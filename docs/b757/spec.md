@@ -220,6 +220,16 @@ already is) would still close the rest of the gap.
 8. First Officer for the 757 in this branch, or later?
 9. Failures (fire scenarios, detector injections): in scope, or leave to BlueBird's EFB?
 
+### Prototype defaults (2026-10-25)
+
+The owner asked for one plan and a flyable prototype overnight, so the prototype (`plans/01-prototype.md`) takes these
+defaults; each can be overruled later: (1) "BlueBird 757-200", code `BBS_757`; (2) the BBS Nest check speaks once
+per connection when the process is missing; (3) the Coherent Comm Bus listener for both CDUs; (4) AI display reads
+only, no letter yet; (5) a "757 EFB" window operating the tablet by scripted, verified clicks (Navigraph sign-in,
+AIRAC update, SimBrief ID, fetch OFP, units answer, cockpit presets, quick starts); (6) BlueBird's settings files are
+read, never written by the app (the SimBrief ID goes in through the EFB); (7) no app take-off callouts on the 757
+(the aircraft makes its own); (8) no First Officer yet; (9) no failures UI.
+
 ## 8. Still to measure in the sim (few, prioritized)
 
 1. The panel sweep: every control's write and read-back by panel (owner present for anything audible), especially
