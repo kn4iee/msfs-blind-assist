@@ -27,11 +27,13 @@ OUTPUT MODE - Press right bracket to activate
 
 MCP Readouts:
   Shift+H    Read MCP Heading
-  Shift+S    Read MCP Speed
+  Shift+S    Read MCP Speed (knots)
   Shift+A    Read MCP Altitude
   Shift+V    Read MCP Vertical Speed
   Each reads the value the MCP window shows, never the simulator's own
-  autopilot values (they disagree with BlueBird's MCP).
+  autopilot values (they disagree with BlueBird's MCP). While the MCP is in
+  Mach mode, Shift+S says so instead of reading a speed; Mach readout and
+  entry come later.
 
 Altitude:
   Q          Read Altitude AGL
@@ -110,11 +112,17 @@ INPUT MODE - Press left bracket to activate
 
 MCP Value Windows:
   Ctrl+H     Set MCP Heading (0 to 359)
-  Ctrl+S     Set MCP Speed in knots. In Mach mode the app says so; set Mach
-             from the Glareshield panel.
-  Ctrl+A     Set MCP Altitude (rounded to 100 feet)
-  Ctrl+V     Set MCP Vertical Speed (-8000 to 6000, in steps of 100)
-  Each value is read back from the MCP after it is set ("Heading 090").
+  Ctrl+S     Set MCP Speed in knots (100 to 399). A Mach number is refused for
+             now ("Mach entry is not supported yet"), and in Mach mode the app
+             says so: set Mach from the Glareshield panel until Mach entry comes.
+  Ctrl+A     Set MCP Altitude (100 to 49000, rounded to 100 feet)
+  Ctrl+V     Set MCP Vertical Speed (-8000 to 6000, rounded to 100)
+  Each window stays open for the next value; Escape closes it. Press Enter
+  to set. About a second later the app reads the value back from the MCP
+  ("Heading 090", "Speed 250", "Altitude 12000", "Vertical speed minus 1500"),
+  so you hear what the MCP took, not what you typed. A speed is set by
+  stepping the MCP, which takes a second or two; the app checks and
+  corrects it before it speaks.
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the

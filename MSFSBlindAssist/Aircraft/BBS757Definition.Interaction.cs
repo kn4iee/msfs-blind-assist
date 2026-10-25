@@ -216,6 +216,7 @@ public partial class BBS757Definition
     public override void OnSwitchedAway()
     {
         base.OnSwitchedAway();
+        CloseMcpDialogs();
         _lifetime.Cancel();
         _lifetime.Dispose();
     }
@@ -301,6 +302,7 @@ public partial class BBS757Definition
         _nestRunning = null;
         _nestSettled = false;
         CancelPendingPicks();
+        CancelMcpSets();
     }
 
     // =================================================================================
@@ -318,6 +320,23 @@ public partial class BBS757Definition
             case HotkeyAction.MonitorManager:
                 hotkeyManager.ExitOutputHotkeyMode();
                 (parentForm as MainForm)?.ShowBBS757MonitorManagerDialog();
+                return true;
+
+            // Ctrl+H / S / A / V: the MCP value windows (BBS757Definition.Mcp.cs), the HS787's way.
+            case HotkeyAction.FCUSetHeading:
+            case HotkeyAction.FCUSetSpeed:
+            case HotkeyAction.FCUSetAltitude:
+            case HotkeyAction.FCUSetVS:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowMcpDialog(action, simConnect, announcer, parentForm);
+                return true;
+
+            // Shift+H / S / A / V: the MCP's own values, read fresh.
+            case HotkeyAction.ReadHeading:
+            case HotkeyAction.ReadSpeed:
+            case HotkeyAction.ReadAltitude:
+            case HotkeyAction.ReadFCUVerticalSpeedFPA:
+                _ = ReadMcpAsync(action, simConnect, announcer);   // never throws: it catches and logs
                 return true;
         }
 

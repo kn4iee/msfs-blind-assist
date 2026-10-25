@@ -44,6 +44,8 @@ namespace MSFSBlindAssist.Aircraft;
 ///   • A button press is heard ("… pressed") and the aircraft reacts (MCP mode lights).
 ///   • With BBS Nest closed, the warning speaks once after connecting; after Nest starts and the
 ///     flight is reloaded, nothing is said.
+///   • Ctrl+H/S/A/V set the MCP heading, speed (knots), altitude and vertical speed, and what is
+///     spoken afterwards is the MCP's own value; Shift+H/S/A/V read the same values (Bbs757Mcp).
 /// </summary>
 public partial class BBS757Definition : BaseAircraftDefinition
 {
@@ -79,7 +81,8 @@ public partial class BBS757Definition : BaseAircraftDefinition
                 Log.Warn("BBS757", $"Control map lists node {c.Node} twice; the second row is ignored.");
     }
 
-    // The MCP takes direct values (docs/b757/spec.md §3.2); the entry dialogs come with plan 01's MCP task.
+    // The MCP takes exact values (docs/b757/spec.md §3.2): Ctrl+H/S/A/V open the entry windows
+    // (BBS757Definition.Mcp.cs), Shift+H/S/A/V read the MCP's own variables.
     public override FCUControlType GetAltitudeControlType() => FCUControlType.SetValue;
     public override FCUControlType GetHeadingControlType() => FCUControlType.SetValue;
     public override FCUControlType GetSpeedControlType() => FCUControlType.SetValue;
@@ -123,6 +126,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
             Name = BridgeProbeKey, DisplayName = "Bridge Probe",
             Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
         };
+
+        // The MCP values the entry windows and readouts read fresh; see Bbs757Mcp.
+        AddMcpVariables(vars);
 
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");
         return vars;
