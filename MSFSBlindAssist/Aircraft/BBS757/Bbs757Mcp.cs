@@ -43,17 +43,39 @@ public static class Bbs757Mcp
     public const string VsVar = "BBS_AP_TARGET_VS";
     public const string MachModeVar = "BBS_AIRSPEED_IN_MACH";
 
-    /// <summary>Every variable the MCP entry and readouts read, for the definition to register.</summary>
-    public static readonly IReadOnlyList<string> AllVars = new[] { HeadingVar, AltitudeVar, SpeedVar, VsVar, MachModeVar };
-
     /// <summary>The wait before a set is read back (the window takes a write within a frame or two; this is generous).</summary>
     public const int ReadBackMs = 1000;
 
-    /// <summary>The wait between a burst of K-events and the read that judges it.</summary>
+    /// <summary>The wait between a burst of K-events and the first read that judges it.</summary>
     public const int StepSettleMs = 600;
+
+    /// <summary>
+    /// After a speed burst the target is read every this many ms until two reads in a row agree: a
+    /// burst can land in more than one part, and judging a half-landed one would re-send the part
+    /// still to come and overshoot.
+    /// </summary>
+    public const int SettlePollMs = 150;
+
+    /// <summary>The settle read gives up after this long and judges the last read it has.</summary>
+    public const int SettleGiveUpMs = 1500;
 
     /// <summary>Most times a speed set re-sends its remainder before it speaks what it reads.</summary>
     public const int MaxSpeedCorrections = 3;
+
+    /// <summary>
+    /// Most K-events one round of a speed set sends: the whole 100 to 399 span fits (299), so a read
+    /// that is merely far off still sets in one round, while a wild one cannot flood the calculator.
+    /// </summary>
+    public const int MaxSpeedStepsPerRound = 300;
+
+    /// <summary>Most K-events one round of a V/S set sends: the whole -8000 to 6000 span in hundreds fits (140).</summary>
+    public const int MaxVsStepsPerRound = 140;
+
+    /// <summary>The speed target reads inside 0 to this many knots; anything else is an unreadable value, not a speed.</summary>
+    public const double SpeedReadMax = 500;
+
+    /// <summary>The V/S target reads inside these limits (feet per minute); anything else is unreadable.</summary>
+    public const double VsReadMin = -8000, VsReadMax = 6000;
 
     public const string MachModeSetRefusal = "MCP is in Mach mode. Set Mach from the Glareshield panel.";
     public const string MachEntryRefusal = "Mach entry is not supported yet. Enter a speed from 100 to 399 knots.";
@@ -69,26 +91,28 @@ public static class Bbs757Mcp
     /// <summary>
     /// The calculator calls that move the speed target from <paramref name="current"/> to
     /// <paramref name="target"/>: one <c>K:AP_SPD_VAR_INC</c> or <c>DEC</c> per whole knot between
-    /// the two rounded values, in calls of at most <see cref="Bbs757Rpn.MaxKeysPerCall"/>. Empty when
-    /// they round to the same knot or either is not a finite number.
+    /// the two rounded values, in calls of at most <see cref="Bbs757Rpn.MaxKeysPerCall"/>, and at most
+    /// <see cref="MaxSpeedStepsPerRound"/> in all (the loop sends the rest in a later round). Empty
+    /// when they round to the same knot or either is not a finite number.
     /// </summary>
     public static IReadOnlyList<string> SpeedSteps(double current, double target)
     {
         if (!double.IsFinite(current) || !double.IsFinite(target)) return Array.Empty<string>();
         long diff = Round(target) - Round(current);
-        return Steps("AP_SPD_VAR_INC", "AP_SPD_VAR_DEC", diff);
+        return Steps("AP_SPD_VAR_INC", "AP_SPD_VAR_DEC", diff, MaxSpeedStepsPerRound);
     }
 
     /// <summary>
     /// The calls that step the V/S target from <paramref name="current"/> to <paramref name="target"/>:
     /// one <c>K:AP_VS_VAR_INC</c> or <c>DEC</c> per hundred feet per minute of the difference
-    /// (assumed, unmeasured: the plan's 100 fpm per event). Empty for less than half a step.
+    /// (assumed, unmeasured: the plan's 100 fpm per event), at most <see cref="MaxVsStepsPerRound"/>.
+    /// Empty for less than half a step.
     /// </summary>
     public static IReadOnlyList<string> VsSteps(double current, double target)
     {
         if (!double.IsFinite(current) || !double.IsFinite(target)) return Array.Empty<string>();
         long diff = Round((target - current) / 100.0);
-        return Steps("AP_VS_VAR_INC", "AP_VS_VAR_DEC", diff);
+        return Steps("AP_VS_VAR_INC", "AP_VS_VAR_DEC", diff, MaxVsStepsPerRound);
     }
 
     /// <summary>Writes the heading target: 0-359, 360 and above wrap, a negative heading wraps the other way.</summary>
@@ -100,10 +124,10 @@ public static class Bbs757Mcp
     /// <summary>Writes the V/S target in feet per minute, signed.</summary>
     public static string VsWrite(int fpm) => Bbs757Rpn.SetLVar(VsVar, fpm);
 
-    private static IReadOnlyList<string> Steps(string inc, string dec, long diff)
+    private static IReadOnlyList<string> Steps(string inc, string dec, long diff, int maxSteps)
     {
         if (diff == 0) return Array.Empty<string>();
-        return Bbs757Rpn.KeyBurst(diff > 0 ? inc : dec, (int)Math.Min(Math.Abs(diff), 100_000));
+        return Bbs757Rpn.KeyBurst(diff > 0 ? inc : dec, (int)Math.Min(Math.Abs(diff), maxSteps));
     }
 
     private static long Round(double value)
@@ -173,23 +197,38 @@ public static class Bbs757Mcp
         return $"Heading {deg.ToString("D3", CultureInfo.InvariantCulture)}";
     }
 
-    /// <summary>"Speed 250" from the IAS target.</summary>
+    /// <summary>"Speed 250" from the IAS target. Outside 0 to <see cref="SpeedReadMax"/> knots is not a speed: "Speed unavailable".</summary>
     public static string SpeedPhrase(double? value)
-        => IsReadable(value) ? $"Speed {Plain(Round(value!.Value))}" : "Speed unavailable";
+        => SpeedReadable(value) ? $"Speed {Plain(Round(value!.Value))}" : "Speed unavailable";
 
     /// <summary>"Altitude 12000" from the altitude target: a plain integer, no thousands separator.</summary>
     public static string AltitudePhrase(double? value)
         => IsReadable(value) ? $"Altitude {Plain(Round(value!.Value))}" : "Altitude unavailable";
 
-    /// <summary>"Vertical speed minus 1500", "Vertical speed 1500", "Vertical speed 0" (never "minus 0").</summary>
+    /// <summary>
+    /// "Vertical speed minus 1500", "Vertical speed 1500", "Vertical speed 0" (never "minus 0").
+    /// Outside <see cref="VsReadMin"/> to <see cref="VsReadMax"/> is not a vertical speed: "unavailable".
+    /// </summary>
     public static string VsPhrase(double? value)
     {
-        if (!IsReadable(value)) return "Vertical speed unavailable";
+        if (!VsReadable(value)) return "Vertical speed unavailable";
         long fpm = Round(value!.Value);
         return fpm < 0 ? $"Vertical speed minus {Plain(-fpm)}" : $"Vertical speed {Plain(fpm)}";
     }
 
     private static bool IsReadable(double? value) => value is { } v && double.IsFinite(v);
+
+    /// <summary>
+    /// A speed target read that can be believed: the step counts of a set rest on it, so a wild one
+    /// (an uninitialized variable, a unit mix-up) must send nothing rather than a flood of K-events.
+    /// </summary>
+    private static bool SpeedReadable(double? value) => value is { } v && double.IsFinite(v) && v >= 0 && v <= SpeedReadMax;
+
+    private static bool VsReadable(double? value) => value is { } v && double.IsFinite(v) && v >= VsReadMin && v <= VsReadMax;
+
+    /// <summary>Two reads of the same target that agree to within half a knot (or half a step): one value, still.</summary>
+    private static bool SameReading(double? a, double? b)
+        => a is null || b is null ? a is null && b is null : Math.Abs(a.Value - b.Value) < 0.5;
 
     private static string Plain(long value) => value.ToString(CultureInfo.InvariantCulture);
 
@@ -215,12 +254,16 @@ public static class Bbs757Mcp
 
     /// <summary>
     /// Sets the IAS target by stepping it, closing the loop on what it reads: read the target fresh,
-    /// send the steps, wait, read again, and while the remaining difference is non-zero and SMALLER
-    /// than before send the steps for the remainder, up to <see cref="MaxSpeedCorrections"/> times. A
-    /// difference that did not shrink is not chased (the aircraft is not taking the steps, or the
-    /// variable is being overwritten). Speaks the value read last, never the request. In Mach mode
-    /// nothing is sent and the pilot is told to set Mach from the panel; an unreadable target is
-    /// "Speed unavailable". Throws <see cref="OperationCanceledException"/> when canceled.
+    /// send the steps (at most <see cref="MaxSpeedStepsPerRound"/>), wait <see cref="StepSettleMs"/>,
+    /// read until the value has SETTLED (<see cref="ReadSettledAsync"/>), and judge the round only on
+    /// that value. While the remaining difference is non-zero and SMALLER in magnitude than before
+    /// send the steps for the remainder, up to <see cref="MaxSpeedCorrections"/> times. A shrinking
+    /// remainder counts as progress even when its sign flipped (an overshoot brought nearer); one that
+    /// did not shrink is not chased (the aircraft is not taking the steps, the variable is being
+    /// overwritten, or the burst overshot by more than it undershot). Speaks the value read last,
+    /// never the request. In Mach mode nothing is sent and the pilot is told to set Mach from the
+    /// panel; a target outside 0 to <see cref="SpeedReadMax"/> knots is unreadable ("Speed
+    /// unavailable") and sends nothing. Throws <see cref="OperationCanceledException"/> when canceled.
     /// </summary>
     public static async Task<string> SetSpeedAsync(McpIo io, int knots, CancellationToken ct)
     {
@@ -228,7 +271,7 @@ public static class Bbs757Mcp
         if (mach is > 0.5) return MachModeSetRefusal;
 
         double? current = await io.Read(SpeedVar, ct);
-        if (!IsReadable(current)) return SpeedPhrase(null);
+        if (!SpeedReadable(current)) return SpeedPhrase(null);
 
         long remaining = Math.Abs(knots - Round(current!.Value));
         if (remaining == 0) return SpeedPhrase(current);
@@ -239,8 +282,8 @@ public static class Bbs757Mcp
         for (int corrections = 0; ; corrections++)
         {
             await io.Delay(StepSettleMs, ct);
-            now = await io.Read(SpeedVar, ct);
-            if (!IsReadable(now)) break;
+            now = await ReadSettledAsync(io, SpeedVar, ct);
+            if (!SpeedReadable(now)) break;
 
             long left = Math.Abs(knots - Round(now!.Value));
             if (left == 0 || left >= remaining || corrections == MaxSpeedCorrections) break;
@@ -252,9 +295,30 @@ public static class Bbs757Mcp
     }
 
     /// <summary>
+    /// Reads <paramref name="key"/> until two reads <see cref="SettlePollMs"/> apart agree, and returns
+    /// that value; after <see cref="SettleGiveUpMs"/> without agreement returns the last read. A K-event
+    /// burst can land in more than one part (the aircraft counts them over several frames), and a read
+    /// between the parts is not a place to judge from.
+    /// </summary>
+    private static async Task<double?> ReadSettledAsync(McpIo io, string key, CancellationToken ct)
+    {
+        double? previous = await io.Read(key, ct);
+        for (int waited = 0; waited < SettleGiveUpMs; waited += SettlePollMs)
+        {
+            await io.Delay(SettlePollMs, ct);
+            double? next = await io.Read(key, ct);
+            if (SameReading(previous, next)) return next;
+            previous = next;
+        }
+        return previous;
+    }
+
+    /// <summary>
     /// Writes the V/S target, waits, reads it, and when it is not what was asked steps the
-    /// difference in hundreds (the write is unmeasured on this variable), waits and reads again.
-    /// Speaks what it reads last.
+    /// difference in hundreds (the write is unmeasured on this variable; at most
+    /// <see cref="MaxVsStepsPerRound"/> events), waits and reads again. Speaks what it reads last. A
+    /// read outside <see cref="VsReadMin"/> to <see cref="VsReadMax"/> is unreadable: nothing is
+    /// stepped from it and the pilot hears "Vertical speed unavailable".
     /// </summary>
     public static async Task<string> SetVerticalSpeedAsync(McpIo io, int fpm, CancellationToken ct)
     {
@@ -262,7 +326,7 @@ public static class Bbs757Mcp
         await io.Delay(ReadBackMs, ct);
         double? now = await io.Read(VsVar, ct);
 
-        if (IsReadable(now))
+        if (VsReadable(now))
         {
             var steps = VsSteps(now!.Value, fpm);
             if (steps.Count > 0)

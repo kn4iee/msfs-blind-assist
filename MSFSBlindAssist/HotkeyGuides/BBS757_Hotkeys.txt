@@ -111,7 +111,7 @@ VATSIM:
 INPUT MODE - Press left bracket to activate
 
 MCP Value Windows:
-  Ctrl+H     Set MCP Heading (0 to 359)
+  Ctrl+H     Set MCP Heading (0-360, 360 is north)
   Ctrl+S     Set MCP Speed in knots (100 to 399). A Mach number is refused for
              now ("Mach entry is not supported yet"), and in Mach mode the app
              says so: set Mach from the Glareshield panel until Mach entry comes.

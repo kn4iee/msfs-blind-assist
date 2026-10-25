@@ -23,8 +23,17 @@ namespace MSFSBlindAssist.Aircraft;
 /// </summary>
 public partial class BBS757Definition
 {
-    /// <summary>The set in flight per MCP variable; a newer set of the same variable cancels it.</summary>
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _mcpSets = new(StringComparer.Ordinal);
+    /// <summary>One set in flight: its token source and the value it is setting.</summary>
+    private sealed record McpSetInFlight(CancellationTokenSource Cts, int Value);
+
+    /// <summary>
+    /// The set in flight per MCP variable; a newer set of the same variable cancels it, except a
+    /// repeat of the same speed (see <see cref="RunMcpSetAsync"/>).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, McpSetInFlight> _mcpSets = new(StringComparer.Ordinal);
+
+    /// <summary>Whether a set can land; replaced by tests, since a SimConnectManager cannot be connected in them.</summary>
+    internal Func<SimConnectManager, bool> CanWrite { get; set; } = sim => sim.CalcWriteCanLand;
 
     /// <summary>The open value windows, one per kind: a second hotkey press brings it forward, never stacks another.</summary>
     private readonly Dictionary<HotkeyAction, ValueInputForm> _mcpDialogs = new();
@@ -76,7 +85,7 @@ public partial class BBS757Definition
 
     private McpEntry EntryFor(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer) => action switch
     {
-        HotkeyAction.FCUSetHeading => new("MCP Heading", "heading", "0-359", Bbs757Mcp.TryHeadingInput,
+        HotkeyAction.FCUSetHeading => new("MCP Heading", "heading", "0-360 (360 is north)", Bbs757Mcp.TryHeadingInput,
             v => SetMcpHeadingAsync(v, sim, announcer)),
         HotkeyAction.FCUSetSpeed => new("MCP Speed", "speed", "100-399 knots", Bbs757Mcp.TrySpeedInput,
             v => SetMcpSpeedAsync(v, sim, announcer)),
@@ -135,41 +144,54 @@ public partial class BBS757Definition
     // =================================================================================
 
     internal Task SetMcpHeadingAsync(int degrees, SimConnectManager sim, ScreenReaderAnnouncer announcer)
-        => RunMcpSetAsync(Bbs757Mcp.HeadingVar, Bbs757Mcp.HeadingPhrase(null), sim, announcer,
+        => RunMcpSetAsync(Bbs757Mcp.HeadingVar, degrees, ignoreSameValueInFlight: false, Bbs757Mcp.HeadingPhrase(null), sim, announcer,
             (io, ct) => Bbs757Mcp.SetHeadingAsync(io, degrees, ct));
 
+    /// <summary>
+    /// A speed set is the only slow one (steps, settle, corrections: seconds), and Enter pressed again
+    /// on the same speed would cancel it and start the closed loop over; the one in flight is
+    /// already going there and will speak, so the repeat is ignored. A different speed supersedes.
+    /// </summary>
     internal Task SetMcpSpeedAsync(int knots, SimConnectManager sim, ScreenReaderAnnouncer announcer)
-        => RunMcpSetAsync(Bbs757Mcp.SpeedVar, Bbs757Mcp.SpeedPhrase(null), sim, announcer,
+        => RunMcpSetAsync(Bbs757Mcp.SpeedVar, knots, ignoreSameValueInFlight: true, Bbs757Mcp.SpeedPhrase(null), sim, announcer,
             (io, ct) => Bbs757Mcp.SetSpeedAsync(io, knots, ct));
 
     internal Task SetMcpAltitudeAsync(int feet, SimConnectManager sim, ScreenReaderAnnouncer announcer)
-        => RunMcpSetAsync(Bbs757Mcp.AltitudeVar, Bbs757Mcp.AltitudePhrase(null), sim, announcer,
+        => RunMcpSetAsync(Bbs757Mcp.AltitudeVar, feet, ignoreSameValueInFlight: false, Bbs757Mcp.AltitudePhrase(null), sim, announcer,
             (io, ct) => Bbs757Mcp.SetAltitudeAsync(io, feet, ct));
 
     internal Task SetMcpVerticalSpeedAsync(int fpm, SimConnectManager sim, ScreenReaderAnnouncer announcer)
-        => RunMcpSetAsync(Bbs757Mcp.VsVar, Bbs757Mcp.VsPhrase(null), sim, announcer,
+        => RunMcpSetAsync(Bbs757Mcp.VsVar, fpm, ignoreSameValueInFlight: false, Bbs757Mcp.VsPhrase(null), sim, announcer,
             (io, ct) => Bbs757Mcp.SetVerticalSpeedAsync(io, fpm, ct));
 
     /// <summary>
     /// One set: refuse aloud when nothing can land ("{value} unavailable", nothing written), else run
     /// the loop and speak its result unless a newer set, a flight load or a profile switch has
-    /// superseded it. Never throws: it is fire-and-forget from a window callback.
+    /// superseded it. A repeat of the value already being set is ignored when
+    /// <paramref name="ignoreSameValueInFlight"/>; a different value supersedes the one in flight.
+    /// Never throws: it is fire-and-forget from a window callback.
     /// </summary>
-    private async Task RunMcpSetAsync(string key, string refusal, SimConnectManager sim, ScreenReaderAnnouncer announcer,
-        Func<McpIo, CancellationToken, Task<string>> set)
+    internal async Task RunMcpSetAsync(string key, int value, bool ignoreSameValueInFlight, string refusal,
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<McpIo, CancellationToken, Task<string>> set)
     {
         if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is written
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        if (_mcpSets.TryGetValue(key, out var prior))
+        if (_mcpSets.TryGetValue(key, out var inFlight))
         {
-            try { prior.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
+            if (ignoreSameValueInFlight && inFlight.Value == value && !inFlight.Cts.IsCancellationRequested)
+            {
+                Log.Debug("BBS757", $"{key}: {value} is already being set; the repeat is ignored.");
+                return;
+            }
+            try { inFlight.Cts.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
         }
-        _mcpSets[key] = cts;
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var mine = new McpSetInFlight(cts, value);
+        _mcpSets[key] = mine;
         var ct = cts.Token;
 
         try
         {
-            if (!sim.CalcWriteCanLand)
+            if (!CanWrite(sim))
             {
                 Log.Debug("BBS757", $"{key}: write refused, nothing sent.");
                 announcer.AnnounceImmediate(refusal);
@@ -188,7 +210,7 @@ public partial class BBS757Definition
         }
         finally
         {
-            _mcpSets.TryRemove(new KeyValuePair<string, CancellationTokenSource>(key, cts));
+            _mcpSets.TryRemove(new KeyValuePair<string, McpSetInFlight>(key, mine));
             cts.Dispose();
         }
     }
@@ -196,9 +218,9 @@ public partial class BBS757Definition
     /// <summary>Cancels every set in flight: one armed before a flight load must not write into the flight that follows.</summary>
     private void CancelMcpSets()
     {
-        foreach (var cts in _mcpSets.Values)
+        foreach (var inFlight in _mcpSets.Values)
         {
-            try { cts.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
+            try { inFlight.Cts.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
         }
     }
 

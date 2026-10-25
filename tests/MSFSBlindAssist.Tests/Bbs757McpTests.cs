@@ -281,7 +281,10 @@ public class Bbs757McpTests
     /// A simulated MCP behind <see cref="McpIo"/>. A K-event burst counts only
     /// <see cref="EventsCountedPerCall"/> events per calculator call (the real limit is unmeasured
     /// past 11) and <see cref="EventsCountedPerWindow"/> between two waits, and
-    /// <see cref="DirectWritesAdopted"/> says whether the target L:var takes a write.
+    /// <see cref="DirectWritesAdopted"/> says whether the target L:var takes a write. It keeps a
+    /// virtual clock (<see cref="Now"/>, advanced only by the loop's waits): with
+    /// <see cref="LagMs"/> set a speed burst lands in two halves that far apart, and with
+    /// <see cref="DriftPerRead"/> set the speed keeps moving after a burst so it never settles.
     /// </summary>
     private sealed class FakeMcp
     {
@@ -291,7 +294,30 @@ public class Bbs757McpTests
         public bool DirectWritesAdopted = true;
         public readonly List<string> Writes = new();
         public int Delays;
+        public long Now;                 // virtual ms
+        public int LagMs;                // > 0: a speed burst lands half now, half this long later
+        public double DriftPerRead;      // added to the speed on every read once a burst was sent
+        public double? SpeedAfterSend;   // when set, the speed reads this once a burst was sent (a wild read)
+        public double Peak;              // highest speed the target ever held after a burst landed
+        private readonly List<(long Due, double Delta)> _pending = new();
+        private bool _sent;
         private int _used;   // events counted since the last wait
+
+        private void MoveSpeed(double delta)
+        {
+            if (Speed == null) return;
+            Speed += delta;
+            Peak = Math.Max(Peak, Speed.Value);
+        }
+
+        private void Land()
+        {
+            foreach (var due in _pending.Where(p => p.Due <= Now).ToList())
+            {
+                MoveSpeed(due.Delta);
+                _pending.Remove(due);
+            }
+        }
 
         private int Counted(string rpn, string kEvent)
         {
@@ -306,6 +332,8 @@ public class Bbs757McpTests
             Read = (key, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
+                Land();
+                if (key == Bbs757Mcp.SpeedVar && _sent && DriftPerRead != 0) MoveSpeed(DriftPerRead);
                 return Task.FromResult(key switch
                 {
                     Bbs757Mcp.SpeedVar => Speed,
@@ -325,7 +353,19 @@ public class Bbs757McpTests
 
                 int inc = Counted(rpn, "(>K:AP_SPD_VAR_INC)");
                 int dec = Counted(rpn, "(>K:AP_SPD_VAR_DEC)");
-                if (Speed != null) Speed += inc - dec;
+                int net = inc - dec;
+                if (rpn.Contains("(>K:AP_SPD_VAR_"))
+                {
+                    _sent = true;
+                    if (SpeedAfterSend != null) Speed = SpeedAfterSend;
+                }
+                if (LagMs > 0)
+                {
+                    int first = net / 2;
+                    MoveSpeed(first);
+                    _pending.Add((Now + LagMs, net - first));
+                }
+                else MoveSpeed(net);
 
                 int vsInc = Counted(rpn, "(>K:AP_VS_VAR_INC)");
                 int vsDec = Counted(rpn, "(>K:AP_VS_VAR_DEC)");
@@ -335,7 +375,9 @@ public class Bbs757McpTests
             {
                 ct.ThrowIfCancellationRequested();
                 Delays++;
+                Now += ms;
                 _used = 0;
+                Land();
                 return Task.CompletedTask;
             },
         };
@@ -491,6 +533,135 @@ public class Bbs757McpTests
     }
 
     [Fact]
+    public async Task A_burst_that_lands_in_two_parts_is_judged_once_both_have_landed()
+    {
+        // Half of each call lands at once, the other half 700 ms later. Judged 600 ms after the send
+        // the speed reads 224 and the "remaining 26" would be sent again, overshooting to 276.
+        var mcp = new FakeMcp { Speed = 200, LagMs = 700 };
+
+        string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
+
+        Assert.Equal("Speed 250", said);
+        Assert.Equal(250, mcp.Speed);
+        Assert.Equal(250, mcp.Peak);          // never above the target, even for a moment
+        Assert.Equal(2, mcp.Writes.Count);    // the first send only: nothing was left to correct
+    }
+
+    [Fact]
+    public async Task The_settle_read_gives_up_after_about_a_second_and_a_half_with_the_last_read()
+    {
+        // The speed keeps moving after the burst (5 kt a read), so two reads never agree.
+        var mcp = new FakeMcp { Speed = 200, DriftPerRead = 5 };
+
+        string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
+
+        // 600 ms settle + ten 150 ms polls; the last of eleven reads is 250 + 5 * 11 = 305, which is
+        // further from 250 than the 50 started with, so nothing is chased.
+        Assert.Equal(600 + Bbs757Mcp.SettleGiveUpMs, mcp.Now);
+        Assert.Equal("Speed 305", said);
+        Assert.Equal(2, mcp.Writes.Count);
+    }
+
+    [Fact]
+    public async Task An_overshoot_nearer_than_the_start_counts_as_progress()
+    {
+        // 200 to 250 lands on 256 (the remaining difference changed sign, 6 against 50): brought back.
+        var mcp = new FakeMcp { Speed = 200 };
+        var io = mcp.Io;
+        bool first = true;
+        var overshooting = new McpIo
+        {
+            Read = io.Read,
+            Delay = io.Delay,
+            Write = rpn =>
+            {
+                io.Write(rpn);
+                if (first && rpn.Contains("INC")) { first = false; mcp.Speed += 6; }
+            },
+        };
+
+        Assert.Equal("Speed 250", await Bbs757Mcp.SetSpeedAsync(overshooting, 250, default));
+        Assert.Contains(mcp.Writes, w => w.Contains("(>K:AP_SPD_VAR_DEC)"));
+    }
+
+    [Fact]
+    public async Task An_overshoot_no_nearer_than_the_start_is_not_chased()
+    {
+        // 200 to 250 lands on 310 (60 off against 50): another round would only widen it.
+        var mcp = new FakeMcp { Speed = 200 };
+        var io = mcp.Io;
+        bool first = true;
+        var wild = new McpIo
+        {
+            Read = io.Read,
+            Delay = io.Delay,
+            Write = rpn =>
+            {
+                io.Write(rpn);
+                if (first && rpn.Contains("INC")) { first = false; mcp.Speed += 60; }
+            },
+        };
+
+        Assert.Equal("Speed 310", await Bbs757Mcp.SetSpeedAsync(wild, 250, default));
+        Assert.DoesNotContain(mcp.Writes, w => w.Contains("(>K:AP_SPD_VAR_DEC)"));
+    }
+
+    [Theory]
+    [InlineData(9999)]
+    [InlineData(-5)]
+    [InlineData(500.5)]
+    [InlineData(double.PositiveInfinity)]
+    public async Task A_speed_target_read_outside_zero_to_500_is_unreadable_and_sends_nothing(double wild)
+    {
+        var mcp = new FakeMcp { Speed = wild };
+
+        Assert.Equal("Speed unavailable", await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default));
+        Assert.Empty(mcp.Writes);
+    }
+
+    [Fact]
+    public async Task A_speed_target_that_reads_wild_after_the_burst_is_not_corrected()
+    {
+        var mcp = new FakeMcp { Speed = 200, SpeedAfterSend = 4000 };
+
+        Assert.Equal("Speed unavailable", await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default));
+        Assert.Equal(2, mcp.Writes.Count);   // the first send only
+    }
+
+    [Fact]
+    public void A_round_sends_at_most_300_speed_steps_and_140_vertical_speed_steps()
+    {
+        Assert.Equal(300, Count(Bbs757Mcp.SpeedSteps(0, 399), "(>K:AP_SPD_VAR_INC)"));
+        Assert.Equal(300, Count(Bbs757Mcp.SpeedSteps(500, 0), "(>K:AP_SPD_VAR_DEC)"));
+        Assert.Equal(299, Count(Bbs757Mcp.SpeedSteps(100, 399), "(>K:AP_SPD_VAR_INC)"));   // the full span fits
+        Assert.Equal(140, Count(Bbs757Mcp.VsSteps(-8000, 6000), "(>K:AP_VS_VAR_INC)"));
+        Assert.Equal(140, Count(Bbs757Mcp.VsSteps(-1_000_000, 6000), "(>K:AP_VS_VAR_INC)"));
+    }
+
+    [Fact]
+    public void The_phrases_refuse_a_value_that_is_not_a_speed_or_a_vertical_speed()
+    {
+        Assert.Equal("Speed 500", Bbs757Mcp.SpeedPhrase(500));
+        Assert.Equal("Speed unavailable", Bbs757Mcp.SpeedPhrase(501));
+        Assert.Equal("Speed unavailable", Bbs757Mcp.SpeedPhrase(-1));
+        Assert.Equal("Vertical speed 6000", Bbs757Mcp.VsPhrase(6000));
+        Assert.Equal("Vertical speed minus 8000", Bbs757Mcp.VsPhrase(-8000));
+        Assert.Equal("Vertical speed unavailable", Bbs757Mcp.VsPhrase(6001));
+        Assert.Equal("Vertical speed unavailable", Bbs757Mcp.VsPhrase(-8001));
+    }
+
+    [Fact]
+    public async Task A_vertical_speed_read_outside_the_range_is_unreadable_and_not_stepped()
+    {
+        var mcp = new FakeMcp { Vs = 1_000_000, DirectWritesAdopted = false };
+
+        string said = await Bbs757Mcp.SetVerticalSpeedAsync(mcp.Io, -1500, default);
+
+        Assert.Equal("Vertical speed unavailable", said);
+        Assert.Equal(new[] { "-1500 (>L:BBS_AP_TARGET_VS)" }, mcp.Writes);   // the direct write only
+    }
+
+    [Fact]
     public async Task A_canceled_speed_set_ends_without_speaking()
     {
         var mcp = new FakeMcp { Speed = 200 };
@@ -610,6 +781,89 @@ public class Bbs757McpTests
         {
             "Heading unavailable", "Speed unavailable", "Altitude unavailable", "Vertical speed unavailable",
         }, speech.All);
+    }
+
+    /// <summary>A set held in flight until released, counting how many started and how many were canceled.</summary>
+    private sealed class HeldSet
+    {
+        public readonly TaskCompletionSource<string> Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Started;
+        public int Canceled;
+
+        public Func<McpIo, CancellationToken, Task<string>> Set => async (_, ct) =>
+        {
+            Started++;
+            try { return await Release.Task.WaitAsync(ct); }
+            catch (OperationCanceledException) { Canceled++; throw; }
+        };
+    }
+
+    [Fact]
+    public async Task A_repeat_of_the_speed_being_set_is_ignored_but_a_different_speed_supersedes_it()
+    {
+        var def = new BBS757Definition { CanWrite = _ => true };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var held = new HeldSet();
+
+        Task first = def.RunMcpSetAsync(Bbs757Mcp.SpeedVar, 250, true, "Speed unavailable", sim, speech, held.Set);
+        Task repeat = def.RunMcpSetAsync(Bbs757Mcp.SpeedVar, 250, true, "Speed unavailable", sim, speech, held.Set);
+        Assert.True(repeat.IsCompleted);
+        Assert.Equal(1, held.Started);   // the repeat started nothing
+        Assert.Equal(0, held.Canceled);  // and did not cancel the set in flight
+
+        Task other = def.RunMcpSetAsync(Bbs757Mcp.SpeedVar, 240, true, "Speed unavailable", sim, speech, held.Set);
+        Assert.Equal(2, held.Started);
+
+        held.Release.SetResult("Speed 240");
+        await Task.WhenAll(first, other);
+
+        Assert.Equal(1, held.Canceled);                    // 250 was superseded
+        Assert.Equal(new[] { "Speed 240" }, speech.All);   // and said nothing
+    }
+
+    [Fact]
+    public async Task The_same_speed_can_be_set_again_once_the_first_set_has_finished()
+    {
+        var def = new BBS757Definition { CanWrite = _ => true };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var held = new HeldSet();
+        held.Release.SetResult("Speed 250");
+
+        await def.RunMcpSetAsync(Bbs757Mcp.SpeedVar, 250, true, "Speed unavailable", sim, speech, held.Set);
+        await def.RunMcpSetAsync(Bbs757Mcp.SpeedVar, 250, true, "Speed unavailable", sim, speech, held.Set);
+
+        Assert.Equal(2, held.Started);
+        Assert.Equal(new[] { "Speed 250", "Speed 250" }, speech.All);
+    }
+
+    [Fact]
+    public async Task A_repeat_of_a_heading_is_not_ignored()
+    {
+        // Only the slow speed loop is protected; a heading write is instant and idempotent.
+        var def = new BBS757Definition { CanWrite = _ => true };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var held = new HeldSet();
+
+        Task first = def.RunMcpSetAsync(Bbs757Mcp.HeadingVar, 90, false, "Heading unavailable", sim, speech, held.Set);
+        Task repeat = def.RunMcpSetAsync(Bbs757Mcp.HeadingVar, 90, false, "Heading unavailable", sim, speech, held.Set);
+
+        Assert.Equal(2, held.Started);
+        held.Release.SetResult("Heading 090");
+        await Task.WhenAll(first, repeat);
+        Assert.Equal(new[] { "Heading 090" }, speech.All);
+    }
+
+    [Fact]
+    public void The_heading_window_and_the_guide_agree_on_the_range()
+    {
+        // Both say 360 is north: the validator takes it, and the window's label says so.
+        Assert.True(Bbs757Mcp.TryHeadingInput("360", out int north, out _));
+        Assert.Equal(0, north);
+        string guide = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "HotkeyGuides", "BBS757_Hotkeys.txt"));
+        Assert.Contains("Set MCP Heading (0-360, 360 is north)", guide);
     }
 
     [Fact]
