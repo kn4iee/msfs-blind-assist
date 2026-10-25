@@ -13,14 +13,13 @@ public partial class MainForm
 
     /// <summary>
     /// The 757's monitor manager (Ctrl+M) — mute individual auto-announced variables. Rebuilt from
-    /// the live definition each time it is created. Public because the definition calls it; the
-    /// aircraft guard keeps a queued call that lands after a profile switch from building a
-    /// "757 monitor manager" over another aircraft's variables.
+    /// the live definition each time it is created. Public because the definition calls it, after
+    /// leaving output hotkey mode itself; the aircraft guard keeps a queued call that lands after a
+    /// profile switch from building a "757 monitor manager" over another aircraft's variables.
     /// </summary>
     public void ShowBBS757MonitorManagerDialog()
     {
         if (currentAircraft is not BBS757Definition bbs757) return;
-        hotkeyManager.ExitOutputHotkeyMode();
         if (bbs757MonitorManagerForm == null || bbs757MonitorManagerForm.IsDisposed)
             bbs757MonitorManagerForm = new Forms.BBS757.BBS757MonitorManagerForm(bbs757.GetVariables());
         bbs757MonitorManagerForm.ShowForm();

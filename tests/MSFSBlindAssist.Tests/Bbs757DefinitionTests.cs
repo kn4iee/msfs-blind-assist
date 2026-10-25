@@ -273,6 +273,88 @@ public class Bbs757DefinitionTests
         Assert.Equal(new[] { BBS757Definition.NestMissingWarning }, speech.All);
     }
 
+    [Fact]
+    public void The_nest_check_rides_a_batch_that_arrives_even_when_nothing_changes()
+    {
+        // A cold and dark cockpit can go minutes without a value change; the 1 Hz continuous batch
+        // is delivered every second regardless, and MainForm calls OnDeferredFlushBatchDelivered at
+        // the end of the batch carrying the watch variable. It must therefore be batch-covered.
+        var def = new BBS757Definition { NestRunning = () => false };
+
+        string? watch = def.DeferredFlushWatchVariable;
+        Assert.Equal("SIM_ON_GROUND", watch);
+        var watched = def.GetVariables()[watch!];
+        Assert.Equal(UpdateFrequency.Continuous, watched.UpdateFrequency);
+        Assert.True(watched.IsAnnounced);
+        Assert.False(watched.ExcludeFromBatch);
+    }
+
+    [Fact]
+    public void The_first_batch_speaks_a_missing_nest_once_and_stops_watching()
+    {
+        var def = new BBS757Definition { NestRunning = () => false };
+        var speech = new SpeechCapture();
+
+        def.OnDeferredFlushBatchDelivered(speech);
+        Assert.Null(def.DeferredFlushWatchVariable);   // the hook costs nothing once settled
+        def.OnDeferredFlushBatchDelivered(speech);
+
+        Assert.Equal(new[] { BBS757Definition.NestMissingWarning }, speech.All);
+    }
+
+    [Fact]
+    public void A_running_nest_settles_silently_on_the_first_batch()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+
+        def.OnDeferredFlushBatchDelivered(speech);
+
+        Assert.Empty(speech.All);
+        Assert.Null(def.DeferredFlushWatchVariable);
+    }
+
+    [Fact]
+    public void A_reload_rearms_the_batch_check()
+    {
+        var def = new BBS757Definition { NestRunning = () => false };
+        var speech = new SpeechCapture();
+
+        def.OnDeferredFlushBatchDelivered(speech);
+        def.OnSimContextReset();
+        Assert.Equal("SIM_ON_GROUND", def.DeferredFlushWatchVariable);
+        def.OnDeferredFlushBatchDelivered(speech);
+
+        Assert.Equal(new[] { BBS757Definition.NestMissingWarning, BBS757Definition.NestMissingWarning }, speech.All);
+    }
+
+    [Fact]
+    public void A_delivery_and_a_batch_between_them_speak_the_warning_once()
+    {
+        var def = new BBS757Definition { NestRunning = () => false };
+        var speech = new SpeechCapture();
+
+        def.ProcessSimVarUpdate("B757_APU_STATE", 0, speech);
+        def.OnDeferredFlushBatchDelivered(speech);
+
+        Assert.Equal(new[] { BBS757Definition.NestMissingWarning }, speech.All);
+    }
+
+    [Fact]
+    public void A_suppressed_announcer_defers_the_batch_warning()
+    {
+        var def = new BBS757Definition { NestRunning = () => false };
+        var speech = new GatedSpeechCapture { Suppressed = true };
+
+        def.OnDeferredFlushBatchDelivered(speech);
+        Assert.Empty(speech.All);
+        Assert.NotNull(def.DeferredFlushWatchVariable);
+
+        speech.Suppressed = false;
+        def.OnDeferredFlushBatchDelivered(speech);
+        Assert.Equal(new[] { BBS757Definition.NestMissingWarning }, speech.All);
+    }
+
     // ---- Writes that cannot run without a sim -------------------------------------------------
 
     [Fact]
@@ -349,6 +431,39 @@ public class Bbs757DefinitionTests
         def.OnSwitchedAway();
 
         await UntilAsync(() => !def.IsPickPending("B757_OVHD_BATTERY_BUTTON"));
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public async Task A_flight_reload_drops_a_pick_in_flight()
+    {
+        // A pick armed before a flight load must never write into the flight that follows.
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+        var battery = def.GetVariables()["B757_OVHD_BATTERY_BUTTON"];
+
+        def.HandleUIVariableSet("B757_OVHD_BATTERY_BUTTON", 1, battery, new SimConnectManager(IntPtr.Zero), speech);
+        Assert.True(def.IsPickPending("B757_OVHD_BATTERY_BUTTON"));
+
+        def.OnSimContextReset();
+
+        Assert.False(def.IsPickPending("B757_OVHD_BATTERY_BUTTON"));
+        await Task.Delay(700);   // past the 300 ms settle: the dropped pick says and sends nothing
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public async Task After_a_profile_switch_a_pick_starts_nothing()
+    {
+        var def = new BBS757Definition();
+        var speech = new SpeechCapture();
+        var battery = def.GetVariables()["B757_OVHD_BATTERY_BUTTON"];
+        def.OnSwitchedAway();
+
+        Assert.True(def.HandleUIVariableSet("B757_OVHD_BATTERY_BUTTON", 1, battery, new SimConnectManager(IntPtr.Zero), speech));
+
+        Assert.False(def.IsPickPending("B757_OVHD_BATTERY_BUTTON"));
+        await Task.Delay(700);
         Assert.Empty(speech.All);
     }
 

@@ -40,8 +40,20 @@ public partial class BBS757Definition
     /// </summary>
     private const int ReadBackDelayMs = 1500;
 
-    /// <summary>Cancelled when the pilot switches to another profile: no pending pick may write after that.</summary>
+    /// <summary>
+    /// Canceled (and disposed) when the pilot switches to another profile: no pending pick or press
+    /// may write after that. Every user checks <c>IsCancellationRequested</c> before it touches the
+    /// token, which is safe on a disposed source.
+    /// </summary>
     private readonly CancellationTokenSource _lifetime = new();
+
+    /// <summary>
+    /// The batch-covered variable whose batch delivery runs the BBS Nest check while it is pending
+    /// (<see cref="DeferredFlushWatchVariable"/>). A base variable, so it is registered on every
+    /// profile and rides the 1 Hz continuous batch, which is delivered every second whether or not a
+    /// value changed: a quiet cold-and-dark cockpit still gets its check within about a second.
+    /// </summary>
+    internal const string NestCheckWatchKey = "SIM_ON_GROUND";
 
     /// <summary>The pick in flight per node; a newer pick of the same control cancels it.</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource> _pendingPicks =
@@ -92,13 +104,14 @@ public partial class BBS757Definition
 
     /// <summary>
     /// A button: press, hold, release, then "{label} pressed" when the button has no readable state.
-    /// The release is never cancelled: a press is always let go, even across a profile switch.
+    /// The release is never canceled: a press is always let go, even across a profile switch.
     /// </summary>
     private async Task PressAsync(Bbs757Control control, Bbs757Press press, SimConnectManager sim,
         ScreenReaderAnnouncer announcer)
     {
         try
         {
+            if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed
             sim.ExecuteCalculatorCodeUnique(press.Down);
             if (press.Up != null)
             {
@@ -134,6 +147,7 @@ public partial class BBS757Definition
     private async Task SetPositionAsync(Bbs757Control control, double target, SimConnectManager sim,
         ScreenReaderAnnouncer announcer)
     {
+        if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is written
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         if (_pendingPicks.TryGetValue(control.Node, out var prior))
         {
@@ -175,15 +189,17 @@ public partial class BBS757Definition
             await Task.Delay(ReadBackDelayMs, ct);
             resync = true;
         }
-        catch (OperationCanceledException) { /* superseded by a newer pick, or switched away */ }
+        catch (OperationCanceledException) { /* superseded by a newer pick, a reload, or switched away */ }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"{control.Node}: write failed: {ex.Message}");
+            resync = true;   // whatever was or was not sent, the combo should show the aircraft's position
         }
         finally
         {
             // Only this pick's own entry: a newer pick of the control has replaced it otherwise, and
-            // then the re-read is that pick's to make.
+            // then the re-read is that pick's to make; a reload has cleared it, and then there is
+            // nothing to re-read into.
             bool mine = _pendingPicks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(control.Node, cts));
             cts.Dispose();
             if (mine && resync) sim.RequestVariable(control.Node, forceUpdate: true);
@@ -193,11 +209,29 @@ public partial class BBS757Definition
     /// <summary>True while a pick of this control is in flight (its deliveries are consumed).</summary>
     internal bool IsPickPending(string varKey) => _pendingPicks.ContainsKey(varKey);
 
-    /// <summary>Stops every pending pick: a profile switch must not let one write into the next aircraft.</summary>
+    /// <summary>
+    /// Stops every pending pick and press: a profile switch must not let one write into the next
+    /// aircraft. The outgoing definition is never used again, so its lifetime source goes too.
+    /// </summary>
     public override void OnSwitchedAway()
     {
         base.OnSwitchedAway();
         _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+
+    /// <summary>
+    /// Cancels and forgets every pick in flight: one armed before a flight load or a dropped
+    /// connection must not write into the flight that follows. Each canceled pick ends silently and
+    /// makes no re-read (its entry is gone).
+    /// </summary>
+    private void CancelPendingPicks()
+    {
+        foreach (var cts in _pendingPicks.Values)
+        {
+            try { cts.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
+        }
+        _pendingPicks.Clear();
     }
 
     // =================================================================================
@@ -205,10 +239,10 @@ public partial class BBS757Definition
     // =================================================================================
 
     /// <summary>
-    /// The BBS Nest check rides the first delivery of each connection. A control with a pick in
-    /// flight is consumed silently (see <see cref="SetPositionAsync"/>). Everything else is the
-    /// base's (the trim and glideslope call-outs) or the generic announcer's (the announced status
-    /// rows).
+    /// The BBS Nest check also rides any delivery that comes before its batch hook (see
+    /// <see cref="DeferredFlushWatchVariable"/>). A control with a pick in flight is consumed
+    /// silently (see <see cref="SetPositionAsync"/>). Everything else is the base's (the trim and
+    /// glideslope call-outs) or the generic announcer's (the announced status rows).
     /// </summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
@@ -218,9 +252,28 @@ public partial class BBS757Definition
     }
 
     /// <summary>
+    /// While the BBS Nest check of this connection or flight load is pending, MainForm calls
+    /// <see cref="OnDeferredFlushBatchDelivered"/> at the end of every delivery of the batch carrying
+    /// <see cref="NestCheckWatchKey"/>. The continuous batches arrive every second whether or not a
+    /// value changed, so the check runs about a second after connecting, switching to this profile
+    /// or loading a flight, even in a cold and dark cockpit where no variable moves (a value-change
+    /// delivery alone could wait for minutes). Null once the check has settled, so the hook costs
+    /// nothing for the rest of the session.
+    /// </summary>
+    public override string? DeferredFlushWatchVariable => _nestSettled ? null : NestCheckWatchKey;
+
+    /// <summary>
+    /// The batch carrying <see cref="NestCheckWatchKey"/> has been dispatched: run the BBS Nest
+    /// check. This runs outside MainForm's Ctrl+M wrap, which is right: the warning is no row's, so
+    /// no mute applies to it.
+    /// </summary>
+    public override void OnDeferredFlushBatchDelivered(ScreenReaderAnnouncer announcer)
+        => WarnOnceIfNestMissing(announcer);
+
+    /// <summary>
     /// Asks once whether BBS Nest runs and, when it does not, says so once. The warning is no
     /// Ctrl+M row's, so a delivery MainForm has wrapped in <c>announcer.Suppressed</c> (a muted row,
-    /// a UI-set echo) does not use it up: it is said on the next delivery instead.
+    /// a UI-set echo) does not use it up: it is said on the next delivery or batch instead.
     /// </summary>
     private void WarnOnceIfNestMissing(ScreenReaderAnnouncer announcer)
     {
@@ -238,12 +291,16 @@ public partial class BBS757Definition
         announcer.Announce(NestMissingWarning);
     }
 
-    /// <summary>A flight load or a dropped connection: BBS Nest is asked about again on the next delivery.</summary>
+    /// <summary>
+    /// A flight load or a dropped connection: BBS Nest is asked about again on the next batch, and
+    /// every pick still in flight is dropped so none writes into the flight that follows.
+    /// </summary>
     public override void OnSimContextReset()
     {
         base.OnSimContextReset();
         _nestRunning = null;
         _nestSettled = false;
+        CancelPendingPicks();
     }
 
     // =================================================================================
