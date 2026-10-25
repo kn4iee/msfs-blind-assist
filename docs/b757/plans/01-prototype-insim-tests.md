@@ -239,7 +239,11 @@ Task 10 fix round 1 (rulings R31, R32):
     moves.
 79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
     a second or two "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
-    (Alt+P), for example after the A/T Disconnect button, note both.
+    (Alt+P), for example after the A/T Disconnect button, note both. Then, engines off: Pedestal > Control stand >
+    A/T Disconnect ("A/T Disconnect pressed"), and in Ctrl+P note A/T Arm's caption (it may now read Off). Press A/T
+    Arm once: either the caption changes ("A/T Arm: On" or "Off") and nothing else is said, or about two seconds later
+    "A/T Arm did not arm", once: the disconnect cleared the armed flag and left the switch on. Then press it again:
+    "A/T Arm: On". Note which you heard.
 80. Trim in units (R35): with the hydraulics powered (the electric pumps on, or the engines running), trim with the
     simulator's trim keys: about once a second while it moves BA says the setting ("Trim 3.0", "Trim 3.1", …), and
     nothing once it stops; the trim as found when BA connects is not spoken (after a flight reload the new flight's

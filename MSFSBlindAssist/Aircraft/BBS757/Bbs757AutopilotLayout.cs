@@ -48,6 +48,20 @@ public static class Bbs757AutopilotLayout
         => armed is double v && double.IsFinite(v) ? (v > 0.5 ? "On" : "Off") : "unavailable";
 
     /// <summary>
+    /// What an A/T Arm press says when the armed flag reads back as it was before it (so the caption
+    /// cannot change, ruling R29's style): "A/T Arm did not arm" (off and still off), "A/T Arm did not
+    /// disarm" (on and still on); null when it changed or either read is missing. The press flips the
+    /// switch, so this is heard when the switch and the flag disagreed.
+    /// </summary>
+    public static string? AutothrottleRefusedPhrase(string label, double? before, double? after)
+    {
+        if (before is not double b || after is not double a || !double.IsFinite(b) || !double.IsFinite(a)) return null;
+        bool wasArmed = b > 0.5, isArmed = a > 0.5;
+        if (wasArmed != isArmed) return null;
+        return wasArmed ? $"{label} did not disarm" : $"{label} did not arm";
+    }
+
+    /// <summary>
     /// A switch's state from its read value: the name of the map position it is at, or "unavailable"
     /// when it was not read or is at none of them.
     /// </summary>

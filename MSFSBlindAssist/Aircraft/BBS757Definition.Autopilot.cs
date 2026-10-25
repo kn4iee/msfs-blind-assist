@@ -19,7 +19,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// feedback, as in the iFly, HS787 and MD-11 windows), its light change being that press's echo; when
 /// the light reads back as it was, the caption cannot change, so the press says "CMD L did not
 /// engage" or "… did not disengage" (the iFly window's words). A switch is moved to its other
-/// position (<see cref="SetPositionAsync"/>). Nothing that can land: "{label} unavailable".
+/// position (<see cref="SetPositionAsync"/>); A/T Arm then reads its flag back and, when it did not
+/// follow, says "A/T Arm did not arm" or "… did not disarm" once. Nothing that can land: "{label}
+/// unavailable".
 /// </summary>
 public partial class BBS757Definition
 {
@@ -117,6 +119,10 @@ public partial class BBS757Definition
     /// <summary>
     /// A switch pressed in the window: its other position, from the cache or else a fresh read, then the
     /// panel's own pick (which refuses aloud, reads fresh again and writes only what is owed).
+    /// A/T Arm's caption is BlueBird's armed flag, not the switch (R40), and the click flips the switch:
+    /// after its pick wrote, the flag is read fresh, and when it reads as the caption showed it before the
+    /// press, the caption cannot change, so the press says so once ("A/T Arm did not arm"). A flag that
+    /// changed says nothing: the caption's change is the feedback (R29).
     /// </summary>
     private async Task FlipFromWindowAsync(Bbs757Control control, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
     {
@@ -128,7 +134,15 @@ public partial class BBS757Definition
                 SayUnavailable(control, announcer);
                 return;
             }
-            await SetPositionAsync(control, target, io, announcer);
+            bool atArm = control.Node == Bbs757AutopilotLayout.AutothrottleArmNode;
+            double? armedBefore = atArm ? io.Cached(Bbs757AutopilotLayout.AutothrottleArmedVar) : null;
+            if (!await SetPositionAsync(control, target, io, announcer) || !atArm) return;
+
+            if (_lifetime.IsCancellationRequested) return;   // switched away meanwhile
+            double? armedAfter = await io.ReadFresh(Bbs757AutopilotLayout.AutothrottleArmedVar, _lifetime.Token);
+            _lifetime.Token.ThrowIfCancellationRequested();
+            if (Bbs757AutopilotLayout.AutothrottleRefusedPhrase(control.Label, armedBefore, armedAfter) is { } refused)
+                announcer.Announce(refused);
         }
         catch (OperationCanceledException) { /* switched away */ }
         catch (Exception ex)

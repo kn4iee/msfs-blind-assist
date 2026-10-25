@@ -820,6 +820,90 @@ public class Bbs757FlightReadinessTests
         Assert.Equal("Off", fd.State());
     }
 
+    [Theory]
+    [InlineData(0.0, 0.0, "A/T Arm did not arm")]       // the caption read Off and still does
+    [InlineData(1.0, 1.0, "A/T Arm did not disarm")]
+    [InlineData(0.0, 1.0, null)]                        // it armed: the caption change says so
+    [InlineData(1.0, 0.0, null)]
+    [InlineData(null, 0.0, null)]                       // nothing known before: no claim
+    [InlineData(1.0, null, null)]
+    public void An_a_t_arm_press_the_flag_did_not_follow_says_so(double? before, double? after, string? phrase)
+    {
+        Assert.Equal(phrase, Bbs757AutopilotLayout.AutothrottleRefusedPhrase("A/T Arm", before, after));
+    }
+
+    private static FakeSim AtArmSim(double? flagBefore, double? flagAfter)
+    {
+        var sim = new FakeSim();
+        sim.Cache[Bbs757AutopilotLayout.AutothrottleArmNode] = 0;   // the switch ON, as every panel state loads it
+        sim.Fresh[Bbs757AutopilotLayout.AutothrottleArmNode] = 0;
+        if (flagBefore is double b) sim.Cache[Bbs757AutopilotLayout.AutothrottleArmedVar] = b;
+        sim.Fresh[Bbs757AutopilotLayout.AutothrottleArmedVar] = flagAfter;
+        return sim;
+    }
+
+    [Theory]
+    [InlineData(0.0, 0.0, "A/T Arm did not arm")]
+    [InlineData(1.0, 1.0, "A/T Arm did not disarm")]
+    public async Task An_a_t_arm_press_whose_flag_did_not_change_says_so_once(double before, double after, string said)
+    {
+        // A/T Arm's caption is BlueBird's armed flag; the press flips the switch (R40). With the switch ON and
+        // the flag 0 (the two disagreeing), the click turns the switch OFF and the flag stays 0.
+        var sim = AtArmSim(before, after);
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync(Bbs757AutopilotLayout.AutothrottleArmNode, new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Equal(new[] { said }, speech.All);
+        Assert.Single(sim.Writes);   // the switch's own click, once
+    }
+
+    [Theory]
+    [InlineData(0.0, 1.0)]
+    [InlineData(1.0, 0.0)]
+    [InlineData(null, 1.0)]   // the caption had nothing to show: no claim
+    public async Task An_a_t_arm_press_that_moved_the_flag_or_had_no_reading_is_silent(double? before, double after)
+    {
+        var sim = AtArmSim(before, after);
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync(Bbs757AutopilotLayout.AutothrottleArmNode, new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Empty(speech.All);
+        Assert.Single(sim.Writes);
+    }
+
+    [Fact]
+    public async Task An_a_t_arm_press_that_cannot_land_is_refused_once_and_says_nothing_of_the_flag()
+    {
+        var sim = AtArmSim(0, 0);
+        sim.CanWrite = false;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync(Bbs757AutopilotLayout.AutothrottleArmNode, new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Equal(new[] { "A/T Arm unavailable" }, speech.All);
+        Assert.Empty(sim.Writes);
+    }
+
+    [Fact]
+    public async Task A_flight_director_press_says_nothing_of_the_armed_flag()
+    {
+        var sim = AtArmSim(0, 0);
+        sim.Cache[Bbs757AutopilotLayout.CaptainFdNode] = 0;
+        sim.Fresh[Bbs757AutopilotLayout.CaptainFdNode] = 0;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync(Bbs757AutopilotLayout.CaptainFdNode, new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Empty(speech.All);
+        Assert.Single(sim.Writes);
+    }
+
     [Fact]
     public void The_armed_flag_is_read_on_request_with_the_switches_and_mutes_nothing()
     {

@@ -196,11 +196,14 @@ public partial class BBS757Definition
     /// the combo current goes out after the pick has left the pending set, so it reaches the combo:
     /// silent when the control landed on the pick (WinForms ignores a same-index set), the real
     /// position once when it did not or nothing could be written.
+    ///
+    /// True when it wrote and waited out the read-back delay; false when it refused, found the control
+    /// already there, or was superseded (the autopilot window's A/T Arm reads its flag only after a write).
     /// </summary>
-    private async Task SetPositionAsync(Bbs757Control control, double target, Bbs757SimIo io,
+    private async Task<bool> SetPositionAsync(Bbs757Control control, double target, Bbs757SimIo io,
         ScreenReaderAnnouncer announcer)
     {
-        if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is written
+        if (_lifetime.IsCancellationRequested) return false;   // switched away: nothing is written
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         if (_pendingPicks.TryGetValue(control.Node, out var prior))
         {
@@ -208,7 +211,7 @@ public partial class BBS757Definition
         }
         _pendingPicks[control.Node] = cts;
         var ct = cts.Token;
-        bool resync = false;
+        bool resync = false, wrote = false;
 
         try
         {
@@ -218,7 +221,7 @@ public partial class BBS757Definition
             {
                 SayUnavailable(control, announcer);
                 resync = true;
-                return;
+                return false;
             }
 
             double? current = await io.ReadFresh(control.Node, ct);
@@ -228,13 +231,13 @@ public partial class BBS757Definition
             switch (plan.Outcome)
             {
                 case Bbs757WriteOutcome.AtPosition:
-                    return;
+                    return false;
                 case Bbs757WriteOutcome.Refused:
                     Log.Debug("BBS757", $"{control.Node}: read {current?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "nothing"}, " +
                         $"target {target.ToString(System.Globalization.CultureInfo.InvariantCulture)}: no safe write.");
                     SayUnavailable(control, announcer);
                     resync = true;
-                    return;
+                    return false;
             }
 
             // The parking brake's state row would announce this pick a second time ("Parking brake
@@ -246,6 +249,7 @@ public partial class BBS757Definition
 
             await io.Delay(ReadBackDelayMs, ct);
             resync = true;
+            wrote = true;
             if (linked != null)
             {
                 // Read the row and close the echo window, as a press does: a change after this (the
@@ -269,6 +273,7 @@ public partial class BBS757Definition
             cts.Dispose();
             if (mine && resync) io.RequestRead(control.Node);
         }
+        return wrote;
     }
 
     /// <summary>True while a pick of this control is in flight (its deliveries are consumed).</summary>

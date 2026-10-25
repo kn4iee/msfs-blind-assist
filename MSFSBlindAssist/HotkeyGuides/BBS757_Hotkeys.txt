@@ -210,7 +210,9 @@ MCP Value Windows:
              Each press is the cockpit's own click; the button then shows
              the new state. When the aircraft does not take a press, the
              app says so about two seconds later: "CMD L did not engage"
-             (or "did not disengage"). Escape closes the window.
+             (or "did not disengage"), and for A/T Arm "A/T Arm did not
+             arm" (or "did not disarm"): press it again. Escape closes the
+             window.
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the
