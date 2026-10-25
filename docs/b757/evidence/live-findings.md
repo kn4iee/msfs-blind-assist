@@ -68,6 +68,32 @@ put back unless noted at the end.
 - **Mach flag (session 4)**: pulsing the IAS/MACH changeover (`L:B757_MCP_AP_SPD_MACH_SW` 1 then 0, separate calls)
   left `L:BBS_AIRSPEED_IN_MACH`, `L:BBS_TARGET_MACH`, stock `AUTOPILOT MANAGED SPEED IN MACH` and the speed target
   (200) unchanged: either the pulse did not register or the flag is another variable. Unproven.
+- **Fuel and payload setters (session 5, 2026-10-25 morning, on the ground, APU running)**: every
+  `L:BBS_EFBX_SET_*` setter rests at -1, takes one write and is consumed. Fuel: `_FUEL_LEFT_LBS` 10000 and
+  `_FUEL_RIGHT_LBS` 10000 gave 1,488.5 gal per wing tank, `_FUEL_CENTER_LBS` 20000 gave 2,973 gal (BlueBird converts at
+  about 6.72 lb/gal; the sim reports 6.70); total 39,865 lb. Tanks (`flight_model.cfg`): center 6,924 gal, left and
+  right 2,176 gal each. Payload (stations `PAYLOAD STATION WEIGHT:3` First Class, `:4` Economy, `:5` Baggage FWD, `:6`
+  Baggage AFT; `:1`/`:2` are the pilots at 200 lb): `_PAX_BUSINESS_LBS` 1900, `_PAX_ECONOMY_LBS` 30000,
+  `_CARGO_FWD_LBS` 4000, `_CARGO_AFT_LBS` 6000 each set their station exactly. `_PAX_WEIGHT_LBS` 32000 split itself
+  2,909.09 / 29,090.9 (1 : 10, BlueBird's cabin ratio). `_CARGO_WEIGHT_LBS` fills the forward hold first: 8000 went
+  all forward, 25000 went 10,300 forward and 14,700 aft (the hold limits, it seems). Left loaded: fuel 39,865 lb,
+  passengers 32,000 lb, cargo 25,000 lb.
+- **BlueBird's own SimBrief loading (session 5, EFB by scripted clicks, seen through the ND mirror)**: the plan was
+  BVI 4RK KSEA-KDEN, units lbs, block fuel 25,550, 224 passengers at 175 lb (+55 lb bags), cargo 12,259, payload
+  51,459, ZFW 184,000 (= max ZFW). EFB positions (EFB-local): Aircraft app menu FUEL (67,237), WEIGHT & BALANCE
+  (124,307); Fuel page IMPORT FROM SIMBRIEF (508,962; 511,981 missed); START BOARDING in the top bar (1231,24); the
+  "Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?" dialog YES (400,648), the same spot
+  as the units dialog's YES; "BOARDING IS COMPLETE!" OK (731,879). The Fuel page's import and START BOARDING both ask
+  that question when current fuel is above the plan's.
+  - Fuel (IMPORT FROM SIMBRIEF, then the defuel ran about 3.5 minutes): **both wings evenly, center empty** for a
+    block under the wings' capacity: left 1,902.0 gal, right 1,902.7 gal (about 12,745 lb each), center 0; block
+    25,550 on the EFB. It first filled both wings to full (2,176 gal, 14,579 lb) while draining the center.
+  - Payload (START BOARDING, about 25 minutes, cargo-door notifications; it zeroes the stations first): passengers
+    **30,800 lb = 176 seats × 175 lb** (the plan's 224 capped at the cabin's 16 + 160 seats), split by BlueBird
+    2,800 First / 28,000 Economy (shown as 15/16 and 151/160 passengers, about 185 lb each); cargo **20,659 lb =
+    payload − passenger weight**, split evenly between the holds but capped at the forward hold's 10,300 lb: forward
+    10,300, aft 10,359. Result: ZFW 182,734, ZFW CG 28.9 %, gross 208,239, CG 31.2 %.
+  - The EFB was left on Home, the mirror removed, the camera restored (cockpit view 1/1).
 - **Calculator string length (session 4)**: the simconnect MCP refuses calculator strings longer than about 220
   characters ("negative count": it pads to a 256-byte message), so a 25-event speed burst could not be measured through
   it. MSFSBA's own MobiFlight channel is 1,024 bytes (`MobiFlightWasmModule.MAX_COMMAND_SIZE`).

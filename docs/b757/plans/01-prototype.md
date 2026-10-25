@@ -184,6 +184,53 @@
 - [x] **Step 2: Request a whole-branch code review** (superpowers:requesting-code-review) and fix what it confirms.
 - [x] **Step 3: Commit and push** to `kn4iee/B757`.
 
+### Task 9: Fuel and payload from SimBrief (added 2026-10-25, owner's request)
+
+An instant load that reproduces BlueBird's own SimBrief loading (measured: `evidence/live-findings.md`, session 5),
+through the measured setters. No typing box (the owner's call).
+
+**Files:**
+- Create: `MSFSBlindAssist/SimConnect/BBS757/Bbs757Loadsheet.cs` (pure: parse the plan, compute the loads, phrase the
+  result), tests `tests/MSFSBlindAssist.Tests/Bbs757LoadsheetTests.cs` with a fixture `Fixtures/bbs757-simbrief-ofp.xml`
+  (made-up airline, flight and IDs; the measured numbers below)
+- Modify: `MSFSBlindAssist/Services/SimBriefService.cs` (one small method that returns the latest OFP's XML for a
+  SimBrief user ID or a username, reusing its HttpClient), `MSFSBlindAssist/Forms/BBS757/BBS757EfbForm.cs` (button
+  "Load fuel and payload from SimBrief"), `MSFSBlindAssist/MainForm.BBS757.cs` (seams for the writes and reads),
+  `MSFSBlindAssist/Aircraft/BBS757Definition.cs` (OnRequest stock reads it needs), hotkey guide, `docs/b757.md`, the
+  guide's `#boeing-757-efb`, `docs/b757/plans/01-prototype-insim-tests.md`
+
+**Interfaces and values:**
+- Plan fields (SimBrief XML): `fuel/plan_ramp`; `weights/pax_count_actual` (else `pax_count`), `weights/pax_weight`,
+  `weights/payload`, `weights/cargo`; `params/units` (`lbs` or `kgs`: kilograms × 2.20462); `general/icao_airline` +
+  `general/flight_number`, `origin/icao_code`, `destination/icao_code` for the spoken line.
+- Source: BlueBird's stored SimBrief ID (`Bbs757WorkFolder.ReadSimBriefId`, as `userid=`), else the app's
+  `SimbriefUsername` setting; neither → "Set your SimBrief ID first." Never log or speak the ID.
+- Loads (pounds; constants from `flight_model.cfg` and the measurement): wing tank 14,579 (2,176 gal × 6.7), center
+  46,390 (6,924 gal × 6.7), seats 176 (16 + 160), forward hold 10,300, aft hold 14,700.
+  - Fuel: each wing `min(block / 2, 14579)`, center the rest; center above 46,390 → refuse "The plan's fuel is more
+    than the tanks hold." and write nothing.
+  - Passengers: `min(pax, 176) × pax_weight`, written as one total (`L:BBS_EFBX_SET_PAX_WEIGHT_LBS`: BlueBird splits
+    First and Economy).
+  - Cargo: `max(0, payload − passenger weight)`, half to each hold, the forward hold capped at 10,300 and its excess
+    aft; more than 25,000 → refuse "The plan's cargo is more than the holds take." and write nothing.
+  - Measured case to pin in a test: block 25,550, 224 × 175, payload 51,459, cargo 12,259 → wings 12,775 each,
+    center 0, passengers 30,800, forward 10,300, aft 10,359. Also: block 40,000 → wings 14,579, center 10,842.
+- Writes: one calculator string through `ExecuteCalculatorCodeUnique` (refuse aloud unless `CalcWriteCanLand`):
+  `L:BBS_EFBX_SET_FUEL_LEFT_LBS`, `_FUEL_RIGHT_LBS`, `_FUEL_CENTER_LBS`, `_PAX_WEIGHT_LBS`, `_CARGO_FWD_LBS`,
+  `_CARGO_AFT_LBS`, invariant numbers (VAR-5). Only on the ground (fresh `SIM ON GROUND`, as the presets).
+- Read-back about 3 s later and speak from it: `FUEL TANK LEFT/RIGHT/CENTER QUANTITY` × `FUEL WEIGHT PER GALLON`,
+  `PAYLOAD STATION WEIGHT:3`+`:4` (passengers), `:5`, `:6`. Phrase, rounded to 10, in the aircraft's units
+  (`Bbs757WorkFolder.ReadUnits`; pounds when unread): "Loaded BVI 4RK, KSEA to KDEN. Fuel 25550 pounds: left 12780,
+  right 12780, center 0. Passengers 30800 pounds. Cargo 20660 pounds: forward 10300, aft 10360." When the plan has
+  more passengers than seats, add "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the
+  payload goes in the holds." Then: "For the ACARS weight and balance, request WGTBAL on the CDU."
+
+- [ ] **Step 1: Failing tests** for the parser (fixture, kilogram plan, missing fields → null), the loads (the
+  measured case, the 40,000 case, both refusals, zero cargo, fewer passengers than seats), the write string (invariant
+  under de-DE, the six setters), the phrase (de-DE, kilograms, the cap sentence).
+- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
+- [ ] **Step 5: Commit** `feat(b757): load fuel and payload from SimBrief`.
+
 ## Rulings made while executing (2026-10-25)
 
 Decisions the plan left open, taken overnight so the run did not stop. Each says what it costs if it is wrong; the
