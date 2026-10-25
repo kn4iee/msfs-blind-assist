@@ -53,6 +53,16 @@ put back unless noted at the end.
   same holds for altitude, V/S and speed (to measure); the stock bug then disagrees and must not be read as the MCP
   value.
 - Restored afterwards: target heading 0, stock bug 0.
+- **Speed (session 3)**: the MCP IAS target is `L:BBS757_ORANGE_AIRSPEED_BUGS` (read 204 while the MCP window
+  showed 204 in a capture; found by diffing all WASM names before and after five `K:AP_SPD_VAR_INC`). It is an
+  output: a direct write of 210 was overwritten (the next INC gave 205). Each `K:AP_SPD_VAR_INC/DEC` is 1 kt, and a
+  burst of 10 or 11 events in one calculator call all counted. So the app sets speed by stepping the difference.
+  The stock `AUTOPILOT AIRSPEED HOLD VAR` moves with the steps but sits at an unrelated offset (100 against 200):
+  never read it as the MCP value. The window's digit drums (`B757_MCP_Gau_SPD_AUTO_1/10/100`) are cumulative
+  animation positions, not digits.
+- **Altitude (session 3)**: `L:BBS_AP_TARGET_ALTITUDE` adopts a direct write (12000 written, one `K:AP_ALT_VAR_INC`
+  gave 12100: a step is 100 ft). Restored to 10000.
+- V/S (`L:BBS_AP_TARGET_VS`, `K:AP_VS_VAR_INC/DEC`): unmeasured.
 
 ## WASM-only variables, first reads (session 2, APU running)
 
