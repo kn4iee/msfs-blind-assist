@@ -237,14 +237,15 @@ public partial class BBS757Definition
     /// The shared trim call-out (<c>MON_ElevatorTrim</c>: the stock <c>ELEVATOR TRIM POSITION</c> in
     /// degrees, on the 1 Hz batch) speaks BlueBird's indicator units
     /// (<see cref="Bbs757Readouts.StabTrimUnits"/>) in the 737s' words, "Trim 5.3"
-    /// (<see cref="StabTrimUnitsCallout"/>), keyed on the tenth it speaks: the stabilizer is heard about
-    /// once a second while it moves (ruling R35). The base class's first-reading baseline, hysteresis,
-    /// Shift+T toggle and Ctrl+M row apply unchanged; no readout key and no status row.
+    /// (<see cref="StabTrimUnitsCallout.Phrase"/>, their one rule), keyed on the tenth it speaks: the
+    /// stabilizer is heard about once a second while it moves (ruling R35). The base class's
+    /// first-reading baseline, hysteresis, Shift+T toggle and Ctrl+M row apply unchanged; no readout
+    /// key and no status row.
     /// </summary>
     protected override (double Key, string Phrase) DescribeElevatorTrim(double degrees)
     {
         double units = Math.Round(R.StabTrimUnits(degrees), 1);
-        return (units, string.Create(CultureInfo.InvariantCulture, $"Trim {units:F1}"));
+        return (units, StabTrimUnitsCallout.Phrase(units));
     }
 
     /// <summary>One row's phrase this delivery: spoken when the tracker calls it a change. A null phrase (an unreadable value) is neither spoken nor a baseline.</summary>

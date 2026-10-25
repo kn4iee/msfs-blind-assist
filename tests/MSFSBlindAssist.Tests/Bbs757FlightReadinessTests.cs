@@ -324,6 +324,8 @@ public class Bbs757FlightReadinessTests
         rig.Deliver(TrimKey, 2.6);      // 3.18 units
 
         Assert.Equal(new[] { "Trim 3.0", "Trim 3.2" }, rig.Speech.All);
+        // The 737s' one rule, from BlueBird's strip.
+        Assert.Equal(StabTrimUnitsCallout.Phrase(R.StabTrimUnits(2.6)), rig.Speech.All[1]);
     }
 
     [Theory]

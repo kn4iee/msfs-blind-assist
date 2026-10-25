@@ -1,4 +1,5 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
 
 namespace MSFSBlindAssist.Tests;
@@ -407,6 +408,17 @@ public class Bbs757ReadoutsTests
         Assert.Equal(1.11308, Bbs757Readouts.StabTrimUnits(0), 5);
         Assert.Equal(0.436, Bbs757Readouts.StabTrimUnits(-0.9), 5);
         Assert.Equal(0.436, Bbs757Readouts.StabTrimUnits(-30), 5);
+    }
+
+    [Theory]
+    [InlineData(5.3, "Trim 5.3")]
+    [InlineData(2.94897, "Trim 2.9")]
+    [InlineData(0.436, "Trim 0.4")]
+    [InlineData(10.0, "Trim 10.0")]
+    public void The_trim_words_are_the_737s_one_rule_with_a_dot(double units, string phrase)
+    {
+        // One rule for every airframe that speaks units (the PMDG 737, the iFly and the 757): StabTrimUnitsCallout.
+        InCulture("de-DE", () => Assert.Equal(phrase, StabTrimUnitsCallout.Phrase(units)));
     }
 
     [Fact]
