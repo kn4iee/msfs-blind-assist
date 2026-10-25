@@ -79,11 +79,13 @@ AI Display Reading (needs an AI provider configured in Settings > AI tab):
   Alt+P      Describe the ADI (attitude and flight mode annunciations)
   Alt+N      Describe the EHSI (map display)
   Alt+E      Describe the upper EICAS (engines and crew alerts)
-  Alt+S      Describe the lower EICAS
+  Alt+S      Describe the lower EICAS (secondary engine data or a system page)
   The 757's displays are drawn by the aircraft itself and cannot be read as
   text, so these are the way to hear them. The app moves the simulator
   camera to the display it is reading and puts your own view back afterwards;
   from an outside or drone view it says "Switch to a cockpit view first".
+  The display is read as it presents itself: abbreviations such as EPR, N1
+  and EGT and the units are not changed.
 
 EFB:
   Shift+E    Open Flight Planning EFB

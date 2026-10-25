@@ -87,6 +87,12 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
+    /// <summary>
+    /// Alt+P / Alt+N / Alt+E / Alt+S read the ADI, the EHSI and the upper and lower EICAS by AI vision
+    /// on the measured instrument views; <c>BaseAircraftDefinition.HandleHotkeyAction</c> dispatches the table.
+    /// </summary>
+    protected override IReadOnlyList<AiDisplayRead> DisplayReads => Bbs757DisplayReads.All;
+
     // =================================================================================
     // Variables
     // =================================================================================
