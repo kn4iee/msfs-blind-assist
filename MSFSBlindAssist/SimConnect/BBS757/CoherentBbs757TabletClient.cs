@@ -62,7 +62,8 @@ public sealed class CoherentBbs757TabletClient : IDisposable
 
     /// <summary>
     /// How long an installed agent's Comm Bus listener may stay not ready before it is installed
-    /// again (the agent itself re-registers after 4 s, so a re-install after this always does).
+    /// again (the agent itself re-registers after 4 s, so a re-install after this does, up to its
+    /// three registrations per page; a view still deaf after them keeps its last agent).
     /// </summary>
     internal const int ListenerReadyTimeoutMs = 5000;
 
@@ -117,8 +118,10 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     private int _installFailures;
     private DateTime? _notReadySinceUtc;
     private int _pendingKeys;
-    // Set when KeysDropped has been raised, cleared when the agent is installed again.
-    private volatile bool _keysDroppedRaised;
+    // 1 when KeysDropped has been raised, 0 again when the agent is installed again. Taken with
+    // Interlocked.Exchange: the key pump and the loop can both drop keys at once, and the event
+    // must be raised once per outage.
+    private int _keysDroppedRaised;
     private long _lastGoodScrapeTicks;
     // Per CDU (index 1 and 2): the agent tag of the frame last delivered, whether the agent
     // holds a frame, and whether one was ever delivered.
@@ -358,8 +361,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         }
         if (dropped == 0) return;
         Log.Debug("BBS757", $"Tablet link lost: {dropped} CDU key(s) dropped, not sent.");
-        if (_keysDroppedRaised) return;
-        _keysDroppedRaised = true;
+        if (Interlocked.Exchange(ref _keysDroppedRaised, 1) == 1) return;
         PostToUI(() => KeysDropped?.Invoke(dropped));
     }
 
@@ -450,7 +452,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         _agentInstalled = true;
         _installFailures = 0;
         _notReadySinceUtc = null;
-        _keysDroppedRaised = false;
+        Interlocked.Exchange(ref _keysDroppedRaised, 0);
         _tags[1] = "";
         _tags[2] = "";
     }

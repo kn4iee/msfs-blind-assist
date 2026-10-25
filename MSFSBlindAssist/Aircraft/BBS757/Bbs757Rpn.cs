@@ -17,6 +17,14 @@ public static class Bbs757Rpn
     /// <summary>Most K-event writes joined into one calculator call.</summary>
     public const int MaxKeysPerCall = 25;
 
+    /// <summary>
+    /// The longest joined call, in characters. MobiFlight's command buffer is 1024
+    /// (<c>MobiFlightWasmModule.MAX_COMMAND_SIZE</c>) and cuts a longer command off silently; the
+    /// unique prefix and MobiFlight's own command name take a few dozen of it. A burst is split by
+    /// length as well as by count, so a long vendor step never pushes a call past this.
+    /// </summary>
+    public const int MaxCallChars = 900;
+
     /// <summary>Sim values read back as doubles are compared with this slack, never with ==.</summary>
     private const double ValueTolerance = 0.001;
 
@@ -83,12 +91,19 @@ public static class Bbs757Rpn
         return -1;
     }
 
-    /// <summary><paramref name="count"/> copies of <paramref name="code"/>, space-joined in calls of at most <paramref name="perCall"/>.</summary>
+    /// <summary>
+    /// <paramref name="count"/> copies of <paramref name="code"/>, space-joined in calls of at most
+    /// <paramref name="perCall"/> copies and shorter than <see cref="MaxCallChars"/>. A single copy
+    /// longer than that still goes, alone: a vendor click is never cut.
+    /// </summary>
     private static IReadOnlyList<string> Burst(string code, int count, int perCall)
     {
+        // n copies joined take n * (length + 1) - 1 characters: n <= MaxCallChars / (length + 1) keeps them under the cap.
+        int fit = Math.Max(1, MaxCallChars / (code.Length + 1));
+        int per = Math.Min(perCall, fit);
         var calls = new List<string>();
-        for (int left = count; left > 0; left -= perCall)
-            calls.Add(string.Join(" ", Enumerable.Repeat(code, Math.Min(left, perCall))));
+        for (int left = count; left > 0; left -= per)
+            calls.Add(string.Join(" ", Enumerable.Repeat(code, Math.Min(left, per))));
         return calls;
     }
 }

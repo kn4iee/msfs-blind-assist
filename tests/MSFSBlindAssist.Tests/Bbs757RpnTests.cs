@@ -209,4 +209,70 @@ public class Bbs757RpnTests
     }
 
     private static int Occurrences(string call) => call.Split("(>K:").Length - 1;
+
+    // ---- calculator string length ---------------------------------------------
+    //
+    // MobiFlight's command buffer is 1024 bytes (MobiFlightWasmModule.MAX_COMMAND_SIZE) and it
+    // truncates silently; the unique prefix (ExecuteCalculatorCodeUnique) and "MF.SimVars.Set." add
+    // a few dozen. Every string a 757 write can produce stays under 900.
+
+    [Fact]
+    public void A_burst_of_long_steps_is_split_by_length_as_well_as_by_count()
+    {
+        string longStep = "(L:LONG_STEP_VAR, enum) 1 + 9 min (>L:LONG_STEP_VAR) " + new string('x', 140);   // ~200 chars
+        var knob = new Bbs757Control
+        {
+            Node = "K", Kind = Bbs757Kinds.Switch, StateVar = "K",
+            Positions = Positions(Enumerable.Range(0, 20).Select(i => (double)i).ToArray()), Cw = longStep, Ccw = longStep,
+        };
+
+        IReadOnlyList<string> calls = Bbs757Rpn.StepTo(knob, 0, 19);
+
+        Assert.All(calls, c => Assert.True(c.Length < Bbs757Rpn.MaxCallChars, $"{c.Length} chars"));
+        Assert.Equal(19, calls.Sum(c => c.Split(longStep).Length - 1));   // every step still sent, in order
+        Assert.True(calls.Count > 1);
+    }
+
+    [Fact]
+    public void A_single_step_longer_than_the_cap_is_still_one_call_of_its_own()
+    {
+        // Never cut inside a vendor click: such a step would go alone (the map has none; see below).
+        string huge = new string('y', 1000);
+        var knob = new Bbs757Control
+        {
+            Node = "K", Kind = Bbs757Kinds.Switch, StateVar = "K", Positions = Positions(0, 1, 2), Cw = huge, Ccw = huge,
+        };
+
+        Assert.Equal(new[] { huge, huge }, Bbs757Rpn.StepTo(knob, 0, 2));
+    }
+
+    [Fact]
+    public void Every_string_a_757_control_can_produce_stays_under_900_characters()
+    {
+        var map = Bbs757ControlMap.Load();
+        var strings = new List<(string Where, string Rpn)>();
+        foreach (var c in map.Controls)
+        {
+            if (!string.IsNullOrWhiteSpace(c.Press)) strings.Add(($"{c.Node} press", c.Press));
+            if (!string.IsNullOrWhiteSpace(c.Release)) strings.Add(($"{c.Node} release", c.Release));
+            foreach (var from in c.Positions)
+            {
+                foreach (var to in c.Positions)
+                {
+                    foreach (var call in Bbs757Rpn.StepTo(c, from.Value, to.Value)) strings.Add(($"{c.Node} step {from.Value}->{to.Value}", call));
+                    string? toggle = Bbs757Rpn.ToggleTo(c, from.Value, to.Value);
+                    if (toggle != null) strings.Add(($"{c.Node} toggle", toggle));
+                    foreach (var call in Bbs757Write.ToPosition(c, from.Value, to.Value).Calls) strings.Add(($"{c.Node} write {from.Value}->{to.Value}", call));
+                }
+                if (!string.IsNullOrWhiteSpace(c.StateVar)) strings.Add(($"{c.Node} set", Bbs757Rpn.SetLVar(c.StateVar, from.Value)));
+            }
+        }
+        // The MCP's K-event bursts, at their cap and past it.
+        foreach (string k in new[] { "AP_SPD_VAR_INC", "AP_SPD_VAR_DEC", "AP_VS_VAR_INC", "AP_VS_VAR_DEC" })
+            foreach (var call in Bbs757Rpn.KeyBurst(k, Bbs757Rpn.MaxKeysPerCall * 4)) strings.Add((k, call));
+
+        Assert.NotEmpty(strings);
+        var tooLong = strings.Where(s => s.Rpn.Length >= 900).Select(s => $"{s.Where}: {s.Rpn.Length}").ToList();
+        Assert.True(tooLong.Count == 0, string.Join("; ", tooLong));
+    }
 }

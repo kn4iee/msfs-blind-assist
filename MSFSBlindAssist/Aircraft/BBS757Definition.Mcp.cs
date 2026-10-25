@@ -32,8 +32,11 @@ public partial class BBS757Definition
     /// </summary>
     private readonly ConcurrentDictionary<string, McpSetInFlight> _mcpSets = new(StringComparer.Ordinal);
 
-    /// <summary>Whether a set can land; replaced by tests, since a SimConnectManager cannot be connected in them.</summary>
-    internal Func<SimConnectManager, bool> CanWrite { get; set; } = sim => sim.CalcWriteCanLand;
+    /// <summary>
+    /// Whether a set can land; replaced by tests at construction (init only), since a
+    /// SimConnectManager cannot be connected in them. Nothing can swap it once the definition runs.
+    /// </summary>
+    internal Func<SimConnectManager, bool> CanWrite { get; init; } = sim => sim.CalcWriteCanLand;
 
     /// <summary>The open value windows, one per kind: a second hotkey press brings it forward, never stacks another.</summary>
     private readonly Dictionary<HotkeyAction, ValueInputForm> _mcpDialogs = new();

@@ -467,6 +467,25 @@ public class Bbs757DefinitionTests
         Assert.Empty(speech.All);
     }
 
+    [Fact]
+    public void Switching_away_twice_is_harmless()
+    {
+        // A switch that threw part-way can call it again at exit: the second call must not throw
+        // on the lifetime source the first one disposed.
+        var def = new BBS757Definition();
+        def.OnSwitchedAway();
+
+        var thrown = Record.Exception(def.OnSwitchedAway);
+
+        Assert.Null(thrown);
+    }
+
+    [Fact]
+    public void The_757_plays_its_own_take_off_speed_callouts()
+    {
+        Assert.True(new BBS757Definition().PlaysOwnTakeoffSpeedCallouts);
+    }
+
     private static async Task UntilAsync(Func<bool> condition)
     {
         for (int waited = 0; waited < 5000 && !condition(); waited += 25) await Task.Delay(25);

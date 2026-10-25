@@ -121,8 +121,8 @@ MCP Value Windows:
   to set. About a second later the app reads the value back from the MCP
   ("Heading 090", "Speed 250", "Altitude 12000", "Vertical speed minus 1500"),
   so you hear what the MCP took, not what you typed. A speed is set by
-  stepping the MCP, which takes a second or two; the app checks and
-  corrects it before it speaks.
+  stepping the MCP, which takes about one to three seconds; the app checks
+  and corrects it before it speaks.
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the
@@ -162,10 +162,11 @@ CDU (Shift+M):
   can be reached. One action runs at a time: a press while one is still
   running says "The EFB is still busy with the last action."
   Sign in to Navigraph   Reads out the Navigraph sign-in code letter by
-                         letter and opens the sign-in page in your
-                         browser (only ever a navigraph.com address). The
-                         code is also in the Status box. Says "Already
-                         signed in to Navigraph" when you are.
+                         letter, then a few seconds later opens the
+                         sign-in page in your browser (only ever a
+                         navigraph.com address). The code is also in
+                         the Status box. Says "Already signed in to
+                         Navigraph" when you are.
   Update nav data        Installs the latest AIRAC cycle from Navigraph,
                          then says "Nav data cycle 2611 installed. Reload
                          the flight to use it." Reload before you fly:
@@ -178,8 +179,13 @@ CDU (Shift+M):
                          the new cycle's first full day (the day after it
                          takes effect), signed in, and at least a minute
                          ago. Otherwise it says to reload the flight, or
-                         to wait a minute, and presses nothing. It runs
-                         once per flight load.
+                         to wait a minute, and presses nothing. On a new
+                         cycle's first day it says to reload after
+                         midnight UTC. It runs once per flight load.
+                         If BlueBird's folder is found in more than one
+                         place (both simulators installed) and they hold
+                         different nav data, it says to update from the
+                         EFB in the sim and presses nothing.
                          If your Navigraph subscription has lapsed, or
                          Navigraph is late with a cycle, BlueBird can
                          show REMOVE where UPDATE was: the window then
@@ -195,16 +201,24 @@ CDU (Shift+M):
                          SimBrief ID". Needed once: without it the CDU's
                          ACARS INIT does nothing.
   Fetch SimBrief flight  Loads your latest SimBrief flight plan into the
-                         EFB. Then, if BlueBird asks to switch weight
-                         units to the plan's, press Accept units or Keep
-                         units. These work only right after a fetch:
-                         otherwise they say "Fetch the SimBrief flight
-                         first." Then in the CDU window: MENU, ACARS,
-                         OPERATIONS, PREFLIGHT, INIT FLT, INIT.
-  Cockpit preset         Choose a panel state (Cold and dark, Turnaround,
-  Load preset            Before start, Ready for taxi, Ready for takeoff,
-                         After takeoff, Cruise, Approach, Final approach)
-                         and press Load preset. Before start brings up
+                         EFB and says which weight units the aircraft
+                         uses. When the plan's weight units differ from
+                         the aircraft's, BlueBird asks to switch them:
+                         Accept units switches, Keep units keeps them,
+                         and the app then says what is set ("Weight
+                         units now pounds", "Weight units unchanged,
+                         kilograms"). These work only right after a
+                         fetch: otherwise they say "Fetch the SimBrief
+                         flight first." Then in the CDU window: MENU,
+                         ACARS, OPERATIONS, PREFLIGHT, INIT FLT, INIT.
+  Cockpit preset         Choose a panel state and press Load preset.
+  Load preset            On the ground: Cold and dark, Turnaround, Before
+                         start, Ready for taxi, Ready for takeoff. In
+                         flight: After takeoff, Cruise, Approach, Final
+                         approach. A ground preset in flight says "That
+                         preset is for the ground." and a flight preset
+                         on the ground "That preset is for flight.", and
+                         nothing is loaded. Before start brings up
                          battery, APU and AC power in about 12 seconds.
   APU quick start        BlueBird's quick start tiles.
   IRS rapid align
@@ -227,5 +241,7 @@ SayIntentions:
 Notes:
   - The aircraft loads in its own panel state (cold and dark) wherever you
     start; the app assumes no power or engines at load.
-  - The 757 calls 80 knots, V1, rotate and its altitude callouts itself, so
-    the app makes no take-off callouts of its own on this aircraft.
+  - The 757 plays its own 80 knots, V1 and rotate calls and its altitude
+    callouts. So on this aircraft Takeoff Assist (output mode, Ctrl+T)
+    does not call "80 knots" or "100 knots"; its centerline tone and pitch
+    calls work as on every other aircraft.

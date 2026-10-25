@@ -46,6 +46,26 @@ public class CoherentBbs757TabletClientTests
     }
 
     [Fact]
+    public void The_tablet_agent_caps_its_listener_registrations_and_is_ready_only_once_both_handlers_are_on()
+    {
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-tablet-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+
+        // A permanently deaf view keeps its last agent after three registrations.
+        Assert.Contains("var MAX_REGISTRATIONS = 3;", code);
+        Assert.Contains("registrations >= MAX_REGISTRATIONS", code);
+        // Strict ES5: no function declaration inside a block.
+        Assert.DoesNotContain("function hook", code);
+        Assert.Contains("var hook = function", code);
+        // ready follows both .on() calls, inside the hook's try.
+        int on2 = code.IndexOf("'BBS_CDU_DISPLAY_2'", StringComparison.Ordinal);
+        int ready = code.IndexOf("state.ready = true", StringComparison.Ordinal);
+        Assert.True(on2 > 0 && ready > on2, "state.ready must be set after both handlers are on");
+        Assert.DoesNotContain("=>", code);
+        Assert.DoesNotMatch(@"\b(let|const|class)\s", code);
+    }
+
+    [Fact]
     public async Task With_nothing_to_read_it_is_not_readable_and_reads_no_navigraph_state()
     {
         using var client = new CoherentBbs757TabletClient(() => "");

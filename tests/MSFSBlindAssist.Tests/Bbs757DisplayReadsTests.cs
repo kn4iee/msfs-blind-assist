@@ -198,4 +198,19 @@ public class Bbs757DisplayReadsTests
         Assert.Contains("MCP", prompt);
         Assert.Contains("standby", prompt, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void TheLowerEicasPrompt_NamesOnlyItsOwnLabel_AndListsTheSecondaryEngineValuesAsWhatToRead()
+    {
+        string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.LowerEicas757);
+
+        // "Secondary engine data" is the one label the prompt supplies; the rule against naming
+        // untitled pages must not contradict it.
+        Assert.Contains("\"Secondary engine data\"", prompt);
+        Assert.Contains("Apart from that label, never name a page the display does not title", prompt);
+        // The secondary engine values are examples of what to read, after the page line, never page names.
+        int thenReport = prompt.IndexOf("Then report", StringComparison.Ordinal);
+        foreach (string value in new[] { "N2", "fuel flow", "oil pressure", "oil temperature", "oil quantity", "vibration" })
+            Assert.True(prompt.IndexOf(value, StringComparison.Ordinal) > thenReport, $"{value} belongs to what is read");
+    }
 }

@@ -16,8 +16,12 @@
 // (an aircraft reload: the app can reach a new view before they do), RegisterViewListener or
 // SimVar is missing, and the install answers NOT_READY instead of the marker, so the app tries
 // again. A listener whose ready callback has not come within REREGISTER_MS is registered again on
-// the next install. A re-install of a healthy agent (a reconnect of the app's socket) keeps it and
-// its frames: the first officer's frame could not be had back until his screen next changes.
+// the next install, at most MAX_REGISTRATIONS times per page: a view that stays deaf after that
+// keeps its last agent (and listener, which may yet come ready) rather than gaining a new
+// listener every few seconds for the rest of the flight. The handlers go on, and `ready` is set,
+// only once both have gone on. A re-install of a healthy agent (a reconnect of the app's socket)
+// keeps it and its frames: the first officer's frame could not be had back until his screen next
+// changes.
 // A replaced agent's listener is left registered, never unregistered: unregistering could take the
 // tablet's own Comm Bus listener with it.
 //
@@ -25,15 +29,21 @@
 // try/catch. Never returns or logs a Navigraph token.
 (function () {
   try {
-    var VERSION = 2;
+    // 3: the registration cap, and `ready` only after both handlers are on.
+    var VERSION = 3;
     var MARK = 'MSFSBA_BBS757_TABLET_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_TABLET_NOT_READY:';
     var HOLD_MS = 250;
     var REREGISTER_MS = 4000;
+    var MAX_REGISTRATIONS = 3;
+
+    // Listeners this page has had registered by any agent, kept on window like the agent itself.
+    var registrations = typeof window.__MSFSBA_BBS757_REGISTRATIONS === 'number' ? window.__MSFSBA_BBS757_REGISTRATIONS : 0;
 
     var old = window.__MSFSBA_BBS757;
     if (old && old.version === VERSION && old._state && old._state.listener
-        && (old._state.ready || (Date.now() - old._state.registeredAt) < REREGISTER_MS)) return MARK;
+        && (old._state.ready || (Date.now() - old._state.registeredAt) < REREGISTER_MS
+            || registrations >= MAX_REGISTRATIONS)) return MARK;
 
     if (typeof RegisterViewListener !== 'function') return NOT_READY + 'RegisterViewListener';
     if (typeof SimVar === 'undefined' || !SimVar || typeof SimVar.SetSimVarValue !== 'function')
@@ -85,14 +95,19 @@
     };
 
     // The handlers go on once the listener says it is ready, whether that comes during
-    // RegisterViewListener or after it.
-    var listener = null, readyEarly = false;
-    function hook() {
+    // RegisterViewListener or after it. `ready` is set only once both are on; a handler already on
+    // is not added twice if the other failed and the ready callback comes again.
+    var listener = null, readyEarly = false, on1 = false, on2 = false;
+    var hook = function () {
       if (state.ready || !listener) return;
-      state.ready = true;
-      listener.on('BBS_CDU_DISPLAY_1', function (json) { A.store(1, json); });
-      listener.on('BBS_CDU_DISPLAY_2', function (json) { A.store(2, json); });
-    }
+      try {
+        if (!on1) { listener.on('BBS_CDU_DISPLAY_1', function (json) { A.store(1, json); }); on1 = true; }
+        if (!on2) { listener.on('BBS_CDU_DISPLAY_2', function (json) { A.store(2, json); }); on2 = true; }
+        state.ready = true;
+      } catch (e) {
+        state.hookError = String(e && e.message);
+      }
+    };
     try {
       listener = RegisterViewListener('JS_LISTENER_COMM_BUS', function () {
         if (listener) hook(); else readyEarly = true;
@@ -101,6 +116,7 @@
       return NOT_READY + 'listener ' + (e && e.message);
     }
     if (!listener) return NOT_READY + 'listener';
+    window.__MSFSBA_BBS757_REGISTRATIONS = registrations + 1;
     state.listener = listener;
     state.registeredAt = Date.now();
     if (readyEarly) hook();

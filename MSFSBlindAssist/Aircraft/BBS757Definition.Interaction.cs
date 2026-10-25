@@ -212,12 +212,14 @@ public partial class BBS757Definition
     /// <summary>
     /// Stops every pending pick and press: a profile switch must not let one write into the next
     /// aircraft. The outgoing definition is never used again, so its lifetime source goes too.
+    /// Safe to call again (a switch that threw part-way, then app exit): a canceled and disposed
+    /// source stays canceled, and Dispose is idempotent.
     /// </summary>
     public override void OnSwitchedAway()
     {
         base.OnSwitchedAway();
         CloseMcpDialogs();
-        _lifetime.Cancel();
+        try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
         _lifetime.Dispose();
     }
 
