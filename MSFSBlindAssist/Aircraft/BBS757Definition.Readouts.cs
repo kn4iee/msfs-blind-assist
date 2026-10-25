@@ -141,17 +141,24 @@ public partial class BBS757Definition
     /// <summary>The panel the transponder's controls are on (the map's), which gains the squawk field.</summary>
     internal const string TransponderPanel = "TCAS and transponder";
 
+    /// <summary>The transponder mode knob, the map's first control on <see cref="TransponderPanel"/>; the squawk field follows it.</summary>
+    internal const string TransponderModeNode = "B757_PED_TCAS_MODE_KNOB";
+
     /// <summary>The map's MCP panel, whose status display lists the button lights.</summary>
     internal const string McpPanel = "MCP";
 
-    /// <summary>The read-only engine panel, under the Status section.</summary>
-    internal const string EnginesPanel = "Engines";
+    /// <summary>
+    /// The read-only engine panel, under the Status section. Not named "Engines": the map's Pedestal panel
+    /// of that name holds the start selectors and the fuel control switches (task 11d), and panels are keyed
+    /// by name, so a second "Engines" would replace its controls with an empty list.
+    /// </summary>
+    internal const string EngineValuesPanel = "Engine values";
 
     /// <summary>
     /// After the map's panels: the flight-control rows join the Status display (after the map's rows),
-    /// the MCP's status display lists the lights, the transponder panel gains the squawk field and its
-    /// read-back row, and the Engines panel is a display-only panel under Status (an empty controls
-    /// entry, or it renders nothing: [HS-5]).
+    /// the MCP's status display lists the lights, the transponder panel gains the squawk field (right
+    /// after its mode knob) and its read-back row, and the engine values are a display-only panel under
+    /// Status (an empty controls entry, or it renders nothing: [HS-5]).
     /// </summary>
     private static void AddReadoutPanels(Dictionary<string, List<string>> structure,
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
@@ -178,14 +185,17 @@ public partial class BBS757Definition
 
         if (controls.TryGetValue(TransponderPanel, out var transponder))
         {
-            transponder.Add(Bbs757Squawk.SetKey);
+            // The pilot reaches the squawk field second, right after the mode knob, which the map puts first on
+            // this panel (curation control_order); a map without the knob leaves the field at the end.
+            int mode = transponder.IndexOf(TransponderModeNode);
+            transponder.Insert(mode < 0 ? transponder.Count : mode + 1, Bbs757Squawk.SetKey);
             Display(TransponderPanel).Add(Bbs757Squawk.CodeKey);
         }
 
-        controls[EnginesPanel] = new List<string>();
+        controls[EngineValuesPanel] = new List<string>();
         if (!structure.TryGetValue(StatusSection, out var status)) structure[StatusSection] = status = new List<string>();
-        status.Add(EnginesPanel);
-        Display(EnginesPanel).AddRange(R.EngineRows.Select(r => r.Key));
+        status.Add(EngineValuesPanel);
+        Display(EngineValuesPanel).AddRange(R.EngineRows.Select(r => r.Key));
     }
 
     // =================================================================================

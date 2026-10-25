@@ -397,16 +397,18 @@ The aircraft always loads cold and dark, wherever you start. BA assumes no power
 
 ### How the panels are organized {#boeing-757-panels}
 
-Press Ctrl+1 for the Sections list and Ctrl+2 for the Panels list. Every regular switch, knob and button of the cockpit is on a panel, named and ordered as on the aircraft. The 757 has six sections:
+Press Ctrl+1 for the Sections list and Ctrl+2 for the Panels list. Every regular switch, knob and button of the cockpit is on a panel, named as on the aircraft. The panels follow BlueBird's preflight-flow order, the order the manual takes you through the cockpit, and inside a panel the controls you use most come first: the Electrical panel starts with Battery and STBY Power, the MCP panel with the two flight directors and A/T Arm. The 757 has six sections:
 
-- **Overhead**: APU, Air conditioning and bleed, Anti-ice, CVR, Cabin lights, Electrical, Engine control and yaw damper, Engine start, Exterior lights, Flight deck door, Fuel, Ground service, Hydraulics, IRS, IRS keypad, Overhead miscellaneous, Passenger signs, Pressurization, SELCAL and cabin call, Switch guards, Warning lights test, Window heat, Wipers.
-- **Glareshield**: MCP, Master warning and caution, VOR/DME.
-- **Forward panel**: Captain EFIS and First officer EFIS, the two DDRMIs, the two autoland status panels, the two chronometers, Landing gear, Main panel switches, Oxygen, Standby attitude indicator, Yokes, Cockpit miscellaneous.
-- **Pedestal**: ADF, Audio panel 1 and 2, Control stand (Parking Brake, Speedbrake Down, Armed and Up, TO/GA and A/T Disconnect), EICAS control, Fire protection, Fuel control, Pedestal radio panels, Radio tuning panels 1, 2 and 3, Stabilizer trim, TCAS and transponder, Weather radar left and right.
+- **Overhead**: Electrical, APU, IRS, Engine control and yaw damper, Hydraulics, Overhead miscellaneous, Fuel, Anti-ice, Wipers, Exterior lights, Window heat, Passenger signs, Pressurization, Air conditioning and bleed, Cabin lights, IRS keypad, Switch guards, Flight deck door, CVR, SELCAL and cabin call, Ground service, Warning lights test.
+- **Glareshield**: MCP, VOR/DME, Master warning and caution.
+- **Forward panel**: Main panel switches, Landing gear, Captain EFIS, Yokes, Captain autoland status, Standby attitude indicator, Captain DDRMI, Captain chronometer, Oxygen, Cockpit miscellaneous, First officer EFIS, First officer autoland status, First officer DDRMI, First officer chronometer.
+- **Pedestal**: Control stand (Parking Brake, Speedbrake Armed, Down and Up, TO/GA and A/T Disconnect), **Engines**, TCAS and transponder, EICAS control, Radio tuning panel 1, Audio panel 1, Fire protection, Stabilizer trim, Weather radar left, ADF, Radio tuning panel 2, Radio tuning panel 3, Audio panel 2, Weather radar right, Pedestal radio panels.
 - **Other**: the P61 panel.
-- **Status**: two panels to read rather than operate. On **Status**, press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed, the cabin altitude, the chocks (*"In place"* or *"Removed"*), the flaps (the lever's position and the flap angle), the gear, the speedbrake and the parking brake. **Engines** shows N1, N2, EGT, fuel flow and EPR for each engine. The rows update by themselves, and F5 refreshes them.
+- **Status**: two panels to read rather than operate. On **Status**, press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed, the cabin altitude, the chocks (*"In place"* or *"Removed"*), the flaps (the lever's position and the flap angle), the gear, the speedbrake and the parking brake. **Engine values** shows N1, N2, EGT, fuel flow and EPR for each engine. The rows update by themselves, and F5 refreshes them.
 
-The MCP panel's status display lists the light of every mode and CMD button (*"CMD L: On"*). The TCAS and transponder panel has a **Squawk Code** box: type the four digits and press Enter. About a second and a half later BA reads the transponder back and says *"Squawk 4743"*; if the transponder holds another code it says so. Its status display shows the code. An empty box says *"Type a four-digit squawk first."*, and letters or a digit 8 or 9 say *"Squawk must be four digits, each 0 to 7."*
+**Engines** on the Pedestal is where you start and stop the engines. It holds the Ignition selector, the L ENG Start and R ENG Start selectors and the four fuel control switches, in the order you use them: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then L Fuel Control (RR) and R Fuel Control (RR). The aircraft comes with either engine, so both pairs are there: (PW) is the Pratt & Whitney pair and (RR) the Rolls-Royce pair; use the pair for your aircraft's engines. Its values, N1 and the rest, are on the Status section's **Engine values** panel.
+
+The MCP panel's status display lists the light of every mode and CMD button (*"CMD L: On"*). The TCAS and transponder panel starts with TCAS Mode and has a **Squawk Code** box right after it: type the four digits and press Enter. About a second and a half later BA reads the transponder back and says *"Squawk 4743"*; if the transponder holds another code it says so. Its status display shows the code. An empty box says *"Type a four-digit squawk first."*, and letters or a digit 8 or 9 say *"Squawk must be four digits, each 0 to 7."*
 
 How the controls behave:
 
@@ -546,7 +548,7 @@ When the update finishes you hear *"Nav data cycle 2611 installed. Reload the fl
 ### Things to know {#boeing-757-quirks}
 
 - **This is a prototype.** BA supports release 0.1.0 of BlueBird's aircraft. There is no First Officer, no failures window and no circuit breakers yet. The speedbrake lever is worked with the Down, Armed and Up buttons on the Control stand panel, or the simulator's own keys. Mach entry for the MCP speed comes later. The [Hotkey Reference](hotkey-reference.md#hk-bbs757) lists which general keys do nothing.
-- **The Engines panel is new.** Its values come from the simulator's engine variables. Compare them with the upper EICAS (Output Alt+E) at your first engine start.
+- **The Engine values panel is new.** Its values come from the simulator's engine variables. Compare them with the upper EICAS (Output Alt+E) at your first engine start.
 - **The EFB is pressed where BlueBird 0.1.0 puts its buttons.** An update to the aircraft can move them. BA then says *"The 757's EFB layout is not the one this version knows."* and presses nothing, until BA is updated.
 - **The CDU is read from the aircraft.** It needs the aircraft powered; until then the window says it is waiting.
 - **Reload the flight after a nav data update.** The aircraft misbehaves until you do, and BlueBird looks for a new cycle only when a flight loads.

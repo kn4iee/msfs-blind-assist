@@ -23,9 +23,16 @@ What is derived and what is curated (curation.json):
   curated   which vendor banners and nodes are left out, which single nodes under an excluded banner are taken in
             anyway (include_nodes: the banner stays excluded, its panel and section come from a node_panels rule),
             the app's panel names, labels the node name cannot give or the vendor got wrong, position names no
-            tooltip carries, the status rows. A curated label, position list, exclusion or inclusion for a node the
-            package does not have is an error (a stale entry never hides); so is an inclusion that does nothing.
+            tooltip carries, the status rows, and the ORDER the pilot tabs through: the panels of a section
+            (panel_order) and the controls of a panel (control_order). A curated label, position list, exclusion or
+            inclusion for a node the package does not have is an error (a stale entry never hides); so is an
+            inclusion that does nothing, and so is an order that names a panel or a node that is not there.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
+  order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
+            order. A panel in panel_order comes first, in the listed order; the panels not listed follow
+            alphabetically, and the run names them (a panel BlueBird adds later turns up there). A node in
+            control_order comes first in its panel, in the listed order; the rest follow in cockpit order. Labels are
+            made in cockpit order before either is applied, so an order never renames or renumbers a control.
   a toggle, guard or select that writes a value other than 0 or 1 to its state var stops the run until its
             positions are named in curation (A/T ARM writes 10).
 
@@ -111,7 +118,8 @@ MISSING_L = re.compile(r"\(>(?![A-Za-z]:)(?=[A-Za-z_])([^()]*)\)")  # "(>NAME, b
 RANGE_SPEC = re.compile(r"range\s+(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\s+step\s+(\d+(?:\.\d+)?)$")
 
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
-                 "node_panels": list, "labels": dict, "positions": dict, "spelling": dict, "status": list}
+                 "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
+                 "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -465,6 +473,64 @@ def status_row(entry):
             "announce": bool(entry["announce"])}
 
 
+def flow_order(controls, cur):
+    """(the controls in the order the pilot tabs through them, the 'Section / Panel' of every panel panel_order does
+    not list, in that order).
+
+    panel_order (section -> panel names) puts those panels first in their section, in the listed order; the rest
+    follow alphabetically. control_order (panel -> node names) puts those controls first in their panel, in the listed
+    order; the rest follow in the order they arrive in, which is cockpit order. The sections keep SECTIONS' order.
+    A section the map does not have, a name that matches nothing, a node that is not in its panel, a repeat and an
+    empty list are errors: an order entry that does nothing is a stale one."""
+    where = {c["node"]: (c["section"], c["panel"]) for c in controls}
+    panels = set(where.values())
+    for section, names in cur["panel_order"].items():
+        if section not in SECTIONS:
+            raise CurationError(f"curation panel_order names a section the map does not have: {section}")
+        if not names:
+            raise CurationError(f"curation panel_order lists no panels for {section} (remove the entry)")
+        twice = sorted({n for n in names if names.count(n) > 1})
+        if twice:
+            raise CurationError(f"curation panel_order lists a panel twice in {section}: {', '.join(twice)}")
+        missing = [n for n in names if (section, n) not in panels]
+        if missing:
+            raise CurationError(f"curation panel_order names panels {section} does not have: {', '.join(missing)}")
+    homes = collections.defaultdict(list)  # panel name -> the sections that have a panel of that name
+    for section, panel in sorted(panels, key=lambda sp: SECTIONS.index(sp[0])):
+        homes[panel].append(section)
+    for panel, nodes in cur["control_order"].items():
+        if panel not in homes:
+            raise CurationError(f"curation control_order names a panel no control is on: {panel}")
+        if len(homes[panel]) > 1:
+            raise CurationError(f"curation control_order names {panel}, which is in more than one section "
+                                f"({', '.join(homes[panel])})")
+        if not nodes:
+            raise CurationError(f"curation control_order lists no nodes for {panel} (remove the entry)")
+        twice = sorted({n for n in nodes if nodes.count(n) > 1})
+        if twice:
+            raise CurationError(f"curation control_order lists a node twice in {panel}: {', '.join(twice)}")
+        elsewhere = [n for n in nodes if where.get(n) != (homes[panel][0], panel)]
+        if elsewhere:
+            raise CurationError(f"curation control_order lists nodes that are not in {panel}: " + ", ".join(
+                f"{n} (in {where[n][0]} / {where[n][1]})" if n in where else f"{n} (not in the map)"
+                for n in elsewhere))
+
+    panel_rank = {s: {n: i for i, n in enumerate(names)} for s, names in cur["panel_order"].items()}
+    node_rank = {p: {n: i for i, n in enumerate(nodes)} for p, nodes in cur["control_order"].items()}
+
+    def key(c):
+        rank = panel_rank.get(c["section"], {}).get(c["panel"])
+        place = node_rank.get(c["panel"], {}).get(c["node"])
+        return (SECTIONS.index(c["section"]),
+                (0, rank, "") if rank is not None else (1, 0, c["panel"]),
+                (0, place) if place is not None else (1, 0))
+
+    ordered = sorted(controls, key=key)  # stable: what no order lists keeps the order it came in
+    unlisted = [f"{section} / {panel}" for section, panel in dict.fromkeys((c["section"], c["panel"]) for c in ordered)
+                if panel not in panel_rank.get(section, {})]
+    return ordered, unlisted
+
+
 def build_map(rows, cur, aircraft, version):
     """(the map, a report of what was dropped and which curation entries did nothing)."""
     keyed, seen = [], set()
@@ -519,6 +585,8 @@ def build_map(rows, cur, aircraft, version):
     if unplaced:
         raise CurationError(f"curation include_nodes name nodes no node_panels rule places: {', '.join(unplaced)} "
                             "(add a node_panels rule naming their panel)")
+    # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).
+    controls, unordered = flow_order(controls, cur)
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,
@@ -527,6 +595,7 @@ def build_map(rows, cur, aircraft, version):
         "overrides_on_dropped": sorted({n for t in ("labels", "positions") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
         "unmapped_banners": sorted(unmapped),
+        "unordered_panels": unordered,
     }
     status = [status_row(s) for s in cur["status"]]
     return {"aircraft": aircraft, "package_version": version, "controls": controls, "status": status}, report
@@ -560,6 +629,12 @@ def load_curation(path) -> dict:
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")
         if rule.get("section", "Other") not in SECTIONS:
             raise CurationError(f"{path}: node_panels rule {rule!r} names an unknown section")
+    for section, names in cur["panel_order"].items():  # which names fit the package is judged in flow_order
+        if not (isinstance(names, list) and all(isinstance(n, str) for n in names)):
+            raise CurationError(f"{path}: panel_order[{section!r}] is a list of panel names")
+    for panel, nodes in cur["control_order"].items():
+        if not (isinstance(nodes, list) and all(isinstance(n, str) for n in nodes)):
+            raise CurationError(f"{path}: control_order[{panel!r}] is a list of node names")
     return cur
 
 
@@ -630,9 +705,9 @@ def main(argv=None) -> None:
     print("  dropped:")
     for why, n in sorted(report["dropped"].items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"    {n:5d}  {why}")
-    panels = collections.Counter((c["section"], c["panel"]) for c in controls)
+    panels = collections.Counter((c["section"], c["panel"]) for c in controls)  # in map order: the order they are tabbed
     print(f"  panels           : {len(panels)}")
-    for (section, panel), n in sorted(panels.items(), key=lambda kv: (SECTIONS.index(kv[0][0]), kv[0][1])):
+    for (section, panel), n in panels.items():
         print(f"    {section} / {panel}: {n}")
     if report["suspected_slips"]:
         print(f"  suspected slips in the vendor's click code, replayed verbatim: {len(report['suspected_slips'])} controls")
@@ -644,6 +719,9 @@ def main(argv=None) -> None:
         print(f"note: curation names the banner {banner!r}, which no control uses", file=sys.stderr)
     for banner in report["unmapped_banners"]:
         print(f"note: the banner {banner!r} has no panel name in curation (its Title Case is used)", file=sys.stderr)
+    if report["unordered_panels"]:
+        print("note: panel_order does not list " + ", ".join(report["unordered_panels"])
+              + " (they follow the listed panels, alphabetically)", file=sys.stderr)
 
 
 if __name__ == "__main__":

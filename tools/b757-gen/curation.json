@@ -4,7 +4,9 @@
     "exclude_banners: vendor banner comments whose controls are left out (circuit breakers, CDU keys, furniture, effects).",
     "exclude_nodes: single controls left out. A name the package does not have is an error, so a stale entry cannot hide.",
     "panels: vendor banner -> app panel name, or {name, section} when the node prefix would pick the wrong section.",
-    "node_panels: first matching {banner?, prefix?} rule wins over the banner table; {panel, section?}.",
+    "node_panels: first matching {banner?, prefix?} rule wins over the banner table; {panel, section?}. A node otherwise lands in the section its prefix names (a B757_OVHD_ node in the Overhead), so a rule that moves it to another section says which.",
+    "panel_order: section -> panel names, the order the panels of that section are tabbed. The listed panels come first, in that order; the panels not listed follow alphabetically, and the run names them (a panel BlueBird adds later turns up there). A section the map does not have, a panel the section has none of, a repeat and an empty list are errors.",
+    "control_order: panel -> node names, the order the controls of that panel are tabbed. The listed controls come first, in that order; the rest follow in cockpit order. A panel no control is on, a node that is not in that panel, a repeat and an empty list are errors. Labels are made first, in cockpit order, so an order never renames or renumbers a control.",
     "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
     "positions: node -> position names in value order (one per value), or explicit [{value, label}].",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
@@ -34,7 +36,8 @@
     "B757_MCP_AP_HDG_BNKLIM (L:BBS757_BANK_LIMITER): 0 AUTO. preset: 0 in all nine; manual: 'BANK LIMIT SELECTOR ... AUTO'. 1 to 5 unmeasured (the degree settings are not named by any BlueBird source).",
     "B757_EICAS_LWR_THRUST-REF_KNOB (L:B757_EICAS_LWR_THRUST_REF_KNOB): 1 BOTH. preset: 1 in all nine; manual: 'thrust reference BOTH'. 0 and 2 unmeasured (L and R by the standard layout; not named).",
     "B757_OVHD_WIPER_SWITCH: 0 OFF. preset: 0 in all nine, dry weather in every state (no state runs the wipers). 1 and 2 unmeasured.",
-    "status BBS757_vis_chocks (RULING R31): 0 Removed, 1 In place, shown on the Status display and never announced. measured 2026-10-25 (live-findings.md, EFB Ground Services): the EFB's CHOCKS tile toggles it 0 to 1 to 0. preset: 1 in cold and dark and turnaround, 0 in the other seven."
+    "status BBS757_vis_chocks (RULING R31): 0 Removed, 1 In place, shown on the Status display and never announced. measured 2026-10-25 (live-findings.md, EFB Ground Services): the EFB's CHOCKS tile toggles it 0 to 1 to 0. preset: 1 in cold and dark and turnaround, 0 in the other seven.",
+    "RULING R37 (2026-10-25, the owner's direction after the first flight): the panels follow the manual's preflight flow and the most used controls come first in a panel (panel_order, control_order). The lists are the owner's to adjust; a control_order lists only the controls that lead, and the rest keep cockpit order. The three start selectors (Ignition, L ENG Start, R ENG Start: nodes B757_OVHD_ENG_START_SWITCH, B757_OVHD_L_ENG_START_SWITCH, B757_OVHD_R_ENG_START_SWITCH, banner LIGHT OVERRIDE) and the four fuel control switches (BBS_fuelcut_PW1, PW2, RR1, RR2) share one Pedestal panel, Engines, in start order: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then the RR pair. The three node_panels rules for the start selectors name the section Pedestal, because a B757_OVHD_ node otherwise lands in the Overhead by its prefix. TCAS and transponder lists TCAS Mode first; the app adds its Squawk Code field right after it (BBS757Definition.Readouts.cs). Each EFIS panel leads with ND Mode and ND Range."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -208,17 +211,20 @@
     {
       "banner": "LIGHT OVERRIDE",
       "prefix": "B757_OVHD_ENG_START",
-      "panel": "Engine start"
+      "panel": "Engines",
+      "section": "Pedestal"
     },
     {
       "banner": "LIGHT OVERRIDE",
       "prefix": "B757_OVHD_L_ENG_START",
-      "panel": "Engine start"
+      "panel": "Engines",
+      "section": "Pedestal"
     },
     {
       "banner": "LIGHT OVERRIDE",
       "prefix": "B757_OVHD_R_ENG_START",
-      "panel": "Engine start"
+      "panel": "Engines",
+      "section": "Pedestal"
     },
     {
       "banner": "lights",
@@ -261,7 +267,7 @@
     },
     {
       "prefix": "BBS_fuelcut_",
-      "panel": "Fuel control",
+      "panel": "Engines",
       "section": "Pedestal"
     },
     {
@@ -363,6 +369,213 @@
       "section": "Pedestal"
     }
   ],
+  "panel_order": {
+    "Overhead": [
+      "Electrical",
+      "APU",
+      "IRS",
+      "Engine control and yaw damper",
+      "Hydraulics",
+      "Overhead miscellaneous",
+      "Fuel",
+      "Anti-ice",
+      "Wipers",
+      "Exterior lights",
+      "Window heat",
+      "Passenger signs",
+      "Pressurization",
+      "Air conditioning and bleed",
+      "Cabin lights",
+      "IRS keypad",
+      "Switch guards",
+      "Flight deck door",
+      "CVR",
+      "SELCAL and cabin call",
+      "Ground service",
+      "Warning lights test"
+    ],
+    "Glareshield": [
+      "MCP",
+      "VOR/DME",
+      "Master warning and caution"
+    ],
+    "Forward panel": [
+      "Main panel switches",
+      "Landing gear",
+      "Captain EFIS",
+      "Yokes",
+      "Captain autoland status",
+      "Standby attitude indicator",
+      "Captain DDRMI",
+      "Captain chronometer",
+      "Oxygen",
+      "Cockpit miscellaneous",
+      "First officer EFIS",
+      "First officer autoland status",
+      "First officer DDRMI",
+      "First officer chronometer"
+    ],
+    "Pedestal": [
+      "Control stand",
+      "Engines",
+      "TCAS and transponder",
+      "EICAS control",
+      "Radio tuning panel 1",
+      "Audio panel 1",
+      "Fire protection",
+      "Stabilizer trim",
+      "Weather radar left",
+      "ADF",
+      "Radio tuning panel 2",
+      "Radio tuning panel 3",
+      "Audio panel 2",
+      "Weather radar right",
+      "Pedestal radio panels"
+    ],
+    "Other": [
+      "P61 panel"
+    ]
+  },
+  "control_order": {
+    "Electrical": [
+      "B757_OVHD_BATTERY_BUTTON",
+      "B757_OVHD_STBY_POWER_SWITCH",
+      "B757_OVHD_L_BUS_TIE_BUTTON",
+      "B757_OVHD_R_BUS_TIE_BUTTON",
+      "B757_OVHD_L_GEN_CONT_BUTTON",
+      "B757_OVHD_R_GEN_CONT_BUTTON",
+      "B757_OVHD_APU_GEN_BUTTON",
+      "B757_OVHD_EXT_PWR_BUTTON",
+      "B757_OVHD_L_UTIL_BUS_BUTTON",
+      "B757_OVHD_R_UTIL_BUS_BUTTON",
+      "B757_OVHD_L_GEN_DRIVE_BUTTON",
+      "B757_OVHD_R_GEN_DRIVE_BUTTON"
+    ],
+    "IRS": [
+      "B757_IRS_L_SWITCH",
+      "B757_IRS_C_SWITCH",
+      "B757_IRS_R_SWITCH"
+    ],
+    "Engine control and yaw damper": [
+      "B757_OVHD_L_YAW_DAMPER_BUTTON",
+      "B757_OVHD_R_YAW_DAMPER_BUTTON",
+      "B757_OVHD_L_ELEC-ENG-CONT_BUTTON",
+      "B757_OVHD_R_ELEC-ENG-CONT_BUTTON"
+    ],
+    "Hydraulics": [
+      "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
+      "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
+      "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
+      "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
+      "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
+      "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON"
+    ],
+    "Fuel": [
+      "B757_OVHD_L_PUMPS_FWD_BUTTON",
+      "B757_OVHD_L_PUMPS_AFT_BUTTON",
+      "B757_OVHD_R_PUMPS_FWD_BUTTON",
+      "B757_OVHD_R_PUMPS_AFT_BUTTON",
+      "B757_OVHD_C_PUMPS_L_BUTTON",
+      "B757_OVHD_C_PUMPS_R_BUTTON",
+      "B757_OVHD_XFEED_PUMPS_FWD_BUTTON",
+      "B757_OVHD_XFEED_PUMPS_AFT_BUTTON"
+    ],
+    "Exterior lights": [
+      "B757_OVHD_LOGO",
+      "B757_OVHD_BEACON",
+      "B757_OVHD_NAV",
+      "B757_OVHD_btn_lights_taxi",
+      "B757_OVHD_SW_landing_L",
+      "B757_OVHD_SW_landing_R",
+      "B757_OVHD_RWY_TURN_L",
+      "B757_OVHD_RWY_TURN_R",
+      "B757_OVHD_HI_INT",
+      "B757_OVHD_LOGO_BUTTON"
+    ],
+    "Passenger signs": [
+      "B757_OVHD_SEATBELTS_SWITCH",
+      "B757_OVHD_NO_SMOKING_SWITCH"
+    ],
+    "Air conditioning and bleed": [
+      "B757_OVHD_SEL_L_PACK_SWITCH",
+      "B757_OVHD_SEL_R_PACK_SWITCH",
+      "B757_OVHD_ISOLATION_BUTTON",
+      "B757_OVHD_LENG_BUTTON",
+      "B757_OVHD_APU_BUTTON",
+      "B757_OVHD_RENG_BUTTON",
+      "B757_OVHD_TRIM_AIR_BUTTON",
+      "B757_OVHD_L_RECIRC_BUTTON",
+      "B757_OVHD_R_RECIRC_BUTTON",
+      "B757_OVHD_L_PACK_BUTTON",
+      "B757_OVHD_R_PACK_BUTTON"
+    ],
+    "MCP": [
+      "B757_MCP_SW_FD_Cap",
+      "B757_MCP_SW_FD_FO",
+      "B757_MCP_SW_AP_throttle",
+      "B757_MCP_THR_BUTTON",
+      "B757_MCP_SPD_BUTTON",
+      "B757_MCP_LNAV_BUTTON",
+      "B757_MCP_VNAV_BUTTON",
+      "B757_MCP_FLCH_BUTTON",
+      "B757_MCP_AP_HDG_SEL_SW",
+      "B757_MCP_HOLD_1_BUTTON",
+      "B757_MCP_VS_BUTTON",
+      "B757_MCP_HOLD_2_BUTTON",
+      "B757_MCP_LOC_BUTTON",
+      "B757_MCP_APP_BUTTON",
+      "B757_MCP_CMD_1_BUTTON",
+      "B757_MCP_CMD_2_BUTTON",
+      "B757_MCP_CMD_3_BUTTON",
+      "B757_MCP_btn_autopilot_disengage",
+      "B757_MCP_AP_SPD_MACH_SW",
+      "BBS757_ALTSEL_CLICK",
+      "B757_MCP_AP_SPD_HOLD_SW",
+      "B757_MCP_AP_HDG_BNKLIM",
+      "B757_MCP_BCRS_1_BUTTON"
+    ],
+    "Main panel switches": [
+      "B757_MAIN_knob_gears_altn_autobrake",
+      "B757_MAIN_TOCHK_BUTTON",
+      "B757_MAIN_TOGA_BUTTON",
+      "B757_MAIN_CLB_BUTTON",
+      "B757_MAIN_CON_BUTTON",
+      "B757_MAIN_CRZ_BUTTON",
+      "B757_MAIN_1_BUTTON",
+      "B757_MAIN_2_BUTTON",
+      "B757_MAIN_HDG_REF_SWITCH",
+      "B757_MAIN_CANCEL_BUTTON",
+      "B757_MAIN_RECALL_BUTTON"
+    ],
+    "Captain EFIS": [
+      "B757_ADI_1_CTR_KNOB",
+      "B757_ADI_1_TFC_KNOB"
+    ],
+    "First officer EFIS": [
+      "B757_ADI_2_CTR_KNOB",
+      "B757_ADI_2_TFC_KNOB"
+    ],
+    "Control stand": [
+      "BBS757_PEDESTAL_Park_Brake_Lever",
+      "BBS757_SPOILERARMED_CLICK",
+      "BBS757_SPOILERDOWN_CLICK",
+      "BBS757_SPOILERUP_CLICK",
+      "ENGINE_Switch_ATDisc_1",
+      "B757_AT_DISC_1"
+    ],
+    "Engines": [
+      "B757_OVHD_ENG_START_SWITCH",
+      "B757_OVHD_L_ENG_START_SWITCH",
+      "BBS_fuelcut_PW1",
+      "B757_OVHD_R_ENG_START_SWITCH",
+      "BBS_fuelcut_PW2",
+      "BBS_fuelcut_RR1",
+      "BBS_fuelcut_RR2"
+    ],
+    "TCAS and transponder": [
+      "B757_PED_TCAS_MODE_KNOB"
+    ]
+  },
   "labels": {
     "B757_OVHD_APU_SWITCH": "APU Selector",
     "B757_OVHD_EXT_PWR_BUTTON": "EXT PWR",

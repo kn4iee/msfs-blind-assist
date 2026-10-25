@@ -208,13 +208,114 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_overhead_ignition_selector_is_named_ignition_beside_the_two_start_selectors()
+    public void The_ignition_selector_is_named_ignition_beside_the_two_start_selectors_on_the_pedestal()
     {
+        // The nodes say B757_OVHD_, which the generator would put in the Overhead; the curation moves all three
+        // to the Pedestal's Engines panel (task 11d, ruling R37).
         Bbs757Control ignition = Find("B757_OVHD_ENG_START_SWITCH");
 
         Assert.Equal("Ignition", ignition.Label);
-        Assert.Equal(new[] { "Ignition", "L ENG Start", "R ENG Start" },
-            Map.Controls.Where(c => c.Panel == ignition.Panel).Select(c => c.Label).OrderBy(l => l, StringComparer.Ordinal));
+        Assert.All(new[] { ignition, Find("B757_OVHD_L_ENG_START_SWITCH"), Find("B757_OVHD_R_ENG_START_SWITCH") },
+            c => Assert.Equal(("Pedestal", "Engines"), (c.Section, c.Panel)));
+        Assert.Equal(new[] { "L ENG Start", "R ENG Start" },
+            new[] { "B757_OVHD_L_ENG_START_SWITCH", "B757_OVHD_R_ENG_START_SWITCH" }.Select(n => Find(n).Label));
+    }
+
+    [Fact]
+    public void The_engines_panel_holds_the_start_selectors_and_the_four_fuel_control_switches_in_start_order()
+    {
+        var engines = Map.Controls.Where(c => c.Section == "Pedestal" && c.Panel == "Engines").ToList();
+
+        Assert.Equal(
+            new[]
+            {
+                "B757_OVHD_ENG_START_SWITCH", "B757_OVHD_L_ENG_START_SWITCH", "BBS_fuelcut_PW1",
+                "B757_OVHD_R_ENG_START_SWITCH", "BBS_fuelcut_PW2", "BBS_fuelcut_RR1", "BBS_fuelcut_RR2",
+            },
+            engines.Select(c => c.Node));
+        Assert.Equal(
+            new[]
+            {
+                "Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
+                "L Fuel Control (RR)", "R Fuel Control (RR)",
+            },
+            engines.Select(c => c.Label));
+    }
+
+    [Fact]
+    public void The_overhead_engine_start_panel_and_the_pedestal_fuel_control_panel_are_gone()
+    {
+        Assert.DoesNotContain(Map.Controls, c => c.Panel is "Engine start" or "Fuel control");
+    }
+
+    // ---- Task 11d: the panels in BlueBird's preflight-flow order, the most used controls first ----
+
+    [Fact]
+    public void The_sections_come_in_the_cockpit_order()
+    {
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Forward panel", "Pedestal", "Other" },
+            Map.Controls.Select(c => c.Section).Distinct());
+    }
+
+    [Theory]
+    [InlineData("Overhead", "Electrical|APU|IRS|Engine control and yaw damper|Hydraulics|Overhead miscellaneous|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Air conditioning and bleed|Cabin lights|IRS keypad|Switch guards|Flight deck door|CVR|SELCAL and cabin call|Ground service|Warning lights test")]
+    [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
+    [InlineData("Forward panel", "Main panel switches|Landing gear|Captain EFIS|Yokes|Captain autoland status|Standby attitude indicator|Captain DDRMI|Captain chronometer|Oxygen|Cockpit miscellaneous|First officer EFIS|First officer autoland status|First officer DDRMI|First officer chronometer")]
+    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar left|ADF|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Weather radar right|Pedestal radio panels")]
+    [InlineData("Other", "P61 panel")]
+    public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
+    {
+        // The owner's order (ruling R37); every panel is listed, so none falls back to the alphabet.
+        Assert.Equal(panels.Split('|'), Map.Controls.Where(c => c.Section == section).Select(c => c.Panel).Distinct());
+    }
+
+    [Theory]
+    [InlineData("Electrical", "Battery|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|EXT PWR|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
+    [InlineData("Hydraulics", "L ENG HYD Pumps|R ENG HYD Pumps|R ENG ELEC Pumps|C Eng1 HYD Pumps|C Eng2 HYD Pumps|L ENG ELEC Pumps")]
+    [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Xfeed Pumps FWD|Xfeed Pumps Aft")]
+    [InlineData("Exterior lights", "Anti-col Red Lights|Position Lights|Anti-col White Lights|Taxi Light|L Landing Light|R Landing Light|L Runway Turnoff|R Runway Turnoff|Wing Lights|Logo Lights")]
+    [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|APU Bleed|R ENG Bleed|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
+    [InlineData("Passenger signs", "Seatbelts|No Smoking")]
+    [InlineData("IRS", "IRS L|IRS C|IRS R")]
+    [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont|R ELEC ENG Cont")]
+    [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|AP SPD Hold|Bank Limit|BCRS 1")]
+    [InlineData("Main panel switches", "Autobrake|Takeoff Check|TOGA|CLB|CON|CRZ|TMSP 1|TMSP 2|HDG Ref|Cancel|Recall")]
+    [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
+    [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
+    [InlineData("TCAS and transponder", "TCAS Mode")]
+    [InlineData("Captain EFIS", "ND Mode|ND Range")]
+    [InlineData("First officer EFIS", "ND Mode|ND Range")]
+    public void The_most_used_controls_lead_their_panel(string panel, string leading)
+    {
+        // The owner's lists (ruling R37), by the names the pilot hears.
+        string[] expected = leading.Split('|');
+        var labels = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Label).ToList();
+
+        Assert.Equal(expected, labels.Take(expected.Length));
+    }
+
+    [Theory]
+    [InlineData("IRS", 3, "IRS Center Knob|IRS Large Knob")]
+    [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Mode Knob Test")]
+    [InlineData("Captain EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
+    [InlineData("First officer EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
+    [InlineData("Main panel switches", 11, "L Flt Dir|L Flt Nav|L Foot Heaters|L Shoulder Heaters|L EFI|L IRS|L Airdata|L Brake Reserve|L Leading Edge|L Trailing Edge|L Flap Ovrd|G/S Inhibit|L Gear Ovrd|L Terr Ovrd|Altn Gear Guard|Altn Gear|Stdby EICAS|Alternate Flaps Selector|Flap Override Guard|Gear Override Guard|Terrain Override Guard|R Flt Dir|R Flt Nav|R Foot Heaters|R Shoulder Heaters|R EFI|R IRS|R Airdata")]
+    public void The_controls_an_order_does_not_list_follow_in_cockpit_order(string panel, int listed, string rest)
+    {
+        // Cockpit order is the order of the vendor's cockpit file: the controls the order leaves out keep it.
+        var after = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Label).Skip(listed);
+
+        Assert.Equal(rest.Split('|'), after);
+    }
+
+    [Fact]
+    public void A_panel_name_is_in_one_section_only()
+    {
+        // The definition keys a panel's controls by its name, so two sections cannot share one.
+        var shared = Map.Controls.GroupBy(c => c.Panel).Where(g => g.Select(c => c.Section).Distinct().Count() > 1)
+            .Select(g => g.Key).ToList();
+
+        Assert.True(shared.Count == 0, string.Join(", ", shared));
     }
 
     [Fact]

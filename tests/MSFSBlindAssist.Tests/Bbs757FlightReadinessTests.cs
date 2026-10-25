@@ -164,9 +164,11 @@ public class Bbs757FlightReadinessTests
     // ---- Panels -------------------------------------------------------------------------------
 
     [Fact]
-    public void The_engines_panel_shows_both_engines()
+    public void The_engine_values_panel_shows_both_engines()
     {
-        Assert.Equal(R.EngineRows.Select(r => r.Key), Def.GetPanelDisplayVariables()[BBS757Definition.EnginesPanel]);
+        Assert.Equal(R.EngineRows.Select(r => r.Key), Def.GetPanelDisplayVariables()[BBS757Definition.EngineValuesPanel]);
+        // Not "Engines": that is the Pedestal panel with the start selectors and the fuel control switches.
+        Assert.DoesNotContain("Engines", Def.GetPanelDisplayVariables().Keys);
     }
 
     [Fact]
@@ -176,9 +178,13 @@ public class Bbs757FlightReadinessTests
     }
 
     [Fact]
-    public void The_transponder_panel_has_the_squawk_field_and_shows_the_code()
+    public void The_transponder_panel_has_the_squawk_field_after_the_mode_knob_and_shows_the_code()
     {
-        Assert.Equal(Bbs757Squawk.SetKey, Def.GetPanelControls()[BBS757Definition.TransponderPanel].Last());
+        var controls = Def.GetPanelControls()[BBS757Definition.TransponderPanel];
+
+        Assert.Equal(BBS757Definition.TransponderModeNode, controls[0]);
+        Assert.Equal(Bbs757Squawk.SetKey, controls[1]);
+        Assert.Single(controls, Bbs757Squawk.SetKey);
         Assert.Equal(new[] { Bbs757Squawk.CodeKey }, Def.GetPanelDisplayVariables()[BBS757Definition.TransponderPanel]);
     }
 

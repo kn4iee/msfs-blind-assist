@@ -17,24 +17,34 @@ The BlueBird 757-200 needs two things running besides the simulator:
     "unavailable" and nothing is sent.
 
 The panels (Overhead, Glareshield, Forward panel, Pedestal) carry every
-regular cockpit switch, knob and button, named and ordered as on the
-aircraft. A switch's combo moves back to where the switch really is if the
+regular cockpit switch, knob and button, named as on the aircraft. They
+follow BlueBird's preflight-flow order (the Overhead starts with
+Electrical, APU and IRS), and inside a panel the controls you use most
+come first (Electrical starts with Battery and STBY Power; the MCP panel
+with the two flight directors and A/T Arm). The Pedestal starts with the
+Control stand, the Engines panel and TCAS and transponder.
+A switch's combo moves back to where the switch really is if the
 aircraft did not take the change. Buttons say "pressed" when pressed,
 except the ones whose result can be read: an MCP mode or CMD button says
 its light about two seconds later ("CMD R on", "LNAV off"), and a
 speedbrake button says the lever ("Speedbrake armed").
-The Pedestal's Control stand panel has the Parking Brake, Speedbrake Down,
-Armed and Up, TO/GA and A/T Disconnect. The TCAS and transponder panel has
-a Squawk Code field: type the four digits and press Enter; the app reads
-the transponder back and says "Squawk 4743". An empty box says "Type a
-four-digit squawk first."; letters or a digit 8 or 9 say "Squawk must be
+The Pedestal's Control stand panel has the Parking Brake, Speedbrake
+Armed, Down and Up, TO/GA and A/T Disconnect. Its Engines panel has the
+Ignition selector, the L ENG Start and R ENG Start selectors and the four
+fuel control switches, in start order: Ignition, L ENG Start, L Fuel
+Control (PW), R ENG Start, R Fuel Control (PW), L Fuel Control (RR), R Fuel
+Control (RR). The TCAS and transponder panel starts with TCAS Mode, then
+has a Squawk Code field: type the four digits and press Enter; the app
+reads the transponder back and says "Squawk 4743". An empty box says "Type
+a four-digit squawk first."; letters or a digit 8 or 9 say "Squawk must be
 four digits, each 0 to 7."
 The Status section's Status panel shows the APU state, master warning and
 caution, the AC bus power sources, the APU speed, the cabin altitude, the
 chocks (In place or Removed), and the flaps (lever and surface angle),
 gear, speedbrake and parking brake.
-Its Engines panel shows N1, N2, EGT, fuel flow and EPR for each engine
-(read only, never announced). The MCP panel's status display lists the
+Its Engine values panel shows N1, N2, EGT, fuel flow and EPR for each
+engine (read only, never announced; the Engines panel on the Pedestal is
+the one with the switches). The MCP panel's status display lists the
 button lights.
 
 Spoken on change (each can be muted with Ctrl+M): flaps ("Flaps 5"), gear
@@ -400,5 +410,6 @@ Notes:
     calls work as on every other aircraft.
   - The flaps, speedbrake and gear also work with the simulator's own keys
     and controls; the app says where they ended up.
-  - The Engines panel's values come from the simulator's engine variables:
-    compare them with the upper EICAS (Alt+E) at your first engine start.
+  - The Engine values panel's values come from the simulator's engine
+    variables: compare them with the upper EICAS (Alt+E) at your first
+    engine start.

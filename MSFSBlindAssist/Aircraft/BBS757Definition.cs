@@ -52,9 +52,10 @@ namespace MSFSBlindAssist.Aircraft;
 ///   • Flaps, gear, speedbrake, parking brake, the MCP lights and the EXEC light speak their changes,
 ///     and the trim speaks BlueBird's units while it moves; L, Shift+G, B, F, Shift+F, W and
 ///     Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
-///     Ctrl+P is the autopilot window, the transponder panel takes a squawk; the Engines panel shows
-///     the stock engine values (all in BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs;
-///     unmeasured parts in docs/b757/plans/01-prototype-insim-tests.md).
+///     Ctrl+P is the autopilot window, the transponder panel takes a squawk right after its mode knob; the
+///     Status section's Engine values panel shows the stock engine values (all in
+///     BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs; unmeasured parts in
+///     docs/b757/plans/01-prototype-insim-tests.md).
 /// </summary>
 public partial class BBS757Definition : BaseAircraftDefinition
 {
@@ -254,10 +255,13 @@ public partial class BBS757Definition : BaseAircraftDefinition
     }
 
     /// <summary>
-    /// Sections and panels from the map, in map order (the generator sorts by section, panel and
-    /// cockpit file line), then the status rows. A status row whose panel is a control panel joins
-    /// that panel's Status display; any other panel is a display-only panel under the Status
-    /// section, with an empty controls entry so the panel builds at all ([HS-5]).
+    /// Sections and panels from the map, in map order, then the status rows. The map's order is the
+    /// order the pilot tabs through them: BlueBird's preflight flow for the panels of a section and the
+    /// most used controls first in a panel (the generator's panel_order and control_order; whatever
+    /// they leave out follows alphabetically, or in cockpit file order). A status row whose panel is a
+    /// control panel joins that panel's Status display; any other panel is a display-only panel under
+    /// the Status section, with an empty controls entry so the panel builds at all ([HS-5]). Panels are
+    /// keyed by name, so no two sections may share one.
     /// </summary>
     private void BuildPanelsOnce()
     {

@@ -67,11 +67,13 @@ public class Bbs757DefinitionTests
     [Fact]
     public void The_status_panel_lists_the_apu_state()
     {
-        Assert.Equal(new[] { "Status", "Engines" }, Def.GetPanelStructure()["Status"]);
+        // The read-only engine panel is "Engine values": the Pedestal's "Engines" holds the start selectors and the
+        // fuel control switches, and panels are keyed by name.
+        Assert.Equal(new[] { "Status", "Engine values" }, Def.GetPanelStructure()["Status"]);
         Assert.Contains("B757_APU_STATE", Def.GetPanelDisplayVariables()["Status"]);
         // A display-only panel still needs its (empty) controls entry, or the panel renders nothing ([HS-5]).
         Assert.Empty(Def.GetPanelControls()["Status"]);
-        Assert.Empty(Def.GetPanelControls()["Engines"]);
+        Assert.Empty(Def.GetPanelControls()["Engine values"]);
     }
 
     [Fact]
@@ -133,11 +135,79 @@ public class Bbs757DefinitionTests
 
         foreach (var panel in Map.Controls.Select(c => c.Panel).Distinct())
         {
-            var nodes = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Node);
-            // The transponder panel ends with the app's squawk field, after the map's controls.
-            var appFields = panel == BBS757Definition.TransponderPanel ? new[] { Bbs757Squawk.SetKey } : Array.Empty<string>();
-            Assert.Equal(nodes.Concat(appFields), Def.GetPanelControls()[panel]);
+            var nodes = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Node).ToList();
+            // The transponder panel gains the app's squawk field, right after the mode knob.
+            if (panel == BBS757Definition.TransponderPanel)
+                nodes.Insert(nodes.IndexOf(BBS757Definition.TransponderModeNode) + 1, Bbs757Squawk.SetKey);
+            Assert.Equal(nodes, Def.GetPanelControls()[panel]);
         }
+    }
+
+    // ---- Task 11d: the panels in BlueBird's preflight-flow order ----------------------------------
+
+    [Fact]
+    public void The_pedestal_starts_with_the_control_stand_the_engines_and_the_transponder()
+    {
+        Assert.Equal(new[] { "Control stand", "Engines", "TCAS and transponder" },
+            Def.GetPanelStructure()["Pedestal"].Take(3));
+    }
+
+    [Fact]
+    public void The_engines_panel_holds_the_start_selectors_and_the_fuel_control_switches_in_start_order()
+    {
+        var vars = Def.GetVariables();
+
+        Assert.Equal(
+            new[]
+            {
+                "Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
+                "L Fuel Control (RR)", "R Fuel Control (RR)",
+            },
+            Def.GetPanelControls()["Engines"].Select(key => vars[key].DisplayName));
+    }
+
+    [Fact]
+    public void The_overhead_has_no_engine_start_panel_and_the_pedestal_no_fuel_control_panel()
+    {
+        Assert.DoesNotContain("Engine start", Def.GetPanelStructure()["Overhead"]);
+        Assert.DoesNotContain("Fuel control", Def.GetPanelStructure()["Pedestal"]);
+        Assert.DoesNotContain("Engine start", Def.GetPanelControls().Keys);
+        Assert.DoesNotContain("Fuel control", Def.GetPanelControls().Keys);
+    }
+
+    [Fact]
+    public void The_squawk_field_follows_the_transponder_mode_knob()
+    {
+        var vars = Def.GetVariables();
+        var transponder = Def.GetPanelControls()[BBS757Definition.TransponderPanel];
+
+        Assert.Equal(BBS757Definition.TransponderModeNode, transponder[0]);
+        Assert.Equal(Bbs757Squawk.SetKey, transponder[1]);
+        Assert.Equal(new[] { "TCAS Mode", "Squawk Code" }, transponder.Take(2).Select(key => vars[key].DisplayName));
+    }
+
+    [Fact]
+    public void A_map_without_the_mode_knob_leaves_the_squawk_field_at_the_end_of_the_transponder_panel()
+    {
+        var map = new Bbs757ControlMap
+        {
+            Controls = Map.Controls.Where(c => c.Node != BBS757Definition.TransponderModeNode).ToList(),
+        };
+        var transponder = new BBS757Definition(map).GetPanelControls()[BBS757Definition.TransponderPanel];
+
+        Assert.Equal(Bbs757Squawk.SetKey, transponder.Last());
+        Assert.DoesNotContain(BBS757Definition.TransponderModeNode, transponder);
+    }
+
+    [Fact]
+    public void A_panel_is_in_one_section_only_and_every_panel_has_a_controls_entry()
+    {
+        // GetPanelControls is keyed by panel name: a name in two sections would let one panel's entry replace the
+        // other's (the Status section's engine values must never be named like the Pedestal's Engines).
+        var names = Def.GetPanelStructure().SelectMany(section => section.Value).ToList();
+
+        Assert.Equal(names.Count, names.Distinct().Count());
+        Assert.Equal(names.Order(StringComparer.Ordinal), Def.GetPanelControls().Keys.Order(StringComparer.Ordinal));
     }
 
     [Fact]

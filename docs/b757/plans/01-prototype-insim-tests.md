@@ -25,8 +25,8 @@ from branch B757 (Release). Input mode is `[`, output mode is `]`.
    ("APU Running" is announced).
 7. Overhead > Fuel > L Pumps FWD on and off: the combo follows. These eight pump buttons replay BlueBird's own click
    code verbatim, which may carry a vendor slip (plan 01, Task 1): if a pump does not move, say which.
-8. Overhead > Engine start > L ENG Start: GND and AUTO move the selector; note what Position 4, 5 and 6 are (the map
-   leaves them unnamed until measured).
+8. Pedestal > Engines > L ENG Start (the panel was Overhead > Engine start until task 11d): GND and AUTO move the
+   selector; note what Position 4, 5 and 6 are (the map leaves them unnamed until measured).
 9. Glareshield > MCP > LNAV (a button): "LNAV pressed" once. (Since task 10: about two seconds later "LNAV on" or
    "LNAV off" instead, once; see check 54.)
 10. Arrow quickly through a combo's rows and stop on one: only the row you stop on is written (300 ms settle).
@@ -150,7 +150,8 @@ Names from the control map that rest on panel states and the manuals, not on a l
 55. IRS selectors OFF, ALIGN, NAV, ATT: ALIGN and ATT are unmeasured. ND range (0 = 10 NM) and ND mode (0 VOR, 1 APP,
     2 MAP, 3 PLAN): turn one click and check the EHSI (Alt+N) shows the named range or mode. TCAS mode: STBY and TA/RA
     named, 1 to 3 numbered; transponder side 0 = L. Alternate flaps 1 to 7 numbered.
-56. PW fuel control switches CUTOFF and RUN by the panel: the engine starts and stops with them.
+56. PW fuel control switches (Pedestal > Engines > L and R Fuel Control (PW); the panel was Pedestal > Fuel control
+    until task 11d) CUTOFF and RUN by the panel: the engine starts and stops with them.
 57. TO/GA and A/T Disconnect in flight: "TO/GA pressed" / "A/T Disconnect pressed"; the ADI's autothrottle mode
     changes (GA, or the A/T drops).
 
@@ -199,9 +200,9 @@ Windows:
     first." Output X ("Squawk 4743") and the panel's status display (Ctrl+3, "Squawk: 4743") read the code back
     from the transponder BlueBird uses (the stock one, measured with XPNDR_SET); nothing needs the radio panel's
     own display.
-71. Engines panel at the first engine start: compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of
-    the upper EICAS. All unmeasured on BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or
-    read wrong.
+71. Status > Engine values panel at the first engine start (it was named Engines until task 11d, when the Pedestal's
+    Engines panel took that name): compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of the upper
+    EICAS. All unmeasured on BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or read wrong.
 72. Alt+P on an approach with APP armed: the reading includes the AUTOLAND STATUS annunciator (LAND 3, LAND 2, NO LAND
     3 or NO AUTOLAND) when it shows one, after the flight modes; nothing about it when it is blank.
 73. EFB window, Set steering to rudder, with the setting already RUDDER (the owner's, since 2026-10-25): "Steering is
@@ -218,7 +219,7 @@ Task 10 fix round 1 (rulings R31, R32):
     again: "Chocks are already in place". Then remove them and taxi: the aircraft moves.
 76. Named flow switches (R32), after loading the EFB's Before start preset: Overhead > Passenger signs > Seatbelts
     reads "ON", Air conditioning and bleed > L and R Pack Selector "AUTO", Pressurization > Mode Select "AUTO 1",
-    Engine start > Ignition "1", Glareshield > MCP > Bank Limit "AUTO", Pedestal > EICAS control > EICAS Lwr Thrust
+    Pedestal > Engines > Ignition "1", Glareshield > MCP > Bank Limit "AUTO", Pedestal > EICAS control > EICAS Lwr Thrust
     Ref "BOTH", Wipers > Wiper "OFF". These read back the values the names were taken from, so they confirm the
     wiring, not the names: where a combo can be moved, note what the aircraft does (for example Seatbelts to OFF:
     the seat belt chime and sign, read by Alt+E or Alt+S if the EICAS shows it).
@@ -230,7 +231,7 @@ Task 10 fix round 1 (rulings R31, R32):
     land exactly with no correction round: the log's "Sent command" lines for the 153 set are two bursts, "26 sp0 …
     AP_SPD_VAR_DEC …" then "2 sp0 …", and for the 280 set one, "53 sp0 … AP_SPD_VAR_INC …"; a further `sp0` line
     a second or more later is a correction. If a speed lands off, note the spoken value and those lines.
-78. MCP window buttons (R34). At the gate with the engines OFF (Status > Engines: both N1 read 0) and the parking brake
+78. MCP window buttons (R34). At the gate with the engines OFF (Status > Engine values: both N1 read 0) and the parking brake
     SET (Status: "Parking Brake: Set"); never with the engines running. The A/T is armed after every load, THR with the
     A/T armed drives the thrust levers to full (measured, engines off or running), and SPD and FLCH are A/T modes too
     (unmeasured). This is the safer of the two ways: with the engines off a lever at full makes no thrust, while in
@@ -272,3 +273,12 @@ Task 10 fix round 1 (rulings R31, R32):
     the Ctrl+P window: its caption reads "THR: On" (NVDA+Tab reads the focused button again) and the engines spool up to
     takeoff thrust; then release the brakes and take off. If instead, about two seconds later, the window says "THR did
     not engage": keep the brakes held, note the A/T Arm caption, and tell the developer.
+83. Panels in flow order, and the Pedestal's Engines panel (R37, task 11d). Ctrl+1: the sections are Overhead,
+    Glareshield, Forward panel, Pedestal, Other, Status. On the Pedestal, Ctrl+2 and arrow down: the first panels are
+    Control stand, Engines, TCAS and transponder, then EICAS control, Radio tuning panel 1 and Audio panel 1. Tab through
+    Engines: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), L Fuel Control (RR), R Fuel
+    Control (RR), in that order; the Overhead has no Engine start panel and the Pedestal no Fuel control panel, and the
+    Status section's two panels are Status and Engine values. In TCAS and transponder the first controls are TCAS Mode,
+    the Squawk Code box, then TCAS Xpndr. The Overhead starts Electrical, APU, IRS, and Electrical starts Battery, STBY
+    Power, L Bus Tie. The order is yours to adjust: note any panel or control you would move, and which fuel control
+    pair, PW or RR, starts and stops your engines.

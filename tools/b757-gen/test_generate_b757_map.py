@@ -48,6 +48,8 @@ CURATION = {
     "include_nodes": [],
     "panels": {"ELECTRICAL PANEL": "Electrical", "FUEL PANEL": "Fuel"},
     "node_panels": [],
+    "panel_order": {},
+    "control_order": {},
     "labels": {},
     "positions": {},
     "spelling": {"CENTRE": "Center"},
@@ -674,6 +676,158 @@ class IncludeNodes(unittest.TestCase):
             g.load_curation(path)
 
 
+class FlowOrder(unittest.TestCase):
+    """panel_order and control_order (ruling R37): the order the pilot tabs through the panels of a section and, inside
+    a panel, through the controls. What is not listed keeps the old order (panels alphabetical, controls in cockpit
+    order), and labels are made before the order is applied."""
+    PANELS = {"ELECTRICAL PANEL": "Electrical", "FUEL PANEL": "Fuel", "ICE PANEL": "Anti-ice", "ZULU PANEL": "Zulu",
+              "MCP PANEL": {"name": "MCP", "section": "Glareshield"},
+              "EFIS PANEL": {"name": "EFIS", "section": "Pedestal"}}
+    BATTERY, GENERATOR, BUS_TIE = "B757_OVHD_BATTERY_BUTTON", "B757_OVHD_GENERATOR_BUTTON", "B757_OVHD_BUS_TIE_BUTTON"
+    PUMP = "B757_OVHD_PUMP_BUTTON"
+
+    def rows(self):
+        """In cockpit order (the file line): Zulu, Fuel, Anti-ice, three Electrical controls, the MCP, the EFIS."""
+        def r(node, banner, line):
+            return row(node=node, panel=banner, line=line, left="x")
+        return [
+            r("B757_OVHD_ZULU_BUTTON", "ZULU PANEL", 1),
+            r(self.PUMP, "FUEL PANEL", 2),
+            r("B757_OVHD_ICE_BUTTON", "ICE PANEL", 3),
+            r(self.BATTERY, "ELECTRICAL PANEL", 4),
+            r(self.GENERATOR, "ELECTRICAL PANEL", 5),
+            r(self.BUS_TIE, "ELECTRICAL PANEL", 6),
+            r("B757_MCP_SPD_BUTTON", "MCP PANEL", 7),
+            r("B757_PED_EFIS_BUTTON", "EFIS PANEL", 8),
+        ]
+
+    def build(self, rows=None, **changes):
+        return g.build_map(rows or self.rows(), curation(panels=self.PANELS, **changes), "pkg", "1")
+
+    @staticmethod
+    def panels(m):
+        """(section, panel) pairs in map order."""
+        return list(dict.fromkeys((c["section"], c["panel"]) for c in m["controls"]))
+
+    @staticmethod
+    def nodes(m, panel):
+        return [c["node"] for c in m["controls"] if c["panel"] == panel]
+
+    def test_without_an_order_panels_are_alphabetical_and_controls_keep_cockpit_order(self):
+        m, _ = self.build()
+
+        self.assertEqual(self.panels(m), [("Overhead", "Anti-ice"), ("Overhead", "Electrical"), ("Overhead", "Fuel"),
+                                          ("Overhead", "Zulu"), ("Glareshield", "MCP"), ("Pedestal", "EFIS")])
+        self.assertEqual(self.nodes(m, "Electrical"), [self.BATTERY, self.GENERATOR, self.BUS_TIE])
+
+    def test_listed_panels_come_first_in_the_listed_order_and_the_rest_follow_alphabetically(self):
+        m, _ = self.build(panel_order={"Overhead": ["Zulu", "Electrical"]})
+
+        self.assertEqual([p for s, p in self.panels(m) if s == "Overhead"], ["Zulu", "Electrical", "Anti-ice", "Fuel"])
+
+    def test_a_listed_panel_moves_ahead_of_the_alphabet_only_inside_its_own_section(self):
+        m, _ = self.build(panel_order={"Pedestal": ["EFIS"], "Overhead": ["Fuel"]})
+
+        self.assertEqual(list(dict.fromkeys(c["section"] for c in m["controls"])), ["Overhead", "Glareshield", "Pedestal"])
+        self.assertEqual([p for s, p in self.panels(m) if s == "Overhead"], ["Fuel", "Anti-ice", "Electrical", "Zulu"])
+
+    def test_a_panel_order_leaves_the_controls_inside_each_panel_alone(self):
+        m, _ = self.build(panel_order={"Overhead": ["Electrical"]})
+
+        self.assertEqual(self.nodes(m, "Electrical"), [self.BATTERY, self.GENERATOR, self.BUS_TIE])
+
+    def test_listed_controls_come_first_in_the_listed_order_and_the_rest_keep_cockpit_order(self):
+        m, _ = self.build(control_order={"Electrical": [self.BUS_TIE]})
+        self.assertEqual(self.nodes(m, "Electrical"), [self.BUS_TIE, self.BATTERY, self.GENERATOR])
+
+        m, _ = self.build(control_order={"Electrical": [self.GENERATOR, self.BUS_TIE]})
+        self.assertEqual(self.nodes(m, "Electrical"), [self.GENERATOR, self.BUS_TIE, self.BATTERY])
+
+    def test_a_control_order_leaves_the_panels_where_they_are(self):
+        plain, _ = self.build()
+        ordered, _ = self.build(control_order={"Electrical": [self.BUS_TIE]})
+
+        self.assertEqual(self.panels(ordered), self.panels(plain))
+        self.assertEqual(self.nodes(ordered, "Fuel"), self.nodes(plain, "Fuel"))
+
+    def test_the_two_orders_work_together(self):
+        m, _ = self.build(panel_order={"Overhead": ["Electrical", "Fuel"]},
+                          control_order={"Electrical": [self.GENERATOR], "Fuel": [self.PUMP]})
+
+        self.assertEqual([c["node"] for c in m["controls"]][:5],
+                         [self.GENERATOR, self.BATTERY, self.BUS_TIE, self.PUMP, "B757_OVHD_ICE_BUTTON"])
+
+    def test_labels_are_made_in_cockpit_order_whatever_the_order(self):
+        # Two controls called "Light": the second in the cockpit is "Light 2", also when the order puts it first.
+        rows = [row(node="B757_OVHD_A_BUTTON", panel="ELECTRICAL PANEL", line=1, left="x"),
+                row(node="B757_OVHD_B_BUTTON", panel="ELECTRICAL PANEL", line=2, left="x")]
+        m, _ = self.build(rows, labels={"B757_OVHD_A_BUTTON": "Light", "B757_OVHD_B_BUTTON": "Light"},
+                          control_order={"Electrical": ["B757_OVHD_B_BUTTON"]})
+
+        self.assertEqual([(c["node"], c["label"]) for c in m["controls"]],
+                         [("B757_OVHD_B_BUTTON", "Light 2"), ("B757_OVHD_A_BUTTON", "Light")])
+
+    def test_the_report_names_every_panel_panel_order_does_not_list(self):
+        _, report = self.build(panel_order={"Overhead": ["Zulu", "Electrical"]})
+        self.assertEqual(report["unordered_panels"],
+                         ["Overhead / Anti-ice", "Overhead / Fuel", "Glareshield / MCP", "Pedestal / EFIS"])
+
+        _, report = self.build(panel_order={"Overhead": ["Zulu", "Electrical", "Anti-ice", "Fuel"],
+                                            "Glareshield": ["MCP"], "Pedestal": ["EFIS"]})
+        self.assertEqual(report["unordered_panels"], [])
+
+    def test_a_panel_the_section_does_not_have_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "panel_order names panels Overhead does not have: Ghost"):
+            self.build(panel_order={"Overhead": ["Electrical", "Ghost"]})
+        # a panel of another section is not this section's
+        with self.assertRaisesRegex(g.CurationError, "panel_order names panels Overhead does not have: MCP"):
+            self.build(panel_order={"Overhead": ["MCP"]})
+
+    def test_a_panel_listed_twice_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "panel_order lists a panel twice in Overhead: Fuel"):
+            self.build(panel_order={"Overhead": ["Fuel", "Electrical", "Fuel"]})
+
+    def test_an_unknown_section_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "panel_order names a section the map does not have: Cockpit"):
+            self.build(panel_order={"Cockpit": ["Fuel"]})
+
+    def test_an_empty_list_does_nothing_so_it_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "panel_order lists no panels for Overhead"):
+            self.build(panel_order={"Overhead": []})
+        with self.assertRaisesRegex(g.CurationError, "control_order lists no nodes for Electrical"):
+            self.build(control_order={"Electrical": []})
+
+    def test_a_control_order_for_a_panel_no_control_is_on_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "control_order names a panel no control is on: Ghost"):
+            self.build(control_order={"Ghost": [self.BATTERY]})
+
+    def test_a_node_that_is_not_in_the_panel_is_an_error_that_says_where_it_is(self):
+        with self.assertRaisesRegex(g.CurationError,
+                                    r"control_order lists nodes that are not in Electrical: "
+                                    r"B757_OVHD_PUMP_BUTTON \(in Overhead / Fuel\), B757_NO_SUCH_NODE \(not in the map\)"):
+            self.build(control_order={"Electrical": [self.BATTERY, self.PUMP, "B757_NO_SUCH_NODE"]})
+
+    def test_a_node_listed_twice_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, f"control_order lists a node twice in Electrical: {self.BATTERY}"):
+            self.build(control_order={"Electrical": [self.BATTERY, self.GENERATOR, self.BATTERY]})
+
+    def test_a_panel_name_in_two_sections_cannot_be_ordered_by_name(self):
+        panels = dict(self.PANELS, **{"EFIS TWO": {"name": "EFIS", "section": "Forward panel"}})
+        rows = self.rows() + [row(node="B757_MAIN_EFIS_BUTTON", panel="EFIS TWO", line=9, left="x")]
+        with self.assertRaisesRegex(g.CurationError, r"control_order names EFIS, which is in more than one section "
+                                                     r"\(Forward panel, Pedestal\)"):
+            g.build_map(rows, curation(panels=panels, control_order={"EFIS": ["B757_PED_EFIS_BUTTON"]}), "pkg", "1")
+
+    def test_a_node_rule_with_a_section_moves_an_overhead_node_to_another_section(self):
+        # B757_OVHD_ nodes land in the Overhead by their prefix; the Engines panel on the Pedestal says its section.
+        rule = {"banner": "LIGHT OVERRIDE", "prefix": "B757_OVHD_ENG_START", "panel": "Engines", "section": "Pedestal"}
+        start = row(node="B757_OVHD_ENG_START_SWITCH", panel="LIGHT OVERRIDE", left="x")
+
+        self.assertEqual(g.panel_of(start, curation(node_panels=[rule])), ("Engines", "Pedestal"))
+        without_section = {k: v for k, v in rule.items() if k != "section"}
+        self.assertEqual(g.panel_of(start, curation(node_panels=[without_section])), ("Engines", "Overhead"))
+
+
 class Curation(unittest.TestCase):
     def write(self, data):
         d = tempfile.mkdtemp()
@@ -690,6 +844,21 @@ class Curation(unittest.TestCase):
     def test_underscore_keys_are_notes(self):
         c = g.load_curation(self.write({"_notes": ["a note"]}))
         self.assertEqual(c["labels"], {})
+
+    def test_the_order_keys_load_as_dicts_and_default_to_empty(self):
+        c = g.load_curation(self.write({}))
+        self.assertEqual((c["panel_order"], c["control_order"]), ({}, {}))
+
+        c = g.load_curation(self.write({"panel_order": {"Overhead": ["Fuel"]}, "control_order": {"Fuel": ["B757_X"]}}))
+        self.assertEqual((c["panel_order"], c["control_order"]), ({"Overhead": ["Fuel"]}, {"Fuel": ["B757_X"]}))
+
+    def test_an_order_that_is_not_a_dict_of_lists_of_names_is_refused(self):
+        for data in ({"panel_order": ["Fuel"]}, {"panel_order": {"Overhead": "Fuel"}}, {"panel_order": {"Overhead": [1]}},
+                     {"control_order": ["B757_X"]}, {"control_order": {"Fuel": "B757_X"}},
+                     {"control_order": {"Fuel": [None]}}):
+            with self.subTest(data=data):
+                with self.assertRaises(g.CurationError):
+                    g.load_curation(self.write(data))
 
     def test_the_shipped_curation_loads(self):
         c = g.load_curation(g.DEFAULT_CURATION)
@@ -899,6 +1068,93 @@ class Curation(unittest.TestCase):
                 self.assertIn(node, notes)
         self.assertIn("unmeasured", notes)
 
+    # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
+    # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.
+    PANEL_ORDER = {
+        "Overhead": ["Electrical", "APU", "IRS", "Engine control and yaw damper", "Hydraulics", "Overhead miscellaneous",
+                     "Fuel", "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
+                     "Air conditioning and bleed", "Cabin lights", "IRS keypad", "Switch guards", "Flight deck door",
+                     "CVR", "SELCAL and cabin call", "Ground service", "Warning lights test"],
+        "Glareshield": ["MCP", "VOR/DME", "Master warning and caution"],
+        "Forward panel": ["Main panel switches", "Landing gear", "Captain EFIS", "Yokes", "Captain autoland status",
+                          "Standby attitude indicator", "Captain DDRMI", "Captain chronometer", "Oxygen",
+                          "Cockpit miscellaneous", "First officer EFIS", "First officer autoland status",
+                          "First officer DDRMI", "First officer chronometer"],
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Radio tuning panel 1",
+                     "Audio panel 1", "Fire protection", "Stabilizer trim", "Weather radar left", "ADF",
+                     "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "Weather radar right",
+                     "Pedestal radio panels"],
+        "Other": ["P61 panel"],
+    }
+    # The first controls of each panel that has an order, by the label the pilot hears (the rest keep cockpit order).
+    CONTROL_ORDER_LABELS = {
+        "Electrical": ["Battery", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont", "R Gen Cont", "APU Gen",
+                       "EXT PWR", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
+        "Hydraulics": ["L ENG HYD Pumps", "R ENG HYD Pumps", "R ENG ELEC Pumps", "C Eng1 HYD Pumps",
+                       "C Eng2 HYD Pumps", "L ENG ELEC Pumps"],
+        "Fuel": ["L Pumps FWD", "L Pumps Aft", "R Pumps FWD", "R Pumps Aft", "C Pumps L", "C Pumps R",
+                 "Xfeed Pumps FWD", "Xfeed Pumps Aft"],
+        "Exterior lights": ["Anti-col Red Lights", "Position Lights", "Anti-col White Lights", "Taxi Light",
+                            "L Landing Light", "R Landing Light", "L Runway Turnoff", "R Runway Turnoff", "Wing Lights",
+                            "Logo Lights"],
+        "Air conditioning and bleed": ["L Pack Selector", "R Pack Selector", "Isolation", "L ENG Bleed", "APU Bleed",
+                                       "R ENG Bleed", "Trim Air", "L Recirc", "R Recirc", "L Pack", "R Pack"],
+        "Passenger signs": ["Seatbelts", "No Smoking"],
+        "IRS": ["IRS L", "IRS C", "IRS R"],
+        "Engine control and yaw damper": ["L Yaw Damper", "R Yaw Damper", "L ELEC ENG Cont", "R ELEC ENG Cont"],
+        "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "THR", "SPD", "LNAV", "VNAV", "FLCH", "HDG SEL", "HDG HOLD", "V/S",
+                "ALT HOLD", "LOC", "APP", "CMD L", "CMD C", "CMD R", "Autopilot Disengage Bar", "IAS/MACH",
+                "ALT SEL Push", "AP SPD Hold", "Bank Limit", "BCRS 1"],
+        "Main panel switches": ["Autobrake", "Takeoff Check", "TOGA", "CLB", "CON", "CRZ", "TMSP 1", "TMSP 2",
+                                "HDG Ref", "Cancel", "Recall"],
+        "Control stand": ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "TO/GA",
+                          "A/T Disconnect"],
+        "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
+                    "L Fuel Control (RR)", "R Fuel Control (RR)"],
+        "TCAS and transponder": ["TCAS Mode"],   # the app's Squawk Code field follows it (BBS757Definition.Readouts.cs)
+        "Captain EFIS": ["ND Mode", "ND Range"],
+        "First officer EFIS": ["ND Mode", "ND Range"],
+    }
+
+    def test_the_shipped_curation_orders_the_panels_in_the_preflight_flow(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        self.assertEqual(c["panel_order"], self.PANEL_ORDER)
+        for section, names in c["panel_order"].items():
+            with self.subTest(section=section):
+                self.assertIn(section, g.SECTIONS)
+                self.assertEqual(len(names), len(set(names)), "a panel listed twice")
+
+    def test_the_shipped_curation_puts_the_most_used_controls_first(self):
+        # A node's label is its curated one, else the one made from its name: the pilot hears the label.
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        self.assertEqual(set(c["control_order"]), set(self.CONTROL_ORDER_LABELS))
+        for panel, labels in self.CONTROL_ORDER_LABELS.items():
+            with self.subTest(panel=panel):
+                nodes = c["control_order"][panel]
+                self.assertEqual(len(nodes), len(set(nodes)), "a node listed twice")
+                self.assertEqual([c["labels"].get(n) or g.humanize(n, c["spelling"]) for n in nodes], labels)
+
+    ENGINE_CONTROLS = {
+        "B757_OVHD_ENG_START_SWITCH": "LIGHT OVERRIDE", "B757_OVHD_L_ENG_START_SWITCH": "LIGHT OVERRIDE",
+        "B757_OVHD_R_ENG_START_SWITCH": "LIGHT OVERRIDE", "BBS_fuelcut_PW1": "(no banner)",
+        "BBS_fuelcut_PW2": "(no banner)", "BBS_fuelcut_RR1": "(no banner)", "BBS_fuelcut_RR2": "(no banner)",
+    }
+
+    def test_the_shipped_curation_puts_the_start_selectors_and_fuel_switches_on_one_pedestal_panel(self):
+        # The three overhead selectors would land in the Overhead by their node prefix: the rules name the Pedestal.
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        for node, banner in self.ENGINE_CONTROLS.items():
+            with self.subTest(node=node):
+                self.assertEqual(g.panel_of(row(node=node, panel=banner), c), ("Engines", "Pedestal"))
+        named = {r["panel"] for r in c["node_panels"]} | {e if isinstance(e, str) else e["name"]
+                                                          for e in c["panels"].values()}
+        self.assertNotIn("Engine start", named)
+        self.assertNotIn("Fuel control", named)
+        self.assertEqual(set(c["control_order"]["Engines"]), set(self.ENGINE_CONTROLS))
+
 
 class FindPackage(unittest.TestCase):
     def test_finds_the_package_in_community_or_community2024(self):
@@ -972,7 +1228,7 @@ class Extractor(unittest.TestCase):
             out = os.path.join(d, "out", "map.json")
             cur_path = os.path.join(d, "curation.json")
             with open(cur_path, "w", encoding="utf-8") as fh:
-                json.dump({"panels": {"ELECTRICAL PANEL": "Electrical"}}, fh)
+                json.dump({"panels": {"ELECTRICAL PANEL": "Electrical"}, "panel_order": {"Overhead": ["Electrical"]}}, fh)
             with contextlib.redirect_stdout(io.StringIO()) as stdout:
                 g.main([str(pkg), "--out", out, "--curation", cur_path])
             with open(out, encoding="utf-8") as fh:
@@ -984,6 +1240,30 @@ class Extractor(unittest.TestCase):
         self.assertEqual([p["label"] for p in c["positions"]], ["Off", "On"])
         self.assertEqual((c["label"], c["panel"], c["section"]), ("Battery", "Electrical", "Overhead"))
         self.assertIn("controls: 1", stdout.getvalue())
+
+    def test_the_run_names_the_panels_panel_order_does_not_list(self):
+        # A panel BlueBird adds later sits alphabetically after the listed ones: the run says so, on stderr like its
+        # other notes.
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_package(d)
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+
+            def run(data):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh)
+                stderr = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                return stderr.getvalue()
+
+            panels = {"ELECTRICAL PANEL": "Electrical"}
+            unlisted = run({"panels": panels})
+            listed = run({"panels": panels, "panel_order": {"Overhead": ["Electrical"]}})
+
+        self.assertIn("panel_order does not list", unlisted)
+        self.assertIn("Overhead / Electrical", unlisted)
+        self.assertNotIn("panel_order", listed)
 
 
 if __name__ == "__main__":
