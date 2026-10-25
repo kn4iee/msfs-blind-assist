@@ -375,6 +375,30 @@ class Convert(unittest.TestCase):
                              cw="(L:A) 1 + 2 min (>L:A)", ccw="(L:A) 1 - 0 max (>L:A)"), cur)
 
 
+    def test_a_curated_explicit_list_may_skip_a_value_the_extractor_counts(self):
+        # B757_OVHD_L_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and
+        # never writes 2 (cw goes 1 to 3, ccw 3 to 1), so curation names the five that exist.
+        node = "B757_OVHD_L_ENG_START_SWITCH"
+        cw = "(L:S, enum) 1 == if{ (L:S, enum) 2 + (>L:S) } els{ (L:S, enum) 1 + 6 min (>L:S) }"
+        ccw = "(L:S, enum) 3 == if{ (L:S, enum) 2 - (>L:S) } els{ (L:S, enum) 1 - 1 max (>L:S) }"
+        pairs = [{"value": v, "label": l} for v, l in ((1, "GND"), (3, "AUTO"), (4, "P4"), (5, "P5"), (6, "P6"))]
+        cur = curation(positions={node: pairs})
+
+        c, why = self.convert(row(node=node, kind="rotary knob finite", positions="6", cw=cw, ccw=ccw, state=["L:S"]), cur)
+
+        self.assertIsNone(why)
+        self.assertEqual(c["positions"], pairs)
+        self.assertEqual((c["cw"], c["ccw"]), (cw, ccw))  # the click code is still replayed verbatim
+        # the safety net holds for an explicit list: a literal the code writes outside it still stops the run
+        with self.assertRaisesRegex(g.CurationError, "writes 2 .* outside its positions"):
+            self.convert(row(node=node, kind="rotary knob finite", positions="6", cw=cw + " 2 (>L:S)", ccw=ccw,
+                             state=["L:S"]), cur)
+        # names in value order, by contrast, must still be one per value the extractor counts
+        with self.assertRaises(g.CurationError):
+            self.convert(row(node=node, kind="rotary knob finite", positions="6", cw=cw, ccw=ccw, state=["L:S"]),
+                         curation(positions={node: ["GND", "AUTO", "P4", "P5", "P6"]}))
+
+
 class SuspectedSlips(unittest.TestCase):
     def test_a_set_without_its_variable_type_is_suspected(self):
         code = "(L:X,bool) ! (>L:X,bool) ! (L:X_ON,bool) ! (>X_ON,bool)"

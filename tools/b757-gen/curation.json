@@ -10,6 +10,7 @@
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
+    "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 to 6 are unmeasured (no CONT/FLT names are invented): measure them in the sim.",
     "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule."
   ],
   "_suspected_slips": [
@@ -454,6 +455,50 @@
       "Off",
       "Auto",
       "BAT"
+    ],
+    "B757_OVHD_L_ENG_START_SWITCH": [
+      {
+        "value": 1,
+        "label": "GND"
+      },
+      {
+        "value": 3,
+        "label": "AUTO"
+      },
+      {
+        "value": 4,
+        "label": "Position 4"
+      },
+      {
+        "value": 5,
+        "label": "Position 5"
+      },
+      {
+        "value": 6,
+        "label": "Position 6"
+      }
+    ],
+    "B757_OVHD_R_ENG_START_SWITCH": [
+      {
+        "value": 1,
+        "label": "GND"
+      },
+      {
+        "value": 3,
+        "label": "AUTO"
+      },
+      {
+        "value": 4,
+        "label": "Position 4"
+      },
+      {
+        "value": 5,
+        "label": "Position 5"
+      },
+      {
+        "value": 6,
+        "label": "Position 6"
+      }
     ],
     "B757_MCP_SW_AP_throttle": [
       {

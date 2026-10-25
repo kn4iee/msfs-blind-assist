@@ -875,15 +875,11 @@
    "positions": [
     {
      "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
+     "label": "GND"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "AUTO"
     },
     {
      "value": 4,
@@ -914,15 +910,11 @@
    "positions": [
     {
      "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
+     "label": "GND"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "AUTO"
     },
     {
      "value": 4,

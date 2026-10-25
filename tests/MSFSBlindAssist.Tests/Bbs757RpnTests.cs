@@ -139,6 +139,20 @@ public class Bbs757RpnTests
         Assert.Empty(Bbs757Rpn.StepTo(bare, 0, 2));
     }
 
+    [Theory]
+    [InlineData("B757_OVHD_L_ENG_START_SWITCH")]
+    [InlineData("B757_OVHD_R_ENG_START_SWITCH")]
+    public void StepTo_engine_start_selector_matches_its_click_code(string node)
+    {
+        // The vendor's cw goes 1 (GND) to 3 (AUTO) and ccw 3 to 1: value 2 is never written, so the map lists
+        // 1, 3, 4, 5, 6 and one click between GND and AUTO is one step either way.
+        Bbs757Control selector = Assert.Single(Bbs757ControlMap.Load().Controls, c => c.Node == node);
+
+        Assert.Equal(new double[] { 1, 3, 4, 5, 6 }, selector.Positions.Select(p => p.Value));
+        Assert.Equal(new[] { selector.Ccw! }, Bbs757Rpn.StepTo(selector, 3, 1));
+        Assert.Equal(new[] { selector.Cw! }, Bbs757Rpn.StepTo(selector, 1, 3));
+    }
+
     [Fact]
     public void SetLVar_is_invariant_under_de_DE()
     {
