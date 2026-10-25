@@ -77,7 +77,10 @@ The selected values live in WASM L:vars `L:BBS_AP_TARGET_HEADING`, `L:BBS_AP_TAR
 091 after one step (window capture). The WASM counts `K:HEADING_BUG_INC/DEC` steps but **ignores stock
 `HEADING_BUG_SET`** (the stock bug went to 90, BlueBird's target did not), and the stock autopilot variables disagree
 with the MCP (stock speed 100 against 200 shown). So the app sets MCP values by L:var and never reads them from stock
-autopilot variables. Altitude, V/S and speed by direct write: to measure.
+autopilot variables. Measured since (`evidence/live-findings.md`, MCP): altitude adopts a direct write (100 ft per
+`K:AP_ALT_VAR_INC`); V/S adopts a direct write, negative values too (500 and -1500 read back; one `K:AP_VS_VAR_INC` is
++100 fpm); the IAS target is `L:BBS757_ORANGE_AIRSPEED_BUGS`, read-only, set by `K:AP_SPD_VAR_INC/DEC` steps of 1 kt.
+The Mach-mode flag is unproven: `L:BBS_AIRSPEED_IN_MACH` stayed 0 after a pulse of the IAS/MACH changeover button.
 
 ### 3.3 CDU: full text both sides, keys by held L:vars (measured)
 
@@ -234,8 +237,8 @@ read, never written by the app (the SimBrief ID goes in through the EFB); (7) no
 
 1. The panel sweep: every control's write and read-back by panel (owner present for anything audible), especially
    knobs with more than two positions, guarded switches, the fuel control and fire handles, and the radios.
-2. MCP: the IAS/Mach target variable; altitude, V/S and speed by direct write; whether the button light vars follow
-   the active modes (an FMA proxy).
+2. MCP: the Mach-mode flag and Mach target (heading, altitude, V/S and IAS are measured, §3.2); whether a burst of 25
+   speed steps in one calculator call all count; whether the button light vars follow the active modes (an FMA proxy).
 3. Engines: a start (starter valve, combustion, N2 rise) and stock engine values against the EICAS.
 4. EFB routes: the center and right fuel setters; payload, cargo and door setters; automatic boarding (START
    BOARDING); the GPU and other ground services by click; every cockpit preset and quick start; the ACARS PERFORMANCE

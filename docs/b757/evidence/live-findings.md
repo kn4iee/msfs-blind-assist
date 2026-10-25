@@ -62,7 +62,15 @@ put back unless noted at the end.
   animation positions, not digits.
 - **Altitude (session 3)**: `L:BBS_AP_TARGET_ALTITUDE` adopts a direct write (12000 written, one `K:AP_ALT_VAR_INC`
   gave 12100: a step is 100 ft). Restored to 10000.
-- V/S (`L:BBS_AP_TARGET_VS`, `K:AP_VS_VAR_INC/DEC`): unmeasured.
+- **V/S (session 4, 2026-10-25 overnight, aircraft powered at the gate)**: `L:BBS_AP_TARGET_VS` adopts a direct write,
+  negative values too (500 and -1500 read back), and one `K:AP_VS_VAR_INC` added 100 fpm (500 → 600). Restored to 0.
+  Reads through the simconnect MCP lag one call behind its writes (its own registration), so read twice.
+- **Mach flag (session 4)**: pulsing the IAS/MACH changeover (`L:B757_MCP_AP_SPD_MACH_SW` 1 then 0, separate calls)
+  left `L:BBS_AIRSPEED_IN_MACH`, `L:BBS_TARGET_MACH`, stock `AUTOPILOT MANAGED SPEED IN MACH` and the speed target
+  (200) unchanged: either the pulse did not register or the flag is another variable. Unproven.
+- **Calculator string length (session 4)**: the simconnect MCP refuses calculator strings longer than about 220
+  characters ("negative count": it pads to a 256-byte message), so a 25-event speed burst could not be measured through
+  it. MSFSBA's own MobiFlight channel is 1,024 bytes (`MobiFlightWasmModule.MAX_COMMAND_SIZE`).
 
 ## WASM-only variables, first reads (session 2, APU running)
 
