@@ -33,7 +33,11 @@ Armed, Down and Up, TO/GA and A/T Disconnect. Its Engines panel has the
 Ignition selector, the L ENG Start and R ENG Start selectors and the four
 fuel control switches, in start order: Ignition, L ENG Start, L Fuel
 Control (PW), R ENG Start, R Fuel Control (PW), L Fuel Control (RR), R Fuel
-Control (RR). The TCAS and transponder panel starts with TCAS Mode, then
+Control (RR). Its status display shows N1, N2, EGT, fuel flow and EPR for
+each engine (read only, never announced), so an engine start happens in
+one panel: Ctrl+3 jumps to the values, which update live while you read
+them; while you are on a switch they pause until F5 or Ctrl+3.
+The TCAS and transponder panel starts with TCAS Mode, then
 has a Squawk Code field: type the four digits and press Enter; the app
 reads the transponder back and says "Squawk 4743". An empty box says "Type
 a four-digit squawk first."; letters or a digit 8 or 9 say "Squawk must be
@@ -42,10 +46,7 @@ The Status section's Status panel shows the APU state, master warning and
 caution, the AC bus power sources, the APU speed, the cabin altitude, the
 chocks (In place or Removed), and the flaps (lever and surface angle),
 gear, speedbrake and parking brake.
-Its Engine values panel shows N1, N2, EGT, fuel flow and EPR for each
-engine (read only, never announced; the Engines panel on the Pedestal is
-the one with the switches). The MCP panel's status display lists the
-button lights.
+The MCP panel's status display lists the button lights.
 
 Spoken on change (each can be muted with Ctrl+M): flaps ("Flaps 5"), gear
 ("Gear in transit", "Gear down", "Gear up"), speedbrake ("Speedbrake
@@ -410,6 +411,6 @@ Notes:
     calls work as on every other aircraft.
   - The flaps, speedbrake and gear also work with the simulator's own keys
     and controls; the app says where they ended up.
-  - The Engine values panel's values come from the simulator's engine
-    variables: compare them with the upper EICAS (Alt+E) at your first
-    engine start.
+  - The engine values on the Engines panel come from the simulator's
+    engine variables: compare them with the upper EICAS (Alt+E) at your
+    first engine start.

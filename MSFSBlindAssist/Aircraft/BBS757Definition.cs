@@ -53,7 +53,7 @@ namespace MSFSBlindAssist.Aircraft;
 ///     and the trim speaks BlueBird's units while it moves; L, Shift+G, B, F, Shift+F, W and
 ///     Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
 ///     Ctrl+P is the autopilot window, the transponder panel takes a squawk right after its mode knob; the
-///     Status section's Engine values panel shows the stock engine values (all in
+///     Pedestal's Engines panel shows the stock engine values beside its switches (all in
 ///     BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs; unmeasured parts in
 ///     docs/b757/plans/01-prototype-insim-tests.md).
 /// </summary>

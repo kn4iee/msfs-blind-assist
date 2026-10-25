@@ -148,17 +148,18 @@ public partial class BBS757Definition
     internal const string McpPanel = "MCP";
 
     /// <summary>
-    /// The read-only engine panel, under the Status section. Not named "Engines": the map's Pedestal panel
-    /// of that name holds the start selectors and the fuel control switches (task 11d), and panels are keyed
-    /// by name, so a second "Engines" would replace its controls with an empty list.
+    /// The map's Pedestal panel with the ignition, the start selectors and the fuel control switches (task
+    /// 11d), whose status display shows the engine values (R45), so an engine start (selector GND, watch N2,
+    /// fuel control RUN, EGT) happens in one panel.
     /// </summary>
-    internal const string EngineValuesPanel = "Engine values";
+    internal const string EnginesPanel = "Engines";
 
     /// <summary>
     /// After the map's panels: the flight-control rows join the Status display (after the map's rows),
     /// the MCP's status display lists the lights, the transponder panel gains the squawk field (right
-    /// after its mode knob) and its read-back row, and the engine values are a display-only panel under
-    /// Status (an empty controls entry, or it renders nothing: [HS-5]).
+    /// after its mode knob) and its read-back row, and the Engines panel's status display shows the
+    /// engine values. A display joins only a panel the map has: a display of a missing panel would be
+    /// an orphan entry and its rows would silently vanish.
     /// </summary>
     private static void AddReadoutPanels(Dictionary<string, List<string>> structure,
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
@@ -183,6 +184,9 @@ public partial class BBS757Definition
         if (controls.ContainsKey(McpPanel))
             Display(McpPanel).AddRange(Bbs757McpLights.All.Select(l => l.Key));
 
+        if (controls.ContainsKey(EnginesPanel))
+            Display(EnginesPanel).AddRange(R.EngineRows.Select(r => r.Key));
+
         if (controls.TryGetValue(TransponderPanel, out var transponder))
         {
             // The pilot reaches the squawk field second, right after the mode knob, which the map puts first on
@@ -191,11 +195,6 @@ public partial class BBS757Definition
             transponder.Insert(mode < 0 ? transponder.Count : mode + 1, Bbs757Squawk.SetKey);
             Display(TransponderPanel).Add(Bbs757Squawk.CodeKey);
         }
-
-        controls[EngineValuesPanel] = new List<string>();
-        if (!structure.TryGetValue(StatusSection, out var status)) structure[StatusSection] = status = new List<string>();
-        status.Add(EngineValuesPanel);
-        Display(EngineValuesPanel).AddRange(R.EngineRows.Select(r => r.Key));
     }
 
     // =================================================================================

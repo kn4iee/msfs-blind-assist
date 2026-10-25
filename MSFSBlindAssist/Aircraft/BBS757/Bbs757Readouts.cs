@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <summary>What the three gear legs say together.</summary>
 public enum Bbs757GearState { Up, Down, Transit }
 
-/// <summary>One read-only engine row on the Engine values panel: its key, stock variable, units and spoken label.</summary>
+/// <summary>One read-only engine row on the Pedestal's Engines panel: its key, stock variable, units and spoken label.</summary>
 public sealed record Bbs757EngineRow(string Key, string SimVar, string Units, string Label, string Kind);
 
 /// <summary>
@@ -287,7 +287,7 @@ public static class Bbs757Readouts
     // ---- engines --------------------------------------------------------------------------------
 
     /// <summary>
-    /// The Engine values panel's rows, left engine then right: N1, N2, EGT, fuel flow and EPR from the
+    /// The Engines panel's status rows, left engine then right: N1, N2, EGT, fuel flow and EPR from the
     /// stock engine variables. Unmeasured on BlueBird: the first engine start compares them with an
     /// Alt+E read of the upper EICAS (the in-sim plan). Nothing here is announced.
     /// </summary>

@@ -164,11 +164,12 @@ public class Bbs757FlightReadinessTests
     // ---- Panels -------------------------------------------------------------------------------
 
     [Fact]
-    public void The_engine_values_panel_shows_both_engines()
+    public void The_engines_panel_shows_both_engines_beside_its_switches()
     {
-        Assert.Equal(R.EngineRows.Select(r => r.Key), Def.GetPanelDisplayVariables()[BBS757Definition.EngineValuesPanel]);
-        // Not "Engines": that is the Pedestal panel with the start selectors and the fuel control switches.
-        Assert.DoesNotContain("Engines", Def.GetPanelDisplayVariables().Keys);
+        // R45: an engine start (selector GND, watch N2, fuel control RUN, EGT) happens in one panel.
+        Assert.Equal(R.EngineRows.Select(r => r.Key), Def.GetPanelDisplayVariables()[BBS757Definition.EnginesPanel]);
+        Assert.Contains("BBS_fuelcut_PW1", Def.GetPanelControls()[BBS757Definition.EnginesPanel]);
+        Assert.DoesNotContain(BBS757Definition.EnginesPanel, Def.GetPanelStructure()[BBS757Definition.StatusSection]);
     }
 
     [Fact]

@@ -67,13 +67,11 @@ public class Bbs757DefinitionTests
     [Fact]
     public void The_status_panel_lists_the_apu_state()
     {
-        // The read-only engine panel is "Engine values": the Pedestal's "Engines" holds the start selectors and the
-        // fuel control switches, and panels are keyed by name.
-        Assert.Equal(new[] { "Status", "Engine values" }, Def.GetPanelStructure()["Status"]);
+        // The engine values are on the Pedestal's Engines panel (R45), so the Status section has one panel.
+        Assert.Equal(new[] { "Status" }, Def.GetPanelStructure()["Status"]);
         Assert.Contains("B757_APU_STATE", Def.GetPanelDisplayVariables()["Status"]);
         // A display-only panel still needs its (empty) controls entry, or the panel renders nothing ([HS-5]).
         Assert.Empty(Def.GetPanelControls()["Status"]);
-        Assert.Empty(Def.GetPanelControls()["Engine values"]);
     }
 
     [Fact]

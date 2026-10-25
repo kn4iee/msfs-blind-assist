@@ -200,9 +200,11 @@ Windows:
     first." Output X ("Squawk 4743") and the panel's status display (Ctrl+3, "Squawk: 4743") read the code back
     from the transponder BlueBird uses (the stock one, measured with XPNDR_SET); nothing needs the radio panel's
     own display.
-71. Status > Engine values panel at the first engine start (it was named Engines until task 11d, when the Pedestal's
-    Engines panel took that name): compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of the upper
-    EICAS. All unmeasured on BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or read wrong.
+71. Pedestal > Engines' status display at the first engine start (ruling R45: the engine values were a Status panel
+    until task 11d): on L ENG Start pick GND, press Ctrl+3 and arrow to Left N2: it rises while you listen. Shift+Tab
+    back to a switch: the values pause there, and F5 ("Status display refreshed") or Ctrl+3 brings them up to date.
+    Compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of the upper EICAS. All unmeasured on
+    BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or read wrong.
 72. Alt+P on an approach with APP armed: the reading includes the AUTOLAND STATUS annunciator (LAND 3, LAND 2, NO LAND
     3 or NO AUTOLAND) when it shows one, after the flight modes; nothing about it when it is blank.
 73. EFB window, Set steering to rudder, with the setting already RUDDER (the owner's, since 2026-10-25): "Steering is
@@ -231,7 +233,7 @@ Task 10 fix round 1 (rulings R31, R32):
     land exactly with no correction round: the log's "Sent command" lines for the 153 set are two bursts, "26 sp0 …
     AP_SPD_VAR_DEC …" then "2 sp0 …", and for the 280 set one, "53 sp0 … AP_SPD_VAR_INC …"; a further `sp0` line
     a second or more later is a correction. If a speed lands off, note the spoken value and those lines.
-78. MCP window buttons (R34). At the gate with the engines OFF (Status > Engine values: both N1 read 0) and the parking brake
+78. MCP window buttons (R34). At the gate with the engines OFF (Pedestal > Engines, Ctrl+3: both N1 read 0) and the parking brake
     SET (Status: "Parking Brake: Set"); never with the engines running. The A/T is armed after every load, THR with the
     A/T armed drives the thrust levers to full (measured, engines off or running), and SPD and FLCH are A/T modes too
     (unmeasured). This is the safer of the two ways: with the engines off a lever at full makes no thrust, while in
@@ -277,8 +279,9 @@ Task 10 fix round 1 (rulings R31, R32):
     Glareshield, Forward panel, Pedestal, Other, Status. On the Pedestal, Ctrl+2 and arrow down: the first panels are
     Control stand, Engines, TCAS and transponder, then EICAS control, Radio tuning panel 1 and Audio panel 1. Tab through
     Engines: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), L Fuel Control (RR), R Fuel
-    Control (RR), in that order; the Overhead has no Engine start panel and the Pedestal no Fuel control panel, and the
-    Status section's two panels are Status and Engine values. In TCAS and transponder the first controls are TCAS Mode,
-    the Squawk Code box, then TCAS Xpndr. The Overhead starts Electrical, APU, IRS, and Electrical starts Battery, STBY
-    Power, L Bus Tie. The order is yours to adjust: note any panel or control you would move, and which fuel control
-    pair, PW or RR, starts and stops your engines.
+    Control (RR), in that order, then the engine values (Ctrl+3); the Overhead has no Engine start panel and the
+    Pedestal no Fuel control panel, and the Status section has one panel, Status. In TCAS and transponder the first
+    controls are TCAS Mode, the Squawk Code box, then TCAS Xpndr. The Overhead starts Electrical, APU, IRS, and
+    Electrical starts Battery, STBY Power, L Bus Tie. The order is yours to adjust: note any panel or control you would
+    move. (Which fuel control pair works is check 56: the PW pair, as your aircraft is the PW one; the RR pair stays
+    unmeasured.)

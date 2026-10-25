@@ -540,3 +540,7 @@ owner can reverse any of them.
 - R44 (Task 11e): BA runs the EFB's FETCH SIMBRIEF OFP before IMPORT (a fresh session is unmeasured) and refuses
   before any tap when the plan's weight units differ from the aircraft's, so the fetch never raises the units
   question. If wrong: one extra fetch per load.
+- R45 (Task 11d review): the engine values are the Pedestal Engines panel's status display, not a Status panel of
+  their own, so an engine start (selector GND, watch N2, fuel control RUN, EGT) happens in one panel; the Status
+  section keeps one panel. If wrong: the values pause while a switch has focus (the status display's refresh skips
+  a focused combo) until F5 or Ctrl+3.
