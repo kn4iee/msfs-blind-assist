@@ -244,6 +244,9 @@ Task 10 fix round 1 (rulings R31, R32):
     it did not engage). At once after each: Pedestal > Control stand > A/T Disconnect: "A/T Disconnect pressed", and a
     mode light that goes out is said ("THR off"). Then move the hardware throttle a little forward and fully back to
     idle: BlueBird's levers follow it, never the simulator's throttle keys (measured), so this brings them back to idle.
+    The disconnect left the A/T armed when measured (2026-10-25), so SPD and FLCH should light as THR does; if they say
+    "SPD off" / "FLCH off", read Ctrl+P's A/T Arm caption: "Off" there means the disconnect disarmed it, not a failed
+    button. Either is fine; note which.
     IAS/MACH: "IAS/MACH pressed" (press it twice: it switches the window between IAS and Mach). With MobiFlight stopped,
     a press says "LNAV unavailable" and nothing moves.
 79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
