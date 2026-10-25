@@ -78,6 +78,12 @@ public partial class BBS757Definition
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
+        if (varKey == Bbs757Squawk.SetKey)
+        {
+            Sim = simConnect;
+            _ = SetSquawkAsync(value, simConnect, announcer);   // never throws: it catches and logs
+            return true;
+        }
         if (!_byNode.TryGetValue(varKey, out var control))
             return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
         Sim = simConnect;
@@ -87,7 +93,7 @@ public partial class BBS757Definition
             // One press per pilot action, so the refusal is judged here, once.
             var press = Bbs757Write.PressFor(control);
             if (press == null || !simConnect.CalcWriteCanLand) return SayUnavailable(control, announcer);
-            _ = PressAsync(control, press, simConnect, announcer);
+            _ = PressAsync(control, press, simConnect, announcer, speak: true);
             return true;
         }
 
@@ -103,15 +109,22 @@ public partial class BBS757Definition
     }
 
     /// <summary>
-    /// A button: press, hold, release, then "{label} pressed" when the button has no readable state.
+    /// A button: press, hold, release, then confirm it once (CORE-7). A button that moves a state row
+    /// (an MCP button's light, a speedbrake spot's lever: <see cref="LinkedStatusKey"/>) reads that row
+    /// back after <see cref="ReadBackDelayMs"/> and says it ("CMD R on", "Speedbrake armed"); its
+    /// change in between is this press's echo and is not announced. Any other button with no readable
+    /// state says "{label} pressed". With <paramref name="speak"/> false (the autopilot window, whose
+    /// button caption shows the new state) nothing is said, but the echo is still settled.
     /// The release is never canceled: a press is always let go, even across a profile switch.
     /// </summary>
     private async Task PressAsync(Bbs757Control control, Bbs757Press press, SimConnectManager sim,
-        ScreenReaderAnnouncer announcer)
+        ScreenReaderAnnouncer announcer, bool speak)
     {
         try
         {
             if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed
+            string? linked = LinkedStatusKey(control.Node);
+            if (linked != null) ArmOwnWriteEcho(linked);
             sim.ExecuteCalculatorCodeUnique(press.Down);
             if (press.Up != null)
             {
@@ -119,10 +132,17 @@ public partial class BBS757Definition
                 sim.ExecuteCalculatorCodeUnique(press.Up);
             }
             if (_lifetime.IsCancellationRequested) return;
-            if (!Bbs757Write.HasReadableState(control)) announcer.Announce($"{control.Label} pressed");
+            if (linked == null && speak && !Bbs757Write.HasReadableState(control)) announcer.Announce($"{control.Label} pressed");
 
             await Task.Delay(ReadBackDelayMs, _lifetime.Token);
             sim.RequestVariable(control.Node, forceUpdate: true);
+            if (linked == null) return;
+
+            double? state = await sim.ReadFreshAsync(linked, FreshReadTimeoutMs, _lifetime.Token);
+            _lifetime.Token.ThrowIfCancellationRequested();
+            string phrase = LinkedPhrase(linked, state);
+            if (state != null) SettleOwnWriteEcho(linked, phrase);
+            if (speak) announcer.Announce(state != null ? phrase : $"{control.Label} pressed");
         }
         catch (OperationCanceledException) { /* switched away: nothing left to say or read */ }
         catch (Exception ex)
@@ -184,6 +204,9 @@ public partial class BBS757Definition
                     return;
             }
 
+            // The parking brake's state row would announce this pick a second time ("Parking brake
+            // set" after the screen reader read "Set"): its change is this write's echo.
+            if (LinkedStatusKey(control.Node) is { } linked) ArmOwnWriteEcho(linked);
             foreach (var call in plan.Calls) sim.ExecuteCalculatorCodeUnique(call);
 
             await Task.Delay(ReadBackDelayMs, ct);
@@ -219,6 +242,7 @@ public partial class BBS757Definition
     {
         base.OnSwitchedAway();
         CloseMcpDialogs();
+        CloseAutoflightWindows();
         try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
         _lifetime.Dispose();
     }
@@ -251,6 +275,9 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
+        // Flaps, gear, speedbrake, parking brake and the MCP lights speak their own changes
+        // (BBS757Definition.Readouts.cs); MainForm's mute wrap gates them ([VAR-8]).
+        if (ProcessReadoutUpdate(varName, value, announcer)) return true;
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }
 
@@ -305,6 +332,7 @@ public partial class BBS757Definition
         _nestSettled = false;
         CancelPendingPicks();
         CancelMcpSets();
+        ResetReadoutBaselines();   // the new flight's flaps, gear and lights are no change
     }
 
     // =================================================================================
@@ -339,6 +367,30 @@ public partial class BBS757Definition
             case HotkeyAction.ReadAltitude:
             case HotkeyAction.ReadFCUVerticalSpeedFPA:
                 _ = ReadMcpAsync(action, simConnect, announcer);   // never throws: it catches and logs
+                return true;
+
+            // L flaps, Shift+G gear, B altimeters and minimums, F / Shift+F fuel, W / Shift+W gross
+            // weight: the other Boeings' keys (BBS757Definition.Readouts.cs).
+            case HotkeyAction.ReadFlaps:
+            case HotkeyAction.ReadGear:
+            case HotkeyAction.ReadAltimeter:
+            case HotkeyAction.ReadFuelQuantity:
+            case HotkeyAction.ReadFuelInfo:
+            case HotkeyAction.ReadWaypointInfo:
+            case HotkeyAction.ReadGrossWeightKg:
+                _ = ReadoutAsync(action, simConnect, announcer);   // never throws: it catches and logs
+                return true;
+
+            // Ctrl+B: the altimeter and minimums window (BBS757Definition.Altimeter.cs).
+            case HotkeyAction.FCUSetBaro:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowAltimeterWindow(simConnect, announcer, parentForm);
+                return true;
+
+            // Ctrl+P: the 757 autopilot window (BBS757Definition.Autopilot.cs).
+            case HotkeyAction.FCUSetAutopilot:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowAutopilotWindow(simConnect, announcer);
                 return true;
         }
 

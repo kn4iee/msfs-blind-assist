@@ -36,8 +36,10 @@ namespace MSFSBlindAssist.Aircraft;
 ///
 /// Every control is an OnRequest L:var read on demand (one individual data definition each,
 /// about 420), the status rows ride the continuous batch or their own on-request read, and the
-/// connection's ceiling is about 1000 (docs/architecture.md). Bbs757DefinitionTests keeps the total
-/// under 900.
+/// connection's ceiling is about 1000 (docs/architecture.md). The flight-control rows and the 14 MCP
+/// lights ride the batch; the engine rows, the flap angle, the squawk, the altimeters, the decision
+/// height, the gear lever and the gross weight are 18 individual definitions (about 500 variables in
+/// all). Bbs757DefinitionTests keeps the total under 900.
 ///
 /// ═══ VERIFY IN SIM ═══
 ///   • A panel pick moves the control and the combo then shows where it really is.
@@ -46,6 +48,11 @@ namespace MSFSBlindAssist.Aircraft;
 ///     flight is reloaded, nothing is said.
 ///   • Ctrl+H/S/A/V set the MCP heading, speed (knots), altitude and vertical speed, and what is
 ///     spoken afterwards is the MCP's own value; Shift+H/S/A/V read the same values (Bbs757Mcp).
+///   • Flaps, gear, speedbrake, parking brake and the MCP lights speak their changes; L, Shift+G, B,
+///     F, Shift+F, W and Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
+///     Ctrl+P is the autopilot window, the transponder panel takes a squawk; the Engines panel shows
+///     the stock engine values (all in BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs;
+///     unmeasured parts in docs/b757/plans/01-prototype-insim-tests.md).
 /// </summary>
 public partial class BBS757Definition : BaseAircraftDefinition
 {
@@ -137,7 +144,12 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddMcpVariables(vars);
 
         // The tanks and payload stations the EFB window's SimBrief load reads back; see Bbs757Loadsheet.
+        // F and Shift+F read the same four.
         AddLoadsheetVariables(vars);
+
+        // Flaps, gear, speedbrake, parking brake, the MCP lights, the engines, the altimeters, the
+        // radio minimums, the gross weight and the squawk; see BBS757Definition.Readouts.cs.
+        AddReadoutVariables(vars);
 
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");
         return vars;
@@ -276,6 +288,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
             if (!structure.TryGetValue(StatusSection, out var statusPanels)) structure[StatusSection] = statusPanels = new List<string>();
             statusPanels.Add(panel);
         }
+
+        // The app's own rows and fields, after the map's (BBS757Definition.Readouts.cs).
+        AddReadoutPanels(structure, controls, displays);
 
         _panelControls = controls;
         _panelDisplays = displays;

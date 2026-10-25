@@ -1,0 +1,397 @@
+using System.Globalization;
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
+using R = MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
+
+namespace MSFSBlindAssist.Aircraft;
+
+/// <summary>
+/// The 757's flight-control readouts, its MCP lights and its engine rows: what is registered, where
+/// it shows, what is spoken on change, and the output-mode readouts (L flaps, Shift+G gear, B the
+/// altimeters and the radio minimums, F and Shift+F fuel, W and Shift+W gross weight).
+///
+/// Speech follows CORE-7. A change the pilot did not make (flaps, gear, speedbrake, parking brake,
+/// an MCP light) is spoken once, through <see cref="Bbs757ChangeTracker"/>: the cockpit as found is
+/// a silent baseline, an unchanged value is silent, and a change the app's own press or pick made is
+/// its echo (the press reads it back itself, the screen reader read the pick). A readout is spoken at
+/// once (AnnounceImmediate), never refused silently.
+///
+/// The data-definition budget: the announced rows ride the 1 Hz batch (no individual definition), the
+/// flap angle, the squawk and the ten engine rows are read while their display is shown, and the
+/// altimeters, the decision height, the gear lever and the gross weight are read on request. The
+/// whole profile stays under 900 variables (Bbs757DefinitionTests).
+/// </summary>
+public partial class BBS757Definition
+{
+    /// <summary>How long a change of a state row after the app's own write to its control is that write's echo.</summary>
+    internal const int OwnWriteEchoMs = 5000;
+
+    /// <summary>The state call-outs' change tracker (baseline, echo, change).</summary>
+    private readonly Bbs757ChangeTracker _changes = new();
+
+    /// <summary>The gear legs as last delivered, for the composed gear call-out and status row.</summary>
+    private readonly Dictionary<string, double> _gearLegs = new(StringComparer.Ordinal);
+
+    /// <summary>The clock the echo windows run on; replaced by tests.</summary>
+    internal Func<long> NowMs { get; init; } = () => Environment.TickCount64;
+
+    /// <summary>
+    /// Whether the pilot muted a Ctrl+M row; replaced by tests. Only the gear call-out asks it: the
+    /// three legs speak the one "Gear" row's call-out, so they are left out of MainForm's mute wrap
+    /// (<see cref="IsMuteWrapExempt"/>, [VAR-8]) and check the row themselves.
+    /// </summary>
+    internal Func<string, bool> IsMonitorMuted { get; init; } =
+        key => Settings.SettingsManager.Current.BBS757DisabledMonitorVariablesSet.Contains(key);
+
+    // =================================================================================
+    // Variables
+    // =================================================================================
+
+    /// <summary>Every variable of this partial, added after the map's (never shadowing one).</summary>
+    private static void AddReadoutVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        void Add(string key, SimVarDefinition def)
+        {
+            if (!vars.ContainsKey(key)) vars[key] = def;
+        }
+
+        // Announced state rows: Continuous + IsAnnounced rides the 1 Hz batch; ProcessSimVarUpdate
+        // speaks them, and each keeps its Ctrl+M row.
+        var detents = new Dictionary<double, string>();
+        for (int i = 0; i < R.FlapDetents.Count; i++) detents[i] = R.FlapDetents[i];
+        Add(R.FlapsHandleKey, StreamedRow("FLAPS HANDLE INDEX", "Flaps", SimVarType.SimVar, "number", detents));
+        Add(R.SpeedbrakeKey, StreamedRow(R.SpeedbrakeLeverVar, "Speedbrake", SimVarType.LVar, "number"));
+        Add(R.ParkingBrakeKey, StreamedRow(R.ParkingBrakeVar, "Parking Brake", SimVarType.LVar, "number",
+            new Dictionary<double, string> { [0] = "Released", [1] = "Set" }));
+
+        // The three gear legs: the nose leg's row is the one Ctrl+M row for the gear call-outs.
+        Add(R.GearNoseKey, StreamedRow("GEAR CENTER POSITION", "Gear", SimVarType.SimVar, "percent over 100"));
+        var left = StreamedRow("GEAR LEFT POSITION", "Left Main Gear", SimVarType.SimVar, "percent over 100");
+        left.ExcludeFromMonitorManager = true;
+        Add(R.GearLeftKey, left);
+        var right = StreamedRow("GEAR RIGHT POSITION", "Right Main Gear", SimVarType.SimVar, "percent over 100");
+        right.ExcludeFromMonitorManager = true;
+        Add(R.GearRightKey, right);
+
+        // The MCP button lights.
+        foreach (var light in Bbs757McpLights.All)
+            Add(light.Key, StreamedRow(light.LightVar, light.Label, SimVarType.LVar, "number"));
+
+        // Silent rows, read while their status display is shown (no Ctrl+M row: they speak nothing).
+        Add(R.FlapsAngleKey, DisplayedRow("TRAILING EDGE FLAPS LEFT ANGLE", "Flap Angle", "degrees"));
+        foreach (var row in R.EngineRows) Add(row.Key, DisplayedRow(row.SimVar, row.Label, row.Units));
+        Add(Bbs757Squawk.CodeKey, DisplayedRow("TRANSPONDER CODE:1", "Squawk", "BCO16"));
+
+        // Read on request only: the readouts and the windows' read-backs.
+        Add(R.GearHandleKey, RequestedRead("GEAR HANDLE POSITION", "Gear Lever", "bool"));
+        Add(R.TotalWeightKey, RequestedRead("TOTAL WEIGHT", "Gross Weight", "pounds"));
+        for (int i = 0; i < Bbs757Altimeters.KohlsmanKeys.Count; i++)
+            Add(Bbs757Altimeters.KohlsmanKeys[i], RequestedRead($"KOHLSMAN SETTING MB:{i + 1}", $"Altimeter {i + 1}", "millibars"));
+        Add(Bbs757Altimeters.DecisionHeightKey, RequestedRead("DECISION HEIGHT", "Decision Height", "feet"));
+
+        // The squawk field. A key containing "_SET" is what MainForm renders as a text box Enter
+        // applies; the definition claims it (HandleUIVariableSet), so the event named here is never
+        // sent: it only keeps the registration an event, which takes no data definition.
+        Add(Bbs757Squawk.SetKey, new SimVarDefinition
+        {
+            Name = "XPNDR_SET", DisplayName = "Squawk Code",
+            Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
+            UnparseableTextAsNaN = true,
+        });
+    }
+
+    private static SimVarDefinition StreamedRow(string name, string label, SimVarType type, string units,
+        Dictionary<double, string>? descriptions = null) => new()
+    {
+        Name = name, DisplayName = label, Type = type, Units = units,
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+        RenderAsReadOnlyStatus = true,
+        ValueDescriptions = descriptions ?? new Dictionary<double, string>(),
+    };
+
+    private static SimVarDefinition DisplayedRow(string name, string label, string units) => new()
+    {
+        Name = name, DisplayName = label, Type = SimVarType.SimVar, Units = units,
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = false,
+        RenderAsReadOnlyStatus = true, ExcludeFromMonitorManager = true,
+    };
+
+    private static SimVarDefinition RequestedRead(string name, string label, string units) => new()
+    {
+        Name = name, DisplayName = label, Type = SimVarType.SimVar, Units = units,
+        UpdateFrequency = UpdateFrequency.OnRequest, ExcludeFromMonitorManager = true,
+    };
+
+    // =================================================================================
+    // Panels
+    // =================================================================================
+
+    /// <summary>The panel the transponder's controls are on (the map's), which gains the squawk field.</summary>
+    internal const string TransponderPanel = "TCAS and transponder";
+
+    /// <summary>The map's MCP panel, whose status display lists the button lights.</summary>
+    internal const string McpPanel = "MCP";
+
+    /// <summary>The read-only engine panel, under the Status section.</summary>
+    internal const string EnginesPanel = "Engines";
+
+    /// <summary>
+    /// After the map's panels: the flight-control rows join the Status display (after the map's rows),
+    /// the MCP's status display lists the lights, the transponder panel gains the squawk field and its
+    /// read-back row, and the Engines panel is a display-only panel under Status (an empty controls
+    /// entry, or it renders nothing: [HS-5]).
+    /// </summary>
+    private static void AddReadoutPanels(Dictionary<string, List<string>> structure,
+        Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
+    {
+        List<string> Display(string panel)
+        {
+            if (!displays.TryGetValue(panel, out var rows)) displays[panel] = rows = new List<string>();
+            return rows;
+        }
+
+        if (!controls.ContainsKey(StatusSection))
+        {
+            controls[StatusSection] = new List<string>();
+            if (!structure.TryGetValue(StatusSection, out var statusPanels)) structure[StatusSection] = statusPanels = new List<string>();
+            statusPanels.Add(StatusSection);
+        }
+        Display(StatusSection).AddRange(new[]
+        {
+            R.FlapsHandleKey, R.FlapsAngleKey, R.GearNoseKey, R.SpeedbrakeKey, R.ParkingBrakeKey,
+        });
+
+        if (controls.ContainsKey(McpPanel))
+            Display(McpPanel).AddRange(Bbs757McpLights.All.Select(l => l.Key));
+
+        if (controls.TryGetValue(TransponderPanel, out var transponder))
+        {
+            transponder.Add(Bbs757Squawk.SetKey);
+            Display(TransponderPanel).Add(Bbs757Squawk.CodeKey);
+        }
+
+        controls[EnginesPanel] = new List<string>();
+        if (!structure.TryGetValue(StatusSection, out var status)) structure[StatusSection] = status = new List<string>();
+        status.Add(EnginesPanel);
+        Display(EnginesPanel).AddRange(R.EngineRows.Select(r => r.Key));
+    }
+
+    // =================================================================================
+    // Announcements
+    // =================================================================================
+
+    /// <summary>The gear legs speak the "Gear" row's call-out, so they check its mute themselves ([VAR-8]).</summary>
+    public override bool IsMuteWrapExempt(string varName)
+        => varName is R.GearNoseKey or R.GearLeftKey or R.GearRightKey || base.IsMuteWrapExempt(varName);
+
+    /// <summary>
+    /// The state rows' call-outs: true when <paramref name="varName"/> is one of them (spoken or not),
+    /// false for anything else, which goes on to the generic path (the silent rows' display values).
+    /// </summary>
+    private bool ProcessReadoutUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
+    {
+        switch (varName)
+        {
+            case R.FlapsHandleKey:
+                SpeakChange(varName, R.FlapDetentName(value) == null ? null : R.FlapsPhrase(value), announcer);
+                return true;
+            case R.SpeedbrakeKey:
+                SpeakChange(varName, R.SpeedbrakeWords(value) == null ? null : R.SpeedbrakePhrase(value), announcer);
+                return true;
+            case R.ParkingBrakeKey:
+                SpeakChange(varName, double.IsFinite(value) ? R.ParkingBrakePhrase(value) : null, announcer);
+                return true;
+            case R.GearNoseKey:
+            case R.GearLeftKey:
+            case R.GearRightKey:
+                _gearLegs[varName] = value;
+                if (GearState() is { } gear && _changes.Observe(R.GearNoseKey, R.GearPhrase(gear), NowMs()) is { } said
+                    && !IsMonitorMuted(R.GearNoseKey))
+                    announcer.Announce(said);
+                return true;
+        }
+        if (Bbs757McpLights.ForKey(varName) is { } light)
+        {
+            SpeakChange(varName, double.IsFinite(value) ? Bbs757McpLights.Phrase(light.Label, value) : null, announcer);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>One row's phrase this delivery: spoken when the tracker calls it a change. A null phrase (an unreadable value) is neither spoken nor a baseline.</summary>
+    private void SpeakChange(string row, string? phrase, ScreenReaderAnnouncer announcer)
+    {
+        if (phrase == null) return;
+        if (_changes.Observe(row, phrase, NowMs()) is { } said) announcer.Announce(said);
+    }
+
+    private Bbs757GearState? GearState() => R.GearLegs(
+        _gearLegs.TryGetValue(R.GearNoseKey, out double n) ? n : null,
+        _gearLegs.TryGetValue(R.GearLeftKey, out double l) ? l : null,
+        _gearLegs.TryGetValue(R.GearRightKey, out double r) ? r : null);
+
+    /// <summary>The state row a control's press or pick moves, or null: an MCP button's light, a speedbrake spot's lever, the parking brake.</summary>
+    internal static string? LinkedStatusKey(string node)
+    {
+        if (Bbs757McpLights.ForNode(node) is { } light) return light.Key;
+        return node switch
+        {
+            "BBS757_SPOILERDOWN_CLICK" or "BBS757_SPOILERARMED_CLICK" or "BBS757_SPOILERUP_CLICK" => R.SpeedbrakeKey,
+            "BBS757_PEDESTAL_Park_Brake_Lever" => R.ParkingBrakeKey,
+            _ => null,
+        };
+    }
+
+    /// <summary>A linked row's phrase for a read value: "CMD R on", "Speedbrake armed", "Parking brake set".</summary>
+    internal static string LinkedPhrase(string statusKey, double? value)
+    {
+        if (Bbs757McpLights.ForKey(statusKey) is { } light) return Bbs757McpLights.Phrase(light.Label, value);
+        return statusKey == R.SpeedbrakeKey ? R.SpeedbrakePhrase(value) : R.ParkingBrakePhrase(value);
+    }
+
+    /// <summary>The app is about to write the control that moves <paramref name="statusKey"/>: its change is the write's echo for a while.</summary>
+    private void ArmOwnWriteEcho(string statusKey) => _changes.ArmEcho(statusKey, NowMs() + OwnWriteEchoMs);
+
+    /// <summary>A read-back spoke (or showed) the row's state: that is its baseline now, and later changes speak again.</summary>
+    private void SettleOwnWriteEcho(string statusKey, string phrase)
+    {
+        _changes.Rebaseline(statusKey, phrase);
+        _changes.ArmEcho(statusKey, 0);
+    }
+
+    /// <summary>A reconnect or a flight load: every state row's next delivery is a baseline again.</summary>
+    private void ResetReadoutBaselines()
+    {
+        _changes.Reset();
+        _gearLegs.Clear();
+    }
+
+    public override void ResetAnnouncementBaselines()
+    {
+        base.ResetAnnouncementBaselines();
+        ResetReadoutBaselines();
+    }
+
+    // =================================================================================
+    // Status display
+    // =================================================================================
+
+    /// <summary>
+    /// The rows a value description cannot say: the gear (three legs together), the speedbrake, the
+    /// flap angle, the squawk (BCO16), the MCP lights and the engine values.
+    /// </summary>
+    public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
+    {
+        switch (varKey)
+        {
+            case R.GearNoseKey:
+                displayText = R.GearDisplay(R.GearLegs(value,
+                    _gearLegs.TryGetValue(R.GearLeftKey, out double l) ? l : null,
+                    _gearLegs.TryGetValue(R.GearRightKey, out double r) ? r : null));
+                return true;
+            case R.FlapsHandleKey:
+                displayText = R.FlapDetentName(value) ?? "unavailable";
+                return true;
+            case R.SpeedbrakeKey:
+                displayText = R.SpeedbrakeDisplay(value);
+                return true;
+            case R.FlapsAngleKey:
+                displayText = string.Create(CultureInfo.InvariantCulture, $"{value:0.0} degrees");
+                return true;
+            case Bbs757Squawk.CodeKey:
+                displayText = Bbs757Squawk.Decode(value);
+                return true;
+        }
+        if (Bbs757McpLights.ForKey(varKey) != null)
+        {
+            displayText = Bbs757McpLights.State(value);
+            return true;
+        }
+        if (R.EngineRows.FirstOrDefault(r => r.Key == varKey) is { } engine)
+        {
+            displayText = R.EngineText(engine, value);
+            return true;
+        }
+        return base.TryGetDisplayOverride(varKey, value, out displayText);
+    }
+
+    // =================================================================================
+    // Readouts (output mode)
+    // =================================================================================
+
+    /// <summary>The readouts' reads, replaced by tests (a SimConnectManager cannot read in them); null: <see cref="ReadoutIoFor"/>.</summary>
+    internal Func<SimConnectManager, McpIo>? ReadoutIo { get; init; }
+
+    /// <summary>
+    /// The readouts' reads: a batch-covered row from the cache (at most a second old), anything else
+    /// read fresh. Null when it cannot be read.
+    /// </summary>
+    private McpIo ReadoutIoFor(SimConnectManager sim) => new()
+    {
+        Read = (key, ct) =>
+        {
+            if (GetVariables().TryGetValue(key, out var def) && def.UpdateFrequency == UpdateFrequency.Continuous
+                && def.IsAnnounced && sim.GetCachedVariableValue(key) is double cached)
+                return Task.FromResult<double?>(cached);
+            return sim.ReadFreshAsync(key, FreshReadTimeoutMs, ct);
+        },
+        Write = sim.ExecuteCalculatorCodeUnique,
+        Delay = Task.Delay,
+    };
+
+    /// <summary>
+    /// L, Shift+G, B, F, Shift+F, W and Shift+W: reads and speaks at once. Never throws (fire and
+    /// forget from the hotkey); a readout that fails says what could not be read.
+    /// </summary>
+    internal async Task ReadoutAsync(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;
+            var ct = _lifetime.Token;
+            var io = ReadoutIo?.Invoke(sim) ?? ReadoutIoFor(sim);
+            string said = action switch
+            {
+                HotkeyAction.ReadFlaps => await R.ReadFlapsAsync(io, ct),
+                HotkeyAction.ReadGear => R.GearReadout(await io.Read(R.GearHandleKey, ct), await io.Read(R.GearNoseKey, ct),
+                    await io.Read(R.GearLeftKey, ct), await io.Read(R.GearRightKey, ct)),
+                HotkeyAction.ReadAltimeter => Bbs757Altimeters.Readout(
+                    await io.Read(Bbs757Altimeters.Kohlsman1Key, ct), await io.Read(Bbs757Altimeters.Kohlsman2Key, ct),
+                    await io.Read(Bbs757Altimeters.Kohlsman3Key, ct), await io.Read(Bbs757Altimeters.DecisionHeightKey, ct)),
+                HotkeyAction.ReadFuelQuantity => await ReadFuelAsync(io, kilograms: false, ct),
+                HotkeyAction.ReadFuelInfo => await ReadFuelAsync(io, kilograms: true, ct),
+                HotkeyAction.ReadWaypointInfo => R.WeightPhrase(await io.Read(R.TotalWeightKey, ct), kilograms: false),
+                HotkeyAction.ReadGrossWeightKg => R.WeightPhrase(await io.Read(R.TotalWeightKey, ct), kilograms: true),
+                _ => throw new ArgumentOutOfRangeException(nameof(action), action, "not a 757 readout"),
+            };
+            ct.ThrowIfCancellationRequested();
+            announcer.AnnounceImmediate(said);
+        }
+        catch (OperationCanceledException) { /* switched away */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{action}: readout failed: {ex.Message}");
+            announcer.AnnounceImmediate(ReadoutUnavailable(action));   // a readout never goes silent
+        }
+    }
+
+    private static async Task<string> ReadFuelAsync(McpIo io, bool kilograms, CancellationToken ct)
+        => R.FuelPhrase(
+            await io.Read(SimConnect.BBS757.Bbs757Loadsheet.LeftFuelKey, ct),
+            await io.Read(SimConnect.BBS757.Bbs757Loadsheet.RightFuelKey, ct),
+            await io.Read(SimConnect.BBS757.Bbs757Loadsheet.CenterFuelKey, ct),
+            await io.Read(SimConnect.BBS757.Bbs757Loadsheet.FuelDensityKey, ct),
+            kilograms);
+
+    private static string ReadoutUnavailable(HotkeyAction action) => action switch
+    {
+        HotkeyAction.ReadFlaps => R.FlapsPhrase(null),
+        HotkeyAction.ReadGear => R.GearPhrase(null),
+        HotkeyAction.ReadAltimeter => Bbs757Altimeters.Readout(null, null, null, null),
+        HotkeyAction.ReadFuelQuantity or HotkeyAction.ReadFuelInfo => "Fuel unavailable",
+        _ => "Gross weight unavailable",
+    };
+}

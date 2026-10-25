@@ -67,16 +67,21 @@ public class Bbs757DefinitionTests
     [Fact]
     public void The_status_panel_lists_the_apu_state()
     {
-        Assert.Equal(new[] { "Status" }, Def.GetPanelStructure()["Status"]);
+        Assert.Equal(new[] { "Status", "Engines" }, Def.GetPanelStructure()["Status"]);
         Assert.Contains("B757_APU_STATE", Def.GetPanelDisplayVariables()["Status"]);
         // A display-only panel still needs its (empty) controls entry, or the panel renders nothing ([HS-5]).
         Assert.Empty(Def.GetPanelControls()["Status"]);
+        Assert.Empty(Def.GetPanelControls()["Engines"]);
     }
 
     [Fact]
-    public void Every_status_row_is_on_the_status_display()
+    public void Every_status_row_is_on_the_status_display_then_the_flight_controls()
     {
-        Assert.Equal(Map.Status.Select(s => s.Key), Def.GetPanelDisplayVariables()["Status"]);
+        Assert.Equal(Map.Status.Select(s => s.Key).Concat(new[]
+        {
+            Bbs757Readouts.FlapsHandleKey, Bbs757Readouts.FlapsAngleKey, Bbs757Readouts.GearNoseKey,
+            Bbs757Readouts.SpeedbrakeKey, Bbs757Readouts.ParkingBrakeKey,
+        }), Def.GetPanelDisplayVariables()["Status"]);
     }
 
     [Fact]
@@ -129,7 +134,9 @@ public class Bbs757DefinitionTests
         foreach (var panel in Map.Controls.Select(c => c.Panel).Distinct())
         {
             var nodes = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Node);
-            Assert.Equal(nodes, Def.GetPanelControls()[panel]);
+            // The transponder panel ends with the app's squawk field, after the map's controls.
+            var appFields = panel == BBS757Definition.TransponderPanel ? new[] { Bbs757Squawk.SetKey } : Array.Empty<string>();
+            Assert.Equal(nodes.Concat(appFields), Def.GetPanelControls()[panel]);
         }
     }
 

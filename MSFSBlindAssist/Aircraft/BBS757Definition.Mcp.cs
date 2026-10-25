@@ -172,11 +172,19 @@ public partial class BBS757Definition
     /// the loop and speak its result unless a newer set, a flight load or a profile switch has
     /// superseded it. A repeat of the value already being set is ignored when
     /// <paramref name="ignoreSameValueInFlight"/>; a different value supersedes the one in flight.
+    /// Whatever is spoken also goes to <paramref name="onSaid"/> (the altimeter window's status box).
     /// Never throws: it is fire-and-forget from a window callback.
     /// </summary>
     internal async Task RunMcpSetAsync(string key, int value, bool ignoreSameValueInFlight, string refusal,
-        SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<McpIo, CancellationToken, Task<string>> set)
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<McpIo, CancellationToken, Task<string>> set,
+        Action<string>? onSaid = null)
     {
+        void Say(string text)
+        {
+            announcer.AnnounceImmediate(text);
+            onSaid?.Invoke(text);
+        }
+
         if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is written
         if (_mcpSets.TryGetValue(key, out var inFlight))
         {
@@ -197,19 +205,19 @@ public partial class BBS757Definition
             if (!CanWrite(sim))
             {
                 Log.Debug("BBS757", $"{key}: write refused, nothing sent.");
-                announcer.AnnounceImmediate(refusal);
+                Say(refusal);
                 return;
             }
 
             string said = await set(McpIoFor(sim), ct);
             ct.ThrowIfCancellationRequested();
-            announcer.AnnounceImmediate(said);
+            Say(said);
         }
         catch (OperationCanceledException) { /* superseded, reloaded, or switched away: nothing to say */ }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"{key}: set failed: {ex.Message}");
-            announcer.AnnounceImmediate(refusal);   // whatever was sent, the pilot is not left waiting for a value
+            Say(refusal);   // whatever was sent, the pilot is not left waiting for a value
         }
         finally
         {

@@ -298,9 +298,10 @@ public static class Bbs757Mcp
     /// Reads <paramref name="key"/> until two reads <see cref="SettlePollMs"/> apart agree, and returns
     /// that value; after <see cref="SettleGiveUpMs"/> without agreement returns the last read. A K-event
     /// burst can land in more than one part (the aircraft counts them over several frames), and a read
-    /// between the parts is not a place to judge from.
+    /// between the parts is not a place to judge from. The radio minimums set reads the same way
+    /// (<see cref="Bbs757Altimeters.SetDecisionHeightAsync"/>).
     /// </summary>
-    private static async Task<double?> ReadSettledAsync(McpIo io, string key, CancellationToken ct)
+    internal static async Task<double?> ReadSettledAsync(McpIo io, string key, CancellationToken ct)
     {
         double? previous = await io.Read(key, ct);
         for (int waited = 0; waited < SettleGiveUpMs; waited += SettlePollMs)
