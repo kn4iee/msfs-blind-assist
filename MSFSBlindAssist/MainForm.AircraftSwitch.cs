@@ -157,6 +157,7 @@ public partial class MainForm
             "HW_A330" => new HeadwindA330Definition(),
             "IFLY_737MAX8" => new IFly737MAXDefinition(),
             "TFDI_MD11" => new TFDiMD11Definition(),
+            "BBS_757" => new BBS757Definition(),
             // Future aircraft will be added here
             _ => new FlyByWireA320Definition() // Default to A320
         };
@@ -1197,6 +1198,10 @@ public partial class MainForm
         // Starting the SDK bridge is a no-op unless the new aircraft is the iFly.
         StartIFlySdkBridge();
 
+        // The 757's windows, on every switch: the monitor manager lists the definition it was
+        // built for, so the next Ctrl+M rebuilds it from the live one.
+        DisposeBBS757Forms();
+
         // Rebuild sections from new aircraft structure
         foreach (var section in currentAircraft.GetPanelStructure().Keys)
         {
@@ -1296,6 +1301,7 @@ public partial class MainForm
         headwindA330MenuItem.Checked = false;
         ifly737MaxMenuItem.Checked = false;
         tfdiMd11MenuItem.Checked = false;
+        bbs757MenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item.
         // NOTE: HeadwindA330Definition derives from FlyByWireA320Definition, so it MUST
@@ -1335,6 +1341,10 @@ public partial class MainForm
         else if (currentAircraft is IFly737MAXDefinition)
         {
             ifly737MaxMenuItem.Checked = true;
+        }
+        else if (currentAircraft is BBS757Definition)
+        {
+            bbs757MenuItem.Checked = true;
         }
     }
 

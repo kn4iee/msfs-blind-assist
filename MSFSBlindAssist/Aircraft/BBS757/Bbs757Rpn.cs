@@ -37,8 +37,8 @@ public static class Bbs757Rpn
     /// </summary>
     public static IReadOnlyList<string> StepTo(Bbs757Control c, double current, double target)
     {
-        int from = IndexOf(c, current);
-        int to = IndexOf(c, target);
+        int from = PositionIndex(c, current);
+        int to = PositionIndex(c, target);
         if (from < 0 || to < 0 || from == to) return Array.Empty<string>();
 
         if (!string.IsNullOrWhiteSpace(c.Cw) && !string.IsNullOrWhiteSpace(c.Ccw))
@@ -72,8 +72,11 @@ public static class Bbs757Rpn
 
     private static bool Same(double a, double b) => Math.Abs(a - b) < ValueTolerance;
 
-    /// <summary>The index of the position holding <paramref name="value"/>, or -1.</summary>
-    private static int IndexOf(Bbs757Control c, double value)
+    /// <summary>
+    /// The index of the position holding <paramref name="value"/> (within the read-back slack), or
+    /// -1 when the value is none of the control's positions.
+    /// </summary>
+    public static int PositionIndex(Bbs757Control c, double value)
     {
         for (int i = 0; i < c.Positions.Count; i++)
             if (Same(c.Positions[i].Value, value)) return i;

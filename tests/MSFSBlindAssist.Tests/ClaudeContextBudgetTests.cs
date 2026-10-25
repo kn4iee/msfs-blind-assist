@@ -141,6 +141,7 @@ public class ClaudeContextBudgetTests
     [InlineData("plugins/VPilotPlugin/Plugin.cs", ".claude/rules/core.md", "MSFSBlindAssist/**", "", true)]
     [InlineData("MSFSBlindAssist/Resources/flypad-shell.html", ".claude/rules/flypad.md", "MSFSBlindAssist/Resources/coherent-flypad-agent.js", "", true)]
     [InlineData("MSFSBlindAssist/Resources/md11_control_map.json", ".claude/rules/md11.md", "MSFSBlindAssist/Aircraft/MD11/**", "", false)]
+    [InlineData("MSFSBlindAssist/Resources/bbs757_control_map.json", ".claude/rules/b757.md", "MSFSBlindAssist/Aircraft/BBS757/**", "", false)]
     [InlineData("tests/MSFSBlindAssist.Tests/TcasServiceTests.cs", ".claude/rules/core.md", "MSFSBlindAssist/**", "", false)]
     [InlineData("tools/CDUTest/Program.cs", ".claude/rules/core.md", "MSFSBlindAssist/**", "", false)]
     [InlineData("MSFSBlindAssist/Utils/Logging/Log.cs", ".claude/rules/core.md", "MSFSBlindAssist/Services/**", "MSFSBlindAssist/Utils/Logging/", false)]

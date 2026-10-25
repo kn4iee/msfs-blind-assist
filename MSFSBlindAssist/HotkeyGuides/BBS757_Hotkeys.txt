@@ -1,0 +1,151 @@
+BLUEBIRD 757-200 HOTKEY REFERENCE
+
+Application Navigation:
+  Ctrl+1     Focus Sections List
+  Ctrl+2     Focus Panels List
+  Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+  F5         Refresh the current panel's Status Display now (it also updates itself live)
+
+Tip: Press the same bracket key again to cancel a mode you activated by accident.
+
+The BlueBird 757-200 needs two things running besides the simulator:
+  - BBS Nest, BlueBird's companion app. Without it the cockpit takes every
+    switch but no system responds. The app says "BBS Nest is not running"
+    once after connecting when it is missing; start it and reload the flight.
+  - The MobiFlight WASM module. Every switch is set by replaying the
+    cockpit's own click through it; without it each control says
+    "unavailable" and nothing is sent.
+
+The panels (Overhead, Glareshield, Forward panel, Pedestal) carry every
+regular cockpit switch, knob and button, named and ordered as on the
+aircraft. A switch's combo moves back to where the switch really is if the
+aircraft did not take the change. Buttons say "pressed" when pressed. The
+Status section shows the APU state, master warning and caution, the AC bus
+power sources, the APU speed and the cabin altitude.
+
+OUTPUT MODE - Press right bracket to activate
+
+MCP Readouts:
+  Shift+H    Read MCP Heading
+  Shift+S    Read MCP Speed
+  Shift+A    Read MCP Altitude
+  Shift+V    Read MCP Vertical Speed
+  Each reads the value the MCP window shows, never the simulator's own
+  autopilot values (they disagree with BlueBird's MCP).
+
+Altitude:
+  Q          Read Altitude AGL
+  A          Read Altitude MSL
+
+Airspeed:
+  S          Read IAS (Indicated Airspeed)
+  T          Read TAS (True Airspeed)
+  G          Read Ground Speed
+  M          Read Mach Number
+
+Heading:
+  H          Read Magnetic Heading
+  U          Read True Heading
+
+Navigation:
+  N          Read NAV radio info
+
+Vertical:
+  V          Read Vertical Speed
+  Ctrl+Shift+R  Read last landing rate (touchdown vertical speed, feet per minute)
+  Ctrl+Shift+G  Read last landing peak g-force
+
+Weather:
+  I          Wind Info
+  O          Read Outside Temperature (Celsius)
+
+Time:
+  Z          Read Local Time at aircraft position
+  Shift+Z    Read Zulu / UTC Time
+
+Position:
+  C          Read Nearest City
+  Ctrl+Shift+T  Cold Temperature Altitude Correction calculator
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
+
+Traffic:
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
+
+AI Display Reading (needs an AI provider configured in Settings > AI tab):
+  Alt+P      Describe the ADI (attitude and flight mode annunciations)
+  Alt+N      Describe the EHSI (map display)
+  Alt+E      Describe the upper EICAS (engines and crew alerts)
+  Alt+S      Describe the lower EICAS
+  The 757's displays are drawn by the aircraft itself and cannot be read as
+  text, so these are the way to hear them. The app moves the simulator
+  camera to the display it is reading and puts your own view back afterwards;
+  from an outside or drone view it says "Switch to a cockpit view first".
+
+EFB:
+  Shift+E    Open Flight Planning EFB
+
+Monitoring:
+  Ctrl+M     757 Monitor Manager. Lists every automatically announced
+             variable (APU state, master warning and caution, ground state,
+             glideslope, trim); uncheck any to stop it speaking when it
+             changes. Persists across sessions.
+
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
+INPUT MODE - Press left bracket to activate
+
+MCP Value Windows:
+  Ctrl+H     Set MCP Heading (0 to 359)
+  Ctrl+S     Set MCP Speed in knots. In Mach mode the app says so; set Mach
+             from the Glareshield panel.
+  Ctrl+A     Set MCP Altitude (rounded to 100 feet)
+  Ctrl+V     Set MCP Vertical Speed (-8000 to 6000, in steps of 100)
+  Each value is read back from the MCP after it is set ("Heading 090").
+
+CDU (Shift+M):
+  Opens the accessible CDU window for both CDUs, read as text from the
+  aircraft. Ctrl+Tab switches between the Captain and First Officer CDU.
+  Ctrl+1 to Ctrl+6    Left line select keys 1-6
+  Alt+1 to Alt+6      Right line select keys 1-6
+  (F1-F6 / F7-F12 when the alternate LSK setting is on)
+  Alt+I  INIT REF     Alt+R  RTE        Alt+D  DEP ARR
+  Alt+T  ATC          Alt+V  VNAV       Alt+F  FIX
+  Alt+G  LEGS         Alt+H  HOLD       Alt+O  FMC COMM
+  Alt+P  PROG         Alt+M  MENU       Alt+N  NAV RAD
+  PageUp / PageDown   PREV / NEXT page
+  Ctrl+Enter          EXEC
+  Typing goes to the scratchpad; Backspace is CLR and Delete is DEL.
+  Flight data (SimBrief flight, route, winds, performance) comes in on the
+  CDU's ACARS and FMC COMM pages: MENU, ACARS, INIT FLT.
+
+757 EFB (Shift+T):
+  Operates BlueBird's tablet for you: Navigraph sign-in (the code is read
+  out and the sign-in page opens in your browser), nav data update, SimBrief
+  ID, fetching the SimBrief flight, the weight units question, cockpit
+  presets and quick starts. Each action says what happened.
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
+
+Notes:
+  - The aircraft loads in its own panel state (cold and dark) wherever you
+    start; the app assumes no power or engines at load.
+  - The 757 calls 80 knots, V1, rotate and its altitude callouts itself, so
+    the app makes no take-off callouts of its own on this aircraft.
