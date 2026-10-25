@@ -476,9 +476,10 @@ If the tablet cannot be reached, the window says *"The 757's EFB is not reachabl
 
 **What Load fuel and payload from SimBrief tells you.** About three seconds after the load, BA reads the tanks and holds back and tells you what they hold, in the aircraft's weight units and rounded to 10. For a plan named QQX 1234 from KSEA to KDEN with 25550 pounds of fuel, you hear *"Loaded QQX 1234, KSEA to KDEN. Fuel 25480 pounds: left 12740, right 12740, center 0. Passengers 30800 pounds. Cargo 20660 pounds: forward 10300, aft 10360."* The fuel is a little under the plan's, because BlueBird converts pounds to gallons slightly differently from the simulator. When the plan has more passengers than the 757 seats, you also hear that they were capped and the rest of the payload went in the holds. It ends *"For the ACARS weight and balance, request WGTBAL on the CDU."*
 
-BA checks each tank, the cabin and each hold against what it loaded, and reads again a few seconds later if one is off:
+BA checks each tank, the cabin and each hold against what it loaded, and reads again a few seconds later if one is off or could not be read:
 
 - If only part of the load arrived, you hear *"The aircraft did not take all of the load for"* the plan, then each part: the ones that are right as above, and each one that is off with the plan's figure, for example *"Fuel 3000 pounds, not the plan's 25550: left 1500, right 1500, center 0."*
+- If the fuel, the passengers or the cargo still could not be read back, you hear *"The load for"* the plan *"could not all be checked."*, then the parts that were read, and for the others, for example, *"The cargo could not be read back."* The WGTBAL reminder comes only once everything has been read.
 - If nothing changed at all, you hear *"BlueBird did not take the load for"* the plan, then *"Is BBS Nest running?"* BlueBird ignores the load while BBS Nest is not running: start it, reload the flight, and press the button again.
 
 Nothing is loaded in these cases:

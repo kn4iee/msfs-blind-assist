@@ -74,8 +74,8 @@ from branch B757 (Release). Input mode is `[`, output mode is `]`.
     request WGTBAL on the CDU." The fuel should be within about 1% of the plan's block fuel (BlueBird converts at
     6.72 lb/gal, the sim reads 6.70). Then request WGTBAL on the CDU's ACARS pages (note the key path) and compare the
     zero fuel weight and fuel it reads with the plan's. Repeat with a SimBrief plan in kilograms with an odd block
-    fuel (for example 11589 kg): again "Loaded …", not "did not take all of the load" (the write is whole pounds, and
-    an odd pound goes in the center tank). With BBS Nest stopped and a SimBrief plan whose fuel differs from what the
+    fuel (for example 11589 kg): again "Loaded …", not "did not take all of the load" (the write is whole pounds, the
+    odd pound goes to the left wing, and the center stays empty: "center 0"). With BBS Nest stopped and a SimBrief plan whose fuel differs from what the
     tanks hold now (an aircraft already holding the plan counts as loaded), press it again: about six seconds later
     "BlueBird did not take the load for …. Is BBS Nest running?" (log: a "SimBrief load NotTaken" line). With a plan for
     another type (an A320, say): "Your latest SimBrief plan is for A320, not a 757-200. Create a B752 plan, then try

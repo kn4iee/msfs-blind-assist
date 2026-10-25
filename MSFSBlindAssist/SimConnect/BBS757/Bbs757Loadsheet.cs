@@ -45,6 +45,11 @@ public enum Bbs757LoadVerdict
     NotTaken,
     /// <summary>Nothing could be read back.</summary>
     NotRead,
+    /// <summary>
+    /// Every group read holds what was written, but a group (the fuel, the cabin or the cargo) could
+    /// not be read back, so the load is not known to be whole: never said as "Loaded".
+    /// </summary>
+    Unchecked,
 }
 
 /// <summary>
@@ -215,13 +220,15 @@ public static class Bbs757Loadsheet
 
     /// <summary>
     /// The loads in whole pounds, or a refusal (and no loads): first when the plan is not for a
-    /// B752, then when it does not fit. With the block rounded: each wing
-    /// <c>floor(min(block / 2, 14,579))</c>, the center the rest (an odd pound goes there), refused
-    /// past its 46,390. Passengers: the seated ones (at most 176) at the plan's standard weight,
-    /// rounded. Cargo: the payload less the passengers' weight (none when they weigh more), rounded;
-    /// forward <c>min(floor(cargo / 2), 10,300)</c>, aft the rest; refused past 25,000. The measured
-    /// plan (25,550 block, 224 × 175, payload 51,459) gives wings 12,775, center 0, passengers
-    /// 30,800, holds 10,300 and 10,359.
+    /// B752, then when it does not fit. With the block rounded: up to what both wings take
+    /// (2 × 14,579), the right wing <c>floor(block / 2)</c>, the left the rest (an odd pound goes
+    /// to the left wing, never alone in the center: a 1 lb center tank is unmeasured on BlueBird and
+    /// could trip a fuel-configuration message) and the center empty; past it, both wings full and
+    /// the center the rest, refused past its 46,390. Passengers: the seated ones (at most 176) at the
+    /// plan's standard weight, rounded. Cargo: the payload less the passengers' weight (none when
+    /// they weigh more), rounded; forward <c>min(floor(cargo / 2), 10,300)</c>, aft the rest; refused
+    /// past 25,000. The measured plan (25,550 block, 224 × 175, payload 51,459) gives wings 12,775,
+    /// center 0, passengers 30,800, holds 10,300 and 10,359.
     /// </summary>
     public static (Bbs757Loads? Loads, string? Refusal) Compute(Bbs757SimBriefPlan plan)
     {
@@ -230,8 +237,18 @@ public static class Bbs757Loadsheet
             return (null, WrongAircraftText(plan.AircraftIcao));
 
         double block = Whole(plan.BlockFuelLbs);
-        double wing = Math.Floor(Math.Min(block / 2, WingTankLbs));
-        double center = Math.Max(0, block - 2 * wing);
+        double left, right, center;
+        if (block <= 2 * WingTankLbs)
+        {
+            right = Math.Floor(block / 2);
+            left = block - right;
+            center = 0;
+        }
+        else
+        {
+            left = right = WingTankLbs;
+            center = block - 2 * WingTankLbs;
+        }
         if (center > CenterTankLbs) return (null, FuelTooMuchText);
 
         int seated = Math.Min(plan.Passengers, Seats);
@@ -242,7 +259,7 @@ public static class Bbs757Loadsheet
         double forward = Math.Min(Math.Floor(cargo / 2), ForwardHoldLbs);
         double aft = cargo - forward;
 
-        return (new Bbs757Loads(wing, wing, center, passengers, forward, aft, plan.Passengers, seated), null);
+        return (new Bbs757Loads(left, right, center, passengers, forward, aft, plan.Passengers, seated), null);
     }
 
     private static double Whole(double lbs) => Math.Round(lbs, MidpointRounding.AwayFromZero);
@@ -313,20 +330,30 @@ public static class Bbs757Loadsheet
     /// Whether BlueBird took the load, judged per tank, cabin and hold, never on totals (a short
     /// right tank is not made up by a full left one). A tank holds its target within the larger of
     /// 1% and 100 lb; the cabin (stations 3 and 4 together) and each hold within the larger of 0.5%
-    /// and 20 lb. Every part read matching is <see cref="Bbs757LoadVerdict.Loaded"/>; a miss where
-    /// no part moved from <paramref name="before"/> (by the same tolerances) is
-    /// <see cref="Bbs757LoadVerdict.NotTaken"/>; any other miss, or a miss with nothing read
-    /// before, <see cref="Bbs757LoadVerdict.PartlyTaken"/>. A group with a part unread is left out;
-    /// with nothing read, <see cref="Bbs757LoadVerdict.NotRead"/>.
+    /// and 20 lb. A group with a part unread is judged on nothing. With nothing read at all:
+    /// <see cref="Bbs757LoadVerdict.NotRead"/>. A miss where no part read moved from
+    /// <paramref name="before"/> (by the same tolerances): <see cref="Bbs757LoadVerdict.NotTaken"/>;
+    /// any other miss, or a miss with nothing read before: <see cref="Bbs757LoadVerdict.PartlyTaken"/>
+    /// (a miss outranks a group left unread). Every part read matching but a group unread:
+    /// <see cref="Bbs757LoadVerdict.Unchecked"/>. Every part of every group matching:
+    /// <see cref="Bbs757LoadVerdict.Loaded"/>.
     /// </summary>
     public static Bbs757LoadVerdict Judge(Bbs757Loads loads, Bbs757LoadReadBack? before, Bbs757LoadReadBack after)
     {
-        var read = ReadParts(PartsOf(loads, before, after));
+        var all = PartsOf(loads, before, after);
+        var read = ReadParts(all);
         if (read.Count == 0) return Bbs757LoadVerdict.NotRead;
-        if (read.All(p => p.Matches)) return Bbs757LoadVerdict.Loaded;
-        if (read.All(p => p.Unchanged)) return Bbs757LoadVerdict.NotTaken;
-        return Bbs757LoadVerdict.PartlyTaken;
+        if (!read.All(p => p.Matches))
+            return read.All(p => p.Unchanged) ? Bbs757LoadVerdict.NotTaken : Bbs757LoadVerdict.PartlyTaken;
+        return read.Count < all.Length ? Bbs757LoadVerdict.Unchecked : Bbs757LoadVerdict.Loaded;
     }
+
+    /// <summary>
+    /// Whether the window reads the tanks and stations once more, about 3 s later, before it speaks:
+    /// for every verdict but <see cref="Bbs757LoadVerdict.Loaded"/>, so a group that did not answer
+    /// or a load BlueBird was still taking gets a second look.
+    /// </summary>
+    public static bool ReadAgain(Bbs757LoadVerdict verdict) => verdict != Bbs757LoadVerdict.Loaded;
 
     // ---- what is said -----------------------------------------------------------------------
 
@@ -341,11 +368,14 @@ public static class Bbs757Loadsheet
     /// above, each part off with the plan's figure: "Fuel 3000 pounds, not the plan's 25550: left
     /// 1500, right 1500, center 0."</item>
     /// <item>Not taken: "BlueBird did not take the load for …. Is BBS Nest running?" and nothing more.</item>
+    /// <item>Unchecked (every group read matches, one could not be read): "The load for … could not
+    /// all be checked.", the groups read as above and "The fuel could not be read back." (or the
+    /// passengers, or the cargo).</item>
     /// <item>Nothing read: the load was sent, but the tanks and holds could not be read back.</item>
     /// </list>
-    /// A part that could not be read says so. A plan with more passengers than seats adds that the
-    /// rest of the payload went in the holds, and a load that was taken, in whole or part, ends with
-    /// where the ACARS weight and balance comes from.
+    /// A group that could not be read says so, whatever the opening. A plan with more passengers than
+    /// seats adds that the rest of the payload went in the holds, and a load whose every group was
+    /// read back, taken in whole or part, ends with where the ACARS weight and balance comes from.
     /// </summary>
     public static string Phrase(Bbs757SimBriefPlan plan, Bbs757Loads loads, Bbs757LoadReadBack? before,
         Bbs757LoadReadBack after, Bbs757WeightUnits? units)
@@ -359,6 +389,8 @@ public static class Bbs757Loadsheet
                 return $"BlueBird did not take the load for {name}. Is BBS Nest running?";
             case Bbs757LoadVerdict.PartlyTaken:
                 return Said($"The aircraft did not take all of the load for {name}.");
+            case Bbs757LoadVerdict.Unchecked:
+                return Said($"The load for {name} could not all be checked.");
             default:
                 return Said($"Loaded {name}.");
         }
@@ -391,7 +423,8 @@ public static class Bbs757Loadsheet
             if (loads.PassengersCapped)
                 said.Add($"The plan's {loads.PlannedPassengers.ToString(CultureInfo.InvariantCulture)} passengers are capped at " +
                          $"the 757's {Seats.ToString(CultureInfo.InvariantCulture)} seats; the rest of the payload goes in the holds.");
-            said.Add(WeightAndBalanceText);
+            // The weight and balance is worth requesting only once every group has been read back.
+            if (parts.All(x => x.After != null)) said.Add(WeightAndBalanceText);
             return string.Join(" ", said);
         }
     }

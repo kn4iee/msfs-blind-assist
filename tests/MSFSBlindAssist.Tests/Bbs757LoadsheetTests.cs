@@ -335,15 +335,32 @@ public class Bbs757LoadsheetTests
     private static bool IsWhole(double v) => v == Math.Floor(v);
 
     [Fact]
-    public void An_odd_block_writes_whole_pounds_with_the_odd_one_in_the_center()
+    public void An_odd_block_puts_the_odd_pound_in_the_left_wing_never_alone_in_the_center()
     {
+        // A 1 lb center tank is unmeasured on BlueBird and could trip a fuel-configuration message.
         var loads = Loads(Plan(block: 25551, payload: 51460));
 
-        Assert.Equal(12775, loads.LeftLbs);
+        Assert.Equal(12776, loads.LeftLbs);
         Assert.Equal(12775, loads.RightLbs);
-        Assert.Equal(1, loads.CenterLbs);
+        Assert.Equal(0, loads.CenterLbs);
         Assert.Equal(10300, loads.ForwardLbs);
         Assert.Equal(10360, loads.AftLbs);
+    }
+
+    [Fact]
+    public void A_block_the_wings_take_exactly_leaves_the_center_empty()
+    {
+        var loads = Loads(Plan(block: 2 * 14579));
+
+        Assert.Equal((14579.0, 14579.0, 0.0), (loads.LeftLbs, loads.RightLbs, loads.CenterLbs));
+    }
+
+    [Fact]
+    public void One_pound_past_the_wings_goes_in_the_center()
+    {
+        var loads = Loads(Plan(block: 2 * 14579 + 1));
+
+        Assert.Equal((14579.0, 14579.0, 1.0), (loads.LeftLbs, loads.RightLbs, loads.CenterLbs));
     }
 
     [Fact]
@@ -357,16 +374,18 @@ public class Bbs757LoadsheetTests
         Assert.Equal(Math.Round(plan.BlockFuelLbs, MidpointRounding.AwayFromZero), loads.LeftLbs + loads.RightLbs + loads.CenterLbs);
         Assert.Equal(Math.Round(150 * plan.PassengerWeightLbs, MidpointRounding.AwayFromZero), loads.PassengerLbs);
         Assert.Equal(Math.Round(plan.PayloadLbs - loads.PassengerLbs, MidpointRounding.AwayFromZero), loads.ForwardLbs + loads.AftLbs);
-        Assert.Equal(loads.LeftLbs, loads.RightLbs);
+        Assert.InRange(loads.LeftLbs - loads.RightLbs, 0, 1);   // an odd pound to the left wing
+        Assert.Equal(0, loads.CenterLbs);
     }
 
     [Fact]
-    public void A_fractional_plan_never_puts_negative_fuel_in_the_center()
+    public void A_fractional_plan_under_the_wings_capacity_never_puts_fuel_in_the_center()
     {
-        foreach (double block in new[] { 0.4, 0.6, 1.4, 1.6, 2.5, 3.5, 29157.6, 29158.4 })
+        foreach (double block in new[] { 0.4, 0.6, 1.4, 1.6, 2.5, 3.5, 25550.5, 29157.6, 29158.4 })
         {
             var loads = Loads(Plan(block: block));
-            Assert.True(loads.CenterLbs >= 0, block.ToString(CultureInfo.InvariantCulture));
+            Assert.True(loads.CenterLbs == 0, block.ToString(CultureInfo.InvariantCulture));
+            Assert.InRange(loads.LeftLbs - loads.RightLbs, 0, 1);
             Assert.Equal(Math.Round(block, MidpointRounding.AwayFromZero), loads.LeftLbs + loads.RightLbs + loads.CenterLbs);
         }
     }
@@ -396,7 +415,7 @@ public class Bbs757LoadsheetTests
 
             Assert.DoesNotContain(",", code);
             Assert.DoesNotContain(".", code);
-            Assert.StartsWith("12774 (>L:BBS_EFBX_SET_FUEL_LEFT_LBS) 12774 (>L:BBS_EFBX_SET_FUEL_RIGHT_LBS) 1 (>L:BBS_EFBX_SET_FUEL_CENTER_LBS)", code);
+            Assert.StartsWith("12775 (>L:BBS_EFBX_SET_FUEL_LEFT_LBS) 12774 (>L:BBS_EFBX_SET_FUEL_RIGHT_LBS) 0 (>L:BBS_EFBX_SET_FUEL_CENTER_LBS)", code);
         });
     }
 
@@ -483,6 +502,38 @@ public class Bbs757LoadsheetTests
         var loads = Loads(Plan());
 
         Assert.Equal(Bbs757LoadVerdict.Loaded, Bbs757Loadsheet.Judge(loads, Empty, ReadBackOf(loads)));
+        Assert.False(Bbs757Loadsheet.ReadAgain(Bbs757LoadVerdict.Loaded));   // nothing to read again
+    }
+
+    [Fact]
+    public void One_unread_group_with_the_rest_matching_is_unchecked_and_read_again()
+    {
+        var loads = Loads(Plan());
+        var after = ReadBackOf(loads) with { AftHoldLbs = null };   // the holds never answered
+
+        var verdict = Bbs757Loadsheet.Judge(loads, Empty, after);
+
+        Assert.Equal(Bbs757LoadVerdict.Unchecked, verdict);
+        Assert.True(Bbs757Loadsheet.ReadAgain(verdict));
+    }
+
+    [Theory]
+    [InlineData(Bbs757LoadVerdict.PartlyTaken)]
+    [InlineData(Bbs757LoadVerdict.NotTaken)]
+    [InlineData(Bbs757LoadVerdict.NotRead)]
+    [InlineData(Bbs757LoadVerdict.Unchecked)]
+    public void Every_verdict_but_loaded_is_read_again(Bbs757LoadVerdict verdict)
+    {
+        Assert.True(Bbs757Loadsheet.ReadAgain(verdict));
+    }
+
+    [Fact]
+    public void A_miss_outranks_an_unread_group()
+    {
+        var loads = Loads(Plan());
+        var after = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, AftHoldLbs = null };
+
+        Assert.Equal(Bbs757LoadVerdict.PartlyTaken, Bbs757Loadsheet.Judge(loads, Empty, after));
     }
 
     [Fact]
@@ -761,9 +812,37 @@ public class Bbs757LoadsheetTests
 
         string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
 
-        Assert.StartsWith("Loaded QQX 1234, KSEA to KDEN. The fuel could not be read back. Passengers 30800 pounds. " +
-                          "The cargo could not be read back.", said);
-        Assert.EndsWith("For the ACARS weight and balance, request WGTBAL on the CDU.", said);
+        // Never "Loaded" with a group unchecked, and no WGTBAL until every group matched.
+        Assert.Equal("The load for QQX 1234, KSEA to KDEN could not all be checked. The fuel could not be read back. " +
+                     "Passengers 30800 pounds. The cargo could not be read back. " +
+                     "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds.", said);
+    }
+
+    [Fact]
+    public void An_unread_cabin_says_so_and_the_matching_groups_as_loaded()
+    {
+        var plan = Plan(pax: 150, payload: 40000);
+        var loads = Loads(plan);
+        var read = ReadBackOf(loads) with { EconomyLbs = null };
+
+        Assert.Equal("The load for QQX 1234, KSEA to KDEN could not all be checked. " +
+                     "Fuel 25560 pounds: left 12780, right 12780, center 0. The passengers could not be read back. " +
+                     "Cargo 13760 pounds: forward 6880, aft 6880.",
+            Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds));
+    }
+
+    [Fact]
+    public void A_miss_with_a_group_unread_says_the_miss_and_no_WGTBAL()
+    {
+        var plan = Plan(pax: 150, payload: 40000);
+        var loads = Loads(plan);
+        var read = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, RightGallons = 1500 / 6.7, AftHoldLbs = null };
+
+        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
+
+        Assert.Equal("The aircraft did not take all of the load for QQX 1234, KSEA to KDEN. " +
+                     "Fuel 3000 pounds, not the plan's 25550: left 1500, right 1500, center 0. " +
+                     "Passengers 26250 pounds. The cargo could not be read back.", said);
     }
 
     [Fact]
@@ -809,7 +888,7 @@ public class Bbs757LoadsheetTests
 
         string line = Bbs757Loadsheet.LogLine(loads, Empty, after);
 
-        Assert.Equal("SimBrief load Loaded: targets 12775/12775/0, 30800, 10300/10359; " +
+        Assert.Equal("SimBrief load Unchecked: targets 12775/12775/0, 30800, 10300/10359; " +
                      "before 0/0/0, 0, 0/0; after 12737/12737/0, 30800, 10300/-", line);
     }
 

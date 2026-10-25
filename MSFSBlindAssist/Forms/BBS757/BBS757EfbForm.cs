@@ -798,9 +798,11 @@ public class BBS757EfbForm : Form
     /// them (<see cref="Bbs757Loadsheet"/>): the tanks and payload stations read, one calculator
     /// write of BlueBird's setters, then the same read about three seconds later, judged per tank,
     /// cabin and hold against what was written (<see cref="Bbs757Loadsheet.Judge"/>), and once more
-    /// about three seconds after that on a miss. What is said is what the aircraft holds, in its
-    /// units: "Loaded …", "The aircraft did not take all of the load for …" with each part that is
-    /// off, or "BlueBird did not take the load for …. Is BBS Nest running?" when nothing moved.
+    /// about three seconds after that on a miss or a group that could not be read. What is said is
+    /// what the aircraft holds, in its units: "Loaded …", "The aircraft did not take all of the load
+    /// for …" with each part that is off, "The load for … could not all be checked." when a group
+    /// still could not be read, or "BlueBird did not take the load for …. Is BBS Nest running?"
+    /// when nothing moved.
     /// The plan is the latest for BlueBird's stored SimBrief ID, else for the app's SimBrief username
     /// setting; the ID is never logged or spoken, and the log has numbers only. The fetch and the
     /// parse run off the UI thread, and each await comes back to it, so the write, the reads and the
@@ -878,9 +880,10 @@ public class BBS757EfbForm : Form
         await Task.Delay(LoadReadBackDelayMs, ct);
         var after = await ReadLoadAsync(ct);
         if (_disposed) return;
-        if (Bbs757Loadsheet.Judge(loads, before, after) != Bbs757LoadVerdict.Loaded)
+        if (Bbs757Loadsheet.ReadAgain(Bbs757Loadsheet.Judge(loads, before, after)))
         {
-            // BlueBird may still be taking it: one more read about 3 s later, and that one is judged.
+            // A part off or a group that did not answer: BlueBird may still be taking it, or the read
+            // came too soon. One more read about 3 s later, and that one is judged.
             await Task.Delay(LoadReadBackDelayMs, ct);
             after = await ReadLoadAsync(ct);
             if (_disposed) return;

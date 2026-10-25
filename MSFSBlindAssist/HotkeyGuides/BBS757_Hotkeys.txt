@@ -238,9 +238,12 @@ CDU (Shift+M):
                          take all of the load for" the plan, and gives
                          each part that is off with the plan's figure,
                          for example "Fuel 3000 pounds, not the plan's
-                         25550". If nothing changed at all, it says
-                         "BlueBird did not take the load for" the plan,
-                         "Is BBS Nest running?"
+                         25550". If the fuel, the passengers or the
+                         cargo could not be read back, it says "The
+                         load for" the plan "could not all be checked."
+                         and which part could not be read. If nothing
+                         changed at all, it says "BlueBird did not take
+                         the load for" the plan, "Is BBS Nest running?"
                          It uses the SimBrief ID set above, else the
                          SimBrief username in Settings. The plan must
                          be for a 757-200 (B752); another type is
