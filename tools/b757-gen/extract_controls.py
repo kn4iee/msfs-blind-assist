@@ -4,6 +4,9 @@ H:/K:/B: events it fires) is visible without the sim.
 
 Usage:  python -I extract_controls.py <package-folder> <output-folder>
         (the package folder is the one holding manifest.json and layout.json, e.g. Community\\<vendor>-aircraft-757)
+As a module (generate_b757_map.py does this): extract(package) -> (control rows, light rows, summary data): the rows the
+        tables are made from, unclipped. A control row keeps its click codes as _clicks {slot: [(label, code)]}, its
+        ANIMTIP texts as _tips [(n, text)], its state code as _state_code and its template parameters as _scope.
 Needs:  nothing running. Reads the package's files only; never executes, imports or writes inside the package.
 How:    every model.cfg names an interior XML; it and each base it pulls in with <IncludeBase> are parsed with expat
         (comments kept: the vendor's banner comments name the panels). Templates defined in those files or in the
@@ -748,7 +751,11 @@ class Extractor:
                 "other": cell("other"), "writes": clip(", ".join(writes), 300), "events": ", ".join(events),
                 "simvars": clip(", ".join(simvars), 200), "notes": notes, "_writes": writes, "_state": state_vars,
                 "_labeled": any(given(k) for k in ("TOOLTIPID", "TOOLTIP_TITLE", "TOOLTIP", "TOOLTIP_ENTRY_0"))
-                or any(t.strip().upper() not in GENERIC_TIPS for _, t in tips)}
+                or any(t.strip().upper() not in GENERIC_TIPS for _, t in tips),
+                # unclipped, for a generator: the click codes as [(label, code)] per slot, the ANIMTIP_n texts as
+                # [(n, text)], the state code and the template's parameters (hold time, switch position var ...)
+                "_clicks": {slot: list(items) for slot, items in clicks.items()}, "_tips": tips,
+                "_state_code": state_code, "_scope": dict(scope)}
 
     def text(self, value: str) -> str:
         v = value.strip()
@@ -948,8 +955,12 @@ SUFFIXES = ("_PRESS", "_ON", "_DECAL", "_BULB_FAILED", "_HELD", "_STATE", "_LIGH
             "_GUARD", "_COVER", "_SW", "_SEL")
 
 
-def main(pkg: pathlib.Path, out: pathlib.Path) -> None:
-    out.mkdir(parents=True, exist_ok=True)
+def extract(pkg: pathlib.Path):
+    """Read the package: (control rows, light rows, summary data), unclipped, in file order. A control row holds the
+    TSV's cells (clipped) and, under underscore keys, the unclipped click codes (_clicks), ANIMTIP texts (_tips), state
+    code and template parameters (_scope); summary holds what write_summary reports (manifest, interior files,
+    template use, errors)."""
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))  # deeply nested vendor templates
     loc = load_loc(pkg)
     errors = []
     parsed = {}
@@ -1096,6 +1107,15 @@ def main(pkg: pathlib.Path, out: pathlib.Path) -> None:
         lt["on"] = sits_on(node, [v for v in lt["lvars"] if shared[v] <= 3], control_names)
         light_rows.append(lt)
 
+    summary = {"backlight_only": backlight_only, "file_stats": file_stats, "used_by": used_by, "roles": roles,
+               "bases": bases, "ex": ex, "externals": externals, "defined_local": defined_local, "fallback": fallback,
+               "errors": errors, "compiled_interiors": compiled_interiors}
+    return controls, light_rows, summary
+
+
+def main(pkg: pathlib.Path, out: pathlib.Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    controls, light_rows, s = extract(pkg)
     header = ["file", "line", "panel", "section", "component", "node", "template", "kind", "positions", "state_vars",
               "state_code", "animtips", "tooltip", "tooltip_value", "left_single", "release", "cw", "ccw",
               "other_codes", "writes_lvars", "events", "simvars", "update_writes", "notes"]
@@ -1111,8 +1131,9 @@ def main(pkg: pathlib.Path, out: pathlib.Path) -> None:
                 ", ".join(lt["pots"]), clip(", ".join(lt["others"]), 200), lt["on"], clip(" || ".join(lt["code"]), 300)]
                for lt in light_rows])
     write_panels(out / "panels.md", pkg, controls, light_rows)
-    write_summary(out / "summary.md", pkg, controls, light_rows, backlight_only, file_stats, used_by, roles, bases,
-                  ex, externals, defined_local, fallback, errors, compiled_interiors)
+    write_summary(out / "summary.md", pkg, controls, light_rows, s["backlight_only"], s["file_stats"], s["used_by"],
+                  s["roles"], s["bases"], s["ex"], s["externals"], s["defined_local"], s["fallback"], s["errors"],
+                  s["compiled_interiors"])
     print((out / "summary.md").read_text(encoding="utf-8").split("\n## ")[0])
 
 

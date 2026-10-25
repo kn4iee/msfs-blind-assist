@@ -1,0 +1,563 @@
+{
+  "_notes": [
+    "Curation for generate_b757_map.py: what the cockpit XML cannot say, kept in one visible place.",
+    "exclude_banners: vendor banner comments whose controls are left out (circuit breakers, CDU keys, furniture, effects).",
+    "exclude_nodes: single controls left out. A name the package does not have is an error, so a stale entry cannot hide.",
+    "panels: vendor banner -> app panel name, or {name, section} when the node prefix would pick the wrong section.",
+    "node_panels: first matching {banner?, prefix?} rule wins over the banner table; {panel, section?}.",
+    "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
+    "positions: node -> position names in value order (one per value), or explicit [{value, label}].",
+    "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
+    "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ..."
+  ],
+  "spelling": {
+    "CENTRE": "Center",
+    "GAURD": "Guard",
+    "FISRT": "First",
+    "VHFL": "VHF L",
+    "VHFC": "VHF C",
+    "VHFR": "VHF R",
+    "HFL": "HF L",
+    "HFR": "HF R"
+  },
+  "exclude_banners": [
+    "CB OVERHEAD PANEL",
+    "ADDING L VARS for CDU switches",
+    "FO CDU CODE",
+    "COCKPIT CAPTAIN CHAIR",
+    "COCKPIT FIRST OFFICER CHAIR",
+    "RIGHT WINDOW RAIN EFFECTS",
+    "L WINDOW WET and DRY LOGIC",
+    "MISC PARTS",
+    "THROTTLES MAIN",
+    "Updated throttle GA A/T buttons with L vars",
+    "RUDDER TRIM_LIMIT",
+    "EMISSIVE GAUGES"
+  ],
+  "exclude_nodes": [
+    "switch_yoke_trim_01_pilot",
+    "switch_yoke_trim_01_copilot",
+    "B757_SUNVISOR_L_base",
+    "B757_SUNVISOR_R_base",
+    "B757_CAPTAIN_SEAT_ARM_REST_1",
+    "B757_CAPTAIN_SEAT_ARM_REST_2",
+    "B757_FO_SEAT_ARM_REST_1",
+    "B757_FO_SEAT_ARM_REST_2",
+    "B757_FLOOR_BOX"
+  ],
+  "panels": {
+    "YOKES + RUDDER + TILLER SYSTEM": {
+      "name": "Yokes",
+      "section": "Forward panel"
+    },
+    "TEST WARNING LIGHTS PANEL": "Warning lights test",
+    "BUTTONS AND SWITCHES MAIN": "Engine control and yaw damper",
+    "HYDRAULIC PANEL": "Hydraulics",
+    "ELECTRICAL PANEL": "Electrical",
+    "APU CONTROL PANEL": "APU",
+    "COCKPIT VOICE RECORDER - CVR": "CVR",
+    "LIGHT OVERRIDE": "Overhead miscellaneous",
+    "FUEL PANEL": "Fuel",
+    "ANTI ICE PANEL BUTTONS": "Anti-ice",
+    "WINDSHIELD RAIN REPELLENT AND WIPER CONTROL PANEL": "Wipers",
+    "lights": "Exterior lights",
+    "WINDOW HEAT CONTROL PANEL BUTTONS": "Window heat",
+    "SELCAL AND CABIN CALL BUTTON PANEL": "SELCAL and cabin call",
+    "PASSENGER SIGN CONTROL PANEL": "Passenger signs",
+    "PRESSURIZATION CONTROL PANEL": "Pressurization",
+    "(after PRESSURIZATION CONTROL PANEL)": "Pressurization",
+    "OVERHEAD PNEUMATIC PANEL": "Air conditioning and bleed",
+    "IRS SUB-CATEGORY - BUTTON_GLASS": {
+      "name": "IRS keypad",
+      "section": "Overhead"
+    },
+    "IRS KNOBS": {
+      "name": "IRS",
+      "section": "Overhead"
+    },
+    "PLASTIC BUTTON and SWITCH GUARDS": {
+      "name": "Switch guards",
+      "section": "Overhead"
+    },
+    "MAIN BUTTONS AND CONTROL": "Lighting and MCP buttons",
+    "AP MASTER DISCONNECT": {
+      "name": "MCP",
+      "section": "Glareshield"
+    },
+    "MCP SPEED KNOB": {
+      "name": "MCP",
+      "section": "Glareshield"
+    },
+    "AUTO THROTTLE ARM/OFF": {
+      "name": "MCP",
+      "section": "Glareshield"
+    },
+    "WARNING/CAUTION BUTTONS": "Master warning and caution",
+    "VOR/DME PANEL": "VOR/DME",
+    "(after DOOR CODE)": {
+      "name": "MCP",
+      "section": "Glareshield"
+    },
+    "EICAS KEY FUNCTIONS - FORWARD ONLY - EXCLUDE CRT BRIGHTNESS": {
+      "name": "EICAS control",
+      "section": "Pedestal"
+    },
+    "NEW ECAM COMPUTER SWITCH": {
+      "name": "EICAS control",
+      "section": "Pedestal"
+    },
+    "EHSI/ADI KEY FUNCTIONS - CAPTAIN's SIDE ONLY - B757_AISLE_STAND_LCDEXCLUDE CRT BRIGHTNESS": {
+      "name": "EFIS control",
+      "section": "Forward panel"
+    },
+    "PEDESTAL GAURD SWITCH GEAR": {
+      "name": "Fire protection",
+      "section": "Pedestal"
+    },
+    "INDIVIDUAL AUDIO/RADIO PANELS": {
+      "name": "Pedestal radio panels",
+      "section": "Pedestal"
+    },
+    "(no banner)": {
+      "name": "Fuel control",
+      "section": "Pedestal"
+    },
+    "LANDING GEAR": {
+      "name": "Landing gear",
+      "section": "Forward panel"
+    },
+    "CAPT DDRMI": {
+      "name": "Captain DDRMI",
+      "section": "Forward panel"
+    },
+    "F/O DDRMI": {
+      "name": "First officer DDRMI",
+      "section": "Forward panel"
+    },
+    "CAPT AUTOLAND STATUS": {
+      "name": "Captain autoland status",
+      "section": "Forward panel"
+    },
+    "F/O AUTOLAND STATUS": {
+      "name": "First officer autoland status",
+      "section": "Forward panel"
+    },
+    "CAPT CHRONOMETER": {
+      "name": "Captain chronometer",
+      "section": "Forward panel"
+    },
+    "FISRT OFFICER CHRONOMETER": {
+      "name": "First officer chronometer",
+      "section": "Forward panel"
+    },
+    "STANDBY ATTITUDE-GYROMETER": {
+      "name": "Standby attitude indicator",
+      "section": "Forward panel"
+    },
+    "MAIN PANEL SWITCH GEAR + BUTTONS": {
+      "name": "Main panel switches",
+      "section": "Forward panel"
+    },
+    "P61 PANEL SWITCH GEAR": "P61 panel",
+    "CHANGE MAJOR CODE and UPDATES BELOW": {
+      "name": "Cockpit miscellaneous",
+      "section": "Forward panel"
+    }
+  },
+  "node_panels": [
+    {
+      "prefix": "B757_OVHD_FLT-DK-DOOR",
+      "panel": "Flight deck door"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_ENG_START",
+      "panel": "Engine start"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_L_ENG_START",
+      "panel": "Engine start"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_R_ENG_START",
+      "panel": "Engine start"
+    },
+    {
+      "banner": "lights",
+      "prefix": "B757_CABIN_",
+      "panel": "Cabin lights",
+      "section": "Overhead"
+    },
+    {
+      "banner": "lights",
+      "prefix": "B757_GND_SVC",
+      "panel": "Ground service",
+      "section": "Overhead"
+    },
+    {
+      "prefix": "B757_OVHD_LOGO_BUTTON",
+      "panel": "Exterior lights"
+    },
+    {
+      "banner": "MAIN BUTTONS AND CONTROL",
+      "prefix": "B757_MCP_",
+      "panel": "MCP"
+    },
+    {
+      "prefix": "B757_ADI_1_",
+      "panel": "Captain EFIS"
+    },
+    {
+      "prefix": "B757_ADI_2_",
+      "panel": "First officer EFIS"
+    },
+    {
+      "prefix": "B757_DH_RESET_CPT",
+      "panel": "Captain EFIS",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_DH_RESET_FO",
+      "panel": "First officer EFIS",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "BBS_fuelcut_",
+      "panel": "Fuel control",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "B757_AISLE_STAND_STAB",
+      "panel": "Stabilizer trim",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "B757_Stab_trim_",
+      "panel": "Stabilizer trim",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "B757_PED_AUDIO_1_",
+      "panel": "Audio panel 1"
+    },
+    {
+      "prefix": "B757_PED_AUDIO_2_",
+      "panel": "Audio panel 2"
+    },
+    {
+      "prefix": "B757_PED_NAV_1_",
+      "panel": "Radio tuning panel 1"
+    },
+    {
+      "prefix": "B757_PED_COMHEAD_1_",
+      "panel": "Radio tuning panel 1"
+    },
+    {
+      "prefix": "B757_PED_NAV_2_",
+      "panel": "Radio tuning panel 2"
+    },
+    {
+      "prefix": "B757_PED_COMHEAD_2_",
+      "panel": "Radio tuning panel 2"
+    },
+    {
+      "prefix": "B757_PED_NAV_3_",
+      "panel": "Radio tuning panel 3"
+    },
+    {
+      "prefix": "B757_PED_COMHEAD_3_",
+      "panel": "Radio tuning panel 3"
+    },
+    {
+      "prefix": "B757_PED_WX_L_",
+      "panel": "Weather radar left"
+    },
+    {
+      "prefix": "B757_PED_WX_R_",
+      "panel": "Weather radar right"
+    },
+    {
+      "prefix": "B757_PED_ADF_",
+      "panel": "ADF"
+    },
+    {
+      "prefix": "B757_PED_TCAS_",
+      "panel": "TCAS and transponder"
+    },
+    {
+      "prefix": "OXY_",
+      "panel": "Oxygen",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "BBS757_O2_",
+      "panel": "Oxygen",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "O2_EARS_",
+      "panel": "Oxygen",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_MAIN_M_Gau_STBY_GYRO",
+      "panel": "Standby attitude indicator",
+      "section": "Forward panel"
+    }
+  ],
+  "labels": {
+    "B757_OVHD_APU_SWITCH": "APU Selector",
+    "B757_OVHD_EXT_PWR_BUTTON": "EXT PWR",
+    "B757_OVHD_SW_CVR_TEST": "CVR Test",
+    "B757_OVHD_SW_CVR_ERASE": "CVR Erase",
+    "B757_OVHD_SW_landing_L": "L Landing Light",
+    "B757_OVHD_SW_landing_R": "R Landing Light",
+    "B757_OVHD_RWY_TURN_L": "L Runway Turnoff",
+    "B757_OVHD_RWY_TURN_R": "R Runway Turnoff",
+    "B757_OVHD_btn_lights_taxi": "Taxi Light",
+    "B757_OVHD_BEACON": "Position Lights",
+    "B757_OVHD_LOGO": "Anti-col Red Lights",
+    "B757_OVHD_NAV": "Anti-col White Lights",
+    "B757_OVHD_HI_INT": "Wing Lights",
+    "B757_OVHD_LOGO_BUTTON": "Logo Lights",
+    "B757_CABIN_WORK_LT002": "Cabin Work Light",
+    "B757_OVHD_SWITCH_GAURD": "Passenger Oxygen Switch Guard",
+    "B757_OVHD_PASS_OXY_BUTTON": "Passenger Oxygen",
+    "B757_OVHD_CABINALT_SWITCH": "Cabin Altitude",
+    "B757_OVHD_AUTORATE_SWITCH": "Cabin Rate",
+    "B757_OVHD_SEL_L_PACK_SWITCH": "L Pack Selector",
+    "B757_OVHD_SEL_R_PACK_SWITCH": "R Pack Selector",
+    "B757_IRS_CENTRE_KNOB": "IRS Center Knob",
+    "B757_IRS_LARGE_KNOB": "IRS Large Knob",
+    "B757_OVHD_FLT-DK-DOOR_SWITCH": "Flight Deck Door",
+    "B757_MCP_VS_BUTTON": "V/S",
+    "B757_MCP_btn_autopilot_disengage": "Autopilot Disengage Bar",
+    "B757_MCP_AP_SPD_MACH_SW": "IAS/MACH",
+    "B757_MCP_AP_HDG_SEL_SW": "HDG SEL",
+    "B757_MCP_AP_HDG_BNKLIM": "Bank Limit",
+    "B757_MCP_AP_ALT_SEL": "ALT SEL",
+    "B757_MCP_SW_FD_Cap": "Captain F/D",
+    "B757_MCP_SW_FD_FO": "F/O F/D",
+    "B757_MCP_SW_AP_throttle": "A/T Arm",
+    "BBS757_ALTSEL_CLICK": "ALT SEL Push",
+    "B757_MCP_btn_master_pilot": "Captain Master Warning and Caution",
+    "B757_MCP_btn_master_copilot": "First Officer Master Warning and Caution",
+    "B757_MCP_VORDME_1_BUTTON": "VOR/DME 1",
+    "B757_MCP_VORDME_2_BUTTON": "VOR/DME 2",
+    "btn_yoke_autopilot_disengage_pilot": "Captain Yoke A/P Disconnect",
+    "btn_yoke_autopilot_disengage_copilot": "First Officer Yoke A/P Disconnect",
+    "B757_MAIN_INSTRUMENT_ADF_Knob_LEFT": "Left Needle VOR/ADF",
+    "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT": "Right Needle VOR/ADF",
+    "FODMEKNOB1": "Left Needle VOR/ADF",
+    "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO": "Right Needle VOR/ADF",
+    "B757_MAIN_L_AUTOLAND_3_BUTTON": "L Autoland Reset",
+    "B757_MAIN_R_AUTOLAND_3_BUTTON": "R Autoland Reset",
+    "INSTRUMENT_Knob_Clock": "Clock Button",
+    "INSTRUMENT_Knob_Date": "Date Button",
+    "INSTRUMENT_Knob_Clock_FO": "Clock Button",
+    "INSTRUMENT_Knob_Date_FO": "Date Button",
+    "B757_MAIN_LOCK_OVRD_SWITCH": "Gear Lock Override",
+    "B757_MAIN_L_BRAKERESERVE_BUTTON": "L Brake Reserve",
+    "B757_MAIN_L_LEADINGEDGE_BUTTON": "L Leading Edge",
+    "B757_MAIN_L_TRAILINGEDGE_BUTTON": "L Trailing Edge",
+    "B757_MAIN_L_FLAPOVRD_BUTTON": "L Flap Ovrd",
+    "B757_MAIN_L_GEAROVRD_BUTTON": "L Gear Ovrd",
+    "B757_MAIN_L_TERROVRD_BUTTON": "L Terr Ovrd",
+    "BBS757_GS_INHIBIT": "G/S Inhibit",
+    "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD": "Altn Gear Guard",
+    "B757_MAIN_knob_gears_altn_autobrake": "Autobrake",
+    "B757_MAIN_knob_gears_altn_flaps": "Alternate Flaps Selector",
+    "B757_MAIN_TOCHK_BUTTON": "Takeoff Check",
+    "B757_MAIN_1_BUTTON": "TMSP 1",
+    "B757_MAIN_2_BUTTON": "TMSP 2",
+    "OXY_CAPT_TEST_SWITCH001": "Captain Oxygen Test",
+    "OXY_FO_TEST_SWITCH1": "First Officer Oxygen Test",
+    "OXY_OBSV_TEST_SWITCH": "Observer Oxygen Test",
+    "OXY_P61_TEST_SWITCH": "P61 Oxygen Test",
+    "BBS757_gyro_knob": "Gyro Cage Knob",
+    "B757_MAIN_M_Gau_STBY_GYRO_SELECTOR": "Gyro Selector",
+    "BBS757_THRREF_CLICK": "Thrust Ref Pull",
+    "B757_ECAM_LRAUTO_KNOB": "EICAS Computer Switch",
+    "BBS757_FIREUNLOCK1": "Engine 1 Fire Handle Unlock",
+    "BBS757_FIREUNLOCK2": "Engine 2 Fire Handle Unlock",
+    "B757_FIREUNLOCK3": "APU Fire Handle Unlock",
+    "BBS757_FIREHANDLE1_CLICK": "Engine 1 Fire Handle",
+    "BBS757_FIREHANDLE1_CLICK2": "Engine 2 Fire Handle",
+    "BBS757_FIREHANDLE1_CLICK3": "APU Fire Handle",
+    "B757_PED_Fire_DISCH_1": "Engine 1 Fire Handle Rotation",
+    "B757_PED_Fire_DISCH_2": "Engine 2 Fire Handle Rotation",
+    "B757_PED_Fire_DISCH_3": "APU Fire Handle Rotation",
+    "B757_PED_FWD_CARGOFIRE_BUTTON": "FWD Cargo Fire",
+    "B757_PED_AFT_CARGOFIRE_BUTTON": "AFT Cargo Fire",
+    "B757_PED_1BTL_CARGOFIRE_BUTTON": "1 BTL Cargo Fire",
+    "B757_PED_2BTL_CARGOFIRE_BUTTON": "2 BTL Cargo Fire",
+    "B757_PED_FIRE_WHLWELL_BUTTON": "Wheel Well Fire",
+    "B757_AISLE_STAND_STAB_1_GAURD_SWITCH": "Stab Trim C Guard",
+    "B757_AISLE_STAND_STAB_2_GAURD_SWITCH": "Stab Trim R Guard",
+    "BBS_fuelcut_PW1": "L Fuel Control (PW)",
+    "BBS_fuelcut_PW2": "R Fuel Control (PW)",
+    "BBS_fuelcut_RR1": "L Fuel Control (RR)",
+    "BBS_fuelcut_RR2": "R Fuel Control (RR)",
+    "B757_VC_P61_SWITCH_1": "Service Interphone",
+    "B757_VC_P61_SWITCH_2": "Flight Recorder",
+    "B757_VC_P61_SWITCH_3": "Equip Cooling Test",
+    "B757_VC_P61_SWITCH_4": "Yaw Damp Test",
+    "B757_VC_P61_SWITCH_5": "Duct Leak Fuel Qty Test",
+    "B757_VC_P61_SWITCH_6": "Wing AI Window Heat Test",
+    "B757_VC_P61_SWITCH_7": "Ground Prox Hyd Gen Test",
+    "B757_VC_P61_SWITCH_8": "TO and Land Config Test",
+    "B757_VC_P61_SWITCH_9": "Air Data Stall Right Test",
+    "B757_VC_P61_SWITCH_10": "Air Data Stall Left Test",
+    "B757_ADI_1_TFC_KNOB": "ND Range",
+    "B757_ADI_1_TFC_BUTTON": "TFC",
+    "B757_ADI_1_CTR_KNOB": "ND Mode",
+    "B757_ADI_1_CTR_BUTTON": "CTR",
+    "B757_ADI_1_TERR_BUTTON": "TERR",
+    "B757_ADI_1_WXR_BUTTON": "WXR",
+    "B757_ADI_1_INOP_BUTTON": "INOP",
+    "B757_ADI_1_NAV-AID_BUTTON": "NAV AID",
+    "B757_ADI_1_APRT_BUTTON": "APRT",
+    "B757_ADI_1_DATA_BUTTON": "DATA",
+    "B757_ADI_1_WPT_BUTTON": "WPT",
+    "B757_ADI_2_TFC_KNOB": "ND Range",
+    "B757_ADI_2_TFC_BUTTON": "TFC",
+    "B757_ADI_2_CTR_KNOB": "ND Mode",
+    "B757_ADI_2_CTR_BUTTON": "CTR",
+    "B757_ADI_2_TERR_BUTTON": "TERR",
+    "B757_ADI_2_WXR_BUTTON": "WXR",
+    "B757_ADI_2_INOP_BUTTON": "INOP",
+    "B757_ADI_2_NAV-AID_BUTTON": "NAV AID",
+    "B757_ADI_2_APRT_BUTTON": "APRT",
+    "B757_ADI_2_DATA_BUTTON": "DATA",
+    "B757_ADI_2_WPT_BUTTON": "WPT",
+    "B757_DH_RESET_CPT": "DH Reset",
+    "B757_DH_RESET_FO": "DH Reset",
+    "B757_OVHD_LENG_BUTTON": "L ENG Bleed",
+    "B757_OVHD_RENG_BUTTON": "R ENG Bleed",
+    "B757_OVHD_APU_BUTTON": "APU Bleed",
+    "B757_MAIN_CHRONO_ET_SWITCH_FO": "Chrono ET",
+    "B757_MAIN_CHRONO_SET_SWITCH_FO": "Chrono Set"
+  },
+  "positions": {
+    "B757_OVHD_APU_SWITCH": [
+      "Off",
+      "On",
+      "Start"
+    ],
+    "B757_OVHD_STBY_POWER_SWITCH": [
+      "Off",
+      "Auto",
+      "BAT"
+    ],
+    "B757_OVHD_CABINALT_SWITCH": [
+      "Position 0",
+      "Position 1",
+      "Position 2"
+    ],
+    "B757_MCP_SW_AP_throttle": [
+      {
+        "value": 0,
+        "label": "On"
+      },
+      {
+        "value": 10,
+        "label": "Off"
+      }
+    ],
+    "BBS757_FIREHANDLE1_CLICK": [
+      {
+        "value": 0,
+        "label": "In"
+      },
+      {
+        "value": 1,
+        "label": "Pulled"
+      }
+    ],
+    "BBS757_FIREHANDLE1_CLICK2": [
+      {
+        "value": 0,
+        "label": "In"
+      },
+      {
+        "value": 1,
+        "label": "Pulled"
+      }
+    ],
+    "B757_PED_Fire_DISCH_1": [
+      "Left",
+      "Center",
+      "Right"
+    ],
+    "B757_PED_Fire_DISCH_2": [
+      "Left",
+      "Center",
+      "Right"
+    ],
+    "B757_PED_Fire_DISCH_3": [
+      "Left",
+      "Center",
+      "Right"
+    ]
+  },
+  "status": [
+    {
+      "key": "B757_APU_STATE",
+      "panel": "Status",
+      "label": "APU",
+      "positions": [
+        "Off",
+        "Starting",
+        "Running",
+        "Shutting down"
+      ],
+      "announce": true
+    },
+    {
+      "key": "BBS_CA_MASTER_WARNING",
+      "panel": "Status",
+      "label": "Master Warning",
+      "positions": [
+        "Off",
+        "On"
+      ],
+      "announce": true
+    },
+    {
+      "key": "BBS_CA_MASTER_CAUTION",
+      "panel": "Status",
+      "label": "Master Caution",
+      "positions": [
+        "Off",
+        "On"
+      ],
+      "announce": true
+    },
+    {
+      "key": "B757_L_BUS_PWR_SRC",
+      "panel": "Status",
+      "label": "Left AC Bus Power Source",
+      "announce": false
+    },
+    {
+      "key": "B757_R_BUS_PWR_SRC",
+      "panel": "Status",
+      "label": "Right AC Bus Power Source",
+      "announce": false
+    },
+    {
+      "key": "B757_APU_RPM_PRC",
+      "panel": "Status",
+      "label": "APU RPM",
+      "announce": false
+    },
+    {
+      "key": "B757_DEBUG_PRESSURE_CABIN_ALT_FT",
+      "panel": "Status",
+      "label": "Cabin Altitude",
+      "announce": false
+    }
+  ]
+}

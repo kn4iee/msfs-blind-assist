@@ -39,7 +39,7 @@ captures for anything visual, public web research, and three agents (repo touchp
 - Every cockpit control is defined in readable model-behavior XML: a component with its state L:var (`ANIM_CODE`),
   its click as RPN (`LEFT_SINGLE_CODE`, knobs `CLOCKWISE_CODE`/`ANTICLOCKWISE_CODE`, momentary release
   `LEFT_LEAVE_CODE`, levers `DRAG_CODE`), and often its position names (`ANIMTIP_0..3`, e.g. "BATTERY OFF" /
-  "BATTERY ON"). The control map (`evidence/controls/`, made by `tools/extract_controls.py`, which expands the
+  "BATTERY ON"). The control map (`evidence/controls/`, made by `tools/b757-gen/extract_controls.py`, which expands the
   aircraft's own templates) counts **1,231 controls and 518 lights**: 511 circuit breakers, 178 toggles, 163
   momentary buttons, 138 CDU keys, 78 finite and 49 infinite rotary knobs, 35 multi-position switches, 30 levers, 24
   guards, 14 select buttons, 7 held buttons, 4 others (yokes, pedals, tiller). **582 are regular enough to generate
@@ -249,4 +249,4 @@ read, never written by the app (the SimBrief ID goes in through the EFB); (7) no
 In `docs/b757/evidence/`: `web-research.md` (public facts, release day), `repo-touchpoints.md` (where a new
 aircraft plugs into the app), `package/` (the survey tables), `controls/` (the control map), `wasm-findings.md`,
 `live-findings.md`, `cdu.md`, `efb-and-manual.md` (what a flight needs from the EFB, from BlueBird's manual and live
-checks). Tools in `docs/b757/tools/`: `survey_package.py`, `extract_controls.py`.
+checks). Tools: `docs/b757/tools/survey_package.py`; `tools/b757-gen/extract_controls.py` and `generate_b757_map.py`.
