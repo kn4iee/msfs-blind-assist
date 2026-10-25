@@ -38,8 +38,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// about 420), the status rows ride the continuous batch or their own on-request read, and the
 /// connection's ceiling is about 1000 (docs/architecture.md). The flight-control rows and the 14 MCP
 /// lights ride the batch; the engine rows, the flap angle, the squawk, the altimeters, the decision
-/// height, the gear lever and the gross weight are 18 individual definitions (about 500 variables in
-/// all). Bbs757DefinitionTests keeps the total under 900.
+/// height, the gear lever, the gross weight and the A/T's armed flag are 19 individual definitions
+/// (about 500 variables in all). Bbs757DefinitionTests keeps the total under 900.
 ///
 /// ═══ VERIFY IN SIM ═══
 ///   • A panel pick moves the control and the combo then shows where it really is.
@@ -47,7 +47,8 @@ namespace MSFSBlindAssist.Aircraft;
 ///   • With BBS Nest closed, the warning speaks once after connecting; after Nest starts and the
 ///     flight is reloaded, nothing is said.
 ///   • Ctrl+H/S/A/V set the MCP heading, speed (knots), altitude and vertical speed, and what is
-///     spoken afterwards is the MCP's own value; Shift+H/S/A/V read the same values (Bbs757Mcp).
+///     spoken afterwards is the MCP's own value; their mode buttons press as the panel does and say
+///     the light once; Shift+H/S/A/V read the same values (Bbs757Mcp).
 ///   • Flaps, gear, speedbrake, parking brake and the MCP lights speak their changes; L, Shift+G, B,
 ///     F, Shift+F, W and Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
 ///     Ctrl+P is the autopilot window, the transponder panel takes a squawk; the Engines panel shows
@@ -142,6 +143,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
         // The MCP values the entry windows and readouts read fresh; see Bbs757Mcp.
         AddMcpVariables(vars);
+
+        // The A/T's armed flag the Ctrl+P window shows; see BBS757Definition.Autopilot.cs.
+        AddAutopilotVariables(vars);
 
         // The tanks and payload stations the EFB window's SimBrief load reads back; see Bbs757Loadsheet.
         // F and Shift+F read the same four.

@@ -91,15 +91,29 @@ public partial class BBS757Definition
 
         if (Bbs757Write.IsMomentary(control))
         {
-            // One press per pilot action, so the refusal is judged here, once.
-            var press = Bbs757Write.PressFor(control);
-            if (press == null || !io.CanWrite()) return SayUnavailable(control, announcer);
-            _ = PressAsync(control, press, io, announcer, speak: true);
+            _ = PressFromPanelAsync(control, io, announcer);   // never throws: it catches and logs
             return true;
         }
 
         _ = SetPositionAsync(control, value, io, announcer);
         return true;
+    }
+
+    /// <summary>
+    /// A button pressed from a panel or from an MCP value window's button (BBS757Definition.Mcp.cs):
+    /// one press per pilot action, so the refusal is judged here, once ("{label} unavailable", nothing
+    /// sent); otherwise <see cref="PressAsync"/> with speech, which reads the light back once ("LNAV
+    /// on") or says "{label} pressed". Never throws.
+    /// </summary>
+    private Task PressFromPanelAsync(Bbs757Control control, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
+    {
+        var press = Bbs757Write.PressFor(control);
+        if (press == null || !io.CanWrite())
+        {
+            SayUnavailable(control, announcer);
+            return Task.CompletedTask;
+        }
+        return PressAsync(control, press, io, announcer, speak: true);
     }
 
     /// <summary>The panel writes' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>

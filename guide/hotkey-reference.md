@@ -501,16 +501,16 @@ F and Shift+F read each tank with a total, L adds the flap angle while the flaps
 
 ### Input keys {#input-keys-8}
 
-- **Input Ctrl+H** — MCP Heading window (0 to 360).
-- **Input Ctrl+S** — MCP Speed window (knots, 100 to 399). A Mach number is refused for now.
-- **Input Ctrl+A** — MCP Altitude window (100 to 49000, rounded to 100 feet).
-- **Input Ctrl+V** — MCP Vertical Speed window (minus 8000 to 6000, rounded to 100).
+- **Input Ctrl+H** — MCP Heading window (0 to 360), with HDG SEL, HDG HOLD and LNAV buttons.
+- **Input Ctrl+S** — MCP Speed window (knots, 100 to 399), with SPD, THR, FLCH and IAS/MACH buttons. A Mach number is refused for now.
+- **Input Ctrl+A** — MCP Altitude window (100 to 49000, rounded to 100 feet), with ALT HOLD, VNAV and FLCH buttons.
+- **Input Ctrl+V** — MCP Vertical Speed window (minus 8000 to 6000, rounded to 100), with a V/S button.
 - **Input Ctrl+B** — Altimeter and minimums window: the three altimeters (inches or hectopascals), a Standard button, and the radio minimums in feet.
 - **Input Ctrl+P** — 757 Autopilot window: CMD L, C and R, A/T Arm, both F/D switches and the mode buttons, each with its state.
 - **Input Shift+M** — Open the CDU window.
 - **Input Shift+T** — Open the EFB window.
 
-Each MCP window and the altimeter window stay open for the next value; **Escape** closes them.
+Each MCP window and the altimeter window stay open for the next value; **Escape** closes them. In an MCP window, **Alt** and a button's underlined letter, the first letter of its last word, presses it: **Alt+S** HDG SEL, **Alt+H** HDG HOLD, **Alt+L** LNAV; **Alt+S** SPD, **Alt+T** THR, **Alt+F** FLCH, **Alt+I** IAS/MACH; **Alt+H** ALT HOLD, **Alt+V** VNAV, **Alt+F** FLCH; **Alt+V** V/S.
 
 ### CDU window (Input Shift+M) {#cdu-window-input-shift-m-2}
 

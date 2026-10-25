@@ -10,8 +10,9 @@ namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
 /// The MCP's heading, speed, altitude and vertical speed: the value windows (Ctrl+H/S/A/V in input
-/// mode, the HS787's modeless <see cref="ValueInputForm"/>) and the readouts (Shift+H/S/A/V in output
-/// mode). How each value is set and why is in <see cref="Bbs757Mcp"/>; this partial is the sim side.
+/// mode, the HS787's modeless <see cref="ValueInputForm"/>, with the mode buttons that go with each
+/// value, as the PMDG 737's windows have) and the readouts (Shift+H/S/A/V in output mode). How each
+/// value is set and why is in <see cref="Bbs757Mcp"/>; this partial is the sim side.
 ///
 /// Every set runs from the UI thread (the window's callback), refuses aloud when the calculator
 /// cannot land a write ([MD11-16]: the MCP is written only through
@@ -114,7 +115,7 @@ public partial class BBS757Definition
         var entry = EntryFor(action, sim, announcer);
         var dialog = new ValueInputForm(entry.Title, entry.Parameter, entry.Range, announcer,
             input => entry.Parse(input, out _, out string? error) ? (true, "") : (false, error ?? ""),
-            new List<ToggleButtonDef>(),
+            McpWindowButtons(action, sim, announcer),
             input =>
             {
                 // The validator has accepted this text; parsing again is the only way the callback gets the number.
@@ -129,6 +130,42 @@ public partial class BBS757Definition
         };
         _mcpDialogs[action] = dialog;
         dialog.Show(parentForm);
+    }
+
+    /// <summary>
+    /// The mode buttons of one value window (<see cref="Bbs757McpWindowLayout"/>), each with its map
+    /// label and an access key, captioned "LNAV: On" from its cached MCP light, or "HDG SEL" alone for a
+    /// button with no light (the window refreshes the captions). A press is the panel's
+    /// (<see cref="PressFromPanelAsync"/>): it reads the light back once ("LNAV on") or says "HDG SEL
+    /// pressed", or refuses aloud when nothing can land. The window's own read-out after a press is
+    /// suppressed, or the press would be said twice (CORE-7, ruling R34). A node missing from the map
+    /// is left out with a warning.
+    /// </summary>
+    internal List<ToggleButtonDef> McpWindowButtons(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var controls = new List<Bbs757Control>();
+        foreach (string node in Bbs757McpWindowLayout.NodesFor(action))
+        {
+            if (_byNode.TryGetValue(node, out var control)) controls.Add(control);
+            else Log.Warn("BBS757", $"MCP window: {node} is not in the control map; its button is left out.");
+        }
+
+        var io = WriteIoFor(sim);
+        var captions = Bbs757McpWindowLayout.Captions(controls.Select(c => c.Label).ToList());
+        var buttons = new List<ToggleButtonDef>();
+        for (int i = 0; i < controls.Count; i++)
+        {
+            var control = controls[i];
+            Func<string> state = Bbs757McpLights.ForNode(control.Node) is { } light
+                ? () => Bbs757McpLights.State(io.Cached(light.Key))
+                : () => "";
+            buttons.Add(new ToggleButtonDef(captions[i], state,
+                () => _ = PressFromPanelAsync(control, io, announcer))   // never throws: it catches and logs
+            {
+                SuppressStateAnnounce = () => true,
+            });
+        }
+        return buttons;
     }
 
     /// <summary>A profile switch closes the windows: their callbacks write through this definition, which no longer may.</summary>

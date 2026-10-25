@@ -9,8 +9,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// <summary>
 /// The Ctrl+P "757 Autopilot" window: one button per MCP engage control (<see cref="Bbs757AutopilotLayout"/>),
 /// each captioned with its live state. A mode or CMD button shows its MCP light (from the 1 Hz
-/// batch); A/T ARM and the two F/D switches show their map position, read on request about once a
-/// second while the window is shown (they are OnRequest controls, and a status row of their own
+/// batch); the two F/D switches show their map position and A/T ARM BlueBird's armed flag
+/// (<c>L:BBS_AUTO_THROTTLE</c>, the A/T's real state, ruling R40), each read on request about once a
+/// second while the window is shown (they are OnRequest variables, and a status row of their own
 /// would cost a data definition and a Ctrl+M row nobody asked for).
 ///
 /// A press goes through the same writer as the panel: a button replays its click code
@@ -33,11 +34,13 @@ public partial class BBS757Definition
         _autopilotSim = sim;
         _autopilotAnnouncer = announcer;
         if (_autopilotWindow == null || _autopilotWindow.IsDisposed)
-            _autopilotWindow = new BBS757AutopilotWindow(AutopilotButtons(), RequestAutopilotSwitches);
+            _autopilotWindow = new BBS757AutopilotWindow(
+                AutopilotButtons(key => _autopilotSim?.GetCachedVariableValue(key)), RequestAutopilotSwitches);
         _autopilotWindow.ShowForm();
     }
 
-    private List<Bbs757AutopilotButton> AutopilotButtons()
+    /// <summary>The window's buttons, each state read through <paramref name="cached"/> (the sim's cache; a test's own).</summary>
+    internal List<Bbs757AutopilotButton> AutopilotButtons(Func<string, double?> cached)
     {
         var buttons = new List<Bbs757AutopilotButton>();
         foreach (string node in Bbs757AutopilotLayout.Nodes)
@@ -48,8 +51,10 @@ public partial class BBS757Definition
                 continue;
             }
             Func<string> state = Bbs757McpLights.ForNode(node) is { } light
-                ? () => Bbs757McpLights.State(_autopilotSim?.GetCachedVariableValue(light.Key))
-                : () => Bbs757AutopilotLayout.SwitchState(control, _autopilotSim?.GetCachedVariableValue(node));
+                ? () => Bbs757McpLights.State(cached(light.Key))
+                : node == Bbs757AutopilotLayout.AutothrottleArmNode
+                    ? () => Bbs757AutopilotLayout.AutothrottleState(cached(Bbs757AutopilotLayout.AutothrottleArmedVar))
+                    : () => Bbs757AutopilotLayout.SwitchState(control, cached(node));
             buttons.Add(new Bbs757AutopilotButton(control.Label, state, () =>
             {
                 if (_autopilotSim is { } sim && _autopilotAnnouncer is { } announcer)
@@ -59,12 +64,30 @@ public partial class BBS757Definition
         return buttons;
     }
 
-    /// <summary>The switches' states are read on request: ask for them (the window does, about once a second while shown).</summary>
+    /// <summary>
+    /// The switches' states and the A/T's armed flag are read on request: ask for them (the window does,
+    /// about once a second while shown).
+    /// </summary>
     private void RequestAutopilotSwitches()
     {
         var sim = _autopilotSim;
         if (sim == null || !sim.IsConnected || _lifetime.IsCancellationRequested) return;
-        foreach (string node in Bbs757AutopilotLayout.SwitchNodes) sim.RequestVariable(node);
+        foreach (string key in Bbs757AutopilotLayout.RequestedKeys) sim.RequestVariable(key);
+    }
+
+    /// <summary>
+    /// Registers the A/T's armed flag as an OnRequest L:var, so the window's request can deliver it:
+    /// a window's cache, never spoken, so no Ctrl+M row ([VAR-9]) and on no panel.
+    /// </summary>
+    private static void AddAutopilotVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        if (vars.ContainsKey(Bbs757AutopilotLayout.AutothrottleArmedVar)) return;   // never shadow a map control or a base var
+        vars[Bbs757AutopilotLayout.AutothrottleArmedVar] = new SimVarDefinition
+        {
+            Name = Bbs757AutopilotLayout.AutothrottleArmedVar, DisplayName = "Autothrottle Armed",
+            Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
+            ExcludeFromMonitorManager = true,
+        };
     }
 
     /// <summary>

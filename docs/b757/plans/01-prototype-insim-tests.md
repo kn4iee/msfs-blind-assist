@@ -230,3 +230,13 @@ Task 10 fix round 1 (rulings R31, R32):
     land exactly with no correction round: the log's "Sent command" lines for the 153 set are two bursts, "26 sp0 …
     AP_SPD_VAR_DEC …" then "2 sp0 …", and for the 280 set one, "53 sp0 … AP_SPD_VAR_INC …"; a further `sp0` line
     a second or more later is a correction. If a speed lands off, note the spoken value and those lines.
+78. MCP window buttons (R34): Ctrl+H, then Tab from the value box: "HDG SEL", "HDG HOLD: Off", "LNAV: Off", each read
+    with its Alt key (Alt+S, Alt+H, Alt+L). With an executed route, press LNAV: about two seconds later "LNAV on",
+    once; nothing more from the window. If you hear the state twice (NVDA reading the caption change as well as "LNAV
+    on"), note it. Alt+S from the value box: "HDG SEL pressed", once. Ctrl+S: SPD, THR, FLCH, IAS/MACH; Ctrl+A: ALT
+    HOLD, VNAV, FLCH; Ctrl+V: V/S; one press each says its light once, IAS/MACH "IAS/MACH pressed" (press it twice:
+    it switches the window between IAS and Mach). With MobiFlight stopped, a press says "LNAV unavailable" and nothing
+    moves.
+79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
+    about a second "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
+    (Alt+P), for example after the A/T Disconnect button, note both.

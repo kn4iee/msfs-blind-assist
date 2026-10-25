@@ -421,18 +421,20 @@ The Glareshield's MCP panel holds the mode and engage buttons. Set its four valu
 
 All in input mode:
 
-- **Input Ctrl+H** opens **MCP Heading** (0 to 360; 360 is north).
-- **Input Ctrl+S** opens **MCP Speed** (knots, 100 to 399).
-- **Input Ctrl+A** opens **MCP Altitude** (100 to 49000 feet, rounded to 100).
-- **Input Ctrl+V** opens **MCP Vertical Speed** (minus 8000 to 6000 feet per minute, rounded to 100).
+- **Input Ctrl+H** opens **MCP Heading** (0 to 360; 360 is north), with **HDG SEL**, **HDG HOLD** and **LNAV** buttons.
+- **Input Ctrl+S** opens **MCP Speed** (knots, 100 to 399), with **SPD**, **THR**, **FLCH** and **IAS/MACH** buttons.
+- **Input Ctrl+A** opens **MCP Altitude** (100 to 49000 feet, rounded to 100), with **ALT HOLD**, **VNAV** and **FLCH** buttons.
+- **Input Ctrl+V** opens **MCP Vertical Speed** (minus 8000 to 6000 feet per minute, rounded to 100), with a **V/S** button.
 
 Type a value and press Enter. Each window stays open for the next value, and Escape closes it. About a second later BA reads the value back from the MCP: *"Heading 090"*, *"Speed 250"*, *"Altitude 12000"* or *"Vertical speed minus 1500"*. You hear what the MCP took, not what you typed, so a different number means the aircraft did not accept yours. BA sets a speed by turning the MCP's speed knob for you, in quick bursts that allow for the way BlueBird's knob speeds up when it is turned fast. It takes about one to two seconds; BA checks the result and corrects it before it speaks.
+
+The buttons are the MCP's own, and each shows its light, for example *"LNAV: On"*; HDG SEL and IAS/MACH have no light and show none. Pressing one is the same as pressing it on the MCP panel: about two seconds later you hear its light, for example *"LNAV on"*, or *"HDG SEL pressed"*. Alt and a button's underlined letter, the first letter of its last word, presses it from anywhere in the window: in the heading window Alt+S is HDG SEL, Alt+H HDG HOLD and Alt+L LNAV; in the speed window Alt+T is THR.
 
 Output Shift+H, Shift+S, Shift+A and Shift+V read the same four values without opening a window. They read the MCP window's own values, never the simulator's autopilot values, which disagree with BlueBird's MCP.
 
 The speed is knots (IAS) only for now; Mach comes later. In Mach mode, Output Shift+S says *"MCP is in Mach mode. Mach is not read yet."* and Input Ctrl+S says *"MCP is in Mach mode. Set Mach from the Glareshield panel."* A Mach number typed in the window is refused with *"Mach entry is not supported yet. Enter a speed from 100 to 399 knots."*
 
-**Input Ctrl+P** opens the **757 Autopilot** window: CMD L, CMD C, CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC and APP, each with its state, for example *"CMD L: On"* or *"A/T Arm: Off"*. The mode and CMD buttons show their light. A press is the cockpit's own click, and the button then shows the new state. If the aircraft does not take the press, you hear so about two seconds later, for example *"CMD L did not engage"* or *"LNAV did not disengage"*. Escape closes the window.
+**Input Ctrl+P** opens the **757 Autopilot** window: CMD L, CMD C, CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC and APP, each with its state, for example *"CMD L: On"* or *"A/T Arm: Off"*. The mode and CMD buttons show their light, and A/T Arm shows whether the autothrottle is armed, as the aircraft holds it. A press is the cockpit's own click, and the button then shows the new state. If the aircraft does not take the press, you hear so about two seconds later, for example *"CMD L did not engage"* or *"LNAV did not disengage"*. Escape closes the window.
 
 The MCP lights are also spoken when they change, for example *"CMD R on"* or *"VNAV off"*; a press you make yourself is not said twice.
 

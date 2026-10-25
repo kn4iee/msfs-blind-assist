@@ -174,6 +174,15 @@ MCP Value Windows:
   turning the MCP's speed knob for you in quick bursts, allowing for the
   way BlueBird's knob speeds up when turned fast; it takes about one to two
   seconds, and the app checks and corrects it before it speaks.
+  Each window also has the MCP buttons that go with its value, each showing
+  its light ("LNAV: On"); Alt and the underlined letter presses one:
+    Heading:           HDG SEL (Alt+S), HDG HOLD (Alt+H), LNAV (Alt+L)
+    Speed:             SPD (Alt+S), THR (Alt+T), FLCH (Alt+F), IAS/MACH (Alt+I)
+    Altitude:          ALT HOLD (Alt+H), VNAV (Alt+V), FLCH (Alt+F)
+    Vertical Speed:    V/S (Alt+V)
+  A press is the same as on the MCP panel: about two seconds later the app
+  says the light ("LNAV on"), or "HDG SEL pressed" for a button with no
+  light (HDG SEL, IAS/MACH).
 
   Ctrl+B     Altimeter and minimums window:
              Altimeter box: type inches (29.92) or hectopascals (1013) and
@@ -189,11 +198,12 @@ MCP Value Windows:
              last result. Escape closes the window.
   Ctrl+P     757 Autopilot window. Buttons with live state: CMD L, CMD C,
              CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV,
-             FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP ("CMD L: On"). Each press
-             is the cockpit's own click; the button then shows the new
-             state. When the aircraft does not take a press, the app says
-             so about two seconds later: "CMD L did not engage" (or "did
-             not disengage"). Escape closes the window.
+             FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP ("CMD L: On"). A/T Arm
+             shows whether the autothrottle is armed, as BlueBird holds it.
+             Each press is the cockpit's own click; the button then shows
+             the new state. When the aircraft does not take a press, the
+             app says so about two seconds later: "CMD L did not engage"
+             (or "did not disengage"). Escape closes the window.
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the
