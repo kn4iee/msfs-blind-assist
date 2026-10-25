@@ -14,9 +14,11 @@ namespace MSFSBlindAssist.Aircraft;
 /// would cost a data definition and a Ctrl+M row nobody asked for).
 ///
 /// A press goes through the same writer as the panel: a button replays its click code
-/// (<see cref="PressAsync"/>) without speaking (the caption's change is the feedback, as in the
-/// iFly, HS787 and MD-11 windows), its light change being that press's echo; a switch is moved to its
-/// other position (<see cref="SetPositionAsync"/>). Nothing that can land: "{label} unavailable".
+/// (<see cref="PressAsync"/>) without speaking when its light changes (the caption's change is the
+/// feedback, as in the iFly, HS787 and MD-11 windows), its light change being that press's echo; when
+/// the light reads back as it was, the caption cannot change, so the press says "CMD L did not
+/// engage" or "… did not disengage" (the iFly window's words). A switch is moved to its other
+/// position (<see cref="SetPositionAsync"/>). Nothing that can land: "{label} unavailable".
 /// </summary>
 public partial class BBS757Definition
 {
@@ -48,7 +50,11 @@ public partial class BBS757Definition
             Func<string> state = Bbs757McpLights.ForNode(node) is { } light
                 ? () => Bbs757McpLights.State(_autopilotSim?.GetCachedVariableValue(light.Key))
                 : () => Bbs757AutopilotLayout.SwitchState(control, _autopilotSim?.GetCachedVariableValue(node));
-            buttons.Add(new Bbs757AutopilotButton(control.Label, state, () => PressFromWindow(control)));
+            buttons.Add(new Bbs757AutopilotButton(control.Label, state, () =>
+            {
+                if (_autopilotSim is { } sim && _autopilotAnnouncer is { } announcer)
+                    _ = PressFromWindowAsync(control.Node, sim, announcer);   // never throws: it catches and logs
+            }));
         }
         return buttons;
     }
@@ -61,43 +67,45 @@ public partial class BBS757Definition
         foreach (string node in Bbs757AutopilotLayout.SwitchNodes) sim.RequestVariable(node);
     }
 
-    /// <summary>A window button: a button presses without speaking; a switch moves to its other position.</summary>
-    private void PressFromWindow(Bbs757Control control)
+    /// <summary>
+    /// A window button: a button presses without speaking on success (its caption changes) and says so
+    /// when the aircraft refused it ("CMD L did not engage"); a switch moves to its other position.
+    /// Refused aloud when nothing can land. Never throws.
+    /// </summary>
+    internal async Task PressFromWindowAsync(string node, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        var sim = _autopilotSim;
-        var announcer = _autopilotAnnouncer;
-        if (sim == null || announcer == null || _lifetime.IsCancellationRequested) return;
+        if (_lifetime.IsCancellationRequested || !_byNode.TryGetValue(node, out var control)) return;
+        var io = WriteIoFor(sim);
 
         if (Bbs757Write.IsMomentary(control))
         {
             var press = Bbs757Write.PressFor(control);
-            if (press == null || !CanWrite(sim))
+            if (press == null || !io.CanWrite())
             {
                 SayUnavailable(control, announcer);
                 return;
             }
-            _ = PressAsync(control, press, sim, announcer, speak: false);
+            await PressAsync(control, press, io, announcer, speak: false);
             return;
         }
-        _ = FlipFromWindowAsync(control, sim, announcer);
+        await FlipFromWindowAsync(control, io, announcer);
     }
 
     /// <summary>
     /// A switch pressed in the window: its other position, from the cache or else a fresh read, then the
     /// panel's own pick (which refuses aloud, reads fresh again and writes only what is owed).
     /// </summary>
-    private async Task FlipFromWindowAsync(Bbs757Control control, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    private async Task FlipFromWindowAsync(Bbs757Control control, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
     {
         try
         {
-            double? now = sim.GetCachedVariableValue(control.Node)
-                ?? await sim.ReadFreshAsync(control.Node, FreshReadTimeoutMs, _lifetime.Token);
+            double? now = io.Cached(control.Node) ?? await io.ReadFresh(control.Node, _lifetime.Token);
             if (Bbs757AutopilotLayout.FlipTarget(control, now) is not double target)
             {
                 SayUnavailable(control, announcer);
                 return;
             }
-            await SetPositionAsync(control, target, sim, announcer);
+            await SetPositionAsync(control, target, io, announcer);
         }
         catch (OperationCanceledException) { /* switched away */ }
         catch (Exception ex)

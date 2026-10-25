@@ -820,6 +820,10 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         return false;
     }
 
+    /// <summary>Default: the raw text is not handled, and MainForm parses it for <see cref="HandleUIVariableSet"/> as always.</summary>
+    public virtual bool HandleUITypedText(string varKey, string text, SimConnect.SimVarDefinition varDef,
+        SimConnect.SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => false;
+
     /// <summary>
     /// Default autopilot engage: the stock <c>AUTOPILOT_ON</c> event (idempotent in the stock
     /// autopilot). Aircraft whose own autopilot ignores it override this: the PMDG jets press

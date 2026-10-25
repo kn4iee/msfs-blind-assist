@@ -40,6 +40,26 @@ public static class Bbs757Squawk
         return true;
     }
 
+    /// <summary>
+    /// The squawk box's own text (the definition takes it before MainForm parses it): one to four ASCII
+    /// digits 0 to 7, padded to four ("421" is 0421). An empty box says to type a code first; anything
+    /// else (letters, a sign, a decimal, a fifth digit, an 8 or a 9) gets the digits message.
+    /// </summary>
+    public static bool TryParseText(string? typed, out string code, out string error)
+    {
+        code = "";
+        error = "";
+        string text = (typed ?? "").Trim();
+        if (text.Length == 0) { error = EmptyMessage; return false; }
+        if (text.Length > 4 || !text.All(c => c is >= '0' and <= '7'))
+        {
+            error = InvalidMessage;
+            return false;
+        }
+        code = text.PadLeft(4, '0');
+        return true;
+    }
+
     /// <summary>The code as BCD, one digit per nibble: "4743" → 0x4743.</summary>
     public static int Bcd(string code)
     {

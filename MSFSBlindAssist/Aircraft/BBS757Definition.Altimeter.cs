@@ -91,20 +91,47 @@ public partial class BBS757Definition
             (io, ct) => Bbs757Altimeters.SetDecisionHeightAsync(io, feet, ct), onSaid);
 
     /// <summary>
-    /// The transponder panel's squawk field: a code that is not four digits 0 to 7 is refused aloud;
-    /// otherwise one <c>XPNDR_SET</c> in BCD, then <c>TRANSPONDER CODE:1</c> read back and "Squawk 4743"
-    /// spoken (or what the transponder holds instead). Never throws: fire and forget from the panel.
+    /// The squawk box's raw text, taken before MainForm parses it, so an empty box ("Type a four-digit
+    /// squawk first.") and letters ("Squawk must be four digits, each 0 to 7.") get their own words.
     /// </summary>
-    internal async Task SetSquawkAsync(double typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    public override bool HandleUITypedText(string varKey, string text, SimVarDefinition varDef,
+        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        if (varKey != Bbs757Squawk.SetKey)
+            return base.HandleUITypedText(varKey, text, varDef, simConnect, announcer);
+        Sim = simConnect;
+        _ = SetSquawkAsync(text, simConnect, announcer);   // never throws: it catches and logs
+        return true;
+    }
+
+    /// <summary>The squawk field's text: refused aloud unless one to four digits 0 to 7, else set (<see cref="SendSquawkAsync"/>).</summary>
+    internal Task SetSquawkAsync(string typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+        => Bbs757Squawk.TryParseText(typed, out string code, out string error)
+            ? SendSquawkAsync(code, sim, announcer)
+            : RefuseSquawk(error, announcer);
+
+    /// <summary>The squawk field's value as MainForm parses it (the numeric path; the text path above comes first).</summary>
+    internal Task SetSquawkAsync(double typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+        => Bbs757Squawk.TryParse(typed, out string code, out string error)
+            ? SendSquawkAsync(code, sim, announcer)
+            : RefuseSquawk(error, announcer);
+
+    private Task RefuseSquawk(string error, ScreenReaderAnnouncer announcer)
+    {
+        if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate(error);   // a validation error always speaks
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A valid squawk: one <c>XPNDR_SET</c> in BCD, then <c>TRANSPONDER CODE:1</c> read back and "Squawk
+    /// 4743" spoken (or what the transponder holds instead); "Squawk unavailable" when nothing can land.
+    /// Never throws: fire and forget from the panel.
+    /// </summary>
+    private async Task SendSquawkAsync(string code, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         try
         {
             if (_lifetime.IsCancellationRequested) return;
-            if (!Bbs757Squawk.TryParse(typed, out string code, out string error))
-            {
-                announcer.AnnounceImmediate(error);
-                return;
-            }
             if (!CanWrite(sim))
             {
                 Log.Debug("BBS757", "Squawk: write refused, nothing sent.");

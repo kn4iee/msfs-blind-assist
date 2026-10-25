@@ -69,14 +69,52 @@ public class Bbs757ReadoutsTests
 
     [Theory]
     [InlineData(2, 5.0)]
-    [InlineData(2, 4.3)]     // within a degree of the detent's angle
+    [InlineData(2, 4.7)]     // within 0.4 of the detent's angle
     [InlineData(3, 11.0)]    // flaps 15 sits at 11 degrees
     [InlineData(6, 34.0)]
     [InlineData(0, 0.2)]
+    [InlineData(1, 1.0)]
+    [InlineData(1, 0.7)]
     public void Surfaces_at_the_detents_angle_add_nothing(double index, double angle)
     {
         Assert.Equal(Bbs757Readouts.FlapsPhrase(index), Bbs757Readouts.FlapsReadout(index, angle, moving: false));
         Assert.Equal(Bbs757Readouts.FlapsPhrase(index), Bbs757Readouts.FlapsReadout(index, angle, moving: null));
+    }
+
+    [Fact]
+    public void The_tolerance_is_below_half_the_smallest_gap_between_detents()
+    {
+        // Detent 1 is 1 degree: a tolerance of a whole degree let a surface still at 0 pass as "Flaps 1".
+        double smallestGap = Bbs757Readouts.FlapDetentAngles.Zip(Bbs757Readouts.FlapDetentAngles.Skip(1), (a, b) => b - a).Min();
+        Assert.True(Bbs757Readouts.FlapAngleTolerance < smallestGap / 2);
+        Assert.Equal(0.4, Bbs757Readouts.FlapAngleTolerance);
+    }
+
+    [Fact]
+    public void Flaps_1_with_the_surfaces_still_up_says_so()
+    {
+        // The measured no-hydraulics case: FLAPS_INCR moved the lever to 1, the surfaces stayed at 0.
+        Assert.Equal("Flaps 1, surfaces at 0 degrees", Bbs757Readouts.FlapsReadout(1, 0, moving: false));
+        Assert.Equal("Flaps 1, surfaces at 0 degrees", Bbs757Readouts.FlapsReadout(1, 0, moving: null));
+        Assert.Equal("Flaps 5, surfaces at 4 degrees", Bbs757Readouts.FlapsReadout(2, 4.3, moving: false));
+    }
+
+    [Fact]
+    public async Task Flaps_1_while_the_surfaces_travel_says_moving()
+    {
+        Assert.Equal("Flaps 1, moving, 0 degrees",
+            await Bbs757Readouts.ReadFlapsAsync(FlapIo(1, 0.0, 0.3), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(1.0, "Flaps UP, surfaces at 1 degree")]
+    [InlineData(0.6, "Flaps UP, surfaces at 1 degree")]    // rounds to 1
+    [InlineData(1.4, "Flaps UP, surfaces at 1 degree")]
+    [InlineData(1.6, "Flaps UP, surfaces at 2 degrees")]
+    public void One_degree_is_singular(double angle, string phrase)
+    {
+        Assert.Equal(phrase, Bbs757Readouts.FlapsReadout(0, angle, moving: false));
+        Assert.Equal(phrase.Replace("surfaces at", "moving,"), Bbs757Readouts.FlapsReadout(0, angle, moving: true));
     }
 
     [Fact]
@@ -402,6 +440,18 @@ public class Bbs757ReadoutsTests
         Assert.Equal("unavailable", Bbs757McpLights.State(null));
         Assert.Equal("On", Bbs757McpLights.State(1));
         Assert.Equal("Off", Bbs757McpLights.State(0));
+    }
+
+    [Theory]
+    [InlineData(0.0, 0.0, "CMD L did not engage")]
+    [InlineData(1.0, 1.0, "CMD L did not disengage")]
+    [InlineData(0.0, 1.0, null)]   // it engaged: the caption change says so
+    [InlineData(1.0, 0.0, null)]
+    [InlineData(null, 0.0, null)]  // nothing known before: no claim
+    [InlineData(0.0, null, null)]
+    public void A_window_press_the_aircraft_refused_says_so(double? before, double? after, string? phrase)
+    {
+        Assert.Equal(phrase, Bbs757McpLights.RefusedPhrase("CMD L", before, after));
     }
 
     [Fact]

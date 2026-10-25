@@ -331,6 +331,16 @@ public interface IAircraftDefinition
         SimConnect.SimConnectManager simConnect, Accessibility.ScreenReaderAnnouncer announcer);
 
     /// <summary>
+    /// A typed panel field's raw text (Enter in a "_SET" box), offered before the text is parsed for
+    /// <see cref="HandleUIVariableSet"/>. True when the aircraft handled it, and the numeric call is then
+    /// not made. For a field whose words depend on what was typed, which the parsed double cannot tell
+    /// apart (an empty box and letters both arrive as NaN): the BlueBird 757's squawk field. Default:
+    /// not handled, so every other aircraft keeps the numeric path unchanged.
+    /// </summary>
+    bool HandleUITypedText(string varKey, string text, SimConnect.SimVarDefinition varDef,
+        SimConnect.SimConnectManager simConnect, Accessibility.ScreenReaderAnnouncer announcer) => false;
+
+    /// <summary>
     /// Engage the autopilot for the universal auto-AP-engage feature. The default fires the
     /// stock <c>AUTOPILOT_ON</c> event. Aircraft whose autopilot ignores or misreads that event
     /// override this to press their own engage switch: the PMDG jets (CMD A on the 737, A/P L on

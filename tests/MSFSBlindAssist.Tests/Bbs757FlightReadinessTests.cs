@@ -319,6 +319,145 @@ public class Bbs757FlightReadinessTests
         Assert.Equal(phrase, BBS757Definition.LinkedPhrase(statusKey, value));
     }
 
+    // ---- Presses and picks through the write seam ----------------------------------------------
+
+    /// <summary>A simulated sim behind the definition's writes: fresh and cached reads by key, the writes made, the resyncs asked.</summary>
+    private sealed class FakeSim
+    {
+        public bool CanWrite = true;
+        public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, double?> Cache = new(StringComparer.Ordinal);
+        public readonly List<string> Writes = new();
+        public readonly List<string> Resyncs = new();
+        public Action<string>? OnWrite;
+
+        public Bbs757SimIo Io => new()
+        {
+            CanWrite = () => CanWrite,
+            ReadFresh = (key, ct) => Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null),
+            Cached = key => Cache.TryGetValue(key, out double? v) ? v : null,
+            Write = rpn => { Writes.Add(rpn); OnWrite?.Invoke(rpn); },
+            RequestRead = key => Resyncs.Add(key),
+            Delay = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+        };
+    }
+
+    private static string LightOf(string node) => Bbs757McpLights.ForNode(node)!.Key;
+
+    [Theory]
+    [InlineData(0.0, 0.0, "CMD L did not engage")]
+    [InlineData(1.0, 1.0, "CMD L did not disengage")]
+    public async Task A_window_press_the_aircraft_refused_says_so_once(double before, double after, string said)
+    {
+        var sim = new FakeSim();
+        sim.Cache[LightOf("B757_MCP_CMD_1_BUTTON")] = before;
+        sim.Fresh[LightOf("B757_MCP_CMD_1_BUTTON")] = after;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync("B757_MCP_CMD_1_BUTTON", new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Equal(new[] { said }, speech.All);
+        Assert.Equal(2, sim.Writes.Count);   // the press and its release, once
+    }
+
+    [Theory]
+    [InlineData(0.0, 1.0)]
+    [InlineData(1.0, 0.0)]
+    public async Task A_window_press_that_took_is_silent(double before, double after)
+    {
+        // The button's caption changes, and the screen reader reads that (ruling R29).
+        var sim = new FakeSim();
+        sim.Cache[LightOf("B757_MCP_LNAV_BUTTON")] = before;
+        sim.Fresh[LightOf("B757_MCP_LNAV_BUTTON")] = after;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync("B757_MCP_LNAV_BUTTON", new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public async Task A_window_press_that_cannot_land_is_refused_aloud_and_sends_nothing()
+    {
+        var sim = new FakeSim { CanWrite = false };
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        await def.PressFromWindowAsync("B757_MCP_CMD_2_BUTTON", new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Equal(new[] { "CMD C unavailable" }, speech.All);
+        Assert.Empty(sim.Writes);
+    }
+
+    [Theory]
+    [InlineData("B757_MCP_CMD_3_BUTTON", "BBS757_MCP_LIGHT_CMD_3", 1.0, "CMD R on")]
+    [InlineData("BBS757_SPOILERARMED_CLICK", R.SpeedbrakeKey, 10.0, "Speedbrake armed")]
+    [InlineData("B757_MCP_LNAV_BUTTON", "BBS757_MCP_LIGHT_LNAV", null, "LNAV pressed")]   // the light unread
+    [InlineData("ENGINE_Switch_ATDisc_1", "", null, "TO/GA pressed")]                   // nothing to read back
+    public void A_panel_press_says_what_it_did_once(string node, string statusKey, double? readBack, string said)
+    {
+        var sim = new FakeSim();
+        if (statusKey.Length > 0) sim.Fresh[statusKey] = readBack;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        Assert.True(def.HandleUIVariableSet(node, 1, def.GetVariables()[node], new SimConnectManager(IntPtr.Zero), speech));
+
+        Assert.Equal(new[] { said }, speech.All);
+        Assert.Contains(node, sim.Resyncs);
+    }
+
+    [Fact]
+    public void A_parking_brake_pick_closes_its_echo_at_the_read_back_so_a_snap_back_is_spoken()
+    {
+        const string brake = "BBS757_PEDESTAL_Park_Brake_Lever";
+        var sim = new FakeSim();
+        long now = 0;
+        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(R.ParkingBrakeKey, 0, speech);   // released: the baseline
+        sim.Fresh[brake] = 0;                                     // the pick reads the lever released
+        sim.Fresh[R.ParkingBrakeKey] = 1;                         // and the row set after the click
+        sim.OnWrite = _ => def.ProcessSimVarUpdate(R.ParkingBrakeKey, 1, speech);   // the click's own echo
+
+        Assert.True(def.HandleUIVariableSet(brake, 1, def.GetVariables()[brake], new SimConnectManager(IntPtr.Zero), speech));
+        Assert.Single(sim.Writes);
+        Assert.Empty(speech.All);            // the screen reader read the pick; the row does not say it again
+
+        now = 3000;                          // inside the five-second echo window the pick armed
+        def.ProcessSimVarUpdate(R.ParkingBrakeKey, 0, speech);   // the brake snaps back
+
+        Assert.Equal(new[] { "Parking brake released" }, speech.All);
+        Assert.Contains(brake, sim.Resyncs);
+    }
+
+    [Fact]
+    public async Task The_squawk_box_text_tells_an_empty_box_from_letters()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        await def.SetSquawkAsync("12a4", sim, speech);
+        await def.SetSquawkAsync("", sim, speech);
+
+        Assert.Equal(new[] { Bbs757Squawk.InvalidMessage, Bbs757Squawk.EmptyMessage }, speech.Interrupts);
+    }
+
+    [Fact]
+    public void The_definition_takes_the_squawk_box_text_and_leaves_other_boxes_to_the_numeric_path()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        Assert.True(def.HandleUITypedText(Bbs757Squawk.SetKey, "12a4", def.GetVariables()[Bbs757Squawk.SetKey], sim, speech));
+        Assert.False(def.HandleUITypedText("SOME_OTHER_SET", "12", new SimVarDefinition(), sim, speech));
+        Assert.Equal(new[] { Bbs757Squawk.InvalidMessage }, speech.Interrupts);
+    }
+
     // ---- Status display -----------------------------------------------------------------------
 
     [Fact]

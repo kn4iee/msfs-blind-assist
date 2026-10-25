@@ -87,19 +87,33 @@ public partial class BBS757Definition
         if (!_byNode.TryGetValue(varKey, out var control))
             return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
         Sim = simConnect;
+        var io = WriteIoFor(simConnect);
 
         if (Bbs757Write.IsMomentary(control))
         {
             // One press per pilot action, so the refusal is judged here, once.
             var press = Bbs757Write.PressFor(control);
-            if (press == null || !simConnect.CalcWriteCanLand) return SayUnavailable(control, announcer);
-            _ = PressAsync(control, press, simConnect, announcer, speak: true);
+            if (press == null || !io.CanWrite()) return SayUnavailable(control, announcer);
+            _ = PressAsync(control, press, io, announcer, speak: true);
             return true;
         }
 
-        _ = SetPositionAsync(control, value, simConnect, announcer);
+        _ = SetPositionAsync(control, value, io, announcer);
         return true;
     }
+
+    /// <summary>The panel writes' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>
+    internal Func<SimConnectManager, Bbs757SimIo>? WriteIo { get; init; }
+
+    private Bbs757SimIo WriteIoFor(SimConnectManager sim) => WriteIo?.Invoke(sim) ?? new Bbs757SimIo
+    {
+        CanWrite = () => CanWrite(sim),
+        ReadFresh = (key, ct) => sim.ReadFreshAsync(key, FreshReadTimeoutMs, ct),
+        Cached = sim.GetCachedVariableValue,
+        Write = sim.ExecuteCalculatorCodeUnique,
+        RequestRead = key => sim.RequestVariable(key, forceUpdate: true),
+        Delay = Task.Delay,
+    };
 
     private static bool SayUnavailable(Bbs757Control control, ScreenReaderAnnouncer announcer)
     {
@@ -114,35 +128,40 @@ public partial class BBS757Definition
     /// back after <see cref="ReadBackDelayMs"/> and says it ("CMD R on", "Speedbrake armed"); its
     /// change in between is this press's echo and is not announced. Any other button with no readable
     /// state says "{label} pressed". With <paramref name="speak"/> false (the autopilot window, whose
-    /// button caption shows the new state) nothing is said, but the echo is still settled.
+    /// button caption shows the new state) a light that changed says nothing, but one that reads back
+    /// as it was before the press says so once ("CMD L did not engage", "LNAV did not disengage"): the
+    /// caption did not change, so nothing else would. The echo is settled either way.
     /// The release is never canceled: a press is always let go, even across a profile switch.
     /// </summary>
-    private async Task PressAsync(Bbs757Control control, Bbs757Press press, SimConnectManager sim,
+    private async Task PressAsync(Bbs757Control control, Bbs757Press press, Bbs757SimIo io,
         ScreenReaderAnnouncer announcer, bool speak)
     {
         try
         {
             if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed
             string? linked = LinkedStatusKey(control.Node);
+            // The state the window's caption shows now, to tell a press the aircraft refused.
+            double? before = linked != null && !speak && Bbs757McpLights.ForKey(linked) != null ? io.Cached(linked) : null;
             if (linked != null) ArmOwnWriteEcho(linked);
-            sim.ExecuteCalculatorCodeUnique(press.Down);
+            io.Write(press.Down);
             if (press.Up != null)
             {
-                await Task.Delay(press.HoldMs);
-                sim.ExecuteCalculatorCodeUnique(press.Up);
+                await io.Delay(press.HoldMs, CancellationToken.None);
+                io.Write(press.Up);
             }
             if (_lifetime.IsCancellationRequested) return;
             if (linked == null && speak && !Bbs757Write.HasReadableState(control)) announcer.Announce($"{control.Label} pressed");
 
-            await Task.Delay(ReadBackDelayMs, _lifetime.Token);
-            sim.RequestVariable(control.Node, forceUpdate: true);
+            await io.Delay(ReadBackDelayMs, _lifetime.Token);
+            io.RequestRead(control.Node);
             if (linked == null) return;
 
-            double? state = await sim.ReadFreshAsync(linked, FreshReadTimeoutMs, _lifetime.Token);
+            double? state = await io.ReadFresh(linked, _lifetime.Token);
             _lifetime.Token.ThrowIfCancellationRequested();
             string phrase = LinkedPhrase(linked, state);
             if (state != null) SettleOwnWriteEcho(linked, phrase);
             if (speak) announcer.Announce(state != null ? phrase : $"{control.Label} pressed");
+            else if (Bbs757McpLights.RefusedPhrase(control.Label, before, state) is { } refused) announcer.Announce(refused);
         }
         catch (OperationCanceledException) { /* switched away: nothing left to say or read */ }
         catch (Exception ex)
@@ -164,7 +183,7 @@ public partial class BBS757Definition
     /// silent when the control landed on the pick (WinForms ignores a same-index set), the real
     /// position once when it did not or nothing could be written.
     /// </summary>
-    private async Task SetPositionAsync(Bbs757Control control, double target, SimConnectManager sim,
+    private async Task SetPositionAsync(Bbs757Control control, double target, Bbs757SimIo io,
         ScreenReaderAnnouncer announcer)
     {
         if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is written
@@ -179,16 +198,16 @@ public partial class BBS757Definition
 
         try
         {
-            await Task.Delay(PickSettleMs, ct);
+            await io.Delay(PickSettleMs, ct);
 
-            if (!sim.CalcWriteCanLand)
+            if (!io.CanWrite())
             {
                 SayUnavailable(control, announcer);
                 resync = true;
                 return;
             }
 
-            double? current = await sim.ReadFreshAsync(control.Node, FreshReadTimeoutMs, ct);
+            double? current = await io.ReadFresh(control.Node, ct);
             ct.ThrowIfCancellationRequested();
 
             var plan = Bbs757Write.ToPosition(control, current, target);
@@ -205,12 +224,21 @@ public partial class BBS757Definition
             }
 
             // The parking brake's state row would announce this pick a second time ("Parking brake
-            // set" after the screen reader read "Set"): its change is this write's echo.
-            if (LinkedStatusKey(control.Node) is { } linked) ArmOwnWriteEcho(linked);
-            foreach (var call in plan.Calls) sim.ExecuteCalculatorCodeUnique(call);
+            // set" after the screen reader read "Set"): its change is this write's echo, until the row
+            // is read back below.
+            string? linked = LinkedStatusKey(control.Node);
+            if (linked != null) ArmOwnWriteEcho(linked);
+            foreach (var call in plan.Calls) io.Write(call);
 
-            await Task.Delay(ReadBackDelayMs, ct);
+            await io.Delay(ReadBackDelayMs, ct);
             resync = true;
+            if (linked != null)
+            {
+                // Read the row and close the echo window, as a press does: a change after this (the
+                // brake snapping back to Set) is the aircraft's, and is spoken.
+                double? state = await io.ReadFresh(linked, ct);
+                if (state != null) SettleOwnWriteEcho(linked, LinkedPhrase(linked, state));
+            }
         }
         catch (OperationCanceledException) { /* superseded by a newer pick, a reload, or switched away */ }
         catch (Exception ex)
@@ -225,7 +253,7 @@ public partial class BBS757Definition
             // nothing to re-read into.
             bool mine = _pendingPicks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(control.Node, cts));
             cts.Dispose();
-            if (mine && resync) sim.RequestVariable(control.Node, forceUpdate: true);
+            if (mine && resync) io.RequestRead(control.Node);
         }
     }
 

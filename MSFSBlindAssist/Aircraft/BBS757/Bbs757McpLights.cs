@@ -53,4 +53,17 @@ public static class Bbs757McpLights
 
     /// <summary>"CMD R on", "CMD R off", "CMD R unavailable".</summary>
     public static string Phrase(string label, double? value) => $"{label} {State(value).ToLowerInvariant()}";
+
+    /// <summary>
+    /// What an autopilot window press says when the aircraft did not take it: the light read back as it
+    /// was before the press, "CMD L did not engage" (off and still off) or "CMD L did not disengage" (on
+    /// and still on); null when it changed or either read is missing (the window's caption says the rest).
+    /// </summary>
+    public static string? RefusedPhrase(string label, double? before, double? after)
+    {
+        if (before is not double b || after is not double a || !double.IsFinite(b) || !double.IsFinite(a)) return null;
+        bool wasOn = b > 0.5, isOn = a > 0.5;
+        if (wasOn != isOn) return null;
+        return wasOn ? $"{label} did not disengage" : $"{label} did not engage";
+    }
 }

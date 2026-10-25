@@ -33,8 +33,12 @@ public class Bbs757AltimeterTests
 
     [Theory]
     [InlineData(1020.0, 16320u)]   // measured: 16320 set all three to 1020
-    [InlineData(1013.0, 16208u)]
-    [InlineData(29.92, 16211u)]
+    [InlineData(1013.0, 16212u)]   // standard, as the Standard button sets it
+    [InlineData(1013.25, 16212u)]
+    [InlineData(29.92, 16212u)]    // standard: 29.92 inches is 1013.21 hPa, never 16211
+    [InlineData(29.916, 16212u)]
+    [InlineData(1013.4, 16214u)]   // not standard
+    [InlineData(1012.0, 16192u)]
     [InlineData(30.12, 16320u)]
     [InlineData(28.50, 15442u)]
     public void Kohlsman_takes_sixteen_times_the_hectopascals(double typed, uint parameter)
@@ -50,9 +54,11 @@ public class Bbs757AltimeterTests
     }
 
     [Theory]
-    [InlineData("de-DE", "29,92", 16211u)]
-    [InlineData("de-DE", "1013", 16208u)]
-    [InlineData("sv-SE", "29.92", 16211u)]
+    [InlineData("de-DE", "29,92", 16212u)]    // typing standard equals the Standard button
+    [InlineData("de-DE", "1013", 16212u)]
+    [InlineData("sv-SE", "29.92", 16212u)]
+    [InlineData("en-US", "1013.25", 16212u)]
+    [InlineData("de-DE", "1012", 16192u)]
     [InlineData("en-US", "30.12", 16320u)]
     [InlineData("en-US", "1020", 16320u)]
     public void A_typed_altimeter_is_read_in_any_culture(string culture, string typed, uint parameter)
@@ -302,6 +308,42 @@ public class Bbs757AltimeterTests
     public void An_empty_squawk_box_is_refused_with_its_own_words()
     {
         Assert.False(Bbs757Squawk.TryParse(double.NaN, out _, out string error));
+        Assert.Equal(Bbs757Squawk.EmptyMessage, error);
+    }
+
+    [Theory]
+    [InlineData("4743", "4743")]
+    [InlineData("421", "0421")]
+    [InlineData(" 7700 ", "7700")]
+    [InlineData("0000", "0000")]
+    public void A_typed_squawk_text_is_up_to_four_octal_digits(string typed, string code)
+    {
+        Assert.True(Bbs757Squawk.TryParseText(typed, out string c, out string error));
+        Assert.Equal(code, c);
+        Assert.Equal("", error);
+    }
+
+    [Theory]
+    [InlineData("12a4")]       // letters are a wrong code, not an empty box
+    [InlineData("4783")]
+    [InlineData("12345")]
+    [InlineData("-123")]
+    [InlineData("47.4")]
+    [InlineData("4 74")]
+    [InlineData("４７４３")]   // full-width digits
+    public void Squawk_text_that_is_not_octal_digits_gets_the_digits_message(string typed)
+    {
+        Assert.False(Bbs757Squawk.TryParseText(typed, out _, out string error));
+        Assert.Equal(Bbs757Squawk.InvalidMessage, error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void An_empty_squawk_text_says_to_type_one_first(string? typed)
+    {
+        Assert.False(Bbs757Squawk.TryParseText(typed, out _, out string error));
         Assert.Equal(Bbs757Squawk.EmptyMessage, error);
     }
 

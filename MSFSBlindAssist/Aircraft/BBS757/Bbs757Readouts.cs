@@ -55,8 +55,12 @@ public static class Bbs757Readouts
     /// </summary>
     public static IReadOnlyList<double> FlapDetentAngles { get; } = new double[] { 0, 1, 5, 11, 20, 25, 34 };
 
-    /// <summary>How far the surfaces may sit from the detent's angle and still be "at" it, in degrees.</summary>
-    public const double FlapAngleTolerance = 1.0;
+    /// <summary>
+    /// How far the surfaces may sit from the detent's angle and still be "at" it, in degrees: below half
+    /// the smallest gap between two detents (UP 0 and 1 are a degree apart), so a surface still at 0
+    /// with the lever on 1 is never taken for flaps 1 (the measured no-hydraulics case).
+    /// </summary>
+    public const double FlapAngleTolerance = 0.4;
 
     /// <summary>Two angle reads further apart than this, in degrees, mean the surfaces are moving.</summary>
     public const double FlapMovingDelta = 0.1;
@@ -95,8 +99,9 @@ public static class Bbs757Readouts
         string detent = $"Flaps {FlapDetents[d]}";
         if (angle is not double a || !double.IsFinite(a)) return detent;
         if (Math.Abs(a - FlapDetentAngles[d]) <= FlapAngleTolerance) return detent;
-        string degrees = Whole(a).ToString(CultureInfo.InvariantCulture);
-        return moving == true ? $"{detent}, moving, {degrees} degrees" : $"{detent}, surfaces at {degrees} degrees";
+        long whole = Whole(a);
+        string degrees = $"{whole.ToString(CultureInfo.InvariantCulture)} {(Math.Abs(whole) == 1 ? "degree" : "degrees")}";
+        return moving == true ? $"{detent}, moving, {degrees}" : $"{detent}, surfaces at {degrees}";
     }
 
     /// <summary>Whether two angle reads <see cref="FlapMovingProbeMs"/> apart show the surfaces moving.</summary>

@@ -58,10 +58,16 @@ public static class Bbs757Altimeters
 
     /// <summary>
     /// The <c>KOHLSMAN_SET</c> parameter, 16 × hPa rounded, for a pressure in hectopascals (100 or
-    /// more) or inches of mercury.
+    /// more) or inches of mercury. Standard (29.92 inches by <see cref="AltimeterPhrase.IsStandardInHg"/>,
+    /// or 1013 or 1013.25 hPa) is <see cref="StandardParameter"/>, so typing it equals the Standard
+    /// button (29.92 inches alone would be 1013.21 hPa, 16211).
     /// </summary>
     public static uint KohlsmanParameter(double hpaOrInHg)
     {
+        bool standard = hpaOrInHg >= 100
+            ? hpaOrInHg is 1013 or 1013.25
+            : AltimeterPhrase.IsStandardInHg(hpaOrInHg);
+        if (standard) return StandardParameter;
         double hpa = hpaOrInHg >= 100 ? hpaOrInHg : hpaOrInHg * AltimeterPhrase.HpaPerInHg;
         return (uint)Math.Round(hpa * 16, MidpointRounding.AwayFromZero);
     }
