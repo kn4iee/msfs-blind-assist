@@ -776,6 +776,11 @@ class Curation(unittest.TestCase):
         self.assertEqual(c["labels"]["B757_MCP_HOLD_1_BUTTON"], "HDG HOLD")
         self.assertEqual(c["labels"]["B757_MCP_HOLD_2_BUTTON"], "ALT HOLD")
 
+    def test_the_shipped_curation_names_the_three_cmd_buttons_left_center_and_right(self):
+        # The 757's autopilots are L, C and R; the vendor numbers their nodes 1 to 3 (the app speaks "CMD R on").
+        c = g.load_curation(g.DEFAULT_CURATION)
+        self.assertEqual([c["labels"][f"B757_MCP_CMD_{n}_BUTTON"] for n in (1, 2, 3)], ["CMD L", "CMD C", "CMD R"])
+
     # Rows in the shape of the vendor's, so the shipped position lists are checked by the generator's own safety net
     # (every value the click code writes must be one of the positions).
     def knob(self, node, state, count, banner="MAIN PANEL SWITCH GEAR + BUTTONS"):

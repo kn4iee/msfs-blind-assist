@@ -189,6 +189,13 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
+    public void The_three_cmd_buttons_are_left_center_and_right()
+    {
+        Assert.Equal(new[] { "CMD L", "CMD C", "CMD R" },
+            new[] { "B757_MCP_CMD_1_BUTTON", "B757_MCP_CMD_2_BUTTON", "B757_MCP_CMD_3_BUTTON" }.Select(n => Find(n).Label));
+    }
+
+    [Fact]
     public void The_autobrake_positions_are_named_from_RTO_to_MAX_AUTO()
     {
         Bbs757Control autobrake = Find("B757_MAIN_knob_gears_altn_autobrake");
