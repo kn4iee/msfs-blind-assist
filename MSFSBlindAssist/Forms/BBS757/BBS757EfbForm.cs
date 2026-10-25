@@ -452,6 +452,14 @@ public class BBS757EfbForm : Form
                 Say($"Nav data cycle {n.ToString(CultureInfo.InvariantCulture)} installed. Reload the flight to use it.");
                 return;
             }
+            // BlueBird decides UPDATE or REMOVE from its own latest-cycle check, made when the flight
+            // loaded, which nothing outside the aircraft can read: if it saw no newer cycle, the
+            // spot was REMOVE. Said plainly, never left as "did not finish".
+            if (installed != null && !Bbs757WorkFolder.HasCycleFile(folder))
+            {
+                Say("BlueBird removed the installed nav data instead of updating it. Reload the flight, then update again.");
+                return;
+            }
             if (DateTime.UtcNow >= until) break;
             await Task.Delay(CyclePollMs, Lifetime);
         }
