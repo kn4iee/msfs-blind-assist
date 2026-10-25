@@ -668,33 +668,72 @@ public class SimBriefService
         CancellationToken ct = default)
     {
         bool byId = userId is > 0;
-        if (!byId && string.IsNullOrWhiteSpace(username))
-            throw new ArgumentException("A SimBrief ID or username is needed.");
-        string query = byId
-            ? $"userid={userId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
-            : $"username={Uri.EscapeDataString(username!.Trim())}";
+        string query = OfpQuery(userId, username);
 
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"{SIMBRIEF_API_URL}?{query}");
             request.Headers.UserAgent.ParseAdd("MSFSBlindAssist/1.0");
             using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
-            // SimBrief answers 400 for an unknown pilot, and for a pilot with no plan.
-            if (response.StatusCode == HttpStatusCode.BadRequest)
-                return (null, $"SimBrief found no flight plan for your SimBrief {(byId ? "ID" : "username")}.");
-            if (!response.IsSuccessStatusCode)
-                return (null, $"SimBrief returned an error, HTTP {(int)response.StatusCode}. Try again later.");
+            if (FailureForStatus(response.StatusCode) is OfpFetchFailure failure)
+                return (null, OfpFetchErrorText(failure, byId, (int)response.StatusCode));
             return (await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false), null);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return (null, "Timed out contacting SimBrief. Check your internet connection and try again.");
+            return (null, OfpFetchErrorText(OfpFetchFailure.TimedOut, byId));
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
-            return (null, "SimBrief could not be reached. Check your internet connection and try again.");
+            return (null, OfpFetchErrorText(OfpFetchFailure.Unreachable, byId));
         }
     }
+
+    /// <summary>Why <see cref="FetchLatestOfpXmlAsync"/> got no plan.</summary>
+    public enum OfpFetchFailure
+    {
+        /// <summary>HTTP 400: SimBrief knows no such pilot, or the pilot has no plan.</summary>
+        NoPlan,
+        /// <summary>Any other unsuccessful HTTP status.</summary>
+        HttpError,
+        /// <summary>The shared client's 30 s timeout.</summary>
+        TimedOut,
+        /// <summary>No answer at all: no network, DNS, a dropped connection.</summary>
+        Unreachable,
+    }
+
+    /// <summary>
+    /// The query naming the pilot: <c>userid=</c> for an ID above zero (BlueBird stores -1 for none),
+    /// else <c>username=</c>, escaped and trimmed. The only place either value goes. Throws when
+    /// there is neither. Internal for its tests.
+    /// </summary>
+    internal static string OfpQuery(long? userId, string? username)
+    {
+        if (userId is long id && id > 0)
+            return $"userid={id.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        if (string.IsNullOrWhiteSpace(username))
+            throw new ArgumentException("A SimBrief ID or username is needed.");
+        return $"username={Uri.EscapeDataString(username.Trim())}";
+    }
+
+    /// <summary>The failure an HTTP status means, or null for a success. Internal for its tests.</summary>
+    internal static OfpFetchFailure? FailureForStatus(HttpStatusCode status) =>
+        status == HttpStatusCode.BadRequest ? OfpFetchFailure.NoPlan
+        : (int)status is >= 200 and <= 299 ? null
+        : OfpFetchFailure.HttpError;
+
+    /// <summary>
+    /// The words said for a failed fetch. It is given neither the ID nor the username, only which of
+    /// the two was asked for, so it cannot say them. Internal for its tests.
+    /// </summary>
+    internal static string OfpFetchErrorText(OfpFetchFailure failure, bool byId, int httpStatus = 0) => failure switch
+    {
+        OfpFetchFailure.NoPlan => $"SimBrief found no flight plan for your SimBrief {(byId ? "ID" : "username")}.",
+        OfpFetchFailure.HttpError =>
+            $"SimBrief returned an error, HTTP {httpStatus.ToString(System.Globalization.CultureInfo.InvariantCulture)}. Try again later.",
+        OfpFetchFailure.TimedOut => "Timed out contacting SimBrief. Check your internet connection and try again.",
+        _ => "SimBrief could not be reached. Check your internet connection and try again.",
+    };
 
     /// <summary>
     /// Fetches the list of available SimBrief aircraft types.

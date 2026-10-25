@@ -81,7 +81,8 @@ public class BBS757EfbForm : Form
     private const int OnGroundReadTimeoutMs = 2500;
     // The tablet client scrapes every second while the CDU window is hidden: two cycles and a margin.
     private const int TabletReadableWaitMs = 2500;
-    // BlueBird consumes its setters on its next update; the tanks and stations are read after this.
+    // BlueBird consumes its setters on its next update; the tanks and stations are read after this,
+    // and once more after it again when the first read-back misses.
     private const int LoadReadBackDelayMs = 3000;
     // One fresh read of a read-back variable (an individual definition answers within a frame or two).
     private const int LoadReadTimeoutMs = 1500;
@@ -794,14 +795,19 @@ public class BBS757EfbForm : Form
 
     /// <summary>
     /// The SimBrief plan's fuel and payload, loaded at once and spread as BlueBird's own EFB spreads
-    /// them (<see cref="Bbs757Loadsheet"/>): one calculator write of BlueBird's setters, then what
-    /// the tanks and payload stations read back about three seconds later, in the aircraft's units.
+    /// them (<see cref="Bbs757Loadsheet"/>): the tanks and payload stations read, one calculator
+    /// write of BlueBird's setters, then the same read about three seconds later, judged per tank,
+    /// cabin and hold against what was written (<see cref="Bbs757Loadsheet.Judge"/>), and once more
+    /// about three seconds after that on a miss. What is said is what the aircraft holds, in its
+    /// units: "Loaded …", "The aircraft did not take all of the load for …" with each part that is
+    /// off, or "BlueBird did not take the load for …. Is BBS Nest running?" when nothing moved.
     /// The plan is the latest for BlueBird's stored SimBrief ID, else for the app's SimBrief username
-    /// setting; the ID is never logged or spoken. The fetch and the parse run off the UI thread, and
-    /// each await comes back to it, so the write, the reads and the speech go out from the UI thread.
-    /// Nothing is written unless a calculator write can land, the aircraft is on the ground (SIM ON
-    /// GROUND read fresh, as the presets) and the plan fits the tanks and holds. No tablet click is
-    /// made, so the units answer stays possible after it.
+    /// setting; the ID is never logged or spoken, and the log has numbers only. The fetch and the
+    /// parse run off the UI thread, and each await comes back to it, so the write, the reads and the
+    /// speech go out from the UI thread. Nothing is written unless the plan is for a B752 and fits
+    /// the tanks and holds, a calculator write can land, and the aircraft is on the ground (SIM ON
+    /// GROUND read fresh, as the presets). No tablet click is made, so the units answer stays
+    /// possible after it.
     /// </summary>
     private async Task LoadFuelAndPayloadAsync()
     {
@@ -855,26 +861,46 @@ public class BBS757EfbForm : Form
             Refuse(LoadOnGroundOnlyText);
             return;
         }
+        // What the aircraft holds before the write: a read-back that has not moved from it means
+        // BlueBird took nothing (with BBS Nest down it ignores every write).
+        var before = await ReadLoadAsync(ct);
+        if (_disposed) return;
         if (!_loadIo.CanWrite())
         {
             Refuse(LoadUnavailableText);
             return;
         }
 
-        string code = Bbs757Loadsheet.WriteCode(loads);
-        Log.Info("BBS757", $"SimBrief fuel and payload written: {code}");
-        _loadIo.Write(code);
+        Log.Info("BBS757", Bbs757Loadsheet.LogLine(loads, before, null));
+        _loadIo.Write(Bbs757Loadsheet.WriteCode(loads));
         SetResult("Loading fuel and payload.");
 
         await Task.Delay(LoadReadBackDelayMs, ct);
-        var values = new Dictionary<string, double?>(StringComparer.Ordinal);
-        foreach (var v in Bbs757Loadsheet.ReadBackVariables)
+        var after = await ReadLoadAsync(ct);
+        if (_disposed) return;
+        if (Bbs757Loadsheet.Judge(loads, before, after) != Bbs757LoadVerdict.Loaded)
         {
-            values[v.Key] = await _loadIo.Read(v.Key, LoadReadTimeoutMs, ct);
+            // BlueBird may still be taking it: one more read about 3 s later, and that one is judged.
+            await Task.Delay(LoadReadBackDelayMs, ct);
+            after = await ReadLoadAsync(ct);
             if (_disposed) return;
         }
+        Log.Info("BBS757", Bbs757Loadsheet.LogLine(loads, before, after));
         Bbs757WeightUnits? units = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
-        Say(Bbs757Loadsheet.Phrase(plan, loads, Bbs757Loadsheet.ReadBack(values), units));
+        Say(Bbs757Loadsheet.Phrase(plan, loads, before, after, units));
+    }
+
+    /// <summary>
+    /// The eight read-back variables read fresh, together (each on its own fresh-read request), and
+    /// gathered by key; a value that could not be read is null.
+    /// </summary>
+    private async Task<Bbs757LoadReadBack> ReadLoadAsync(CancellationToken ct)
+    {
+        var vars = Bbs757Loadsheet.ReadBackVariables;
+        double?[] read = await Task.WhenAll(vars.Select(v => _loadIo.Read(v.Key, LoadReadTimeoutMs, ct)));
+        var values = new Dictionary<string, double?>(StringComparer.Ordinal);
+        for (int i = 0; i < vars.Count; i++) values[vars[i].Key] = read[i];
+        return Bbs757Loadsheet.ReadBack(values);
     }
 
     /// <summary>

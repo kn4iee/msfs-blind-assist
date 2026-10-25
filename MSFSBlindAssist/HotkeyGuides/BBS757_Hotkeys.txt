@@ -219,21 +219,37 @@ CDU (Shift+M):
                          center; the passengers the 176 seats take; the
                          rest of the payload as cargo, half in each
                          hold (the forward hold takes at most 10,300
-                         pounds). About three seconds later it says
-                         "Loaded" with the plan's flight and route,
-                         then what the tanks and holds hold, in the
-                         aircraft's weight units, for example "Fuel
-                         25550 pounds: left 12780, right 12780, center
-                         0. Passengers 30800 pounds. Cargo 20660
-                         pounds: forward 10300, aft 10360." When the
-                         plan has more passengers than seats, it says
-                         so. It uses the SimBrief ID set above,
-                         else the SimBrief username in Settings. Only
-                         on the ground; a plan with more fuel than the
-                         tanks hold, or more cargo than the holds take,
-                         is refused and nothing is loaded. For the
-                         ACARS weight and balance, request WGTBAL on
-                         the CDU.
+                         pounds). About three seconds later it reads
+                         the tanks and holds back and says "Loaded"
+                         with the plan's flight and route, then what
+                         they hold, in the aircraft's weight units.
+                         For a plan of 25550 pounds of fuel, for
+                         example: "Fuel 25480 pounds: left 12740, right
+                         12740, center 0. Passengers 30800 pounds.
+                         Cargo 20660 pounds: forward 10300, aft
+                         10360." The fuel is a little under the
+                         plan's: BlueBird converts pounds to gallons
+                         slightly differently from the simulator. When
+                         the plan has more passengers than seats, it
+                         says so. Then: "For the ACARS weight and
+                         balance, request WGTBAL on the CDU."
+                         If a tank, the cabin or a hold does not hold
+                         what was loaded, it says "The aircraft did not
+                         take all of the load for" the plan, and gives
+                         each part that is off with the plan's figure,
+                         for example "Fuel 3000 pounds, not the plan's
+                         25550". If nothing changed at all, it says
+                         "BlueBird did not take the load for" the plan,
+                         "Is BBS Nest running?"
+                         It uses the SimBrief ID set above, else the
+                         SimBrief username in Settings. The plan must
+                         be for a 757-200 (B752); another type is
+                         refused ("Your latest SimBrief plan is for
+                         A320, not a 757-200. Create a B752 plan, then
+                         try again."). Only on the ground; a plan with
+                         more fuel than the tanks hold, or more cargo
+                         than the holds take, is refused, and nothing
+                         is loaded.
   Cockpit preset         Choose a panel state and press Load preset.
   Load preset            On the ground: Cold and dark, Turnaround, Before
                          start, Ready for taxi, Ready for takeoff. In
