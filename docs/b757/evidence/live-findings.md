@@ -174,6 +174,23 @@ identical consecutive commands are dropped by MobiFlight, [VAR-4]) and window ca
   REALISTIC) and `automatic_loading` (false); neither changed. Settings > GENERAL holds LOCK KEYBOARD TO EFB, EFB
   POWERED ON DURING INITIALIZATION, EFB BRIGHTNESS MODE, EFB BACKGROUND, LIVE AUTOBRAKE INFO, NOTIFICATIONS FADE-OUT
   TIMER, EFB COLORS THEME. Left on Home, mirror removed.
+- **BlueBird's own loading through its EFB (Task 11e step 0, same evening, at the gate, APU on)**. Start: fuel 960.5 /
+  996 / 0 gal (13,109 lb); stations First 2,963, Economy 28,334, FWD 0, AFT 0 lb (left over from the flight).
+  - Home, Aircraft, FUEL (67,237), IMPORT FROM SIMBRIEF (508,962), with no FETCH SIMBRIEF OFP on the ACARS dashboard
+    before it (the session had an ACARS INIT FLT on the CDU): fueling started at once, overlay "FUELING IN PROGRESS…"
+    with a falling count and the notification "FUELING INITIATED"; no question (fuel below the plan). The wings
+    equalized first, then rose together: 1,219.9 gal per wing, center 0, 16,346 lb (BlueBird's 6.72 lb/gal makes it
+    the plan's 16,400) about 2 minutes after the tap.
+  - START BOARDING (1231,24) about a minute after IMPORT, during fueling: no question; boarding began at once, the
+    stations zeroed and then filled; BlueBird's notification panel opened at the right (FUEL / CARGO / PAX progress,
+    cargo doors opened). Done within about 40 minutes (checked then): First 1,850 (10/16), Economy 19,240 (104/160) =
+    21,090 lb, the plan's; cargo 3,990 lb all FORWARD, aft 0. BlueBird fills the forward hold first up to its
+    10,300 lb, then aft (the morning's 20,659 lb came out 10,300/10,359 the same way), not half per hold.
+  - Completion: the Fuel page shows the in-page box "FUEL ADJUSTMENT IS COMPLETE!" (OK about (822,692)); boarding
+    completion was a notification only ("BOARDING IS COMPLETE", the doors closing); no box on WEIGHT & BALANCE, which
+    read EMPTY 130,870, ZFW 156,280, ZFW CG 22.4 %, BLK FUEL 16,250, TAKE-OFF 172,065, LANDING 164,322, gross 172,605,
+    CG 24.8 %. Neither box blocks IMPORT. The aircraft was left loaded, EFB on Home (COCKPIT PRESETS last), mirror
+    removed.
 
 ## WASM-only variables, first reads (session 2, APU running)
 

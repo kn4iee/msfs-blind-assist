@@ -532,3 +532,11 @@ owner can reverse any of them.
 - R41 (Task 11, guide): BlueBird's thrust levers ignore the simulator's throttle keys and events (measured); the
   guide says to use a hardware throttle and to press THR before brake release. The flight's THR failure at the hold
   short was not reproduced: an in-sim check, not a code change.
+- R42 (Task 11e step 0): BA taps no OK after loading: the Fuel page's "FUEL ADJUSTMENT IS COMPLETE!" box and the
+  boarding notification block nothing, and each blind tap is a risk. Withdraws the brief's (731,879) tap. If wrong: a
+  stale box a sighted user sees.
+- R43 (Task 11e): the load watch judges passenger weight and the cargo TOTAL, and `Bbs757Loadsheet` splits cargo
+  forward first up to 10,300 lb (measured). If wrong: a completion said one read late.
+- R44 (Task 11e): BA runs the EFB's FETCH SIMBRIEF OFP before IMPORT (a fresh session is unmeasured) and refuses
+  before any tap when the plan's weight units differ from the aircraft's, so the fetch never raises the units
+  question. If wrong: one extra fetch per load.
