@@ -524,7 +524,7 @@ Each MCP window stays open for the next value; **Escape** closes it.
 - **Enter** in the SimBrief ID box — Set the SimBrief ID.
 - **Escape** — Close.
 
-The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load preset (with the Cockpit preset list), APU quick start and IRS rapid align.
+The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load fuel and payload from SimBrief, Load preset (with the Cockpit preset list), APU quick start and IRS rapid align.
 
 ### General keys that differ or don't work here {#general-keys-that-differ-or-don-t-work-here-8}
 

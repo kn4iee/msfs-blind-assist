@@ -136,6 +136,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
         // The MCP values the entry windows and readouts read fresh; see Bbs757Mcp.
         AddMcpVariables(vars);
 
+        // The tanks and payload stations the EFB window's SimBrief load reads back; see Bbs757Loadsheet.
+        AddLoadsheetVariables(vars);
+
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");
         return vars;
     }
@@ -178,6 +181,26 @@ public partial class BBS757Definition : BaseAircraftDefinition
         RenderAsReadOnlyStatus = true,
         ExcludeFromMonitorManager = !row.Announce,
     };
+
+    /// <summary>
+    /// Registers the stock tank, fuel-density and payload-station variables the SimBrief load reads
+    /// back (<see cref="SimConnect.BBS757.Bbs757Loadsheet.ReadBackVariables"/>), each under its own
+    /// key: <c>ReadFreshAsync</c> delivers only a registered key. OnRequest, never announced, no
+    /// Ctrl+M row ([VAR-9]) and on no panel; eight individual definitions.
+    /// </summary>
+    private static void AddLoadsheetVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        foreach (var v in SimConnect.BBS757.Bbs757Loadsheet.ReadBackVariables)
+        {
+            if (vars.ContainsKey(v.Key)) continue;   // never shadow a map control or a base var
+            vars[v.Key] = new SimVarDefinition
+            {
+                Name = v.SimVar, DisplayName = v.Label, Units = v.Units,
+                Type = SimVarType.SimVar, UpdateFrequency = UpdateFrequency.OnRequest,
+                ExcludeFromMonitorManager = true,
+            };
+        }
+    }
 
     private static Dictionary<double, string> DescriptionsFor(IEnumerable<Bbs757Position> positions)
     {

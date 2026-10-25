@@ -69,8 +69,9 @@ public partial class MainForm
     /// <summary>
     /// Shift+T on the 757: the EFB window, which operates BlueBird's tablet by scripted clicks (the
     /// EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
-    /// client). Both go over the Coherent debugger; only a cockpit preset needs SimConnect, for its
-    /// ground or flight check (<see cref="ReadBbs757OnGroundAsync"/>).
+    /// client). Both go over the Coherent debugger; a cockpit preset needs SimConnect for its ground
+    /// or flight check (<see cref="ReadBbs757OnGroundAsync"/>), and the SimBrief fuel and payload
+    /// load for that check, its write and its read-back (<see cref="CreateBbs757LoadIo"/>).
     /// </summary>
     private void ShowBBS757EfbDialog()
     {
@@ -80,9 +81,26 @@ public partial class MainForm
         var efb = EnsureBbs757EfbClient();
         var tablet = EnsureBbs757TabletClient();
         if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
-            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync);
+            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync, CreateBbs757LoadIo());
         bbs757EfbForm.ShowForm();
     }
+
+    /// <summary>
+    /// The EFB window's SimBrief load seams: the calculator write and its gate (CalcWriteCanLand,
+    /// false with no connection), fresh reads of the read-back variables the definition registers
+    /// (Bbs757Loadsheet.ReadBackVariables), the app's SimBrief username setting and the plan fetch.
+    /// Each reads <c>simConnectManager</c> when it is called, so a reconnect is followed.
+    /// </summary>
+    private Forms.BBS757.Bbs757LoadIo CreateBbs757LoadIo() => new()
+    {
+        CanWrite = () => simConnectManager is { IsConnected: true } sim && sim.CalcWriteCanLand,
+        Write = rpn => simConnectManager?.ExecuteCalculatorCodeUnique(rpn),
+        Read = (key, timeoutMs, ct) => simConnectManager is { IsConnected: true } sim
+            ? sim.ReadFreshAsync(key, timeoutMs, ct)
+            : Task.FromResult<double?>(null),
+        SimBriefUsername = () => MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "",
+        FetchOfpXml = MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync,
+    };
 
     /// <summary>
     /// SIM ON GROUND read fresh for the EFB window's preset gate: true on the ground, false airborne,

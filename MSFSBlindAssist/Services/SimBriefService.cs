@@ -658,6 +658,45 @@ public class SimBriefService
     }
 
     /// <summary>
+    /// The latest OFP's raw XML for a SimBrief pilot ID (<c>userid=</c>, used when given) or a
+    /// username, or a friendly error to speak instead. Neither the ID nor the username is ever in
+    /// the error (the ID is the pilot's own), and nothing here logs. Shares the 30 s client; a
+    /// cancel through <paramref name="ct"/> throws <see cref="OperationCanceledException"/>, and the
+    /// client's own timeout comes back as an error.
+    /// </summary>
+    public static async Task<(string? Xml, string? Error)> FetchLatestOfpXmlAsync(long? userId, string? username,
+        CancellationToken ct = default)
+    {
+        bool byId = userId is > 0;
+        if (!byId && string.IsNullOrWhiteSpace(username))
+            throw new ArgumentException("A SimBrief ID or username is needed.");
+        string query = byId
+            ? $"userid={userId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"username={Uri.EscapeDataString(username!.Trim())}";
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{SIMBRIEF_API_URL}?{query}");
+            request.Headers.UserAgent.ParseAdd("MSFSBlindAssist/1.0");
+            using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            // SimBrief answers 400 for an unknown pilot, and for a pilot with no plan.
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+                return (null, $"SimBrief found no flight plan for your SimBrief {(byId ? "ID" : "username")}.");
+            if (!response.IsSuccessStatusCode)
+                return (null, $"SimBrief returned an error, HTTP {(int)response.StatusCode}. Try again later.");
+            return (await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false), null);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return (null, "Timed out contacting SimBrief. Check your internet connection and try again.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            return (null, "SimBrief could not be reached. Check your internet connection and try again.");
+        }
+    }
+
+    /// <summary>
     /// Fetches the list of available SimBrief aircraft types.
     /// Returns list of (Id, DisplayName) tuples, sorted by name.
     /// </summary>

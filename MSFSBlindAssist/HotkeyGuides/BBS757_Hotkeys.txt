@@ -211,6 +211,29 @@ CDU (Shift+M):
                          fetch: otherwise they say "Fetch the SimBrief
                          flight first." Then in the CDU window: MENU,
                          ACARS, OPERATIONS, PREFLIGHT, INIT FLT, INIT.
+  Load fuel and payload from SimBrief
+                         Loads your latest SimBrief plan's fuel,
+                         passengers and cargo at once, spread as
+                         BlueBird's own EFB spreads them: the fuel
+                         evenly over both wing tanks, the rest in the
+                         center; the passengers the 176 seats take; the
+                         rest of the payload as cargo, half in each
+                         hold (the forward hold takes at most 10,300
+                         pounds). About three seconds later it says
+                         "Loaded" with the plan's flight and route,
+                         then what the tanks and holds hold, in the
+                         aircraft's weight units, for example "Fuel
+                         25550 pounds: left 12780, right 12780, center
+                         0. Passengers 30800 pounds. Cargo 20660
+                         pounds: forward 10300, aft 10360." When the
+                         plan has more passengers than seats, it says
+                         so. It uses the SimBrief ID set above,
+                         else the SimBrief username in Settings. Only
+                         on the ground; a plan with more fuel than the
+                         tanks hold, or more cargo than the holds take,
+                         is refused and nothing is loaded. For the
+                         ACARS weight and balance, request WGTBAL on
+                         the CDU.
   Cockpit preset         Choose a panel state and press Load preset.
   Load preset            On the ground: Cold and dark, Turnaround, Before
                          start, Ready for taxi, Ready for takeoff. In
