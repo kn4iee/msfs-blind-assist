@@ -103,6 +103,11 @@ put back unless noted at the end.
   sit at EFB x about 1154. **NOSEWHEEL STEERING switched from REALISTIC (tiller) to RUDDER** with one click at
   (1154,249), at the owner's request (no one uses a tiller): `efb_settings.json` `tiller_realistic` read `false`
   right after (global setting). The EFB was left on Home.
+- **EFB Ground Services (session 6)**: Home, Aircraft (320,190), GROUND SERVICES menu item (128,368). Tiles: JETWAY,
+  GPU, FWD STAIR, CARGO SVC, LEFT/RIGHT AIR START, GROUND A/C, CHOCKS, FUEL TRUCK, AFT STAIRS, CATERING (red = removed
+  or off), GND SRVC Mode BBS, REQ PB TUG, REMOVE TUG and three direction arrows. **The CHOCKS tile (404,556) toggles
+  `L:BBS757_vis_chocks`** (0 removed, 1 in place): measured 0 → 1 → 0 with two taps; left removed. The owner's
+  INITIAL CHOCKS IN PLACE is ON, so chocks are attached at each load at a stop.
 - **Stock events on the 757 (session 6, on the ground, engines off, APU on; each restored after)**: BlueBird's own
   variables are the truth (stock `BRAKE PARKING POSITION` read 0 with BlueBird's brake set; stock throttle 1 read
   100%). `K:FLAPS_INCR` moved stock `FLAPS HANDLE INDEX` to 1 and BlueBird's `L:B757_FC_FLAP_LEVER` 0 → 17 (surfaces
