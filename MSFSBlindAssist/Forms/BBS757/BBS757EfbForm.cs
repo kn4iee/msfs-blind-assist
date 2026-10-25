@@ -20,14 +20,17 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The nav data update clicks the spot that is BlueBird's REMOVE whenever BlueBird saw no newer
 /// cycle at the flight's load, so it clicks only under <see cref="Bbs757EfbLayout.MayClickUpdate"/>,
 /// re-checked by the agent on the page it clicks, once per flight load, and never when anything it
-/// needs cannot be read. The units answer is pressed only right after a finished fetch, on its page.
+/// needs cannot be read or the work folders disagree. The units answer is pressed only right after
+/// a finished fetch, on its page, and what it did is read back from BlueBird's unit system setting.
+/// A cockpit preset loads only in its phase: a ground one on the ground, a flight one airborne.
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
-/// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Loading Before
-/// start"). An action the window cannot do is refused aloud: the EFB unreachable, an action still
-/// running, an ID that is not digits. The SimBrief ID is never logged or spoken; the Navigraph code
-/// is spoken letter by letter and shown in the status box, never logged. The status box is a
-/// read-only TextBox (VAT-13).
+/// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Weight units now
+/// pounds", "Loading Before start"). An action the window cannot do is refused aloud: the EFB
+/// unreachable, an action still running, an ID that is not digits, a preset for the other phase.
+/// The SimBrief ID is never logged or spoken; the Navigraph code is spoken letter by letter, before
+/// the browser opens, and shown in the status box, never logged. The status box is a read-only
+/// TextBox (VAT-13).
 /// </summary>
 public class BBS757EfbForm : Form
 {
@@ -49,6 +52,9 @@ public class BBS757EfbForm : Form
     public const string FetchFirstText = "Fetch the SimBrief flight first.";
     public const string RemovedText =
         "BlueBird removed the installed nav data instead of updating it. With an active Navigraph subscription, reload the flight and update again.";
+    public const string FoldersDisagreeText =
+        "More than one BlueBird work folder was found and they disagree. Update from the EFB in the sim.";
+    public const string GroundStateUnknownText = "The aircraft's ground state cannot be read, so no preset was loaded.";
 
     /// <summary>The two hosts a Navigraph sign-in address may have to be opened.</summary>
     private static readonly string[] NavigraphHosts = { "navigraph.com", "identity.api.navigraph.com" };
@@ -58,13 +64,22 @@ public class BBS757EfbForm : Form
     private const int CycleWaitMs = 20000;
     private const int SimBriefWaitMs = 3000;
     private const int SimBriefPollMs = 250;
+    // How long the units setting is watched for BlueBird's write after Accept units (it is written
+    // at once, as the SimBrief ID is), and after Keep units, which should leave it as it was.
+    private const int UnitsAcceptWaitMs = 3000;
+    private const int UnitsKeepWaitMs = 1000;
+    private const int UnitsPollMs = 250;
+    // The fresh SIM ON GROUND read a preset waits for (the 1 Hz batch carries it).
+    private const int OnGroundReadTimeoutMs = 2500;
     // The tablet client scrapes every second while the CDU window is hidden: two cycles and a margin.
     private const int TabletReadableWaitMs = 2500;
 
     private readonly CoherentBbs757EfbClient _efb;
     private readonly CoherentBbs757TabletClient _tablet;
     private readonly ScreenReaderAnnouncer _announcer;
-    private readonly Func<string?> _findWorkFolder;
+    private readonly Func<IReadOnlyList<string>> _workRoots;
+    // SIM ON GROUND read fresh: true on the ground, false airborne, null when it cannot be read.
+    private readonly Func<int, CancellationToken, Task<bool?>> _readOnGround;
     // Canceled when the window is disposed (a profile switch, app exit): no pending action may
     // click or speak after that.
     private readonly CancellationTokenSource _lifetime = new();
@@ -96,18 +111,24 @@ public class BBS757EfbForm : Form
     private string? _loggedFolder;
     private bool _folderLogged;
 
-    public BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer)
-        : this(efb, tablet, announcer, Bbs757WorkFolder.Find)
+    /// <param name="readOnGround">
+    /// Reads SIM ON GROUND fresh within the given milliseconds: true on the ground, false airborne,
+    /// null when it cannot be read (no simulator connection). A preset is loaded only after it.
+    /// </param>
+    public BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer,
+        Func<int, CancellationToken, Task<bool?>> readOnGround)
+        : this(efb, tablet, announcer, readOnGround, Bbs757WorkFolder.DefaultRoots)
     {
     }
 
     internal BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer,
-        Func<string?> findWorkFolder)
+        Func<int, CancellationToken, Task<bool?>> readOnGround, Func<IReadOnlyList<string>> workRoots)
     {
         _efb = efb;
         _tablet = tablet;
         _announcer = announcer;
-        _findWorkFolder = findWorkFolder;
+        _readOnGround = readOnGround;
+        _workRoots = workRoots;
 
         BuildForm();
         _statusTimer = new System.Windows.Forms.Timer { Interval = StatusTickMs };
@@ -151,6 +172,35 @@ public class BBS757EfbForm : Form
             parts.Add(c == '-' ? "dash" : c.ToString());
         }
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// How long the browser waits after the code is spoken, so opening it (which moves focus, and
+    /// NVDA then reads the browser) does not cut the code off: 1.5 s and 350 ms per spoken
+    /// character (a dash is a word), at least 2 s and at most 6 s. The code also stays in the status box.
+    /// </summary>
+    internal static int CodeSpeechMs(string code)
+    {
+        int spoken = SpellCode(code).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        return Math.Clamp(1500 + 350 * spoken, 2000, 6000);
+    }
+
+    /// <summary>The refusal on a new cycle's first day: no flight loaded today can have seen it.</summary>
+    internal static string NewTodayText(int cycle) =>
+        $"Nav data cycle {cycle.ToString(CultureInfo.InvariantCulture)} is new today. " +
+        "Reload the flight after midnight UTC, then update.";
+
+    /// <summary>
+    /// What a finished SimBrief fetch says. BlueBird asks to switch the unit system only when the
+    /// plan's weight units differ from the aircraft's, and the question cannot be seen, so this says
+    /// when it comes, what each answer does, and the aircraft's units now when they can be read.
+    /// </summary>
+    internal static string FetchedText(Bbs757WeightUnits? aircraftUnits)
+    {
+        string now = aircraftUnits is Bbs757WeightUnits u ? $" The aircraft uses {Bbs757EfbLayout.UnitsName(u)}." : "";
+        return "SimBrief flight requested. If the plan's weight units differ from the aircraft's, BlueBird asks to switch them: " +
+               "Accept units switches, Keep units keeps them, and the app says which units are set." + now +
+               " Then run ACARS INIT FLT in the CDU window.";
     }
 
     // ------------------------------------------------------------------
@@ -347,9 +397,11 @@ public class BBS757EfbForm : Form
     }
 
     /// <summary>The work folder now (newest settings file, <see cref="Bbs757WorkFolder.Find(IReadOnlyList{string})"/>); a change is logged once, never a file's content.</summary>
-    private string? ResolveWorkFolder()
+    private string? ResolveWorkFolder() => ResolveWorkFolder(_workRoots());
+
+    private string? ResolveWorkFolder(IReadOnlyList<string> roots)
     {
-        string? folder = _findWorkFolder();
+        string? folder = Bbs757WorkFolder.Find(roots);
         if (!_folderLogged || !string.Equals(folder, _loggedFolder, StringComparison.OrdinalIgnoreCase))
         {
             _folderLogged = true;
@@ -423,23 +475,28 @@ public class BBS757EfbForm : Form
             return;
         }
 
-        string tail;
-        if (IsTrustedNavigraphUri(uriText, out var uri) && uri != null)
+        // The code is spoken BEFORE the browser opens: opening it moves focus and the screen reader
+        // reads the browser, which would cut the code off. The status box holds the code as it is,
+        // for reading character by character.
+        if (!IsTrustedNavigraphUri(uriText, out var uri) || uri == null)
         {
-            tail = OpenInBrowser(uri)
-                ? "The sign-in page is opening in your browser."
-                : "The sign-in page could not be opened.";
-        }
-        else
-        {
-            tail = string.IsNullOrWhiteSpace(uriText)
+            string why = string.IsNullOrWhiteSpace(uriText)
                 ? "No sign-in address came with it."
                 : "Its sign-in address is not a Navigraph address, so it was not opened.";
+            SetResult($"Navigraph code {code.Trim()}. {why}");
+            _announcer.Announce($"Navigraph code {SpellCode(code)}. {why}");
+            return;
         }
+
+        SetResult($"Navigraph code {code.Trim()}. The sign-in page opens in your browser.");
+        _announcer.Announce($"Navigraph code {SpellCode(code)}. The sign-in page opens in your browser in a moment.");
+        await Task.Delay(CodeSpeechMs(code), Lifetime);
         if (_disposed) return;
-        // The status box holds the code as it is, for reading character by character.
-        SetResult($"Navigraph code {code.Trim()}. {tail}");
-        _announcer.Announce($"Navigraph code {SpellCode(code)}. {tail}");
+        if (!OpenInBrowser(uri))
+        {
+            SetResult($"Navigraph code {code.Trim()}. The sign-in page could not be opened.");
+            _announcer.Announce("The sign-in page could not be opened.");
+        }
     }
 
     /// <summary>
@@ -494,13 +551,14 @@ public class BBS757EfbForm : Form
     /// click is bound to that load (<see cref="Bbs757EfbLayout.MayClickUpdate"/>): the installed
     /// cycle out of date, the pilot signed in and not seen signed out since the tablet's page
     /// loaded, that page loaded on or after the current cycle's first full day and at least a
-    /// minute ago. The agent checks the page conditions again on the page it clicks, and runs the
-    /// update once per page. Whatever cannot be known stops it: no work folder, an unreadable cycle
-    /// file, an unreadable page or sign-in.
+    /// minute ago. The agent checks the page conditions again on the page it clicks (the very page
+    /// judged here), and runs the update once per page. Whatever cannot be known stops it: no work
+    /// folder, an unreadable cycle file, work folders that disagree, an unreadable page or sign-in.
     /// </summary>
     private async Task UpdateNavDataAsync()
     {
-        string? folder = ResolveWorkFolder();
+        var roots = _workRoots();
+        string? folder = ResolveWorkFolder(roots);
         if (folder == null)
         {
             Refuse($"{FolderMissingText}, so the installed nav data cannot be checked. Nothing was clicked.");
@@ -517,6 +575,14 @@ public class BBS757EfbForm : Form
         if (!Bbs757EfbLayout.ShouldUpdate(installed, today))
         {
             Refuse($"Nav data is current, cycle {installed!.Value.ToString(CultureInfo.InvariantCulture)}");
+            return;
+        }
+        // Another work folder holding current (or unreadable) nav data: BlueBird may be using that
+        // one, and then the spot is REMOVE.
+        if (Bbs757WorkFolder.OthersDisagree(roots, folder, AiracCycle.ForDate(today)))
+        {
+            Log.Info("BBS757", "Nav data update refused: the BlueBird work folders disagree.");
+            Refuse(FoldersDisagreeText);
             return;
         }
 
@@ -549,8 +615,7 @@ public class BBS757EfbForm : Form
                 Refuse(NotSignedInText);
                 return;
             case Bbs757UpdateGate.NewToday:
-                Refuse($"Nav data cycle {AiracCycle.ForDate(today).ToString(CultureInfo.InvariantCulture)} is new today. " +
-                       "Reload the flight tomorrow, then update.");
+                Refuse(NewTodayText(AiracCycle.ForDate(today)));
                 return;
             case Bbs757UpdateGate.StillChecking:
                 Refuse(StillCheckingText);
@@ -561,11 +626,20 @@ public class BBS757EfbForm : Form
         }
 
         SetResult("Updating nav data.");
-        var result = await RunAsync(Bbs757EfbRunKind.Update, Bbs757EfbLayout.UpdateNavData(), Bbs757EfbLayout.UpdateGuard(today));
+        var result = await RunAsync(Bbs757EfbRunKind.Update, Bbs757EfbLayout.UpdateNavData(),
+            Bbs757EfbLayout.UpdateGuard(today, page.LoadedMs));
         if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunProblem(result);
-            return;
+            // A run refused or stopped before its start clicked nothing: said as it is. One that
+            // started and did not report finishing may have clicked UPDATE (or REMOVE), so the
+            // cycle file is watched all the same and the outcome said from it.
+            if (!_efb.LastRunMayHaveClicked)
+            {
+                SayRunProblem(result);
+                return;
+            }
+            Log.Debug("BBS757", $"Nav data update run ended {result}; checking the cycle file.");
+            SetResult("The update's clicks were not all confirmed. Checking the nav data.");
         }
 
         // BlueBird may rewrite the cycle file during an update, so a missing file is judged only
@@ -654,14 +728,15 @@ public class BBS757EfbForm : Form
             SayRunProblem(result);
             return;
         }
-        Say("SimBrief flight requested. If BlueBird asks to switch weight units, use Accept units or Keep units. " +
-            "Then run ACARS INIT FLT in the CDU window.");
+        Say(FetchedText(folder == null ? null : Bbs757WorkFolder.ReadUnits(folder)));
     }
 
     /// <summary>
-    /// YES or NO on "switch weight units?". The question is only on screen right after a fetch, so
-    /// the answer is pressed only when the last run was a finished fetch, with no run since
-    /// (<see cref="Bbs757EfbLayout.MayAnswerUnits"/>), and on the page the fetch ran on.
+    /// YES or NO on "switch the aircraft unit system?". The question is only on screen right after a
+    /// fetch, so the answer is pressed only when the last run was a finished fetch, with no run since
+    /// (<see cref="Bbs757EfbLayout.MayAnswerUnits"/>), and on the page the fetch ran on. Whether a
+    /// question was up cannot be seen, so the window reads BlueBird's unit system before and after
+    /// the click and says what is set (<see cref="Bbs757EfbLayout.UnitsAnswerPhrase"/>).
     /// </summary>
     private async Task AnswerUnitsAsync(bool accept)
     {
@@ -670,6 +745,9 @@ public class BBS757EfbForm : Form
             Refuse(FetchFirstText);
             return;
         }
+        string? folder = ResolveWorkFolder();
+        Bbs757WeightUnits? before = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
+
         var guard = new Bbs757EfbRunGuard(SamePageAsMs: _fetchPageMs);
         var result = await RunAsync(Bbs757EfbRunKind.Units, Bbs757EfbLayout.AnswerUnits(accept), guard);
         if (result != Bbs757EfbRunResult.Done)
@@ -677,14 +755,46 @@ public class BBS757EfbForm : Form
             SayRunProblem(result);
             return;
         }
-        Say(accept ? "Accept units pressed" : "Keep units pressed");
+        if (folder == null)
+        {
+            Say($"{(accept ? "Accept units" : "Keep units")} pressed. {FolderMissingText}, so the units could not be checked.");
+            return;
+        }
+
+        // BlueBird writes its settings when the unit system changes; watch for that write.
+        Bbs757WeightUnits? after = Bbs757WorkFolder.ReadUnits(folder);
+        var until = DateTime.UtcNow.AddMilliseconds(accept ? UnitsAcceptWaitMs : UnitsKeepWaitMs);
+        while (after == before && DateTime.UtcNow < until)
+        {
+            await Task.Delay(UnitsPollMs, Lifetime);
+            after = Bbs757WorkFolder.ReadUnits(folder);
+        }
+        Say(Bbs757EfbLayout.UnitsAnswerPhrase(before, after));
     }
 
+    /// <summary>
+    /// A cockpit preset: a ground one (Cold and dark to Ready for takeoff) only on the ground, a
+    /// flight one (After takeoff to Final approach) only airborne, judged on SIM ON GROUND read fresh
+    /// (<see cref="Bbs757EfbLayout.PresetRefusal"/>); nothing is clicked when it cannot be read.
+    /// </summary>
     private async Task LoadPresetAsync()
     {
         if (_presetCombo.SelectedItem is not string preset)
         {
             Refuse("Choose a cockpit preset first.");
+            return;
+        }
+        bool? onGround = await _readOnGround(OnGroundReadTimeoutMs, Lifetime);
+        if (_disposed) return;
+        if (onGround is not bool ground)
+        {
+            Refuse(GroundStateUnknownText);
+            return;
+        }
+        string? refusal = Bbs757EfbLayout.PresetRefusal(preset, ground);
+        if (refusal != null)
+        {
+            Refuse(refusal);
             return;
         }
         SetResult($"Opening the {preset} preset.");

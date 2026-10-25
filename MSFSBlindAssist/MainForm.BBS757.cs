@@ -69,7 +69,8 @@ public partial class MainForm
     /// <summary>
     /// Shift+T on the 757: the EFB window, which operates BlueBird's tablet by scripted clicks (the
     /// EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
-    /// client). Needs no SimConnect connection: both go over the Coherent debugger.
+    /// client). Both go over the Coherent debugger; only a cockpit preset needs SimConnect, for its
+    /// ground or flight check (<see cref="ReadBbs757OnGroundAsync"/>).
     /// </summary>
     private void ShowBBS757EfbDialog()
     {
@@ -79,8 +80,20 @@ public partial class MainForm
         var efb = EnsureBbs757EfbClient();
         var tablet = EnsureBbs757TabletClient();
         if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
-            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer);
+            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync);
         bbs757EfbForm.ShowForm();
+    }
+
+    /// <summary>
+    /// SIM ON GROUND read fresh for the EFB window's preset gate: true on the ground, false airborne,
+    /// null when it cannot be read (no connection, or no delivery within the timeout).
+    /// </summary>
+    private async Task<bool?> ReadBbs757OnGroundAsync(int timeoutMs, CancellationToken ct)
+    {
+        var sim = simConnectManager;
+        if (sim == null || !sim.IsConnected) return null;
+        double? value = await sim.ReadFreshAsync("SIM_ON_GROUND", timeoutMs, ct);
+        return value is double v && double.IsFinite(v) ? v > 0.5 : null;
     }
 
     /// <summary>

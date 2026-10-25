@@ -21,6 +21,9 @@
 // is cleared. Its optional guards are checked here, on the page that will be clicked:
 // notBeforeLoadMs (the page loaded at or after it), minAgeMs (the page at least this old),
 // samePageAsMs (the page that loaded then), onceKey (no run with this key started on this page).
+// A sequence with any click near the AIRAC page's UPDATE spot, which is BlueBird's REMOVE whenever
+// its load-time check saw no newer cycle, is refused ('unguarded-update') unless it carries all
+// three of onceKey, notBeforeLoadMs and minAgeMs: only the app's nav data update does.
 // status(id) says how far a run got; cancel() stops one.
 //
 // Install: an agent that cannot click is no agent. When Coherent.call or the tablet's canvas (with
@@ -32,12 +35,16 @@
 // try/catch.
 (function () {
   try {
-    var VERSION = 2;
+    // 3: the unguarded-update refusal. The app's clickSeq call asks for this version or later.
+    var VERSION = 3;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
     // layout: the measured positions would miss, so nothing is clicked.
     var WIDTH = 1397, MIN_HEIGHT = 1048, MAX_HEIGHT = 1070, SIZE_SLACK = 2;
+    // The UPDATE/REMOVE spot on the AIRAC page (Bbs757EfbLayout.UpdateButton) and how far either
+    // side of it a click counts as one on it (UpdateSpotHalfWidth, UpdateSpotHalfHeight).
+    var UPDATE_X = 1291, UPDATE_Y = 337, UPDATE_HALF_W = 100, UPDATE_HALF_H = 40;
     var MAX_STEPS = 40, MAX_DELAY_MS = 10000;
     // A run still marked running this long after its last click was due is taken as dead.
     var STALE_MS = 5000;
@@ -146,6 +153,18 @@
 
     function refuse(error) { return { ok: false, error: error, page: pageTime() }; }
 
+    function touchesUpdateSpot(steps) {
+      for (var i = 0; i < steps.length; i++) {
+        if (Math.abs(steps[i][0] - UPDATE_X) <= UPDATE_HALF_W && Math.abs(steps[i][1] - UPDATE_Y) <= UPDATE_HALF_H) return true;
+      }
+      return false;
+    }
+
+    // A click near the UPDATE spot needs every guard the nav data update runs under.
+    function updateGuarded(opts) {
+      return !!opts && opts.onceKey != null && opts.notBeforeLoadMs != null && opts.minAgeMs != null;
+    }
+
     // Why this page may not run a guarded sequence, or null.
     function guardProblem(opts) {
       if (!opts) return null;
@@ -169,6 +188,7 @@
       var steps = parseSeq(json);
       if (!steps) return refuse('bad-seq');
       if (opts != null && typeof opts !== 'object') return refuse('bad-seq');
+      if (touchesUpdateSpot(steps) && !updateGuarded(opts)) return refuse('unguarded-update');
       var g = guardProblem(opts);
       if (g) return refuse(g);
       var p = coherentProblem() || canvasProblem(findCanvas());

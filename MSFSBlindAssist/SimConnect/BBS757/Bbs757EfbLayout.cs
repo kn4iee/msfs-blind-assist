@@ -15,7 +15,7 @@ public enum Bbs757UpdateGate
     Current,
     /// <summary>Not signed in to Navigraph: BlueBird cannot have found a newer cycle.</summary>
     NotSignedIn,
-    /// <summary>The cycle in force took effect today: no page load qualifies before tomorrow.</summary>
+    /// <summary>The cycle in force took effect today (UTC): no page load qualifies before the next midnight UTC.</summary>
     NewToday,
     /// <summary>
     /// The page loaded before the cycle's first full day, or the pilot was seen signed out during
@@ -55,8 +55,10 @@ public sealed record Bbs757EfbRunGuard(
 /// units question is a dialog over the ACARS dashboard, answered where it is.
 ///
 /// The UPDATE button on the AIRAC page and BlueBird's REMOVE button share one spot
-/// (<see cref="UpdateButton"/>): only <see cref="UpdateNavData"/> clicks there, and the window runs
-/// it only when <see cref="ShouldUpdate"/> says the installed cycle is out of date. Pure.
+/// (<see cref="UpdateButton"/>): only <see cref="UpdateNavData"/> clicks there. The window runs it
+/// only when <see cref="MayClickUpdate"/> allows it, under <see cref="UpdateGuard"/>, which the agent
+/// checks again on the page it clicks; the agent refuses any click near the spot without that
+/// guard. Pure.
 /// </summary>
 public static class Bbs757EfbLayout
 {
@@ -105,6 +107,16 @@ public static class Bbs757EfbLayout
     /// installed nav data) once the installed cycle is current: the same spot.
     /// </summary>
     public static readonly EfbPoint UpdateButton = new(1291, 337);
+
+    /// <summary>
+    /// How far either side of <see cref="UpdateButton"/>, across and down, a click counts as one on
+    /// the UPDATE/REMOVE button: the agent refuses such a click without the update's page guards
+    /// (its UPDATE_HALF_W and UPDATE_HALF_H). Wider than the button, so no near miss slips through.
+    /// </summary>
+    public const int UpdateSpotHalfWidth = 100;
+
+    /// <inheritdoc cref="UpdateSpotHalfWidth"/>
+    public const int UpdateSpotHalfHeight = 40;
 
     // The on-screen numeric keypad the SimBrief ID field opens.
     public static readonly EfbPoint Key7 = new(823, 255);
@@ -170,6 +182,54 @@ public static class Bbs757EfbLayout
     /// <summary>The cockpit presets, as the window lists them, in the tablet's order.</summary>
     public static IReadOnlyList<string> PresetNames { get; } = Presets.Select(p => p.Name).ToArray();
 
+    /// <summary>The presets for an aircraft on the ground (the tablet's left column); the others are for flight.</summary>
+    private static readonly HashSet<string> GroundPresets = new(StringComparer.Ordinal)
+    {
+        "Cold and dark", "Turnaround", "Before start", "Ready for taxi", "Ready for takeoff",
+    };
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is a ground preset (Cold and dark to Ready for takeoff) rather
+    /// than a flight one (After takeoff, Cruise, Approach, Final approach). Throws for a name that is
+    /// no preset.
+    /// </summary>
+    public static bool IsGroundPreset(string name)
+    {
+        Lookup(Presets, name, nameof(name));
+        return GroundPresets.Contains(name);
+    }
+
+    /// <summary>
+    /// Null when <paramref name="name"/> may load with the aircraft <paramref name="onGround"/> or
+    /// not: a ground preset only on the ground, a flight preset only airborne (loading Cold and dark
+    /// in flight, or Cruise at the gate, would set the panel for the wrong phase). Otherwise what is
+    /// said instead: "That preset is for the ground." or "That preset is for flight."
+    /// </summary>
+    public static string? PresetRefusal(string name, bool onGround)
+    {
+        bool ground = IsGroundPreset(name);
+        if (ground == onGround) return null;
+        return ground ? "That preset is for the ground." : "That preset is for flight.";
+    }
+
+    // ---- weight units ----------------------------------------------------------
+
+    /// <summary>"pounds" or "kilograms": how the window names a unit system.</summary>
+    public static string UnitsName(Bbs757WeightUnits units) =>
+        units == Bbs757WeightUnits.Pounds ? "pounds" : "kilograms";
+
+    /// <summary>
+    /// What the window says after Accept units or Keep units, from BlueBird's unit system read
+    /// before and after the click: "Weight units now pounds", "Weight units unchanged, pounds",
+    /// "Weight units are pounds" (nothing read before), or "The weight units could not be read".
+    /// </summary>
+    public static string UnitsAnswerPhrase(Bbs757WeightUnits? before, Bbs757WeightUnits? after)
+    {
+        if (after is not Bbs757WeightUnits now) return "The weight units could not be read";
+        if (before is not Bbs757WeightUnits was) return $"Weight units are {UnitsName(now)}";
+        return was == now ? $"Weight units unchanged, {UnitsName(now)}" : $"Weight units now {UnitsName(now)}";
+    }
+
     /// <summary>The quick start tiles: "APU quick start", "Engine quick start", "IRS rapid align".</summary>
     public static IReadOnlyList<string> QuickStartNames { get; } = QuickStarts.Select(p => p.Name).ToArray();
 
@@ -223,13 +283,16 @@ public static class Bbs757EfbLayout
 
     /// <summary>
     /// The guards the update sequence runs under, so the agent checks them again on the page it
-    /// clicks: loaded at or after <see cref="EarliestPageLoadUtc"/>, at least a minute old, and no
-    /// earlier update on that page.
+    /// clicks: loaded at or after <see cref="EarliestPageLoadUtc"/>, at least a minute old, no
+    /// earlier update on that page, and the very page the window judged
+    /// (<paramref name="judgedPageMs"/>, its load time as <see cref="CoherentBbs757EfbClient.ReadPageAsync"/>
+    /// read it): a flight reloaded between the judgment and the click is another page.
     /// </summary>
-    public static Bbs757EfbRunGuard UpdateGuard(DateOnly todayUtc) => new(
+    public static Bbs757EfbRunGuard UpdateGuard(DateOnly todayUtc, long judgedPageMs) => new(
         NotBeforeLoadMs: new DateTimeOffset(EarliestPageLoadUtc(todayUtc)).ToUnixTimeMilliseconds(),
         MinPageAgeMs: UpdateMinPageAgeMs,
-        OnceKey: UpdateOnceKey);
+        OnceKey: UpdateOnceKey,
+        SamePageAsMs: judgedPageMs);
 
     /// <summary>
     /// Whether "switch weight units?" can be on screen to answer: only right after a fetch that
@@ -297,7 +360,8 @@ public static class Bbs757EfbLayout
     /// <summary>
     /// The AIRAC page, left <see cref="AiracPageSettleMs"/> to show its state, then UPDATE. One
     /// sequence, so the click runs on the page the same run opened (a link lost between two runs
-    /// could otherwise land it on another page). Run it only when <see cref="ShouldUpdate"/> says so.
+    /// could otherwise land it on another page). Run it only when <see cref="MayClickUpdate"/> allows
+    /// it, and only under <see cref="UpdateGuard"/>: the agent refuses it without those guards.
     /// </summary>
     public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> UpdateNavData()
     {

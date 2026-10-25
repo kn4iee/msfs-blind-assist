@@ -662,13 +662,239 @@ public class Bbs757EfbTests
     }
 
     [Fact]
-    public void The_nav_data_update_runs_once_per_page_under_the_page_guards()
+    public void The_nav_data_update_runs_once_per_page_under_the_page_guards_on_the_page_it_judged()
     {
-        var guard = Bbs757EfbLayout.UpdateGuard(DateOnly.FromDateTime(U("2026-10-30 10:00:00")));
+        long judged = new DateTimeOffset(U("2026-10-30 08:00:00")).ToUnixTimeMilliseconds();
+        var guard = Bbs757EfbLayout.UpdateGuard(DateOnly.FromDateTime(U("2026-10-30 10:00:00")), judged);
 
         Assert.Equal("airac-update", guard.OnceKey);
         Assert.Equal(60000, guard.MinPageAgeMs);
         Assert.Equal(new DateTimeOffset(U("2026-10-30 00:00:00")).ToUnixTimeMilliseconds(), guard.NotBeforeLoadMs);
-        Assert.Null(guard.SamePageAsMs);
+        // The click lands only on the page whose load time the window judged: a reload in between
+        // (a new page) is refused by the agent as "other-page".
+        Assert.Equal(judged, guard.SamePageAsMs);
+    }
+
+    [Fact]
+    public void The_efb_agent_refuses_an_unguarded_click_near_the_update_spot()
+    {
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+
+        // The client asks for this agent version, the first that has the guard.
+        Assert.Contains("var VERSION = " + CoherentBbs757EfbClient.AgentVersion.ToString(CultureInfo.InvariantCulture) + ";", code);
+        Assert.Contains("'unguarded-update'", code);
+        Assert.Contains("UPDATE_X = " + Bbs757EfbLayout.UpdateButton.X.ToString(CultureInfo.InvariantCulture), code);
+        Assert.Contains("UPDATE_Y = " + Bbs757EfbLayout.UpdateButton.Y.ToString(CultureInfo.InvariantCulture), code);
+        Assert.Contains("UPDATE_HALF_W = " + Bbs757EfbLayout.UpdateSpotHalfWidth.ToString(CultureInfo.InvariantCulture), code);
+        Assert.Contains("UPDATE_HALF_H = " + Bbs757EfbLayout.UpdateSpotHalfHeight.ToString(CultureInfo.InvariantCulture), code);
+        // All three page guards must be there for such a click.
+        Assert.Matches(@"onceKey\s*!=\s*null\s*&&\s*opts\.notBeforeLoadMs\s*!=\s*null\s*&&\s*opts\.minAgeMs\s*!=\s*null", code);
+        Assert.Equal(Bbs757EfbRunResult.NotFinished, CoherentBbs757EfbClient.ResultForRefusal("unguarded-update"));
+    }
+
+    [Fact]
+    public void No_other_sequence_clicks_anywhere_near_the_update_spot()
+    {
+        var spot = Bbs757EfbLayout.UpdateButton;
+        bool Near(EfbPoint p) => Math.Abs(p.X - spot.X) <= Bbs757EfbLayout.UpdateSpotHalfWidth
+                                 && Math.Abs(p.Y - spot.Y) <= Bbs757EfbLayout.UpdateSpotHalfHeight;
+
+        var update = Bbs757EfbLayout.UpdateNavData();
+        Assert.Single(update, s => Near(s.Point));
+        var others = EveryHomeSequence().Where(seq => !seq.Any(s => s.Point == spot)).ToList();
+        others.Add(Bbs757EfbLayout.AnswerUnits(accept: true));
+        others.Add(Bbs757EfbLayout.AnswerUnits(accept: false));
+        Assert.True(others.Count >= 15);
+        foreach (var seq in others)
+            Assert.DoesNotContain(seq, s => Near(s.Point));
+    }
+
+    [Fact]
+    public void The_new_cycle_s_first_day_refusal_says_after_midnight_utc()
+    {
+        string text = BBS757EfbForm.NewTodayText(2611);
+
+        Assert.Contains("2611", text);
+        Assert.Contains("after midnight UTC", text);
+        Assert.DoesNotContain("tomorrow", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- weight units -------------------------------------------------------
+
+    [Fact]
+    public void ReadUnits_reads_the_units_field_from_a_settings_file_of_blueBirds_shape()
+    {
+        using var tmp = new TempDir();
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "bbs757-efb-settings.json"), Path.Combine(tmp.Path, "efb_settings.json"));
+
+        Assert.Equal(Bbs757WeightUnits.Pounds, Bbs757WorkFolder.ReadUnits(tmp.Path));
+        Assert.Equal(123456L, Bbs757WorkFolder.ReadSimBriefId(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData("{\"units\":0}", Bbs757WeightUnits.Kilograms)]   // METRIC
+    [InlineData("{\"units\":1}", Bbs757WeightUnits.Pounds)]      // IMPERIAL
+    [InlineData("{\"hoppie_logon_code\":\"NOT-A-REAL-CODE\",\"units\":0,\"sayintentions_acars_key\":\"NOT-A-REAL-KEY\"}", Bbs757WeightUnits.Kilograms)]
+    public void ReadUnits_maps_metric_to_kilograms_and_imperial_to_pounds(string json, Bbs757WeightUnits expected)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Equal(expected, Bbs757WorkFolder.ReadUnits(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData("{\"units\":2}")]
+    [InlineData("{\"units\":-1}")]
+    [InlineData("{\"units\":\"1\"}")]
+    [InlineData("{\"units\":true}")]
+    [InlineData("{\"units\":1.5}")]
+    [InlineData("{\"units\":null}")]
+    [InlineData("{}")]
+    [InlineData("[1]")]
+    [InlineData("not json")]
+    public void ReadUnits_returns_null_for_anything_else(string json)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Null(Bbs757WorkFolder.ReadUnits(tmp.Path));
+    }
+
+    [Fact]
+    public void ReadUnits_with_no_settings_file_is_null()
+    {
+        using var tmp = new TempDir();
+
+        Assert.Null(Bbs757WorkFolder.ReadUnits(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, "Weight units now pounds")]
+    [InlineData(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms, "Weight units now kilograms")]
+    [InlineData(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, "Weight units unchanged, pounds")]
+    [InlineData(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Kilograms, "Weight units unchanged, kilograms")]
+    [InlineData(null, Bbs757WeightUnits.Pounds, "Weight units are pounds")]
+    [InlineData(Bbs757WeightUnits.Pounds, null, "The weight units could not be read")]
+    [InlineData(null, null, "The weight units could not be read")]
+    public void The_units_answer_says_which_units_are_set(Bbs757WeightUnits? before, Bbs757WeightUnits? after, string expected)
+    {
+        Assert.Equal(expected, Bbs757EfbLayout.UnitsAnswerPhrase(before, after));
+    }
+
+    [Fact]
+    public void After_a_fetch_the_window_does_not_assume_the_pilot_saw_the_units_question()
+    {
+        string text = BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds);
+
+        Assert.DoesNotContain("If BlueBird asks", text);
+        Assert.Contains("If the plan's weight units differ from the aircraft's", text);
+        Assert.Contains("Accept units switches", text);
+        Assert.Contains("Keep units keeps them", text);
+        Assert.Contains("the app says which units are set", text);
+        Assert.Contains("The aircraft uses pounds.", text);
+        Assert.Contains("ACARS INIT FLT", text);
+        Assert.DoesNotContain("The aircraft uses", BBS757EfbForm.FetchedText(null));
+    }
+
+    // ---- cockpit presets: ground or flight -------------------------------------
+
+    [Theory]
+    [InlineData("Cold and dark")]
+    [InlineData("Turnaround")]
+    [InlineData("Before start")]
+    [InlineData("Ready for taxi")]
+    [InlineData("Ready for takeoff")]
+    public void A_ground_preset_loads_only_on_the_ground(string preset)
+    {
+        Assert.True(Bbs757EfbLayout.IsGroundPreset(preset));
+        Assert.Null(Bbs757EfbLayout.PresetRefusal(preset, onGround: true));
+        Assert.Equal("That preset is for the ground.", Bbs757EfbLayout.PresetRefusal(preset, onGround: false));
+    }
+
+    [Theory]
+    [InlineData("After takeoff")]
+    [InlineData("Cruise")]
+    [InlineData("Approach")]
+    [InlineData("Final approach")]
+    public void A_flight_preset_loads_only_airborne(string preset)
+    {
+        Assert.False(Bbs757EfbLayout.IsGroundPreset(preset));
+        Assert.Null(Bbs757EfbLayout.PresetRefusal(preset, onGround: false));
+        Assert.Equal("That preset is for flight.", Bbs757EfbLayout.PresetRefusal(preset, onGround: true));
+    }
+
+    [Fact]
+    public void Every_preset_is_a_ground_or_a_flight_one()
+    {
+        Assert.Equal(5, Bbs757EfbLayout.PresetNames.Count(Bbs757EfbLayout.IsGroundPreset));
+        Assert.Equal(4, Bbs757EfbLayout.PresetNames.Count(p => !Bbs757EfbLayout.IsGroundPreset(p)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbLayout.IsGroundPreset("Taxi"));
+    }
+
+    // ---- more than one work folder ------------------------------------------------
+
+    [Fact]
+    public void Work_folders_disagree_when_another_one_holds_the_current_cycle_or_newer()
+    {
+        using var tmp = new TempDir();
+        string chosen = tmp.Sub("chosen"), other = tmp.Sub("other"), missing = tmp.Sub("missing");
+        Directory.CreateDirectory(chosen);
+        Directory.CreateDirectory(other);
+        WriteCycle(chosen, "{\"cycle\":\"2603\"}");
+
+        WriteCycle(other, "{\"cycle\":\"2610\"}");
+        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { chosen, other, missing }, chosen, currentCycle: 2610));
+        WriteCycle(other, "{\"cycle\":\"2611\"}");
+        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { other, chosen }, chosen, currentCycle: 2610));
+    }
+
+    [Fact]
+    public void Work_folders_disagree_when_another_one_holds_a_cycle_file_that_cannot_be_read()
+    {
+        using var tmp = new TempDir();
+        string chosen = tmp.Sub("chosen"), other = tmp.Sub("other");
+        Directory.CreateDirectory(chosen);
+        WriteCycle(other, "not json");
+
+        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { chosen, other }, chosen, currentCycle: 2610));
+    }
+
+    [Fact]
+    public void Work_folders_agree_when_the_others_hold_an_older_cycle_or_none()
+    {
+        using var tmp = new TempDir();
+        string chosen = tmp.Sub("chosen"), older = tmp.Sub("older"), bare = tmp.Sub("bare"), missing = tmp.Sub("missing");
+        WriteCycle(chosen, "{\"cycle\":\"2603\"}");
+        WriteCycle(older, "{\"cycle\":\"2609\"}");
+        Directory.CreateDirectory(bare);
+
+        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen, older, bare, missing }, chosen, currentCycle: 2610));
+        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen }, chosen, currentCycle: 2610));
+        Assert.False(Bbs757WorkFolder.OthersDisagree(Array.Empty<string>(), chosen, currentCycle: 2610));
+    }
+
+    [Fact]
+    public void The_chosen_folder_itself_never_counts_as_another()
+    {
+        using var tmp = new TempDir();
+        string chosen = tmp.Sub("chosen");
+        WriteCycle(chosen, "{\"cycle\":\"2610\"}");
+
+        // Listed twice, and with another spelling of the same path.
+        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen, chosen + Path.DirectorySeparatorChar, chosen.ToUpperInvariant() }, chosen, currentCycle: 2610));
+    }
+
+    // ---- the Navigraph code is spoken before the browser opens -----------------
+
+    [Theory]
+    [InlineData("A", 2000)]                           // never shorter than two seconds
+    [InlineData("ABCD", 2900)]                        // 1.5 s, then 350 ms a spoken character
+    [InlineData("ABCD-1234", 4650)]                   // the dash is a word too
+    [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 6000)]
+    public void The_browser_waits_for_the_code_to_be_spoken(string code, int expectedMs)
+    {
+        Assert.Equal(expectedMs, BBS757EfbForm.CodeSpeechMs(code));
     }
 }

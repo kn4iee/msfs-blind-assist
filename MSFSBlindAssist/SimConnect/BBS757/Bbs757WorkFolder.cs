@@ -2,16 +2,26 @@ using System.Text.Json;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
+/// <summary>BlueBird's unit system (its <c>units</c> setting), named by the weight it uses.</summary>
+public enum Bbs757WeightUnits
+{
+    /// <summary>METRIC, stored as 0.</summary>
+    Kilograms,
+    /// <summary>IMPERIAL, stored as 1.</summary>
+    Pounds,
+}
+
 /// <summary>
 /// BlueBird's 757 "work" folder, where the aircraft keeps its EFB settings and the nav data it
-/// downloaded, and the only two values the app reads from it: the SimBrief ID (to confirm an entry
-/// made on the EFB took) and the installed AIRAC cycle (so the nav data update never clicks where
-/// BlueBird shows REMOVE). Read only: the app never writes BlueBird's files.
+/// downloaded, and the only three values the app reads from it: the SimBrief ID (to confirm an
+/// entry made on the EFB took), the unit system (to say what the weight units answer did) and the
+/// installed AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). Read
+/// only: the app never writes BlueBird's files.
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key:
-/// it is parsed for <c>simbrief_id</c> alone, nothing else is taken from it, and neither file's
-/// content is ever logged. The SimBrief ID is the pilot's own identifier: callers never log it
-/// either. Pure, with the folder candidates passed in.
+/// it is parsed for <c>simbrief_id</c> and <c>units</c> alone, nothing else is taken from it, and
+/// neither file's content is ever logged. The SimBrief ID is the pilot's own identifier: callers
+/// never log it either. Pure, with the folder candidates passed in.
 /// </summary>
 public static class Bbs757WorkFolder
 {
@@ -104,6 +114,62 @@ public static class Bbs757WorkFolder
         if (!doc.RootElement.TryGetProperty("simbrief_id", out var id)) return null;
         if (id.ValueKind != JsonValueKind.Number || !id.TryGetInt64(out long value)) return null;
         return value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// BlueBird's unit system (<c>units</c>, the EFB's Settings, Aircraft, UNITS: IMPERIAL or METRIC
+    /// for the systems, the EFB and the FMS; the "switch the aircraft unit system?" question after a
+    /// SimBrief fetch sets it), or null when it is missing, another value, or the file cannot be
+    /// read. 0 is METRIC (kilograms) and 1 IMPERIAL (pounds): read 1 live on 2026-10-25 after the
+    /// question was answered YES ("Unit system set to Imperial"), and the module's own display table
+    /// lists METRIC, IMPERIAL, INVALID in that order. Nothing else in the file is read.
+    /// </summary>
+    public static Bbs757WeightUnits? ReadUnits(string folder)
+    {
+        using var doc = ReadJson(Path.Combine(folder, SettingsFile));
+        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+        if (!doc.RootElement.TryGetProperty("units", out var units)) return null;
+        if (units.ValueKind != JsonValueKind.Number || !units.TryGetInt32(out int value)) return null;
+        return value switch
+        {
+            0 => Bbs757WeightUnits.Kilograms,
+            1 => Bbs757WeightUnits.Pounds,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Whether a work folder other than <paramref name="chosen"/> among <paramref name="roots"/>
+    /// holds nav data at or above <paramref name="currentCycle"/>, or a cycle file whose cycle cannot
+    /// be read. Then the folders disagree about what is installed: BlueBird may be using the other
+    /// one, where its AIRAC page shows REMOVE at the UPDATE spot, so the update must not click.
+    /// Folders that do not exist, or hold no cycle file, agree with anything. Paths are compared
+    /// whole, case-insensitive, after normalizing.
+    /// </summary>
+    public static bool OthersDisagree(IReadOnlyList<string> roots, string chosen, int currentCycle)
+    {
+        string chosenKey = PathKey(chosen);
+        foreach (string root in roots)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
+                if (string.Equals(PathKey(root), chosenKey, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!HasCycleFile(root)) continue;
+                int? cycle = ReadInstalledCycle(root);
+                if (cycle == null || cycle >= currentCycle) return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                           or NotSupportedException or System.Security.SecurityException) { }
+        }
+        return false;
+    }
+
+    private static string PathKey(string path)
+    {
+        try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException
+                                       or System.Security.SecurityException) { return path; }
     }
 
     /// <summary>

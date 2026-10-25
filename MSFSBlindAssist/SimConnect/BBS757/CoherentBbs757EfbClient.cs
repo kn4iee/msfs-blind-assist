@@ -48,10 +48,12 @@ public sealed record Bbs757EfbPage(long LoadedMs, DateTime LoadedUtc);
 ///
 /// The loop only keeps the link: it connects, installs, and while the EFB window is shown checks
 /// the agent every <see cref="KeepAliveMs"/> ms so the window's status stays true; hidden, it sends
-/// nothing. <see cref="RunAsync"/> and <see cref="ReadPageAsync"/> use the loop's socket and never
-/// connect themselves, so they cannot race the loop's connection setup ([A380C-3]); they wake the
-/// loop and wait a few seconds for the agent when the link is down. Sequences run one at a time,
-/// in the page; a run given up on is canceled there before the next may start.
+/// nothing. Showing the window pings at once, and that ping or a run's start going unanswered
+/// drops the socket straight away (a half-open socket after a reload). <see cref="RunAsync"/> and
+/// <see cref="ReadPageAsync"/> use the loop's socket and never connect themselves, so they cannot
+/// race the loop's connection setup ([A380C-3]); they wake the loop and wait a few seconds for the
+/// agent when the link is down. Sequences run one at a time, in the page; a run given up on is
+/// canceled there before the next may start, and one still going at Dispose is canceled first.
 ///
 /// The page clock: the agent reports when its document loaded, which is when the flight loaded
 /// (the view is made anew on each load). The nav data update is bound to it: its guard is checked
@@ -65,6 +67,22 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     private const string AgentFile = "coherent-bbs757-efb-agent.js";
     internal const string InstallMarker = "MSFSBA_BBS757_EFB_INSTALLED";
     private const string NoAgent = "no-agent";
+
+    /// <summary>
+    /// The agent version a run asks for (its VERSION): 3 is the first that refuses a click near the
+    /// UPDATE spot without the update's page guards. An older agent on the page answers "no agent"
+    /// to a run and is replaced by the install.
+    /// </summary>
+    internal const int AgentVersion = 3;
+
+    // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
+    // since it runs on the UI thread during a profile switch or app exit.
+    private const int TeardownCancelWaitMs = 500;
+
+    // The agent's ping, answered "no agent" by a missing agent or one older than AgentVersion, so
+    // the keep-alive and the page read have an old agent replaced before a run needs it.
+    private static readonly string PingExpression =
+        $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} ? JSON.stringify(__MSFSBA_BBS757EFB.ping()) : '{NoAgent}'";
 
     private const int KeepAliveMs = 3000;
     private const int IdleIntervalMs = 5000;
@@ -108,6 +126,11 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     private long _lastRunPageMs;
     private IDisposable? _viewClaim;
     private bool _disposed;
+    // Set by SetActive(true): the loop's next keep-alive is the window's first look at the link,
+    // and a silent answer to it drops the socket at once (a half-open one after a reload).
+    private int _pingOnShow;
+    // Whether the last run's start went out and was not refused: it may have clicked.
+    private volatile bool _lastRunMayHaveClicked;
 
     public CoherentBbs757EfbClient()
         : this(() => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", AgentFile)))
@@ -145,6 +168,13 @@ public sealed class CoherentBbs757EfbClient : IDisposable
             return ms > 0 ? ms : null;
         }
     }
+
+    /// <summary>
+    /// Whether the last <see cref="RunAsync"/> may have clicked anything: its start went out and the
+    /// agent did not refuse it (an unanswered start counts, since it may have run). False for a run
+    /// stopped before its start, or refused by the agent: nothing was clicked then.
+    /// </summary>
+    public bool LastRunMayHaveClicked => _lastRunMayHaveClicked;
 
     /// <summary>The page the last run started on (its load time, Unix ms), or null.</summary>
     public long? LastRunPageLoadedMs
@@ -188,11 +218,20 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         _viewClaim = null;
     }
 
-    /// <summary>Check the link every few seconds while the EFB window is shown; send nothing while it is hidden.</summary>
+    /// <summary>
+    /// Check the link every few seconds while the EFB window is shown; send nothing while it is
+    /// hidden. Showing it pings at once, and a ping no one answers then drops the socket straight
+    /// away: hidden, the client sent nothing, so a socket left half-open by a reload is found here
+    /// rather than by the pilot's first action failing.
+    /// </summary>
     public void SetActive(bool active)
     {
         _active = active;
-        if (active) _wake.Wake();
+        if (active)
+        {
+            Interlocked.Exchange(ref _pingOnShow, 1);
+            _wake.Wake();
+        }
     }
 
     /// <summary>
@@ -208,6 +247,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     public async Task<Bbs757EfbRunResult> RunAsync(IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq,
         CancellationToken ct, Bbs757EfbRunGuard? guard = null)
     {
+        _lastRunMayHaveClicked = false;
         // Not started, or started without its agent (no loop runs then): nothing could ever click.
         if (seq.Count == 0 || _viewClaim == null || _disposed) return Bbs757EfbRunResult.Unreachable;
         string json = Bbs757EfbLayout.ToJson(seq);
@@ -235,13 +275,18 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                     if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), token))
                         return _layoutUnknown ? Bbs757EfbRunResult.LayoutUnknown : Bbs757EfbRunResult.Unreachable;
 
+                    // Only an agent of this version or later may run it: an older one lacks the
+                    // update-spot guard, answers "no agent", and is replaced by the re-install.
                     string raw = await EvalAsync(
-                        $"window.__MSFSBA_BBS757EFB ? JSON.stringify(__MSFSBA_BBS757EFB.clickSeq({JsonSerializer.Serialize(json)},{opts})) : '{NoAgent}'",
+                        $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} ? JSON.stringify(__MSFSBA_BBS757EFB.clickSeq({JsonSerializer.Serialize(json)},{opts})) : '{NoAgent}'",
                         token);
                     if (raw.Length == 0)
                     {
-                        NoteUnansweredEval();
-                        Log.Debug("BBS757", "EFB sequence: no answer; not sent again.");
+                        // It may have run. And the socket is presumed dead at once: a half-open
+                        // one after a reload otherwise fails two more actions before it is dropped.
+                        _lastRunMayHaveClicked = true;
+                        NoteUnansweredEval(dropNow: true);
+                        Log.Debug("BBS757", "EFB sequence: no answer; not sent again, reconnecting.");
                         return Bbs757EfbRunResult.NotFinished;
                     }
                     if (raw == NoAgent)
@@ -251,7 +296,11 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                     }
 
                     var start = Parse(raw);
-                    if (start == null) return Bbs757EfbRunResult.NotFinished;
+                    if (start == null)
+                    {
+                        _lastRunMayHaveClicked = true;   // an answer that cannot be read: it may have run
+                        return Bbs757EfbRunResult.NotFinished;
+                    }
                     NotePage(start.page);
                     if (!start.ok)
                     {
@@ -266,6 +315,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                         return refused;
                     }
                     Interlocked.Exchange(ref _lastRunPageMs, start.page ?? 0);
+                    _lastRunMayHaveClicked = true;
                     if (start.error != null)
                     {
                         Log.Debug("BBS757", $"EFB sequence stopped at its first click: {start.error}");
@@ -313,10 +363,17 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
-            if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), linked.Token)) return null;
-            string raw = await EvalAsync($"window.__MSFSBA_BBS757EFB ? JSON.stringify(__MSFSBA_BBS757EFB.ping()) : '{NoAgent}'", linked.Token);
-            if (raw.Length == 0) { NoteUnansweredEval(); return null; }
-            if (raw == NoAgent) { AgentUnusable(); return null; }
+            string raw = NoAgent;
+            // An agent missing, or older than AgentVersion (an app update over a loaded flight), is
+            // installed again by the loop and asked once more.
+            for (int attempt = 0; attempt < 2 && raw == NoAgent; attempt++)
+            {
+                if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), linked.Token)) return null;
+                raw = await EvalAsync(PingExpression, linked.Token);
+                if (raw.Length == 0) { NoteUnansweredEval(); return null; }
+                if (raw == NoAgent) AgentUnusable();
+            }
+            if (raw == NoAgent) return null;
             var ping = JsonSerializer.Deserialize<PingAnswer>(raw);
             if (ping == null || !ping.ok) return null;
             NotePage(ping.page);
@@ -438,10 +495,14 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         _wake.Wake();
     }
 
-    /// <summary>An eval no one answered: after a few in a row the loop drops the socket.</summary>
-    private void NoteUnansweredEval()
+    /// <summary>
+    /// An eval no one answered: after a few in a row the loop drops the socket, or on its next pass
+    /// when <paramref name="dropNow"/> (an unanswered run start, or the ping when the window is shown).
+    /// </summary>
+    private void NoteUnansweredEval(bool dropNow = false)
     {
-        Interlocked.Increment(ref _emptyEvalStreak);
+        if (dropNow) Interlocked.Exchange(ref _emptyEvalStreak, DeadSocketEvalFailures);
+        else Interlocked.Increment(ref _emptyEvalStreak);
         _wake.Wake();
     }
 
@@ -463,7 +524,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                     await _wake.WaitAsync(TimeSpan.FromMilliseconds(ReconnectDelayMs), ct);
                     continue;
                 }
-                if (_active) await KeepAlive(ct);
+                if (_active) await KeepAlive(ct, firstSinceShown: Interlocked.Exchange(ref _pingOnShow, 0) == 1);
                 await _wake.WaitAsync(TimeSpan.FromMilliseconds(_active ? KeepAliveMs : IdleIntervalMs), ct);
             }
             catch (OperationCanceledException) { break; }
@@ -476,11 +537,26 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         }
     }
 
-    /// <summary>While the window is shown: is the agent still there, and can it still click?</summary>
-    private async Task KeepAlive(CancellationToken ct)
+    /// <summary>
+    /// While the window is shown: is the agent still there, and can it still click? The first ping
+    /// after the window is shown (<paramref name="firstSinceShown"/>) drops a silent socket at once.
+    /// </summary>
+    private async Task KeepAlive(CancellationToken ct, bool firstSinceShown)
     {
-        string raw = await EvalAsync($"window.__MSFSBA_BBS757EFB ? JSON.stringify(__MSFSBA_BBS757EFB.ping()) : '{NoAgent}'", ct);
-        if (raw.Length == 0) { Interlocked.Increment(ref _emptyEvalStreak); return; }
+        string raw = await EvalAsync(PingExpression, ct);
+        if (raw.Length == 0)
+        {
+            if (firstSinceShown)
+            {
+                Log.Debug("BBS757", "EFB client: no answer when the window was shown, reconnecting.");
+                NoteUnansweredEval(dropNow: true);
+            }
+            else
+            {
+                Interlocked.Increment(ref _emptyEvalStreak);
+            }
+            return;
+        }
         Interlocked.Exchange(ref _emptyEvalStreak, 0);
         if (raw == NoAgent)
         {
@@ -748,9 +824,30 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         catch (JsonException) { /* malformed frame: ignore */ }
     }
 
+    /// <summary>
+    /// A run still holding the run lock at teardown (the window was closed by a profile switch or
+    /// app exit mid-run) keeps clicking in the page after the socket goes: its cancel is sent first,
+    /// best effort, waiting at most <see cref="TeardownCancelWaitMs"/>. Run on the pool, so the wait
+    /// on the UI thread cannot deadlock on a continuation posted back to it.
+    /// </summary>
+    private void CancelRunOnTeardown()
+    {
+        if (_runLock.CurrentCount != 0 || !IsReady) return;   // no run in progress, or no link to send on
+        try
+        {
+            if (!Task.Run(CancelRunAsync).Wait(TeardownCancelWaitMs))
+                Log.Debug("BBS757", "EFB client: run cancel at teardown not confirmed in time.");
+        }
+        catch (AggregateException ex)
+        {
+            Log.Debug("BBS757", $"EFB client: run cancel at teardown failed: {ex.InnerException?.Message}");
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
+        CancelRunOnTeardown();
         _disposed = true;
         Stop();
         try { _cts?.Dispose(); } catch { }
