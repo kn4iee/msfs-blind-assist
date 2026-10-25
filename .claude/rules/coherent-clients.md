@@ -1,6 +1,7 @@
 ---
 paths:
   - "MSFSBlindAssist/SimConnect/Coherent*.cs"
+  - "MSFSBlindAssist/SimConnect/*/Coherent*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*Coherent*.cs"
   - "MSFSBlindAssist/MSFSBlindAssist.csproj"
   - "MSFSBlindAssist/Resources/coherent-*.js"

@@ -242,6 +242,11 @@ public partial class MainForm
                     // MD-11 — all three MCDUs as text from the MD11MCDU client data area.
                     ShowMd11McduDialog();
                 }
+                else if (currentAircraft?.AircraftCode == "BBS_757")
+                {
+                    // BlueBird 757 — both CDUs as text from the aircraft's Comm Bus, over Coherent.
+                    ShowBBS757CduDialog();
+                }
                 else if (currentAircraft?.AircraftCode == "A320" || currentAircraft?.AircraftCode == "HW_A330")
                 {
                     // The Headwind A330 MCDU is the same FBW instrument (the Coherent view

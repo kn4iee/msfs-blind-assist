@@ -1445,6 +1445,10 @@ public partial class MainForm : Form
         md11MonitorManagerForm = null;
         coherentMd11Efb?.Dispose();
 
+        // The 757's windows and the tablet client they share (same leak class: the CDU window's
+        // timer and the client's poll loop and socket), as on the swap path.
+        DisposeBBS757Forms();
+
         // Clean up 787 forms + the IRS / CAS Coherent clients
         hs787FMCForm?.Dispose();
         hs787IrsClient?.Dispose();

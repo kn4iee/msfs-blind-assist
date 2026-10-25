@@ -126,7 +126,12 @@ MCP Value Windows:
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the
-  aircraft. Ctrl+Tab switches between the Captain and First Officer CDU.
+  aircraft. The list shows the
+  page title, each line select key's label and its numbered line ("3:" is
+  line 3), and the scratchpad last. Ctrl+Tab switches between the Captain
+  and First Officer CDU and says which one you are on. The two CDUs are
+  independent, as on the aircraft. The first officer's CDU shows once its
+  screen changes: if it says it is waiting, press a page key such as Alt+R.
   Ctrl+1 to Ctrl+6    Left line select keys 1-6
   Alt+1 to Alt+6      Right line select keys 1-6
   (F1-F6 / F7-F12 when the alternate LSK setting is on)
@@ -134,9 +139,17 @@ CDU (Shift+M):
   Alt+T  ATC          Alt+V  VNAV       Alt+F  FIX
   Alt+G  LEGS         Alt+H  HOLD       Alt+O  FMC COMM
   Alt+P  PROG         Alt+M  MENU       Alt+N  NAV RAD
-  PageUp / PageDown   PREV / NEXT page
-  Ctrl+Enter          EXEC
-  Typing goes to the scratchpad; Backspace is CLR and Delete is DEL.
+  PageUp / PageDown   PREV / NEXT page (also Alt+Up / Alt+Down)
+  Ctrl+Enter or Alt+E EXEC
+  Alt+S               Scratchpad box: type, then Enter sends it to the CDU
+  Alt+Home            Back to the CDU display
+  Backspace / Delete  CLR / DEL (on the display, or in an empty scratchpad box)
+  Escape              Close the window
+  A page change says the new page's title. After you type or press CLR, the
+  scratchpad is read back once the keys have gone in, so you hear what the
+  CDU took. Keys go in one at a time, a little over half a second apart;
+  holding a key down presses it once. CLR deletes one character or clears
+  a message.
   Flight data (SimBrief flight, route, winds, performance) comes in on the
   CDU's ACARS and FMC COMM pages: MENU, ACARS, INIT FLT.
 
