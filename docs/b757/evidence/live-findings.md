@@ -94,6 +94,28 @@ put back unless noted at the end.
     payload − passenger weight**, split evenly between the holds but capped at the forward hold's 10,300 lb: forward
     10,300, aft 10,359. Result: ZFW 182,734, ZFW CG 28.9 %, gross 208,239, CG 31.2 %.
   - The EFB was left on Home, the mirror removed, the camera restored (cockpit view 1/1).
+- **EFB Settings > Aircraft (session 6, 2026-10-25 afternoon)**: Settings icon (1073,190), then the AIRCRAFT menu
+  item (98,244). The page lists, top to bottom, at EFB y about 128, 192, 249, 310, 371, 434, 492, 553, 614, 674, 735,
+  793, 853, 914, 975: ADAPTIVE COCKPIT LIGHTING (AUTOMATIC), TOD PAUSE DISTANCE (NM), NOSEWHEEL STEERING, DISPLAYS
+  BOOTUP SPEED (REALISTIC), SYNC BAROMETERS (OFF), INITIAL COCKPIT DOOR (OPEN), PARKING BRAKE MODE (REALISTIC), IRS
+  ALIGNMENT TIME (slider, FULL), BOARDING & LOAD RATE (REALISTIC), AUTOMATIC BOARDING (OFF), AUTOMATIC GPU/JETWAY
+  (ON), HOPPIE ACARS (OFF), CPDLC NETWORK (HOPPIE), INITIAL CHOCKS IN PLACE (ON), DIRTY PANEL STATES (OFF); the switches
+  sit at EFB x about 1154. **NOSEWHEEL STEERING switched from REALISTIC (tiller) to RUDDER** with one click at
+  (1154,249), at the owner's request (no one uses a tiller): `efb_settings.json` `tiller_realistic` read `false`
+  right after (global setting). The EFB was left on Home.
+- **Stock events on the 757 (session 6, on the ground, engines off, APU on; each restored after)**: BlueBird's own
+  variables are the truth (stock `BRAKE PARKING POSITION` read 0 with BlueBird's brake set; stock throttle 1 read
+  100%). `K:FLAPS_INCR` moved stock `FLAPS HANDLE INDEX` to 1 and BlueBird's `L:B757_FC_FLAP_LEVER` 0 → 17 (surfaces
+  stayed up, no hydraulics); `K:FLAPS_UP` returned both to 0. `K:SPOILERS_ARM_TOGGLE` set stock `SPOILERS ARMED` and
+  `L:B757_FC_SPOILER_LEVER` 10 (ARMED); toggled back to 0. `K:PARKING_BRAKES` and one `K:BRAKES` left
+  `L:B757_FC_PARK_BRAKE` at 1 (PARKING BRAKE MODE is REALISTIC: release is by the pedals, to measure with held
+  brakes). `K:KOHLSMAN_SET` 16320 set ALL THREE altimeters (`KOHLSMAN SETTING MB:1..3`) to 1020 (reads lag a few
+  seconds); `K:KOHLSMAN_INC` moves only altimeter 1 by 0.01 inHg. `K:XPNDR_SET` takes BCD (0x4743 → 4743; a decimal
+  4743 gave 1207). `K:COM_STBY_RADIO_SET_HZ` 124650000 set stock COM 1 standby (whether BlueBird's tuning head shows
+  it is unmeasured). DH is the stock `DECISION HEIGHT` (the ADI showed DH200 with stock 200), not settable; one
+  `K:INCREASE_DECISION_HEIGHT` gave 210 and one `DECREASE` 200; `L:B757_ADI_1_DH_REF` stayed 0 (a knob animation
+  counter). Not tested on the ground: gear up, thrust, stab trim (no hydraulics). Seen: `L:BBS757_THRUST_LEVER_L`
+  100.006 and `_R` 0 with the engines off (a hardware axis or a leftover; to check before engine start).
 - **Calculator string length (session 4)**: the simconnect MCP refuses calculator strings longer than about 220
   characters ("negative count": it pads to a 256-byte message), so a 25-event speed burst could not be measured through
   it. MSFSBA's own MobiFlight channel is 1,024 bytes (`MobiFlightWasmModule.MAX_COMMAND_SIZE`).

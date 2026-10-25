@@ -234,6 +234,80 @@ through the measured setters. No typing box (the owner's call).
   load… Is BBS Nest running?" when nothing moved), whole-pound writes, B752 plans only, an unread group re-read and
   never called loaded, an odd pound to the left wing (R25).
 
+### Task 10: Full-flight readiness (added 2026-10-25, owner's go-ahead)
+
+The 14 gaps in `evidence/flight-readiness.md`, found by checking BlueBird's v1.01 manuals against the prototype.
+Values measured in `evidence/live-findings.md` (sessions 5 and 6). Built in two stages (10a generator, 10b app).
+
+**10a, the control map (`tools/b757-gen`, regenerate `bbs757_control_map.json`):**
+- Add, under section Pedestal, panel "Control stand":
+  - "Parking Brake" (`BBS757_PEDESTAL_Park_Brake_Lever`, toggle on `L:B757_FC_PARK_BRAKE`, Released/Set);
+  - "Speedbrake Down", "Speedbrake Armed", "Speedbrake Up" (`BBS757_SPOILERDOWN_CLICK`, `_SPOILERARMED_CLICK`,
+    `_SPOILERUP_CLICK`, buttons);
+  - "TO/GA" (`ENGINE_Switch_ATDisc_1`, its click code verbatim);
+  - "A/T Disconnect" (`B757_AT_DISC_1`).
+  These sit under excluded vendor banners: take them in by node, not by re-including the banners.
+- Name positions:
+  - autobrake (`B757_MAIN_knob_gears_altn_autobrake`, `BBS_AUTOBRAKE_KNOB`): 0 RTO, 1 OFF, 2 DISARM, 3 "1", 4 "2",
+    5 "3", 6 "4", 7 MAX AUTO (vendor panel states: ready for takeoff 0, cold and dark 1, approach 2);
+  - PW fuel control switches: 0 CUTOFF, 2 RUN.
+  - Also IRS mode selectors, ND range and mode, TCAS mode and alternate flaps, from the vendor panel states and the
+    manuals' wording (IRS "OFF/ALIGN/NAV/ATT", transponder "TA/RA"). Mark any name not backed by a panel state as
+    unmeasured in curation `_notes` and the in-sim plan. Leave a position numbered when nothing supports a name.
+- MCP buttons whose label is a slip: "Hold 1" is HDG HOLD and "Hold 2" is ALT HOLD (757 MCP layout).
+
+**10b, the app:**
+- Readouts, as status rows and announced on change (Ctrl+M rows):
+  - flaps from stock `FLAPS HANDLE INDEX` (0-6 = UP, 1, 5, 15, 20, 25, 30) with `TRAILING EDGE FLAPS LEFT ANGLE`;
+  - gear from `GEAR HANDLE POSITION` and `GEAR POSITION:0..2`;
+  - speedbrake from `L:B757_FC_SPOILER_LEVER` (0 down, 10 armed, above 10 "up N percent");
+  - parking brake from `L:B757_FC_PARK_BRAKE`.
+- Hotkeys, matching the other Boeings:
+  - Output L (flaps), Shift+G (gear), B (the three altimeters and the radio minimums);
+  - F and Shift+F (fuel per tank and total, pounds and kilograms, from the tank gallons × `FUEL WEIGHT PER GALLON`);
+  - W and Shift+W (`TOTAL WEIGHT`).
+- Input Ctrl+B "Altimeter and minimums" window:
+  - altimeter in inHg or hPa (typed, CORE-17) and a Standard (29.92) button, sent as `K:KOHLSMAN_SET` (16 × hPa,
+    sets all three altimeters, measured);
+  - radio minimums in feet, stepped with `K:INCREASE_DECISION_HEIGHT`/`DECREASE_DECISION_HEIGHT` (10 ft per step)
+    and read back from `DECISION HEIGHT`, which is read-only.
+  - Speak the values read back.
+- "Set Squawk Code" number field in the TCAS and transponder panel: `K:XPNDR_SET` in BCD (measured); read back
+  `TRANSPONDER CODE:1` and speak "Squawk 4743" as one number (owner's rule).
+- MCP button state:
+  - register `L:B757_MCP_<THR|SPD|LNAV|VNAV|FLCH|HOLD_1|VS|HOLD_2|BCRS_1|LOC|APP|CMD_1|CMD_2|CMD_3>_BUTTON`
+    (the button lights);
+  - a press of those MCP buttons reads back its light ("CMD R on"), per CORE-7, instead of "pressed";
+  - the lights announce on change, with Ctrl+M rows;
+  - Input Ctrl+P "757 Autopilot" window: buttons with live state for CMD L, C, R (CMD 1-3), A/T ARM, the two F/D,
+    THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP. They press through the map's click code, as the
+    iFly, HS787 and MD-11 windows do.
+- Engines: a read-only "Engines" panel in the Status section, per engine:
+  - N1, N2, EGT and fuel flow from the stock engine variables, plus `TURB ENG PRESSURE RATIO` (EPR);
+  - announce nothing;
+  - mark them unmeasured on BlueBird (in-sim check at the first start).
+- The ADI AI read also reports the AUTOLAND STATUS annunciator (LAND 3, LAND 2, NO LAND 3, NO AUTOLAND) beside it in
+  the same instrument view.
+- 757 EFB window: "Set steering to rudder":
+  - Settings (1073,190), AIRCRAFT (98,244), the NOSEWHEEL STEERING switch (1154,249) only while `efb_settings.json`
+    `tiller_realistic` is true (read only that key);
+  - read it back: "Steering set to rudder" or "Steering is already rudder";
+  - measured 2026-10-25.
+- Hotkey guide, `docs/b757.md`, the pilot's guide (Boeing chapter and hotkey reference) and the in-sim plan follow.
+
+- [ ] **Step 1: Failing tests:**
+  - the curation (names, new nodes);
+  - the flap index → name map;
+  - the speedbrake phrase;
+  - the altimeter encoding (hPa and inHg → 16 × hPa, invariant under de-DE);
+  - the DH step count;
+  - the squawk BCD;
+  - the fuel and weight phrases (de-DE, kilograms);
+  - the MCP light read-back phrases;
+  - the steering sequence.
+- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
+- [ ] **Step 5: Commit** `feat(b757): full-flight controls and readouts`.
+
 ## Rulings made while executing (2026-10-25)
 
 Decisions the plan left open, taken overnight so the run did not stop. Each says what it costs if it is wrong; the
