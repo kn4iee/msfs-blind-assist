@@ -531,7 +531,13 @@ public class TakeoffAssistManager : IDisposable
     /// Announces "80 knots", "100 knots", "V1" (Fenix only), and "rotate" (Fenix only).
     /// </summary>
     /// <param name="currentIAS">Current indicated airspeed in knots</param>
-    public void ProcessSpeedUpdate(double currentIAS)
+    /// <param name="aircraftCallsOwnSpeeds">
+    /// The loaded aircraft plays its own take-off speed callouts
+    /// (<see cref="Aircraft.IAircraftDefinition.PlaysOwnTakeoffSpeedCallouts"/>, the BlueBird 757):
+    /// none of these is spoken then, so a roll never hears two "80 knots". Passed per sample by the
+    /// one caller, so it always follows the aircraft loaded now.
+    /// </param>
+    public void ProcessSpeedUpdate(double currentIAS, bool aircraftCallsOwnSpeeds = false)
     {
         // Cache BEFORE the guards — the trace's iasKt column must stay fresh
         // even when callouts are disabled.
@@ -539,6 +545,7 @@ public class TakeoffAssistManager : IDisposable
 
         if (!isActive) return;
         if (!enableCallouts) return;
+        if (aircraftCallsOwnSpeeds) return;
 
         // 80 knots callout (all aircraft)
         // Use Announce() (queued, non-interrupting) so callouts don't cut each other off

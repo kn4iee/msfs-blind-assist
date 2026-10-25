@@ -91,6 +91,12 @@ public partial class BBS757Definition : BaseAircraftDefinition
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
     /// <summary>
+    /// The 757 plays its own pilot-monitoring 80 knots, V1 and rotate (docs/b757/spec.md §4), so
+    /// Takeoff Assist's "80 knots" and "100 knots" are not spoken on it.
+    /// </summary>
+    public override bool PlaysOwnTakeoffSpeedCallouts => true;
+
+    /// <summary>
     /// Alt+P / Alt+N / Alt+E / Alt+S read the ADI, the EHSI and the upper and lower EICAS by AI vision
     /// on the measured instrument views; <c>BaseAircraftDefinition.HandleHotkeyAction</c> dispatches the table.
     /// </summary>

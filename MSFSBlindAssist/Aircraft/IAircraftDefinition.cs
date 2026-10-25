@@ -548,6 +548,16 @@ public interface IAircraftDefinition
     bool HasOwnIcingAnnouncer { get; }
 
     /// <summary>
+    /// True when this aircraft plays its own take-off speed callouts (the BlueBird 757 calls 80 knots,
+    /// V1 and rotate itself). Takeoff Assist then makes none of its speed callouts ("80 knots",
+    /// "100 knots", the Fenix's V1 and rotate) on it, so a roll never hears two "80 knots"; its
+    /// centerline tone and pitch calls are unchanged. False (the default) keeps them, which every
+    /// other aircraft does: the definition-owned V1 / Rotate / V2 machines
+    /// (<see cref="TakeoffVSpeedCallouts"/>) are separate and are not governed by this.
+    /// </summary>
+    bool PlaysOwnTakeoffSpeedCallouts { get; }
+
+    /// <summary>
     /// Null when this aircraft's COM 1 takes the stock tuning events (COM_STBY_RADIO_SET_HZ,
     /// COM1_RADIO_SWAP) the surroundings window's Frequencies list sends on Enter / Shift+Enter;
     /// otherwise the sentence to speak INSTEAD of sending them. The FBW A380 ignores them

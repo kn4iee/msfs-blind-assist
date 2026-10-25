@@ -954,6 +954,9 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
 
     public virtual bool HasOwnIcingAnnouncer => false;
 
+    /// <inheritdoc />
+    public virtual bool PlaysOwnTakeoffSpeedCallouts => false;
+
     public virtual string? StockComTuningRefusal => null;
 
     // One capture at a time, app-wide — the scene description takes the same gate, because the
