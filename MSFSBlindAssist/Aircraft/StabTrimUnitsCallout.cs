@@ -13,10 +13,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// rounded values let a trim resting on x.x5 flip every sample.
 /// </para>
 /// <para>
-/// The BlueBird 757 speaks the same words (<see cref="Phrase"/>) on the shared degrees row: it has no
-/// units field either, so its definition converts the stock degrees with BlueBird's indicator-strip
-/// formula (<c>Bbs757Readouts.StabTrimUnits</c>) in its <c>DescribeElevatorTrim</c> override, keyed on
-/// the same tenth, and the base class's debounce does the rest.
+/// The BlueBird 757 speaks the same words (<see cref="Phrase"/>) on the shared degrees row: it
+/// publishes no units field, so its definition converts the stock degrees with BlueBird's
+/// indicator-strip formula (<c>Bbs757Readouts.StabTrimUnits</c>) in its <c>DescribeElevatorTrim</c>
+/// override, keyed on the same tenth, and the base class's debounce does the rest.
 /// </para>
 /// <para>
 /// The PMDG 777 is different on purpose: it publishes no units field, so it converts the stock
