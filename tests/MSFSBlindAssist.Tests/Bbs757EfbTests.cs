@@ -164,6 +164,7 @@ public class Bbs757EfbTests
         foreach (string preset in Bbs757EfbLayout.PresetNames) yield return Bbs757EfbLayout.LoadPreset(preset);
         foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
         yield return Bbs757EfbLayout.SetSteeringToRudder();
+        yield return Bbs757EfbLayout.ToggleChocks();
     }
 
     [Fact]
@@ -275,8 +276,60 @@ public class Bbs757EfbTests
         others.AddRange(Bbs757EfbLayout.PresetNames.Select(Bbs757EfbLayout.LoadPreset));
         others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
         others.Add(Bbs757EfbLayout.SetSteeringToRudder());
+        others.Add(Bbs757EfbLayout.ToggleChocks());
         foreach (var seq in others)
             Assert.DoesNotContain(seq, s => s.Point == spot);
+    }
+
+    // ---- Chocks ----------------------------------------------------------------------------------
+
+    [Fact]
+    public void The_chocks_are_home_aircraft_ground_services_then_the_chocks_tile()
+    {
+        // Measured 2026-10-25 (live-findings.md, EFB Ground Services): the tile toggles L:BBS757_vis_chocks.
+        var seq = Bbs757EfbLayout.ToggleChocks();
+
+        Assert.Equal(new[]
+        {
+            Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuGroundServices,
+            Bbs757EfbLayout.GroundServicesChocks,
+        }, seq.Select(s => s.Point));
+        Assert.Equal(new EfbPoint(320, 190), Bbs757EfbLayout.AircraftIcon);
+        Assert.Equal(new EfbPoint(128, 368), Bbs757EfbLayout.AircraftMenuGroundServices);
+        Assert.Equal(new EfbPoint(404, 556), Bbs757EfbLayout.GroundServicesChocks);
+        Assert.Single(seq, s => s.Point == Bbs757EfbLayout.GroundServicesChocks);   // one tap: it toggles
+        Assert.All(seq, s => Assert.Equal(Bbs757EfbLayout.NavigateDelayMs, s.DelayAfterMs));
+        Assert.Equal("BBS757_vis_chocks", Bbs757EfbLayout.ChocksVar);
+    }
+
+    [Theory]
+    [InlineData(1.0, false, true)]    // in place, removing: tap
+    [InlineData(0.0, true, true)]     // removed, setting: tap
+    [InlineData(0.0, false, false)]   // already removed: a tap would put them back
+    [InlineData(1.0, true, false)]
+    [InlineData(null, false, false)]  // unreadable: never guess on a toggle
+    [InlineData(double.NaN, true, false)]
+    public void The_chocks_tile_is_tapped_only_when_the_chocks_differ_from_what_is_wanted(double? chocks, bool wantInPlace, bool tap)
+    {
+        Assert.Equal(tap, Bbs757EfbLayout.MayClickChocks(chocks, wantInPlace));
+    }
+
+    [Theory]
+    [InlineData(false, 0.0, "Chocks removed")]
+    [InlineData(true, 1.0, "Chocks in place")]
+    [InlineData(false, 1.0, "BlueBird did not move the chocks")]
+    [InlineData(true, 0.0, "BlueBird did not move the chocks")]
+    [InlineData(false, null, "The chocks could not be read back.")]
+    public void The_chocks_result_is_said_from_the_variable_read_after(bool wantInPlace, double? after, string phrase)
+    {
+        Assert.Equal(phrase, Bbs757EfbLayout.ChocksResultPhrase(wantInPlace, after));
+    }
+
+    [Fact]
+    public void Chocks_already_where_wanted_say_so()
+    {
+        Assert.Equal("Chocks are already removed", Bbs757EfbLayout.ChocksAlreadyText(inPlace: false));
+        Assert.Equal("Chocks are already in place", Bbs757EfbLayout.ChocksAlreadyText(inPlace: true));
     }
 
     // ---- Nosewheel steering ----------------------------------------------------------------

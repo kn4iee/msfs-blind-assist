@@ -27,7 +27,7 @@ public enum Bbs757UpdateGate
 }
 
 /// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
-public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering }
+public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks }
 
 /// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
 public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
@@ -163,6 +163,15 @@ public static class Bbs757EfbLayout
     public static readonly EfbPoint Cruise = new(818, 266);             // est.
     public static readonly EfbPoint Approach = new(818, 319);           // est.
     public static readonly EfbPoint FinalApproach = new(818, 372);      // est.
+
+    /// <summary>The Aircraft app's left menu: GROUND SERVICES (measured 2026-10-25, session 6).</summary>
+    public static readonly EfbPoint AircraftMenuGroundServices = new(128, 368);
+
+    /// <summary>
+    /// The Ground Services page's CHOCKS tile (measured 2026-10-25: it toggles <c>L:BBS757_vis_chocks</c>
+    /// 0 to 1 to 0). It TOGGLES, so it is tapped only under <see cref="MayClickChocks"/>.
+    /// </summary>
+    public static readonly EfbPoint GroundServicesChocks = new(404, 556);
 
     // Quick start (same page).
     public static readonly EfbPoint ApuQuickStart = new(433, 524);
@@ -463,6 +472,49 @@ public static class Bbs757EfbLayout
         false => "Steering set to rudder",
         true => "BlueBird did not change the steering. It is still the tiller.",
         null => "The steering setting could not be read back.",
+    };
+
+    // ---- chocks ------------------------------------------------------------------------
+
+    /// <summary>The chocks' L:var (0 removed, 1 in place, measured), also the Status display's "Chocks" row.</summary>
+    public const string ChocksVar = "BBS757_vis_chocks";
+
+    public const string ChocksUnreadableText = "The chocks cannot be read, so nothing was clicked.";
+
+    /// <summary>
+    /// Home, Aircraft (it opens on COCKPIT PRESETS), GROUND SERVICES, then the CHOCKS tile once. Run it
+    /// only when <see cref="MayClickChocks"/> allows it: the tile toggles.
+    /// </summary>
+    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> ToggleChocks() => new[]
+    {
+        (Home, NavigateDelayMs),
+        (AircraftIcon, NavigateDelayMs),
+        (AircraftMenuGroundServices, NavigateDelayMs),
+        (GroundServicesChocks, NavigateDelayMs),
+    };
+
+    /// <summary>Whether the chocks are in place by <c>L:BBS757_vis_chocks</c>: true, false, or null when it was not read.</summary>
+    public static bool? ChocksInPlace(double? value)
+        => value is double v && double.IsFinite(v) ? v > 0.5 : null;
+
+    /// <summary>
+    /// Whether the CHOCKS tile may be tapped to get <paramref name="wantInPlace"/>: only when the chocks read
+    /// the other way. Already where wanted, a tap would undo it; unread, nothing says which way it would go.
+    /// </summary>
+    public static bool MayClickChocks(double? chocks, bool wantInPlace) => ChocksInPlace(chocks) is bool now && now != wantInPlace;
+
+    /// <summary>"Chocks are already in place" or "Chocks are already removed".</summary>
+    public static string ChocksAlreadyText(bool inPlace) => inPlace ? "Chocks are already in place" : "Chocks are already removed";
+
+    /// <summary>
+    /// What the tap came to, from the chocks read after it: "Chocks removed" / "Chocks in place", "BlueBird
+    /// did not move the chocks" when they read as before, "The chocks could not be read back.".
+    /// </summary>
+    public static string ChocksResultPhrase(bool wantInPlace, double? after) => ChocksInPlace(after) switch
+    {
+        null => "The chocks could not be read back.",
+        bool now when now == wantInPlace => wantInPlace ? "Chocks in place" : "Chocks removed",
+        _ => "BlueBird did not move the chocks",
     };
 
     private static EfbPoint Lookup((string Name, EfbPoint Point)[] table, string name, string paramName)

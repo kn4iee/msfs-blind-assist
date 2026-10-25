@@ -90,6 +90,8 @@ public class BBS757EfbForm : Form
     // How long the steering setting is watched for BlueBird's write after the click (measured: at once).
     private const int SteeringWaitMs = 3000;
     private const int SteeringPollMs = 250;
+    // The chocks are read back this long after the tile's tap.
+    private const int ChocksReadBackDelayMs = 1500;
 
     private readonly CoherentBbs757EfbClient _efb;
     private readonly CoherentBbs757TabletClient _tablet;
@@ -115,6 +117,8 @@ public class BBS757EfbForm : Form
     private Button _apuButton = null!;
     private Button _irsButton = null!;
     private Button _steeringButton = null!;
+    private Button _removeChocksButton = null!;
+    private Button _setChocksButton = null!;
     private TextBox _statusBox = null!;
     private Button _closeButton = null!;
     private readonly System.Windows.Forms.Timer _statusTimer;
@@ -308,6 +312,9 @@ public class BBS757EfbForm : Form
         _irsButton = MakeButton("IRS rapid align", left + halfW + 10, halfW, () => QuickStartAsync("IRS rapid align"));
         y += h + gap;
         _steeringButton = MakeButton("Set steering to rudder", left, fullW, SetSteeringToRudderAsync);
+        y += h + gap;
+        _removeChocksButton = MakeButton("Remove chocks", left, halfW, () => ChocksAsync(wantInPlace: false));
+        _setChocksButton = MakeButton("Set chocks", left + halfW + 10, halfW, () => ChocksAsync(wantInPlace: true));
         y += h + gap + 4;
 
         var statusLabel = new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ };
@@ -993,6 +1000,44 @@ public class BBS757EfbForm : Form
             after = Bbs757WorkFolder.ReadTillerRealistic(folder);
         }
         Say(Bbs757EfbLayout.SteeringResultPhrase(after));
+    }
+
+    /// <summary>
+    /// Remove chocks / Set chocks (the owner's INITIAL CHOCKS IN PLACE puts them on at every load, and
+    /// the aircraft does not move with them). The CHOCKS tile TOGGLES <c>L:BBS757_vis_chocks</c>, so the
+    /// variable is read fresh first (<see cref="Bbs757EfbLayout.MayClickChocks"/>): already where wanted
+    /// says so and taps nothing ("Chocks are already removed"); unreadable refuses. Otherwise the tile is
+    /// tapped once, the variable read about 1.5 s later, and the result said: "Chocks removed", "Chocks
+    /// in place" or "BlueBird did not move the chocks". In flight too (BlueBird shows the tile there).
+    /// A run that started and did not report finishing is judged from the variable all the same.
+    /// </summary>
+    private async Task ChocksAsync(bool wantInPlace)
+    {
+        var ct = Lifetime;
+        double? before = await _loadIo.Read(Bbs757EfbLayout.ChocksVar, LoadReadTimeoutMs, ct);
+        if (_disposed) return;
+        if (Bbs757EfbLayout.ChocksInPlace(before) is not bool inPlace)
+        {
+            Refuse(Bbs757EfbLayout.ChocksUnreadableText);
+            return;
+        }
+        if (!Bbs757EfbLayout.MayClickChocks(before, wantInPlace))
+        {
+            Say(Bbs757EfbLayout.ChocksAlreadyText(inPlace));
+            return;
+        }
+
+        SetResult(wantInPlace ? "Setting the chocks." : "Removing the chocks.");
+        var result = await RunAsync(Bbs757EfbRunKind.Chocks, Bbs757EfbLayout.ToggleChocks());
+        if (result != Bbs757EfbRunResult.Done && !_efb.LastRunMayHaveClicked)
+        {
+            SayRunProblem(result);
+            return;
+        }
+        await Task.Delay(ChocksReadBackDelayMs, ct);
+        double? after = await _loadIo.Read(Bbs757EfbLayout.ChocksVar, LoadReadTimeoutMs, ct);
+        if (_disposed) return;
+        Say(Bbs757EfbLayout.ChocksResultPhrase(wantInPlace, after));
     }
 
     /// <summary>A quick start tile, which has nothing to read back: clicked, then "{name} pressed".</summary>
