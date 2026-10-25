@@ -191,6 +191,13 @@ identical consecutive commands are dropped by MobiFlight, [VAR-4]) and window ca
     read EMPTY 130,870, ZFW 156,280, ZFW CG 22.4 %, BLK FUEL 16,250, TAKE-OFF 172,065, LANDING 164,322, gross 172,605,
     CG 24.8 %. Neither box blocks IMPORT. The aircraft was left loaded, EFB on Home (COCKPIT PRESETS last), mirror
     removed.
+  - Read again from the same session's FUEL page captures (scratchpad e1-e3, taken 19:50-20:31 PC time) for the final
+    review of Task 11: (400,648), the defuel question's YES, is plain page background on the FUEL page with no
+    question up, left of the "FUELING IN PROGRESS…" overlay and the "FUEL ADJUSTMENT IS COMPLETE!" box (both span
+    about x 530-1117, y 581-720). No tap was made there without a question up. START BOARDING (1231,24) is a top-bar
+    button whose face follows BlueBird's state: green "START BOARDING" before boarding (e1, during fueling), a darker
+    "BOARDING …" status button during it (e2), and no button at all after "BOARDING IS COMPLETE" (e3). What a press
+    does while it reads "BOARDING …" is unmeasured; after completion a press lands on empty bar.
 
 ## WASM-only variables, first reads (session 2, APU running)
 

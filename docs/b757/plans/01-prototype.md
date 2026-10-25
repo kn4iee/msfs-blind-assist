@@ -427,7 +427,8 @@ EFB (after the controller's live measurement in its step 0).
   hold (`Bbs757Loadsheet`'s phrases), when every part is within `Judge`'s tolerance of the plan's spread and
   unchanged across two reads; after boarding it taps the "BOARDING IS COMPLETE!" OK (731,879) and Home, never
   before. After 45 minutes it says boarding has not finished and stops. A second press while it runs: "The load is
-  already running."
+  already running." (As built, rulings R42, R47 and R51 replace the OK tap, the units sentence, the 45 minutes and
+  "unchanged across two reads".)
 - The setter write (`Bbs757Loadsheet.WriteCode`) and its tests go.
 - Presets and quick starts tap the COCKPIT PRESETS menu item (127,178) after Aircraft: the Aircraft app reopens on
   its last page (measured after a chocks tap), so a preset tile could land on Ground Services.
@@ -440,13 +441,13 @@ and 100 → 280 exact; LNAV arms with an executed route; THR at the runway (the 
 note the A/T state if it fails); EXEC light on after ACTIVATE and off after EXEC; trim spoken while trimming and equal
 to TAKEOFF REF's trim; the panel order; the load's two "complete" announcements.
 
-- [ ] **Step 1: Failing tests:** the speed tiers and bursts (7, 10, 11, 13, 40, 41, 47, 100, 299 knots; the flight's
+- [x] **Step 1: Failing tests:** the speed tiers and bursts (7, 10, 11, 13, 40, 41, 47, 100, 299 knots; the flight's
   53 events = 180 kt), a fake MCP with BlueBird's tiers that lands 200 → 153 and 100 → 280 with no correction, and
   one with plain 1 kt steps that converges; the MCP window layouts; `StabTrimUnits` (2.3° → 2.9, 2.381° → 3.0, a
   large negative → 0.4) and the trim phrase under de-DE; the EXEC phrases; the curation orders and errors (Python);
   the load sequence and the watch's judgement; the presets' COCKPIT PRESETS tap.
-- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
-- [ ] **Step 5: Commit** per part: 11a-c `fix(b757): …`, 11d `feat(b757): panels in flow order …`, 11e
+- [x] **Step 2-4:** run (fail), implement, full suite (pass).
+- [x] **Step 5: Commit** per part: 11a-c `fix(b757): …`, 11d `feat(b757): panels in flow order …`, 11e
   `feat(b757): load through BlueBird's EFB …`.
 
 ## Rulings made while executing (2026-10-25)
@@ -558,3 +559,21 @@ owner can reverse any of them.
   says why and starts no watch. If wrong: none in use; the pilot presses again after a run that did not finish.
 - R50 (Task 11e): Ready for taxi, Ready for takeoff, Engine quick start and IRS rapid align use the positions measured
   on 2026-10-25 instead of the estimates. If wrong: a few pixels, inside the tiles either way.
+- R51 (Task 11e, the dispatch spec, recorded after the final review): the watch gives up after 60 minutes, not 45
+  (boarding took under 40 measured); the fuel counts as settled when every tank moved less than 20 lb between reads,
+  never "unchanged" (the APU burns fuel; per tank since the final review, as BlueBird can move fuel between tanks
+  while the total holds still); the cabin and cargo when they moved less than 1 lb. If wrong: a completion said a
+  read later than it could be.
+- R52 (final review, important 1): the load refuses while BBS Nest is not running, and the watch says at three
+  minutes which part has not started ("BlueBird has not started loading. Is BBS Nest running? …" when neither moved)
+  and stops watching it. If wrong: a part BlueBird starts later than three minutes is no longer announced.
+- R53 (final review, important 2, partly measured from step 0's captures): START BOARDING's face follows BlueBird's
+  state (START BOARDING, then "BOARDING …", then gone). BA never presses it while its watch runs, and a run that may
+  have pressed something without confirming every press is watched, not offered again. Residual: a load started
+  after a lost connection or an app restart during a boarding presses the "BOARDING …" button, effect unmeasured.
+- R54 (final review, important 3): "Fetch SimBrief flight" now fetches the same plan through the app to learn its
+  units and says whether BlueBird is asking; the load refuses while that question may be up on the tablet's page
+  (`Bbs757UnitsQuestion`), and a later fetch in matching units on the same page does not clear it. If wrong: one
+  needless refusal, cleared by Keep units.
+- R55 (final review, minors 1 and 2 re-graded important): a speed set superseded during its read sends nothing (the
+  first flight's failure class), and "Fueling complete." waits for every tank to settle. If wrong: none.

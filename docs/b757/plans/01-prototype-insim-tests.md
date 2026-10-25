@@ -250,8 +250,9 @@ Task 10 fix round 1 (rulings R31, R32):
     The disconnect left the A/T armed when measured (2026-10-25), so SPD and FLCH should light as THR does; if they say
     "SPD off" / "FLCH off", read Ctrl+P's A/T Arm caption: "Off" there means the disconnect disarmed it, not a failed
     button. Either is fine; note which.
-    IAS/MACH: "IAS/MACH pressed" (press it twice: it switches the window between IAS and Mach). With MobiFlight stopped,
-    a press says "LNAV unavailable" and nothing moves.
+    IAS/MACH: "IAS/MACH pressed". Then Output Shift+S: "MCP is in Mach mode. Mach is not read yet." if the window
+    switched to Mach, the speed as before if it did not (note which); press IAS/MACH again and Shift+S reads the knots
+    again. With MobiFlight stopped, a press says "LNAV unavailable" and nothing moves.
 79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
     a second or two "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
     (Alt+P), for example after the A/T Disconnect button, note both. Then, engines off: Pedestal > Control stand >
@@ -293,21 +294,35 @@ Task 10 fix round 1 (rulings R31, R32):
 85. BlueBird's own load, fuel below the plan (task 11e; R38, R42-R44). At the gate, engines off, the APU or ground power
     on, the SimBrief plan in the aircraft's weight units and less fuel aboard than its block (Output F). EFB window, Load
     fuel and payload from SimBrief: about 20 seconds later (the taps take 18) "Fueling and boarding started. BlueBird
-    loads at its own pace; boarding can take half an hour." Close the window. Within about 3 minutes "Fueling complete.
-    Fuel … pounds: left …, right …, center …."; Output F then says the same figures, and the total is within 1% of the
-    plan's block. Press Load fuel and payload again: "The load is already running." Within about 40 minutes "Boarding
+    loads at its own pace; boarding can take half an hour." Close the window. Within a few minutes (about two for
+    3,300 lb, longer for a large block) "Fueling complete. Fuel … pounds: left …, right …, center …."; Output F then says
+    the same figures, and the total is within 1% of the plan's block. If instead, three minutes after the start, you
+    hear "BlueBird has not started …", note it and whether BBS Nest runs. Press Load fuel and payload again: "The load
+    is already running." Within about 40 minutes "Boarding
     complete. Passengers … pounds. Cargo … pounds: forward …, aft …. For the ACARS weight and balance, request WGTBAL on
     the CDU.": the passengers the plan's count times its passenger weight, the cargo forward first (all forward under
     10,300 lb). Nothing else is said by the load. Note the minutes from the press to each announcement. Then a preset
     (check 84's Before start, say) still lands: the Aircraft app was left on the FUEL page.
-86. The same with more fuel aboard than the plan (after check 85, a new SimBrief plan for a shorter flight). BlueBird
+86. The same with more fuel aboard than the plan (after check 85, a new SimBrief plan for a shorter flight). Output W
+    just before the press and again a minute after: the weight must not fall (a fall would mean the START BOARDING spot,
+    empty after a completed boarding unless the fetch brings the button back, stopped or reversed something). BlueBird
     asks to defuel after IMPORT and START BOARDING, and BA answers YES unseen: "Fueling complete." comes with the total
-    within 1% of the new, smaller block, and "Boarding complete." follows. No stray tap shows: Fetch SimBrief flight still
-    says "The aircraft uses pounds." (or kilograms, as before), and Status > Chocks reads as before.
-87. Weight units (R44, [B757-4]). With a SimBrief plan in kilograms and the aircraft in pounds: Load fuel and payload
-    says "Your SimBrief plan is in kilograms and the aircraft in pounds. Fetch the SimBrief flight and accept its units,
-    or create the plan in pounds, then try again." and nothing happens (Output F unchanged a minute later). Then Fetch
-    SimBrief flight, Accept units ("Weight units now kilograms"), and Load fuel and payload: it starts, and the
-    completions are said in kilograms. Set the units back the same way when done.
+    within 1% of the new, smaller block, and either "Boarding complete." follows, or within three minutes "BlueBird has
+    not started boarding. Check the weight with W." (the button did not come back after the fetch); note which. No
+    stray tap shows: Fetch SimBrief flight says "The plan and the aircraft both use pounds." (or kilograms, as before),
+    and Status > Chocks reads as before.
+87. Weight units (R44, R47, [B757-4]). With a SimBrief plan in kilograms and the aircraft in pounds: Load fuel and
+    payload says "Your SimBrief plan is in kilograms and the aircraft in pounds. Fetch the SimBrief flight and accept its
+    units, or create the plan in pounds, then try again." and nothing happens (Output F unchanged a minute later). Fetch
+    SimBrief flight: "SimBrief flight requested. The plan is in kilograms and the aircraft in pounds, so BlueBird is
+    asking whether to switch: …". Leave the question unanswered, create the plan again in pounds on SimBrief, and press
+    Load fuel and payload: "BlueBird is asking whether to switch the weight units. Press Accept units or Keep units
+    first." and nothing happens. Keep units: "Weight units unchanged, pounds". Load fuel and payload: it starts.
 88. A flight load ends the watch. Start a load, then reload the flight before "Boarding complete.": nothing more is said
     about it, and Load fuel and payload starts a new load at once (no "already running").
+89. BBS Nest (last, as it needs a flight reload after): close BBS Nest, then Load fuel and payload: "BBS Nest is not
+    running. The 757's systems will not respond until it runs and the flight is reloaded. Nothing was loaded."
+90. VNAV on the ground (the first flight's other report). With an executed route ("EXEC light off"), press VNAV (the
+    Glareshield MCP panel, or Ctrl+A and Tab to VNAV) before the PERF INIT uplink is accepted, and note what it says
+    ("VNAV on" or "VNAV off"); then accept PERF INIT (FMC COMM, PERF, ACCEPT) and press it again. The real 757 arms VNAV
+    on the ground only with PERF INIT complete; BlueBird's need is unmeasured.
