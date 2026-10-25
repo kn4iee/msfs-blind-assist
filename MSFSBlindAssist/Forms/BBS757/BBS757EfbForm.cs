@@ -761,10 +761,11 @@ public class BBS757EfbForm : Form
             return;
         }
 
-        // BlueBird writes its settings when the unit system changes; watch for that write.
+        // BlueBird writes its settings when the unit system changes; watch for that write. A read
+        // that lands mid-write comes back null, so it is waited past rather than reported.
         Bbs757WeightUnits? after = Bbs757WorkFolder.ReadUnits(folder);
         var until = DateTime.UtcNow.AddMilliseconds(accept ? UnitsAcceptWaitMs : UnitsKeepWaitMs);
-        while (after == before && DateTime.UtcNow < until)
+        while ((after == before || after == null) && DateTime.UtcNow < until)
         {
             await Task.Delay(UnitsPollMs, Lifetime);
             after = Bbs757WorkFolder.ReadUnits(folder);
