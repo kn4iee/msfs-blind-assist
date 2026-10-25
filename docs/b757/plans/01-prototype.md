@@ -362,9 +362,10 @@ owner can reverse any of them.
 - R26 (Task 10b): the gear is read from the stock `GEAR CENTER/LEFT/RIGHT POSITION` (0 to 1), not `GEAR POSITION:n`,
   which is documented as an up/down enum with no "in transit". If wrong: no gear call-outs until the variables are
   changed (in-sim check 60).
-- R27: the flap surfaces count as "at" a detent within a degree of BlueBird's `flight_model.cfg` angle (0, 1, 5, 11,
-  20, 25, 34), not the detent's name (flaps 15 is 11 degrees). L reads the angle twice 500 ms apart to say "moving"
-  only when it moves. If wrong: a settled detent reads "surfaces at …" (check 59).
+- R27: the flap surfaces count as "at" a detent within 0.4 degrees of BlueBird's `flight_model.cfg` angle (0, 1, 5,
+  11, 20, 25, 34), not the detent's name (flaps 15 is 11 degrees). L reads the angle twice 500 ms apart to say
+  "moving" only when it moves. Fix round 1: the tolerance was a degree, which hid the whole flaps-1 travel (detent 1
+  is 1 degree); 0.4 is below half the smallest gap. If wrong: a settled detent reads "surfaces at …" (check 59).
 - R28: CMD 1 to 3 are relabeled CMD L, C and R in the curation, so the panel, the window and the read-back say one
   name. If wrong: two of the three names are swapped (check 54).
 - R29: the Ctrl+P window's presses say nothing on success (the caption change is the feedback, as in the iFly,
