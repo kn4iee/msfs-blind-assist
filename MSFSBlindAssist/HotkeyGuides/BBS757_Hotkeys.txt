@@ -131,7 +131,7 @@ CDU (Shift+M):
   line 3), and the scratchpad last. Ctrl+Tab switches between the Captain
   and First Officer CDU and says which one you are on. The two CDUs are
   independent, as on the aircraft. The first officer's CDU shows once its
-  screen changes: if it says it is waiting, press a page key such as Alt+R.
+  screen changes: if its list shows it waiting, press a page key such as Alt+R.
   Ctrl+1 to Ctrl+6    Left line select keys 1-6
   Alt+1 to Alt+6      Right line select keys 1-6
   (F1-F6 / F7-F12 when the alternate LSK setting is on)
@@ -149,7 +149,9 @@ CDU (Shift+M):
   scratchpad is read back once the keys have gone in, so you hear what the
   CDU took. Keys go in one at a time, a little over half a second apart;
   holding a key down presses it once. CLR deletes one character or clears
-  a message.
+  a message. Typing "-" presses the +/- key once and "+" presses it twice.
+  If the link to the aircraft drops while keys are still going in, the rest
+  are not sent and the app says "CDU connection lost, keys not sent".
   Flight data (SimBrief flight, route, winds, performance) comes in on the
   CDU's ACARS and FMC COMM pages: MENU, ACARS, INIT FLT.
 

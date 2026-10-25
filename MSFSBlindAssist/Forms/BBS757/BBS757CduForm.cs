@@ -15,9 +15,10 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// only subscribes, and unsubscribes in Dispose.
 ///
 /// Speech (CORE-7): a page title is spoken when it changes, and the scratchpad is read back by
-/// <see cref="CduScratchpadAnnouncer"/> once a burst of keys has settled, which is the state the
-/// screen reader cannot know. A key the window cannot deliver is refused aloud. Nothing speaks
-/// while the window is hidden.
+/// <see cref="CduScratchpadAnnouncer"/> once every queued key has had its cycle, which is the
+/// state the screen reader cannot know. A key the window cannot deliver is refused aloud. Ctrl+Tab
+/// says only which CDU is shown. While the window is hidden only one thing speaks: keys the pilot
+/// sent that were dropped because the link went ("CDU connection lost, keys not sent").
 /// </summary>
 public partial class BBS757CduForm : Form
 {
@@ -31,6 +32,7 @@ public partial class BBS757CduForm : Form
     public const string WaitingFirstOfficerText =
         "Waiting for the first officer's CDU. It shows once its screen changes: press a page key, such as Alt+R for RTE.";
     public const string NotReachableText = "The 757's CDU is not reachable.";
+    public const string KeysDroppedText = "CDU connection lost, keys not sent";
 
     private const int PollTickMs = 350;
     // After the last queued key, how long the scratchpad waits before it is read back.
@@ -68,6 +70,7 @@ public partial class BBS757CduForm : Form
 
         _client.ScreenUpdated += Client_ScreenUpdated;
         _client.ScreenLost += Client_ScreenLost;
+        _client.KeysDropped += Client_KeysDropped;
     }
 
     // ------------------------------------------------------------------
@@ -96,23 +99,23 @@ public partial class BBS757CduForm : Form
         this.KeyDown += Form_KeyDown;
         scratchpadInput.KeyDown += ScratchpadInput_KeyDown;
 
-        btnInitRef.Click  += (s, e) => SendKey("INIT");
-        btnRte.Click      += (s, e) => SendKey("RTE");
-        btnDepArr.Click   += (s, e) => SendKey("DEPARR");
-        btnAtc.Click      += (s, e) => SendKey("ATC");
-        btnVnav.Click     += (s, e) => SendKey("VNAV");
-        btnFix.Click      += (s, e) => SendKey("FIX");
-        btnLegs.Click     += (s, e) => SendKey("LEGS");
-        btnHold.Click     += (s, e) => SendKey("HOLD");
-        btnFmcComm.Click  += (s, e) => SendKey("FMCCOMM");
-        btnProg.Click     += (s, e) => SendKey("PROG");
-        btnMenu.Click     += (s, e) => SendKey("MENU");
-        btnNavRad.Click   += (s, e) => SendKey("NAVRAD");
-        btnPrevPage.Click += (s, e) => SendKey("PREV");
-        btnNextPage.Click += (s, e) => SendKey("NEXT");
-        btnExec.Click     += (s, e) => SendKey("EXEC");
-        btnClr.Click      += (s, e) => SendKey("KEYCLR");
-        btnDel.Click      += (s, e) => SendKey("KEYDEL");
+        btnInitRef.Click  += (s, e) => SendKey(Bbs757CduKeys.Init);
+        btnRte.Click      += (s, e) => SendKey(Bbs757CduKeys.Rte);
+        btnDepArr.Click   += (s, e) => SendKey(Bbs757CduKeys.DepArr);
+        btnAtc.Click      += (s, e) => SendKey(Bbs757CduKeys.Atc);
+        btnVnav.Click     += (s, e) => SendKey(Bbs757CduKeys.Vnav);
+        btnFix.Click      += (s, e) => SendKey(Bbs757CduKeys.Fix);
+        btnLegs.Click     += (s, e) => SendKey(Bbs757CduKeys.Legs);
+        btnHold.Click     += (s, e) => SendKey(Bbs757CduKeys.Hold);
+        btnFmcComm.Click  += (s, e) => SendKey(Bbs757CduKeys.FmcComm);
+        btnProg.Click     += (s, e) => SendKey(Bbs757CduKeys.Prog);
+        btnMenu.Click     += (s, e) => SendKey(Bbs757CduKeys.Menu);
+        btnNavRad.Click   += (s, e) => SendKey(Bbs757CduKeys.NavRad);
+        btnPrevPage.Click += (s, e) => SendKey(Bbs757CduKeys.Prev);
+        btnNextPage.Click += (s, e) => SendKey(Bbs757CduKeys.Next);
+        btnExec.Click     += (s, e) => SendKey(Bbs757CduKeys.Exec);
+        btnClr.Click      += (s, e) => SendKey(Bbs757CduKeys.Clr);
+        btnDel.Click      += (s, e) => SendKey(Bbs757CduKeys.Del);
         btnSwitchCdu.Click += (s, e) => SwitchCdu();
     }
 
@@ -137,6 +140,14 @@ public partial class BBS757CduForm : Form
         Render();
     });
 
+    // Keys the pilot sent were thrown away when the link went: a background change he did not
+    // see coming, so it is said (once per outage, the client's guarantee), window shown or not.
+    private void Client_KeysDropped(int count) => SafeBeginInvoke(() =>
+    {
+        if (_disposed) return;
+        _announcer.Announce(KeysDroppedText);
+    });
+
     // ObjectDisposedException derives from InvalidOperationException, so one catch covers both;
     // the IsHandleCreated check alone races a handle destroy ([A380C-6]).
     private void SafeBeginInvoke(Action action)
@@ -152,8 +163,16 @@ public partial class BBS757CduForm : Form
     private void OnPollTick()
     {
         UpdateStatus();
+        var now = DateTime.UtcNow;
+        // While keys are still queued or in their cycle, the scratchpad is mid-entry: hold its
+        // read-back, so typing is read back once, settled, ScratchpadSettleMs after the last key.
+        if (_client.PendingKeyCount > 0)
+        {
+            var until = now.AddMilliseconds(ScratchpadSettleMs);
+            if (until > _scratchpad.SuppressUntil) _scratchpad.SuppressUntil = until;
+        }
         var screen = _screens[_cdu];
-        if (screen != null && _scratchpad.OnPoll(screen.Scratchpad, DateTime.UtcNow) is { } say)
+        if (screen != null && _scratchpad.OnPoll(screen.Scratchpad, now) is { } say)
             _announcer.Announce(say);
     }
 
@@ -178,9 +197,10 @@ public partial class BBS757CduForm : Form
     /// <summary>
     /// Shows the selected CDU's screen. A changed page title is spoken (while the window is shown)
     /// and moves the list to its first line, as in the HS787 window; otherwise the reading position
-    /// is kept, since CDU lines are positional.
+    /// is kept, since CDU lines are positional. <paramref name="announceTitle"/> false shows the
+    /// screen as it is and leaves the title to the next push (the CDU switch).
     /// </summary>
-    private void Render()
+    private void Render(bool announceTitle = true)
     {
         UpdateStatus();
 
@@ -197,7 +217,12 @@ public partial class BBS757CduForm : Form
         Forms.DisplayList.UpdateInPlace(cduDisplay, Bbs757CduFrame.ToDisplayLines(screen));
 
         string title = screen.Title;
-        if (title.Length > 0 && title != _previousTitle)
+        if (!announceTitle)
+        {
+            if (savedIndex >= 0 && savedIndex < cduDisplay.Items.Count && cduDisplay.SelectedIndex != savedIndex)
+                cduDisplay.SelectedIndex = savedIndex;
+        }
+        else if (title.Length > 0 && title != _previousTitle)
         {
             if (Visible) _announcer.Announce(title);
             _previousTitle = title;
@@ -222,15 +247,20 @@ public partial class BBS757CduForm : Form
     // CDU switch
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Ctrl+Tab: says only which CDU is now shown. Its page title is spoken by the fresh push the
+    /// client sends for it (setting ActiveCdu asks for one), never from the copy held here, which
+    /// can be older; until then the held copy is shown as it is. A CDU with no screen yet says so
+    /// in its list row and the status box.
+    /// </summary>
     private void SwitchCdu()
     {
         _cdu = _cdu == 1 ? 2 : 1;
         _client.ActiveCdu = _cdu;
-        bool hasScreen = _screens[_cdu] != null;
-        _announcer.AnnounceImmediate(hasScreen ? CduName(_cdu) : $"{CduName(_cdu)}, waiting for its screen");
-        _previousTitle = "";   // the selected CDU's page title follows, queued
+        _announcer.AnnounceImmediate(CduName(_cdu));
+        _previousTitle = "";   // so the fresh push speaks its title
         ReseedScratchpad();
-        Render();
+        Render(announceTitle: false);
     }
 
     // ------------------------------------------------------------------
@@ -246,35 +276,12 @@ public partial class BBS757CduForm : Form
             return;
         }
         _client.PressKey(_cdu, key);
-        HoldScratchpadForQueuedKeys();
     }
 
-    /// <summary>
-    /// Holds the scratchpad read-back until every queued key has had its cycle, so typing is
-    /// read back once, settled, instead of letter by letter.
-    /// </summary>
-    private void HoldScratchpadForQueuedKeys()
-    {
-        var until = DateTime.UtcNow.AddMilliseconds(
-            _client.PendingKeyCount * CoherentBbs757TabletClient.KeyCycleMs + ScratchpadSettleMs);
-        if (until > _scratchpad.SuppressUntil) _scratchpad.SuppressUntil = until;
-    }
-
-    /// <summary>The CDU key for a typed character, or null when the CDU has none.</summary>
-    internal static string? KeyForChar(char c) => char.ToUpperInvariant(c) switch
-    {
-        >= 'A' and <= 'Z' and var u => "KEY" + u,
-        >= '0' and <= '9' and var d => "NUM" + d,
-        '.' => "NUMPER",
-        '+' or '-' => "NUMPLUS",
-        ' ' => "KEYSP",
-        '/' => "KEYSLASH",
-        _ => null,
-    };
-
+    /// <summary>Types the scratchpad box's text into the selected CDU (Bbs757CduKeys.ForChar; characters with no key are skipped).</summary>
     private void SendText(string text)
     {
-        var keys = text.Select(KeyForChar).Where(k => k != null).Select(k => k!).ToList();
+        var keys = text.SelectMany(Bbs757CduKeys.ForChar).ToList();
         if (keys.Count == 0) return;
         if (!_client.IsReadable)
         {
@@ -282,7 +289,6 @@ public partial class BBS757CduForm : Form
             return;
         }
         foreach (var key in keys) _client.PressKey(_cdu, key);
-        HoldScratchpadForQueuedKeys();
     }
 
     // ------------------------------------------------------------------
@@ -356,51 +362,33 @@ public partial class BBS757CduForm : Form
         if (SettingsManager.Current.MCDUUseAlternateLSKKeys)
         {
             if (!e.Control && !e.Alt && !e.Shift && e.KeyCode >= Keys.F1 && e.KeyCode <= Keys.F6)
-                return $"L{e.KeyCode - Keys.F1 + 1}";
+                return Bbs757CduKeys.Lsk(right: false, e.KeyCode - Keys.F1 + 1);
             if (!e.Control && !e.Alt && !e.Shift && e.KeyCode >= Keys.F7 && e.KeyCode <= Keys.F12)
-                return $"R{e.KeyCode - Keys.F7 + 1}";
+                return Bbs757CduKeys.Lsk(right: true, e.KeyCode - Keys.F7 + 1);
         }
         else
         {
             if (e.Control && !e.Alt && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D6)
-                return $"L{e.KeyCode - Keys.D1 + 1}";
+                return Bbs757CduKeys.Lsk(right: false, e.KeyCode - Keys.D1 + 1);
             if (e.Alt && !e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D6)
-                return $"R{e.KeyCode - Keys.D1 + 1}";
+                return Bbs757CduKeys.Lsk(right: true, e.KeyCode - Keys.D1 + 1);
         }
 
         if ((e.KeyCode == Keys.PageUp && !e.Control && !e.Alt) || (e.Alt && e.KeyCode == Keys.Up))
-            return "PREV";
+            return Bbs757CduKeys.Prev;
         if ((e.KeyCode == Keys.PageDown && !e.Control && !e.Alt) || (e.Alt && e.KeyCode == Keys.Down))
-            return "NEXT";
+            return Bbs757CduKeys.Next;
         if (e.Control && !e.Alt && e.KeyCode == Keys.Return)
-            return "EXEC";
+            return Bbs757CduKeys.Exec;
 
         if (ActiveControl == cduDisplay && !e.Control && !e.Alt && !e.Shift)
         {
-            if (e.KeyCode == Keys.Back) return "KEYCLR";
-            if (e.KeyCode == Keys.Delete) return "KEYDEL";
+            if (e.KeyCode == Keys.Back) return Bbs757CduKeys.Clr;
+            if (e.KeyCode == Keys.Delete) return Bbs757CduKeys.Del;
         }
 
         if (e.Alt && !e.Control && !e.Shift)
-        {
-            return e.KeyCode switch
-            {
-                Keys.I => "INIT",
-                Keys.R => "RTE",
-                Keys.D => "DEPARR",
-                Keys.T => "ATC",
-                Keys.V => "VNAV",
-                Keys.F => "FIX",
-                Keys.G => "LEGS",
-                Keys.H => "HOLD",
-                Keys.O => "FMCCOMM",
-                Keys.P => "PROG",
-                Keys.M => "MENU",
-                Keys.N => "NAVRAD",
-                Keys.E => "EXEC",
-                _ => null,
-            };
-        }
+            return Bbs757CduKeys.ForAltLetter(e.KeyCode);
         return null;
     }
 
@@ -418,7 +406,7 @@ public partial class BBS757CduForm : Form
                  && (e.KeyCode == Keys.Back || e.KeyCode == Keys.Delete))
         {
             // An empty box: Backspace is CLR and Delete is DEL, as on the display.
-            if (!_keyRepeat) SendKey(e.KeyCode == Keys.Back ? "KEYCLR" : "KEYDEL");
+            if (!_keyRepeat) SendKey(e.KeyCode == Keys.Back ? Bbs757CduKeys.Clr : Bbs757CduKeys.Del);
             e.Handled = true;
             e.SuppressKeyPress = true;
         }
@@ -469,6 +457,7 @@ public partial class BBS757CduForm : Form
             _pollTimer.Dispose();
             _client.ScreenUpdated -= Client_ScreenUpdated;
             _client.ScreenLost -= Client_ScreenLost;
+            _client.KeysDropped -= Client_KeysDropped;
             _client.SetActive(false);
             // The client is MainForm's, shared with the EFB window: never disposed here.
         }

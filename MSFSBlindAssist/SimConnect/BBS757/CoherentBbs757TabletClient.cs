@@ -19,7 +19,12 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// client CLAIMS its view (<see cref="CoherentViewOwnership"/>) from Start to Stop, reconnect gaps
 /// included, as <see cref="CoherentA32nxMcduClient"/> does. A still-open socket whose agent went
 /// missing gets the agent re-installed on it; any other socket is aborted and disposed before a
-/// new one connects ([A380C-2]). On-demand calls (<see cref="GetNavigraphAsync"/>, key presses)
+/// new one connects ([A380C-2]). An agent is only ever taken as installed while it can hear the
+/// Comm Bus: an install the page answers NOT_READY (an aircraft reload, the view's scripts not run
+/// yet) is retried on the same socket, and a scrape that shows no listener, or one still not ready
+/// after <see cref="ListenerReadyTimeoutMs"/>, installs it again (<see cref="NeedsReinstall"/>).
+/// Whenever the link is lost the queued keys are dropped, never sent later to a page nobody has
+/// checked (<see cref="KeysDropped"/>). On-demand calls (<see cref="GetNavigraphAsync"/>, key presses)
 /// only ever use the loop's socket and never connect themselves, so they cannot race the loop's
 /// connection setup ([A380C-3]).
 ///
@@ -51,6 +56,15 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     private const int DeadSocketEvalFailures = 3;
     // A scrape answered within this long keeps the client readable.
     private const int ReadableWindowMs = 5000;
+    // Installs answered with something other than the marker (the view's scripts have not run
+    // yet) before the view is resolved again from the page list.
+    private const int InstallRetriesPerSocket = 5;
+
+    /// <summary>
+    /// How long an installed agent's Comm Bus listener may stay not ready before it is installed
+    /// again (the agent itself re-registers after 4 s, so a re-install after this always does).
+    /// </summary>
+    internal const int ListenerReadyTimeoutMs = 5000;
 
     /// <summary>How long the agent holds a key down (its HOLD_MS).</summary>
     public const int KeyHoldMs = 250;
@@ -60,9 +74,6 @@ public sealed class CoherentBbs757TabletClient : IDisposable
 
     /// <summary>One key's whole cycle in the queue: hold, release, gap.</summary>
     public const int KeyCycleMs = KeyHoldMs + KeyGapMs;
-
-    private static readonly System.Text.RegularExpressions.Regex KeyName =
-        new("^[A-Z0-9]{1,8}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>A CDU's screen changed (1 captain, 2 first officer); posted to the UI context.</summary>
     public event Action<int, Bbs757CduScreen>? ScreenUpdated;
@@ -74,13 +85,22 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     /// </summary>
     public event Action<int>? ScreenLost;
 
+    /// <summary>
+    /// Queued keys were thrown away because the link to the tablet view was lost (the socket
+    /// dropped, or the agent was gone or deaf): a key meant for the page the pilot was reading is
+    /// never sent later to a page nobody has checked. Raised once per outage with the number of
+    /// keys dropped; posted to the UI context.
+    /// </summary>
+    public event Action<int>? KeysDropped;
+
     private readonly SynchronizationContext? _syncContext;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
     private readonly WakeableDelay _wake = new();
+    // Read by the key pump and drained by DropQueuedKeys, so not single-reader.
     private readonly Channel<(int Cdu, string Key)> _keys = Channel.CreateUnbounded<(int, string)>(
-        new UnboundedChannelOptions { SingleReader = true });
+        new UnboundedChannelOptions { SingleReader = false });
     private readonly Func<string> _readAgent;
 
     private CancellationTokenSource? _cts;
@@ -94,7 +114,11 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     private volatile bool _active;
     private volatile int _activeCdu = 1;
     private int _emptyEvalStreak;
+    private int _installFailures;
+    private DateTime? _notReadySinceUtc;
     private int _pendingKeys;
+    // Set when KeysDropped has been raised, cleared when the agent is installed again.
+    private volatile bool _keysDroppedRaised;
     private long _lastGoodScrapeTicks;
     // Per CDU (index 1 and 2): the agent tag of the frame last delivered, whether the agent
     // holds a frame, and whether one was ever delivered.
@@ -201,13 +225,13 @@ public sealed class CoherentBbs757TabletClient : IDisposable
 
     /// <summary>
     /// Queues one key for a CDU (<c>L1</c>, <c>LEGS</c>, <c>KEYA</c>, <c>KEYCLR</c> …, the cockpit's
-    /// own names). Keys go out one at a time, <see cref="KeyCycleMs"/> apart. A key that cannot be
-    /// delivered (no socket, no agent) is logged and dropped; the window refuses aloud before
-    /// queueing when <see cref="IsReadable"/> is false.
+    /// own names, <see cref="Bbs757CduKeys"/>). Keys go out one at a time, <see cref="KeyCycleMs"/>
+    /// apart. When the link is lost every queued key is dropped (<see cref="KeysDropped"/>); the
+    /// window refuses aloud before queueing when <see cref="IsReadable"/> is false.
     /// </summary>
     public void PressKey(int cdu, string key)
     {
-        if ((cdu != 1 && cdu != 2) || key == null || !KeyName.IsMatch(key))
+        if ((cdu != 1 && cdu != 2) || !Bbs757CduKeys.IsKey(key))
         {
             Log.Debug("BBS757", $"CDU key {cdu}/{key}: not a key, not sent.");
             return;
@@ -270,11 +294,23 @@ public sealed class CoherentBbs757TabletClient : IDisposable
             {
                 try
                 {
+                    var ws = _ws;
+                    if (ws == null || ws.State != WebSocketState.Open || !_agentInstalled)
+                    {
+                        // The link went while this key waited: it and the rest are dropped.
+                        DropQueuedKeys(alreadyDropped: 1);
+                        continue;
+                    }
                     string expr = $"window.__MSFSBA_BBS757 ? __MSFSBA_BBS757.press({cdu},{JsonSerializer.Serialize(key)}) : '{NoAgent}'";
                     string result = await EvalAsync(expr, ct);
                     if (result != "ok")
                         Log.Debug("BBS757", $"CDU {cdu} key {key}: {(result.Length == 0 ? "no answer" : result)}");
-                    if (result == NoAgent) _agentInstalled = false;
+                    if (result == NoAgent)
+                    {
+                        _agentInstalled = false;
+                        DropQueuedKeys(alreadyDropped: 1);
+                        continue;
+                    }
                     // Timed from the answer: the press ran before it, so its release (250 ms
                     // later in the page) is at least KeyGapMs before the next key.
                     await Task.Delay(KeyCycleMs, ct);
@@ -287,6 +323,47 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Log.Debug("BBS757", $"CDU key pump: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Throws away every queued key (the link to the page they were meant for is gone) and, once
+    /// per outage, raises <see cref="KeysDropped"/>. <paramref name="alreadyDropped"/> counts a key
+    /// the pump had already taken off the queue; its own count is the pump's to settle.
+    /// </summary>
+    private void DropQueuedKeys(int alreadyDropped = 0)
+    {
+        int dropped = alreadyDropped;
+        while (_keys.Reader.TryRead(out _))
+        {
+            dropped++;
+            Interlocked.Decrement(ref _pendingKeys);
+        }
+        if (dropped == 0) return;
+        Log.Debug("BBS757", $"Tablet link lost: {dropped} CDU key(s) dropped, not sent.");
+        if (_keysDroppedRaised) return;
+        _keysDroppedRaised = true;
+        PostToUI(() => KeysDropped?.Invoke(dropped));
+    }
+
+    /// <summary>
+    /// Whether a scrape's answer shows an agent that cannot hear the Comm Bus, so it must be
+    /// installed again: no listener at all, or a listener still not ready
+    /// <see cref="ListenerReadyTimeoutMs"/> after this client first saw it not ready
+    /// (<paramref name="notReadySinceUtc"/>, null while it was ready). Pure.
+    /// </summary>
+    internal static bool NeedsReinstall(bool listening, bool ready, DateTime? notReadySinceUtc, DateTime nowUtc)
+    {
+        if (!listening) return true;
+        if (ready || notReadySinceUtc == null) return false;
+        return (nowUtc - notReadySinceUtc.Value).TotalMilliseconds >= ListenerReadyTimeoutMs;
+    }
+
+    /// <summary>The agent stopped being usable: install it again on the next pass, and drop the queued keys.</summary>
+    private void AgentUnusable()
+    {
+        _agentInstalled = false;
+        _notReadySinceUtc = null;
+        DropQueuedKeys();
     }
 
     // ---- connection + poll loop -------------------------------------
@@ -329,18 +406,46 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         try { ws.Dispose(); } catch { }
     }
 
-    /// <summary>The one teardown path: close the socket, fail the evals waiting on it, re-push on reconnect.</summary>
+    /// <summary>
+    /// The one teardown path: close the socket, fail the evals waiting on it, drop the queued keys,
+    /// re-push on reconnect.
+    /// </summary>
     private void DropSocket()
     {
         var ws = _ws;
         _ws = null;
         _agentInstalled = false;
         _emptyEvalStreak = 0;
+        _installFailures = 0;
+        _notReadySinceUtc = null;
         CloseSocket(ws);
         foreach (var kv in _pending) kv.Value.TrySetCanceled();
         _pending.Clear();
         _tags[1] = "";
         _tags[2] = "";
+        DropQueuedKeys();
+    }
+
+    /// <summary>The agent answered with its marker: the link is usable again.</summary>
+    private void AgentInstalled()
+    {
+        _agentInstalled = true;
+        _installFailures = 0;
+        _notReadySinceUtc = null;
+        _keysDroppedRaised = false;
+        _tags[1] = "";
+        _tags[2] = "";
+    }
+
+    /// <summary>
+    /// An install the page answered without the marker (its scripts have not run yet, after an
+    /// aircraft reload): the socket is kept and the install tried again on it next pass, until
+    /// <see cref="InstallRetriesPerSocket"/> answers, after which the view is resolved afresh.
+    /// </summary>
+    private bool KeepSocketAfterUnreadyInstall(string answer)
+    {
+        Log.Debug("BBS757", $"Tablet agent install answered: {Shorten(answer)}");
+        return ++_installFailures < InstallRetriesPerSocket;
     }
 
     private async Task<bool> EnsureConnected(CancellationToken ct)
@@ -350,19 +455,19 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         bool open = current != null && current.State == WebSocketState.Open;
         if (open && _agentInstalled) return true;
 
-        // Socket still open but the agent went missing (the page re-evaluated), or its first
-        // install timed out: re-install on the SAME socket rather than reconnecting.
+        // Socket still open but the agent went missing (the page re-evaluated) or deaf, or its
+        // install was not ready or timed out: re-install on the SAME socket rather than
+        // reconnecting. A page that answers without the marker keeps the socket for a few tries;
+        // one that does not answer at all is torn down.
         if (open)
         {
             string reinstall = await EvalAsync(_agentJs, ct);
             if (reinstall.IndexOf(InstallMarker, StringComparison.Ordinal) >= 0)
             {
-                _agentInstalled = true;
-                _tags[1] = "";
-                _tags[2] = "";
+                AgentInstalled();
                 return true;
             }
-            if (reinstall.Length > 0) Log.Debug("BBS757", $"Tablet agent re-install answered: {Shorten(reinstall)}");
+            if (reinstall.Length > 0 && KeepSocketAfterUnreadyInstall(reinstall)) return false;
         }
 
         // ONE inspector socket per view: tear down before reconnecting.
@@ -407,15 +512,14 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         _ = Task.Run(() => ReceiveLoop(ws, ct));
 
         string install = await EvalAsync(_agentJs, ct);
-        _agentInstalled = install.IndexOf(InstallMarker, StringComparison.Ordinal) >= 0;
-        if (!_agentInstalled)
+        if (install.IndexOf(InstallMarker, StringComparison.Ordinal) < 0)
         {
-            if (install.Length > 0) Log.Debug("BBS757", $"Tablet agent install answered: {Shorten(install)}");
+            // Not ready (kept: the next pass re-installs on this socket) or no answer.
+            if (install.Length > 0) KeepSocketAfterUnreadyInstall(install);
             return false;
         }
         Log.Info("BBS757", $"Tablet agent installed on view '{ViewNeedle}' (page {pageId.Value}).");
-        _tags[1] = "";
-        _tags[2] = "";
+        AgentInstalled();
         return true;
     }
 
@@ -459,7 +563,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         {
             // The page re-evaluated: re-install on this socket on the next pass.
             Log.Debug("BBS757", "Tablet agent missing, re-installing on the open socket.");
-            _agentInstalled = false;
+            AgentUnusable();
             return;
         }
 
@@ -468,7 +572,19 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         catch (JsonException) { return; }
         if (result == null || !result.ok) return;
 
-        Interlocked.Exchange(ref _lastGoodScrapeTicks, DateTime.UtcNow.Ticks);
+        // An agent that cannot hear the Comm Bus would freeze CDU 1 on its seed and never get
+        // CDU 2: install it again (the agent registers a new listener then).
+        var now = DateTime.UtcNow;
+        if (result.ready) _notReadySinceUtc = null;
+        else _notReadySinceUtc ??= now;
+        if (NeedsReinstall(result.listening, result.ready, _notReadySinceUtc, now))
+        {
+            Log.Debug("BBS757", $"Tablet agent deaf (listening {result.listening}, ready {result.ready}), re-installing.");
+            AgentUnusable();
+            return;
+        }
+
+        Interlocked.Exchange(ref _lastGoodScrapeTicks, now.Ticks);
         _hasFrame[cdu] = result.hasFrame;
 
         if (!result.hasFrame)
@@ -606,6 +722,8 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     {
         public bool ok { get; set; }
         public int cdu { get; set; }
+        public bool listening { get; set; }
+        public bool ready { get; set; }
         public bool hasFrame { get; set; }
         public string? tag { get; set; }
         public string? frame { get; set; }
