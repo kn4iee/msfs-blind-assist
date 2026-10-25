@@ -230,13 +230,22 @@ Task 10 fix round 1 (rulings R31, R32):
     land exactly with no correction round: the log's "Sent command" lines for the 153 set are two bursts, "26 sp0 …
     AP_SPD_VAR_DEC …" then "2 sp0 …", and for the 280 set one, "53 sp0 … AP_SPD_VAR_INC …"; a further `sp0` line
     a second or more later is a correction. If a speed lands off, note the spoken value and those lines.
-78. MCP window buttons (R34): Ctrl+H, then Tab from the value box: "HDG SEL", "HDG HOLD: Off", "LNAV: Off", each read
-    with its Alt key (Alt+S, Alt+H, Alt+L). With an executed route, press LNAV: about two seconds later "LNAV on",
-    once; nothing more from the window. If you hear the state twice (NVDA reading the caption change as well as "LNAV
-    on"), note it. Alt+S from the value box: "HDG SEL pressed", once. Ctrl+S: SPD, THR, FLCH, IAS/MACH; Ctrl+A: ALT
-    HOLD, VNAV, FLCH; Ctrl+V: V/S; one press each says its light once, IAS/MACH "IAS/MACH pressed" (press it twice:
-    it switches the window between IAS and Mach). With MobiFlight stopped, a press says "LNAV unavailable" and nothing
-    moves.
+78. MCP window buttons (R34). At the gate with the engines OFF (Status > Engines: both N1 read 0) and the parking brake
+    SET (Status: "Parking Brake: Set"); never with the engines running. The A/T is armed after every load, THR with the
+    A/T armed drives the thrust levers to full (measured, engines off or running), and SPD and FLCH are A/T modes too
+    (unmeasured). This is the safer of the two ways: with the engines off a lever at full makes no thrust, while in
+    flight these presses would change the thrust or the climb of an aircraft you cannot see.
+    Ctrl+H, then Tab from the value box: "HDG SEL", "HDG HOLD: Off", "LNAV: Off", each read with its Alt key (Alt+S,
+    Alt+H, Alt+L). With an executed route, press LNAV: about two seconds later "LNAV on", once; nothing more from the
+    window. If you hear the state twice (NVDA reading the caption change as well as "LNAV on"), note it. Alt+S from the
+    value box: "HDG SEL pressed", once. Ctrl+A: ALT HOLD and VNAV (its FLCH is the same button as the Speed window's);
+    Ctrl+V: V/S; one press each says its light once.
+    Ctrl+S: press THR, SPD and FLCH one at a time. Each says its light about two seconds later ("THR on", or "THR off" if
+    it did not engage). At once after each: Pedestal > Control stand > A/T Disconnect: "A/T Disconnect pressed", and a
+    mode light that goes out is said ("THR off"). Then move the hardware throttle a little forward and fully back to
+    idle: BlueBird's levers follow it, never the simulator's throttle keys (measured), so this brings them back to idle.
+    IAS/MACH: "IAS/MACH pressed" (press it twice: it switches the window between IAS and Mach). With MobiFlight stopped,
+    a press says "LNAV unavailable" and nothing moves.
 79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
     a second or two "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
     (Alt+P), for example after the A/T Disconnect button, note both. Then, engines off: Pedestal > Control stand >
@@ -254,3 +263,9 @@ Task 10 fix round 1 (rulings R31, R32):
 81. EXEC light (R36): route by ACARS as in checks 38-39. After ACTIVATE (Alt+6 on RTE): "EXEC light on", once; after
     EXEC (Ctrl+Enter): "EXEC light off", once. A later modification (a direct-to, say) says "on" again and its EXEC
     "off". Ctrl+M lists "EXEC light"; untick it: no EXEC call-outs. Reload the flight: nothing is said at the load.
+82. THR at the runway (the first flight's THR press at the hold short did not engage, and that was not reproduced on
+    the ground): lined up with the engines running, the brakes held (the toe brakes, or the parking brake set), the
+    hardware throttle left at idle, and the A/T armed (Ctrl+P: "A/T Arm: On"; if it reads Off, press it). Press THR in
+    the Ctrl+P window: its caption reads "THR: On" (NVDA+Tab reads the focused button again) and the engines spool up to
+    takeoff thrust; then release the brakes and take off. If instead, about two seconds later, the window says "THR did
+    not engage": keep the brakes held, note the A/T Arm caption, and tell the developer.
