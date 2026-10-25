@@ -156,10 +156,43 @@ CDU (Shift+M):
   CDU's ACARS and FMC COMM pages: MENU, ACARS, INIT FLT.
 
 757 EFB (Shift+T):
-  Operates BlueBird's tablet for you: Navigraph sign-in (the code is read
-  out and the sign-in page opens in your browser), nav data update, SimBrief
-  ID, fetching the SimBrief flight, the weight units question, cockpit
-  presets and quick starts. Each action says what happened.
+  Operates BlueBird's tablet for you by pressing its buttons, since the
+  tablet itself cannot be read. Each action says what came of it; the
+  Status box at the bottom keeps the last result and whether the tablet
+  can be reached. One action runs at a time: a press while one is still
+  running says "The EFB is still busy with the last action."
+  Sign in to Navigraph   Reads out the Navigraph sign-in code letter by
+                         letter and opens the sign-in page in your
+                         browser (only ever a navigraph.com address). The
+                         code is also in the Status box. Says "Already
+                         signed in to Navigraph" when you are.
+  Update nav data        Installs the latest AIRAC cycle from Navigraph,
+                         then says "Nav data cycle 2610 installed. Reload
+                         the flight to use it." Reload before you fly:
+                         the aircraft misbehaves until you do. When your
+                         cycle is current it says "Nav data is current"
+                         and presses nothing. Needs the Navigraph sign-in
+                         and a flight loaded after signing in.
+  SimBrief ID box        Type your SimBrief pilot ID (digits only), then
+  Set SimBrief ID        press Enter or this button. It says "SimBrief ID
+                         saved" once BlueBird has stored it. Needed once:
+                         without it the CDU's ACARS INIT does nothing.
+  Fetch SimBrief flight  Loads your latest SimBrief flight plan into the
+                         EFB. Then, if BlueBird asks to switch weight
+                         units to the plan's, press Accept units or Keep
+                         units. Then in the CDU window: MENU, ACARS,
+                         OPERATIONS, PREFLIGHT, INIT FLT, INIT.
+  Cockpit preset         Choose a panel state (Cold and dark, Turnaround,
+  Load preset            Before start, Ready for taxi, Ready for takeoff,
+                         After takeoff, Cruise, Approach, Final approach)
+                         and press Load preset. Before start brings up
+                         battery, APU and AC power in about 12 seconds.
+  APU quick start        BlueBird's quick start tiles.
+  IRS rapid align
+  Escape                 Close the window
+  If the tablet cannot be reached the window says "The 757's EFB is not
+  reachable. Is the aircraft loaded?". The buttons are pressed where
+  BlueBird 0.1.0 puts them; an update to the aircraft can move them.
 
 SayIntentions:
   Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.

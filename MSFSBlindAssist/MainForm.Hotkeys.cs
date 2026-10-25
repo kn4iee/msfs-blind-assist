@@ -260,7 +260,13 @@ public partial class MainForm
                 }
                 break;
             case HotkeyAction.ShowPMDGEFB:
-                if (currentAircraft is IPMDGAircraft pmdgEFB && pmdgEFB.HasEFBSupport)
+                if (currentAircraft?.AircraftCode == "BBS_757")
+                {
+                    // BlueBird 757 — the EFB window operating BlueBird's tablet by scripted clicks.
+                    // First, so no broader test (an interface check) can ever take the 757's Shift+T.
+                    ShowBBS757EfbDialog();
+                }
+                else if (currentAircraft is IPMDGAircraft pmdgEFB && pmdgEFB.HasEFBSupport)
                 {
                     ShowPmdgCoherentEfbDialog(firstOfficer: false);
                 }

@@ -5,13 +5,14 @@ namespace MSFSBlindAssist;
 
 /// <summary>
 /// BlueBird 757-200 windows and menu entry. Kept in its own partial so the aircraft's surfaces sit
-/// together: the Ctrl+M monitor manager and the Shift+M CDU window; the EFB window joins them with
-/// plan 01's later task, and <see cref="DisposeBBS757Forms"/> is where each is torn down.
+/// together: the Ctrl+M monitor manager, the Shift+M CDU window and the Shift+T EFB window;
+/// <see cref="DisposeBBS757Forms"/> is where each is torn down.
 /// </summary>
 public partial class MainForm
 {
     private Forms.BBS757.BBS757MonitorManagerForm? bbs757MonitorManagerForm;
     private Forms.BBS757.BBS757CduForm? bbs757CduForm;
+    private Forms.BBS757.BBS757EfbForm? bbs757EfbForm;
 
     /// <summary>
     /// The one client on the 757's "BBSTablet" Coherent view ([DBG-9]: one socket per view): the
@@ -33,6 +34,24 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// The one client on the 757's "BBSNavigraphMap" Coherent view, where BlueBird's EFB tablet is
+    /// drawn ([DBG-9]): the EFB window clicks the tablet through it. Created on first use, disposed
+    /// in <see cref="DisposeBBS757Forms"/>; the window never disposes it.
+    /// </summary>
+    private CoherentBbs757EfbClient? bbs757EfbClient;
+
+    /// <summary>The EFB-view client, created and started on first use.</summary>
+    internal CoherentBbs757EfbClient EnsureBbs757EfbClient()
+    {
+        if (bbs757EfbClient == null)
+        {
+            bbs757EfbClient = new CoherentBbs757EfbClient();
+            bbs757EfbClient.Start();
+        }
+        return bbs757EfbClient;
+    }
+
+    /// <summary>
     /// Shift+M on the 757: both CDUs as text. Needs no SimConnect connection: the screens and keys
     /// go over the Coherent debugger.
     /// </summary>
@@ -45,6 +64,23 @@ public partial class MainForm
         if (bbs757CduForm == null || bbs757CduForm.IsDisposed)
             bbs757CduForm = new Forms.BBS757.BBS757CduForm(client, announcer);
         bbs757CduForm.ShowForm();
+    }
+
+    /// <summary>
+    /// Shift+T on the 757: the EFB window, which operates BlueBird's tablet by scripted clicks (the
+    /// EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
+    /// client). Needs no SimConnect connection: both go over the Coherent debugger.
+    /// </summary>
+    private void ShowBBS757EfbDialog()
+    {
+        if (currentAircraft is not BBS757Definition) return;
+        hotkeyManager.ExitInputHotkeyMode();
+
+        var efb = EnsureBbs757EfbClient();
+        var tablet = EnsureBbs757TabletClient();
+        if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
+            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer);
+        bbs757EfbForm.ShowForm();
     }
 
     /// <summary>
@@ -62,11 +98,11 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Closes every 757 window, then the tablet client they share (windows first, so none is left
-    /// subscribed to a disposed client). Called by SwitchAircraft on every switch, and on app exit:
-    /// the monitor manager's rows are snapshotted from the definition it was built for, so a
-    /// surviving one would list the outgoing definition, and the client holds the one inspector
-    /// socket Coherent allows on the tablet view.
+    /// Closes every 757 window, then the clients they use (windows first, so none is left
+    /// subscribed to or running on a disposed client). Called by SwitchAircraft on every switch,
+    /// and on app exit: the monitor manager's rows are snapshotted from the definition it was built
+    /// for, so a surviving one would list the outgoing definition, and each client holds the one
+    /// inspector socket Coherent allows on its view.
     /// </summary>
     private void DisposeBBS757Forms()
     {
@@ -74,8 +110,12 @@ public partial class MainForm
         bbs757MonitorManagerForm = null;
         if (bbs757CduForm != null && !bbs757CduForm.IsDisposed) bbs757CduForm.Dispose();
         bbs757CduForm = null;
+        if (bbs757EfbForm != null && !bbs757EfbForm.IsDisposed) bbs757EfbForm.Dispose();
+        bbs757EfbForm = null;
         bbs757TabletClient?.Dispose();
         bbs757TabletClient = null;
+        bbs757EfbClient?.Dispose();
+        bbs757EfbClient = null;
     }
 
     private void BBS757MenuItem_Click(object? sender, EventArgs e)
