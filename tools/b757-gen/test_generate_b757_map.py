@@ -165,7 +165,9 @@ class Positions(unittest.TestCase):
 
 class Convert(unittest.TestCase):
     def convert(self, r, cur=None):
-        return g.convert_row(r, cur or curation())
+        """(control, why): convert_row without the suspected-slips list, which has its own tests."""
+        control, why, _slips = g.convert_row(r, cur or curation())
+        return control, why
 
     def test_toggle(self):
         c, why = self.convert(row(node="B757_OVHD_BATTERY_BUTTON", kind="toggle", tips=["BATTERY OFF", "BATTERY ON"],
@@ -302,6 +304,47 @@ class Convert(unittest.TestCase):
         c, _ = self.convert(r, cur)
         self.assertEqual(c["positions"][1], {"value": 10, "label": "Off"})
 
+    def test_a_switch_that_writes_a_value_its_positions_do_not_list_must_be_curated(self):
+        # B757_OVHD_CABINALT_SWITCH: three tips, but the turn code writes 0 and 7
+        r = row(node="B757_OVHD_CABINALT_SWITCH", kind="rotary knob finite", positions="3",
+                tips=["OFF", "AUTO", "ON"],
+                cw="7 (>L:B757_OVHD_CABINALT_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)",
+                ccw="0 (>L:B757_OVHD_CABINALT_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)")
+        with self.assertRaisesRegex(g.CurationError, "writes 7 .* outside its positions"):
+            self.convert(r)
+        # named positions that include the value make it pass; so does leaving the node out
+        cur = curation(positions={"B757_OVHD_CABINALT_SWITCH": [{"value": 0, "label": "A"}, {"value": 4, "label": "B"},
+                                                                {"value": 7, "label": "C"}]})
+        c, _ = self.convert(r, cur)
+        self.assertEqual([p["value"] for p in c["positions"]], [0, 4, 7])
+        c, why = self.convert(r, curation(exclude_nodes=["B757_OVHD_CABINALT_SWITCH"]))
+        self.assertEqual((c, why), (None, "excluded node"))
+
+    def test_a_switch_that_writes_only_listed_values_passes(self):
+        r = row(node="B757_OVHD_FLT-DK-DOOR_SWITCH", kind="rotary knob finite", positions="3",
+                tips=["UNLOCKED", "AUTO", "DENY"],
+                cw="2 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)",
+                ccw="0 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)",
+                state=["L:B757_OVHD_FLT_DK_DOOR_SWITCH"])
+        c, why = self.convert(r)
+        self.assertIsNone(why)
+        self.assertEqual([p["label"] for p in c["positions"]], ["Unlocked", "Auto", "Deny"])
+
+    def test_curated_positions_are_checked_against_what_the_code_writes_too(self):
+        r = row(node="B757_MCP_SW_AP_throttle", kind="toggle", state=["L:AT_ARM_SWITCH"],
+                left="(L:AT_ARM_SWITCH, enum) 0 == if{ 10 (>L:AT_ARM_SWITCH) } els{ 0 (>L:AT_ARM_SWITCH) }")
+        cur = curation(positions={"B757_MCP_SW_AP_throttle": ["Armed", "Off"]})  # names for 0 and 1: 10 is not listed
+        with self.assertRaises(g.CurationError):
+            self.convert(r, cur)
+
+    def test_suspected_slips_come_back_as_a_third_value(self):
+        control, why, slips = g.convert_row(
+            row(kind="toggle", left="(L:A) ! (>L:A) ! (>A_ON,bool) }", state=["L:A"]), curation())
+        self.assertIsNone(why)
+        self.assertEqual(slips, ["press: set without a variable type", "press: closing brace nothing opened"])
+        self.assertNotIn("_suspected", control)
+        self.assertEqual(g.convert_row(row(kind="circuit breaker"), curation()), (None, "circuit breaker", []))
+
     def test_excluded_nodes(self):
         c, why = self.convert(row(node="B757_SUNVISOR_L_base", kind="toggle", left="x"),
                               curation(exclude_nodes=["B757_SUNVISOR_L_base"]))
@@ -353,7 +396,8 @@ class SuspectedSlips(unittest.TestCase):
                 row(node="B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO", panel="FUEL PANEL", left=brace, state=["L:B"])]
         m, report = g.build_map(rows, curation(), "pkg", "1")
         self.assertEqual([c["press"] for c in m["controls"]], [slip, brace])
-        self.assertTrue(all("_suspected" not in c for c in m["controls"]))
+        self.assertTrue(all(list(c) == ["node", "section", "panel", "label", "kind", "state_var", "positions",
+                                        "press", "release", "hold_ms", "cw", "ccw"] for c in m["controls"]))
         self.assertEqual(report["suspected_slips"], {
             "B757_OVHD_L_PUMPS_FWD_BUTTON": ["press: set without a variable type"],
             "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO": ["press: closing brace nothing opened"]})
@@ -485,6 +529,19 @@ class WholeMap(unittest.TestCase):
         self.assertEqual(report["unmapped_banners"], ["NEW VENDOR PANEL"])
         self.assertEqual(sorted(c["panel"] for c in m["controls"]), ["Fuel", "New Vendor Panel"])
 
+    def test_a_node_rule_names_its_controls_so_their_banner_is_not_reported(self):
+        cur = curation(node_panels=[{"prefix": "BBS_fuelcut_", "panel": "Fuel control", "section": "Pedestal"}])
+        rows = [row(node="BBS_fuelcut_PW1", panel="(no banner)", kind="multi-position switch", positions="2",
+                    left="(L:BBS_fuelcut_PW1) 2 + 2 min (>L:BBS_fuelcut_PW1)",
+                    other=[("RightSingle", "(L:BBS_fuelcut_PW1) 2 - 0 max (>L:BBS_fuelcut_PW1)")]),
+                row(node="B757_OVHD_NEW_BUTTON", panel="(no banner)", left="x")]
+        m, report = self.build(rows, cur)
+        self.assertEqual(report["unmapped_banners"], ["(no banner)"], "the control no rule names surfaces")
+        self.assertIn(("Pedestal", "Fuel control"), [(c["section"], c["panel"]) for c in m["controls"]])
+        self.assertEqual(len(m["controls"]), 2)
+        _, report = self.build(rows[:1], cur)
+        self.assertEqual(report["unmapped_banners"], [])
+
     def test_status_rows(self):
         cur = curation(status=[
             {"key": "B757_APU_STATE", "panel": "Status", "label": "APU",
@@ -533,7 +590,13 @@ class Curation(unittest.TestCase):
             self.assertNotRegex(name, "GAURD|FISRT|Gaurd|Fisrt")
         self.assertTrue({"B757_MCP_AP_ALT_SEL", "B757_OVHD_AUTORATE_SWITCH", "BBS757_FIREHANDLE1_CLICK"}
                         <= set(c["labels"]))
-        self.assertNotIn("_suspected_slips", c, "the suspected slips are information, never curation")
+
+    def test_the_shipped_curation_leaves_no_banner_to_a_guess(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        self.assertNotIn("(no banner)", c["panels"])
+        self.assertTrue(any(r.get("prefix") == "BBS_fuelcut_" for r in c["node_panels"]))
+        self.assertIn("B757_OVHD_CABINALT_SWITCH", c["exclude_nodes"])
+        self.assertNotIn("B757_OVHD_CABINALT_SWITCH", c["positions"])
 
 
 class FindPackage(unittest.TestCase):

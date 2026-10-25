@@ -254,12 +254,21 @@ def section_of(node: str) -> str:
     return "Other"
 
 
-def panel_of(row, cur):
-    """(app panel name, section): a node rule first, then the banner table, else the banner in Title Case."""
+def node_rule(row, cur):
+    """The first node_panels rule that fits this row (its banner and/or node prefix), or None."""
     node, banner = row["node"], row["panel"]
     for rule in cur["node_panels"]:
         if ("banner" not in rule or rule["banner"] == banner) and ("prefix" not in rule or node.startswith(rule["prefix"])):
-            return rule["panel"], rule.get("section") or section_of(node)
+            return rule
+    return None
+
+
+def panel_of(row, cur):
+    """(app panel name, section): a node rule first, then the banner table, else the banner in Title Case."""
+    node, banner = row["node"], row["panel"]
+    rule = node_rule(row, cur)
+    if rule is not None:
+        return rule["panel"], rule.get("section") or section_of(node)
     entry = cur["panels"].get(banner)
     if entry is None:
         return title_case(banner, cur["spelling"]), section_of(node)
@@ -352,41 +361,45 @@ def state_var_for(row, out_kind, press):
 
 
 def convert_row(row, cur):
-    """(control, None) or (None, why it is left out)."""
+    """(control, None, suspected slips) or (None, why it is left out, [])."""
     kind, node = row["kind"], row["node"]
     if row["panel"] in cur["exclude_banners"]:
-        return None, "excluded banner"
+        return None, "excluded banner", []
     if node in cur["exclude_nodes"]:
-        return None, "excluded node"
+        return None, "excluded node", []
     if kind not in KIND_MAP:
-        return None, kind
+        return None, kind, []
     out_kind = KIND_MAP[kind]
     values = None
     if out_kind == "switch":
         values = position_values(row)
         if values is None:
             spec = str(row.get("positions") or "").strip()
-            return None, f"{kind} with more than 12 positions" if spec else f"{kind} without positions"
+            return None, f"{kind} with more than 12 positions" if spec else f"{kind} without positions", []
     press, release, cw, ccw = click_fields(row, out_kind)
     suspected = [f"{name}: {what}" for name, code in (("press", press), ("release", release), ("cw", cw), ("ccw", ccw))
                  for what in suspected_slips(code)]
     state_var = state_var_for(row, out_kind, press)
     if not (press or cw or ccw or (out_kind == "switch" and state_var)):
-        return None, "no click code"
+        return None, "no click code", []
     if out_kind not in ("button", "held") and state_var is None:
-        return None, "state is not an L:var"
+        return None, "state is not an L:var", []
     spelling = cur["spelling"]
     if node in cur["positions"]:
         if values is None and out_kind in ("toggle", "guard", "select"):
             values = [0, 1]
         positions = expand_positions(cur["positions"][node], values, node)
     else:
-        if out_kind in ("toggle", "guard", "select") and press:
-            odd = sorted({v for v, name in ASSIGN.findall(press) if name == state_var} - {"0", "1"})
-            if odd:  # not a 0/1 switch: only the pilot's cockpit knows which value is which
-                raise CurationError(f"{node} writes {', '.join(odd)} to its state var {state_var}: "
-                                    f"name its positions under 'positions' in curation")
         positions = positions_for(row, spelling)
+    if positions:  # a control that writes a value its positions do not list: its positions are wrong, not the code
+        listed = {number(p["value"]) for p in positions}
+        written = {number(v) for code in (press, release, cw, ccw) for v, name in ASSIGN.findall(code or "")
+                   if name == state_var}
+        if written - listed:
+            odd = ", ".join(str(v) for v in sorted(written - listed))
+            raise CurationError(f"{node} writes {odd} to its state var {state_var}, outside its positions "
+                                f"{sorted(listed)}: name its positions under 'positions' in curation, or exclude "
+                                f"the node under 'exclude_nodes'")
     panel, section = panel_of(row, cur)
     control = {
         "node": node, "section": section, "panel": panel,
@@ -395,9 +408,7 @@ def convert_row(row, cur):
         "press": press, "release": release, "hold_ms": hold_ms_of(row) if out_kind == "held" else 0,
         "cw": cw, "ccw": ccw,
     }
-    if suspected:
-        control["_suspected"] = suspected  # build_map moves it into the report
-    return control, None
+    return control, None, suspected
 
 
 def unique_labels(controls) -> None:
@@ -458,17 +469,17 @@ def build_map(rows, cur, aircraft, version):
     suspected = {}
     unmapped = set()
     for index, row in enumerate(rows):
-        control, why = convert_row(row, cur)
+        control, why, slips = convert_row(row, cur)
         if why:
             dropped[why] += 1
         elif control["node"] in seen:
             dropped["duplicate node"] += 1
         else:
             seen.add(control["node"])
-            if row["panel"] not in cur["panels"]:
+            if row["panel"] not in cur["panels"] and node_rule(row, cur) is None:
                 unmapped.add(row["panel"])
-            if "_suspected" in control:
-                suspected[control["node"]] = control.pop("_suspected")
+            if slips:
+                suspected[control["node"]] = slips
             keyed.append(((SECTIONS.index(control["section"]), control["panel"], row.get("line", 0), index), control))
     keyed.sort(key=lambda kc: kc[0])
     tell_apart(keyed, {r["node"]: r for r in reversed(rows)}, cur)
@@ -603,8 +614,7 @@ def main(argv=None) -> None:
     for banner in report["unused_banners"]:
         print(f"note: curation names the banner {banner!r}, which no control uses", file=sys.stderr)
     for banner in report["unmapped_banners"]:
-        print(f"note: the banner {banner!r} has no panel name in curation (its Title Case is used unless a node "
-              f"rule applies)", file=sys.stderr)
+        print(f"note: the banner {banner!r} has no panel name in curation (its Title Case is used)", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,9 @@
     "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
     "positions: node -> position names in value order (one per value), or explicit [{value, label}].",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
-    "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ..."
+    "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
+    "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
+    "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -48,7 +50,8 @@
     "B757_CAPTAIN_SEAT_ARM_REST_2",
     "B757_FO_SEAT_ARM_REST_1",
     "B757_FO_SEAT_ARM_REST_2",
-    "B757_FLOOR_BOX"
+    "B757_FLOOR_BOX",
+    "B757_OVHD_CABINALT_SWITCH"
   ],
   "panels": {
     "YOKES + RUDDER + TILLER SYSTEM": {
@@ -121,10 +124,6 @@
     },
     "INDIVIDUAL AUDIO/RADIO PANELS": {
       "name": "Pedestal radio panels",
-      "section": "Pedestal"
-    },
-    "(no banner)": {
-      "name": "Fuel control",
       "section": "Pedestal"
     },
     "LANDING GEAR": {
@@ -455,11 +454,6 @@
       "Off",
       "Auto",
       "BAT"
-    ],
-    "B757_OVHD_CABINALT_SWITCH": [
-      "Position 0",
-      "Position 1",
-      "Position 2"
     ],
     "B757_MCP_SW_AP_throttle": [
       {

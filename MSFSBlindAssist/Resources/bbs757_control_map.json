@@ -2030,33 +2030,6 @@
    "ccw": "(L:B757_OVHD_SEATBELTS_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEATBELTS_SWITCH)"
   },
   {
-   "node": "B757_OVHD_CABINALT_SWITCH",
-   "section": "Overhead",
-   "panel": "Pressurization",
-   "label": "Cabin Altitude",
-   "kind": "switch",
-   "state_var": "B757_OVHD_CABINALT_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Position 0"
-    },
-    {
-     "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "7 (>L:B757_OVHD_CABINALT_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)",
-   "ccw": "0 (>L:B757_OVHD_CABINALT_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)"
-  },
-  {
    "node": "B757_OVHD_MODE_SELECT_SWITCH",
    "section": "Overhead",
    "panel": "Pressurization",
