@@ -125,6 +125,56 @@ put back unless noted at the end.
   characters ("negative count": it pads to a 256-byte message), so a 25-event speed burst could not be measured through
   it. MSFSBA's own MobiFlight channel is 1,024 bytes (`MobiFlightWasmModule.MAX_COMMAND_SIZE`).
 
+## After the first flight (session 7, 2026-10-25 evening, at KATL gate A2, APU on)
+
+The first flight (debug.log kept in the session scratchpad) ended off the end of KATL 09L: 84 s from brake release to
+140 kt, liftoff at the runway end. Measured afterwards through the simconnect MCP's calculator path (unique prefixes;
+identical consecutive commands are dropped by MobiFlight, [VAR-4]) and window captures of the PFD, MCP and ND:
+
+- **MCP speed knob accelerates within a burst**: `K:AP_SPD_VAR_INC/DEC` events that arrive together move the target
+  1 kt each for events 1-10, 2 kt for 11-25 and 5 kt from the 26th. Measured: 10 events +10, 20 +30, 25 +40, 30 +65,
+  50 hit the 100 kt floor; the flight's bursts fit exactly (53 events +180, 47 hit the floor). A burst is one
+  calculator call or several back to back; a pause of about 0.3 s or more starts a new burst (two 10-event calls with
+  0.25 s or 0.5 s between them moved 20). An RPN loop fires N events from one short string:
+  `N sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_INC) l0 1 - sp0 g1 }`. Restored to 200.
+- **MCP buttons: the `_PRESS` pulse works and the `L:B757_MCP_<button>_BUTTON` lights follow.** THR with the A/T
+  armed engaged EPR (FMA EPR boxed, THR light 1, levers driven to 100) with the engines off and the F/Ds on or off,
+  right after re-arming, and with the engines running (Ready for taxi preset) with the F/Ds on or off; each was
+  disconnected at once (`L:B757_AT_DISC_1` pulse) and the levers returned to idle. With an executed route, LNAV armed
+  (FMA white LNAV, light 1) with the F/Ds on and also with both off; a second press disarmed it. The flight's THR
+  press at the hold short (engines running, F/Ds off, A/T presumably armed) did not engage: not reproduced, cause
+  open.
+- **A/T and F/D at load**: every BlueBird panel state, cold and dark included, has `BBS_AUTO_THROTTLE` 1 and
+  `AT_ARM_SWITCH` 0 (ON: the XML tooltip says 0 "Auto-throttle ON"); `BBS_FD1/2_SWITCH` 0 in cold and dark and
+  quickturn, 1 in every other state.
+- **EXEC light**: `L:FMC_EXEC_ACTIVE_1` / `_2` went 1 on both CDUs after ACTIVATE (route loaded by ACARS INIT FLT and
+  RTE SEND/LOAD through the CDU key L:vars) and 0 after EXEC.
+- **Thrust levers**: BlueBird ignored `K:THROTTLE_CUT`, `K:THROTTLE_SET` 0, `K:AXIS_THROTTLE_SET`,
+  `K:THROTTLE_AXIS_SET_EX1` and `K:THROTTLE_INCR` (calculator and SimConnect) with the A/T off; the owner's hardware
+  throttle moved both levers together; a direct write of `L:BBS757_THRUST_LEVER_L/R` (what the cockpit's drag code
+  writes, percent) moved them and the stock throttle positions followed.
+- **Stab trim**: the indicator strip shows units = -0.002148 d² + 0.803152 d + 1.11308 (at least 0.436), d =
+  `A:ELEVATOR TRIM POSITION` in degrees, while circuit 286 is powered (cockpit XML). At load: 2.3° = 2.95 units. Unlike
+  thrust, the stock trim events reach it: five SimConnect `ELEV_TRIM_UP` moved 2.300° to 2.381° (about 0.016° each,
+  electric hydraulic pumps on, engines off) and five `ELEV_TRIM_DN` back to 2.300°. During the first flight the
+  shared `MON_ElevatorTrim` row never changed, so the takeoff used the loaded 2.95 units.
+- **EFB Aircraft app keeps its last page**: Home, then Aircraft reopened on GROUND SERVICES after a chocks tap, not on
+  COCKPIT PRESETS. The left menu's COCKPIT PRESETS item is at about (127,178); BA's preset and quick-start sequences
+  must tap it first. Measured preset positions (mirror on the ND): Ready for taxi (433,369), Ready for takeoff
+  (433,421), Engine quick start (822,524), IRS rapid align (about 1209,519), CABIN & DOORS about (119,427). Engine quick
+  start did nothing from the APU-on gate state. Ready for taxi left the parking brake set and the chocks as they were.
+- **EFB sliders and AUTOMATIC BOARDING (same session)**: the EFB canvas forwards pointer input as Coherent calls
+  (`WASM_MOUSE_MOVE`/`DOWN`/`UP`/`CLICK`/`WHEEL`/`LEAVE`; the JS handlers track buttons 1 and 2 only). Taps work on
+  buttons, tiles, menu items and the steering switch, and a hover shows tooltips (BOARDING & LOAD RATE: "Real-world
+  style loading/boarding timing"). But neither slider moved (BOARDING & LOAD RATE knob at about (905,614) on
+  Settings > Aircraft, IRS ALIGNMENT TIME at the right end near (1192,553)): not with a tap on the track, a drag with
+  button 0 or 1 spread over 1-2 s of timers, or ten wheel notches either way. The AUTOMATIC BOARDING switch (row at
+  about y 677, switch near x 1150-1170) ignored three taps and a tap on its label, while the steering switch takes one
+  tap: why is open (a state it is disabled in, perhaps). BlueBird's settings keys for them: `loading_speed` (0 at
+  REALISTIC) and `automatic_loading` (false); neither changed. Settings > GENERAL holds LOCK KEYBOARD TO EFB, EFB
+  POWERED ON DURING INITIALIZATION, EFB BRIGHTNESS MODE, EFB BACKGROUND, LIVE AUTOBRAKE INFO, NOTIFICATIONS FADE-OUT
+  TIMER, EFB COLORS THEME. Left on Home, mirror removed.
+
 ## WASM-only variables, first reads (session 2, APU running)
 
 From `wasm-findings.md`'s list; all read through the calculator path:

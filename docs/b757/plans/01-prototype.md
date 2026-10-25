@@ -1,6 +1,6 @@
 # BlueBird 757-200 Prototype Implementation Plan (plan 01)
 
-**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); Tasks 9 and 10 built; in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
+**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); Tasks 9 and 10 built; Task 11 (first-flight fixes) planned; in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -320,6 +320,135 @@ Values measured in `evidence/live-findings.md` (sessions 5 and 6). Built in two 
   chocks EFB action and Status row (R31); the flow switches' position names and the Ignition label (R32). In-sim
   checks 75-76; 68 and 70 no longer need sight.
 
+### Task 11: First-flight fixes (added 2026-10-25 evening, owner's list after the first flight)
+
+The first flight ran off the end of KATL 09L. The owner's list: speed setting unreliable, no buttons in the MCP
+windows, no trim read-out, panels not in flow order (fuel levers belong in an engine panel on the pedestal, most-used
+controls first), fuel and payload must load through BlueBird's EFB, LNAV/VNAV would not arm on the ground, no EXEC
+announcement. Everything below was measured that evening (`evidence/live-findings.md`, "After the first flight") and
+agreed with the owner: the trim is spoken while it moves (no key, no Status row); BlueBird's loading pace stays
+REALISTIC because BA cannot move its sliders or its AUTOMATIC BOARDING switch (the owner's fallback); the fuel
+switches go to a new Pedestal "Engines" panel. Dispatched in three parts: 11a-11c the app, 11d the generator, 11e the
+EFB (after the controller's live measurement in its step 0).
+
+**11a, MCP speed set by BlueBird's measured knob tiers (`Aircraft/BBS757/Bbs757Mcp.cs`):**
+- BlueBird accelerates `K:AP_SPD_VAR_INC/DEC` within a burst: events 1-10 move 1 kt, 11-25 move 2 kt, from the 26th
+  5 kt; a burst is one calculator call or several back to back, and a pause of about 0.3 s starts a new one.
+- New pure members:
+  - `public const int SpeedBurstGapMs = 600;` the pause between two bursts (twice the measured reset, margin);
+  - `public const int LinearBurstMax = 10;` events per burst that each move 1 kt;
+  - `public static int SpeedBurstKnots(int events)`: n ≤ 10 → n; n ≤ 25 → 10 + 2(n − 10); else 40 + 5(n − 25);
+  - `public static (int Bulk, int Rest) SpeedBursts(int knots)` for a magnitude ≥ 0: Bulk is the largest n with
+    `SpeedBurstKnots(n) ≤ knots`, Rest the knots left over (0-4, each sent as its own burst at 1 kt);
+  - `public static string SpeedBurstCode(bool up, int events)`: one RPN loop for any count,
+    `{events} sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_INC) l0 1 - sp0 g1 }` (`DEC` going down), invariant culture.
+- `SetSpeedAsync`: read the Mach flag and the target as now; write the Bulk burst, wait `SpeedBurstGapMs`, write the
+  Rest burst; settle-read as now. A correction (at most `MaxSpeedCorrections`, only while the remainder shrinks)
+  sends the remainder as bursts of at most `LinearBurstMax`, each followed by `SpeedBurstGapMs`. `SpeedSteps` and
+  `MaxSpeedStepsPerRound` go (V/S keeps `VsSteps`). The class comment states the tiers.
+- New rule line B757-3 in `.claude/rules/b757.md` (full text in `docs/invariants/b757.md`): never step the MCP speed
+  one event per knot in one burst; plan bursts with `Bbs757Mcp.SpeedBursts` (BlueBird's 1/2/5 kt tiers, measured).
+
+**11b, MCP windows' mode buttons and the A/T's real state (`BBS757Definition.Mcp.cs`, `.Autopilot.cs`):**
+- Each Ctrl+H/S/A/V window gets buttons, as the PMDG 737's windows do (their state from the MCP light, the press
+  through the same path as a panel press, which reads the light back once: "LNAV on"; a button with no light says
+  "HDG SEL pressed"); `SuppressStateAnnounce = () => true` so the window does not speak a second time (CORE-7):
+  - Heading: `B757_MCP_AP_HDG_SEL_SW` (HDG SEL), `B757_MCP_HOLD_1_BUTTON` (HDG HOLD), `B757_MCP_LNAV_BUTTON`;
+  - Speed: `B757_MCP_SPD_BUTTON`, `B757_MCP_THR_BUTTON`, `B757_MCP_FLCH_BUTTON`, `B757_MCP_AP_SPD_MACH_SW` (IAS/MACH);
+  - Altitude: `B757_MCP_HOLD_2_BUTTON` (ALT HOLD), `B757_MCP_VNAV_BUTTON`, `B757_MCP_FLCH_BUTTON`;
+  - V/S: `B757_MCP_VS_BUTTON`.
+  The lists live in a pure `Bbs757McpWindowLayout.NodesFor(HotkeyAction)`; labels and states come from the map and
+  `Bbs757McpLights` ("On"/"Off", empty for a button with no light).
+- Ctrl+P's A/T Arm shows `L:BBS_AUTO_THROTTLE` (1 On, 0 Off), the A/T's real armed state (the click code sets it
+  with `AT_ARM_SWITCH`); registered OnRequest and requested with the switches.
+
+**11c, trim spoken in units, and the EXEC light:**
+- `Bbs757Readouts.StabTrimUnits(double degrees)` = max(0.436, −0.002148·d² + 0.803152·d + 1.11308), BlueBird's
+  indicator strip (cockpit XML). `BBS757Definition` overrides `DescribeElevatorTrim`: key `Math.Round(units, 1)`,
+  phrase "Trim 5.3" (invariant, the 737s' words, `StabTrimUnitsCallout`). The shared trim row then speaks the
+  current setting about once a second while the stabilizer moves (the 1 Hz batch); Shift+T still toggles it.
+- `L:FMC_EXEC_ACTIVE_1` (the captain's CDU EXEC light; both lit together, measured) as a Continuous row, spoken on
+  change after a silent baseline: "EXEC light on" / "EXEC light off" (the iFly window's words), Ctrl+M row "EXEC
+  light". No Status row.
+
+**11d, panels in flow order (`tools/b757-gen`, regenerate the map):**
+- Two curation keys: `panel_order` (section → panel names; listed panels first in that order, the rest after,
+  alphabetical, and named in the generator's report) and `control_order` (panel → nodes; listed first in that order,
+  the rest after in cockpit order; a node not in that panel, or listed twice, is a `CurationError`).
+- `node_panels` rules move Ignition, L ENG Start and R ENG Start (Overhead "Engine start") and the four fuel control
+  switches (Pedestal "Fuel control") into a new Pedestal panel **Engines**; both old panels disappear.
+- Panel order (the manual's preflight flow; for the owner's review):
+  - Overhead: Electrical, APU, IRS, Engine control and yaw damper, Hydraulics, Overhead miscellaneous, Fuel,
+    Anti-ice, Wipers, Exterior lights, Window heat, Passenger signs, Pressurization, Air conditioning and bleed, Cabin
+    lights, IRS keypad, Switch guards, Flight deck door, CVR, SELCAL and cabin call, Ground service, Warning lights
+    test.
+  - Glareshield: MCP, VOR/DME, Master warning and caution.
+  - Forward panel: Main panel switches, Landing gear, Captain EFIS, Yokes, Captain autoland status, Standby attitude
+    indicator, Captain DDRMI, Captain chronometer, Oxygen, Cockpit miscellaneous, First officer EFIS, First officer
+    autoland status, First officer DDRMI, First officer chronometer.
+  - Pedestal: Control stand, Engines, TCAS and transponder, EICAS control, Radio tuning panel 1, Audio panel 1, Fire
+    protection, Stabilizer trim, Weather radar left, ADF, Radio tuning panel 2, Radio tuning panel 3, Audio panel 2,
+    Weather radar right, Pedestal radio panels.
+  - Other: P61 panel. (The Status section stays last.)
+- Control order, most used first (the rest keep cockpit order):
+  - Electrical: Battery, STBY Power, L Bus Tie, R Bus Tie, L Gen Cont, R Gen Cont, APU Gen, EXT PWR, L Util Bus,
+    R Util Bus, L Gen Drive, R Gen Drive.
+  - Hydraulics: L ENG HYD Pumps, R ENG HYD Pumps, R ENG ELEC Pumps, C Eng1 HYD Pumps, C Eng2 HYD Pumps, L ENG ELEC
+    Pumps (the manual's R, C, L order for the electric pumps).
+  - Fuel: L Pumps FWD, L Pumps Aft, R Pumps FWD, R Pumps Aft, C Pumps L, C Pumps R, Xfeed Pumps FWD, Xfeed Pumps Aft.
+  - Exterior lights: Anti-col Red Lights, Position Lights, Anti-col White Lights, Taxi Light, L Landing Light, R
+    Landing Light, L Runway Turnoff, R Runway Turnoff, Wing Lights, Logo Lights.
+  - Air conditioning and bleed: L Pack Selector, R Pack Selector, Isolation, L ENG Bleed, APU Bleed, R ENG Bleed,
+    Trim Air, L Recirc, R Recirc, L Pack, R Pack.
+  - Passenger signs: Seatbelts, No Smoking. IRS: IRS L, IRS C, IRS R, then the knobs.
+  - Engine control and yaw damper: L Yaw Damper, R Yaw Damper, L ELEC ENG Cont, R ELEC ENG Cont.
+  - MCP: Captain F/D, F/O F/D, A/T Arm, THR, SPD, LNAV, VNAV, FLCH, HDG SEL, HDG HOLD, V/S, ALT HOLD, LOC, APP,
+    CMD L, CMD C, CMD R, Autopilot Disengage Bar, IAS/MACH, ALT SEL Push, AP SPD Hold, Bank Limit, BCRS 1.
+  - Main panel switches: Autobrake, Takeoff Check, TOGA, CLB, CON, CRZ, TMSP 1, TMSP 2, HDG Ref, Cancel, Recall.
+  - Control stand: Parking Brake, Speedbrake Armed, Speedbrake Down, Speedbrake Up, TO/GA, A/T Disconnect.
+  - Engines: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), L Fuel Control (RR),
+    R Fuel Control (RR).
+  - TCAS and transponder: TCAS Mode first, then the app's Squawk Code field, then the rest.
+  - Captain EFIS and First officer EFIS: ND Mode, ND Range, then the rest.
+
+**11e, the EFB: BlueBird's own loading, and presets that find their page (`Bbs757EfbLayout`, `BBS757EfbForm`):**
+- Step 0 (controller, live, before dispatch): with the owner's plan, measure FETCH OFP, then Aircraft → FUEL →
+  IMPORT FROM SIMBRIEF, then START BOARDING: which of them asks "Current fuel exceeds the flight plan fuel…" and
+  when, whether IMPORT needs the fetch first, and where BlueBird says boarding is complete. Record it in
+  `evidence/live-findings.md` and carry exact points and delays to the brief.
+- "Load fuel and payload from SimBrief" keeps its checks (SimBrief ID, B752 plan that fits, on the ground, the EFB
+  reachable; refuses when the plan's weight units differ from the aircraft's: "Fetch the SimBrief flight and answer
+  the units question first") and replaces BlueBird's setter variables with BlueBird's own buttons: FUEL menu
+  (67,237), IMPORT FROM SIMBRIEF (508,962), START BOARDING (1231,24), each followed by the defuel question's YES
+  (400,648) (empty background on the Fuel page when no question is up, measured), then Home. It says "Fueling and
+  boarding started. BlueBird loads at its own pace, about 25 minutes." (BOARDING & LOAD RATE stays REALISTIC.)
+- A watch owned by the definition (it outlives the window; canceled on a profile switch or a flight load) reads the
+  tanks and stations every 15 s and speaks, once each, "Fueling complete." and "Boarding complete." with what they
+  hold (`Bbs757Loadsheet`'s phrases), when every part is within `Judge`'s tolerance of the plan's spread and
+  unchanged across two reads; after boarding it taps the "BOARDING IS COMPLETE!" OK (731,879) and Home, never
+  before. After 45 minutes it says boarding has not finished and stops. A second press while it runs: "The load is
+  already running."
+- The setter write (`Bbs757Loadsheet.WriteCode`) and its tests go.
+- Presets and quick starts tap the COCKPIT PRESETS menu item (127,178) after Aircraft: the Aircraft app reopens on
+  its last page (measured after a chocks tap), so a preset tile could land on Ground Services.
+
+**Docs (each part with its code):** hotkey guide, `docs/b757.md`, the pilot's guide (Boeing chapter, hotkey
+reference) and the in-sim plan. The guide also says what was measured about flying it: BlueBird's thrust levers do
+not answer the simulator's throttle keys or events (a hardware throttle moves them); the trim keys do work; arm the
+A/T and press THR at the runway before releasing the brakes, and listen for "THR on". In-sim checks: speed 200 → 153
+and 100 → 280 exact; LNAV arms with an executed route; THR at the runway (the flight's failure is not reproduced:
+note the A/T state if it fails); EXEC light on after ACTIVATE and off after EXEC; trim spoken while trimming and equal
+to TAKEOFF REF's trim; the panel order; the load's two "complete" announcements.
+
+- [ ] **Step 1: Failing tests:** the speed tiers and bursts (7, 10, 11, 13, 40, 41, 47, 100, 299 knots; the flight's
+  53 events = 180 kt), a fake MCP with BlueBird's tiers that lands 200 → 153 and 100 → 280 with no correction, and
+  one with plain 1 kt steps that converges; the MCP window layouts; `StabTrimUnits` (2.3° → 2.9, 2.381° → 3.0, a
+  large negative → 0.4) and the trim phrase under de-DE; the EXEC phrases; the curation orders and errors (Python);
+  the load sequence and the watch's judgement; the presets' COCKPIT PRESETS tap.
+- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
+- [ ] **Step 5: Commit** per part: 11a-c `fix(b757): …`, 11d `feat(b757): panels in flow order …`, 11e
+  `feat(b757): load through BlueBird's EFB …`.
+
 ## Rulings made while executing (2026-10-25)
 
 Decisions the plan left open, taken overnight so the run did not stop. Each says what it costs if it is wrong; the
@@ -382,3 +511,24 @@ owner can reverse any of them.
   Smoking OFF/ON, packs OFF/AUTO, Mode Select AUTO 1, Ignition 1, Bank Limit AUTO, thrust reference BOTH, wiper
   OFF), the rest numbered; ENG Start relabeled Ignition. If wrong: one misnamed position, which the preset read-back
   check cannot catch.
+- R33 (Task 11a): the MCP speed is set with BlueBird's measured knob tiers (1/2/5 kt, a new burst after a pause of
+  about 0.3 s): one planned burst, a pause, then the 0-4 knots left at 1 kt; corrections in bursts of 10 at most. If
+  wrong: a correction round fixes the miss, at worst three rounds of 1 kt bursts.
+- R34 (Task 11b): the MCP windows' buttons press through the panel's path, which speaks the light read back once,
+  and suppress the window's own state announcement. If wrong: a press is spoken once by the panel path's words
+  ("LNAV on") rather than the window's ("LNAV On").
+- R35 (Task 11c, owner): the trim is spoken in BlueBird's indicator units ("Trim 5.3", the 737s' words) about once a
+  second while it moves; no key and no Status row. If wrong: the strip formula reads a tenth off at the ends.
+- R36 (Task 11c): "EXEC light on/off" from the captain's CDU light only (both lit together, measured). If wrong: a
+  modification shown only on the first officer's CDU is not announced.
+- R37 (Task 11d, owner's direction): panels follow the manual's preflight flow, most-used controls first, the fuel
+  switches with the start selectors in a Pedestal "Engines" panel. The order is the owner's to adjust.
+- R38 (Task 11e, owner's fallback): BA loads through BlueBird's IMPORT FROM SIMBRIEF and START BOARDING at
+  BlueBird's REALISTIC pace (about 25 minutes): its BOARDING & LOAD RATE slider and AUTOMATIC BOARDING switch do not
+  take BA's input (measured). If wrong: a load that a later BlueBird could do faster is slow.
+- R39 (Task 11e): presets and quick starts tap COCKPIT PRESETS first (the Aircraft app reopens on its last page).
+- R40 (Task 11b): Ctrl+P's A/T Arm reads `L:BBS_AUTO_THROTTLE`, the real armed state, not the switch position. If
+  wrong: none; the two agree whenever the click code moved them.
+- R41 (Task 11, guide): BlueBird's thrust levers ignore the simulator's throttle keys and events (measured); the
+  guide says to use a hardware throttle and to press THR before brake release. The flight's THR failure at the hold
+  short was not reproduced: an in-sim check, not a code change.
