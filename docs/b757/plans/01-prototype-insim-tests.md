@@ -285,3 +285,8 @@ Task 10 fix round 1 (rulings R31, R32):
     Electrical starts Battery, STBY Power, L Bus Tie. The order is yours to adjust: note any panel or control you would
     move. (Which fuel control pair works is check 56: the PW pair, as your aircraft is the PW one; the RR pair stays
     unmeasured.)
+84. Presets after the chocks (R39). Cold and dark at the gate (Overhead > Passenger signs > Seatbelts reads "OFF"), EFB
+    window: Remove chocks ("Chocks removed"), then at once Load preset with Before start: "Loading Before start", and
+    within about 15 seconds Seatbelts reads "ON" and the Status panel's APU row shows the APU starting. Status > Chocks
+    still reads "Removed" (a tap on the Ground Services page would show here). Then IRS rapid align: "IRS rapid align
+    pressed".

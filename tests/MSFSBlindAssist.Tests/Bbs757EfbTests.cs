@@ -450,18 +450,27 @@ public class Bbs757EfbTests
     [InlineData("Cold and dark", 433, 214)]
     [InlineData("Turnaround", 433, 266)]
     [InlineData("Before start", 433, 319)]
-    [InlineData("Ready for taxi", 433, 372)]
-    [InlineData("Ready for takeoff", 433, 424)]
+    [InlineData("Ready for taxi", 433, 369)]      // measured 2026-10-25
+    [InlineData("Ready for takeoff", 433, 421)]   // measured 2026-10-25
     [InlineData("After takeoff", 818, 214)]
     [InlineData("Cruise", 818, 266)]
     [InlineData("Approach", 818, 319)]
     [InlineData("Final approach", 818, 372)]
-    public void A_preset_is_home_aircraft_then_the_preset(string name, int x, int y)
+    public void A_preset_is_home_aircraft_cockpit_presets_then_the_preset(string name, int x, int y)
     {
         var seq = Bbs757EfbLayout.LoadPreset(name);
 
-        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, new EfbPoint(x, y) }, seq.Select(s => s.Point));
+        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuCockpitPresets, new EfbPoint(x, y) },
+            seq.Select(s => s.Point));
         Assert.Contains(name, Bbs757EfbLayout.PresetNames);
+    }
+
+    [Fact]
+    public void Cockpit_presets_is_the_aircraft_apps_first_menu_item()
+    {
+        // Measured 2026-10-25 (live-findings.md, "EFB Aircraft app keeps its last page"): the Aircraft
+        // app reopens on the page it was left on, so a preset or quick start taps this item first.
+        Assert.Equal(new EfbPoint(127, 178), Bbs757EfbLayout.AircraftMenuCockpitPresets);
     }
 
     [Fact]
@@ -476,11 +485,11 @@ public class Bbs757EfbTests
 
     [Theory]
     [InlineData("APU quick start", 433, 524)]
-    [InlineData("Engine quick start", 818, 524)]
-    [InlineData("IRS rapid align", 1197, 524)]
-    public void A_quick_start_is_home_aircraft_then_the_tile(string name, int x, int y)
+    [InlineData("Engine quick start", 822, 524)]   // measured 2026-10-25
+    [InlineData("IRS rapid align", 1209, 519)]     // measured 2026-10-25
+    public void A_quick_start_is_home_aircraft_cockpit_presets_then_the_tile(string name, int x, int y)
     {
-        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, new EfbPoint(x, y) },
+        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuCockpitPresets, new EfbPoint(x, y) },
             Bbs757EfbLayout.QuickStart(name).Select(s => s.Point));
     }
 

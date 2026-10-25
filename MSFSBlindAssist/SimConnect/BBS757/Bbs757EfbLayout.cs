@@ -153,12 +153,19 @@ public static class Bbs757EfbLayout
     public static readonly EfbPoint UnitsYes = new(390, 658);
     public static readonly EfbPoint UnitsNo = new(993, 658);            // est.
 
-    // Cockpit presets (the Aircraft app opens on COCKPIT PRESETS).
+    /// <summary>
+    /// The Aircraft app's left menu: COCKPIT PRESETS (measured 2026-10-25, session 7). The app reopens on
+    /// the page it was left on (GROUND SERVICES after a chocks tap, the FUEL page after a load), so every
+    /// preset and quick start taps this first.
+    /// </summary>
+    public static readonly EfbPoint AircraftMenuCockpitPresets = new(127, 178);
+
+    // Cockpit presets, on the COCKPIT PRESETS page.
     public static readonly EfbPoint ColdAndDark = new(433, 214);        // est.
     public static readonly EfbPoint Turnaround = new(433, 266);         // est.
     public static readonly EfbPoint BeforeStart = new(433, 319);
-    public static readonly EfbPoint ReadyForTaxi = new(433, 372);       // est.
-    public static readonly EfbPoint ReadyForTakeoff = new(433, 424);    // est.
+    public static readonly EfbPoint ReadyForTaxi = new(433, 369);
+    public static readonly EfbPoint ReadyForTakeoff = new(433, 421);
     public static readonly EfbPoint AfterTakeoff = new(818, 214);       // est.
     public static readonly EfbPoint Cruise = new(818, 266);             // est.
     public static readonly EfbPoint Approach = new(818, 319);           // est.
@@ -173,10 +180,10 @@ public static class Bbs757EfbLayout
     /// </summary>
     public static readonly EfbPoint GroundServicesChocks = new(404, 556);
 
-    // Quick start (same page).
+    // Quick start (the COCKPIT PRESETS page too).
     public static readonly EfbPoint ApuQuickStart = new(433, 524);
-    public static readonly EfbPoint EngineQuickStart = new(818, 524);   // est.
-    public static readonly EfbPoint IrsRapidAlign = new(1197, 524);     // est.
+    public static readonly EfbPoint EngineQuickStart = new(822, 524);
+    public static readonly EfbPoint IrsRapidAlign = new(1209, 519);
 
     private static readonly (string Name, EfbPoint Point)[] Presets =
     {
@@ -424,18 +431,23 @@ public static class Bbs757EfbLayout
         (accept ? UnitsYes : UnitsNo, NavigateDelayMs),
     };
 
-    /// <summary>Home, Aircraft (opens on COCKPIT PRESETS), then the preset's tile.</summary>
+    /// <summary>Home, Aircraft, COCKPIT PRESETS, then the preset's tile.</summary>
     public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> LoadPreset(string name) =>
         FromAircraftApp(Lookup(Presets, name, nameof(name)));
 
-    /// <summary>Home, Aircraft, then the quick start tile ("APU quick start", "Engine quick start", "IRS rapid align").</summary>
+    /// <summary>Home, Aircraft, COCKPIT PRESETS, then the quick start tile ("APU quick start", "Engine quick start", "IRS rapid align").</summary>
     public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> QuickStart(string name) =>
         FromAircraftApp(Lookup(QuickStarts, name, nameof(name)));
 
+    /// <summary>
+    /// A tile on the COCKPIT PRESETS page: the Aircraft app reopens on its last page, so the menu item
+    /// is tapped before the tile, never assumed.
+    /// </summary>
     private static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> FromAircraftApp(EfbPoint tile) => new[]
     {
         (Home, NavigateDelayMs),
         (AircraftIcon, NavigateDelayMs),
+        (AircraftMenuCockpitPresets, NavigateDelayMs),
         (tile, NavigateDelayMs),
     };
 
@@ -482,7 +494,7 @@ public static class Bbs757EfbLayout
     public const string ChocksUnreadableText = "The chocks cannot be read, so nothing was clicked.";
 
     /// <summary>
-    /// Home, Aircraft (it opens on COCKPIT PRESETS), GROUND SERVICES, then the CHOCKS tile once. Run it
+    /// Home, Aircraft (it reopens on its last page), GROUND SERVICES, then the CHOCKS tile once. Run it
     /// only when <see cref="MayClickChocks"/> allows it: the tile toggles.
     /// </summary>
     public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> ToggleChocks() => new[]
