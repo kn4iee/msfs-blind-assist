@@ -23,15 +23,16 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// needs cannot be read or the work folders disagree. The units answer is pressed only right after
 /// a finished fetch, on its page, and what it did is read back from BlueBird's unit system setting.
 /// A cockpit preset loads only in its phase: a ground one on the ground, a flight one airborne.
-/// The SimBrief fuel and payload load clicks nothing: it writes BlueBird's setters through the
-/// calculator (<see cref="Bbs757LoadIo"/>, MainForm's seams) and speaks the read-back. The steering
-/// switch toggles, so it is clicked only while BlueBird's setting reads the tiller.
+/// The SimBrief fuel and payload load taps BlueBird's own IMPORT FROM SIMBRIEF and START BOARDING
+/// and hands the rest to the definition's load watch (<see cref="Bbs757LoadIo"/>, MainForm's seams),
+/// which says when the fueling and the boarding are complete. The steering switch toggles, so it is
+/// clicked only while BlueBird's setting reads the tiller.
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
 /// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Weight units now
-/// pounds", "Loading Before start", "Loaded … Fuel 25550 pounds…"). An action the window cannot do is
-/// refused aloud: the EFB unreachable, an action still running, an ID that is not digits, a preset
-/// for the other phase, a plan the tanks or holds cannot take.
+/// pounds", "Loading Before start", "Fueling and boarding started…"). An action the window cannot do
+/// is refused aloud: the EFB unreachable, an action still running, an ID that is not digits, a preset
+/// for the other phase, a plan the tanks or holds cannot take or in other units than the aircraft's.
 /// The SimBrief ID is never logged or spoken; the Navigraph code is spoken letter by letter, before
 /// the browser opens, and shown in the status box, never logged. The status box is a read-only
 /// TextBox (VAT-13).
@@ -60,7 +61,6 @@ public class BBS757EfbForm : Form
         "More than one BlueBird work folder was found and they disagree. Update from the EFB in the sim.";
     public const string GroundStateUnknownText = "The aircraft's ground state cannot be read, so no preset was loaded.";
     public const string SetSimBriefIdFirstText = "Set your SimBrief ID first.";
-    public const string LoadUnavailableText = "Fuel and payload unavailable. Nothing was loaded.";
     public const string LoadOnGroundOnlyText = "Fuel and payload load only on the ground.";
     public const string LoadGroundUnknownText = "The aircraft's ground state cannot be read, so nothing was loaded.";
     public const string PlanUnreadableText = "The SimBrief plan's fuel and weights could not be read. Nothing was loaded.";
@@ -82,10 +82,7 @@ public class BBS757EfbForm : Form
     private const int OnGroundReadTimeoutMs = 2500;
     // The tablet client scrapes every second while the CDU window is hidden: two cycles and a margin.
     private const int TabletReadableWaitMs = 2500;
-    // BlueBird consumes its setters on its next update; the tanks and stations are read after this,
-    // and once more after it again when the first read-back misses.
-    private const int LoadReadBackDelayMs = 3000;
-    // One fresh read of a read-back variable (an individual definition answers within a frame or two).
+    // One fresh read of a registered variable (an individual definition answers within a frame or two).
     private const int LoadReadTimeoutMs = 1500;
     // How long the steering setting is watched for BlueBird's write after the click (measured: at once).
     private const int SteeringWaitMs = 3000;
@@ -140,7 +137,7 @@ public class BBS757EfbForm : Form
     /// null when it cannot be read (no simulator connection). A preset or a fuel and payload load
     /// is made only after it.
     /// </param>
-    /// <param name="loadIo">The SimBrief load's write, reads, username setting and plan fetch.</param>
+    /// <param name="loadIo">The plan fetch, the definition's load watch, and fresh reads (the chocks).</param>
     public BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer,
         Func<int, CancellationToken, Task<bool?>> readOnGround, Bbs757LoadIo loadIo)
         : this(efb, tablet, announcer, readOnGround, loadIo, Bbs757WorkFolder.DefaultRoots)
@@ -808,42 +805,43 @@ public class BBS757EfbForm : Form
     }
 
     /// <summary>
-    /// The SimBrief plan's fuel and payload, loaded at once and spread as BlueBird's own EFB spreads
-    /// them (<see cref="Bbs757Loadsheet"/>): the tanks and payload stations read, one calculator
-    /// write of BlueBird's setters, then the same read about three seconds later, judged per tank,
-    /// cabin and hold against what was written (<see cref="Bbs757Loadsheet.Judge"/>), and once more
-    /// about three seconds after that on a miss or a group that could not be read. What is said is
-    /// what the aircraft holds, in its units: "Loaded …", "The aircraft did not take all of the load
-    /// for …" with each part that is off, "The load for … could not all be checked." when a group
-    /// still could not be read, or "BlueBird did not take the load for …. Is BBS Nest running?"
-    /// when nothing moved.
-    /// The plan is the latest for BlueBird's stored SimBrief ID, else for the app's SimBrief username
-    /// setting; the ID is never logged or spoken, and the log has numbers only. The fetch and the
-    /// parse run off the UI thread, and each await comes back to it, so the write, the reads and the
-    /// speech go out from the UI thread. Nothing is written unless the plan is for a B752 and fits
-    /// the tanks and holds, a calculator write can land, and the aircraft is on the ground (SIM ON
-    /// GROUND read fresh, as the presets). No tablet click is made, so the units answer stays
-    /// possible after it.
+    /// The SimBrief plan's fuel and payload, loaded by BlueBird's own EFB (task 11e): FETCH SIMBRIEF
+    /// OFP, then the Aircraft app's FUEL page, IMPORT FROM SIMBRIEF and START BOARDING, each followed
+    /// by the defuel question's YES (<see cref="Bbs757EfbLayout.LoadThroughEfb"/>), and BlueBird fuels
+    /// and boards at its own pace. The window says "Fueling and boarding started…", and the
+    /// definition's load watch (<see cref="Bbs757LoadWatch"/>) says "Fueling complete." and "Boarding
+    /// complete." as each finishes. BlueBird's completion boxes are left alone (ruling R42).
+    /// Nothing is tapped unless: no load is being watched ("The load is already running."); BlueBird
+    /// holds a SimBrief ID, which its own fetch uses; BA's fetch of that ID's latest plan parses, is for
+    /// a B752 and fits the tanks and holds, giving the watch its targets; the plan's weight units are
+    /// the aircraft's (<see cref="Bbs757Loadsheet.UnitsRefusal"/>), so BlueBird's fetch never asks to
+    /// switch them; and the aircraft is on the ground (SIM ON GROUND read fresh, as the presets). The
+    /// ID is never logged or spoken, and the log has numbers only. The fetch and the parse run off the
+    /// UI thread, and each await comes back to it, so the taps, the watch and the speech go out from it.
     /// </summary>
     private async Task LoadFuelAndPayloadAsync()
     {
-        string? folder = ResolveWorkFolder();
-        long? id = folder == null ? null : Bbs757WorkFolder.ReadSimBriefId(folder);
-        string username = id == null ? (_loadIo.SimBriefUsername() ?? "").Trim() : "";
-        if (id == null && username.Length == 0)
+        if (_loadIo.WatchRunning())
         {
-            Refuse(SetSimBriefIdFirstText);
+            Refuse(Bbs757LoadWatch.AlreadyRunningText);
             return;
         }
-        if (!_loadIo.CanWrite())
+        string? folder = ResolveWorkFolder();
+        if (folder == null)
         {
-            Refuse(LoadUnavailableText);
+            Refuse($"{FolderMissingText}, so the SimBrief ID and the weight units cannot be checked. Nothing was loaded.");
+            return;
+        }
+        long? id = Bbs757WorkFolder.ReadSimBriefId(folder);
+        if (id is not long simBriefId)
+        {
+            Refuse(SetSimBriefIdFirstText);
             return;
         }
 
         var ct = Lifetime;
         SetResult("Fetching the SimBrief plan.");
-        var (xml, error) = await Task.Run(() => _loadIo.FetchOfpXml(id, id == null ? username : null, ct), ct);
+        var (xml, error) = await Task.Run(() => _loadIo.FetchOfpXml(simBriefId, ct), ct);
         if (_disposed) return;
         if (error != null || xml == null)
         {
@@ -863,8 +861,14 @@ public class BBS757EfbForm : Form
             Refuse(refusal ?? PlanUnreadableText);
             return;
         }
+        Bbs757WeightUnits? units = Bbs757WorkFolder.ReadUnits(folder);
+        if (Bbs757Loadsheet.UnitsRefusal(plan.Units, units) is { } unitsRefusal)
+        {
+            Refuse(unitsRefusal);
+            return;
+        }
 
-        // The ground and the calculator are judged last, right before the write.
+        // The ground is judged last, right before the taps.
         bool? onGround = await _readOnGround(OnGroundReadTimeoutMs, ct);
         if (_disposed) return;
         if (onGround is not bool ground)
@@ -877,47 +881,22 @@ public class BBS757EfbForm : Form
             Refuse(LoadOnGroundOnlyText);
             return;
         }
-        // What the aircraft holds before the write: a read-back that has not moved from it means
-        // BlueBird took nothing (with BBS Nest down it ignores every write).
-        var before = await ReadLoadAsync(ct);
-        if (_disposed) return;
-        if (!_loadIo.CanWrite())
+
+        SetResult("Starting BlueBird's fuel and payload load.");
+        var result = await RunAsync(Bbs757EfbRunKind.Load, Bbs757EfbLayout.LoadThroughEfb());
+        if (result != Bbs757EfbRunResult.Done)
         {
-            Refuse(LoadUnavailableText);
+            SayRunProblem(result);
             return;
         }
-
-        Log.Info("BBS757", Bbs757Loadsheet.LogLine(loads, before, null));
-        _loadIo.Write(Bbs757Loadsheet.WriteCode(loads));
-        SetResult("Loading fuel and payload.");
-
-        await Task.Delay(LoadReadBackDelayMs, ct);
-        var after = await ReadLoadAsync(ct);
-        if (_disposed) return;
-        if (Bbs757Loadsheet.ReadAgain(Bbs757Loadsheet.Judge(loads, before, after)))
+        Log.Info("BBS757", Bbs757Loadsheet.LogLine("started", loads, null));
+        if (_loadIo.StartWatch(loads, units))
         {
-            // A part off or a group that did not answer: BlueBird may still be taking it, or the read
-            // came too soon. One more read about 3 s later, and that one is judged.
-            await Task.Delay(LoadReadBackDelayMs, ct);
-            after = await ReadLoadAsync(ct);
-            if (_disposed) return;
+            Say(Bbs757LoadWatch.StartedText);
+            return;
         }
-        Log.Info("BBS757", Bbs757Loadsheet.LogLine(loads, before, after));
-        Bbs757WeightUnits? units = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
-        Say(Bbs757Loadsheet.Phrase(plan, loads, before, after, units));
-    }
-
-    /// <summary>
-    /// The eight read-back variables read fresh, together (each on its own fresh-read request), and
-    /// gathered by key; a value that could not be read is null.
-    /// </summary>
-    private async Task<Bbs757LoadReadBack> ReadLoadAsync(CancellationToken ct)
-    {
-        var vars = Bbs757Loadsheet.ReadBackVariables;
-        double?[] read = await Task.WhenAll(vars.Select(v => _loadIo.Read(v.Key, LoadReadTimeoutMs, ct)));
-        var values = new Dictionary<string, double?>(StringComparer.Ordinal);
-        for (int i = 0; i < vars.Count; i++) values[vars[i].Key] = read[i];
-        return Bbs757Loadsheet.ReadBack(values);
+        Log.Warn("BBS757", "SimBrief load: the load watch did not start.");
+        Say(Bbs757LoadWatch.StartedUnwatchedText);
     }
 
     /// <summary>
@@ -1102,23 +1081,24 @@ public class BBS757EfbForm : Form
 }
 
 /// <summary>
-/// What the EFB window's SimBrief fuel and payload load needs from the app, as MainForm's seams.
+/// What the EFB window needs from the app beyond the tablet, as MainForm's seams: the SimBrief fuel
+/// and payload load's plan fetch and the definition's load watch, and fresh reads (the chocks).
 /// Each is called on the UI thread, except <see cref="FetchOfpXml"/>, which the window runs off it.
 /// </summary>
 public sealed class Bbs757LoadIo
 {
-    /// <summary>Whether a calculator write can land now (<c>CalcWriteCanLand</c>; false with no connection).</summary>
-    public required Func<bool> CanWrite { get; init; }
-
-    /// <summary>One calculator write (<c>ExecuteCalculatorCodeUnique</c>).</summary>
-    public required Action<string> Write { get; init; }
-
     /// <summary>A registered variable read fresh within the given milliseconds; null when it cannot be read.</summary>
     public required Func<string, int, CancellationToken, Task<double?>> Read { get; init; }
 
-    /// <summary>The app's SimBrief username setting, used when BlueBird has no SimBrief ID stored.</summary>
-    public required Func<string> SimBriefUsername { get; init; }
+    /// <summary>The latest OFP's XML for a SimBrief ID, or a friendly error (<c>SimBriefService.FetchLatestOfpXmlAsync</c>).</summary>
+    public required Func<long, CancellationToken, Task<(string? Xml, string? Error)>> FetchOfpXml { get; init; }
 
-    /// <summary>The latest OFP's XML for a SimBrief ID or a username, or a friendly error (<c>SimBriefService.FetchLatestOfpXmlAsync</c>).</summary>
-    public required Func<long?, string?, CancellationToken, Task<(string? Xml, string? Error)>> FetchOfpXml { get; init; }
+    /// <summary>Whether the definition's load watch runs (<c>BBS757Definition.LoadWatchRunning</c>).</summary>
+    public required Func<bool> WatchRunning { get; init; }
+
+    /// <summary>
+    /// Starts the definition's load watch toward the loads, speaking in the aircraft's units
+    /// (<c>BBS757Definition.StartLoadWatch</c>); false when it did not start.
+    /// </summary>
+    public required Func<Bbs757Loads, Bbs757WeightUnits?, bool> StartWatch { get; init; }
 }

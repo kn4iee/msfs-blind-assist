@@ -71,7 +71,7 @@ public partial class MainForm
     /// EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
     /// client). Both go over the Coherent debugger; a cockpit preset needs SimConnect for its ground
     /// or flight check (<see cref="ReadBbs757OnGroundAsync"/>), and the SimBrief fuel and payload
-    /// load for that check, its write and its read-back (<see cref="CreateBbs757LoadIo"/>).
+    /// load for that check and the definition's load watch (<see cref="CreateBbs757LoadIo"/>).
     /// </summary>
     private void ShowBBS757EfbDialog()
     {
@@ -86,20 +86,20 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The EFB window's SimBrief load seams: the calculator write and its gate (CalcWriteCanLand,
-    /// false with no connection), fresh reads of the read-back variables the definition registers
-    /// (Bbs757Loadsheet.ReadBackVariables), the app's SimBrief username setting and the plan fetch.
-    /// Each reads <c>simConnectManager</c> when it is called, so a reconnect is followed.
+    /// The EFB window's seams: fresh reads of the variables the definition registers (the chocks),
+    /// the plan fetch for BlueBird's SimBrief ID, and the current 757 definition's load watch. Each
+    /// reads <c>simConnectManager</c> and <c>currentAircraft</c> when it is called, so a reconnect is
+    /// followed; the window is disposed on every profile switch.
     /// </summary>
     private Forms.BBS757.Bbs757LoadIo CreateBbs757LoadIo() => new()
     {
-        CanWrite = () => simConnectManager is { IsConnected: true } sim && sim.CalcWriteCanLand,
-        Write = rpn => simConnectManager?.ExecuteCalculatorCodeUnique(rpn),
         Read = (key, timeoutMs, ct) => simConnectManager is { IsConnected: true } sim
             ? sim.ReadFreshAsync(key, timeoutMs, ct)
             : Task.FromResult<double?>(null),
-        SimBriefUsername = () => MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "",
-        FetchOfpXml = MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync,
+        FetchOfpXml = (id, ct) => MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync(id, null, ct),
+        WatchRunning = () => currentAircraft is BBS757Definition { LoadWatchRunning: true },
+        StartWatch = (loads, units) => currentAircraft is BBS757Definition def && simConnectManager is { IsConnected: true } sim
+            && def.StartLoadWatch(loads, units, sim, announcer),
     };
 
     /// <summary>

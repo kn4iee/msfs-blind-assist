@@ -165,6 +165,37 @@ public class Bbs757EfbTests
         foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
         yield return Bbs757EfbLayout.SetSteeringToRudder();
         yield return Bbs757EfbLayout.ToggleChocks();
+        yield return Bbs757EfbLayout.LoadThroughEfb();
+    }
+
+    [Fact]
+    public void The_load_fetches_the_plan_then_imports_and_boards_answering_the_defuel_question_after_each()
+    {
+        // Measured 2026-10-25 (live-findings.md, "BlueBird's own loading through its EFB"): IMPORT FROM
+        // SIMBRIEF and START BOARDING each ask to defuel when the fuel is above the plan, and the
+        // question's YES is empty background on the Fuel page when no question is up.
+        var seq = Bbs757EfbLayout.LoadThroughEfb();
+
+        Assert.Equal(new[]
+        {
+            Bbs757EfbLayout.Home, Bbs757EfbLayout.NavigationIcon, Bbs757EfbLayout.AcarsDashboard, Bbs757EfbLayout.FetchOfpButton,
+            Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuFuel, Bbs757EfbLayout.ImportFromSimBrief,
+            Bbs757EfbLayout.DefuelYes, Bbs757EfbLayout.StartBoarding, Bbs757EfbLayout.DefuelYes, Bbs757EfbLayout.Home,
+        }, seq.Select(s => s.Point));
+        Assert.All(seq, s => Assert.Equal(Bbs757EfbLayout.NavigateDelayMs, s.DelayAfterMs));
+        Assert.Equal(new EfbPoint(67, 237), Bbs757EfbLayout.AircraftMenuFuel);
+        Assert.Equal(new EfbPoint(508, 962), Bbs757EfbLayout.ImportFromSimBrief);
+        Assert.Equal(new EfbPoint(1231, 24), Bbs757EfbLayout.StartBoarding);
+        Assert.Equal(new EfbPoint(400, 648), Bbs757EfbLayout.DefuelYes);
+    }
+
+    [Fact]
+    public void No_load_tap_comes_near_the_update_and_remove_spot()
+    {
+        // The agent refuses any click this close to UPDATE/REMOVE without the update's guards.
+        Assert.All(Bbs757EfbLayout.LoadThroughEfb(), s => Assert.False(
+            Math.Abs(s.Point.X - Bbs757EfbLayout.UpdateButton.X) <= Bbs757EfbLayout.UpdateSpotHalfWidth &&
+            Math.Abs(s.Point.Y - Bbs757EfbLayout.UpdateButton.Y) <= Bbs757EfbLayout.UpdateSpotHalfHeight, s.Point.ToString()));
     }
 
     [Fact]
@@ -277,6 +308,7 @@ public class Bbs757EfbTests
         others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
         others.Add(Bbs757EfbLayout.SetSteeringToRudder());
         others.Add(Bbs757EfbLayout.ToggleChocks());
+        others.Add(Bbs757EfbLayout.LoadThroughEfb());
         foreach (var seq in others)
             Assert.DoesNotContain(seq, s => s.Point == spot);
     }

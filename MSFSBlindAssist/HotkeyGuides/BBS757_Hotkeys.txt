@@ -314,46 +314,50 @@ CDU (Shift+M):
                          ACARS, OPERATIONS, PREFLIGHT, INIT FLT, INIT.
   Load fuel and payload from SimBrief
                          Loads your latest SimBrief plan's fuel,
-                         passengers and cargo at once, spread as
-                         BlueBird's own EFB spreads them: the fuel
-                         evenly over both wing tanks, the rest in the
-                         center; the passengers the 176 seats take; the
-                         rest of the payload as cargo, half in each
-                         hold (the forward hold takes at most 10,300
-                         pounds). About three seconds later it reads
-                         the tanks and holds back and says "Loaded"
-                         with the plan's flight and route, then what
-                         they hold, in the aircraft's weight units.
-                         For a plan of 25550 pounds of fuel, for
-                         example: "Fuel 25480 pounds: left 12740, right
-                         12740, center 0. Passengers 30800 pounds.
-                         Cargo 20660 pounds: forward 10300, aft
-                         10360." The fuel is a little under the
-                         plan's: BlueBird converts pounds to gallons
-                         slightly differently from the simulator. When
-                         the plan has more passengers than seats, it
-                         says so. Then: "For the ACARS weight and
-                         balance, request WGTBAL on the CDU."
-                         If a tank, the cabin or a hold does not hold
-                         what was loaded, it says "The aircraft did not
-                         take all of the load for" the plan, and gives
-                         each part that is off with the plan's figure,
-                         for example "Fuel 3000 pounds, not the plan's
-                         25550". If the fuel, the passengers or the
-                         cargo could not be read back, it says "The
-                         load for" the plan "could not all be checked."
-                         and which part could not be read. If nothing
-                         changed at all, it says "BlueBird did not take
-                         the load for" the plan, "Is BBS Nest running?"
-                         It uses the SimBrief ID set above, else the
-                         SimBrief username in Settings. The plan must
-                         be for a 757-200 (B752); another type is
-                         refused ("Your latest SimBrief plan is for
-                         A320, not a 757-200. Create a B752 plan, then
-                         try again."). Only on the ground; a plan with
-                         more fuel than the tanks hold, or more cargo
-                         than the holds take, is refused, and nothing
-                         is loaded.
+                         passengers and cargo through BlueBird's own
+                         EFB: it fetches the plan there, then presses
+                         IMPORT FROM SIMBRIEF on the Fuel page and
+                         START BOARDING, answering yes when BlueBird
+                         asks to defuel (the aircraft holds more fuel
+                         than the plan). It says "Fueling and boarding
+                         started. BlueBird loads at its own pace;
+                         boarding can take half an hour." BlueBird
+                         fuels in about two minutes and boards at its
+                         realistic pace. The app checks every 15
+                         seconds and says once each, in the aircraft's
+                         weight units, for a plan of 16400 pounds of
+                         fuel and 114 passengers for example:
+                         "Fueling complete. Fuel 16340 pounds: left
+                         8170, right 8170, center 0." and "Boarding
+                         complete. Passengers 21090 pounds. Cargo 3990
+                         pounds: forward 3990, aft 0. For the ACARS
+                         weight and balance, request WGTBAL on the
+                         CDU." The fuel is a little under the plan's:
+                         BlueBird converts pounds to gallons slightly
+                         differently from the simulator. When the plan
+                         has more passengers than the 176 seats, it
+                         says they were capped and the rest of the
+                         payload went in the holds. If the boarding
+                         has not finished after an hour, it says so
+                         ("Check the weight with W.") and stops
+                         watching; loading another flight stops it
+                         too. Pressing the button again while it
+                         watches says "The load is already running."
+                         It needs the SimBrief ID set above, which
+                         BlueBird's own fetch uses ("Set your SimBrief
+                         ID first."). The plan must be for a 757-200
+                         (B752); another type is refused ("Your latest
+                         SimBrief plan is for A320, not a 757-200.
+                         Create a B752 plan, then try again."). A plan
+                         in other weight units than the aircraft's is
+                         refused ("Your SimBrief plan is in kilograms
+                         and the aircraft in pounds. Fetch the SimBrief
+                         flight and accept its units, or create the
+                         plan in pounds, then try again."): press Fetch
+                         SimBrief flight, then Accept units.
+                         Only on the ground; a plan with more fuel than
+                         the tanks hold, or more cargo than the holds
+                         take, is refused, and nothing is pressed.
   Cockpit preset         Choose a panel state and press Load preset.
   Load preset            On the ground: Cold and dark, Turnaround, Before
                          start, Ready for taxi, Ready for takeoff. In
@@ -414,3 +418,12 @@ Notes:
   - The engine values on the Engines panel come from the simulator's
     engine variables: compare them with the upper EICAS (Alt+E) at your
     first engine start.
+  - BlueBird's thrust levers do not answer the simulator's throttle keys;
+    a hardware throttle moves them. For takeoff, check the A/T is armed
+    (Ctrl+P: "A/T Arm: On"), hold the brakes, press THR and listen for
+    "THR on" (the MCP panel or Ctrl+S; in Ctrl+P its caption reads "THR:
+    On") before you release them. "THR off" or "THR did not engage":
+    keep the brakes held and check A/T Arm.
+  - The simulator's trim keys move the stabilizer trim, and the app says
+    the setting while it moves: trim to the CDU's TAKEOFF REF figure
+    before takeoff.

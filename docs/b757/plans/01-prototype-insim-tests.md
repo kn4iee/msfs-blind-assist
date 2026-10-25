@@ -290,3 +290,24 @@ Task 10 fix round 1 (rulings R31, R32):
     within about 15 seconds Seatbelts reads "ON" and the Status panel's APU row shows the APU starting. Status > Chocks
     still reads "Removed" (a tap on the Ground Services page would show here). Then IRS rapid align: "IRS rapid align
     pressed".
+85. BlueBird's own load, fuel below the plan (task 11e; R38, R42-R44). At the gate, engines off, the APU or ground power
+    on, the SimBrief plan in the aircraft's weight units and less fuel aboard than its block (Output F). EFB window, Load
+    fuel and payload from SimBrief: about 20 seconds later (the taps take 18) "Fueling and boarding started. BlueBird
+    loads at its own pace; boarding can take half an hour." Close the window. Within about 3 minutes "Fueling complete.
+    Fuel … pounds: left …, right …, center …."; Output F then says the same figures, and the total is within 1% of the
+    plan's block. Press Load fuel and payload again: "The load is already running." Within about 40 minutes "Boarding
+    complete. Passengers … pounds. Cargo … pounds: forward …, aft …. For the ACARS weight and balance, request WGTBAL on
+    the CDU.": the passengers the plan's count times its passenger weight, the cargo forward first (all forward under
+    10,300 lb). Nothing else is said by the load. Note the minutes from the press to each announcement. Then a preset
+    (check 84's Before start, say) still lands: the Aircraft app was left on the FUEL page.
+86. The same with more fuel aboard than the plan (after check 85, a new SimBrief plan for a shorter flight). BlueBird
+    asks to defuel after IMPORT and START BOARDING, and BA answers YES unseen: "Fueling complete." comes with the total
+    within 1% of the new, smaller block, and "Boarding complete." follows. No stray tap shows: Fetch SimBrief flight still
+    says "The aircraft uses pounds." (or kilograms, as before), and Status > Chocks reads as before.
+87. Weight units (R44, [B757-4]). With a SimBrief plan in kilograms and the aircraft in pounds: Load fuel and payload
+    says "Your SimBrief plan is in kilograms and the aircraft in pounds. Fetch the SimBrief flight and accept its units,
+    or create the plan in pounds, then try again." and nothing happens (Output F unchanged a minute later). Then Fetch
+    SimBrief flight, Accept units ("Weight units now kilograms"), and Load fuel and payload: it starts, and the
+    completions are said in kilograms. Set the units back the same way when done.
+88. A flight load ends the watch. Start a load, then reload the flight before "Boarding complete.": nothing more is said
+    about it, and Load fuel and payload starts a new load at once (no "already running").

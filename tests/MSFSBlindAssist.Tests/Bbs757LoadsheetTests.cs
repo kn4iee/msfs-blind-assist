@@ -6,10 +6,10 @@ using MSFSBlindAssist.SimConnect.BBS757;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The 757's fuel and payload load from SimBrief, which spreads the plan the way BlueBird's own EFB
-/// does (measured 2026-10-25, docs/b757/evidence/live-findings.md, session 5): the plan's fields,
-/// the whole-pound loads per tank, cabin and hold, the one calculator string, whether the read-back
-/// shows BlueBird took them, and what is said. Whether BlueBird takes the setters is checked in the sim.
+/// The 757's fuel and payload load from SimBrief, which BlueBird's own EFB loads (task 11e): the
+/// plan's fields and units, the whole-pound targets per tank, cabin and hold as BlueBird spreads them
+/// (measured 2026-10-25, docs/b757/evidence/live-findings.md, sessions 5 and 7), the units check made
+/// before any tap, the read-back, and the sentences the load watch says.
 /// </summary>
 public class Bbs757LoadsheetTests
 {
@@ -60,19 +60,12 @@ public class Bbs757LoadsheetTests
         return loads!;
     }
 
-    /// <summary>A read-back that holds exactly what was written, at the sim's 6.7 pounds per gallon.</summary>
+    /// <summary>A read-back that holds exactly the targets, at the sim's 6.7 pounds per gallon.</summary>
     private static Bbs757LoadReadBack ReadBackOf(Bbs757Loads loads, double firstShare = 2800.0 / 30800.0) => new(
         LeftGallons: loads.LeftLbs / 6.7, RightGallons: loads.RightLbs / 6.7, CenterGallons: loads.CenterLbs / 6.7,
         PoundsPerGallon: 6.7,
         FirstClassLbs: loads.PassengerLbs * firstShare, EconomyLbs: loads.PassengerLbs * (1 - firstShare),
         ForwardHoldLbs: loads.ForwardLbs, AftHoldLbs: loads.AftLbs);
-
-    /// <summary>A read-back in pounds (one pound per "gallon"), so tolerance edges are exact.</summary>
-    private static Bbs757LoadReadBack Pounds(double left, double right, double center, double cabin, double forward, double aft)
-        => new(left, right, center, 1, cabin, 0, forward, aft);
-
-    /// <summary>An empty aircraft: what the tanks and stations held before a load.</summary>
-    private static readonly Bbs757LoadReadBack Empty = new(0, 0, 0, 6.7, 0, 0, 0, 0);
 
     // ---- the plan ---------------------------------------------------------------------------
 
@@ -90,10 +83,11 @@ public class Bbs757LoadsheetTests
         Assert.Equal(224, plan.Passengers);
         Assert.Equal(175, plan.PassengerWeightLbs);
         Assert.Equal(51459, plan.PayloadLbs);
+        Assert.Equal(Bbs757WeightUnits.Pounds, plan.Units);
     }
 
     [Fact]
-    public void A_kilogram_plan_is_read_in_pounds()
+    public void A_kilogram_plan_is_read_in_pounds_and_keeps_its_units()
     {
         var plan = Bbs757Loadsheet.ParsePlan(Ofp(units: "kgs", ramp: "11589", paxWeight: "84", payload: "23341"));
 
@@ -102,6 +96,7 @@ public class Bbs757LoadsheetTests
         Assert.Equal(84 * 2.20462, plan.PassengerWeightLbs, 6);
         Assert.Equal(23341 * 2.20462, plan.PayloadLbs, 6);
         Assert.Equal(224, plan.Passengers);   // a count, not a weight
+        Assert.Equal(Bbs757WeightUnits.Kilograms, plan.Units);   // what BlueBird's units are checked against
     }
 
     [Fact]
@@ -242,7 +237,7 @@ public class Bbs757LoadsheetTests
     public void The_measured_plan_spreads_as_BlueBird_spread_it()
     {
         // BlueBird's EFB on 2026-10-25: both wings evenly with the center empty, 176 seats at 175 lb,
-        // cargo = payload - passenger weight, half to each hold with the forward one capped.
+        // cargo = payload - passenger weight, the forward hold first up to its 10,300 lb, then aft.
         var loads = Loads(Plan());
 
         Assert.Equal(12775, loads.LeftLbs);
@@ -313,15 +308,26 @@ public class Bbs757LoadsheetTests
     }
 
     [Fact]
-    public void Fewer_passengers_than_seats_all_sit_and_the_cargo_splits_evenly()
+    public void Fewer_passengers_than_seats_all_sit_and_the_cargo_fills_the_forward_hold_first()
     {
         var loads = Loads(Plan(pax: 150, payload: 40000));
 
         Assert.Equal(150, loads.SeatedPassengers);
         Assert.False(loads.PassengersCapped);
         Assert.Equal(26250, loads.PassengerLbs);
-        Assert.Equal(6875, loads.ForwardLbs);
-        Assert.Equal(6875, loads.AftLbs);
+        Assert.Equal(10300, loads.ForwardLbs);
+        Assert.Equal(3450, loads.AftLbs);
+    }
+
+    [Fact]
+    public void Cargo_the_forward_hold_takes_goes_there_alone()
+    {
+        // The evening's load (task 11e step 0): 114 passengers at 185 lb, 3,990 lb of cargo, all forward.
+        var loads = Loads(Plan(block: 16400, pax: 114, paxWeight: 185, payload: 21090 + 3990));
+
+        Assert.Equal(21090, loads.PassengerLbs);
+        Assert.Equal(3990, loads.ForwardLbs);
+        Assert.Equal(0, loads.AftLbs);
     }
 
     [Fact]
@@ -364,7 +370,7 @@ public class Bbs757LoadsheetTests
     }
 
     [Fact]
-    public void A_kilogram_plan_writes_whole_pounds_that_add_up_to_its_rounded_totals()
+    public void A_kilogram_plan_loads_whole_pounds_that_add_up_to_its_rounded_totals()
     {
         var plan = Bbs757Loadsheet.ParsePlan(Ofp(units: "kgs", ramp: "11589", paxActual: "150", paxWeight: "84", payload: "18341"))!;
         var loads = Loads(plan);
@@ -390,41 +396,35 @@ public class Bbs757LoadsheetTests
         }
     }
 
-    // ---- the write --------------------------------------------------------------------------
-
-    [Fact]
-    public void The_write_sets_the_six_setters_in_one_string()
-    {
-        string code = Bbs757Loadsheet.WriteCode(Loads(Plan()));
-
-        Assert.Equal(
-            "12775 (>L:BBS_EFBX_SET_FUEL_LEFT_LBS) 12775 (>L:BBS_EFBX_SET_FUEL_RIGHT_LBS) " +
-            "0 (>L:BBS_EFBX_SET_FUEL_CENTER_LBS) 30800 (>L:BBS_EFBX_SET_PAX_WEIGHT_LBS) " +
-            "10300 (>L:BBS_EFBX_SET_CARGO_FWD_LBS) 10359 (>L:BBS_EFBX_SET_CARGO_AFT_LBS)", code);
-    }
+    // ---- the units --------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("de-DE")]
-    [InlineData("sv-SE")]
-    public void The_write_is_whole_numbers_and_invariant_under_a_comma_decimal_culture(string culture)
+    [InlineData(Bbs757WeightUnits.Pounds)]
+    [InlineData(Bbs757WeightUnits.Kilograms)]
+    public void A_plan_in_the_aircrafts_units_may_load(Bbs757WeightUnits units)
     {
-        InCulture(culture, () =>
-        {
-            var plan = Bbs757Loadsheet.ParsePlan(Ofp(units: "kgs", ramp: "11589", paxWeight: "84", payload: "23341"))!;
-            string code = Bbs757Loadsheet.WriteCode(Loads(plan));
-
-            Assert.DoesNotContain(",", code);
-            Assert.DoesNotContain(".", code);
-            Assert.StartsWith("12775 (>L:BBS_EFBX_SET_FUEL_LEFT_LBS) 12774 (>L:BBS_EFBX_SET_FUEL_RIGHT_LBS) 0 (>L:BBS_EFBX_SET_FUEL_CENTER_LBS)", code);
-        });
+        Assert.Null(Bbs757Loadsheet.UnitsRefusal(units, units));
     }
 
     [Fact]
-    public void The_write_fits_one_calculator_call()
+    public void A_plan_in_other_units_is_refused_so_the_fetch_never_asks()
     {
-        var loads = new Bbs757Loads(14579, 14579, 46390, 99999, 10300, 14700, 176, 176);
+        // BlueBird asks to switch the units after a fetch only when they differ, and that question's
+        // YES is beside the defuel question's: the load refuses before any tap instead. Keep units
+        // would leave them different, so the way out is to accept them or plan in the aircraft's.
+        Assert.Equal("Your SimBrief plan is in kilograms and the aircraft in pounds. " +
+                     "Fetch the SimBrief flight and accept its units, or create the plan in pounds, then try again.",
+            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds));
+        Assert.Equal("Your SimBrief plan is in pounds and the aircraft in kilograms. " +
+                     "Fetch the SimBrief flight and accept its units, or create the plan in kilograms, then try again.",
+            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms));
+    }
 
-        Assert.True(Bbs757Loadsheet.WriteCode(loads).Length < MSFSBlindAssist.Aircraft.BBS757.Bbs757Rpn.MaxCallChars);
+    [Fact]
+    public void Unread_aircraft_units_are_refused()
+    {
+        Assert.Equal("BlueBird's weight units cannot be read, so nothing was loaded.",
+            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Pounds, null));
     }
 
     // ---- the read-back ----------------------------------------------------------------------
@@ -494,410 +494,110 @@ public class Bbs757LoadsheetTests
         Assert.Null(read.AftHoldLbs);   // not read at all
     }
 
-    // ---- did BlueBird take it ---------------------------------------------------------------
-
     [Fact]
-    public void A_read_back_of_what_was_written_is_loaded()
+    public void The_totals_are_pounds_and_unread_when_any_part_is()
     {
-        var loads = Loads(Plan());
+        // The evening's load once done: 1,850 + 19,240 lb in the cabin, 3,990 lb forward.
+        var read = new Bbs757LoadReadBack(1000, 1000, 500, 6.7, 1850, 19240, 3990, 0);
 
-        Assert.Equal(Bbs757LoadVerdict.Loaded, Bbs757Loadsheet.Judge(loads, Empty, ReadBackOf(loads)));
-        Assert.False(Bbs757Loadsheet.ReadAgain(Bbs757LoadVerdict.Loaded));   // nothing to read again
-    }
-
-    [Fact]
-    public void One_unread_group_with_the_rest_matching_is_unchecked_and_read_again()
-    {
-        var loads = Loads(Plan());
-        var after = ReadBackOf(loads) with { AftHoldLbs = null };   // the holds never answered
-
-        var verdict = Bbs757Loadsheet.Judge(loads, Empty, after);
-
-        Assert.Equal(Bbs757LoadVerdict.Unchecked, verdict);
-        Assert.True(Bbs757Loadsheet.ReadAgain(verdict));
-    }
-
-    [Theory]
-    [InlineData(Bbs757LoadVerdict.PartlyTaken)]
-    [InlineData(Bbs757LoadVerdict.NotTaken)]
-    [InlineData(Bbs757LoadVerdict.NotRead)]
-    [InlineData(Bbs757LoadVerdict.Unchecked)]
-    public void Every_verdict_but_loaded_is_read_again(Bbs757LoadVerdict verdict)
-    {
-        Assert.True(Bbs757Loadsheet.ReadAgain(verdict));
-    }
-
-    [Fact]
-    public void A_miss_outranks_an_unread_group()
-    {
-        var loads = Loads(Plan());
-        var after = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, AftHoldLbs = null };
-
-        Assert.Equal(Bbs757LoadVerdict.PartlyTaken, Bbs757Loadsheet.Judge(loads, Empty, after));
-    }
-
-    [Fact]
-    public void BlueBirds_conversion_at_6_72_pounds_per_gallon_still_counts_as_loaded()
-    {
-        // Measured: 10,000 written read 9,973; 20,000 read 19,919; 12,775 about 12,745.
-        var loads = new Bbs757Loads(10000, 10000, 20000, 0, 0, 0, 0, 0);
-        var read = new Bbs757LoadReadBack(1488.5, 1488.5, 2973, 6.7, 0, 0, 0, 0);
-
-        Assert.Equal(Bbs757LoadVerdict.Loaded, Bbs757Loadsheet.Judge(loads, Empty, read));
-    }
-
-    [Fact]
-    public void An_unchanged_read_back_is_not_taken()
-    {
-        var loads = Loads(Plan());
-        var before = new Bbs757LoadReadBack(500, 500, 0, 6.7, 0, 0, 0, 0);
-
-        Assert.Equal(Bbs757LoadVerdict.NotTaken, Bbs757Loadsheet.Judge(loads, before, before));
-    }
-
-    [Fact]
-    public void Only_part_of_the_load_taken_is_partly_taken()
-    {
-        var loads = Loads(Plan());
-        var after = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, RightGallons = 1500 / 6.7 };
-        var before = after with { FirstClassLbs = 0, EconomyLbs = 0, ForwardHoldLbs = 0, AftHoldLbs = 0 };
-
-        Assert.Equal(Bbs757LoadVerdict.PartlyTaken, Bbs757Loadsheet.Judge(loads, before, after));
-    }
-
-    [Fact]
-    public void With_no_reading_from_before_a_miss_is_partly_taken_never_not_taken()
-    {
-        var loads = Loads(Plan());
-
-        Assert.Equal(Bbs757LoadVerdict.PartlyTaken, Bbs757Loadsheet.Judge(loads, null, Empty));
-    }
-
-    [Fact]
-    public void An_aircraft_already_holding_the_plan_is_loaded()
-    {
-        var loads = Loads(Plan());
-
-        Assert.Equal(Bbs757LoadVerdict.Loaded, Bbs757Loadsheet.Judge(loads, ReadBackOf(loads), ReadBackOf(loads)));
-    }
-
-    [Fact]
-    public void Nothing_read_back_is_not_read()
-    {
-        var loads = Loads(Plan());
-
-        Assert.Equal(Bbs757LoadVerdict.NotRead,
-            Bbs757Loadsheet.Judge(loads, Empty, new Bbs757LoadReadBack(null, null, null, null, null, null, null, null)));
-    }
-
-    [Theory]
-    // A tank: within the larger of 1% of its target and 100 lb.
-    [InlineData(4000, 3900, true)]        // 1% is 40: the 100 lb floor
-    [InlineData(4000, 3899, false)]
-    [InlineData(14579, 14434, true)]      // 1% is 145.79
-    [InlineData(14579, 14433, false)]
-    [InlineData(14579, 14724, true)]      // over as well as under
-    [InlineData(14579, 14725, false)]
-    public void A_wing_tank_matches_within_one_percent_or_100_pounds(double target, double read, bool matches)
-    {
-        var loads = new Bbs757Loads(target, target, 0, 0, 0, 0, 0, 0);
-        var after = Pounds(read, target, 0, 0, 0, 0);
-
-        Assert.Equal(matches, Bbs757Loadsheet.Judge(loads, null, after) == Bbs757LoadVerdict.Loaded);
-    }
-
-    [Theory]
-    [InlineData(100, true)]   // an empty center: the 100 lb floor
-    [InlineData(101, false)]
-    public void The_empty_center_tank_matches_within_100_pounds(double read, bool matches)
-    {
-        var loads = new Bbs757Loads(1000, 1000, 0, 0, 0, 0, 0, 0);
-
-        Assert.Equal(matches, Bbs757Loadsheet.Judge(loads, null, Pounds(1000, 1000, read, 0, 0, 0)) == Bbs757LoadVerdict.Loaded);
-    }
-
-    [Theory]
-    // The cabin and each hold: within the larger of 0.5% of the target and 20 lb.
-    [InlineData(30800, 30647, true)]   // 0.5% is 154
-    [InlineData(30800, 30645, false)]
-    [InlineData(1750, 1730, true)]     // 0.5% is 8.75: the 20 lb floor
-    [InlineData(1750, 1729, false)]
-    public void The_cabin_matches_within_half_a_percent_or_20_pounds(double target, double read, bool matches)
-    {
-        var loads = new Bbs757Loads(0, 0, 0, target, 0, 0, 10, 10);
-
-        Assert.Equal(matches, Bbs757Loadsheet.Judge(loads, null, Pounds(0, 0, 0, read, 0, 0)) == Bbs757LoadVerdict.Loaded);
-    }
-
-    [Theory]
-    [InlineData(10300, 10249, true)]   // 0.5% is 51.5
-    [InlineData(10300, 10248, false)]
-    [InlineData(0, 20, true)]          // an empty hold: the 20 lb floor
-    [InlineData(0, 21, false)]
-    public void Each_hold_matches_within_half_a_percent_or_20_pounds(double target, double read, bool matches)
-    {
-        var loads = new Bbs757Loads(0, 0, 0, 0, target, 0, 0, 0);
-
-        Assert.Equal(matches, Bbs757Loadsheet.Judge(loads, null, Pounds(0, 0, 0, 0, read, 0)) == Bbs757LoadVerdict.Loaded);
-    }
-
-    [Fact]
-    public void Tanks_are_judged_one_by_one_never_as_a_total()
-    {
-        // The right tank's shortfall made up by the left: the total matches, the tanks do not.
-        var loads = new Bbs757Loads(10000, 10000, 0, 0, 0, 0, 0, 0);
-
-        Assert.Equal(Bbs757LoadVerdict.PartlyTaken, Bbs757Loadsheet.Judge(loads, null, Pounds(11000, 9000, 0, 0, 0, 0)));
+        Assert.Equal(2500 * 6.7, read.FuelLbs!.Value, 6);
+        Assert.Equal(21090, read.PassengerLbs);
+        Assert.Equal(3990, read.CargoLbs);
+        Assert.Null((read with { PoundsPerGallon = null }).FuelLbs);
+        Assert.Null((read with { CenterGallons = null }).FuelLbs);
+        Assert.Null((read with { FirstClassLbs = null }).PassengerLbs);
+        Assert.Null((read with { AftHoldLbs = null }).CargoLbs);
     }
 
     // ---- what is said -----------------------------------------------------------------------
 
-    // Each total is the sum of its spoken parts: 12780 + 12780 + 0 = 25560.
-    private const string MeasuredPounds =
-        "Loaded QQX 1234, KSEA to KDEN. Fuel 25560 pounds: left 12780, right 12780, center 0. " +
-        "Passengers 30800 pounds. Cargo 20660 pounds: forward 10300, aft 10360. " +
-        "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds. " +
-        "For the ACARS weight and balance, request WGTBAL on the CDU.";
-
     [Fact]
-    public void The_measured_load_is_said_in_pounds_rounded_to_ten()
+    public void The_fuel_is_said_in_pounds_rounded_to_ten_its_total_the_sum_of_its_parts()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
+        // BlueBird converts at about 6.72 lb/gal and the sim reads 6.70: 12775 loaded reads back lower.
+        var read = ReadBackOf(Loads(Plan())) with { LeftGallons = 12775 / 6.72, RightGallons = 12775 / 6.72 };
 
-        Assert.Equal(MeasuredPounds, Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Pounds));
-    }
-
-    [Theory]
-    [InlineData("de-DE")]
-    [InlineData("sv-SE")]
-    public void The_phrase_is_the_same_under_a_comma_decimal_culture(string culture)
-    {
-        InCulture(culture, () =>
-        {
-            var plan = Plan();
-            var loads = Loads(plan);
-            Assert.Equal(MeasuredPounds, Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Pounds));
-        });
+        Assert.Equal("Fuel 25480 pounds: left 12740, right 12740, center 0.", Bbs757Loadsheet.FuelSentence(read, Bbs757WeightUnits.Pounds));
     }
 
     [Fact]
-    public void Unread_aircraft_units_are_said_in_pounds()
+    public void The_passengers_and_the_cargo_are_said_in_pounds()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
+        var read = ReadBackOf(Loads(Plan()));
 
-        Assert.Equal(MeasuredPounds, Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), null));
+        Assert.Equal("Passengers 30800 pounds.", Bbs757Loadsheet.PassengersSentence(read, Bbs757WeightUnits.Pounds));
+        Assert.Equal("Cargo 20660 pounds: forward 10300, aft 10360.", Bbs757Loadsheet.CargoSentence(read, Bbs757WeightUnits.Pounds));
     }
 
     [Fact]
     public void A_kilogram_aircraft_hears_kilograms()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
+        var read = ReadBackOf(Loads(Plan()));
 
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Kilograms);
-
-        Assert.Equal(
-            "Loaded QQX 1234, KSEA to KDEN. Fuel 11580 kilograms: left 5790, right 5790, center 0. " +
-            "Passengers 13970 kilograms. Cargo 9370 kilograms: forward 4670, aft 4700. " +
-            "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds. " +
-            "For the ACARS weight and balance, request WGTBAL on the CDU.", said);
+        Assert.Equal("Fuel 11580 kilograms: left 5790, right 5790, center 0.", Bbs757Loadsheet.FuelSentence(read, Bbs757WeightUnits.Kilograms));
+        Assert.Equal("Passengers 13970 kilograms.", Bbs757Loadsheet.PassengersSentence(read, Bbs757WeightUnits.Kilograms));
+        Assert.Equal("Cargo 9370 kilograms: forward 4670, aft 4700.", Bbs757Loadsheet.CargoSentence(read, Bbs757WeightUnits.Kilograms));
     }
 
     [Fact]
-    public void Every_passenger_seated_says_no_cap()
+    public void Unread_aircraft_units_are_said_in_pounds()
     {
-        var plan = Plan(pax: 150, payload: 40000);
-        var loads = Loads(plan);
+        var read = ReadBackOf(Loads(Plan()));
 
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Pounds);
-
-        Assert.DoesNotContain("capped", said);
-        Assert.Contains("Passengers 26250 pounds.", said);
-        Assert.EndsWith("Cargo 13760 pounds: forward 6880, aft 6880. For the ACARS weight and balance, request WGTBAL on the CDU.", said);
+        Assert.Equal("Passengers 30800 pounds.", Bbs757Loadsheet.PassengersSentence(read, null));
     }
 
-    [Fact]
-    public void The_phrase_speaks_what_was_read_back_not_what_was_planned()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_sentences_are_the_same_under_a_comma_decimal_culture(string culture)
     {
-        // BlueBird converts at about 6.72 lb/gal and the sim reads 6.70: 12775 written reads back lower.
-        var plan = Plan();
-        var loads = Loads(plan);
-        var read = ReadBackOf(loads) with { LeftGallons = 12775 / 6.72, RightGallons = 12775 / 6.72 };
-
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
-
-        Assert.StartsWith("Loaded QQX 1234, KSEA to KDEN. Fuel 25480 pounds: left 12740, right 12740, center 0.", said);
+        InCulture(culture, () =>
+        {
+            var read = ReadBackOf(Loads(Plan())) with { LeftGallons = 12775 / 6.72, RightGallons = 12775 / 6.72 };
+            Assert.Equal("Fuel 25480 pounds: left 12740, right 12740, center 0.", Bbs757Loadsheet.FuelSentence(read, Bbs757WeightUnits.Pounds));
+            Assert.Equal("Cargo 9370 kilograms: forward 4670, aft 4700.", Bbs757Loadsheet.CargoSentence(read, Bbs757WeightUnits.Kilograms));
+        });
     }
 
     [Fact]
     public void A_tank_read_a_hair_below_zero_says_zero()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var read = ReadBackOf(loads) with { CenterGallons = -0.0001 };
+        var read = ReadBackOf(Loads(Plan())) with { CenterGallons = -0.0001 };
 
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
+        string said = Bbs757Loadsheet.FuelSentence(read, Bbs757WeightUnits.Pounds)!;
 
-        Assert.Contains("center 0.", said);
+        Assert.EndsWith("center 0.", said);
         Assert.DoesNotContain("-0", said);
     }
 
     [Fact]
-    public void A_load_BlueBird_did_not_take_says_so_and_asks_about_BBS_Nest()
+    public void A_group_with_a_part_unread_has_no_sentence()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var before = new Bbs757LoadReadBack(500, 500, 0, 6.7, 0, 0, 0, 0);
+        var read = ReadBackOf(Loads(Plan()));
 
-        Assert.Equal("BlueBird did not take the load for QQX 1234, KSEA to KDEN. Is BBS Nest running?",
-            Bbs757Loadsheet.Phrase(plan, loads, before, before, Bbs757WeightUnits.Pounds));
-    }
-
-    [Fact]
-    public void A_load_partly_taken_says_which_parts_are_off_with_the_plans_figure()
-    {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var after = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, RightGallons = 1500 / 6.7 };
-        var before = after with { FirstClassLbs = 0, EconomyLbs = 0, ForwardHoldLbs = 0, AftHoldLbs = 0 };
-
-        Assert.Equal(
-            "The aircraft did not take all of the load for QQX 1234, KSEA to KDEN. " +
-            "Fuel 3000 pounds, not the plan's 25550: left 1500, right 1500, center 0. " +
-            "Passengers 30800 pounds. Cargo 20660 pounds: forward 10300, aft 10360. " +
-            "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds. " +
-            "For the ACARS weight and balance, request WGTBAL on the CDU.",
-            Bbs757Loadsheet.Phrase(plan, loads, before, after, Bbs757WeightUnits.Pounds));
-    }
-
-    [Fact]
-    public void Passengers_and_cargo_off_are_said_with_the_plans_figures()
-    {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var after = ReadBackOf(loads) with { FirstClassLbs = 0, EconomyLbs = 0, ForwardHoldLbs = 4000, AftHoldLbs = 6000 };
-
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, after, Bbs757WeightUnits.Pounds);
-
-        Assert.StartsWith("The aircraft did not take all of the load for QQX 1234, KSEA to KDEN. " +
-                          "Fuel 25560 pounds: left 12780, right 12780, center 0. ", said);
-        Assert.Contains("Passengers 0 pounds, not the plan's 30800. ", said);
-        Assert.Contains("Cargo 10000 pounds, not the plan's 20660: forward 4000, aft 6000. ", said);
-    }
-
-    [Fact]
-    public void A_partly_taken_load_is_said_the_same_under_a_comma_decimal_culture()
-    {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var after = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, RightGallons = 1500 / 6.7 };
-        string invariant = Bbs757Loadsheet.Phrase(plan, loads, null, after, Bbs757WeightUnits.Kilograms);
-
-        InCulture("de-DE", () =>
-        {
-            string said = Bbs757Loadsheet.Phrase(plan, loads, null, after, Bbs757WeightUnits.Kilograms);
-            Assert.Equal(invariant, said);
-            Assert.Contains("Fuel 1360 kilograms, not the plan's 11590: left 680, right 680, center 0.", said);
-        });
-    }
-
-    [Fact]
-    public void A_part_that_could_not_be_read_back_says_so()
-    {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var read = ReadBackOf(loads) with { PoundsPerGallon = null, AftHoldLbs = null };
-
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
-
-        // Never "Loaded" with a group unchecked, and no WGTBAL until every group matched.
-        Assert.Equal("The load for QQX 1234, KSEA to KDEN could not all be checked. The fuel could not be read back. " +
-                     "Passengers 30800 pounds. The cargo could not be read back. " +
-                     "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds.", said);
-    }
-
-    [Fact]
-    public void An_unread_cabin_says_so_and_the_matching_groups_as_loaded()
-    {
-        var plan = Plan(pax: 150, payload: 40000);
-        var loads = Loads(plan);
-        var read = ReadBackOf(loads) with { EconomyLbs = null };
-
-        Assert.Equal("The load for QQX 1234, KSEA to KDEN could not all be checked. " +
-                     "Fuel 25560 pounds: left 12780, right 12780, center 0. The passengers could not be read back. " +
-                     "Cargo 13760 pounds: forward 6880, aft 6880.",
-            Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds));
-    }
-
-    [Fact]
-    public void A_miss_with_a_group_unread_says_the_miss_and_no_WGTBAL()
-    {
-        var plan = Plan(pax: 150, payload: 40000);
-        var loads = Loads(plan);
-        var read = ReadBackOf(loads) with { LeftGallons = 1500 / 6.7, RightGallons = 1500 / 6.7, AftHoldLbs = null };
-
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, read, Bbs757WeightUnits.Pounds);
-
-        Assert.Equal("The aircraft did not take all of the load for QQX 1234, KSEA to KDEN. " +
-                     "Fuel 3000 pounds, not the plan's 25550: left 1500, right 1500, center 0. " +
-                     "Passengers 26250 pounds. The cargo could not be read back.", said);
-    }
-
-    [Fact]
-    public void Nothing_read_back_says_the_load_was_sent_but_not_confirmed()
-    {
-        var plan = Plan();
-        var loads = Loads(plan);
-
-        string said = Bbs757Loadsheet.Phrase(plan, loads, Empty, new Bbs757LoadReadBack(null, null, null, null, null, null, null, null),
-            Bbs757WeightUnits.Pounds);
-
-        Assert.Equal("Fuel and payload sent for QQX 1234, KSEA to KDEN, but the tanks and holds could not be read back.", said);
-    }
-
-    [Fact]
-    public void A_plan_with_no_flight_or_route_is_named_the_SimBrief_plan()
-    {
-        var plan = Plan() with { Flight = "", Origin = "", Destination = "" };
-        var loads = Loads(plan);
-
-        Assert.StartsWith("Loaded the SimBrief plan. Fuel 25560 pounds",
-            Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Pounds));
-    }
-
-    [Fact]
-    public void A_route_with_one_end_missing_is_left_out()
-    {
-        var plan = Plan() with { Destination = "" };
-        var loads = Loads(plan);
-
-        Assert.StartsWith("Loaded QQX 1234. Fuel",
-            Bbs757Loadsheet.Phrase(plan, loads, Empty, ReadBackOf(loads), Bbs757WeightUnits.Pounds));
+        Assert.Null(Bbs757Loadsheet.FuelSentence(read with { PoundsPerGallon = null }, Bbs757WeightUnits.Pounds));
+        Assert.Null(Bbs757Loadsheet.FuelSentence(read with { RightGallons = null }, Bbs757WeightUnits.Pounds));
+        Assert.Null(Bbs757Loadsheet.PassengersSentence(read with { EconomyLbs = null }, Bbs757WeightUnits.Pounds));
+        Assert.Null(Bbs757Loadsheet.CargoSentence(read with { ForwardHoldLbs = null }, Bbs757WeightUnits.Pounds));
     }
 
     // ---- the log ----------------------------------------------------------------------------
 
     [Fact]
-    public void The_log_line_is_numbers_and_the_verdict_only()
+    public void The_log_line_is_numbers_only()
     {
-        var plan = Plan();
-        var loads = Loads(plan);
-        var after = ReadBackOf(loads) with { LeftGallons = 12775 / 6.72, RightGallons = 12775 / 6.72, AftHoldLbs = null };
+        var loads = Loads(Plan());
+        var read = ReadBackOf(loads) with { LeftGallons = 12775 / 6.72, RightGallons = 12775 / 6.72, AftHoldLbs = null };
 
-        string line = Bbs757Loadsheet.LogLine(loads, Empty, after);
-
-        Assert.Equal("SimBrief load Unchecked: targets 12775/12775/0, 30800, 10300/10359; " +
-                     "before 0/0/0, 0, 0/0; after 12737/12737/0, 30800, 10300/-", line);
+        Assert.Equal("SimBrief load fueling complete: targets 12775/12775/0, 30800, 10300/10359; " +
+                     "now 12737/12737/0, 30800, 10300/-", Bbs757Loadsheet.LogLine("fueling complete", loads, read));
     }
 
     [Fact]
-    public void The_write_is_logged_before_any_read_back()
+    public void The_start_is_logged_with_the_targets_alone()
     {
-        var loads = Loads(Plan());
-
-        Assert.Equal("SimBrief load written: targets 12775/12775/0, 30800, 10300/10359; before -/-/-, -, -/-",
-            Bbs757Loadsheet.LogLine(loads, null, null));
+        Assert.Equal("SimBrief load started: targets 12775/12775/0, 30800, 10300/10359",
+            Bbs757Loadsheet.LogLine("started", Loads(Plan()), null));
     }
 }

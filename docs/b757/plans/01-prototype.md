@@ -1,6 +1,6 @@
 # BlueBird 757-200 Prototype Implementation Plan (plan 01)
 
-**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); Tasks 9 and 10 built; Task 11 (first-flight fixes) planned; in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
+**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); Tasks 9 and 10 built; Task 11 (first-flight fixes) built; in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -544,3 +544,17 @@ owner can reverse any of them.
   their own, so an engine start (selector GND, watch N2, fuel control RUN, EGT) happens in one panel; the Status
   section keeps one panel. If wrong: the values pause while a switch has focus (the status display's refresh skips
   a focused combo) until F5 or Ctrl+3.
+- R46 (Task 11e): the load needs BlueBird's stored SimBrief ID; the app's SimBrief username no longer stands in,
+  since BlueBird's own fetch and IMPORT use its stored ID. A missing work folder or unreadable weight units refuse
+  too ([B757-4]). If wrong: a pilot with only the username set hears "Set your SimBrief ID first."
+- R47 (Task 11e): the units refusal names the two ways out ("Fetch the SimBrief flight and accept its units, or
+  create the plan in pounds, then try again."), not "answer the units question": Keep units would leave them
+  different. If wrong: a longer sentence.
+- R48 (Task 11e): the watch's hour message covers whichever is unfinished (fueling, boarding or both, with F or W),
+  and "unchanged" for the cabin and cargo means moved less than 1 lb between reads. If wrong: a completion said one
+  read later than it could be.
+- R49 (Task 11e): the setter write's read-back judgement (`Judge`, its verdicts, `ReadAgain`, the "Loaded …" phrase)
+  went with `WriteCode`; the fuel, passenger and cargo sentences stay for the watch. A load run that does not finish
+  says why and starts no watch. If wrong: none in use; the pilot presses again after a run that did not finish.
+- R50 (Task 11e): Ready for taxi, Ready for takeoff, Engine quick start and IRS rapid align use the positions measured
+  on 2026-10-25 instead of the estimates. If wrong: a few pixels, inside the tiles either way.

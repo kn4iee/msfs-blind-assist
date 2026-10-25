@@ -290,6 +290,7 @@ public partial class BBS757Definition
         base.OnSwitchedAway();
         CloseMcpDialogs();
         CloseAutoflightWindows();
+        CancelLoadWatch();
         try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
         _lifetime.Dispose();
     }
@@ -369,8 +370,9 @@ public partial class BBS757Definition
     }
 
     /// <summary>
-    /// A flight load or a dropped connection: BBS Nest is asked about again on the next batch, and
-    /// every pick still in flight is dropped so none writes into the flight that follows.
+    /// A flight load or a dropped connection: BBS Nest is asked about again on the next batch, every
+    /// pick still in flight is dropped so none writes into the flight that follows, and the load watch
+    /// ends (its load belonged to the flight before).
     /// </summary>
     public override void OnSimContextReset()
     {
@@ -379,6 +381,7 @@ public partial class BBS757Definition
         _nestSettled = false;
         CancelPendingPicks();
         CancelMcpSets();
+        CancelLoadWatch();
         ResetReadoutBaselines();   // the new flight's flaps, gear and lights are no change
     }
 

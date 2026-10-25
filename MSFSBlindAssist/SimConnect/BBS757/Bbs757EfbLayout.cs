@@ -27,7 +27,7 @@ public enum Bbs757UpdateGate
 }
 
 /// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
-public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks }
+public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks, Load }
 
 /// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
 public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
@@ -184,6 +184,29 @@ public static class Bbs757EfbLayout
     public static readonly EfbPoint ApuQuickStart = new(433, 524);
     public static readonly EfbPoint EngineQuickStart = new(822, 524);
     public static readonly EfbPoint IrsRapidAlign = new(1209, 519);
+
+    /// <summary>The Aircraft app's left menu: FUEL (measured 2026-10-25, session 7).</summary>
+    public static readonly EfbPoint AircraftMenuFuel = new(67, 237);
+
+    /// <summary>
+    /// IMPORT FROM SIMBRIEF on the FUEL page (measured 2026-10-25, session 7): BlueBird fuels to the
+    /// plan BlueBird holds at once, in about two minutes.
+    /// </summary>
+    public static readonly EfbPoint ImportFromSimBrief = new(508, 962);
+
+    /// <summary>
+    /// START BOARDING in the top bar (measured 2026-10-25, session 7, from the FUEL page): boarding
+    /// starts at once, the stations zeroed and then filled at BlueBird's pace.
+    /// </summary>
+    public static readonly EfbPoint StartBoarding = new(1231, 24);
+
+    /// <summary>
+    /// YES on "Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?", which
+    /// IMPORT FROM SIMBRIEF and START BOARDING each ask when the fuel is above the plan (session 5).
+    /// Empty background on the FUEL page when no question is up (measured, session 7), so the load
+    /// taps it after each of the two either way.
+    /// </summary>
+    public static readonly EfbPoint DefuelYes = new(400, 648);
 
     private static readonly (string Name, EfbPoint Point)[] Presets =
     {
@@ -421,6 +444,31 @@ public static class Bbs757EfbLayout
         (AcarsDashboard, NavigateDelayMs),
         (FetchOfpButton, NavigateDelayMs),
     };
+
+    /// <summary>
+    /// BlueBird's own load of the SimBrief plan (task 11e): <see cref="FetchOfp"/>, so BlueBird holds
+    /// the latest plan, then Home, Aircraft, FUEL, IMPORT FROM SIMBRIEF, the defuel question's YES,
+    /// START BOARDING, YES again, and Home, each tap 1.5 s after the one before. Run it only when the
+    /// plan's weight units are the aircraft's (<see cref="Bbs757Loadsheet.UnitsRefusal"/>): otherwise
+    /// the fetch asks to switch them, and that question's YES is beside the defuel question's.
+    /// BlueBird's completion boxes are left alone (ruling R42).
+    /// </summary>
+    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> LoadThroughEfb()
+    {
+        var seq = FetchOfp().ToList();
+        seq.AddRange(new[]
+        {
+            (Home, NavigateDelayMs),
+            (AircraftIcon, NavigateDelayMs),
+            (AircraftMenuFuel, NavigateDelayMs),
+            (ImportFromSimBrief, NavigateDelayMs),
+            (DefuelYes, NavigateDelayMs),
+            (StartBoarding, NavigateDelayMs),
+            (DefuelYes, NavigateDelayMs),
+            (Home, NavigateDelayMs),
+        });
+        return seq;
+    }
 
     /// <summary>
     /// The answer to "switch the aircraft's weight units to the plan's?": YES (accept) or NO
