@@ -36,7 +36,7 @@ public partial class BBS757Definition
     /// <summary>The gear legs as last delivered, for the composed gear call-out and status row.</summary>
     private readonly Dictionary<string, double> _gearLegs = new(StringComparer.Ordinal);
 
-    /// <summary>The clock the echo windows run on; replaced by tests.</summary>
+    /// <summary>The clock the echo windows and the speed sets' spacing (BBS757Definition.Mcp.cs) run on; replaced by tests.</summary>
     internal Func<long> NowMs { get; init; } = () => Environment.TickCount64;
 
     /// <summary>

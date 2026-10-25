@@ -70,7 +70,10 @@ public partial class BBS757Definition
         }
     }
 
-    private McpIo McpIoFor(SimConnectManager sim) => new()
+    /// <summary>The MCP sets' and readouts' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>
+    internal Func<SimConnectManager, McpIo>? McpSetIo { get; init; }
+
+    private McpIo McpIoFor(SimConnectManager sim) => McpSetIo?.Invoke(sim) ?? new McpIo
     {
         Read = (key, ct) => sim.ReadFreshAsync(key, FreshReadTimeoutMs, ct),
         Write = sim.ExecuteCalculatorCodeUnique,
@@ -194,7 +197,37 @@ public partial class BBS757Definition
     /// </summary>
     internal Task SetMcpSpeedAsync(int knots, SimConnectManager sim, ScreenReaderAnnouncer announcer)
         => RunMcpSetAsync(Bbs757Mcp.SpeedVar, knots, ignoreSameValueInFlight: true, Bbs757Mcp.SpeedPhrase(null), sim, announcer,
-            (io, ct) => Bbs757Mcp.SetSpeedAsync(io, knots, ct));
+            (io, ct) => SetSpeedSpacedAsync(io, knots, ct));
+
+    /// <summary>When the last speed burst went out, on <see cref="NowMs"/>, whichever set sent it; null before the first.</summary>
+    private long? _lastSpeedBurstMs;
+
+    /// <summary>
+    /// A speed set kept out of the burst before it. BlueBird counts one burst across writes less than
+    /// about 0.3 s apart (<see cref="Bbs757Mcp"/>), and a set superseded just after its burst leaves that
+    /// burst counting: a newer set's first write inside <see cref="Bbs757Mcp.SpeedBurstGapMs"/> of it would
+    /// move 2 or 5 kt an event. So the rest of that gap is waited out first, before the target is read,
+    /// which also lets the last burst land; and every speed write of this set is timed for the next one.
+    /// </summary>
+    private async Task<string> SetSpeedSpacedAsync(McpIo io, int knots, CancellationToken ct)
+    {
+        if (_lastSpeedBurstMs is long last)
+        {
+            long wait = Math.Clamp(Bbs757Mcp.SpeedBurstGapMs - (NowMs() - last), 0, Bbs757Mcp.SpeedBurstGapMs);
+            if (wait > 0) await io.Delay((int)wait, ct);
+        }
+        var timed = new McpIo
+        {
+            Read = io.Read,
+            Delay = io.Delay,
+            Write = rpn =>
+            {
+                io.Write(rpn);
+                _lastSpeedBurstMs = NowMs();
+            },
+        };
+        return await Bbs757Mcp.SetSpeedAsync(timed, knots, ct);
+    }
 
     internal Task SetMcpAltitudeAsync(int feet, SimConnectManager sim, ScreenReaderAnnouncer announcer)
         => RunMcpSetAsync(Bbs757Mcp.AltitudeVar, feet, ignoreSameValueInFlight: false, Bbs757Mcp.AltitudePhrase(null), sim, announcer,

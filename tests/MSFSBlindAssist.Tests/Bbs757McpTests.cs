@@ -350,12 +350,15 @@ public class Bbs757McpTests
         public bool DirectWritesAdopted = true;
         public readonly List<string> Writes = new();
         public readonly List<long> WriteTimes = new();      // virtual ms of each write
+        public int SpeedReads;                              // reads of the speed target so far
+        public readonly List<int> SpeedReadsAtWrite = new();   // SpeedReads when each write went out
         public int Delays;
         public long Now;                 // virtual ms
         public int LagMs;                // > 0: a speed write lands half now, half this long later
         public double DriftPerRead;      // added to the speed on every read once a burst was sent
         public double? SpeedAfterSend;   // when set, the speed reads this once a burst was sent (a wild read)
         public double Peak;              // highest speed the target ever held after a burst landed
+        public bool CancelNextDelay;     // the next wait throws as a superseded set's does, before any time passes
         private readonly List<(long Due, double Delta)> _pending = new();
         private bool _sent;
         private int _used;               // V/S events counted since the last wait
@@ -422,6 +425,7 @@ public class Bbs757McpTests
             {
                 ct.ThrowIfCancellationRequested();
                 Land();
+                if (key == Bbs757Mcp.SpeedVar) SpeedReads++;
                 if (key == Bbs757Mcp.SpeedVar && _sent && DriftPerRead != 0) MoveSpeed(DriftPerRead);
                 return Task.FromResult(key switch
                 {
@@ -437,6 +441,7 @@ public class Bbs757McpTests
             {
                 Writes.Add(rpn);
                 WriteTimes.Add(Now);
+                SpeedReadsAtWrite.Add(SpeedReads);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_HEADING)") && DirectWritesAdopted) Heading = Value(rpn);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_ALTITUDE)") && DirectWritesAdopted) Altitude = Value(rpn);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_VS)") && DirectWritesAdopted) Vs = Value(rpn);
@@ -450,6 +455,11 @@ public class Bbs757McpTests
             Delay = (ms, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
+                if (CancelNextDelay)
+                {
+                    CancelNextDelay = false;
+                    throw new OperationCanceledException();
+                }
                 Delays++;
                 Now += ms;
                 _used = 0;
@@ -516,6 +526,7 @@ public class Bbs757McpTests
         // restarts BlueBird's count, so they move 1 kt each and not 5.
         Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(false, 26), Bbs757Mcp.SpeedBurstCode(false, 2) }, mcp.Writes);
         Assert.True(mcp.WriteTimes[1] - mcp.WriteTimes[0] >= Bbs757Mcp.SpeedBurstGapMs);
+        Assert.Equal(new[] { 1, 1 }, mcp.SpeedReadsAtWrite);   // both before any settle read: the 2 are the plan's, not a correction
     }
 
     [Fact]
@@ -529,8 +540,9 @@ public class Bbs757McpTests
     }
 
     [Theory]
-    [InlineData(100)]
+    [InlineData(100)]   // 100 to 280 among them
     [InlineData(153)]
+    [InlineData(200)]   // 200 to 153 and 200 to 250 among them
     [InlineData(250)]
     [InlineData(399)]
     public async Task Every_speed_from_100_to_399_lands_with_no_correction(double from)
@@ -540,8 +552,23 @@ public class Bbs757McpTests
             var mcp = new FakeMcp { Speed = from };
 
             Assert.Equal($"Speed {to}", await Bbs757Mcp.SetSpeedAsync(mcp.Io, to, default));
-            Assert.True(mcp.Writes.Count <= 2, $"{from} to {to}: {mcp.Writes.Count} writes, a correction ran");
+            // Exactly the planned burst and its rest, both sent on the one read that planned them. A
+            // correction comes only after a settle read, and a correction of the rest would be the very
+            // same string as the planned rest, so the reads are what tell them apart.
+            Assert.Equal(PlannedBursts(from, to), mcp.Writes);
+            Assert.All(mcp.SpeedReadsAtWrite, reads => Assert.Equal(1, reads));
         }
+    }
+
+    /// <summary>What a set from <paramref name="from"/> to <paramref name="to"/> plans: its bulk burst, then its rest when there is one.</summary>
+    private static List<string> PlannedBursts(double from, int to)
+    {
+        int diff = to - (int)from;
+        var (bulk, rest) = Bbs757Mcp.SpeedBursts(Math.Abs(diff));
+        var writes = new List<string>();
+        if (bulk > 0) writes.Add(Bbs757Mcp.SpeedBurstCode(diff > 0, bulk));
+        if (rest > 0) writes.Add(Bbs757Mcp.SpeedBurstCode(diff > 0, rest));
+        return writes;
     }
 
     [Fact]
@@ -980,6 +1007,41 @@ public class Bbs757McpTests
 
         Assert.Equal(2, held.Started);
         Assert.Equal(new[] { "Speed 250", "Speed 250" }, speech.All);
+    }
+
+    [Fact]
+    public async Task A_speed_set_right_after_a_superseded_one_waits_out_blueBirds_burst_gap()
+    {
+        // The first set is cut off just after its burst, as a newer set supersedes it. Sent at once, the
+        // newer set's events would join BlueBird's count (its 28th on move 5 kt each) and overshoot.
+        var mcp = new FakeMcp { Speed = 200, CancelNextDelay = true };
+        var def = new BBS757Definition { CanWrite = _ => true, NowMs = () => mcp.Now, McpSetIo = _ => mcp.Io };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        await def.SetMcpSpeedAsync(250, sim, speech);   // its 27 events land on 250, then it is cut off
+        await def.SetMcpSpeedAsync(260, sim, speech);
+
+        Assert.Equal(new[] { "Speed 260" }, speech.All);   // the superseded set says nothing
+        Assert.Equal(260, mcp.Speed);
+        Assert.Equal(2, mcp.Writes.Count);
+        Assert.True(mcp.WriteTimes[1] - mcp.WriteTimes[0] >= Bbs757Mcp.SpeedBurstGapMs, "the newer burst went out inside BlueBird's window");
+    }
+
+    [Fact]
+    public async Task A_speed_set_long_after_the_last_burst_does_not_wait()
+    {
+        var mcp = new FakeMcp { Speed = 200 };
+        var def = new BBS757Definition { CanWrite = _ => true, NowMs = () => mcp.Now, McpSetIo = _ => mcp.Io };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        await def.SetMcpSpeedAsync(250, sim, speech);   // its settle reads take it well past the gap
+        long finished = mcp.Now;
+        await def.SetMcpSpeedAsync(260, sim, speech);
+
+        Assert.Equal(new[] { "Speed 250", "Speed 260" }, speech.All);
+        Assert.Equal(finished, mcp.WriteTimes[1]);   // read and sent at once, with no wait first
     }
 
     [Fact]
