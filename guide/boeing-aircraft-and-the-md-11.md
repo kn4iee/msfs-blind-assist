@@ -384,7 +384,7 @@ What BA says by itself:
 
 ## BlueBird 757-200 {#boeing-bbs757}
 
-BA supports the BlueBird Simulations 757-200 with one set of panels, MCP value windows, both CDUs read as text, AI reads of its four flight displays and an EFB window that presses the aircraft's tablet for you. It is a prototype: read [Things to know](#boeing-757-quirks) before your first flight.
+BA supports the BlueBird Simulations 757-200 with one set of panels, MCP value windows, an autopilot window, an altimeter and minimums window, flap, gear, speedbrake and parking brake readouts that are also spoken when they change, both CDUs read as text, AI reads of its four flight displays and an EFB window that presses the aircraft's tablet for you. It is a prototype: read [Things to know](#boeing-757-quirks) before your first flight.
 
 ### Before you fly {#boeing-757-before}
 
@@ -402,15 +402,17 @@ Press Ctrl+1 for the Sections list and Ctrl+2 for the Panels list. Every regular
 - **Overhead**: APU, Air conditioning and bleed, Anti-ice, CVR, Cabin lights, Electrical, Engine control and yaw damper, Engine start, Exterior lights, Flight deck door, Fuel, Ground service, Hydraulics, IRS, IRS keypad, Overhead miscellaneous, Passenger signs, Pressurization, SELCAL and cabin call, Switch guards, Warning lights test, Window heat, Wipers.
 - **Glareshield**: MCP, Master warning and caution, VOR/DME.
 - **Forward panel**: Captain EFIS and First officer EFIS, the two DDRMIs, the two autoland status panels, the two chronometers, Landing gear, Main panel switches, Oxygen, Standby attitude indicator, Yokes, Cockpit miscellaneous.
-- **Pedestal**: ADF, Audio panel 1 and 2, EICAS control, Fire protection, Fuel control, Pedestal radio panels, Radio tuning panels 1, 2 and 3, Stabilizer trim, TCAS and transponder, Weather radar left and right.
+- **Pedestal**: ADF, Audio panel 1 and 2, Control stand (Parking Brake, Speedbrake Down, Armed and Up, TO/GA and A/T Disconnect), EICAS control, Fire protection, Fuel control, Pedestal radio panels, Radio tuning panels 1, 2 and 3, Stabilizer trim, TCAS and transponder, Weather radar left and right.
 - **Other**: the P61 panel.
-- **Status**: one panel to read rather than operate. Press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed and the cabin altitude. The rows update by themselves, and F5 refreshes them.
+- **Status**: two panels to read rather than operate. On **Status**, press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed, the cabin altitude, the flaps (the lever's position and the flap angle), the gear, the speedbrake and the parking brake. **Engines** shows N1, N2, EGT, fuel flow and EPR for each engine. The rows update by themselves, and F5 refreshes them.
+
+The MCP panel's status display lists the light of every mode and CMD button (*"CMD L: On"*). The TCAS and transponder panel has a **Squawk Code** box: type the four digits and press Enter. About a second and a half later BA reads the transponder back and says *"Squawk 4743"*; if the transponder holds another code it says so. Its status display shows the code.
 
 How the controls behave:
 
 - **Each control is named as on the aircraft**, and a switch, knob or selector is a list of its positions. Arrow to the position you want. BA waits a moment after you stop on a row and sets only that one, so arrowing through a list does not step the switch through every position on the way.
 - **A combo moves back if the aircraft did not take the change.** About a second and a half after a write, BA reads the control again, and the combo shows where the switch really is. A guarded or unpowered switch therefore jumps back to its real position, and your screen reader reads it.
-- **Buttons say "pressed".** A button with no state of its own is pressed, held for as long as the aircraft needs and released, and you then hear *"<name> pressed"*.
+- **Buttons say "pressed", or what they did.** A button with no state of its own is pressed, held for as long as the aircraft needs and released, and you then hear *"<name> pressed"*. An MCP mode or CMD button instead says its light about two seconds later, for example *"CMD R on"* or *"LNAV off"*, and a speedbrake button says the lever, for example *"Speedbrake armed"*.
 - **A control BA cannot write says so.** You hear *"<name> unavailable"* and nothing is sent. This happens when the MobiFlight module is missing, or when BA cannot read where the control is now.
 
 The Glareshield's MCP panel holds the mode and engage buttons. Set its four values with the windows below.
@@ -429,6 +431,21 @@ Type a value and press Enter. Each window stays open for the next value, and Esc
 Output Shift+H, Shift+S, Shift+A and Shift+V read the same four values without opening a window. They read the MCP window's own values, never the simulator's autopilot values, which disagree with BlueBird's MCP.
 
 The speed is knots (IAS) only for now; Mach comes later. In Mach mode, Output Shift+S says *"MCP is in Mach mode. Mach is not read yet."* and Input Ctrl+S says *"MCP is in Mach mode. Set Mach from the Glareshield panel."* A Mach number typed in the window is refused with *"Mach entry is not supported yet. Enter a speed from 100 to 399 knots."*
+
+**Input Ctrl+P** opens the **757 Autopilot** window: CMD L, CMD C, CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC and APP, each with its state, for example *"CMD L: On"* or *"A/T Arm: Off"*. The mode and CMD buttons show their light. A press is the cockpit's own click, and the button then shows the new state. Escape closes the window.
+
+The MCP lights are also spoken when they change, for example *"CMD R on"* or *"VNAV off"*; a press you make yourself is not said twice.
+
+### Altimeters and minimums {#boeing-757-altimeter}
+
+**Input Ctrl+B** opens the **Altimeter and minimums** window:
+
+- **Altimeter** box: type inches (29.92) or hectopascals (1013) and press Enter. All three altimeters are set together. They take a few seconds to follow; BA then reads them back, for example *"Altimeter: 1018, 30.05"* or *"Altimeter standard"*. If they still differ, each is read: *"Altimeter 1: …, Altimeter 2: …, Altimeter 3: …"*.
+- **Standard, 29.92** button: sets all three to standard.
+- **Radio minimums** box: type the decision height in feet (0 to 2500; it moves in steps of 10) and press Enter. BA steps the minimums and reads back what the ADI shows, for example *"DH 200"*.
+- **Status** box: read-only, with the values when the window opens and the last result.
+
+Escape closes the window. **Output B** reads the same: *"Altimeter: 1018, 30.05. DH 200"*.
 
 ### The CDU {#boeing-757-cdu}
 
@@ -470,6 +487,7 @@ The buttons, in order:
 - **Load fuel and payload from SimBrief**: loads your latest SimBrief plan's fuel, passengers and cargo at once, spread the way BlueBird's own EFB spreads them, without its half hour of fueling and boarding. The fuel goes evenly into both wing tanks, and what they cannot take goes in the center tank. The passengers fill up to the cabin's 176 seats at the plan's passenger weight. The rest of the payload is cargo, half in each hold, with the forward hold taking at most 10,300 pounds and the rest going aft. BA uses the SimBrief ID you set above, or else the SimBrief username in **Settings** (see [Setting your SimBrief username](planning-your-flight.md#setting-your-simbrief-username)); without either you hear *"Set your SimBrief ID first."* What you hear afterwards is described below the list.
 - **Cockpit preset** list and **Load preset**: choose a panel state and press Load preset. The list starts on Before start. On the ground: Cold and dark, Turnaround, Before start, Ready for taxi and Ready for takeoff. In flight: After takeoff, Cruise, Approach and Final approach. A ground preset in flight says *"That preset is for the ground."*, a flight preset on the ground says *"That preset is for flight."*, and nothing is loaded. A loading preset says, for example, *"Loading Before start"*. Before start brings up battery, APU and AC power in about 12 seconds.
 - **APU quick start** and **IRS rapid align**: BlueBird's quick start tiles. You hear *"APU quick start pressed"* or *"IRS rapid align pressed"*.
+- **Set steering to rudder**: switches BlueBird's NOSEWHEEL STEERING setting from REALISTIC (the tiller) to RUDDER, so you steer on the ground with the rudder pedals. BA reads BlueBird's setting first: when it is already rudder you hear *"Steering is already rudder"* and nothing is pressed, because the switch toggles and a second press would bring the tiller back. Otherwise you hear *"Steering set to rudder"*. The setting applies to every flight, so you need it once.
 - **Close** hides the window.
 
 If the tablet cannot be reached, the window says *"The 757's EFB is not reachable. Is the aircraft loaded?"* If the tablet is not the size this version of BA knows, it says *"The 757's EFB layout is not the one this version knows."* and presses nothing.
@@ -509,15 +527,22 @@ When the update finishes you hear *"Nav data cycle 2611 installed. Reload the fl
 
 ### Aircraft-specific hotkeys and callouts {#boeing-757-hotkeys}
 
-- **Output Alt+P** describes the ADI (attitude and flight mode annunciations), **Alt+N** the EHSI (the map display), **Alt+E** the upper EICAS (engines and crew alerts) and **Alt+S** the lower EICAS (secondary engine data or a system page). They need an AI provider; see [AI Display Reading](core-concepts.md#ai-display-reading). The 757's displays are drawn by the aircraft itself and cannot be read as text, so these are the way to hear them. BA moves the simulator's camera to the display it is reading and puts your own view back afterwards. From an outside or drone view you hear *"Switch to a cockpit view first"*. The display is read as it presents itself: abbreviations such as EPR, N1 and EGT, and the units, are not changed.
-- **Output Ctrl+M** opens the **757 Monitor Manager**. It lists every variable BA announces by itself: the APU state, Master Warning and Master Caution, the ground state, the glideslope and trim. Uncheck any to stop it speaking when it changes. Your choices persist across sessions. See [The Monitor Manager](core-concepts.md#monitor-manager).
+- **Output Alt+P** describes the ADI (attitude and flight mode annunciations), and the AUTOLAND STATUS annunciator beside it (LAND 3, LAND 2, NO LAND 3 or NO AUTOLAND) when it shows a message. **Alt+N** describes the EHSI (the map display), **Alt+E** the upper EICAS (engines and crew alerts) and **Alt+S** the lower EICAS (secondary engine data or a system page). They need an AI provider; see [AI Display Reading](core-concepts.md#ai-display-reading). The 757's displays are drawn by the aircraft itself and cannot be read as text, so these are the way to hear them. BA moves the simulator's camera to the display it is reading and puts your own view back afterwards. From an outside or drone view you hear *"Switch to a cockpit view first"*. The display is read as it presents itself: abbreviations such as EPR, N1 and EGT, and the units, are not changed.
+- **Output L** reads the flap lever, for example *"Flaps 5"*. When the flaps are not at the lever's position yet, it adds where they are: *"Flaps 5, moving, 3 degrees"*, or *"Flaps 5, surfaces at 0 degrees"* when they stay there (no hydraulic pressure).
+- **Output Shift+G** reads the gear: *"Gear down"*, *"Gear up"* or *"Gear in transit"*, with the lever when it disagrees, for example *"Gear down, lever up"*.
+- **Output B** reads the three altimeters and the radio minimums, as described [above](#boeing-757-altimeter).
+- **Output F** reads the fuel in pounds, the total and each tank: *"Fuel 25480 pounds: left 12740, right 12740, center 0"*. **Output Shift+F** says the same in kilograms.
+- **Output W** reads the gross weight in pounds, **Output Shift+W** in kilograms.
+- **Spoken when they change**: the flaps (*"Flaps 15"*), the gear (*"Gear in transit"*, then *"Gear down"* or *"Gear up"*), the speedbrake (*"Speedbrake armed"*, *"Speedbrake up 50 percent"*, *"Speedbrake down"*), the parking brake (*"Parking brake set"*, *"Parking brake released"*) and the MCP lights. They work whether you move the control from BA, from the simulator's own keys or from your hardware; a change you make from BA is not said twice.
+- **Output Ctrl+M** opens the **757 Monitor Manager**. It lists every variable BA announces by itself: the APU state, Master Warning and Master Caution, the flaps, the gear, the speedbrake, the parking brake, each MCP light, the ground state, the glideslope and trim. Uncheck any to stop it speaking when it changes. Your choices persist across sessions. See [The Monitor Manager](core-concepts.md#monitor-manager).
 - Output Shift+H, Shift+S, Shift+A and Shift+V read the MCP, as described [above](#boeing-757-mcp).
 
 **Take-off callouts.** The 757 plays its own *"80 knots"*, V1 and rotate calls, and its own altitude callouts. So on this aircraft [Takeoff Assist](takeoff-climb-and-cruise.md#takeoff-assist) does not call *"80 knots"* or *"100 knots"*. Its centerline tone and pitch calls work as on every other aircraft.
 
 ### Things to know {#boeing-757-quirks}
 
-- **This is a prototype.** BA supports release 0.1.0 of BlueBird's aircraft. There is no First Officer, no failures window and no circuit breakers yet, and the speed brake lever is not on a panel. Mach entry for the MCP speed comes later. The fuel, flap, gear and altimeter readouts that other Boeing aircraft have are not here yet; the [Hotkey Reference](hotkey-reference.md#hk-bbs757) lists which general keys do nothing.
+- **This is a prototype.** BA supports release 0.1.0 of BlueBird's aircraft. There is no First Officer, no failures window and no circuit breakers yet. The speedbrake lever is worked with the Down, Armed and Up buttons on the Control stand panel, or the simulator's own keys. Mach entry for the MCP speed comes later. The [Hotkey Reference](hotkey-reference.md#hk-bbs757) lists which general keys do nothing.
+- **The Engines panel is new.** Its values come from the simulator's engine variables. Compare them with the upper EICAS (Output Alt+E) at your first engine start.
 - **The EFB is pressed where BlueBird 0.1.0 puts its buttons.** An update to the aircraft can move them. BA then says *"The 757's EFB layout is not the one this version knows."* and presses nothing, until BA is updated.
 - **The CDU is read from the aircraft.** It needs the aircraft powered; until then the window says it is waiting.
 - **Reload the flight after a nav data update.** The aircraft misbehaves until you do, and BlueBird looks for a new cycle only when a flight loads.

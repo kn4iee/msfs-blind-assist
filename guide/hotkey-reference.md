@@ -489,7 +489,7 @@ Full explanations: [BlueBird 757-200](boeing-aircraft-and-the-md-11.md#boeing-bb
 ### Output keys {#output-keys-8}
 
 - **Output Shift+H**, **Shift+S**, **Shift+A**, **Shift+V** — Read the MCP window's own heading, speed (knots), altitude and vertical speed. In Mach mode Shift+S says so instead of reading a speed.
-- **Output Alt+P** — Read the ADI (AI).
+- **Output Alt+P** — Read the ADI, and the AUTOLAND STATUS annunciator beside it when it shows a message (AI).
 - **Output Alt+N** — Read the EHSI, the map display (AI).
 - **Output Alt+E** — Read the upper EICAS: engines and crew alerts (AI).
 - **Output Alt+S** — Read the lower EICAS: secondary engine data or a system page (AI).
@@ -497,16 +497,20 @@ Full explanations: [BlueBird 757-200](boeing-aircraft-and-the-md-11.md#boeing-bb
 
 BA moves the camera for the AI reads and puts your view back afterwards. The 757 plays its own take-off speed calls, so Takeoff Assist does not call *"80 knots"* or *"100 knots"* on it.
 
+F and Shift+F read each tank with a total, L adds the flap angle while the flaps are not at the lever's position, Shift+G adds the lever when it disagrees with the gear, and B reads the three altimeters and the radio minimums (*"Altimeter: 1018, 30.05. DH 200"*).
+
 ### Input keys {#input-keys-8}
 
 - **Input Ctrl+H** — MCP Heading window (0 to 360).
 - **Input Ctrl+S** — MCP Speed window (knots, 100 to 399). A Mach number is refused for now.
 - **Input Ctrl+A** — MCP Altitude window (100 to 49000, rounded to 100 feet).
 - **Input Ctrl+V** — MCP Vertical Speed window (minus 8000 to 6000, rounded to 100).
+- **Input Ctrl+B** — Altimeter and minimums window: the three altimeters (inches or hectopascals), a Standard button, and the radio minimums in feet.
+- **Input Ctrl+P** — 757 Autopilot window: CMD L, C and R, A/T Arm, both F/D switches and the mode buttons, each with its state.
 - **Input Shift+M** — Open the CDU window.
 - **Input Shift+T** — Open the EFB window.
 
-Each MCP window stays open for the next value; **Escape** closes it.
+Each MCP window and the altimeter window stay open for the next value; **Escape** closes them.
 
 ### CDU window (Input Shift+M) {#cdu-window-input-shift-m-2}
 
@@ -524,12 +528,19 @@ Each MCP window stays open for the next value; **Escape** closes it.
 - **Enter** in the SimBrief ID box — Set the SimBrief ID.
 - **Escape** — Close.
 
-The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load fuel and payload from SimBrief, Load preset (with the Cockpit preset list), APU quick start and IRS rapid align.
+The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load fuel and payload from SimBrief, Load preset (with the Cockpit preset list), APU quick start, IRS rapid align and Set steering to rudder.
+
+### Altimeter and minimums window (Input Ctrl+B) {#altimeter-window-input-ctrl-b-bbs757}
+
+- **Enter** in the Altimeter box — Set all three altimeters (29.92 or 1013).
+- **Standard, 29.92** — Set all three to standard.
+- **Enter** in the Radio minimums box — Set the decision height (feet, 0 to 2500).
+- **Escape** — Close.
 
 ### General keys that differ or don't work here {#general-keys-that-differ-or-don-t-work-here-8}
 
-- **Output Shift+1 to Shift+6, F, Shift+F, W, Shift+W, L, Shift+G, B, D, Shift+D, Alt+I, Ctrl+W, Ctrl+0, Ctrl+E** do nothing.
-- **Input Ctrl+B, Ctrl+N, Ctrl+P, Shift+A, Ctrl+O, Shift+P, Ctrl+J, Ctrl+L**, the Shift/Ctrl+number knob keys and **Input Ctrl+Shift+T** do nothing. The engage buttons are on the Glareshield section's MCP panel; the four MCP values are set in the Ctrl+H, Ctrl+S, Ctrl+A and Ctrl+V windows.
+- **Output Shift+1 to Shift+6, D, Shift+D, Alt+I, Ctrl+W, Ctrl+0, Ctrl+E** do nothing.
+- **Input Ctrl+N, Shift+A, Ctrl+O, Shift+P, Ctrl+J, Ctrl+L**, the Shift/Ctrl+number knob keys and **Input Ctrl+Shift+T** do nothing. The engage buttons are in the Ctrl+P window and on the Glareshield section's MCP panel; the four MCP values are set in the Ctrl+H, Ctrl+S, Ctrl+A and Ctrl+V windows.
 - **Output Shift+C** says *"No checklist for this aircraft."*: the 757 has no First Officer.
 
 ## TFDi MD-11 {#hk-md11}

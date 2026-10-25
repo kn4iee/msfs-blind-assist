@@ -198,7 +198,7 @@ The common set below works on most aircraft. Each aircraft adds its own keys, an
 
 | Key | What it reads |
 |---|---|
-| Output F | Fuel on board in pounds (on the PMDG Boeings, the 787 and the MD-11, tank by tank) |
+| Output F | Fuel on board in pounds (on the PMDG Boeings, the 787, the BlueBird 757 and the MD-11, tank by tank) |
 | Output Shift+F | Fuel in kilograms |
 | Output W | Gross weight in pounds (on the FlyByWire aircraft, with centre of gravity) |
 | Output Shift+W | Gross weight in kilograms |

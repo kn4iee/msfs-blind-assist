@@ -27,7 +27,8 @@ from branch B757 (Release). Input mode is `[`, output mode is `]`.
    code verbatim, which may carry a vendor slip (plan 01, Task 1): if a pump does not move, say which.
 8. Overhead > Engine start > L ENG Start: GND and AUTO move the selector; note what Position 4, 5 and 6 are (the map
    leaves them unnamed until measured).
-9. Glareshield > MCP > LNAV (a button): "LNAV pressed" once.
+9. Glareshield > MCP > LNAV (a button): "LNAV pressed" once. (Since task 10: about two seconds later "LNAV on" or
+   "LNAV off" instead, once; see check 54.)
 10. Arrow quickly through a combo's rows and stop on one: only the row you stop on is written (300 ms settle).
 11. Stop MobiFlight, pick any combo row: "{label} unavailable", nothing moves.
 12. Forward panel > Yokes > Captain Yoke A/P Disconnect: "pressed" once (held 1.5 s by the vendor template).
@@ -133,3 +134,74 @@ from branch B757 (Release). Input mode is `[`, output mode is `]`.
 
 51. Quit MSFSBA with both windows open: it closes cleanly. Restart, Shift+M and Shift+T: both connect again.
 52. Switch to another aircraft profile and back: no stale window, no doubled speech.
+
+## I. Full-flight readiness (plan 01, task 10)
+
+Names from the control map that rest on panel states and the manuals, not on a live read (stage 10a):
+
+53. Pedestal > Control stand: Parking Brake, Speedbrake Down / Armed / Up, TO/GA, A/T Disconnect are there. Forward
+    panel > Landing gear > Autobrake: from OFF one step should read DISARM with the amber AUTO BRAKES on the EICAS
+    (Alt+E); then 1, 2, 3, 4, MAX AUTO; RTO before takeoff. Note it if the approach preset leaves it on DISARM.
+54. Glareshield > MCP: the three CMD buttons are CMD L, CMD C and CMD R (from the nodes 1, 2, 3: unmeasured which is
+    which side). HDG HOLD and ALT HOLD (were "Hold 1" and "Hold 2"): pressing HDG HOLD in flight engages HDG HOLD on
+    the ADI (Alt+P), and so on. Each MCP mode or CMD press says its light about two seconds later ("ALT HOLD on"),
+    once, never "pressed".
+55. IRS selectors OFF, ALIGN, NAV, ATT: ALIGN and ATT are unmeasured. ND range (0 = 10 NM) and ND mode (0 VOR, 1 APP,
+    2 MAP, 3 PLAN): turn one click and check the EHSI (Alt+N) shows the named range or mode. TCAS mode: STBY and TA/RA
+    named, 1 to 3 numbered; transponder side 0 = L. Alternate flaps 1 to 7 numbered.
+56. PW fuel control switches CUTOFF and RUN by the panel: the engine starts and stops with them.
+57. TO/GA and A/T Disconnect in flight: "TO/GA pressed" / "A/T Disconnect pressed"; the ADI's autothrottle mode
+    changes (GA, or the A/T drops).
+
+Readouts and call-outs:
+
+58. Status panel: rows Flaps, Flap Angle, Gear, Speedbrake, Parking Brake. Ctrl+M lists Flaps, Gear, Speedbrake,
+    Parking Brake and the fourteen MCP lights (THR to CMD R), not the main gear legs, the flap angle or the engines.
+59. Flaps: Output L clean says "Flaps UP". The simulator's flaps-down key once: "Flaps 1" spoken; L at once says
+    "Flaps 1, moving, … degrees", or with no hydraulic pressure "Flaps 1, surfaces at 0 degrees". Settled at 15 and at
+    30, L must say just "Flaps 15" and "Flaps 30": that confirms the flight model's angles (15 is 11 degrees, 30 is 34)
+    are what the simulator reports. If it adds "surfaces at …" while settled, note the angle.
+60. Gear (in flight): gear up by the simulator's key: "Gear in transit", then "Gear up"; Shift+G during the transit:
+    "Gear in transit, lever up". Down: "Gear in transit", "Gear down". On the ground Shift+G: "Gear down". The stock leg
+    positions following BlueBird's gear is unmeasured.
+61. Speedbrake: Control stand > Speedbrake Armed: about two seconds later "Speedbrake armed", once. Up: "Speedbrake up"
+    (the UP click's 100 is unmeasured). Down: "Speedbrake down". The simulator's arm key: "Speedbrake armed" from the
+    change announcement. In flight, the lever moved part way by the simulator's speedbrake keys: "Speedbrake up 50
+    percent" or similar.
+62. Parking brake: Control stand > Parking Brake to Set: NVDA reads the combo, and no "Parking brake set" follows.
+    Releasing it with the combo is unmeasured with PARKING BRAKE MODE on REALISTIC: note whether it stays Released or
+    snaps back to Set. Holding the toe brakes (the simulator's brake key) releases it: "Parking brake released".
+63. Fuel: F "Fuel … pounds: left …, right …, center …" (rounded to 10) matches the EICAS fuel; Shift+F the same in
+    kilograms. W and Shift+W: the gross weight; compare with the CDU's PROGRESS or WGTBAL.
+64. MCP lights on change: a mode that engages by itself (ALT HOLD at the altitude capture, LOC at capture) is spoken
+    ("ALT HOLD on"). Untick VNAV in Ctrl+M: no VNAV call-outs. Untick Gear: no gear call-outs from any leg.
+65. Reload the flight: no flaps, gear, speedbrake, brake or light call-outs at the load; the first real change speaks.
+
+Windows:
+
+66. Ctrl+P: the 757 Autopilot window, focus on "CMD L: …". Tab through sixteen buttons, each "Label: On/Off". A/T Arm,
+    Captain F/D and F/O F/D flip within about a second of a press (NVDA reads the new caption). CMD L in flight with a
+    mode engaged: "CMD L: On". Escape closes; Ctrl+P again brings the same window back.
+67. Ctrl+B: the Altimeter and minimums window opens on the altimeter box; Tab to Status: the current values. Type
+    30.12, Enter: within about six seconds "Altimeter: 1020, 30.12"; Alt+P's baro and both other altimeters agree (all
+    three are set together, measured on the ground). 1013, Enter; "29,92" with a comma reads as 29.92; 500 is refused
+    aloud. Standard: "Altimeter standard". If they ever differ, note which "Altimeter 1, 2, 3" is the captain's, the
+    first officer's and the standby (unmeasured).
+68. Same window, Radio minimums 250, Enter: "DH 250" within about two seconds, and the ADI shows DH250. Then 200, then
+    0 and 2500 (the ends: note any other value the read-back gives). Log: the INCREASE/DECREASE_DECISION_HEIGHT calls
+    and whether a correction round ran.
+69. Output B: "Altimeter: …. DH …" as set.
+70. TCAS and transponder > Squawk Code: 4743, Enter: "Squawk 4743" (one number); 0421: "Squawk 0421"; 7778: "Squawk
+    must be four digits, each 0 to 7."; an empty box: "Type a four-digit squawk first." Output X and the panel's status
+    display show 4743. Ask whether BlueBird's transponder display shows the code too (it is the stock transponder,
+    measured).
+71. Engines panel at the first engine start: compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of
+    the upper EICAS. All unmeasured on BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or
+    read wrong.
+72. Alt+P on an approach with APP armed: the reading includes the AUTOLAND STATUS annunciator (LAND 3, LAND 2, NO LAND
+    3 or NO AUTOLAND) when it shows one, after the flight modes; nothing about it when it is blank.
+73. EFB window, Set steering to rudder, with the setting already RUDDER (the owner's, since 2026-10-25): "Steering is
+    already rudder", nothing pressed; taxi still steers with the rudder. The click itself (from REALISTIC) can only be
+    checked after the setting is put back to REALISTIC on BlueBird's EFB: then "Steering set to rudder" and rudder
+    steering on the next taxi.
+74. Switch profile with the Ctrl+P and Ctrl+B windows open: both close.

@@ -1,6 +1,6 @@
 # BlueBird 757-200 Prototype Implementation Plan (plan 01)
 
-**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
+**Claimed by:** Claude (overnight, 2026-10-25) · **Status:** built and reviewed (Tasks 1-7, final review and fix wave); Tasks 9 and 10 built; in-sim tests pending ([01-prototype-insim-tests.md](01-prototype-insim-tests.md))
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -295,7 +295,7 @@ Values measured in `evidence/live-findings.md` (sessions 5 and 6). Built in two 
   - measured 2026-10-25.
 - Hotkey guide, `docs/b757.md`, the pilot's guide (Boeing chapter and hotkey reference) and the in-sim plan follow.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - the curation (names, new nodes);
   - the flap index → name map;
   - the speedbrake phrase;
@@ -305,8 +305,13 @@ Values measured in `evidence/live-findings.md` (sessions 5 and 6). Built in two 
   - the fuel and weight phrases (de-DE, kilograms);
   - the MCP light read-back phrases;
   - the steering sequence.
-- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
-- [ ] **Step 5: Commit** `feat(b757): full-flight controls and readouts`.
+- [x] **Step 2-4:** run (fail), implement, full suite (pass).
+- [x] **Step 5: Commit** in stages: 10a `feat(b757): map gains parking brake, speedbrake, TO/GA, A/T disconnect and
+  named positions`; 10b the CMD L/C/R labels, the readouts, call-outs and windows, the EFB steering and ADI autoland
+  read, and the docs. Decisions 10b took (R26-R30 below): the gear reads the stock leg positions, the flap surfaces are
+  judged against `flight_model.cfg`'s angles, the CMD buttons are relabeled CMD L/C/R in the curation, the autopilot
+  window's presses are silent (the caption is the feedback) and the 757's on-change call-outs swallow the echo of the
+  app's own press or pick. In-sim checks 53-74.
 
 ## Rulings made while executing (2026-10-25)
 
@@ -347,3 +352,17 @@ owner can reverse any of them.
 - R24, R25 (Task 9): the SimBrief load is checked per tank and station and only called loaded when all of it took;
   only a B752 plan loads; an odd pound goes to the left wing. If wrong: a B753 or custom-type plan is refused until a
   B752 plan is made; a 1 lb wing imbalance.
+- R26 (Task 10b): the gear is read from the stock `GEAR CENTER/LEFT/RIGHT POSITION` (0 to 1), not `GEAR POSITION:n`,
+  which is documented as an up/down enum with no "in transit". If wrong: no gear call-outs until the variables are
+  changed (in-sim check 60).
+- R27: the flap surfaces count as "at" a detent within a degree of BlueBird's `flight_model.cfg` angle (0, 1, 5, 11,
+  20, 25, 34), not the detent's name (flaps 15 is 11 degrees). L reads the angle twice 500 ms apart to say "moving"
+  only when it moves. If wrong: a settled detent reads "surfaces at …" (check 59).
+- R28: CMD 1 to 3 are relabeled CMD L, C and R in the curation, so the panel, the window and the read-back say one
+  name. If wrong: two of the three names are swapped (check 54).
+- R29: the Ctrl+P window's presses say nothing on success (the caption change is the feedback, as in the iFly,
+  HS787 and MD-11 windows); a panel press of the same button reads its light back. If wrong: the window press is
+  silent for a screen reader that does not read caption changes.
+- R30: a state row's change within 5 s of the app's own press or pick of its control is that write's echo and not
+  announced; the press's read-back closes the window. If wrong: a real change in those 5 s after a pick is not said
+  (the status row still shows it).
