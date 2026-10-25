@@ -317,8 +317,8 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
-        // Flaps, gear, speedbrake, parking brake and the MCP lights speak their own changes
-        // (BBS757Definition.Readouts.cs); MainForm's mute wrap gates them ([VAR-8]).
+        // Flaps, gear, speedbrake, parking brake, the MCP lights and the EXEC light speak their own
+        // changes (BBS757Definition.Readouts.cs); MainForm's mute wrap gates them ([VAR-8]).
         if (ProcessReadoutUpdate(varName, value, announcer)) return true;
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }

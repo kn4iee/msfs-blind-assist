@@ -12,7 +12,8 @@ namespace MSFSBlindAssist.Tests;
 /// The 757's full-flight readiness work (plan 01, task 10b) at the definition: what is registered and
 /// where it shows, what is spoken on change and what is not, the Ctrl+M rows, the readouts and sets
 /// with no simulator (each says it is unavailable, never nothing), and the autopilot window's table;
-/// and task 11's first-flight fixes: the MCP value windows' buttons and Ctrl+P's A/T Arm.
+/// and task 11's first-flight fixes: the MCP value windows' buttons, Ctrl+P's A/T Arm, the trim in
+/// BlueBird's units and the EXEC light.
 /// Whether the aircraft moves is checked in the sim (docs/b757/plans/01-prototype-insim-tests.md).
 /// </summary>
 public class Bbs757FlightReadinessTests
@@ -291,6 +292,138 @@ public class Bbs757FlightReadinessTests
         Assert.False(rig.Def.ProcessSimVarUpdate(R.EngineRows[0].Key, 20, rig.Speech));
         Assert.False(rig.Def.ProcessSimVarUpdate(Bbs757Squawk.CodeKey, 0x4743, rig.Speech));
         Assert.True(rig.Def.ProcessSimVarUpdate(R.FlapsHandleKey, 0, rig.Speech));
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // ---- The trim in BlueBird's units (task 11c, ruling R35) ------------------------------------------
+
+    private const string TrimKey = "MON_ElevatorTrim";   // the shared trim row: stock ELEVATOR TRIM POSITION, degrees
+
+    private static void InCulture(string name, Action body)
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(name);
+            body();
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
+    public void The_trim_is_spoken_in_blueBirds_units_while_it_moves()
+    {
+        var rig = new Rig();
+
+        rig.Deliver(TrimKey, 2.3);      // the load's 2.95 units: a silent baseline
+        rig.Deliver(TrimKey, 2.381);    // five ELEV_TRIM_UP later (session 7): 3.01 units
+        rig.Deliver(TrimKey, 2.381);    // still: nothing
+        rig.Deliver(TrimKey, 2.6);      // 3.18 units
+
+        Assert.Equal(new[] { "Trim 3.0", "Trim 3.2" }, rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_trim_is_spoken_with_a_dot_under_a_comma_decimal_culture(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            var rig = new Rig();
+
+            rig.Deliver(TrimKey, 2.3);
+            rig.Deliver(TrimKey, -10);   // the strip's floor, 0.436
+
+            Assert.Equal(new[] { "Trim 0.4" }, rig.Speech.All);
+        });
+    }
+
+    [Fact]
+    public void The_loads_trim_on_a_tenths_boundary_does_not_flip_with_jitter()
+    {
+        // 2.3 degrees is 2.949 units, a hair under the 2.95 boundary; 2.31 is 2.957. The shared
+        // hysteresis (0.03 degrees) holds the 2.9 the load read, as it does for every aircraft's scale.
+        var rig = new Rig();
+
+        rig.Deliver(TrimKey, 2.3);
+        rig.Deliver(TrimKey, 2.31);
+        rig.Deliver(TrimKey, 2.29);
+        rig.Deliver(TrimKey, 2.31);
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_trim_keeps_its_one_ctrl_m_row_and_has_no_status_row()
+    {
+        var rows = MonitorRowBuilder.Build(Def.GetVariables());
+
+        Assert.Equal(new[] { TrimKey }, rows.Where(r => r.Label.Contains("trim", StringComparison.OrdinalIgnoreCase)).Select(r => r.Key));
+        Assert.DoesNotContain(TrimKey, Def.GetPanelDisplayVariables().SelectMany(p => p.Value));
+    }
+
+    // ---- The EXEC light (task 11c, ruling R36) -------------------------------------------------------
+
+    [Fact]
+    public void The_exec_light_speaks_its_changes_after_a_silent_baseline()
+    {
+        var rig = new Rig();
+
+        rig.Deliver(R.ExecLightKey, 0);   // the cockpit as found
+        rig.Deliver(R.ExecLightKey, 1);   // ACTIVATE
+        rig.Deliver(R.ExecLightKey, 1);
+        rig.Deliver(R.ExecLightKey, 0);   // EXEC
+
+        Assert.Equal(new[] { "EXEC light on", "EXEC light off" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_exec_light_is_the_captains_cdu_light_with_its_own_ctrl_m_row_and_no_panel()
+    {
+        var exec = Def.GetVariables()[R.ExecLightKey];
+
+        Assert.Equal("FMC_EXEC_ACTIVE_1", exec.Name);
+        Assert.Equal(SimVarType.LVar, exec.Type);
+        Assert.Equal(UpdateFrequency.Continuous, exec.UpdateFrequency);
+        Assert.True(exec.IsAnnounced);
+        Assert.False(exec.ExcludeFromMonitorManager);
+        Assert.Contains(MonitorRowBuilder.Build(Def.GetVariables()), r => r.Key == R.ExecLightKey && r.Label == "EXEC light");
+        Assert.DoesNotContain(R.ExecLightKey, Def.GetPanelControls().SelectMany(p => p.Value));
+        Assert.DoesNotContain(R.ExecLightKey, Def.GetPanelDisplayVariables().SelectMany(p => p.Value));
+    }
+
+    [Fact]
+    public void A_ctrl_m_muted_exec_light_is_silenced_by_mainforms_wrap()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new GatedSpeechCapture();
+        var settings = new UserSettings { BBS757DisabledMonitorVariables = new() { R.ExecLightKey } };
+        settings.RebuildDisabledMonitorVariableCaches();
+
+        MuteWrap.Deliver(def, speech, settings, R.ExecLightKey, 0);
+        MuteWrap.Deliver(def, speech, settings, R.ExecLightKey, 1);
+        MuteWrap.Deliver(def, speech, settings, R.FlapsHandleKey, 0);
+        MuteWrap.Deliver(def, speech, settings, R.FlapsHandleKey, 1);
+
+        Assert.Equal(new[] { "Flaps 1" }, speech.All);
+        Assert.False(def.IsMuteWrapExempt(R.ExecLightKey));
+    }
+
+    [Fact]
+    public void A_flight_load_makes_the_exec_lights_next_reading_a_baseline_again()
+    {
+        var rig = new Rig();
+        rig.Deliver(R.ExecLightKey, 0);
+
+        rig.Def.OnSimContextReset();
+        rig.Deliver(R.ExecLightKey, 1);   // the new flight's light, as found
+        rig.Def.ResetAnnouncementBaselines();
+        rig.Deliver(R.ExecLightKey, 0);
+
         Assert.Empty(rig.Speech.All);
     }
 

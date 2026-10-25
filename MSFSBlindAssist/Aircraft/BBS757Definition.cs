@@ -36,10 +36,10 @@ namespace MSFSBlindAssist.Aircraft;
 ///
 /// Every control is an OnRequest L:var read on demand (one individual data definition each,
 /// about 420), the status rows ride the continuous batch or their own on-request read, and the
-/// connection's ceiling is about 1000 (docs/architecture.md). The flight-control rows and the 14 MCP
-/// lights ride the batch; the engine rows, the flap angle, the squawk, the altimeters, the decision
-/// height, the gear lever, the gross weight and the A/T's armed flag are 19 individual definitions
-/// (about 500 variables in all). Bbs757DefinitionTests keeps the total under 900.
+/// connection's ceiling is about 1000 (docs/architecture.md). The flight-control rows, the 14 MCP
+/// lights and the EXEC light ride the batch; the engine rows, the flap angle, the squawk, the
+/// altimeters, the decision height, the gear lever, the gross weight and the A/T's armed flag are 19
+/// individual definitions (about 500 variables in all). Bbs757DefinitionTests keeps the total under 900.
 ///
 /// ═══ VERIFY IN SIM ═══
 ///   • A panel pick moves the control and the combo then shows where it really is.
@@ -49,8 +49,9 @@ namespace MSFSBlindAssist.Aircraft;
 ///   • Ctrl+H/S/A/V set the MCP heading, speed (knots), altitude and vertical speed, and what is
 ///     spoken afterwards is the MCP's own value; their mode buttons press as the panel does and say
 ///     the light once; Shift+H/S/A/V read the same values (Bbs757Mcp).
-///   • Flaps, gear, speedbrake, parking brake and the MCP lights speak their changes; L, Shift+G, B,
-///     F, Shift+F, W and Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
+///   • Flaps, gear, speedbrake, parking brake, the MCP lights and the EXEC light speak their changes,
+///     and the trim speaks BlueBird's units while it moves; L, Shift+G, B, F, Shift+F, W and
+///     Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
 ///     Ctrl+P is the autopilot window, the transponder panel takes a squawk; the Engines panel shows
 ///     the stock engine values (all in BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs;
 ///     unmeasured parts in docs/b757/plans/01-prototype-insim-tests.md).

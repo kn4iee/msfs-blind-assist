@@ -214,6 +214,39 @@ public static class Bbs757Readouts
 
     private static string Lower(string words) => words.Length == 0 ? words : char.ToLowerInvariant(words[0]) + words[1..];
 
+    // ---- stabilizer trim ------------------------------------------------------------------------
+
+    /// <summary>The trim indicator strip's floor, in units: it shows no less however far nose down the stabilizer goes.</summary>
+    public const double StabTrimMinUnits = 0.436;
+
+    /// <summary>
+    /// The stabilizer trim in BlueBird's indicator units from the stock <c>ELEVATOR TRIM POSITION</c> in
+    /// degrees: <c>max(0.436, -0.002148·d² + 0.803152·d + 1.11308)</c>, the strip's own code in the
+    /// cockpit XML (live-findings, session 7: 2.3 degrees at load is 2.95 units). The curve rises until
+    /// about 187 degrees, far past the stabilizer's travel, so more nose-up trim never reads fewer units;
+    /// below about -0.84 degrees the strip rests on <see cref="StabTrimMinUnits"/>.
+    /// </summary>
+    public static double StabTrimUnits(double degrees)
+        => Math.Max(StabTrimMinUnits, -0.002148 * degrees * degrees + 0.803152 * degrees + 1.11308);
+
+    // ---- EXEC light -----------------------------------------------------------------------------
+
+    /// <summary>The EXEC light's call-out row, keyed apart from the L:var like the other rows.</summary>
+    public const string ExecLightKey = "BBS757_EXEC_LIGHT";
+
+    /// <summary>
+    /// The captain's CDU EXEC light, <c>L:FMC_EXEC_ACTIVE_1</c> (1 lit). Both CDUs lit together after
+    /// ACTIVATE and went out after EXEC (session 7), so the first officer's <c>_2</c> is not read (ruling R36).
+    /// </summary>
+    public const string ExecLightVar = "FMC_EXEC_ACTIVE_1";
+
+    /// <summary>"EXEC light on", "EXEC light off" (the iFly CDU window's words), "EXEC light unavailable" when not read.</summary>
+    public static string ExecLightPhrase(double? value)
+    {
+        if (value is not double v || !double.IsFinite(v)) return "EXEC light unavailable";
+        return v > 0.5 ? "EXEC light on" : "EXEC light off";
+    }
+
     // ---- fuel and weight ------------------------------------------------------------------------
 
     /// <summary>

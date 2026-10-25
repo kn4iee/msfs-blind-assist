@@ -392,7 +392,7 @@ You can also move the lever on those aircraft from the Control Stand panel. Turn
 
 BA announces stabiliser trim as it changes. On most aircraft it is spoken in degrees with a direction, in steps of a tenth of a degree, for example *"Trim up 1.4"*. It stays quiet while the trim only wobbles on the ground. Some aircraft use their own trim units, to match the number the FMC asks for and the trim indicator shows:
 
-- PMDG 737 and iFly 737 MAX 8: *"Trim 5.3"*.
+- PMDG 737, iFly 737 MAX 8 and BlueBird 757-200: *"Trim 5.3"*.
 - PMDG 777: *"Trim 5.25 units"*.
 
 On every aircraft, press Output Shift+T to turn trim announcements on or off; you hear *"Trim announcements on"* or *"Trim announcements off"*. Trim announcements can also be muted from the Monitor Manager.

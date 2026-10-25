@@ -9,15 +9,16 @@ using R = MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// The 757's flight-control readouts, its MCP lights and its engine rows: what is registered, where
-/// it shows, what is spoken on change, and the output-mode readouts (L flaps, Shift+G gear, B the
-/// altimeters and the radio minimums, F and Shift+F fuel, W and Shift+W gross weight).
+/// The 757's flight-control readouts, its MCP lights, its EXEC light and its engine rows: what is
+/// registered, where it shows, what is spoken on change, the trim in BlueBird's units, and the
+/// output-mode readouts (L flaps, Shift+G gear, B the altimeters and the radio minimums, F and Shift+F
+/// fuel, W and Shift+W gross weight).
 ///
 /// Speech follows CORE-7. A change the pilot did not make (flaps, gear, speedbrake, parking brake,
-/// an MCP light) is spoken once, through <see cref="Bbs757ChangeTracker"/>: the cockpit as found is
-/// a silent baseline, an unchanged value is silent, and a change the app's own press or pick made is
-/// its echo (the press reads it back itself, the screen reader read the pick). A readout is spoken at
-/// once (AnnounceImmediate), never refused silently.
+/// an MCP light, the EXEC light) is spoken once, through <see cref="Bbs757ChangeTracker"/>: the
+/// cockpit as found is a silent baseline, an unchanged value is silent, and a change the app's own
+/// press or pick made is its echo (the press reads it back itself, the screen reader read the pick).
+/// A readout is spoken at once (AnnounceImmediate), never refused silently.
 ///
 /// The data-definition budget: the announced rows ride the 1 Hz batch (no individual definition), the
 /// flap angle, the squawk and the ten engine rows are read while their display is shown, and the
@@ -79,6 +80,14 @@ public partial class BBS757Definition
         // The MCP button lights.
         foreach (var light in Bbs757McpLights.All)
             Add(light.Key, StreamedRow(light.LightVar, light.Label, SimVarType.LVar, "number"));
+
+        // The captain's CDU EXEC light (ruling R36): spoken on change, with a Ctrl+M row of its own,
+        // and on no panel or status display.
+        Add(R.ExecLightKey, new SimVarDefinition
+        {
+            Name = R.ExecLightVar, DisplayName = "EXEC light", Type = SimVarType.LVar, Units = "number",
+            UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+        });
 
         // Silent rows, read while their status display is shown (no Ctrl+M row: they speak nothing).
         Add(R.FlapsAngleKey, DisplayedRow("TRAILING EDGE FLAPS LEFT ANGLE", "Flap Angle", "degrees"));
@@ -204,6 +213,9 @@ public partial class BBS757Definition
             case R.ParkingBrakeKey:
                 SpeakChange(varName, double.IsFinite(value) ? R.ParkingBrakePhrase(value) : null, announcer);
                 return true;
+            case R.ExecLightKey:
+                SpeakChange(varName, double.IsFinite(value) ? R.ExecLightPhrase(value) : null, announcer);
+                return true;
             case R.GearNoseKey:
             case R.GearLeftKey:
             case R.GearRightKey:
@@ -219,6 +231,20 @@ public partial class BBS757Definition
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// The shared trim call-out (<c>MON_ElevatorTrim</c>: the stock <c>ELEVATOR TRIM POSITION</c> in
+    /// degrees, on the 1 Hz batch) speaks BlueBird's indicator units
+    /// (<see cref="Bbs757Readouts.StabTrimUnits"/>) in the 737s' words, "Trim 5.3"
+    /// (<see cref="StabTrimUnitsCallout"/>), keyed on the tenth it speaks: the stabilizer is heard about
+    /// once a second while it moves (ruling R35). The base class's first-reading baseline, hysteresis,
+    /// Shift+T toggle and Ctrl+M row apply unchanged; no readout key and no status row.
+    /// </summary>
+    protected override (double Key, string Phrase) DescribeElevatorTrim(double degrees)
+    {
+        double units = Math.Round(R.StabTrimUnits(degrees), 1);
+        return (units, string.Create(CultureInfo.InvariantCulture, $"Trim {units:F1}"));
     }
 
     /// <summary>One row's phrase this delivery: spoken when the tracker calls it a change. A null phrase (an unreadable value) is neither spoken nor a baseline.</summary>

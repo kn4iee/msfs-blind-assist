@@ -39,9 +39,13 @@ button lights.
 
 Spoken on change (each can be muted with Ctrl+M): flaps ("Flaps 5"), gear
 ("Gear in transit", "Gear down", "Gear up"), speedbrake ("Speedbrake
-armed", "Speedbrake up 50 percent"), parking brake ("Parking brake set")
-and the MCP button lights ("CMD L on", "VNAV off"). A change you make
-yourself in the app is not said twice.
+armed", "Speedbrake up 50 percent"), parking brake ("Parking brake set"),
+the MCP button lights ("CMD L on", "VNAV off") and the CDU's EXEC light
+("EXEC light on" when a change waits for EXEC, "EXEC light off" once it is
+executed). A change you make yourself in the app is not said twice.
+The stabilizer trim is spoken while it moves, about once a second, in the
+units BlueBird's trim indicator shows ("Trim 5.3", as on the 737s);
+Shift+T in output mode turns it off and on.
 
 OUTPUT MODE - Press right bracket to activate
 
@@ -99,6 +103,9 @@ Altimeter:
 Squawk:
   X          Read Squawk Code
 
+Trim:
+  Shift+T    Toggle Trim Announcements On/Off
+
 Vertical:
   V          Read Vertical Speed
   Ctrl+Shift+R  Read last landing rate (touchdown vertical speed, feet per minute)
@@ -144,9 +151,9 @@ EFB:
 Monitoring:
   Ctrl+M     757 Monitor Manager. Lists every automatically announced
              variable (APU state, master warning and caution, flaps, gear,
-             speedbrake, parking brake, each MCP button light, ground state,
-             glideslope, trim); uncheck any to stop it speaking when it
-             changes. Persists across sessions.
+             speedbrake, parking brake, each MCP button light, the EXEC
+             light, ground state, glideslope, trim); uncheck any to stop it
+             speaking when it changes. Persists across sessions.
 
 SayIntentions:
   Ctrl+S        Read last SayIntentions transmission

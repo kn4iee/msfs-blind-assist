@@ -6,8 +6,9 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The BlueBird 757's readouts that need no simulator: the flap detents and their surface angles,
 /// the gear, the speedbrake and the parking brake words, the fuel and weight sentences, the engine
-/// rows, the MCP button lights and the change tracker that decides what is spoken on change. CI
-/// runs under en-US, so the de-DE and sv-SE cases are the ones that catch a comma or a U+2212 minus.
+/// rows, the trim in units, the EXEC light, the MCP button lights and the change tracker that decides
+/// what is spoken on change. CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch
+/// a comma or a U+2212 minus.
 /// </summary>
 public class Bbs757ReadoutsTests
 {
@@ -385,6 +386,58 @@ public class Bbs757ReadoutsTests
     {
         var row = Bbs757Readouts.EngineRows.First(r => r.Kind == kind);
         InCulture("de-DE", () => Assert.Equal(text, Bbs757Readouts.EngineText(row, value)));
+    }
+
+    // ---- Stabilizer trim (task 11c, ruling R35) -----------------------------------------------
+
+    [Theory]
+    [InlineData(2.3, 2.9)]       // at load: 2.3 degrees, 2.95 units on the strip (session 7)
+    [InlineData(2.381, 3.0)]     // five ELEV_TRIM_UP later
+    [InlineData(-10.0, 0.4)]     // far nose down: the strip stops at 0.436
+    public void The_trim_is_blueBirds_indicator_strip_in_units(double degrees, double units)
+    {
+        Assert.Equal(units, Math.Round(Bbs757Readouts.StabTrimUnits(degrees), 1));
+    }
+
+    [Fact]
+    public void The_units_are_the_strips_own_formula()
+    {
+        // max(0.436, -0.002148 d² + 0.803152 d + 1.11308), the cockpit XML's strip.
+        Assert.Equal(2.94897, Bbs757Readouts.StabTrimUnits(2.3), 5);
+        Assert.Equal(1.11308, Bbs757Readouts.StabTrimUnits(0), 5);
+        Assert.Equal(0.436, Bbs757Readouts.StabTrimUnits(-0.9), 5);
+        Assert.Equal(0.436, Bbs757Readouts.StabTrimUnits(-30), 5);
+    }
+
+    [Fact]
+    public void More_nose_up_trim_never_reads_fewer_units()
+    {
+        // The shared trim call-out keys its debounce on the units, so they must never fall as the degrees rise.
+        double last = double.MinValue;
+        for (int hundredths = -2000; hundredths <= 2000; hundredths++)
+        {
+            double units = Bbs757Readouts.StabTrimUnits(hundredths / 100.0);
+            Assert.True(units >= last, $"{hundredths / 100.0} degrees");
+            last = units;
+        }
+    }
+
+    // ---- The EXEC light (task 11c, ruling R36) --------------------------------------------------
+
+    [Theory]
+    [InlineData(1, "EXEC light on")]
+    [InlineData(0, "EXEC light off")]
+    [InlineData(0.9, "EXEC light on")]
+    public void The_exec_light_says_on_or_off(double value, string phrase)
+    {
+        Assert.Equal(phrase, Bbs757Readouts.ExecLightPhrase(value));
+    }
+
+    [Fact]
+    public void An_unread_exec_light_is_unavailable()
+    {
+        Assert.Equal("EXEC light unavailable", Bbs757Readouts.ExecLightPhrase(null));
+        Assert.Equal("EXEC light unavailable", Bbs757Readouts.ExecLightPhrase(double.NaN));
     }
 
     // ---- MCP lights -------------------------------------------------------------------------

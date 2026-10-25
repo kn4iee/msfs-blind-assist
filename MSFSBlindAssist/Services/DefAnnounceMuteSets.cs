@@ -25,10 +25,10 @@ namespace MSFSBlindAssist.Services;
 /// It was the one left out until 2026-09-25 and relied on each branch checking
 /// <c>A380DisabledMonitorVariablesSet</c> itself; the baro branches never did, so their rows muted
 /// nothing. The branches that check locally are unaffected.</item>
-/// <item>the BlueBird 757 — its flaps, speedbrake, parking brake and MCP light call-outs and the base
-/// class's trim and glideslope call-outs (its map's status rows speak on the generic path, where the
-/// same list gates them; its three gear legs speak the one "Gear" row's call-out, so they are
-/// <see cref="IAircraftDefinition.IsMuteWrapExempt"/> and check that row themselves).</item>
+/// <item>the BlueBird 757 — its flaps, speedbrake, parking brake, MCP light and EXEC light call-outs
+/// and the base class's trim and glideslope call-outs (its map's status rows speak on the generic
+/// path, where the same list gates them; its three gear legs speak the one "Gear" row's call-out,
+/// so they are <see cref="IAircraftDefinition.IsMuteWrapExempt"/> and check that row themselves).</item>
 /// </list>
 /// The Fenix announces on the generic path, where its own gate lives, so it is not wrapped. Anything
 /// a definition speaks from a TIMER or a batch hook runs outside this wrap and must still check its

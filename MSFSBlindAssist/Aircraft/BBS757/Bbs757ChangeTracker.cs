@@ -2,8 +2,8 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
 /// Decides which of the 757's state call-outs (flaps, gear, speedbrake, parking brake, the MCP
-/// lights) are spoken: a phrase per row, spoken when it CHANGES. Pure; the definition feeds it
-/// deliveries on the UI thread, with the time.
+/// lights, the EXEC light) are spoken: a phrase per row, spoken when it CHANGES. Pure; the definition
+/// feeds it deliveries on the UI thread, with the time.
 /// <list type="bullet">
 /// <item>Baseline-first: the first phrase of a row after connecting or a flight load is remembered,
 /// never spoken (the cockpit as found is no change).</item>

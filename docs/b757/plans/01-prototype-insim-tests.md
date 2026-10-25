@@ -238,5 +238,15 @@ Task 10 fix round 1 (rulings R31, R32):
     it switches the window between IAS and Mach). With MobiFlight stopped, a press says "LNAV unavailable" and nothing
     moves.
 79. Ctrl+P, A/T Arm (R40): after a flight load "A/T Arm: On" (BlueBird loads every panel state armed). Press it: within
-    about a second "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
+    a second or two "A/T Arm: Off"; again: "On". If the caption ever disagrees with the autothrottle mode the ADI shows
     (Alt+P), for example after the A/T Disconnect button, note both.
+80. Trim in units (R35): with the hydraulics powered (the electric pumps on, or the engines running), trim with the
+    simulator's trim keys: about once a second while it moves BA says the setting ("Trim 3.0", "Trim 3.1", …), and
+    nothing once it stops; the trim as found when BA connects is not spoken (after a flight reload the new flight's
+    trim may be said once, as on every aircraft). On the CDU's TAKEOFF REF page (Shift+M, INIT REF) note the
+    TRIM figure and trim until BA says it; Claude compares the stabilizer trim indicator on a window capture with the
+    spoken value there and near each end of the travel (the strip formula is weakest at the ends). Output Shift+T:
+    "Trim announcements off" and trimming is silent; Shift+T again: "Trim announcements on".
+81. EXEC light (R36): route by ACARS as in checks 38-39. After ACTIVATE (Alt+6 on RTE): "EXEC light on", once; after
+    EXEC (Ctrl+Enter): "EXEC light off", once. A later modification (a direct-to, say) says "on" again and its EXEC
+    "off". Ctrl+M lists "EXEC light"; untick it: no EXEC call-outs. Reload the flight: nothing is said at the load.
