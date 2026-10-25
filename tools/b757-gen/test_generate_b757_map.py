@@ -652,6 +652,14 @@ class IncludeNodes(unittest.TestCase):
         with self.assertRaisesRegex(g.CurationError, r"still leave out: BBS757_PEDESTAL_Park_Brake_Lever \(lever\)"):
             self.build(rows)
 
+    def test_a_taken_in_node_no_node_panels_rule_places_is_an_error(self):
+        # Without a rule it would fall back to a panel named after the EXCLUDED banner ("Right Window Rain Effects").
+        with self.assertRaisesRegex(g.CurationError,
+                                    r"include_nodes name nodes no node_panels rule places: BBS757_PEDESTAL_Park_Brake_Lever"):
+            self.build(cur=self.cur(node_panels=[]))
+        with self.assertRaisesRegex(g.CurationError, "no node_panels rule places"):
+            self.build(cur=self.cur(node_panels=[{"prefix": "BBS757_OTHER_", "panel": "Control stand"}]))
+
     def test_include_nodes_loads_as_a_list_and_defaults_to_empty(self):
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, ignore_errors=True)
@@ -692,8 +700,8 @@ class Curation(unittest.TestCase):
         keys = [s["key"] for s in c["status"]]
         self.assertEqual(keys, ["B757_APU_STATE", "BBS_CA_MASTER_WARNING", "BBS_CA_MASTER_CAUTION",
                                 "B757_L_BUS_PWR_SRC", "B757_R_BUS_PWR_SRC", "B757_APU_RPM_PRC",
-                                "B757_DEBUG_PRESSURE_CABIN_ALT_FT"])
-        self.assertEqual([s["announce"] for s in c["status"]], [True, True, True, False, False, False, False])
+                                "B757_DEBUG_PRESSURE_CABIN_ALT_FT", "BBS757_vis_chocks"])
+        self.assertEqual([s["announce"] for s in c["status"]], [True, True, True, False, False, False, False, False])
         for banner, entry in c["panels"].items():  # the vendor's typos never reach a pilot
             name = entry if isinstance(entry, str) else entry["name"]
             self.assertNotRegex(name, "GAURD|FISRT|Gaurd|Fisrt")
@@ -828,6 +836,52 @@ class Curation(unittest.TestCase):
         control, _, _ = g.convert_row(r, c)
         self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "L"), (1, "R")])
 
+    def test_the_shipped_curation_names_the_flow_switches_from_panel_states_and_the_manual(self):
+        # Ruling R32: only the positions BlueBird's nine panel states and the manual's procedure text back are named;
+        # the rest keep the generator's own "Position n".
+        c = g.load_curation(g.DEFAULT_CURATION)
+        n = lambda *labels: [(i, l) for i, l in enumerate(labels)]
+        signs = n("OFF", "Position 1", "ON")
+        packs = n("OFF", "AUTO", "Position 2", "Position 3", "Position 4")
+        cases = [
+            (self.knob("B757_OVHD_SEATBELTS_SWITCH", "B757_OVHD_SEATBELTS_SWITCH", 3, "PASSENGER SIGNS"), signs),
+            (self.knob("B757_OVHD_NO_SMOKING_SWITCH", "B757_OVHD_NO_SMOKING_SWITCH", 3, "PASSENGER SIGNS"), signs),
+            (self.knob("B757_OVHD_SEL_L_PACK_SWITCH", "B757_OVHD_SEL_L_PACK_SWITCH", 5, "AIR COND"), packs),
+            (self.knob("B757_OVHD_SEL_R_PACK_SWITCH", "B757_OVHD_SEL_R_PACK_SWITCH", 5, "AIR COND"), packs),
+            (self.knob("B757_OVHD_MODE_SELECT_SWITCH", "B757_OVHD_MODE_SELECT_SWITCH", 3, "PRESSURIZATION"),
+             n("AUTO 1", "Position 1", "Position 2")),
+            (self.knob("B757_OVHD_ENG_START_SWITCH", "B757_OVHD_ENG_START_SWITCH", 3, "ENGINE START"),
+             n("1", "Position 1", "Position 2")),
+            (self.knob("B757_MCP_AP_HDG_BNKLIM", "BBS757_BANK_LIMITER", 6, "MCP"),
+             n("AUTO", *[f"Position {i}" for i in range(1, 6)])),
+            (self.knob("B757_EICAS_LWR_THRUST-REF_KNOB", "B757_EICAS_LWR_THRUST_REF_KNOB", 3, "EICAS"),
+             n("Position 0", "BOTH", "Position 2")),
+            (self.knob("B757_OVHD_WIPER_SWITCH", "B757_OVHD_WIPER_SWITCH", 3, "WIPERS"),
+             n("OFF", "Position 1", "Position 2")),
+        ]
+        for r, names in cases:
+            with self.subTest(node=r["node"]):
+                control, why, _ = g.convert_row(r, c)
+                self.assertIsNone(why)
+                self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], names)
+        # The overhead ignition selector's node says ENG START; it selects the igniters (the vendor's tooltip
+        # 'Engine Ignitors'), and the panel's other two rows are the L and R ENG Start selectors.
+        self.assertEqual(c["labels"]["B757_OVHD_ENG_START_SWITCH"], "Ignition")
+
+    def test_the_shipped_curation_shows_the_chocks_without_announcing_them(self):
+        # Ruling R31: L:BBS757_vis_chocks, 0 removed, 1 in place (measured), a Status row, never spoken.
+        c = g.load_curation(g.DEFAULT_CURATION)
+        chocks = [g.status_row(s) for s in c["status"] if s["key"] == "BBS757_vis_chocks"]
+        self.assertEqual(chocks, [{"key": "BBS757_vis_chocks", "panel": "Status", "label": "Chocks",
+                                   "positions": [{"value": 0, "label": "Removed"}, {"value": 1, "label": "In place"}],
+                                   "announce": False}])
+
+    def test_the_notes_are_written_in_us_english(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = "\n".join(json.load(fh)["_notes"])
+        for british in ("initialise", "colour", "centre"):
+            self.assertNotIn(british, notes)
+
     def test_each_named_position_list_has_its_evidence_in_the_notes(self):
         with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
             data = json.load(fh)
@@ -836,7 +890,11 @@ class Curation(unittest.TestCase):
                      "B757_IRS_C_SWITCH", "B757_IRS_R_SWITCH", "B757_ADI_1_TFC_KNOB", "B757_ADI_2_TFC_KNOB",
                      "B757_ADI_1_CTR_KNOB", "B757_ADI_2_CTR_KNOB", "B757_PED_TCAS_MODE_KNOB",
                      "B757_PED_TCAS_XPNDR_SWITCH", "B757_MAIN_knob_gears_altn_flaps", "B757_IRS_LARGE_KNOB",
-                     "B757_IRS_CENTRE_KNOB", "B757_MCP_HOLD_1_BUTTON", "BBS757_PEDESTAL_Park_Brake_Lever"):
+                     "B757_IRS_CENTRE_KNOB", "B757_MCP_HOLD_1_BUTTON", "BBS757_PEDESTAL_Park_Brake_Lever",
+                     "B757_OVHD_SEATBELTS_SWITCH", "B757_OVHD_NO_SMOKING_SWITCH", "B757_OVHD_SEL_L_PACK_SWITCH",
+                     "B757_OVHD_SEL_R_PACK_SWITCH", "B757_OVHD_MODE_SELECT_SWITCH", "B757_OVHD_ENG_START_SWITCH",
+                     "B757_MCP_AP_HDG_BNKLIM", "B757_EICAS_LWR_THRUST-REF_KNOB", "B757_OVHD_WIPER_SWITCH",
+                     "BBS757_vis_chocks"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
         self.assertIn("unmeasured", notes)

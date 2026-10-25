@@ -136,11 +136,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
@@ -171,11 +171,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
@@ -842,13 +842,13 @@
    "node": "B757_OVHD_ENG_START_SWITCH",
    "section": "Overhead",
    "panel": "Engine start",
-   "label": "ENG Start",
+   "label": "Ignition",
    "kind": "switch",
    "state_var": "B757_OVHD_ENG_START_SWITCH",
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "1"
     },
     {
      "value": 1,
@@ -1977,7 +1977,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
@@ -1985,7 +1985,7 @@
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "ON"
     }
    ],
    "press": null,
@@ -2004,7 +2004,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
@@ -2012,7 +2012,7 @@
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "ON"
     }
    ],
    "press": null,
@@ -2031,7 +2031,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "AUTO 1"
     },
     {
      "value": 1,
@@ -2525,7 +2525,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
@@ -2799,7 +2799,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "AUTO"
     },
     {
      "value": 1,
@@ -6538,7 +6538,7 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "BOTH"
     },
     {
      "value": 2,
@@ -8743,6 +8743,22 @@
    "panel": "Status",
    "label": "Cabin Altitude",
    "positions": [],
+   "announce": false
+  },
+  {
+   "key": "BBS757_vis_chocks",
+   "panel": "Status",
+   "label": "Chocks",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Removed"
+    },
+    {
+     "value": 1,
+     "label": "In place"
+    }
+   ],
    "announce": false
   }
  ]

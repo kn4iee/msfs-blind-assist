@@ -510,6 +510,15 @@ def build_map(rows, cur, aircraft, version):
     if left_out:
         raise CurationError("curation include_nodes name nodes the rules still leave out: "
                             + ", ".join(f"{n} ({dropped_why.get(n, '?')})" for n in left_out))
+    # A taken-in control must be placed by a node rule: without one it would land on a panel named after the very
+    # banner that is excluded.
+    first_row = {}
+    for r in rows:
+        first_row.setdefault(r["node"], r)
+    unplaced = sorted(n for n in included if node_rule(first_row[n], cur) is None)
+    if unplaced:
+        raise CurationError(f"curation include_nodes name nodes no node_panels rule places: {', '.join(unplaced)} "
+                            "(add a node_panels rule naming their panel)")
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,

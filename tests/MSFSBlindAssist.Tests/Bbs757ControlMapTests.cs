@@ -188,6 +188,45 @@ public class Bbs757ControlMapTests
         Assert.All(new[] { hdg, alt }, c => Assert.Equal(("Glareshield", "MCP"), (c.Section, c.Panel)));
     }
 
+    [Theory]
+    [InlineData("B757_OVHD_SEATBELTS_SWITCH", "OFF|Position 1|ON")]
+    [InlineData("B757_OVHD_NO_SMOKING_SWITCH", "OFF|Position 1|ON")]
+    [InlineData("B757_OVHD_SEL_L_PACK_SWITCH", "OFF|AUTO|Position 2|Position 3|Position 4")]
+    [InlineData("B757_OVHD_SEL_R_PACK_SWITCH", "OFF|AUTO|Position 2|Position 3|Position 4")]
+    [InlineData("B757_OVHD_MODE_SELECT_SWITCH", "AUTO 1|Position 1|Position 2")]
+    [InlineData("B757_OVHD_ENG_START_SWITCH", "1|Position 1|Position 2")]
+    [InlineData("B757_MCP_AP_HDG_BNKLIM", "AUTO|Position 1|Position 2|Position 3|Position 4|Position 5")]
+    [InlineData("B757_EICAS_LWR_THRUST-REF_KNOB", "Position 0|BOTH|Position 2")]
+    [InlineData("B757_OVHD_WIPER_SWITCH", "OFF|Position 1|Position 2")]
+    public void The_flow_switches_name_the_positions_the_panel_states_and_manual_back(string node, string names)
+    {
+        // Ruling R32: named only where BlueBird's nine panel states and the manual agree; the rest stay numbered.
+        Bbs757Control c = Find(node);
+
+        Assert.Equal(names.Split('|'), c.Positions.Select(p => p.Label));
+        Assert.Equal(Enumerable.Range(0, c.Positions.Count).Select(i => (double)i), c.Positions.Select(p => p.Value));
+    }
+
+    [Fact]
+    public void The_overhead_ignition_selector_is_named_ignition_beside_the_two_start_selectors()
+    {
+        Bbs757Control ignition = Find("B757_OVHD_ENG_START_SWITCH");
+
+        Assert.Equal("Ignition", ignition.Label);
+        Assert.Equal(new[] { "Ignition", "L ENG Start", "R ENG Start" },
+            Map.Controls.Where(c => c.Panel == ignition.Panel).Select(c => c.Label).OrderBy(l => l, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void The_chocks_are_a_silent_status_row()
+    {
+        // Ruling R31: L:BBS757_vis_chocks, measured 0 removed, 1 in place.
+        var chocks = Assert.Single(Map.Status, s => s.Key == "BBS757_vis_chocks");
+
+        Assert.Equal(("Status", "Chocks", false), (chocks.Panel, chocks.Label, chocks.Announce));
+        Assert.Equal(new[] { new Bbs757Position(0, "Removed"), new Bbs757Position(1, "In place") }, chocks.Positions);
+    }
+
     [Fact]
     public void The_three_cmd_buttons_are_left_center_and_right()
     {
