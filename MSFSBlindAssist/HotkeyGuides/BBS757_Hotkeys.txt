@@ -171,8 +171,9 @@ MCP Value Windows:
   to set. About a second later the app reads the value back from the MCP
   ("Heading 090", "Speed 250", "Altitude 12000", "Vertical speed minus 1500"),
   so you hear what the MCP took, not what you typed. A speed is set by
-  stepping the MCP, which takes about one to three seconds; the app checks
-  and corrects it before it speaks.
+  turning the MCP's speed knob for you in quick bursts, allowing for the
+  way BlueBird's knob speeds up when turned fast; it takes about one to two
+  seconds, and the app checks and corrects it before it speaks.
 
   Ctrl+B     Altimeter and minimums window:
              Altimeter box: type inches (29.92) or hectopascals (1013) and

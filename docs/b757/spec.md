@@ -79,7 +79,9 @@ The selected values live in WASM L:vars `L:BBS_AP_TARGET_HEADING`, `L:BBS_AP_TAR
 with the MCP (stock speed 100 against 200 shown). So the app sets MCP values by L:var and never reads them from stock
 autopilot variables. Measured since (`evidence/live-findings.md`, MCP): altitude adopts a direct write (100 ft per
 `K:AP_ALT_VAR_INC`); V/S adopts a direct write, negative values too (500 and -1500 read back; one `K:AP_VS_VAR_INC` is
-+100 fpm); the IAS target is `L:BBS757_ORANGE_AIRSPEED_BUGS`, read-only, set by `K:AP_SPD_VAR_INC/DEC` steps of 1 kt.
++100 fpm); the IAS target is `L:BBS757_ORANGE_AIRSPEED_BUGS`, read-only, set by `K:AP_SPD_VAR_INC/DEC` steps of 1 kt,
+which BlueBird speeds up within a burst (events 11-25 move 2 kt, later ones 5 kt; measured after the first flight, rule
+B757-3).
 The Mach-mode flag is unproven: `L:BBS_AIRSPEED_IN_MACH` stayed 0 after a pulse of the IAS/MACH changeover button.
 
 ### 3.3 CDU: full text both sides, keys by held L:vars (measured)

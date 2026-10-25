@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.SimConnect;
@@ -8,16 +9,20 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The BlueBird 757's MCP value entry: the pure RPN and phrase builders, the typed-input
-/// validators, and the set loops run against a simulated MCP (<see cref="FakeMcp"/>). What a real
-/// 757 does with a burst of K-events is checked in the sim; what is pinned here is the logic
-/// around it: how many steps, when to correct, what is spoken (the value READ, never the request),
-/// and that no number is formatted with the PC's culture (CI runs under en-US, so the de-DE and
-/// sv-SE tests are the ones that can catch a comma or a U+2212 minus).
+/// validators, and the set loops run against a simulated MCP (<see cref="FakeMcp"/>) that moves the
+/// speed target the way BlueBird's knob was measured to (session 7: 1, 2 and 5 kt tiers within a
+/// burst). What is pinned here is the logic around the aircraft: how a speed change is cut into
+/// bursts, when to correct, what is spoken (the value READ, never the request), and that no number
+/// is formatted with the PC's culture (CI runs under en-US, so the de-DE and sv-SE tests are the
+/// ones that can catch a comma or a U+2212 minus).
 /// </summary>
 public class Bbs757McpTests
 {
     private static int Count(IEnumerable<string> calls, string needle)
         => calls.Sum(c => c.Split(needle).Length - 1);
+
+    /// <summary>The events a speed burst loop fires: its count, the number it starts with.</summary>
+    private static int EventsIn(string burst) => int.Parse(burst.Split(' ')[0], CultureInfo.InvariantCulture);
 
     private static void InCulture(string name, Action body)
     {
@@ -45,44 +50,74 @@ public class Bbs757McpTests
         Assert.Equal("BBS_AIRSPEED_IN_MACH", Bbs757Mcp.MachModeVar);
     }
 
-    [Fact]
-    public void SpeedSteps_up_is_fifty_increments_in_two_calls()
-    {
-        var calls = Bbs757Mcp.SpeedSteps(200, 250);
+    // ---- Speed bursts: BlueBird's knob tiers (session 7) ---------------------------------------
 
-        Assert.Equal(2, calls.Count);
-        Assert.Equal(50, Count(calls, "(>K:AP_SPD_VAR_INC)"));
-        Assert.Equal(0, Count(calls, "DEC"));
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(10, 10)]     // events 1-10 move 1 kt each (measured: 10 events +10)
+    [InlineData(11, 12)]     // events 11-25 move 2 kt each
+    [InlineData(20, 30)]     // measured: 20 events +30
+    [InlineData(25, 40)]     // measured: 25 events +40
+    [InlineData(26, 45)]     // from the 26th, 5 kt each
+    [InlineData(30, 65)]     // measured: 30 events +65
+    [InlineData(53, 180)]    // the first flight's burst: 53 events moved the target 180 kt
+    public void A_burst_moves_the_speed_by_blueBirds_measured_tiers(int events, int knots)
+    {
+        Assert.Equal(knots, Bbs757Mcp.SpeedBurstKnots(events));
+    }
+
+    [Theory]
+    [InlineData(7, 7, 0)]
+    [InlineData(10, 10, 0)]
+    [InlineData(11, 10, 1)]
+    [InlineData(13, 11, 1)]
+    [InlineData(40, 25, 0)]
+    [InlineData(41, 25, 1)]
+    [InlineData(47, 26, 2)]     // 200 to 153: 26 events move 45 kt, 2 are left
+    [InlineData(100, 37, 0)]
+    [InlineData(180, 53, 0)]    // 100 to 280: the flight's 53 events, exactly
+    [InlineData(299, 76, 4)]    // the whole 100 to 399 span
+    [InlineData(0, 0, 0)]
+    public void A_speed_change_is_one_planned_burst_and_the_knots_it_cannot_reach(int knots, int bulk, int rest)
+    {
+        Assert.Equal(new Bbs757SpeedBurstPlan(bulk, rest), Bbs757Mcp.SpeedBursts(knots));
     }
 
     [Fact]
-    public void SpeedSteps_down_is_fifty_one_decrements()
+    public void The_planned_burst_is_the_longest_that_does_not_pass_the_change()
     {
-        var calls = Bbs757Mcp.SpeedSteps(250, 199);
+        for (int knots = 0; knots <= 500; knots++)
+        {
+            var (bulk, rest) = Bbs757Mcp.SpeedBursts(knots);
 
-        Assert.Equal(51, Count(calls, "(>K:AP_SPD_VAR_DEC)"));
-        Assert.Equal(0, Count(calls, "INC"));
-        Assert.All(calls, c => Assert.True(Count(new[] { c }, "(>K:") <= Bbs757Rpn.MaxKeysPerCall));
+            Assert.Equal(knots, Bbs757Mcp.SpeedBurstKnots(bulk) + rest);
+            Assert.True(Bbs757Mcp.SpeedBurstKnots(bulk + 1) > knots, $"{knots} kt: one more event would still fit");
+            // The rest goes as a burst of its own, so every one of its events moves 1 kt.
+            Assert.InRange(rest, 0, 4);
+        }
     }
 
-    [Fact]
-    public void SpeedSteps_when_already_there_is_empty()
+    [Theory]
+    [InlineData(true, 26, "26 sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_INC) l0 1 - sp0 g1 }")]
+    [InlineData(false, 2, "2 sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_DEC) l0 1 - sp0 g1 }")]
+    [InlineData(true, 76, "76 sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_INC) l0 1 - sp0 g1 }")]
+    public void A_burst_is_one_short_rpn_loop_for_any_count(bool up, int events, string code)
     {
-        Assert.Empty(Bbs757Mcp.SpeedSteps(200, 200));
-        Assert.Empty(Bbs757Mcp.SpeedSteps(200.4, 199.6));   // both round to 200
+        // No unique prefix: ExecuteCalculatorCodeUnique adds it on the way out.
+        Assert.Equal(code, Bbs757Mcp.SpeedBurstCode(up, events));
     }
 
-    [Fact]
-    public void SpeedSteps_counts_whole_knots_between_the_rounded_values()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_burst_loop_is_written_invariant_under_comma_decimal_cultures(string culture)
     {
-        Assert.Equal(6, Count(Bbs757Mcp.SpeedSteps(204.4, 209.6), "(>K:AP_SPD_VAR_INC)"));   // 204 to 210
-    }
-
-    [Fact]
-    public void SpeedSteps_of_an_unreadable_value_sends_nothing()
-    {
-        Assert.Empty(Bbs757Mcp.SpeedSteps(double.NaN, 250));
-        Assert.Empty(Bbs757Mcp.SpeedSteps(200, double.PositiveInfinity));
+        InCulture(culture, () =>
+        {
+            Assert.Equal("1234 sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_DEC) l0 1 - sp0 g1 }", Bbs757Mcp.SpeedBurstCode(false, 1234));
+            Assert.Equal("53 sp0 :1 l0 0 > if{ (>K:AP_SPD_VAR_INC) l0 1 - sp0 g1 }", Bbs757Mcp.SpeedBurstCode(true, 53));
+        });
     }
 
     [Fact]
@@ -151,7 +186,8 @@ public class Bbs757McpTests
                     Bbs757Mcp.AltitudePhrase(12000), Bbs757Mcp.AltitudePhrase(35000.2),
                     Bbs757Mcp.VsPhrase(-1500), Bbs757Mcp.VsPhrase(1500), Bbs757Mcp.VsPhrase(0),
                 };
-                all.AddRange(Bbs757Mcp.SpeedSteps(200, 250));
+                all.Add(Bbs757Mcp.SpeedBurstCode(true, 27));
+                all.Add(Bbs757Mcp.SpeedBurstCode(false, 4));
                 all.AddRange(Bbs757Mcp.VsSteps(0, -1500));
 
                 Assert.All(all, s => Assert.DoesNotContain(",", s));
@@ -278,35 +314,58 @@ public class Bbs757McpTests
     // ---- Set loops against a simulated MCP ---------------------------------------------------
 
     /// <summary>
-    /// A simulated MCP behind <see cref="McpIo"/>. A K-event burst counts only
-    /// <see cref="EventsCountedPerCall"/> events per calculator call (the real limit is unmeasured
-    /// past 11) and <see cref="EventsCountedPerWindow"/> between two waits, and
-    /// <see cref="DirectWritesAdopted"/> says whether the target L:var takes a write. It keeps a
-    /// virtual clock (<see cref="Now"/>, advanced only by the loop's waits): with
-    /// <see cref="LagMs"/> set a speed burst lands in two halves that far apart, and with
-    /// <see cref="DriftPerRead"/> set the speed keeps moving after a burst so it never settles.
+    /// A simulated MCP behind <see cref="McpIo"/>, with a virtual clock (<see cref="Now"/>, advanced
+    /// only by the loop's waits).
+    /// <list type="bullet">
+    /// <item>The speed target moves as BlueBird's measured knob moves it (live-findings, session 7),
+    /// modeled here on its own, never through the code under test: a speed write fires its events
+    /// (a burst loop's count, or each <c>(&gt;K:AP_SPD_VAR_…)</c> written out), and the writes with
+    /// less than <see cref="BurstResetMs"/> between them are ONE burst whose count runs across them.
+    /// <see cref="Tiered"/> (the default) moves a burst's events 1-10 1 kt each, 11-25 2 kt and every
+    /// later one 5 kt; without it every event moves 1 kt. The target clamps at 100 and 399.</item>
+    /// <item><see cref="IgnoresSpeedEvents"/> drops every speed event (the variable is overwritten),
+    /// <see cref="EventsCountedPerBurst"/> drops a burst's events past that many, <see cref="LagMs"/>
+    /// lands half of a write's move at once and the other half that long after, <see cref="DriftPerRead"/>
+    /// keeps the speed moving on every read once a burst was sent (it never settles) and
+    /// <see cref="SpeedAfterSend"/> makes it read wild once one was.</item>
+    /// <item>V/S events move 100 fpm each, counted per calculator call (<see cref="EventsCountedPerCall"/>)
+    /// and between two waits (<see cref="EventsCountedPerWindow"/>); <see cref="DirectWritesAdopted"/>
+    /// says whether a target L:var takes a direct write.</item>
+    /// </list>
     /// </summary>
     private sealed class FakeMcp
     {
+        /// <summary>A pause this long or longer between two speed writes starts a new burst (measured: about 0.3 s).</summary>
+        public const int BurstResetMs = 300;
+
+        private static readonly Regex BurstLoop =
+            new(@"^(\d+) sp0 :1 l0 0 > if\{ \(>K:AP_SPD_VAR_(INC|DEC)\) l0 1 - sp0 g1 \}$");
+
         public double? Speed = 200, Heading = 0, Altitude = 10000, Vs = 0, Mach = 0;
-        public int EventsCountedPerCall = int.MaxValue;
-        public int EventsCountedPerWindow = int.MaxValue;
+        public bool Tiered = true;
+        public bool IgnoresSpeedEvents;
+        public int EventsCountedPerBurst = int.MaxValue;
+        public int EventsCountedPerCall = int.MaxValue;     // V/S
+        public int EventsCountedPerWindow = int.MaxValue;   // V/S
         public bool DirectWritesAdopted = true;
         public readonly List<string> Writes = new();
+        public readonly List<long> WriteTimes = new();      // virtual ms of each write
         public int Delays;
         public long Now;                 // virtual ms
-        public int LagMs;                // > 0: a speed burst lands half now, half this long later
+        public int LagMs;                // > 0: a speed write lands half now, half this long later
         public double DriftPerRead;      // added to the speed on every read once a burst was sent
         public double? SpeedAfterSend;   // when set, the speed reads this once a burst was sent (a wild read)
         public double Peak;              // highest speed the target ever held after a burst landed
         private readonly List<(long Due, double Delta)> _pending = new();
         private bool _sent;
-        private int _used;   // events counted since the last wait
+        private int _used;               // V/S events counted since the last wait
+        private int _burstEvents;        // speed events in the burst under way
+        private long? _lastSpeedWrite;   // virtual ms of the last speed write
 
         private void MoveSpeed(double delta)
         {
             if (Speed == null) return;
-            Speed += delta;
+            Speed = Math.Clamp(Speed.Value + delta, 100, 399);
             Peak = Math.Max(Peak, Speed.Value);
         }
 
@@ -325,6 +384,36 @@ public class Bbs757McpTests
             n = Math.Min(n, Math.Max(0, EventsCountedPerWindow - _used));
             _used += n;
             return n;
+        }
+
+        /// <summary>One speed write: its events join the burst under way, or start a new one after a pause.</summary>
+        private void SpeedWrite(string rpn)
+        {
+            var loop = BurstLoop.Match(rpn);
+            int events = loop.Success
+                ? int.Parse(loop.Groups[1].Value, CultureInfo.InvariantCulture)
+                : Count(new[] { rpn }, "(>K:AP_SPD_VAR_INC)") + Count(new[] { rpn }, "(>K:AP_SPD_VAR_DEC)");
+            int sign = rpn.Contains("AP_SPD_VAR_INC") ? 1 : -1;
+
+            if (_lastSpeedWrite is not long last || Now - last >= BurstResetMs) _burstEvents = 0;
+            _lastSpeedWrite = Now;
+            _sent = true;
+
+            double moved = 0;
+            for (int i = 0; i < events; i++)
+            {
+                _burstEvents++;
+                if (IgnoresSpeedEvents || _burstEvents > EventsCountedPerBurst) continue;
+                moved += !Tiered ? 1 : _burstEvents <= 10 ? 1 : _burstEvents <= 25 ? 2 : 5;
+            }
+            if (LagMs > 0)
+            {
+                double first = Math.Truncate(moved / 2);
+                MoveSpeed(sign * first);
+                _pending.Add((Now + LagMs, sign * (moved - first)));
+            }
+            else MoveSpeed(sign * moved);
+            if (SpeedAfterSend != null) Speed = SpeedAfterSend;
         }
 
         public McpIo Io => new()
@@ -347,25 +436,12 @@ public class Bbs757McpTests
             Write = rpn =>
             {
                 Writes.Add(rpn);
+                WriteTimes.Add(Now);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_HEADING)") && DirectWritesAdopted) Heading = Value(rpn);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_ALTITUDE)") && DirectWritesAdopted) Altitude = Value(rpn);
                 if (rpn.EndsWith("(>L:BBS_AP_TARGET_VS)") && DirectWritesAdopted) Vs = Value(rpn);
 
-                int inc = Counted(rpn, "(>K:AP_SPD_VAR_INC)");
-                int dec = Counted(rpn, "(>K:AP_SPD_VAR_DEC)");
-                int net = inc - dec;
-                if (rpn.Contains("(>K:AP_SPD_VAR_"))
-                {
-                    _sent = true;
-                    if (SpeedAfterSend != null) Speed = SpeedAfterSend;
-                }
-                if (LagMs > 0)
-                {
-                    int first = net / 2;
-                    MoveSpeed(first);
-                    _pending.Add((Now + LagMs, net - first));
-                }
-                else MoveSpeed(net);
+                if (rpn.Contains("AP_SPD_VAR_")) SpeedWrite(rpn);
 
                 int vsInc = Counted(rpn, "(>K:AP_VS_VAR_INC)");
                 int vsDec = Counted(rpn, "(>K:AP_VS_VAR_DEC)");
@@ -416,16 +492,85 @@ public class Bbs757McpTests
     }
 
     [Fact]
-    public async Task A_speed_set_steps_the_difference_and_speaks_what_it_reads()
+    public async Task A_speed_set_sends_one_planned_burst_and_speaks_what_it_reads()
     {
         var mcp = new FakeMcp { Speed = 200 };
 
         string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
 
         Assert.Equal("Speed 250", said);
-        Assert.Equal(50, Count(mcp.Writes, "(>K:AP_SPD_VAR_INC)"));
-        Assert.Equal(2, mcp.Writes.Count);   // nothing to correct
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(true, 27) }, mcp.Writes);   // 27 events: 10 + 30 + 10 kt, nothing to correct
         Assert.DoesNotContain(mcp.Writes, w => w.Contains("L:BBS757_ORANGE_AIRSPEED_BUGS"));   // read-only: never written directly
+    }
+
+    [Fact]
+    public async Task Two_hundred_to_153_lands_on_blueBirds_tiers_with_no_correction()
+    {
+        var mcp = new FakeMcp { Speed = 200 };
+
+        string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 153, default);
+
+        Assert.Equal("Speed 153", said);
+        Assert.Equal(153, mcp.Speed);
+        // 26 events move 45 kt; the 2 knots left go as a burst of their own, after the pause that
+        // restarts BlueBird's count, so they move 1 kt each and not 5.
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(false, 26), Bbs757Mcp.SpeedBurstCode(false, 2) }, mcp.Writes);
+        Assert.True(mcp.WriteTimes[1] - mcp.WriteTimes[0] >= Bbs757Mcp.SpeedBurstGapMs);
+    }
+
+    [Fact]
+    public async Task One_hundred_to_280_lands_on_blueBirds_tiers_in_one_burst()
+    {
+        var mcp = new FakeMcp { Speed = 100 };
+
+        Assert.Equal("Speed 280", await Bbs757Mcp.SetSpeedAsync(mcp.Io, 280, default));
+        Assert.Equal(280, mcp.Speed);
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(true, 53) }, mcp.Writes);   // the flight's 53 events: 180 kt
+    }
+
+    [Theory]
+    [InlineData(100)]
+    [InlineData(153)]
+    [InlineData(250)]
+    [InlineData(399)]
+    public async Task Every_speed_from_100_to_399_lands_with_no_correction(double from)
+    {
+        for (int to = 100; to <= 399; to++)
+        {
+            var mcp = new FakeMcp { Speed = from };
+
+            Assert.Equal($"Speed {to}", await Bbs757Mcp.SetSpeedAsync(mcp.Io, to, default));
+            Assert.True(mcp.Writes.Count <= 2, $"{from} to {to}: {mcp.Writes.Count} writes, a correction ran");
+        }
+    }
+
+    [Fact]
+    public async Task Plain_one_knot_steps_converge_through_the_corrections()
+    {
+        // An MCP that does not speed up (every event 1 kt): the planned burst falls short, and the
+        // corrections, 1 kt an event, bring the speed the rest of the way.
+        var down = new FakeMcp { Speed = 200, Tiered = false };
+        Assert.Equal("Speed 153", await Bbs757Mcp.SetSpeedAsync(down.Io, 153, default));
+        Assert.True(down.Writes.Count > 2, "corrected");
+
+        var up = new FakeMcp { Speed = 100, Tiered = false };
+        Assert.Equal("Speed 280", await Bbs757Mcp.SetSpeedAsync(up.Io, 280, default));
+        Assert.True(up.Writes.Count > 1, "corrected");
+    }
+
+    [Fact]
+    public async Task A_correction_sends_bursts_of_at_most_ten_a_pause_apart()
+    {
+        // The planned burst (53 events) moves only 53 kt on an MCP that does not speed up: 127 are left.
+        var mcp = new FakeMcp { Speed = 100, Tiered = false };
+
+        await Bbs757Mcp.SetSpeedAsync(mcp.Io, 280, default);
+
+        var corrections = mcp.Writes.Skip(1).ToList();
+        Assert.Equal(127, corrections.Sum(EventsIn));
+        Assert.All(corrections, w => Assert.InRange(EventsIn(w), 1, Bbs757Mcp.LinearBurstMax));
+        for (int i = 2; i < mcp.WriteTimes.Count; i++)
+            Assert.True(mcp.WriteTimes[i] - mcp.WriteTimes[i - 1] >= Bbs757Mcp.SpeedBurstGapMs, $"write {i} came too soon");
     }
 
     [Fact]
@@ -468,38 +613,40 @@ public class Bbs757McpTests
     [Fact]
     public async Task A_burst_the_aircraft_only_partly_counts_is_corrected_until_it_lands()
     {
-        // 10 events count per calculator call, however many were sent: 25 + 25 sent counts 20.
-        var mcp = new FakeMcp { Speed = 200, EventsCountedPerCall = 10 };
+        // Only a burst's first 10 events count: the planned 27 move 10 kt. The correction's bursts of
+        // at most ten each count whole and stay on the 1 kt tier, so it lands exactly.
+        var mcp = new FakeMcp { Speed = 200, EventsCountedPerBurst = 10 };
 
         string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
 
         Assert.Equal("Speed 250", said);
-        Assert.True(mcp.Writes.Count > 2, "the remainder was sent again");
+        Assert.True(mcp.Writes.Count > 1, "the remainder was sent again");
+        Assert.Equal(250, mcp.Peak);   // never past the target
     }
 
     [Fact]
     public async Task A_speed_that_does_not_move_is_not_chased()
     {
-        // The variable is overwritten by the aircraft: the difference never shrinks, so nothing is
-        // re-sent, and the pilot hears the value the window shows, not the one asked for.
-        var mcp = new FakeMcp { Speed = 200, EventsCountedPerCall = 0 };
+        // The variable is overwritten by the aircraft: after the first round the difference has not
+        // shrunk, so nothing more is sent, and the pilot hears the value the window shows.
+        var mcp = new FakeMcp { Speed = 200, IgnoresSpeedEvents = true };
 
-        string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
+        string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 153, default);
 
         Assert.Equal("Speed 200", said);
-        Assert.Equal(2, mcp.Writes.Count);   // the first send only
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(false, 26), Bbs757Mcp.SpeedBurstCode(false, 2) }, mcp.Writes);   // the first round only
     }
 
     [Fact]
     public async Task Corrections_stop_after_three_rounds()
     {
-        // Only 5 events count between two waits: the difference shrinks every round, forever.
-        var mcp = new FakeMcp { Speed = 200, EventsCountedPerWindow = 5 };
+        // Only 5 events of a burst count: the difference shrinks every round, forever.
+        var mcp = new FakeMcp { Speed = 200, EventsCountedPerBurst = 5 };
 
         string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
 
-        // 1 initial send + 3 corrections, 5 kt each: 220, and no more.
-        Assert.Equal("Speed 220", said);
+        // The planned burst 205; then 45 left in five bursts, 230; 20 in two, 240; 10 in one, 245; and no more.
+        Assert.Equal("Speed 245", said);
     }
 
     [Fact]
@@ -536,7 +683,7 @@ public class Bbs757McpTests
     public async Task A_burst_that_lands_in_two_parts_is_judged_once_both_have_landed()
     {
         // Half of each call lands at once, the other half 700 ms later. Judged 600 ms after the send
-        // the speed reads 224 and the "remaining 26" would be sent again, overshooting to 276.
+        // the speed reads 225 and the "remaining 25" would be sent again, overshooting to 275.
         var mcp = new FakeMcp { Speed = 200, LagMs = 700 };
 
         string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
@@ -544,7 +691,7 @@ public class Bbs757McpTests
         Assert.Equal("Speed 250", said);
         Assert.Equal(250, mcp.Speed);
         Assert.Equal(250, mcp.Peak);          // never above the target, even for a moment
-        Assert.Equal(2, mcp.Writes.Count);    // the first send only: nothing was left to correct
+        Assert.Single(mcp.Writes);            // the first send only: nothing was left to correct
     }
 
     [Fact]
@@ -559,7 +706,7 @@ public class Bbs757McpTests
         // further from 250 than the 50 started with, so nothing is chased.
         Assert.Equal(600 + Bbs757Mcp.SettleGiveUpMs, mcp.Now);
         Assert.Equal("Speed 305", said);
-        Assert.Equal(2, mcp.Writes.Count);
+        Assert.Single(mcp.Writes);
     }
 
     [Fact]
@@ -625,15 +772,12 @@ public class Bbs757McpTests
         var mcp = new FakeMcp { Speed = 200, SpeedAfterSend = 4000 };
 
         Assert.Equal("Speed unavailable", await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default));
-        Assert.Equal(2, mcp.Writes.Count);   // the first send only
+        Assert.Single(mcp.Writes);   // the first send only
     }
 
     [Fact]
-    public void A_round_sends_at_most_300_speed_steps_and_140_vertical_speed_steps()
+    public void A_round_sends_at_most_140_vertical_speed_steps()
     {
-        Assert.Equal(300, Count(Bbs757Mcp.SpeedSteps(0, 399), "(>K:AP_SPD_VAR_INC)"));
-        Assert.Equal(300, Count(Bbs757Mcp.SpeedSteps(500, 0), "(>K:AP_SPD_VAR_DEC)"));
-        Assert.Equal(299, Count(Bbs757Mcp.SpeedSteps(100, 399), "(>K:AP_SPD_VAR_INC)"));   // the full span fits
         Assert.Equal(140, Count(Bbs757Mcp.VsSteps(-8000, 6000), "(>K:AP_VS_VAR_INC)"));
         Assert.Equal(140, Count(Bbs757Mcp.VsSteps(-1_000_000, 6000), "(>K:AP_VS_VAR_INC)"));
     }

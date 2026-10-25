@@ -426,7 +426,7 @@ All in input mode:
 - **Input Ctrl+A** opens **MCP Altitude** (100 to 49000 feet, rounded to 100).
 - **Input Ctrl+V** opens **MCP Vertical Speed** (minus 8000 to 6000 feet per minute, rounded to 100).
 
-Type a value and press Enter. Each window stays open for the next value, and Escape closes it. About a second later BA reads the value back from the MCP: *"Heading 090"*, *"Speed 250"*, *"Altitude 12000"* or *"Vertical speed minus 1500"*. You hear what the MCP took, not what you typed, so a different number means the aircraft did not accept yours. A speed is set by stepping the MCP one knot at a time, which takes about one to three seconds; BA checks the result and corrects it before it speaks.
+Type a value and press Enter. Each window stays open for the next value, and Escape closes it. About a second later BA reads the value back from the MCP: *"Heading 090"*, *"Speed 250"*, *"Altitude 12000"* or *"Vertical speed minus 1500"*. You hear what the MCP took, not what you typed, so a different number means the aircraft did not accept yours. BA sets a speed by turning the MCP's speed knob for you, in quick bursts that allow for the way BlueBird's knob speeds up when it is turned fast. It takes about one to two seconds; BA checks the result and corrects it before it speaks.
 
 Output Shift+H, Shift+S, Shift+A and Shift+V read the same four values without opening a window. They read the MCP window's own values, never the simulator's autopilot values, which disagree with BlueBird's MCP.
 

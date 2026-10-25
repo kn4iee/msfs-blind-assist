@@ -112,6 +112,7 @@ from branch B757 (Release). Input mode is `[`, output mode is `]`.
 41. Ctrl+A 12049: "Altitude 12000". 99: error.
 42. Ctrl+S 250 from 200: within about 1-3 s "Speed 250". Also 100, 399. 0.82: "Mach entry is not supported yet…".
     Log: the `AP_SPD_VAR` calls and whether a correction round ran (measures whether 25 events per call all count).
+    (Since task 11 the speed goes in BlueBird's measured knob tiers; see check 77.)
 43. Press the MCP IAS/MACH button, then Ctrl+S 250: "MCP is in Mach mode. Set Mach from the Glareshield panel." If
     instead the speed is set, the Mach flag `L:BBS_AIRSPEED_IN_MACH` is the wrong variable (it read 0 after a C/O
     pulse on 2026-10-25): note it.
@@ -221,3 +222,11 @@ Task 10 fix round 1 (rulings R31, R32):
     Ref "BOTH", Wipers > Wiper "OFF". These read back the values the names were taken from, so they confirm the
     wiring, not the names: where a combo can be moved, note what the aircraft does (for example Seatbelts to OFF:
     the seat belt chime and sign, read by Alt+E or Alt+S if the EICAS shows it).
+
+## J. First-flight fixes (plan 01, task 11)
+
+77. MCP speed in BlueBird's knob tiers (R33): with the MCP speed at 200, Ctrl+S 153, Enter: within about two seconds
+    "Speed 153", and Output Shift+S also says "Speed 153". Then Ctrl+S 100, Enter, and 280, Enter: "Speed 280". Both
+    land exactly with no correction round: the log's "Sent command" lines for the 153 set are two bursts, "26 sp0 …
+    AP_SPD_VAR_DEC …" then "2 sp0 …", and for the 280 set one, "53 sp0 … AP_SPD_VAR_INC …"; a further `sp0` line
+    a second or more later is a correction. If a speed lands off, note the spoken value and those lines.

@@ -16,16 +16,27 @@ public sealed class McpIo
 }
 
 /// <summary>
+/// A speed change cut into bursts (<see cref="Bbs757Mcp.SpeedBursts"/>): <c>Bulk</c>, the events of
+/// the one planned burst, then <c>Rest</c>, the knots left for a burst of their own. A record, not a
+/// tuple: C# reserves the tuple element name <c>Rest</c>.
+/// </summary>
+public readonly record struct Bbs757SpeedBurstPlan(int Bulk, int Rest);
+
+/// <summary>
 /// The BlueBird 757's MCP (autopilot panel) values: how each is set and read, the typed-input
 /// rules and the words spoken. Pure; <see cref="BBS757Definition"/> wires it to the sim.
 ///
-/// What was measured (docs/b757/evidence/live-findings.md, "MCP"):
+/// What was measured (docs/b757/evidence/live-findings.md, "MCP" and "After the first flight"):
 ///   • Heading <c>L:BBS_AP_TARGET_HEADING</c> and altitude <c>L:BBS_AP_TARGET_ALTITUDE</c> adopt a
 ///     direct write, so an exact value is one write.
 ///   • The speed target <c>L:BBS757_ORANGE_AIRSPEED_BUGS</c> is READ-ONLY (a direct write is
-///     overwritten). It moves 1 kt per <c>K:AP_SPD_VAR_INC/DEC</c>, so a speed is set by stepping
-///     the difference, and the loop reads it back and corrects (a burst of 10-11 events in one call
-///     all counted; a burst of 25 is unmeasured).
+///     overwritten) and moves only by <c>K:AP_SPD_VAR_INC/DEC</c>, which BlueBird ACCELERATES within
+///     a burst, as a knob turned fast: events 1-10 move 1 kt each, 11-25 2 kt, from the 26th 5 kt
+///     (10 events +10, 20 +30, 25 +40, 30 +65; the first flight's 53 +180, and its 47 hit the 100 kt
+///     floor). A burst is one calculator call or several back to back; a pause of about 0.3 s
+///     starts a new one. So a speed is set by one planned burst and its 0-4 kt rest
+///     (<see cref="SpeedBursts"/>, rule B757-3), and the loop reads it back and corrects in bursts
+///     that stay on the 1 kt tier.
 ///   • <c>L:BBS_AP_TARGET_VS</c> is unmeasured: written directly first, stepped by
 ///     <c>K:AP_VS_VAR_INC/DEC</c> when the window did not take the write.
 ///   • The stock autopilot SimVars sit at unrelated offsets and are never read here.
@@ -63,10 +74,16 @@ public static class Bbs757Mcp
     public const int MaxSpeedCorrections = 3;
 
     /// <summary>
-    /// Most K-events one round of a speed set sends: the whole 100 to 399 span fits (299), so a read
-    /// that is merely far off still sets in one round, while a wild one cannot flood the calculator.
+    /// The pause between two speed bursts, so the second starts BlueBird's count again at 1 kt an
+    /// event: twice the measured reset (a pause of about 0.3 s starts a new burst), for margin.
     /// </summary>
-    public const int MaxSpeedStepsPerRound = 300;
+    public const int SpeedBurstGapMs = 600;
+
+    /// <summary>Events in one speed burst that each move the target 1 kt: BlueBird's first tier.</summary>
+    public const int LinearBurstMax = 10;
+
+    /// <summary>The last event of a burst that moves 2 kt; every later one moves 5.</summary>
+    private const int TwoKnotBurstMax = 25;
 
     /// <summary>Most K-events one round of a V/S set sends: the whole -8000 to 6000 span in hundreds fits (140).</summary>
     public const int MaxVsStepsPerRound = 140;
@@ -89,20 +106,6 @@ public static class Bbs757Mcp
     // =================================================================================
 
     /// <summary>
-    /// The calculator calls that move the speed target from <paramref name="current"/> to
-    /// <paramref name="target"/>: one <c>K:AP_SPD_VAR_INC</c> or <c>DEC</c> per whole knot between
-    /// the two rounded values, in calls of at most <see cref="Bbs757Rpn.MaxKeysPerCall"/>, and at most
-    /// <see cref="MaxSpeedStepsPerRound"/> in all (the loop sends the rest in a later round). Empty
-    /// when they round to the same knot or either is not a finite number.
-    /// </summary>
-    public static IReadOnlyList<string> SpeedSteps(double current, double target)
-    {
-        if (!double.IsFinite(current) || !double.IsFinite(target)) return Array.Empty<string>();
-        long diff = Round(target) - Round(current);
-        return Steps("AP_SPD_VAR_INC", "AP_SPD_VAR_DEC", diff, MaxSpeedStepsPerRound);
-    }
-
-    /// <summary>
     /// The calls that step the V/S target from <paramref name="current"/> to <paramref name="target"/>:
     /// one <c>K:AP_VS_VAR_INC</c> or <c>DEC</c> per hundred feet per minute of the difference
     /// (assumed, unmeasured: the plan's 100 fpm per event), at most <see cref="MaxVsStepsPerRound"/>.
@@ -113,6 +116,48 @@ public static class Bbs757Mcp
         if (!double.IsFinite(current) || !double.IsFinite(target)) return Array.Empty<string>();
         long diff = Round((target - current) / 100.0);
         return Steps("AP_VS_VAR_INC", "AP_VS_VAR_DEC", diff, MaxVsStepsPerRound);
+    }
+
+    /// <summary>
+    /// The knots a burst of <paramref name="events"/> moves the speed target, by BlueBird's measured
+    /// tiers: events 1 to <see cref="LinearBurstMax"/> move 1 kt each, the 11th to the 25th 2 kt, every
+    /// one after that 5 kt. 0 for no events.
+    /// </summary>
+    public static int SpeedBurstKnots(int events)
+    {
+        if (events <= 0) return 0;
+        if (events <= LinearBurstMax) return events;
+        if (events <= TwoKnotBurstMax) return LinearBurstMax + 2 * (events - LinearBurstMax);
+        return SpeedBurstKnots(TwoKnotBurstMax) + 5 * (events - TwoKnotBurstMax);
+    }
+
+    /// <summary>
+    /// How a speed change of <paramref name="knots"/> (a magnitude) is sent: <c>Bulk</c>, the most
+    /// events one burst can fire without moving past it (<see cref="SpeedBurstKnots"/>), then
+    /// <c>Rest</c>, the 0 to 4 knots the 2 and 5 kt steps cannot land on, sent as a burst of its own
+    /// after <see cref="SpeedBurstGapMs"/>, so each of its events moves 1 kt. (0, 0) for no change.
+    /// </summary>
+    public static Bbs757SpeedBurstPlan SpeedBursts(int knots)
+    {
+        if (knots <= 0) return new Bbs757SpeedBurstPlan(0, 0);
+        int twoKnotTop = SpeedBurstKnots(TwoKnotBurstMax);
+        int bulk = knots <= LinearBurstMax ? knots
+            : knots <= twoKnotTop ? LinearBurstMax + (knots - LinearBurstMax) / 2
+            : TwoKnotBurstMax + (knots - twoKnotTop) / 5;
+        return new Bbs757SpeedBurstPlan(bulk, knots - SpeedBurstKnots(bulk));
+    }
+
+    /// <summary>
+    /// One calculator call that fires <paramref name="events"/> <c>K:AP_SPD_VAR_INC</c> (or <c>DEC</c>
+    /// going down) as ONE burst: an RPN loop that counts register 0 down to zero, one event a pass
+    /// (measured live), so the string stays short for any count. No unique prefix: the definition's
+    /// <c>ExecuteCalculatorCodeUnique</c> adds it. The count is written with the invariant culture.
+    /// </summary>
+    public static string SpeedBurstCode(bool up, int events)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(events);
+        string kEvent = up ? "AP_SPD_VAR_INC" : "AP_SPD_VAR_DEC";
+        return $"{events.ToString(CultureInfo.InvariantCulture)} sp0 :1 l0 0 > if{{ (>K:{kEvent}) l0 1 - sp0 g1 }}";
     }
 
     /// <summary>Writes the heading target: 0-359, 360 and above wrap, a negative heading wraps the other way.</summary>
@@ -253,17 +298,20 @@ public static class Bbs757Mcp
     }
 
     /// <summary>
-    /// Sets the IAS target by stepping it, closing the loop on what it reads: read the target fresh,
-    /// send the steps (at most <see cref="MaxSpeedStepsPerRound"/>), wait <see cref="StepSettleMs"/>,
-    /// read until the value has SETTLED (<see cref="ReadSettledAsync"/>), and judge the round only on
-    /// that value. While the remaining difference is non-zero and SMALLER in magnitude than before
-    /// send the steps for the remainder, up to <see cref="MaxSpeedCorrections"/> times. A shrinking
-    /// remainder counts as progress even when its sign flipped (an overshoot brought nearer); one that
-    /// did not shrink is not chased (the aircraft is not taking the steps, the variable is being
-    /// overwritten, or the burst overshot by more than it undershot). Speaks the value read last,
-    /// never the request. In Mach mode nothing is sent and the pilot is told to set Mach from the
-    /// panel; a target outside 0 to <see cref="SpeedReadMax"/> knots is unreadable ("Speed
-    /// unavailable") and sends nothing. Throws <see cref="OperationCanceledException"/> when canceled.
+    /// Sets the IAS target in BlueBird's knob tiers, closing the loop on what it reads: read the
+    /// target fresh, send the planned burst (<see cref="SpeedBursts"/>' <c>Bulk</c>), wait
+    /// <see cref="SpeedBurstGapMs"/> and send its <c>Rest</c> as a burst of its own, wait
+    /// <see cref="StepSettleMs"/>, read until the value has SETTLED (<see cref="ReadSettledAsync"/>), and
+    /// judge the round only on that value. While the remaining difference is non-zero and SMALLER in
+    /// magnitude than before, correct it, up to <see cref="MaxSpeedCorrections"/> times, in bursts of at
+    /// most <see cref="LinearBurstMax"/> events, each followed by <see cref="SpeedBurstGapMs"/>, so every
+    /// event moves exactly 1 kt. A shrinking remainder counts as progress even when its sign flipped
+    /// (an overshoot brought nearer); one that did not shrink is not chased (the aircraft is not taking
+    /// the steps, the variable is being overwritten, or the burst overshot by more than it undershot).
+    /// Speaks the value read last, never the request. In Mach mode nothing is sent and the pilot is
+    /// told to set Mach from the panel; a target outside 0 to <see cref="SpeedReadMax"/> knots is
+    /// unreadable ("Speed unavailable") and sends nothing. Throws <see cref="OperationCanceledException"/>
+    /// when canceled.
     /// </summary>
     public static async Task<string> SetSpeedAsync(McpIo io, int knots, CancellationToken ct)
     {
@@ -273,10 +321,18 @@ public static class Bbs757Mcp
         double? current = await io.Read(SpeedVar, ct);
         if (!SpeedReadable(current)) return SpeedPhrase(null);
 
-        long remaining = Math.Abs(knots - Round(current!.Value));
+        long diff = knots - Round(current!.Value);
+        long remaining = Math.Abs(diff);
         if (remaining == 0) return SpeedPhrase(current);
 
-        foreach (var call in SpeedSteps(current.Value, knots)) io.Write(call);
+        // A readable target is 0 to 500 kt, so the change fits an int.
+        var (bulk, rest) = SpeedBursts((int)remaining);
+        if (bulk > 0) io.Write(SpeedBurstCode(diff > 0, bulk));
+        if (rest > 0)
+        {
+            await io.Delay(SpeedBurstGapMs, ct);
+            io.Write(SpeedBurstCode(diff > 0, rest));
+        }
 
         double? now = current;
         for (int corrections = 0; ; corrections++)
@@ -285,13 +341,27 @@ public static class Bbs757Mcp
             now = await ReadSettledAsync(io, SpeedVar, ct);
             if (!SpeedReadable(now)) break;
 
-            long left = Math.Abs(knots - Round(now!.Value));
-            if (left == 0 || left >= remaining || corrections == MaxSpeedCorrections) break;
+            long left = knots - Round(now!.Value);
+            if (left == 0 || Math.Abs(left) >= remaining || corrections == MaxSpeedCorrections) break;
 
-            remaining = left;
-            foreach (var call in SpeedSteps(now.Value, knots)) io.Write(call);
+            remaining = Math.Abs(left);
+            await SendLinearBurstsAsync(io, left > 0, remaining, ct);
         }
         return SpeedPhrase(now);
+    }
+
+    /// <summary>
+    /// A correction: <paramref name="knots"/> sent in bursts of at most <see cref="LinearBurstMax"/>
+    /// events, each followed by <see cref="SpeedBurstGapMs"/>, so no burst reaches BlueBird's 2 kt
+    /// tier and every event moves the target exactly 1 kt.
+    /// </summary>
+    private static async Task SendLinearBurstsAsync(McpIo io, bool up, long knots, CancellationToken ct)
+    {
+        for (long left = knots; left > 0; left -= LinearBurstMax)
+        {
+            io.Write(SpeedBurstCode(up, (int)Math.Min(left, LinearBurstMax)));
+            await io.Delay(SpeedBurstGapMs, ct);
+        }
     }
 
     /// <summary>
