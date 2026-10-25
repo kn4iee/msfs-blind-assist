@@ -12,7 +12,7 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// so this window operates it for the pilot, by scripted clicks through the tablet's own mouse
 /// handler (<see cref="CoherentBbs757EfbClient"/>, positions in <see cref="Bbs757EfbLayout"/>), and
 /// checks each result where it can be read: BlueBird's work folder (<see cref="Bbs757WorkFolder"/>)
-/// for the nav data cycle and the SimBrief ID, and the hidden helper view
+/// for the nav data cycle, the SimBrief ID, the units and the nosewheel steering, and the hidden helper view
 /// (<see cref="CoherentBbs757TabletClient"/>) for the Navigraph sign-in.
 ///
 /// Both clients are MainForm's: this window uses them and disposes neither.
@@ -24,7 +24,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// a finished fetch, on its page, and what it did is read back from BlueBird's unit system setting.
 /// A cockpit preset loads only in its phase: a ground one on the ground, a flight one airborne.
 /// The SimBrief fuel and payload load clicks nothing: it writes BlueBird's setters through the
-/// calculator (<see cref="Bbs757LoadIo"/>, MainForm's seams) and speaks the read-back.
+/// calculator (<see cref="Bbs757LoadIo"/>, MainForm's seams) and speaks the read-back. The steering
+/// switch toggles, so it is clicked only while BlueBird's setting reads the tiller.
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
 /// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Weight units now
@@ -86,6 +87,9 @@ public class BBS757EfbForm : Form
     private const int LoadReadBackDelayMs = 3000;
     // One fresh read of a read-back variable (an individual definition answers within a frame or two).
     private const int LoadReadTimeoutMs = 1500;
+    // How long the steering setting is watched for BlueBird's write after the click (measured: at once).
+    private const int SteeringWaitMs = 3000;
+    private const int SteeringPollMs = 250;
 
     private readonly CoherentBbs757EfbClient _efb;
     private readonly CoherentBbs757TabletClient _tablet;
@@ -110,6 +114,7 @@ public class BBS757EfbForm : Form
     private Button _loadPresetButton = null!;
     private Button _apuButton = null!;
     private Button _irsButton = null!;
+    private Button _steeringButton = null!;
     private TextBox _statusBox = null!;
     private Button _closeButton = null!;
     private readonly System.Windows.Forms.Timer _statusTimer;
@@ -301,6 +306,8 @@ public class BBS757EfbForm : Form
 
         _apuButton = MakeButton("APU quick start", left, halfW, () => QuickStartAsync("APU quick start"));
         _irsButton = MakeButton("IRS rapid align", left + halfW + 10, halfW, () => QuickStartAsync("IRS rapid align"));
+        y += h + gap;
+        _steeringButton = MakeButton("Set steering to rudder", left, fullW, SetSteeringToRudderAsync);
         y += h + gap + 4;
 
         var statusLabel = new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ };
@@ -939,6 +946,53 @@ public class BBS757EfbForm : Form
             return;
         }
         Say($"Loading {preset}");
+    }
+
+    /// <summary>
+    /// NOSEWHEEL STEERING to RUDDER (BlueBird's default is REALISTIC, the tiller, which a pilot steering
+    /// with the rudder pedals cannot use). The switch TOGGLES, so it is clicked only while BlueBird's
+    /// <c>tiller_realistic</c> reads true (<see cref="Bbs757EfbLayout.MayClickSteering"/>): already
+    /// rudder says so and clicks nothing; unreadable (no work folder, no such setting) refuses. After the
+    /// click the setting is read back (BlueBird writes it at once, measured) and the result said:
+    /// "Steering set to rudder", or that it did not change or could not be read. A run that started
+    /// and did not report finishing is judged from the setting all the same; it is never run again.
+    /// </summary>
+    private async Task SetSteeringToRudderAsync()
+    {
+        string? folder = ResolveWorkFolder();
+        if (folder == null)
+        {
+            Refuse($"{FolderMissingText}, so the steering setting cannot be checked. Nothing was clicked.");
+            return;
+        }
+        bool? tiller = Bbs757WorkFolder.ReadTillerRealistic(folder);
+        if (tiller == false)
+        {
+            Say(Bbs757EfbLayout.SteeringAlreadyRudderText);
+            return;
+        }
+        if (!Bbs757EfbLayout.MayClickSteering(tiller))
+        {
+            Refuse("BlueBird's steering setting cannot be read, so nothing was clicked.");
+            return;
+        }
+
+        SetResult("Setting the steering to rudder.");
+        var result = await RunAsync(Bbs757EfbRunKind.Steering, Bbs757EfbLayout.SetSteeringToRudder());
+        if (result != Bbs757EfbRunResult.Done && !_efb.LastRunMayHaveClicked)
+        {
+            SayRunProblem(result);
+            return;
+        }
+
+        bool? after = Bbs757WorkFolder.ReadTillerRealistic(folder);
+        var until = DateTime.UtcNow.AddMilliseconds(SteeringWaitMs);
+        while (after != false && DateTime.UtcNow < until)
+        {
+            await Task.Delay(SteeringPollMs, Lifetime);
+            after = Bbs757WorkFolder.ReadTillerRealistic(folder);
+        }
+        Say(Bbs757EfbLayout.SteeringResultPhrase(after));
     }
 
     /// <summary>A quick start tile, which has nothing to read back: clicked, then "{name} pressed".</summary>

@@ -27,7 +27,7 @@ public enum Bbs757UpdateGate
 }
 
 /// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
-public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart }
+public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering }
 
 /// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
 public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
@@ -98,6 +98,16 @@ public static class Bbs757EfbLayout
 
     // Settings menu.
     public static readonly EfbPoint AiracData = new(95, 486);
+
+    /// <summary>The Settings menu's AIRCRAFT item (measured 2026-10-25, session 6).</summary>
+    public static readonly EfbPoint SettingsAircraft = new(98, 244);
+
+    /// <summary>
+    /// The NOSEWHEEL STEERING switch on Settings &gt; AIRCRAFT, third row (measured 2026-10-25, session 6:
+    /// one click switched REALISTIC, the tiller, to RUDDER). It TOGGLES: a click while it is RUDDER
+    /// switches it back to the tiller, so it is clicked only under <see cref="MayClickSteering"/>.
+    /// </summary>
+    public static readonly EfbPoint NosewheelSteeringSwitch = new(1154, 249);
 
     // AIRAC data page.
     public static readonly EfbPoint SimBriefField = new(842, 126);
@@ -418,6 +428,41 @@ public static class Bbs757EfbLayout
         (Home, NavigateDelayMs),
         (AircraftIcon, NavigateDelayMs),
         (tile, NavigateDelayMs),
+    };
+
+    // ---- nosewheel steering ----------------------------------------------------------
+
+    public const string SteeringAlreadyRudderText = "Steering is already rudder";
+
+    /// <summary>
+    /// Home, Settings, AIRCRAFT, then the NOSEWHEEL STEERING switch once. Run it only when
+    /// <see cref="MayClickSteering"/> allows it: the switch toggles.
+    /// </summary>
+    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> SetSteeringToRudder() => new[]
+    {
+        (Home, NavigateDelayMs),
+        (SettingsIcon, NavigateDelayMs),
+        (SettingsAircraft, NavigateDelayMs),
+        (NosewheelSteeringSwitch, NavigateDelayMs),
+    };
+
+    /// <summary>
+    /// Whether the steering switch may be clicked: only while BlueBird's <c>tiller_realistic</c> reads
+    /// true. Already false (rudder), a click would switch it BACK to the tiller; unreadable, nothing
+    /// says which way one click would go.
+    /// </summary>
+    public static bool MayClickSteering(bool? tillerRealistic) => tillerRealistic == true;
+
+    /// <summary>
+    /// What the steering click came to, from <c>tiller_realistic</c> read after it: false "Steering set
+    /// to rudder", still true "BlueBird did not change the steering. It is still the tiller.",
+    /// unreadable "The steering setting could not be read back.".
+    /// </summary>
+    public static string SteeringResultPhrase(bool? tillerRealisticAfter) => tillerRealisticAfter switch
+    {
+        false => "Steering set to rudder",
+        true => "BlueBird did not change the steering. It is still the tiller.",
+        null => "The steering setting could not be read back.",
     };
 
     private static EfbPoint Lookup((string Name, EfbPoint Point)[] table, string name, string paramName)

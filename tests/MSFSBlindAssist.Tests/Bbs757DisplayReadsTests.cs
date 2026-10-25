@@ -157,6 +157,24 @@ public class Bbs757DisplayReadsTests
     }
 
     [Fact]
+    public void TheAdiPrompt_AlsoReadsTheAutolandStatusAnnunciator_BesideIt()
+    {
+        // No variable carries the autoland status (wasm-findings.md §5); the AUTOLAND STATUS
+        // annunciator sits beside the ADI in the same instrument view, so the ADI read reports it.
+        string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.Adi757);
+
+        Assert.Contains("AUTOLAND STATUS", prompt);
+        foreach (string word in new[] { "LAND 3", "LAND 2", "NO LAND 3", "NO AUTOLAND" })
+            Assert.Contains(word, prompt);
+        // The one separate instrument it reads; the rule against reading the others stands.
+        Assert.Contains("Never read a separate instrument beside the ADI", prompt);
+        Assert.Contains("except the AUTOLAND STATUS annunciator", prompt);
+        // After the flight modes, which stay first.
+        Assert.True(prompt.IndexOf("Report them first", StringComparison.Ordinal)
+                    < prompt.IndexOf("AUTOLAND STATUS", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TheEhsiPrompt_LeavesTheAdiAlone()
     {
         string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.Ehsi757);

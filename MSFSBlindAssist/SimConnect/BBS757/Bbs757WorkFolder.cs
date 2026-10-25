@@ -13,13 +13,14 @@ public enum Bbs757WeightUnits
 
 /// <summary>
 /// BlueBird's 757 "work" folder, where the aircraft keeps its EFB settings and the nav data it
-/// downloaded, and the only three values the app reads from it: the SimBrief ID (to confirm an
-/// entry made on the EFB took), the unit system (to say what the weight units answer did) and the
-/// installed AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). Read
-/// only: the app never writes BlueBird's files.
+/// downloaded, and the only four values the app reads from it: the SimBrief ID (to confirm an
+/// entry made on the EFB took), the unit system (to say what the weight units answer did), the
+/// nosewheel steering setting (so the steering button never clicks its toggle when it is already
+/// rudder) and the installed AIRAC cycle (so the nav data update never clicks where BlueBird shows
+/// REMOVE). Read only: the app never writes BlueBird's files.
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key:
-/// it is parsed for <c>simbrief_id</c> and <c>units</c> alone, nothing else is taken from it, and
+/// it is parsed for <c>simbrief_id</c>, <c>units</c> and <c>tiller_realistic</c> alone, nothing else is taken from it, and
 /// neither file's content is ever logged. The SimBrief ID is the pilot's own identifier: callers
 /// never log it either. Pure, with the folder candidates passed in.
 /// </summary>
@@ -134,6 +135,25 @@ public static class Bbs757WorkFolder
         {
             0 => Bbs757WeightUnits.Kilograms,
             1 => Bbs757WeightUnits.Pounds,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// BlueBird's NOSEWHEEL STEERING setting (<c>tiller_realistic</c>, the EFB's Settings, AIRCRAFT):
+    /// true REALISTIC (the tiller), false RUDDER. Measured 2026-10-25: it read false right after the
+    /// switch was clicked from REALISTIC to RUDDER (a global setting, written at once). Null when it
+    /// is missing, not a JSON bool, or the file cannot be read. Nothing else in the file is read.
+    /// </summary>
+    public static bool? ReadTillerRealistic(string folder)
+    {
+        using var doc = ReadJson(Path.Combine(folder, SettingsFile));
+        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+        if (!doc.RootElement.TryGetProperty("tiller_realistic", out var tiller)) return null;
+        return tiller.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
             _ => null,
         };
     }

@@ -163,6 +163,7 @@ public class Bbs757EfbTests
         yield return Bbs757EfbLayout.FetchOfp();
         foreach (string preset in Bbs757EfbLayout.PresetNames) yield return Bbs757EfbLayout.LoadPreset(preset);
         foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
+        yield return Bbs757EfbLayout.SetSteeringToRudder();
     }
 
     [Fact]
@@ -273,8 +274,99 @@ public class Bbs757EfbTests
         };
         others.AddRange(Bbs757EfbLayout.PresetNames.Select(Bbs757EfbLayout.LoadPreset));
         others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
+        others.Add(Bbs757EfbLayout.SetSteeringToRudder());
         foreach (var seq in others)
             Assert.DoesNotContain(seq, s => s.Point == spot);
+    }
+
+    // ---- Nosewheel steering ----------------------------------------------------------------
+
+    [Fact]
+    public void Steering_to_rudder_is_home_settings_aircraft_then_the_nosewheel_steering_switch()
+    {
+        // Measured 2026-10-25 (live-findings.md, session 6): one click at (1154,249) on Settings >
+        // AIRCRAFT switched NOSEWHEEL STEERING from REALISTIC (tiller) to RUDDER.
+        var seq = Bbs757EfbLayout.SetSteeringToRudder();
+
+        Assert.Equal(new[]
+        {
+            Bbs757EfbLayout.Home, Bbs757EfbLayout.SettingsIcon, Bbs757EfbLayout.SettingsAircraft, Bbs757EfbLayout.NosewheelSteeringSwitch
+        }, seq.Select(s => s.Point));
+        Assert.Equal(new EfbPoint(98, 244), Bbs757EfbLayout.SettingsAircraft);
+        Assert.Equal(new EfbPoint(1154, 249), Bbs757EfbLayout.NosewheelSteeringSwitch);
+        Assert.Equal(new EfbPoint(1073, 190), Bbs757EfbLayout.SettingsIcon);
+        // The switch toggles: one click, never two.
+        Assert.Single(seq, s => s.Point == Bbs757EfbLayout.NosewheelSteeringSwitch);
+        Assert.All(seq.Take(3), s => Assert.True(s.DelayAfterMs >= Bbs757EfbLayout.NavigateDelayMs));
+    }
+
+    [Theory]
+    [InlineData("{\"tiller_realistic\":true}", true)]
+    [InlineData("{\"tiller_realistic\":false}", false)]
+    [InlineData("{\"hoppie_logon_code\":\"NOT-A-REAL-CODE\",\"tiller_realistic\":true,\"simbrief_id\":123456}", true)]
+    public void ReadTillerRealistic_reads_only_the_steering_key(string json, bool expected)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Equal(expected, Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"tiller_realistic\":1}")]
+    [InlineData("{\"tiller_realistic\":\"true\"}")]
+    [InlineData("{\"tiller_realistic\":null}")]
+    [InlineData("[true]")]
+    [InlineData("not json")]
+    public void ReadTillerRealistic_is_null_for_anything_but_a_bool(string json)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
+    }
+
+    [Fact]
+    public void ReadTillerRealistic_with_no_settings_file_is_null()
+    {
+        using var tmp = new TempDir();
+
+        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
+    }
+
+    [Fact]
+    public void The_fixture_settings_file_reads_tiller_realistic_too()
+    {
+        using var tmp = new TempDir();
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "bbs757-efb-settings.json"), Path.Combine(tmp.Path, "efb_settings.json"));
+
+        // The fixture is BlueBird's shape after the owner's switch to rudder (2026-10-25).
+        Assert.False(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData(true, true)]     // realistic (tiller): the one case the switch is clicked
+    [InlineData(false, false)]   // already rudder: clicking would switch it BACK to the tiller
+    [InlineData(null, false)]    // unreadable: never guess on a toggle
+    public void The_steering_switch_is_clicked_only_while_it_reads_tiller(bool? tillerRealistic, bool click)
+    {
+        Assert.Equal(click, Bbs757EfbLayout.MayClickSteering(tillerRealistic));
+    }
+
+    [Theory]
+    [InlineData(false, "Steering set to rudder")]
+    [InlineData(true, "BlueBird did not change the steering. It is still the tiller.")]
+    [InlineData(null, "The steering setting could not be read back.")]
+    public void The_steering_result_is_said_from_the_setting_read_after(bool? after, string phrase)
+    {
+        Assert.Equal(phrase, Bbs757EfbLayout.SteeringResultPhrase(after));
+    }
+
+    [Fact]
+    public void A_steering_already_on_rudder_says_so()
+    {
+        Assert.Equal("Steering is already rudder", Bbs757EfbLayout.SteeringAlreadyRudderText);
     }
 
     [Fact]
