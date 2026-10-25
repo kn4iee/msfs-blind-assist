@@ -359,6 +359,7 @@ public class Bbs757McpTests
         public double? SpeedAfterSend;   // when set, the speed reads this once a burst was sent (a wild read)
         public double Peak;              // highest speed the target ever held after a burst landed
         public bool CancelNextDelay;     // the next wait throws as a superseded set's does, before any time passes
+        public Action? OnSpeedRead;      // runs inside each read of the speed target, after its cancellation check
         private readonly List<(long Due, double Delta)> _pending = new();
         private bool _sent;
         private int _used;               // V/S events counted since the last wait
@@ -425,7 +426,11 @@ public class Bbs757McpTests
             {
                 ct.ThrowIfCancellationRequested();
                 Land();
-                if (key == Bbs757Mcp.SpeedVar) SpeedReads++;
+                if (key == Bbs757Mcp.SpeedVar)
+                {
+                    SpeedReads++;
+                    OnSpeedRead?.Invoke();
+                }
                 if (key == Bbs757Mcp.SpeedVar && _sent && DriftPerRead != 0) MoveSpeed(DriftPerRead);
                 return Task.FromResult(key switch
                 {
@@ -469,6 +474,21 @@ public class Bbs757McpTests
         };
 
         private static double Value(string rpn) => double.Parse(rpn.Split(' ')[0], CultureInfo.InvariantCulture);
+    }
+
+    [Fact]
+    public async Task A_set_superseded_during_its_speed_read_sends_nothing()
+    {
+        // The final review's minor 1: a newer set cancels this one while its read is in flight, and the
+        // read still answers. Its burst must not go out after the newer set made its spacing check, or
+        // the two bursts merge into one accelerated burst.
+        var mcp = new FakeMcp();
+        using var cts = new CancellationTokenSource();
+        mcp.OnSpeedRead = () => cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, cts.Token));
+
+        Assert.Empty(mcp.Writes);
     }
 
     [Fact]

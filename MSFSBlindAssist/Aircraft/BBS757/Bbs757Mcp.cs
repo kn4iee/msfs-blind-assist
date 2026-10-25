@@ -325,6 +325,10 @@ public static class Bbs757Mcp
         long remaining = Math.Abs(diff);
         if (remaining == 0) return SpeedPhrase(current);
 
+        // A newer set may have superseded this one while the read was in flight: its burst must not go
+        // out after the newer set's spacing check, or the two would merge into one accelerated burst.
+        ct.ThrowIfCancellationRequested();
+
         // A readable target is 0 to 500 kt, so the change fits an int.
         var (bulk, rest) = SpeedBursts((int)remaining);
         if (bulk > 0) io.Write(SpeedBurstCode(diff > 0, bulk));
