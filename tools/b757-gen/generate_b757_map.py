@@ -27,8 +27,9 @@ What is derived and what is curated (curation.json):
   a toggle, guard or select that writes a value other than 0 or 1 to its state var stops the run until its
             positions are named in curation (A/T ARM writes 10).
 
-The vendor's click code has two slips no RPN parser accepts (a set without its 'L:', a stray closing brace); they
-are repaired and listed in the printed report. Everything else is the code as the vendor wrote it.
+press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
+cockpit runs, so a slip the cockpit has stays a slip in the replay. Code that looks like a slip (a set without its
+'L:', a closing brace nothing opened) is only reported, as suspected_slips; nothing is changed.
 
 Dropped, and counted in the printed report: circuit breakers, CDU keys, levers, infinite knobs, finite knobs with
 more than 12 positions, anything in an excluded banner or node, controls with no click code or whose state is not
@@ -103,7 +104,7 @@ ANY_BOTTOM = re.compile(r"(-?\d+(?:\.\d+)?)\s+max\b")
 CONSTANT_SET = re.compile(r"(?:^|\s)(-?\d+(?:\.\d+)?)\s*\(>L:")
 ASSIGN = re.compile(r"(?:^|\s)(-?\d+(?:\.\d+)?)\s*\(>L:([^,()\s]+)")           # "10 (>L:X)": a constant written to X
 FLIP = re.compile(r"\(L:([^,()\s]+)[^()]*\)\s*!\s*\(>L:\1\s*[,)]")              # "(L:X) ! (>L:X)": the var a click flips
-MISSING_L = re.compile(r"\(>(?![A-Za-z]:)(?=[A-Za-z_])([^()]*)\)")  # "(>NAME, bool)": the vendor dropped the "L:"
+MISSING_L = re.compile(r"\(>(?![A-Za-z]:)(?=[A-Za-z_])([^()]*)\)")  # "(>NAME, bool)": a set with no "L:" in front
 RANGE_SPEC = re.compile(r"range\s+(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\s+step\s+(\d+(?:\.\d+)?)$")
 
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "panels": dict, "node_panels": list, "labels": dict,
@@ -290,21 +291,17 @@ def click_fields(row, out_kind):
     return press, release, cw, ccw
 
 
-def repair_rpn(code):
-    """(code, what was repaired). The vendor's click code has two slips no RPN parser accepts, which would make the
-    calculator refuse the whole string: a set without its variable type, '(>B757_X_ON, bool)', which is an L:var
-    like its neighbors, and a closing brace nothing opened. Both are repaired the way the vendor evidently meant."""
+def suspected_slips(code):
+    """What looks like a slip in a click code, as words; the code itself is never changed. Two things no RPN parser
+    accepts: a set without its variable type, '(>B757_X_ON, bool)', and a closing brace nothing opened."""
     if not code:
-        return code, []
-    fixed = []
-    new = MISSING_L.sub(lambda m: f"(>L:{m.group(1)})", code)
-    if new != code:
-        fixed.append("set without a variable type")
-    code = new
-    while code.count("}") > code.count("{") and code.rstrip().endswith("}"):
-        code = code.rstrip()[:-1].rstrip()
-        fixed.append("closing brace nothing opened")
-    return code, fixed
+        return []
+    found = []
+    if MISSING_L.search(code):
+        found.append("set without a variable type")
+    if code.count("}") > code.count("{"):
+        found.append("closing brace nothing opened")
+    return found
 
 
 def hold_ms_of(row) -> int:
@@ -371,13 +368,8 @@ def convert_row(row, cur):
             spec = str(row.get("positions") or "").strip()
             return None, f"{kind} with more than 12 positions" if spec else f"{kind} without positions"
     press, release, cw, ccw = click_fields(row, out_kind)
-    repaired = []
-    fixed_codes = []
-    for name, code in (("press", press), ("release", release), ("cw", cw), ("ccw", ccw)):
-        code, fixed = repair_rpn(code)
-        fixed_codes.append(code)
-        repaired += [f"{name}: {what}" for what in fixed]
-    press, release, cw, ccw = fixed_codes
+    suspected = [f"{name}: {what}" for name, code in (("press", press), ("release", release), ("cw", cw), ("ccw", ccw))
+                 for what in suspected_slips(code)]
     state_var = state_var_for(row, out_kind, press)
     if not (press or cw or ccw or (out_kind == "switch" and state_var)):
         return None, "no click code"
@@ -403,8 +395,8 @@ def convert_row(row, cur):
         "press": press, "release": release, "hold_ms": hold_ms_of(row) if out_kind == "held" else 0,
         "cw": cw, "ccw": ccw,
     }
-    if repaired:
-        control["_repaired"] = repaired  # build_map moves it into the report
+    if suspected:
+        control["_suspected"] = suspected  # build_map moves it into the report
     return control, None
 
 
@@ -463,7 +455,7 @@ def build_map(rows, cur, aircraft, version):
     """(the map, a report of what was dropped and which curation entries did nothing)."""
     keyed, seen = [], set()
     dropped = collections.Counter()
-    repaired = {}
+    suspected = {}
     unmapped = set()
     for index, row in enumerate(rows):
         control, why = convert_row(row, cur)
@@ -475,8 +467,8 @@ def build_map(rows, cur, aircraft, version):
             seen.add(control["node"])
             if row["panel"] not in cur["panels"]:
                 unmapped.add(row["panel"])
-            if "_repaired" in control:
-                repaired[control["node"]] = control.pop("_repaired")
+            if "_suspected" in control:
+                suspected[control["node"]] = control.pop("_suspected")
             keyed.append(((SECTIONS.index(control["section"]), control["panel"], row.get("line", 0), index), control))
     keyed.sort(key=lambda kc: kc[0])
     tell_apart(keyed, {r["node"]: r for r in reversed(rows)}, cur)
@@ -492,7 +484,7 @@ def build_map(rows, cur, aircraft, version):
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,
-        "repaired": repaired,
+        "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
         "unmapped_banners": sorted(unmapped),
@@ -602,9 +594,9 @@ def main(argv=None) -> None:
     print(f"  panels           : {len(panels)}")
     for (section, panel), n in sorted(panels.items(), key=lambda kv: (SECTIONS.index(kv[0][0]), kv[0][1])):
         print(f"    {section} / {panel}: {n}")
-    if report["repaired"]:
-        print(f"  vendor RPN repaired in {len(report['repaired'])} controls:")
-        for node, what in report["repaired"].items():
+    if report["suspected_slips"]:
+        print(f"  suspected slips in the vendor's click code, replayed verbatim: {len(report['suspected_slips'])} controls")
+        for node, what in report["suspected_slips"].items():
             print(f"    {node}: {'; '.join(what)}")
     for node in report["overrides_on_dropped"]:
         print(f"note: curation names {node}, which the rules leave out", file=sys.stderr)

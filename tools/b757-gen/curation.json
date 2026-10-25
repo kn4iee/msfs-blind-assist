@@ -10,6 +10,11 @@
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ..."
   ],
+  "_suspected_slips": [
+    "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
+    "B757_OVHD_L_PUMPS_AFT_BUTTON, B757_OVHD_L_PUMPS_FWD_BUTTON, B757_OVHD_XFEED_PUMPS_AFT_BUTTON, B757_OVHD_XFEED_PUMPS_FWD_BUTTON, B757_OVHD_R_PUMPS_AFT_BUTTON, B757_OVHD_R_PUMPS_FWD_BUTTON, B757_OVHD_C_PUMPS_L_BUTTON, B757_OVHD_C_PUMPS_R_BUTTON: press ends '! (L:<node>_ON,bool) ! (>B757_..._ON,bool)': a set with no 'L:' in front (and a '!' with nothing to negate) in the vendor's XML.",
+    "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO: press '(L:BBS_DDRMI_RIGHT_FO) ! (>L:BBS_DDRMI_RIGHT_FO) }' ends in a closing brace nothing opened in the vendor's XML."
+  ],
   "spelling": {
     "CENTRE": "Center",
     "GAURD": "Guard",

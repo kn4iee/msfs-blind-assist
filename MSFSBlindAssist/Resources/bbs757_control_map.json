@@ -1217,7 +1217,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_L_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_L_PUMPS_AFT_BUTTON,bool) (L:B757_OVHD_L_PUMPS_AFT_BUTTON_ON,bool) ! (>L:B757_OVHD_L_PUMPS_AFT_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_L_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_L_PUMPS_AFT_BUTTON,bool) (L:B757_OVHD_L_PUMPS_AFT_BUTTON_ON,bool) ! (>B757_OVHD_L_PUMPS_AFT_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1240,7 +1240,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_L_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_L_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_L_PUMPS_FWD_BUTTON_ON,bool) ! (>L:B757_OVHD_L_PUMPS_FWD_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_L_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_L_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_L_PUMPS_FWD_BUTTON_ON,bool) ! (>B757_OVHD_L_PUMPS_FWD_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1263,7 +1263,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON,bool) ! (L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON_ON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON,bool) ! (L:B757_OVHD_XFEED_PUMPS_AFT_BUTTON_ON,bool) ! (>B757_OVHD_XFEED_PUMPS_AFT_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1286,7 +1286,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON_ON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_XFEED_PUMPS_FWD_BUTTON_ON,bool) ! (>B757_OVHD_XFEED_PUMPS_FWD_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1309,7 +1309,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_R_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_R_PUMPS_AFT_BUTTON,bool) (L:B757_OVHD_R_PUMPS_AFT_BUTTON_ON,bool) ! (>L:B757_OVHD_R_PUMPS_AFT_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_R_PUMPS_AFT_BUTTON,bool) ! (>L:B757_OVHD_R_PUMPS_AFT_BUTTON,bool) (L:B757_OVHD_R_PUMPS_AFT_BUTTON_ON,bool) ! (>B757_OVHD_R_PUMPS_AFT_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1332,7 +1332,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_R_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_R_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_R_PUMPS_FWD_BUTTON_ON,bool) ! (>L:B757_OVHD_R_PUMPS_FWD_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_R_PUMPS_FWD_BUTTON,bool) ! (>L:B757_OVHD_R_PUMPS_FWD_BUTTON,bool) ! (L:B757_OVHD_R_PUMPS_FWD_BUTTON_ON,bool) ! (>B757_OVHD_R_PUMPS_FWD_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1355,7 +1355,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_C_PUMPS_L_BUTTON,bool) ! (>L:B757_OVHD_C_PUMPS_L_BUTTON,bool) ! (L:B757_OVHD_C_PUMPS_L_BUTTON_ON,bool) ! (>L:B757_OVHD_C_PUMPS_L_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_C_PUMPS_L_BUTTON,bool) ! (>L:B757_OVHD_C_PUMPS_L_BUTTON,bool) ! (L:B757_OVHD_C_PUMPS_L_BUTTON_ON,bool) ! (>B757_OVHD_C_PUMPS_L_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1378,7 +1378,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_C_PUMPS_R_BUTTON,bool) ! (>L:B757_OVHD_C_PUMPS_R_BUTTON,bool) ! (L:B757_OVHD_C_PUMPS_R_BUTTON_ON,bool) ! (>L:B757_OVHD_C_PUMPS_R_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_C_PUMPS_R_BUTTON,bool) ! (>L:B757_OVHD_C_PUMPS_R_BUTTON,bool) ! (L:B757_OVHD_C_PUMPS_R_BUTTON_ON,bool) ! (>B757_OVHD_C_PUMPS_R_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -3558,7 +3558,7 @@
      "label": "ADF"
     }
    ],
-   "press": "(L:BBS_DDRMI_RIGHT_FO) ! (>L:BBS_DDRMI_RIGHT_FO)",
+   "press": "(L:BBS_DDRMI_RIGHT_FO) ! (>L:BBS_DDRMI_RIGHT_FO) }",
    "release": null,
    "hold_ms": 0,
    "cw": null,

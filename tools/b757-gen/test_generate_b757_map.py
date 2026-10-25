@@ -332,29 +332,31 @@ class Convert(unittest.TestCase):
                              cw="(L:A) 1 + 2 min (>L:A)", ccw="(L:A) 1 - 0 max (>L:A)"), cur)
 
 
-class RepairRpn(unittest.TestCase):
-    def test_a_set_without_its_variable_type_is_an_l_var(self):
+class SuspectedSlips(unittest.TestCase):
+    def test_a_set_without_its_variable_type_is_suspected(self):
         code = "(L:X,bool) ! (>L:X,bool) ! (L:X_ON,bool) ! (>X_ON,bool)"
-        fixed, what = g.repair_rpn(code)
-        self.assertEqual(fixed, "(L:X,bool) ! (>L:X,bool) ! (L:X_ON,bool) ! (>L:X_ON,bool)")
-        self.assertEqual(what, ["set without a variable type"])
+        self.assertEqual(g.suspected_slips(code), ["set without a variable type"])
 
-    def test_typed_sets_are_left_alone(self):
-        code = "1 (>K:AUTOPILOT_OFF) 1 (>H:EVT) 2 (>O:ButtonLocked, bool) 3 (>A:LIGHT POTENTIOMETER:20, number)"
-        self.assertEqual(g.repair_rpn(code), (code, []))
+    def test_typed_sets_are_not_suspected(self):
+        code = "1 (>K:AUTOPILOT_OFF) 1 (>H:EVT) 2 (>O:ButtonLocked, bool) 3 (>A:LIGHT POTENTIOMETER:20, number) 1 (>L:X)"
+        self.assertEqual(g.suspected_slips(code), [])
 
-    def test_a_closing_brace_nothing_opened_is_dropped(self):
-        self.assertEqual(g.repair_rpn("(L:X) ! (>L:X) }"), ("(L:X) ! (>L:X)", ["closing brace nothing opened"]))
-        balanced = "(L:X) if{ 1 (>L:Y) } els{ 0 (>L:Y) }"
-        self.assertEqual(g.repair_rpn(balanced), (balanced, []))
-        self.assertEqual(g.repair_rpn(None), (None, []))
+    def test_a_closing_brace_nothing_opened_is_suspected(self):
+        self.assertEqual(g.suspected_slips("(L:X) ! (>L:X) }"), ["closing brace nothing opened"])
+        self.assertEqual(g.suspected_slips("(L:X) if{ 1 (>L:Y) } els{ 0 (>L:Y) }"), [])
+        self.assertEqual(g.suspected_slips(None), [])
 
-    def test_the_map_reports_what_it_repaired(self):
-        r = row(node="B757_OVHD_L_PUMPS_FWD_BUTTON", panel="FUEL PANEL", left="(L:A) ! (>L:A) ! (>A_ON,bool)")
-        m, report = g.build_map([r], curation(), "pkg", "1")
-        self.assertEqual(m["controls"][0]["press"], "(L:A) ! (>L:A) ! (>L:A_ON,bool)")
-        self.assertNotIn("_repaired", m["controls"][0])
-        self.assertEqual(report["repaired"], {"B757_OVHD_L_PUMPS_FWD_BUTTON": ["press: set without a variable type"]})
+    def test_the_click_code_is_replayed_verbatim_and_the_slip_is_only_reported(self):
+        slip = "(L:A) ! (>L:A) ! (L:A_ON,bool) ! (>A_ON,bool)"
+        brace = "(L:B) ! (>L:B) }"
+        rows = [row(node="B757_OVHD_L_PUMPS_FWD_BUTTON", panel="FUEL PANEL", left=slip),
+                row(node="B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO", panel="FUEL PANEL", left=brace, state=["L:B"])]
+        m, report = g.build_map(rows, curation(), "pkg", "1")
+        self.assertEqual([c["press"] for c in m["controls"]], [slip, brace])
+        self.assertTrue(all("_suspected" not in c for c in m["controls"]))
+        self.assertEqual(report["suspected_slips"], {
+            "B757_OVHD_L_PUMPS_FWD_BUTTON": ["press: set without a variable type"],
+            "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO": ["press: closing brace nothing opened"]})
 
 
 class Sections(unittest.TestCase):
@@ -531,6 +533,7 @@ class Curation(unittest.TestCase):
             self.assertNotRegex(name, "GAURD|FISRT|Gaurd|Fisrt")
         self.assertTrue({"B757_MCP_AP_ALT_SEL", "B757_OVHD_AUTORATE_SWITCH", "BBS757_FIREHANDLE1_CLICK"}
                         <= set(c["labels"]))
+        self.assertNotIn("_suspected_slips", c, "the suspected slips are information, never curation")
 
 
 class FindPackage(unittest.TestCase):
