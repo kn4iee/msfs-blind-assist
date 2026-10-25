@@ -58,6 +58,100 @@ public class Bbs757EfbTests
         Assert.Equal(expected, Bbs757EfbLayout.ShouldUpdate(installed, D("2026-10-25")));
     }
 
+    [Theory]
+    [InlineData(2501, "2025-01-23")]
+    [InlineData(2513, "2025-12-25")]
+    [InlineData(2601, "2026-01-22")]
+    [InlineData(2610, "2026-10-01")]
+    [InlineData(2611, "2026-10-29")]
+    [InlineData(2014, "2020-12-31")]
+    [InlineData(2101, "2021-01-28")]
+    public void AiracCycle_effective_date(int cycle, string date)
+    {
+        Assert.Equal(D(date), AiracCycle.EffectiveDate(cycle));
+    }
+
+    [Theory]
+    [InlineData(2514)]   // 2025 had thirteen cycles
+    [InlineData(2600)]
+    [InlineData(2615)]
+    [InlineData(999)]
+    [InlineData(10001)]
+    public void AiracCycle_effective_date_refuses_a_cycle_that_never_was(int cycle)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => AiracCycle.EffectiveDate(cycle));
+    }
+
+    [Fact]
+    public void Every_date_falls_in_the_cycle_whose_effective_date_it_follows()
+    {
+        for (var d = D("2020-01-01"); d < D("2031-01-01"); d = d.AddDays(1))
+        {
+            int cycle = AiracCycle.ForDate(d);
+            var effective = AiracCycle.EffectiveDate(cycle);
+            Assert.True(effective <= d && d < effective.AddDays(28), $"{d:yyyy-MM-dd}: {cycle} effective {effective:yyyy-MM-dd}");
+        }
+    }
+
+    // ---- the nav data update gate, bound to the page ---------------------------
+
+    private static DateTime U(string iso) => DateTime.SpecifyKind(
+        DateTime.ParseExact(iso, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture), DateTimeKind.Utc);
+
+    [Theory]
+    // Installed cycle current: nothing to do, whatever else holds.
+    [InlineData(2610, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Current)]
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Allowed)]
+    [InlineData(null, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Allowed)]
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", false, false, Bbs757UpdateGate.NotSignedIn)]
+    // Signed in after this load: BlueBird's load-time check ran signed out.
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, true, Bbs757UpdateGate.ReloadFirst)]
+    // The page must have loaded on or after the cycle's first full day (2610: 2026-10-02 00:00 UTC).
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-01 23:59:59", true, false, Bbs757UpdateGate.ReloadFirst)]
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-02 00:00:00", true, false, Bbs757UpdateGate.Allowed)]
+    // On a new cycle's first day no page can qualify yet: reloading would not help.
+    [InlineData(2610, "2026-10-29 10:00:00", "2026-10-29 09:00:00", true, false, Bbs757UpdateGate.NewToday)]
+    [InlineData(2610, "2026-10-30 10:00:00", "2026-10-29 23:00:00", true, false, Bbs757UpdateGate.ReloadFirst)]
+    [InlineData(2610, "2026-10-30 10:00:00", "2026-10-30 00:00:00", true, false, Bbs757UpdateGate.Allowed)]
+    // BlueBird's check needs a minute after the load.
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 11:59:01", true, false, Bbs757UpdateGate.StillChecking)]
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 11:59:00", true, false, Bbs757UpdateGate.Allowed)]
+    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 12:00:30", true, false, Bbs757UpdateGate.StillChecking)]
+    public void MayClickUpdate_needs_an_old_cycle_a_signed_in_load_after_the_cycle_s_first_day_and_a_minute(
+        int? installed, string now, string pageLoaded, bool signedIn, bool sawSignedOut, Bbs757UpdateGate expected)
+    {
+        Assert.Equal(expected, Bbs757EfbLayout.MayClickUpdate(installed, U(now), U(pageLoaded), signedIn, sawSignedOut));
+    }
+
+    [Fact]
+    public void The_update_gate_never_allows_what_ShouldUpdate_refuses()
+    {
+        var now = U("2026-10-25 12:00:00");
+        foreach (int installed in new[] { 2610, 2611, 2701 })
+        {
+            Assert.False(Bbs757EfbLayout.ShouldUpdate(installed, DateOnly.FromDateTime(now)));
+            Assert.Equal(Bbs757UpdateGate.Current, Bbs757EfbLayout.MayClickUpdate(installed, now, U("2026-10-25 08:00:00"), true, false));
+        }
+    }
+
+    [Fact]
+    public void The_earliest_page_load_is_the_day_after_the_cycle_took_effect()
+    {
+        Assert.Equal(U("2026-10-02 00:00:00"), Bbs757EfbLayout.EarliestPageLoadUtc(DateOnly.FromDateTime(U("2026-10-25 12:00:00"))));
+        Assert.Equal(U("2026-10-30 00:00:00"), Bbs757EfbLayout.EarliestPageLoadUtc(DateOnly.FromDateTime(U("2026-10-30 00:00:00"))));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("2026-10-25 07:59:59", false)]   // read in the flight before this one
+    [InlineData("2026-10-25 08:00:00", true)]
+    [InlineData("2026-10-25 09:30:00", true)]
+    public void A_signed_out_reading_counts_for_the_page_it_was_taken_on(string? signedOutAt, bool expected)
+    {
+        DateTime? at = signedOutAt == null ? null : U(signedOutAt);
+        Assert.Equal(expected, Bbs757EfbLayout.SignedOutDuringLoad(at, U("2026-10-25 08:00:00")));
+    }
+
     // ---- click sequences --------------------------------------------------
 
     private static IEnumerable<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>> EveryHomeSequence()
@@ -72,30 +166,38 @@ public class Bbs757EfbTests
     }
 
     [Fact]
-    public void EnterSimBriefId_clicks_home_settings_airac_field_digits_ok_in_order()
+    public void EnterSimBriefId_clicks_home_settings_airac_field_ten_backspaces_digits_ok_in_order()
     {
         var seq = Bbs757EfbLayout.EnterSimBriefId("189");
 
-        Assert.Equal(new[]
+        var expected = new List<EfbPoint>
         {
             Bbs757EfbLayout.Home, Bbs757EfbLayout.SettingsIcon, Bbs757EfbLayout.AiracData, Bbs757EfbLayout.SimBriefField,
-            Bbs757EfbLayout.Key1, Bbs757EfbLayout.Key8, Bbs757EfbLayout.Key9, Bbs757EfbLayout.KeyOk
-        }, seq.Select(s => s.Point));
-        Assert.Equal(new EfbPoint(823, 413), seq[4].Point);
-        Assert.Equal(new EfbPoint(936, 255), seq[5].Point);
-        Assert.Equal(new EfbPoint(1052, 255), seq[6].Point);
-        Assert.Equal(new EfbPoint(1052, 565), seq[7].Point);
-        // The digits go in 500 ms apart.
-        Assert.Equal(500, seq[4].DelayAfterMs);
-        Assert.Equal(500, seq[5].DelayAfterMs);
-        Assert.Equal(500, seq[6].DelayAfterMs);
+        };
+        expected.AddRange(Enumerable.Repeat(Bbs757EfbLayout.KeyBackspace, 10));
+        expected.AddRange(new[] { Bbs757EfbLayout.Key1, Bbs757EfbLayout.Key8, Bbs757EfbLayout.Key9, Bbs757EfbLayout.KeyOk });
+        Assert.Equal(expected, seq.Select(s => s.Point));
+
+        Assert.Equal(new EfbPoint(823, 565), seq[4].Point);    // BKSP
+        Assert.Equal(new EfbPoint(823, 413), seq[14].Point);   // 1
+        Assert.Equal(new EfbPoint(936, 255), seq[15].Point);   // 8
+        Assert.Equal(new EfbPoint(1052, 255), seq[16].Point);  // 9
+        Assert.Equal(new EfbPoint(1052, 565), seq[17].Point);  // OK
+        // Every keypad key, backspaces and digits, goes in 500 ms after the one before.
+        Assert.All(seq.Skip(4).Take(13), s => Assert.Equal(500, s.DelayAfterMs));
+    }
+
+    [Fact]
+    public void The_simbrief_entry_never_presses_the_keypad_s_delete_key()
+    {
+        Assert.DoesNotContain(Bbs757EfbLayout.EnterSimBriefId("1234567890"), s => s.Point == Bbs757EfbLayout.KeyDelete);
     }
 
     [Fact]
     public void Every_keypad_digit_has_its_measured_key()
     {
         var seq = Bbs757EfbLayout.EnterSimBriefId("1234567890");
-        var digits = seq.Skip(4).Take(10).Select(s => s.Point).ToList();
+        var digits = seq.Skip(14).Take(10).Select(s => s.Point).ToList();
 
         Assert.Equal(new[]
         {
@@ -251,6 +353,32 @@ public class Bbs757EfbTests
         Assert.Equal(new[] { new EfbPoint(993, 658) }, Bbs757EfbLayout.AnswerUnits(accept: false).Select(s => s.Point));
     }
 
+    [Theory]
+    [InlineData(Bbs757EfbRunKind.FetchOfp, true, true)]
+    [InlineData(Bbs757EfbRunKind.FetchOfp, false, false)]   // the fetch did not finish: no dialog to answer
+    [InlineData(Bbs757EfbRunKind.Units, true, false)]       // already answered
+    [InlineData(Bbs757EfbRunKind.Preset, true, false)]      // another run since the fetch
+    [InlineData(Bbs757EfbRunKind.SimBriefId, true, false)]
+    [InlineData(null, false, false)]                        // nothing run yet
+    public void The_units_question_is_answered_only_right_after_a_finished_fetch(Bbs757EfbRunKind? last, bool done, bool expected)
+    {
+        Assert.Equal(expected, Bbs757EfbLayout.MayAnswerUnits(last, done));
+    }
+
+    [Theory]
+    [InlineData(null, 189L, Bbs757SimBriefEntry.Saved)]
+    [InlineData(555L, 189L, Bbs757SimBriefEntry.Saved)]
+    [InlineData(189L, 189L, Bbs757SimBriefEntry.Saved)]           // the same ID again
+    [InlineData(null, null, Bbs757SimBriefEntry.NotSaved)]
+    [InlineData(555L, 555L, Bbs757SimBriefEntry.NotSaved)]
+    [InlineData(555L, 555189L, Bbs757SimBriefEntry.Different)]    // the keypad appended
+    [InlineData(555L, null, Bbs757SimBriefEntry.Different)]       // cleared, not set
+    [InlineData(null, 42L, Bbs757SimBriefEntry.Different)]
+    public void The_simbrief_entry_is_judged_from_the_stored_id_before_and_after(long? before, long? after, Bbs757SimBriefEntry expected)
+    {
+        Assert.Equal(expected, Bbs757EfbLayout.JudgeSimBriefEntry(before, after, typed: 189));
+    }
+
     [Fact]
     public void Home_and_the_icons_sit_at_their_measured_positions()
     {
@@ -288,8 +416,31 @@ public class Bbs757EfbTests
         }
     }
 
+    private static void WriteSettingsAt(string work, DateTime writtenUtc)
+    {
+        Directory.CreateDirectory(work);
+        string path = Path.Combine(work, "efb_settings.json");
+        File.WriteAllText(path, "{\"simbrief_id\":-1}");
+        File.SetLastWriteTimeUtc(path, writtenUtc);
+    }
+
     [Fact]
-    public void Find_picks_the_first_root_that_exists()
+    public void Find_picks_the_root_whose_settings_were_written_last()
+    {
+        using var tmp = new TempDir();
+        string older = tmp.Sub("older"), newer = tmp.Sub("newer"), bare = tmp.Sub("bare"), missing = tmp.Sub("missing");
+        WriteSettingsAt(older, new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc));
+        WriteSettingsAt(newer, new DateTime(2026, 10, 20, 8, 0, 0, DateTimeKind.Utc));
+        Directory.CreateDirectory(bare);   // a folder without BlueBird's settings file
+
+        Assert.Equal(newer, Bbs757WorkFolder.Find(new[] { older, newer, bare }));
+        Assert.Equal(newer, Bbs757WorkFolder.Find(new[] { newer, older }));
+        Assert.Equal(newer, Bbs757WorkFolder.Find(new[] { missing, bare, older, newer }));
+        Assert.Equal(older, Bbs757WorkFolder.Find(new[] { bare, older }));
+    }
+
+    [Fact]
+    public void With_no_settings_file_anywhere_Find_takes_the_first_root_that_exists()
     {
         using var tmp = new TempDir();
         string missing = tmp.Sub("missing"), second = tmp.Sub("second"), third = tmp.Sub("third");
@@ -453,8 +604,36 @@ public class Bbs757EfbTests
         client.Start();
 
         Assert.False(client.IsReady);
-        Assert.False(await client.RunAsync(Bbs757EfbLayout.FetchOfp(), CancellationToken.None));
-        Assert.False(await client.RunAsync(Array.Empty<(EfbPoint, int)>(), CancellationToken.None));
+        Assert.False(client.IsLayoutUnknown);
+        Assert.Equal(Bbs757EfbRunResult.Unreachable, await client.RunAsync(Bbs757EfbLayout.FetchOfp(), CancellationToken.None));
+        Assert.Equal(Bbs757EfbRunResult.Unreachable, await client.RunAsync(Array.Empty<(EfbPoint, int)>(), CancellationToken.None));
+        Assert.Null(await client.ReadPageAsync(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("no-canvas: size 1200x900", Bbs757EfbRunResult.LayoutUnknown)]
+    [InlineData("no-canvas: canvas", Bbs757EfbRunResult.Unreachable)]
+    [InlineData("no-canvas: handlers", Bbs757EfbRunResult.Unreachable)]
+    [InlineData("page-too-early", Bbs757EfbRunResult.PageTooEarly)]
+    [InlineData("page-too-young", Bbs757EfbRunResult.PageTooYoung)]
+    [InlineData("already-ran", Bbs757EfbRunResult.AlreadyRan)]
+    [InlineData("other-page", Bbs757EfbRunResult.OtherPage)]
+    [InlineData("busy", Bbs757EfbRunResult.NotFinished)]
+    [InlineData("bad-seq", Bbs757EfbRunResult.NotFinished)]
+    [InlineData("no-page-time", Bbs757EfbRunResult.NotFinished)]
+    public void An_agent_refusal_maps_to_what_the_window_says(string error, Bbs757EfbRunResult expected)
+    {
+        Assert.Equal(expected, CoherentBbs757EfbClient.ResultForRefusal(error));
+    }
+
+    [Theory]
+    [InlineData("MSFSBA_BBS757_EFB_NOT_READY:size 1200x900", true)]
+    [InlineData("MSFSBA_BBS757_EFB_NOT_READY:canvas", false)]
+    [InlineData("MSFSBA_BBS757_EFB_NOT_READY:Coherent", false)]
+    [InlineData("no-canvas: size 1397x900", true)]
+    public void Only_a_canvas_of_another_size_means_an_unknown_layout(string answer, bool expected)
+    {
+        Assert.Equal(expected, CoherentBbs757EfbClient.IsSizeProblem(answer));
     }
 
     [Fact]
@@ -474,5 +653,22 @@ public class Bbs757EfbTests
         Assert.DoesNotContain(".includes(", code);
         Assert.StartsWith("(function () {", code.TrimStart());
         Assert.Contains("} catch (e) {", code);
+        // The page-bound guards the nav data update relies on, and the page clock they use.
+        Assert.Contains("notBeforeLoadMs", code);
+        Assert.Contains("minAgeMs", code);
+        Assert.Contains("onceKey", code);
+        Assert.Contains("Date.now() - performance.now()", code);
+        Assert.DoesNotContain("cancelled", agent);   // US spelling
+    }
+
+    [Fact]
+    public void The_nav_data_update_runs_once_per_page_under_the_page_guards()
+    {
+        var guard = Bbs757EfbLayout.UpdateGuard(DateOnly.FromDateTime(U("2026-10-30 10:00:00")));
+
+        Assert.Equal("airac-update", guard.OnceKey);
+        Assert.Equal(60000, guard.MinPageAgeMs);
+        Assert.Equal(new DateTimeOffset(U("2026-10-30 00:00:00")).ToUnixTimeMilliseconds(), guard.NotBeforeLoadMs);
+        Assert.Null(guard.SamePageAsMs);
     }
 }

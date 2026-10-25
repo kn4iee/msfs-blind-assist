@@ -30,6 +30,21 @@ public static class AiracCycle
     }
 
     /// <summary>
+    /// The date cycle <paramref name="cycle"/> (YYNN) took or takes effect, 00:00 UTC. Throws for a
+    /// number no cycle has (NN past the year's last cycle, or not a cycle number at all).
+    /// </summary>
+    public static DateOnly EffectiveDate(int cycle)
+    {
+        if (!IsCycleNumber(cycle)) throw new ArgumentOutOfRangeException(nameof(cycle), cycle, "Not an AIRAC cycle number.");
+        int year = 2000 + cycle / 100;
+        int first = CeilDiv(new DateOnly(year, 1, 1).DayNumber - Anchor.DayNumber, CycleDays);
+        var effective = Anchor.AddDays((first + cycle % 100 - 1) * CycleDays);
+        if (effective.Year != year)
+            throw new ArgumentOutOfRangeException(nameof(cycle), cycle, "That year has fewer cycles.");
+        return effective;
+    }
+
+    /// <summary>
     /// Whether <paramref name="cycle"/> is shaped like a cycle number: four digits, its last two
     /// 01 to 14.
     /// </summary>

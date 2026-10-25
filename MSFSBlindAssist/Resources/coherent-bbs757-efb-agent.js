@@ -10,9 +10,18 @@
 // real mouse. Nothing on the tablet can be read: the app checks results through files BlueBird
 // writes.
 //
+// The page clock: this view's document is made anew on every flight load, so the moment it loaded
+// (Date.now() - performance.now(), the real clock, measured against the host's UTC) tells which
+// flight load BlueBird's load-time checks belong to. It is fixed once per document, kept on window
+// so a newer agent on the same page keeps it, and sent with every answer as `page`.
+//
 // Sequences: clickSeq takes [[x, y, delayAfterMs], ...] and runs it in the page with setTimeout,
 // one run at a time, so a sequence is never interleaved with another and never depends on the
-// app's link staying up between its clicks. status(id) says how far a run got; cancel() stops one.
+// app's link staying up between its clicks. Before a new run starts, any older run's pending click
+// is cleared. Its optional guards are checked here, on the page that will be clicked:
+// notBeforeLoadMs (the page loaded at or after it), minAgeMs (the page at least this old),
+// samePageAsMs (the page that loaded then), onceKey (no run with this key started on this page).
+// status(id) says how far a run got; cancel() stops one.
 //
 // Install: an agent that cannot click is no agent. When Coherent.call or the tablet's canvas (with
 // its four handlers, at the measured size) is missing - the view's scripts or gauges not ready
@@ -23,7 +32,7 @@
 // try/catch.
 (function () {
   try {
-    var VERSION = 1;
+    var VERSION = 2;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -32,6 +41,19 @@
     var MAX_STEPS = 40, MAX_DELAY_MS = 10000;
     // A run still marked running this long after its last click was due is taken as dead.
     var STALE_MS = 5000;
+
+    // This document's load time, once (see the page clock above).
+    if (typeof window.__MSFSBA_BBS757EFB_PAGE !== 'number') {
+      if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
+        window.__MSFSBA_BBS757EFB_PAGE = Math.round(Date.now() - performance.now());
+    }
+    // The once-per-page keys already used, kept on window like the page time.
+    if (!window.__MSFSBA_BBS757EFB_ONCE || typeof window.__MSFSBA_BBS757EFB_ONCE !== 'object')
+      window.__MSFSBA_BBS757EFB_ONCE = {};
+
+    function pageTime() {
+      return typeof window.__MSFSBA_BBS757EFB_PAGE === 'number' ? window.__MSFSBA_BBS757EFB_PAGE : null;
+    }
 
     function canvasProblem(c) {
       if (!c) return 'canvas';
@@ -64,6 +86,11 @@
     var problem = coherentProblem() || canvasProblem(findCanvas());
     if (problem) return NOT_READY + problem;
 
+    // An older agent on this page is replaced: its run, if any, stops first (one run at a time).
+    if (old && typeof old.cancel === 'function') {
+      try { old.cancel(); } catch (e) { }
+    }
+
     var A = { version: VERSION };
     var state = { nextId: 1, run: null };
     A._state = state;
@@ -94,6 +121,17 @@
       return !!run && run.running && (Date.now() - run.startedAt) < run.totalMs + STALE_MS;
     }
 
+    // Stops a run: its pending click is cleared, so nothing more of it is clicked.
+    function stopRun(run, reason) {
+      if (!run) return false;
+      if (run.timer) clearTimeout(run.timer);
+      run.timer = null;
+      if (!run.running) return false;
+      run.running = false;
+      run.error = reason;
+      return true;
+    }
+
     function parseSeq(json) {
       var steps;
       try { steps = JSON.parse(json); } catch (e) { return null; }
@@ -106,17 +144,39 @@
       return steps;
     }
 
+    function refuse(error) { return { ok: false, error: error, page: pageTime() }; }
+
+    // Why this page may not run a guarded sequence, or null.
+    function guardProblem(opts) {
+      if (!opts) return null;
+      var page = pageTime();
+      var needsPage = opts.notBeforeLoadMs != null || opts.minAgeMs != null || opts.samePageAsMs != null;
+      if (needsPage && page === null) return 'no-page-time';
+      if (opts.notBeforeLoadMs != null && !(page >= opts.notBeforeLoadMs)) return 'page-too-early';
+      if (opts.minAgeMs != null && !(Date.now() - page >= opts.minAgeMs)) return 'page-too-young';
+      if (opts.samePageAsMs != null && page !== opts.samePageAsMs) return 'other-page';
+      if (opts.onceKey != null && window.__MSFSBA_BBS757EFB_ONCE[String(opts.onceKey)]) return 'already-ran';
+      return null;
+    }
+
     function runInfo(run) {
-      return { ok: true, id: run.id, n: run.n, done: run.done, running: runIsLive(run), error: run.error };
+      return { ok: true, id: run.id, n: run.n, done: run.done, running: runIsLive(run), error: run.error, page: pageTime() };
     }
 
     // Starts a run: the first click now, each next one after the previous step's delay.
-    A.clickSeq = function (json) {
-      if (runIsLive(state.run)) return { ok: false, error: 'busy' };
+    A.clickSeq = function (json, opts) {
+      if (runIsLive(state.run)) return refuse('busy');
       var steps = parseSeq(json);
-      if (!steps) return { ok: false, error: 'bad-seq' };
+      if (!steps) return refuse('bad-seq');
+      if (opts != null && typeof opts !== 'object') return refuse('bad-seq');
+      var g = guardProblem(opts);
+      if (g) return refuse(g);
       var p = coherentProblem() || canvasProblem(findCanvas());
-      if (p) return { ok: false, error: 'no-canvas: ' + p };
+      if (p) return refuse('no-canvas: ' + p);
+
+      // A dead run may still hold a pending click: cleared before the new run starts.
+      stopRun(state.run, 'canceled');
+      if (opts && opts.onceKey != null) window.__MSFSBA_BBS757EFB_ONCE[String(opts.onceKey)] = Date.now();
 
       var total = 0;
       for (var i = 0; i < steps.length; i++) total += steps[i][2];
@@ -141,30 +201,24 @@
         run.timer = setTimeout(function () { step(k + 1); }, steps[k][2]);
       }
       step(0);
-      return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error };
+      return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error, page: pageTime() };
     };
 
     // How far run `id` got.
     A.status = function (id) {
       var run = state.run;
-      if (!run || run.id !== id) return { ok: false, error: 'unknown-run' };
+      if (!run || run.id !== id) return refuse('unknown-run');
       return runInfo(run);
     };
 
     // Stops the run in progress: no further click is made.
     A.cancel = function () {
-      var run = state.run;
-      if (!run || !run.running) return 'idle';
-      if (run.timer) clearTimeout(run.timer);
-      run.timer = null;
-      run.running = false;
-      run.error = 'canceled';
-      return 'canceled';
+      return { ok: true, canceled: stopRun(state.run, 'canceled'), page: pageTime() };
     };
 
     A.ping = function () {
       var p = coherentProblem() || canvasProblem(findCanvas());
-      return { ok: true, ready: !p, problem: p, running: runIsLive(state.run) };
+      return { ok: true, ready: !p, problem: p, running: runIsLive(state.run), page: pageTime() };
     };
 
     window.__MSFSBA_BBS757EFB = A;

@@ -17,8 +17,10 @@ namespace MSFSBlindAssist.Forms.BBS757;
 ///
 /// Both clients are MainForm's: this window uses them and disposes neither.
 ///
-/// The nav data update never clicks while the installed cycle is current, nor when it cannot tell:
-/// BlueBird's REMOVE button sits where UPDATE was (<see cref="Bbs757EfbLayout.ShouldUpdate"/>).
+/// The nav data update clicks the spot that is BlueBird's REMOVE whenever BlueBird saw no newer
+/// cycle at the flight's load, so it clicks only under <see cref="Bbs757EfbLayout.MayClickUpdate"/>,
+/// re-checked by the agent on the page it clicks, once per flight load, and never when anything it
+/// needs cannot be read. The units answer is pressed only right after a finished fetch, on its page.
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
 /// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Loading Before
@@ -36,9 +38,17 @@ public class BBS757EfbForm : Form
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     public const string NotReachableText = "The 757's EFB is not reachable. Is the aircraft loaded?";
+    public const string LayoutUnknownText = "The 757's EFB layout is not the one this version knows.";
     public const string BusyText = "The EFB is still busy with the last action.";
     public const string NotFinishedText = "The EFB did not finish the clicks. Try again.";
     public const string FolderMissingText = "BlueBird's 757 folder was not found";
+    public const string ReloadFirstText = "BlueBird checks for new nav data when the flight loads. Reload the flight, then try again.";
+    public const string StillCheckingText = "BlueBird is still checking for nav data. Try again in a minute.";
+    public const string NotSignedInText = "Sign in to Navigraph first, then reload the flight and update.";
+    public const string AlreadyRanText = "The nav data update already ran on this flight. Reload the flight, then try again.";
+    public const string FetchFirstText = "Fetch the SimBrief flight first.";
+    public const string RemovedText =
+        "BlueBird removed the installed nav data instead of updating it. With an active Navigraph subscription, reload the flight and update again.";
 
     /// <summary>The two hosts a Navigraph sign-in address may have to be opened.</summary>
     private static readonly string[] NavigraphHosts = { "navigraph.com", "identity.api.navigraph.com" };
@@ -78,6 +88,13 @@ public class BBS757EfbForm : Form
     private string _lastResult = "";
     private bool _busy;
     private bool _disposed;
+    // What ran last (the units answer may only follow a finished fetch), and the page the fetch ran on.
+    private Bbs757EfbRunKind? _lastRunKind;
+    private bool _lastRunDone;
+    private long? _fetchPageMs;
+    // The work folder last written to the log, so a change of folder is logged once.
+    private string? _loggedFolder;
+    private bool _folderLogged;
 
     public BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer)
         : this(efb, tablet, announcer, Bbs757WorkFolder.Find)
@@ -192,8 +209,8 @@ public class BBS757EfbForm : Form
 
         _fetchButton = MakeButton("Fetch SimBrief flight", left, fullW, FetchSimBriefFlightAsync);
         y += h + gap;
-        _acceptUnitsButton = MakeButton("Accept units", left, halfW, () => PressAsync(Bbs757EfbLayout.AnswerUnits(accept: true), "Accept units pressed"));
-        _keepUnitsButton = MakeButton("Keep units", left + halfW + 10, halfW, () => PressAsync(Bbs757EfbLayout.AnswerUnits(accept: false), "Keep units pressed"));
+        _acceptUnitsButton = MakeButton("Accept units", left, halfW, () => AnswerUnitsAsync(accept: true));
+        _keepUnitsButton = MakeButton("Keep units", left + halfW + 10, halfW, () => AnswerUnitsAsync(accept: false));
         y += h + gap + 4;
 
         var presetLabel = new Label { Text = "Cockpit preset", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ };
@@ -212,8 +229,8 @@ public class BBS757EfbForm : Form
         _loadPresetButton = MakeButton("Load preset", left + 285, 155, LoadPresetAsync);
         y += h + gap;
 
-        _apuButton = MakeButton("APU quick start", left, halfW, () => PressAsync(Bbs757EfbLayout.QuickStart("APU quick start"), "APU quick start pressed"));
-        _irsButton = MakeButton("IRS rapid align", left + halfW + 10, halfW, () => PressAsync(Bbs757EfbLayout.QuickStart("IRS rapid align"), "IRS rapid align pressed"));
+        _apuButton = MakeButton("APU quick start", left, halfW, () => QuickStartAsync("APU quick start"));
+        _irsButton = MakeButton("IRS rapid align", left + halfW + 10, halfW, () => QuickStartAsync("IRS rapid align"));
         y += h + gap + 4;
 
         var statusLabel = new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ };
@@ -266,7 +283,9 @@ public class BBS757EfbForm : Form
     private void UpdateStatus()
     {
         if (_disposed) return;
-        string link = _efb.IsReady ? "EFB connected." : "EFB not reachable. Is the aircraft loaded?";
+        string link = _efb.IsLayoutUnknown ? LayoutUnknownText
+            : _efb.IsReady ? "EFB connected."
+            : "EFB not reachable. Is the aircraft loaded?";
         string text = _lastResult.Length > 0 ? link + Environment.NewLine + _lastResult : link;
         if (_statusBox.Text != text) _statusBox.Text = text;
     }
@@ -293,11 +312,51 @@ public class BBS757EfbForm : Form
         _announcer.AnnounceImmediate(text);
     }
 
-    /// <summary>A run that returned false: the EFB unreachable, or the clicks not finished.</summary>
-    private void SayRunFailed()
+    /// <summary>
+    /// A run that did not finish, said as what the pilot can do about it. Everything that stopped
+    /// before a click is a refusal (said at once); a run that started and stopped is a result.
+    /// </summary>
+    private void SayRunProblem(Bbs757EfbRunResult result)
     {
-        if (_efb.IsReady) Say(NotFinishedText);
-        else Refuse(NotReachableText);
+        switch (result)
+        {
+            case Bbs757EfbRunResult.Done: return;
+            case Bbs757EfbRunResult.LayoutUnknown: Refuse(LayoutUnknownText); return;
+            case Bbs757EfbRunResult.PageTooEarly: Refuse(ReloadFirstText); return;
+            case Bbs757EfbRunResult.PageTooYoung: Refuse(StillCheckingText); return;
+            case Bbs757EfbRunResult.AlreadyRan: Refuse(AlreadyRanText); return;
+            case Bbs757EfbRunResult.OtherPage: Refuse(FetchFirstText); return;
+            case Bbs757EfbRunResult.Unreachable: Refuse(NotReachableText); return;
+            default: Say(NotFinishedText); return;
+        }
+    }
+
+    /// <summary>
+    /// Runs a sequence and remembers what ran (for the units answer). Every run counts, refused or
+    /// not: after any other run the units question can no longer be assumed on screen.
+    /// </summary>
+    private async Task<Bbs757EfbRunResult> RunAsync(Bbs757EfbRunKind kind,
+        IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq, Bbs757EfbRunGuard? guard = null)
+    {
+        _lastRunKind = kind;
+        _lastRunDone = false;
+        var result = await _efb.RunAsync(seq, Lifetime, guard);
+        _lastRunDone = result == Bbs757EfbRunResult.Done;
+        if (kind == Bbs757EfbRunKind.FetchOfp) _fetchPageMs = _lastRunDone ? _efb.LastRunPageLoadedMs : null;
+        return result;
+    }
+
+    /// <summary>The work folder now (newest settings file, <see cref="Bbs757WorkFolder.Find(IReadOnlyList{string})"/>); a change is logged once, never a file's content.</summary>
+    private string? ResolveWorkFolder()
+    {
+        string? folder = _findWorkFolder();
+        if (!_folderLogged || !string.Equals(folder, _loggedFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            _folderLogged = true;
+            _loggedFolder = folder;
+            Log.Info("BBS757", folder == null ? "BlueBird work folder: none found." : $"BlueBird work folder: {folder}");
+        }
+        return folder;
     }
 
     // ------------------------------------------------------------------
@@ -341,6 +400,18 @@ public class BBS757EfbForm : Form
         SetResult("Reading the Navigraph sign-in.");
         var (signedIn, code, uriText) = await _tablet.GetNavigraphAsync();
         if (_disposed) return;
+        if (!signedIn && string.IsNullOrWhiteSpace(code))
+        {
+            // Nothing read, or read too soon after the helper's client connected: read again once
+            // it answers, so the answer given is the helper's, not the empty one.
+            if (!await TabletReadableAsync())
+            {
+                Refuse(NotReachableText);
+                return;
+            }
+            (signedIn, code, uriText) = await _tablet.GetNavigraphAsync();
+            if (_disposed) return;
+        }
         if (signedIn)
         {
             Say("Already signed in to Navigraph");
@@ -348,8 +419,7 @@ public class BBS757EfbForm : Form
         }
         if (string.IsNullOrWhiteSpace(code))
         {
-            if (!await TabletReadableAsync()) Refuse(NotReachableText);
-            else Say("No Navigraph sign-in code is waiting yet. Try again in a minute.");
+            Refuse("No Navigraph sign-in code is waiting yet. Try again in a minute.");
             return;
         }
 
@@ -404,66 +474,119 @@ public class BBS757EfbForm : Form
         }
     }
 
+    /// <summary>
+    /// Whether the pilot is signed in to Navigraph, read fresh: true, false, or null when the
+    /// helper cannot be read. A signed-out first answer is read again once the helper answers
+    /// (it may have come before the helper's first scrape).
+    /// </summary>
+    private async Task<bool?> ReadSignedInAsync()
+    {
+        var (signedIn, _, _) = await _tablet.GetNavigraphAsync();
+        if (signedIn) return true;
+        if (!await TabletReadableAsync()) return null;
+        (signedIn, _, _) = await _tablet.GetNavigraphAsync();
+        return signedIn;
+    }
+
+    /// <summary>
+    /// The nav data update. BlueBird's UPDATE spot is its REMOVE button whenever its own
+    /// latest-cycle check, made inside the WASM when the flight loaded, saw no newer cycle, so the
+    /// click is bound to that load (<see cref="Bbs757EfbLayout.MayClickUpdate"/>): the installed
+    /// cycle out of date, the pilot signed in and not seen signed out since the tablet's page
+    /// loaded, that page loaded on or after the current cycle's first full day and at least a
+    /// minute ago. The agent checks the page conditions again on the page it clicks, and runs the
+    /// update once per page. Whatever cannot be known stops it: no work folder, an unreadable cycle
+    /// file, an unreadable page or sign-in.
+    /// </summary>
     private async Task UpdateNavDataAsync()
     {
-        string? folder = _findWorkFolder();
+        string? folder = ResolveWorkFolder();
         if (folder == null)
         {
-            Say($"{FolderMissingText}, so the installed nav data cannot be checked. Nothing was clicked.");
+            Refuse($"{FolderMissingText}, so the installed nav data cannot be checked. Nothing was clicked.");
             return;
         }
         int? installed = Bbs757WorkFolder.ReadInstalledCycle(folder);
         if (installed == null && Bbs757WorkFolder.HasCycleFile(folder))
         {
             // Some cycle is installed but its number cannot be read: the spot may be REMOVE.
-            Say("The installed nav data cycle cannot be read, so nothing was clicked.");
+            Refuse("The installed nav data cycle cannot be read, so nothing was clicked.");
             return;
         }
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         if (!Bbs757EfbLayout.ShouldUpdate(installed, today))
         {
-            Say($"Nav data is current, cycle {installed!.Value.ToString(CultureInfo.InvariantCulture)}");
+            Refuse($"Nav data is current, cycle {installed!.Value.ToString(CultureInfo.InvariantCulture)}");
             return;
         }
 
-        // BlueBird looks for a newer cycle only when the aircraft loads signed in: not signed in,
-        // the update cannot run (a definite "not signed in" only; an unreadable helper does not stop it).
-        var (signedIn, _, _) = await _tablet.GetNavigraphAsync();
+        var page = await _efb.ReadPageAsync(Lifetime);
         if (_disposed) return;
-        if (!signedIn && await TabletReadableAsync())
+        if (page == null)
         {
-            Say("Sign in to Navigraph first, then reload the flight and update.");
+            Refuse(_efb.IsLayoutUnknown ? LayoutUnknownText : NotReachableText);
             return;
+        }
+        bool? signedIn = await ReadSignedInAsync();
+        if (_disposed) return;
+        if (signedIn == null)
+        {
+            Refuse("The Navigraph sign-in cannot be read. Try again in a moment.");
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        today = DateOnly.FromDateTime(now);
+        bool sawSignedOut = Bbs757EfbLayout.SignedOutDuringLoad(_tablet.LastSignedOutUtc, page.LoadedUtc);
+        switch (Bbs757EfbLayout.MayClickUpdate(installed, now, page.LoadedUtc, signedIn.Value, sawSignedOut))
+        {
+            case Bbs757UpdateGate.Allowed:
+                break;
+            case Bbs757UpdateGate.Current:
+                Refuse($"Nav data is current, cycle {installed!.Value.ToString(CultureInfo.InvariantCulture)}");
+                return;
+            case Bbs757UpdateGate.NotSignedIn:
+                Refuse(NotSignedInText);
+                return;
+            case Bbs757UpdateGate.NewToday:
+                Refuse($"Nav data cycle {AiracCycle.ForDate(today).ToString(CultureInfo.InvariantCulture)} is new today. " +
+                       "Reload the flight tomorrow, then update.");
+                return;
+            case Bbs757UpdateGate.StillChecking:
+                Refuse(StillCheckingText);
+                return;
+            default:
+                Refuse(ReloadFirstText);
+                return;
         }
 
         SetResult("Updating nav data.");
-        if (!await _efb.RunAsync(Bbs757EfbLayout.UpdateNavData(), Lifetime))
+        var result = await RunAsync(Bbs757EfbRunKind.Update, Bbs757EfbLayout.UpdateNavData(), Bbs757EfbLayout.UpdateGuard(today));
+        if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunFailed();
+            SayRunProblem(result);
             return;
         }
 
+        // BlueBird may rewrite the cycle file during an update, so a missing file is judged only
+        // once the whole window has passed.
         var until = DateTime.UtcNow.AddMilliseconds(CycleWaitMs);
         while (true)
         {
-            int? now = Bbs757WorkFolder.ReadInstalledCycle(folder);
-            if (now is int n && (installed is null || n > installed))
+            int? cycle = Bbs757WorkFolder.ReadInstalledCycle(folder);
+            if (cycle is int n && (installed is null || n > installed))
             {
                 Say($"Nav data cycle {n.ToString(CultureInfo.InvariantCulture)} installed. Reload the flight to use it.");
-                return;
-            }
-            // BlueBird decides UPDATE or REMOVE from its own latest-cycle check, made when the flight
-            // loaded, which nothing outside the aircraft can read: if it saw no newer cycle, the
-            // spot was REMOVE. Said plainly, never left as "did not finish".
-            if (installed != null && !Bbs757WorkFolder.HasCycleFile(folder))
-            {
-                Say("BlueBird removed the installed nav data instead of updating it. Reload the flight, then update again.");
                 return;
             }
             if (DateTime.UtcNow >= until) break;
             await Task.Delay(CyclePollMs, Lifetime);
         }
-        Say("The update did not finish. Try again after reloading the flight.");
+        // The spot was REMOVE after all (a lapsed subscription, a late cycle): said plainly.
+        if (installed != null && !Bbs757WorkFolder.HasCycleFile(folder))
+            Say(RemovedText);
+        else
+            Say("The update did not finish. Try again after reloading the flight.");
     }
 
     private async Task SetSimBriefIdAsync()
@@ -480,52 +603,81 @@ public class BBS757EfbForm : Form
             return;
         }
 
+        // The stored ID before, to tell "not taken" from "taken as something else" after. Neither
+        // value is ever spoken or logged.
+        string? folder = ResolveWorkFolder();
+        long? before = folder == null ? null : Bbs757WorkFolder.ReadSimBriefId(folder);
+
         SetResult("Entering the SimBrief ID.");
-        if (!await _efb.RunAsync(Bbs757EfbLayout.EnterSimBriefId(digits), Lifetime))
+        var result = await RunAsync(Bbs757EfbRunKind.SimBriefId, Bbs757EfbLayout.EnterSimBriefId(digits));
+        if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunFailed();
+            SayRunProblem(result);
             return;
         }
 
-        string? folder = _findWorkFolder();
         if (folder == null)
         {
             Say($"SimBrief ID entered. {FolderMissingText}, so it could not be checked.");
             return;
         }
-        long expected = Bbs757EfbLayout.SimBriefIdValue(digits);
+        long typed = Bbs757EfbLayout.SimBriefIdValue(digits);
+        long? after = Bbs757WorkFolder.ReadSimBriefId(folder);
         var until = DateTime.UtcNow.AddMilliseconds(SimBriefWaitMs);
-        while (true)
+        while (after != typed && DateTime.UtcNow < until)
         {
-            if (Bbs757WorkFolder.ReadSimBriefId(folder) == expected)
-            {
-                Say("SimBrief ID saved");
-                return;
-            }
-            if (DateTime.UtcNow >= until) break;
             await Task.Delay(SimBriefPollMs, Lifetime);
+            after = Bbs757WorkFolder.ReadSimBriefId(folder);
         }
-        Say("BlueBird did not save the SimBrief ID");
+        switch (Bbs757EfbLayout.JudgeSimBriefEntry(before, after, typed))
+        {
+            case Bbs757SimBriefEntry.Saved: Say("SimBrief ID saved"); break;
+            case Bbs757SimBriefEntry.NotSaved: Say("BlueBird did not save the SimBrief ID"); break;
+            default: Say("BlueBird stored a different SimBrief ID"); break;
+        }
     }
 
     private async Task FetchSimBriefFlightAsync()
     {
         // Without an ID BlueBird fetches nothing and says nothing.
-        string? folder = _findWorkFolder();
+        string? folder = ResolveWorkFolder();
         if (folder != null && Bbs757WorkFolder.ReadSimBriefId(folder) == null)
         {
-            Say("Set your SimBrief ID first.");
+            Refuse("Set your SimBrief ID first.");
             return;
         }
 
         SetResult("Fetching the SimBrief flight.");
-        if (!await _efb.RunAsync(Bbs757EfbLayout.FetchOfp(), Lifetime))
+        var result = await RunAsync(Bbs757EfbRunKind.FetchOfp, Bbs757EfbLayout.FetchOfp());
+        if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunFailed();
+            SayRunProblem(result);
             return;
         }
         Say("SimBrief flight requested. If BlueBird asks to switch weight units, use Accept units or Keep units. " +
             "Then run ACARS INIT FLT in the CDU window.");
+    }
+
+    /// <summary>
+    /// YES or NO on "switch weight units?". The question is only on screen right after a fetch, so
+    /// the answer is pressed only when the last run was a finished fetch, with no run since
+    /// (<see cref="Bbs757EfbLayout.MayAnswerUnits"/>), and on the page the fetch ran on.
+    /// </summary>
+    private async Task AnswerUnitsAsync(bool accept)
+    {
+        if (!Bbs757EfbLayout.MayAnswerUnits(_lastRunKind, _lastRunDone) || _fetchPageMs == null)
+        {
+            Refuse(FetchFirstText);
+            return;
+        }
+        var guard = new Bbs757EfbRunGuard(SamePageAsMs: _fetchPageMs);
+        var result = await RunAsync(Bbs757EfbRunKind.Units, Bbs757EfbLayout.AnswerUnits(accept), guard);
+        if (result != Bbs757EfbRunResult.Done)
+        {
+            SayRunProblem(result);
+            return;
+        }
+        Say(accept ? "Accept units pressed" : "Keep units pressed");
     }
 
     private async Task LoadPresetAsync()
@@ -536,23 +688,25 @@ public class BBS757EfbForm : Form
             return;
         }
         SetResult($"Opening the {preset} preset.");
-        if (!await _efb.RunAsync(Bbs757EfbLayout.LoadPreset(preset), Lifetime))
+        var result = await RunAsync(Bbs757EfbRunKind.Preset, Bbs757EfbLayout.LoadPreset(preset));
+        if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunFailed();
+            SayRunProblem(result);
             return;
         }
         Say($"Loading {preset}");
     }
 
-    /// <summary>A button with nothing to read back: clicked, then "{name} pressed".</summary>
-    private async Task PressAsync(IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq, string pressed)
+    /// <summary>A quick start tile, which has nothing to read back: clicked, then "{name} pressed".</summary>
+    private async Task QuickStartAsync(string name)
     {
-        if (!await _efb.RunAsync(seq, Lifetime))
+        var result = await RunAsync(Bbs757EfbRunKind.QuickStart, Bbs757EfbLayout.QuickStart(name));
+        if (result != Bbs757EfbRunResult.Done)
         {
-            SayRunFailed();
+            SayRunProblem(result);
             return;
         }
-        Say(pressed);
+        Say($"{name} pressed");
     }
 
     // ------------------------------------------------------------------

@@ -47,18 +47,34 @@ public static class Bbs757WorkFolder
         };
     }
 
-    /// <summary>The first of <paramref name="roots"/> that exists as a folder, or null.</summary>
+    /// <summary>
+    /// The work folder BlueBird uses now: of <paramref name="roots"/>, the one whose
+    /// <see cref="SettingsFile"/> was written last (a pilot with both simulators, or an old install
+    /// left behind, has more than one; BlueBird rewrites its settings whenever one changes, so the
+    /// newest is the one in use). With no settings file in any of them, the first that exists as a
+    /// folder; null when none does. Only the file's time is looked at, never its content.
+    /// </summary>
     public static string? Find(IReadOnlyList<string> roots)
     {
+        string? firstExisting = null, newest = null;
+        DateTime newestWrite = DateTime.MinValue;
         foreach (string root in roots)
         {
             try
             {
-                if (!string.IsNullOrEmpty(root) && Directory.Exists(root)) return root;
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
+                firstExisting ??= root;
+                var settings = new FileInfo(Path.Combine(root, SettingsFile));
+                if (settings.Exists && (newest == null || settings.LastWriteTimeUtc > newestWrite))
+                {
+                    newest = root;
+                    newestWrite = settings.LastWriteTimeUtc;
+                }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                           or NotSupportedException or System.Security.SecurityException) { }
         }
-        return null;
+        return newest ?? firstExisting;
     }
 
     /// <summary>The work folder at one of the <see cref="DefaultRoots"/>, or null.</summary>

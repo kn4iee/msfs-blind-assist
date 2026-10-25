@@ -6,6 +6,42 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <summary>A point on BlueBird's EFB, in the tablet's own pixels (its gauge is 1397 wide).</summary>
 public sealed record EfbPoint(int X, int Y);
 
+/// <summary>What <see cref="Bbs757EfbLayout.MayClickUpdate"/> decided, the first reason not to click winning.</summary>
+public enum Bbs757UpdateGate
+{
+    /// <summary>The spot is UPDATE as far as anything outside the aircraft can tell: click.</summary>
+    Allowed,
+    /// <summary>The installed cycle is current: the spot is BlueBird's REMOVE.</summary>
+    Current,
+    /// <summary>Not signed in to Navigraph: BlueBird cannot have found a newer cycle.</summary>
+    NotSignedIn,
+    /// <summary>The cycle in force took effect today: no page load qualifies before tomorrow.</summary>
+    NewToday,
+    /// <summary>
+    /// The page loaded before the cycle's first full day, or the pilot was seen signed out during
+    /// this load: BlueBird's load-time check cannot have seen the cycle. A reload is needed.
+    /// </summary>
+    ReloadFirst,
+    /// <summary>The page loaded under a minute ago: BlueBird may still be checking.</summary>
+    StillChecking,
+}
+
+/// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
+public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart }
+
+/// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
+public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
+
+/// <summary>
+/// Conditions the EFB agent checks on its own page before a run starts, so a check made by the
+/// app and the click land on the same page: the page loaded at or after
+/// <see cref="NotBeforeLoadMs"/> (Unix ms, UTC), it is at least <see cref="MinPageAgeMs"/> old,
+/// no run with <see cref="OnceKey"/> has started on it, and it is the page that loaded at
+/// <see cref="SamePageAsMs"/>. Null means no such condition.
+/// </summary>
+public sealed record Bbs757EfbRunGuard(
+    long? NotBeforeLoadMs = null, int? MinPageAgeMs = null, string? OnceKey = null, long? SamePageAsMs = null);
+
 /// <summary>
 /// Where BlueBird's EFB tablet ("BBOS", release 0.1.0) has its buttons, and the click sequences the
 /// 757 EFB window runs through <see cref="CoherentBbs757EfbClient"/>. The tablet is a WASM picture:
@@ -38,6 +74,15 @@ public static class Bbs757EfbLayout
 
     /// <summary>How long the AIRAC page is left to show its state before UPDATE is clicked.</summary>
     public const int AiracPageSettleMs = 4000;
+
+    /// <summary>Keypad backspaces before the SimBrief ID's digits: more than any stored ID has.</summary>
+    public const int SimBriefBackspaces = 10;
+
+    /// <summary>How old the tablet's page must be before UPDATE: BlueBird checks for a new cycle at load.</summary>
+    public const int UpdateMinPageAgeMs = 60_000;
+
+    /// <summary>The nav data update runs at most once per page (flight load).</summary>
+    public const string UpdateOnceKey = "airac-update";
 
     // ---- positions (measured unless marked est.) ---------------------------
 
@@ -138,6 +183,72 @@ public static class Bbs757EfbLayout
     public static bool ShouldUpdate(int? installed, DateOnly today) =>
         installed is null || installed < AiracCycle.ForDate(today);
 
+    /// <summary>
+    /// The earliest page load that can have seen the cycle in force on <paramref name="todayUtc"/>:
+    /// 00:00 UTC the day after it took effect (a margin for Navigraph's switchover hour and for
+    /// clock skew).
+    /// </summary>
+    public static DateTime EarliestPageLoadUtc(DateOnly todayUtc) =>
+        AiracCycle.EffectiveDate(AiracCycle.ForDate(todayUtc)).AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+    /// <summary>
+    /// Whether the nav data update may click the UPDATE spot, which is BlueBird's REMOVE whenever
+    /// BlueBird saw no newer cycle. BlueBird looks for one only when the flight loads, signed in,
+    /// inside its WASM, where nothing outside can read the answer. So the click needs:
+    /// <see cref="ShouldUpdate"/>; the pilot signed in, and not seen signed out during this load
+    /// (a sign-in after the load needs a reload); the tablet's page loaded at or after
+    /// <see cref="EarliestPageLoadUtc"/>; and that page at least <see cref="UpdateMinPageAgeMs"/>
+    /// old. Pure; all times UTC.
+    /// </summary>
+    public static Bbs757UpdateGate MayClickUpdate(int? installed, DateTime nowUtc, DateTime pageLoadedUtc,
+        bool signedIn, bool sawSignedOutThisLoad)
+    {
+        var today = DateOnly.FromDateTime(nowUtc);
+        if (!ShouldUpdate(installed, today)) return Bbs757UpdateGate.Current;
+        if (!signedIn) return Bbs757UpdateGate.NotSignedIn;
+        var earliest = EarliestPageLoadUtc(today);
+        if (nowUtc < earliest) return Bbs757UpdateGate.NewToday;
+        if (sawSignedOutThisLoad || pageLoadedUtc < earliest) return Bbs757UpdateGate.ReloadFirst;
+        if ((nowUtc - pageLoadedUtc).TotalMilliseconds < UpdateMinPageAgeMs) return Bbs757UpdateGate.StillChecking;
+        return Bbs757UpdateGate.Allowed;
+    }
+
+    /// <summary>
+    /// Whether a signed-out Navigraph reading belongs to the page that loaded at
+    /// <paramref name="pageLoadedUtc"/>: taken at or after its load. A reading from an earlier
+    /// flight does not count; that load's check is not this one's.
+    /// </summary>
+    public static bool SignedOutDuringLoad(DateTime? lastSignedOutUtc, DateTime pageLoadedUtc) =>
+        lastSignedOutUtc is { } t && t >= pageLoadedUtc;
+
+    /// <summary>
+    /// The guards the update sequence runs under, so the agent checks them again on the page it
+    /// clicks: loaded at or after <see cref="EarliestPageLoadUtc"/>, at least a minute old, and no
+    /// earlier update on that page.
+    /// </summary>
+    public static Bbs757EfbRunGuard UpdateGuard(DateOnly todayUtc) => new(
+        NotBeforeLoadMs: new DateTimeOffset(EarliestPageLoadUtc(todayUtc)).ToUnixTimeMilliseconds(),
+        MinPageAgeMs: UpdateMinPageAgeMs,
+        OnceKey: UpdateOnceKey);
+
+    /// <summary>
+    /// Whether "switch weight units?" can be on screen to answer: only right after a fetch that
+    /// finished, with no other run since.
+    /// </summary>
+    public static bool MayAnswerUnits(Bbs757EfbRunKind? lastRun, bool lastRunDone) =>
+        lastRun == Bbs757EfbRunKind.FetchOfp && lastRunDone;
+
+    /// <summary>
+    /// A SimBrief ID entry judged from BlueBird's stored ID before and after it: stored as typed;
+    /// unchanged (nothing taken); or changed to something else (an appended entry, a cleared one).
+    /// </summary>
+    public static Bbs757SimBriefEntry JudgeSimBriefEntry(long? before, long? after, long typed)
+    {
+        if (after == typed) return Bbs757SimBriefEntry.Saved;
+        if (after == before) return Bbs757SimBriefEntry.NotSaved;
+        return Bbs757SimBriefEntry.Different;
+    }
+
     // ---- SimBrief ID ---------------------------------------------------------
 
     /// <summary>
@@ -196,12 +307,17 @@ public static class Bbs757EfbLayout
         return seq;
     }
 
-    /// <summary>The AIRAC page, the SimBrief ID field, each digit 500 ms apart, then OK.</summary>
+    /// <summary>
+    /// The AIRAC page, the SimBrief ID field, <see cref="SimBriefBackspaces"/> backspaces (the
+    /// keypad may open on the stored ID; whether it does is unmeasured), each digit, then OK: every
+    /// keypad key 500 ms after the one before. Never the keypad's DEL, whose effect is unmeasured.
+    /// </summary>
     public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> EnterSimBriefId(string digits)
     {
         if (!IsSimBriefId(digits)) throw new ArgumentException("A SimBrief ID is digits only.", nameof(digits));
         var seq = OpenAiracPage().ToList();
         seq.Add((SimBriefField, KeypadOpenDelayMs));
+        for (int i = 0; i < SimBriefBackspaces; i++) seq.Add((KeyBackspace, DigitDelayMs));
         foreach (char c in digits) seq.Add((KeyFor(c), DigitDelayMs));
         seq.Add((KeyOk, KeypadOkDelayMs));
         return seq;

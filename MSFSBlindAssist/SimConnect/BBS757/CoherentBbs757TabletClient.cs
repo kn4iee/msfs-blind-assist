@@ -241,10 +241,27 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     }
 
     /// <summary>
+    /// When a Navigraph reading (<see cref="GetNavigraphAsync"/>, answered by the tablet) last found
+    /// the pilot signed out, UTC; null if none has. BlueBird looks for a newer AIRAC cycle only when
+    /// the flight loads, so a signed-out reading taken after the current flight loaded means that
+    /// check ran signed out (<see cref="Bbs757EfbLayout.SignedOutDuringLoad"/>).
+    /// </summary>
+    public DateTime? LastSignedOutUtc
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref _lastSignedOutTicks);
+            return ticks == 0 ? null : new DateTime(ticks, DateTimeKind.Utc);
+        }
+    }
+
+    private long _lastSignedOutTicks;
+
+    /// <summary>
     /// The Navigraph sign-in state BlueBird's tablet holds: signed in or not, and the pending
     /// device sign-in's user code and address. Never a token. (false, null, null) when the view
     /// or its agent cannot be read within a few seconds; callers that must tell that apart check
-    /// <see cref="IsReadable"/> first.
+    /// <see cref="IsReadable"/> first. A signed-out answer is time-stamped (<see cref="LastSignedOutUtc"/>).
     /// </summary>
     public async Task<(bool SignedIn, string? UserCode, string? Uri)> GetNavigraphAsync()
     {
@@ -257,6 +274,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
             var root = doc.RootElement;
             if (!root.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True) return (false, null, null);
             bool signedIn = root.TryGetProperty("signedIn", out var s) && s.ValueKind == JsonValueKind.True;
+            if (!signedIn) Interlocked.Exchange(ref _lastSignedOutTicks, DateTime.UtcNow.Ticks);
             string? code = root.TryGetProperty("userCode", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
             string? uri = root.TryGetProperty("uri", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
             return (signedIn, code, uri);
@@ -715,7 +733,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         foreach (var kv in _pending) kv.Value.TrySetCanceled();
         _pending.Clear();
         // _sendLock is deliberately not disposed: the loop is not joined and may be waiting on
-        // it; Stop() cancelled the token, which releases the waiter (as the sibling clients do).
+        // it; Stop() canceled the token, which releases the waiter (as the sibling clients do).
     }
 
     private sealed class ScrapeResult

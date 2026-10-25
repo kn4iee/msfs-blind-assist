@@ -167,20 +167,39 @@ CDU (Shift+M):
                          code is also in the Status box. Says "Already
                          signed in to Navigraph" when you are.
   Update nav data        Installs the latest AIRAC cycle from Navigraph,
-                         then says "Nav data cycle 2610 installed. Reload
+                         then says "Nav data cycle 2611 installed. Reload
                          the flight to use it." Reload before you fly:
                          the aircraft misbehaves until you do. When your
                          cycle is current it says "Nav data is current"
-                         and presses nothing. Needs the Navigraph sign-in
-                         and a flight loaded after signing in.
+                         and presses nothing.
+                         BlueBird looks for a new cycle only when the
+                         flight loads, signed in to Navigraph. So the
+                         update runs only on a flight loaded on or after
+                         the new cycle's first full day (the day after it
+                         takes effect), signed in, and at least a minute
+                         ago. Otherwise it says to reload the flight, or
+                         to wait a minute, and presses nothing. It runs
+                         once per flight load.
+                         If your Navigraph subscription has lapsed, or
+                         Navigraph is late with a cycle, BlueBird can
+                         show REMOVE where UPDATE was: the window then
+                         says BlueBird removed the nav data. An update
+                         with an active subscription, after a reload,
+                         brings it back.
   SimBrief ID box        Type your SimBrief pilot ID (digits only), then
-  Set SimBrief ID        press Enter or this button. It says "SimBrief ID
-                         saved" once BlueBird has stored it. Needed once:
-                         without it the CDU's ACARS INIT does nothing.
+  Set SimBrief ID        press Enter or this button. The window clears
+                         BlueBird's field first, then types the ID. It
+                         says "SimBrief ID saved" once BlueBird has stored
+                         it, "BlueBird did not save the SimBrief ID" if
+                         nothing changed, or "BlueBird stored a different
+                         SimBrief ID". Needed once: without it the CDU's
+                         ACARS INIT does nothing.
   Fetch SimBrief flight  Loads your latest SimBrief flight plan into the
                          EFB. Then, if BlueBird asks to switch weight
                          units to the plan's, press Accept units or Keep
-                         units. Then in the CDU window: MENU, ACARS,
+                         units. These work only right after a fetch:
+                         otherwise they say "Fetch the SimBrief flight
+                         first." Then in the CDU window: MENU, ACARS,
                          OPERATIONS, PREFLIGHT, INIT FLT, INIT.
   Cockpit preset         Choose a panel state (Cold and dark, Turnaround,
   Load preset            Before start, Ready for taxi, Ready for takeoff,
@@ -192,7 +211,10 @@ CDU (Shift+M):
   Escape                 Close the window
   If the tablet cannot be reached the window says "The 757's EFB is not
   reachable. Is the aircraft loaded?". The buttons are pressed where
-  BlueBird 0.1.0 puts them; an update to the aircraft can move them.
+  BlueBird 0.1.0 puts them; an update to the aircraft can move them. If
+  the tablet is not the size this version knows, the window says "The
+  757's EFB layout is not the one this version knows." and presses
+  nothing.
 
 SayIntentions:
   Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
