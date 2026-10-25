@@ -8,12 +8,17 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// ADI, the EHSI and both EICAS CRTs are WASM-rendered gauges with no DOM and no text behind them
 /// (docs/b757/spec.md §3.4), so AI vision on a camera capture is the only way to read them.
 ///
-/// The view indices are 0-based into the aircraft's cameras.cfg instrument cameras (the sim's own
-/// "instrument view 1" is index 0) and were measured on the live aircraft, 2026-10-25: index 0
-/// frames the ADI and the EHSI; index 1, titled "EICAS", frames both EICAS CRTs and, with them, the
-/// whole MCP, the standby instruments, the autobrake, the flap gauge, the gear lever and the first
-/// officer's airspeed, so every EICAS prompt names the CRT to describe and says to ignore the rest.
-/// Index 2 is the overhead and frames no display.
+/// The view indices are 0-based into the aircraft's cameras.cfg instrument cameras, so the sim's
+/// own "instrument view 1" is index 0 and its "instrument view 2" is index 1. Measured on the live
+/// aircraft:
+///   • Index 0, titled "ADI/EHSI", frames the captain's EHSI (a window capture on 2026-10-25,
+///     docs/b757/evidence/efb-and-manual.md). That the ADI is legible in it is still to be
+///     confirmed in the sim.
+///   • Index 1, titled "EICAS", is the EICAS view (docs/b757/evidence/live-findings.md): both EICAS
+///     CRTs and, with them, the whole MCP, the standby instruments, the autobrake, the flap gauge,
+///     the gear lever and the first officer's airspeed, so every EICAS prompt names the CRT to
+///     describe and says to ignore the rest.
+///   • Index 2 is the overhead and frames no display.
 ///
 /// The rows are <see cref="AiDisplayRead"/>s and the dispatch is
 /// <c>BaseAircraftDefinition.TryReadDisplayFor</c>, shared with every other aircraft that reads
@@ -23,10 +28,10 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// </summary>
 internal static class Bbs757DisplayReads
 {
-    /// <summary>Instrument view 1: the ADI and the EHSI.</summary>
+    /// <summary>Index 0 (the sim's "instrument view 1"): the captain's EHSI; the ADI's legibility here is to be confirmed in the sim.</summary>
     public const int AdiEhsiView = 0;
 
-    /// <summary>Instrument view 2: both EICAS CRTs, the MCP, the standby instruments, the autobrake, the flap gauge, the gear lever and the first officer's airspeed.</summary>
+    /// <summary>Index 1 (the sim's "instrument view 2"): both EICAS CRTs, the MCP, the standby instruments, the autobrake, the flap gauge, the gear lever and the first officer's airspeed.</summary>
     public const int EicasView = 1;
 
     public static readonly IReadOnlyList<AiDisplayRead> All = new[]

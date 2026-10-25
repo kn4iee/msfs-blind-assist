@@ -8,11 +8,13 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The BlueBird 757-200's four AI display reads: which hotkey reads which display, which
-/// instrument camera view frames it (measured on the live aircraft, 2026-10-25: index 0 frames the
-/// ADI and EHSI, index 1 the EICAS view, which also holds the whole MCP, the standby instruments,
-/// the autobrake, the flap gauge, the gear lever and the first officer's airspeed), and the prompts
-/// that tell the AI which display of a busy frame to describe. Whether the camera lands on the
-/// right view and the AI reads the right CRT is checked in the sim.
+/// instrument camera view frames it, and the prompts that tell the AI which display of a busy frame
+/// to describe. Index 0 was measured as framing the captain's EHSI (a 2026-10-25 window capture,
+/// docs/b757/evidence/efb-and-manual.md); that the ADI is legible in it is to be confirmed in the
+/// sim. Index 1 was measured as the EICAS view (docs/b757/evidence/live-findings.md), which also
+/// holds the whole MCP, the standby instruments, the autobrake, the flap gauge, the gear lever and
+/// the first officer's airspeed. Whether the camera lands on the right view and the AI reads the
+/// right display is checked in the sim.
 /// </summary>
 public class Bbs757DisplayReadsTests
 {
@@ -44,20 +46,6 @@ public class Bbs757DisplayReadsTests
         Assert.Equal(type, read.DisplayType);
         Assert.Equal(name, read.SpokenName);
         Assert.Equal(view, read.InstrumentViewIndex);
-    }
-
-    [Fact]
-    public void TheViewConstants_AreTheMeasuredIndices()
-    {
-        Assert.Equal(0, Bbs757DisplayReads.AdiEhsiView);
-        Assert.Equal(1, Bbs757DisplayReads.EicasView);
-    }
-
-    [Fact]
-    public void EveryRead_NamesAMeasuredView_NeverTheCurrentOne()
-    {
-        // A null index would capture whatever is on screen; the 757's views are measured, so none may be null.
-        Assert.All(Bbs757DisplayReads.All, r => Assert.NotNull(r.InstrumentViewIndex));
     }
 
     [Theory]
@@ -144,10 +132,28 @@ public class Bbs757DisplayReadsTests
     {
         string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.Adi757);
 
-        Assert.Contains("flight mode annunciations", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.True(prompt.IndexOf("flight mode annunciations", StringComparison.OrdinalIgnoreCase)
-                    < prompt.IndexOf("airspeed", StringComparison.OrdinalIgnoreCase));
+        // Anchored on the instruction itself: "flight mode annunciations" is also in the identifying
+        // sentence, which precedes everything, so an index compare on that phrase proves nothing.
+        int reportThemFirst = prompt.IndexOf("Report them first", StringComparison.Ordinal);
+        int airspeedLine = prompt.IndexOf("Airspeed:", StringComparison.Ordinal);
+        Assert.True(reportThemFirst >= 0, "The prompt must tell the AI to report the annunciations first.");
+        Assert.True(airspeedLine >= 0, "The prompt must still ask for the airspeed.");
+        Assert.True(reportThemFirst < airspeedLine);
         Assert.Contains("Ignore the EHSI", prompt);
+    }
+
+    [Fact]
+    public void TheAdiPrompt_ReadsOnlyWhatTheAdiShows_NeverASeparateGauge()
+    {
+        // The 757's airspeed indicator and altimeter may be separate gauges beside the ADI (the EICAS
+        // view lists the first officer's airspeed and the standby instruments apart). A prompt that
+        // asks for them unconditionally makes the AI read a neighbor or invent a value.
+        string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.Adi757);
+
+        Assert.DoesNotContain("tape", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only if the ADI itself shows it", prompt);
+        Assert.Contains("Never read a separate instrument beside the ADI", prompt);
+        Assert.Contains("never guess or estimate a value", prompt);
     }
 
     [Fact]
@@ -167,6 +173,10 @@ public class Bbs757DisplayReadsTests
         Assert.Contains("EPR", prompt);
         Assert.Contains("N1", prompt);
         Assert.Contains("EGT", prompt);
+        // Colors are named only where they carry meaning, and the prompt does not explain them.
+        Assert.Contains("Name the color only for red or amber messages", prompt);
+        Assert.DoesNotContain("is a warning", prompt);
+        Assert.DoesNotContain("is a caution", prompt);
         // The EICAS view also frames the MCP, the standby instruments, the flap gauge and the gear lever.
         Assert.Contains("Ignore the lower EICAS", prompt);
         Assert.Contains("MCP", prompt);
@@ -181,6 +191,9 @@ public class Bbs757DisplayReadsTests
         Assert.Contains("page", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.True(prompt.IndexOf("First line", StringComparison.Ordinal)
                     < prompt.IndexOf("Then report", StringComparison.Ordinal));
+        // The page is the title as shown, never one picked from a list of page names the prompt supplies.
+        Assert.Contains("the page title exactly as shown", prompt);
+        Assert.DoesNotContain("hydraulics", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Ignore the upper EICAS", prompt);
         Assert.Contains("MCP", prompt);
         Assert.Contains("standby", prompt, StringComparison.OrdinalIgnoreCase);
