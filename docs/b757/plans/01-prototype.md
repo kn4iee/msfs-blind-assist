@@ -225,11 +225,14 @@ through the measured setters. No typing box (the owner's call).
   more passengers than seats, add "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the
   payload goes in the holds." Then: "For the ACARS weight and balance, request WGTBAL on the CDU."
 
-- [ ] **Step 1: Failing tests** for the parser (fixture, kilogram plan, missing fields → null), the loads (the
+- [x] **Step 1: Failing tests** for the parser (fixture, kilogram plan, missing fields → null), the loads (the
   measured case, the 40,000 case, both refusals, zero cargo, fewer passengers than seats), the write string (invariant
   under de-DE, the six setters), the phrase (de-DE, kilograms, the cap sentence).
-- [ ] **Step 2-4:** run (fail), implement, full suite (pass).
-- [ ] **Step 5: Commit** `feat(b757): load fuel and payload from SimBrief`.
+- [x] **Step 2-4:** run (fail), implement, full suite (pass).
+- [x] **Step 5: Commit** `feat(b757): load fuel and payload from SimBrief`. Reviewed, then fixed: the load is checked
+  per tank and station against what was written (R24: "Loaded" only when it all took; "BlueBird did not take the
+  load… Is BBS Nest running?" when nothing moved), whole-pound writes, B752 plans only, an unread group re-read and
+  never called loaded, an odd pound to the left wing (R25).
 
 ## Rulings made while executing (2026-10-25)
 
@@ -267,3 +270,6 @@ owner can reverse any of them.
   calls are heard.
 - R23: Accept units / Keep units read BlueBird's units setting before and after and say which units are set. If wrong:
   a click on an unmeasured spot when no dialog is up, reported as unchanged.
+- R24, R25 (Task 9): the SimBrief load is checked per tank and station and only called loaded when all of it took;
+  only a B752 plan loads; an odd pound goes to the left wing. If wrong: a B753 or custom-type plan is refused until a
+  B752 plan is made; a 1 lb wing imbalance.
