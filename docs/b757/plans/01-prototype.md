@@ -183,3 +183,40 @@
 - [x] **Step 1: Release build** `dotnet build MSFSBlindAssist.sln -c Release` and the full test suite — pass.
 - [x] **Step 2: Request a whole-branch code review** (superpowers:requesting-code-review) and fix what it confirms.
 - [x] **Step 3: Commit and push** to `kn4iee/B757`.
+
+## Rulings made while executing (2026-10-25)
+
+Decisions the plan left open, taken overnight so the run did not stop. Each says what it costs if it is wrong; the
+owner can reverse any of them.
+
+- R1: the C# loader maps the generator's snake_case JSON names explicitly. If wrong: the map loads empty (tests catch it).
+- R2: Task 5 routes the MCP hotkeys through `BBS757Definition.Interaction.cs`. If wrong: one routing edit.
+- R3: `MainForm.BBS757.cs` owns one tablet client and one EFB client, shared by the windows ([DBG-9]). If wrong: a
+  second client would fight for the view.
+- R4, R14: the BBS Nest warning speaks once per connection, about a second after load even in a quiet cockpit. If
+  wrong: a late or repeated warning.
+- R5, R19, R20, R21: the nav data update clicks only when the installed cycle is older than today's, the tablet page
+  loaded on or after the new cycle's first full day and at least a minute ago, Navigraph was signed in for the whole
+  page load, the click lands on the page that was judged (once per page), and the newest-written work folder is the
+  one read; the SimBrief ID entry clears the field first and reads the stored ID back. If wrong: refusals on a cycle's
+  first day, or (lapsed subscription, late cycle) a click on REMOVE, which the app reports.
+- R6: Task 8 pushes to `kn4iee/B757` without asking again.
+- R7: the vendor's click code is replayed verbatim, suspected slips only listed. If wrong: eight fuel-pump legend
+  writes stay as broken as the cockpit's own click.
+- R8: a switch with no click code is written through its state variable. If wrong: those switches ignore the write
+  (the read-back shows it).
+- R9: the cabin altitude knob is left out of the map (it writes 0 and 7 and rests at 4); the generator now checks
+  every written value against the positions. If wrong: one pressurization knob missing until measured.
+- R10: the 757 rule file, doc stub and CLAUDE.md row came in Task 2 (the budget test needs them for any new code).
+- R11: a test keeps the 757 under 900 registered variables (the SimConnect ceiling is 1000).
+- R12: the engine start selectors take positions 1 GND, 3 AUTO, 4-6 unnamed (their click code skips 2). If wrong:
+  4-6 read as numbers until measured.
+- R13: MCP speed entry is IAS only; a Mach entry is refused aloud. If wrong: Mach is set from the Glareshield panel.
+- R15, R17: a speed set reads back, corrects up to three rounds and speaks the value read. If wrong: a set takes up to
+  a few seconds longer.
+- R16: implementers verified their agents live with page keys and navigation clicks only.
+- R18: typed "-" is one +/- press, "+" two (Boeing behavior, unmeasured on BlueBird).
+- R22: the app makes no Takeoff Assist 80/100-knot calls on the 757 (spec default 7). If wrong: only the aircraft's own
+  calls are heard.
+- R23: Accept units / Keep units read BlueBird's units setting before and after and say which units are set. If wrong:
+  a click on an unmeasured spot when no dialog is up, reported as unchanged.
