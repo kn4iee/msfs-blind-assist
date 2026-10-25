@@ -11,7 +11,19 @@
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
     "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 to 6 are unmeasured (no CONT/FLT names are invented): measure them in the sim.",
-    "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule."
+    "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule.",
+    "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in). All sit in Pedestal / Control stand, in file order.",
+    "EVIDENCE for the control stand and the position names below (2026-10-25). preset = the nine vendor panel states in Data/panel_states/*.snap (cold and dark, turnaround, before start, ready for taxi, ready for takeoff, after takeoff, cruise, approach, final approach; positional arrays, but most knob states also sit in them as named L:var pairs). manual = BlueBird's v1.01 User Procedures and Complete Flight Guide. measured = read live in the sim (docs/b757/evidence/live-findings.md). unmeasured = no live read: the name rests on the sources given and goes on the in-sim plan. Names are the panel's legends as printed (capitals), as the brief spells them; a list entry 'Position N' is a position nothing names.",
+    "BBS757_PEDESTAL_Park_Brake_Lever (L:B757_FC_PARK_BRAKE): 0 Released, 1 Set. A toggle whose click flips the var. measured (session 6): K:PARKING_BRAKES left the var at 1 while the stock BRAKE PARKING POSITION read 0. preset: 1 in cold and dark, before start, ready for taxi and ready for takeoff; 0 in turnaround and the four airborne states. unmeasured: releasing it with the lever click while PARKING BRAKE MODE is REALISTIC (that setting wants full pedal braking).",
+    "BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK write 0, 10 and 100 to L:B757_FC_SPOILER_LEVER and keep no state of their own (buttons with a press only, replayed verbatim). measured (session 6): 10 is ARMED, 0 is down (K:SPOILERS_ARM_TOGGLE); all nine presets hold 0. unmeasured: 100 for UP (the click code only).",
+    "ENGINE_Switch_ATDisc_1 is the left TO/GA button: its press writes L:GO_AROUND_PADDLE1 and fires K:AUTO_THROTTLE_TO_GA, its release clears the var, all replayed verbatim. B757_AT_DISC_1 is the A/T disconnect: press writes L:B757_AT_DISC_1 1, release 0. unmeasured in flight.",
+    "B757_MCP_HOLD_1_BUTTON is HDG HOLD, B757_MCP_HOLD_2_BUTTON is ALT HOLD (the generated labels 'Hold 1' and 'Hold 2' were slips). Evidence: (1) the vendor's disabled original components (commented out in BBS_752_BASE_INTERIOR.xml, after the BBS757_MCP_BUTTON instances) pair HOLD_1 with H:BBS_AP_HDG_HOLD and HOLD_2 with H:BBS_AP_ALT_HOLD; (2) the template instances run LNAV, VNAV, FLCH, HOLD_1, VS, HOLD_2, BCRS_1, LOC, APP, the 757 MCP's order; (3) preset lights: L:B757_MCP_HOLD_2_BUTTON is 1 after takeoff, in cruise and on base leg and 0 on final approach, L:B757_MCP_HOLD_1_BUTTON is 0 in all nine. unmeasured live.",
+    "B757_MAIN_knob_gears_altn_autobrake (L:BBS_AUTOBRAKE_KNOB): 0 RTO, 1 OFF, 2 DISARM, 3 '1', 4 '2', 5 '3', 6 '4', 7 MAX AUTO. preset: 0 in ready for taxi and ready for takeoff (manual: the before-takeoff item AUTOBRAKES RTO); 1 in cold and dark, turnaround, before start, after takeoff and cruise (manual: AUTOBRAKES OFF after landing); 2 in approach and final approach. manual: the selector is shown 'at DISARM' with the amber AUTO BRAKES light; the vendor's landing calculator lists A/BRK 1 to 4 and MAX AUTO. unmeasured: 2 to 7. 3 to 7 follow the standard 757 selector order by elimination, and so does 2 = DISARM, although the approach presets sit on 2 where a landing setting would be expected: check by one click from OFF (the EICAS shows AUTOBRAKES on DISARM).",
+    "BBS_fuelcut_PW1, BBS_fuelcut_PW2: 0 CUTOFF, 2 RUN (a left click goes to 2, a right click to 0). preset: 0 in cold and dark, turnaround and before start; 2 in all six states after engine start; manual: the shutdown item 'Fuel control switches CUTOFF'. The RR switches are the reverse (preset 2 in the cold states, 0 once running; their tips read RUN, RICH, CUTOFF), so the two lists differ on purpose. Backed by presets and manual, not read live.",
+    "B757_IRS_L_SWITCH, B757_IRS_C_SWITCH, B757_IRS_R_SWITCH: 0 OFF, 1 ALIGN, 2 NAV, 3 ATT. preset: 0 in cold and dark, 2 in the other eight; manual: 'IRS selectors OFF, THEN NAV', and 'NAV to ALIGN to NAV' for a realignment. unmeasured: 1 ALIGN (the manual's word, in the standard slot between OFF and NAV) and 3 ATT (the standard 757 selector; the manuals never say ATT). B757_IRS_LARGE_KNOB (4 positions, 3 in every preset) and B757_IRS_CENTRE_KNOB (3 positions, 0 in every preset) are the display unit's knobs: nothing names their positions, so they stay 'Position N'.",
+    "B757_ADI_1_TFC_KNOB, B757_ADI_2_TFC_KNOB (ND range; L:BBS_ND1_Range_Index, L:BBS_ND2_Range_Index): 0 10 NM, 1 20 NM, 2 40 NM, 3 80 NM, 4 160 NM, 5 320 NM. B757_ADI_1_CTR_KNOB, B757_ADI_2_CTR_KNOB (ND mode): 0 VOR, 1 APP, 2 MAP, 3 PLAN. The words are the vendor's tooltip lists ('320 NM' '160 NM' ... '10 NM' 6 (L:BBS_ND1_Range_Index) case and 'PLAN' 'MAP' 'APP' 'VOR' 4 (L:B757_ADI_2_CTR_KNOB) case), read with the LAST word pushed as index 0. unmeasured: that reading of the list. For it: the FO mode knob initialises to 2 and all nine presets hold 2, which is MAP only under this reading (APP under the other), and it puts the approach presets on 80 NM (base leg) and 20 NM (final) where the other reading gives 40 and 160 NM. The manual calls the approach mode ILS; the cockpit's own word APP is kept.",
+    "B757_PED_TCAS_MODE_KNOB: 0 STBY, 4 TA/RA, 1 to 3 'Position N'. preset: 0 in cold and dark and turnaround, 4 in the other seven; manual: 'set transponder TA/RA ... before start', and the panel is illustrated at 'L and STBY'. unmeasured: 1 to 3 (the standard 757 order is ALT RPTG OFF, XPNDR, TA ONLY; no BlueBird source says so). B757_PED_TCAS_XPNDR_SWITCH: 0 L, 1 R; manual: 'Select L or R for the pilot flying', illustrated at L; 0 in every preset; the WASM keeps two transponders. unmeasured: which side is 0.",
+    "B757_MAIN_knob_gears_altn_flaps (8 positions): only 0 NORM is named: 0 in all nine presets and the manual's 'ALTN FLAPS SELECTOR NORM'. 1 to 7 have no source (its animation tips are a copy of the standby power selector's) and stay 'Position N'."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -53,6 +65,14 @@
     "B757_FO_SEAT_ARM_REST_2",
     "B757_FLOOR_BOX",
     "B757_OVHD_CABINALT_SWITCH"
+  ],
+  "include_nodes": [
+    "BBS757_PEDESTAL_Park_Brake_Lever",
+    "BBS757_SPOILERDOWN_CLICK",
+    "BBS757_SPOILERARMED_CLICK",
+    "BBS757_SPOILERUP_CLICK",
+    "ENGINE_Switch_ATDisc_1",
+    "B757_AT_DISC_1"
   ],
   "panels": {
     "YOKES + RUDDER + TILLER SYSTEM": {
@@ -310,6 +330,26 @@
       "prefix": "B757_MAIN_M_Gau_STBY_GYRO",
       "panel": "Standby attitude indicator",
       "section": "Forward panel"
+    },
+    {
+      "prefix": "BBS757_PEDESTAL_Park_Brake_Lever",
+      "panel": "Control stand",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "BBS757_SPOILER",
+      "panel": "Control stand",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "ENGINE_Switch_ATDisc_1",
+      "panel": "Control stand",
+      "section": "Pedestal"
+    },
+    {
+      "prefix": "B757_AT_DISC_1",
+      "panel": "Control stand",
+      "section": "Pedestal"
     }
   ],
   "labels": {
@@ -443,7 +483,15 @@
     "B757_OVHD_RENG_BUTTON": "R ENG Bleed",
     "B757_OVHD_APU_BUTTON": "APU Bleed",
     "B757_MAIN_CHRONO_ET_SWITCH_FO": "Chrono ET",
-    "B757_MAIN_CHRONO_SET_SWITCH_FO": "Chrono Set"
+    "B757_MAIN_CHRONO_SET_SWITCH_FO": "Chrono Set",
+    "B757_MCP_HOLD_1_BUTTON": "HDG HOLD",
+    "B757_MCP_HOLD_2_BUTTON": "ALT HOLD",
+    "BBS757_PEDESTAL_Park_Brake_Lever": "Parking Brake",
+    "BBS757_SPOILERDOWN_CLICK": "Speedbrake Down",
+    "BBS757_SPOILERARMED_CLICK": "Speedbrake Armed",
+    "BBS757_SPOILERUP_CLICK": "Speedbrake Up",
+    "ENGINE_Switch_ATDisc_1": "TO/GA",
+    "B757_AT_DISC_1": "A/T Disconnect"
   },
   "positions": {
     "B757_OVHD_APU_SWITCH": [
@@ -544,6 +592,95 @@
       "Left",
       "Center",
       "Right"
+    ],
+    "BBS757_PEDESTAL_Park_Brake_Lever": [
+      "Released",
+      "Set"
+    ],
+    "B757_MAIN_knob_gears_altn_autobrake": [
+      "RTO",
+      "OFF",
+      "DISARM",
+      "1",
+      "2",
+      "3",
+      "4",
+      "MAX AUTO"
+    ],
+    "BBS_fuelcut_PW1": [
+      "CUTOFF",
+      "RUN"
+    ],
+    "BBS_fuelcut_PW2": [
+      "CUTOFF",
+      "RUN"
+    ],
+    "B757_IRS_L_SWITCH": [
+      "OFF",
+      "ALIGN",
+      "NAV",
+      "ATT"
+    ],
+    "B757_IRS_C_SWITCH": [
+      "OFF",
+      "ALIGN",
+      "NAV",
+      "ATT"
+    ],
+    "B757_IRS_R_SWITCH": [
+      "OFF",
+      "ALIGN",
+      "NAV",
+      "ATT"
+    ],
+    "B757_ADI_1_TFC_KNOB": [
+      "10 NM",
+      "20 NM",
+      "40 NM",
+      "80 NM",
+      "160 NM",
+      "320 NM"
+    ],
+    "B757_ADI_2_TFC_KNOB": [
+      "10 NM",
+      "20 NM",
+      "40 NM",
+      "80 NM",
+      "160 NM",
+      "320 NM"
+    ],
+    "B757_ADI_1_CTR_KNOB": [
+      "VOR",
+      "APP",
+      "MAP",
+      "PLAN"
+    ],
+    "B757_ADI_2_CTR_KNOB": [
+      "VOR",
+      "APP",
+      "MAP",
+      "PLAN"
+    ],
+    "B757_PED_TCAS_MODE_KNOB": [
+      "STBY",
+      "Position 1",
+      "Position 2",
+      "Position 3",
+      "TA/RA"
+    ],
+    "B757_PED_TCAS_XPNDR_SWITCH": [
+      "L",
+      "R"
+    ],
+    "B757_MAIN_knob_gears_altn_flaps": [
+      "NORM",
+      "Position 1",
+      "Position 2",
+      "Position 3",
+      "Position 4",
+      "Position 5",
+      "Position 6",
+      "Position 7"
     ]
   },
   "status": [

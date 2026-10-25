@@ -20,10 +20,12 @@ What is derived and what is curated (curation.json):
   derived   kind, state var, positions (the clamps in the turn code, or the vendor's ANIMTIP texts when there is
             one per position), click code, hold time, section (node prefix), a label from the node name (a guard
             is named by what its tip says it covers).
-  curated   which vendor banners and nodes are left out, the app's panel names, labels the node name cannot give or
-            the vendor got wrong, position names no tooltip carries, the status rows. A curated label, position
-            list or exclusion for a node the package does not have is an error (a stale entry never hides). The
-            vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
+  curated   which vendor banners and nodes are left out, which single nodes under an excluded banner are taken in
+            anyway (include_nodes: the banner stays excluded, its panel and section come from a node_panels rule),
+            the app's panel names, labels the node name cannot give or the vendor got wrong, position names no
+            tooltip carries, the status rows. A curated label, position list, exclusion or inclusion for a node the
+            package does not have is an error (a stale entry never hides); so is an inclusion that does nothing.
+            The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
   a toggle, guard or select that writes a value other than 0 or 1 to its state var stops the run until its
             positions are named in curation (A/T ARM writes 10).
 
@@ -32,8 +34,9 @@ cockpit runs, so a slip the cockpit has stays a slip in the replay. Code that lo
 'L:', a closing brace nothing opened) is only reported, as suspected_slips; nothing is changed.
 
 Dropped, and counted in the printed report: circuit breakers, CDU keys, levers, infinite knobs, finite knobs with
-more than 12 positions, anything in an excluded banner or node, controls with no click code or whose state is not
-an L:var, and the second row of a node the interior files repeat (the PW and RR variants).
+more than 12 positions, anything in an excluded banner or node (but an include_nodes node under an excluded banner
+is kept), controls with no click code or whose state is not an L:var, and the second row of a node the interior
+files repeat (the PW and RR variants).
 
 Usage:  python -I tools/b757-gen/generate_b757_map.py [<package folder>] [--out <json>] [--curation <json>]
         With no folder the package is looked for in Community and Community2024 under
@@ -107,8 +110,8 @@ FLIP = re.compile(r"\(L:([^,()\s]+)[^()]*\)\s*!\s*\(>L:\1\s*[,)]")              
 MISSING_L = re.compile(r"\(>(?![A-Za-z]:)(?=[A-Za-z_])([^()]*)\)")  # "(>NAME, bool)": a set with no "L:" in front
 RANGE_SPEC = re.compile(r"range\s+(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\s+step\s+(\d+(?:\.\d+)?)$")
 
-CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "panels": dict, "node_panels": list, "labels": dict,
-                 "positions": dict, "spelling": dict, "status": list}
+CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
+                 "node_panels": list, "labels": dict, "positions": dict, "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -363,7 +366,7 @@ def state_var_for(row, out_kind, press):
 def convert_row(row, cur):
     """(control, None, suspected slips) or (None, why it is left out, [])."""
     kind, node = row["kind"], row["node"]
-    if row["panel"] in cur["exclude_banners"]:
+    if row["panel"] in cur["exclude_banners"] and node not in cur["include_nodes"]:
         return None, "excluded banner", []
     if node in cur["exclude_nodes"]:
         return None, "excluded node", []
@@ -468,10 +471,12 @@ def build_map(rows, cur, aircraft, version):
     dropped = collections.Counter()
     suspected = {}
     unmapped = set()
+    dropped_why = {}
     for index, row in enumerate(rows):
         control, why, slips = convert_row(row, cur)
         if why:
             dropped[why] += 1
+            dropped_why[row["node"]] = why
         elif control["node"] in seen:
             dropped["duplicate node"] += 1
         else:
@@ -487,14 +492,28 @@ def build_map(rows, cur, aircraft, version):
     unique_labels(controls)
 
     in_package = {r["node"] for r in rows}
-    for table in ("labels", "positions", "exclude_nodes"):
+    for table in ("labels", "positions", "exclude_nodes", "include_nodes"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
     kept = {c["node"] for c in controls}
+    included = set(cur["include_nodes"])
+    both = sorted(included & set(cur["exclude_nodes"]))
+    if both:
+        raise CurationError(f"curation include_nodes and exclude_nodes both name: {', '.join(both)}")
+    hidden = {r["node"] for r in rows if r["panel"] in cur["exclude_banners"]}
+    idle = sorted(included - hidden)
+    if idle:
+        raise CurationError(f"curation include_nodes name nodes no excluded banner hides (the entry does nothing, "
+                            f"remove it): {', '.join(idle)}")
+    left_out = sorted(included - kept)
+    if left_out:
+        raise CurationError("curation include_nodes name nodes the rules still leave out: "
+                            + ", ".join(f"{n} ({dropped_why.get(n, '?')})" for n in left_out))
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,
+        "taken_in": sorted(included),
         "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
@@ -598,6 +617,7 @@ def main(argv=None) -> None:
     for kind, n in sorted(collections.Counter(c["kind"] for c in controls).items()):
         print(f"    {kind:8s} {n}")
     print(f"  status rows      : {len(map_['status'])}")
+    print(f"  taken in by node : {len(report['taken_in'])} (under excluded banners)")
     print("  dropped:")
     for why, n in sorted(report["dropped"].items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"    {n:5d}  {why}")

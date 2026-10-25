@@ -104,6 +104,164 @@ public class Bbs757ControlMapTests
         Assert.Equal(new Bbs757Position(2, "Running"), apu.Positions[2]);
     }
 
+    // ---- Task 10a: the control stand, taken in by node from two excluded vendor banners ----
+
+    private static string[] Labels(Bbs757Control c) => c.Positions.Select(p => p.Label).ToArray();
+
+    private static (double Value, string Label)[] Pairs(Bbs757Control c) =>
+        c.Positions.Select(p => (p.Value, p.Label)).ToArray();
+
+    [Fact]
+    public void The_control_stand_holds_exactly_the_six_controls_taken_in_by_node()
+    {
+        var stand = Map.Controls.Where(c => c.Panel == "Control stand").ToList();
+
+        Assert.All(stand, c => Assert.Equal("Pedestal", c.Section));
+        Assert.Equal(
+            new[]
+            {
+                "B757_AT_DISC_1", "BBS757_PEDESTAL_Park_Brake_Lever", "BBS757_SPOILERARMED_CLICK",
+                "BBS757_SPOILERDOWN_CLICK", "BBS757_SPOILERUP_CLICK", "ENGINE_Switch_ATDisc_1",
+            },
+            stand.Select(c => c.Node).OrderBy(n => n, StringComparer.Ordinal));
+        // The banners stay excluded: the right-hand TO/GA and A/T disconnect and the speed brake lever
+        // sit under them and are not in the map.
+        Assert.DoesNotContain(Map.Controls, c => c.Node is "ENGINE_Switch_ATDisc_2" or "B757_AT_DISC_2"
+            or "BBS757_lever_speed_brake" or "lever_speed_brake");
+    }
+
+    [Fact]
+    public void The_parking_brake_is_a_toggle_on_its_own_var_named_Released_and_Set()
+    {
+        Bbs757Control brake = Find("BBS757_PEDESTAL_Park_Brake_Lever");
+
+        Assert.Equal("Parking Brake", brake.Label);
+        Assert.Equal(("Pedestal", "Control stand"), (brake.Section, brake.Panel));
+        Assert.Equal(Bbs757Kinds.Toggle, brake.Kind);
+        Assert.Equal("B757_FC_PARK_BRAKE", brake.StateVar);
+        Assert.Equal(new[] { (0d, "Released"), (1d, "Set") }, Pairs(brake));
+        Assert.Contains(">L:B757_FC_PARK_BRAKE", brake.Press);
+    }
+
+    [Theory]
+    [InlineData("BBS757_SPOILERDOWN_CLICK", "Speedbrake Down", "0 (>L:B757_FC_SPOILER_LEVER, number)")]
+    [InlineData("BBS757_SPOILERARMED_CLICK", "Speedbrake Armed", "10 (>L:B757_FC_SPOILER_LEVER, number)")]
+    [InlineData("BBS757_SPOILERUP_CLICK", "Speedbrake Up", "100 (>L:B757_FC_SPOILER_LEVER, number)")]
+    public void Each_speedbrake_click_spot_is_a_button_that_sets_the_lever_var(string node, string label, string press)
+    {
+        Bbs757Control c = Find(node);
+
+        Assert.Equal(label, c.Label);
+        Assert.Equal(("Pedestal", "Control stand"), (c.Section, c.Panel));
+        Assert.Equal(Bbs757Kinds.Button, c.Kind);
+        Assert.Equal(press, c.Press);   // the vendor's code, verbatim
+        Assert.Empty(c.Positions);
+    }
+
+    [Fact]
+    public void TO_GA_and_the_A_T_disconnect_replay_the_vendors_click_code()
+    {
+        Bbs757Control toga = Find("ENGINE_Switch_ATDisc_1");
+
+        Assert.Equal("TO/GA", toga.Label);
+        Assert.Equal(("Pedestal", "Control stand"), (toga.Section, toga.Panel));
+        Assert.Equal(Bbs757Kinds.Button, toga.Kind);
+        Assert.Equal("1 (>L:GO_AROUND_PADDLE1, bool) 1 (>K:AUTO_THROTTLE_TO_GA)", toga.Press);
+        Assert.Equal("0 (>L:GO_AROUND_PADDLE1, bool)", toga.Release);
+
+        Bbs757Control disconnect = Find("B757_AT_DISC_1");
+
+        Assert.Equal("A/T Disconnect", disconnect.Label);
+        Assert.Equal(("Pedestal", "Control stand"), (disconnect.Section, disconnect.Panel));
+        Assert.Equal(Bbs757Kinds.Button, disconnect.Kind);
+        Assert.Contains(">L:B757_AT_DISC_1", disconnect.Press);
+    }
+
+    [Fact]
+    public void The_two_hold_buttons_are_labelled_by_what_they_hold()
+    {
+        Bbs757Control hdg = Find("B757_MCP_HOLD_1_BUTTON");
+        Bbs757Control alt = Find("B757_MCP_HOLD_2_BUTTON");
+
+        Assert.Equal("HDG HOLD", hdg.Label);
+        Assert.Equal("ALT HOLD", alt.Label);
+        Assert.All(new[] { hdg, alt }, c => Assert.Equal(("Glareshield", "MCP"), (c.Section, c.Panel)));
+    }
+
+    [Fact]
+    public void The_autobrake_positions_are_named_from_RTO_to_MAX_AUTO()
+    {
+        Bbs757Control autobrake = Find("B757_MAIN_knob_gears_altn_autobrake");
+
+        Assert.Equal("BBS_AUTOBRAKE_KNOB", autobrake.StateVar);
+        Assert.Equal(
+            new[] { (0d, "RTO"), (1d, "OFF"), (2d, "DISARM"), (3d, "1"), (4d, "2"), (5d, "3"), (6d, "4"), (7d, "MAX AUTO") },
+            Pairs(autobrake));
+    }
+
+    [Theory]
+    [InlineData("BBS_fuelcut_PW1")]
+    [InlineData("BBS_fuelcut_PW2")]
+    public void The_PW_fuel_control_switches_rest_at_0_and_2_named_CUTOFF_and_RUN(string node)
+    {
+        Assert.Equal(new[] { (0d, "CUTOFF"), (2d, "RUN") }, Pairs(Find(node)));
+    }
+
+    [Theory]
+    [InlineData("B757_IRS_L_SWITCH")]
+    [InlineData("B757_IRS_C_SWITCH")]
+    [InlineData("B757_IRS_R_SWITCH")]
+    public void The_IRS_mode_selectors_are_OFF_ALIGN_NAV_ATT(string node)
+    {
+        Assert.Equal(new[] { (0d, "OFF"), (1d, "ALIGN"), (2d, "NAV"), (3d, "ATT") }, Pairs(Find(node)));
+    }
+
+    [Theory]
+    [InlineData("B757_ADI_1_TFC_KNOB")]
+    [InlineData("B757_ADI_2_TFC_KNOB")]
+    public void The_ND_range_knobs_step_from_10_to_320_NM(string node)
+    {
+        Assert.Equal(
+            new[] { (0d, "10 NM"), (1d, "20 NM"), (2d, "40 NM"), (3d, "80 NM"), (4d, "160 NM"), (5d, "320 NM") },
+            Pairs(Find(node)));
+    }
+
+    [Theory]
+    [InlineData("B757_ADI_1_CTR_KNOB")]
+    [InlineData("B757_ADI_2_CTR_KNOB")]
+    public void The_ND_mode_knobs_rest_on_MAP_at_2(string node)
+    {
+        Assert.Equal(new[] { (0d, "VOR"), (1d, "APP"), (2d, "MAP"), (3d, "PLAN") }, Pairs(Find(node)));
+    }
+
+    [Fact]
+    public void The_transponder_names_only_what_a_source_backs()
+    {
+        // 0 STBY and 4 TA/RA are the vendor panel states and the manual's wording; 1 to 3 have no source.
+        Assert.Equal(
+            new[] { (0d, "STBY"), (1d, "Position 1"), (2d, "Position 2"), (3d, "Position 3"), (4d, "TA/RA") },
+            Pairs(Find("B757_PED_TCAS_MODE_KNOB")));
+        Assert.Equal(new[] { (0d, "L"), (1d, "R") }, Pairs(Find("B757_PED_TCAS_XPNDR_SWITCH")));
+    }
+
+    [Fact]
+    public void The_alternate_flaps_selector_names_only_NORM()
+    {
+        Bbs757Control altn = Find("B757_MAIN_knob_gears_altn_flaps");
+
+        Assert.Equal("NORM", altn.Positions[0].Label);
+        Assert.Equal(8, altn.Positions.Count);
+        Assert.Equal(Enumerable.Range(1, 7).Select(i => $"Position {i}"), Labels(altn).Skip(1));
+    }
+
+    [Theory]
+    [InlineData("B757_IRS_LARGE_KNOB", 4)]
+    [InlineData("B757_IRS_CENTRE_KNOB", 3)]
+    public void The_IRS_display_knobs_stay_numbered_because_nothing_names_their_positions(string node, int count)
+    {
+        Assert.Equal(Enumerable.Range(0, count).Select(i => $"Position {i}"), Labels(Find(node)));
+    }
+
     [Fact]
     public void Every_caller_on_every_thread_gets_the_same_map()
     {

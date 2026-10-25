@@ -1596,19 +1596,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "ALIGN"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "NAV"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "ATT"
     }
    ],
    "press": null,
@@ -1627,19 +1627,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "ALIGN"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "NAV"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "ATT"
     }
    ],
    "press": null,
@@ -1658,19 +1658,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "ALIGN"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "NAV"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "ATT"
     }
    ],
    "press": null,
@@ -2616,7 +2616,7 @@
    "node": "B757_MCP_HOLD_1_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "Hold 1",
+   "label": "HDG HOLD",
    "kind": "button",
    "state_var": "B757_MCP_HOLD_1_BUTTON_PRESS",
    "positions": [],
@@ -2644,7 +2644,7 @@
    "node": "B757_MCP_HOLD_2_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "Hold 2",
+   "label": "ALT HOLD",
    "kind": "button",
    "state_var": "B757_MCP_HOLD_2_BUTTON_PRESS",
    "positions": [],
@@ -3037,27 +3037,27 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "10 NM"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "20 NM"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "40 NM"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "80 NM"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "160 NM"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "320 NM"
     }
    ],
    "press": null,
@@ -3076,19 +3076,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "VOR"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "APP"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "MAP"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "PLAN"
     }
    ],
    "press": null,
@@ -3539,27 +3539,27 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "10 NM"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "20 NM"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "40 NM"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "80 NM"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "160 NM"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "320 NM"
     }
    ],
    "press": null,
@@ -3578,19 +3578,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "VOR"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "APP"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "MAP"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "PLAN"
     }
    ],
    "press": null,
@@ -4370,35 +4370,35 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "RTO"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "OFF"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "DISARM"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "1"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "2"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "3"
     },
     {
      "value": 6,
-     "label": "Position 6"
+     "label": "4"
     },
     {
      "value": 7,
-     "label": "Position 7"
+     "label": "MAX AUTO"
     }
    ],
    "press": null,
@@ -4417,7 +4417,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "NORM"
     },
     {
      "value": 1,
@@ -6363,6 +6363,99 @@
    "ccw": null
   },
   {
+   "node": "ENGINE_Switch_ATDisc_1",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "TO/GA",
+   "kind": "button",
+   "state_var": "GO_AROUND_PADDLE1",
+   "positions": [],
+   "press": "1 (>L:GO_AROUND_PADDLE1, bool) 1 (>K:AUTO_THROTTLE_TO_GA)",
+   "release": "0 (>L:GO_AROUND_PADDLE1, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_AT_DISC_1",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "A/T Disconnect",
+   "kind": "button",
+   "state_var": "B757_AT_DISC_1",
+   "positions": [],
+   "press": "1 (>L:B757_AT_DISC_1, bool)",
+   "release": "0 (>L:B757_AT_DISC_1, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_PEDESTAL_Park_Brake_Lever",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Parking Brake",
+   "kind": "toggle",
+   "state_var": "B757_FC_PARK_BRAKE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Released"
+    },
+    {
+     "value": 1,
+     "label": "Set"
+    }
+   ],
+   "press": "(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERARMED_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Armed",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "10 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERUP_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Up",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "100 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERDOWN_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Down",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "0 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_EICAS_L_STATUS_BUTTON",
    "section": "Pedestal",
    "panel": "EICAS control",
@@ -6891,11 +6984,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "CUTOFF"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "RUN"
     }
    ],
    "press": null,
@@ -6914,11 +7007,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "CUTOFF"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "RUN"
     }
    ],
    "press": null,
@@ -7475,11 +7568,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Off"
+     "label": "L"
     },
     {
      "value": 1,
-     "label": "On"
+     "label": "R"
     }
    ],
    "press": "(L:B757_PED_TCAS_XPNDR_SWITCH,bool) ! (>L:B757_PED_TCAS_XPNDR_SWITCH,bool)",
@@ -7512,7 +7605,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "STBY"
     },
     {
      "value": 1,
@@ -7528,7 +7621,7 @@
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "TA/RA"
     }
    ],
    "press": null,

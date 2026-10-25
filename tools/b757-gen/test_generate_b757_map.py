@@ -45,6 +45,7 @@ def row(node="B757_OVHD_TEST_BUTTON", kind="toggle", panel="ELECTRICAL PANEL", l
 CURATION = {
     "exclude_banners": ["CB OVERHEAD PANEL"],
     "exclude_nodes": [],
+    "include_nodes": [],
     "panels": {"ELECTRICAL PANEL": "Electrical", "FUEL PANEL": "Fuel"},
     "node_panels": [],
     "labels": {},
@@ -581,6 +582,90 @@ class WholeMap(unittest.TestCase):
         self.assertIs(m["status"][1]["announce"], False)
 
 
+class IncludeNodes(unittest.TestCase):
+    """A control under an excluded vendor banner is taken in by NODE (include_nodes), never by re-including the
+    banner: the banner's other controls stay out. Panel and section come from a node_panels rule."""
+    BANNER = "RIGHT WINDOW RAIN EFFECTS"
+    BRAKE = "BBS757_PEDESTAL_Park_Brake_Lever"
+    WIPER = "BBS757_RAIN_WIPER_TOGGLE"
+
+    def cur(self, **changes):
+        base = dict(exclude_banners=["CB OVERHEAD PANEL", self.BANNER],
+                    include_nodes=[self.BRAKE],
+                    node_panels=[{"prefix": "BBS757_PEDESTAL_", "panel": "Control stand", "section": "Pedestal"}])
+        base.update(changes)
+        return curation(**base)
+
+    def rows(self):
+        return [row(node=self.BRAKE, panel=self.BANNER, line=5, state=["L:B757_FC_PARK_BRAKE"],
+                    left="(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)"),
+                row(node=self.WIPER, panel=self.BANNER, line=6, left="(L:W,bool) ! (>L:W,bool)")]
+
+    def build(self, rows=None, cur=None):
+        return g.build_map(rows or self.rows(), cur or self.cur(), "pkg", "1")
+
+    def test_a_listed_node_is_taken_in_and_the_rest_of_its_banner_stays_out(self):
+        m, report = self.build()
+        self.assertEqual([c["node"] for c in m["controls"]], [self.BRAKE])
+        self.assertEqual(report["dropped"]["excluded banner"], 1)
+        self.assertEqual(report["taken_in"], [self.BRAKE])
+
+    def test_the_banner_itself_is_still_excluded(self):
+        cur = self.cur()
+        self.assertIn(self.BANNER, cur["exclude_banners"])
+        control, why, _ = g.convert_row(self.rows()[1], cur)
+        self.assertEqual((control, why), (None, "excluded banner"))
+        control, why, _ = g.convert_row(self.rows()[0], cur)
+        self.assertIsNone(why)
+        self.assertEqual(control["node"], self.BRAKE)
+
+    def test_without_the_entry_the_node_is_dropped_as_before(self):
+        m, report = self.build(cur=self.cur(include_nodes=[]))
+        self.assertEqual(m["controls"], [])
+        self.assertEqual(report["dropped"]["excluded banner"], 2)
+        self.assertEqual(report["taken_in"], [])
+
+    def test_panel_and_section_come_from_a_node_panels_rule(self):
+        m, report = self.build()
+        self.assertEqual((m["controls"][0]["section"], m["controls"][0]["panel"]), ("Pedestal", "Control stand"))
+        self.assertEqual(report["unmapped_banners"], [], "the rule names the control, so its banner is not a guess")
+
+    def test_a_taken_in_node_keeps_the_vendors_click_code_verbatim(self):
+        m, _ = self.build()
+        self.assertEqual(m["controls"][0]["press"], "(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)")
+
+    def test_a_node_the_package_does_not_have_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "include_nodes name nodes the package does not have"):
+            self.build(cur=self.cur(include_nodes=[self.BRAKE, "BBS757_NO_SUCH_NODE"]))
+
+    def test_a_node_that_is_also_excluded_is_an_error(self):
+        with self.assertRaisesRegex(g.CurationError, "include_nodes and exclude_nodes both name"):
+            self.build(cur=self.cur(exclude_nodes=[self.BRAKE]))
+
+    def test_a_node_no_excluded_banner_hides_is_an_error(self):
+        rows = self.rows() + [row(node="B757_OVHD_BATTERY_BUTTON", panel="ELECTRICAL PANEL", left="(L:B) ! (>L:B)")]
+        with self.assertRaisesRegex(g.CurationError, "no excluded banner hides"):
+            self.build(rows, self.cur(include_nodes=[self.BRAKE, "B757_OVHD_BATTERY_BUTTON"]))
+
+    def test_a_node_the_rules_still_leave_out_is_an_error(self):
+        rows = [row(node=self.BRAKE, kind="lever", panel=self.BANNER, positions="", line=5)]
+        with self.assertRaisesRegex(g.CurationError, r"still leave out: BBS757_PEDESTAL_Park_Brake_Lever \(lever\)"):
+            self.build(rows)
+
+    def test_include_nodes_loads_as_a_list_and_defaults_to_empty(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        path = os.path.join(d, "curation.json")
+        for data, expected in (({}, []), ({"include_nodes": ["A"]}, ["A"])):
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            self.assertEqual(g.load_curation(path)["include_nodes"], expected)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"include_nodes": {"A": 1}}, fh)
+        with self.assertRaises(g.CurationError):
+            g.load_curation(path)
+
+
 class Curation(unittest.TestCase):
     def write(self, data):
         d = tempfile.mkdtemp()
@@ -621,6 +706,135 @@ class Curation(unittest.TestCase):
         self.assertTrue(any(r.get("prefix") == "BBS_fuelcut_" for r in c["node_panels"]))
         self.assertIn("B757_OVHD_CABINALT_SWITCH", c["exclude_nodes"])
         self.assertNotIn("B757_OVHD_CABINALT_SWITCH", c["positions"])
+
+    CONTROL_STAND = {
+        "BBS757_PEDESTAL_Park_Brake_Lever": "RIGHT WINDOW RAIN EFFECTS",
+        "BBS757_SPOILERDOWN_CLICK": "RIGHT WINDOW RAIN EFFECTS",
+        "BBS757_SPOILERARMED_CLICK": "RIGHT WINDOW RAIN EFFECTS",
+        "BBS757_SPOILERUP_CLICK": "RIGHT WINDOW RAIN EFFECTS",
+        "ENGINE_Switch_ATDisc_1": "THROTTLES MAIN",
+        "B757_AT_DISC_1": "THROTTLES MAIN",
+    }
+
+    def test_the_shipped_curation_takes_in_the_control_stand_by_node_and_keeps_the_banners_out(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        self.assertEqual(sorted(c["include_nodes"]), sorted(self.CONTROL_STAND))
+        for node, banner in self.CONTROL_STAND.items():
+            with self.subTest(node=node):
+                self.assertIn(banner, c["exclude_banners"])
+                self.assertEqual(g.panel_of(row(node=node, panel=banner), c), ("Control stand", "Pedestal"))
+        # only the left TO/GA and the first A/T disconnect: the right-hand ones are not taken in
+        self.assertNotIn("ENGINE_Switch_ATDisc_2", c["include_nodes"])
+        self.assertNotIn("B757_AT_DISC_2", c["include_nodes"])
+
+    def control_stand_rows(self):
+        flip = "(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)"
+        rows = {
+            "BBS757_PEDESTAL_Park_Brake_Lever": row(
+                node="BBS757_PEDESTAL_Park_Brake_Lever", kind="toggle", positions="2", panel="RIGHT WINDOW RAIN EFFECTS",
+                state=["L:B757_FC_PARK_BRAKE"], tips=["Parking Brake"], left=flip),
+            "ENGINE_Switch_ATDisc_1": row(
+                node="ENGINE_Switch_ATDisc_1", kind="momentary button", positions="-", panel="THROTTLES MAIN",
+                state=["L:GO_AROUND_PADDLE1"],
+                left="1 (>L:GO_AROUND_PADDLE1, bool) 1 (>K:AUTO_THROTTLE_TO_GA)", release="0 (>L:GO_AROUND_PADDLE1, bool)"),
+            "B757_AT_DISC_1": row(
+                node="B757_AT_DISC_1", kind="momentary button", positions="-", panel="THROTTLES MAIN",
+                state=["L:B757_AT_DISC_1"], left="1 (>L:B757_AT_DISC_1, bool)", release="0 (>L:B757_AT_DISC_1, bool)"),
+        }
+        for node, value in (("BBS757_SPOILERDOWN_CLICK", 0), ("BBS757_SPOILERARMED_CLICK", 10), ("BBS757_SPOILERUP_CLICK", 100)):
+            rows[node] = row(node=node, kind="momentary button", positions="-", panel="RIGHT WINDOW RAIN EFFECTS",
+                             state=[], left=f"{value} (>L:B757_FC_SPOILER_LEVER, number)")
+        return rows
+
+    def test_the_shipped_curation_names_and_converts_the_control_stand(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        rows = self.control_stand_rows()
+        expected = {
+            "BBS757_PEDESTAL_Park_Brake_Lever": ("Parking Brake", "toggle", ["Released", "Set"]),
+            "BBS757_SPOILERDOWN_CLICK": ("Speedbrake Down", "button", []),
+            "BBS757_SPOILERARMED_CLICK": ("Speedbrake Armed", "button", []),
+            "BBS757_SPOILERUP_CLICK": ("Speedbrake Up", "button", []),
+            "ENGINE_Switch_ATDisc_1": ("TO/GA", "button", []),
+            "B757_AT_DISC_1": ("A/T Disconnect", "button", []),
+        }
+        for node, (label, kind, positions) in expected.items():
+            with self.subTest(node=node):
+                control, why, slips = g.convert_row(rows[node], c)
+                self.assertIsNone(why)
+                self.assertEqual((control["label"], control["kind"], [p["label"] for p in control["positions"]]),
+                                 (label, kind, positions))
+                self.assertEqual((control["section"], control["panel"], slips), ("Pedestal", "Control stand", []))
+                self.assertEqual(control["press"], rows[node]["_clicks"]["left"][0][1], "the click code is verbatim")
+        toga, _, _ = g.convert_row(rows["ENGINE_Switch_ATDisc_1"], c)
+        self.assertEqual(toga["release"], "0 (>L:GO_AROUND_PADDLE1, bool)")
+        brake, _, _ = g.convert_row(rows["BBS757_PEDESTAL_Park_Brake_Lever"], c)
+        self.assertEqual([(p["value"], p["label"]) for p in brake["positions"]], [(0, "Released"), (1, "Set")])
+
+    def test_the_shipped_curation_labels_the_two_hold_buttons_by_what_they_hold(self):
+        # B757_MCP_HOLD_1 / _2: the vendor's disabled original component fires H:BBS_AP_HDG_HOLD / H:BBS_AP_ALT_HOLD
+        c = g.load_curation(g.DEFAULT_CURATION)
+        self.assertEqual(c["labels"]["B757_MCP_HOLD_1_BUTTON"], "HDG HOLD")
+        self.assertEqual(c["labels"]["B757_MCP_HOLD_2_BUTTON"], "ALT HOLD")
+
+    # Rows in the shape of the vendor's, so the shipped position lists are checked by the generator's own safety net
+    # (every value the click code writes must be one of the positions).
+    def knob(self, node, state, count, banner="MAIN PANEL SWITCH GEAR + BUTTONS"):
+        return row(node=node, kind="rotary knob finite", positions=str(count), panel=banner, state=["L:" + state],
+                   cw=f"(L:{state}, enum) 1 + {count - 1} min (>L:{state})",
+                   ccw=f"(L:{state}, enum) 1 - 0 max (>L:{state})")
+
+    def test_the_shipped_curation_names_the_positions_the_evidence_supports(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        n = lambda *labels: [(i, l) for i, l in enumerate(labels)]
+        ranges = n("10 NM", "20 NM", "40 NM", "80 NM", "160 NM", "320 NM")
+        modes = n("VOR", "APP", "MAP", "PLAN")
+        irs = n("OFF", "ALIGN", "NAV", "ATT")
+        cases = [
+            (self.knob("B757_MAIN_knob_gears_altn_autobrake", "BBS_AUTOBRAKE_KNOB", 8),
+             n("RTO", "OFF", "DISARM", "1", "2", "3", "4", "MAX AUTO")),
+            (self.knob("B757_MAIN_knob_gears_altn_flaps", "B757_MAIN_knob_gears_altn_flaps", 8),
+             n("NORM", *[f"Position {i}" for i in range(1, 8)])),
+            (self.knob("B757_PED_TCAS_MODE_KNOB", "B757_PED_TCAS_MODE_KNOB", 5, "INDIVIDUAL AUDIO/RADIO PANELS"),
+             n("STBY", "Position 1", "Position 2", "Position 3", "TA/RA")),
+            (self.knob("B757_ADI_1_TFC_KNOB", "BBS_ND1_Range_Index", 6, "EHSI/ADI"), ranges),
+            (self.knob("B757_ADI_2_TFC_KNOB", "BBS_ND2_Range_Index", 6, "EHSI/ADI"), ranges),
+            (self.knob("B757_ADI_1_CTR_KNOB", "B757_ADI_1_CTR_KNOB", 4, "EHSI/ADI"), modes),
+            (self.knob("B757_ADI_2_CTR_KNOB", "B757_ADI_2_CTR_KNOB", 4, "EHSI/ADI"), modes),
+            (self.knob("B757_IRS_L_SWITCH", "B757_IRS_L_SWITCH", 4, "IRS KNOBS"), irs),
+            (self.knob("B757_IRS_C_SWITCH", "B757_IRS_C_SWITCH", 4, "IRS KNOBS"), irs),
+            (self.knob("B757_IRS_R_SWITCH", "B757_IRS_R_SWITCH", 4, "IRS KNOBS"), irs),
+        ]
+        for r, names in cases:
+            with self.subTest(node=r["node"]):
+                control, why, _ = g.convert_row(r, c)
+                self.assertIsNone(why)
+                self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], names)
+        # the PW fuel control switches rest at 0 and 2 (the vendor's panel states): CUTOFF and RUN
+        for node in ("BBS_fuelcut_PW1", "BBS_fuelcut_PW2"):
+            r = row(node=node, kind="multi-position switch", positions="2", panel="(no banner)", state=["L:" + node],
+                    left=f"(L:{node}) 2 + 2 min (>L:{node})", other=[("RightSingle", f"(L:{node}) 2 - 0 max (>L:{node})")])
+            with self.subTest(node=node):
+                control, why, _ = g.convert_row(r, c)
+                self.assertIsNone(why)
+                self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "CUTOFF"), (2, "RUN")])
+        r = row(node="B757_PED_TCAS_XPNDR_SWITCH", kind="toggle", positions="2", panel="INDIVIDUAL AUDIO/RADIO PANELS",
+                state=["L:B757_PED_TCAS_XPNDR_SWITCH"], tips=["XPNDR"],
+                left="(L:B757_PED_TCAS_XPNDR_SWITCH,bool) ! (>L:B757_PED_TCAS_XPNDR_SWITCH,bool)")
+        control, _, _ = g.convert_row(r, c)
+        self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "L"), (1, "R")])
+
+    def test_each_named_position_list_has_its_evidence_in_the_notes(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+        notes = "\n".join(data["_notes"])
+        for node in ("B757_MAIN_knob_gears_altn_autobrake", "BBS_fuelcut_PW1", "BBS_fuelcut_PW2", "B757_IRS_L_SWITCH",
+                     "B757_IRS_C_SWITCH", "B757_IRS_R_SWITCH", "B757_ADI_1_TFC_KNOB", "B757_ADI_2_TFC_KNOB",
+                     "B757_ADI_1_CTR_KNOB", "B757_ADI_2_CTR_KNOB", "B757_PED_TCAS_MODE_KNOB",
+                     "B757_PED_TCAS_XPNDR_SWITCH", "B757_MAIN_knob_gears_altn_flaps", "B757_IRS_LARGE_KNOB",
+                     "B757_IRS_CENTRE_KNOB", "B757_MCP_HOLD_1_BUTTON", "BBS757_PEDESTAL_Park_Brake_Lever"):
+            with self.subTest(node=node):
+                self.assertIn(node, notes)
+        self.assertIn("unmeasured", notes)
 
 
 class FindPackage(unittest.TestCase):
