@@ -21,6 +21,7 @@ Chapter 4 of 4 in [Appendices](index.md#appendices) of the MSFS Blind Assist use
 - [PMDG 777](#hk-pmdg777)
 - [HorizonSim 787-9](#hk-hs787)
 - [iFly 737 MAX8](#hk-ifly)
+- [BlueBird 757-200](#hk-bbs757)
 - [TFDi MD-11](#hk-md11)
 
 </nav>
@@ -74,8 +75,8 @@ These read what the FCU, MCP or flight control panel shows, with its mode. The e
 ### Output: navigation and distance {#output-navigation-and-distance}
 
 - **Output N** — NAV 1 and NAV 2: frequency, ident, localiser, glideslope and DME.
-- **Output D** — Distance to destination, from the aircraft's FMS. Not on: Fenix, MD-11.
-- **Output Shift+D** — Distance and time to top of descent. Not on: Fenix, MD-11.
+- **Output D** — Distance to destination, from the aircraft's FMS. Not on: Fenix, MD-11, BlueBird 757.
+- **Output Shift+D** — Distance and time to top of descent. Not on: Fenix, MD-11, BlueBird 757.
 - **Output 1** to **Output 5** — Read tracked waypoint slots 1 to 5 (see [Tracking Waypoints](planning-your-flight.md#fix-tracking)).
 - **Output Ctrl+D** — Distance to your selected destination runway.
 - **Output Ctrl+I** — ILS guidance report for the destination runway.
@@ -136,7 +137,7 @@ What each one includes (per tank, centre of gravity) depends on the aircraft; se
 
 - **Output Shift+E** — Open [the Flight Planning window](planning-your-flight.md#flight-planning-efb): route viewer, procedures and airport lookup.
 - **Output Shift+B** — Open the [SimBrief](planning-your-flight.md#simbrief) briefing.
-- **Output Shift+C** — Open this aircraft's [First Officer](first-officer.md): its flows and checklists. Not on: HorizonSim 787 (you hear *"No checklist for this aircraft."*).
+- **Output Shift+C** — Open this aircraft's [First Officer](first-officer.md): its flows and checklists. Not on: HorizonSim 787, BlueBird 757 (you hear *"No checklist for this aircraft."*).
 - **Output Ctrl+M** — Open this aircraft's [Monitor Manager](core-concepts.md#monitor-manager), to mute any automatic announcement.
 
 ### Output: AI and display reading {#output-ai-and-display-reading}
@@ -169,7 +170,7 @@ Each opens a window where you type a value, with the related mode buttons. The b
 - **Input Ctrl+A** — Altitude window.
 - **Input Ctrl+V** — Vertical speed window.
 - **Input Ctrl+P** — Autopilot panel window, with live-state buttons.
-- **Input Ctrl+B** — Altimeter window. Not on: PMDG 777.
+- **Input Ctrl+B** — Altimeter window. Not on: PMDG 777, BlueBird 757.
 
 ### Input: aircraft windows {#input-aircraft-windows}
 
@@ -480,6 +481,56 @@ The Ctrl+P window has CMD A and B, CWS A and B, both flight directors, A/T arm, 
 
 - **Output Alt+S, Ctrl+W, Ctrl+0, Ctrl+E** do nothing.
 - **Input Shift+A, Ctrl+O, Shift+P, Ctrl+J, Ctrl+L** and the Shift/Ctrl+number knob keys do nothing; use the Ctrl+P window and the MCP windows.
+
+## BlueBird 757-200 {#hk-bbs757}
+
+Full explanations: [BlueBird 757-200](boeing-aircraft-and-the-md-11.md#boeing-bbs757).
+
+### Output keys {#output-keys-8}
+
+- **Output Shift+H**, **Shift+S**, **Shift+A**, **Shift+V** — Read the MCP window's own heading, speed (knots), altitude and vertical speed. In Mach mode Shift+S says so instead of reading a speed.
+- **Output Alt+P** — Read the ADI (AI).
+- **Output Alt+N** — Read the EHSI, the map display (AI).
+- **Output Alt+E** — Read the upper EICAS: engines and crew alerts (AI).
+- **Output Alt+S** — Read the lower EICAS: secondary engine data or a system page (AI).
+- **Output Ctrl+M** — Open the 757 Monitor Manager.
+
+BA moves the camera for the AI reads and puts your view back afterwards. The 757 plays its own take-off speed calls, so Takeoff Assist does not call *"80 knots"* or *"100 knots"* on it.
+
+### Input keys {#input-keys-8}
+
+- **Input Ctrl+H** — MCP Heading window (0 to 360).
+- **Input Ctrl+S** — MCP Speed window (knots, 100 to 399). A Mach number is refused for now.
+- **Input Ctrl+A** — MCP Altitude window (100 to 49000, rounded to 100 feet).
+- **Input Ctrl+V** — MCP Vertical Speed window (minus 8000 to 6000, rounded to 100).
+- **Input Shift+M** — Open the CDU window.
+- **Input Shift+T** — Open the EFB window.
+
+Each MCP window stays open for the next value; **Escape** closes it.
+
+### CDU window (Input Shift+M) {#cdu-window-input-shift-m-2}
+
+- **Up**, **Down** — Read the screen line by line.
+- **Ctrl+Tab** — Switch between the Captain's and the First Officer's CDU.
+- **Page Up**, **Page Down**, or **Alt+Up**, **Alt+Down** — PREV and NEXT page.
+- **Ctrl+Enter** or **Alt+E** — EXEC.
+- **Backspace** — CLR. **Delete** — DEL. Both work on the display or in an empty scratchpad box.
+- **Escape** — Close.
+- **Alt+I** INIT REF, **Alt+R** RTE, **Alt+D** DEP ARR, **Alt+T** ATC, **Alt+V** VNAV, **Alt+F** FIX, **Alt+G** LEGS, **Alt+H** HOLD, **Alt+O** FMC COMM, **Alt+P** PROG, **Alt+M** MENU, **Alt+N** NAV RAD.
+
+### EFB window (Input Shift+T) {#efb-window-input-shift-t}
+
+- **Tab**, **Shift+Tab** — Move between the buttons, the SimBrief ID box and the Status box.
+- **Enter** in the SimBrief ID box — Set the SimBrief ID.
+- **Escape** — Close.
+
+The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load preset (with the Cockpit preset list), APU quick start and IRS rapid align.
+
+### General keys that differ or don't work here {#general-keys-that-differ-or-don-t-work-here-8}
+
+- **Output Shift+1 to Shift+6, F, Shift+F, W, Shift+W, L, Shift+G, B, D, Shift+D, Alt+I, Ctrl+W, Ctrl+0, Ctrl+E** do nothing.
+- **Input Ctrl+B, Ctrl+N, Ctrl+P, Shift+A, Ctrl+O, Shift+P, Ctrl+J, Ctrl+L**, the Shift/Ctrl+number knob keys and **Input Ctrl+Shift+T** do nothing. The engage buttons are on the Glareshield section's MCP panel; the four MCP values are set in the Ctrl+H, Ctrl+S, Ctrl+A and Ctrl+V windows.
+- **Output Shift+C** says *"No checklist for this aircraft."*: the 757 has no First Officer.
 
 ## TFDi MD-11 {#hk-md11}
 
