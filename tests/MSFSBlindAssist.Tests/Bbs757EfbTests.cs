@@ -984,6 +984,92 @@ public class Bbs757EfbTests
         Assert.DoesNotContain("The aircraft uses", BBS757EfbForm.FetchedText(null));
     }
 
+    [Fact]
+    public void After_a_fetch_in_other_units_the_window_says_the_question_is_up()
+    {
+        Assert.Equal("SimBrief flight requested. The plan is in kilograms and the aircraft in pounds, so BlueBird is asking " +
+                     "whether to switch: Accept units switches, Keep units keeps them, and the app says which units are set. " +
+                     "Then run ACARS INIT FLT in the CDU window.",
+            BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms));
+    }
+
+    [Fact]
+    public void After_a_fetch_in_the_aircrafts_units_the_window_says_no_question_comes()
+    {
+        Assert.Equal("SimBrief flight requested. The plan and the aircraft both use pounds. Then run ACARS INIT FLT in the CDU window.",
+            BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds));
+    }
+
+    // ---- the units question left open (the final review's important 3) ------------------
+
+    [Fact]
+    public void A_fetch_in_other_units_leaves_the_question_open_on_its_page_only()
+    {
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
+
+        Assert.True(question.MayBeOpen(1000));
+        Assert.True(question.MayBeOpen(null));    // the page unread: it may still be up
+        Assert.False(question.MayBeOpen(2000));   // the flight reloaded: a new page, without it
+    }
+
+    [Fact]
+    public void Accept_or_keep_units_closes_the_question()
+    {
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
+
+        question.Answered();
+
+        Assert.False(question.MayBeOpen(1000));
+    }
+
+    [Fact]
+    public void A_fetch_in_matching_or_unread_units_raises_no_question()
+    {
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 1000);
+        Assert.False(question.MayBeOpen(1000));
+        question.AfterFetch(null, Bbs757WeightUnits.Pounds, pageMs: 1000);
+        Assert.False(question.MayBeOpen(1000));
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, null, pageMs: 1000);
+        Assert.False(question.MayBeOpen(1000));
+    }
+
+    [Fact]
+    public void A_later_fetch_in_matching_units_on_the_same_page_leaves_an_open_question_open()
+    {
+        // If the question is modal, the later fetch's presses may never have reached the tablet.
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
+
+        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 1000);
+
+        Assert.True(question.MayBeOpen(1000));
+    }
+
+    [Fact]
+    public void A_fetch_on_a_new_page_forgets_the_old_pages_question()
+    {
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
+
+        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 2000);
+
+        Assert.False(question.MayBeOpen(2000));
+    }
+
+    [Fact]
+    public void A_question_raised_on_an_unread_page_blocks_every_page_until_answered()
+    {
+        var question = new Bbs757UnitsQuestion();
+        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: null);
+
+        Assert.True(question.MayBeOpen(1000));
+        question.Answered();
+        Assert.False(question.MayBeOpen(1000));
+    }
+
     // ---- cockpit presets: ground or flight -------------------------------------
 
     [Theory]

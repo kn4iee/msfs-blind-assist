@@ -302,16 +302,18 @@ CDU (Shift+M):
                          SimBrief ID". Needed once: without it the CDU's
                          ACARS INIT does nothing.
   Fetch SimBrief flight  Loads your latest SimBrief flight plan into the
-                         EFB and says which weight units the aircraft
-                         uses. When the plan's weight units differ from
-                         the aircraft's, BlueBird asks to switch them:
-                         Accept units switches, Keep units keeps them,
-                         and the app then says what is set ("Weight
-                         units now pounds", "Weight units unchanged,
-                         kilograms"). These work only right after a
-                         fetch: otherwise they say "Fetch the SimBrief
-                         flight first." Then in the CDU window: MENU,
-                         ACARS, OPERATIONS, PREFLIGHT, INIT FLT, INIT.
+                         EFB and says whether the plan and the aircraft
+                         use the same weight units ("The plan and the
+                         aircraft both use pounds."). When they differ,
+                         BlueBird asks to switch them, and the app says
+                         so: Accept units switches, Keep units keeps
+                         them, and the app then says what is set
+                         ("Weight units now pounds", "Weight units
+                         unchanged, kilograms"). These work only right
+                         after a fetch: otherwise they say "Fetch the
+                         SimBrief flight first." Then in the CDU window:
+                         MENU, ACARS, OPERATIONS, PREFLIGHT, INIT FLT,
+                         INIT.
   Load fuel and payload from SimBrief
                          Loads your latest SimBrief plan's fuel,
                          passengers and cargo through BlueBird's own
@@ -322,8 +324,9 @@ CDU (Shift+M):
                          than the plan). It says "Fueling and boarding
                          started. BlueBird loads at its own pace;
                          boarding can take half an hour." BlueBird
-                         fuels in about two minutes and boards at its
-                         realistic pace. The app checks every 15
+                         fuels in a few minutes (about two for 3300
+                         pounds, longer for a large block) and boards
+                         at its realistic pace. The app checks every 15
                          seconds and says once each, in the aircraft's
                          weight units, for a plan of 16400 pounds of
                          fuel and 114 passengers for example:
@@ -337,12 +340,24 @@ CDU (Shift+M):
                          differently from the simulator. When the plan
                          has more passengers than the 176 seats, it
                          says they were capped and the rest of the
-                         payload went in the holds. If the boarding
-                         has not finished after an hour, it says so
-                         ("Check the weight with W.") and stops
-                         watching; loading another flight stops it
-                         too. Pressing the button again while it
+                         payload went in the holds. If BlueBird has not
+                         started after three minutes, it says so
+                         ("BlueBird has not started loading. Is BBS
+                         Nest running? Check the fuel with F and the
+                         weight with W.", or only the fueling or the
+                         boarding) and stops watching that part. If
+                         the boarding has not finished after an hour,
+                         it says so ("Check the weight with W.") and
+                         stops watching; loading another flight stops
+                         it too. Pressing the button again while it
                          watches says "The load is already running."
+                         If the EFB did not confirm every press, it
+                         says so and watches all the same: do not
+                         press the button again, listen for what
+                         follows. It refuses while BBS Nest is not
+                         running, and while BlueBird is still asking
+                         about the weight units ("Press Accept units or
+                         Keep units first.").
                          It needs the SimBrief ID set above, which
                          BlueBird's own fetch uses ("Set your SimBrief
                          ID first."). The plan must be for a 757-200

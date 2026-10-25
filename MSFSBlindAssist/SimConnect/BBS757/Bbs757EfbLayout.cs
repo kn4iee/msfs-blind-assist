@@ -33,6 +33,45 @@ public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, Quic
 public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
 
 /// <summary>
+/// Whether BlueBird's question "switch the aircraft's weight units to the plan's?" may still be on the
+/// tablet (the final review of task 11, [B757-4]). A FETCH SIMBRIEF OFP raises it when the plan's units
+/// differ from the aircraft's, and the window cannot see it; the EFB load's blind defuel YES lands 14 px
+/// from its YES, so the load refuses while it may be open. It is raised on the page the fetch ran on and
+/// closed by Accept units or Keep units, or by a flight load (a new page). A later fetch in matching units
+/// on the same page leaves it open: if the question is modal, that fetch's presses may never have reached
+/// the tablet. A fetch whose units could not be read raises nothing. Pure.
+/// </summary>
+public sealed class Bbs757UnitsQuestion
+{
+    private bool _open;
+    private long? _pageMs;
+
+    /// <summary>After a finished fetch, on the page that loaded at <paramref name="pageMs"/> (null: unread).</summary>
+    public void AfterFetch(Bbs757WeightUnits? planUnits, Bbs757WeightUnits? aircraftUnits, long? pageMs)
+    {
+        if (planUnits is Bbs757WeightUnits plan && aircraftUnits is Bbs757WeightUnits aircraft && plan != aircraft)
+        {
+            _open = true;
+            _pageMs = pageMs;
+        }
+        else if (_open && _pageMs is long raised && pageMs is long page && raised != page)
+        {
+            _open = false;   // raised on an earlier page, and gone with it
+        }
+    }
+
+    /// <summary>Accept units or Keep units pressed the question's answer.</summary>
+    public void Answered() => _open = false;
+
+    /// <summary>
+    /// Whether the question may be up on the page that loaded at <paramref name="currentPageMs"/>: raised
+    /// and not answered, on that page, or with either page unread.
+    /// </summary>
+    public bool MayBeOpen(long? currentPageMs) =>
+        _open && (_pageMs is not long raised || currentPageMs is not long current || raised == current);
+}
+
+/// <summary>
 /// Conditions the EFB agent checks on its own page before a run starts, so a check made by the
 /// app and the click land on the same page: the page loaded at or after
 /// <see cref="NotBeforeLoadMs"/> (Unix ms, UTC), it is at least <see cref="MinPageAgeMs"/> old,

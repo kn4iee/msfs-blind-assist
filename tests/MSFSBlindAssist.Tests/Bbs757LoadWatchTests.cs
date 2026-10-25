@@ -87,13 +87,41 @@ public class Bbs757LoadWatchTests
     }
 
     [Fact]
-    public void Fuel_still_moving_twenty_pounds_a_read_is_not_complete()
+    public void Fuel_still_moving_twenty_pounds_in_a_tank_is_not_complete()
     {
         var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
-        watch.Observe(Read(8175), 0);
+        watch.Observe(Read(8170), 0);
 
-        Assert.Null(watch.Observe(Read(8185), 15_000));     // 20 lb more: still fueling
-        Assert.StartsWith("Fueling complete.", watch.Observe(Read(8185), 30_000));
+        Assert.Null(watch.Observe(Read(8190), 15_000));     // 20 lb more in each wing: still fueling
+        Assert.StartsWith("Fueling complete.", watch.Observe(Read(8190), 30_000));
+    }
+
+    [Fact]
+    public void Fuel_moving_between_tanks_at_the_plans_total_is_not_complete_until_every_tank_settles()
+    {
+        // The final review's minor 2: a turnaround whose fuel is already near the plan. BlueBird moves fuel
+        // between tanks (session 5: it filled the wings while draining the center), so the total holds
+        // still while the tanks do not.
+        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        watch.Observe(Read(7000, center: 2400), 0);
+
+        Assert.Null(watch.Observe(Read(7600, center: 1200), 15_000));
+        Assert.Null(watch.Observe(Read(8200, center: 0), 30_000));
+        Assert.Equal(Fueled, watch.Observe(Read(8200, center: 0), 45_000));
+    }
+
+    [Fact]
+    public void A_slow_transfer_between_tanks_counts_as_started()
+    {
+        // The fuel's total holds still while the tanks trade fuel: that is loading, never "not started".
+        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        for (int i = 0; i <= 16; i++)
+        {
+            string? said = watch.Observe(
+                Read(7000 + 50 * i, center: 2400 - 100 * i, first: 1850, economy: 19240, forward: 3990), i * 15_000L);
+            Assert.True(said == null || !said.Contains("not started"), said);
+        }
+        Assert.False(watch.FuelDone);   // the tanks never settled
     }
 
     [Fact]
@@ -202,6 +230,50 @@ public class Bbs757LoadWatchTests
             watch.Observe(aboard, 45_000));
     }
 
+    // ---- a load that never starts -----------------------------------------------------------
+
+    [Fact]
+    public void A_load_that_never_starts_says_so_after_three_minutes_and_ends()
+    {
+        // The final review's important 1: with BBS Nest closed BlueBird ignores every tap. Otherwise
+        // fueling and boarding start at once (measured), so nothing moving for three minutes means the load
+        // never started.
+        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        for (long t = 0; t < 180_000; t += 15_000)
+            Assert.Null(watch.Observe(Read(5000), t));
+
+        Assert.Equal("BlueBird has not started loading. Is BBS Nest running? Check the fuel with F and the weight with W.",
+            watch.Observe(Read(5000), 180_000));
+        Assert.True(watch.Finished);
+        Assert.Null(watch.Observe(Read(5000), 195_000));
+    }
+
+    [Fact]
+    public void Fueling_that_never_starts_is_said_and_the_boarding_is_still_watched()
+    {
+        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        watch.Observe(Read(5000), 0);
+        watch.Observe(Read(5000, first: 1850, economy: 2000), 90_000);   // boarding under way
+
+        Assert.Equal("BlueBird has not started fueling. Check the fuel with F.",
+            watch.Observe(Read(5000, first: 1850, economy: 4000), 180_000));
+        Assert.False(watch.Finished);
+
+        watch.Observe(Read(5000, first: 1850, economy: 19240, forward: 3990), 1_200_000);
+        Assert.Equal(Boarded, watch.Observe(Read(5000, first: 1850, economy: 19240, forward: 3990), 1_215_000));
+        Assert.True(watch.Finished);
+    }
+
+    [Fact]
+    public void Boarding_that_never_starts_is_said_once_the_fuel_is_done()
+    {
+        var watch = FueledWatch();   // the cabin and the holds empty all along
+
+        Assert.Null(watch.Observe(Read(8200), 165_000));
+        Assert.Equal("BlueBird has not started boarding. Check the weight with W.", watch.Observe(Read(8200), 180_000));
+        Assert.True(watch.Finished);
+    }
+
     // ---- what cannot be read, and the hour ---------------------------------------------------
 
     [Fact]
@@ -233,9 +305,10 @@ public class Bbs757LoadWatchTests
     {
         var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
         watch.Observe(Read(5000), 0);
+        watch.Observe(Read(5100, first: 500), 165_000);   // both under way, slowly
 
         Assert.Equal("Fueling and boarding have not finished after an hour. Check the fuel with F and the weight with W.",
-            watch.Observe(Read(5000), Bbs757LoadWatch.TimeoutMs));
+            watch.Observe(Read(5200, first: 1000), Bbs757LoadWatch.TimeoutMs));
         Assert.True(watch.Finished);
     }
 
@@ -246,16 +319,32 @@ public class Bbs757LoadWatchTests
         var shortOfFuel = Loaded with { LeftGallons = 5000, RightGallons = 5000 };
         watch.Observe(shortOfFuel, 0);
         Assert.Equal(Boarded, watch.Observe(shortOfFuel, 15_000));
+        watch.Observe(shortOfFuel with { LeftGallons = 5200, RightGallons = 5200 }, 165_000);   // fueling, slowly
 
         Assert.Equal("Fueling has not finished after an hour. Check the fuel with F.",
-            watch.Observe(shortOfFuel, Bbs757LoadWatch.TimeoutMs));
+            watch.Observe(shortOfFuel with { LeftGallons = 5400, RightGallons = 5400 }, Bbs757LoadWatch.TimeoutMs));
     }
 
     [Fact]
-    public void The_hour_is_one_hour_and_the_reads_fifteen_seconds_apart()
+    public void The_hour_is_one_hour_the_start_is_judged_at_three_minutes_and_the_reads_fifteen_seconds_apart()
     {
         Assert.Equal(60 * 60_000, Bbs757LoadWatch.TimeoutMs);
+        Assert.Equal(3 * 60_000, Bbs757LoadWatch.NotStartedMs);
         Assert.Equal(15_000, Bbs757LoadWatch.IntervalMs);
+    }
+
+    // ---- what the window says once the taps are made -----------------------------------------
+
+    [Theory]
+    [InlineData(true, true, "Fueling and boarding started. BlueBird loads at its own pace; boarding can take half an hour.")]
+    [InlineData(false, true, "The EFB did not confirm every press. BA is watching the fuel and payload, and says within three minutes if BlueBird has not started.")]
+    [InlineData(true, false, "Fueling and boarding started. BlueBird loads at its own pace; check the fuel with F and the weight with W.")]
+    [InlineData(false, false, "The EFB did not confirm every press. Check the fuel with F and the weight with W.")]
+    public void The_start_is_said_as_far_as_the_taps_and_the_watch_can_tell(bool confirmed, bool watching, string said)
+    {
+        // The final review's important 2: a run that may have pressed something is watched, never retried
+        // (a second START BOARDING press during boarding is unmeasured), so "Try again" is never said here.
+        Assert.Equal(said, Bbs757LoadWatch.StartedPhrase(confirmed, watching));
     }
 
     // ---- units and culture ------------------------------------------------------------------
@@ -341,7 +430,7 @@ public class Bbs757LoadWatchTests
     }
 
     [Fact]
-    public void A_load_that_never_finishes_is_given_up_after_an_hour_of_reads_fifteen_seconds_apart()
+    public void A_load_that_never_starts_is_given_up_after_three_minutes_of_reads_fifteen_seconds_apart()
     {
         var sim = new LoadSim();
         sim.Set(Read(5000));
@@ -349,9 +438,9 @@ public class Bbs757LoadWatchTests
 
         def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, new SimConnectManager(IntPtr.Zero), speech);
 
-        Assert.Equal(new[] { "Fueling and boarding have not finished after an hour. Check the fuel with F and the weight with W." },
+        Assert.Equal(new[] { "BlueBird has not started loading. Is BBS Nest running? Check the fuel with F and the weight with W." },
             speech.All);
-        Assert.Equal(240, sim.Waits.Count);
+        Assert.Equal(12, sim.Waits.Count);   // reads at 0, 15, …, 180 s
         Assert.All(sim.Waits, w => Assert.Equal(15_000, w));
         Assert.False(def.LoadWatchRunning);
     }

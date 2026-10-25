@@ -98,6 +98,7 @@ public partial class MainForm
             : Task.FromResult<double?>(null),
         FetchOfpXml = (id, ct) => MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync(id, null, ct),
         WatchRunning = () => currentAircraft is BBS757Definition { LoadWatchRunning: true },
+        NestRunning = () => currentAircraft is BBS757Definition def ? def.NestRunning() : Aircraft.BBS757.Bbs757Nest.IsRunning(),
         StartWatch = (loads, units) => currentAircraft is BBS757Definition def && simConnectManager is { IsConnected: true } sim
             && def.StartLoadWatch(loads, units, sim, announcer),
     };
