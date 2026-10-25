@@ -45,5 +45,22 @@ keyboard or joystick bindings, or how to turn the radio, transponder, baro or MC
 | 13 | Nosewheel steering by rudder | BlueBird's default is REALISTIC (tiller) | a "Steering: rudder" button in the 757 EFB window (Settings > Aircraft switch, measured); the owner's is switched |
 | 14 | Other unnamed positions (ND range and mode, IRS mode selectors, TCAS mode, alternate flaps) | numbers | names from the vendor's tooltips and panel states |
 
+Gap 14, follow-up (ruling R32, 2026-10-25, Task 10 fix round 1): seven more controls the flows need still read as
+numbers after 10a, and are named where BlueBird's nine panel states and the manual's procedure text agree: Seatbelts
+and No Smoking 0 OFF, 2 ON (seat belts 0 in cold and dark and turnaround, 2 in the other seven; No Smoking 2 in all
+nine, so its OFF rests on the identical seat belt switch and the manual's shutdown); the pack selectors 0 OFF, 1 AUTO
+(0 in cold and dark, 1 in every powered state; "PACK SELECTORS ... OFF with no supply"); pressurization Mode Select
+0 AUTO 1 ("mode selector AUTO 1 or AUTO 2"); the overhead ignition selector, relabeled Ignition (its node says ENG
+START; tooltip 'Engine Ignitors'), 0 "1" ("Ignition 1 is the illustrated example"); Bank Limit 0 AUTO ("BANK LIMIT
+SELECTOR ... AUTO"); the EICAS thrust reference 1 BOTH ("thrust reference BOTH"); the wiper 0 OFF (0 in all nine).
+Every other position stays "Position n". Limit: the in-sim preset check reads back the very values the names were
+taken from, so a misnamed position would not show there.
+
+Beyond the 14 gaps (ruling R31): BlueBird's INITIAL CHOCKS IN PLACE (the owner's is ON) puts wheel chocks on at every
+flight load, and the aircraft will not move with them. The only control is the CHOCKS tile on the EFB's Ground
+Services page, which toggles `L:BBS757_vis_chocks` (measured: `live-findings.md`, EFB Ground Services). The 757 EFB
+window gains Remove chocks / Set chocks (read first, tapped only when they differ) and the Status display a Chocks
+row.
+
 Seen while measuring: BlueBird's left thrust lever read 100% and the right 0% with the engines off (a hardware throttle
 axis or a leftover). Check the thrust levers before engine start.

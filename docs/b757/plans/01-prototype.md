@@ -312,6 +312,13 @@ Values measured in `evidence/live-findings.md` (sessions 5 and 6). Built in two 
   judged against `flight_model.cfg`'s angles, the CMD buttons are relabeled CMD L/C/R in the curation, the autopilot
   window's presses are silent (the caption is the feedback) and the 757's on-change call-outs swallow the echo of the
   app's own press or pick. In-sim checks 53-74.
+- [x] **Fix round 1** (the task review and two additions): the flap tolerance is 0.4° (flaps 1 with the surfaces up is
+  no longer "Flaps 1"), "1 degree" in the singular; a parking brake pick reads its row back and closes its echo; a
+  Ctrl+P press the aircraft refused says "… did not engage" / "… did not disengage"; a typed standard altimeter is
+  the Standard button's 16212; the squawk box tells an empty box from letters (`HandleUITypedText`); the generator
+  stops when an `include_nodes` control has no `node_panels` rule; the first two 757 rules (B757-1, B757-2); the
+  chocks EFB action and Status row (R31); the flow switches' position names and the Ignition label (R32). In-sim
+  checks 75-76; 68 and 70 no longer need sight.
 
 ## Rulings made while executing (2026-10-25)
 
@@ -362,7 +369,15 @@ owner can reverse any of them.
   name. If wrong: two of the three names are swapped (check 54).
 - R29: the Ctrl+P window's presses say nothing on success (the caption change is the feedback, as in the iFly,
   HS787 and MD-11 windows); a panel press of the same button reads its light back. If wrong: the window press is
-  silent for a screen reader that does not read caption changes.
+  silent for a screen reader that does not read caption changes. (Fix round 1: a press whose light reads back
+  unchanged says "… did not engage" / "… did not disengage", since its caption cannot change.)
 - R30: a state row's change within 5 s of the app's own press or pick of its control is that write's echo and not
-  announced; the press's read-back closes the window. If wrong: a real change in those 5 s after a pick is not said
-  (the status row still shows it).
+  announced; the press's read-back, and the parking brake pick's (fix round 1), closes the window. If wrong: a real
+  change in those few seconds is not said (the status row still shows it).
+- R31 (fix round 1): the 757 EFB window gains Remove chocks / Set chocks (Home, Aircraft, GROUND SERVICES, the CHOCKS
+  tile, measured), tapped only when `L:BBS757_vis_chocks` read fresh differs from the wish, read back about 1.5 s
+  later; a "Chocks" Status row, never announced. If wrong: one EFB tile press the pilot hears read back.
+- R32 (fix round 1): the flow switches' positions named from the nine panel states and the manual (Seatbelts and No
+  Smoking OFF/ON, packs OFF/AUTO, Mode Select AUTO 1, Ignition 1, Bank Limit AUTO, thrust reference BOTH, wiper
+  OFF), the rest numbered; ENG Start relabeled Ignition. If wrong: one misnamed position, which the preset read-back
+  check cannot catch.

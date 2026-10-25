@@ -393,7 +393,7 @@ The 757 needs two things running besides the simulator:
 - **BBS Nest**, BlueBird's companion app. Without it the cockpit takes every switch, but no system responds. About a second after BA connects, after you switch to this profile or after you load a flight, BA checks for it. If it is missing you hear *"BBS Nest is not running. The 757's systems will not respond until it runs and the flight is reloaded."* Start BBS Nest, then reload the flight.
 - **The MobiFlight WASM module** (see [Installing](getting-started.md#install)). BA sets every switch by replaying the cockpit's own click through it. Without it, readouts still work, but each control you try says it is unavailable, and a short while after connecting you may hear *"MobiFlight calculator path unavailable. Some cockpit controls may not respond."* Install or reinstall the module and restart the simulator.
 
-The aircraft always loads cold and dark, wherever you start. BA assumes no power and no engines at load. Bring the aircraft up from the panels, or load a cockpit preset from the [EFB window](#boeing-757-efb).
+The aircraft always loads cold and dark, wherever you start. BA assumes no power and no engines at load. Bring the aircraft up from the panels, or load a cockpit preset from the [EFB window](#boeing-757-efb). With BlueBird's INITIAL CHOCKS IN PLACE setting on, the wheel chocks are on at every load: remove them with the EFB window's **Remove chocks** before you taxi (the Status panel's Chocks row says where they are).
 
 ### How the panels are organized {#boeing-757-panels}
 
@@ -404,9 +404,9 @@ Press Ctrl+1 for the Sections list and Ctrl+2 for the Panels list. Every regular
 - **Forward panel**: Captain EFIS and First officer EFIS, the two DDRMIs, the two autoland status panels, the two chronometers, Landing gear, Main panel switches, Oxygen, Standby attitude indicator, Yokes, Cockpit miscellaneous.
 - **Pedestal**: ADF, Audio panel 1 and 2, Control stand (Parking Brake, Speedbrake Down, Armed and Up, TO/GA and A/T Disconnect), EICAS control, Fire protection, Fuel control, Pedestal radio panels, Radio tuning panels 1, 2 and 3, Stabilizer trim, TCAS and transponder, Weather radar left and right.
 - **Other**: the P61 panel.
-- **Status**: two panels to read rather than operate. On **Status**, press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed, the cabin altitude, the flaps (the lever's position and the flap angle), the gear, the speedbrake and the parking brake. **Engines** shows N1, N2, EGT, fuel flow and EPR for each engine. The rows update by themselves, and F5 refreshes them.
+- **Status**: two panels to read rather than operate. On **Status**, press Ctrl+3 to read the APU state, Master Warning and Master Caution, the left and right AC bus power sources, the APU speed, the cabin altitude, the chocks (*"In place"* or *"Removed"*), the flaps (the lever's position and the flap angle), the gear, the speedbrake and the parking brake. **Engines** shows N1, N2, EGT, fuel flow and EPR for each engine. The rows update by themselves, and F5 refreshes them.
 
-The MCP panel's status display lists the light of every mode and CMD button (*"CMD L: On"*). The TCAS and transponder panel has a **Squawk Code** box: type the four digits and press Enter. About a second and a half later BA reads the transponder back and says *"Squawk 4743"*; if the transponder holds another code it says so. Its status display shows the code.
+The MCP panel's status display lists the light of every mode and CMD button (*"CMD L: On"*). The TCAS and transponder panel has a **Squawk Code** box: type the four digits and press Enter. About a second and a half later BA reads the transponder back and says *"Squawk 4743"*; if the transponder holds another code it says so. Its status display shows the code. An empty box says *"Type a four-digit squawk first."*, and letters or a digit 8 or 9 say *"Squawk must be four digits, each 0 to 7."*
 
 How the controls behave:
 
@@ -432,7 +432,7 @@ Output Shift+H, Shift+S, Shift+A and Shift+V read the same four values without o
 
 The speed is knots (IAS) only for now; Mach comes later. In Mach mode, Output Shift+S says *"MCP is in Mach mode. Mach is not read yet."* and Input Ctrl+S says *"MCP is in Mach mode. Set Mach from the Glareshield panel."* A Mach number typed in the window is refused with *"Mach entry is not supported yet. Enter a speed from 100 to 399 knots."*
 
-**Input Ctrl+P** opens the **757 Autopilot** window: CMD L, CMD C, CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC and APP, each with its state, for example *"CMD L: On"* or *"A/T Arm: Off"*. The mode and CMD buttons show their light. A press is the cockpit's own click, and the button then shows the new state. Escape closes the window.
+**Input Ctrl+P** opens the **757 Autopilot** window: CMD L, CMD C, CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC and APP, each with its state, for example *"CMD L: On"* or *"A/T Arm: Off"*. The mode and CMD buttons show their light. A press is the cockpit's own click, and the button then shows the new state. If the aircraft does not take the press, you hear so about two seconds later, for example *"CMD L did not engage"* or *"LNAV did not disengage"*. Escape closes the window.
 
 The MCP lights are also spoken when they change, for example *"CMD R on"* or *"VNAV off"*; a press you make yourself is not said twice.
 
@@ -440,7 +440,7 @@ The MCP lights are also spoken when they change, for example *"CMD R on"* or *"V
 
 **Input Ctrl+B** opens the **Altimeter and minimums** window:
 
-- **Altimeter** box: type inches (29.92) or hectopascals (1013) and press Enter. All three altimeters are set together. They take a few seconds to follow; BA then reads them back, for example *"Altimeter: 1018, 30.05"* or *"Altimeter standard"*. If they still differ, each is read: *"Altimeter 1: …, Altimeter 2: …, Altimeter 3: …"*.
+- **Altimeter** box: type inches (29.92) or hectopascals (1013) and press Enter. All three altimeters are set together. They take a few seconds to follow; BA then reads them back, for example *"Altimeter: 1018, 30.05"* or *"Altimeter standard"*. If they still differ, each is read: *"Altimeter 1: …, Altimeter 2: …, Altimeter 3: …"*. Typing 29.92 or 1013 sets standard, the same as the Standard button.
 - **Standard, 29.92** button: sets all three to standard.
 - **Radio minimums** box: type the decision height in feet (0 to 2500; it moves in steps of 10) and press Enter. BA steps the minimums and reads back what the ADI shows, for example *"DH 200"*.
 - **Status** box: read-only, with the values when the window opens and the last result.
@@ -488,6 +488,7 @@ The buttons, in order:
 - **Cockpit preset** list and **Load preset**: choose a panel state and press Load preset. The list starts on Before start. On the ground: Cold and dark, Turnaround, Before start, Ready for taxi and Ready for takeoff. In flight: After takeoff, Cruise, Approach and Final approach. A ground preset in flight says *"That preset is for the ground."*, a flight preset on the ground says *"That preset is for flight."*, and nothing is loaded. A loading preset says, for example, *"Loading Before start"*. Before start brings up battery, APU and AC power in about 12 seconds.
 - **APU quick start** and **IRS rapid align**: BlueBird's quick start tiles. You hear *"APU quick start pressed"* or *"IRS rapid align pressed"*.
 - **Set steering to rudder**: switches BlueBird's NOSEWHEEL STEERING setting from REALISTIC (the tiller) to RUDDER, so you steer on the ground with the rudder pedals. BA reads BlueBird's setting first: when it is already rudder you hear *"Steering is already rudder"* and nothing is pressed, because the switch toggles and a second press would bring the tiller back. Otherwise you hear *"Steering set to rudder"*. The setting applies to every flight, so you need it once.
+- **Remove chocks** and **Set chocks**: take the wheel chocks away or put them back. With BlueBird's INITIAL CHOCKS IN PLACE setting on, the chocks are on at every flight load and the aircraft will not move until they are removed. BA reads the chocks first: when they are already where you want them you hear *"Chocks are already removed"* (or *"Chocks are already in place"*) and nothing is pressed, because the tile toggles. Otherwise BA presses the CHOCKS tile on the Ground Services page and, about a second and a half later, says *"Chocks removed"* or *"Chocks in place"*, or *"BlueBird did not move the chocks"*. The Status panel's Chocks row follows.
 - **Close** hides the window.
 
 If the tablet cannot be reached, the window says *"The 757's EFB is not reachable. Is the aircraft loaded?"* If the tablet is not the size this version of BA knows, it says *"The 757's EFB layout is not the one this version knows."* and presses nothing.
@@ -528,7 +529,7 @@ When the update finishes you hear *"Nav data cycle 2611 installed. Reload the fl
 ### Aircraft-specific hotkeys and callouts {#boeing-757-hotkeys}
 
 - **Output Alt+P** describes the ADI (attitude and flight mode annunciations), and the AUTOLAND STATUS annunciator beside it (LAND 3, LAND 2, NO LAND 3 or NO AUTOLAND) when it shows a message. **Alt+N** describes the EHSI (the map display), **Alt+E** the upper EICAS (engines and crew alerts) and **Alt+S** the lower EICAS (secondary engine data or a system page). They need an AI provider; see [AI Display Reading](core-concepts.md#ai-display-reading). The 757's displays are drawn by the aircraft itself and cannot be read as text, so these are the way to hear them. BA moves the simulator's camera to the display it is reading and puts your own view back afterwards. From an outside or drone view you hear *"Switch to a cockpit view first"*. The display is read as it presents itself: abbreviations such as EPR, N1 and EGT, and the units, are not changed.
-- **Output L** reads the flap lever, for example *"Flaps 5"*. When the flaps are not at the lever's position yet, it adds where they are: *"Flaps 5, moving, 3 degrees"*, or *"Flaps 5, surfaces at 0 degrees"* when they stay there (no hydraulic pressure).
+- **Output L** reads the flap lever, for example *"Flaps 5"*. When the flaps are not at the lever's position yet, it adds where they are: *"Flaps 5, moving, 3 degrees"*, or *"Flaps 1, surfaces at 0 degrees"* when they stay there (no hydraulic pressure).
 - **Output Shift+G** reads the gear: *"Gear down"*, *"Gear up"* or *"Gear in transit"*, with the lever when it disagrees, for example *"Gear down, lever up"*.
 - **Output B** reads the three altimeters and the radio minimums, as described [above](#boeing-757-altimeter).
 - **Output F** reads the fuel in pounds, the total and each tank: *"Fuel 25480 pounds: left 12740, right 12740, center 0"*. **Output Shift+F** says the same in kilograms.

@@ -528,7 +528,7 @@ Each MCP window and the altimeter window stay open for the next value; **Escape*
 - **Enter** in the SimBrief ID box — Set the SimBrief ID.
 - **Escape** — Close.
 
-The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load fuel and payload from SimBrief, Load preset (with the Cockpit preset list), APU quick start, IRS rapid align and Set steering to rudder.
+The buttons are Sign in to Navigraph, Update nav data, Set SimBrief ID, Fetch SimBrief flight, Accept units, Keep units, Load fuel and payload from SimBrief, Load preset (with the Cockpit preset list), APU quick start, IRS rapid align, Set steering to rudder, Remove chocks and Set chocks.
 
 ### Altimeter and minimums window (Input Ctrl+B) {#altimeter-window-input-ctrl-b-bbs757}
 

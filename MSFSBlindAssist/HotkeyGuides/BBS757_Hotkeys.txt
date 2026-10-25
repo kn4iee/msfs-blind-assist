@@ -26,10 +26,13 @@ speedbrake button says the lever ("Speedbrake armed").
 The Pedestal's Control stand panel has the Parking Brake, Speedbrake Down,
 Armed and Up, TO/GA and A/T Disconnect. The TCAS and transponder panel has
 a Squawk Code field: type the four digits and press Enter; the app reads
-the transponder back and says "Squawk 4743".
+the transponder back and says "Squawk 4743". An empty box says "Type a
+four-digit squawk first."; letters or a digit 8 or 9 say "Squawk must be
+four digits, each 0 to 7."
 The Status section's Status panel shows the APU state, master warning and
-caution, the AC bus power sources, the APU speed, the cabin altitude, and
-the flaps (lever and surface angle), gear, speedbrake and parking brake.
+caution, the AC bus power sources, the APU speed, the cabin altitude, the
+chocks (In place or Removed), and the flaps (lever and surface angle),
+gear, speedbrake and parking brake.
 Its Engines panel shows N1, N2, EGT, fuel flow and EPR for each engine
 (read only, never announced). The MCP panel's status display lists the
 button lights.
@@ -81,7 +84,7 @@ Weight:
 Flaps:
   L          Read the flap lever ("Flaps 5"). When the flaps are not at
              the lever's position yet it adds where they are: "Flaps 5,
-             moving, 3 degrees", or "Flaps 5, surfaces at 0 degrees" when
+             moving, 3 degrees", or "Flaps 1, surfaces at 0 degrees" when
              they stay there (no hydraulic pressure).
 
 Landing Gear:
@@ -175,7 +178,8 @@ MCP Value Windows:
              Altimeter box: type inches (29.92) or hectopascals (1013) and
              press Enter. All three altimeters are set together; a few
              seconds later the app reads them back ("Altimeter: 1018,
-             30.05", "Altimeter standard").
+             30.05", "Altimeter standard"). Typing 29.92 or 1013 sets
+             standard, the same as the Standard button.
              Standard, 29.92 button: sets all three to standard.
              Radio minimums box: type the decision height in feet (0 to
              2500, rounded to 10) and press Enter. The app steps the
@@ -186,7 +190,9 @@ MCP Value Windows:
              CMD R, A/T Arm, Captain F/D, F/O F/D, THR, SPD, LNAV, VNAV,
              FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP ("CMD L: On"). Each press
              is the cockpit's own click; the button then shows the new
-             state. Escape closes the window.
+             state. When the aircraft does not take a press, the app says
+             so about two seconds later: "CMD L did not engage" (or "did
+             not disengage"). Escape closes the window.
 
 CDU (Shift+M):
   Opens the accessible CDU window for both CDUs, read as text from the
@@ -337,6 +343,18 @@ CDU (Shift+M):
                          so a second press would set the tiller again).
                          Afterwards it says "Steering set to rudder". The
                          setting applies to every flight.
+  Remove chocks          Removes or puts back the wheel chocks (BlueBird
+  Set chocks             puts them on at every flight load when INITIAL
+                         CHOCKS IN PLACE is on, and the aircraft will
+                         not move with them). The app reads the chocks
+                         first: when they are already where you want
+                         them it says "Chocks are already removed" (or
+                         "already in place") and presses nothing, since
+                         the tile toggles. Otherwise it presses the
+                         Ground Services page's CHOCKS tile once and
+                         says "Chocks removed" or "Chocks in place", or
+                         "BlueBird did not move the chocks". The Status
+                         panel's Chocks row follows.
   Escape                 Close the window
   If the tablet cannot be reached the window says "The 757's EFB is not
   reachable. Is the aircraft loaded?". The buttons are pressed where

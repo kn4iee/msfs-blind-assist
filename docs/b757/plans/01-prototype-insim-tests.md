@@ -181,27 +181,43 @@ Windows:
 
 66. Ctrl+P: the 757 Autopilot window, focus on "CMD L: …". Tab through sixteen buttons, each "Label: On/Off". A/T Arm,
     Captain F/D and F/O F/D flip within about a second of a press (NVDA reads the new caption). CMD L in flight with a
-    mode engaged: "CMD L: On". Escape closes; Ctrl+P again brings the same window back.
+    mode engaged: "CMD L: On". Escape closes; Ctrl+P again brings the same window back. A press the aircraft does not
+    take (CMD L on the ground, cold and dark): about two seconds later "CMD L did not engage", once.
 67. Ctrl+B: the Altimeter and minimums window opens on the altimeter box; Tab to Status: the current values. Type
     30.12, Enter: within about six seconds "Altimeter: 1020, 30.12"; Alt+P's baro and both other altimeters agree (all
-    three are set together, measured on the ground). 1013, Enter; "29,92" with a comma reads as 29.92; 500 is refused
+    three are set together, measured on the ground). 1013, Enter: "Altimeter standard" (typing standard is the
+    Standard button); "29,92" with a comma reads as 29.92, the same; 1012: "Altimeter: 1012, 29.88"; 500 is refused
     aloud. Standard: "Altimeter standard". If they ever differ, note which "Altimeter 1, 2, 3" is the captain's, the
     first officer's and the standby (unmeasured).
-68. Same window, Radio minimums 250, Enter: "DH 250" within about two seconds, and the ADI shows DH250. Then 200, then
-    0 and 2500 (the ends: note any other value the read-back gives). Log: the INCREASE/DECREASE_DECISION_HEIGHT calls
-    and whether a correction round ran.
+68. Same window, Radio minimums 250, Enter: "DH 250" within about two seconds; then Output Alt+P (the AI read of the
+    ADI) reads the minimums as DH250. Then 200, then 0 and 2500 (the ends: note any other value the read-back gives).
+    Log: the INCREASE/DECREASE_DECISION_HEIGHT calls and whether a correction round ran.
 69. Output B: "Altimeter: …. DH …" as set.
 70. TCAS and transponder > Squawk Code: 4743, Enter: "Squawk 4743" (one number); 0421: "Squawk 0421"; 7778: "Squawk
-    must be four digits, each 0 to 7."; an empty box: "Type a four-digit squawk first." Output X and the panel's status
-    display show 4743. Ask whether BlueBird's transponder display shows the code too (it is the stock transponder,
-    measured).
+    must be four digits, each 0 to 7."; 12a4: the same digits message; an empty box: "Type a four-digit squawk
+    first." Output X ("Squawk 4743") and the panel's status display (Ctrl+3, "Squawk: 4743") read the code back
+    from the transponder BlueBird uses (the stock one, measured with XPNDR_SET); nothing needs the radio panel's
+    own display.
 71. Engines panel at the first engine start: compare Left/Right N1, N2, EGT, Fuel Flow and EPR with an Alt+E read of
     the upper EICAS. All unmeasured on BlueBird (the stock engine variables; EPR's scale): note any that stay at 0 or
     read wrong.
 72. Alt+P on an approach with APP armed: the reading includes the AUTOLAND STATUS annunciator (LAND 3, LAND 2, NO LAND
     3 or NO AUTOLAND) when it shows one, after the flight modes; nothing about it when it is blank.
 73. EFB window, Set steering to rudder, with the setting already RUDDER (the owner's, since 2026-10-25): "Steering is
-    already rudder", nothing pressed; taxi still steers with the rudder. The click itself (from REALISTIC) can only be
-    checked after the setting is put back to REALISTIC on BlueBird's EFB: then "Steering set to rudder" and rudder
-    steering on the next taxi.
+    already rudder", nothing pressed; taxi still steers with the rudder. The click itself (from REALISTIC) can be
+    checked only on an install whose setting is still REALISTIC (a new install or a reset of BlueBird's settings):
+    then "Steering set to rudder" and rudder steering on the next taxi.
 74. Switch profile with the Ctrl+P and Ctrl+B windows open: both close.
+
+Task 10 fix round 1 (rulings R31, R32):
+
+75. Chocks: after a flight load (INITIAL CHOCKS IN PLACE on), the Status panel reads "Chocks: In place". EFB window,
+    Remove chocks: "Chocks removed" about two seconds after the clicks, and the Status row follows ("Chocks:
+    Removed"); press Remove chocks again: "Chocks are already removed", nothing pressed. Set chocks: "Chocks in place";
+    again: "Chocks are already in place". Then remove them and taxi: the aircraft moves.
+76. Named flow switches (R32), after loading the EFB's Before start preset: Overhead > Passenger signs > Seatbelts
+    reads "ON", Air conditioning and bleed > L and R Pack Selector "AUTO", Pressurization > Mode Select "AUTO 1",
+    Engine start > Ignition "1", Glareshield > MCP > Bank Limit "AUTO", Pedestal > EICAS control > EICAS Lwr Thrust
+    Ref "BOTH", Wipers > Wiper "OFF". These read back the values the names were taken from, so they confirm the
+    wiring, not the names: where a combo can be moved, note what the aircraft does (for example Seatbelts to OFF:
+    the seat belt chime and sign, read by Alt+E or Alt+S if the EICAS shows it).
