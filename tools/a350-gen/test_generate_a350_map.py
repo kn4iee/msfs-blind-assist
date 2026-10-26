@@ -109,6 +109,14 @@ def _fixture():
         init="(L:INI_GEAR_HANDLE_STATUS) 1 0 l0 ? (>O:AIRLINER_LDG_LEVER_Position)",
         tt_value=("(O:AIRLINER_LDG_LEVER_Position) 0 == if{ (R:1:INI.TOOLTIPS.LDG_LEVER.UP) } "
                   "els{ (R:1:INI.TOOLTIPS.LDG_LEVER.DOWN) } '%s' (F:Format)"))
+    # The HUD declutter key: its input event only animates the key; the click code flips INI_FCU_HUD_DECLUTTER_LEFT.
+    add(ecam, 'INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID', 'INI.TOOLTIPS.FCU_HUD_DECLUTTER_LEFT.ACTION', units='Boolean',
+        set_code=("p0 1 min 0 max (>O:INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID_Position) "
+                  "(O:INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID_Position) s0 l0 0 == if{ 0 (>L:INI_FCU_HUD_DECLUTTER_LEFT_ANIM) g1 } "
+                  "l0 1 == if{ 1 (>L:INI_FCU_HUD_DECLUTTER_LEFT_ANIM) g1 } :1 1 (>O:_ButtonAnimVar)"),
+        init="(L:INI_FCU_HUD_DECLUTTER_LEFT_ANIM) sp0 l0 (>O:INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID_Position)",
+        tt_value=("(B:INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID, Bool) if{ (R:1:COCKPIT.TOOLTIPSV2.GT_STATE_ON) } "
+                  "els{ (R:1:COCKPIT.TOOLTIPSV2.GT_STATE_OFF) }"))
     return f.build()
 
 
@@ -125,7 +133,7 @@ def _by_id():
 
 class GenerateA350MapTests(unittest.TestCase):
     def test_every_control_is_read(self):
-        self.assertEqual(9, len(_map()['controls']))
+        self.assertEqual(10, len(_map()['controls']))
 
     def test_area_and_panel_come_from_the_component_tree(self):
         c = _by_id()['AIRLINER_ELEC_BAT_1']
@@ -164,6 +172,11 @@ class GenerateA350MapTests(unittest.TestCase):
     def test_a_push_that_writes_a_constant_is_a_button(self):
         c = _by_id()['AIRLINER_APU_START']
         self.assertEqual(('button', 1), (c['kind'], c['press']))
+
+    def test_a_key_whose_click_code_flips_an_l_var_is_a_two_position_selector_on_it(self):
+        c = _by_id()['INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID']
+        self.assertEqual(('selector', 'L:INI_FCU_HUD_DECLUTTER_LEFT', {'0': 'OFF', '1': 'ON'}, None),
+                         (c['kind'], c['state_var'], c['positions'], c['press']))
 
     def test_hold(self):
         self.assertEqual(('hold', 2), (_by_id()['AIRLINER_ECAM_ENG']['kind'], _by_id()['AIRLINER_ECAM_ENG']['press']))

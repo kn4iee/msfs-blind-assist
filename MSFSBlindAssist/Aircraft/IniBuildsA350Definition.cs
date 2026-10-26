@@ -45,8 +45,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     private readonly Dictionary<string, List<string>> _panelDisplays;
 
-    /// <summary>A button row's own light (its only lamp): the row reads it, as a sighted pilot sees the button lit.</summary>
-    private readonly Dictionary<string, A350Lamp> _buttonLamps = new(StringComparer.Ordinal);
+    /// <summary>A button row's own lights: the row reads them, as a sighted pilot sees the button lit
+    /// (<see cref="A350ButtonStates.LegendState"/>).</summary>
+    private readonly Dictionary<string, List<A350Lamp>> _buttonLamps = new(StringComparer.Ordinal);
+
+    /// <summary>A button row with no light whose state the cockpit shows elsewhere (<see cref="A350ButtonStates"/>).</summary>
+    private readonly Dictionary<string, A350ButtonState> _buttonStates = new(StringComparer.Ordinal);
 
     /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
     private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
@@ -142,9 +146,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         _lampBoard = new A350LampBoard(_lamps.Values);
 
         foreach (var group in _lamps.Values.Where(l => l.ControlId != null).GroupBy(l => l.ControlId!))
-            if (group.Count() == 1)
-                foreach (var row in _rows.Values.Where(r => r.Action == A350RowAction.Press && r.Control?.Id == group.Key))
-                    _buttonLamps[row.Key] = group.First();
+            foreach (var row in _rows.Values.Where(r => r.Action == A350RowAction.Press && r.Control?.Id == group.Key))
+                _buttonLamps[row.Key] = group.OrderBy(l => l.Key, StringComparer.Ordinal).ToList();
+        foreach (var (rowKey, state) in A350ButtonStates.ByRow)
+            if (_rows.ContainsKey(rowKey) && !_buttonLamps.ContainsKey(rowKey))
+                _buttonStates[rowKey] = state;
 
         void AddDisplay(string panel, string key)
         {
@@ -199,13 +205,26 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => _panelDisplays;
 
-    /// <summary>A button row lit by its own light reads "On" or "Off", as the cockpit shows it.</summary>
+    /// <summary>A button row reads its state as the cockpit shows it: its lit legends, or the state it switches
+    /// (<see cref="A350ButtonStates"/>). Nothing while an input is unread.</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
-        if (_buttonLamps.TryGetValue(varKey, out var lamp) && _sim is { } sim && lamp.IsLit(key => Cached(sim, key)) is bool lit)
+        if (_sim is { } sim && _rows.TryGetValue(varKey, out var row))
         {
-            stateText = lit ? "On" : "Off";
-            return true;
+            if (_buttonLamps.TryGetValue(varKey, out var lamps))
+            {
+                var lit = lamps.Select(l => (l.Name, Lit: l.IsLit(key => Cached(sim, key)))).ToList();
+                if (lit.All(l => l.Lit.HasValue))
+                {
+                    stateText = A350ButtonStates.LegendState(row.Name, lit.Select(l => (l.Name, l.Lit!.Value)).ToList());
+                    return true;
+                }
+            }
+            else if (_buttonStates.TryGetValue(varKey, out var state) && Cached(sim, KeyForInput(state.Var)) is double value)
+            {
+                stateText = state.Word(value);
+                return true;
+            }
         }
         return base.TryDescribeControlState(varKey, out stateText);
     }
@@ -251,8 +270,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (vars.ContainsKey(row.Key))
                 continue;   // never shadow a base variable
             var def = BuildRowVariable(row);
-            if (_buttonLamps.TryGetValue(row.Key, out var buttonLamp))
-                def.StateVariables = buttonLamp.InputKeys;   // the label repaints when its light changes
+            if (_buttonLamps.TryGetValue(row.Key, out var buttonLamps))
+                def.StateVariables = buttonLamps.SelectMany(l => l.InputKeys).Distinct().ToList();   // the label repaints when a light changes
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;
@@ -301,6 +320,18 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     Register(A350PanelLamps.InputKey(input), input, input, null);
                     _lampInputKeys.Add(A350PanelLamps.InputKey(input));   // consumed silently
                 }
+
+        // What a button with no light reads on its label; the label repaints with it.
+        foreach (var (rowKey, state) in _buttonStates)
+        {
+            if (!_keyByName.ContainsKey(state.Var))
+            {
+                Register(A350PanelLamps.InputKey(state.Var), state.Var, state.Var, null);
+                _lampInputKeys.Add(A350PanelLamps.InputKey(state.Var));   // consumed silently
+            }
+            if (vars.TryGetValue(rowKey, out var rowDef))
+                rowDef.StateVariables = new[] { _keyByName[state.Var] };
+        }
 
         // A light streams its rule's first variable under its own key, which carries its status line; its rule's other
         // variables and the bus powers stream once each, consumed silently. A name already batched streams on its own

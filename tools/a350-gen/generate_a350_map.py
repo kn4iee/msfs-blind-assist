@@ -48,6 +48,14 @@ STOCK_COMMANDS = {}
 # Three-position selectors with a NEUTRAL middle that do NOT spring back.
 NOT_SPRING = set()
 
+# Keys whose input event only animates them while their click code flips the state (the HUD declutter keys: the
+# LeftSingle code writes INI_FCU_HUD_DECLUTTER_* 0 or 1; the Set code moves only the key's ANIM). They are two-position
+# selectors on that variable, written by the app the way the click code writes it (live, 1.2.7).
+CLICK_SWITCHES = {
+    'INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID': 'L:INI_FCU_HUD_DECLUTTER_LEFT',
+    'INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID': 'L:INI_FCU_HUD_DECLUTTER_RIGHT',
+}
+
 RANGE_RE = re.compile(r'^\s*p0\s+(\d+)\s+min\s+0\s+max')
 SET_EVENT_RE = re.compile(r'\(>B:([A-Za-z0-9_]+?)_Set\)')
 TOGGLE_RE = re.compile(r'\(L:([^,)]+)(?:,\s*[A-Za-z]+)?\)\s*!\s*\(>L:([^,)]+)')
@@ -166,6 +174,12 @@ def classify(entry, ie, loc):
     s, units, init, tt = ie['set_code'] or '', (ie['units'] or '').lower(), ie['init'] or '', ie['tt_value'] or ''
     writes_l = re.findall(r'\(>L:([^,)]+)', s)
     writes_k = re.findall(r'\(>K:([^,)]+)', s)
+
+    if entry['id'] in CLICK_SWITCHES:
+        entry['kind'] = SELECTOR
+        entry['state_var'] = CLICK_SWITCHES[entry['id']]
+        entry['positions'] = OrderedDict([('0', 'OFF'), ('1', 'ON')])
+        return entry
 
     if entry['id'] in STOCK_COMMANDS:
         var, unit, words = STOCK_COMMANDS[entry['id']]

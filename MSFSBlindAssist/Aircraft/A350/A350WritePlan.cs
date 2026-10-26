@@ -56,6 +56,21 @@ public static class A350WritePlan
     public static readonly IReadOnlyDictionary<string, int> SpringHolds =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Switches whose input event only animates the key while the click code flips the state: the app writes what the
+    /// click code writes. The HUD declutter keys (1.2.7, LeftSingle): the key's ANIM to 0 and a 2-frame TIMER, after
+    /// which the model's update puts the ANIM back to 1, and the declutter itself.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, Func<double, string>> ClickWrites =
+        new Dictionary<string, Func<double, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID"] = p => HudDeclutter("LEFT", p),
+            ["INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID"] = p => HudDeclutter("RIGHT", p),
+        };
+
+    private static string HudDeclutter(string side, double position) =>
+        $"0 (>L:INI_FCU_HUD_DECLUTTER_{side}_ANIM) 2 (>L:INI_FCU_HUD_DECLUTTER_{side}_TIMER) {Format(position)} (>L:INI_FCU_HUD_DECLUTTER_{side})";
+
     public static int HoldMsFor(A350Control control) =>
         TestHoldMs.TryGetValue(control.Id, out var ms) ? ms : HoldMs;
 
@@ -95,6 +110,8 @@ public static class A350WritePlan
                     return A350Plan.Refused(NotAPositionRefusal);
                 if (current is double now && Math.Abs(now - target) < SameValueTolerance)
                     return A350Plan.AlreadyInPosition;
+                if (ClickWrites.TryGetValue(control.Id, out var click))
+                    return Steps(new A350CalcStep(click(position)));
                 return Steps(Set(control, position));
             }
             case A350Kinds.Spring:

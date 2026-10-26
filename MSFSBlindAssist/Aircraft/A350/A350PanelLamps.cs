@@ -222,6 +222,9 @@ public static class A350PanelLamps
             foreach (var (suffix, legend) in Legends)
                 if (other.EndsWith(suffix, StringComparison.Ordinal))
                     return legend;
+        // An engine's hydraulic SUPPLY button: its lower legend is SHUT, lit while its fire shut-off valve is shut.
+        if (node.StartsWith("HYD_SUPPLY_ENG_", StringComparison.Ordinal) && node.Contains("_SEQ2_", StringComparison.Ordinal))
+            return "shut";
         return node.Contains("_SEQ1_", StringComparison.Ordinal) ? "upper legend"
             : node.Contains("_SEQ2_", StringComparison.Ordinal) ? "lower legend"
             : "";

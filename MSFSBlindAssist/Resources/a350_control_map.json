@@ -5577,14 +5577,17 @@
    "area": "EFIS",
    "panel": "FCU",
    "title": "CAPT HUD DECLUTTER",
-   "kind": "button",
+   "kind": "selector",
    "event": "INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID_Set",
-   "state_var": null,
+   "state_var": "L:INI_FCU_HUD_DECLUTTER_LEFT",
    "state_unit": null,
    "scale": null,
-   "positions": {},
+   "positions": {
+    "0": "OFF",
+    "1": "ON"
+   },
    "values": null,
-   "press": 1,
+   "press": null,
    "rest": null,
    "note": null,
    "checklist": null
@@ -5595,14 +5598,17 @@
    "area": "EFIS",
    "panel": "FCU",
    "title": "FO HUD DECLUTTER",
-   "kind": "button",
+   "kind": "selector",
    "event": "INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID_Set",
-   "state_var": null,
+   "state_var": "L:INI_FCU_HUD_DECLUTTER_RIGHT",
    "state_unit": null,
    "scale": null,
-   "positions": {},
+   "positions": {
+    "0": "OFF",
+    "1": "ON"
+   },
    "values": null,
-   "press": 1,
+   "press": null,
    "rest": null,
    "note": null,
    "checklist": null

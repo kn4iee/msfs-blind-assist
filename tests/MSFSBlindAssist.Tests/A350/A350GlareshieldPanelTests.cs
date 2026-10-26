@@ -78,13 +78,38 @@ public class A350GlareshieldPanelTests
         {
             ("Captain HUD brightness", Set, ""), ("First officer HUD brightness", Set, ""),
             ("Captain HUD crosswind mode", Set, OffOn), ("First officer HUD crosswind mode", Set, OffOn),
-            ("Captain HUD declutter", Press, ""), ("First officer HUD declutter", Press, ""),
+            ("Captain HUD declutter", Set, OffOn), ("First officer HUD declutter", Set, OffOn),
         });
         AssertRows("Loudspeakers and Table Lights", new[]
         {
             ("Captain loudspeaker", Set, ""), ("First officer loudspeaker", Set, ""),
             ("Captain sliding table light", Set, ""), ("First officer sliding table light", Set, ""),
         });
+    }
+
+    /// <summary>The HUD is an option (OIS OPTIONS, <c>INI_IS_HUD</c>): without it the cockpit hides its controls. A
+    /// declutter key's input event only animates it; its click code flips the declutter, so the app writes what the
+    /// click code writes.</summary>
+    [Fact]
+    public void Hud_is_an_option_and_its_declutter_is_switched_as_its_click_code_does()
+    {
+        foreach (var id in new[]
+        {
+            "AIRLINER_FCU_HUD_BRIGHTNESS_LEFT", "AIRLINER_FCU_HUD_BRIGHTNESS_RIGHT", "AIRLINER_FCU_HUD_XWIND_LEFT",
+            "AIRLINER_FCU_HUD_XWIND_RIGHT", "INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID", "INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID",
+            "AIRLINER_HUD_LEFT", "AIRLINER_HUD_RIGHT", "AIRLINER_HUD_HANDLE_LEFT", "AIRLINER_HUD_HANDLE_RIGHT",
+        })
+            Assert.Equal(("INI_IS_HUD", "HUD"), (A350Options.For(id)!.Var, A350Options.For(id)!.Name));
+        var declutter = Map.Controls.Single(c => c.Id == "INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID");
+        Assert.Equal(new A350Step[]
+        {
+            new A350CalcStep("0 (>L:INI_FCU_HUD_DECLUTTER_LEFT_ANIM) 2 (>L:INI_FCU_HUD_DECLUTTER_LEFT_TIMER) 1 (>L:INI_FCU_HUD_DECLUTTER_LEFT)"),
+        }, A350WritePlan.ForSet(declutter, 1, 0).Steps);
+        Assert.Equal(new A350Step[]
+        {
+            new A350CalcStep("0 (>L:INI_FCU_HUD_DECLUTTER_LEFT_ANIM) 2 (>L:INI_FCU_HUD_DECLUTTER_LEFT_TIMER) 0 (>L:INI_FCU_HUD_DECLUTTER_LEFT)"),
+        }, A350WritePlan.ForSet(declutter, 0, 1).Steps);
+        Assert.True(A350WritePlan.ForSet(declutter, 1, 1).IsEmpty);
     }
 
     /// <summary>Live 2026-10-26 through MSFSBA's path: every position of the ND mode and range selectors; baro PUSH

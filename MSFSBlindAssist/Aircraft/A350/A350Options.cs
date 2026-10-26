@@ -34,6 +34,15 @@ public static class A350Options
             "AIRLINER_ISIS_KNOB_BUTTON_2", "AIRLINER_ISIS_LS_2", "AIRLINER_ISIS_MENU_2", "AIRLINER_ISIS_MINUS_2",
             "AIRLINER_ISIS_MODE_2", "AIRLINER_ISIS_PLUS_2", "AIRLINER_ISIS_KNOB_2",
         }),
+        // The HUD (the OIS option writes INI_IS_HUD): it picks the cockpit's HUD skeleton (SKEL_INT_COCKPIT_VISIBILITY_
+        // ULR_VIS on (L:INI_IS_HUD) 1 ==, NONULR on 0), the one holding both HUD units, their covers and handles, and
+        // the glareshield's HUD keys.
+        new A350Option("INI_IS_HUD", "HUD", new[]
+        {
+            "AIRLINER_FCU_HUD_BRIGHTNESS_LEFT", "AIRLINER_FCU_HUD_BRIGHTNESS_RIGHT", "AIRLINER_FCU_HUD_XWIND_LEFT",
+            "AIRLINER_FCU_HUD_XWIND_RIGHT", "INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID", "INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID",
+            "AIRLINER_HUD_LEFT", "AIRLINER_HUD_RIGHT", "AIRLINER_HUD_HANDLE_LEFT", "AIRLINER_HUD_HANDLE_RIGHT",
+        }),
     };
 
     private static readonly Dictionary<string, A350Option> ByControl =

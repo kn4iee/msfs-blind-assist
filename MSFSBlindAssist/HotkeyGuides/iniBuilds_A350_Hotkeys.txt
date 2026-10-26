@@ -17,9 +17,17 @@ switching, display power, both side and individual panels) are in the Sections l
 (Ctrl+1): every switch, selector, guarded button and knob, with the panels named and
 ordered as on the A380. A switch the aircraft did not move is said once ("BAT 1 did not
 move"). Each panel's status display (Ctrl+3) reads its lights, the FCU's four windows,
-each side's baro and the ISIS QNH setting as the cockpit shows them, and a button lit by
-its own light reads On or Off on its row. The runway condition (Autobrake panel) is one
-choice from 6 dry to 1 ice: the knob opens its menu on the SD, steps to it and closes it.
+each side's baro and the ISIS QNH setting as the cockpit shows them. A button shows its
+state beside its name wherever the cockpit shows one: its light On or Off, its lit legends
+("EXT 1: Available", "APU agent: Squib and discharged"), or what it switches ("SPD/MACH:
+Knots", "Captain baro unit: Hectopascals", "Speed knob push: Managed"). The runway
+condition (Autobrake panel) is one choice from 6 dry to 1 ice: the knob opens its menu on
+the SD, steps to it and closes it. The HUD is an option on the OIS options page: without it
+the HUD panel's controls say "HUD is not fitted"; each side's declutter is an Off/On switch.
+
+Switches and lights speak when they change on their own ("Seat belts: On", "BAT 1 fault
+light on", "Master caution on"), as the cockpit shows them; what you set yourself is not
+repeated. Each one has its own row in the Monitor Manager (Ctrl+M), where you can mute it.
 
 A knob whose value the cockpit shows is a typed field, as on the other Airbus aircraft: the
 FCU Speed, Heading, Altitude and VS/FPA fields, each side's QNH (in that side's unit), the
@@ -49,6 +57,7 @@ Tools:
   Ctrl+T     Activate/deactivate Takeoff Assistance
   Ctrl+D     Read Distance to Selected Runway
   Ctrl+I     Read ILS Guidance System Report
+  Ctrl+M     A350 Monitor Manager (mute or unmute each switch and light that speaks)
 
 Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Y          Taxi Status (current taxiway, next turn, distance to destination)
