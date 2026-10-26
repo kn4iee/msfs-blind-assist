@@ -32,8 +32,8 @@ python -I diff_snaps.py idle1.json idle2.json --noise noise.txt --learn-noise
 ```
 
 `noise.txt` keeps the names it already has, so start from a copy of `../live/noise.txt` (65 names from session 8)
-and run this again whenever a diff shows something that drifts. Keep the snapshots and your noise list outside the
-repo.
+and run this again whenever a diff shows something that drifts. The snapshots (`*.json`) and your `noise.txt` are
+git-ignored in this folder.
 
 ## 3. Snapshot, act, snapshot, diff
 
