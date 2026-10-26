@@ -927,6 +927,8 @@ public class Bbs757McpTests
     [InlineData(70.0, 110.0)]
     [InlineData(100.0, 40.0)]
     [InlineData(double.NaN, 40.0)]
+    [InlineData(20.0, 90.0)]     // 283 kt in IAS reads ".28": knots, never a Mach the window takes (review finding 1)
+    [InlineData(30.0, 10.0)]     // .30: below the .40 floor
     public void Wheels_that_are_not_a_mach_read_as_unread(double? tenths, double? hundredths)
     {
         Assert.Null(Bbs757Mcp.MachFromDrums(tenths, hundredths));

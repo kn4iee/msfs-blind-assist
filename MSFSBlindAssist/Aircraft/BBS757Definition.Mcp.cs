@@ -110,8 +110,22 @@ public partial class BBS757Definition
     private readonly Dictionary<string, Bbs757RestingValue> _resting =
         A.RestingRows.ToDictionary(k => k, _ => new Bbs757RestingValue(), StringComparer.Ordinal);
 
-    // The rows a call-out depends on, as last delivered: ProcessSimVarUpdate gets no SimConnectManager.
-    private double? _lastBlanked, _lastMachFlag, _lastMachTenths;
+    // The speed rows' inputs, as last delivered: ProcessSimVarUpdate gets no SimConnectManager. A batch
+    // sends them sorted by name, the speed before the mode flag and the blank flag, the Mach's hundredths
+    // wheel before its tenths wheel (review findings 2 and 3), so they are judged together once the whole
+    // batch is in (EvaluateSpeedRows), never as each arrives.
+    private double? _lastBlanked, _lastMachFlag, _lastMachTenths, _lastSpeed, _lastMachHundredths;
+
+    /// <summary>A speed row's input arrived since the last judging.</summary>
+    private bool _speedRowsDirty;
+
+    // The flags the speed rows were last judged under (null: unread), and whether they have been judged.
+    private bool? _judgedBlank, _judgedMach;
+    private bool _speedRowsJudged;
+
+    // The phrases last fed to the speed and Mach rows, so an unchanged value is not fed again (which
+    // would restart its rest).
+    private string? _fedSpeed, _fedMach;
 
     /// <summary>
     /// How long after one of the app's own MCP sets the row it moved is the set's echo: the set spoke the
@@ -132,13 +146,12 @@ public partial class BBS757Definition
     private const int RestTickMs = 250;
 
     /// <summary>
-    /// Plan 05's deliveries (the seam in BBS757Definition.Hooks.cs). The blank flag, the Mach flag and the
-    /// Mach's tenths wheel are kept and consumed silently. The five MCP rows feed their resting values: the
-    /// speed only while the window is open and in IAS, the Mach only in Mach mode; otherwise, and during or
-    /// just after the app's own set of that value, the value counts as spoken (a VNAV target behind a blank
-    /// window, the Mach's IAS equivalent, a set that speaks its own read-back). They are spoken by the
-    /// release, outside MainForm's mute wrap, which checks each row's mute itself ([VAR-8]). A/T arm and the
-    /// disconnect lights speak here, once per change, through the state tracker; MainForm's wrap mutes them.
+    /// Plan 05's deliveries (the seam in BBS757Definition.Hooks.cs). The heading, altitude and V/S rows feed
+    /// their resting values at once. The speed rows' inputs (the speed, both Mach wheels, the Mach flag and
+    /// the blank flag) are only kept: they are judged together by the release once the batch is in
+    /// (<see cref="EvaluateSpeedRows"/>). Resting values are spoken by the release, outside MainForm's mute
+    /// wrap, which checks each row's mute itself ([VAR-8]). A/T arm and the disconnect lights speak here,
+    /// once per change, through the state tracker; MainForm's wrap mutes them.
     /// </summary>
     partial void ProcessAutoflightUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
@@ -146,30 +159,32 @@ public partial class BBS757Definition
         {
             case Bbs757Mcp.IasBlankedVar:
                 _lastBlanked = value;
+                MarkSpeedRowsDirty(announcer);
                 break;
             case A.ModeWatchKey:
                 _lastMachFlag = value;
+                MarkSpeedRowsDirty(announcer);
                 break;
             case A.MachTenthsWatchKey:
                 _lastMachTenths = value;
-                break;
-            case A.HeadingWatchKey:
-                Feed(varName, Bbs757Mcp.HeadingVar, double.IsFinite(value) ? A.HeadingPhrase(value) : null, speakable: true, announcer);
-                break;
-            case A.AltitudeWatchKey:
-                Feed(varName, Bbs757Mcp.AltitudeVar, double.IsFinite(value) ? A.AltitudePhrase(value) : null, speakable: true, announcer);
-                break;
-            case A.VsWatchKey:
-                Feed(varName, Bbs757Mcp.VsVar, double.IsFinite(value) ? A.VsPhrase(value) : null, speakable: true, announcer);
-                break;
-            case A.SpeedWatchKey:
-                Feed(varName, Bbs757Mcp.SpeedVar, double.IsFinite(value) ? A.SpeedPhrase(value) : null,
-                    speakable: _lastBlanked is not >= 0.5 && _lastMachFlag is not >= 0.5, announcer);
+                MarkSpeedRowsDirty(announcer);
                 break;
             case A.MachWatchKey:
-                double? mach = Bbs757Mcp.MachFromDrums(_lastMachTenths, value);
-                Feed(varName, Bbs757Mcp.SpeedVar, mach is double m ? A.MachPhrase(m) : null,
-                    speakable: _lastMachFlag is >= 0.5 && _lastBlanked is not >= 0.5, announcer);
+                _lastMachHundredths = value;
+                MarkSpeedRowsDirty(announcer);
+                break;
+            case A.SpeedWatchKey:
+                _lastSpeed = value;
+                MarkSpeedRowsDirty(announcer);
+                break;
+            case A.HeadingWatchKey:
+                FeedNow(varName, Bbs757Mcp.HeadingVar, double.IsFinite(value) ? A.HeadingPhrase(value) : null, announcer);
+                break;
+            case A.AltitudeWatchKey:
+                FeedNow(varName, Bbs757Mcp.AltitudeVar, double.IsFinite(value) ? A.AltitudePhrase(value) : null, announcer);
+                break;
+            case A.VsWatchKey:
+                FeedNow(varName, Bbs757Mcp.VsVar, double.IsFinite(value) ? A.VsPhrase(value) : null, announcer);
                 break;
             case A.AtArmedKey:
                 SpeakChange(varName, A.AtArmedPhrase(value), announcer);
@@ -177,10 +192,9 @@ public partial class BBS757Definition
             case A.ApDiscLightKey:
             case A.AtDiscLightKey:
                 string what = varName == A.ApDiscLightKey ? "Autopilot" : "Autothrottle";
+                string? on = A.DiscLightPhrase(what, value);
                 // The tracker sees both states, so the light coming on again is a change; only "on" is spoken.
-                if (double.IsFinite(value)
-                    && _changes.Observe(varName, A.DiscLightPhrase(what, value) ?? $"{what} disconnect off", NowMs()) is { } said
-                    && A.DiscLightPhrase(what, value) != null)
+                if (double.IsFinite(value) && _changes.Observe(varName, on ?? $"{what} disconnect off", NowMs()) is { } said && on != null)
                     announcer.Announce(said);
                 break;
             default:
@@ -189,25 +203,78 @@ public partial class BBS757Definition
         handled = true;
     }
 
-    /// <summary>
-    /// One resting row's delivery: a change while it may be spoken, else the value counts as spoken. A row
-    /// whose value is being set by the app (<paramref name="setKey"/> in flight), or was within
-    /// <see cref="OwnSetEchoMs"/>, is the set's. An unreadable value does nothing.
-    /// </summary>
-    private void Feed(string row, string setKey, string? phrase, bool speakable, ScreenReaderAnnouncer announcer)
+    private void FeedNow(string row, string setKey, string? phrase, ScreenReaderAnnouncer announcer)
     {
-        if (phrase == null) return;
+        if (Feed(row, setKey, phrase, speakable: true, NowMs())) StartRestTimer(announcer);
+    }
+
+    private void MarkSpeedRowsDirty(ScreenReaderAnnouncer announcer)
+    {
+        _speedRowsDirty = true;
+        StartRestTimer(announcer);
+    }
+
+    /// <summary>
+    /// The speed and Mach rows, judged once a batch is in (the release's tick; a batch is delivered in one
+    /// go on the UI thread, so a tick never falls inside one). A change of the blank or Mach flag is a
+    /// changeover, VNAV taking or giving back the speed, or Speed Intervene: both rows take their new values
+    /// as spoken and anything waiting is dropped. Otherwise a changed speed is fed while the window is open
+    /// in IAS, a changed Mach while it is open in Mach; at any other time the value counts as spoken (a VNAV
+    /// target behind a blank window, the Mach's IAS equivalent). The Mach is read from both wheels and is
+    /// only a Mach at .40 or more, never the knots the wheels show in IAS.
+    /// </summary>
+    private void EvaluateSpeedRows(long nowMs)
+    {
+        if (!_speedRowsDirty) return;
+        _speedRowsDirty = false;
+
+        bool? blank = On(_lastBlanked), mach = On(_lastMachFlag);
+        string? speed = _lastSpeed is double s && double.IsFinite(s) ? A.SpeedPhrase(s) : null;
+        string? machPhrase = Bbs757Mcp.MachFromDrums(_lastMachTenths, _lastMachHundredths) is double m ? A.MachPhrase(m) : null;
+
+        bool flagsChanged = !_speedRowsJudged || blank != _judgedBlank || mach != _judgedMach;
+        _speedRowsJudged = true;
+        _judgedBlank = blank;
+        _judgedMach = mach;
+
+        if (speed != null && (flagsChanged || speed != _fedSpeed))
+        {
+            _fedSpeed = speed;
+            Feed(A.SpeedWatchKey, Bbs757Mcp.SpeedVar, speed, speakable: !flagsChanged && blank != true && mach != true, nowMs);
+        }
+        if (machPhrase != null && (flagsChanged || machPhrase != _fedMach))
+        {
+            _fedMach = machPhrase;
+            Feed(A.MachWatchKey, Bbs757Mcp.SpeedVar, machPhrase, speakable: !flagsChanged && mach == true && blank != true, nowMs);
+        }
+        if (flagsChanged)
+        {
+            // A value that did not change still loses anything it was waiting to say.
+            if (_fedSpeed != null) _resting[A.SpeedWatchKey].Rebaseline(_fedSpeed);
+            if (_fedMach != null) _resting[A.MachWatchKey].Rebaseline(_fedMach);
+        }
+
+        static bool? On(double? v) => v is double d && double.IsFinite(d) ? d >= 0.5 : null;
+    }
+
+    /// <summary>
+    /// One resting row's new value: a change while it may be spoken (true: it now waits to rest), else it
+    /// counts as spoken. A row whose value is being set by the app (<paramref name="setKey"/> in flight), or
+    /// was within <see cref="OwnSetEchoMs"/>, is the set's. An unreadable value does nothing.
+    /// </summary>
+    private bool Feed(string row, string setKey, string? phrase, bool speakable, long nowMs)
+    {
+        if (phrase == null) return false;
         var resting = _resting[row];
-        long now = NowMs();
         bool ownSet = _mcpSets.ContainsKey(setKey)
-                      || (_ownSetEchoUntil.TryGetValue(setKey, out long until) && now < until);
+                      || (_ownSetEchoUntil.TryGetValue(setKey, out long until) && nowMs < until);
         if (!speakable || ownSet)
         {
             resting.Rebaseline(phrase);
-            return;
+            return false;
         }
-        resting.Changed(phrase, now);
-        if (resting.Pending) StartRestTimer(announcer);
+        resting.Changed(phrase, nowMs);
+        return resting.Pending;
     }
 
     private void StartRestTimer(ScreenReaderAnnouncer announcer)
@@ -226,18 +293,20 @@ public partial class BBS757Definition
     }
 
     /// <summary>
-    /// The release (the timer's tick, or a test with its clock): each resting row whose value has rested
-    /// is spoken, unless the pilot muted its Ctrl+M row, when it is dropped. The timer stops once nothing
-    /// waits. Speaks outside MainForm's mute wrap, so the mute is checked here ([VAR-8]).
+    /// The release (the timer's tick, or a test with its clock): the speed rows are judged if a batch moved
+    /// them (<see cref="EvaluateSpeedRows"/>), then each resting row whose value has rested is spoken, unless
+    /// the pilot muted its Ctrl+M row, when it is dropped. The timer stops once nothing waits. Speaks outside
+    /// MainForm's mute wrap, so the mute is checked here ([VAR-8]).
     /// </summary>
     internal void ReleaseRestedAutoflight(long nowMs, ScreenReaderAnnouncer announcer)
     {
+        EvaluateSpeedRows(nowMs);
         foreach (string row in A.RestingRows)
         {
             if (_resting[row].TakeDue(nowMs) is { } phrase && !IsMonitorMuted(row))
                 announcer.Announce(phrase);
         }
-        if (_resting.Values.All(r => !r.Pending)) _restTimer?.Stop();
+        if (!_speedRowsDirty && _resting.Values.All(r => !r.Pending)) _restTimer?.Stop();
     }
 
     /// <summary>A set of <paramref name="setKey"/> just ended: its row's next deliveries are its echo for a while.</summary>
@@ -248,7 +317,10 @@ public partial class BBS757Definition
     {
         foreach (var resting in _resting.Values) resting.Reset();
         _ownSetEchoUntil.Clear();
-        _lastBlanked = _lastMachFlag = _lastMachTenths = null;
+        _lastBlanked = _lastMachFlag = _lastMachTenths = _lastSpeed = _lastMachHundredths = null;
+        _speedRowsDirty = _speedRowsJudged = false;
+        _judgedBlank = _judgedMach = null;
+        _fedSpeed = _fedMach = null;
         _restTimer?.Stop();
         _restTimer?.Dispose();
         _restTimer = null;

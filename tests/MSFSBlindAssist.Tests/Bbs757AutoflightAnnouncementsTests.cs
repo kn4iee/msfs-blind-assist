@@ -42,6 +42,31 @@ public class Bbs757AutoflightAnnouncementsTests
             Now = ms;
             Def.ReleaseRestedAutoflight(ms, Speech);
         }
+
+        /// <summary>
+        /// One 1 Hz batch at <paramref name="ms"/>: its rows delivered in the order SimConnect sends them
+        /// (sorted ordinally by full name, <see cref="ContinuousBatchLayout.Order"/>), then the release
+        /// timer's next tick. Review finding 2/3: hand-ordered deliveries hid that a row comes BEFORE the
+        /// flag or wheel it depends on.
+        /// </summary>
+        public void Batch(long ms, params (string Key, double Value)[] rows)
+        {
+            var vars = Def.GetVariables();
+            foreach (var (key, value) in rows.OrderBy(r => ContinuousBatchLayout.FullName(vars[r.Key]), StringComparer.Ordinal))
+                At(ms, key, value);
+            Release(ms);
+        }
+    }
+
+    [Fact]
+    public void The_batch_sends_each_dependent_row_before_its_flag()
+    {
+        // The order the fixes below must survive (review finding 2/3), as SimConnect sorts the batch.
+        var vars = new BBS757Definition().GetVariables();
+        string Name(string key) => ContinuousBatchLayout.FullName(vars[key]);
+        Assert.True(string.CompareOrdinal(Name(A.MachWatchKey), Name(A.MachTenthsWatchKey)) < 0);
+        Assert.True(string.CompareOrdinal(Name(A.SpeedWatchKey), Name(A.ModeWatchKey)) < 0);
+        Assert.True(string.CompareOrdinal(Name(A.ModeWatchKey), Name(Bbs757Mcp.IasBlankedVar)) < 0);
     }
 
     [Fact]
@@ -146,16 +171,32 @@ public class Bbs757AutoflightAnnouncementsTests
         Assert.Equal(new[] { "Heading 090" }, rig.Speech.All);
     }
 
+    // ---- The speed and Mach rows, fed in the sim's batch order (review findings 2 and 3) ----------
+
+    private static (string, double)[] IasOpen(double speed) =>
+        new[] { (A.SpeedWatchKey, speed), (A.ModeWatchKey, 0.0), (Bbs757Mcp.IasBlankedVar, 0.0) };
+
+    [Fact]
+    public void A_speed_spun_in_the_cockpit_is_spoken_once_it_rests()
+    {
+        var rig = new Rig();
+        rig.Batch(0, IasOpen(250));
+        rig.Batch(1000, (A.SpeedWatchKey, 260));
+        rig.Release(2499);
+        Assert.Empty(rig.Speech.All);
+
+        rig.Release(2500);
+
+        Assert.Equal(new[] { "MCP speed 260" }, rig.Speech.All);
+    }
+
     [Fact]
     public void Speed_silent_while_blank()
     {
         var rig = new Rig();
-        rig.At(0, Bbs757Mcp.IasBlankedVar, 0);
-        rig.At(0, A.ModeWatchKey, 0);
-        rig.At(0, A.SpeedWatchKey, 250);
-        rig.At(1000, Bbs757Mcp.IasBlankedVar, 1);
-        rig.At(1000, A.SpeedWatchKey, 286.69);   // VNAV's own target behind the blank window
-        rig.At(2000, A.SpeedWatchKey, 287.2);
+        rig.Batch(0, IasOpen(250));
+        rig.Batch(1000, (A.SpeedWatchKey, 286.69), (Bbs757Mcp.IasBlankedVar, 1));   // VNAV engages, its own target
+        rig.Batch(2000, (A.SpeedWatchKey, 287.2));
 
         rig.Release(10_000);
 
@@ -163,53 +204,82 @@ public class Bbs757AutoflightAnnouncementsTests
     }
 
     [Fact]
-    public void Speed_spoken_when_intervene_opens_the_window_on_a_new_speed()
+    public void Intervene_opening_the_window_is_no_spin_but_a_spin_after_it_is()
     {
+        // The press said "Speed Intervene pressed" and the caption says the window is open: the speed the
+        // window opens on is a new baseline, not a knob turn (finding 3's reverse case).
         var rig = new Rig();
-        rig.At(0, Bbs757Mcp.IasBlankedVar, 1);
-        rig.At(0, A.ModeWatchKey, 0);
-        rig.At(0, A.SpeedWatchKey, 283);
-        rig.At(1000, Bbs757Mcp.IasBlankedVar, 0);
-        rig.At(1000, A.SpeedWatchKey, 287);
+        rig.Batch(0, (A.SpeedWatchKey, 283), (A.ModeWatchKey, 0), (Bbs757Mcp.IasBlankedVar, 1));
+        rig.Batch(1000, (A.SpeedWatchKey, 287), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Release(4000);
+        Assert.Empty(rig.Speech.All);
+
+        rig.Batch(5000, (A.SpeedWatchKey, 290));
+        rig.Release(7000);
+
+        Assert.Equal(new[] { "MCP speed 290" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_mach_click_across_a_tenth_is_spoken_whole()
+    {
+        // .79 to .80 in one batch: the hundredths wheel arrives before the tenths wheel (finding 2).
+        var rig = new Rig();
+        rig.Batch(0, (A.MachWatchKey, 100), (A.MachTenthsWatchKey, 70), (A.ModeWatchKey, 1), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Batch(1000, (A.MachWatchKey, 10), (A.MachTenthsWatchKey, 80));
 
         rig.Release(3000);
 
-        Assert.Equal(new[] { "MCP speed 287" }, rig.Speech.All);
+        Assert.Equal(new[] { "MCP Mach 0.80" }, rig.Speech.All);
     }
 
     [Fact]
     public void Mach_only_in_mach_mode()
     {
         var rig = new Rig();
-        rig.At(0, Bbs757Mcp.IasBlankedVar, 0);
-        rig.At(0, A.ModeWatchKey, 0);
-        rig.At(0, A.MachTenthsWatchKey, 20);   // in IAS the wheels show knots: 283
-        rig.At(0, A.MachWatchKey, 90);
-        rig.At(1000, A.MachWatchKey, 100);
+        rig.Batch(0, (A.MachWatchKey, 90), (A.MachTenthsWatchKey, 20), (A.SpeedWatchKey, 283), (A.ModeWatchKey, 0), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Batch(1000, (A.MachWatchKey, 100), (A.SpeedWatchKey, 284));   // knots on the wheels: never a Mach
         rig.Release(4000);
-        Assert.Empty(rig.Speech.All);
-
-        rig.At(5000, A.ModeWatchKey, 1);
-        rig.At(5000, A.MachTenthsWatchKey, 70);
-        rig.At(5000, A.MachWatchKey, 40);      // .73: the first Mach is a baseline
-        rig.At(6000, A.MachWatchKey, 50);      // .74
-        rig.Release(8000);
-
-        Assert.Equal(new[] { "MCP Mach 0.74" }, rig.Speech.All);
+        Assert.Equal(new[] { "MCP speed 284" }, rig.Speech.All);
     }
 
     [Fact]
-    public void Speed_in_mach_mode_is_the_machs_equivalent_and_silent()
+    public void Ias_to_mach_in_one_batch_says_nothing()
+    {
+        // The bug becomes the Mach's IAS equivalent before the mode flag arrives (finding 3).
+        var rig = new Rig();
+        rig.Batch(0, (A.MachWatchKey, 90), (A.MachTenthsWatchKey, 20), (A.SpeedWatchKey, 283), (A.ModeWatchKey, 0), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Batch(1000, (A.MachWatchKey, 40), (A.MachTenthsWatchKey, 70), (A.SpeedWatchKey, 281.1), (A.ModeWatchKey, 1));
+
+        rig.Release(10_000);
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void Mach_to_ias_in_one_batch_says_nothing()
+    {
+        // The wheels show knots before the mode flag says IAS (finding 3).
+        var rig = new Rig();
+        rig.Batch(0, (A.MachWatchKey, 40), (A.MachTenthsWatchKey, 70), (A.SpeedWatchKey, 281.1), (A.ModeWatchKey, 1), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Batch(1000, (A.MachWatchKey, 90), (A.MachTenthsWatchKey, 20), (A.SpeedWatchKey, 283), (A.ModeWatchKey, 0));
+
+        rig.Release(10_000);
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_mach_spun_after_the_changeover_is_spoken()
     {
         var rig = new Rig();
-        rig.At(0, Bbs757Mcp.IasBlankedVar, 0);
-        rig.At(0, A.ModeWatchKey, 1);
-        rig.At(0, A.SpeedWatchKey, 281.1);
-        rig.At(1000, A.SpeedWatchKey, 285.3);
+        rig.Batch(0, (A.MachWatchKey, 90), (A.MachTenthsWatchKey, 20), (A.SpeedWatchKey, 283), (A.ModeWatchKey, 0), (Bbs757Mcp.IasBlankedVar, 0));
+        rig.Batch(1000, (A.MachWatchKey, 40), (A.MachTenthsWatchKey, 70), (A.SpeedWatchKey, 281.1), (A.ModeWatchKey, 1));
+        rig.Batch(2000, (A.MachWatchKey, 50), (A.SpeedWatchKey, 285.3));   // .74; the equivalent moves too
 
         rig.Release(5000);
 
-        Assert.Empty(rig.Speech.All);
+        Assert.Equal(new[] { "MCP Mach 0.74" }, rig.Speech.All);
     }
 
     [Fact]

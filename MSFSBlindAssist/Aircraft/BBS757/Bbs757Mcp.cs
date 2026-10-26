@@ -458,13 +458,14 @@ public static class Bbs757Mcp
     /// <summary>
     /// The Mach the speed window's wheels show: tenths from the hundreds wheel (10·d), hundredths from
     /// the tens wheel (10·(d+1)); measured at FL290, .40 to .95 (flight-05.md M1). Null when either is
-    /// unread, not a digit (a wheel caught between digits reads between multiples of 10), or the result is
-    /// not a Mach the window can show.
+    /// unread, not a digit (a wheel caught between digits reads between multiples of 10), or below the
+    /// .40 floor: the wheels showing knots (100-399 kt) decode as .10-.39, as they do for a second or two
+    /// after an IAS/MACH changeover, and must never be taken for a Mach.
     /// </summary>
     public static double? MachFromDrums(double? tenthsWheel, double? hundredthsWheel)
     {
         if (Digit(tenthsWheel, 0) is not int tenths || Digit(hundredthsWheel, 1) is not int hundredths) return null;
-        return tenths == 0 ? null : (tenths * 10 + hundredths) / 100.0;
+        return tenths < 4 ? null : (tenths * 10 + hundredths) / 100.0;
 
         // A wheel position 10·(d + offset) within 1 of a multiple of 10, for a digit d of 0 to 9.
         static int? Digit(double? wheel, int offset)

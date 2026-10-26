@@ -121,14 +121,30 @@ public class Bbs757MachTests
 
         public double? MachFlag = 1;
         public int Hundredths = 73;     // the Mach target, in hundredths
+        public int Knots = 283;         // the IAS target the wheels show in IAS (flight-05.md: 20/90/40 at 283)
         public bool WheelsReadable = true;
         public bool ChangeoverWorks = true;
+        public int RollDelayMs;         // the wheels show a change this long after it (flight-05.md: 1-2 s)
         public int Peak;
         public readonly List<string> Writes = new();
         public long Now;
 
         private long? _lastBurst;
         private int _burstEvents;
+        private int _shownDuringRoll;   // what the wheels show until _rollUntil
+        private long _rollUntil;
+        private long _machShownAt;      // the wheels show Mach, not knots, from this time
+
+        private int Displayed() => Now < _rollUntil ? _shownDuringRoll : Hundredths;
+
+        private (double Tenths, double Hundredths) Wheels()
+        {
+            int shown = Displayed();
+            bool mach = MachFlag is >= 0.5 && Now >= _machShownAt;
+            return mach
+                ? (shown / 10 * 10, (shown % 10 + 1) * 10)
+                : (Knots / 100 * 10, (Knots / 10 % 10 + 1) * 10);
+        }
 
         public McpIo Io => new()
         {
@@ -138,8 +154,8 @@ public class Bbs757MachTests
                 double? value = key switch
                 {
                     Bbs757Mcp.MachModeVar => MachFlag,
-                    Bbs757Mcp.MachTenthsDrumVar => WheelsReadable ? Hundredths / 10 * 10 : null,
-                    Bbs757Mcp.MachHundredthsDrumVar => WheelsReadable ? (Hundredths % 10 + 1) * 10 : null,
+                    Bbs757Mcp.MachTenthsDrumVar => WheelsReadable ? Wheels().Tenths : null,
+                    Bbs757Mcp.MachHundredthsDrumVar => WheelsReadable ? Wheels().Hundredths : null,
                     "BBS_TARGET_MACH" => 0,
                     _ => null,
                 };
@@ -148,9 +164,14 @@ public class Bbs757MachTests
             Write = rpn =>
             {
                 Writes.Add(rpn);
-                if (rpn == Changeover.Down && ChangeoverWorks && MachFlag is double f) MachFlag = f > 0.5 ? 0 : 1;
+                if (rpn == Changeover.Down && ChangeoverWorks && MachFlag is double f)
+                {
+                    MachFlag = f > 0.5 ? 0 : 1;
+                    _machShownAt = Now + RollDelayMs;
+                }
                 var loop = BurstLoop.Match(rpn);
                 if (!loop.Success) return;
+                int before = Displayed();
                 if (_lastBurst is not long last || Now - last >= 300) _burstEvents = 0;
                 _lastBurst = Now;
                 int sign = loop.Groups[2].Value == "INC" ? 1 : -1;
@@ -160,6 +181,11 @@ public class Bbs757MachTests
                     int step = _burstEvents <= 10 ? 1 : _burstEvents <= 25 ? 2 : 3;
                     Hundredths = Math.Clamp(Hundredths + sign * step, 40, 95);
                     Peak = Math.Max(Peak, Hundredths);
+                }
+                if (RollDelayMs > 0)
+                {
+                    _shownDuringRoll = before;
+                    _rollUntil = Now + RollDelayMs;
                 }
             },
             Delay = (ms, ct) =>
@@ -206,28 +232,78 @@ public class Bbs757MachTests
         Assert.Equal(86, mcp.Peak);   // a burst of 30 would have run to .95 (measured)
     }
 
-    [Fact]
-    public async Task A_burst_that_lands_short_is_corrected_in_linear_bursts()
+    /// <summary>The fake's MCP with every speed write passed through <paramref name="after"/> once it has landed.</summary>
+    private static McpIo Tampered(FakeMcp mcp, Action<string> after)
     {
-        // .41 to .60 with one event of the first burst lost: the remainder is sent again, 1 hundredth an event.
-        var mcp = new FakeMcp { Hundredths = 41 };
         var io = mcp.Io;
-        bool dropped = false;
-        var lossy = new McpIo
-        {
-            Read = io.Read,
-            Delay = io.Delay,
-            Write = rpn =>
-            {
-                io.Write(rpn);
-                if (!dropped && rpn.Contains("AP_SPD_VAR_INC")) { dropped = true; mcp.Hundredths--; }
-            },
-        };
+        return new McpIo { Read = io.Read, Delay = io.Delay, Write = rpn => { io.Write(rpn); after(rpn); } };
+    }
 
-        string said = await Bbs757Mach.SetMachAsync(lossy, 60, default);
+    [Fact]
+    public async Task An_overshoot_is_brought_back_in_a_linear_burst()
+    {
+        // .41 to .60 with one hundredth too many landing: the correction goes the other way, 1 an event.
+        var mcp = new FakeMcp { Hundredths = 41 };
+        bool extra = false;
+        var io = Tampered(mcp, rpn => { if (!extra && rpn.Contains("AP_SPD_VAR_INC")) { extra = true; mcp.Hundredths++; } });
 
-        Assert.Equal("Mach 0.60", said);
-        Assert.All(mcp.Bursts.Skip(1), b => Assert.True(int.Parse(b.Split(' ')[0], CultureInfo.InvariantCulture) <= Bbs757Mcp.LinearBurstMax));
+        Assert.Equal("Mach 0.60", await Bbs757Mach.SetMachAsync(io, 60, default));
+        Assert.Contains(Bbs757Mcp.SpeedBurstCode(false, 1), mcp.Bursts);
+    }
+
+    [Fact]
+    public async Task A_short_landing_is_never_chased_past_the_planned_count()
+    {
+        // A burst that seems to land short may still be landing: sending more than the planned difference in
+        // its direction could carry the target past what was typed (and near .86, past the aircraft's limit).
+        var mcp = new FakeMcp { Hundredths = 41 };
+        bool lost = false;
+        var io = Tampered(mcp, rpn => { if (!lost && rpn.Contains("AP_SPD_VAR_INC")) { lost = true; mcp.Hundredths--; } });
+
+        Assert.Equal("Mach 0.59", await Bbs757Mach.SetMachAsync(io, 60, default));   // the honest read-back
+        Assert.True(mcp.Peak <= 60);
+        // Only the plan for 19: a bulk of 14 events (18 hundredths) and its rest of 1; no correction after.
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(true, 14), Bbs757Mcp.SpeedBurstCode(true, 1) }, mcp.Bursts);
+    }
+
+    [Fact]
+    public async Task A_mach_typed_in_knots_waits_for_the_wheels_to_show_mach()
+    {
+        // Review finding 1: in IAS at 283 kt the wheels read 20/90 (".28"); they roll to the Mach 1-2 s after
+        // the changeover (flight-05.md). Planned from ".28", .78 would send +50 and run the target to .95.
+        var mcp = new FakeMcp { MachFlag = 0, Hundredths = 73, Knots = 283, RollDelayMs = 1500 };
+        Assert.Null(await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach: true, Changeover, () => { }, default));
+
+        string said = await Bbs757Mach.SetMachAsync(mcp.Io, 78, default);
+
+        Assert.Equal("Mach 0.78", said);
+        Assert.True(mcp.Peak <= 78, $"the target reached .{mcp.Peak}");
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(true, 5) }, mcp.Bursts);
+    }
+
+    [Fact]
+    public async Task A_burst_is_judged_only_once_the_wheels_have_rolled()
+    {
+        // Review finding 4: the wheels show a burst 1-2 s after it; two reads of the old digits must not
+        // count as "it did not move", nor send a correction on top of the burst still rolling in.
+        var mcp = new FakeMcp { Hundredths = 70, RollDelayMs = 2000 };
+
+        string said = await Bbs757Mach.SetMachAsync(mcp.Io, 78, default);
+
+        Assert.Equal("Mach 0.78", said);
+        Assert.Single(mcp.Bursts);
+        Assert.Equal(78, mcp.Peak);
+    }
+
+    [Fact]
+    public async Task Wheels_that_never_show_a_mach_send_nothing()
+    {
+        var mcp = new FakeMcp { MachFlag = 1, Hundredths = 73, RollDelayMs = 60_000 };
+        mcp.Io.Write(Changeover.Down);   // flag to 0
+        mcp.Io.Write(Changeover.Down);   // and back to 1: the wheels keep showing knots for a minute
+
+        Assert.Equal("Mach unavailable", await Bbs757Mach.SetMachAsync(mcp.Io, 78, default));
+        Assert.Empty(mcp.Bursts);
     }
 
     [Fact]

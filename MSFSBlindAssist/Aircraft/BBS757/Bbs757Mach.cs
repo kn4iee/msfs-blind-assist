@@ -37,11 +37,17 @@ public static class Bbs757Mach
     public const int ChangeoverWaitMs = 2000;
 
     /// <summary>
-    /// The wait between a Mach burst and the first read that judges it: the wheels moved within 1-2 s of
-    /// a burst in flight (measured through the MCP tool, whose own round trip is part of that), so longer
-    /// than the knots' <see cref="Bbs757Mcp.StepSettleMs"/>.
+    /// The Mach is judged from the window's wheels, which show a burst or a changeover 1-2 s after it
+    /// (flight-05.md M1, measured through the MCP tool, whose own round trip is part of that). After a
+    /// burst they are read every <see cref="WheelPollMs"/> until they move, for up to <see cref="WheelWaitMs"/> ...
     /// </summary>
-    public const int MachStepSettleMs = 1500;
+    public const int WheelPollMs = 250;
+
+    /// <summary>... then read again <see cref="WheelSettleMs"/> apart until two reads agree (also up to <see cref="WheelWaitMs"/>).</summary>
+    public const int WheelSettleMs = 500;
+
+    /// <summary>The longest wait for the wheels to move, or to agree.</summary>
+    public const int WheelWaitMs = 3000;
 
     /// <summary>The last burst event planned in BlueBird's measured tiers; events past 25 were not measured cleanly.</summary>
     private const int MeasuredBurstMax = 25;
@@ -134,58 +140,90 @@ public static class Bbs757Mach
 
     /// <summary>
     /// Sets the Mach target to <paramref name="target"/> hundredths with the window already in Mach, the
-    /// knots set's closed loop in hundredths: read the wheels, send <see cref="Bursts"/>' bulk, wait
-    /// <see cref="Bbs757Mcp.SpeedBurstGapMs"/> and send its rest, wait <see cref="MachStepSettleMs"/>, read
-    /// until two reads agree, and correct a shrinking remainder in linear bursts of at most
-    /// <see cref="Bbs757Mcp.LinearBurstMax"/>, up to <see cref="Bbs757Mcp.MaxSpeedCorrections"/> times.
-    /// Speaks the Mach read last; unread wheels send nothing ("Mach unavailable").
+    /// knots set's closed loop in hundredths, judged from the wheels (which lag; review finding 1 and 4):
+    /// <list type="number">
+    /// <item>Read the wheels until they show a Mach that holds (<see cref="ReadSettledMachAsync"/>): right
+    /// after a changeover they still show knots, which never decode as a Mach. None within
+    /// <see cref="WheelWaitMs"/>: nothing is sent ("Mach unavailable").</item>
+    /// <item>Send <see cref="Bursts"/>' bulk, wait <see cref="Bbs757Mcp.SpeedBurstGapMs"/>, send its rest.</item>
+    /// <item>Wait for the wheels to move off the old Mach, then for two agreeing reads.</item>
+    /// <item>Correct a shrinking remainder in linear bursts of at most <see cref="Bbs757Mcp.LinearBurstMax"/>,
+    /// up to <see cref="Bbs757Mcp.MaxSpeedCorrections"/> times, but never more in the set's direction than
+    /// the planned difference in all: a burst that seems short may still be rolling in, and chasing it could
+    /// carry the target past what was typed (near .86, past the aircraft's limit, which BlueBird does not
+    /// stop). An overshoot is brought back.</item>
+    /// </list>
+    /// Speaks the Mach read last.
     /// </summary>
     public static async Task<string> SetMachAsync(McpIo io, int target, CancellationToken ct)
     {
-        double? current = await ReadMachAsync(io, ct);
+        double? current = await ReadSettledMachAsync(io, ct);
         if (current is not double cur) return Phrase(null);
 
         int diff = target - Hundredths(cur);
+        if (diff == 0) return Phrase(current);
+        bool up = diff > 0;
         int remaining = Math.Abs(diff);
-        if (remaining == 0) return Phrase(current);
+        int netToward = remaining;   // hundredths sent in the set's direction, less those sent back
 
         ct.ThrowIfCancellationRequested();
         var (bulk, rest) = Bursts(remaining);
-        if (bulk > 0) io.Write(Bbs757Mcp.SpeedBurstCode(diff > 0, bulk));
+        if (bulk > 0) io.Write(Bbs757Mcp.SpeedBurstCode(up, bulk));
         if (rest > 0)
         {
             await io.Delay(Bbs757Mcp.SpeedBurstGapMs, ct);
-            await Bbs757Mcp.SendLinearBurstsAsync(io, diff > 0, rest, ct);
+            await Bbs757Mcp.SendLinearBurstsAsync(io, up, rest, ct);
         }
 
         double? now = current;
         for (int corrections = 0; ; corrections++)
         {
-            await io.Delay(MachStepSettleMs, ct);
-            now = await ReadMachSettledAsync(io, ct);
+            now = await ReadAfterRollAsync(io, now, ct);
             if (now is not double n) break;
 
             int left = target - Hundredths(n);
             if (left == 0 || Math.Abs(left) >= remaining || corrections == Bbs757Mcp.MaxSpeedCorrections) break;
 
+            bool toward = left > 0 == up;
+            int send = toward ? Math.Min(Math.Abs(left), Math.Abs(diff) - netToward) : Math.Abs(left);
+            if (send <= 0) break;
+            netToward += toward ? send : -send;
             remaining = Math.Abs(left);
-            await Bbs757Mcp.SendLinearBurstsAsync(io, left > 0, remaining, ct);
+            await Bbs757Mcp.SendLinearBurstsAsync(io, left > 0, send, ct);
         }
         return Phrase(now);
     }
 
-    /// <summary>The wheels read until two reads <see cref="Bbs757Mcp.SettlePollMs"/> apart agree, as the knots are.</summary>
-    private static async Task<double?> ReadMachSettledAsync(McpIo io, CancellationToken ct)
+    /// <summary>
+    /// The wheels after a burst: read every <see cref="WheelPollMs"/> until they show something other than
+    /// <paramref name="before"/> (or <see cref="WheelWaitMs"/> passes: the burst did not move them), then
+    /// until a Mach holds.
+    /// </summary>
+    private static async Task<double?> ReadAfterRollAsync(McpIo io, double? before, CancellationToken ct)
+    {
+        for (int waited = 0; waited < WheelWaitMs; waited += WheelPollMs)
+        {
+            await io.Delay(WheelPollMs, ct);
+            if (await ReadMachAsync(io, ct) != before) break;
+        }
+        return await ReadSettledMachAsync(io, ct);
+    }
+
+    /// <summary>
+    /// A Mach the wheels hold: two reads <see cref="WheelSettleMs"/> apart that agree and decode as a Mach.
+    /// Null when none holds within <see cref="WheelWaitMs"/> (still rolling, or showing knots).
+    /// </summary>
+    private static async Task<double?> ReadSettledMachAsync(McpIo io, CancellationToken ct)
     {
         double? previous = await ReadMachAsync(io, ct);
-        for (int waited = 0; waited < Bbs757Mcp.SettleGiveUpMs; waited += Bbs757Mcp.SettlePollMs)
+        for (int waited = 0; waited < WheelWaitMs; waited += WheelSettleMs)
         {
-            await io.Delay(Bbs757Mcp.SettlePollMs, ct);
+            await io.Delay(WheelSettleMs, ct);
             double? next = await ReadMachAsync(io, ct);
-            if (next == previous) return next;
+            if (next != null && next == previous) return next;
             previous = next;
         }
-        return previous;
+        return null;
     }
 
     private static int Hundredths(double mach) => (int)Math.Round(mach * 100, MidpointRounding.AwayFromZero);
