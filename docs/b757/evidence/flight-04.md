@@ -714,3 +714,324 @@ from AUTO to MAN (`B757_MCP_VOR1_MODE_AUTO` 1 to 0; the VOR/DME panel read `117.
 11:47:48 and 11:48:32 after putting the knob back from APP to MAP with a direct write. Not reproduced; plausibly
 BlueBird's auto-tuning logic around EFIS modes (manual p. 94: AUTO tuning only in MAP or PLAN). It was put back with the
 VOR/DME 1 button. Check VOR AUTO afterwards in any experiment that writes the knob.
+
+## Round 4: ILS step timing and localizer detection
+
+Measured 13:09-13:34. Same aircraft and gate, MSFSBA closed, the owner's KATL-KMIA route untouched (no CDU key
+pressed). Start (13:09:19): ILS PARK with fraction .10, proved on the gauge (MCP `-1` to 111.10 at 13:14:39, `+1` to
+PARK at 13:14:49); `BBS_ILS_COURSE` 0, `BBS_LOC_DEV_DEG` 0, SADI selector 0, `B757_SADI_LOC` 0, ND MAP
+(`B757_ADI_1_CTR_KNOB` 2), VOR L and R AUTO. The camera was still round 3's instrument view 1 (type 2 index 1,
+substate 5) and was not touched: that view shows the upper EICAS and the SADI, so the ILS gauge overlay (round 1's:
+`WasmGaugeLiveView_12` over the upper EICAS in VCockpit14) was read from a window capture at (840,545) 340 x 65.
+
+Method:
+- Writes: the MCP calculator (`msfs_execute_calculator_code`, every string unique `n 0 * ...`) where timing did not
+  matter; a scratch SimConnect harness where it did. The harness sends what the app sends (default channel
+  `MobiFlight.Command`, `MF.SimVars.Set.<seq> 0 * <rpn>`, a 1024-byte string, through the app's own `SimConnect.dll`)
+  with a wall-clock timestamp, and reads the same L:vars through a SimConnect data definition every sim frame
+  (`SIM_FRAME`, unit `number`: the app's read path). MCP calls take seconds and cannot be spaced 50-150 ms.
+- Reads: an in-page poll in the BBSTablet view (a `setTimeout` loop recording `Date.now()` and `E:SIMULATION TIME`,
+  started and read back by separate `coherent-eval.ps1` calls). A 20 ms request runs once per sim frame (21-45 ms
+  apart, median 34, once 192 ms in the hitch below); a 100 ms request runs every 100-138 ms. Sim time ran with wall
+  time (87.546 s in 87.546 s). About 30-31 frames a second (SimConnect frame median 33.4 ms); one 192 ms frame in a
+  110 s window (13:15:21.8).
+- The Coherent inspector does not await promises (an `awaitPromise` evaluate returned `{}` at once): a timed poll has
+  to be started, left running in the page and read back later.
+
+### F1. ILS knob steps through the calculator
+
+F1.1 Consume time (13 MCP writes, 13:14:35-13:15:58): 7 WHOLE +1/-1 (PARK to 111.10 and back x3, then PARK to
+108.10) and 6 FRAC +1/-1 at 108.10 (.15 and back to .10 x3). Each request read non-zero in exactly one in-page sample
+and 0 in the next: first non-zero to first 0 = **29 / 33 / 35 ms** (min / median / max), i.e. one sample, one frame. A
+request is consumed in the frame it lands in or the next. **Through SimConnect it is never seen**: the per-frame
+data-definition read showed the request at 0 in all 8,485 frames of every harness run (77 writes in their windows).
+Every step landed on the gauge.
+
+F1.2 Bursts of 6 FRAC +1 (harness; every result read on the gauge):
+
+| Run (sends) | Spacing | Gauge, start to end | Steps applied | In-page view |
+|---|---|---|---|---|
+| handshake, 13:19:28.96-29.46 | each sent once the page saw the previous request non-zero and then 0 (through the Coherent inspector): 99-102 ms | 108.10 to **108.70** | **6/6** | arm 23-38 ms, send to non-zero 28-29 ms, non-zero to 0 32-38 ms |
+| 13:19:48.58-49.33 | 150 ms | 108.70 to **108.30** | **6/6** | six separate one-frame pulses |
+| 13:20:10.31-10.56 | 50 ms | 108.30 to **108.90** | **6/6** | pulses run together (non-zero for 2 samples at a time) |
+| extra, 13:20:47.71-47.81 | 20 ms | 108.90 to 108.30 (6 steps: 108.50) | **4/6** | non-zero from +26 to +158 ms |
+| extra, 13:21:09.164-.169 | 1 ms | 108.30 to 108.35 (6 steps: 108.95) | **1/6** | one pulse |
+
+F1.3 One request of 2 (`4301 0 * 2 (>L:B757_ILS_FREQ_FRAC_INC)`, 13:21:49): it read 2 for one sample, then 0, and the
+gauge moved **one** channel, 108.35 to 108.50. Put back with FRAC -1 to 108.35 (13:22:17).
+
+F1.4 FRAC -1 x3 and WHOLE -1 (harness, 400 ms apart) to PARK (13:22:34); proof -1 to 111.10, +1 to PARK (13:22:41,
+13:22:47). Side effect, expected: the 50 ms burst ended on 108.90 (KATL 09R), so `BBS_LOC_DEV_DEG` latched -18.498 as
+in round 2; left through F2 and written 0 at the end.
+
+Verdict F1:
+- A request is consumed within one frame. **One write is one step whatever its size** (+2 moved one channel), so
+  steps cannot be batched into one write, and **two writes landing in the same frame count once** (1 ms apart: 1 of
+  6; 20 ms: 4 of 6). 50 ms (1.5 frames here) and 150 ms lost nothing; nor did the handshake.
+- The safe gap is "more than one frame". 50 ms leaves no margin below 20 fps, and one long frame (192 ms was seen)
+  would bring two queued writes into the same frame. Proposal: 150 ms or more between steps (2 frames down to
+  ~13 fps). The handshake through the BBSTablet view (about 100 ms a step) does not depend on the frame time, but needs
+  the Coherent link the app already has for the CDU tablet agent.
+- The app cannot confirm a step, or handshake, through SimConnect: the request never reads non-zero there.
+
+### F2. Localizer detection after tuning, SADI selector on
+
+The SADI ILS selector was set with MCP `4501 0 * 1 (>L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR)` (13:23:31; read back 1;
+the knob is drawn turned from OFF to ILS, the panel labels being OFF / ILS / B/CRS). PARK to 110.35 by harness
+(13:23:48-49, confirmed on the gauge). Each measured step was a harness write, with the page poll (100 ms) and the
+harness's per-frame SimConnect read running. Times are from the step's send.
+
+| Step (send) | `BBS_LOC_DEV_DEG` | `B757_SADI_LOC` | `...STBY_GYRO_knob` | `B757_SADI_LOC_FLAG` |
+|---|---|---|---|---|
+| F2.1 110.35 to 110.50 (13:24:06.99) | -18.498 to -6.643 at **+2577 ms** | 0 to 3.5 at +2611 (one frame later), 25 at +2.91 s, 47.5 at +4.0 s, 50.0 by ~+7 s | 0 to 0.38 at +2641, then 4.75 | 0 throughout |
+| F2.2 110.50 to 110.55 (13:25:02.11) | last change at +17 ms, stays -6.6425 | falls from **+86 ms**: < 25 at 0.39 s, < 10 at 0.86, < 5 at 1.19, < 2 at 1.63, **< 1 at 1.96**, < 0.5 at 2.30, **< 0.1 at 3.07**, < 0.01 at 4.17, < 0.001 at 5.28 | the same curve (= SADI x 0.095) | 0 |
+| F2.3 110.55 to 110.50 (13:25:55.01) | live again at **+3088 ms** (-6.642504277 to -6.642504350) | 7.2 at +3148 (page), 32 at +3.6 s, 49.9 at +6.0 s | follows | 0 |
+| F2.4 108.75 to 108.90 (13:26:52.74) | -6.643 to -18.498 at **+2662 ms** | 3.2 at +2700, 25 at ~+3.0 s, 50 at ~+8.4 s | follows | 0 |
+
+The page poll agreed within one sample (DEV +2571 / +3148 / +2653, SADI +2702 / +3148 / +2988). F2.4 was reached by
+WHOLE -1 x2, FRAC +1 x3 (110.50 to 108.75, 13:26:27-29, nothing received on the way) and 8 s of decay. Every tuned
+state was confirmed on the gauge.
+
+- **`B757_SADI_LOC` is a first-order lag toward a target** (time constant 483 ms, half-life 335 ms, fitted over 260
+  frames of F2.2; the rise has the same time constant): 50 on 09L and 09R, about 19 on 08R. After a loss it heads for
+  0 within 2-3 frames (76-105 ms in 6 switches); after a tuning it moves up only when a station is acquired.
+- **`BBS_LOC_DEV_DEG` is live while a localizer is received and freezes on loss**: while received it changes every
+  frame in the 8th-10th decimal (167, 157 and 165 distinct values in F2.1, F2.3, F2.4) and it stops within a frame of
+  the loss. On re-reception of the same station it moves only in the 8th decimal, so to any tolerance of 1e-6 or more
+  (the app's is 0.001, [SIM-7]) it does not change. At rest on the ground the live changes are about 1e-9 degrees a
+  second; in flight they should move visibly (unmeasured).
+
+Extra, the acquisition delay (same knob writes): 108.90 (09R) to 109.90 (08R) and back by WHOLE +1/-1, the delay taken
+to the `BBS_LOC_DEV_DEG` jump.
+- 6 switches 6.0 s apart (13:28:44-13:29:14): 2790, 2816, 2844, 2872, 2900, 2928 ms (+28 ms each).
+- 8 switches 6.4 s apart (13:30:49-13:31:34): 830, 462, 91, 2745, 2380, 2005, 1633, 1264 ms (-372 ms each, wrapping).
+- Acquisitions were always exactly 186 or 279 frames apart (multiples of 93 frames, 3013-3018 ms here). **A new
+  localizer is picked up only at a periodic scan, every ~3.0 s**: the delay after the last step is anywhere from about
+  0.1 to 3.1 s (91-3088 ms over 17 tunings). Whether the scan counts frames (93) or seconds cannot be told at a steady
+  frame rate; if frames, it stretches at a lower frame rate (about 4.7 s at 20 fps).
+- So F2.3's slower return (3.09 s against F2.1's 2.58 s) is the scan's phase, not something about re-reception.
+
+F2.5 MCP calculator read while 108.90 was received (13:27:19; live 50.0 in the page and through SimConnect):
+`(L:B757_SADI_LOC)` gave **100** (twice; `msfs_get_lvar` 100; `(L:B757_SADI_LOC, number)` 1000). The same MCP
+session read `BBS_LOC_DEV_DEG` 0 (live -18.498), the gyro knob 0 (live 4.75) and `B757_ADI_1_CTR_KNOB` 0 (live 2).
+After `msfs_disconnect` and `msfs_connect` (13:28): `(L:B757_SADI_LOC)` **50**, `(L:BBS_LOC_DEV_DEG)` -18.49825,
+`(L:B757_ADI_1_CTR_KNOB)` 2. The calculator read returns the live value; the MCP's earlier session had gone stale (the
+known MCP problem). **The app's own path, a SimConnect data definition on `L:B757_SADI_LOC`, returned the live value
+in every frame** (49.999999999999964, identical to the page; the same for the gyro knob and `BBS_LOC_DEV_DEG`).
+
+Verdict F2:
+- Detection: a received localizer appears 0.1-3.1 s after the step that tunes it (the ~3 s scan), `BBS_LOC_DEV_DEG`
+  first and `B757_SADI_LOC` one frame later (3.2-3.5 in its first frame, 25 or more after 0.33 s on 09L/09R).
+  `B757_SADI_LOC_FLAG` never moved: no use.
+- "Gone": from 50 the SADI value is below 1.0 1.96 s after the step and below 0.1 at 3.07 s (from 19, below 1.0 after
+  about 1.5 s).
+- Proposal: read `B757_SADI_LOC` **3.5 s after the last tuning step** (the 3.0 s scan plus margin; longer at a low
+  frame rate if the scan counts frames): **1.0 or more = received**, less = not received. At 3.5 s an old station's
+  value has fallen from 50 to about 0.04, and a station acquired at the latest (3.1 s) is already above 10 (08L/08R
+  targets ~18-19, 09L/09R 50).
+- `BBS_LOC_DEV_DEG` says which station: it takes the new station's value at acquisition (09L -6.643, 09R -18.498,
+  08R 18.227) and keeps it after a loss.
+- The SADI value needs the SADI's ILS selector on (ILS or B/CRS), a cockpit switch.
+
+### Round 4 state at the end (13:34)
+
+| Value | Start | Changed to | Restored | Confirmed |
+|---|---|---|---|---|
+| ILS panel | PARK, fraction .10 | 111.10 ... 108.90, 110.50, 109.90 (F1, F2) | PARK, fraction .10 (FRAC +1 x2, WHOLE -1; proof -1 to 111.10, +1 to PARK) | gauge 13:32:52, 13:32:58, 13:33:05 |
+| `B757_MAIN_M_Gau_STBY_GYRO_SELECTOR` | 0 | 1 | 0 (MCP `4701 0 * 0 (>L:...)`) | page 13:33:21, snapshot 13:34:04 |
+| `BBS_LOC_DEV_DEG` | 0 | -18.498, -6.643, 18.227 | 0 (MCP `4702 0 * 0 (>L:BBS_LOC_DEV_DEG)`) | page 13:33:21, snapshot 13:34:04 |
+| `B757_SADI_LOC`, gyro knob | 0 | up to 50 / 4.75 | 4.5e-66 / 4.3e-67 (decaying on their own) | snapshot 13:34:04 |
+| `BBS_ILS_COURSE` | 0 | not written | 0 | snapshot 13:34:04 |
+| VCockpit14 overlay `msfsba_mirror2` | none | ILS gauge mirror | removed (`removed`; `nd-mirror-off.js` answered `none`) | 13:33:30 |
+| BBSTablet globals `__msfsba_r4p`, `__msfsba_r4hs` | none | poll and handshake state | deleted (`undefined`) | 13:33:30 |
+| MCP SimConnect session | connected, reads stale | disconnected and reconnected (F2.5) | connected | 13:28 |
+
+Full snapshot 13:09:19 to 13:34:04: only `B757_SADI_LOC` and the gyro knob differ (decaying toward 0, as in round 2).
+The camera (instrument view 1), CDUs, EFB, COM and VOR radios were not touched (`B757_ADI_1_CTR_KNOB` 2, VOR L and R
+AUTO at the end). No Coherent socket open; the harness closed its SimConnect connection after every run. The CDU
+tablet agent is still installed, as before.
+
+## Round 5: reading the ILS display; the localizer on 09L
+
+Measured 13:51-14:08. KATL runway 09L, lined up by the owner with MSFSBA's runway teleport: 33.63473137 /
+-84.44822173, true heading 090.0025°, on the ground, ground speed 0, parking brake set (read 13:51:56, 14:06:15 and
+14:08:28, the same each time). MSFSBA closed. Start (snapshot 13:52:40): ILS PARK with fraction .10 (proved by a display
+read, see G1: -1 to `111.10`, +1 to `-----`, 14:00:26-14:00:29), `BBS_ILS_COURSE` 0, `BBS_LOC_DEV_DEG` 0, SADI
+selector 0, `B757_SADI_LOC` 0, ND MAP, VOR L and R AUTO.
+
+**The camera was NOT on the normal cockpit view**: the first capture and `CAMERA VIEW TYPE AND INDEX:0/:1` = 2/1
+(state 2, substate 5) show round 3's instrument view 1, the main panel (MCP, EICAS, SADI). It was left there.
+
+Method: writes (ILS knob requests, `BBS_ILS_COURSE`, the SADI selector, `BBS_LOC_DEV_DEG`, the camera index) are
+`SimVar.SetSimVarValue` in the BBSTablet view, with knob steps 300 ms apart. Reads are in the same view. The overlay
+goes in the view named below. No MCP call was made.
+
+### G1. Reading the ILS display from the 2D UI layer
+
+G1.1 The view. These 2D views in `pagelist.json` cover the whole window (1920 x 1080): `mainUi`
+(`coui://html_UI/Global/mainUI.html`), two `notifications` pages and `transition`. These are smaller than the window:
+`Toolbar` (918 x 162), `Mission Steps` (389 x 240) and three untitled `InGameHud` pages (324 x 324, 1296 x 540,
+1080 x 540).
+
+**The first candidate tried, `mainUi`, works.** The overlay is a `position:fixed` div at left/top 16 px, z-index
+2147483647, `pointer-events:none`, black, holding `<img src="WasmGaugeLiveView_12">` at 668 x 93. A window capture
+shows the live ILS gauge in it: the live view resolves in a UI view, as it did cross-view in round 1.
+
+It lands at client pixels (16,16)-(683,108), exactly 668 x 93. The page reports `--uiScale` "1", `devicePixelRatio` 1
+and innerWidth x innerHeight 1920 x 1080. The window is borderless, 1920 x 1080 at (0,0), client origin (0,0), 96 DPI.
+So 1 CSS px = 1 client pixel here. Other UI scales, resolutions and DPI were not measured; an app could map with client
+width / innerWidth, which the inject answer returns.
+
+The other candidates were not needed and not tried. No app code uses `mainUi` today.
+
+G1.2 Contrast: a CSS filter on the img only. Coherent applies the filters live.
+
+| Filter | Result |
+|---|---|
+| none | grey lit segments (channel mean ~64-95) and dim unlit "ghost" segments (~20-35) on navy (13,13,26); 98% of pixels in between |
+| `grayscale(1) contrast(4)` | all black, no digits |
+| `invert(1)` | ghosts kept, light ground |
+| `grayscale(1) brightness(2) contrast(10)` | clean but thinner segments; 2.75% grey |
+| `grayscale(1) brightness(2.8) contrast(10)`, with or without `invert(1)` | white on black (or black on white); 0.98% grey |
+| **`grayscale(1) brightness(2.6) contrast(40)`** (chosen) | white digits on black, ghosts gone; **99.44% of pixels pure black or white**, 348 edge pixels in between |
+
+The inverted version is as clean, but it flashes a white box on screen, so the black one was chosen.
+
+G1.3 Camera independence:
+1. Read `109.35 095` in the start view (2/1).
+2. Wrote index 0 (14:03:13); it read back 2/0 at +1.7 s and +3.5 s: the captain's ADI/EHSI view.
+3. Read again. **The crop at (16,16), 668 x 93, is byte-identical to the 2/1 one** (the same PNG file) and decodes
+   the same. A full capture shows the box at the top left over that view.
+4. Wrote index 1 back at 14:03:34; it read back 2/1 at +1.7 s and +3.5 s, and the capture is framed as at the start.
+
+The normal cockpit view (type 1) was not tried: the camera was not on it, and round 3 found that this aircraft refuses
+type writes out of the instrument type.
+
+G1.4 The decoder: a scratch Python script, standard library only.
+
+The cells were measured from a capture with every segment lit (the filter `grayscale(1) brightness(7) contrast(10)`
+turns the ghosts white):
+- Frequency cells at x 11, 73, 134, 195 and 256; course cells at x 420, 482 and 543. Each is 48 px wide, pitch ~61.
+- Segments: a y 12-23, f/b y 15-49, g y 45-56, e/c y 51-86, d y 78-89.
+- The decimal point (x 184-192, y 79-88) is drawn only when a frequency is tuned; it has no ghost.
+
+Method:
+1. Resample to 668 x 93.
+2. Otsu threshold.
+3. Try offsets of +-4 px and keep the one where every segment is most clearly on or off.
+4. Sample each segment's core, relative to the cell's left edge x0; a segment is on at 50% or more.
+   - a: x0+14..33, y 15..20
+   - b: x0+38..44, y 22..41
+   - c: x0+38..44, y 58..78
+   - d: x0+14..33, y 81..86
+   - e: x0+3..9, y 58..78
+   - f: x0+3..9, y 22..41
+   - g: x0+14..33, y 48..53
+5. Map the pattern to a character. In this font 6 = acdefg, 7 = abc, 9 = abcfg (no bottom) and a dash = g.
+
+| State (knob model or course write) | Decoded |
+|---|---|
+| PARK | `----- 000` |
+| W +1 | `108.10 000` |
+| W +1 x2, F +1 x4 | `110.50 000` |
+| W +1, F +1 x5 | `111.95 000` |
+| W -1 x2, F +1 x4 | `109.35 000` |
+| `BBS_ILS_COURSE` 95 | `109.35 095` |
+| F +1 x4, course 246 (extra, for digits 2, 4, 6 and 7) | `109.75 246` |
+| course 0 (its start value) | `109.75 000` |
+| from G2 and the restore | `111.30 000`, `111.10 000` |
+
+- **All 19 reads with the chosen filter decoded right, with clarity 1.00** (every segment fully on or off).
+- So did these:
+  - the unfiltered crop (Otsu threshold 45)
+  - inverted crops
+  - crops cut from the two full captures
+  - a crop cut 3 px left and 2 px low (offset found: (3,-2))
+- A crop with an 8 px margin fails: the decoder expects the overlay's rectangle.
+- The bare scene under that corner decodes as invalid, with clarity 0.21-0.33. So "the overlay is drawn" can be told
+  from the decode itself.
+
+G1.5 Timing. The figures come from 26 timed reads, timed from the inject call. Each read is one inject, then
+PrintWindow captures of the 1920 x 1080 client area back to back until the box is drawn, a removal at once, then
+captures until the box is gone.
+- The inject call was answered in 28-38 ms (median 35). Every Coherent call costs about one UI frame: pagelist
+  31-35 ms, socket connect 31-36 ms, an evaluate 33-35 ms.
+- **The box was in the third capture every time.** It was not in a capture that started 74-92 ms after the inject,
+  and it was in one that ended 134-153 ms (median 145) after it.
+- The capture itself: 35-51 ms (median 44) for the first after an inject, 21-43 ms (median 27) for the rest. That is a
+  32-bit DIB with no PNG encoding; the app's PNG encoding of a full frame would add to it.
+- The removal was sent at 141-159 ms and answered at 163-174 ms (median 167).
+- **One read takes about 0.17 s** with the socket open and the page id known, or about 0.24 s with the pagelist and the
+  connect. The decode adds tens of milliseconds in Python.
+- The box stayed in two more captures (the last starting at 208-225 ms). It was gone from every capture ending
+  268-286 ms after the inject.
+- **On screen for at least 71-75 ms and at most 191-210 ms per read: about 130 ms, some 4 frames at ~30 fps.**
+- Exceptions: the first exploratory inject, done as separate processes, stayed up ~0.6 s. The `contrast(4)` test (all
+  black, never detected) stayed up 3.1 s, until its timeout.
+- What a pilot would see: a black 668 x 93 box with white digits in the top-left corner of the sim window, for about
+  0.13 s.
+- It never shows on a cockpit display. Only `mainUi` holds it, no VCockpit view got an element, and the cockpit
+  displays in the full captures look as they do without it.
+- Not measured: VR, the sim's hide-UI toggle, a menu or window over that corner, other UI scales and resolutions.
+
+G1.6 Each read removed its element (answer `removed:1, left:0`). At 14:08 a query of all 16 views found:
+- no `msfsba*` element;
+- no `WasmGaugeLiveView` img outside the VCockpit pages' own (18, 10 and 2);
+- no new global. The round-1 CDU agent's and round-3 EFB agent's globals remain, as before.
+
+Verdict G1:
+- **Yes: the ILS display can be read without depending on the camera.** The ILS gauge's live view, laid on `mainUi` at
+  (16,16), filtered with `grayscale(1) brightness(2.6) contrast(40)`, captured and decoded, gave the right frequency
+  and course in every state.
+- It sat at the same client pixels in two different camera views, and the two crops were byte-identical.
+- One read costs about 0.17-0.24 s, and the box is on screen for about 0.13 s.
+- A valid frequency and course with clarity 1.0 tells "drawn" from the bare scene.
+
+### G2. The localizer lined up on 09L
+
+G2.1 The position is as above (true heading 090.0025°). The SADI selector went 0 to 1 at 14:06:28 (read back 1). With
+109.75 tuned, `B757_SADI_LOC` stayed 0 for 4.5 s.
+
+G2.2 110.50: W +1, F -1 x3 from 109.75, last click at 14:06:42.42; the gauge read `110.50 000`. The page was polled
+every ~0.1 s for 7.9 s.
+- **Received.** `BBS_LOC_DEV_DEG` went 0 to -0.03975° between +2.02 and +2.16 s after the last click (the ~3 s scan).
+  `B757_SADI_LOC` read 6.2 at +2.16 s and **28.9 at +3.5 s**, settling at 30.45. The gyro knob went to 4.75; the LOC
+  flag stayed 0.
+- **Deviation -0.040°.** Predicted **-0.053°** from the brief's antenna (33.63470556 / -84.4053, course 090°, 3,974 m
+  = 2.15 NM away), or -0.071° from the app's fs2024 navdata (33.634701 / -84.405182, course 089.99°). That is within
+  0.01-0.03° of the prediction, ~0.04° left of centre. The value is live: 48 different values in 66 samples, moving
+  in the 9th decimal.
+- `B757_SADI_LOC` behaves like a needle position around ~30, not a signal strength. On the centreline it settles at
+  30.45; at the gate it was 50 for 09L (-6.6°) and 18-19 for 08L and 08R (+18° and +26°). It is 0 when nothing is
+  received, so round 4's "1.0 or more = received" still holds.
+
+G2.3 111.30: W +1, F -1 x2, last click at 14:07:15.82; the gauge read `111.30 000`.
+- **Not received.** `B757_SADI_LOC` fell from 30.45 once 110.50 was left, 0.64 s before the last click. It read 8.7 at
+  the last click, 0.13 at +2.06 s, 0.006 at +3.5 s and 1e-7 at +9 s.
+- `BBS_LOC_DEV_DEG` stayed at -0.0397542 (09L's value, frozen) through 9 s, which is three scans.
+- **The 27R antenna is 283.5 m (0.153 NM) from the aircraft** by the brief's coordinates (294 m, 0.159 NM, by the
+  navdata). The aircraft is on its front-course side; predicted deviation +0.52° (+0.58° by the navdata).
+- With round 2 (27L and 27R not received at 0.8 NM; every received localizer at least 1.09 NM away), 27R has now not
+  been received at either 0.15 or 0.82 NM.
+
+During G1, 110.50 was tuned for 2.07 s (14:02:10.6-14:02:12.7) and `BBS_LOC_DEV_DEG` stayed 0: no scan fell in that
+window. This fits round 4's ~3 s scan.
+
+### Round 5 end state (14:08)
+
+| Value | Start | Changed to | Restored | Confirmed |
+|---|---|---|---|---|
+| ILS panel | PARK, fraction .10 | 111.10 ... 111.30 (G1.4, G2) | PARK, fraction .10 (111.30, F -1 x2 to 111.10, W +1 to PARK; proof -1 to `111.10`, +1 to `-----`) | display read 14:07:42-14:07:48 |
+| `BBS_ILS_COURSE` | 0 | 95, 246 | 0 | display read `000` 14:04:41; snapshot 14:08:28 |
+| `B757_MAIN_M_Gau_STBY_GYRO_SELECTOR` | 0 | 1 | 0 | page 14:07:57 (held 3.8 s); snapshot 14:08:28 |
+| `BBS_LOC_DEV_DEG` | 0 | -0.03975 | 0 (direct write, 14:07:57.7) | held 3.8 s; snapshot 14:08:28 |
+| `B757_SADI_LOC`, gyro knob | 0 | up to 30.45 / 4.75 | ~1e-65 (decaying on their own) | snapshot 14:08:28 |
+| Camera | 2/1 (instrument view, main panel) | 2/0 | 2/1 | read back 14:03:36, 14:03:38 and 14:08:28; end capture |
+| `mainUi` overlay `msfsba_ocr5` | none | 27 timed reads plus one exploratory inject | removed after each | query of all views, 14:08 |
+
+Full snapshot 13:52:40 to 14:08:28:
+- Besides the decaying SADI values, only **`B757_FC_SPOILER_LEVER` 0.8149 to 0.7325** differs.
+- It moved between 13:52:40 and 14:05:23 with no write by the agent. No write in this round touches the spoilers, and
+  round 2 saw this variable move on its own too. It was stable at 14:06 and was not touched.
+- Position and heading are unchanged; ND MAP, VOR L and R AUTO.
+- No Coherent socket is left open (0 ESTABLISHED on :19999).

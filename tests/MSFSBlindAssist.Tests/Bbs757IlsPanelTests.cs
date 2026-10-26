@@ -9,9 +9,10 @@ namespace MSFSBlindAssist.Tests;
 /// The BlueBird 757's ILS control panel (plan 04, task 6a), counted. No variable holds the tuned
 /// frequency, and the panel's two knobs are step requests BlueBird consumes within a frame, so the app
 /// keeps its own count of the panel, from the state a flight loads in (PARK, fraction .10), and turns the
-/// knobs one click per write, 250 ms apart. The knob model is round 1's measurement (flight-04.md,
-/// section C), copied here as data; the step gap is round 4's (section F). CI runs under en-US, so the
-/// de-DE and sv-SE cases are the ones that catch a culture leak.
+/// knobs one click per write, each after a fresh read and 250 ms apart. The knob model is round 1's
+/// measurement (docs/b757/evidence/flight-04.md, "C. ILS panel on the ground"), copied here as data; the
+/// step timing is round 4's ("Round 4: ILS step timing and localizer detection"). CI runs under en-US, so
+/// the de-DE and sv-SE cases are the ones that catch a culture leak.
 /// </summary>
 public class Bbs757IlsPanelTests
 {
@@ -163,7 +164,7 @@ public class Bbs757IlsPanelTests
     // ---- The knob model -----------------------------------------------------------------------------------
 
     /// <summary>
-    /// Round 1 (flight-04.md, section C, "Knob behaviour", 11:40-11:49), in the order the knobs were turned
+    /// Round 1 (flight-04.md, "C. ILS panel on the ground", "Knob behaviour", 11:40-11:49), in the order the knobs were turned
     /// from the panel as the flight loaded (PARK, .10): each row's knob and direction, and what the panel's
     /// frequency window showed after each of its clicks.
     /// </summary>
@@ -313,7 +314,8 @@ public class Bbs757IlsPanelTests
     [Fact]
     public void Out_of_park_the_whole_knob_turns_first_and_the_load_state_to_110_50_is_what_round_3_turned()
     {
-        // Round 3 (flight-04.md, E3) tuned 110.50 by hand from the load state: WHOLE -1 x2, FRAC +1 x4.
+        // Round 3 (flight-04.md, "E3. The FMC as an ILS comparator, on the ground") tuned 110.50 by hand from
+        // the load state: WHOLE -1 x2, FRAC +1 x4.
         Assert.Equal(new[] { (W, -1), (W, -1), (F, +1), (F, +1), (F, +1), (F, +1) },
             Bbs757IlsPanel.PlanSteps(Bbs757IlsDial.LoadState, Dial(110.50)));
         // A tie round the fraction ring (five either way) goes up.
@@ -349,13 +351,21 @@ public class Bbs757IlsPanelTests
 
     // ==== The definition: the count and the set ===========================================================
 
+    /// <summary>The fresh read made before every click: the ILS course, the variable the course set reads back.</summary>
+    private const string ReadBefore = "read BBS757_ILS_COURSE";
+
     /// <summary>
-    /// The sim behind the definition's ILS set, as the set sees it: whether a write can land, and, in order,
-    /// every write and wait it makes. Nothing is read: no variable holds the frequency.
+    /// The sim behind the definition's ILS set, as the set sees it: whether a write can land, the answer to a
+    /// fresh read, a clock the waits move, and, in order, every read, wait and write it makes.
     /// </summary>
     private sealed class PanelSim
     {
         public bool CanWrite = true;
+        public long Now = 1_000_000;
+
+        /// <summary>What a fresh read answers (null: the sim did not answer it in time).</summary>
+        public double? ReadAnswer = 95;
+
         public readonly List<string> Writes = new();
         public readonly List<string> Log = new();
 
@@ -370,8 +380,13 @@ public class Bbs757IlsPanelTests
         public Bbs757SimIo Io => new()
         {
             CanWrite = () => CanWrite,
-            ReadFresh = (key, _) => throw new InvalidOperationException($"the ILS set read {key}: no variable holds the frequency"),
-            Cached = key => throw new InvalidOperationException($"the ILS set read {key}"),
+            ReadFresh = (key, ct) =>
+            {
+                Log.Add($"read {key}");
+                ct.ThrowIfCancellationRequested();
+                return Task.FromResult(ReadAnswer);
+            },
+            Cached = key => throw new InvalidOperationException($"the ILS set read the cache of {key}"),
             Write = rpn =>
             {
                 OnWrite?.Invoke(Writes.Count + 1);
@@ -382,6 +397,7 @@ public class Bbs757IlsPanelTests
             Delay = (ms, ct) =>
             {
                 Log.Add($"wait {ms}");
+                Now += ms;
                 OnWait?.Invoke(++_waits);
                 ct.ThrowIfCancellationRequested();
                 return Task.CompletedTask;
@@ -389,7 +405,7 @@ public class Bbs757IlsPanelTests
         };
     }
 
-    /// <summary>A definition whose writes go to <see cref="Sim"/>, and what it said and gave the window's status box.</summary>
+    /// <summary>A definition whose writes go to <see cref="Sim"/> on its clock, and what it said and gave the window's status box.</summary>
     private sealed class Rig
     {
         public readonly PanelSim Sim = new();
@@ -397,13 +413,23 @@ public class Bbs757IlsPanelTests
         public readonly List<string> Status = new();
         public readonly BBS757Definition Def;
 
-        public Rig() => Def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => Sim.Io };
+        public Rig() => Def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => Sim.Io, NowMs = () => Sim.Now };
 
         /// <summary>A set from the window: a frequency, or PARK (null).</summary>
         public Task Set(double? mhz) => Def.SetIlsAsync(mhz, new SimConnectManager(IntPtr.Zero), Speech, Status.Add);
 
-        /// <summary>A flight load: MainForm's AircraftLoaded.</summary>
-        public void FlightLoad() => Def.OnSimContextReset();
+        /// <summary>MainForm's AircraftLoaded: a flight is loading, and BlueBird's panel may not run yet.</summary>
+        public void LoadBegins() => Def.OnSimContextReset();
+
+        /// <summary>A COM row delivered (the 1 Hz batch): the flight runs.</summary>
+        public void ComDelivered() => Def.ProcessSimVarUpdate(Bbs757Radios.ActiveKey(1), 121.9, new SpeechCapture());
+
+        /// <summary>A flight load, then its first COM delivery.</summary>
+        public void FlightLoad()
+        {
+            LoadBegins();
+            ComDelivered();
+        }
 
         /// <summary>A dropped connection: MainForm.OnConnectionLost calls both, in this order.</summary>
         public void ConnectionDrop()
@@ -425,11 +451,17 @@ public class Bbs757IlsPanelTests
         // has not seen the panel as it loaded.
         Assert.Null(rig.Def.IlsDial);
 
-        rig.FlightLoad();
+        rig.LoadBegins();
+        Assert.Null(rig.Def.IlsDial);   // loading: BlueBird's panel may not run yet
+        rig.ComDelivered();
+        Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);   // the flight runs: the panel as it loads
+        rig.ComDelivered();
         Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);
 
         await rig.Set(110.50);
         Assert.Equal(Dial(110.50), rig.Def.IlsDial);   // the count follows the clicks sent
+        rig.ComDelivered();
+        Assert.Equal(Dial(110.50), rig.Def.IlsDial);   // a later COM delivery is no flight load
 
         rig.FlightLoad();   // the next flight's panel loads parked again
         Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);
@@ -437,9 +469,95 @@ public class Bbs757IlsPanelTests
         await rig.Set(109.30);
         rig.ConnectionDrop();   // whatever happens to the panel until the app is back is unseen
         Assert.Null(rig.Def.IlsDial);
+        rig.ComDelivered();     // the reconnect's re-fire: still no flight load seen
+        Assert.Null(rig.Def.IlsDial);
 
         rig.FlightLoad();   // reconnected, and a flight loaded: counted again
         Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);
+    }
+
+    [Fact]
+    public async Task A_set_between_a_flight_load_and_the_first_com_delivery_is_refused()
+    {
+        // AircraftLoaded fires during the loading screen, before BlueBird's panel runs: a click then could be
+        // lost while the count moved. The count starts once the flight runs (a COM row delivered).
+        var rig = new Rig();
+        rig.LoadBegins();
+
+        await rig.Set(110.50);
+
+        Assert.Equal(new[] { "ILS tuning unknown: use ILS sync first." }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Log);
+
+        rig.ComDelivered();
+        await rig.Set(110.50);
+
+        Assert.Equal(LoadStateTo11050, rig.Sim.Writes);
+        Assert.Equal("ILS 110.50 set", rig.Speech.Interrupts[^1]);
+    }
+
+    [Fact]
+    public async Task Each_click_follows_a_fresh_read_and_back_to_back_sets_keep_the_gap()
+    {
+        // A wall-clock gap alone cannot keep two clicks in separate sim frames across a stall: each click
+        // waits for a fresh read (answered by the sim in a frame after the last click went out), then the gap.
+        var rig = new Rig();
+        rig.FlightLoad();
+
+        await rig.Set(108.10);   // PARK to 108: one click
+        await rig.Set(null);     // at once: its first click waits out the gap since the last one
+        rig.Sim.Now += 100;
+        await rig.Set(108.10);   // 100 ms later: the rest of the gap
+        rig.Sim.Now += 400;
+        await rig.Set(null);     // 400 ms later: no wait
+
+        Assert.Equal(new[]
+        {
+            ReadBefore, WholeUp,
+            ReadBefore, "wait 250", WholeDown,
+            ReadBefore, "wait 150", WholeUp,
+            ReadBefore, WholeDown,
+        }, rig.Sim.Log);
+    }
+
+    [Fact]
+    public async Task A_click_whose_read_the_sim_does_not_answer_is_not_sent()
+    {
+        // No answer: nothing shows the sim moved on from the last click, so the next could share its frame.
+        var rig = new Rig();
+        rig.FlightLoad();
+        rig.Sim.OnWrite = n =>
+        {
+            if (n == 1) rig.Sim.ReadAnswer = null;   // the sim stops answering after the first click
+        };
+
+        await rig.Set(110.50);
+
+        Assert.Equal(new[] { ReadBefore, WholeDown, ReadBefore }, rig.Sim.Log);
+        Assert.Equal(new[] { WholeDown }, rig.Sim.Writes);
+        Assert.Equal(new[] { "ILS unavailable" }, rig.Speech.Interrupts);
+        Assert.Equal(new Bbs757IlsDial(3, 0), rig.Def.IlsDial);   // the click sent is counted: 111.10
+    }
+
+    [Theory]
+    [InlineData("flight load")]
+    [InlineData("dropped connection")]
+    public async Task A_set_stopped_by_a_flight_load_or_a_drop_shows_the_count_without_saying_it(string reset)
+    {
+        var rig = new Rig();
+        rig.FlightLoad();
+        rig.Sim.OnWait = n =>
+        {
+            if (n != 2) return;
+            if (reset == "flight load") rig.LoadBegins();
+            else rig.ConnectionDrop();
+        };
+
+        await rig.Set(110.50);
+
+        Assert.Equal(new[] { WholeDown, WholeDown }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);                                // nothing said
+        Assert.Equal(new[] { "ILS tuning unknown" }, rig.Status);    // the window no longer says it is setting
     }
 
     [Fact]
@@ -468,10 +586,15 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(110.50);
 
+        // Each click after a fresh read; from the second on, the gap after it.
         Assert.Equal(new[]
         {
-            WholeDown, "wait 250", WholeDown, "wait 250", FractionUp, "wait 250",
-            FractionUp, "wait 250", FractionUp, "wait 250", FractionUp,
+            ReadBefore, WholeDown,
+            ReadBefore, "wait 250", WholeDown,
+            ReadBefore, "wait 250", FractionUp,
+            ReadBefore, "wait 250", FractionUp,
+            ReadBefore, "wait 250", FractionUp,
+            ReadBefore, "wait 250", FractionUp,
         }, rig.Sim.Log);
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes);
         Assert.Equal(250, BBS757Definition.IlsStepGapMs);
@@ -492,7 +615,8 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(null);
 
-        Assert.Equal(new[] { WholeUp, "wait 250", WholeUp }, rig.Sim.Log);   // 110, 111, PARK
+        // 110, 111, PARK; pressed right after the set, so its first click waits out the gap too.
+        Assert.Equal(new[] { ReadBefore, "wait 250", WholeUp, ReadBefore, "wait 250", WholeUp }, rig.Sim.Log);
         Assert.Equal(new[] { "ILS parked" }, rig.Speech.Interrupts);
         Assert.Equal(new Bbs757IlsDial(4, 4), rig.Def.IlsDial);              // PARK, remembering .50
     }
@@ -569,17 +693,19 @@ public class Bbs757IlsPanelTests
         rig.FlightLoad();
         rig.Sim.OnWait = n =>
         {
-            if (n == 2) rig.FlightLoad();   // after the second click
+            if (n == 2) rig.LoadBegins();   // after the second click
         };
 
         await rig.Set(110.50);
 
         Assert.Equal(new[] { WholeDown, WholeDown }, rig.Sim.Writes);
         Assert.Empty(rig.Speech.All);
-        Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);   // the new flight's panel, as it loads
+        Assert.Null(rig.Def.IlsDial);   // loading
 
+        rig.ComDelivered();             // the new flight runs: its panel as it loads
+        Assert.Equal(Bbs757IlsDial.LoadState, rig.Def.IlsDial);
         rig.Sim.OnWait = null;
-        await rig.Set(110.50);   // counted from there
+        await rig.Set(110.50);          // counted from there
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes.Skip(2));
     }
 
@@ -597,6 +723,7 @@ public class Bbs757IlsPanelTests
 
         Assert.Equal(new[] { WholeDown, WholeDown, FractionUp }, rig.Sim.Writes);
         Assert.Empty(rig.Speech.All);   // nothing said into the next aircraft
+        Assert.Empty(rig.Status);       // nor shown: the window is closed
         Assert.Equal(Dial(110.15), rig.Def.IlsDial);
     }
 

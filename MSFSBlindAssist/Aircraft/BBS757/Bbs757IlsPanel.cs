@@ -46,7 +46,8 @@ public readonly record struct Bbs757IlsDial(int Whole, int Fraction)
 /// the knob model, the clicks that reach a frequency or PARK, and the words. Pure; BBS757Definition.Radios.cs
 /// keeps the count and turns the knobs.
 ///
-/// Measured on the ground (docs/b757/evidence/flight-04.md, sections C and F):
+/// Measured on the ground (docs/b757/evidence/flight-04.md, "C. ILS panel on the ground" and "Round 4: ILS
+/// step timing and localizer detection"):
 ///   • No variable holds the frequency. The knobs are step requests, <c>L:B757_ILS_FREQ_WHOLE_INC</c> and
 ///     <c>L:B757_ILS_FREQ_FRAC_INC</c>, written +1 or -1 and set back to 0 by BlueBird within a frame.
 ///   • The whole knob is a ring of five, 108, 109, 110, 111, PARK, then 108 again (+1), the reverse for -1,

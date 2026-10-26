@@ -158,13 +158,19 @@ public partial class BBS757Definition
     /// and never for the app's own standby set (its echo window, <see cref="ArmOwnWriteEcho"/>). The
     /// words are the three-decimal frequency, so the simulator's float noise (121.9 read as
     /// 121.89999999999999) is one phrase and never a change. MainForm's mute wrap gates a Ctrl+M-muted row
-    /// ([VAR-8]). Every other key is left to the next hook.
+    /// ([VAR-8]). The first COM reading after a flight load also starts the ILS count
+    /// (<see cref="_ilsLoadPending"/>). Every other key is left to the next hook.
     /// </summary>
     partial void ProcessRadioUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
         if (!ComRows.TryGetValue(varName, out var row)) return;
         handled = true;
         if (!double.IsFinite(value)) return;
+        if (_ilsLoadPending)
+        {
+            _ilsLoadPending = false;
+            _ilsDial = Bbs757IlsDial.LoadState;   // the flight runs: its ILS panel as a flight loads it
+        }
         SpeakChange(varName,
             row.Active ? Bbs757Radios.ActivePhrase(row.Com, value) : Bbs757Radios.StandbyPhrase(row.Com, value),
             announcer);
@@ -261,8 +267,12 @@ public partial class BBS757Definition
     // The transfer
     // =================================================================================
 
-    /// <summary>The radios whose transfer is running now (each swap toggles, so two overlapping ones could undo each other).</summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _transfersRunning = new();
+    /// <summary>
+    /// The radios whose transfer is running now (each swap toggles, so two overlapping ones could undo each
+    /// other), each with its token, linked to the lifetime, that a flight load or a dropped connection
+    /// cancels (<see cref="CancelTransfers"/>).
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, CancellationTokenSource> _transfersRunning = new();
 
     /// <summary>The radio a transfer button belongs to (1 to 3), or 0 for any other key.</summary>
     private static int ComOfTransferKey(string varKey)
@@ -299,21 +309,25 @@ public partial class BBS757Definition
     /// cannot tell whether it was ignored); one unreadable after it says "COM1 transfer sent, the radio did
     /// not report back" and keeps the windows open for the late delivery. A swap that left the rows as they
     /// were goes to <see cref="PanelFallbackAsync"/>. A second press of the same radio while its transfer
-    /// runs is refused aloud; other radios run at once. Never throws; silent after a switch away.
+    /// runs is refused aloud; other radios run at once. A flight load, a dropped connection or a switch away
+    /// stops it, silently, so it never presses a panel button into the flight that follows (a button already
+    /// held is still let go). Never throws.
     /// </summary>
     internal async Task TransferAsync(int com, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        bool running = false;
+        CancellationTokenSource? mine = null;
         try
         {
             if (_lifetime.IsCancellationRequested) return;
-            var ct = _lifetime.Token;
-            if (!_transfersRunning.TryAdd(com, true))
+            var claim = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+            if (!_transfersRunning.TryAdd(com, claim))
             {
+                claim.Dispose();
                 announcer.AnnounceImmediate(Bbs757Radios.TransferInProgressPhrase(com));
                 return;
             }
-            running = true;
+            mine = claim;
+            var ct = mine.Token;
 
             var io = WriteIoFor(sim);
             if (!io.CanWrite())
@@ -347,7 +361,7 @@ public partial class BBS757Definition
 
             await PanelFallbackAsync(com, io, a, s, announcer, ct);
         }
-        catch (OperationCanceledException) { /* switched away */ }
+        catch (OperationCanceledException) { /* a flight load, a dropped connection or a switch away */ }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"COM{com} transfer failed: {ex.Message}");
@@ -355,7 +369,23 @@ public partial class BBS757Definition
         }
         finally
         {
-            if (running) _transfersRunning.TryRemove(com, out _);
+            if (mine != null)
+            {
+                _transfersRunning.TryRemove(new KeyValuePair<int, CancellationTokenSource>(com, mine));
+                mine.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops every COM transfer still running (a flight load or a dropped connection): none may press a tuning
+    /// panel's button into the flight that follows. A button already held is still let go.
+    /// </summary>
+    private void CancelTransfers()
+    {
+        foreach (var running in _transfersRunning.Values)
+        {
+            try { running.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
         }
     }
 
@@ -718,19 +748,30 @@ public partial class BBS757Definition
     /// <summary>
     /// The wait between two ILS knob clicks. BlueBird takes a click within one sim frame (median 33 ms) and
     /// counts two writes landing in one frame as one: 20 ms apart lost steps, 50 and 150 ms apart lost none,
-    /// and one 192 ms frame was seen (measured, flight-04.md round 4). Nothing confirms a click through
-    /// SimConnect (the request never reads non-zero there), so this gap is the only guard.
+    /// and one 192 ms frame was seen (measured, flight-04.md, "Round 4: ILS step timing and localizer
+    /// detection"). Nothing confirms a click through SimConnect (the request never reads non-zero there), so
+    /// each click also waits for a fresh read, which the sim answers in a frame after the last click went out:
+    /// the gap then follows the sim's frames, not the wall clock alone (a stall longer than the gap would
+    /// otherwise bring two clicks into one frame).
     /// </summary>
     internal const int IlsStepGapMs = 250;
 
     /// <summary>
     /// The ILS control panel as the app counts it (<see cref="Bbs757IlsPanel"/>): <see cref="Bbs757IlsDial.LoadState"/>
-    /// on a flight load (<see cref="ResetRadios"/>), then moved by every click the app sends. Null, unknown,
-    /// until the app sees a flight load (a definition made after the flight loaded: MSFSBA started, or the
-    /// 757 picked) and after a dropped connection (<see cref="OnVariableCacheCleared"/>). Touched on the UI
-    /// thread only.
+    /// once a flight loaded and runs (<see cref="_ilsLoadPending"/>), then moved by every click the app sends.
+    /// Null, unknown, until then (a definition made after the flight loaded: MSFSBA started, or the 757
+    /// picked; a flight still loading) and after a dropped connection (<see cref="OnVariableCacheCleared"/>).
+    /// Touched on the UI thread only.
     /// </summary>
     private Bbs757IlsDial? _ilsDial;
+
+    /// <summary>
+    /// A flight was loaded (<see cref="ResetRadios"/>) and has not shown it runs yet. AircraftLoaded fires
+    /// during the loading screen, before BlueBird's panel runs, so a click then could be lost while the count
+    /// moved: the count starts at the first delivery of a COM row after it (<see cref="ProcessRadioUpdate"/>).
+    /// A dropped connection clears it. UI thread only.
+    /// </summary>
+    private bool _ilsLoadPending;
 
     /// <summary>The counted ILS panel, for the tests.</summary>
     internal Bbs757IlsDial? IlsDial => _ilsDial;
@@ -738,17 +779,24 @@ public partial class BBS757Definition
     /// <summary>The token of the ILS set turning the knobs now, linked to the lifetime; null when none runs.</summary>
     private CancellationTokenSource? _ilsSet;
 
+    /// <summary>When the last ILS click went out, on <see cref="NowMs"/>, whichever set sent it; null before the first.</summary>
+    private long? _lastIlsClickMs;
+
     /// <summary>
     /// Sets the ILS control panel to <paramref name="mhz"/>, or parks it when null, by turning its knobs from
     /// the count. Refused aloud, nothing sent: a frequency that is no ILS channel, no calculator write that
-    /// can land ("ILS unavailable"), no count ("ILS tuning unknown: use ILS sync first."), another set still
-    /// turning the knobs ("ILS tuning in progress"). Otherwise the clicks <see cref="Bbs757IlsPanel.PlanSteps"/>
-    /// plans: none needed says "ILS already 110.50" or "ILS already parked"; else each click is one calculator
-    /// write, counted as it is sent, <see cref="IlsStepGapMs"/> apart, and the end says "ILS 110.50 set" or
-    /// "ILS parked": what was sent, never that the ILS is tuned (nothing reads the panel back). Every result
-    /// also goes to <paramref name="onSaid"/> (the window's status). A flight load, a dropped connection or a
-    /// profile switch stops the set between clicks, silently, and the count keeps the clicks sent; a click
-    /// that throws leaves the count unknown. Runs on the UI thread, whose context the awaits keep. Never throws.
+    /// can land ("ILS unavailable"), no count, or a flight still loading ("ILS tuning unknown: use ILS sync
+    /// first."), another set still turning the knobs ("ILS tuning in progress"). Otherwise the clicks
+    /// <see cref="Bbs757IlsPanel.PlanSteps"/> plans: none needed says "ILS already 110.50" or "ILS already
+    /// parked"; else each click waits for a fresh read of the ILS course (the sim's next frame), then for
+    /// <see cref="IlsStepGapMs"/> after the click before it, the first one for what is left of that gap since
+    /// the last click of any set; it is one calculator write, counted as it is sent. A read the sim does not
+    /// answer stops the set there ("ILS unavailable"; the count keeps the clicks sent). The end says "ILS 110.50
+    /// set" or "ILS parked": what was sent, never that the ILS is tuned (nothing reads the panel back). Every
+    /// result also goes to <paramref name="onSaid"/> (the window's status). A flight load, a dropped connection
+    /// or a profile switch stops the set between clicks, silently: after a load or a drop the status shows the
+    /// count, unsaid. A click that throws leaves the count unknown. Runs on the UI thread, whose context the
+    /// awaits keep. Never throws.
     /// </summary>
     internal async Task SetIlsAsync(double? mhz, SimConnectManager sim, ScreenReaderAnnouncer announcer, Action<string>? onSaid = null)
     {
@@ -759,7 +807,7 @@ public partial class BBS757Definition
         }
 
         CancellationTokenSource? mine = null;
-        bool turning = false;
+        bool sending = false;
         try
         {
             if (_lifetime.IsCancellationRequested) return;
@@ -804,28 +852,46 @@ public partial class BBS757Definition
                 return;
             }
 
-            turning = true;
             for (int i = 0; i < plan.Count; i++)
             {
-                if (i > 0)
+                // The sim answers a fresh read in a frame after the last click went out.
+                double? framed = await io.ReadFresh(Bbs757NavRad.IlsCourseKey, ct);
+                ct.ThrowIfCancellationRequested();   // a read that ended just before a reset or switch canceled the set
+                if (framed is null)
                 {
-                    await io.Delay(IlsStepGapMs, ct);
+                    Log.Debug("BBS757", $"ILS set: the read before click {i + 1} of {plan.Count} was not answered; stopped.");
+                    Say(Bbs757IlsPanel.UnavailablePhrase);
+                    return;
+                }
+
+                int wait = i > 0 ? IlsStepGapMs : GapLeftSinceLastIlsClick();
+                if (wait > 0)
+                {
+                    await io.Delay(wait, ct);
                     ct.ThrowIfCancellationRequested();   // a wait that ended just before a reset or switch canceled the set
                 }
+
                 var (knob, direction) = plan[i];
                 OnOwnWrite(Bbs757IlsPanel.Variable(knob));   // plan 13
+                _lastIlsClickMs = NowMs();
+                sending = true;
                 io.Write(Bbs757IlsPanel.StepCode(knob, direction));
+                sending = false;
                 dial = Bbs757IlsPanel.Step(dial, knob, direction);
                 _ilsDial = dial;
             }
-            turning = false;
             Say(Bbs757IlsPanel.SetPhrase(dial));
         }
-        catch (OperationCanceledException) { /* a flight load, a dropped connection or a switch away: nothing more to say */ }
+        catch (OperationCanceledException)
+        {
+            // A flight load or a dropped connection: the window shows the count it left, unsaid. A switch
+            // away: nothing (the window is closed).
+            if (!_lifetime.IsCancellationRequested) onSaid?.Invoke(Bbs757IlsPanel.Phrase(_ilsDial));
+        }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"ILS set failed: {ex.Message}");
-            if (turning) _ilsDial = null;   // a click that threw may or may not have gone out
+            if (sending) _ilsDial = null;   // a click that threw may or may not have gone out
             if (!_lifetime.IsCancellationRequested) Say(Bbs757IlsPanel.UnavailablePhrase);
         }
         finally
@@ -839,32 +905,47 @@ public partial class BBS757Definition
     }
 
     /// <summary>
-    /// A flight load or a dropped connection (<see cref="OnSimContextReset"/>): an ILS set still turning the
-    /// knobs stops, so none turns the next flight's, and the count starts again from the panel as a flight
-    /// loads it, PARK with .10. A dropped connection then makes it unknown (<see cref="OnVariableCacheCleared"/>).
+    /// A flight load or a dropped connection (<see cref="OnSimContextReset"/>): a COM transfer or an ILS set
+    /// still running stops, so none presses or turns anything in the next flight, and the ILS count is
+    /// unknown until the flight runs: it becomes the panel as a flight loads it, PARK with .10, at the first
+    /// COM reading (<see cref="_ilsLoadPending"/>). A dropped connection then clears that (<see cref="OnVariableCacheCleared"/>).
     /// </summary>
-    partial void ResetRadios() => RestartIlsCount(Bbs757IlsDial.LoadState);
+    partial void ResetRadios()
+    {
+        CancelTransfers();
+        RestartIlsCount(loadPending: true);
+    }
 
     /// <summary>
     /// The connection dropped: MainForm calls this right after <see cref="OnSimContextReset"/>, on a drop only
     /// (a flight load calls that alone). What happens to the ILS panel until the app is back goes unseen (a
-    /// flight loaded meanwhile, the knobs turned), so the count is unknown.
+    /// flight loaded meanwhile, the knobs turned), so the count stays unknown, and the reconnect's re-fire of
+    /// the COM rows is no flight load.
     /// </summary>
     public override void OnVariableCacheCleared()
     {
         base.OnVariableCacheCleared();
-        RestartIlsCount(null);
+        RestartIlsCount(loadPending: false);
     }
 
-    /// <summary>Stops the ILS set turning the knobs, if one runs, and starts the count again at <paramref name="count"/> (null: unknown).</summary>
-    private void RestartIlsCount(Bbs757IlsDial? count)
+    /// <summary>
+    /// The ILS count becomes unknown (<paramref name="loadPending"/>: until the flight runs), then the ILS set
+    /// turning the knobs, if one runs, stops. In that order: a cancel can run the set's ending at once, and it
+    /// shows the count.
+    /// </summary>
+    private void RestartIlsCount(bool loadPending)
     {
+        _ilsDial = null;
+        _ilsLoadPending = loadPending;
         if (Interlocked.Exchange(ref _ilsSet, null) is { } running)
         {
             try { running.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
         }
-        _ilsDial = count;
     }
+
+    /// <summary>What is left of <see cref="IlsStepGapMs"/> since the last ILS click went out; 0 before the first.</summary>
+    private int GapLeftSinceLastIlsClick()
+        => _lastIlsClickMs is long last ? (int)Math.Clamp(IlsStepGapMs - (NowMs() - last), 0, IlsStepGapMs) : 0;
 
     /// <summary>Closes and disposes the radio windows (a profile switch): the Ctrl+N window.</summary>
     partial void CloseRadioWindows()

@@ -203,13 +203,13 @@ public static class Bbs757NavRad
     /// course 095.", then the ILS control panel as the app counts it (<paramref name="ilsDial"/>, through
     /// <see cref="Bbs757IlsPanel.Phrase"/>): "ILS 110.50.", "ILS parked." or "ILS tuning unknown.". Without
     /// the page (the first officer's CDU busy or unreachable): "VOR L course 095, VOR R course 000, ILS course
-    /// 095. ILS 110.50. Frequencies unavailable." A course that was not read is "course unavailable".
+    /// 095. ILS 110.50. VOR frequencies unavailable." A course that was not read is "course unavailable".
     /// </summary>
     public static string Readout(Bbs757NavRadPage? page, int? vorL, int? vorR, int? ils, Bbs757IlsDial? ilsDial)
     {
         string counted = $"{Bbs757IlsPanel.Phrase(ilsDial)}.";
         if (page == null)
-            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {counted} Frequencies unavailable.";
+            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {counted} VOR frequencies unavailable.";
         return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}. {counted}";
     }
 

@@ -1192,6 +1192,42 @@ public class Bbs757RadiosTests
     }
 
     [Fact]
+    public async Task A_flight_load_stops_a_transfer_before_it_presses_a_panel_button()
+    {
+        // The stock swap was ignored and the transfer waits for its read-back: a flight loaded then must not
+        // get the old flight's fallback press.
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+        rig.Sim.OnDelayMs = ms => { if (ms == 1500) rig.Def.OnSimContextReset(); };
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)" }, rig.Sim.Writes);   // no panel button pressed
+        Assert.Empty(rig.Speech.All);
+
+        // The radio is free again: the next transfer runs.
+        rig.Sim.OnDelayMs = null;
+        await rig.Transfer(1);
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", "(>K:COM_STBY_RADIO_SWAP)", PanelDown(1), PanelUp(1) }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 active 120.900, standby 121.900" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_flight_load_while_the_panel_button_is_held_still_lets_it_go()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+        rig.Sim.OnDelayMs = ms => { if (ms == 200) rig.Def.OnSimContextReset(); };   // while the button is held
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", PanelDown(1), PanelUp(1) }, rig.Sim.Writes);   // let go
+        Assert.Empty(rig.Speech.All);   // and nothing said about the flight before
+    }
+
+    [Fact]
     public async Task A_transfer_after_a_switch_away_does_nothing()
     {
         var rig = new ComRig();
