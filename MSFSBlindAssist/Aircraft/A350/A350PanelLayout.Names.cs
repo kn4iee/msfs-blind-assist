@@ -41,6 +41,16 @@ public static partial class A350PanelLayout
         ["FCU"] = "FCU",
         ["EFIS_CPT"] = "EFIS Captain",
         ["EFIS_FO"] = "EFIS First Officer",
+        // Instrument panel (main instrument panel and its side consoles)
+        ["MIP_SIDE_PANEL_LEFT"] = "Captain Side Panel",
+        ["MIP_INDIVIDUAL_PANEL_LEFT"] = "Captain Individual Panel",
+        ["DISPLAY_EFB_LEFT_PWR"] = "Display Power", ["DISPLAY_EFB_RIGHT_PWR"] = "Display Power",
+        ["DISPLAY_EFIS_LEFT_PWR"] = "Display Power", ["DISPLAY_EFIS_RIGHT_PWR"] = "Display Power",
+        ["DISPLAY_PFDND_MFD_PWR"] = "Display Power", ["DISPLAY_SD_PWR"] = "Display Power",
+        ["ADIRS_FMS"] = "FMS and Air Data",
+        ["LDG_PANEL"] = "Landing Gear and Brakes",
+        ["MIP_INDIVIDUAL_PANEL_RIGHT"] = "First Officer Individual Panel",
+        ["MIP_SIDE_PANEL_RIGHT"] = "First Officer Side Panel",
     };
 
     /// <summary>A control iniBuilds files under another group, sent to the panel it sits on in the cockpit.</summary>
@@ -63,6 +73,11 @@ public static partial class A350PanelLayout
             "Surveillance", "Maintenance",
         },
         ["Glareshield"] = new() { "FCU", "EFIS Captain", "EFIS First Officer" },
+        ["Instrument"] = new()
+        {
+            "Captain Side Panel", "Captain Individual Panel", "Display Power", "FMS and Air Data", "Landing Gear and Brakes",
+            "First Officer Individual Panel", "First Officer Side Panel",
+        },
     };
 
     /// <summary>Names for controls whose tooltip title is wrong or shared: iniBuilds titles the engine bleeds

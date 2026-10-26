@@ -23,6 +23,16 @@ public class A350PanelLayoutTests
     }
 
     [Fact]
+    public void The_instrument_panels_read_left_to_right_across_the_cockpit()
+    {
+        Assert.Equal(new[]
+        {
+            "Captain Side Panel", "Captain Individual Panel", "Display Power", "FMS and Air Data", "Landing Gear and Brakes",
+            "First Officer Individual Panel", "First Officer Side Panel",
+        }, Placement.Structure["Instrument"]);
+    }
+
+    [Fact]
     public void Sections_come_in_cockpit_order()
     {
         Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" }, Placement.Structure.Keys);
