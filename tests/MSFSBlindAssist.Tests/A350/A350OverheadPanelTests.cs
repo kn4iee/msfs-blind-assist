@@ -297,12 +297,10 @@ public class A350OverheadPanelTests
     {
         AssertRows("Pressurization", new[]
         {
-            ("Cabin altitude target increase", A350RowAction.Increase, ""),
-            ("Cabin altitude target decrease", A350RowAction.Decrease, ""),
+            ("Cabin altitude target (feet)", A350RowAction.Typed, ""),
             ("Cabin altitude mode", A350RowAction.Set, "0=Auto, 1=Man"),
             ("Cabin V/S mode", A350RowAction.Set, "0=Auto, 1=Man"),
-            ("Cabin V/S target increase", A350RowAction.Increase, ""),
-            ("Cabin V/S target decrease", A350RowAction.Decrease, ""),
+            ("Cabin V/S target (feet per minute)", A350RowAction.Typed, ""),
             ("Ditching", A350RowAction.Set, "0=Off, 1=On"),
         });
     }

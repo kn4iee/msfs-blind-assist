@@ -57,6 +57,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>Variable key → the panel row it drives (every operable row).</summary>
     private readonly Dictionary<string, A350PlacedRow> _rows = new(StringComparer.Ordinal);
 
+    /// <summary>The typed rows offered (<see cref="A350TypedEntry"/>), by key.</summary>
+    private readonly Dictionary<string, A350TypedField> _typed = new(StringComparer.Ordinal);
+
+    /// <summary>The key each streamed variable is read under, by its name (L:var names are case-insensitive).</summary>
+    private readonly Dictionary<string, string> _keyByName = new(StringComparer.OrdinalIgnoreCase);
+
     private SimConnectManager? _sim;
     private bool _disposed;
 
@@ -107,10 +113,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             string panel = _placement.RowsByPanel.First(p => p.Value.Contains(row)).Key;
             if (A350Options.For(control.Id) is { } option)
                 AddDisplay(panel, option.Key);
-            if (row.Action == A350RowAction.Increase && A350Readouts.HasValueLine(control))
+            if (row.Action == A350RowAction.Typed && A350TypedEntry.ForControl(control.Id) is { } typed)
+                _typed[row.Key] = typed;
+            if (row.Action is A350RowAction.Increase or A350RowAction.Typed && A350Readouts.HasValueLine(control))
             {
                 string key = A350Readouts.KeyFor(control);
-                _values[key] = (control, row.Name.EndsWith(" increase", StringComparison.Ordinal) ? row.Name[..^" increase".Length] : row.Name);
+                _values[key] = (control, LineName(row.Name));
                 AddDisplay(panel, key);
             }
         }
@@ -143,6 +151,23 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (!lines.Contains(key))
                 lines.Add(key);
         }
+    }
+
+    /// <summary>A value line's name from its row's: "Cabin altitude target increase" and "Cabin altitude target
+    /// (feet)" both read "Cabin altitude target".</summary>
+    private static string LineName(string rowName)
+    {
+        if (rowName.EndsWith(" increase", StringComparison.Ordinal))
+            return rowName[..^" increase".Length];
+        int unit = rowName.IndexOf(" (", StringComparison.Ordinal);
+        return unit > 0 ? rowName[..unit] : rowName;
+    }
+
+    /// <summary>The key a streamed variable is read under: the row, light, window or value line that streams it.</summary>
+    internal string KeyForInput(string name)
+    {
+        _ = GetVariables();   // the keys are known once the variables are built
+        return _keyByName.TryGetValue(name, out var key) ? key : A350PanelLamps.InputKey(name);
     }
 
     /// <summary>The SimConnect manager the definition writes through; MainForm calls this when the A350 is selected,
@@ -229,6 +254,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;
+            if (def.UpdateFrequency == UpdateFrequency.Continuous)
+                _keyByName.TryAdd(def.Name, row.Key);
         }
 
         foreach (var lamp in _lamps.Values)
@@ -260,6 +287,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
 
+        // What a typed value is planned from and read back in, where nothing above streams it yet.
+        foreach (var field in _typed.Values)
+            foreach (var input in A350TypedEntry.Inputs(field))
+                if (!_keyByName.ContainsKey(input))
+                {
+                    Register(A350PanelLamps.InputKey(input), input, input, null);
+                    _lampInputKeys.Add(A350PanelLamps.InputKey(input));   // consumed silently
+                }
+
         // A light streams its rule's first variable under its own key, which carries its status line; its rule's other
         // variables and the bus powers stream once each, consumed silently. A name already batched streams on its own
         // subscription ([VAR-7]).
@@ -285,6 +321,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (!batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[key] = def;
+            _keyByName.TryAdd(name, key);
         }
 
         // Every A350 write is a calculator-path string, dropped without a word when MobiFlight's WASM module is
@@ -337,6 +374,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     RefreshControlWhenDefHandled = _ => true,
                 };
             }
+
+            case A350RowAction.Typed:   // a "_SET" key: MainForm renders a typed field, applied by Enter
+                return new SimVarDefinition
+                {
+                    Name = "MSFSBA_" + row.Key,
+                    DisplayName = row.Name,
+                    Type = SimVarType.LVar,
+                    UpdateFrequency = UpdateFrequency.Never,
+                    UnparseableTextAsNaN = true,   // A350TypedEntry refuses NaN; a 0 would be north or level off
+                };
 
             default:   // Press, Increase, Decrease: write-only buttons, never registered
                 return new SimVarDefinition

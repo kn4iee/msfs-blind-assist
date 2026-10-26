@@ -40,6 +40,9 @@ public partial class IniBuildsA350Definition
             return false;   // a base variable: MainForm's generic path
         _sim = simConnect;
 
+        if (_typed.TryGetValue(varKey, out var field))
+            return HandleTyped(row, field, value, simConnect, announcer);
+
         // An option the aircraft is built without: the cockpit hides its controls and clears their variables.
         if (A350Options.For(control.Id) is { } option && Cached(simConnect, option.Key) is double fitted && fitted < 0.5)
         {
@@ -66,6 +69,78 @@ public partial class IniBuildsA350Definition
         if (commanded is double target && control.Kind is A350Kinds.Toggle or A350Kinds.Command or A350Kinds.Selector)
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
         return true;
+    }
+
+    /// <summary>How long a typed value's click is given to land before it is read back.</summary>
+    public const int TypedReadBackMs = 600;
+
+    /// <summary>A typed value (<see cref="A350TypedEntry"/>): refused aloud, or written one step short and clicked to,
+    /// then read back, corrected when the click landed elsewhere, and confirmed as the cockpit shows it (a numeric
+    /// confirmation always speaks, [CORE-7]).</summary>
+    private bool HandleTyped(A350PlacedRow row, A350TypedField field, double value, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer)
+    {
+        double? Read(string name) => Cached(sim, KeyForInput(name));
+        var plan = A350TypedEntry.Plan(field, value, Read);
+        if (plan.Refusal != null)
+        {
+            announcer.Announce(plan.Refusal);
+            return true;
+        }
+        if (!CanLand(sim))
+        {
+            announcer.Announce($"{row.Name} unavailable");
+            return true;
+        }
+        _ = TypedAsync(row, value, plan, Read, sim, announcer);
+        return true;
+    }
+
+    private async Task TypedAsync(A350PlacedRow row, double typed, A350TypedPlan plan, Func<string, double?> read,
+        SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        int run = ++_nextRunId;
+        _latestRunByRow[row.Key] = run;
+        bool Superseded() => _disposed || _latestRunByRow.GetValueOrDefault(row.Key) != run;
+        try
+        {
+            foreach (var step in plan.Steps)
+            {
+                if (step is A350CalcStep calc)
+                    Send(sim, calc.Rpn);
+                else if (step is A350DelayStep delay)
+                {
+                    await Delay(delay.Milliseconds);
+                    if (Superseded())
+                        return;
+                }
+            }
+            string key = KeyForInput(plan.ReadBackVar);
+            await Delay(TypedReadBackMs);
+            if (Superseded())
+                return;
+            double? shown = await ReadFresh(sim, key, ReadoutTimeoutMs);
+            if (shown is double landed && !plan.Reached(landed) && !Superseded())
+            {
+                Send(sim, plan.Correction.Rpn);   // e.g. a 1000 ft altitude step, or the managed speed's own preset
+                await Delay(TypedReadBackMs);
+                if (Superseded())
+                    return;
+                shown = await ReadFresh(sim, key, ReadoutTimeoutMs);
+            }
+            if (Superseded())
+                return;
+            if (shown is not double now)
+                announcer.Announce(plan.Confirm(plan.Target, read));   // no read-back: the value sent, as the A320 says it
+            else if (plan.Reached(now))
+                announcer.Announce(plan.Confirm(now, read));
+            else
+                announcer.Announce($"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(now, read)}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A350", $"A typed value for {row.Key} failed: {ex.Message}");
+        }
     }
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>

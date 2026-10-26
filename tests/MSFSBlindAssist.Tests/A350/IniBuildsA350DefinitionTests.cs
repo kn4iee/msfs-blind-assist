@@ -312,6 +312,34 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void A_typed_row_is_a_text_field_that_refuses_what_is_not_a_number()
+    {
+        var def = _def.GetVariables()["A350_CABIN_ALT_TARGET_SET"];
+        Assert.True(def.UnparseableTextAsNaN);
+        Assert.Equal(UpdateFrequency.Never, def.UpdateFrequency);
+        Assert.False(def.RenderAsButton);
+        Assert.Empty(def.ValueDescriptions);
+        Assert.Equal("Cabin altitude target (feet)", def.DisplayName);
+        Assert.Contains("A350_CABIN_ALT_TARGET_SET", _def.GetPanelControls()["Pressurization"]);
+    }
+
+    [Fact]
+    public void A_typed_value_that_is_refused_is_said_and_sends_nothing()
+    {
+        Assert.True(Set("A350_CABIN_ALT_TARGET_SET", 20000));
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { "Cabin altitude target must be between -2000 and 13500 feet" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_is_written_short_and_clicked_to()
+    {
+        _cache[_def.KeyForInput("INI_CABIN_PRESS_ALTITUDE_TARGET")] = 0;
+        Assert.True(Set("A350_CABIN_ALT_TARGET_SET", 3000));
+        Assert.Equal(new[] { "2900 (>L:INI_CABIN_PRESS_ALTITUDE_TARGET)" }, _sent);   // the click waits on the delay
+    }
+
+    [Fact]
     public void The_calculator_path_probe_is_registered()
     {
         Assert.True(_def.GetVariables().ContainsKey("MSFSBA_BRIDGE_PROBE"));
@@ -326,6 +354,78 @@ public class IniBuildsA350DefinitionTests
 
 public class IniBuildsA350ReadBackTests
 {
+    private sealed class Glareshield : IniBuildsA350Definition
+    {
+        public Glareshield() : base(new[] { "Glareshield" }) { }
+    }
+
+    private static (IniBuildsA350Definition Def, List<string> Sent, SpeechCapture Speech, Queue<double?> ReadBacks) Typed(
+        Dictionary<string, double> cache)
+    {
+        var sent = new List<string>();
+        var speech = new SpeechCapture();
+        var readBacks = new Queue<double?>();
+        var def = new Glareshield
+        {
+            CanLand = _ => true,
+            Send = (_, rpn) => sent.Add(rpn),
+            ReRead = (_, _) => { },
+            Delay = _ => Task.CompletedTask,
+            ReadFresh = (_, _, _) => Task.FromResult(readBacks.Count > 0 ? readBacks.Dequeue() : null),
+        };
+        def.Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null;
+        return (def, sent, speech, readBacks);
+    }
+
+    private static Dictionary<string, double> SelectedSpeed(IniBuildsA350Definition def) => new()
+    {
+        [def.KeyForInput("INI_AIRSPEED_DIAL")] = 200,
+        [def.KeyForInput("INI_AIRSPEED_IS_MACH")] = 0,
+        [def.KeyForInput("INI_MANAGED_SPEED")] = 0,
+        [def.KeyForInput("INI_FCU_SPD_DOT")] = 0,
+    };
+
+    [Fact]
+    public async Task A_typed_speed_the_click_lands_is_confirmed_as_the_fcu_shows_it()
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, sent, speech, readBacks) = Typed(cache);
+        foreach (var (k, v) in SelectedSpeed(def)) cache[k] = v;
+        readBacks.Enqueue(250);
+        def.HandleUIVariableSet("A350_FCU_SPEED_SET", 250, def.GetVariables()["A350_FCU_SPEED_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Equal(new[] { "249 (>L:INI_AIRSPEED_DIAL)", "1 (>B:AIRLINER_FCU_SPD_KNOB_Set)" }, sent);
+        Assert.Equal(new[] { "FCU speed 250, selected" }, speech.All);
+    }
+
+    [Fact]
+    public async Task A_typed_value_the_click_misses_is_corrected_then_confirmed()
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, sent, speech, readBacks) = Typed(cache);
+        cache[def.KeyForInput("INI_ALTITUDE_DIAL")] = 10000;
+        cache[def.KeyForInput("INI_FCU_ALT_DOT")] = 0;
+        readBacks.Enqueue(13000);   // the 1000 ft increment: 11900 + a click rounds to 13000
+        readBacks.Enqueue(12000);
+        def.HandleUIVariableSet("A350_FCU_ALTITUDE_SET", 12000, def.GetVariables()["A350_FCU_ALTITUDE_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Equal(new[] { "11900 (>L:INI_ALTITUDE_DIAL)", "1 (>B:AIRLINER_FCU_ALT_KNOB_Set)", "12000 (>L:INI_ALTITUDE_DIAL)" }, sent);
+        Assert.Equal(new[] { "FCU altitude 12000, selected" }, speech.All);
+    }
+
+    [Fact]
+    public async Task A_typed_value_the_aircraft_will_not_take_says_what_it_shows()
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, sent, speech, readBacks) = Typed(cache);
+        foreach (var (k, v) in SelectedSpeed(def)) cache[k] = v;
+        readBacks.Enqueue(200);
+        readBacks.Enqueue(200);
+        def.HandleUIVariableSet("A350_FCU_SPEED_SET", 250, def.GetVariables()["A350_FCU_SPEED_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Equal(new[] { "Speed did not take 250. FCU speed 200, selected" }, speech.All);
+    }
+
     [Fact]
     public async Task A_switch_the_aircraft_did_not_move_is_said_once()
     {

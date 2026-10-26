@@ -145,7 +145,8 @@ public static partial class A350PanelLayout
     }
 
     /// <summary>Places every placed map control in map (cockpit file) order, panels in <see cref="PanelOrder"/>.
-    /// Encoders become two rows ("… increase", "… decrease").</summary>
+    /// An encoder whose value the cockpit shows is one typed row (<see cref="A350TypedEntry"/>); any other becomes two
+    /// rows ("… increase", "… decrease").</summary>
     public static A350Placement Place(A350ControlMap map)
     {
         var placement = new A350Placement();
@@ -175,6 +176,10 @@ public static partial class A350PanelLayout
                 case A350Kinds.Button:
                 case A350Kinds.Hold:
                     rows.Add(new A350PlacedRow(control.Key, name, A350RowAction.Press, control, new Dictionary<double, string>()));
+                    break;
+                case A350Kinds.Encoder when A350TypedEntry.ForControl(control.Id) is { } typed:
+                    // A value the cockpit shows is typed, as the released aircraft type theirs.
+                    rows.Add(new A350PlacedRow(typed.Key, typed.Name, A350RowAction.Typed, control, new Dictionary<double, string>()));
                     break;
                 case A350Kinds.Encoder:
                     rows.Add(new A350PlacedRow(control.Key + "#INC", name + " increase", A350RowAction.Increase, control, new Dictionary<double, string>()));

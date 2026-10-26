@@ -91,11 +91,19 @@ public class A350PanelLayoutTests
     }
 
     [Fact]
-    public void An_encoder_is_an_increase_and_a_decrease_row()
+    public void An_encoder_whose_value_is_not_shown_is_an_increase_and_a_decrease_row()
     {
-        var rows = Placement.RowsByPanel["Pressurization"].Select(r => r.Name).ToList();
-        Assert.Contains("Cabin altitude target increase", rows);
-        Assert.Contains("Cabin altitude target decrease", rows);
+        var rows = Placement.RowsByPanel.Values.SelectMany(r => r).Where(r => r.Control?.Id == "AIRLINER_WXR_GAIN_LEFT").ToList();
+        Assert.Equal(new[] { A350RowAction.Increase, A350RowAction.Decrease }, rows.Select(r => r.Action));
+    }
+
+    [Fact]
+    public void An_encoder_whose_value_is_shown_is_one_typed_row_in_its_place()
+    {
+        var rows = Placement.RowsByPanel["Pressurization"];
+        var typed = Assert.Single(rows, r => r.Control?.Id == "AIRLINER_CABIN_PRESS_ALTITUDE_TARGET");
+        Assert.Equal(("A350_CABIN_ALT_TARGET_SET", "Cabin altitude target (feet)", A350RowAction.Typed), (typed.Key, typed.Name, typed.Action));
+        Assert.Equal(0, rows.IndexOf(typed));   // where its increase row was
     }
 
     [Fact]
