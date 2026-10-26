@@ -32,9 +32,9 @@
 
 **Who:** whoever runs the plan, before any other task; with subagents, the controller itself, never an implementer. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
 
-- [ ] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/03-panel-writes.md`. Anything but "not started" and "none" means the plan is taken: stop.
-- [ ] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 03`, with the `Plan: 03` trailer.
-- [ ] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
+- [x] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/03-panel-writes.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [x] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 03`, with the `Plan: 03` trailer.
+- [x] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ### Task 1: The guarded-write planner
 
@@ -54,11 +54,11 @@
   ```
 - Rules: `current` or `guardState` null, or no `StateVar` → `Refused`. `target == CloseSets`: guard open → [guard toggled to `GuardClosed`, then `SetLVar(StateVar, target)`]; guard closed and current == target → []; guard closed and current ≠ target → [`SetLVar`]. `target != CloseSets`: guard closed → [guard toggled open, `SetLVar(StateVar, target)`]; guard open → current == target ? [] : [`SetLVar`].
 
-- [ ] **Step 1: Write the failing tests** with in-memory controls (emergency lights 0 OFF / 1 ARMED / 2 ON, guard closed 0, close sets 1; stab trim C 0 NORMAL / 1 CUTOUT, guard closed 0, close sets 0): `Off_from_armed_opens_the_guard_and_writes_zero`; `Armed_from_off_closes_the_guard_and_writes_one`; `On_with_the_guard_open_writes_two`; `Already_there_sends_nothing`; `Cutout_opens_and_writes_one`; `Normal_closes_the_guard_and_writes_zero`; `Unread_state_refuses`; `Calls_are_invariant_under_de_DE`.
-- [ ] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757GuardedTests`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the full suite.** Expected: PASS.
-- [ ] **Step 5: Commit** `fix(b757): plan a guarded control's write`.
+- [x] **Step 1: Write the failing tests** with in-memory controls (emergency lights 0 OFF / 1 ARMED / 2 ON, guard closed 0, close sets 1; stab trim C 0 NORMAL / 1 CUTOUT, guard closed 0, close sets 0): `Off_from_armed_opens_the_guard_and_writes_zero`; `Armed_from_off_closes_the_guard_and_writes_one`; `On_with_the_guard_open_writes_two`; `Already_there_sends_nothing`; `Cutout_opens_and_writes_one`; `Normal_closes_the_guard_and_writes_zero`; `Unread_state_refuses`; `Calls_are_invariant_under_de_DE`.
+- [x] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757GuardedTests`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the full suite.** Expected: PASS.
+- [x] **Step 5: Commit** `fix(b757): plan a guarded control's write`.
 
 ### Task 2: Route guarded picks through it
 
@@ -68,9 +68,9 @@
 - `private Task<bool> SetGuardedAsync(Bbs757Control control, Bbs757Control guard, double target, Bbs757SimIo io, ScreenReaderAnnouncer announcer)`, following `SetPositionAsync` (pick settle and supersede through `_pendingPicks`, refusal through `io.CanWrite()`, `OnOwnWrite(control.Node)`): read both fresh, `Bbs757Guarded.Plan`, send `StepGapMs` apart, wait `ReadBackDelayMs`, request both rows' re-reads; the control not at the target → "{label} did not move".
 - `HandleUIVariableSet`: a control whose `Guard` names a control in `_byNode` goes to `SetGuardedAsync`; a `Guard` naming none logs a warning and says "{label} unavailable".
 
-- [ ] **Step 1: Write the failing tests** with a fake `WriteIo`: `Guarded_pick_sends_the_plan` (pick 0, reads 1 and 0 → the guard's press, then `0 (>L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK)`); `Guarded_pick_that_does_not_land_says_so`.
-- [ ] **Steps 2-4:** run (FAIL), implement, full suite (PASS).
-- [ ] **Step 5: Commit** `fix(b757): guarded controls open and close their guards`.
+- [x] **Step 1: Write the failing tests** with a fake `WriteIo`: `Guarded_pick_sends_the_plan` (pick 0, reads 1 and 0 → the guard's press, then `0 (>L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK)`); `Guarded_pick_that_does_not_land_says_so`.
+- [x] **Steps 2-4:** run (FAIL), implement, full suite (PASS).
+- [x] **Step 5: Commit** `fix(b757): guarded controls open and close their guards`.
 
 ### Task 3: Fire handles lock again after an app unlock
 
@@ -81,9 +81,9 @@
 - `public static string? RelockAfterUnlock(Bbs757Control c, out int delayMs)` in `Bbs757Write`: for the three unlock buttons, the write that relocks and the vendor's delay; null for any other control.
 - After an unlock press (`PressAsync` path), schedule that write after `delayMs` on the definition's lifetime (canceled on switch-away is fine: the handle then stays as the cockpit would leave it).
 
-- [ ] **Step 1: Write the failing tests:** `Unlock_buttons_relock` (each of the three yields its relock write and delay); `Other_buttons_do_not`.
-- [ ] **Steps 2-4:** run, implement, full suite.
-- [ ] **Step 5: Commit** `fix(b757): a fire handle unlocked from the app locks again`.
+- [x] **Step 1: Write the failing tests:** `Unlock_buttons_relock` (each of the three yields its relock write and delay); `Other_buttons_do_not`.
+- [x] **Steps 2-4:** run, implement, full suite.
+- [x] **Step 5: Commit** `fix(b757): a fire handle unlocked from the app locks again`.
 
 ### Task 4 [owner]: In-sim check of the fixes
 
@@ -108,7 +108,7 @@
   ```
   Errors (exact): empty → "Type the landing altitude in feet first."; otherwise → "Landing altitude must be from -1070 to 14100 feet." Rounds to the nearest 10 (`NumberParsing.TryParseTyped`).
 
-- [ ] **Steps 1-5** (tests `Parses_and_rounds`, `Refuses_empty_and_out_of_range`, `De_DE_typing`, `Phrases`); commit `feat(b757): landing altitude entry, pure`.
+- [x] **Steps 1-5** (tests `Parses_and_rounds`, `Refuses_empty_and_out_of_range`, `De_DE_typing`, `Phrases`); commit `feat(b757): landing altitude entry, pure`.
 
 ### Task 6: The landing altitude field on the Pressurization panel
 
@@ -119,7 +119,7 @@
 - Panels: the field first in "Pressurization", the row in its status display.
 - `HandleOverheadTypedText` for `SetKey`: parse (refusal → the error); `CanWrite` false → "Landing altitude unavailable"; write `Write(feet)`; after `ReadBackDelayMs` read `DisplayKey` fresh; speak `Phrase`.
 
-- [ ] **Steps 1-5** (tests `Pressurization_panel_starts_with_the_field`, `Typed_altitude_writes_and_reads_back`, `Typed_altitude_speaks_what_came_back`, `Display_says_feet`); commit `feat(b757): type the landing altitude on the Pressurization panel`.
+- [x] **Steps 1-5** (tests `Pressurization_panel_starts_with_the_field`, `Typed_altitude_writes_and_reads_back`, `Typed_altitude_speaks_what_came_back`, `Display_says_feet`); commit `feat(b757): type the landing altitude on the Pressurization panel`.
 
 ## In-sim checks (owner)
 
@@ -130,20 +130,46 @@
 
 - **Pilot-facing:** the fixes "757: the emergency lights can be armed, switched off or on from the Overhead miscellaneous panel and the stab trim cutouts set from the Stabilizer trim panel (the app opens and closes their guards); a fire handle unlocked from the app locks again" (`fix`); the essential "type the destination's landing altitude on the Pressurization panel (the 757 has no cruise altitude selector: the FMC's cruise level is on the CDU's PERF INIT page)" (`feature`).
 - **Proposed rule line:** `- [B757-7] Set the 757 landing altitude as `Bbs757LandingAltitude.Write` does: `L:B757_OVHD_LDG_ELEV` = target − 10, then one `L:B757_OVHD_LDG_ELEV_CHG` step; a direct write alone holds but leaves the panel's digits stale until the next knob step (measured). Full: docs/invariants/b757.md#b757-7`
+- **Two more proposed rule lines** (the next free numbers on 2026-10-26; plan 16 renumbers if another plan takes them):
+  - `- [B757-12] Write a guarded 757 control (a map row naming a `Guard`) only through `Bbs757Guarded.Plan`: open the guard, write the state var, and for `CloseSets` close the guard and write it too; an unread control or guard writes nothing. A click behind a closed guard does nothing, and BlueBird's close forces `CloseSets` (measured). Full: docs/invariants/b757.md#b757-12`
+  - `- [B757-13] After an app press of a fire handle unlock, relock it (`Bbs757Write.RelockAfterUnlock`, 1.5 s): the cockpit relocks on `O:` timers a calculator write never starts, so without it the handle stays unlocked (measured). Full: docs/invariants/b757.md#b757-13`
+- **Requests for frozen files:** none.
+- **For other plans:**
+  - Plan 02: `HandleUIVariableSet` sends any control whose `Guard` names a map row through the guarded writer (plan 02's guarded rows: kind `switch`, state var, positions, guard fields, no click code); a `Guard` naming no row says "{label} unavailable". Two plan 03 tests read the shipped map (the three fire handle unlocks are the only controls that relock; the Pressurization panel gets the field): if plan 02's map changes those rows, tell plan 03's owner rather than editing the tests.
+  - Plan 12 takes over `BBS757Definition.Overhead.cs`, `Bbs757Write.cs` and `Bbs757Rpn.cs`: the five overhead seams are implemented there now, so plan 12 adds to their bodies (a second declaration does not compile). The pick bookkeeping is shared (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync` in `Interaction.cs`); a flight load stops a guarded sequence through `_pickEpoch`.
+  - Plan 13: `OnOwnWrite` is called with a guarded control's node AND its guard's node, with the unlock button's node before the relock, and with `Bbs757LandingAltitude.DisplayKey` (`BBS757_LDG_ALT`) for the landing altitude. Readable for announcements (measured): `B757_OVHD_PASS_OXY_UNARMED_DECAL` (1 while the emergency lights are not ARMED) and `BBS757_CABIN_EMER_LIGHTING` (1 while they are lit).
+  - Plan 10: the emergency lights ARMED and the stab trim cutouts NORMAL can be set through the same guarded path.
+- **For the owner to hear in the in-sim check:** the field ("Landing Altitude value") and the status row ("Landing Altitude") share a name; a write that throws says "Landing altitude unavailable"; after an app Unlock, a fire handle pick must follow within the cockpit's 1.5 s (a handle whose fire light is on needs no unlock).
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** code done, waiting on owner (Task 4 and the in-sim checks)
 - **Claimed by:** kn4iee (the owner), 2026-10-26
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** 2026-10-26, from `c8a80bd6f`
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Worked by:** kn4iee with Claude, with subagents (a fresh implementer and a reviewer per task, one whole-plan review)
+- **Started:** 2026-10-26, from `c8a80bd6f` (claim `b64fa844b`)
+- **Landed:** LANDED-AT-PUSH
+- **Tests at landing:** SUITE-AT-PUSH
+- **Tasks:** 0-3, 5 and 6 done, each reviewed (Task 2 took one fix round); Task 4 is the owner's. Every write's RPN was
+  replayed live through the simconnect MCP on the ground (`docs/b757/evidence/flight-03.md`).
+- **Waiting on the owner:** Task 4 in the app (Emergency Lights OFF, ARMED, ON, ARMED; Stab Trim C CUTOUT then NORMAL;
+  a fire handle unlock reads locked after 1.5 s) and "In-sim checks (owner)" 2 (type 1030, then 645). Both need plan
+  02's guarded rows for the emergency lights and stab trims; the landing altitude and the relock work without them.
+- **In-sim results:** no check in the app yet. Claude's MCP replays (2026-10-26, 757 RR cold and dark at KATL, BBS
+  Nest running): the emergency lights write and its guard close, the stab trim C write and its guard close, the fire
+  handle relock, and the landing altitude at 1030, -60, -1070 and 14100 all landed and were put back.
+- **Changed from the plan:** "1.030" is refused, not read as 1030 (CORE-17; Review Focus 3 amended); two keys are
+  registered, not one (the field's never-sent event is named `BBS757.LDG_ALT_SET`); `HandleOverheadSet` claims the
+  field so its event is never sent; the pick bookkeeping `SetPositionAsync` and the guarded writer share
+  (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync`), and a flight load stops a guarded sequence part-way
+  (`_pickEpoch`); a `Guard` naming no map row also re-reads the combo; a landing altitude write that throws says
+  "Landing altitude unavailable" (the squawk's way); tests added beyond the plan's for each Review Focus line, the
+  relock's scheduling and switch-away, and the field's refusals and registration.
+- **Rulings made while working** (Claude as controller; the owner may reverse any): R2 the guarded planner also
+  refuses a reading or target off the positions and a guard it cannot toggle; R4 `OnOwnWrite` for the guard too; R5
+  the unlock buttons by state var, 1500 ms; R7 CORE-17 over "1.030"; R8 645 rounds to 650 (away from zero), range after
+  rounding; R10 the row shows "-60 feet", speech says "minus 60 feet"; R12 the landing altitude's `OnOwnWrite` key is
+  `BBS757_LDG_ALT`; R14 the relock keeps BlueBird's 1.5 s; R15 a started guarded sequence finishes across a newer
+  pick but stops on a flight load or switch-away; R16 the private event name.
