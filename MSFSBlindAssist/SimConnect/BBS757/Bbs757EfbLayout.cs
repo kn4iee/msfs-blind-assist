@@ -27,7 +27,7 @@ public enum Bbs757UpdateGate
 }
 
 /// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
-public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks, Load }
+public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks, Load, GroundPower }
 
 /// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
 public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
@@ -614,6 +614,27 @@ public static class Bbs757EfbLayout
         null => "The chocks could not be read back.",
         bool now when now == wantInPlace => wantInPlace ? "Chocks in place" : "Chocks removed",
         _ => "BlueBird did not move the chocks",
+    };
+
+    // ---- ground power ------------------------------------------------------------------
+
+    /// <summary>
+    /// The Ground Services page's GPU tile (measured 2026-10-25, session 8, and again 2026-10-26: each tap
+    /// toggled <c>L:BBS_757_GPU_AC_PWR_CONNECTED</c>, 1 to 0 and 0 to 1). It TOGGLES, so it is tapped only
+    /// when <see cref="Bbs757GroundPower.Refusal"/> returns null ([B757-2]'s pattern).
+    /// </summary>
+    public static readonly EfbPoint GpuTile = new(1005, 231);
+
+    /// <summary>
+    /// Home, Aircraft (it reopens on its last page), GROUND SERVICES, then the GPU tile once. Run it only
+    /// when <see cref="Bbs757GroundPower.Refusal"/> returns null: the tile toggles.
+    /// </summary>
+    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> ToggleGroundPower() => new[]
+    {
+        (Home, NavigateDelayMs),
+        (AircraftIcon, NavigateDelayMs),
+        (AircraftMenuGroundServices, NavigateDelayMs),
+        (GpuTile, NavigateDelayMs),
     };
 
     private static EfbPoint Lookup((string Name, EfbPoint Point)[] table, string name, string paramName)

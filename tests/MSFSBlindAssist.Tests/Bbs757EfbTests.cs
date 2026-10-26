@@ -165,6 +165,7 @@ public class Bbs757EfbTests
         foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
         yield return Bbs757EfbLayout.SetSteeringToRudder();
         yield return Bbs757EfbLayout.ToggleChocks();
+        yield return Bbs757EfbLayout.ToggleGroundPower();
         yield return Bbs757EfbLayout.LoadThroughEfb();
     }
 
@@ -308,6 +309,7 @@ public class Bbs757EfbTests
         others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
         others.Add(Bbs757EfbLayout.SetSteeringToRudder());
         others.Add(Bbs757EfbLayout.ToggleChocks());
+        others.Add(Bbs757EfbLayout.ToggleGroundPower());
         others.Add(Bbs757EfbLayout.LoadThroughEfb());
         foreach (var seq in others)
             Assert.DoesNotContain(seq, s => s.Point == spot);
