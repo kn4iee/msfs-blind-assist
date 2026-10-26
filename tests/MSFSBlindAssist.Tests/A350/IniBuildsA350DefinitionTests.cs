@@ -207,8 +207,8 @@ public class IniBuildsA350DefinitionTests
     public void A_panels_status_display_lists_its_lights()
     {
         var displays = _def.GetPanelDisplayVariables();
-        Assert.Contains(BatFault, displays["Electrical"]);
-        Assert.DoesNotContain("A350_LT_ELEC_BAT_1_SEQ2_LIGHT", displays["Electrical"]);   // the switch's own OFF legend
+        Assert.Contains(BatFault, displays["ELEC"]);
+        Assert.DoesNotContain("A350_LT_ELEC_BAT_1_SEQ2_LIGHT", displays["ELEC"]);   // the switch's own OFF legend
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public class IniBuildsA350DefinitionTests
     [Fact]
     public void An_options_panel_shows_whether_it_is_fitted()
     {
-        Assert.Contains(JettisonOption, _def.GetPanelDisplayVariables()["Fuel Jettison"]);
+        Assert.Contains(JettisonOption, _def.GetPanelDisplayVariables()["Fuel"]);
         var option = _def.GetVariables()[JettisonOption];
         Assert.Equal("INI_OPTION_FUEL_JETTISON", option.Name);
         Assert.Equal("Fuel jettison option", option.DisplayName);
@@ -287,7 +287,7 @@ public class IniBuildsA350DefinitionTests
     [Fact]
     public void An_encoders_value_is_a_status_line_on_its_panel()
     {
-        Assert.Contains(CabinAltitudeTarget, _def.GetPanelDisplayVariables()["Cabin Pressure"]);
+        Assert.Contains(CabinAltitudeTarget, _def.GetPanelDisplayVariables()["Pressurization"]);
         var value = _def.GetVariables()[CabinAltitudeTarget];
         Assert.Equal("INI_CABIN_PRESS_ALTITUDE_TARGET", value.Name);
         Assert.Equal("Cabin altitude target", value.DisplayName);

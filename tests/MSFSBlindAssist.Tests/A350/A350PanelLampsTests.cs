@@ -15,7 +15,7 @@ public class A350PanelLampsTests
     public void A_fault_legend_is_shown_on_its_rows_panel_named_after_the_row()
     {
         var fault = Lamp("ELEC_BAT_1_SEQ1_LIGHT");
-        Assert.Equal("Electrical", fault.Panel);
+        Assert.Equal("ELEC", fault.Panel);
         Assert.Equal("BAT 1 fault light", fault.Name);
         Assert.Equal("A350_LT_ELEC_BAT_1_SEQ1_LIGHT", fault.Key);
     }

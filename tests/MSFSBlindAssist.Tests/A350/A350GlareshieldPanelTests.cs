@@ -12,6 +12,21 @@ public class A350GlareshieldPanelTests
         Placement.RowsByPanel[panel].Select(r => (r.Name, r.Action,
             string.Join(", ", r.Positions.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}"))));
 
+    /// <summary>These rows, in this order, among the panel's rows (a panel the A380 merges holds several groups' rows).</summary>
+    private static void AssertRows(string panel, (string Name, A350RowAction Action, string Positions)[] expected)
+    {
+        var names = expected.Select(e => e.Name).ToHashSet();
+        Assert.Equal(expected, Rows(panel).Where(r => names.Contains(r.Name)));
+    }
+
+    /// <summary>These lights, in this order, among the panel's lights.</summary>
+    private static void AssertLights(string panel, string[] expected)
+    {
+        var names = expected.ToHashSet();
+        Assert.Equal(expected, Lights(panel).Where(names.Contains));
+    }
+
+
     private static IEnumerable<string> Lights(string panel) =>
         A350PanelLamps.Resolve(Map, Placement, new[] { "Glareshield" }).Where(l => l.Panel == panel).Select(l => l.Name);
 
@@ -25,7 +40,7 @@ public class A350GlareshieldPanelTests
     [Fact]
     public void Fcu()
     {
-        Assert.Equal(new[]
+        AssertRows("FCU", new[]
         {
             ("AP 1", Press, ""), ("AP 2", Press, ""), ("A/THR", Press, ""), ("FD", Set, OffOn), ("LOC", Press, ""),
             ("APPR", Press, ""), ("ALT", Press, ""), ("SPD/MACH", Press, ""), ("HDG-V/S / TRK-FPA", Press, ""),
@@ -39,28 +54,36 @@ public class A350GlareshieldPanelTests
             ("V/S knob push", Press, ""), ("V/S knob pull", Press, ""),
             ("V/S knob increase", A350RowAction.Increase, ""), ("V/S knob decrease", A350RowAction.Decrease, ""),
             ("Altitude 100/1000 selector", Press, ""),
+            ("FCU display brightness", Set, ""), ("FCU integral lighting", Set, ""),
+        });
+        AssertLights("FCU", new[] { "AP 1 light", "AP 2 light", "A/THR light", "LOC light", "APPR light", "ALT light" });
+        AssertRows("Warnings", new[]
+        {
             ("Captain chrono", Press, ""), ("First officer chrono", Press, ""),
-            ("Captain loudspeaker", Set, ""), ("First officer loudspeaker", Set, ""),
-            ("Captain HUD brightness", Set, ""), ("First officer HUD brightness", Set, ""),
-            ("Captain HUD crosswind mode", Set, OffOn), ("First officer HUD crosswind mode", Set, OffOn),
-            ("Captain HUD declutter", Press, ""), ("First officer HUD declutter", Press, ""),
             ("Captain master caution", Press, ""), ("First officer master caution", Press, ""),
             ("Captain master warning", Press, ""), ("First officer master warning", Press, ""),
             ("Captain autoland", Press, ""), ("First officer autoland", Press, ""),
             ("Captain ATC message", Press, ""), ("First officer ATC message", Press, ""),
-            ("Captain sliding table light", Set, ""), ("First officer sliding table light", Set, ""),
-            ("FCU display brightness", Set, ""), ("FCU integral lighting", Set, ""),
-        }, Rows("FCU"));
-        Assert.Equal(new[]
-        {
-            "AP 1 light", "AP 2 light", "A/THR light", "LOC light", "APPR light", "ALT light",
+        });
+        AssertLights("Warnings", new[] {
             "Captain master caution light", "Captain master caution lower light",
             "First officer master caution light", "First officer master caution lower light",
             "Captain master warning light", "Captain master warning lower light",
             "First officer master warning light", "First officer master warning lower light",
             "Captain autoland light", "First officer autoland light",
             "Captain ATC message light", "First officer ATC message light",
-        }, Lights("FCU"));
+        });
+        AssertRows("HUD", new[]
+        {
+            ("Captain HUD brightness", Set, ""), ("First officer HUD brightness", Set, ""),
+            ("Captain HUD crosswind mode", Set, OffOn), ("First officer HUD crosswind mode", Set, OffOn),
+            ("Captain HUD declutter", Press, ""), ("First officer HUD declutter", Press, ""),
+        });
+        AssertRows("Loudspeakers and Table Lights", new[]
+        {
+            ("Captain loudspeaker", Set, ""), ("First officer loudspeaker", Set, ""),
+            ("Captain sliding table light", Set, ""), ("First officer sliding table light", Set, ""),
+        });
     }
 
     /// <summary>Live 2026-10-26 through MSFSBA's path: every position of the ND mode and range selectors; baro PUSH
@@ -70,7 +93,7 @@ public class A350GlareshieldPanelTests
     [Fact]
     public void Efis_captain()
     {
-        Assert.Equal(new[]
+        AssertRows("EFIS Captain", new[]
         {
             ("Captain ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
             ("Captain ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
@@ -83,10 +106,10 @@ public class A350GlareshieldPanelTests
             ("Captain VOR 1", Press, ""), ("Captain WX", Press, ""), ("Captain TERR", Press, ""), ("Captain TRAF", Press, ""),
             ("Captain VOR 2", Press, ""),
             ("Captain LS", Set, OffOn), ("Captain taxi", Set, OffOn), ("Captain VV", Set, OffOn),
-        }, Rows("EFIS Captain"));
-        Assert.Equal(new[] { "Captain CSTR light", "Captain WPT light", "Captain VORD light", "Captain NDB light",
+        });
+        AssertLights("EFIS Captain", new[] { "Captain CSTR light", "Captain WPT light", "Captain VORD light", "Captain NDB light",
             "Captain ARPT light", "Captain VOR 1 light", "Captain WX light", "Captain TERR light", "Captain TRAF light",
-            "Captain VOR 2 light" }, Lights("EFIS Captain"));
+            "Captain VOR 2 light" });
     }
 
     /// <summary>Live 2026-10-26: the first officer's panel, as the captain's (its baro is XMLVAR_Baro2_Mode, unit flag
@@ -94,7 +117,7 @@ public class A350GlareshieldPanelTests
     [Fact]
     public void Efis_first_officer()
     {
-        Assert.Equal(new[]
+        AssertRows("EFIS First Officer", new[]
         {
             ("First officer ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
             ("First officer ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
@@ -108,9 +131,9 @@ public class A350GlareshieldPanelTests
             ("First officer VOR 1", Press, ""), ("First officer WX", Press, ""), ("First officer TERR", Press, ""),
             ("First officer TRAF", Press, ""), ("First officer VOR 2", Press, ""),
             ("First officer LS", Set, OffOn), ("First officer taxi", Set, OffOn), ("First officer VV", Set, OffOn),
-        }, Rows("EFIS First Officer"));
-        Assert.Equal(new[] { "First officer CSTR light", "First officer WPT light", "First officer VORD light",
+        });
+        AssertLights("EFIS First Officer", new[] { "First officer CSTR light", "First officer WPT light", "First officer VORD light",
             "First officer NDB light", "First officer ARPT light", "First officer VOR 1 light", "First officer WX light",
-            "First officer TERR light", "First officer TRAF light", "First officer VOR 2 light" }, Lights("EFIS First Officer"));
+            "First officer TERR light", "First officer TRAF light", "First officer VOR 2 light" });
     }
 }

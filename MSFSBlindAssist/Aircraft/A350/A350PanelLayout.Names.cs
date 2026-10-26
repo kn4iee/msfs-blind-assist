@@ -2,80 +2,109 @@ namespace MSFSBlindAssist.Aircraft.A350;
 
 public static partial class A350PanelLayout
 {
-    /// <summary>iniBuilds' group name → the panel the pilot sees; two groups naming one panel merge.</summary>
+    /// <summary>iniBuilds' group name → the panel the pilot sees; two groups naming one panel merge. Panels take the
+    /// FlyByWire A380's names (and order, <see cref="PanelOrder"/>) wherever the two cockpits share a panel, so a pilot finds
+    /// the same panel in the same place on both Airbus widebodies.</summary>
     private static readonly Dictionary<string, string> PanelNames = new(StringComparer.Ordinal)
     {
-        // Overhead (manual p. 24)
-        ["WIPERS"] = "Wipers",
-        ["CALLS"] = "Calls and Evacuation",
-        ["EVAC"] = "Calls and Evacuation",
-        ["OXYGEN"] = "Oxygen",
-        ["RCD"] = "Recorder",
-        ["CVR"] = "Recorder",
-        ["ELT"] = "ELT",
-        ["EMER_ELEC"] = "Emergency Electrical Power",
-        ["FCTL"] = "Flight Controls",
-        ["IRS"] = "ADIRS",
-        ["LIGHTS_EXT"] = "Exterior Lighting",
+        // Overhead
+        ["ELEC"] = "ELEC",
+        ["EMER_ELEC"] = "ELEC",
         ["APU"] = "APU",
-        ["LIGHT_INT"] = "Interior Lighting and Signs",
-        ["SIGNS"] = "Interior Lighting and Signs",
-        ["ANTI_ICE"] = "Anti-Ice",
-        ["AIR"] = "Air Conditioning",
-        ["CABIN_PRESS"] = "Cabin Pressure",
-        ["ELEC"] = "Electrical",
         ["FUEL"] = "Fuel",
         ["HYD"] = "Hydraulics",
-        ["FIRE"] = "Fire",
-        ["ENG_MAN_START"] = "Engine Manual Start",
+        ["GND_HYD"] = "Hydraulics",
+        ["AIR"] = "Air Conditioning",
+        ["CABIN_PRESS"] = "Pressurization",
         ["VENT"] = "Ventilation",
-        ["CARGO_AIR_COND"] = "Cargo Air Conditioning",
+        ["CARGO_AIR_COND"] = "Cargo Air",
+        ["ANTI_ICE"] = "Anti Ice",
+        ["FIRE"] = "Fire",
         ["CARGO_SMOKE"] = "Cargo Smoke",
         ["CAB_SMOKE"] = "Cabin Smoke",
-        ["GND_HYD"] = "Ground Hydraulics",
+        ["OXYGEN"] = "Oxygen",
+        ["CALLS"] = "Calls",
+        ["EVAC"] = "Evacuation",
+        ["SIGNS"] = "Signs",
+        ["WIPERS"] = "Wipers",
+        ["IRS"] = "ADIRS",
+        ["FCTL"] = "Flight Control Computers",
+        ["ENG_MAN_START"] = "Engine FADEC and Manual Start",
+        ["RCD"] = "Recorder and Misc",
+        ["CVR"] = "Recorder and Misc",
+        ["ELT"] = "Recorder and Misc",
+        ["SURV"] = "Surveillance",
         ["CABIN"] = "Cabin",
         ["OIS"] = "OIS",
-        ["SURV"] = "Surveillance",
         ["MAINTENANCE"] = "Maintenance",
+        ["LIGHT_INT"] = "Interior Lighting",
+        ["LIGHTS_EXT"] = "Exterior Lighting",
         // Glareshield
         ["FCU"] = "FCU",
         ["EFIS_CPT"] = "EFIS Captain",
         ["EFIS_FO"] = "EFIS First Officer",
         // Instrument panel (main instrument panel and its side consoles)
-        ["MIP_SIDE_PANEL_LEFT"] = "Captain Side Panel",
-        ["MIP_INDIVIDUAL_PANEL_LEFT"] = "Captain Individual Panel",
+        ["LDG_PANEL"] = "Autobrake",
+        ["ISIS_1"] = "ISIS",
+        ["ISIS_2"] = "ISIS",
+        ["ADIRS_FMS"] = "Source Switching",
         ["DISPLAY_EFB_LEFT_PWR"] = "Display Power", ["DISPLAY_EFB_RIGHT_PWR"] = "Display Power",
         ["DISPLAY_EFIS_LEFT_PWR"] = "Display Power", ["DISPLAY_EFIS_RIGHT_PWR"] = "Display Power",
         ["DISPLAY_PFDND_MFD_PWR"] = "Display Power", ["DISPLAY_SD_PWR"] = "Display Power",
-        ["ADIRS_FMS"] = "FMS and Air Data",
-        ["LDG_PANEL"] = "Landing Gear and Brakes",
+        ["MIP_SIDE_PANEL_LEFT"] = "Captain Side Panel",
+        ["MIP_INDIVIDUAL_PANEL_LEFT"] = "Captain Individual Panel",
         ["MIP_INDIVIDUAL_PANEL_RIGHT"] = "First Officer Individual Panel",
         ["MIP_SIDE_PANEL_RIGHT"] = "First Officer Side Panel",
     };
 
-    /// <summary>A control iniBuilds files under another group, sent to the panel it sits on in the cockpit.</summary>
+    /// <summary>A control iniBuilds files under another group, sent to the panel the A380 puts it on.</summary>
     private static readonly Dictionary<string, string> ControlPanels = new(StringComparer.Ordinal)
     {
-        ["JETTISON_ARM"] = "Fuel Jettison",
-        ["JETTISON_ACTIVE"] = "Fuel Jettison",
-        ["EMER_ELEC_RAT"] = "Emergency Electrical Power",
+        ["JETTISON_ARM"] = "Fuel",
+        ["JETTISON_ACTIVE"] = "Fuel",
+        ["EMER_ELEC_RAT"] = "ELEC",
+        // The bleeds are their own panel on the A380; packs, hot air and temperatures stay Air Conditioning.
+        ["AIR_X_BLEED"] = "Bleed Air", ["AIR_ENG_BLEED_1"] = "Bleed Air", ["AIR_ENG_BLEED_2"] = "Bleed Air",
+        ["AIR_APU_BLEED"] = "Bleed Air",
+        // The occupants' lights and the coat stowage light are lights, not signs.
+        ["3RD_OCCPT_CONSOLE_BRT"] = "Interior Lighting", ["3RD_OCCPT_READING_BRT"] = "Interior Lighting",
+        ["4RD_OCCPT_READING_BRT"] = "Interior Lighting", ["LIGHTS_INT_COAT_STWG"] = "Interior Lighting",
+        ["LIGHTS_INT_ANN_LT"] = "Interior Lighting", ["LIGHTS_INT_STBY_COMPASS"] = "Interior Lighting",
+        // The FADEC ground power buttons sit with the engine start, as the A380's "Engine FADEC and Manual Start".
+        ["MAINT_ENG_FADEC_GND_POWER_1"] = "Engine FADEC and Manual Start",
+        ["MAINT_ENG_FADEC_GND_POWER_2"] = "Engine FADEC and Manual Start",
+        // Glareshield: the warning lights and chronos as the A380's Warnings; the HUD and the side controls apart.
+        ["FCU_MASTER_CAUTION_LEFT"] = "Warnings", ["FCU_MASTER_CAUTION_RIGHT"] = "Warnings",
+        ["FCU_MASTER_WARNING_LEFT"] = "Warnings", ["FCU_MASTER_WARNING_RIGHT"] = "Warnings",
+        ["FCU_AUTO_LAND_LEFT"] = "Warnings", ["FCU_AUTO_LAND_RIGHT"] = "Warnings",
+        ["FCU_ATC_MSG_LEFT"] = "Warnings", ["FCU_ATC_MSG_RIGHT"] = "Warnings",
+        ["FCU_CHRONO_LEFT"] = "Warnings", ["FCU_CHRONO_RIGHT"] = "Warnings",
+        ["FCU_HUD_BRIGHTNESS_LEFT"] = "HUD", ["FCU_HUD_BRIGHTNESS_RIGHT"] = "HUD",
+        ["FCU_HUD_XWIND_LEFT"] = "HUD", ["FCU_HUD_XWIND_RIGHT"] = "HUD",
+        ["INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID"] = "HUD", ["INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID"] = "HUD",
+        ["FCU_LOUD_SPEAKER_LEFT"] = "Loudspeakers and Table Lights", ["FCU_LOUD_SPEAKER_RIGHT"] = "Loudspeakers and Table Lights",
+        ["FCU_SLIDING_TABLE_BRT_LEFT"] = "Loudspeakers and Table Lights",
+        ["FCU_SLIDING_TABLE_BRT_RIGHT"] = "Loudspeakers and Table Lights",
+        // Instrument: the gear lever, anti-skid and brake fans as the A380's Gear panel; the rest is Autobrake.
+        ["LDG_LEVER"] = "Gear", ["LDG_ANTI_SKID"] = "Gear", ["LDG_BRK_HOT"] = "Gear",
     };
 
-    /// <summary>The order of each section's panels; a panel not named here follows them in cockpit file order.</summary>
+    /// <summary>The order of each section's panels, the A380's where the panels are shared; a panel listed here belongs to
+    /// that section whatever iniBuilds' area (the ISIS, filed under the pedestal, is the Instrument section's as on the
+    /// A380). A panel not named here follows them in cockpit file order.</summary>
     private static readonly Dictionary<string, List<string>> PanelOrder = new(StringComparer.Ordinal)
     {
         ["Overhead"] = new()
         {
-            "Wipers", "Calls and Evacuation", "Oxygen", "Recorder", "ELT", "Emergency Electrical Power", "Fuel Jettison",
-            "Flight Controls", "ADIRS", "Exterior Lighting", "APU", "Interior Lighting and Signs", "Anti-Ice",
-            "Air Conditioning", "Cabin Pressure", "Electrical", "Fuel", "Hydraulics", "Fire", "Engine Manual Start",
-            "Ventilation", "Cargo Air Conditioning", "Cargo Smoke", "Cabin Smoke", "Ground Hydraulics", "Cabin", "OIS",
-            "Surveillance", "Maintenance",
+            "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Wipers", "ADIRS",
+            "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc", "Surveillance", "Cabin", "OIS",
+            "Maintenance", "Interior Lighting", "Exterior Lighting",
         },
-        ["Glareshield"] = new() { "FCU", "EFIS Captain", "EFIS First Officer" },
+        ["Glareshield"] = new() { "FCU", "EFIS Captain", "EFIS First Officer", "Warnings", "HUD", "Loudspeakers and Table Lights" },
         ["Instrument"] = new()
         {
-            "Captain Side Panel", "Captain Individual Panel", "Display Power", "FMS and Air Data", "Landing Gear and Brakes",
+            "Gear", "Autobrake", "ISIS", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
             "First Officer Individual Panel", "First Officer Side Panel",
         },
     };

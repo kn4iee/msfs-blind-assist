@@ -47,8 +47,15 @@ public static partial class A350PanelLayout
     /// <summary>Whether a map control is placed on a panel at all.</summary>
     public static bool IsPlaced(A350Control control) => control.Kind is not (A350Kinds.Cover or A350Kinds.None);
 
-    public static string SectionFor(A350Control control) =>
-        AreaSections.TryGetValue(control.Area, out var section) ? section : "Cockpit";
+    /// <summary>The section a panel's order lists it in, else iniBuilds' area's.</summary>
+    public static string SectionFor(A350Control control)
+    {
+        string panel = PanelFor(control);
+        foreach (var (section, panels) in PanelOrder)
+            if (panels.Contains(panel))
+                return section;
+        return AreaSections.TryGetValue(control.Area, out var byArea) ? byArea : "Cockpit";
+    }
 
     public static string PanelFor(A350Control control)
     {

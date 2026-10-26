@@ -10,24 +10,23 @@ public class A350PanelLayoutTests
     private static A350PlacedRow Row(string panel, string key) => Placement.RowsByPanel[panel].Single(r => r.Key == key);
 
     [Fact]
-    public void The_overhead_panels_follow_the_manuals_cockpit_layout()
+    public void The_overhead_panels_follow_the_A380s_order()
     {
         Assert.Equal(new[]
         {
-            "Wipers", "Calls and Evacuation", "Oxygen", "Recorder", "ELT", "Emergency Electrical Power", "Fuel Jettison",
-            "Flight Controls", "ADIRS", "Exterior Lighting", "APU", "Interior Lighting and Signs", "Anti-Ice",
-            "Air Conditioning", "Cabin Pressure", "Electrical", "Fuel", "Hydraulics", "Fire", "Engine Manual Start",
-            "Ventilation", "Cargo Air Conditioning", "Cargo Smoke", "Cabin Smoke", "Ground Hydraulics", "Cabin", "OIS",
-            "Surveillance", "Maintenance",
+            "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Wipers", "ADIRS",
+            "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc", "Surveillance", "Cabin", "OIS",
+            "Maintenance", "Interior Lighting", "Exterior Lighting",
         }, Placement.Structure["Overhead"]);
     }
 
     [Fact]
-    public void The_instrument_panels_read_left_to_right_across_the_cockpit()
+    public void The_instrument_panels_follow_the_A380s_order()
     {
         Assert.Equal(new[]
         {
-            "Captain Side Panel", "Captain Individual Panel", "Display Power", "FMS and Air Data", "Landing Gear and Brakes",
+            "Gear", "Autobrake", "ISIS", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
             "First Officer Individual Panel", "First Officer Side Panel",
         }, Placement.Structure["Instrument"]);
     }
@@ -41,7 +40,7 @@ public class A350PanelLayoutTests
     [Fact]
     public void A_toggle_row_offers_its_positions_in_sentence_case()
     {
-        var bat = Row("Electrical", "A350_ELEC_BAT_1");
+        var bat = Row("ELEC", "A350_ELEC_BAT_1");
         Assert.Equal("BAT 1", bat.Name);
         Assert.Equal(A350RowAction.Set, bat.Action);
         Assert.Equal(new Dictionary<double, string> { [0] = "Off", [1] = "On" }, bat.Positions);
@@ -51,7 +50,7 @@ public class A350PanelLayoutTests
     public void A_selector_keeps_the_tooltip_words_by_state_value()
     {
         Assert.Equal(new Dictionary<double, string> { [0] = "On", [1] = "Auto", [2] = "Off" },
-            Row("Interior Lighting and Signs", "A350_SIGNS_SEAT_BELTS").Positions);
+            Row("Signs", "A350_SIGNS_SEAT_BELTS").Positions);
     }
 
     [Fact]
@@ -64,17 +63,17 @@ public class A350PanelLayoutTests
     [Fact]
     public void Misnamed_and_shared_titles_are_named_apart()
     {
-        Assert.Equal("ENG 1 bleed", Row("Air Conditioning", "A350_AIR_ENG_BLEED_1").Name);
-        Assert.Equal("ENG 2 FADEC GND PWR", Row("Maintenance", "A350_MAINT_ENG_FADEC_GND_POWER_2").Name);
+        Assert.Equal("ENG 1 bleed", Row("Bleed Air", "A350_AIR_ENG_BLEED_1").Name);
+        Assert.Equal("ENG 2 FADEC GND PWR", Row("Engine FADEC and Manual Start", "A350_MAINT_ENG_FADEC_GND_POWER_2").Name);
         Assert.Equal("Captain wiper", Row("Wipers", "A350_WIPER_LEFT").Name);
         Assert.Equal("ENG 2 agent 1", Row("Fire", "A350_FIRE_ENG_2_AGENT_1").Name);
     }
 
     [Fact]
-    public void Jettison_controls_sit_on_their_own_panel()
+    public void Jettison_controls_sit_on_the_fuel_panel()
     {
-        Assert.Contains(Placement.RowsByPanel["Fuel Jettison"], r => r.Key == "A350_JETTISON_ARM");
-        Assert.DoesNotContain(Placement.RowsByPanel["Fuel"], r => r.Key == "A350_JETTISON_ARM");
+        Assert.Contains(Placement.RowsByPanel["Fuel"], r => r.Key == "A350_JETTISON_ARM");
+        Assert.DoesNotContain(Placement.Structure["Overhead"], p => p == "Fuel Jettison");
     }
 
     [Fact]
@@ -94,7 +93,7 @@ public class A350PanelLayoutTests
     [Fact]
     public void An_encoder_is_an_increase_and_a_decrease_row()
     {
-        var rows = Placement.RowsByPanel["Cabin Pressure"].Select(r => r.Name).ToList();
+        var rows = Placement.RowsByPanel["Pressurization"].Select(r => r.Name).ToList();
         Assert.Contains("Cabin altitude target increase", rows);
         Assert.Contains("Cabin altitude target decrease", rows);
     }
