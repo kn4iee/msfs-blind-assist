@@ -140,10 +140,10 @@ public class Bbs757ProgTests
     [InlineData(1, new[] { "PROG" })]
     [InlineData(2, new[] { "PROG", "PREV" })]
     [InlineData(3, new[] { "PROG", "PREV", "PREV" })]
-    public void Prog_opening_on_page_two_or_three_steps_back_to_page_one(int opensOn, string[] keys)
+    public async Task Prog_opening_on_page_two_or_three_steps_back_to_page_one(int opensOn, string[] keys)
     {
         var cdu = new FakeProgCdu(ProgPage) { OpensOn = opensOn };
-        var screen = Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None).GetAwaiter().GetResult();
+        var screen = await Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None);
 
         Assert.NotNull(screen);
         Assert.True(Bbs757Prog.IsPageOne(screen!));
@@ -151,18 +151,18 @@ public class Bbs757ProgTests
     }
 
     [Fact]
-    public void Prev_that_does_not_reach_page_one_gives_up_after_two_presses()
+    public async Task Prev_that_does_not_reach_page_one_gives_up_after_two_presses()
     {
         var cdu = new FakeProgCdu(ProgPage) { OpensOn = 3, IgnorePrev = true };
-        Assert.Null(Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None).GetAwaiter().GetResult());
+        Assert.Null(await Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None));
         Assert.Equal(new[] { "PROG", "PREV", "PREV" }, cdu.Keys);
     }
 
     [Fact]
-    public void An_unreachable_cdu_reads_nothing()
+    public async Task An_unreachable_cdu_reads_nothing()
     {
         var cdu = new FakeProgCdu(ProgPage) { IsReadable = false };
-        Assert.Null(Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None).GetAwaiter().GetResult());
+        Assert.Null(await Bbs757Prog.ReadPageOneAsync(Pages(cdu), CancellationToken.None));
         Assert.Empty(cdu.Keys);
     }
 
