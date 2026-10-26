@@ -167,9 +167,8 @@ public class Bbs757McpTests
             Assert.True(FcuValueEntry.TrySpeed(value, out int speed, out _));
             Assert.Equal(250, speed);
 
-            Assert.True(Bbs757Mcp.TrySpeedInput("250", out int knots, out string? error));
-            Assert.Equal(250, knots);
-            Assert.Null(error);
+            Assert.True(Bbs757Mach.TryParse("250", out var entry, out string error), error);
+            Assert.Equal(250, entry.Knots);
         });
     }
 
@@ -195,30 +194,6 @@ public class Bbs757McpTests
                 Assert.All(all, s => Assert.DoesNotContain("−", s));   // sv-SE's minus sign
             });
         }
-    }
-
-    [Fact]
-    public void A_typed_speed_takes_knots_and_refuses_mach_aloud()
-    {
-        Assert.True(Bbs757Mcp.TrySpeedInput("250", out int knots, out _));
-        Assert.Equal(250, knots);
-        Assert.True(Bbs757Mcp.TrySpeedInput("100", out _, out _));
-        Assert.True(Bbs757Mcp.TrySpeedInput("399", out _, out _));
-
-        Assert.False(Bbs757Mcp.TrySpeedInput("0.82", out _, out string? mach));
-        Assert.Equal("Mach entry is not supported yet. Enter a speed from 100 to 399 knots.", mach);
-        InCulture("de-DE", () =>
-        {
-            Assert.False(Bbs757Mcp.TrySpeedInput("0,82", out _, out string? machDe));
-            Assert.Equal(Bbs757Mcp.MachEntryRefusal, machDe);
-        });
-
-        Assert.False(Bbs757Mcp.TrySpeedInput("99", out _, out string? low));
-        Assert.False(Bbs757Mcp.TrySpeedInput("400", out _, out string? high));
-        Assert.False(Bbs757Mcp.TrySpeedInput("", out _, out string? empty));
-        Assert.False(Bbs757Mcp.TrySpeedInput("fast", out _, out string? text));
-        Assert.All(new[] { low, high, empty, text }, e => Assert.False(string.IsNullOrEmpty(e)));
-        Assert.NotEqual(Bbs757Mcp.MachEntryRefusal, low);
     }
 
     [Fact]
@@ -304,12 +279,6 @@ public class Bbs757McpTests
         Assert.Equal("Altitude unavailable", Bbs757Mcp.AltitudePhrase(null));
         Assert.Equal("Vertical speed unavailable", Bbs757Mcp.VsPhrase(null));
         Assert.Equal("Speed unavailable", Bbs757Mcp.SpeedPhrase(double.NaN));
-    }
-
-    [Fact]
-    public void The_mach_mode_message_is_the_plans()
-    {
-        Assert.Equal("MCP is in Mach mode. Set Mach from the Glareshield panel.", Bbs757Mcp.MachModeSetRefusal);
     }
 
     // ---- Set loops against a simulated MCP ---------------------------------------------------
@@ -637,11 +606,12 @@ public class Bbs757McpTests
     [Fact]
     public async Task A_speed_set_in_mach_mode_writes_nothing_and_says_so()
     {
+        // The definition changes the window to knots first; Mach here means that did not hold.
         var mcp = new FakeMcp { Mach = 1 };
 
         string said = await Bbs757Mcp.SetSpeedAsync(mcp.Io, 250, default);
 
-        Assert.Equal("MCP is in Mach mode. Set Mach from the Glareshield panel.", said);
+        Assert.Equal("IAS/MACH changeover is not available now", said);
         Assert.Empty(mcp.Writes);
     }
 

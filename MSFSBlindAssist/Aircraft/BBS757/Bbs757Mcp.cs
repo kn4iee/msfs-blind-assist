@@ -109,11 +109,8 @@ public static class Bbs757Mcp
     /// <summary>The V/S target reads inside these limits (feet per minute); anything else is unreadable.</summary>
     public const double VsReadMin = -8000, VsReadMax = 6000;
 
-    public const string MachModeSetRefusal = "MCP is in Mach mode. Set Mach from the Glareshield panel.";
-    public const string MachEntryRefusal = "Mach entry is not supported yet. Enter a speed from 100 to 399 knots.";
     public const string MachModeReadNote = "MCP is in Mach mode. Mach is not read yet.";
 
-    private const string SpeedRangeError = "Speed must be between 100 and 399 knots";
     private const string VsRangeError = "Vertical speed must be between minus 8000 and 6000 feet per minute";
 
     // =================================================================================
@@ -206,22 +203,6 @@ public static class Bbs757Mcp
         degrees = 0;
         if (!NumberParsing.TryParseTyped(input, out double value)) { error = FcuValueEntry.InvalidNumber; return false; }
         return FcuValueEntry.TryHeading(value, out degrees, out error);
-    }
-
-    /// <summary>
-    /// A typed speed in knots, 100-399. <see cref="FcuValueEntry.TrySpeed"/> also takes Mach
-    /// 0.10-0.99, which the prototype does not set: that is refused with its own words so the pilot
-    /// is not left guessing why a valid-looking Mach number did nothing.
-    /// </summary>
-    public static bool TrySpeedInput(string? input, out int knots, out string? error)
-    {
-        knots = 0;
-        if (!NumberParsing.TryParseTyped(input, out double value)) { error = FcuValueEntry.InvalidNumber; return false; }
-        if (!FcuValueEntry.TrySpeed(value, out int internalSpeed, out _)) { error = SpeedRangeError; return false; }
-        if (value < 1.0) { error = MachEntryRefusal; return false; }
-        knots = internalSpeed;
-        error = null;
-        return true;
     }
 
     /// <summary>A typed altitude, 100-49000, rounded to the nearest hundred feet.</summary>
@@ -323,15 +304,17 @@ public static class Bbs757Mcp
     /// event moves exactly 1 kt. A shrinking remainder counts as progress even when its sign flipped
     /// (an overshoot brought nearer); one that did not shrink is not chased (the aircraft is not taking
     /// the steps, the variable is being overwritten, or the burst overshot by more than it undershot).
-    /// Speaks the value read last, never the request. In Mach mode nothing is sent and the pilot is
-    /// told to set Mach from the panel; a target outside 0 to <see cref="SpeedReadMax"/> knots is
-    /// unreadable ("Speed unavailable") and sends nothing. Throws <see cref="OperationCanceledException"/>
-    /// when canceled.
+    /// Speaks the value read last, never the request. In Mach mode nothing is sent: the caller changes
+    /// the window to knots first (<see cref="Bbs757Mach.EnsureUnitsAsync"/>), so Mach here means the
+    /// changeover did not hold (<see cref="Bbs757Mach.ChangeoverRefusal"/>); the IAS target is then the
+    /// Mach's equivalent and steps would move the Mach. A target outside 0 to <see cref="SpeedReadMax"/>
+    /// knots is unreadable ("Speed unavailable") and sends nothing. Throws
+    /// <see cref="OperationCanceledException"/> when canceled.
     /// </summary>
     public static async Task<string> SetSpeedAsync(McpIo io, int knots, CancellationToken ct)
     {
         double? mach = await io.Read(MachModeVar, ct);
-        if (mach is > 0.5) return MachModeSetRefusal;
+        if (mach is > 0.5) return Bbs757Mach.ChangeoverRefusal;
 
         double? current = await io.Read(SpeedVar, ct);
         if (!SpeedReadable(current)) return SpeedPhrase(null);
@@ -374,7 +357,7 @@ public static class Bbs757Mcp
     /// events, each followed by <see cref="SpeedBurstGapMs"/>, so no burst reaches BlueBird's 2 kt
     /// tier and every event moves the target exactly 1 kt.
     /// </summary>
-    private static async Task SendLinearBurstsAsync(McpIo io, bool up, long knots, CancellationToken ct)
+    internal static async Task SendLinearBurstsAsync(McpIo io, bool up, long knots, CancellationToken ct)
     {
         for (long left = knots; left > 0; left -= LinearBurstMax)
         {

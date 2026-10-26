@@ -109,19 +109,30 @@ public partial class BBS757Definition
 
     private delegate bool McpParser(string? input, out int value, out string? error);
 
-    /// <summary>What one value window is: its words, its validator and what an accepted value does.</summary>
-    private sealed record McpEntry(string Title, string Parameter, string Range, McpParser Parse,
-        Func<int, Task> Apply);
+    /// <summary>
+    /// What one value window is: its words, what is wrong with a typed text (null when it is accepted)
+    /// and what an accepted text does.
+    /// </summary>
+    private sealed record McpEntry(string Title, string Parameter, string Range, Func<string?, string?> Error,
+        Func<string, Task> Apply);
+
+    /// <summary>A window whose typed value is one whole number (heading, altitude, vertical speed).</summary>
+    private static McpEntry NumberEntry(string title, string parameter, string range, McpParser parse, Func<int, Task> set)
+        => new(title, parameter, range,
+            input => parse(input, out _, out string? error) ? null : error ?? "",
+            // The validator has accepted this text; parsing again is the only way the callback gets the number.
+            input => parse(input, out int value, out _) ? set(value) : Task.CompletedTask);
 
     private McpEntry EntryFor(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer) => action switch
     {
-        HotkeyAction.FCUSetHeading => new("MCP Heading", "heading", "0-360 (360 is north)", Bbs757Mcp.TryHeadingInput,
+        HotkeyAction.FCUSetHeading => NumberEntry("MCP Heading", "heading", "0-360 (360 is north)", Bbs757Mcp.TryHeadingInput,
             v => SetMcpHeadingAsync(v, sim, announcer)),
-        HotkeyAction.FCUSetSpeed => new("MCP Speed", "speed", "100-399 knots", Bbs757Mcp.TrySpeedInput,
-            v => SetMcpSpeedAsync(v, sim, announcer)),
-        HotkeyAction.FCUSetAltitude => new("MCP Altitude", "altitude", "100-49000 feet, rounded to 100", Bbs757Mcp.TryAltitudeInput,
+        HotkeyAction.FCUSetSpeed => new("MCP Speed", "speed", "100-399 knots, or Mach 0.40-0.86",
+            input => Bbs757Mach.TryParse(input, out _, out string error) ? null : error,
+            input => Bbs757Mach.TryParse(input, out var entry, out _) ? SetMcpSpeedAsync(entry, sim, announcer) : Task.CompletedTask),
+        HotkeyAction.FCUSetAltitude => NumberEntry("MCP Altitude", "altitude", "100-49000 feet, rounded to 100", Bbs757Mcp.TryAltitudeInput,
             v => SetMcpAltitudeAsync(v, sim, announcer)),
-        HotkeyAction.FCUSetVS => new("MCP Vertical Speed", "vertical speed", "-8000 to 6000 feet per minute, rounded to 100",
+        HotkeyAction.FCUSetVS => NumberEntry("MCP Vertical Speed", "vertical speed", "-8000 to 6000 feet per minute, rounded to 100",
             Bbs757Mcp.TryVerticalSpeedInput, v => SetMcpVerticalSpeedAsync(v, sim, announcer)),
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "not an MCP value window"),
     };
@@ -140,13 +151,9 @@ public partial class BBS757Definition
 
         var entry = EntryFor(action, sim, announcer);
         var dialog = new ValueInputForm(entry.Title, entry.Parameter, entry.Range, announcer,
-            input => entry.Parse(input, out _, out string? error) ? (true, "") : (false, error ?? ""),
+            input => entry.Error(input) is { } error ? (false, error) : (true, ""),
             McpWindowButtons(action, sim, announcer),
-            input =>
-            {
-                // The validator has accepted this text; parsing again is the only way the callback gets the number.
-                if (entry.Parse(input, out int value, out _)) _ = entry.Apply(value);
-            },
+            input => _ = entry.Apply(input),
             McpInputEnabled(action, sim));
 
         dialog.ShowCancelButton = false;
@@ -260,20 +267,56 @@ public partial class BBS757Definition
     /// already going there and will speak, so the repeat is ignored. A different speed supersedes.
     /// </summary>
     internal Task SetMcpSpeedAsync(int knots, SimConnectManager sim, ScreenReaderAnnouncer announcer)
-        => RunMcpSetAsync(Bbs757Mcp.SpeedVar, knots, ignoreSameValueInFlight: true, Bbs757Mcp.SpeedPhrase(null), sim, announcer,
-            (io, ct) => SetSpeedSpacedAsync(io, knots, ct));
+        => SetMcpSpeedAsync(new Bbs757SpeedEntry(knots, null), sim, announcer);
+
+    /// <summary>
+    /// A typed speed, knots or Mach (<see cref="Bbs757Mach.TryParse"/>). The window is first made to show
+    /// the entry's units (<see cref="Bbs757Mach.EnsureUnitsAsync"/>: IAS/MACH pressed silently when it shows
+    /// the other, refused aloud when that does not take), then the knots or the Mach are set in BlueBird's
+    /// knob tiers. Both are one set of the speed window: a newer one supersedes; a repeat of the same entry
+    /// in flight is ignored (a Mach is told apart from a knots value by an offset no knots value reaches).
+    /// </summary>
+    internal Task SetMcpSpeedAsync(Bbs757SpeedEntry entry, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        int? hundredths = entry.Hundredths;
+        int inFlightValue = hundredths is int h ? MachInFlightOffset + h : entry.Knots ?? 0;
+        string refusal = hundredths != null ? Bbs757Mach.Phrase(null) : Bbs757Mcp.SpeedPhrase(null);
+        return RunMcpSetAsync(Bbs757Mcp.SpeedVar, inFlightValue, ignoreSameValueInFlight: true, refusal, sim, announcer,
+            async (io, ct) =>
+            {
+                if (ChangeoverPress() is not { } changeover) return Bbs757Mach.ChangeoverRefusal;
+                string? refused = await Bbs757Mach.EnsureUnitsAsync(io, wantMach: hundredths != null, changeover,
+                    () => OnOwnWrite(Bbs757McpWindowLayout.ChangeoverNode), ct);
+                if (refused != null) return refused;
+                return await SpacedAsync(io, timed => hundredths is int target
+                    ? Bbs757Mach.SetMachAsync(timed, target, ct)
+                    : Bbs757Mcp.SetSpeedAsync(timed, entry.Knots ?? 0, ct), ct);
+            });
+    }
+
+    /// <summary>Added to a Mach set's hundredths for <see cref="RunMcpSetAsync"/>'s in-flight compare: above any knots value.</summary>
+    private const int MachInFlightOffset = 10_000;
+
+    /// <summary>The IAS/MACH button's press from the map, or null (logged) when the map lacks it.</summary>
+    private Bbs757Press? ChangeoverPress()
+    {
+        if (_byNode.TryGetValue(Bbs757McpWindowLayout.ChangeoverNode, out var control) && Bbs757Write.PressFor(control) is { } press)
+            return press;
+        Log.Warn("BBS757", $"{Bbs757McpWindowLayout.ChangeoverNode} is not a pressable control in the map; the speed window cannot change units.");
+        return null;
+    }
 
     /// <summary>When the last speed burst went out, on <see cref="NowMs"/>, whichever set sent it; null before the first.</summary>
     private long? _lastSpeedBurstMs;
 
     /// <summary>
-    /// A speed set kept out of the burst before it. BlueBird counts one burst across writes less than
-    /// about 0.3 s apart (<see cref="Bbs757Mcp"/>), and a set superseded just after its burst leaves that
-    /// burst counting: a newer set's first write inside <see cref="Bbs757Mcp.SpeedBurstGapMs"/> of it would
-    /// move 2 or 5 kt an event. So the rest of that gap is waited out first, before the target is read,
+    /// A speed or Mach set kept out of the burst before it. BlueBird counts one burst across writes less
+    /// than about 0.3 s apart (<see cref="Bbs757Mcp"/>), and a set superseded just after its burst leaves
+    /// that burst counting: a newer set's first write inside <see cref="Bbs757Mcp.SpeedBurstGapMs"/> of it
+    /// would move 2 or 5 an event. So the rest of that gap is waited out first, before the target is read,
     /// which also lets the last burst land; and every speed write of this set is timed for the next one.
     /// </summary>
-    private async Task<string> SetSpeedSpacedAsync(McpIo io, int knots, CancellationToken ct)
+    private async Task<string> SpacedAsync(McpIo io, Func<McpIo, Task<string>> set, CancellationToken ct)
     {
         if (_lastSpeedBurstMs is long last)
         {
@@ -290,7 +333,7 @@ public partial class BBS757Definition
                 _lastSpeedBurstMs = NowMs();
             },
         };
-        return await Bbs757Mcp.SetSpeedAsync(timed, knots, ct);
+        return await set(timed);
     }
 
     internal Task SetMcpAltitudeAsync(int feet, SimConnectManager sim, ScreenReaderAnnouncer announcer)

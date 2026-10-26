@@ -1,0 +1,331 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests;
+
+/// <summary>
+/// The 757's Mach entry through the speed window (gap plan 05, Task 3): the typed entry, the IAS/MACH
+/// changeover before a set in the other units, and the Mach set against a simulated MCP that behaves as
+/// flight-05.md M1 measured at FL290: one knob event moves 0.01 Mach, bursts speed up in BlueBird's knot
+/// tiers, the target stops at .40 but runs past .86 (to at least .95), and the Mach shows only on the
+/// window's wheels (<c>L:BBS_TARGET_MACH</c> stays 0). Whether the aircraft flies it is checked in the sim.
+/// </summary>
+public class Bbs757MachTests
+{
+    private const string RangeError = "Enter a speed from 100 to 399 knots, or a Mach number from 0.40 to 0.86.";
+
+    private static readonly Bbs757Press Changeover =
+        new("1 (>L:B757_MCP_AP_SPD_MACH_SW, bool)", "0 (>L:B757_MCP_AP_SPD_MACH_SW, bool)", 0);
+
+    private static void InCulture(string name, Action body)
+    {
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(name);
+            body();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    // ---- Typed entry ------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("250", 250, null)]
+    [InlineData("100", 100, null)]
+    [InlineData("399", 399, null)]
+    [InlineData("0.78", null, 0.78)]
+    [InlineData(".78", null, 0.78)]
+    [InlineData("M.78", null, 0.78)]
+    [InlineData("m0.78", null, 0.78)]
+    [InlineData(" M 0.40 ", null, 0.40)]
+    [InlineData("0.86", null, 0.86)]
+    public void Parses_knots_and_mach(string text, int? knots, double? mach)
+    {
+        Assert.True(Bbs757Mach.TryParse(text, out var entry, out string error), error);
+        Assert.Equal(knots, entry.Knots);
+        Assert.Equal(mach, entry.Mach);
+    }
+
+    [Fact]
+    public void Parses_a_comma_mach_under_de_DE()
+    {
+        InCulture("de-DE", () =>
+        {
+            Assert.True(Bbs757Mach.TryParse("0,78", out var entry, out _));
+            Assert.Equal(0.78, entry.Mach);
+            Assert.True(Bbs757Mach.TryParse("M,78", out entry, out _));
+            Assert.Equal(0.78, entry.Mach);
+        });
+    }
+
+    [Theory]
+    [InlineData("0.39")]
+    [InlineData("0.87")]
+    [InlineData("0.95")]       // BlueBird's target runs to .95; the app never sets past .86
+    [InlineData("0.785")]      // the window shows hundredths only
+    [InlineData("99")]
+    [InlineData("400")]
+    [InlineData("250.5")]
+    [InlineData("1.5")]
+    [InlineData("M250")]
+    [InlineData("")]
+    [InlineData("fast")]
+    [InlineData(null)]
+    public void Refuses_out_of_range(string? text)
+    {
+        Assert.False(Bbs757Mach.TryParse(text, out _, out string error));
+        Assert.Equal(RangeError, error);
+    }
+
+    [Theory]
+    [InlineData(0.78, "Mach 0.78")]
+    [InlineData(0.4, "Mach 0.40")]
+    [InlineData(null, "Mach unavailable")]
+    public void Phrase_is_two_decimals_and_invariant(double? mach, string said)
+    {
+        Assert.Equal(said, Bbs757Mach.Phrase(mach));
+        InCulture("de-DE", () => Assert.Equal(said, Bbs757Mach.Phrase(mach)));
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(8, 8, 0)]
+    [InlineData(10, 10, 0)]
+    [InlineData(13, 11, 1)]    // 11 events move 12 hundredths; the last one goes alone
+    [InlineData(40, 25, 0)]
+    [InlineData(46, 25, 6)]    // .40 to .86: never a burst into the unmeasured third tier
+    public void Bursts_use_the_knot_tiers_and_stop_at_the_measured_ones(int hundredths, int bulk, int rest)
+    {
+        Assert.Equal(new Bbs757SpeedBurstPlan(bulk, rest), Bbs757Mach.Bursts(hundredths));
+    }
+
+    // ---- The set against a simulated MCP ----------------------------------------------------
+
+    /// <summary>
+    /// The MCP as flight-05.md M1 measured it: the IAS/MACH flag, the window's wheels in Mach, the knob
+    /// events in tiers (1 hundredth each for events 1-10, 2 for 11-25, 3 after), the .40 floor and no
+    /// ceiling before .95. A changeover press flips the flag unless <see cref="ChangeoverWorks"/> is false
+    /// (on the ground, measured in session 8).
+    /// </summary>
+    private sealed class FakeMcp
+    {
+        private static readonly Regex BurstLoop =
+            new(@"^(\d+) sp0 :1 l0 0 > if\{ \(>K:AP_SPD_VAR_(INC|DEC)\) l0 1 - sp0 g1 \}$");
+
+        public double? MachFlag = 1;
+        public int Hundredths = 73;     // the Mach target, in hundredths
+        public bool WheelsReadable = true;
+        public bool ChangeoverWorks = true;
+        public int Peak;
+        public readonly List<string> Writes = new();
+        public long Now;
+
+        private long? _lastBurst;
+        private int _burstEvents;
+
+        public McpIo Io => new()
+        {
+            Read = (key, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                double? value = key switch
+                {
+                    Bbs757Mcp.MachModeVar => MachFlag,
+                    Bbs757Mcp.MachTenthsDrumVar => WheelsReadable ? Hundredths / 10 * 10 : null,
+                    Bbs757Mcp.MachHundredthsDrumVar => WheelsReadable ? (Hundredths % 10 + 1) * 10 : null,
+                    "BBS_TARGET_MACH" => 0,
+                    _ => null,
+                };
+                return Task.FromResult(value);
+            },
+            Write = rpn =>
+            {
+                Writes.Add(rpn);
+                if (rpn == Changeover.Down && ChangeoverWorks && MachFlag is double f) MachFlag = f > 0.5 ? 0 : 1;
+                var loop = BurstLoop.Match(rpn);
+                if (!loop.Success) return;
+                if (_lastBurst is not long last || Now - last >= 300) _burstEvents = 0;
+                _lastBurst = Now;
+                int sign = loop.Groups[2].Value == "INC" ? 1 : -1;
+                for (int i = int.Parse(loop.Groups[1].Value, CultureInfo.InvariantCulture); i > 0; i--)
+                {
+                    _burstEvents++;
+                    int step = _burstEvents <= 10 ? 1 : _burstEvents <= 25 ? 2 : 3;
+                    Hundredths = Math.Clamp(Hundredths + sign * step, 40, 95);
+                    Peak = Math.Max(Peak, Hundredths);
+                }
+            },
+            Delay = (ms, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                Now += ms;
+                return Task.CompletedTask;
+            },
+        };
+
+        public IEnumerable<string> Bursts => Writes.Where(w => w.Contains("AP_SPD_VAR_"));
+    }
+
+    [Fact]
+    public async Task Mach_set_against_a_fake_mcp_up()
+    {
+        var mcp = new FakeMcp { Hundredths = 70 };
+
+        string said = await Bbs757Mach.SetMachAsync(mcp.Io, 78, default);
+
+        Assert.Equal("Mach 0.78", said);
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(true, 8) }, mcp.Bursts);   // one burst, no correction
+    }
+
+    [Fact]
+    public async Task Mach_set_against_a_fake_mcp_down()
+    {
+        var mcp = new FakeMcp { Hundredths = 80 };
+
+        string said = await Bbs757Mach.SetMachAsync(mcp.Io, 74, default);
+
+        Assert.Equal("Mach 0.74", said);
+        Assert.Equal(new[] { Bbs757Mcp.SpeedBurstCode(false, 6) }, mcp.Bursts);
+    }
+
+    [Fact]
+    public async Task The_whole_range_in_one_set_never_passes_the_target()
+    {
+        var mcp = new FakeMcp { Hundredths = 40 };
+
+        string said = await Bbs757Mach.SetMachAsync(mcp.Io, 86, default);
+
+        Assert.Equal("Mach 0.86", said);
+        Assert.Equal(86, mcp.Peak);   // a burst of 30 would have run to .95 (measured)
+    }
+
+    [Fact]
+    public async Task A_burst_that_lands_short_is_corrected_in_linear_bursts()
+    {
+        // .41 to .60 with one event of the first burst lost: the remainder is sent again, 1 hundredth an event.
+        var mcp = new FakeMcp { Hundredths = 41 };
+        var io = mcp.Io;
+        bool dropped = false;
+        var lossy = new McpIo
+        {
+            Read = io.Read,
+            Delay = io.Delay,
+            Write = rpn =>
+            {
+                io.Write(rpn);
+                if (!dropped && rpn.Contains("AP_SPD_VAR_INC")) { dropped = true; mcp.Hundredths--; }
+            },
+        };
+
+        string said = await Bbs757Mach.SetMachAsync(lossy, 60, default);
+
+        Assert.Equal("Mach 0.60", said);
+        Assert.All(mcp.Bursts.Skip(1), b => Assert.True(int.Parse(b.Split(' ')[0], CultureInfo.InvariantCulture) <= Bbs757Mcp.LinearBurstMax));
+    }
+
+    [Fact]
+    public async Task Unread_wheels_send_nothing()
+    {
+        var mcp = new FakeMcp { WheelsReadable = false };
+
+        Assert.Equal("Mach unavailable", await Bbs757Mach.SetMachAsync(mcp.Io, 78, default));
+        Assert.Empty(mcp.Writes);
+    }
+
+    // ---- The IAS/MACH changeover before a set (ruling R59) ----------------------------------
+
+    [Fact]
+    public async Task Changeover_refused_on_the_ground()
+    {
+        var mcp = new FakeMcp { MachFlag = 0, ChangeoverWorks = false };
+        int presses = 0;
+
+        string? refused = await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach: true, Changeover, () => presses++, default);
+
+        Assert.Equal("IAS/MACH changeover is not available now", refused);
+        Assert.Equal(1, presses);
+        Assert.Equal(new[] { Changeover.Down, Changeover.Up }, mcp.Writes);   // the press and its release, nothing else
+        Assert.InRange(mcp.Now, 2000, 2500);                                   // waited out the 2 s for the flag
+    }
+
+    [Theory]
+    [InlineData(0.0, true)]
+    [InlineData(1.0, false)]
+    public async Task A_set_in_the_other_units_presses_the_changeover_first(double flag, bool wantMach)
+    {
+        var mcp = new FakeMcp { MachFlag = flag };
+        int presses = 0;
+
+        Assert.Null(await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach, Changeover, () => presses++, default));
+        Assert.Equal(1, presses);
+        Assert.Equal(wantMach ? 1 : 0, mcp.MachFlag);
+    }
+
+    [Theory]
+    [InlineData(1.0, true)]
+    [InlineData(0.0, false)]
+    [InlineData(null, false)]   // an unread flag never stops a knots set (as before)
+    public async Task A_set_in_the_shown_units_presses_nothing(double? flag, bool wantMach)
+    {
+        var mcp = new FakeMcp { MachFlag = flag };
+
+        Assert.Null(await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach, Changeover, () => { }, default));
+        Assert.Empty(mcp.Writes);
+    }
+
+    // ---- Through the speed window (the definition) --------------------------------------------
+
+    private static (BBS757Definition Def, SpeechCapture Speech, SimConnectManager Sim) Window(FakeMcp mcp)
+        => (new BBS757Definition { CanWrite = _ => true, NowMs = () => mcp.Now, McpSetIo = _ => mcp.Io },
+            new SpeechCapture(), new SimConnectManager(IntPtr.Zero));
+
+    [Fact]
+    public async Task A_typed_mach_in_knots_presses_the_changeover_then_sets_and_says_the_mach()
+    {
+        var mcp = new FakeMcp { MachFlag = 0, Hundredths = 73 };
+        var (def, speech, sim) = Window(mcp);
+
+        await def.SetMcpSpeedAsync(new Bbs757SpeedEntry(null, 0.78), sim, speech);
+
+        Assert.Equal(new[] { "Mach 0.78" }, speech.All);   // the changeover itself says nothing (R59)
+        Assert.Equal(1, mcp.MachFlag);
+        Assert.Equal(Changeover.Down, mcp.Writes[0]);      // the map's own press, before any burst
+    }
+
+    [Fact]
+    public async Task A_typed_mach_the_aircraft_cannot_change_to_is_refused_once_and_sends_no_burst()
+    {
+        var mcp = new FakeMcp { MachFlag = 0, ChangeoverWorks = false };
+        var (def, speech, sim) = Window(mcp);
+
+        await def.SetMcpSpeedAsync(new Bbs757SpeedEntry(null, 0.78), sim, speech);
+
+        Assert.Equal(new[] { "IAS/MACH changeover is not available now" }, speech.All);
+        Assert.Empty(mcp.Bursts);
+    }
+
+    [Fact]
+    public void The_speed_window_takes_mach_and_says_the_range()
+    {
+        Assert.True(Bbs757Mach.TryParse("0.78", out var entry, out _));
+        Assert.Equal(78, entry.Hundredths);
+        Assert.Null(new Bbs757SpeedEntry(250, null).Hundredths);
+    }
+
+    [Fact]
+    public async Task A_mach_set_with_the_flag_unread_presses_nothing()
+    {
+        // The changeover is a toggle: pressed on an unknown state it could leave the window in knots.
+        var mcp = new FakeMcp { MachFlag = null };
+
+        Assert.Equal("Mach unavailable", await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach: true, Changeover, () => { }, default));
+        Assert.Empty(mcp.Writes);
+    }
+}

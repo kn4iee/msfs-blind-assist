@@ -13,6 +13,9 @@ public static class Bbs757McpWindowLayout
     /// <summary>The IAS/MACH knob's push: BlueBird's speed intervention (<c>L:B757_MCP_IAS_MACH_KNOB_BUTTON</c>).</summary>
     public const string SpeedInterveneNode = "B757_MCP_AP_SPD_HOLD_SW";
 
+    /// <summary>The IAS/MACH changeover button: a Mach or knots set presses it when the window shows the other units.</summary>
+    public const string ChangeoverNode = "B757_MCP_AP_SPD_MACH_SW";
+
     private static readonly string[] Heading = { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_HOLD_1_BUTTON", "B757_MCP_LNAV_BUTTON" };
     private static readonly string[] Speed = { "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON", "B757_MCP_AP_SPD_MACH_SW", SpeedInterveneNode };
     private static readonly string[] Altitude = { "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VNAV_BUTTON", "B757_MCP_FLCH_BUTTON" };
