@@ -37,6 +37,9 @@ public partial class BBS757Definition
     /// <summary>The gear legs as last delivered, for the composed gear call-out and status row.</summary>
     private readonly Dictionary<string, double> _gearLegs = new(StringComparer.Ordinal);
 
+    /// <summary>The announced rows' last delivered values, for a row whose phrase reads another's (an IRS's switch).</summary>
+    private readonly Dictionary<string, double> _annunciatorValues = new(StringComparer.Ordinal);
+
     /// <summary>The clock the echo windows and the speed sets' spacing (BBS757Definition.Mcp.cs) run on; replaced by tests.</summary>
     internal Func<long> NowMs { get; init; } = () => Environment.TickCount64;
 
@@ -83,12 +86,14 @@ public partial class BBS757Definition
             Add(light.Key, StreamedRow(light.LightVar, light.Label, SimVarType.LVar, "number"));
 
         // The announced lights and states (plan 06): status rows on their panel's display, or on no display.
+        // A silent row (an IRS switch another row reads) rides the batch too, with no Ctrl+M row ([VAR-9]).
         foreach (var row in Bbs757Annunciators.Rows)
         {
             Add(row.Key, new SimVarDefinition
             {
                 Name = row.LVar, DisplayName = row.Label, Type = SimVarType.LVar, Units = "number",
                 UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+                ExcludeFromMonitorManager = row.Silent,
                 RenderAsReadOnlyStatus = row.Panel != null,
                 ValueDescriptions = row.States?.ToDictionary(p => p.Key, p => p.Value) ?? new Dictionary<double, string>(),
             });
@@ -257,7 +262,11 @@ public partial class BBS757Definition
         }
         if (Bbs757Annunciators.ForKey(varName) is { } row)
         {
-            SpeakChange(varName, row.Phrase(value, null), announcer);
+            _annunciatorValues[varName] = value;
+            double? related = row.RelatedKey != null && _annunciatorValues.TryGetValue(row.RelatedKey, out double r) ? r : null;
+            if (row.Phrase(value, related) is { } phrase
+                && _changes.Observe(varName, phrase, NowMs()) is { } said && Bbs757Annunciators.IsSpoken(said))
+                announcer.Announce(said);
             return true;
         }
         return false;
@@ -330,6 +339,7 @@ public partial class BBS757Definition
     {
         _changes.Reset();
         _gearLegs.Clear();
+        _annunciatorValues.Clear();
     }
 
     public override void ResetAnnouncementBaselines()

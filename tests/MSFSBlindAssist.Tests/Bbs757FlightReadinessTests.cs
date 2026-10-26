@@ -166,8 +166,10 @@ public class Bbs757FlightReadinessTests
     [Fact]
     public void The_engines_panel_shows_both_engines_beside_its_switches()
     {
-        // R45: an engine start (selector GND, watch N2, fuel control RUN, EGT) happens in one panel.
-        Assert.Equal(R.EngineRows.Select(r => r.Key), Def.GetPanelDisplayVariables()[BBS757Definition.EnginesPanel]);
+        // R45: an engine start (selector GND, watch N2, fuel control RUN, EGT) happens in one panel; the start
+        // valves (plan 06) follow the engine values there.
+        Assert.Equal(R.EngineRows.Select(r => r.Key).Concat(new[] { "BBS757_L_START_VALVE", "BBS757_R_START_VALVE" }),
+            Def.GetPanelDisplayVariables()[BBS757Definition.EnginesPanel]);
         Assert.Contains("BBS_fuelcut_PW1", Def.GetPanelControls()[BBS757Definition.EnginesPanel]);
         Assert.DoesNotContain(BBS757Definition.EnginesPanel, Def.GetPanelStructure()[BBS757Definition.StatusSection]);
     }

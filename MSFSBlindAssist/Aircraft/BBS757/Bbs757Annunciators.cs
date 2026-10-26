@@ -2,17 +2,24 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
 /// One of the 757's announced lights or states: the variable key the app reads it under, BlueBird's L:var,
-/// the Ctrl+M label (also its status row's name), the phrase a value speaks (null: silent; the second
-/// argument is a related row's last delivered value, null when there is none), the map panel whose status
+/// the Ctrl+M label (also its status row's name), the phrase a value maps to, the map panel whose status
 /// display shows it (null: on no display), and the words that display shows per value.
+/// <para>
+/// The phrase's second argument is the last delivered value of <paramref name="RelatedKey"/>'s row (null when
+/// there is none, or none was delivered). A null phrase is not tracked (an unreadable value, a door between
+/// its ends); a <see cref="Bbs757Annunciators.Quiet"/> phrase is a state that is tracked but never spoken (a
+/// blank autoland status, an alert going out), so the change out of it is still heard.
+/// </para>
+/// A <paramref name="Silent"/> row is only read for another row's phrase: it speaks nothing and has no Ctrl+M row.
 /// </summary>
 public sealed record Bbs757AnnunciatorRow(string Key, string LVar, string Label, Func<double, double?, string?> Phrase,
-    string? Panel, IReadOnlyDictionary<double, string>? States = null);
+    string? Panel, IReadOnlyDictionary<double, string>? States = null, string? RelatedKey = null, bool Silent = false);
 
 /// <summary>
 /// The 757's announced lights and states (plan 06): BlueBird's published L:vars, each spoken on change
-/// through the definition's <see cref="Bbs757ChangeTracker"/> (the cockpit as found is a silent baseline).
-/// Pure: the table and the words.
+/// through the definition's <see cref="Bbs757ChangeTracker"/> (the cockpit as found is a silent baseline):
+/// EXT PWR, the autoland status annunciator, the altitude alert, the configuration warning, each IRS aligned,
+/// the engine start valves and the doors. Pure: the table and the words.
 /// </summary>
 public static class Bbs757Annunciators
 {
@@ -22,29 +29,105 @@ public static class Bbs757Annunciators
     /// <summary>The map's panel with the EXT PWR button.</summary>
     public const string ElectricalPanel = "Electrical";
 
-    public static IReadOnlyList<Bbs757AnnunciatorRow> Rows { get; } = new[]
-    {
-        // The press's read-back and the row's change say the same words: the read-back rebaselines the row
-        // with LinkedPhrase, so a different phrase would announce the press a second time.
-        new Bbs757AnnunciatorRow(Bbs757SharedKeys.ExtPwrOn, "B757_OVHD_EXT_PWR_BUTTON_ON", "External Power On",
-            (v, _) => OnOff(v, "EXT PWR on", "EXT PWR off"), ElectricalPanel, States("Off", "On")),
-        new Bbs757AnnunciatorRow(Bbs757SharedKeys.ExtPwrAvail, "B757_OVHD_APUGENEXTPWR_R_AVAIL_DECAL", "External Power Available",
-            (v, _) => OnOff(v, "External power available", "External power not available"), ElectricalPanel,
-            States("Not available", "Available")),
-    };
+    /// <summary>
+    /// The prefix of a phrase that is a tracked state but never spoken (<see cref="IsSpoken"/>). The change
+    /// tracker speaks a change from a remembered phrase, so a state the pilot need not hear still needs one:
+    /// without it, the first spoken state after it would be taken for a baseline and lost.
+    /// </summary>
+    public const string Quiet = "quiet: ";
+
+    /// <summary>The IRS mode selector's NAV position (OFF 0, ALIGN 1, NAV 2, ATT 3).</summary>
+    private const double IrsNav = 2;
+
+    public static IReadOnlyList<Bbs757AnnunciatorRow> Rows { get; } = BuildRows();
 
     private static readonly Dictionary<string, Bbs757AnnunciatorRow> ByKey = Rows.ToDictionary(r => r.Key, StringComparer.Ordinal);
 
     /// <summary>The row read under this variable key, or null.</summary>
     public static Bbs757AnnunciatorRow? ForKey(string key) => ByKey.GetValueOrDefault(key);
 
+    /// <summary>Whether a tracked phrase is said aloud (not a <see cref="Quiet"/> state).</summary>
+    public static bool IsSpoken(string phrase) => !phrase.StartsWith(Quiet, StringComparison.Ordinal);
+
     /// <summary>The EXT PWR read-back: "EXT PWR on", "EXT PWR off", or "EXT PWR unavailable" when it was not read.</summary>
     public static string ExtPwrPhrase(double? value)
         => value is double v && ByKey[Bbs757SharedKeys.ExtPwrOn].Phrase(v, null) is { } phrase ? phrase : "EXT PWR unavailable";
 
+    private static List<Bbs757AnnunciatorRow> BuildRows()
+    {
+        var rows = new List<Bbs757AnnunciatorRow>
+        {
+            // The press's read-back and the row's change say the same words: the read-back rebaselines the row
+            // with LinkedPhrase, so a different phrase would announce the press a second time.
+            new(Bbs757SharedKeys.ExtPwrOn, "B757_OVHD_EXT_PWR_BUTTON_ON", "External Power On",
+                (v, _) => OnOff(v, "EXT PWR on", "EXT PWR off"), ElectricalPanel, States("Off", "On")),
+            new(Bbs757SharedKeys.ExtPwrAvail, "B757_OVHD_APUGENEXTPWR_R_AVAIL_DECAL", "External Power Available",
+                (v, _) => OnOff(v, "External power available", "External power not available"), ElectricalPanel,
+                States("Not available", "Available")),
+
+            // The autoland status annunciator's two lines (confirmed on the owner's first autoland, flight-06.md).
+            new("BBS757_ASA_UPPER", "B757_MAIN_L_AUTOLAND_1_BUTTON_ON", "Autoland Status Upper",
+                (v, _) => Asa(v, "LAND 3", "LAND 2", "upper blank"), BBS757Definition.StatusSection,
+                new Dictionary<double, string> { [0] = "LAND 3", [1] = "Blank", [2] = "LAND 2" }),
+            new("BBS757_ASA_LOWER", "B757_MAIN_L_AUTOLAND_2_BUTTON_ON", "Autoland Status Lower",
+                (v, _) => Asa(v, "NO LAND 3", "NO AUTOLAND", "lower blank"), BBS757Definition.StatusSection,
+                new Dictionary<double, string> { [0] = "NO LAND 3", [1] = "Blank", [2] = "NO AUTOLAND" }),
+
+            new("BBS757_ALT_ALERT", "BBS757_CA_ALTIMETER_ALT_ALERT_LIGHT", "Altitude Alert",
+                (v, _) => OnOff(v, "Altitude alert", Quiet + "altitude alert out"), null),
+            new("BBS757_CONFIG_WARNING", "B757_MAIN_CONFIG_1_DECAL", "Configuration Warning",
+                (v, _) => OnOff(v, "Configuration warning", Quiet + "configuration warning out"), null),
+        };
+
+        // Each IRS: the ALIGN light going out says "aligned" only with that IRS at NAV. A switch turned off also
+        // puts the light out, so the switch's last value rides along (a silent row of its own). The batch
+        // delivers in name order, so B757_IRS_x_SWITCH arrives before B757_OVHD_IRS_x_ALIGN_DECAL.
+        foreach (string irs in new[] { "L", "C", "R" })
+        {
+            string watch = $"BBS757_IRS_{irs}_SWITCH_WATCH";
+            rows.Add(new($"BBS757_IRS_{irs}_ALIGN", $"B757_OVHD_IRS_{irs}_ALIGN_DECAL", $"IRS {irs} Aligned",
+                (v, sw) => !double.IsFinite(v) ? null
+                    : v > 0.5 ? Quiet + $"IRS {irs} aligning"
+                    : sw == IrsNav ? $"IRS {irs} aligned"
+                    : Quiet + $"IRS {irs} align light out",
+                null, RelatedKey: watch));
+            rows.Add(new(watch, $"B757_IRS_{irs}_SWITCH", $"IRS {irs} Switch", (_, _) => null, null, Silent: true));
+        }
+
+        rows.Add(new("BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_VALVE_DECAL", "Left Start Valve",
+            (v, _) => OnOff(v, "Left start valve open", "Left start valve closed"), BBS757Definition.EnginesPanel,
+            States("Closed", "Open")));
+        rows.Add(new("BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_VALVE_DECAL", "Right Start Valve",
+            (v, _) => OnOff(v, "Right start valve open", "Right start valve closed"), BBS757Definition.EnginesPanel,
+            States("Closed", "Open")));
+
+        // The doors animate 0-100 (passenger) or 0-200 (cargo): only the ends speak.
+        foreach (string door in new[] { "L1", "L2", "L3", "R1", "R2", "R3" })
+            rows.Add(new($"BBS757_DOOR_{door}", $"B757_DOORS_PAX_{door}", $"Door {door}",
+                (v, _) => Door(v, $"Door {door}", open: 90, closed: 5), null));
+        rows.Add(new("BBS757_DOOR_CARGO_FWD", "B757_DOORS_CARGO_FWD", "Forward Cargo Door",
+            (v, _) => Door(v, "Forward cargo door", open: 180, closed: 10), null));
+        rows.Add(new("BBS757_DOOR_CARGO_AFT", "B757_DOORS_CARGO_AFT", "Aft Cargo Door",
+            (v, _) => Door(v, "Aft cargo door", open: 180, closed: 10), null));
+        return rows;
+    }
+
     /// <summary>A light's words: above 0.5 is lit; null when the value is not a number.</summary>
     private static string? OnOff(double value, string lit, string dark)
         => double.IsFinite(value) ? (value > 0.5 ? lit : dark) : null;
+
+    /// <summary>An autoland status line: 0 and 2 are its two messages, 1 blank (tracked, never spoken).</summary>
+    private static string? Asa(double value, string at0, string at2, string blank)
+        => !double.IsFinite(value) ? null : Math.Round(value) switch
+        {
+            0 => at0,
+            2 => at2,
+            _ => Quiet + blank,
+        };
+
+    /// <summary>A door at either end; null between them, so a door moving says only where it stops.</summary>
+    private static string? Door(double value, string name, double open, double closed)
+        => !double.IsFinite(value) ? null : value >= open ? $"{name} open" : value <= closed ? $"{name} closed" : null;
 
     private static IReadOnlyDictionary<double, string> States(string dark, string lit)
         => new Dictionary<double, string> { [0] = dark, [1] = lit };

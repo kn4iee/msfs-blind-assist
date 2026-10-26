@@ -187,6 +187,154 @@ public class Bbs757AnnunciatorsTests
         Assert.Equal(new[] { "Ground power disconnected", "External power not available" }, rig.Speech.All);
     }
 
+    // ---- Task 4: the essential announcements ---------------------------------------------------------------
+
+    /// <summary>Delivers each (key, value) in order and returns what was said.</summary>
+    private static List<string> Said(params (string Key, double Value)[] deliveries)
+    {
+        var rig = new Rig();
+        foreach (var (key, value) in deliveries) Assert.True(rig.Deliver(key, value));
+        return rig.Speech.All;
+    }
+
+    [Fact]
+    public void Asa_phrases()
+    {
+        // The upper ASA: 0 LAND 3, 2 LAND 2, 1 blank (silent); the first reading is a baseline.
+        Assert.Equal(new[] { "LAND 3", "LAND 2", "LAND 3" }, Said(
+            ("BBS757_ASA_UPPER", 1), ("BBS757_ASA_UPPER", 0), ("BBS757_ASA_UPPER", 2),
+            ("BBS757_ASA_UPPER", 1), ("BBS757_ASA_UPPER", 0)));
+        Assert.Equal(new[] { "NO LAND 3", "NO AUTOLAND" }, Said(
+            ("BBS757_ASA_LOWER", 1), ("BBS757_ASA_LOWER", 0), ("BBS757_ASA_LOWER", 1), ("BBS757_ASA_LOWER", 2)));
+        Assert.Empty(Said(("BBS757_ASA_UPPER", 0)));   // LAND 3 as found: no change
+    }
+
+    [Theory]
+    [InlineData("BBS757_ALT_ALERT", "Altitude alert")]
+    [InlineData("BBS757_CONFIG_WARNING", "Configuration warning")]
+    public void Alerts_speak_when_they_light(string key, string said)
+    {
+        Assert.Equal(new[] { said, said }, Said((key, 0), (key, 1), (key, 0), (key, 1)));
+        Assert.Empty(Said((key, 1), (key, 0)));   // lit as found, then out: silent
+    }
+
+    [Theory]
+    [InlineData("L")]
+    [InlineData("C")]
+    [InlineData("R")]
+    public void Irs_aligned_only_in_nav(string irs)
+    {
+        string light = $"BBS757_IRS_{irs}_ALIGN", sw = $"BBS757_IRS_{irs}_SWITCH_WATCH";
+
+        // OFF to NAV: the ALIGN light comes on, then goes out at NAV: aligned.
+        Assert.Equal(new[] { $"IRS {irs} aligned" }, Said((sw, 0), (light, 0), (sw, 2), (light, 1), (light, 0)));
+
+        // Switched off while aligning: the light goes out too, and nothing is said.
+        Assert.Empty(Said((sw, 1), (light, 0), (light, 1), (sw, 0), (light, 0)));
+        Assert.Empty(Said((sw, 2), (light, 1), (sw, 0), (light, 0)));
+
+        // The switch row itself is never spoken.
+        Assert.Empty(Said((sw, 0), (sw, 1), (sw, 2), (sw, 3)));
+    }
+
+    [Theory]
+    [InlineData("BBS757_DOOR_L1", 100, "Door L1")]
+    [InlineData("BBS757_DOOR_R3", 100, "Door R3")]
+    [InlineData("BBS757_DOOR_CARGO_FWD", 200, "Forward cargo door")]
+    [InlineData("BBS757_DOOR_CARGO_AFT", 200, "Aft cargo door")]
+    public void Door_ends_only(string key, double full, string name)
+    {
+        // Animating through the middle speaks only at the ends.
+        Assert.Equal(new[] { $"{name} open", $"{name} closed" }, Said(
+            (key, 0), (key, full * 0.3), (key, full * 0.6), (key, full * 0.95), (key, full * 0.5),
+            (key, full), (key, full * 0.2), (key, full * 0.02)));
+    }
+
+    [Fact]
+    public void Start_valves_open_and_close()
+    {
+        Assert.Equal(new[] { "Left start valve open", "Left start valve closed" },
+            Said(("BBS757_L_START_VALVE", 0), ("BBS757_L_START_VALVE", 1), ("BBS757_L_START_VALVE", 0)));
+        Assert.Equal(new[] { "Right start valve open" },
+            Said(("BBS757_R_START_VALVE", 0), ("BBS757_R_START_VALVE", 1)));
+    }
+
+    public static TheoryData<string, string, string, string?> Task4Rows => new()
+    {
+        { "BBS757_ASA_UPPER", "B757_MAIN_L_AUTOLAND_1_BUTTON_ON", "Autoland Status Upper", "Status" },
+        { "BBS757_ASA_LOWER", "B757_MAIN_L_AUTOLAND_2_BUTTON_ON", "Autoland Status Lower", "Status" },
+        { "BBS757_ALT_ALERT", "BBS757_CA_ALTIMETER_ALT_ALERT_LIGHT", "Altitude Alert", null },
+        { "BBS757_CONFIG_WARNING", "B757_MAIN_CONFIG_1_DECAL", "Configuration Warning", null },
+        { "BBS757_IRS_L_ALIGN", "B757_OVHD_IRS_L_ALIGN_DECAL", "IRS L Aligned", null },
+        { "BBS757_IRS_C_ALIGN", "B757_OVHD_IRS_C_ALIGN_DECAL", "IRS C Aligned", null },
+        { "BBS757_IRS_R_ALIGN", "B757_OVHD_IRS_R_ALIGN_DECAL", "IRS R Aligned", null },
+        { "BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_VALVE_DECAL", "Left Start Valve", "Engines" },
+        { "BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_VALVE_DECAL", "Right Start Valve", "Engines" },
+        { "BBS757_DOOR_L1", "B757_DOORS_PAX_L1", "Door L1", null },
+        { "BBS757_DOOR_L2", "B757_DOORS_PAX_L2", "Door L2", null },
+        { "BBS757_DOOR_L3", "B757_DOORS_PAX_L3", "Door L3", null },
+        { "BBS757_DOOR_R1", "B757_DOORS_PAX_R1", "Door R1", null },
+        { "BBS757_DOOR_R2", "B757_DOORS_PAX_R2", "Door R2", null },
+        { "BBS757_DOOR_R3", "B757_DOORS_PAX_R3", "Door R3", null },
+        { "BBS757_DOOR_CARGO_FWD", "B757_DOORS_CARGO_FWD", "Forward Cargo Door", null },
+        { "BBS757_DOOR_CARGO_AFT", "B757_DOORS_CARGO_AFT", "Aft Cargo Door", null },
+    };
+
+    [Theory]
+    [MemberData(nameof(Task4Rows))]
+    public void Rows_are_announced_and_muteable(string key, string lvar, string label, string? panel)
+    {
+        var def = new Rig(Bbs757ControlMap.Parse("""
+            {
+              "controls": [
+                { "node": "B757_A", "section": "Pedestal", "panel": "Engines", "label": "A", "kind": "toggle", "state_var": "B757_A" },
+                { "node": "B757_B", "section": "Overhead", "panel": "Electrical", "label": "B", "kind": "toggle", "state_var": "B757_B" }
+              ]
+            }
+            """)).Def;
+        var row = def.GetVariables()[key];
+
+        Assert.Equal(lvar, row.Name);
+        Assert.Equal(label, row.DisplayName);
+        Assert.Equal(SimVarType.LVar, row.Type);
+        Assert.Equal(UpdateFrequency.Continuous, row.UpdateFrequency);
+        Assert.True(row.IsAnnounced);
+        Assert.False(row.ExcludeFromMonitorManager);
+        Assert.Contains(def.MonitorRows(), r => r.Key == key && r.Label == label);
+        Assert.False(def.IsMuteWrapExempt(key));   // MainForm's Ctrl+M wrap mutes it ([VAR-8])
+
+        var shownOn = def.GetPanelDisplayVariables().Where(p => p.Value.Contains(key)).Select(p => p.Key).ToList();
+        Assert.Equal(panel == null ? Array.Empty<string>() : new[] { panel }, shownOn);
+        Assert.Equal(panel != null, row.RenderAsReadOnlyStatus);
+    }
+
+    [Theory]
+    [InlineData("L")]
+    [InlineData("C")]
+    [InlineData("R")]
+    public void Irs_switch_watches_are_silent_rows(string irs)
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        string key = $"BBS757_IRS_{irs}_SWITCH_WATCH";
+        var row = def.GetVariables()[key];
+
+        Assert.Equal($"B757_IRS_{irs}_SWITCH", row.Name);
+        Assert.Equal(UpdateFrequency.Continuous, row.UpdateFrequency);
+        Assert.True(row.ExcludeFromMonitorManager);   // it speaks nothing: no Ctrl+M row ([VAR-9])
+        Assert.DoesNotContain(def.MonitorRows(), r => r.Key == key);
+        Assert.DoesNotContain(key, def.GetPanelDisplayVariables().SelectMany(p => p.Value));
+    }
+
+    [Fact]
+    public void Variable_ceiling_holds()
+    {
+        var vars = new BBS757Definition { NestRunning = () => true }.GetVariables();
+        Assert.True(vars.Count < 900, $"{vars.Count} variables");
+        // Every row of the plan registered, each under its own key.
+        Assert.All(Bbs757Annunciators.Rows, r => Assert.Equal(r.LVar, vars[r.Key].Name));
+        Assert.Equal(22, Bbs757Annunciators.Rows.Count);
+    }
+
     [Fact]
     public void Every_row_speaks_the_same_under_a_comma_decimal_culture()
     {
