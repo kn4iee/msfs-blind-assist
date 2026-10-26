@@ -64,6 +64,9 @@ public class BBS757EfbForm : Form
     public const string LoadOnGroundOnlyText = "Fuel and payload load only on the ground.";
     public const string LoadGroundUnknownText = "The aircraft's ground state cannot be read, so nothing was loaded.";
     public const string PlanUnreadableText = "The SimBrief plan's fuel and weights could not be read. Nothing was loaded.";
+    public const string LoadNestMissingText = MSFSBlindAssist.Aircraft.BBS757Definition.NestMissingWarning + " Nothing was loaded.";
+    public const string UnitsQuestionOpenText =
+        "BlueBird is asking whether to switch the weight units. Press Accept units or Keep units first.";
 
     /// <summary>The two hosts a Navigraph sign-in address may have to be opened.</summary>
     private static readonly string[] NavigraphHosts = { "navigraph.com", "identity.api.navigraph.com" };
@@ -128,6 +131,8 @@ public class BBS757EfbForm : Form
     private Bbs757EfbRunKind? _lastRunKind;
     private bool _lastRunDone;
     private long? _fetchPageMs;
+    // Whether a fetch left BlueBird's units question up: the load refuses while it may be ([B757-4]).
+    private readonly Bbs757UnitsQuestion _unitsQuestion = new();
     // The work folder last written to the log, so a change of folder is logged once.
     private string? _loggedFolder;
     private bool _folderLogged;
@@ -216,15 +221,22 @@ public class BBS757EfbForm : Form
 
     /// <summary>
     /// What a finished SimBrief fetch says. BlueBird asks to switch the unit system only when the
-    /// plan's weight units differ from the aircraft's, and the question cannot be seen, so this says
-    /// when it comes, what each answer does, and the aircraft's units now when they can be read.
+    /// plan's weight units differ from the aircraft's, and the question cannot be seen. With both units
+    /// read (the plan's from the app's own fetch of the same plan), this says whether the question is up;
+    /// otherwise when it comes, what each answer does, and the aircraft's units now when they can be read.
     /// </summary>
-    internal static string FetchedText(Bbs757WeightUnits? aircraftUnits)
+    internal static string FetchedText(Bbs757WeightUnits? aircraftUnits, Bbs757WeightUnits? planUnits = null)
     {
+        const string next = " Then run ACARS INIT FLT in the CDU window.";
+        if (aircraftUnits is Bbs757WeightUnits aircraft && planUnits is Bbs757WeightUnits plan)
+            return plan == aircraft
+                ? $"SimBrief flight requested. The plan and the aircraft both use {Bbs757EfbLayout.UnitsName(aircraft)}.{next}"
+                : $"SimBrief flight requested. The plan is in {Bbs757EfbLayout.UnitsName(plan)} and the aircraft in " +
+                  $"{Bbs757EfbLayout.UnitsName(aircraft)}, so BlueBird is asking whether to switch: Accept units switches, " +
+                  $"Keep units keeps them, and the app says which units are set.{next}";
         string now = aircraftUnits is Bbs757WeightUnits u ? $" The aircraft uses {Bbs757EfbLayout.UnitsName(u)}." : "";
         return "SimBrief flight requested. If the plan's weight units differ from the aircraft's, BlueBird asks to switch them: " +
-               "Accept units switches, Keep units keeps them, and the app says which units are set." + now +
-               " Then run ACARS INIT FLT in the CDU window.";
+               "Accept units switches, Keep units keeps them, and the app says which units are set." + now + next;
     }
 
     // ------------------------------------------------------------------
@@ -742,11 +754,19 @@ public class BBS757EfbForm : Form
         }
     }
 
+    /// <summary>
+    /// FETCH SIMBRIEF OFP on the ACARS dashboard. Afterwards the app fetches the same latest plan itself,
+    /// off the UI thread, to learn its weight units: when they differ from the aircraft's, BlueBird is
+    /// asking whether to switch them, which the window says, and the EFB load refuses until Accept units
+    /// or Keep units answers it (<see cref="Bbs757UnitsQuestion"/>, [B757-4]). The ID is never logged or
+    /// spoken.
+    /// </summary>
     private async Task FetchSimBriefFlightAsync()
     {
         // Without an ID BlueBird fetches nothing and says nothing.
         string? folder = ResolveWorkFolder();
-        if (folder != null && Bbs757WorkFolder.ReadSimBriefId(folder) == null)
+        long? id = folder == null ? null : Bbs757WorkFolder.ReadSimBriefId(folder);
+        if (folder != null && id == null)
         {
             Refuse(SetSimBriefIdFirstText);
             return;
@@ -759,7 +779,20 @@ public class BBS757EfbForm : Form
             SayRunProblem(result);
             return;
         }
-        Say(FetchedText(folder == null ? null : Bbs757WorkFolder.ReadUnits(folder)));
+        Bbs757WeightUnits? aircraftUnits = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
+        Bbs757WeightUnits? planUnits = id is long simBriefId ? await PlanUnitsAsync(simBriefId) : null;
+        if (_disposed) return;
+        _unitsQuestion.AfterFetch(planUnits, aircraftUnits, _fetchPageMs);
+        Say(FetchedText(aircraftUnits, planUnits));
+    }
+
+    /// <summary>The weight units of the latest plan for the SimBrief ID, by the app's own fetch; null when it cannot be read.</summary>
+    private async Task<Bbs757WeightUnits?> PlanUnitsAsync(long simBriefId)
+    {
+        var ct = Lifetime;
+        var (xml, error) = await Task.Run(() => _loadIo.FetchOfpXml(simBriefId, ct), ct);
+        if (error != null || xml == null) return null;
+        return (await Task.Run(() => Bbs757Loadsheet.ParsePlan(xml), ct))?.Units;
     }
 
     /// <summary>
@@ -781,6 +814,8 @@ public class BBS757EfbForm : Form
 
         var guard = new Bbs757EfbRunGuard(SamePageAsMs: _fetchPageMs);
         var result = await RunAsync(Bbs757EfbRunKind.Units, Bbs757EfbLayout.AnswerUnits(accept), guard);
+        // A press that went out answered the question, whatever the run reported after it.
+        if (result == Bbs757EfbRunResult.Done || _efb.LastRunMayHaveClicked) _unitsQuestion.Answered();
         if (result != Bbs757EfbRunResult.Done)
         {
             SayRunProblem(result);
@@ -810,20 +845,30 @@ public class BBS757EfbForm : Form
     /// by the defuel question's YES (<see cref="Bbs757EfbLayout.LoadThroughEfb"/>), and BlueBird fuels
     /// and boards at its own pace. The window says "Fueling and boarding started…", and the
     /// definition's load watch (<see cref="Bbs757LoadWatch"/>) says "Fueling complete." and "Boarding
-    /// complete." as each finishes. BlueBird's completion boxes are left alone (ruling R42).
-    /// Nothing is tapped unless: no load is being watched ("The load is already running."); BlueBird
-    /// holds a SimBrief ID, which its own fetch uses; BA's fetch of that ID's latest plan parses, is for
-    /// a B752 and fits the tanks and holds, giving the watch its targets; the plan's weight units are
-    /// the aircraft's (<see cref="Bbs757Loadsheet.UnitsRefusal"/>), so BlueBird's fetch never asks to
-    /// switch them; and the aircraft is on the ground (SIM ON GROUND read fresh, as the presets). The
-    /// ID is never logged or spoken, and the log has numbers only. The fetch and the parse run off the
-    /// UI thread, and each await comes back to it, so the taps, the watch and the speech go out from it.
+    /// complete." as each finishes, or within three minutes that BlueBird has not started. BlueBird's
+    /// completion boxes are left alone (ruling R42).
+    /// Nothing is tapped unless: no load is being watched ("The load is already running."); BBS Nest
+    /// runs (without it BlueBird ignores every press); BlueBird holds a SimBrief ID, which its own fetch
+    /// uses; BA's fetch of that ID's latest plan parses, is for a B752 and fits the tanks and holds,
+    /// giving the watch its targets; the plan's weight units are the aircraft's
+    /// (<see cref="Bbs757Loadsheet.UnitsRefusal"/>), so BlueBird's fetch never asks to switch them, and no
+    /// earlier fetch left that question up (<see cref="Bbs757UnitsQuestion"/>, [B757-4]); and the aircraft
+    /// is on the ground (SIM ON GROUND read fresh, as the presets). A run that may have pressed something
+    /// without confirming every press is watched, never offered again: what a second START BOARDING press
+    /// does during a boarding is unmeasured. The ID is never logged or spoken, and the log has numbers
+    /// only. The fetch and the parse run off the UI thread, and each await comes back to it, so the taps,
+    /// the watch and the speech go out from it.
     /// </summary>
     private async Task LoadFuelAndPayloadAsync()
     {
         if (_loadIo.WatchRunning())
         {
             Refuse(Bbs757LoadWatch.AlreadyRunningText);
+            return;
+        }
+        if (!_loadIo.NestRunning())
+        {
+            Refuse(LoadNestMissingText);
             return;
         }
         string? folder = ResolveWorkFolder();
@@ -867,6 +912,14 @@ public class BBS757EfbForm : Form
             Refuse(unitsRefusal);
             return;
         }
+        // A question an earlier fetch raised stays up until answered, on the page it was raised on.
+        long? pageMs = (await _efb.ReadPageAsync(ct))?.LoadedMs;
+        if (_disposed) return;
+        if (_unitsQuestion.MayBeOpen(pageMs))
+        {
+            Refuse(UnitsQuestionOpenText);
+            return;
+        }
 
         // The ground is judged last, right before the taps.
         bool? onGround = await _readOnGround(OnGroundReadTimeoutMs, ct);
@@ -884,19 +937,16 @@ public class BBS757EfbForm : Form
 
         SetResult("Starting BlueBird's fuel and payload load.");
         var result = await RunAsync(Bbs757EfbRunKind.Load, Bbs757EfbLayout.LoadThroughEfb());
-        if (result != Bbs757EfbRunResult.Done)
+        if (result != Bbs757EfbRunResult.Done && !_efb.LastRunMayHaveClicked)
         {
-            SayRunProblem(result);
+            SayRunProblem(result);   // nothing was pressed: trying again is safe
             return;
         }
-        Log.Info("BBS757", Bbs757Loadsheet.LogLine("started", loads, null));
-        if (_loadIo.StartWatch(loads, units))
-        {
-            Say(Bbs757LoadWatch.StartedText);
-            return;
-        }
-        Log.Warn("BBS757", "SimBrief load: the load watch did not start.");
-        Say(Bbs757LoadWatch.StartedUnwatchedText);
+        bool confirmed = result == Bbs757EfbRunResult.Done;
+        Log.Info("BBS757", Bbs757Loadsheet.LogLine(confirmed ? "started" : "started, presses unconfirmed", loads, null));
+        bool watching = _loadIo.StartWatch(loads, units);
+        if (!watching) Log.Warn("BBS757", "SimBrief load: the load watch did not start.");
+        Say(Bbs757LoadWatch.StartedPhrase(confirmed, watching));
     }
 
     /// <summary>
@@ -1095,6 +1145,9 @@ public sealed class Bbs757LoadIo
 
     /// <summary>Whether the definition's load watch runs (<c>BBS757Definition.LoadWatchRunning</c>).</summary>
     public required Func<bool> WatchRunning { get; init; }
+
+    /// <summary>Whether BBS Nest runs now (<c>Bbs757Nest.IsRunning</c>): without it BlueBird ignores every press.</summary>
+    public required Func<bool> NestRunning { get; init; }
 
     /// <summary>
     /// Starts the definition's load watch toward the loads, speaking in the aircraft's units
