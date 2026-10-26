@@ -2,6 +2,7 @@
 paths:
   - "tools/a350-probe/**"
   - "tools/a350-gen/**"
+  - "tools/A350Probe/**"
   - "MSFSBlindAssist/Aircraft/A350/**"
   - "MSFSBlindAssist/Aircraft/IniBuildsA350*.cs"
   - "tests/MSFSBlindAssist.Tests/A350/**"

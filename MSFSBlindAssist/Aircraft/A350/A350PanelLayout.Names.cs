@@ -86,6 +86,13 @@ public static partial class A350PanelLayout
         ["3RD_OCCPT_READING_BRT"] = "Third occupant reading light",
         ["4RD_OCCPT_READING_BRT"] = "Fourth occupant reading light",
         ["LIGHTS_INT_COAT_STWG"] = "Coat stowage light",
+        // Calls and Evacuation: the rest-area calls named for whom they call (CCRC, FCRC), the EVAC rows by their panel.
+        ["CALLS_CAB_REST"] = "Cabin crew rest",
+        ["CALLS_FLT_REST"] = "Flight crew rest",
+        ["CALLS_PURS"] = "Purser",
+        ["EVAC_COMMAND"] = "EVAC command",
+        ["EVAC_HORN_OFF"] = "EVAC horn off",
+        ["EVAC_CAPT_PURS"] = "EVAC CAPT and PURS",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
@@ -95,5 +102,6 @@ public static partial class A350PanelLayout
         ["LIGHTS_EXT_NOSE"] = new() { [0] = "T.O", [1] = "Taxi", [2] = "Off" },
         ["LIGHTS_INT_STBY_COMPASS"] = new() { [0] = "Compass and eye reference", [1] = "Ice indicator", [2] = "Off" },
         ["SIGNS_EMER_EXIT"] = new() { [0] = "On", [1] = "Arm", [2] = "Off" },
+        ["EVAC_CAPT_PURS"] = new() { [0] = "Captain only", [1] = "Captain and purser" },
     };
 }

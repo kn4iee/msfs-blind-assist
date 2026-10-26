@@ -30,4 +30,36 @@ public class A350OverheadPanelTests
             ("First officer rain repellent", A350RowAction.Press, ""),
         }, Rows("Wipers"));
     }
+
+    private static IEnumerable<string> Lights(string panel)
+    {
+        var map = A350ControlMap.Load();
+        return A350PanelLamps.Resolve(map, Placement, new[] { "Overhead" }).Where(l => l.Panel == panel).Select(l => l.Name);
+    }
+
+    /// <summary>Live 2026-10-26 through MSFSBA's own path (tools/A350Probe): every call button presses; EMER, EVAC
+    /// COMMAND and the CAPT and PURS selector reach both positions. EVAC COMMAND lights its EVAC legend
+    /// (INI_EVAC_LIGHT) within seconds and puts it out when switched off. Only FWD, PURS and the EVAC variables are
+    /// read by the systems; the other calls are chimes. CAPT and PURS: 0 lets only the captain order an evacuation.</summary>
+    [Fact]
+    public void Calls_and_evacuation()
+    {
+        Assert.Equal(new[]
+        {
+            ("Aft", A350RowAction.Press, ""),
+            ("All", A350RowAction.Press, ""),
+            ("Cabin crew rest", A350RowAction.Press, ""),
+            ("Exit", A350RowAction.Press, ""),
+            ("Flight crew rest", A350RowAction.Press, ""),
+            ("Fwd", A350RowAction.Press, ""),
+            ("Mech call", A350RowAction.Press, ""),
+            ("Mid", A350RowAction.Press, ""),
+            ("Purser", A350RowAction.Press, ""),
+            ("EMER", A350RowAction.Set, "0=Off, 1=On"),
+            ("EVAC command", A350RowAction.Set, "0=Off, 1=On"),
+            ("EVAC horn off", A350RowAction.Press, ""),
+            ("EVAC CAPT and PURS", A350RowAction.Set, "0=Captain only, 1=Captain and purser"),
+        }, Rows("Calls and Evacuation"));
+        Assert.Equal(new[] { "EMER call light", "EVAC light" }, Lights("Calls and Evacuation"));
+    }
 }

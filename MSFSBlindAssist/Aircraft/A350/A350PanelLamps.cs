@@ -75,6 +75,12 @@ public static class A350PanelLamps
         ("_OPEN", "open"), ("_ISOL", "isolated"), ("_CALL", "call"), ("_END", "end"), ("_ON", "on"),
     };
 
+    /// <summary>A lamp's name where the generated one is vague: its legend, as printed on the button.</summary>
+    private static readonly Dictionary<string, string> NameOverrides = new(StringComparer.Ordinal)
+    {
+        ["EVAC_COMMAND_SEQ1_LIGHT"] = "EVAC light",
+    };
+
     public static string? PowerKeyFor(A350LightPower power) => power switch
     {
         A350LightPower.Ac => AcPowerKey,
@@ -112,7 +118,8 @@ public static class A350PanelLamps
                         if (stateVar != null && rule.Inputs.All(i => i == stateVar))
                             continue;   // its switch's own position legend
                         string legend = LegendOf(mapLamp.Node, rule, stateVar);
-                        string name = legend.Length == 0 ? $"{row.Name} light" : $"{row.Name} {legend} light";
+                        string name = NameOverrides.TryGetValue(mapLamp.Node, out var given) ? given
+                            : legend.Length == 0 ? $"{row.Name} light" : $"{row.Name} {legend} light";
                         lamps.Add(new A350Lamp(mapLamp.Node, name, panel, rule, mapLamp.Power));
                     }
                 }
