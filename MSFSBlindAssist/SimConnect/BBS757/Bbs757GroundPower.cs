@@ -26,13 +26,11 @@ public static class Bbs757GroundPower
     public const string ExtPwrOnKey = "BBS757_EFB_EXT_PWR_ON";
 
     /// <summary>
-    /// From just before the window's taps, how long a change of the ground power row counts as the window's
-    /// own run: longer than any run can take, so the run's end shortens it.
+    /// From just before the window's taps, the longest a change of the ground power row counts as the window's
+    /// own run: longer than any run can take, so it matters only for a run that never settles. A run that ends
+    /// ends the echo at once (the definition's <c>SettleGroundPowerEcho</c>).
     /// </summary>
     public const int WindowRunMaxMs = 60_000;
-
-    /// <summary>After the window's run is over, how long a delivery still in flight counts as its echo.</summary>
-    public const int WindowRunEchoMs = 8000;
 
     /// <summary>
     /// Null when the GPU tile may be tapped to <paramref name="connect"/> or disconnect the ground power;

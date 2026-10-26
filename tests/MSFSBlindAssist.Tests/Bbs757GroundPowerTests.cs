@@ -13,8 +13,9 @@ namespace MSFSBlindAssist.Tests;
 /// 2026-10-26), so the tile is tapped only when that variable reads the other way from the wish and, for a
 /// disconnect, external power is not on line. This pins what is said instead of a tap and after one, what
 /// the Ground Power row says when it changes, and the tile's click sequence. The second half is the
-/// definition's side (BBS757Definition.Efb.cs): the row on the Electrical panel, its speech, and the echo
-/// windows the window opens around its own run so a change it made is said once, by the window.
+/// definition's side (BBS757Definition.Efb.cs): the row on the Electrical panel, its speech, and the echo the
+/// window opens around its own run (armed before its taps, ended when it settles) so a change it made is said
+/// once, by the window.
 /// </summary>
 public class Bbs757GroundPowerTests
 {
@@ -171,10 +172,10 @@ public class Bbs757GroundPowerTests
             InCulture(culture, () => Assert.Equal(expected, Phrases()));
     }
 
-    // ---- the variables and the run windows ---------------------------------------------------------
+    // ---- the variables and the run window ----------------------------------------------------------
 
     [Fact]
-    public void The_variable_names_and_the_run_windows_are_pinned()
+    public void The_variable_names_and_the_run_window_are_pinned()
     {
         Assert.Equal("BBS_757_GPU_AC_PWR_CONNECTED", Bbs757GroundPower.ConnectedVar);
         Assert.Equal("B757_OVHD_EXT_PWR_BUTTON_ON", Bbs757GroundPower.ExtPwrOnVar);
@@ -182,7 +183,6 @@ public class Bbs757GroundPowerTests
         Assert.Equal("BBS757_EFB_EXT_PWR_ON", Bbs757GroundPower.ExtPwrOnKey);
         Assert.NotEqual(Bbs757SharedKeys.ExtPwrOn, Bbs757GroundPower.ExtPwrOnKey);
         Assert.Equal(60_000, Bbs757GroundPower.WindowRunMaxMs);
-        Assert.Equal(8000, Bbs757GroundPower.WindowRunEchoMs);
         // No run outlasts its window: the four taps take six seconds.
         Assert.True(Bbs757EfbLayout.TotalMs(Bbs757EfbLayout.ToggleGroundPower()) < Bbs757GroundPower.WindowRunMaxMs);
     }
@@ -245,11 +245,8 @@ public class Bbs757GroundPowerTests
         Assert.Equal(new Dictionary<double, string> { [0] = "Not connected", [1] = "Connected" }, gpu.ValueDescriptions);
         Assert.Contains(def.MonitorRows(), r => r.Key == GpuKey && r.Label == "Ground Power");
 
-        // It shows on the Electrical panel's status display, once, and is no control. The panel is the generated
-        // map's Overhead one: a regeneration that renamed it would drop the row without a word, and this pins it.
-        Assert.Contains(BBS757Definition.ElectricalPanel, def.GetPanelControls().Keys);
-        Assert.Single(def.GetPanelDisplayVariables()[BBS757Definition.ElectricalPanel], GpuKey);
-        Assert.Single(def.GetPanelDisplayVariables().SelectMany(p => p.Value), GpuKey);
+        // It is no control. Which panel's status display shows it is proved below through an in-memory map, not
+        // the generated one (the plan set's convention: tests never depend on another plan's map).
         Assert.DoesNotContain(GpuKey, def.GetPanelControls().SelectMany(p => p.Value));
 
         // The status display says it in words.
@@ -276,7 +273,7 @@ public class Bbs757GroundPowerTests
     }
 
     [Theory]
-    [InlineData(BBS757Definition.ElectricalPanel, true)]
+    [InlineData(BBS757Definition.GroundPowerPanel, true)]
     [InlineData("Pedestal", false)]
     public void The_row_joins_the_electrical_panel_only_when_the_map_has_one(string panel, bool joins)
     {
@@ -296,13 +293,14 @@ public class Bbs757GroundPowerTests
 
         if (joins)
         {
-            Assert.Single(displays[BBS757Definition.ElectricalPanel], GpuKey);
+            Assert.Single(displays[BBS757Definition.GroundPowerPanel], GpuKey);   // on that panel's display ...
+            Assert.Single(displays.SelectMany(p => p.Value), GpuKey);            // ... and on no other
         }
         else
         {
             // A display of a panel the map lacks would be an orphan entry whose rows silently vanish.
-            Assert.DoesNotContain(BBS757Definition.ElectricalPanel, def.GetPanelControls().Keys);
-            Assert.DoesNotContain(BBS757Definition.ElectricalPanel, displays.Keys);
+            Assert.DoesNotContain(BBS757Definition.GroundPowerPanel, def.GetPanelControls().Keys);
+            Assert.DoesNotContain(BBS757Definition.GroundPowerPanel, displays.Keys);
             Assert.DoesNotContain(GpuKey, displays.SelectMany(p => p.Value));
         }
         Assert.Contains(GpuKey, def.GetVariables().Keys);   // the row speaks whatever panels the map has
@@ -366,19 +364,15 @@ public class Bbs757GroundPowerTests
         rig.Deliver(0);                       // not connected: the baseline
         rig.Def.ArmGroundPowerEcho();         // right before the window's taps
 
-        rig.Now += 30_000;                    // a slow run: well past 8 s, inside 60 s
+        rig.Now += 30_000;                    // a slow run, inside the 60 s
         rig.Deliver(1);                       // the tile took: tracked, not spoken
         Assert.Empty(rig.Speech.All);
 
         rig.Def.SettleGroundPowerEcho(1);     // the run is over; the window said the result itself
-        rig.Deliver(1);                       // a delivery still in flight
+        rig.Deliver(1);                       // the delivery in flight: no change
         Assert.Empty(rig.Speech.All);
 
-        rig.Now += Bbs757GroundPower.WindowRunEchoMs + 1;   // past the echo
-        rig.Deliver(1);                       // the rebaseline holds: no change
-        Assert.Empty(rig.Speech.All);
-
-        rig.Deliver(0);                       // another source takes it away
+        rig.Deliver(0);                       // another source takes it away, right after: spoken
         Assert.Equal(new[] { RowDisconnected }, rig.Speech.All);
     }
 
@@ -391,17 +385,34 @@ public class Bbs757GroundPowerTests
 
         // The window read the connection after its taps (the delivery had not come yet) and said it.
         rig.Def.SettleGroundPowerEcho(1);
-        rig.Now += Bbs757GroundPower.WindowRunEchoMs + 1;   // the echo is over, the baseline is not
-        rig.Deliver(1);
+        rig.Deliver(1);                       // that delivery is no change, though the echo is over
 
         Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_late_change_after_a_run_whose_read_back_missed_the_wish_is_spoken()
+    {
+        var rig = new Rig();
+        rig.Deliver(0);
+        rig.Def.ArmGroundPowerEcho();         // Connect ground power
+        rig.Now += 6000;                      // the taps took their six seconds ...
+
+        // ... and the read-back was still not connected: the window said "BlueBird did not connect the ground power".
+        rig.Def.SettleGroundPowerEcho(0);
+        rig.Now += 3000;
+        rig.Deliver(0);                       // nothing yet
+        Assert.Empty(rig.Speech.All);
+
+        rig.Deliver(1);                       // BlueBird connects it after all: the aircraft's change, spoken
+        Assert.Equal(new[] { RowConnected }, rig.Speech.All);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
-    public void An_unread_settle_still_opens_the_echo(double? after)
+    public void An_unread_settle_keeps_the_baseline_and_ends_the_echo(double? after)
     {
         var rig = new Rig();
         rig.Deliver(0);
@@ -409,30 +420,29 @@ public class Bbs757GroundPowerTests
         rig.Now += 2000;                      // a quick run that read nothing at the end
 
         rig.Def.SettleGroundPowerEcho(after);
-        rig.Now += Bbs757GroundPower.WindowRunEchoMs - 1000;
-        rig.Deliver(1);                       // a change inside the 8 s: the run's
+        rig.Deliver(0);                       // still as it was: nothing
         Assert.Empty(rig.Speech.All);
 
-        // The settle shortened the run's 60 s to 8 s: past it, a change is another source's.
-        rig.Now += 2000;
-        rig.Deliver(0);
-        Assert.Equal(new[] { RowDisconnected }, rig.Speech.All);
+        rig.Deliver(1);                       // a change from the baseline of 0, after the run: spoken
+        Assert.Equal(new[] { RowConnected }, rig.Speech.All);
     }
 
     [Fact]
-    public void An_unread_settle_leaves_the_baseline_alone()
+    public void A_change_during_the_run_stays_silent_when_the_settle_reads_nothing()
     {
         var rig = new Rig();
         rig.Deliver(0);
         rig.Def.ArmGroundPowerEcho();
-        rig.Def.SettleGroundPowerEcho(null);
-        rig.Now += Bbs757GroundPower.WindowRunEchoMs + 1;
-
-        rig.Deliver(0);                       // still as it was: nothing
+        rig.Now += 5000;
+        rig.Deliver(1);                       // during the armed run, before the settle: tracked, not spoken
         Assert.Empty(rig.Speech.All);
 
-        rig.Deliver(1);                       // a change from the baseline of 0
-        Assert.Equal(new[] { RowConnected }, rig.Speech.All);
+        rig.Def.SettleGroundPowerEcho(null);  // nothing read at the end: the baseline is what the run tracked
+        rig.Deliver(1);                       // still: nothing
+        Assert.Empty(rig.Speech.All);
+
+        rig.Deliver(0);                       // another source's change, right after the run: spoken
+        Assert.Equal(new[] { RowDisconnected }, rig.Speech.All);
     }
 
     [Fact]
