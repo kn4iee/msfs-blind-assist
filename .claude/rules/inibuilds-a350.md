@@ -2,6 +2,8 @@
 paths:
   - "tools/a350-probe/**"
   - "tools/a350-gen/**"
+  - "MSFSBlindAssist/Aircraft/A350/**"
+  - "tests/MSFSBlindAssist.Tests/A350/**"
 ---
 # iniBuilds A350 rules
 

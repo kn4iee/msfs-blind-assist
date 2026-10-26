@@ -103,6 +103,8 @@
     <!-- TFDi MD-11 control map. EmbeddedResource, not a copied file: the aircraft has zero
          controls without it, so it must not be able to go missing from the output folder. -->
     <EmbeddedResource Include="Resources\md11_control_map.json" />
+    <!-- iniBuilds A350 control map (tools/a350-gen): embedded, like the MD-11's, so a missing file cannot leave the aircraft with no controls. -->
+    <EmbeddedResource Include="Resources\a350_control_map.json" />
   </ItemGroup>
 
   <ItemGroup>
