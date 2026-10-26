@@ -160,6 +160,39 @@ public class Bbs757IlsPanelTests
             Assert.Equal("ILS parked", Bbs757IlsPanel.Phrase(Bbs757IlsDial.LoadState));
             Assert.Equal("ILS parked", Bbs757IlsPanel.Phrase(new Bbs757IlsDial(4, 7)));   // whatever fraction PARK remembers
             Assert.Equal("ILS tuning unknown", Bbs757IlsPanel.Phrase(null));
+
+            // N and the Ctrl+N window say the count with its qualifier, so it never sounds like a reading
+            // (a read is said bare: ReadPhrase); no count is still "unknown".
+            Assert.Equal("ILS 110.50 by count", Bbs757IlsPanel.CountPhrase(Dial(110.50)));
+            Assert.Equal("ILS 108.10 by count", Bbs757IlsPanel.CountPhrase(Dial(108.10)));
+            Assert.Equal("ILS parked by count", Bbs757IlsPanel.CountPhrase(Bbs757IlsDial.LoadState));
+            Assert.Equal("ILS tuning unknown", Bbs757IlsPanel.CountPhrase(null));
+            Assert.NotEqual(Bbs757IlsPanel.ReadPhrase(new Bbs757IlsReading(false, 110.50, 95)), Bbs757IlsPanel.CountPhrase(Dial(110.50)));
+            Assert.NotEqual(Bbs757IlsPanel.ReadPhrase(new Bbs757IlsReading(true, null, 95)), Bbs757IlsPanel.CountPhrase(Bbs757IlsDial.LoadState));
+        });
+    }
+
+    [Fact]
+    public void A_set_that_stops_part_way_says_how_far_it_got()
+    {
+        // The clicks sent and the clicks planned; before any click it is the plain refusal.
+        Assert.Equal("ILS unavailable", Bbs757IlsPanel.UnavailableAfterPhrase(0, 6));
+        Assert.Equal("ILS unavailable after 3 of 5 clicks.", Bbs757IlsPanel.UnavailableAfterPhrase(3, 5));
+        Assert.Equal("ILS unavailable after 6 of 6 clicks.", Bbs757IlsPanel.UnavailableAfterPhrase(6, 6));
+        Assert.Equal("ILS unavailable after 1 of 1 click.", Bbs757IlsPanel.UnavailableAfterPhrase(1, 1));
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_failed_read_after_the_learning_click_says_the_ils_left_park(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            Assert.Equal("ILS display could not be read: the ILS left PARK, now 108.75 by count.",
+                Bbs757IlsPanel.LeftParkUnreadPhrase(Dial(108.75)));
+            Assert.Equal("ILS display could not be read: the ILS left PARK.", Bbs757IlsPanel.LeftParkUnreadPhrase(null));
         });
     }
 
@@ -588,8 +621,28 @@ public class Bbs757IlsPanelTests
 
         Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeDown, ReadBefore }, rig.Sim.Log);
         Assert.Equal(new[] { WholeDown }, rig.Sim.Writes);
-        Assert.Equal(new[] { "ILS unavailable" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { "ILS unavailable after 1 of 6 clicks." }, rig.Speech.Interrupts);   // how far it got
+        Assert.Equal(rig.Speech.Interrupts, rig.Status);
         Assert.Equal(new Bbs757IlsDial(3, 0), rig.Def.IlsDial);   // the click sent is counted: 111.10
+
+        // Not answered before the first click: nothing went out, the plain words.
+        var silent = new Rig();
+        silent.FlightLoad();
+        silent.Sim.ReadAnswer = null;
+        await silent.Set(110.50);
+        Assert.Empty(silent.Sim.Writes);
+        Assert.Equal(new[] { "ILS unavailable" }, silent.Speech.Interrupts);
+
+        // A set of two plans (the learning click out of PARK, then five): the clicks of both.
+        var learning = new Rig();
+        learning.ShowPanel(new Bbs757IlsDial(Bbs757IlsDial.Park, 7));   // PARK remembering .75, no count
+        learning.Sim.OnWrite = n =>
+        {
+            if (n == 2) learning.Sim.ReadAnswer = null;   // the sim stops answering after the second click
+        };
+        await learning.Set(110.50);
+        Assert.Equal(new[] { WholeUp, FractionDown }, learning.Sim.Writes);
+        Assert.Equal(new[] { "ILS unavailable after 2 of 6 clicks." }, learning.Speech.Interrupts);
     }
 
     [Theory]
@@ -795,7 +848,7 @@ public class Bbs757IlsPanelTests
         await rig.Set(110.50);
 
         Assert.Equal(new[] { WholeDown, WholeDown }, rig.Sim.Writes);
-        Assert.Equal(new[] { "ILS unavailable" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { "ILS unavailable after 2 of 6 clicks." }, rig.Speech.Interrupts);   // the two known sent
         Assert.Null(rig.Def.IlsDial);   // whether the third click went out cannot be known
 
         rig.Sim.OnWrite = null;
@@ -855,11 +908,11 @@ public class Bbs757IlsPanelTests
 
         Assert.Equal(new[]
         {
-            ReadDisplay,                         // 109.30
-            ReadBefore, FractionUp,              // .35
-            ReadBefore, "wait 250", FractionUp,  // .50
-            ReadBefore, "wait 250", WholeUp,     // 110.50
-            ReadDisplay,                         // the panel shows the target
+            ReadDisplay,                           // 109.30
+            ReadBefore, FractionUp,                // .35
+            ReadBefore, "wait 250", FractionUp,    // .50
+            ReadBefore, "wait 250", WholeUp,       // 110.50
+            ReadBefore, "wait 250", ReadDisplay,   // the panel catches up (a fresh read, the gap), then shows the target
         }, rig.Sim.Log);
         Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);   // said once, from the read
         Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);
@@ -876,7 +929,8 @@ public class Bbs757IlsPanelTests
         rig.Sim.Log.Clear();
         rig.Sim.Now += 1000;
         await rig.Set(null);
-        Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeUp, ReadBefore, "wait 250", WholeUp, ReadDisplay }, rig.Sim.Log);
+        Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeUp, ReadBefore, "wait 250", WholeUp, ReadBefore, "wait 250", ReadDisplay },
+            rig.Sim.Log);
         Assert.Equal("ILS parked", rig.Speech.Interrupts[^1]);
         Assert.Equal(new Bbs757IlsDial(Bbs757IlsDial.Park, 4), rig.Def.IlsDial);   // PARK keeps the fraction the count had (.50)
     }
@@ -902,13 +956,13 @@ public class Bbs757IlsPanelTests
         {
             ReadDisplay,                           // -----
             ReadBefore, WholeUp,                   // out of PARK
-            ReadDisplay,                           // 108.75: the fraction
-            ReadBefore, "wait 250", FractionDown,  // .70
+            ReadBefore, "wait 250", ReadDisplay,   // the panel catches up, then 108.75: the fraction
+            ReadBefore, FractionDown,              // .70 (the gap since the last click is already waited)
             ReadBefore, "wait 250", FractionDown,  // .55
             ReadBefore, "wait 250", FractionDown,  // .50
             ReadBefore, "wait 250", WholeUp,       // 109.50
             ReadBefore, "wait 250", WholeUp,       // 110.50
-            ReadDisplay,
+            ReadBefore, "wait 250", ReadDisplay,
         }, rig.Sim.Log);
         Assert.Equal("ILS 110.50 set", rig.Speech.Interrupts[^1]);
         Assert.Equal(Dial(110.50), rig.Def.IlsDial);
@@ -924,6 +978,28 @@ public class Bbs757IlsPanelTests
     }
 
     [Fact]
+    public async Task A_display_lost_after_the_learning_click_says_the_ils_left_park()
+    {
+        // The learning click took the panel out of PARK (108 and the hidden fraction), then the display could
+        // not be read: the pilot hears that the ILS is no longer parked, not the plain "could not be read".
+        var rig = new Rig();
+        rig.ShowPanel(new Bbs757IlsDial(Bbs757IlsDial.Park, 7));   // PARK, remembering .75; no count
+        rig.Sim.OnWrite = n =>
+        {
+            if (n == 1) rig.Display.Answer = () => null;   // the display goes with the learning click
+        };
+
+        await rig.Set(110.50);
+
+        Assert.Equal(new[] { WholeUp }, rig.Sim.Writes);   // out of PARK, nothing more
+        const string said = "ILS display could not be read: the ILS left PARK.";   // the count never knew the fraction
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { said }, rig.Status);
+        Assert.Null(rig.Def.IlsDial);
+        Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeUp, ReadBefore, "wait 250", ReadDisplay }, rig.Sim.Log);
+    }
+
+    [Fact]
     public async Task Set_retries_once_then_reports()
     {
         // A click the panel lost: the read after the clicks shows where it is, and the set plans once more from there.
@@ -933,7 +1009,19 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(110.50);
 
-        // .15 .30 (lost) .35 .50 counted; the panel shows 110.35, one more click.
+        // .15 .30 (lost) .35 .50 counted; the panel shows 110.35, one more click. Each check read waits for the
+        // panel to catch up: after the first plan's clicks and after the retry's.
+        Assert.Equal(new[]
+        {
+            ReadDisplay,                           // 110.10
+            ReadBefore, FractionUp,                // .15
+            ReadBefore, "wait 250", FractionUp,    // lost
+            ReadBefore, "wait 250", FractionUp,    // .30
+            ReadBefore, "wait 250", FractionUp,    // .35
+            ReadBefore, "wait 250", ReadDisplay,   // shows 110.35
+            ReadBefore, FractionUp,                // .50, the retry (the gap already waited)
+            ReadBefore, "wait 250", ReadDisplay,   // shows 110.50
+        }, rig.Sim.Log);
         Assert.Equal(Enumerable.Repeat(FractionUp, 5), rig.Sim.Writes);
         Assert.Equal(3, rig.Display.Reads);
         Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);
@@ -985,6 +1073,7 @@ public class Bbs757IlsPanelTests
         await late.Set(110.50);
 
         Assert.Equal(new[] { FractionUp, FractionUp, WholeUp }, late.Sim.Writes);
+        Assert.Equal(new[] { ReadBefore, "wait 250", ReadDisplay }, late.Sim.Log.TakeLast(3));   // the check read was paced too
         Assert.Equal(new[] { "ILS 110.50 set by count: the ILS display could not be read." }, late.Speech.Interrupts);
         Assert.Equal(Dial(110.50), late.Def.IlsDial);
 

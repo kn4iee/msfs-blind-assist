@@ -22,13 +22,15 @@ namespace MSFSBlindAssist.Aircraft;
 /// The Ctrl+N window (<see cref="ShowNavRadiosWindow"/>). One window per definition, shown again on a later
 /// Ctrl+N and closed by <see cref="CloseRadioWindows"/>. It opens on N's readout and the FMC's runway ILS
 /// from APPROACH REF, read on the first officer's CDU in the background (<see cref="ReadRunwayIlsAsync"/>),
-/// which is left on NAV RADIO; the status is spoken once, when it is filled. The ILS course is written as a
-/// calculator write and read back (<see cref="SetIlsCourseAsync"/>). The ILS frequency and park turn the ILS
-/// control panel's knobs, which no variable reads back: the app reads the panel's display from a picture
+/// which is left on NAV RADIO; the status is spoken once, when it is filled. That fill stops when the window
+/// closes, its CDU walk and N's CDU step take turns (<see cref="_foCduWalk"/>), and a fill that ends after a
+/// set, park or course result only adds the FMC's runway ILS to the status, silently. The ILS course is written
+/// as a calculator write and read back (<see cref="SetIlsCourseAsync"/>). The ILS frequency and park turn the
+/// ILS control panel's knobs, which no variable reads back: the app reads the panel's display from a picture
 /// (<see cref="CoherentBbs757IlsDisplay"/>), turns the knobs from that read and reads it again
 /// (<see cref="SetIlsAsync"/>), and N says the read. When the display cannot be read, the app's count of the
-/// panel, from the state a flight loads it in and the clicks it sent, stands in, and says so. The VORs are not
-/// in it: a VOR is tuned, and its course set, on the CDU.
+/// panel, from the state a flight loads it in and the clicks it sent, stands in, and is said as a count ("ILS
+/// 110.50 by count."). The VORs are not in it: a VOR is tuned, and its course set, on the CDU.
 ///
 /// The COM radios. BlueBird's VHF L, C and R are the simulator's own COM 1, 2 and 3 (measured), so the six
 /// active and standby frequencies are the stock <c>COM ACTIVE/STANDBY FREQUENCY:n</c> on the 1 Hz batch:
@@ -530,9 +532,11 @@ public partial class BBS757Definition
 
     /// <summary>
     /// N's sentence (<see cref="Bbs757NavRad.Readout"/>): the three courses read fresh, the first officer's CDU
-    /// brought to NAV RADIO (or found there), then one read of the ILS panel's display: what it shows is said
-    /// (and is the count), else the count. Throws when a course read throws or the token fires; the page service
-    /// and the display never do, so a CDU or a display that cannot be had gives the readout without them.
+    /// brought to NAV RADIO (or found there) under <see cref="_foCduWalk"/>, so it waits for a Ctrl+N fill's
+    /// walk and never presses a key into one, then one read of the ILS panel's display: what it shows is said
+    /// (and is the count), else the count, said as one. Throws when a course read throws or the token fires
+    /// (waiting for the walk included); the page service and the display never do, so a CDU or a display that
+    /// cannot be had gives the readout without them.
     /// </summary>
     private async Task<string> NavRadiosReadoutAsync(SimConnectManager sim, Bbs757CduPages pages, CancellationToken ct)
     {
@@ -541,7 +545,16 @@ public partial class BBS757Definition
         int? vorR = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.VorRCourseKey, ct));
         int? ilsCourse = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.IlsCourseKey, ct));
 
-        var screen = await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757NavRad.PageKey, Bbs757NavRad.IsNavRadio, ct);
+        Bbs757CduScreen? screen;
+        await _foCduWalk.WaitAsync(ct);
+        try
+        {
+            screen = await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757NavRad.PageKey, Bbs757NavRad.IsNavRadio, ct);
+        }
+        finally
+        {
+            _foCduWalk.Release();
+        }
         ct.ThrowIfCancellationRequested();
         var ilsRead = await ReadIlsDisplayAsync(sim, bySet: false, ct);
         return Bbs757NavRad.Readout(screen == null ? null : Bbs757NavRad.Parse(screen), vorL, vorR, ilsCourse, _ilsDial, ilsRead);
@@ -553,6 +566,14 @@ public partial class BBS757Definition
 
     /// <summary>What the status says while the window reads the nav radios.</summary>
     internal const string NavRadiosReadingMessage = "Reading the nav radios…";
+
+    /// <summary>
+    /// One at a time on the first officer's CDU: N's step (<see cref="NavRadiosReadoutAsync"/>, which a Ctrl+N
+    /// fill also takes) and a fill's whole APPROACH REF walk (<see cref="ReadRunwayIlsAsync"/>: INIT, L6, L5 and
+    /// back to NAV RADIO). The page service gates each of its calls but not a walk of several, so without this N's
+    /// NAV RAD key could land between two of the walk's keys, or a second fill's walk inside the first's.
+    /// </summary>
+    private readonly SemaphoreSlim _foCduWalk = new(1, 1);
 
     /// <summary>The Ctrl+N window; a later Ctrl+N brings it forward. Null before the first and after <see cref="CloseRadioWindows"/>.</summary>
     private Forms.BBS757.BBS757NavRadiosForm? _navRadiosForm;
@@ -573,6 +594,14 @@ public partial class BBS757Definition
     /// course (<see cref="SetIlsCourseAsync"/>), its ILS frequency box and ILS park button the panel
     /// (<see cref="SetIlsAsync"/>); a typed value they cannot take is refused by the window. Runs on the UI
     /// thread, so the tablet client is made there (<paramref name="pages"/> given: a test's page service).
+    ///
+    /// The window and its fill are kept apart (the final review's Important 2). The fill stops when the window
+    /// closes (its FormClosed; Disposed too, for a window closed before it was ever shown, which WinForms only
+    /// disposes): no key after that, but the first officer's CDU is still put back on NAV RADIO if the walk had
+    /// left it. And the window counts its results: every press of the ILS course box's Enter, the ILS frequency
+    /// box's Enter or ILS park (the window shows at once that it is setting, or the refusal), and every result a
+    /// set, park or course hands to the status. A fill that started before one neither replaces the status nor
+    /// speaks, since its readout was read before that result; it only adds the FMC's runway ILS, silently.
     /// </summary>
     internal Forms.BBS757.BBS757NavRadiosForm ShowNavRadiosWindow(SimConnectManager sim, ScreenReaderAnnouncer announcer,
         Form? parentForm, Bbs757CduPages? pages = null)
@@ -585,30 +614,51 @@ public partial class BBS757Definition
 
         pages ??= CduPages;
         Forms.BBS757.BBS757NavRadiosForm? form = null;
-        void Show(string text) => form?.ShowStatus(text);
+        int results = 0;   // this window's: every set, park and course pressed or answered
+        void Pressed() => Interlocked.Increment(ref results);
+        void Show(string text)
+        {
+            Interlocked.Increment(ref results);
+            form?.ShowStatus(text);
+        }
         form = new Forms.BBS757.BBS757NavRadiosForm(announcer,
             setIlsCourse: typed =>
             {
+                Pressed();
                 if (!Bbs757NavRad.TryParseCourse(typed, out int degrees, out string error)) return error;
                 _ = SetIlsCourseAsync(degrees, sim, announcer, Show);   // never throws: it catches and logs
                 return null;
             },
             setIlsFrequency: typed =>
             {
+                Pressed();
                 if (!Bbs757IlsPanel.TryParseIls(typed, out double mhz, out string error)) return error;
                 _ = SetIlsAsync(mhz, sim, announcer, Show);   // never throws: it catches and logs
                 return null;
             },
-            parkIls: () => _ = SetIlsAsync(null, sim, announcer, Show));
+            parkIls: () =>
+            {
+                Pressed();
+                _ = SetIlsAsync(null, sim, announcer, Show);   // never throws: it catches and logs
+            });
+
+        var closed = new CancellationTokenSource();   // this window's fill: canceled when the window goes
+        void StopFill()
+        {
+            try { closed.Cancel(); } catch (ObjectDisposedException) { /* the fill finished meanwhile */ }
+        }
         form.FormClosed += (_, _) =>
         {
             if (ReferenceEquals(_navRadiosForm, form)) _navRadiosForm = null;
+            StopFill();
         };
+        form.Disposed += (_, _) => StopFill();
+
         _navRadiosForm = form;
         form.ShowStatus(NavRadiosReadingMessage);
         if (ShowRadioForm != null) ShowRadioForm(form, parentForm);
         else form.Show(parentForm);
-        NavRadiosFill = FillNavRadiosWindowAsync(form, sim, announcer, pages);
+        NavRadiosFill = FillNavRadiosWindowAsync(form, sim, announcer, pages, closed, () => Volatile.Read(ref results));
         return form;
     }
 
@@ -616,15 +666,23 @@ public partial class BBS757Definition
     /// Fills the window's status: N's readout, then the FMC's runway ILS (<see cref="Bbs757NavRad.RunwayIlsPhrase"/>;
     /// "FMC runway ILS unavailable" when APPROACH REF cannot be had), and speaks it once: the screen reader
     /// cannot know the box changed. A courses read that fails still gives the readout with everything
-    /// unavailable. Silent when the window was closed or the profile switched away meanwhile. Never throws.
+    /// unavailable. When <paramref name="results"/> moved on while it read (a set, park or course pressed or
+    /// answered), the status is that result's: the fill adds only the FMC's runway ILS to it and says nothing.
+    /// Runs on its own token, linked to the lifetime and to <paramref name="closed"/> (the window going), which it
+    /// disposes when it ends; silent, with no key pressed after it fires but the CDU's way back to NAV RADIO
+    /// (<see cref="ReadRunwayIlsAsync"/>). Never throws.
     /// </summary>
     private async Task FillNavRadiosWindowAsync(Forms.BBS757.BBS757NavRadiosForm form, SimConnectManager sim,
-        ScreenReaderAnnouncer announcer, Bbs757CduPages pages)
+        ScreenReaderAnnouncer announcer, Bbs757CduPages pages, CancellationTokenSource closed, Func<int> results)
     {
         try
         {
             if (_lifetime.IsCancellationRequested) return;
-            var ct = _lifetime.Token;
+            var lifetime = _lifetime.Token;
+            using var fill = CancellationTokenSource.CreateLinkedTokenSource(lifetime, closed.Token);
+            var ct = fill.Token;
+            int before = results();
+
             string readout;
             try
             {
@@ -639,18 +697,29 @@ public partial class BBS757Definition
                 Log.Error("BBS757", $"Nav radios window: the readout failed: {ex.Message}");
                 readout = Bbs757NavRad.Readout(null, null, null, null, _ilsDial);
             }
-            var ils = await ReadRunwayIlsAsync(pages, ct);
+            var ils = await ReadRunwayIlsAsync(pages, ct, lifetime);
             ct.ThrowIfCancellationRequested();
 
-            string status = $"{readout} {Bbs757NavRad.RunwayIlsPhrase(ils)}.";
+            string runwayIls = $"{Bbs757NavRad.RunwayIlsPhrase(ils)}.";
             if (form.IsDisposed) return;
+            if (results() != before)
+            {
+                // A result came meanwhile: its words stand, and the readout, read before it, is not said.
+                form.AppendStatus(runwayIls);
+                return;
+            }
+            string status = $"{readout} {runwayIls}";
             form.ShowStatus(status);
             announcer.AnnounceImmediate(status);
         }
-        catch (OperationCanceledException) { /* switched away */ }
+        catch (OperationCanceledException) { /* the window closed, or switched away */ }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"Nav radios window failed: {ex.Message}");
+        }
+        finally
+        {
+            closed.Dispose();
         }
     }
 
@@ -660,32 +729,59 @@ public partial class BBS757Definition
     /// or PERF INIT, whose 6L (<c>&lt;INDEX</c>) gave INIT/REF INDEX, whose 5L (<c>&lt;APPROACH</c>) gave
     /// APPROACH REF; in flight INIT may open APPROACH REF at once (Boeing's INIT REF depends on the phase;
     /// unmeasured), or the index. Every step is checked by the page it shows; a step that does not give the
-    /// expected page, a CDU that is busy or unreachable, or a page with no ILS rows gives null. Never throws
+    /// expected page, a CDU that is busy or unreachable, or a page with no ILS rows gives null.
+    ///
+    /// The whole walk, the way back included, runs under <see cref="_foCduWalk"/>, so N's step never lands
+    /// inside it. When <paramref name="ct"/> fires (the window closed) no further key of the walk is pressed;
+    /// the way back to NAV RADIO is still taken, on <paramref name="lifetime"/> (only a switch away stops it), if
+    /// the walk had begun and so may have left NAV RADIO. A walk that never began presses nothing. Never throws
     /// (a token that fires gives null too; the caller checks it).
     /// </summary>
-    internal async Task<Bbs757RunwayIls?> ReadRunwayIlsAsync(Bbs757CduPages pages, CancellationToken ct)
+    internal async Task<Bbs757RunwayIls?> ReadRunwayIlsAsync(Bbs757CduPages pages, CancellationToken ct, CancellationToken lifetime)
     {
-        Bbs757RunwayIls? ils = null;
         try
         {
-            ils = await FindRunwayIlsAsync(pages, ct);
+            await _foCduWalk.WaitAsync(ct);
         }
-        catch (OperationCanceledException) { /* switched away */ }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            Log.Error("BBS757", $"APPROACH REF read failed: {ex.Message}");
+            return null;   // stopped before the walk: nothing pressed, nothing to put back
         }
 
-        // The page the app leaves the FO CDU on. A call that refuses (the CDU busy) presses nothing.
-        await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757NavRad.PageKey, Bbs757NavRad.IsNavRadio, ct);
-        return ils;
+        try
+        {
+            Bbs757RunwayIls? ils = null;
+            bool walked = false;
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                walked = true;
+                ils = await FindRunwayIlsAsync(pages, ct);
+            }
+            catch (OperationCanceledException) { /* the window closed, or switched away */ }
+            catch (Exception ex)
+            {
+                Log.Error("BBS757", $"APPROACH REF read failed: {ex.Message}");
+            }
+
+            // The page the app leaves the FO CDU on. A call that refuses (the CDU busy) presses nothing, and one
+            // that finds NAV RADIO already presses nothing either.
+            if (walked) await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757NavRad.PageKey, Bbs757NavRad.IsNavRadio, lifetime);
+            return ils;
+        }
+        finally
+        {
+            _foCduWalk.Release();
+        }
     }
 
+    /// <summary>The walk itself: INIT, then 6L and 5L as the pages ask; no key once <paramref name="ct"/> fires.</summary>
     private static async Task<Bbs757RunwayIls?> FindRunwayIlsAsync(Bbs757CduPages pages, CancellationToken ct)
     {
         const int cdu = Bbs757CduPages.FirstOfficer;
         var screen = await pages.ShowPageAsync(cdu, Bbs757CduKeys.Init,
             s => Bbs757NavRad.IsApproachRef(s) || Bbs757NavRad.IsInitRefIndex(s) || Bbs757NavRad.HasIndexKey(s), ct);
+        ct.ThrowIfCancellationRequested();
         if (screen == null) return null;
 
         if (!Bbs757NavRad.IsApproachRef(screen))
@@ -693,9 +789,11 @@ public partial class BBS757Definition
             if (!Bbs757NavRad.IsInitRefIndex(screen))
             {
                 screen = await pages.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 6) }, ct);   // <INDEX
+                ct.ThrowIfCancellationRequested();
                 if (screen == null || !Bbs757NavRad.IsInitRefIndex(screen)) return null;
             }
             screen = await pages.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 5) }, ct);      // <APPROACH
+            ct.ThrowIfCancellationRequested();
             if (screen == null || !Bbs757NavRad.IsApproachRef(screen)) return null;
         }
         return Bbs757NavRad.ParseApproachRefIls(screen);
@@ -756,7 +854,8 @@ public partial class BBS757Definition
     /// detection"). Nothing confirms a click through SimConnect (the request never reads non-zero there), so
     /// each click also waits for a fresh read, which the sim answers in a frame after the last click went out:
     /// the gap then follows the sim's frames, not the wall clock alone (a stall longer than the gap would
-    /// otherwise bring two clicks into one frame).
+    /// otherwise bring two clicks into one frame). A display read that checks clicks waits the same way, a fresh
+    /// read and then this gap, so the panel has caught up with the last click.
     /// </summary>
     internal const int IlsStepGapMs = 250;
 
@@ -872,12 +971,14 @@ public partial class BBS757Definition
     ///
     /// The display read (<see cref="ReadIlsDisplayAsync"/>, which also makes it the count): parked with the
     /// fraction unknown (no count to say what PARK remembers; the fraction knob does nothing while parked) and
-    /// a frequency wanted, the whole knob takes it out of PARK once (+1: 108.xx) and the display is read again.
-    /// Then the clicks <see cref="Bbs757IlsPanel.PlanSteps"/> plans from the read, the display read again and,
-    /// short of the target, planned once more from that read, clicked and read. The words are what the display
-    /// shows: "ILS already 110.50" (no click), "ILS 110.50 set", "ILS parked", or after the second try "ILS
-    /// shows 110.55, not 110.50". A display that cannot be read after the clicks ends the set on its count:
-    /// "ILS 110.50 set by count: the ILS display could not be read."
+    /// a frequency wanted, the whole knob takes it out of PARK once (+1: 108.xx) and the display is read again;
+    /// a display that cannot be read then says the ILS is no longer parked ("ILS display could not be read: the
+    /// ILS left PARK.", <see cref="Bbs757IlsPanel.LeftParkUnreadPhrase"/>). Then the clicks
+    /// <see cref="Bbs757IlsPanel.PlanSteps"/> plans from the read, the display read again and, short of the
+    /// target, planned once more from that read, clicked and read. The words are what the display shows: "ILS
+    /// already 110.50" (no click), "ILS 110.50 set", "ILS parked", or after the second try "ILS shows 110.55, not
+    /// 110.50". A display that cannot be read after the clicks ends the set on its count: "ILS 110.50 set by
+    /// count: the ILS display could not be read."
     ///
     /// A display that cannot be read at all: 6a's count, as before. No count, or a flight still loading: "ILS
     /// tuning unknown: the ILS display could not be read." Else the count's clicks and its words with
@@ -885,12 +986,16 @@ public partial class BBS757Definition
     ///
     /// Each click waits for a fresh read of the ILS course (the sim's next frame), then for
     /// <see cref="IlsStepGapMs"/> after the click before it, the first one for what is left of that gap since the
-    /// last click of any set; it is one calculator write, counted as it is sent. A read the sim does not answer
-    /// stops the set there ("ILS unavailable"; the count keeps the clicks sent). Never a claim that a station is
-    /// received: the display says only what the panel shows. Every result also goes to <paramref name="onSaid"/>
-    /// (the window's status). A flight load, a dropped connection or a profile switch stops the set between
-    /// clicks or during a read, silently: after a load or a drop the status shows the count, unsaid. A click that
-    /// throws leaves the count unknown. Runs on the UI thread, whose context the awaits keep. Never throws.
+    /// last click of any set; it is one calculator write, counted as it is sent. Every read that checks clicks
+    /// (after the learning click, after a plan's clicks, the retry's included) first lets the panel catch up: one
+    /// fresh read, then <see cref="IlsStepGapMs"/>. A read the sim does not answer before a click stops the set
+    /// there, saying how far it got ("ILS unavailable after 3 of 5 clicks.", the clicks sent and planned across
+    /// the set's plans; "ILS unavailable" before any click; <see cref="Bbs757IlsPanel.UnavailableAfterPhrase"/>), and
+    /// the count keeps the clicks sent. Never a claim that a station is received: the display says only what the
+    /// panel shows. Every result also goes to <paramref name="onSaid"/> (the window's status). A flight load, a
+    /// dropped connection or a profile switch stops the set between clicks or during a read, silently: after a
+    /// load or a drop the status shows the count, unsaid. A click that throws leaves the count unknown and is not
+    /// counted as sent. Runs on the UI thread, whose context the awaits keep. Never throws.
     /// </summary>
     internal async Task SetIlsAsync(double? mhz, SimConnectManager sim, ScreenReaderAnnouncer announcer, Action<string>? onSaid = null)
     {
@@ -902,6 +1007,7 @@ public partial class BBS757Definition
 
         CancellationTokenSource? mine = null;
         bool sending = false;
+        int sent = 0, planned = 0;   // this set's clicks, across its plans: how far a set that stops got
         try
         {
             if (_lifetime.IsCancellationRequested) return;
@@ -935,9 +1041,10 @@ public partial class BBS757Definition
             var ct = mine.Token;
 
             // Turns the knobs by a plan, the count following each click sent (when there is one). False when a
-            // read the sim did not answer stopped it (said).
+            // read the sim did not answer stopped it (said, with how far the set got).
             async Task<bool> TurnAsync(IReadOnlyList<(Bbs757IlsKnob Knob, int Direction)> plan)
             {
+                planned += plan.Count;
                 for (int i = 0; i < plan.Count; i++)
                 {
                     // The sim answers a fresh read in a frame after the last click went out.
@@ -945,8 +1052,8 @@ public partial class BBS757Definition
                     ct.ThrowIfCancellationRequested();   // a read that ended just before a reset or switch canceled the set
                     if (framed is null)
                     {
-                        Log.Debug("BBS757", $"ILS set: the read before click {i + 1} of {plan.Count} was not answered; stopped.");
-                        Say(Bbs757IlsPanel.UnavailablePhrase);
+                        Log.Debug("BBS757", $"ILS set: the read before click {i + 1} of {plan.Count} was not answered; stopped after {sent} of {planned}.");
+                        Say(Bbs757IlsPanel.UnavailableAfterPhrase(sent, planned));
                         return false;
                     }
 
@@ -963,9 +1070,22 @@ public partial class BBS757Definition
                     sending = true;
                     io.Write(Bbs757IlsPanel.StepCode(knob, direction));
                     sending = false;
+                    sent++;
                     if (_ilsDial is Bbs757IlsDial counted) _ilsDial = Bbs757IlsPanel.Step(counted, knob, direction);
                 }
                 return true;
+            }
+
+            // Before a read that checks clicks: lets the panel catch up with the last one. A fresh read, which the
+            // sim answers in a frame after that click went out, then the gap. An unanswered read still waits the
+            // gap: the display, not SimConnect, is the check.
+            async Task CatchUpAsync()
+            {
+                double? framed = await io.ReadFresh(Bbs757NavRad.IlsCourseKey, ct);
+                ct.ThrowIfCancellationRequested();
+                if (framed is null) Log.Debug("BBS757", "ILS set: the read before the check was not answered; the display is read after the gap.");
+                await io.Delay(IlsStepGapMs, ct);
+                ct.ThrowIfCancellationRequested();
             }
 
             var reading = await ReadIlsDisplayAsync(sim, bySet: true, ct);
@@ -994,10 +1114,12 @@ public partial class BBS757Definition
                 // Parked, the fraction hidden: out of PARK once (+1 gives 108.xx), and the display shows it.
                 if (!await TurnAsync(new[] { (Bbs757IlsKnob.Whole, +1) })) return;
                 turned = true;
+                await CatchUpAsync();
                 reading = await ReadIlsDisplayAsync(sim, bySet: true, ct);
                 if (reading == null)
                 {
-                    Say(Bbs757IlsPanel.UnknownRefusal);
+                    // The panel is no longer parked: say so, with the count's frequency when it knows the fraction.
+                    Say(Bbs757IlsPanel.LeftParkUnreadPhrase(_ilsDial));
                     return;
                 }
             }
@@ -1018,6 +1140,7 @@ public partial class BBS757Definition
 
                 if (!await TurnAsync(Bbs757IlsPanel.PlanSteps(from, to))) return;
                 turned = true;
+                await CatchUpAsync();
                 var after = await ReadIlsDisplayAsync(sim, bySet: true, ct);
                 if (after == null)
                 {
@@ -1029,15 +1152,15 @@ public partial class BBS757Definition
         }
         catch (OperationCanceledException)
         {
-            // A flight load or a dropped connection: the window shows the count it left, unsaid. A switch
-            // away: nothing (the window is closed).
-            if (!_lifetime.IsCancellationRequested) onSaid?.Invoke(Bbs757IlsPanel.Phrase(_ilsDial));
+            // A flight load or a dropped connection: the window shows the count it left, as a count, unsaid. A
+            // switch away: nothing (the window is closed).
+            if (!_lifetime.IsCancellationRequested) onSaid?.Invoke(Bbs757IlsPanel.CountPhrase(_ilsDial));
         }
         catch (Exception ex)
         {
             Log.Error("BBS757", $"ILS set failed: {ex.Message}");
-            if (sending) _ilsDial = null;   // a click that threw may or may not have gone out
-            if (!_lifetime.IsCancellationRequested) Say(Bbs757IlsPanel.UnavailablePhrase);
+            if (sending) _ilsDial = null;   // a click that threw may or may not have gone out (not counted as sent)
+            if (!_lifetime.IsCancellationRequested) Say(Bbs757IlsPanel.UnavailableAfterPhrase(sent, planned));
         }
         finally
         {

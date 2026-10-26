@@ -13,9 +13,10 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// What is read and set is the definition's (BBS757Definition.Radios.cs). This window speaks only a typed
 /// value it cannot take (a validation error always speaks); the definition speaks the status once it is
 /// filled, the ILS course it reads back and the ILS frequency or park the panel's display shows after the
-/// knobs turned (or, when the display cannot be read, the clicks it counted, saying so). The window stays open
-/// for the next value; Escape closes it and gives focus back to the window that was in front, as the value
-/// dialogs do.
+/// knobs turned (or, when the display cannot be read, the clicks it counted, saying so). A fill that ends after
+/// a set, park or course was pressed only adds the FMC's runway ILS to the status, silently
+/// (<see cref="AppendStatus"/>). The window stays open for the next value; Escape closes it (which stops its
+/// fill) and gives focus back to the window that was in front, as the value dialogs do.
 /// </summary>
 public sealed class BBS757NavRadiosForm : Form
 {
@@ -212,6 +213,24 @@ public sealed class BBS757NavRadiosForm : Form
             return;
         }
         if (_statusBox.Text != text) _statusBox.Text = text;
+    }
+
+    /// <summary>
+    /// Adds the sentence <paramref name="text"/> after what the status box shows, closing that with a full stop
+    /// first when it has none ("ILS course 095" and "FMC runway ILS …." read "ILS course 095. FMC runway ILS …."),
+    /// so the words already there stay. It does not speak. Safe from any thread; a closed window ignores it.
+    /// </summary>
+    public void AppendStatus(string text)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            SafeBeginInvoke(() => AppendStatus(text));
+            return;
+        }
+        string shown = _statusBox.Text.TrimEnd();
+        if (shown.Length == 0) _statusBox.Text = text;
+        else _statusBox.Text = shown.EndsWith('.') ? $"{shown} {text}" : $"{shown}. {text}";
     }
 
     // ObjectDisposedException derives from InvalidOperationException, so one catch covers both; the

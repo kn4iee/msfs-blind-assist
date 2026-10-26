@@ -59,7 +59,7 @@ public readonly record struct Bbs757IlsDial(int Whole, int Fraction)
 /// The panel's display can be read from a picture (round 5, <see cref="Bbs757IlsOcr"/>): a set reads it, clicks
 /// and reads it again, and what it says is what the display shows. When the display cannot be read the app
 /// counts the clicks it sends from a state it knows (<see cref="Bbs757IlsDial.LoadState"/>, or the last
-/// reading) and its words say it went by the count (<see cref="ByCount"/>).
+/// reading) and its words say it went by the count (<see cref="ByCount"/>, <see cref="CountPhrase"/>).
 /// </summary>
 public static class Bbs757IlsPanel
 {
@@ -205,13 +205,45 @@ public static class Bbs757IlsPanel
 
     /// <summary>
     /// The panel as counted: "ILS 110.50", "ILS parked", or "ILS tuning unknown" when the app has no count.
-    /// What the count says, never more: said when the display cannot be read (<see cref="ReadPhrase"/> when it can).
+    /// What the count says, never more, and only inside words that say it is the count (<see cref="SetPhrase(Bbs757IlsDial)"/>
+    /// with <see cref="ByCount"/>, <see cref="CountPhrase"/>); a read is said through <see cref="ReadPhrase"/>.
     /// </summary>
     public static string Phrase(Bbs757IlsDial? dial)
     {
         if (dial is not Bbs757IlsDial d) return "ILS tuning unknown";
         return d.Mhz is double mhz ? $"ILS {Frequency(mhz)}" : "ILS parked";
     }
+
+    /// <summary>
+    /// The count as output N and the Ctrl+N window's status say it when the display cannot be read: "ILS 110.50
+    /// by count", "ILS parked by count", or "ILS tuning unknown" when the app has no count. The qualifier keeps
+    /// the count from sounding like a reading (<see cref="ReadPhrase"/>: "ILS 110.50"), which it is not: it is
+    /// the app's own tally of the clicks it sent.
+    /// </summary>
+    public static string CountPhrase(Bbs757IlsDial? dial) => dial is null ? Phrase(null) : $"{Phrase(dial)} by count";
+
+    /// <summary>
+    /// A set that stopped (a read the sim did not answer, a write that failed): "ILS unavailable" before any
+    /// click went out, else how far it got, the clicks sent and the clicks planned: "ILS unavailable after 3 of 5
+    /// clicks." (one click planned: "after 1 of 1 click.").
+    /// </summary>
+    public static string UnavailableAfterPhrase(int sent, int planned)
+    {
+        if (sent <= 0) return UnavailablePhrase;
+        string clicks = planned == 1 ? "click" : "clicks";
+        return $"{UnavailablePhrase} after {sent.ToString(CultureInfo.InvariantCulture)} of {planned.ToString(CultureInfo.InvariantCulture)} {clicks}.";
+    }
+
+    /// <summary>
+    /// The display could not be read after the click that took the ILS out of PARK (the learning click): the
+    /// panel is no longer parked, so the words say so, "ILS display could not be read: the ILS left PARK, now
+    /// 108.75 by count." with the counted frequency, or "ILS display could not be read: the ILS left PARK." when
+    /// the count does not know the fraction (<paramref name="count"/> null or parked).
+    /// </summary>
+    public static string LeftParkUnreadPhrase(Bbs757IlsDial? count)
+        => count is { Mhz: double mhz }
+            ? $"ILS display could not be read: the ILS left PARK, now {Frequency(mhz)} by count."
+            : "ILS display could not be read: the ILS left PARK.";
 
     /// <summary>A set that sent its clicks: "ILS 110.50 set", "ILS parked".</summary>
     public static string SetPhrase(Bbs757IlsDial dial) => dial.IsParked ? Phrase(dial) : $"{Phrase(dial)} set";

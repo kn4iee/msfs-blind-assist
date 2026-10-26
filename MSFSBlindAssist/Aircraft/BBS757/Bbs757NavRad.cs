@@ -36,8 +36,8 @@ public sealed record Bbs757RunwayIls(string Runway, double Mhz, string Ident, in
 /// RADIO page, and the FMC's runway ILS on APPROACH REF, both read on the first officer's CDU
 /// (<see cref="Bbs757CduPages"/>, ruling R52). The tuned ILS frequency is in no variable and on no page: the
 /// readout says what the ILS control panel's display shows (<see cref="Bbs757IlsOcr"/>), or, when it cannot be
-/// read, the app's count of the panel (<see cref="Bbs757IlsPanel"/>). The members here read screens and build
-/// sentences; they press no key.
+/// read, the app's count of the panel (<see cref="Bbs757IlsPanel"/>), saying it is a count ("ILS 110.50 by
+/// count."). The members here read screens and build sentences; they press no key.
 ///
 /// The measured NAV RADIO page (CDU 2, 2026-10-26): row 0 the title <c>NAV RADIO</c>, row 1 the labels
 /// <c>VOR L … VOR R</c>, row 2 the tunings, row 3 <c>CRS RADIAL CRS</c>, row 4 the courses. The two sides
@@ -202,19 +202,20 @@ public static class Bbs757NavRad
     /// What N says. With the page, each VOR's tuning ("VOR L 116.90 auto, GSU."), its course only while it is
     /// tuned by hand (a frequency and a mode other than auto: "VOR L 113.90 remote, course 095."), then "ILS
     /// course 095.", then the ILS control panel: what its display shows (<paramref name="ilsRead"/>, through
-    /// <see cref="Bbs757IlsPanel.ReadPhrase"/>) or, when it could not be read, as the app counts it
-    /// (<paramref name="ilsDial"/>, through <see cref="Bbs757IlsPanel.Phrase"/>): "ILS 110.50.", "ILS parked." or
-    /// "ILS tuning unknown.". Without the page (the first officer's CDU busy or unreachable): "VOR L course 095,
-    /// VOR R course 000, ILS course 095. ILS 110.50. VOR frequencies unavailable." A course that was not read is
-    /// "course unavailable".
+    /// <see cref="Bbs757IlsPanel.ReadPhrase"/>: "ILS 110.50.", "ILS parked.") or, when it could not be read, as
+    /// the app counts it, said as a count so it never sounds like a reading (<paramref name="ilsDial"/>, through
+    /// <see cref="Bbs757IlsPanel.CountPhrase"/>: "ILS 110.50 by count.", "ILS parked by count.", or "ILS tuning
+    /// unknown." with no count). Without the page (the first officer's CDU busy or unreachable): "VOR L course
+    /// 095, VOR R course 000, ILS course 095. ILS 110.50. VOR frequencies unavailable." A course that was not read
+    /// is "course unavailable".
     /// </summary>
     public static string Readout(Bbs757NavRadPage? page, int? vorL, int? vorR, int? ils, Bbs757IlsDial? ilsDial,
         Bbs757IlsReading? ilsRead = null)
     {
-        string counted = $"{(ilsRead != null ? Bbs757IlsPanel.ReadPhrase(ilsRead) : Bbs757IlsPanel.Phrase(ilsDial))}.";
+        string panel = $"{(ilsRead != null ? Bbs757IlsPanel.ReadPhrase(ilsRead) : Bbs757IlsPanel.CountPhrase(ilsDial))}.";
         if (page == null)
-            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {counted} VOR frequencies unavailable.";
-        return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}. {counted}";
+            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {panel} VOR frequencies unavailable.";
+        return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}. {panel}";
     }
 
     /// <summary>One VOR's sentence: the tuning, and its course only when it is tuned by hand.</summary>
