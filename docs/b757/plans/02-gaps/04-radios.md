@@ -121,7 +121,7 @@
 
 VOR frequencies are not in this window (the scope change above): the pilot tunes a VOR in the CDU window, and N reads it back.
 
-- [ ] **Step 1 (owner-in-sim, on the ground):** on the first officer's CDU, NAV RADIO: type `095` into the CRS line under VOR L (2L), then under VOR R (2R): does `L:BBS_VOR_L_COURSE` / `L:BBS_VOR_R_COURSE` follow, and does the captain's NAV RADIO show it? Restore the old courses. Then find the keys from any page to APPROACH REF on the FO CDU (INIT REF, its INDEX, then APPROACH) with an arrival runway selected, and record them and its ILS lines. Record both in `flight-04.md`.
+- [x] **Step 1 (owner-in-sim, on the ground):** on the first officer's CDU, NAV RADIO: type `095` into the CRS line under VOR L (2L), then under VOR R (2R): does `L:BBS_VOR_L_COURSE` / `L:BBS_VOR_R_COURSE` follow, and does the captain's NAV RADIO show it? Restore the old courses. Then find the keys from any page to APPROACH REF on the FO CDU (INIT REF, its INDEX, then APPROACH) with an arrival runway selected, and record them and its ILS lines. Record both in `flight-04.md`.
 - **Interfaces:** in `Bbs757NavRad`: `TryParseCourse(string? text, out int degrees, out string error)` (0-360, 360 → 0), `CourseCode(string lvar, int degrees)` ("95 (>L:BBS_ILS_COURSE)"), and
   ```csharp
   public sealed record Bbs757RunwayIls(string Runway, double Mhz, string Ident, int? FrontCourse);

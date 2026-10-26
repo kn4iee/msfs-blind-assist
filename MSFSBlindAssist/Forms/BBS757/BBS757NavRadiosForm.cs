@@ -1,0 +1,159 @@
+using System.Runtime.InteropServices;
+using MSFSBlindAssist.Accessibility;
+
+namespace MSFSBlindAssist.Forms.BBS757;
+
+/// <summary>
+/// The 757's "Nav Radios" window (Ctrl+N in input mode): what the FMC cannot set. A read-only status box
+/// first, which opens on the nav radios as output N reads them and the FMC's runway ILS from APPROACH REF
+/// (the ILS control panel is tuned by hand, and the FMC posts an ERROR when it differs), then the
+/// "ILS course" box that Enter applies. The VORs are not here: a VOR is tuned, and its course set, on the
+/// CDU (the CDU window).
+///
+/// What is read and set is the definition's (BBS757Definition.Radios.cs). This window speaks only a typed
+/// value it cannot take (a validation error always speaks); the definition speaks the status once it is
+/// filled, and the ILS course it reads back. The window stays open for the next value; Escape closes it
+/// and gives focus back to the window that was in front, as the value dialogs do.
+/// </summary>
+public sealed class BBS757NavRadiosForm : Form
+{
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private readonly ScreenReaderAnnouncer _announcer;
+    private readonly Func<string, string?> _setIlsCourse;
+    private readonly IntPtr _previousWindow;
+
+    private TextBox _statusBox = null!;
+    private TextBox _ilsCourseBox = null!;
+
+    /// <param name="setIlsCourse">Takes the typed ILS course; returns the error to say, or null when the set started.</param>
+    public BBS757NavRadiosForm(ScreenReaderAnnouncer announcer, Func<string, string?> setIlsCourse)
+    {
+        _previousWindow = GetForegroundWindow();
+        _announcer = announcer;
+        _setIlsCourse = setIlsCourse;
+        BuildForm();
+    }
+
+    private void BuildForm()
+    {
+        Text = "757 Nav Radios";
+        AccessibleName = "757 Nav Radios";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterParent;
+        ShowInTaskbar = false;
+        KeyPreview = true;
+
+        const int left = 15, width = 360, h = 28, gap = 10;
+        int y = 15, tab = 0;
+
+        Controls.Add(new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ });
+        y += 20;
+        _statusBox = new TextBox
+        {
+            Location = new Point(left, y),
+            Size = new Size(width, 110),
+            Multiline = true,
+            ReadOnly = true,
+            TabStop = true,
+            ScrollBars = ScrollBars.Vertical,
+            BorderStyle = BorderStyle.FixedSingle,
+            AccessibleName = "Nav radios status",
+            TabIndex = tab++,
+        };
+        Controls.Add(_statusBox);
+        y += 110 + gap + 6;
+
+        Controls.Add(new Label { Text = "&ILS course", Location = new Point(left, y + 5), Size = new Size(120, 20), TabIndex = tab++ });
+        _ilsCourseBox = new TextBox
+        {
+            Location = new Point(left + 130, y + 2),
+            Size = new Size(110, 25),
+            AccessibleName = "ILS course",
+            AccessibleDescription = "Type the course in degrees, 0 to 360, and press Enter to set it",
+            TabIndex = tab++,
+        };
+        _ilsCourseBox.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter || e.Alt || e.Control) return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;   // no ding
+            ApplyIlsCourse(_ilsCourseBox.Text);
+        };
+        Controls.Add(_ilsCourseBox);
+        y += h + gap + 6;
+
+        var close = new Button { Text = "Close", Location = new Point(left, y), Size = new Size(width, h), TabIndex = tab++ };
+        close.Click += (_, _) => Close();
+        Controls.Add(close);
+        ClientSize = new Size(left + width + left, y + h + 15);
+
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Escape && !e.Alt && !e.Control && !e.Shift)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                Close();
+            }
+        };
+        FormClosed += (_, _) =>
+        {
+            if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
+        };
+        Load += (_, _) =>
+        {
+            BringToFront();
+            Activate();
+            _statusBox.Focus();
+        };
+    }
+
+    /// <summary>
+    /// Enter in the ILS course box: hand the text over. Only that box is applied (R55). A value the
+    /// definition cannot take is said and shown, and the text is selected for retyping.
+    /// </summary>
+    internal void ApplyIlsCourse(string typed)
+    {
+        ShowStatus("Setting the ILS course.");   // before the set starts: its own result may follow at once
+        string? error = _setIlsCourse(typed.Trim());
+        if (error != null)
+        {
+            ShowStatus(error);
+            _announcer.AnnounceImmediate(error);
+        }
+        _ilsCourseBox.SelectAll();
+    }
+
+    /// <summary>The status box's text.</summary>
+    internal string StatusText => _statusBox.Text;
+
+    /// <summary>
+    /// Shows <paramref name="text"/> in the status box (it does not speak: the definition speaks what it
+    /// reads). Safe from any thread; a closed window ignores it.
+    /// </summary>
+    public void ShowStatus(string text)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            SafeBeginInvoke(() => ShowStatus(text));
+            return;
+        }
+        if (_statusBox.Text != text) _statusBox.Text = text;
+    }
+
+    // ObjectDisposedException derives from InvalidOperationException, so one catch covers both; the
+    // IsHandleCreated check alone races a handle destroy ([A380C-6]).
+    private void SafeBeginInvoke(Action action)
+    {
+        try { if (IsHandleCreated) BeginInvoke(action); }
+        catch (InvalidOperationException) { }
+    }
+}

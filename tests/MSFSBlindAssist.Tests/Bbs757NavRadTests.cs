@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Windows.Forms;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Hotkeys;
@@ -93,6 +94,64 @@ public class Bbs757NavRadTests
             Bbs757NavRad.Parse(Screen("        NAV RADIO       ", "113.90R           ------"))!.Left);
     }
 
+    [Theory]
+    // The right side is mirrored, [ident][mode]freq, flush right (measured 2026-10-26: a tuned VOR R
+    // read "GSUR116.90"); the left side is freq[mode][ident].
+    [InlineData("GSUR116.90", 116.90, 'R', "GSU")]    // tuned from the CDU, station received
+    [InlineData("GSUA116.90", 116.90, 'A', "GSU")]    // auto
+    [InlineData("R113.90", 113.90, 'R', null)]        // tuned from the CDU, no ident yet
+    [InlineData("M117.40", 117.40, 'M', null)]        // manual on the VOR/DME panel
+    [InlineData("114.20", 114.20, null, null)]        // no letter, no ident
+    public void Parses_vor_r_mirrored(string text, double mhz, char? mode, string? ident)
+    {
+        var page = Bbs757NavRad.Parse(NavRadio("------", text));
+
+        Assert.Equal(new Bbs757VorTuning(mhz, mode, ident), page!.Right);
+        Assert.Equal(NotTuned, page.Left);
+    }
+
+    /// <summary>The whole NAV RADIO screen as CDU 2 showed it (measured 2026-10-26, rows 0-13).</summary>
+    private static Bbs757CduScreen MeasuredNavRadio(string tunings, string courses = "")
+    {
+        var lines = new[]
+        {
+            "        NAV RADIO       ",
+            "VOR L              VOR R",
+            tunings,
+            "CRS      RADIAL      CRS",
+            courses.PadRight(Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            new string(' ', Bbs757CduFrame.Columns),
+            "        PRESELECT       ",
+            "------            ------",
+            new string(' ', Bbs757CduFrame.Columns),
+        };
+        return new Bbs757CduScreen(lines);
+    }
+
+    [Fact]
+    public void Parses_the_measured_nav_radio_screens()
+    {
+        // As found: both VORs auto-tuned or not tuned.
+        var auto = Bbs757NavRad.Parse(MeasuredNavRadio("116.90AGSU        ------"))!;
+        Assert.Equal(new Bbs757VorTuning(116.90, 'A', "GSU"), auto.Left);
+        Assert.Equal(NotTuned, auto.Right);
+
+        // Both tuned from the CDU (11:35:10 and 11:36:08): VOR L freq-first, VOR R ident-first.
+        var both = Bbs757NavRad.Parse(MeasuredNavRadio("116.90RGSU        GSUR116.90", "095                  095"))!;
+        Assert.Equal(new Bbs757VorTuning(116.90, 'R', "GSU"), both.Left);
+        Assert.Equal(new Bbs757VorTuning(116.90, 'R', "GSU"), both.Right);
+
+        // VOR L manual on the VOR/DME panel (117.40M, no ident), VOR R still not tuned.
+        var manual = Bbs757NavRad.Parse(MeasuredNavRadio("117.40M           ------"))!;
+        Assert.Equal(new Bbs757VorTuning(117.40, 'M', null), manual.Left);
+        Assert.Equal(NotTuned, manual.Right);
+    }
+
     [Fact]
     public void Not_the_page_is_null()
     {
@@ -102,14 +161,23 @@ public class Bbs757NavRadTests
         Assert.Null(Bbs757NavRad.Parse(Bbs757CduFrame.Blank));
     }
 
-    [Theory]
-    [InlineData("GARBAGE")]   // neither a tuning nor dashes
-    [InlineData("")]          // the row has not been drawn
-    public void A_tuning_row_it_cannot_read_gives_no_page(string left)
+    [Fact]
+    public void A_side_it_cannot_read_is_unavailable_and_the_other_still_reads()
     {
-        // "Frequencies unavailable" is honest; "VOR L not tuned" for a row not read would not be.
-        Assert.Null(Bbs757NavRad.Parse(NavRadio(left)));
-        Assert.Null(Bbs757NavRad.Parse(NavRadio("116.90AGSU", "GARBAGE")));
+        // "Frequency unavailable" is honest; "VOR L not tuned" for a text not read would not be. The
+        // page is null only when the screen is not NAV RADIO.
+        var garbageLeft = Bbs757NavRad.Parse(NavRadio("GARBAGE", "GSUR116.90"))!;
+        Assert.Null(garbageLeft.Left);
+        Assert.Equal(new Bbs757VorTuning(116.90, 'R', "GSU"), garbageLeft.Right);
+
+        var garbageRight = Bbs757NavRad.Parse(NavRadio("116.90AGSU", "GARBAGE"))!;
+        Assert.Equal(new Bbs757VorTuning(116.90, 'A', "GSU"), garbageRight.Left);
+        Assert.Null(garbageRight.Right);
+
+        // A row that has not been drawn: both sides unreadable, still a page.
+        var undrawn = Bbs757NavRad.Parse(Screen("        NAV RADIO       ", new string(' ', Bbs757CduFrame.Columns)))!;
+        Assert.Null(undrawn.Left);
+        Assert.Null(undrawn.Right);
     }
 
     // ---- The sentences ------------------------------------------------------------------------
@@ -131,23 +199,53 @@ public class Bbs757NavRadTests
     }
 
     [Fact]
+    public void An_unreadable_side_says_its_frequency_is_unavailable()
+    {
+        Assert.Equal("VOR R frequency unavailable", Bbs757NavRad.TuningPhrase("VOR R", null));
+    }
+
+    [Fact]
     public void Readout_sentences()
     {
         var page = new Bbs757NavRadPage(new Bbs757VorTuning(116.90, 'A', "GSU"), NotTuned);
 
-        // With the page: each VOR's tuning and course, then the ILS course.
-        Assert.Equal("VOR L 116.90 auto, GSU, course 095. VOR R not tuned, course 000. ILS course 095.",
+        // With the page: each VOR's tuning, then the ILS course. An auto-tuned or untuned VOR has no
+        // course to say (measured: the CDU blanks its CRS field and ignores an entry).
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095.",
             Bbs757NavRad.Readout(page, 95, 0, 95));
         // Without it (the first officer's CDU busy or unreachable): the courses, and why there is no more.
         Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable.",
             Bbs757NavRad.Readout(null, 95, 0, 95));
-        // A course that cannot be read says so, in both forms.
-        Assert.Equal("VOR L 116.90 auto, GSU, course unavailable. VOR R not tuned, course 000. ILS course 095.",
-            Bbs757NavRad.Readout(page, null, 0, 95));
+        // An ILS course that cannot be read says so, in both forms.
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course unavailable.",
+            Bbs757NavRad.Readout(page, null, 0, null));
         Assert.Equal("VOR L course 095, VOR R course unavailable, ILS course unavailable. Frequencies unavailable.",
             Bbs757NavRad.Readout(null, 95, null, null));
         Assert.Equal("VOR L course unavailable, VOR R course unavailable, ILS course unavailable. Frequencies unavailable.",
             Bbs757NavRad.Readout(null, null, null, null));
+    }
+
+    [Fact]
+    public void A_vor_course_is_said_only_while_that_vor_is_tuned_by_hand()
+    {
+        var remote = new Bbs757VorTuning(116.90, 'R', "GSU");
+        var manual = new Bbs757VorTuning(117.40, 'M', null);
+        var auto = new Bbs757VorTuning(116.90, 'A', "GSU");
+
+        // Hand-tuned from the CDU (R) or on the VOR/DME panel (M): the course applies, whichever side.
+        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R 117.40 manual, course 270. ILS course 095.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, manual), 95, 270, 95));
+        // One hand-tuned, the other auto or untuned: only the hand-tuned one has a course.
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 manual, course 270. ILS course 095.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(auto, manual), 95, 270, 95));
+        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R not tuned. ILS course 095.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), 95, 270, 95));
+        // A hand-tuned VOR whose course cannot be read says so.
+        Assert.Equal("VOR L 116.90 remote, GSU, course unavailable. VOR R not tuned. ILS course 095.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), null, 270, 95));
+        // A side the page could not be read for: nothing is known of its course either.
+        Assert.Equal("VOR L frequency unavailable. VOR R 117.40 manual, course 270. ILS course 095.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(null, manual), 95, 270, 95));
     }
 
     [Theory]
@@ -159,11 +257,12 @@ public class Bbs757NavRadTests
         // and be spoken with a dot.
         InCulture(culture, () =>
         {
-            var page = Bbs757NavRad.Parse(NavRadio("116.90AGSU"));
+            var page = Bbs757NavRad.Parse(NavRadio("116.90AGSU", "GSUR117.40"));
 
-            Assert.Equal(116.90, page!.Left.Mhz);
-            Assert.Equal("VOR L 116.90 auto, GSU, course 095. VOR R not tuned, course 000. ILS course 095.",
-                Bbs757NavRad.Readout(page, 95, 0, 95));
+            Assert.Equal(116.90, page!.Left!.Mhz);
+            Assert.Equal(117.40, page.Right!.Mhz);
+            Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 remote, GSU, course 270. ILS course 095.",
+                Bbs757NavRad.Readout(page, 95, 270, 95));
         });
     }
 
@@ -192,6 +291,202 @@ public class Bbs757NavRadTests
     {
         Assert.Equal("VOR L course 005, VOR R course 000, ILS course 360. Frequencies unavailable.",
             Bbs757NavRad.Readout(null, 5, 0, 360));
+    }
+
+    // ---- The ILS course typed in ----------------------------------------------------------------
+
+    [Theory]
+    [InlineData("095", 95)]
+    [InlineData("95", 95)]
+    [InlineData("0", 0)]
+    [InlineData("000", 0)]
+    [InlineData("270", 270)]
+    [InlineData("359", 359)]
+    [InlineData("360", 0)]       // 360 is north: 0
+    [InlineData(" 180 ", 180)]   // surrounding spaces are not part of it
+    [InlineData("95.0", 95)]     // a whole number typed with a decimal mark
+    public void Course_parsing(string typed, int degrees)
+    {
+        Assert.True(Bbs757NavRad.TryParseCourse(typed, out int parsed, out string error));
+        Assert.Equal(degrees, parsed);
+        Assert.Equal("", error);
+    }
+
+    [Theory]
+    [InlineData(null, "Type a course first.")]
+    [InlineData("", "Type a course first.")]
+    [InlineData("   ", "Type a course first.")]
+    [InlineData("361", "Course must be 0 to 360.")]
+    [InlineData("1000", "Course must be 0 to 360.")]
+    [InlineData("-5", "Course must be 0 to 360.")]
+    [InlineData("95.5", "Course must be 0 to 360.")]   // not a whole number
+    [InlineData("1,000", "Course must be 0 to 360.")]  // a thousands group is refused, never guessed
+    [InlineData("abc", "Course must be 0 to 360.")]
+    [InlineData("NaN", "Course must be 0 to 360.")]
+    public void Course_parsing_refuses_what_is_not_a_course(string? typed, string said)
+    {
+        Assert.False(Bbs757NavRad.TryParseCourse(typed, out int degrees, out string error));
+        Assert.Equal(said, error);
+        Assert.Equal(0, degrees);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_typed_course_is_read_in_any_culture(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            Assert.True(Bbs757NavRad.TryParseCourse("095", out int plain, out _));
+            Assert.Equal(95, plain);
+            Assert.True(Bbs757NavRad.TryParseCourse("95,0", out int comma, out _));   // a comma-decimal PC's own mark
+            Assert.Equal(95, comma);
+            Assert.True(Bbs757NavRad.TryParseCourse("95.0", out int dot, out _));
+            Assert.Equal(95, dot);
+        });
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Course_code_is_invariant(string culture)
+    {
+        // A whole number of degrees, written with no culture in it (VAR-5).
+        InCulture(culture, () =>
+        {
+            Assert.Equal("95 (>L:BBS_ILS_COURSE)", Bbs757NavRad.CourseCode("BBS_ILS_COURSE", 95));
+            Assert.Equal("0 (>L:BBS_ILS_COURSE)", Bbs757NavRad.CourseCode("BBS_ILS_COURSE", 0));
+            Assert.Equal("270 (>L:BBS_ILS_COURSE)", Bbs757NavRad.CourseCode("BBS_ILS_COURSE", 270));
+        });
+    }
+
+    // ---- The FMC's runway ILS (APPROACH REF) --------------------------------------------------------
+
+    /// <summary>A CDU screen from 14 rows, each exactly 24 columns (the page service's shape).</summary>
+    private static Bbs757CduScreen Cdu(params string[] rows)
+    {
+        Assert.Equal(Bbs757CduFrame.Rows, rows.Length);
+        Assert.All(rows, r => Assert.Equal(Bbs757CduFrame.Columns, r.Length));
+        return new Bbs757CduScreen(rows);
+    }
+
+    private static readonly string Blank24 = new(' ', Bbs757CduFrame.Columns);
+
+    /// <summary>
+    /// APPROACH REF as CDU 2 showed it with KATL-KMIA programmed and an arrival selected, on the ground
+    /// (measured 2026-10-26, section E2). The ILS is two rows: a label row and the row under it. The
+    /// CDU's entry box reads as '_' once scraped.
+    /// </summary>
+    private static Bbs757CduScreen MeasuredApproachRef(string? runwayRow = null, string? ilsLabel = null, string? ilsValue = null)
+        => Cdu(
+            "      APPROACH REF      ",
+            " GROSS WT               ",
+            "___._                   ",
+            Blank24, Blank24, Blank24, Blank24,
+            runwayRow ?? " KATL09L      FLAP/SPEED",
+            "12390FT3776M      --/---",
+            ilsLabel ?? " ILS 09L       FRONT CRS",
+            ilsValue ?? "110.50 IHZK         095°",
+            "------------------------",
+            "<INDEX                  ",
+            Blank24);
+
+    /// <summary>APPROACH REF with no arrival runway (measured, no route): no ILS rows.</summary>
+    private static Bbs757CduScreen ApproachRefWithoutIls()
+        => Cdu(
+            "      APPROACH REF      ",
+            " GROSS WT               ",
+            "???.?                   ",
+            Blank24, Blank24, Blank24, Blank24,
+            "              FLAP/SPEED",
+            "                  --/---",
+            Blank24, Blank24,
+            "------------------------",
+            "<INDEX                  ",
+            Blank24);
+
+    [Fact]
+    public void Is_approach_ref_by_its_title()
+    {
+        Assert.True(Bbs757NavRad.IsApproachRef(MeasuredApproachRef()));
+        Assert.True(Bbs757NavRad.IsApproachRef(ApproachRefWithoutIls()));
+        Assert.False(Bbs757NavRad.IsApproachRef(NavRadio("116.90AGSU")));
+        Assert.False(Bbs757NavRad.IsApproachRef(Legs()));
+        Assert.False(Bbs757NavRad.IsApproachRef(Bbs757CduFrame.Blank));
+    }
+
+    [Fact]
+    public void Approach_ref_ils_parsed()
+    {
+        var ils = Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef());
+
+        Assert.Equal(new Bbs757RunwayIls("09L", 110.50, "IHZK", 95, "KATL"), ils);
+    }
+
+    [Fact]
+    public void A_page_with_no_ils_rows_gives_no_ils()
+    {
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(ApproachRefWithoutIls()));
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(NavRadio("116.90AGSU")));
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(Bbs757CduFrame.Blank));
+        // The label without a frequency under it is no ILS to set either.
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(ilsValue: "------                  ")));
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(ilsValue: "                        ")));
+    }
+
+    [Fact]
+    public void An_ils_without_a_front_course_is_still_read()
+    {
+        var ils = Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(ilsValue: "110.50 IHZK".PadRight(Bbs757CduFrame.Columns)));
+
+        Assert.Equal(new Bbs757RunwayIls("09L", 110.50, "IHZK", null, "KATL"), ils);
+    }
+
+    [Fact]
+    public void The_airport_is_named_only_when_its_runway_is_the_ils_runway()
+    {
+        // Row 7 names the airport and the runway the page is about; another runway there is not this ILS's.
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(runwayRow: " KMIA09R      FLAP/SPEED"))!.Airport);
+        Assert.Null(Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(runwayRow: "              FLAP/SPEED"))!.Airport);
+        // Another runway with a letter, and a runway without one.
+        var other = Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(
+            runwayRow: " KMIA08R      FLAP/SPEED", ilsLabel: " ILS 08R       FRONT CRS", ilsValue: "109.90 IATL         090°"));
+        Assert.Equal(new Bbs757RunwayIls("08R", 109.90, "IATL", 90, "KMIA"), other);
+        var plain = Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef(
+            runwayRow: " EDDF25       FLAP/SPEED", ilsLabel: " ILS 25        FRONT CRS", ilsValue: "109.90 IFFC         249°"));
+        Assert.Equal(new Bbs757RunwayIls("25", 109.90, "IFFC", 249, "EDDF"), plain);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_ils_is_read_and_said_whatever_the_pcs_culture(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            var ils = Bbs757NavRad.ParseApproachRefIls(MeasuredApproachRef());
+
+            Assert.Equal(110.50, ils!.Mhz);   // not 11050
+            Assert.Equal("FMC runway ILS KATL 09L, 110.50, IHZK, front course 095", Bbs757NavRad.RunwayIlsPhrase(ils));
+        });
+    }
+
+    [Fact]
+    public void Runway_ils_phrases()
+    {
+        Assert.Equal("FMC runway ILS KATL 09L, 110.50, IHZK, front course 095",
+            Bbs757NavRad.RunwayIlsPhrase(new Bbs757RunwayIls("09L", 110.50, "IHZK", 95, "KATL")));
+        // No airport read: the runway alone.
+        Assert.Equal("FMC runway ILS 09L, 110.50, IHZK, front course 095",
+            Bbs757NavRad.RunwayIlsPhrase(new Bbs757RunwayIls("09L", 110.50, "IHZK", 95)));
+        // No front course on the page: it is left out, never invented.
+        Assert.Equal("FMC runway ILS KATL 09L, 110.50, IHZK",
+            Bbs757NavRad.RunwayIlsPhrase(new Bbs757RunwayIls("09L", 110.50, "IHZK", null, "KATL")));
+        // The frequency has two decimals ("108.10", not "108.1") and the course three digits.
+        Assert.Equal("FMC runway ILS 26L, 108.10, IBRU, front course 005",
+            Bbs757NavRad.RunwayIlsPhrase(new Bbs757RunwayIls("26L", 108.1, "IBRU", 5)));
+        Assert.Equal("FMC runway ILS unavailable", Bbs757NavRad.RunwayIlsPhrase(null));
     }
 
     // ---- The variables ------------------------------------------------------------------------
@@ -282,7 +577,7 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 116.90 auto, GSU, course 095. VOR R not tuned, course 000. ILS course 095." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095." }, speech.Interrupts);
         Assert.Empty(cdu.Presses);   // already on the page: no key
     }
 
@@ -295,7 +590,7 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 113.90 remote, course 095. VOR R not tuned, course 000. ILS course 095." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 113.90 remote, course 095. VOR R not tuned. ILS course 095." }, speech.Interrupts);
         Assert.Equal(new[] { (Fo, Bbs757NavRad.PageKey, 250) }, cdu.Presses);   // R52: the captain's CDU is never touched
     }
 
@@ -328,13 +623,13 @@ public class Bbs757NavRadTests
     [Fact]
     public async Task N_with_a_course_that_cannot_be_read_says_so()
     {
-        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU") };
+        var cdu = new FakeCdu { Screen = NavRadio("113.90R") };   // tuned by hand: its course applies
         var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(null, 0, double.NaN) };
         var speech = new SpeechCapture();
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 116.90 auto, GSU, course unavailable. VOR R not tuned, course 000. ILS course unavailable." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 113.90 remote, course unavailable. VOR R not tuned. ILS course unavailable." }, speech.Interrupts);
     }
 
     [Fact]
@@ -370,6 +665,441 @@ public class Bbs757NavRadTests
         Assert.Empty(speech.Interrupts);
     }
 
+    // ---- The Ctrl+N window ------------------------------------------------------------------------
+
+    private static Bbs757CduScreen InitPage(string title, string? row12 = null)
+    {
+        var rows = Enumerable.Repeat(Blank24, Bbs757CduFrame.Rows).ToArray();
+        rows[0] = title;
+        if (row12 != null) rows[12] = row12;
+        return Cdu(rows);
+    }
+
+    /// <summary>INIT on the ground gave POS INIT (measured): 6L is the way to the index.</summary>
+    private static Bbs757CduScreen PosInit() => InitPage("      POS INIT       1/4", "<INDEX            ROUTE>");
+
+    /// <summary>With a route programmed INIT gave PERF INIT (measured): its 6L is the index too.</summary>
+    private static Bbs757CduScreen PerfInit() => InitPage("        PERF INIT       ", "<INDEX          TAKEOFF>");
+
+    private static Bbs757CduScreen InitRefIndex() => InitPage("     INIT/REF INDEX     ", "                  MAINT>");
+
+    private const string Reading = "Reading the nav radios…";
+
+    private const string TunedAuto = "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095.";
+
+    /// <summary>A simulated aircraft behind the ILS course write: what a fresh read answers, the writes and waits made.</summary>
+    private sealed class IlsSim
+    {
+        public bool CanWrite = true;
+        public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
+        public readonly List<string> Writes = new();
+        public readonly List<int> Delays = new();
+
+        public Bbs757SimIo Io => new()
+        {
+            CanWrite = () => CanWrite,
+            ReadFresh = (key, _) => Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null),
+            Cached = _ => null,
+            Write = rpn => Writes.Add(rpn),
+            RequestRead = _ => { },
+            Delay = (ms, ct) =>
+            {
+                Delays.Add(ms);
+                ct.ThrowIfCancellationRequested();
+                return Task.CompletedTask;
+            },
+        };
+    }
+
+    /// <summary>A definition wired to a fake first officer's CDU, a simulated aircraft and a window nothing shows.</summary>
+    private sealed class WindowRig
+    {
+        public readonly SpeechCapture Speech = new();
+        public readonly FakeCdu Cdu;
+        public readonly IlsSim Sim = new();
+        public readonly BBS757Definition Def;
+        public int Shown;
+
+        /// <param name="gate">When set, the courses read waits for it (the window is then still opening).</param>
+        public WindowRig(FakeCdu cdu, Task? gate = null, double? vorL = 95, double? vorR = 0, double? ils = 95)
+        {
+            Cdu = cdu;
+            Def = new BBS757Definition
+            {
+                NestRunning = () => true,
+                WriteIo = _ => Sim.Io,
+                ShowRadioForm = (_, _) => Shown++,
+                ReadoutIo = _ => new McpIo
+                {
+                    Read = async (key, _) =>
+                    {
+                        if (gate != null) await gate;
+                        return key switch
+                        {
+                            Bbs757NavRad.VorLCourseKey => vorL,
+                            Bbs757NavRad.VorRCourseKey => vorR,
+                            Bbs757NavRad.IlsCourseKey => ils,
+                            _ => throw new InvalidOperationException($"the window read {key}"),
+                        };
+                    },
+                    Write = _ => throw new InvalidOperationException("the readout writes nothing"),
+                    Delay = (_, _) => Task.CompletedTask,
+                },
+            };
+        }
+
+        public Forms.BBS757.BBS757NavRadiosForm Open()
+            => Def.ShowNavRadiosWindow(new SimConnectManager(IntPtr.Zero), Speech, null, Pages(Cdu));
+    }
+
+    /// <summary>The FO CDU on NAV RADIO, INIT leading to the approach page the measured way (or the page given).</summary>
+    private static FakeCdu CduToApproachRef(Bbs757CduScreen initGives, Bbs757CduScreen? indexL5Gives = null)
+    {
+        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU"), ScreenAfterNavRadKey = NavRadio("116.90AGSU") };
+        cdu.Transitions[("NAV RADIO", Bbs757CduKeys.Init)] = initGives;
+        cdu.Transitions[("POS INIT", "L6")] = InitRefIndex();
+        cdu.Transitions[("PERF INIT", "L6")] = InitRefIndex();
+        cdu.Transitions[("INIT/REF INDEX", "L5")] = indexL5Gives ?? MeasuredApproachRef();
+        return cdu;
+    }
+
+    [Fact]
+    public async Task Window_opens_without_approach_ref()
+    {
+        // The FO CDU is on NAV RADIO and INIT changes nothing: no APPROACH REF can be had. The window
+        // opens anyway, and its status says so.
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") });
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        const string said = TunedAuto + " FMC runway ILS unavailable.";
+        Assert.Equal(said, form.StatusText);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // spoken once: the screen reader cannot know it changed
+        Assert.Equal(1, rig.Shown);
+        Assert.Equal(new[] { (Fo, Bbs757CduKeys.Init, 250) }, rig.Cdu.Presses);   // INIT tried, nothing else pressed
+    }
+
+    [Fact]
+    public async Task The_window_opens_on_a_reading_message_and_speaks_nothing_until_it_is_filled()
+    {
+        var gate = new TaskCompletionSource();
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") }, gate.Task);
+
+        var form = rig.Open();
+
+        Assert.Equal(Reading, form.StatusText);
+        Assert.Empty(rig.Speech.All);
+
+        gate.SetResult();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.StartsWith(TunedAuto, form.StatusText);
+        Assert.Single(rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData(false)]   // INIT gave POS INIT (no route)
+    [InlineData(true)]    // INIT gave PERF INIT (route programmed)
+    public async Task The_fmc_runway_ils_is_read_through_init_the_index_and_approach(bool perfInit)
+    {
+        var rig = new WindowRig(CduToApproachRef(perfInit ? PerfInit() : PosInit()));
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        const string said = TunedAuto + " FMC runway ILS KATL 09L, 110.50, IHZK, front course 095.";
+        Assert.Equal(said, form.StatusText);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);
+        // The keys measured: INIT, 6L (INDEX), 5L (APPROACH), then the FO CDU is put back on NAV RADIO.
+        Assert.Equal(new[]
+        {
+            (Fo, Bbs757CduKeys.Init, 250), (Fo, "L6", 250), (Fo, "L5", 250), (Fo, Bbs757CduKeys.NavRad, 250),
+        }, rig.Cdu.Presses);
+        Assert.True(Bbs757NavRad.IsNavRadio(rig.Cdu.Screen!));
+    }
+
+    [Fact]
+    public async Task In_flight_init_may_open_approach_ref_at_once()
+    {
+        // Boeing's INIT REF is phase dependent: if INIT shows APPROACH REF there are no index keys to press.
+        var rig = new WindowRig(CduToApproachRef(MeasuredApproachRef()));
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.EndsWith("FMC runway ILS KATL 09L, 110.50, IHZK, front course 095.", form.StatusText);
+        Assert.Equal(new[] { (Fo, Bbs757CduKeys.Init, 250), (Fo, Bbs757CduKeys.NavRad, 250) }, rig.Cdu.Presses);
+    }
+
+    [Fact]
+    public async Task When_init_shows_the_index_itself_6L_is_not_pressed()
+    {
+        var rig = new WindowRig(CduToApproachRef(InitRefIndex()));
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.EndsWith("FMC runway ILS KATL 09L, 110.50, IHZK, front course 095.", form.StatusText);
+        Assert.Equal(new[] { (Fo, Bbs757CduKeys.Init, 250), (Fo, "L5", 250), (Fo, Bbs757CduKeys.NavRad, 250) }, rig.Cdu.Presses);
+    }
+
+    [Theory]
+    [InlineData("wrong page after 6L")]
+    [InlineData("6L did nothing")]
+    [InlineData("5L did nothing")]
+    public async Task A_page_that_is_not_the_expected_one_on_the_way_gives_no_ils_and_the_cdu_is_put_back(string fault)
+    {
+        var cdu = CduToApproachRef(PosInit());
+        switch (fault)
+        {
+            case "wrong page after 6L": cdu.Transitions[("POS INIT", "L6")] = Legs(); break;
+            case "6L did nothing": cdu.Transitions.Remove(("POS INIT", "L6")); break;
+            default: cdu.Transitions.Remove(("INIT/REF INDEX", "L5")); break;
+        }
+        var rig = new WindowRig(cdu);
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.Equal(TunedAuto + " FMC runway ILS unavailable.", form.StatusText);
+        Assert.True(Bbs757NavRad.IsNavRadio(cdu.Screen!));   // success or not, the FO CDU ends on NAV RADIO
+        Assert.Equal((Fo, Bbs757CduKeys.NavRad, 250), cdu.Presses[^1]);
+    }
+
+    [Fact]
+    public async Task An_approach_page_with_no_ils_says_so_and_the_cdu_is_put_back()
+    {
+        var rig = new WindowRig(CduToApproachRef(ApproachRefWithoutIls()));
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.Equal(TunedAuto + " FMC runway ILS unavailable.", form.StatusText);
+        Assert.Equal((Fo, Bbs757CduKeys.NavRad, 250), rig.Cdu.Presses[^1]);
+    }
+
+    [Fact]
+    public async Task With_the_cdu_busy_the_window_still_opens_with_the_courses_and_no_key_is_pressed()
+    {
+        // The pilot is typing in the CDU window: the page service presses nothing.
+        var rig = new WindowRig(new FakeCdu { Screen = Legs(), PendingKeyCount = 3 });
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable. FMC runway ILS unavailable.",
+            form.StatusText);
+        Assert.Empty(rig.Cdu.Presses);
+    }
+
+    [Fact]
+    public async Task A_window_closed_before_it_is_filled_says_nothing()
+    {
+        var gate = new TaskCompletionSource();
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") }, gate.Task);
+        var form = rig.Open();
+
+        form.Dispose();
+        gate.SetResult();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task Switching_away_stops_the_read_and_says_nothing()
+    {
+        var gate = new TaskCompletionSource();
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") }, gate.Task);
+        var form = rig.Open();
+
+        rig.Def.OnSwitchedAway();
+        gate.SetResult();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.True(form.IsDisposed);
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Cdu.Presses);
+    }
+
+    [Fact]
+    public async Task Ctrl_N_shows_one_window_and_brings_it_forward_again()
+    {
+        var shown = 0;
+        var def = new BBS757Definition
+        {
+            NestRunning = () => true,
+            ReadoutIo = _ => Courses(95, 0, 95),
+            ShowRadioForm = (_, _) => shown++,
+            TabletClientFactory = () =>
+            {
+                var client = new CoherentBbs757TabletClient(() => "");
+                client.Dispose();
+                return client;
+            },
+        };
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        bool first = def.HandleHotkeyAction(HotkeyAction.SetNavRadios, sim, speech, null!, new HotkeyManager());
+        var window = def.NavRadiosWindow;
+        await def.NavRadiosFill!;
+        bool second = def.HandleHotkeyAction(HotkeyAction.SetNavRadios, sim, speech, null!, new HotkeyManager());
+
+        Assert.True(first);
+        Assert.True(second);
+        Assert.NotNull(window);
+        Assert.Same(window, def.NavRadiosWindow);   // the same window, shown again
+        Assert.Equal(1, shown);
+        Assert.Equal("757 Nav Radios", window!.Text);
+
+        def.OnSwitchedAway();
+        Assert.True(window.IsDisposed);
+        Assert.Null(def.NavRadiosWindow);
+    }
+
+    [Fact]
+    public void The_window_has_a_read_only_status_box_first_and_the_ils_course_box_with_its_label()
+    {
+        using var form = new Forms.BBS757.BBS757NavRadiosForm(new SpeechCapture(), _ => null);
+
+        var boxes = form.Controls.OfType<TextBox>().OrderBy(t => t.TabIndex).ToList();
+        Assert.Equal(2, boxes.Count);   // no VOR boxes: the CDU sets a VOR's course
+        Assert.True(boxes[0].ReadOnly);   // the status, first ([VAT-13])
+        Assert.False(boxes[1].ReadOnly);
+        Assert.Equal("757 Nav Radios", form.Text);
+
+        var label = form.Controls.OfType<Label>().Single(l => l.Text.Replace("&", "") == "ILS course");
+        Assert.InRange(label.TabIndex, boxes[0].TabIndex + 1, boxes[1].TabIndex - 1);   // right before its box
+        Assert.Equal("ILS course", boxes[1].AccessibleName);
+    }
+
+    [Fact]
+    public void Escape_closes_the_window()
+    {
+        var form = new Forms.BBS757.BBS757NavRadiosForm(new SpeechCapture(), _ => null);
+
+        var onKeyDown = typeof(Control).GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        onKeyDown.Invoke(form, new object[] { new KeyEventArgs(Keys.Escape) });
+
+        Assert.True(form.IsDisposed);
+    }
+
+    // ---- The ILS course ---------------------------------------------------------------------------
+
+    private static (BBS757Definition Def, IlsSim Sim, SpeechCapture Speech) IlsRig()
+    {
+        var sim = new IlsSim();
+        return (new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io }, sim, new SpeechCapture());
+    }
+
+    private static Task SetIls(BBS757Definition def, int degrees, SpeechCapture speech, Action<string>? onSaid = null)
+        => def.SetIlsCourseAsync(degrees, new SimConnectManager(IntPtr.Zero), speech, onSaid);
+
+    [Fact]
+    public async Task An_ils_course_is_written_read_back_and_said_from_what_came_back()
+    {
+        var (def, sim, speech) = IlsRig();
+        sim.Fresh[Bbs757NavRad.IlsCourseKey] = 95;
+        var said = new List<string>();
+
+        await SetIls(def, 95, speech, said.Add);
+
+        Assert.Equal(new[] { "95 (>L:BBS_ILS_COURSE)" }, sim.Writes);
+        Assert.Equal(new[] { 1500 }, sim.Delays);   // ReadBackDelayMs, no more
+        Assert.Equal(new[] { "ILS course 095" }, speech.Interrupts);
+        Assert.Equal(new[] { "ILS course 095" }, said);   // every result also goes into the status box
+    }
+
+    [Fact]
+    public async Task What_the_aircraft_holds_is_said_not_what_was_asked()
+    {
+        var (def, sim, speech) = IlsRig();
+        sim.Fresh[Bbs757NavRad.IlsCourseKey] = 90;   // the aircraft did not take 95
+
+        await SetIls(def, 95, speech);
+
+        Assert.Equal(new[] { "ILS course 090" }, speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task An_ils_course_that_cannot_be_read_back_is_not_claimed()
+    {
+        var (def, sim, speech) = IlsRig();
+        sim.Fresh[Bbs757NavRad.IlsCourseKey] = null;
+        var said = new List<string>();
+
+        await SetIls(def, 5, speech, said.Add);
+
+        Assert.Equal(new[] { "ILS course 005 sent, not read back" }, speech.Interrupts);
+        Assert.Equal(speech.Interrupts, said);
+    }
+
+    [Fact]
+    public async Task An_ils_course_is_refused_aloud_when_no_write_can_land()
+    {
+        var (def, sim, speech) = IlsRig();
+        sim.CanWrite = false;
+        var said = new List<string>();
+
+        await SetIls(def, 95, speech, said.Add);
+
+        Assert.Empty(sim.Writes);   // nothing written
+        Assert.Empty(sim.Delays);
+        Assert.Equal(new[] { "ILS course unavailable" }, speech.Interrupts);
+        Assert.Equal(new[] { "ILS course unavailable" }, said);
+    }
+
+    [Fact]
+    public async Task An_ils_course_after_switching_away_writes_and_says_nothing()
+    {
+        var (def, sim, speech) = IlsRig();
+        def.OnSwitchedAway();
+
+        await SetIls(def, 95, speech);
+
+        Assert.Empty(sim.Writes);
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public async Task Enter_in_the_ils_box_sets_that_course_only()
+    {
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") });
+        rig.Sim.Fresh[Bbs757NavRad.IlsCourseKey] = 270;
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+        rig.Speech.Interrupts.Clear();
+        var presses = rig.Cdu.Presses.Count;
+
+        form.ApplyIlsCourse(" 270 ");
+
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
+        Assert.Equal(new[] { "ILS course 270" }, rig.Speech.Interrupts);
+        Assert.Equal("ILS course 270", form.StatusText);
+        Assert.Equal(new[] { "270 (>L:BBS_ILS_COURSE)" }, rig.Sim.Writes);   // one write: the ILS course
+        Assert.Equal(presses, rig.Cdu.Presses.Count);                        // no CDU key for it
+    }
+
+    [Theory]
+    [InlineData("", "Type a course first.")]
+    [InlineData("400", "Course must be 0 to 360.")]
+    [InlineData("north", "Course must be 0 to 360.")]
+    public async Task A_course_that_is_not_one_is_refused_aloud_and_nothing_is_written(string typed, string said)
+    {
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") });
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+        rig.Speech.Interrupts.Clear();
+
+        form.ApplyIlsCourse(typed);
+
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // a validation error always speaks
+        Assert.Equal(said, form.StatusText);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
     // ---- A fake first officer's CDU ---------------------------------------------------------------
 
     private static Bbs757CduPages Pages(FakeCdu cdu) => new(cdu, (_, _) => Task.CompletedTask);
@@ -385,12 +1115,16 @@ public class Bbs757NavRadTests
         /// <summary>What it shows once the NAV RAD key was pressed; null: the key changes nothing.</summary>
         public Bbs757CduScreen? ScreenAfterNavRadKey { get; set; }
 
+        /// <summary>What a key shows on a page: (the page's identity, the key) to the screen it then shows; a key not listed changes nothing.</summary>
+        public Dictionary<(string Page, string Key), Bbs757CduScreen> Transitions { get; } = new();
+
         public List<(int Cdu, string Key, int HoldMs)> Presses { get; } = new();
 
         public void PressKey(int cdu, string key, int holdMs)
         {
             Presses.Add((cdu, key, holdMs));
             if (key == Bbs757CduKeys.NavRad && ScreenAfterNavRadKey != null) Screen = ScreenAfterNavRadKey;
+            else if (Screen != null && Transitions.TryGetValue((Bbs757CduTitle.Identity(Screen.Lines[0]), key), out var next)) Screen = next;
         }
 
         public Task<Bbs757CduScreen?> ScrapeAsync(int cdu, CancellationToken ct) => Task.FromResult(Screen);
