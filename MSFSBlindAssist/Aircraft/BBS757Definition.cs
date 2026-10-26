@@ -56,8 +56,7 @@ namespace MSFSBlindAssist.Aircraft;
 ///     Shift+W read them; Ctrl+B sets the altimeters and the radio minimums,
 ///     Ctrl+P is the autopilot window, the transponder panel takes a squawk right after its mode knob; the
 ///     Pedestal's Engines panel shows the stock engine values beside its switches (all in
-///     BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs; unmeasured parts in
-///     docs/b757/plans/01-prototype-insim-tests.md).
+///     BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs).
 /// </summary>
 public partial class BBS757Definition : BaseAircraftDefinition
 {

@@ -14,7 +14,7 @@ namespace MSFSBlindAssist.Tests;
 /// with no simulator (each says it is unavailable, never nothing); and task 11's first-flight fixes:
 /// the trim in BlueBird's units and the EXEC light. The MCP windows' tests (the autopilot window, A/T
 /// Arm, the value windows' buttons) are in Bbs757McpWindowTests.
-/// Whether the aircraft moves is checked in the sim (docs/b757/plans/01-prototype-insim-tests.md).
+/// Whether the aircraft moves is checked in the sim.
 /// </summary>
 public class Bbs757FlightReadinessTests
 {
