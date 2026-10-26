@@ -99,11 +99,11 @@
   - The altimeter set: `OnOwnAltimeterSet()` before its write; `SetSquawkAsync`: `OnOwnSquawkSet(code)` before its write.
 - Produces `public static class Bbs757SharedKeys` with `public const string ExtPwrOn = "BBS757_EXT_PWR_ON", ExtPwrAvail = "BBS757_EXT_PWR_AVAIL", GpuConnected = "BBS757_GPU_CONNECTED";` (registered by plans 06, 06 and 07).
 
-- [ ] **Step 1: Write the failing test** `Bbs757SeamsTests.Hooks_file_declares_every_seam`: read `MSFSBlindAssist/Aircraft/BBS757Definition.Hooks.cs` from the repo root (as other source-scan tests find files) and assert each of the 36 method names above appears with `partial void`; `Monitor_rows_without_hooks_are_todays` (`MonitorRows()` equals `MonitorRowBuilder.Build(GetVariables())`); `Shared_keys_are_distinct` (three constants, distinct, prefix `BBS757_`); `Display_override_unchanged_without_hooks` (the 757's `TryGetDisplayOverride` gives today's text for the squawk row and the flap row).
-- [ ] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757SeamsTests`. Expected: FAIL.
-- [ ] **Step 3: Implement** the hooks file (a class comment naming each group's plan), the shared keys and the calls; each call site gets a one-line comment naming the plan whose file implements it.
-- [ ] **Step 4: Run the full suite.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(b757): seams for the gap plans`.
+- [x] **Step 1: Write the failing test** `Bbs757SeamsTests.Hooks_file_declares_every_seam`: read `MSFSBlindAssist/Aircraft/BBS757Definition.Hooks.cs` from the repo root (as other source-scan tests find files) and assert each of the 36 method names above appears with `partial void`; `Monitor_rows_without_hooks_are_todays` (`MonitorRows()` equals `MonitorRowBuilder.Build(GetVariables())`); `Shared_keys_are_distinct` (three constants, distinct, prefix `BBS757_`); `Display_override_unchanged_without_hooks` (the 757's `TryGetDisplayOverride` gives today's text for the squawk row and the flap row).
+- [x] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757SeamsTests`. Expected: FAIL.
+- [x] **Step 3: Implement** the hooks file (a class comment naming each group's plan), the shared keys and the calls; each call site gets a one-line comment naming the plan whose file implements it.
+- [x] **Step 4: Run the full suite.** Expected: PASS.
+- [x] **Step 5: Commit** `feat(b757): seams for the gap plans`.
 
 ### Task 2: Split the test files by owner
 
@@ -115,10 +115,10 @@
 - `Bbs757DefinitionTests` (frozen after this): `Sections_and_panels_follow_the_map_order` checks that the map's panels appear in each section, and the map's controls in each panel, **in map order as a subsequence** (app panels and fields may sit between); `Every_status_row_is_on_the_status_display_then_the_flight_controls` checks the map's status rows then the flight-control rows appear in that order (other rows may follow); `The_pedestal_starts_with_the_control_stand_the_engines_and_the_transponder` checks the order of those three among the Pedestal's map panels.
 - Move verbatim, keeping each test's name, from `Bbs757FlightReadinessTests.cs` to the new `Bbs757McpWindowTests.cs` (owned by plan 05, then 14): the sections "The autopilot window's table", "Ctrl+P's A/T Arm: BlueBird's armed flag" and "The MCP value windows' buttons", and the three window-press tests `A_window_press_the_aircraft_refused_says_so_once`, `A_window_press_that_took_is_silent`, `A_window_press_that_cannot_land_is_refused_aloud_and_sends_nothing`, with the fixture helpers they need (copied, not shared).
 
-- [ ] **Step 1: Make the edits** (no production change).
-- [ ] **Step 2: Run the full suite.** Expected: PASS, with the same test count as before.
-- [ ] **Step 3: Prove the loosening:** a throwaway local edit that inserts a dummy app panel after "TCAS and transponder" in `BuildPanelsOnce` keeps the three tests green; revert it.
-- [ ] **Step 4: Commit** `test(b757): split the 757 tests by plan owner`.
+- [x] **Step 1: Make the edits** (no production change).
+- [x] **Step 2: Run the full suite.** Expected: PASS, with the same test count as before.
+- [x] **Step 3: Prove the loosening:** a throwaway local edit that inserts a dummy app panel after "TCAS and transponder" in `BuildPanelsOnce` keeps the three tests green; revert it.
+- [x] **Step 4: Commit** `test(b757): split the 757 tests by plan owner`.
 
 ### Task 3: The definition owns the tablet client
 
@@ -130,11 +130,11 @@
 - Produces on the definition: `internal CoherentBbs757TabletClient EnsureTabletClient()` (created and started on first use, the client MainForm used to own), `internal Func<CoherentBbs757TabletClient>? TabletClientFactory { get; init; }` (tests replace it), and disposal at the end of `OnSwitchedAway` (after the windows close).
 - `MainForm.EnsureBbs757TabletClient()` returns `(currentAircraft as BBS757Definition)?.EnsureTabletClient()` and throws nothing when the 757 is not loaded (it returns null; its callers already only run on the 757: make them null-safe); `DisposeBBS757Forms` stops disposing the tablet client.
 
-- [ ] **Step 1: Write the failing tests:** `Tablet_client_is_created_once` (two `EnsureTabletClient` calls, one factory call); `Switching_away_disposes_it_after_the_windows` (a fake client records Dispose after the definition's windows close).
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the full suite** (`CoherentBbs757TabletClientTests`). Expected: PASS.
-- [ ] **Step 5: Commit** `refactor(b757): the 757 definition owns the tablet client`.
+- [x] **Step 1: Write the failing tests:** `Tablet_client_is_created_once` (two `EnsureTabletClient` calls, one factory call); `Switching_away_disposes_it_after_the_windows` (a fake client records Dispose after the definition's windows close).
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the full suite** (`CoherentBbs757TabletClientTests`). Expected: PASS.
+- [x] **Step 5: Commit** `refactor(b757): the 757 definition owns the tablet client`.
 
 ### Task 4: No glideslope call-out from the simulator's NAV 1 (a fix)
 
@@ -145,11 +145,11 @@
 **Interfaces:**
 - `public virtual bool UsesStockNavReceivers => true;` on `BaseAircraftDefinition` (doc comment: false for an aircraft whose own receivers leave the sim's NAV radios untouched); `BBS757Definition` overrides it `false`. When false, `GetBaseVariables` does not register the glideslope row (no Ctrl+M row, [VAR-9]) and the alive/lost branch never speaks.
 
-- [ ] **Step 1: Write the failing tests:** `Bbs757_registers_no_glideslope_row`; `Pmdg737_keeps_its_glideslope_row` (old key, `IsAnnounced` unchanged); `Bbs757_never_speaks_glideslope_alive` (the base key fed 1 then 0: nothing).
-- [ ] **Step 2: Run** with `--filter Bbs757GlideslopeGateTests`. Expected: FAIL.
-- [ ] **Step 3: Implement** (comment: spec 3.2).
-- [ ] **Step 4: Run the full suite** (`DefAnnounceMuteSetsTests`, `ClaudeContextBudgetTests`). Expected: PASS.
-- [ ] **Step 5: Commit** `fix(b757): no glideslope call-out from the sim's NAV 1 on the 757`.
+- [x] **Step 1: Write the failing tests:** `Bbs757_registers_no_glideslope_row`; `Pmdg737_keeps_its_glideslope_row` (old key, `IsAnnounced` unchanged); `Bbs757_never_speaks_glideslope_alive` (the base key fed 1 then 0: nothing).
+- [x] **Step 2: Run** with `--filter Bbs757GlideslopeGateTests`. Expected: FAIL.
+- [x] **Step 3: Implement** (comment: spec 3.2).
+- [x] **Step 4: Run the full suite** (`DefAnnounceMuteSetsTests`, `ClaudeContextBudgetTests`). Expected: PASS.
+- [x] **Step 5: Commit** `fix(b757): no glideslope call-out from the sim's NAV 1 on the 757`.
 
 ### Task 5: Tablet client additions and `Bbs757CduPages`
 
@@ -204,11 +204,11 @@
   - `PressKeysAsync`: null if `!IsReadable` or `PendingKeyCount > 0`; press each key (250 ms hold), wait for the drain, wait 1200 ms, return a fresh read.
   - Exceptions from the link are caught, logged under `BBS757`, answered with null / false.
 
-- [ ] **Step 1: Write the failing tests.** Client: `PressExpression_carries_the_hold` (exact string; 5000 → 1500; 10 → 100); `Agent_press_takes_a_hold_argument` (source scan of the agent); `Agent_version_check` (`AgentIsCurrent(AgentVersion - 1)` false, `(AgentVersion)` true, `(null)` false). Pages, against a fake link with scripted screens: `ShowPage_presses_nothing_when_already_there`; `ShowPage_presses_the_page_key_and_waits` (LEGS then NAV RADIO: one `NAVRAD`); `Enter_types_wipes_and_presses_the_line_key` (`EnterAsync(2, "113.90", "L1")`: `KEYCLR`/1300, `NUM1 NUM1 NUM3 NUMPER NUM9 NUM0`, `L1`, in order); `Enter_presses_no_line_key_when_a_message_covers_the_typing` (`INVALID ENTRY`: no `L1`, a second wipe, null); `Enter_refuses_while_the_pilot_types` (`PendingKeyCount` 3); `PressKeys_sends_the_keys_in_order` (`KEYDEL`, `L1`); `Calls_never_throw`; `Title_and_page_count` (`"  ACT RTE 1 LEGS     1/7"` → `"ACT RTE 1 LEGS"`, (1, 7), identity `"RTE 1 LEGS"`, spoken `"ACT RTE 1 LEGS 1/7"`; `"  MOD RTE 1 LEGS     1/7"` has the same identity; `"        NAV RADIO       "` → no count).
-- [ ] **Step 2: Run** both filters. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the full suite** (`Bbs757CduKeysTests` reads the agent's key list: unchanged). Expected: PASS.
-- [ ] **Step 5: Commit** `feat(b757): the first officer's CDU as a page service`.
+- [x] **Step 1: Write the failing tests.** Client: `PressExpression_carries_the_hold` (exact string; 5000 → 1500; 10 → 100); `Agent_press_takes_a_hold_argument` (source scan of the agent); `Agent_version_check` (`AgentIsCurrent(AgentVersion - 1)` false, `(AgentVersion)` true, `(null)` false). Pages, against a fake link with scripted screens: `ShowPage_presses_nothing_when_already_there`; `ShowPage_presses_the_page_key_and_waits` (LEGS then NAV RADIO: one `NAVRAD`); `Enter_types_wipes_and_presses_the_line_key` (`EnterAsync(2, "113.90", "L1")`: `KEYCLR`/1300, `NUM1 NUM1 NUM3 NUMPER NUM9 NUM0`, `L1`, in order); `Enter_presses_no_line_key_when_a_message_covers_the_typing` (`INVALID ENTRY`: no `L1`, a second wipe, null); `Enter_refuses_while_the_pilot_types` (`PendingKeyCount` 3); `PressKeys_sends_the_keys_in_order` (`KEYDEL`, `L1`); `Calls_never_throw`; `Title_and_page_count` (`"  ACT RTE 1 LEGS     1/7"` → `"ACT RTE 1 LEGS"`, (1, 7), identity `"RTE 1 LEGS"`, spoken `"ACT RTE 1 LEGS 1/7"`; `"  MOD RTE 1 LEGS     1/7"` has the same identity; `"        NAV RADIO       "` → no count).
+- [x] **Step 2: Run** both filters. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run the full suite** (`Bbs757CduKeysTests` reads the agent's key list: unchanged). Expected: PASS.
+- [x] **Step 5: Commit** `feat(b757): the first officer's CDU as a page service`.
 
 ### Task 6: Map loader guard fields
 
@@ -216,9 +216,9 @@
 
 **Interfaces:** `Bbs757Control` gains `public string? Guard { get; set; }` (the guard control's node), `public double? GuardClosed { get; set; }`, `public double? CloseSets { get; set; }` (the value BlueBird writes to this control when the guard closes, or null), read from JSON `guard`, `guard_closed`, `close_sets` in the loader's explicit snake_case mapping (ruling R1); absent → null.
 
-- [ ] **Step 1: Write the failing test** `Loader_reads_guard_fields` (parse a two-control snippet through the loader's parse path; expose `internal static Bbs757ControlMap Parse(string json)` if there is none).
-- [ ] **Step 2-4:** run (FAIL), implement, full suite (PASS).
-- [ ] **Step 5: Commit** `feat(b757): control map carries a control's guard`.
+- [x] **Step 1: Write the failing test** `Loader_reads_guard_fields` (parse a two-control snippet through the loader's parse path; expose `internal static Bbs757ControlMap Parse(string json)` if there is none).
+- [x] **Step 2-4:** run (FAIL), implement, full suite (PASS).
+- [x] **Step 5: Commit** `feat(b757): control map carries a control's guard`.
 
 ### Task 7: The L:var snapshot tool
 
@@ -230,7 +230,7 @@ Start from session 8's working scripts, already committed in `docs/b757/tools/li
 - `snap.ps1 -Out <file>`: `tools/coherent-eval.ps1 -Title BBSTablet -ExprFile <snap.js>`, saving the JSON.
 - `diff_snaps.py <a> <b> [--noise <file>] [--learn-noise]`.
 - README: session 8's use (`live-findings.md`), the noise-list step, and the rule that MSFSBA must not hold the `BBSTablet` view while it runs ([DBG-9]).
-- [ ] Write them, run once with the 757 loaded (owner) or against a saved JSON pair, commit `docs(b757): the L:var snapshot tool`. Then write this plan's last commit SHA into `00-index.md` "Base commits" (early plans) and push.
+- [x] Write them, run once with the 757 loaded (owner) or against a saved JSON pair, commit `docs(b757): the L:var snapshot tool`. Then write this plan's last commit SHA into `00-index.md` "Base commits" (early plans) and push.
 
 ## In-sim checks (owner)
 
@@ -242,6 +242,11 @@ Start from session 8's working scripts, already committed in `docs/b757/tools/li
 - **Pilot-facing:** "The 757 no longer says glideslope alive or lost: those came from the simulator's own nav radio, which BlueBird's 757 does not use, so they were wrong." Guide: the 757's automatic announcements; Ctrl+M loses its glideslope row on the 757. Changelog `fix`.
 - **Proposed rule line:** `- [B757-5] Never read the stock NAV radio variables (frequency, OBS, CDI, glideslope) on the 757: BlueBird's VOR and ILS receivers are its own and leave them untouched (measured); frequencies come from the CDU's NAV RAD page through `Bbs757CduPages`, courses from `BBS_VOR_L_COURSE`, `BBS_VOR_R_COURSE`, `BBS_ILS_COURSE`. Full: docs/invariants/b757.md#b757-5`
 - **docs/b757.md:** a "Seams" paragraph (`BBS757Definition.Hooks.cs`, the definition owning the tablet client, `Bbs757CduPages`: CDU 2 only, CLR held 1300 ms only to wipe), and the snapshot tool.
+- **Frozen-file requests:** `MainForm.cs` (about line 1448, the exit path) says `DisposeBBS757Forms` disposes "the tablet client they share"; the definition disposes it now (`OnSwitchedAway`). `docs/invariants/coherent-clients.md#a380c-3`: the rule names a `_connectLock`; an on-demand call that never connects (the 757 tablet client's `ScrapeAsync` and `GetNavigraphAsync`) needs none: say "or never connects".
+- **Ruling numbers clash:** Robin's prototype-plan commit 10e34ed18 added R51-R55 to `docs/b757/plans/01-prototype.md`, and `spec-gaps.md` uses R51-R74 for other decisions; plan 01's code cites R52 (`Bbs757CduPages`) and R56 (`BBS757Definition.UsesStockNavReceivers`, `Bbs757GlideslopeGateTests`). Renumber one set (owner's call) and the citations with it.
+- **For the plans that use `Bbs757CduPages` (04, 06, 13):** it presses keys on CDU 2 only and reads either CDU. On a CDU 2 with no frame yet (after every aircraft load) call `ShowPageAsync` first: `EnterAsync` on it answers null. Calls are gated one at a time, not as a sequence: re-check the title of every screen you act on (`Bbs757CduPages.Title`). "The pilot is typing" is only `PendingKeyCount > 0`: a half-typed entry the pilot paused on CDU 2 is wiped by `EnterAsync`, which the guide should say (R52's risk, wider). The page wait is 3 s of wall clock and every wait stops once the tablet view is unreadable: measure a page key on the FO CDU just after a load in the sim. `DrainAsync` can report success for keys the client dropped in a reconnect within one 100 ms poll; `KeysDropped` is the signal.
+- **For plans 08 and 09 (the CDU window):** the key queue is shared, so the window's scratchpad read-back waits while background keys are queued, and "keys not sent" after a link drop counts background keys too.
+- **For plan 13:** `OnConnectionBatch`'s announcer may be `Suppressed` (a muted delivery can settle the BBS Nest check): speak later, not inline.
 
 ## Execution record
 
@@ -249,14 +254,14 @@ Kept in this file only, so no other plan's push ever touches it. Claim the plan 
 setting **Status** to claimed, and push that one change before starting; if the push stops on a conflict in these
 lines, someone claimed it first. Fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** (date; the `B757` commit you branched from)
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Status:** landed; waiting on the owner (in-sim checks, Task 7's live run, the push)
+- **Claimed by:** kn4iee
+- **Worked by:** kn4iee with Claude: Tasks 1-4 inline (superpowers:executing-plans), Tasks 5-7 with subagents (superpowers:subagent-driven-development), then one whole-branch review and one fix wave
+- **Started:** 2026-10-26; `B757` at 2bcbed557, worked on `B757` directly (plan 01 ran alone)
+- **Landed:** 2026-10-26; last code commit 27ecc0894, then merged with Robin's `kn4iee/B757` (25733526f) and `origin/main` (f5ead55c2)
+- **Tests at landing:** full suite passed: 15,342 on 27ecc0894; 16,942 on the merge f5ead55c2; `MSFSBlindAssist.sln` builds
+- **Tasks:** 1-7 done
+- **Waiting on the owner:** in-sim checks 1 and 2; Task 7's live snapshot run (no simulator was running: only BBS Nest, and port 19999 held by a dead process); pushing `B757`
+- **In-sim results:** none run
+- **Changed from the plan:** 35 hooks, not 36 (the list has 35). `BBS757Definition.CloseTabletWindows` (MainForm hands it in): the switch calls `OnSwitchedAway` before it disposes the 757's windows, so the definition closes the CDU and EFB windows itself before disposing the client. `CoherentBbs757TabletClient.IsDisposed` (internal, for the test). A switched-away definition never makes a client from the factory: it hands back a never-started, disposed one. `OnSwitchedAway` disposes the client in a `finally`. Added tests `Pmdg737_still_speaks_glideslope_alive_and_lost`, `Switching_away_makes_no_client`. The agent's version is checked on every scrape answer (`AgentIsCurrent`); `ScrapeAsync` never connects. The client implements `IBbs757CduLink`. `Bbs757CduPages`: presses on CDU 2 only (R52 in the seam), refuses empty or unkeyable text and non-keys, a wall-clock 3 s page wait that stops once the view is unreadable, `EnterAsync` and `PressKeysAsync` give up when their keys do not drain, a null first read still presses the page key (a frameless CDU 2). `Bbs757ControlMap.Parse(string)` added. The snapshot tool validates the answer before saving and ignores its outputs in git.
+- **Rulings made while working:** (all by Claude, for the owner to reverse) no claim push and no push without the owner's go-ahead; 35 hooks; the window-closing callback; the internal `IsDisposed`; a disposed client after a switch away; the Base-commits line written without a push; the final review's minor fixes taken now because their files freeze after plan 01; `MainForm.cs`'s stale comment handed to plan 16; Task 6's commit trailer names Opus though Sonnet wrote it (not rewritten); the weak "pilot is typing" check and the per-call gate recorded in the handoff for plans 04 and 06 rather than changed in the seam.
