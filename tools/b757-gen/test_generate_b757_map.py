@@ -1727,11 +1727,12 @@ class Levers(unittest.TestCase):
 
 
 class CockpitPresence(unittest.TestCase):
-    """Plan 02, task 5 (ruling R65): the map holds only controls the cockpit has. BlueBird ships one interior model per
-    engine variant (BBS_752_PW_INTERIOR.gltf, BBS_752_RR_INTERIOR.gltf), and a control can be clicked only where a node
-    of its name is in the model. A control whose node is in neither model is left out, counted and named like every
-    other drop; a control that one model alone has says which, with (PW) or (RR) at the end of its label. The rows have
-    the shape the extractor gives (row()); the cockpit is the two models' node names (g.Cockpit)."""
+    """Plan 02, task 5 (ruling R65): the map holds only controls the cockpit has. BlueBird ships six interior models (a PW
+    and an RR cockpit, each with an AWE and a no-cab variant, which agree on every control node today); the generator
+    reads the two standard ones (BBS_752_PW_INTERIOR.gltf, BBS_752_RR_INTERIOR.gltf), and a control can be clicked only
+    where a node of its name is in the model. A control whose node is in neither model is left out, counted and named like
+    every other drop; a control that one model alone has says which, with (PW) or (RR) at the end of its label. The rows
+    have the shape the extractor gives (row()); the cockpit is the two models' node names (g.Cockpit)."""
     BOTH, PW_ONLY, RR_ONLY, NEITHER = ("B757_OVHD_ALPHA_BUTTON", "B757_OVHD_BRAVO_BUTTON", "B757_OVHD_CHARLIE_BUTTON",
                                        "B757_OVHD_DELTA_BUTTON")
     STAB, GUARD = "B757_Stab_trim_C_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH"

@@ -40,8 +40,9 @@ What is derived and what is curated (curation.json):
             that is not there. A kind only re-reads a control the rules keep: for one they drop it changes nothing and
             is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
-  cockpit   BlueBird ships one interior model per engine variant, and a control can be clicked only where a node of its
-            name is in the model. The run reads the node names of BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf
+  cockpit   BlueBird ships six interior models: a PW and an RR cockpit, each with an AWE and a no-cab variant. They agree
+            on every control node today, and a control can be clicked only where a node of its name is in the model. The
+            run reads the node names of the two standard ones, BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf,
             from the package (it stops when either is missing, found twice or not a glTF with nodes), and the map holds
             only controls the cockpit has. A control whose node is in neither model is left out: the last of the drop
             rules, counted as "no cockpit node" and named in the run's report with the label it would have had and its
@@ -213,9 +214,10 @@ EXCLUSIONS = ("excluded banner", "excluded node")
 # code, or after another code when several join in one (a node with two templates).
 GATE_NOTE = re.compile(r"(?:^|\s)\[")
 
-# The cockpit. BlueBird ships one interior model per engine variant, and a control can be clicked only where a node of its
-# name is in the model. The models are found by name under the package's SimObjects folder; of each only the node names
-# are read.
+# The cockpit. BlueBird ships six interior models: a PW and an RR cockpit, each with an AWE and a no-cab variant (and two
+# low-detail LOD01 models, which lack most control nodes). The six agree on every control node today, and a control can be
+# clicked only where a node of its name is in the model, so the run reads the two standard ones. They are found by name
+# under the package's SimObjects folder; of each only the node names are read.
 INTERIOR_MODELS = {"pw": "BBS_752_PW_INTERIOR.gltf", "rr": "BBS_752_RR_INTERIOR.gltf"}
 # What a label says of a control that exactly one model has (the variants as cockpit_presence names them).
 VARIANT_TAGS = {"pw": "(PW)", "rr": "(RR)"}

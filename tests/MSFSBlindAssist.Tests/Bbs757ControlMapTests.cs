@@ -438,8 +438,9 @@ public class Bbs757ControlMapTests
         Bbs757Control et = Find(node);
 
         // BlueBird's list says RESET is 3 with 2 unused; the cockpit's tooltip list says 2. The vendor's click code steps
-        // down 3, 2, 1, 0 and up 0, 1, 3 (HOLD jumps straight to RESET), so no step of it lands where a pick aims, and the
-        // map holds none of it (ruling R10): the app writes the state var. 3 is RESET and 2 is not a position.
+        // down 3, 2, 1, 0 and up 0, 1, 3 (HOLD jumps straight to RESET): the step down from RESET lands on 2, which is no
+        // position, so a pick made by stepping would be refused from there on. The map holds none of that code (ruling
+        // R10): the app writes the state var. 3 is RESET and 2 is not a position.
         Assert.Equal(stateVar, et.StateVar);
         Assert.Equal(Bbs757Kinds.Switch, et.Kind);
         Assert.Equal("RESET", Assert.Single(et.Positions, p => p.Value == 3).Label);
@@ -709,6 +710,24 @@ public class Bbs757ControlMapTests
         {
             Assert.Null(c.GuardClosed);
             Assert.Null(c.CloseSets);
+        });
+    }
+
+    [Fact]
+    public void Every_guard_a_control_names_is_a_guard_row_of_the_map()
+    {
+        // The exact list above pins today's three. This holds for whatever control has a Guard, so a guarded control a later
+        // plan adds (plan 12's) is covered without a new line there: plan 03's writer finds the guard row by node and
+        // presses it as a guard, and a pick on a control whose Guard names no row says "{label} unavailable".
+        var guarded = Map.Controls.Where(c => c.Guard != null).ToList();
+
+        Assert.NotEmpty(guarded);
+        Assert.All(guarded, c =>
+        {
+            Bbs757Control? guard = Map.Controls.FirstOrDefault(g => g.Node == c.Guard);
+
+            Assert.True(guard != null, $"{c.Node} names the guard {c.Guard}, which is not a row of the map");
+            Assert.True(guard!.Kind == Bbs757Kinds.Guard, $"{c.Node} names {c.Guard}, which is a {guard.Kind}, not a guard");
         });
     }
 

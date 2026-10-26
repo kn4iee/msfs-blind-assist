@@ -14,11 +14,12 @@ the cockpit's code uses is understood; anything else is a ReplayError, never a g
     operators     !  +  -  ++  --  min  max  ==  <  >  d  %  and  or
     blocks        if{ ... }   if{ ... } els{ ... }
 
-Operands come off the stack in RPN order: "a b -" is a - b and "a b >" is 1 when a > b. A comparison, ! and, or push 1 or 0;
-and and or take any non-zero value as true. "d" copies the top of the stack. A set pops the top of the stack into the
-variable, and if{ takes its condition the same way. A pop from an empty stack gives 0: the cockpit's own code needs that
-(some 40 of the map's click codes, the bus tie and the APU generator buttons among them, write a var and then run a "!"
-with nothing left to negate). The sim's own behavior there has not been measured.
+Operands come off the stack in RPN order: "a b -" is a - b and "a b >" is 1 when a > b. A comparison, "!", "and" and "or"
+push 1 or 0; "and" and "or" take any non-zero value as true. "d" copies the top of the stack. A set pops the top of the
+stack into the variable, and if{ takes its condition the same way. A pop from an empty stack gives 0: the cockpit's own
+code needs that (46 of the map's press codes pop an empty stack, counted with the vendor slips' stray token left out as
+test_generate_b757_map.py replays them; the bus tie and the APU generator buttons are among them, writing a var and then
+running a "!" with nothing left to negate). The sim's own behavior there has not been measured.
 
 The returned dict holds the L:vars under their bare names, as map.state_var gives them. Every other variable lives in it
 under its type and name, "O:LOCK" or "K:AUTOPILOT_OFF": an O:var written earlier in the code reads back, an A: or E: var
