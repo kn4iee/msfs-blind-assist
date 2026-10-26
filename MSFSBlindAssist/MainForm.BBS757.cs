@@ -72,14 +72,83 @@ public partial class MainForm
         bbs757CduForm.ShowForm();
     }
 
+    /// <summary>The reworked 757 EFB window (plan 11): the shared accessible EFB window over the tablet reader.</summary>
+    private Forms.FBWA380.FbwEfbForm? bbs757EfbReaderForm;
+    private Bbs757EfbBridge? bbs757EfbBridge;
+
     /// <summary>
-    /// Shift+T on the 757: the EFB window, which operates BlueBird's tablet by scripted clicks (the
-    /// EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
+    /// Shift+T on the 757: BlueBird's tablet in the shared accessible EFB window (R73; plan 11), read from
+    /// its pixels and operated by the EFB client's clicks (<see cref="Bbs757EfbBridge"/>). The first time it
+    /// shows, the tablet reader's pop-out is made as the A300 and A330 CDU windows make theirs: the camera
+    /// goes to the captain's instrument view, the simulator comes to the front for a moment, and the camera
+    /// is put back. While the window is shown the tablet is mirrored onto the captain's ND and read; hidden,
+    /// nothing is read and the ND is the ND. The classic window (<see cref="ShowBBS757ClassicEfbDialog"/>) is
+    /// a button in it: SimBrief load, Navigraph sign-in, nav data update.
+    /// </summary>
+    private void ShowBBS757EfbDialog()
+    {
+        if (currentAircraft is not BBS757Definition) return;
+        hotkeyManager.ExitInputHotkeyMode();
+
+        var efb = EnsureBbs757EfbClient();
+        if (bbs757EfbBridge == null)
+        {
+            bbs757EfbBridge = new Bbs757EfbBridge(efb, CreateBbs757EfbBridgeIo());
+            bbs757EfbBridge.Start();
+        }
+        if (bbs757EfbReaderForm == null || bbs757EfbReaderForm.IsDisposed)
+        {
+            var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "BlueBird 757 EFB", "tablet", "BlueBird tablet");
+            var bridge = bbs757EfbBridge;
+            form.VisibleChanged += (_, _) => bridge.SetActive(form.Visible && !form.IsDisposed);
+            bbs757EfbReaderForm = form;
+        }
+        bbs757EfbReaderForm.ShowForm();
+        bbs757EfbBridge.SetActive(true);
+    }
+
+    /// <summary>
+    /// The bridge's seams. Camera reads and writes go to the UI thread (SimConnect calls stay there); the
+    /// type and the index are written apart, since leaving an instrument view needs the two spaced
+    /// (<c>SimConnectManager.SetCameraView</c>, measured). Variables are read fresh (safe from any thread).
+    /// </summary>
+    private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo() => new()
+    {
+        ReadCamera = async () =>
+        {
+            var sim = simConnectManager;
+            if (sim == null || !sim.IsConnected) return null;
+            var task = (Task<MSFSBlindAssist.Services.CameraViewReading?>)Invoke(new Func<Task<MSFSBlindAssist.Services.CameraViewReading?>>(() => sim.ReadCameraViewAsync(1500)));
+            var r = await task;
+            return r is { } v ? (v.ViewType, v.ViewIndex) : null;
+        },
+        SetCamera = (type, index) =>
+        {
+            var sim = simConnectManager;
+            if (sim == null || !sim.IsConnected) return;
+            Invoke(() => sim.SetCameraViewType(type));
+            Thread.Sleep(150);
+            Invoke(() => sim.SetCameraViewIndex(index));
+        },
+        OnGround = ct => ReadBbs757OnGroundAsync(1500, ct),
+        ReadRegistered = (key, ct) => simConnectManager is { IsConnected: true } sim
+            ? sim.ReadFreshAsync(key, 1500, ct)
+            : Task.FromResult<double?>(null),
+        OpenClassicWindow = ShowBBS757ClassicEfbDialog,
+        ArmServiceEcho = s => { if (currentAircraft is BBS757Definition def) def.ArmServiceEcho(s); },
+        SettleServiceEcho = (s, v) => { if (currentAircraft is BBS757Definition def) def.SettleServiceEcho(s, v); },
+        ArmGroundPowerEcho = () => { if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho(); },
+        SettleGroundPowerEcho = v => { if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(v); },
+    };
+
+    /// <summary>
+    /// The classic 757 EFB window, which operates BlueBird's tablet by scripted clicks at measured points
+    /// (the EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
     /// client). Both go over the Coherent debugger; a cockpit preset needs SimConnect for its ground
     /// or flight check (<see cref="ReadBbs757OnGroundAsync"/>), and the SimBrief fuel and payload
     /// load for that check and the definition's load watch (<see cref="CreateBbs757LoadIo"/>).
     /// </summary>
-    private void ShowBBS757EfbDialog()
+    private void ShowBBS757ClassicEfbDialog()
     {
         if (currentAircraft is not BBS757Definition) return;
         hotkeyManager.ExitInputHotkeyMode();
@@ -158,6 +227,11 @@ public partial class MainForm
         if (bbs757MonitorManagerForm != null && !bbs757MonitorManagerForm.IsDisposed) bbs757MonitorManagerForm.Dispose();
         bbs757MonitorManagerForm = null;
         CloseBbs757TabletWindows();
+        if (bbs757EfbReaderForm != null && !bbs757EfbReaderForm.IsDisposed) bbs757EfbReaderForm.Dispose();
+        bbs757EfbReaderForm = null;
+        // The bridge before the client it reads through (it turns the mirror off on its way out).
+        bbs757EfbBridge?.Dispose();
+        bbs757EfbBridge = null;
         bbs757EfbClient?.Dispose();
         bbs757EfbClient = null;
     }

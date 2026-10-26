@@ -532,13 +532,32 @@ public static class Bbs757EfbScreen
     {
         var o = new List<Bbs757EfbItem>();
         var boxes = FindButtonBoxes(px, ContentArea);
-        var inBox = boxes.ToDictionary(b => b, _ => new List<Bbs757EfbTextLine>());
         var loose = new List<Bbs757EfbTextLine>();
+        var claimed = new Dictionary<FoundBox, List<Bbs757EfbTextLine>>();
+        // A shaded button can be found only down to the middle of its gradient (measured: the BBS button
+        // on a dim tablet), so a box with NO text inside it claims a line whose centre is just past its top
+        // or bottom edge, and grows to hold it. A box that has its own text never does: the line under it
+        // is its caption (a door tile's LEFT FWD).
+        var pending = new List<Bbs757EfbTextLine>();
         foreach (var l in lines)
         {
             var host = boxes.FirstOrDefault(b => b.Box.Contains(l.Centre));
-            if (host != null) inBox[host].Add(l); else loose.Add(l);
+            if (host == null) { pending.Add(l); continue; }
+            if (!claimed.TryGetValue(host, out var list)) claimed[host] = list = new List<Bbs757EfbTextLine>();
+            list.Add(l);
         }
+        foreach (var l in pending)
+        {
+            var host = boxes.FirstOrDefault(b => !claimed.ContainsKey(b) && l.Centre.X > b.Box.Left && l.Centre.X < b.Box.Right
+                && l.Centre.Y >= b.Box.Top - 10 && l.Centre.Y <= b.Box.Bottom + 10 && l.Pass != 'K');
+            if (host == null) { loose.Add(l); continue; }
+            claimed[host] = new List<Bbs757EfbTextLine> { l };
+        }
+        // Grown boxes: each box with the text it claimed.
+        boxes = boxes.Select(b => claimed.TryGetValue(b, out var ls)
+            ? b with { Box = Rectangle.Union(b.Box, ls.Select(l => l.Box).Aggregate(Rectangle.Union)) } : b).ToList();
+        var inBox = boxes.ToDictionary(b => b, b => lines.Where(l => claimed.Any(kv => kv.Value.Contains(l)
+            && Rectangle.Union(kv.Key.Box, kv.Value.Select(x => x.Box).Aggregate(Rectangle.Union)) == b.Box)).ToList());
 
         // One box can hold several controls: a row of tabs drawn as one band (Maintenance's LANDING
         // GEAR | HYDRAULIC | OXYGEN | FIRE PROTECT | APU, measured): text clusters more than 25 px
@@ -1009,8 +1028,8 @@ public static class Bbs757EfbScreen
     internal sealed record FoundBox(Rectangle Box, Bbs757EfbTint Tint);
 
     /// <summary>Clearly not the surface it sits on (more than 18 normalised from it).</summary>
-    private static bool Filled((int R, int G, int B) c, (int R, int G, int B) bg) =>
-        Math.Max(Math.Abs(c.R - bg.R), Math.Max(Math.Abs(c.G - bg.G), Math.Abs(c.B - bg.B))) > 18;
+    private static bool Filled((int R, int G, int B) c, (int R, int G, int B) bg, int threshold = 18) =>
+        Math.Max(Math.Abs(c.R - bg.R), Math.Max(Math.Abs(c.G - bg.G), Math.Abs(c.B - bg.B))) > threshold;
 
     /// <summary>
     /// Every filled box of button size in <paramref name="area"/>: connected pixels of one colour
@@ -1038,6 +1057,9 @@ public static class Bbs757EfbScreen
         var found = new List<FoundBox>();
         var seen = new bool[px.Width * px.Height];
         const int Step = 14;
+        // Inside a panel a button's shading can come within a few levels of the panel's colour (the BBS
+        // button's lower half, measured): the panel search takes a finer threshold and a shorter box.
+        int threshold = depth == 0 ? 18 : 10, minH = depth == 0 ? 18 : 14;
         var queue = new Queue<int>();
         for (int y = area.Top; y < area.Bottom; y += 3)
             for (int x = area.Left; x < area.Right; x += 3)
@@ -1045,7 +1067,7 @@ public static class Bbs757EfbScreen
                 int i0 = y * px.Width + x;
                 if (seen[i0]) continue;
                 var seed = px.At(x, y);
-                if (!Filled(seed, bg)) { seen[i0] = true; continue; }
+                if (!Filled(seed, bg, threshold)) { seen[i0] = true; continue; }
                 var tint = TintOf(seed);
                 int minX = x, maxX = x, minY = y, maxY = y, count = 0;
                 queue.Clear(); queue.Enqueue(i0); seen[i0] = true;
@@ -1064,7 +1086,7 @@ public static class Bbs757EfbScreen
                         int ni = ny * px.Width + nx;
                         if (seen[ni]) return;
                         var n = px.At(nx, ny);
-                        if (!Filled(n, bg) || TintOf(n) != tint) return;
+                        if (!Filled(n, bg, threshold) || TintOf(n) != tint) return;
                         if (Math.Abs(n.R - c.R) > Step || Math.Abs(n.G - c.G) > Step || Math.Abs(n.B - c.B) > Step) return;
                         seen[ni] = true;
                         queue.Enqueue(ni);
@@ -1072,7 +1094,7 @@ public static class Bbs757EfbScreen
                 }
                 int w = maxX - minX + 1, h = maxY - minY + 1;
                 var rect = new Rectangle(minX, minY, w, h);
-                if (w >= 60 && w <= 520 && h >= 18 && h <= 70)
+                if (w >= 60 && w <= 520 && h >= minH && h <= 70)
                 {
                     if (count >= 0.5 * w * h) found.Add(new FoundBox(rect, tint));
                 }

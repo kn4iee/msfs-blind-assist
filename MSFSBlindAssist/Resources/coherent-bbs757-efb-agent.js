@@ -38,7 +38,8 @@
     // 3: the unguarded-update refusal. The app's clickSeq call asks for this version or later.
     // 4: mirror(on), for the tablet reader (Bbs757EfbPopout / Bbs757EfbPageReader).
     // 5: wheel(x, y, deltaY), for scrolling a long tablet page.
-    var VERSION = 5;
+    // 6: readVars(names), the L:vars the reader judges a tap by.
+    var VERSION = 6;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -123,6 +124,28 @@
         return 'ok';
       } catch (e) {
         return 'error: ' + (e && e.message);
+      }
+    };
+
+    // L:vars read in this page (SimVar.GetSimVarValue), for the reader to judge a tile before and after
+    // a tap: the ground services' BBS757_vis_* flags, the doors, the brake temperatures. Costs no
+    // SimConnect definition. names: an array of L:var names without the "L:" prefix, at most 64, each
+    // letters, digits and underscores. Answers {ok, values: {name: number|null}} or {ok:false, error}.
+    A.readVars = function (names) {
+      try {
+        if (typeof SimVar === 'undefined' || !SimVar || typeof SimVar.GetSimVarValue !== 'function') return { ok: false, error: 'no-simvar' };
+        if (!names || typeof names.length !== 'number' || names.length > 64) return { ok: false, error: 'bad-names' };
+        var out = {};
+        for (var i = 0; i < names.length; i++) {
+          var n = names[i];
+          if (typeof n !== 'string' || !/^[A-Za-z0-9_]{1,80}$/.test(n)) return { ok: false, error: 'bad-name' };
+          var v = null;
+          try { v = SimVar.GetSimVarValue('L:' + n, 'number'); } catch (e) { v = null; }
+          out[n] = (typeof v === 'number' && isFinite(v)) ? v : null;
+        }
+        return { ok: true, values: out };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message) };
       }
     };
 

@@ -169,7 +169,10 @@ public static class Bbs757EfbVocabulary
     public static string? Nearest(string t)
     {
         if (t.Length < 2) return null;
-        bool mixed = t.Any(char.IsLower);
+        // Mixed case = mostly small letters (a sentence); a capitals label with a stray small letter
+        // or two read off noise ("RIOHT an START", "Apu FIRE") is still a label.
+        int letters = t.Count(char.IsLetter), lower = t.Count(char.IsLower);
+        bool mixed = letters > 0 && lower * 2 > letters;
         string up = t.ToUpperInvariant();
         string? best = null;
         int bestD = int.MaxValue;

@@ -56,6 +56,17 @@ internal static class Program
                 {
                     using var bmp = new Bitmap(Path.Combine(args[1], n + ".png"));
                     var read = await Bbs757EfbPageReader.ReadAsync(bmp);
+                    if (Environment.GetEnvironmentVariable("PROBE_SAVE") is { Length: > 0 } saveDir)
+                    {
+                        // A test fixture: the picture and the reader's final lines (what Parse is given).
+                        Directory.CreateDirectory(saveDir);
+                        File.Copy(Path.Combine(args[1], n + ".png"), Path.Combine(saveDir, n + ".png"), true);
+                        File.WriteAllText(Path.Combine(saveDir, n + ".lines.json"), JsonSerializer.Serialize(read.Lines.Select(l => new
+                        {
+                            text = l.Text, x = l.Box.X, y = l.Box.Y, w = l.Box.Width, h = l.Box.Height, pass = l.Pass.ToString(),
+                            words = l.Words.Select(w => new { text = w.Text, x = w.Box.X, y = w.Box.Y, w = w.Box.Width, h = w.Box.Height }),
+                        }), new JsonSerializerOptions { WriteIndented = false }));
+                    }
                     if (Environment.GetEnvironmentVariable("PROBE_LINES") == "1")
                         foreach (var l in read.Lines) Console.WriteLine($"    line {l.Box.X},{l.Box.Y} {l.Box.Width}x{l.Box.Height} [{l.Pass}] {l.Text}");
                     PrintModel(n, read.Model, $"{read.OcrMs} ms, {read.Rereads} re-reads");

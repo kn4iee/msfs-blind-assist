@@ -73,7 +73,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// UPDATE spot without the update's page guards. An older agent on the page answers "no agent"
     /// to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 5;   // 4: mirror(on) for the tablet reader; 5: wheel(x, y, deltaY)
+    internal const int AgentVersion = 6;   // 4: mirror(on), 5: wheel(x, y, deltaY), 6: readVars(names)
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
@@ -402,21 +402,63 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// </summary>
     public async Task<bool?> SetMirrorAsync(bool on, CancellationToken ct)
     {
+        using var doc = await CallAgentAsync("mirror", on ? "true" : "false", ct);
+        if (doc == null) return null;
+        bool ok = doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
+        if (!ok) Log.Debug("BBS757", $"EFB mirror({on}) refused: {Shorten(doc.RootElement.GetRawText())}");
+        return ok;
+    }
+
+    /// <summary>
+    /// BlueBird L:vars read in the tablet's page (the agent's readVars: SimVar.GetSimVarValue, no
+    /// SimConnect definition). Names without the "L:" prefix, letters, digits and underscores, at most
+    /// 64. A value is null when the page could not read it; the whole answer is null when the agent
+    /// could not be reached or refused the names.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, double?>?> ReadVarsAsync(IReadOnlyList<string> names, CancellationToken ct)
+    {
+        if (names.Count == 0 || names.Count > 64 || names.Any(n => !System.Text.RegularExpressions.Regex.IsMatch(n, "^[A-Za-z0-9_]{1,80}$")))
+            return null;
+        using var doc = await CallAgentAsync("readVars", JsonSerializer.Serialize(names), ct);
+        if (doc == null || !doc.RootElement.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True) return null;
+        if (!doc.RootElement.TryGetProperty("values", out var values) || values.ValueKind != JsonValueKind.Object) return null;
+        var o = new Dictionary<string, double?>(StringComparer.Ordinal);
+        foreach (var n in names)
+            o[n] = values.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+        return o;
+    }
+
+    /// <summary>One mouse-wheel step at a tablet-local point (positive deltaY scrolls down): true when
+    /// the agent delivered it, false when it refused, null when it could not be reached.</summary>
+    public async Task<bool?> WheelAsync(int x, int y, int deltaY, CancellationToken ct)
+    {
+        using var doc = await CallAgentAsync("wheel",
+            string.Join(",", x.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                y.ToString(System.Globalization.CultureInfo.InvariantCulture), deltaY.ToString(System.Globalization.CultureInfo.InvariantCulture)), ct,
+            stringResult: true);
+        if (doc == null) return null;
+        return doc.RootElement.ValueKind == JsonValueKind.String && doc.RootElement.GetString() == "ok";
+    }
+
+    /// <summary>
+    /// Calls one of the agent's functions with literal JS arguments and parses its JSON answer. Null
+    /// when the view or agent cannot be reached (the loop re-installs it), or the answer is not JSON.
+    /// Never connects ([A380C-3]) and takes no run's place: the reader's reads, mirror and wheel
+    /// share the loop's socket between click runs.
+    /// </summary>
+    private async Task<JsonDocument?> CallAgentAsync(string function, string args, CancellationToken ct, bool stringResult = false)
+    {
         if (_viewClaim == null || _disposed) return null;
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
             if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), linked.Token)) return null;
-            string arg = on ? "true" : "false";
             string raw = await EvalAsync(
-                $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} && __MSFSBA_BBS757EFB.mirror ? JSON.stringify(__MSFSBA_BBS757EFB.mirror({arg})) : '{NoAgent}'",
+                $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} && typeof __MSFSBA_BBS757EFB.{function} === 'function' ? JSON.stringify(__MSFSBA_BBS757EFB.{function}({args})) : '{NoAgent}'",
                 linked.Token);
             if (raw.Length == 0) { NoteUnansweredEval(); return null; }
             if (raw == NoAgent) { AgentUnusable(); return null; }
-            using var doc = JsonDocument.Parse(raw);
-            bool ok = doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
-            if (!ok) Log.Debug("BBS757", $"EFB mirror({arg}) refused: {Shorten(raw)}");
-            return ok;
+            return JsonDocument.Parse(raw);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or JsonException)
         {

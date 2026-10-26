@@ -62,6 +62,18 @@ public partial class BBS757Definition
             ValueDescriptions = new Dictionary<double, string> { [0] = "Not connected", [1] = "Connected" },
         });
 
+        // Plan 11 Task 5: one announced row per ground service a reversible tap has proven in sim
+        // (Bbs757GroundServices.Announced), spoken from its BlueBird variable like the ground power row.
+        foreach (var s in Bbs757GroundServices.Announced)
+            Add(ServiceKey(s), new SimVarDefinition
+            {
+                Name = s.StateVar, DisplayName = s.Name,
+                Type = SimVarType.LVar, Units = "number",
+                UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+                RenderAsReadOnlyStatus = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = Cap(s.OffWord), [1] = Cap(s.OnWord) },
+            });
+
         // The EXT PWR button's ON light, read fresh by the window just before a disconnect and never spoken, so
         // it has no Ctrl+M row ([VAR-9]) and is on no panel or display. OnRequest and under a key of its own:
         // plan 06 registers the same L:var as an announced EXT PWR row (Bbs757SharedKeys.ExtPwrOn), and two
@@ -118,9 +130,52 @@ public partial class BBS757Definition
     /// </summary>
     partial void ProcessEfbUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
+        if (ServiceForKey(varName) is { } svc)
+        {
+            // A ground service row (plan 11 Task 5): "Fuel truck called", "Aft stairs removed".
+            handled = true;
+            SpeakChange(varName, Bbs757GroundServices.ChangePhrase(svc, value), announcer);
+            return;
+        }
         if (varName != Bbs757SharedKeys.GpuConnected) return;
         handled = true;
         SpeakChange(Bbs757SharedKeys.GpuConnected, Bbs757GroundPower.ChangePhrase(value), announcer);
+    }
+
+    // =================================================================================
+    // Ground service rows (plan 11 Task 5)
+    // =================================================================================
+
+    /// <summary>The row key of a ground service's state variable.</summary>
+    internal static string ServiceKey(Bbs757GroundService s) => "BBS757_SVC_" + s.StateVar;
+
+    private static Bbs757GroundService? ServiceForKey(string key) =>
+        key.StartsWith("BBS757_SVC_", StringComparison.Ordinal)
+            ? Bbs757GroundServices.Announced.FirstOrDefault(s => ServiceKey(s) == key)
+            : null;
+
+    private static string Cap(string w) => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w.Substring(1);
+
+    /// <summary>
+    /// The EFB window is about to tap a service tile: its row's change is the window's own until
+    /// <see cref="SettleServiceEcho"/> (at most <see cref="Bbs757GroundPower.WindowRunMaxMs"/>), tracked and
+    /// not spoken, since the window says the result itself (CORE-7), as <see cref="ArmGroundPowerEcho"/> does
+    /// for the GPU. Does nothing for a service with no announced row. UI thread.
+    /// </summary>
+    internal void ArmServiceEcho(Bbs757GroundService s)
+    {
+        if (!Bbs757GroundServices.Announced.Contains(s)) return;
+        _changes.ArmEcho(ServiceKey(s), NowMs() + Bbs757GroundPower.WindowRunMaxMs);
+    }
+
+    /// <summary>The window's service tap is over: the state read after it is the row's baseline (when read),
+    /// and the echo ends at once, as <see cref="SettleGroundPowerEcho"/>. UI thread.</summary>
+    internal void SettleServiceEcho(Bbs757GroundService s, double? after)
+    {
+        if (!Bbs757GroundServices.Announced.Contains(s)) return;
+        if (after is double v && Bbs757GroundServices.ChangePhrase(s, v) is { } phrase)
+            _changes.Rebaseline(ServiceKey(s), phrase);
+        _changes.ArmEcho(ServiceKey(s), 0);
     }
 
     // =================================================================================
