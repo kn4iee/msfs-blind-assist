@@ -1,14 +1,19 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The BlueBird 757's COM radios (plan 04, task 2), as far as they run without a sim: the typed
+/// The BlueBird 757's COM radios (plan 04, tasks 2 and 3), as far as they run without a sim: the typed
 /// standby frequency (25 and 8.33 kHz channels, 118.000 to 136.990), the stock-event code that sets
 /// it (<c>K:COM_STBY_RADIO_SET_HZ</c>, Hz as an integer), the transfer's panel lookup and the phrases
-/// ("COM1 active 124.850"). BlueBird's VHF L, C and R are the simulator's COM 1, 2 and 3 (measured).
-/// CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch a culture leak.
+/// ("COM1 active 124.850"); then the COM radios panel, its rows, what is spoken when a frequency
+/// changes and what the standby field says. BlueBird's VHF L, C and R are the simulator's COM 1, 2 and 3
+/// (measured). CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch a culture leak.
 /// </summary>
 public class Bbs757RadiosTests
 {
@@ -286,5 +291,487 @@ public class Bbs757RadiosTests
     public void A_frequency_has_three_decimals(double mhz, string said)
     {
         Assert.Equal(said, Bbs757Radios.Frequency(mhz));
+    }
+
+    // ==== The COM radios panel and its announcements (task 3) ===========================================
+
+    private static readonly Bbs757ControlMap Map = Bbs757ControlMap.Load();
+
+    /// <summary>The six status rows in panel order: COM 1 active, COM 1 standby, COM 2 active, ...</summary>
+    private static readonly string[] SixRows =
+    {
+        Bbs757Radios.ActiveKey(1), Bbs757Radios.StandbyKey(1),
+        Bbs757Radios.ActiveKey(2), Bbs757Radios.StandbyKey(2),
+        Bbs757Radios.ActiveKey(3), Bbs757Radios.StandbyKey(3),
+    };
+
+    private const string Panel = "COM radios";
+
+    private static async Task InCultureAsync(string name, Func<Task> body)
+    {
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(name);
+            await body();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    /// <summary>A simulated sim behind the definition's writes: what a fresh read answers, the writes made.</summary>
+    private sealed class ComSim
+    {
+        public bool CanWrite = true;
+        public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
+        public readonly List<string> Writes = new();
+        public Action<string>? OnWrite;
+        public Action? OnDelay;
+
+        public Bbs757SimIo Io => new()
+        {
+            CanWrite = () => CanWrite,
+            ReadFresh = (key, ct) => Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null),
+            Cached = _ => null,
+            Write = rpn => { Writes.Add(rpn); OnWrite?.Invoke(rpn); },
+            RequestRead = _ => { },
+            Delay = (_, ct) => { OnDelay?.Invoke(); ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+        };
+    }
+
+    /// <summary>A definition whose BBS Nest check is settled, whose clock is a field and whose writes go to <see cref="Sim"/>.</summary>
+    private sealed class ComRig
+    {
+        public long Now;
+        public readonly ComSim Sim = new();
+        public readonly SpeechCapture Speech = new();
+        public readonly BBS757Definition Def;
+
+        public ComRig() => Def = new BBS757Definition { NestRunning = () => true, NowMs = () => Now, WriteIo = _ => Sim.Io };
+
+        public bool Deliver(string key, double value) => Def.ProcessSimVarUpdate(key, value, Speech);
+
+        public Task Set(int com, string typed) => Def.SetStandbyAsync(com, typed, new SimConnectManager(IntPtr.Zero), Speech);
+    }
+
+    // ---- The panel ------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Com_panel_follows_tcas()
+    {
+        var def = new BBS757Definition();
+        var pedestal = def.GetPanelStructure()["Pedestal"];
+
+        int tcas = pedestal.IndexOf(BBS757Definition.TransponderPanel);
+        Assert.True(tcas >= 0);
+        Assert.Equal(Panel, pedestal[tcas + 1]);
+
+        // Each radio: its standby field, then its transfer button; the status display lists the six rows.
+        var fields = def.GetPanelControls()[Panel];
+        Assert.Equal(new[]
+        {
+            Bbs757Radios.SetKey(1), Bbs757Radios.TransferKey(1), Bbs757Radios.SetKey(2),
+            Bbs757Radios.TransferKey(2), Bbs757Radios.SetKey(3), Bbs757Radios.TransferKey(3),
+        }, fields);
+        Assert.Equal(new[]
+        {
+            "COM1 Standby Frequency", "COM1 Transfer", "COM2 Standby Frequency",
+            "COM2 Transfer", "COM3 Standby Frequency", "COM3 Transfer",
+        }, fields.Select(k => def.GetVariables()[k].DisplayName));
+        Assert.Equal(SixRows, def.GetPanelDisplayVariables()[Panel]);
+    }
+
+    [Fact]
+    public void Com_panel_closes_the_pedestal_when_the_map_has_no_tcas_panel()
+    {
+        var map = new Bbs757ControlMap
+        {
+            Controls = Map.Controls.Where(c => c.Panel != BBS757Definition.TransponderPanel).ToList(),
+            Status = Map.Status,
+        };
+        var def = new BBS757Definition(map);
+
+        var pedestal = def.GetPanelStructure()["Pedestal"];
+
+        Assert.DoesNotContain(BBS757Definition.TransponderPanel, pedestal);
+        Assert.Equal(Panel, pedestal.Last());
+        Assert.Equal(6, def.GetPanelControls()[Panel].Count);
+        Assert.Equal(SixRows, def.GetPanelDisplayVariables()[Panel]);
+    }
+
+    [Fact]
+    public void Com_panel_is_in_one_section_and_has_a_controls_entry()
+    {
+        var def = new BBS757Definition();
+        var names = def.GetPanelStructure().SelectMany(section => section.Value).ToList();
+
+        Assert.Single(names, Panel);
+        Assert.True(def.GetPanelControls().ContainsKey(Panel));
+    }
+
+    [Fact]
+    public void Com_variables_are_registered_as_the_plan_says()
+    {
+        var vars = new BBS757Definition().GetVariables();
+        string[] setEvents = { "COM_STBY_RADIO_SET_HZ", "COM2_STBY_RADIO_SET_HZ", "COM3_STBY_RADIO_SET_HZ" };
+        string[] swapEvents = { "COM_STBY_RADIO_SWAP", "COM2_RADIO_SWAP", "COM3_RADIO_SWAP" };
+
+        for (int com = 1; com <= 3; com++)
+        {
+            // The stock rows: the simulator's own COM radios (measured), in MHz, on the 1 Hz batch.
+            foreach (var (key, name, label) in new[]
+            {
+                (Bbs757Radios.ActiveKey(com), $"COM ACTIVE FREQUENCY:{com}", $"COM{com} Active"),
+                (Bbs757Radios.StandbyKey(com), $"COM STANDBY FREQUENCY:{com}", $"COM{com} Standby"),
+            })
+            {
+                var row = vars[key];
+                Assert.Equal(name, row.Name);
+                Assert.Equal(label, row.DisplayName);
+                Assert.Equal(SimVarType.SimVar, row.Type);
+                Assert.Equal("MHz", row.Units);
+                Assert.Equal(UpdateFrequency.Continuous, row.UpdateFrequency);
+                Assert.True(row.IsAnnounced);
+                Assert.True(row.RenderAsReadOnlyStatus);
+                Assert.False(row.ExcludeFromMonitorManager);
+            }
+
+            var set = vars[Bbs757Radios.SetKey(com)];
+            Assert.Equal(setEvents[com - 1], set.Name);
+            Assert.Equal($"COM{com} Standby Frequency", set.DisplayName);
+            Assert.Equal(SimVarType.Event, set.Type);
+            Assert.Equal(UpdateFrequency.OnRequest, set.UpdateFrequency);
+
+            var transfer = vars[Bbs757Radios.TransferKey(com)];
+            Assert.Equal(swapEvents[com - 1], transfer.Name);
+            Assert.Equal($"COM{com} Transfer", transfer.DisplayName);
+            Assert.Equal(SimVarType.Event, transfer.Type);
+            Assert.True(transfer.RenderAsButton);
+        }
+    }
+
+    [Fact]
+    public void The_tuning_panels_lights_are_read_on_request_in_panel_order_left_center_right()
+    {
+        // Measured: panel 1 is VHF L, panel 2 VHF C, panel 3 VHF R.
+        var vars = new BBS757Definition().GetVariables();
+
+        Assert.Equal(new[] { "BBS757_RTP_1_LIGHTS", "BBS757_RTP_2_LIGHTS", "BBS757_RTP_3_LIGHTS" }, Bbs757Radios.RtpLightsKeys);
+        Assert.Equal(new[] { "BBS_RTP_L_LIGHTS", "BBS_RTP_C_LIGHTS", "BBS_RTP_R_LIGHTS" },
+            Bbs757Radios.RtpLightsKeys.Select(k => vars[k].Name));
+        Assert.All(Bbs757Radios.RtpLightsKeys, key =>
+        {
+            Assert.Equal(SimVarType.LVar, vars[key].Type);
+            Assert.Equal(UpdateFrequency.OnRequest, vars[key].UpdateFrequency);
+            Assert.False(vars[key].IsAnnounced);
+            Assert.True(vars[key].ExcludeFromMonitorManager);   // read for the transfer, never spoken: no Ctrl+M row
+        });
+    }
+
+    // ---- What is spoken when a frequency changes ------------------------------------------------------
+
+    [Fact]
+    public void Com_change_is_announced_once_after_a_silent_first_reading()
+    {
+        var rig = new ComRig();
+
+        Assert.True(rig.Deliver(Bbs757Radios.ActiveKey(1), 124.85));     // the cockpit as found
+        Assert.True(rig.Deliver(Bbs757Radios.StandbyKey(1), 121.5));
+        Assert.True(rig.Deliver(Bbs757Radios.ActiveKey(1), 124.85));     // unchanged
+        Assert.Empty(rig.Speech.All);
+
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.5);
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.5);                   // the same value again
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 124.85);
+
+        Assert.Equal(new[] { "COM1 active 121.500", "COM1 standby 124.850" }, rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Each_radio_speaks_its_own_number(int com)
+    {
+        var rig = new ComRig();
+        rig.Deliver(Bbs757Radios.ActiveKey(com), 118.0);
+        rig.Deliver(Bbs757Radios.StandbyKey(com), 118.0);
+
+        rig.Deliver(Bbs757Radios.ActiveKey(com), 136.99);
+        rig.Deliver(Bbs757Radios.StandbyKey(com), 120.905);
+
+        Assert.Equal(new[] { $"COM{com} active 136.990", $"COM{com} standby 120.905" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_simulators_float_noise_is_one_phrase()
+    {
+        // The sim reports 121.9 as 121.89999999999999: three decimals make both the same words, so
+        // neither a first reading nor a second one says a change.
+        var rig = new ComRig();
+
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.9);
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.89999999999999);
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.90000000000001);
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_reading_that_is_not_a_number_is_neither_spoken_nor_a_baseline()
+    {
+        var rig = new ComRig();
+
+        Assert.True(rig.Deliver(Bbs757Radios.ActiveKey(1), double.NaN));
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 124.85);     // the first real reading: the baseline
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.5);
+
+        Assert.Equal(new[] { "COM1 active 121.500" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_flight_load_makes_the_next_com_reading_a_baseline_again()
+    {
+        var rig = new ComRig();
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 124.85);
+
+        rig.Def.OnSimContextReset();
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 121.5);      // the new flight's radio, as found
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_lights_and_every_other_key_are_left_to_the_generic_path()
+    {
+        var rig = new ComRig();
+
+        Assert.False(rig.Deliver(Bbs757Radios.RtpLightsKeys[0], 2));
+        Assert.False(rig.Deliver(Bbs757Radios.RtpLightsKeys[0], 4));
+        Assert.False(rig.Deliver(Bbs757Radios.SetKey(1), 124.85));
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // ---- Ctrl+M ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Six_ctrl_m_rows()
+    {
+        var def = new BBS757Definition();
+        var rows = def.MonitorRows();
+
+        Assert.Equal(
+            new[] { "COM1 Active", "COM1 Standby", "COM2 Active", "COM2 Standby", "COM3 Active", "COM3 Standby" },
+            SixRows.Select(key => Assert.Single(rows, r => r.Key == key).Label));
+
+        // The fields, the buttons and the lights say nothing on their own: a row would mute nothing.
+        var others = Bbs757Radios.RtpLightsKeys
+            .Concat(new[] { 1, 2, 3 }.SelectMany(com => new[] { Bbs757Radios.SetKey(com), Bbs757Radios.TransferKey(com) }));
+        Assert.All(others, key => Assert.DoesNotContain(rows, r => r.Key == key));
+    }
+
+    [Fact]
+    public void A_ctrl_m_muted_com_row_says_nothing()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new GatedSpeechCapture();
+        var settings = new UserSettings { BBS757DisabledMonitorVariables = new() { Bbs757Radios.ActiveKey(1) } };
+        settings.RebuildDisabledMonitorVariableCaches();
+
+        MuteWrap.Deliver(def, speech, settings, Bbs757Radios.ActiveKey(1), 124.85);
+        MuteWrap.Deliver(def, speech, settings, Bbs757Radios.ActiveKey(1), 121.5);      // muted: gated by MainForm's wrap
+        MuteWrap.Deliver(def, speech, settings, Bbs757Radios.StandbyKey(1), 124.85);
+        MuteWrap.Deliver(def, speech, settings, Bbs757Radios.StandbyKey(1), 121.5);
+
+        Assert.Equal(new[] { "COM1 standby 121.500" }, speech.All);
+        Assert.False(def.IsMuteWrapExempt(Bbs757Radios.ActiveKey(1)));
+    }
+
+    // ---- The standby field ----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Own_standby_set_is_not_said_twice()
+    {
+        var rig = new ComRig();
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 121.5);                  // as found
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 124.85;               // what the radio holds after the write
+        rig.Sim.OnWrite = _ =>
+        {
+            rig.Now = 200;
+            rig.Deliver(Bbs757Radios.StandbyKey(1), 124.85);              // the batch delivers the write's own change
+        };
+
+        await rig.Set(1, "124.85");
+
+        Assert.Equal(new[] { "124850000 (>K:COM_STBY_RADIO_SET_HZ)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 standby 124.850" }, rig.Speech.All);   // once: the read-back, not also the change
+        Assert.Equal(rig.Speech.All, rig.Speech.Interrupts);
+
+        // The read-back closed the echo window: the same value again is no change, a real change speaks.
+        rig.Now = 3000;
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 124.85);
+        Assert.Single(rig.Speech.All);
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 118.0);
+        Assert.Equal(new[] { "COM1 standby 124.850", "COM1 standby 118.000" }, rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData(1, "121.5", 121.5, "121500000 (>K:COM_STBY_RADIO_SET_HZ)", "COM1 standby 121.500")]
+    [InlineData(2, "118.275", 118.275, "118275000 (>K:COM2_STBY_RADIO_SET_HZ)", "COM2 standby 118.275")]
+    [InlineData(3, "121.57", 121.575, "121575000 (>K:COM3_STBY_RADIO_SET_HZ)", "COM3 standby 121.575")]
+    public void A_typed_standby_goes_through_the_field_to_the_stock_event(int com, string typed, double readBack, string code, string said)
+    {
+        // The fakes complete at once, so the fire-and-forget set has run to its end when the hook returns.
+        var rig = new ComRig();
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(com)] = readBack;
+
+        Assert.True(rig.Def.HandleUITypedText(Bbs757Radios.SetKey(com), typed, rig.Def.GetVariables()[Bbs757Radios.SetKey(com)],
+            new SimConnectManager(IntPtr.Zero), rig.Speech));
+
+        Assert.Equal(new[] { code }, rig.Sim.Writes);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public void The_standby_fields_are_claimed_at_once_refusals_included_and_other_boxes_are_not()
+    {
+        var rig = new ComRig();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var vars = rig.Def.GetVariables();
+
+        Assert.True(rig.Def.HandleUITypedText(Bbs757Radios.SetKey(3), "121.520", vars[Bbs757Radios.SetKey(3)], sim, rig.Speech));
+        Assert.True(rig.Def.HandleUITypedText(Bbs757Radios.SetKey(2), "", vars[Bbs757Radios.SetKey(2)], sim, rig.Speech));
+        Assert.False(rig.Def.HandleUITypedText("SOME_OTHER_SET", "12", new SimVarDefinition(), sim, rig.Speech));
+
+        Assert.Equal(new[] { Bbs757Radios.InvalidMessage, Bbs757Radios.EmptyMessage }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task A_standby_that_cannot_land_is_refused_aloud_and_nothing_is_written()
+    {
+        var rig = new ComRig();
+        rig.Sim.CanWrite = false;
+
+        await rig.Set(2, "121.5");
+
+        Assert.Equal(new[] { "COM2 unavailable" }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task A_refused_standby_says_why_and_writes_nothing()
+    {
+        var rig = new ComRig();
+
+        await rig.Set(1, "117.995");
+        await rig.Set(1, "");
+
+        Assert.Equal(new[] { Bbs757Radios.InvalidMessage, Bbs757Radios.EmptyMessage }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task The_standby_said_is_the_one_the_radio_reports()
+    {
+        // The radio did not take it (or took another): what is said is what came back, never the request.
+        var rig = new ComRig();
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 121.9;
+
+        await rig.Set(1, "124.85");
+
+        Assert.Equal(new[] { "COM1 standby 121.900" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_standby_the_radio_does_not_report_back_is_not_claimed_and_keeps_the_echo_window()
+    {
+        var rig = new ComRig();
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 121.5);
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = null;
+
+        await rig.Set(1, "124.85");
+
+        Assert.Equal(new[] { "COM1 standby 124.850 sent, the radio did not report back" }, rig.Speech.Interrupts);
+
+        // Not settled: the late delivery of the write's own change is still its echo, and is not said again.
+        rig.Now = 1600;
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 124.85);
+        Assert.Single(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_write_that_throws_says_unavailable_and_never_throws()
+    {
+        var rig = new ComRig();
+        rig.Sim.OnWrite = _ => throw new InvalidOperationException("no link");
+
+        await rig.Set(3, "121.5");
+
+        Assert.Equal(new[] { "COM3 unavailable" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_switch_away_before_the_read_back_says_nothing_more()
+    {
+        var rig = new ComRig();
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 124.85;
+        rig.Sim.OnDelay = () => rig.Def.OnSwitchedAway();
+
+        await rig.Set(1, "124.85");
+
+        Assert.Single(rig.Sim.Writes);       // sent before the switch
+        Assert.Empty(rig.Speech.All);        // nothing said into the next aircraft
+    }
+
+    [Fact]
+    public async Task A_set_after_a_switch_away_does_nothing()
+    {
+        var rig = new ComRig();
+        rig.Def.OnSwitchedAway();
+
+        await rig.Set(1, "124.85");
+        await rig.Set(1, "117");
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // ---- The status display ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task Frequencies_display_with_three_decimals_under_de_DE(string culture)
+    {
+        await InCultureAsync(culture, async () =>
+        {
+            var rig = new ComRig();
+
+            // The status rows ("MHz" alone would show 125): three decimals, a dot, the sim's noise rounded.
+            foreach (string key in SixRows)
+            {
+                Assert.True(rig.Def.TryGetDisplayOverride(key, 124.85, out string shown));
+                Assert.Equal("124.850", shown);
+                Assert.True(rig.Def.TryGetDisplayOverride(key, 121.89999999999999, out shown));
+                Assert.Equal("121.900", shown);
+            }
+            Assert.True(rig.Def.TryGetDisplayOverride(Bbs757Radios.ActiveKey(2), 118.0, out string lowest));
+            Assert.Equal("118.000", lowest);
+            Assert.True(rig.Def.TryGetDisplayOverride(Bbs757Radios.StandbyKey(3), 136.99, out string highest));
+            Assert.Equal("136.990", highest);
+
+            // The words on a change carry the dot too.
+            rig.Deliver(Bbs757Radios.ActiveKey(1), 124.85);
+            rig.Deliver(Bbs757Radios.ActiveKey(1), 121.89999999999999);
+            Assert.Equal(new[] { "COM1 active 121.900" }, rig.Speech.All);
+
+            // A frequency typed with the PC's own decimal comma goes out as the Hz integer and is read back with a dot.
+            rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 121.5;
+            await rig.Set(1, "121,5");
+            Assert.Equal(new[] { "121500000 (>K:COM_STBY_RADIO_SET_HZ)" }, rig.Sim.Writes);
+            Assert.Equal("COM1 standby 121.500", rig.Speech.Interrupts.Single());
+        });
     }
 }

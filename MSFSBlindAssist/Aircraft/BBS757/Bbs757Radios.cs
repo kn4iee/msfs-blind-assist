@@ -23,6 +23,22 @@ public static class Bbs757Radios
 
     private static readonly char[] DecimalMarks = { '.', ',' };
 
+    /// <summary>
+    /// The three radio tuning panels' "selected radio" lights, in panel order (panel 1, 2, 3), with the
+    /// names the variables are shown under. Measured: panel 1 is <c>L:BBS_RTP_L_LIGHTS</c>, panel 2
+    /// <c>L:BBS_RTP_C_LIGHTS</c>, panel 3 <c>L:BBS_RTP_R_LIGHTS</c>. The one place that mapping lives; the
+    /// transfer's fallback reads them in this order and hands them to <see cref="TransferPanelFor"/>.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Key, string LVar, string Label)> RtpLights = new[]
+    {
+        ("BBS757_RTP_1_LIGHTS", "BBS_RTP_L_LIGHTS", "Radio Tuning Panel 1 Lights"),
+        ("BBS757_RTP_2_LIGHTS", "BBS_RTP_C_LIGHTS", "Radio Tuning Panel 2 Lights"),
+        ("BBS757_RTP_3_LIGHTS", "BBS_RTP_R_LIGHTS", "Radio Tuning Panel 3 Lights"),
+    };
+
+    /// <summary>The keys of <see cref="RtpLights"/>, panel 1, 2, 3.</summary>
+    public static readonly IReadOnlyList<string> RtpLightsKeys = RtpLights.Select(l => l.Key).ToArray();
+
     public static string ActiveKey(int com) => $"BBS757_COM{Radio(com)}_ACTIVE";
 
     public static string StandbyKey(int com) => $"BBS757_COM{Radio(com)}_STANDBY";

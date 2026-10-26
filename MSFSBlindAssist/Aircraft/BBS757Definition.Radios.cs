@@ -9,12 +9,19 @@ namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
 /// The 757's radios (plan 04), in the hooks plan 01 laid (BBS757Definition.Hooks.cs). So far: output
-/// N, which reads BlueBird's own VOR tunings and courses. Until it landed N fell through to MainForm's
-/// shared readout of the simulator's NAV radios, which BlueBird does not use (<see cref="UsesStockNavReceivers"/>).
+/// N, which reads BlueBird's own VOR tunings and courses, and the COM radios panel.
 ///
-/// The tunings are on the NAV RADIO page of the first officer's CDU, so N brings that page up there
-/// (never on the captain's CDU, ruling R52; <see cref="Bbs757NavRad"/> reads it) and leaves it there.
-/// The courses are BlueBird's own L:vars, read fresh. Nothing is written.
+/// Output N. Until it landed N fell through to MainForm's shared readout of the simulator's NAV radios,
+/// which BlueBird does not use (<see cref="UsesStockNavReceivers"/>). The tunings are on the NAV RADIO page
+/// of the first officer's CDU, so N brings that page up there (never on the captain's CDU, ruling R52;
+/// <see cref="Bbs757NavRad"/> reads it) and leaves it there. The courses are BlueBird's own L:vars, read
+/// fresh. Nothing is written.
+///
+/// The COM radios. BlueBird's VHF L, C and R are the simulator's own COM 1, 2 and 3 (measured), so the six
+/// active and standby frequencies are the stock <c>COM ACTIVE/STANDBY FREQUENCY:n</c> on the 1 Hz batch:
+/// shown in the "COM radios" panel's status display with three decimals, and spoken when one changes, as
+/// on the other Boeings ("COM1 active 124.850", ruling R53). A standby typed in goes out as the stock
+/// <c>K:COMn_STBY_RADIO_SET_HZ</c> (ruling R54) and is confirmed by what the radio reads back.
 /// </summary>
 public partial class BBS757Definition
 {
@@ -24,7 +31,11 @@ public partial class BBS757Definition
 
     /// <summary>
     /// The VOR and ILS course variables N reads fresh (<see cref="Bbs757NavRad.CourseVariables"/>): OnRequest
-    /// L:vars on no panel, never announced, so no Ctrl+M row ([VAR-9]).
+    /// L:vars on no panel, never announced, so no Ctrl+M row ([VAR-9]). Then the COM radios' fifteen: for each
+    /// radio the active and standby rows (the stock COM variables, in MHz, on the 1 Hz batch so they ride
+    /// no data definition of their own, with a Ctrl+M row each), the standby field and the transfer button
+    /// (events, no data definition), and the three tuning panels' lights (OnRequest, read for the
+    /// transfer's fallback and never spoken, so no Ctrl+M row).
     /// </summary>
     static partial void AddRadioVariables(Dictionary<string, SimVarDefinition> vars)
     {
@@ -37,6 +48,205 @@ public partial class BBS757Definition
                 Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
                 ExcludeFromMonitorManager = true,
             };
+        }
+
+        void Add(string key, SimVarDefinition def)
+        {
+            if (!vars.ContainsKey(key)) vars[key] = def;
+        }
+
+        for (int com = 1; com <= 3; com++)
+        {
+            Add(Bbs757Radios.ActiveKey(com), StreamedRow($"COM ACTIVE FREQUENCY:{com}", $"COM{com} Active", SimVarType.SimVar, "MHz"));
+            Add(Bbs757Radios.StandbyKey(com), StreamedRow($"COM STANDBY FREQUENCY:{com}", $"COM{com} Standby", SimVarType.SimVar, "MHz"));
+
+            // The squawk field's pattern: a key containing "_SET" is what MainForm renders as a box Enter
+            // applies. The definition takes its text first (HandleRadioTypedText), so the event named
+            // here is never sent from the registration; it only keeps the field an event.
+            Add(Bbs757Radios.SetKey(com), new SimVarDefinition
+            {
+                Name = SetEventName(com), DisplayName = $"COM{com} Standby Frequency",
+                Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
+            });
+            Add(Bbs757Radios.TransferKey(com), new SimVarDefinition
+            {
+                Name = SwapEventName(com), DisplayName = $"COM{com} Transfer",
+                Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
+                RenderAsButton = true, IsMomentary = true,
+            });
+        }
+
+        foreach (var (key, lvar, label) in Bbs757Radios.RtpLights)
+        {
+            Add(key, new SimVarDefinition
+            {
+                Name = lvar, DisplayName = label,
+                Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
+                ExcludeFromMonitorManager = true,
+            });
+        }
+    }
+
+    // The stock events behind the field and the button (Bbs757Radios.StandbySetCode and SwapCode send
+    // the same ones); COM 1's carry no digit.
+    private static string SetEventName(int com) => com == 1 ? "COM_STBY_RADIO_SET_HZ" : $"COM{com}_STBY_RADIO_SET_HZ";
+
+    private static string SwapEventName(int com) => com == 1 ? "COM_STBY_RADIO_SWAP" : $"COM{com}_RADIO_SWAP";
+
+    // =================================================================================
+    // Panel
+    // =================================================================================
+
+    /// <summary>The map's section the COM radios panel joins.</summary>
+    internal const string PedestalSection = "Pedestal";
+
+    /// <summary>The app's own panel for the three COM radios.</summary>
+    internal const string ComRadiosPanel = "COM radios";
+
+    /// <summary>
+    /// The "COM radios" panel, in the Pedestal right after the transponder's (its neighbour on the aft
+    /// pedestal), or at the end of the section when the map has no such panel: for each radio its standby
+    /// field then its transfer button, and a status display of the six frequencies.
+    /// </summary>
+    partial void AddRadioPanels(Dictionary<string, List<string>> structure, Dictionary<string, List<string>> controls,
+        Dictionary<string, List<string>> displays)
+    {
+        var fields = new List<string>();
+        var rows = new List<string>();
+        for (int com = 1; com <= 3; com++)
+        {
+            fields.Add(Bbs757Radios.SetKey(com));
+            fields.Add(Bbs757Radios.TransferKey(com));
+            rows.Add(Bbs757Radios.ActiveKey(com));
+            rows.Add(Bbs757Radios.StandbyKey(com));
+        }
+        controls[ComRadiosPanel] = fields;
+        displays[ComRadiosPanel] = rows;
+
+        if (!structure.TryGetValue(PedestalSection, out var panels)) structure[PedestalSection] = panels = new List<string>();
+        int transponder = panels.IndexOf(TransponderPanel);
+        panels.Insert(transponder < 0 ? panels.Count : transponder + 1, ComRadiosPanel);
+    }
+
+    // =================================================================================
+    // Announcements and the status display
+    // =================================================================================
+
+    /// <summary>The six frequency rows by key: the radio and whether the row is its active frequency.</summary>
+    private static readonly Dictionary<string, (int Com, bool Active)> ComRows = BuildComRows();
+
+    private static Dictionary<string, (int Com, bool Active)> BuildComRows()
+    {
+        var rows = new Dictionary<string, (int, bool)>(StringComparer.Ordinal);
+        for (int com = 1; com <= 3; com++)
+        {
+            rows[Bbs757Radios.ActiveKey(com)] = (com, true);
+            rows[Bbs757Radios.StandbyKey(com)] = (com, false);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// The six frequency rows speak a change once ("COM1 active 124.850"), after a silent first reading
+    /// and never for the app's own standby set (its echo window, <see cref="ArmOwnWriteEcho"/>). The
+    /// words are the three-decimal frequency, so the simulator's float noise (121.9 read as
+    /// 121.89999999999999) is one phrase and never a change. MainForm's mute wrap gates a Ctrl+M-muted row
+    /// ([VAR-8]). Every other key is left to the next hook.
+    /// </summary>
+    partial void ProcessRadioUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
+    {
+        if (!ComRows.TryGetValue(varName, out var row)) return;
+        handled = true;
+        if (!double.IsFinite(value)) return;
+        SpeakChange(varName,
+            row.Active ? Bbs757Radios.ActivePhrase(row.Com, value) : Bbs757Radios.StandbyPhrase(row.Com, value),
+            announcer);
+    }
+
+    /// <summary>The six frequency rows show three decimals ("121.900", where the unit alone would round to "122").</summary>
+    partial void FormatRadioDisplay(string varKey, double value, ref string? text)
+    {
+        if (ComRows.ContainsKey(varKey)) text = Bbs757Radios.Frequency(value);
+    }
+
+    // =================================================================================
+    // The standby field
+    // =================================================================================
+
+    /// <summary>The radio a standby field belongs to (1 to 3), or 0 for any other key.</summary>
+    private static int ComOfSetKey(string varKey)
+    {
+        for (int com = 1; com <= 3; com++)
+            if (varKey == Bbs757Radios.SetKey(com)) return com;
+        return 0;
+    }
+
+    /// <summary>
+    /// A standby field's raw text, taken before MainForm parses it (an empty box and a frequency off the
+    /// channel grid each get their own words). Claimed at once, refusals included, so the generic path
+    /// never writes its own. The set runs on its own task: fire and forget, it never throws.
+    /// </summary>
+    partial void HandleRadioTypedText(string varKey, string text, SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        ref bool handled)
+    {
+        int com = ComOfSetKey(varKey);
+        if (com == 0) return;
+        handled = true;
+        _ = SetStandbyAsync(com, text, simConnect, announcer);
+    }
+
+    /// <summary>
+    /// A typed standby: refused aloud when it is not a channel of the band (<see cref="Bbs757Radios.TryParseCom"/>
+    /// says why) or when no calculator write can land ("COM1 unavailable", nothing sent); otherwise the
+    /// stock <c>COMn_STBY_RADIO_SET_HZ</c>, then, after <see cref="ReadBackDelayMs"/>, the standby row
+    /// read fresh and what it holds spoken ("COM1 standby 121.500"), never the request (CORE-7). The row's
+    /// own change, which the batch delivers meanwhile, is that write's echo: it is not said a second time,
+    /// and the read-back closes the window. A radio that cannot be read back is not claimed to be tuned and
+    /// keeps the window open for the late delivery. Never throws; silent after a switch away.
+    /// </summary>
+    internal async Task SetStandbyAsync(int com, string typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;
+            if (!Bbs757Radios.TryParseCom(typed, out double mhz, out string error))
+            {
+                announcer.AnnounceImmediate(error);   // a validation error always speaks
+                return;
+            }
+
+            var io = WriteIoFor(sim);
+            if (!io.CanWrite())
+            {
+                Log.Debug("BBS757", $"COM{com} standby: write refused, nothing sent.");
+                announcer.AnnounceImmediate($"COM{com} unavailable");
+                return;
+            }
+
+            string standby = Bbs757Radios.StandbyKey(com);
+            OnOwnWrite(Bbs757Radios.SetKey(com));   // plan 13
+            ArmOwnWriteEcho(standby);
+            io.Write(Bbs757Radios.StandbySetCode(com, mhz));
+
+            await io.Delay(ReadBackDelayMs, _lifetime.Token);
+            double? read = await io.ReadFresh(standby, _lifetime.Token);
+            _lifetime.Token.ThrowIfCancellationRequested();
+            if (read is double held && double.IsFinite(held))
+            {
+                string phrase = Bbs757Radios.StandbyPhrase(com, held);
+                SettleOwnWriteEcho(standby, phrase);
+                announcer.AnnounceImmediate(phrase);
+            }
+            else
+            {
+                announcer.AnnounceImmediate($"{Bbs757Radios.StandbyPhrase(com, mhz)} sent, the radio did not report back");
+            }
+        }
+        catch (OperationCanceledException) { /* switched away */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"COM{com} standby set failed: {ex.Message}");
+            if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate($"COM{com} unavailable");
         }
     }
 
