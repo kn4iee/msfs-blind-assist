@@ -39,18 +39,43 @@ $lines = @(& $eval -Title BBSTablet -ExprFile $Js 2>&1 | ForEach-Object { "$_" }
 $timer.Stop()
 
 # coherent-eval.ps1 prints "# resolved ..." first, then the JSON, or one line naming what went wrong.
+# A debugger error (a view that is reloading, say) comes back as a raw protocol message, which starts with "{" too,
+# so only a map of names to numbers (null is JSON for a NaN) counts as a snapshot.
 $json = $lines | Where-Object { $_.TrimStart().StartsWith("{") } | Select-Object -Last 1
-if (-not $json -or $json.Trim().Length -le 2) {
+$answer = $null
+$map = $null
+if (-not $json) {
   $answer = ($lines | Where-Object { $_.Trim() -ne "" } | Select-Object -Last 1)
-  if (-not $answer) { $answer = "nothing" }
-  if ($json) { $answer = "an empty map (no variable could be read)" }
-  Fail ("the Coherent debugger answered: " + $answer.Trim().TrimEnd(".") + ". " +
+  $answer = if ($answer) { $answer.Trim().TrimEnd(".") } else { "nothing" }
+} else {
+  $json = $json.Trim()
+  $problem = $null
+  # -AsHashtable keeps names that differ only by case (B757_CAPT_O2_STARBURST and B757_CAPT_O2_starburst).
+  try { $map = $json | ConvertFrom-Json -AsHashtable } catch { $problem = "not valid JSON" }
+  if (-not $problem -and $map -isnot [System.Collections.IDictionary]) { $problem = "not a name -> number map" }
+  if (-not $problem -and $map.Count -eq 0) { $answer = "an empty map (no variable could be read)" }
+  elseif (-not $problem) {
+    foreach ($entry in $map.GetEnumerator()) {
+      $value = $entry.Value
+      if ($null -ne $value -and $value -isnot [int] -and $value -isnot [long] -and $value -isnot [double] -and
+          $value -isnot [decimal] -and $value -isnot [System.Numerics.BigInteger]) {
+        $problem = "`"$($entry.Key)`" is not a number"
+        break
+      }
+    }
+  }
+  if ($problem) {
+    $shown = if ($json.Length -gt 300) { $json.Substring(0, 300) + " [cut]" } else { $json }
+    $answer = "not a snapshot ($problem): $shown"
+  }
+}
+if ($answer) {
+  Fail ("the Coherent debugger answered: $answer. " +
     "Is MSFS running with the BlueBird 757 and BBS Nest loaded, and MSFSBA closed? (port 19999, view BBSTablet, [DBG-9])")
 }
 
 $parent = Split-Path -Parent $Out
 if ($parent -and -not (Test-Path -LiteralPath $parent)) { $null = New-Item -ItemType Directory -Path $parent }
-[System.IO.File]::WriteAllText($Out, $json.Trim() + "`n", [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($Out, $json + "`n", [System.Text.UTF8Encoding]::new($false))
 
-$count = [regex]::Matches($json, '"[^"]+":').Count
-Write-Output ("{0} variables in {1:N1} s -> {2}" -f $count, $timer.Elapsed.TotalSeconds, $Out)
+Write-Output ("{0} variables in {1:N1} s -> {2}" -f $map.Count, $timer.Elapsed.TotalSeconds, $Out)
