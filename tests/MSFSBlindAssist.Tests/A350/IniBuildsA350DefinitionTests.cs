@@ -53,8 +53,9 @@ public class IniBuildsA350DefinitionTests
     [Fact]
     public void Only_the_curated_sections_are_offered()
     {
-        Assert.Equal(new[] { "Overhead" }, _def.GetPanelStructure().Keys);
-        Assert.DoesNotContain("A350_EFIS_RANGE_LEFT", _def.GetVariables().Keys);
+        Assert.Equal(new[] { "Overhead", "Glareshield" }, _def.GetPanelStructure().Keys);
+        Assert.Contains("A350_EFIS_RANGE_LEFT", _def.GetVariables().Keys);
+        Assert.DoesNotContain("A350_PARK_BRK_PARKING_BRAKE", _def.GetVariables().Keys);   // the pedestal: not yet
     }
 
     private sealed class WithSections : IniBuildsA350Definition
@@ -117,7 +118,7 @@ public class IniBuildsA350DefinitionTests
 
     [Fact]
     public void The_fcu_windows_are_absent_while_the_glareshield_is_not_offered() =>
-        Assert.DoesNotContain("A350_FCU_ALTITUDE_WINDOW", _def.GetVariables().Keys);
+        Assert.DoesNotContain("A350_FCU_ALTITUDE_WINDOW", new WithSections("Overhead").GetVariables().Keys);
 
     [Fact]
     public void Every_overhead_row_is_a_registered_variable_on_its_panel()
