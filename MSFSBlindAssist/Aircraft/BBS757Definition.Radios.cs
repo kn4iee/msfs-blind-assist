@@ -21,7 +21,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// active and standby frequencies are the stock <c>COM ACTIVE/STANDBY FREQUENCY:n</c> on the 1 Hz batch:
 /// shown in the "COM radios" panel's status display with three decimals, and spoken when one changes, as
 /// on the other Boeings ("COM1 active 124.850", ruling R53). A standby typed in goes out as the stock
-/// <c>K:COMn_STBY_RADIO_SET_HZ</c> (ruling R54) and is confirmed by what the radio reads back.
+/// <c>K:COMn_STBY_RADIO_SET_HZ</c> (ruling R54) and is confirmed by what the radio reads back. A transfer tries
+/// the stock <c>COMn_RADIO_SWAP</c> first and, when BlueBird ignores it, presses the button of the tuning
+/// panel whose lights select the radio (<see cref="TransferAsync"/>).
 /// </summary>
 public partial class BBS757Definition
 {
@@ -65,12 +67,12 @@ public partial class BBS757Definition
             // here is never sent from the registration; it only keeps the field an event.
             Add(Bbs757Radios.SetKey(com), new SimVarDefinition
             {
-                Name = SetEventName(com), DisplayName = $"COM{com} Standby Frequency",
+                Name = Bbs757Radios.StandbySetEvent(com), DisplayName = $"COM{com} Standby Frequency",
                 Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
             });
             Add(Bbs757Radios.TransferKey(com), new SimVarDefinition
             {
-                Name = SwapEventName(com), DisplayName = $"COM{com} Transfer",
+                Name = Bbs757Radios.SwapEvent(com), DisplayName = $"COM{com} Transfer",
                 Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
                 RenderAsButton = true, IsMomentary = true,
             });
@@ -86,12 +88,6 @@ public partial class BBS757Definition
             });
         }
     }
-
-    // The stock events behind the field and the button (Bbs757Radios.StandbySetCode and SwapCode send
-    // the same ones); COM 1's carry no digit.
-    private static string SetEventName(int com) => com == 1 ? "COM_STBY_RADIO_SET_HZ" : $"COM{com}_STBY_RADIO_SET_HZ";
-
-    private static string SwapEventName(int com) => com == 1 ? "COM_STBY_RADIO_SWAP" : $"COM{com}_RADIO_SWAP";
 
     // =================================================================================
     // Panel
@@ -248,6 +244,194 @@ public partial class BBS757Definition
             Log.Error("BBS757", $"COM{com} standby set failed: {ex.Message}");
             if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate($"COM{com} unavailable");
         }
+    }
+
+    // =================================================================================
+    // The transfer
+    // =================================================================================
+
+    /// <summary>The radios whose transfer is running now (each swap toggles, so two overlapping ones could undo each other).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _transfersRunning = new();
+
+    /// <summary>The radio a transfer button belongs to (1 to 3), or 0 for any other key.</summary>
+    private static int ComOfTransferKey(string varKey)
+    {
+        for (int com = 1; com <= 3; com++)
+            if (varKey == Bbs757Radios.TransferKey(com)) return com;
+        return 0;
+    }
+
+    /// <summary>
+    /// A press of a COM transfer button, claimed at once so the generic path never sends its own write.
+    /// Every other key is left to the next hook. The transfer runs on its own task: fire and forget, it
+    /// never throws.
+    /// </summary>
+    partial void HandleRadioSet(string varKey, double value, SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        ref bool handled)
+    {
+        int com = ComOfTransferKey(varKey);
+        if (com == 0) return;
+        handled = true;
+        _ = TransferAsync(com, simConnect, announcer);
+    }
+
+    /// <summary>
+    /// Transfers a radio, the stock swap first (R54: <c>COMn_RADIO_SWAP</c>, measured to work and hold on all
+    /// three) and the tuning panel's button as the fallback for a swap BlueBird ignores.
+    ///
+    /// "COM1 unavailable" and nothing sent when no calculator write can land. Otherwise both rows are read
+    /// fresh, their echo windows opened (the batch's own two changes are this write's, CORE-7), the swap
+    /// written and, after <see cref="ReadBackDelayMs"/>, both rows read again. What is spoken is what the
+    /// radio reports: "COM1 active 121.500, standby 124.850", once. Swapped means the new active is the old
+    /// standby and the new standby the old active, at 1 kHz, so equal rows (COM 3 today) count as swapped.
+    /// A row unreadable before the swap still gets the swap and, when both read after it, the sentence (you
+    /// cannot tell whether it was ignored); one unreadable after it says "COM1 transfer sent, the radio did
+    /// not report back" and keeps the windows open for the late delivery. A swap that left the rows as they
+    /// were goes to <see cref="PanelFallbackAsync"/>. A second press of the same radio while its transfer
+    /// runs is refused aloud; other radios run at once. Never throws; silent after a switch away.
+    /// </summary>
+    internal async Task TransferAsync(int com, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        bool running = false;
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;
+            var ct = _lifetime.Token;
+            if (!_transfersRunning.TryAdd(com, true))
+            {
+                announcer.AnnounceImmediate(Bbs757Radios.TransferInProgressPhrase(com));
+                return;
+            }
+            running = true;
+
+            var io = WriteIoFor(sim);
+            if (!io.CanWrite())
+            {
+                Log.Debug("BBS757", $"COM{com} transfer: write refused, nothing sent.");
+                announcer.AnnounceImmediate($"COM{com} unavailable");
+                return;
+            }
+
+            var (activeBefore, standbyBefore) = await ReadComRowsAsync(io, com, ct);
+            ct.ThrowIfCancellationRequested();
+
+            ArmComEchoes(com);
+            OnOwnWrite(Bbs757Radios.TransferKey(com));   // plan 13
+            io.Write(Bbs757Radios.SwapCode(com));
+
+            await io.Delay(ReadBackDelayMs, ct);
+            var (active, standby) = await ReadComRowsAsync(io, com, ct);
+            ct.ThrowIfCancellationRequested();
+
+            if (active is not double a || standby is not double s)
+            {
+                announcer.AnnounceImmediate(Bbs757Radios.TransferNoReportPhrase(com));
+                return;
+            }
+            if (activeBefore is not double a0 || standbyBefore is not double s0 || Bbs757Radios.Swapped(a0, s0, a, s))
+            {
+                SpeakTransfer(com, a, s, announcer);
+                return;
+            }
+
+            await PanelFallbackAsync(com, io, a, s, announcer, ct);
+        }
+        catch (OperationCanceledException) { /* switched away */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"COM{com} transfer failed: {ex.Message}");
+            if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate($"COM{com} unavailable");
+        }
+        finally
+        {
+            if (running) _transfersRunning.TryRemove(com, out _);
+        }
+    }
+
+    /// <summary>
+    /// The stock swap was ignored (the rows are as they were: <paramref name="active"/> and
+    /// <paramref name="standby"/>). The tuning panel whose lights select the radio is found from the three
+    /// panels' lights read fresh (<see cref="Bbs757Radios.RtpLightsKeys"/>, <see cref="Bbs757Radios.TransferPanelFor"/>):
+    /// none, or lights that cannot be read, says "No tuning panel selects COM1" and presses nothing. Otherwise
+    /// the panel's button is held, 1, <see cref="Bbs757Write.ButtonHoldMs"/> ms, 0, and the rows read again after
+    /// <see cref="ReadBackDelayMs"/>: swapped speaks the sentence, anything else "COM1 did not transfer". The
+    /// release is never canceled (a button is always let go, as <see cref="PressAsync"/>); the write is refused
+    /// aloud when the link was lost meanwhile, and the echo windows are opened again for the button's own change.
+    /// </summary>
+    private async Task PanelFallbackAsync(int com, Bbs757SimIo io, double active, double standby,
+        ScreenReaderAnnouncer announcer, CancellationToken ct)
+    {
+        var lights = new double?[Bbs757Radios.RtpLightsKeys.Count];
+        for (int i = 0; i < lights.Length; i++)
+            lights[i] = await io.ReadFresh(Bbs757Radios.RtpLightsKeys[i], ct);
+        ct.ThrowIfCancellationRequested();
+
+        if (Bbs757Radios.TransferPanelFor(com, lights[0], lights[1], lights[2]) is not int panel)
+        {
+            Log.Debug("BBS757", $"COM{com} transfer: the stock swap was ignored and no tuning panel selects it.");
+            SettleComRows(com, active, standby);   // nothing changed: no echo is owed
+            announcer.AnnounceImmediate(Bbs757Radios.NoPanelPhrase(com));
+            return;
+        }
+
+        if (!io.CanWrite())
+        {
+            SettleComRows(com, active, standby);
+            announcer.AnnounceImmediate($"COM{com} unavailable");
+            return;
+        }
+
+        ArmComEchoes(com);
+        OnOwnWrite(Bbs757Radios.TransferKey(com));   // plan 13
+        io.Write(Bbs757Radios.PanelPressCode(panel));
+        await io.Delay(Bbs757Write.ButtonHoldMs, CancellationToken.None);
+        io.Write(Bbs757Radios.PanelReleaseCode(panel));
+
+        await io.Delay(ReadBackDelayMs, ct);
+        var (activeAfter, standbyAfter) = await ReadComRowsAsync(io, com, ct);
+        ct.ThrowIfCancellationRequested();
+
+        if (activeAfter is not double a || standbyAfter is not double s)
+        {
+            announcer.AnnounceImmediate(Bbs757Radios.TransferNoReportPhrase(com));
+            return;
+        }
+        if (Bbs757Radios.Swapped(active, standby, a, s))
+        {
+            SpeakTransfer(com, a, s, announcer);
+            return;
+        }
+        SettleComRows(com, a, s);
+        announcer.AnnounceImmediate(Bbs757Radios.NotTransferredPhrase(com));
+    }
+
+    /// <summary>Both rows of a radio read fresh; a row that cannot be read, or is not a number, is null.</summary>
+    private static async Task<(double? Active, double? Standby)> ReadComRowsAsync(Bbs757SimIo io, int com, CancellationToken ct)
+    {
+        double? active = await io.ReadFresh(Bbs757Radios.ActiveKey(com), ct);
+        double? standby = await io.ReadFresh(Bbs757Radios.StandbyKey(com), ct);
+        return (active is double a && double.IsFinite(a) ? a : null, standby is double s && double.IsFinite(s) ? s : null);
+    }
+
+    /// <summary>The app is about to write the radio: the batch's changes to both rows are that write's echo (CORE-7).</summary>
+    private void ArmComEchoes(int com)
+    {
+        ArmOwnWriteEcho(Bbs757Radios.ActiveKey(com));
+        ArmOwnWriteEcho(Bbs757Radios.StandbyKey(com));
+    }
+
+    /// <summary>A read-back fixed what both rows hold: that is their baseline now and their echo windows close.</summary>
+    private void SettleComRows(int com, double active, double standby)
+    {
+        SettleOwnWriteEcho(Bbs757Radios.ActiveKey(com), Bbs757Radios.ActivePhrase(com, active));
+        SettleOwnWriteEcho(Bbs757Radios.StandbyKey(com), Bbs757Radios.StandbyPhrase(com, standby));
+    }
+
+    /// <summary>The transfer's one sentence, from what the radio reports; the rows' own changes were its echo.</summary>
+    private void SpeakTransfer(int com, double active, double standby, ScreenReaderAnnouncer announcer)
+    {
+        SettleComRows(com, active, standby);
+        announcer.AnnounceImmediate(Bbs757Radios.TransferPhrase(com, active, standby));
     }
 
     // =================================================================================

@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - Owned files: `Aircraft/BBS757Definition.Radios.cs` (new), `Aircraft/BBS757/Bbs757Radios.cs` (new), `Aircraft/BBS757/Bbs757NavRad.cs` (new), `Forms/BBS757/BBS757NavRadiosForm.cs` (new), tests `Bbs757RadiosTests.cs`, `Bbs757NavRadTests.cs`, `docs/b757/evidence/flight-04.md`.
-- Radios: COM 1 = VHF L, COM 2 = VHF C, COM 3 = VHF R (measured). Stock events: `COM_STBY_RADIO_SET_HZ`, `COM2_STBY_RADIO_SET_HZ`, `COM3_STBY_RADIO_SET_HZ`; `COM_STBY_RADIO_SWAP`, `COM2_RADIO_SWAP`, `COM3_RADIO_SWAP`. Tuning-panel transfer buttons `B757_PED_COMHEAD_1/2/3_SWAP_BUTTON` (held 1 then 0); panel 1's selected radio is `BBS_RTP_L_LIGHTS` (measured: bit 2 VHF L); panels 2 and 3 are believed to be `BBS_RTP_R_LIGHTS` and `BBS_RTP_C_LIGHTS` (the knob request vars say so; Task 4 step 1 measures it). Bits 2 VHF L, 4 VHF C, 8 VHF R.
+- Radios: COM 1 = VHF L, COM 2 = VHF C, COM 3 = VHF R (measured). Stock events: `COM_STBY_RADIO_SET_HZ`, `COM2_STBY_RADIO_SET_HZ`, `COM3_STBY_RADIO_SET_HZ`; `COM_STBY_RADIO_SWAP`, `COM2_RADIO_SWAP`, `COM3_RADIO_SWAP`. Tuning-panel transfer buttons `B757_PED_COMHEAD_1/2/3_SWAP_BUTTON` (held 1 then 0); panel 1's selected radio is `BBS_RTP_L_LIGHTS` (measured: bit 2 VHF L); panel 2's is `BBS_RTP_C_LIGHTS` and panel 3's `BBS_RTP_R_LIGHTS` (measured 2026-10-26, `docs/b757/evidence/flight-04.md`: panel 2's button swapped COM 2 and panel 3's COM 3), and all three stock swaps (`COM_STBY_RADIO_SWAP`, `COM2_RADIO_SWAP`, `COM3_RADIO_SWAP`) work and hold on BlueBird. Bits 2 VHF L, 4 VHF C, 8 VHF R.
 - COM range 118.000-136.990 MHz; valid channels have a kHz part whose value mod 25 is 0, 5, 10 or 15.
 - Words (owner, Q1): "COM1 active 124.850", "COM2 standby 121.500"; three decimals, invariant; Ctrl+M rows "COM1 Active", "COM1 Standby", … as on the PMDG 737.
 - Status rows show frequencies with three decimals through plan 01's `FormatRadioDisplay` seam (units "MHz" alone would round to "125").
@@ -111,7 +111,7 @@
 
 **Files:** `BBS757Definition.Radios.cs` (`HandleRadioSet`); test `Bbs757RadiosTests.cs`; `docs/b757/evidence/flight-04.md`.
 
-- [ ] **Step 1 (owner-in-sim, on the ground):** hold `B757_PED_COMHEAD_2_SWAP_BUTTON` and `_3_` (1, 200 ms, 0) and record which COM swapped, with the three `BBS_RTP_*_LIGHTS`; try `K:COM_STBY_RADIO_SWAP`, `COM2_RADIO_SWAP`, `COM3_RADIO_SWAP` and record whether each swaps; swap everything back. Record in `flight-04.md` and correct the panel-to-lights mapping in Global Constraints if it differs.
+- [x] **Step 1 (owner-in-sim, on the ground):** hold `B757_PED_COMHEAD_2_SWAP_BUTTON` and `_3_` (1, 200 ms, 0) and record which COM swapped, with the three `BBS_RTP_*_LIGHTS`; try `K:COM_STBY_RADIO_SWAP`, `COM2_RADIO_SWAP`, `COM3_RADIO_SWAP` and record whether each swaps; swap everything back. Record in `flight-04.md` and correct the panel-to-lights mapping in Global Constraints if it differs.
 - **Interfaces:** `HandleRadioSet` for a `TransferKey`: `CanWrite` false → "COM1 unavailable"; read active and standby fresh; arm both echoes; write `SwapCode`; after `ReadBackDelayMs` read both; swapped → "COM1 active 121.500, standby 124.850"; not swapped → `TransferPanelFor` (null → "No tuning panel selects COM1") → press that panel's button (1, 200 ms, 0), read back, speak the sentence or "COM1 did not transfer".
 - [ ] **Steps 2-6:** tests `Stock_swap_that_works_is_used`, `Panel_fallback_when_stock_swap_is_ignored`, `No_panel_refuses`; run, implement, full suite; commit `feat(b757): COM transfer, stock swap first, the panel's button as fallback`.
 

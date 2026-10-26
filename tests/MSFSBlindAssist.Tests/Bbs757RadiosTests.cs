@@ -215,9 +215,87 @@ public class Bbs757RadiosTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.TransferKey(com));
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.StandbySetCode(com, 121.5));
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.SwapCode(com));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.StandbySetEvent(com));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.SwapEvent(com));
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.TransferPanelFor(com, 2, 4, 8));
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.ActivePhrase(com, 121.5));
         Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.StandbyPhrase(com, 121.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.TransferPhrase(com, 121.5, 124.85));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.NoPanelPhrase(com));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.NotTransferredPhrase(com));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.TransferInProgressPhrase(com));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.TransferNoReportPhrase(com));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(-1)]
+    public void A_panel_outside_1_to_3_throws(int panel)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.PanelPressCode(panel));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Bbs757Radios.PanelReleaseCode(panel));
+    }
+
+    [Theory]
+    [InlineData(1, "COM_STBY_RADIO_SET_HZ", "COM_STBY_RADIO_SWAP")]   // COM 1's events carry no digit
+    [InlineData(2, "COM2_STBY_RADIO_SET_HZ", "COM2_RADIO_SWAP")]
+    [InlineData(3, "COM3_STBY_RADIO_SET_HZ", "COM3_RADIO_SWAP")]
+    public void The_event_names_are_stated_once_and_the_codes_and_registrations_use_them(int com, string setEvent, string swapEvent)
+    {
+        Assert.Equal(setEvent, Bbs757Radios.StandbySetEvent(com));
+        Assert.Equal(swapEvent, Bbs757Radios.SwapEvent(com));
+        Assert.Equal($"(>K:{swapEvent})", Bbs757Radios.SwapCode(com));
+        Assert.EndsWith($"(>K:{setEvent})", Bbs757Radios.StandbySetCode(com, 121.5));
+
+        // A registration can never name another event than the write sends.
+        var vars = new BBS757Definition().GetVariables();
+        Assert.Equal(setEvent, vars[Bbs757Radios.SetKey(com)].Name);
+        Assert.Equal(swapEvent, vars[Bbs757Radios.TransferKey(com)].Name);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void A_tuning_panels_transfer_button_is_held_1_then_0(int panel)
+    {
+        // The vendor's own click code (the control map's): the same button the Pedestal panel presses.
+        Assert.Equal($"1 (>L:B757_PED_COMHEAD_{panel}_SWAP_BUTTON,bool)", Bbs757Radios.PanelPressCode(panel));
+        Assert.Equal($"0 (>L:B757_PED_COMHEAD_{panel}_SWAP_BUTTON,bool)", Bbs757Radios.PanelReleaseCode(panel));
+    }
+
+    [Theory]
+    [InlineData(121.9, 120.9, 120.9, 121.9, true)]
+    [InlineData(121.9, 120.9, 121.9, 120.9, false)]              // nothing moved: the stock swap was ignored
+    [InlineData(124.85, 124.85, 124.85, 124.85, true)]           // equal rows: swapping changes nothing to see
+    [InlineData(121.9, 120.9, 120.9, 120.9, false)]              // only half moved
+    [InlineData(121.9, 120.9, 121.9, 121.9, false)]
+    [InlineData(121.9, 120.9, 121.5, 121.9, false)]              // the standby went somewhere else
+    [InlineData(121.9, 120.9, 120.89999999999999, 121.90000000000001, true)]   // float noise is not a difference
+    [InlineData(121.575, 120.905, 120.905, 121.575, true)]       // 8.33 kHz channels compare at 1 kHz
+    [InlineData(121.575, 120.905, 120.9, 121.575, false)]
+    public void Swapped_compares_both_rows_at_one_kilohertz(double a0, double s0, double a1, double s1, bool swapped)
+    {
+        Assert.Equal(swapped, Bbs757Radios.Swapped(a0, s0, a1, s1));
+    }
+
+    [Fact]
+    public void A_row_that_is_not_a_number_is_never_a_swap()
+    {
+        Assert.False(Bbs757Radios.Swapped(double.NaN, 120.9, 120.9, double.NaN));
+        Assert.False(Bbs757Radios.Swapped(121.9, double.PositiveInfinity, double.PositiveInfinity, 121.9));
+    }
+
+    [Fact]
+    public void Transfer_phrases()
+    {
+        Assert.Equal("COM1 active 121.500, standby 124.850", Bbs757Radios.TransferPhrase(1, 121.5, 124.85));
+        Assert.Equal("COM3 active 118.000, standby 136.990", Bbs757Radios.TransferPhrase(3, 118.0, 136.99));
+        Assert.Equal("No tuning panel selects COM1", Bbs757Radios.NoPanelPhrase(1));
+        Assert.Equal("COM2 did not transfer", Bbs757Radios.NotTransferredPhrase(2));
+        Assert.Equal("COM1 transfer in progress", Bbs757Radios.TransferInProgressPhrase(1));
+        Assert.Equal("COM3 transfer sent, the radio did not report back", Bbs757Radios.TransferNoReportPhrase(3));
     }
 
     // ---- The tuning panel that selects a radio ------------------------------------------------------
@@ -327,8 +405,10 @@ public class Bbs757RadiosTests
         public bool CanWrite = true;
         public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
         public readonly List<string> Writes = new();
+        public readonly List<int> Delays = new();
         public Action<string>? OnWrite;
         public Action? OnDelay;
+        public Action<int>? OnDelayMs;
 
         public Bbs757SimIo Io => new()
         {
@@ -337,7 +417,14 @@ public class Bbs757RadiosTests
             Cached = _ => null,
             Write = rpn => { Writes.Add(rpn); OnWrite?.Invoke(rpn); },
             RequestRead = _ => { },
-            Delay = (_, ct) => { OnDelay?.Invoke(); ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+            Delay = (ms, ct) =>
+            {
+                Delays.Add(ms);
+                OnDelay?.Invoke();
+                OnDelayMs?.Invoke(ms);
+                ct.ThrowIfCancellationRequested();
+                return Task.CompletedTask;
+            },
         };
     }
 
@@ -354,6 +441,40 @@ public class Bbs757RadiosTests
         public bool Deliver(string key, double value) => Def.ProcessSimVarUpdate(key, value, Speech);
 
         public Task Set(int com, string typed) => Def.SetStandbyAsync(com, typed, new SimConnectManager(IntPtr.Zero), Speech);
+
+        public Task Transfer(int com) => Def.TransferAsync(com, new SimConnectManager(IntPtr.Zero), Speech);
+
+        /// <summary>The tuning panels as found: panel 1 selects VHF L (2), panel 2 VHF C (4), panel 3 VHF R (8).</summary>
+        public void LightsAsFound(double? p1 = 2, double? p2 = 4, double? p3 = 8)
+        {
+            Sim.Fresh[Bbs757Radios.RtpLightsKeys[0]] = p1;
+            Sim.Fresh[Bbs757Radios.RtpLightsKeys[1]] = p2;
+            Sim.Fresh[Bbs757Radios.RtpLightsKeys[2]] = p3;
+        }
+
+        /// <summary>
+        /// A radio as the sim holds it, found by the batch (a silent first reading). A write that swaps it
+        /// exchanges the two rows and the batch delivers both changes at once: the stock swap when
+        /// <paramref name="stockSwaps"/>, a press of the tuning panel <paramref name="panelButton"/>'s
+        /// button (its "1" code) when that panel is named. Calling it again wires another radio too.
+        /// </summary>
+        public void Wire(int com, double active, double standby, bool stockSwaps, int? panelButton)
+        {
+            string activeKey = Bbs757Radios.ActiveKey(com), standbyKey = Bbs757Radios.StandbyKey(com);
+            Sim.Fresh[activeKey] = active;
+            Sim.Fresh[standbyKey] = standby;
+            Deliver(activeKey, active);
+            Deliver(standbyKey, standby);
+            Sim.OnWrite += rpn =>
+            {
+                bool swaps = (stockSwaps && rpn == Bbs757Radios.SwapCode(com))
+                    || (panelButton is int panel && rpn == $"1 (>L:B757_PED_COMHEAD_{panel}_SWAP_BUTTON,bool)");
+                if (!swaps) return;
+                (Sim.Fresh[activeKey], Sim.Fresh[standbyKey]) = (Sim.Fresh[standbyKey], Sim.Fresh[activeKey]);
+                Deliver(activeKey, Sim.Fresh[activeKey]!.Value);
+                Deliver(standbyKey, Sim.Fresh[standbyKey]!.Value);
+            };
+        }
     }
 
     // ---- The panel ------------------------------------------------------------------------------------
@@ -772,6 +893,330 @@ public class Bbs757RadiosTests
             await rig.Set(1, "121,5");
             Assert.Equal(new[] { "121500000 (>K:COM_STBY_RADIO_SET_HZ)" }, rig.Sim.Writes);
             Assert.Equal("COM1 standby 121.500", rig.Speech.Interrupts.Single());
+        });
+    }
+
+    // ==== The transfer (task 4) ==========================================================================
+    //
+    // Measured 2026-10-26 (docs/b757/evidence/flight-04.md): all three stock swaps work on BlueBird, and the
+    // tuning panels' transfer buttons swap the radio their lights select. So the stock swap goes first; a
+    // swap BlueBird ignores falls back to that button. The fakes complete at once, so a fire-and-forget
+    // press has run to its end when the call returns.
+
+    private static string PanelDown(int panel) => $"1 (>L:B757_PED_COMHEAD_{panel}_SWAP_BUTTON,bool)";
+
+    private static string PanelUp(int panel) => $"0 (>L:B757_PED_COMHEAD_{panel}_SWAP_BUTTON,bool)";
+
+    [Theory]
+    [InlineData(1, "(>K:COM_STBY_RADIO_SWAP)", 121.9, 120.9, "COM1 active 120.900, standby 121.900")]
+    [InlineData(2, "(>K:COM2_RADIO_SWAP)", 121.5, 130.8, "COM2 active 130.800, standby 121.500")]
+    [InlineData(3, "(>K:COM3_RADIO_SWAP)", 124.85, 127.3, "COM3 active 127.300, standby 124.850")]
+    public async Task Stock_swap_that_works_is_used(int com, string code, double active, double standby, string said)
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(com, active, standby, stockSwaps: true, panelButton: null);
+
+        await rig.Transfer(com);
+
+        Assert.Equal(new[] { code }, rig.Sim.Writes);                       // the stock event only, no panel button
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);                // what the radio reports back, in one sentence
+        Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);                // once: the batch's own two changes were this write's echo
+        Assert.Equal(new[] { 1500 }, rig.Sim.Delays);                       // ReadBackDelayMs, no more
+
+        // The read-back closed both echo windows: the same values again are no change, a real change speaks.
+        rig.Now = 100;
+        rig.Deliver(Bbs757Radios.ActiveKey(com), standby);
+        Assert.Single(rig.Speech.All);
+        rig.Deliver(Bbs757Radios.ActiveKey(com), 118.0);
+        Assert.Equal(new[] { said, $"COM{com} active 118.000" }, rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData(1, 1, "(>K:COM_STBY_RADIO_SWAP)", 121.9, 120.9, "COM1 active 120.900, standby 121.900")]
+    [InlineData(2, 2, "(>K:COM2_RADIO_SWAP)", 121.5, 130.8, "COM2 active 130.800, standby 121.500")]
+    [InlineData(3, 3, "(>K:COM3_RADIO_SWAP)", 124.85, 127.3, "COM3 active 127.300, standby 124.850")]
+    public async Task Panel_fallback_when_stock_swap_is_ignored(int com, int panel, string stock, double active, double standby, string said)
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(com, active, standby, stockSwaps: false, panelButton: panel);
+
+        await rig.Transfer(com);
+
+        // The stock event first, then the button of the panel whose lights select the radio: 1, 200 ms, 0.
+        Assert.Equal(new[] { stock, PanelDown(panel), PanelUp(panel) }, rig.Sim.Writes);
+        Assert.Equal(new[] { 1500, 200, 1500 }, rig.Sim.Delays);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);
+        Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task The_panel_pressed_is_the_one_whose_lights_select_the_radio_wherever_it_is()
+    {
+        // The selectors moved: panel 2 shows VHF L (COM 1), panel 1 shows VHF C.
+        var rig = new ComRig();
+        rig.LightsAsFound(p1: 4, p2: 2, p3: 8);
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 2);
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", PanelDown(2), PanelUp(2) }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 active 120.900, standby 121.900" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_panel_press_that_changes_nothing_says_the_radio_did_not_transfer_and_closes_the_windows()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: null);
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", PanelDown(1), PanelUp(1) }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 did not transfer" }, rig.Speech.Interrupts);
+
+        // Nothing changed, so no echo is owed: a real change right after speaks.
+        rig.Now = 100;
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 118.0);
+        Assert.Equal(new[] { "COM1 did not transfer", "COM1 standby 118.000" }, rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData(4.0, 4.0, 8.0)]       // two panels show VHF C, none VHF L
+    [InlineData(0.0, 0.0, 0.0)]
+    [InlineData(null, null, null)]    // the lights could not be read
+    [InlineData(null, 4.0, 8.0)]      // the one panel that might select it was not read
+    public async Task No_panel_refuses(double? p1, double? p2, double? p3)
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound(p1, p2, p3);
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)" }, rig.Sim.Writes);   // nothing pressed
+        Assert.Equal(new[] { "No tuning panel selects COM1" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { 1500 }, rig.Sim.Delays);
+    }
+
+    [Fact]
+    public async Task A_transfer_that_cannot_land_is_refused_aloud_and_nothing_is_written()
+    {
+        var rig = new ComRig();
+        rig.Wire(2, 121.5, 130.8, stockSwaps: true, panelButton: null);
+        rig.Sim.CanWrite = false;
+
+        await rig.Transfer(2);
+
+        Assert.Equal(new[] { "COM2 unavailable" }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+    }
+
+    [Fact]
+    public async Task The_write_channel_lost_before_the_fallback_press_refuses_it_aloud()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+        rig.Sim.OnWrite += _ => rig.Sim.CanWrite = false;   // the link drops after the stock event
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 unavailable" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task Equal_active_and_standby_count_as_swapped()
+    {
+        // COM 3 today: 124.850 / 124.850. A swap leaves it so; the sentence is spoken and no panel is pressed.
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(3, 124.85, 124.85, stockSwaps: true, panelButton: 3);
+
+        await rig.Transfer(3);
+
+        Assert.Equal(new[] { "(>K:COM3_RADIO_SWAP)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM3 active 124.850, standby 124.850" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_radio_that_could_not_be_read_before_still_gets_the_swap_and_the_sentence_and_no_panel()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = null;      // unreadable before the swap, readable after it
+        rig.Sim.Fresh[Bbs757Radios.ActiveKey(1)] = 121.9;
+        rig.Sim.OnWrite = _ =>
+        {
+            rig.Sim.Fresh[Bbs757Radios.ActiveKey(1)] = 120.9;
+            rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 121.9;
+        };
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)" }, rig.Sim.Writes);   // you cannot tell it was ignored: no fallback
+        Assert.Equal(new[] { "COM1 active 120.900, standby 121.900" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_radio_that_does_not_report_back_is_not_claimed_presses_no_panel_and_keeps_the_echo_windows()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+        rig.Sim.OnWrite += _ => rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = null;   // the standby stops answering
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM1 transfer sent, the radio did not report back" }, rig.Speech.Interrupts);
+
+        // Not settled: the late delivery of the swap's own change is still its echo, and is not said.
+        rig.Now = 1600;
+        rig.Deliver(Bbs757Radios.ActiveKey(1), 120.9);
+        rig.Deliver(Bbs757Radios.StandbyKey(1), 121.9);
+        Assert.Single(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task The_fallbacks_press_re_arms_the_echo_windows()
+    {
+        // Each delay moves the clock; the stock swap's windows (5 s from the start) are over by the time the
+        // button's own change reaches the batch, so the press has to open them again.
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: null);
+        rig.Sim.OnDelayMs = ms => rig.Now += ms;
+        rig.Sim.OnWrite += rpn =>
+        {
+            if (rpn != PanelDown(1)) return;
+            rig.Now = 5500;                                            // past the first windows, inside the new ones
+            rig.Deliver(Bbs757Radios.ActiveKey(1), 120.9);
+            rig.Deliver(Bbs757Radios.StandbyKey(1), 121.9);
+            rig.Sim.Fresh[Bbs757Radios.ActiveKey(1)] = 120.9;
+            rig.Sim.Fresh[Bbs757Radios.StandbyKey(1)] = 121.9;
+        };
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "COM1 active 120.900, standby 121.900" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_second_press_of_a_radio_while_its_transfer_runs_is_refused_but_another_radio_runs()
+    {
+        var rig = new ComRig();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: true, panelButton: null);
+        rig.Wire(2, 121.5, 130.8, stockSwaps: true, panelButton: null);
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var vars = rig.Def.GetVariables();
+        bool pressed = false;
+        rig.Sim.OnDelayMs = _ =>
+        {
+            if (pressed) return;
+            pressed = true;                                            // while COM 1's swap waits for its read-back
+            Assert.True(rig.Def.HandleUIVariableSet(Bbs757Radios.TransferKey(1), 1, vars[Bbs757Radios.TransferKey(1)], sim, rig.Speech));
+            Assert.True(rig.Def.HandleUIVariableSet(Bbs757Radios.TransferKey(2), 1, vars[Bbs757Radios.TransferKey(2)], sim, rig.Speech));
+        };
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", "(>K:COM2_RADIO_SWAP)" }, rig.Sim.Writes);   // COM 1 swapped once only
+        Assert.Equal(new[]
+        {
+            "COM1 transfer in progress",
+            "COM2 active 130.800, standby 121.500",
+            "COM1 active 120.900, standby 121.900",
+        }, rig.Speech.Interrupts);
+
+        // Finished: the radio can be transferred again.
+        await rig.Transfer(1);
+        Assert.Equal(3, rig.Sim.Writes.Count);
+        Assert.Equal("COM1 active 121.900, standby 120.900", rig.Speech.Interrupts[^1]);
+    }
+
+    [Fact]
+    public void A_transfer_press_from_the_panel_is_claimed_at_once_and_runs()
+    {
+        var rig = new ComRig();
+        rig.Wire(2, 121.5, 130.8, stockSwaps: true, panelButton: null);
+
+        Assert.True(rig.Def.HandleUIVariableSet(Bbs757Radios.TransferKey(2), 1,
+            rig.Def.GetVariables()[Bbs757Radios.TransferKey(2)], new SimConnectManager(IntPtr.Zero), rig.Speech));
+
+        Assert.Equal(new[] { "(>K:COM2_RADIO_SWAP)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { "COM2 active 130.800, standby 121.500" }, rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task A_write_that_throws_says_unavailable_and_never_throws_and_frees_the_radio()
+    {
+        var rig = new ComRig();
+        rig.Sim.OnWrite = _ => throw new InvalidOperationException("no link");
+
+        await rig.Transfer(3);
+        await rig.Transfer(3);
+
+        Assert.Equal(new[] { "COM3 unavailable", "COM3 unavailable" }, rig.Speech.Interrupts);   // not "in progress" the second time
+    }
+
+    [Fact]
+    public async Task A_switch_away_before_the_swap_read_back_says_nothing_more()
+    {
+        var rig = new ComRig();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: true, panelButton: null);
+        rig.Sim.OnDelay = () => rig.Def.OnSwitchedAway();
+
+        await rig.Transfer(1);
+
+        Assert.Single(rig.Sim.Writes);       // sent before the switch
+        Assert.Empty(rig.Speech.All);        // nothing said into the next aircraft
+    }
+
+    [Fact]
+    public async Task The_panel_buttons_release_is_never_canceled_by_a_switch_away()
+    {
+        var rig = new ComRig();
+        rig.LightsAsFound();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: false, panelButton: 1);
+        rig.Sim.OnDelayMs = ms => { if (ms == 200) rig.Def.OnSwitchedAway(); };   // while the button is held
+
+        await rig.Transfer(1);
+
+        Assert.Equal(new[] { "(>K:COM_STBY_RADIO_SWAP)", PanelDown(1), PanelUp(1) }, rig.Sim.Writes);   // let go
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_transfer_after_a_switch_away_does_nothing()
+    {
+        var rig = new ComRig();
+        rig.Wire(1, 121.9, 120.9, stockSwaps: true, panelButton: null);
+        rig.Def.OnSwitchedAway();
+
+        await rig.Transfer(1);
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task The_transfer_sentence_carries_a_dot_under_de_DE(string culture)
+    {
+        await InCultureAsync(culture, async () =>
+        {
+            var rig = new ComRig();
+            rig.Wire(2, 121.5, 130.8, stockSwaps: true, panelButton: null);
+
+            await rig.Transfer(2);
+
+            Assert.Equal(new[] { "COM2 active 130.800, standby 121.500" }, rig.Speech.Interrupts);
         });
     }
 }

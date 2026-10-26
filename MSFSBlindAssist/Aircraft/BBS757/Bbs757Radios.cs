@@ -91,12 +91,46 @@ public static class Bbs757Radios
     public static string StandbySetCode(int com, double mhz)
     {
         long hz = (long)Math.Round(mhz * 1000.0, MidpointRounding.AwayFromZero) * 1000L;
-        return $"{hz.ToString(CultureInfo.InvariantCulture)} (>K:{EventPrefix(com)}_STBY_RADIO_SET_HZ)";
+        return $"{hz.ToString(CultureInfo.InvariantCulture)} (>K:{StandbySetEvent(com)})";
     }
 
-    /// <summary>The stock transfer: <c>COM_STBY_RADIO_SWAP</c> for COM 1, <c>COM2_RADIO_SWAP</c>, <c>COM3_RADIO_SWAP</c>.</summary>
-    public static string SwapCode(int com)
-        => Radio(com) == 1 ? "(>K:COM_STBY_RADIO_SWAP)" : $"(>K:{EventPrefix(com)}_RADIO_SWAP)";
+    /// <summary>
+    /// The stock event that sets the standby, <c>COM_STBY_RADIO_SET_HZ</c> for COM 1, <c>COM2_STBY_RADIO_SET_HZ</c>,
+    /// <c>COM3_STBY_RADIO_SET_HZ</c>. Stated here once: <see cref="StandbySetCode"/> sends it and the
+    /// standby field's registration names it, so the two can never differ.
+    /// </summary>
+    public static string StandbySetEvent(int com) => $"{EventPrefix(com)}_STBY_RADIO_SET_HZ";
+
+    /// <summary>
+    /// The stock transfer event, <c>COM_STBY_RADIO_SWAP</c> for COM 1, <c>COM2_RADIO_SWAP</c>,
+    /// <c>COM3_RADIO_SWAP</c> (all three work on BlueBird, measured). <see cref="SwapCode"/> sends it and
+    /// the transfer button's registration names it.
+    /// </summary>
+    public static string SwapEvent(int com) => Radio(com) == 1 ? "COM_STBY_RADIO_SWAP" : $"COM{com}_RADIO_SWAP";
+
+    /// <summary>The stock transfer: <c>(&gt;K:COM_STBY_RADIO_SWAP)</c> for COM 1, <c>COM2_RADIO_SWAP</c>, <c>COM3_RADIO_SWAP</c>.</summary>
+    public static string SwapCode(int com) => $"(>K:{SwapEvent(com)})";
+
+    /// <summary>
+    /// The tuning panel's transfer button pressed (1): the vendor's own click code, the one the control map
+    /// replays. Hold <see cref="Bbs757Write.ButtonHoldMs"/> (200 ms), then <see cref="PanelReleaseCode"/>.
+    /// A panel's button swaps the radio its lights select (measured).
+    /// </summary>
+    public static string PanelPressCode(int panel) => $"1 (>L:{PanelButton(panel)},bool)";
+
+    /// <summary>The tuning panel's transfer button let go (0).</summary>
+    public static string PanelReleaseCode(int panel) => $"0 (>L:{PanelButton(panel)},bool)";
+
+    /// <summary>
+    /// Whether a transfer swapped the radio: after it the active equals the standby from before AND the
+    /// standby equals the active from before, compared at 1 kHz (the sim reports 121.9 as
+    /// 121.89999999999999). Equal active and standby count as swapped: nothing can show the difference.
+    /// A row that is not a number is never a swap.
+    /// </summary>
+    public static bool Swapped(double activeBefore, double standbyBefore, double activeAfter, double standbyAfter)
+        => double.IsFinite(activeBefore) && double.IsFinite(standbyBefore)
+           && double.IsFinite(activeAfter) && double.IsFinite(standbyAfter)
+           && Khz(activeAfter) == Khz(standbyBefore) && Khz(standbyAfter) == Khz(activeBefore);
 
     /// <summary>
     /// The tuning panel (1, 2 or 3) whose lights show this radio selected: the radio's bit (COM1 2, COM2
@@ -125,6 +159,29 @@ public static class Bbs757Radios
 
     /// <summary>"COM1 standby 121.500".</summary>
     public static string StandbyPhrase(int com, double mhz) => $"COM{Radio(com)} standby {Frequency(mhz)}";
+
+    /// <summary>"COM1 active 121.500, standby 124.850": a transfer's read-back, both rows in one sentence.</summary>
+    public static string TransferPhrase(int com, double activeMhz, double standbyMhz)
+        => $"{ActivePhrase(com, activeMhz)}, standby {Frequency(standbyMhz)}";
+
+    /// <summary>The fallback found no tuning panel whose lights select the radio, so nothing was pressed.</summary>
+    public static string NoPanelPhrase(int com) => $"No tuning panel selects COM{Radio(com)}";
+
+    /// <summary>The radio reported back and neither the stock swap nor the panel's button moved it.</summary>
+    public static string NotTransferredPhrase(int com) => $"COM{Radio(com)} did not transfer";
+
+    /// <summary>A second press of a radio's transfer while its first is still running (each swap toggles, so two could undo each other).</summary>
+    public static string TransferInProgressPhrase(int com) => $"COM{Radio(com)} transfer in progress";
+
+    /// <summary>The transfer was sent but a row could not be read back, so it is not claimed.</summary>
+    public static string TransferNoReportPhrase(int com) => $"COM{Radio(com)} transfer sent, the radio did not report back";
+
+    private static long Khz(double mhz) => (long)Math.Round(mhz * 1000.0, MidpointRounding.AwayFromZero);
+
+    private static string PanelButton(int panel)
+        => panel is >= 1 and <= 3
+            ? $"B757_PED_COMHEAD_{panel}_SWAP_BUTTON"
+            : throw new ArgumentOutOfRangeException(nameof(panel), panel, "The 757 has radio tuning panels 1 to 3.");
 
     private static int Radio(int com)
         => com is >= 1 and <= 3
