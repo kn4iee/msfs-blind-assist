@@ -181,7 +181,7 @@ internal static class Program
         await Agent("(function(){var a=document.querySelectorAll('.msfsba_cal');for(var i=0;i<a.length;i++)a[i].parentNode.removeChild(a[i]);return 'removed';})()");
         await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(false))");
         if (tablet == null) { Console.WriteLine("capture failed"); return 3; }
-        tablet.Save("calibrate.png", ImageFormat.Png);
+        tablet.Save(Path.Combine(Path.GetTempPath(), "bbs757-calibrate.png"), ImageFormat.Png);
         foreach (var (tx, ty) in points)
         {
             long sx = 0, sy = 0, n = 0;
