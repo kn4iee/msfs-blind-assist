@@ -486,6 +486,70 @@ public class Bbs757GuardedTests
         Assert.Equal(new[] { LightsState, LightsGuardNode }, rig.Sim.Resyncs);     // and only it re-reads
     }
 
+    [Fact]
+    public async Task A_flight_load_in_the_step_gap_stops_the_sequence()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal == 1;   // the step gap between the two calls
+
+        var pick = rig.Def.SetGuardedAsync(lights, guard, 0, rig.Sim.Io, rig.Speech);
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);   // the guard's press has gone, the gap is held
+
+        rig.Def.OnSimContextReset();   // a flight load: the pick is dropped
+        rig.Sim.Release(1);
+        Assert.False(await pick.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        // The state write does not go out into the flight that follows; nothing is said or re-read.
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Sim.Resyncs);
+        Assert.False(rig.Def.IsPickPending(LightsState));
+    }
+
+    [Fact]
+    public async Task A_newer_pick_after_a_flight_load_does_not_revive_the_older_sequence()
+    {
+        // The newer pick arrives after the load and before the gap ends: it replaces the older pick's
+        // entry, so only the load count can tell the older one it was dropped, not superseded.
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal == 1;
+
+        var older = rig.Def.SetGuardedAsync(lights, guard, 0, rig.Sim.Io, rig.Speech);
+        rig.Def.OnSimContextReset();
+        var newer = rig.Def.SetGuardedAsync(lights, guard, 2, rig.Sim.Io, rig.Speech);   // not held: runs to its end
+        Assert.True(await newer.WaitAsync(TimeSpan.FromSeconds(30)));
+        rig.Sim.Release(1);
+        Assert.False(await older.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        // The guard's press, then the newer pick's calls (the guard already reads open after the press): no state write 0.
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(2) }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task Switching_away_in_the_step_gap_stops_the_sequence()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal == 1;
+
+        var pick = rig.Def.SetGuardedAsync(lights, guard, 0, rig.Sim.Io, rig.Speech);
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);
+
+        rig.Def.OnSwitchedAway();   // the pilot picks another aircraft profile
+        rig.Sim.Release(1);         // a no-op if the switch already ended the wait
+        Assert.False(await pick.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Sim.Resyncs);
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]

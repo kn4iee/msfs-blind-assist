@@ -59,6 +59,15 @@ public partial class BBS757Definition
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource> _pendingPicks =
         new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Counts the flight loads and dropped connections that dropped every pick in flight
+    /// (<see cref="CancelPendingPicks"/>). A guarded sequence that has sent its first call keeps going
+    /// when a newer pick of its control cancels it, so its own token cannot say it was dropped: it
+    /// captures this count at the start and sends nothing more when it has changed
+    /// (<see cref="SetGuardedAsync"/>).
+    /// </summary>
+    private int _pickEpoch;
+
     /// <summary>Whether BBS Nest is running, asked once per connection; replaced by tests.</summary>
     internal Func<bool> NestRunning { get; set; } = () => Bbs757Nest.IsRunning();
 
@@ -233,23 +242,15 @@ public partial class BBS757Definition
     private async Task<bool> SetPositionAsync(Bbs757Control control, double target, Bbs757SimIo io,
         ScreenReaderAnnouncer announcer)
     {
-        if (_lifetime.IsCancellationRequested) return false;   // switched away: nothing is written
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        if (_pendingPicks.TryGetValue(control.Node, out var prior))
-        {
-            try { prior.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
-        }
-        _pendingPicks[control.Node] = cts;
+        var cts = BeginPick(control.Node);
+        if (cts == null) return false;   // switched away: nothing is written
         var ct = cts.Token;
         bool resync = false, wrote = false;
 
         try
         {
-            await io.Delay(PickSettleMs, ct);
-
-            if (!io.CanWrite())
+            if (!await SettleAndCheckWriteAsync(control, io, announcer, ct))
             {
-                SayUnavailable(control, announcer);
                 resync = true;
                 return false;
             }
@@ -297,14 +298,55 @@ public partial class BBS757Definition
         }
         finally
         {
-            // Only this pick's own entry: a newer pick of the control has replaced it otherwise, and
-            // then the re-read is that pick's to make; a reload has cleared it, and then there is
-            // nothing to re-read into.
-            bool mine = _pendingPicks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(control.Node, cts));
-            cts.Dispose();
-            if (mine && resync) io.RequestRead(control.Node);
+            if (EndPick(control.Node, cts) && resync) io.RequestRead(control.Node);
         }
         return wrote;
+    }
+
+    /// <summary>
+    /// Enters a pick of <paramref name="node"/> in the pending set (the set <see cref="IsPickPending"/>,
+    /// <see cref="CancelPendingPicks"/> and <see cref="ProcessSimVarUpdate"/>'s delivery consumption
+    /// read): a source linked to the profile's lifetime, after canceling any earlier pick of the node,
+    /// which a newer pick supersedes at its next await. Null once the pilot has switched away from the
+    /// profile: nothing may be written then. The pick ends with <see cref="EndPick"/>.
+    /// </summary>
+    private CancellationTokenSource? BeginPick(string node)
+    {
+        if (_lifetime.IsCancellationRequested) return null;
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        if (_pendingPicks.TryGetValue(node, out var prior))
+        {
+            try { prior.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
+        }
+        _pendingPicks[node] = cts;
+        return cts;
+    }
+
+    /// <summary>
+    /// Takes a pick out of the pending set and disposes its source. True only when the entry was still
+    /// its own: a newer pick of the control has replaced it otherwise, and then the re-read is that
+    /// pick's to make; a flight load has cleared it, and then there is nothing to re-read into.
+    /// </summary>
+    private bool EndPick(string node, CancellationTokenSource pick)
+    {
+        bool mine = _pendingPicks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(node, pick));
+        pick.Dispose();
+        return mine;
+    }
+
+    /// <summary>
+    /// The first two steps of every positional pick: wait out <see cref="PickSettleMs"/> (arrowing
+    /// through a combo commits each row it passes; only the one it settles on is written), then ask
+    /// whether a write can land at all. False when it cannot: "{label} unavailable" has been said and
+    /// nothing may be sent, and the caller re-reads the control so its combo shows the aircraft's position.
+    /// </summary>
+    private async Task<bool> SettleAndCheckWriteAsync(Bbs757Control control, Bbs757SimIo io,
+        ScreenReaderAnnouncer announcer, CancellationToken ct)
+    {
+        await io.Delay(PickSettleMs, ct);
+        if (io.CanWrite()) return true;
+        SayUnavailable(control, announcer);
+        return false;
     }
 
     /// <summary>True while a pick of this control is in flight (its deliveries are consumed).</summary>
@@ -312,7 +354,8 @@ public partial class BBS757Definition
 
     /// <summary>
     /// Stops every pending pick and press: a profile switch must not let one write into the next
-    /// aircraft. The outgoing definition is never used again, so its lifetime source goes too.
+    /// aircraft (a guarded sequence in its step gap included: it sends none of its remaining calls).
+    /// The outgoing definition is never used again, so its lifetime source goes too.
     /// Safe to call again (a switch that threw part-way, then app exit): a canceled and disposed
     /// source stays canceled, and Dispose is idempotent. The tablet client goes even when a step
     /// before it throws, so it never keeps the view for a profile that is gone.
@@ -339,10 +382,14 @@ public partial class BBS757Definition
     /// <summary>
     /// Cancels and forgets every pick in flight: one armed before a flight load or a dropped
     /// connection must not write into the flight that follows. Each canceled pick ends silently and
-    /// makes no re-read (its entry is gone).
+    /// makes no re-read (its entry is gone). A guarded sequence that has already sent its first call
+    /// does not watch its own token (a newer pick of its control must not cut it short), so this also
+    /// bumps <see cref="_pickEpoch"/>: it sends none of its remaining calls once it sees the count
+    /// has changed.
     /// </summary>
     private void CancelPendingPicks()
     {
+        Interlocked.Increment(ref _pickEpoch);
         foreach (var cts in _pendingPicks.Values)
         {
             try { cts.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
@@ -418,8 +465,9 @@ public partial class BBS757Definition
 
     /// <summary>
     /// A flight load or a dropped connection: BBS Nest is asked about again on the next batch, every
-    /// pick still in flight is dropped so none writes into the flight that follows, and the load watch
-    /// ends (its load belonged to the flight before).
+    /// pick still in flight is dropped so none writes into the flight that follows (a guarded
+    /// sequence already past its first call included: it sends none of its remaining calls), and the
+    /// load watch ends (its load belonged to the flight before).
     /// </summary>
     public override void OnSimContextReset()
     {

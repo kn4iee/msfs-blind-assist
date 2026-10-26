@@ -21,37 +21,34 @@ public partial class BBS757Definition
     /// await before its first call, and both rows are re-read at the end so their combos show where
     /// the aircraft really is.
     ///
-    /// Once the first call has gone, a newer pick does not stop the sequence: a half-run one would
-    /// leave the guard open with no state write behind it. Only a profile switch ends it. The newer
-    /// pick still cancels this one's read-back, so only the newer pick speaks.
+    /// Once the first call has gone, a NEWER PICK of the same control does not stop the sequence: a
+    /// half-run one would leave the guard open with no state write behind it (the gaps are awaited on
+    /// the profile's lifetime, not on this pick's own token). The newer pick still cancels this one's
+    /// read-back, so only the newer pick speaks. A flight load or a dropped connection
+    /// (<see cref="CancelPendingPicks"/>, seen through <see cref="_pickEpoch"/>) and a profile switch
+    /// do stop it: after each gap it sends nothing more, says nothing and re-reads nothing, so no
+    /// write reaches the flight that follows.
     ///
     /// Speech follows CORE-7: the screen reader read the combo, so a pick that lands says nothing and
     /// one that does not says "{label} did not move" once (an unreadable read-back counts as not
     /// landed); a pick that cannot be planned or written says "{label} unavailable" and sends nothing.
     ///
     /// True when it wrote and waited out the read-back delay; false when it refused, found the control
-    /// already there, or was superseded or switched away. Never throws.
+    /// already there, or was superseded, dropped or switched away. Never throws.
     /// </summary>
-    private async Task<bool> SetGuardedAsync(Bbs757Control control, Bbs757Control guard, double target,
+    internal async Task<bool> SetGuardedAsync(Bbs757Control control, Bbs757Control guard, double target,
         Bbs757SimIo io, ScreenReaderAnnouncer announcer)
     {
-        if (_lifetime.IsCancellationRequested) return false;   // switched away: nothing is written
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-        if (_pendingPicks.TryGetValue(control.Node, out var prior))
-        {
-            try { prior.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
-        }
-        _pendingPicks[control.Node] = cts;
+        int epoch = Volatile.Read(ref _pickEpoch);   // before the pick is entered: a drop from here on is this pick's
+        var cts = BeginPick(control.Node);
+        if (cts == null) return false;   // switched away: nothing is written
         var ct = cts.Token;
         bool resync = false, wrote = false;
 
         try
         {
-            await io.Delay(PickSettleMs, ct);
-
-            if (!io.CanWrite())
+            if (!await SettleAndCheckWriteAsync(control, io, announcer, ct))
             {
-                SayUnavailable(control, announcer);
                 resync = true;
                 return false;
             }
@@ -79,9 +76,11 @@ public partial class BBS757Definition
                 if (i > 0)
                 {
                     // The first call has gone: finish even if a newer pick has superseded this one
-                    // (its token is not awaited here). Only a profile switch stops the sequence.
-                    if (_lifetime.IsCancellationRequested) return false;
+                    // (its token is not awaited here), but not across a flight load or a profile
+                    // switch, whichever lands before or during the gap.
+                    if (SequenceDropped(epoch)) return false;
                     await io.Delay(Bbs757Guarded.StepGapMs, _lifetime.Token);
+                    if (SequenceDropped(epoch)) return false;
                 }
                 io.Write(plan.Calls[i]);
             }
@@ -102,11 +101,7 @@ public partial class BBS757Definition
         }
         finally
         {
-            // Only this pick's own entry, as SetPositionAsync: a newer pick of the control has replaced
-            // it otherwise, and then the re-read is that pick's to make.
-            bool mine = _pendingPicks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(control.Node, cts));
-            cts.Dispose();
-            if (mine && resync)
+            if (EndPick(control.Node, cts) && resync)
             {
                 io.RequestRead(control.Node);
                 io.RequestRead(guard.Node);
@@ -114,6 +109,15 @@ public partial class BBS757Definition
         }
         return wrote;
     }
+
+    /// <summary>
+    /// True when a guarded sequence that has sent its first call must send nothing more: the pilot
+    /// switched away from the profile, or a flight load or dropped connection dropped the pick
+    /// (<see cref="_pickEpoch"/> moved since <paramref name="epoch"/> was read). A newer pick of the
+    /// same control is neither, so it never ends a sequence.
+    /// </summary>
+    private bool SequenceDropped(int epoch)
+        => _lifetime.IsCancellationRequested || epoch != Volatile.Read(ref _pickEpoch);
 
     /// <summary>True when <paramref name="reading"/> is a number holding the position <paramref name="target"/> (within the read-back slack).</summary>
     private static bool LandedOnPick(Bbs757Control control, double? reading, double target)
