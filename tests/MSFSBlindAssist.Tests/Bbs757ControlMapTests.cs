@@ -253,6 +253,7 @@ public class Bbs757ControlMapTests
     [Theory]
     [InlineData("Electrical", "Battery|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|EXT PWR|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
     [InlineData("Hydraulics", "L ENG HYD Pumps|R ENG HYD Pumps|R ELEC Pump|C1 ELEC Pump|C2 ELEC Pump|L ELEC Pump")]
+    [InlineData("Overhead miscellaneous", "Emergency Lights|Emergency Lights Guard")]
     [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Crossfeed FWD|Crossfeed Aft")]
     [InlineData("Exterior lights", "Anti-col Red Lights|Position Lights|Anti-col White Lights|Taxi Light|L Landing Light|R Landing Light|L Runway Turnoff|R Runway Turnoff|Wing Lights|Logo Lights")]
     [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|APU Bleed|R ENG Bleed|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
@@ -567,6 +568,76 @@ public class Bbs757ControlMapTests
             Assert.EndsWith($"1 (>L:{node}, bool)", c.Press);
             Assert.Null(c.Release);
         }
+    }
+
+    // ---- Plan 02, task 3: guarded controls ----
+
+    [Fact]
+    public void Guarded_controls_carry_their_guard()
+    {
+        // The emergency lights switch and the two stab trim cutouts move only while their guard is open. The vendor's click
+        // on each is gated on that guard (the extractor writes the gate as an "[if ...]" note in front of the click code,
+        // which is not RPN), so the map holds no click code for them: each is a switch on its own L:var that names its
+        // guard, the value the guard reads while closed and the value closing the guard writes to the switch. The guard
+        // keeps its own row, and the app opens it, writes the position and closes it.
+        var expected = new (string Node, string Label, string Section, string Panel, string Positions, string Guard, double CloseSets)[]
+        {
+            ("B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "Emergency Lights", "Overhead", "Overhead miscellaneous",
+                "0=OFF|1=ARMED|2=ON", "B757_OVHD_SWITCH_GAURD", 1),
+            ("B757_Stab_trim_C_toggle_switch_CLICK", "Stab Trim C Cutout", "Pedestal", "Stabilizer trim",
+                "0=NORMAL|1=CUTOUT", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", 0),
+            ("B757_Stab_trim_R_toggle_switch_CLICK", "Stab Trim R Cutout", "Pedestal", "Stabilizer trim",
+                "0=NORMAL|1=CUTOUT", "B757_AISLE_STAND_STAB_2_GAURD_SWITCH", 0),
+        };
+
+        foreach (var e in expected)
+        {
+            Bbs757Control c = Find(e.Node);
+
+            Assert.Equal(e.Label, c.Label);
+            Assert.Equal(Bbs757Kinds.Switch, c.Kind);
+            Assert.Equal((e.Section, e.Panel), (c.Section, c.Panel));
+            Assert.Equal(e.Node, c.StateVar);
+            Assert.Equal(e.Positions, Spell(c));
+            Assert.Null(c.Press);
+            Assert.Null(c.Release);
+            Assert.Null(c.Cw);
+            Assert.Null(c.Ccw);
+            Assert.Equal(0, c.HoldMs);
+            Assert.Equal(e.Guard, c.Guard);
+            Assert.Equal(0.0, c.GuardClosed);
+            Assert.Equal(e.CloseSets, c.CloseSets);
+
+            Bbs757Control guard = Find(e.Guard);   // the guard has a row of its own, on the same panel, Closed then Open
+            Assert.Equal(Bbs757Kinds.Guard, guard.Kind);
+            Assert.Equal((c.Section, c.Panel), (guard.Section, guard.Panel));
+            Assert.Equal("0=Closed|1=Open", Spell(guard));
+            Assert.False(string.IsNullOrWhiteSpace(guard.StateVar));
+        }
+
+        // Those three, and no other control, name a guard.
+        Assert.Equal(
+            expected.Select(e => e.Node).Order(StringComparer.Ordinal),
+            Map.Controls.Where(c => c.Guard != null).Select(c => c.Node).Order(StringComparer.Ordinal));
+        Assert.All(Map.Controls.Where(c => c.Guard == null), c =>
+        {
+            Assert.Null(c.GuardClosed);
+            Assert.Null(c.CloseSets);
+        });
+    }
+
+    [Fact]
+    public void No_click_code_in_the_map_carries_the_extractors_gate_note()
+    {
+        // The note is "[if <test>] " in front of a click that only runs inside an enclosing if{}: not RPN, so a press that
+        // began with it (the old Stab Trim press) never ran. A gated control is a guarded one and has no click code.
+        var carrying = Map.Controls
+            .SelectMany(c => new[] { ("press", c.Press), ("release", c.Release), ("cw", c.Cw), ("ccw", c.Ccw) }
+                .Where(f => f.Item2 != null && Regex.IsMatch(f.Item2, @"(^|\s)\["))
+                .Select(f => $"{c.Node} {f.Item1}"))
+            .ToList();
+
+        Assert.True(carrying.Count == 0, "gate note in: " + string.Join(", ", carrying));
     }
 
     [Fact]

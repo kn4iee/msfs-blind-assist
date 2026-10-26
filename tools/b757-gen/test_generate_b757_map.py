@@ -55,6 +55,7 @@ CURATION = {
     "labels": {},
     "positions": {},
     "kinds": {},
+    "guarded": {},
     "spelling": {"CENTRE": "Center"},
     "status": [],
 }
@@ -850,6 +851,247 @@ class IncludeNodes(unittest.TestCase):
             g.load_curation(path)
 
 
+class Guarded(unittest.TestCase):
+    """Plan 02, task 3: curation's 'guarded'. The emergency lights switch and the two stab trim cutouts move only while
+    their guard is open. The vendor's click on each is gated on the guard, which the extractor writes as an '[if <test>] '
+    note in front of the click code: not RPN. So a guarded control keeps no click code. It is a switch on its own L:var
+    that names its guard, the value the guard reads closed and the value closing the guard writes to it, and the app opens
+    the guard, writes the position and closes it (Bbs757Control.Guard). The guard keeps its own row. The rows have the
+    shape the extractor gives the vendor's own controls (BBS_752_BASE_INTERIOR.xml: the emergency lights at 8106, the
+    stab trim cutouts at 15380) and are converted with the SHIPPED curation."""
+    EMERGENCY, EMERGENCY_GUARD = "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"
+    STAB_C, STAB_C_GUARD = "B757_Stab_trim_C_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH"
+    STAB_R, STAB_R_GUARD = "B757_Stab_trim_R_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_2_GAURD_SWITCH"
+    LT_OVRD = "B757_OVHD_LT_OVRD_BUTTON"
+    SWITCHES = (EMERGENCY, STAB_C, STAB_R)
+    GUARDS = (EMERGENCY_GUARD, STAB_C_GUARD, STAB_R_GUARD)
+    CLICK_FIELDS = ("press", "release", "cw", "ccw")
+
+    @staticmethod
+    def gated(guard, code):
+        """What the extractor makes of a click inside the vendor's '(L:<guard>, bool) 1 == if{ ... }'."""
+        return f"[if (L:{guard}, bool) 1 ==] {code}"
+
+    def rows(self):
+        """node -> row, in the vendor's shape: the three guarded switches, their three guards and a neighbor of the
+        emergency lights switch (the one the panel's cockpit order starts with)."""
+        gated, rows = self.gated, {}
+        node, guard = self.EMERGENCY, self.EMERGENCY_GUARD
+        up, down = f"(L:{node}, number) 1 + 2 min (>L:{node}, number)", f"(L:{node}, number) 1 - 0 max (>L:{node}, number)"
+        rows[self.LT_OVRD] = row(node=self.LT_OVRD, panel="LIGHT OVERRIDE", line=8080,
+                                 left=f"(L:{self.LT_OVRD},bool) ! (>L:{self.LT_OVRD},bool)")
+        # its animation reads an O: var, so the rules find no state var and leave the switch out
+        rows[node] = row(node=node, kind="multi-position switch", positions="3", panel="LIGHT OVERRIDE", line=8107,
+                         state=[f"O:{node}_SUBMOVEMENT"], left=gated(guard, up),
+                         other=[("RightSingle", gated(guard, down)), ("WheelDown", gated(guard, up)),
+                                ("WheelUp", gated(guard, down))])
+        rows[guard] = row(node=guard, kind="guard", panel="LIGHT OVERRIDE", line=8113, state=["L:" + guard],
+                          left=f"(L:{guard}, bool) ! (>L:{guard}, bool) (L:{guard}, bool) 0 == if{{ 1 (>L:{node}, number) }}")
+        for node, guard, guard_line, line in ((self.STAB_C, self.STAB_C_GUARD, 15381, 15397),
+                                              (self.STAB_R, self.STAB_R_GUARD, 15389, 15403)):
+            rows[guard] = row(node=guard, kind="guard", panel="PEDESTAL GAURD SWITCH GEAR", line=guard_line,
+                              state=["L:" + guard],
+                              left=f"(L:{guard}, bool) ! (>L:{guard}, bool) "
+                                   f"(L:{guard}, bool) 0 == if{{ 0 (>L:{node}, number) }}")
+            rows[node] = row(node=node, kind="toggle", panel="PEDESTAL GAURD SWITCH GEAR", line=line, state=["L:" + node],
+                             left=gated(guard, f"(L:{node}, number) 1 == if{{ 0 }} els{{ 1 }} (>L:{node}, number)"),
+                             other=[("WheelDown", gated(guard, f"(L:{node}, number) 1 + 1 min (>L:{node}, number)")),
+                                    ("WheelUp", gated(guard, f"(L:{node}, number) 1 - 0 max (>L:{node}, number)"))])
+        return rows
+
+    def shipped(self, **changes):
+        """The shipped curation, cut down to the nodes of rows(): a table entry for a node the package lacks is an error."""
+        cur = g.load_curation(g.DEFAULT_CURATION)
+        here = set(self.rows())
+        for table in ("labels", "positions", "kinds", "guarded"):
+            cur[table] = {n: v for n, v in cur[table].items() if n in here}
+        cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
+        cur["control_order"] = {p: ns for p, ns in cur["control_order"].items() if set(ns) <= here}
+        cur.update(changes)
+        return cur
+
+    def build(self, rows=None, **changes):
+        return g.build_map(list((rows or self.rows()).values()), self.shipped(**changes), "pkg", "1")
+
+    def guarded(self, node, **changes):
+        """The shipped 'guarded' table with some fields of one node's entry changed, or a node added: whatever a test
+        changes is the one thing that is wrong with it."""
+        table = self.shipped()["guarded"]
+        table[node] = dict(table.get(node) or table[self.EMERGENCY], **changes)
+        return table
+
+    def test_guarded_controls(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        rows = self.rows()
+
+        def switch(node, section, panel, label, names, guard, close_sets):
+            return {"node": node, "section": section, "panel": panel, "label": label, "kind": "switch", "state_var": node,
+                    "positions": [{"value": v, "label": l} for v, l in enumerate(names)],
+                    "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None,
+                    "guard": guard, "guard_closed": 0, "close_sets": close_sets}
+
+        expected = {
+            self.EMERGENCY: switch(self.EMERGENCY, "Overhead", "Overhead miscellaneous", "Emergency Lights",
+                                   ("OFF", "ARMED", "ON"), self.EMERGENCY_GUARD, 1),
+            self.STAB_C: switch(self.STAB_C, "Pedestal", "Stabilizer trim", "Stab Trim C Cutout",
+                                ("NORMAL", "CUTOUT"), self.STAB_C_GUARD, 0),
+            self.STAB_R: switch(self.STAB_R, "Pedestal", "Stabilizer trim", "Stab Trim R Cutout",
+                                ("NORMAL", "CUTOUT"), self.STAB_R_GUARD, 0),
+        }
+        for node, want in expected.items():
+            with self.subTest(node=node):
+                control, why, slips = g.convert_row(rows[node], c)
+                self.assertIsNone(why)
+                self.assertEqual(control, want)
+                self.assertEqual(list(control), list(want), "the keys keep the JSON order, the guard fields last")
+                self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
+        # the guard keeps its own row: an ordinary guard, Closed and Open, on the vendor's own click code
+        for node in self.GUARDS:
+            with self.subTest(guard=node):
+                control, why, _ = g.convert_row(rows[node], c)
+                self.assertIsNone(why)
+                self.assertEqual((control["kind"], [(p["value"], p["label"]) for p in control["positions"]]),
+                                 ("guard", [(0, "Closed"), (1, "Open")]))
+                self.assertEqual(control["press"], rows[node]["_clicks"]["left"][0][1])
+                self.assertNotIn("guard_closed", control)
+
+        m, report = self.build()
+
+        # the emergency lights switch leads its panel and its guard follows; the rest keep cockpit order
+        self.assertEqual([(x["node"], x["label"]) for x in m["controls"] if x["panel"] == "Overhead miscellaneous"],
+                         [(self.EMERGENCY, "Emergency Lights"), (self.EMERGENCY_GUARD, "Emergency Lights Guard"),
+                          (self.LT_OVRD, "Lt Ovrd")])
+        self.assertEqual(sorted(x["label"] for x in m["controls"] if x["panel"] == "Stabilizer trim"),
+                         ["Stab Trim C Cutout", "Stab Trim C Guard", "Stab Trim R Cutout", "Stab Trim R Guard"])
+        # only a guarded control carries the guard fields
+        self.assertEqual({x["node"] for x in m["controls"] if "guard" in x}, set(self.SWITCHES))
+        self.assertEqual({x["node"] for x in m["controls"] if "guard_closed" in x or "close_sets" in x}, set(self.SWITCHES))
+
+    def test_gate_note_never_reaches_click_code(self):
+        # The note is in front of every vendor click here: what the old Stab Trim press began with.
+        rows = self.rows()
+        for node in self.SWITCHES:
+            self.assertTrue(rows[node]["_clicks"]["left"][0][1].startswith("[if "), node)
+
+        m, _ = self.build()
+
+        for control in m["controls"]:
+            for field in self.CLICK_FIELDS:
+                with self.subTest(node=control["node"], field=field):
+                    self.assertNotRegex(control[field] or "", g.GATE_NOTE)
+        for control in m["controls"]:
+            if control["node"] in self.SWITCHES:
+                self.assertEqual([control[f] for f in self.CLICK_FIELDS], [None] * 4, control["node"])
+        # the map the app embeds: no click code anywhere starts with the note, and the three guarded switches have none
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            embedded = json.load(fh)
+        carrying = [(c["node"], f) for c in embedded["controls"] for f in self.CLICK_FIELDS
+                    if re.search(r"(?:^|\s)\[", c[f] or "")]
+        self.assertEqual(carrying, [])
+        by_node = {c["node"]: c for c in embedded["controls"]}
+        for node in self.SWITCHES:
+            self.assertEqual((by_node[node]["kind"], [by_node[node][f] for f in self.CLICK_FIELDS]),
+                             ("switch", [None] * 4), node)
+
+    def test_gated_control_outside_guarded_stops_the_run(self):
+        # The same package with `guarded` left empty: the rules keep the stab trims, their press starting with the note.
+        with self.assertRaisesRegex(g.CurationError, rf"{self.STAB_C}: press carries the extractor's gate note "
+                                                     r"'\[if \(L:B757_AISLE_STAND_STAB_1_GAURD_SWITCH, bool\) 1 ==\]'"):
+            self.build(guarded={})
+        # whichever of the four fields carries it, and wherever in the code: the codes of several templates join in one
+        node, note = "B757_OVHD_X_SWITCH", "[if (L:G, bool) 1 ==] "
+        joined = row(node=node, kind="toggle", left="(L:X) ! (>L:X)")
+        joined["_clicks"]["left"].append(("", note + "1 (>L:Y)"))
+        gated_release = row(node=node, kind="momentary button", positions="-", left="1 (>L:Y)", release=note + "0 (>L:Y)")
+        cases = [
+            ("press", row(node=node, kind="toggle", left=note + "(L:X) ! (>L:X)")),
+            ("press", joined),
+            ("release", gated_release),
+            ("cw", row(node=node, kind="rotary knob finite", positions="3", cw=note + "(L:X) 1 + 2 min (>L:X)",
+                       ccw="(L:X) 1 - 0 max (>L:X)")),
+            ("ccw", row(node=node, kind="rotary knob finite", positions="3", cw="(L:X) 1 + 2 min (>L:X)",
+                        ccw=note + "(L:X) 1 - 0 max (>L:X)")),
+        ]
+        for i, (field, r) in enumerate(cases):
+            with self.subTest(field=field, case=i):
+                with self.assertRaisesRegex(g.CurationError, rf"{node}: {field} carries the extractor's gate note"):
+                    g.build_map([r], curation(), "pkg", "1")
+        # only the control the map keeps is checked: a gated row of a node the package repeats is dropped as a repeat
+        clean = row(node=node, kind="toggle", left="(L:X) ! (>L:X)")
+        m, report = g.build_map([clean, gated_release], curation(), "pkg", "1")
+        self.assertEqual(([c["kind"] for c in m["controls"]], report["dropped"]["duplicate node"]), (["toggle"], 1))
+        # listed under `guarded` (its guard in the package), the same gated switches build, with no click code
+        m, _ = self.build()
+        self.assertEqual(sorted(c["node"] for c in m["controls"] if c["node"] in self.SWITCHES), sorted(self.SWITCHES))
+
+    def test_a_guarded_control_the_rules_drop_is_taken_in_and_reported(self):
+        # Never silent, as for include_nodes: the run names each guarded control and what the rules alone would have done.
+        c, rows = self.shipped(), self.rows()
+        self.assertEqual(g.drop_reason(rows[self.EMERGENCY], c), "state is not an L:var")
+        self.assertIsNone(g.drop_reason(rows[self.STAB_C], c))
+        old, _, _ = g.convert_row(rows[self.STAB_C], dict(c, guarded={}))
+        self.assertEqual((old["kind"], old["press"].startswith("[if ")), ("toggle", True), "the press the rules alone make")
+
+        m, report = self.build()
+
+        self.assertEqual(sorted(report["guarded"]), sorted(self.SWITCHES))
+        self.assertRegex(report["guarded"][self.EMERGENCY], r"^taken in .*the rules alone leave it out: state is not an L:var")
+        for node in (self.STAB_C, self.STAB_R):
+            self.assertRegex(report["guarded"][node], r"^re-read .*the rules alone keep it as a toggle")
+        self.assertEqual(report["dropped"], collections.Counter(), "the emergency lights switch is not counted as dropped")
+        self.assertEqual(report["taken_in"], [], "taken_in stays include_nodes' own")
+        plain, plain_report = g.build_map([rows[self.LT_OVRD]], curation(), "pkg", "1")   # none listed, none named
+        self.assertEqual((plain_report["guarded"], [c["node"] for c in plain["controls"]]), ({}, [self.LT_OVRD]))
+
+    def test_a_guarded_entry_that_does_not_fit_the_package_stops_the_run(self):
+        # Each case changes the shipped curation in one way and nothing else, so the one check it is meant for is the one
+        # that stops the run; the shipped curation itself passes all of them.
+        sw, guard = self.EMERGENCY, self.EMERGENCY_GUARD
+        stab, stab_guard = self.STAB_C, self.STAB_C_GUARD
+        cases = [
+            ("a node the package does not have", dict(guarded=self.guarded("B757_NO_SUCH_NODE")),
+             "guarded name nodes the package does not have: B757_NO_SUCH_NODE"),
+            ("a guard the package does not have", dict(guarded=self.guarded(sw, guard="B757_NO_SUCH_GUARD")),
+             rf"the guard B757_NO_SUCH_GUARD of {sw} has no row in the map \(the package does not have it\)"),
+            ("a guard the rules leave out", dict(exclude_nodes=[guard]),
+             rf"the guard {guard} of {sw} has no row in the map \(the rules leave it out: excluded node\)"),
+            ("names that do not fit the vendor's count", dict(guarded=self.guarded(sw, positions=["OFF", "ON"])),
+             rf"positions for {sw}: 2 names but the control has 3 positions"),
+            ("a state var the click never writes", dict(guarded=self.guarded(sw, state_var=sw + "_TYPO")),
+             rf"{sw}'s click code never writes {sw}_TYPO"),
+            ("a guard that does not gate the click", dict(guarded=self.guarded(stab, guard=self.STAB_R_GUARD)),
+             rf"{stab}'s click is not gated on {self.STAB_R_GUARD}'s var"),
+            ("a close_sets the guard's click does not write", dict(guarded=self.guarded(stab, close_sets=1)),
+             rf"closing {stab_guard} writes 0 to {stab}, but close_sets is 1"),
+            ("a close_sets of none when closing writes", dict(guarded=self.guarded(sw, close_sets=None)),
+             rf"closing {guard} writes 1 to {sw}, but close_sets is None"),
+            ("a node curation leaves out", dict(exclude_nodes=[stab]),
+             rf"guarded names {stab}, which curation also leaves out \(excluded node\)"),
+            ("a positions entry too", dict(positions={sw: ["OFF", "ARMED", "ON"]}),
+             rf"guarded and positions both name: {sw}"),
+            ("a kinds entry too", dict(kinds={stab: "button"}), rf"guarded and kinds both name: {stab}"),
+        ]
+        for what, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build(**changes)
+        self.build()
+
+    def test_a_guarded_entry_may_name_its_positions_as_value_label_pairs(self):
+        # As under 'positions': names are laid onto the vendor's own values, pairs say which values they are.
+        pairs = [{"value": 0, "label": "NORMAL"}, {"value": 1, "label": "CUTOUT"}]
+
+        m, _ = self.build(guarded=self.guarded(self.STAB_C, positions=pairs))
+
+        self.assertEqual({c["node"]: c["positions"] for c in m["controls"]}[self.STAB_C], pairs)
+
+    def test_a_guarded_node_under_an_excluded_banner_stops_the_run(self):
+        banners = ["CB OVERHEAD PANEL", "PEDESTAL GAURD SWITCH GEAR"]
+        with self.assertRaisesRegex(g.CurationError, rf"guarded names {self.STAB_C}, which curation also leaves out "
+                                                     r"\(excluded banner\)"):
+            self.build(exclude_banners=banners)
+
+
 class FlowOrder(unittest.TestCase):
     """panel_order and control_order (ruling R37): the order the pilot tabs through the panels of a section and, inside
     a panel, through the controls. What is not listed keeps the old order (panels alphabetical, controls in cockpit
@@ -1048,6 +1290,33 @@ class Curation(unittest.TestCase):
             with self.subTest(data=data):
                 with self.assertRaises(g.CurationError):
                     g.load_curation(self.write(data))
+
+    GUARDED_ENTRY = {"state_var": "B757_X", "positions": ["OFF", "ON"], "guard": "B757_X_GUARD", "guard_closed": 0,
+                     "close_sets": 1}
+
+    def test_the_guarded_key_loads_as_a_dict_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["guarded"], {})
+        entry = dict(self.GUARDED_ENTRY)
+        self.assertEqual(g.load_curation(self.write({"guarded": {"B757_X": entry}}))["guarded"], {"B757_X": entry})
+        # closing the guard may leave the switch alone (close_sets null), and a position may be an explicit pair
+        other = dict(entry, positions=[{"value": 0, "label": "OFF"}, {"value": 11, "label": "ON"}], close_sets=None,
+                     guard_closed=0.5)
+        self.assertEqual(g.load_curation(self.write({"guarded": {"B757_X": other}}))["guarded"], {"B757_X": other})
+
+    def test_a_guarded_entry_that_is_not_whole_is_refused(self):
+        # All five fields, each of the kind the generator reads: a missing or mistyped one stops the run when the file loads.
+        entry = self.GUARDED_ENTRY
+        bad = [["B757_X"], {"B757_X": "switch"}, {"B757_X": {}}, {"B757_X": dict(entry, extra=1)}]
+        bad += [{"B757_X": {k: v for k, v in entry.items() if k != field}} for field in entry]
+        bad += [{"B757_X": dict(entry, **change)} for change in (
+            {"state_var": ""}, {"state_var": None}, {"guard": ""}, {"guard": 1}, {"positions": []}, {"positions": "OFF"},
+            {"positions": ["OFF", 1]}, {"positions": ["OFF", {"value": 1, "label": "ON"}]}, {"positions": [{"value": 0}]},
+            {"guard_closed": "0"}, {"guard_closed": True}, {"guard_closed": None}, {"close_sets": "1"},
+            {"close_sets": False})]
+        for data in bad:
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, r"guarded(\[| must be)"):   # not "unknown key(s) guarded"
+                    g.load_curation(self.write({"guarded": data}))
 
     def test_the_shipped_curation_loads(self):
         c = g.load_curation(g.DEFAULT_CURATION)
@@ -1481,12 +1750,49 @@ class Curation(unittest.TestCase):
                      "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
                      "B757_OVHD_XFEED_PUMPS_FWD_BUTTON", "B757_OVHD_XFEED_PUMPS_AFT_BUTTON", "B757_GAURD_11_SWITCH",
                      "B757_GAURD_12_SWITCH", "B757_MCP_btn_autopilot_disengage", "BBS757_THRREF_CLICK",
-                     "B757_MCP_AP_SPD_HOLD_SW", "BBS757_FIREHANDLE1_CLICK3", "B757_PED_AUDIO_1_MIC_", "B757_PED_AUDIO_2_MIC_"):
+                     "B757_MCP_AP_SPD_HOLD_SW", "BBS757_FIREHANDLE1_CLICK3", "B757_PED_AUDIO_1_MIC_", "B757_PED_AUDIO_2_MIC_",
+                     # plan 02 task 3: the guarded switches and their guards
+                     "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_Stab_trim_C_toggle_switch_CLICK",
+                     "B757_Stab_trim_R_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
+                     "B757_AISLE_STAND_STAB_2_GAURD_SWITCH"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
-        # the key that makes the two kind changes is explained where the other keys are
+        # the keys that make the kind changes and guard the switches are explained where the other keys are
         self.assertRegex(notes, r"kinds: node -> toggle or button")
+        self.assertRegex(notes, r"guarded: node -> \{state_var, positions, guard, guard_closed, close_sets\}")
         self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
+
+    # Plan 02, task 3: the brief's values, written out here so a change to them is a visible one.
+    GUARDED = {
+        "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK": {
+            "state_var": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "positions": ["OFF", "ARMED", "ON"],
+            "guard": "B757_OVHD_SWITCH_GAURD", "guard_closed": 0, "close_sets": 1},
+        "B757_Stab_trim_C_toggle_switch_CLICK": {
+            "state_var": "B757_Stab_trim_C_toggle_switch_CLICK", "positions": ["NORMAL", "CUTOUT"],
+            "guard": "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", "guard_closed": 0, "close_sets": 0},
+        "B757_Stab_trim_R_toggle_switch_CLICK": {
+            "state_var": "B757_Stab_trim_R_toggle_switch_CLICK", "positions": ["NORMAL", "CUTOUT"],
+            "guard": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH", "guard_closed": 0, "close_sets": 0},
+    }
+
+    def test_the_shipped_curation_guards_the_emergency_lights_and_the_two_stab_trim_cutouts(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        self.assertEqual(c["guarded"], self.GUARDED)
+        self.assertEqual([c["labels"][node] for node in self.GUARDED],
+                         ["Emergency Lights", "Stab Trim C Cutout", "Stab Trim R Cutout"])
+        # no other table speaks for a guarded control, and none leaves it out
+        for node in self.GUARDED:
+            with self.subTest(node=node):
+                self.assertNotIn(node, c["positions"])
+                self.assertNotIn(node, c["kinds"])
+                self.assertNotIn(node, c["exclude_nodes"])
+        # the guards keep their own rows (labels the vendor's copies would have got wrong), and the emergency lights switch
+        # leads its panel with its guard right after it
+        self.assertEqual([c["labels"][entry["guard"]] for entry in c["guarded"].values()],
+                         ["Emergency Lights Guard", "Stab Trim C Guard", "Stab Trim R Guard"])
+        self.assertEqual(c["control_order"]["Overhead miscellaneous"],
+                         ["B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"])
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.
@@ -1512,6 +1818,7 @@ class Curation(unittest.TestCase):
                        "EXT PWR", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
         "Hydraulics": ["L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump",
                        "L ELEC Pump"],
+        "Overhead miscellaneous": ["Emergency Lights", "Emergency Lights Guard"],   # plan 02 task 3: the guarded switch
         "Fuel": ["L Pumps FWD", "L Pumps Aft", "R Pumps FWD", "R Pumps Aft", "C Pumps L", "C Pumps R",
                  "Crossfeed FWD", "Crossfeed Aft"],
         "Exterior lights": ["Anti-col Red Lights", "Position Lights", "Anti-col White Lights", "Taxi Light",
@@ -1627,6 +1934,76 @@ def write_package(root):
     return pkg
 
 
+# The vendor's two stab trim templates, trimmed (BBS_752_BASE_INTERIOR.xml: BBS_SWITCH_FLIP_GUARD at 1357 and
+# BBS_METAL_2STATE_TOGGLE_SWITCH at 1402): a guard whose click writes RESET_VALUE to the switch it covers when the guard
+# closes, and a toggle whose click runs only while that guard reads 1.
+GATED_INTERIOR = """<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<Template Name="BBS_SWITCH_FLIP_GUARD">
+  <Parameters>
+    <NODE_ID>#NODE_ID#</NODE_ID>
+    <SWITCH_TO_RESET>#SWITCH_TO_RESET#</SWITCH_TO_RESET>
+    <RESET_VALUE>1</RESET_VALUE>
+  </Parameters>
+  <Component ID="#NODE_ID#_comp" Node="#NODE_ID#">
+    <UseTemplate Name="ASOBO_GT_Switch_Code">
+      <ANIM_NAME>#NODE_ID#</ANIM_NAME>
+      <ANIM_CODE>(L:#NODE_ID#, bool) 100 *</ANIM_CODE>
+      <LEFT_SINGLE_CODE>
+        (L:#NODE_ID#, bool) ! (&gt;L:#NODE_ID#, bool)
+        (L:#NODE_ID#, bool) 0 == if{
+        #RESET_VALUE# (&gt;L:#SWITCH_TO_RESET#, number)
+        }
+      </LEFT_SINGLE_CODE>
+    </UseTemplate>
+  </Component>
+</Template>
+<Template Name="BBS_METAL_2STATE_TOGGLE_SWITCH">
+  <Parameters>
+    <NODE_ID>#NODE_ID#</NODE_ID>
+    <GUARD_NODE_ID>#GUARD_NODE_ID#</GUARD_NODE_ID>
+  </Parameters>
+  <Component ID="#NODE_ID#_comp" Node="#NODE_ID#">
+    <UseTemplate Name="ASOBO_GT_Anim_Code">
+      <ANIM_NAME>#NODE_ID#</ANIM_NAME>
+      <ANIM_CODE>(L:#NODE_ID#, number)</ANIM_CODE>
+    </UseTemplate>
+    <UseTemplate Name="ASOBO_GT_MouseRect">
+      <MOUSE_ID>#NODE_ID#</MOUSE_ID>
+      <MOUSEFLAGS>LeftSingle</MOUSEFLAGS>
+      <CALLBACKCODE>
+        (L:#GUARD_NODE_ID#, bool) 1 == if{
+        (M:Event) 'LeftSingle' scmp 0 == if{
+        (L:#NODE_ID#, number) 1 == if{ 0 } els{ 1 } (&gt;L:#NODE_ID#, number)
+        }
+        }
+      </CALLBACKCODE>
+    </UseTemplate>
+  </Component>
+</Template>
+<!-- ======== PEDESTAL GAURD SWITCH GEAR ======== -->
+<Component ID="BBS757_STAB_TRIM_CUTOUTS">
+  <UseTemplate Name="BBS_SWITCH_FLIP_GUARD">
+    <NODE_ID>B757_AISLE_STAND_STAB_1_GAURD_SWITCH</NODE_ID>
+    <SWITCH_TO_RESET>B757_Stab_trim_C_toggle_switch_CLICK</SWITCH_TO_RESET>
+    <RESET_VALUE>0</RESET_VALUE>
+  </UseTemplate>
+  <UseTemplate Name="BBS_METAL_2STATE_TOGGLE_SWITCH">
+    <NODE_ID>B757_Stab_trim_C_toggle_switch_CLICK</NODE_ID>
+    <GUARD_NODE_ID>B757_AISLE_STAND_STAB_1_GAURD_SWITCH</GUARD_NODE_ID>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+"""
+
+
+def write_gated_package(root):
+    """write_package's package, its interior replaced by GATED_INTERIOR."""
+    pkg = write_package(root)
+    (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(GATED_INTERIOR, encoding="utf-8")
+    return pkg
+
+
 class Extractor(unittest.TestCase):
     def test_extract_returns_unclipped_rows_lights_and_summary(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1684,6 +2061,42 @@ class Extractor(unittest.TestCase):
         self.assertIn("panel_order does not list", unlisted)
         self.assertIn("Overhead / Electrical", unlisted)
         self.assertNotIn("panel_order", listed)
+
+    def test_a_gated_click_from_the_package_stops_the_run_unless_its_control_is_guarded(self):
+        # The extractor's own note, from the vendor's own template shape, meets the generator's check.
+        node, guard = "B757_Stab_trim_C_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH"
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_gated_package(d)
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+            panels = {"PEDESTAL GAURD SWITCH GEAR": {"name": "Stabilizer trim", "section": "Pedestal"}}
+
+            def run(**curation_):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump({"panels": panels, **curation_}, fh)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                return stdout.getvalue()
+
+            with self.assertRaises(SystemExit) as stopped:
+                run()
+            self.assertRegex(str(stopped.exception), rf"^curation: {node}: press carries the extractor's gate note")
+            self.assertFalse(os.path.exists(out), "a stopped run writes no map")
+
+            printed = run(labels={node: "Stab Trim C Cutout"}, guarded={node: {
+                "state_var": node, "positions": ["NORMAL", "CUTOUT"], "guard": guard, "guard_closed": 0, "close_sets": 0}})
+            with open(out, encoding="utf-8") as fh:
+                m = json.load(fh)
+
+        by_node = {c["node"]: c for c in m["controls"]}
+        c = by_node[node]
+        self.assertEqual((c["kind"], c["label"], c["state_var"], [c[f] for f in ("press", "release", "cw", "ccw")]),
+                         ("switch", "Stab Trim C Cutout", node, [None] * 4))
+        self.assertEqual((c["guard"], c["guard_closed"], c["close_sets"]), (guard, 0, 0))
+        self.assertEqual(by_node[guard]["kind"], "guard", "the guard keeps its own row")
+        self.assertIn("guarded controls", printed)
+        self.assertIn(f"{node}: re-read", printed)
 
 
 if __name__ == "__main__":

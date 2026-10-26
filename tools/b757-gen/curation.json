@@ -10,6 +10,7 @@
     "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
     "positions: node -> position names in value order (one per value: the names are laid onto the control's own values, so two names for a control whose values are 0 and 11 name 0 and 11), or explicit [{value, label}] when the extractor counts a value the click code never rests on (the start selectors never write 2, the chronometer ET lever skips it).",
     "kinds: node -> toggle or button, for a control whose click code the extractor misreads. Two re-readings only: a momentary button made a toggle (its click sets its own state var by a gate, not a flip) and a select made a button (a radio-style choice that is only ever pressed). Only the kind changes (and with it the positions the generator derives: two for a toggle, none for a button, unless positions names them); the state var and the click code stay the vendor's, verbatim. The rules decide first, on the row as the extractor read it, so an entry never brings back a control they drop: it changes nothing and is only reported, like a label for a dropped node. An entry for a node the package does not have, for a control the extractor already reads that way, for any other re-reading, or for a kind the control cannot be built as (a toggle needs an L:var state), is an error.",
+    "guarded: node -> {state_var, positions, guard, guard_closed, close_sets}: a switch whose vendor click only runs while its guard is open. The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, so none of the click is kept: the control is emitted as a switch on state_var with the named positions (laid onto the control's own values, as under positions), the guard's node, the value the guard reads while closed (guard_closed) and the value closing it writes to the control (close_sets, null when closing leaves it alone), and press, release, cw and ccw are empty: the app opens the guard, writes the position and closes the guard. The guard keeps its own row. An entry takes in a control the rules leave out (the emergency lights switch) or re-reads one they keep (the stab trims), and the run names each; it never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped fact or a change of BlueBird's stops the run: the click writes state_var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. An entry for a node or a guard the package does not have, names that do not fit the vendor's count of positions, a positions or kinds entry for the same node, and any other control whose click code carries the gate note are errors.",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
@@ -26,6 +27,7 @@
     "B757_GAURD_11_SWITCH and B757_GAURD_12_SWITCH are the covers of the 1 BTL and 2 BTL cargo fire buttons: the vendor's template instances of B757_PED_1BTL_CARGOFIRE_BUTTON and B757_PED_2BTL_CARGOFIRE_BUTTON name them as their GUARD_NODE_ID (XML:15975 and 16013), so they read '1 BTL Cargo Fire Guard' and '2 BTL Cargo Fire Guard' after the buttons' own labels. The list has no row for either guard; the vendor's disabled earlier components tip them 'FWD CARGO' and 'AFT CARGO'.",
     "B757_MCP_btn_autopilot_disengage: 0 Up, 1 Down. Its click flips its own var and passes it on to K:AUTOPILOT_DISENGAGE_SET ('if{ 1 (>K:AUTOPILOT_DISENGAGE_SET) } els{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }'), so 1 is the bar down, which disengages the autopilot, and 0 the bar up; its animation names no positions and the list has no row for it. BBS757_THRREF_CLICK (L:BBS757_THRREF_PULL): 0 In, 1 Pulled; the list: 'Manual EPR-reference mode', 1 = pulled/manual, 0 = pushed/manual off. B757_MCP_AP_SPD_HOLD_SW writes L:B757_MCP_IAS_MACH_KNOB_BUTTON, which the list calls the 'Speed intervention command' (write 1 to request it, 0 = idle): the push of the IAS/MACH knob, so it reads 'Speed Intervene', not 'AP SPD Hold'.",
     "BBS757_FIREHANDLE1_CLICK3, the APU fire handle, is a toggle (kinds) on L:B757_APUFIRE_SWITCH, its pulled state, as the engine handles are on L:B757_ENGFIRE_1_SWITCH and _2_ (the list: 'Apufire switch', 0 = normal, 1 = fire handle pulled): 0 In, 1 Pulled. Its click writes 1 when the handle is unlocked (L:BBS757_FIREUNLOCK3) or the APU fire is active and 0 otherwise, a gate and not a flip, so the extractor read a momentary button with no state to show; the app now reads the handle before it presses. The 14 microphone selects, B757_PED_AUDIO_1_MIC_L_LIGHT to _INT_LIGHT and the seven of B757_PED_AUDIO_2_MIC_*_LIGHT, are buttons (kinds): a click sets that microphone to 1 and the panel's other six to 0, so a combo of Off and On could never reach Off. The list calls each a 'microphone selector' (0 = deselected, 1 = selected; 'a 0-to-1 transition selects the transmitter').",
+    "PLAN 02 TASK 3 (2026-10-26): the emergency lights switch and the two stab trim cutouts are guarded, from BBS_752_BASE_INTERIOR.xml (cited as XML:line) and BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21). B757_OVHD_PASS_OXY_Toggle_Switch_CLICK is the emergency lights switch (label Emergency Lights; BBS_B757_EMERGENCY_LIGHTS_COMPONENT, XML:8106-8120; the PASS_OXY in its node name is a copy, as for its guard): its state is L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK, 0 OFF, 1 ARMED, 2 ON (the list; its click steps '1 + 2 min' and '1 - 0 max', XML:1504 and 1507, which is why the extractor read a switch with three positions, and its animation reads an O: var, which is why the rules left it out). Its guard is B757_OVHD_SWITCH_GAURD, its own L:var (XML:1361): the click runs only while that reads 1 (XML:1502), so 1 is open and 0 is closed (guard_closed 0; the list: 0 = closed, 1 = open). Closing the guard writes 1, ARMED, to the switch: the guard's click writes its RESET_VALUE 1 (XML:1375-1378 and 8118) and the switch's own update code forces 1 while the guard reads 0 (XML:1532), so close_sets is 1. B757_Stab_trim_C_toggle_switch_CLICK and B757_Stab_trim_R_toggle_switch_CLICK are the stab trim cutouts (labels Stab Trim C Cutout and Stab Trim R Cutout; BBS757_STAB_TRIM_CUTOUTS, XML:15380-15408): their states are L:B757_Stab_trim_C_toggle_switch_CLICK and L:B757_Stab_trim_R_toggle_switch_CLICK, 0 NORMAL, 1 CUTOUT (the list; the click toggles 0 and 1, XML:1426), behind B757_AISLE_STAND_STAB_1_GAURD_SWITCH and B757_AISLE_STAND_STAB_2_GAURD_SWITCH, each its own L:var (XML:1361); the click runs only while its guard reads 1 (XML:1424), and closing a guard writes its RESET_VALUE 0, NORMAL, to the switch (XML:15385 and 15393), so close_sets is 0. The extractor had read the stab trims as toggles whose press began with the gate note (not valid RPN, and its 'On' was CUTOUT). measured (docs/b757/evidence/live-findings.md, docs/b757/spec-gaps.md 3.3): the emergency lights switch reads 1 with its guard 0, the stab trims 0 with their guards 0, none changed. unmeasured in the sim: that a write to a switch's L:var takes while its guard is open (the sim's own gate is in the click, which the app no longer replays).",
     "BBS757_PEDESTAL_Park_Brake_Lever (L:B757_FC_PARK_BRAKE): 0 Released, 1 Set. A toggle whose click flips the var. measured (session 6): K:PARKING_BRAKES left the var at 1 while the stock BRAKE PARKING POSITION read 0. preset: 1 in cold and dark, before start, ready for taxi and ready for takeoff; 0 in turnaround and the four airborne states. unmeasured: releasing it with the lever click while PARKING BRAKE MODE is REALISTIC (that setting wants full pedal braking).",
     "BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK write 0, 10 and 100 to L:B757_FC_SPOILER_LEVER and keep no state of their own (buttons with a press only, replayed verbatim). measured (session 6): 10 is ARMED, 0 is down (K:SPOILERS_ARM_TOGGLE); all nine presets hold 0. unmeasured: 100 for UP (the click code only).",
     "ENGINE_Switch_ATDisc_1 is the left TO/GA button: its press writes L:GO_AROUND_PADDLE1 and fires K:AUTO_THROTTLE_TO_GA, its release clears the var, all replayed verbatim. B757_AT_DISC_1 is the A/T disconnect: press writes L:B757_AT_DISC_1 1, release 0. unmeasured in flight.",
@@ -480,6 +482,10 @@
       "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
       "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON"
     ],
+    "Overhead miscellaneous": [
+      "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
+      "B757_OVHD_SWITCH_GAURD"
+    ],
     "Fuel": [
       "B757_OVHD_L_PUMPS_FWD_BUTTON",
       "B757_OVHD_L_PUMPS_AFT_BUTTON",
@@ -602,6 +608,7 @@
     "B757_OVHD_HI_INT": "Wing Lights",
     "B757_OVHD_LOGO_BUTTON": "Logo Lights",
     "B757_CABIN_WORK_LT002": "Cabin Work Light",
+    "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK": "Emergency Lights",
     "B757_OVHD_SWITCH_GAURD": "Emergency Lights Guard",
     "B757_OVHD_PASS_OXY_BUTTON": "Passenger Oxygen",
     "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON": "R ELEC Pump",
@@ -684,6 +691,8 @@
     "B757_GAURD_12_SWITCH": "2 BTL Cargo Fire Guard",
     "B757_AISLE_STAND_STAB_1_GAURD_SWITCH": "Stab Trim C Guard",
     "B757_AISLE_STAND_STAB_2_GAURD_SWITCH": "Stab Trim R Guard",
+    "B757_Stab_trim_C_toggle_switch_CLICK": "Stab Trim C Cutout",
+    "B757_Stab_trim_R_toggle_switch_CLICK": "Stab Trim R Cutout",
     "BBS_fuelcut_PW1": "L Fuel Control (PW)",
     "BBS_fuelcut_PW2": "R Fuel Control (PW)",
     "BBS_fuelcut_RR1": "L Fuel Control (RR)",
@@ -1136,6 +1145,39 @@
     "B757_PED_AUDIO_2_MIC_RR_LIGHT": "button",
     "B757_PED_AUDIO_2_MIC_PA_LIGHT": "button",
     "B757_PED_AUDIO_2_MIC_INT_LIGHT": "button"
+  },
+  "guarded": {
+    "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK": {
+      "state_var": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
+      "positions": [
+        "OFF",
+        "ARMED",
+        "ON"
+      ],
+      "guard": "B757_OVHD_SWITCH_GAURD",
+      "guard_closed": 0,
+      "close_sets": 1
+    },
+    "B757_Stab_trim_C_toggle_switch_CLICK": {
+      "state_var": "B757_Stab_trim_C_toggle_switch_CLICK",
+      "positions": [
+        "NORMAL",
+        "CUTOUT"
+      ],
+      "guard": "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
+      "guard_closed": 0,
+      "close_sets": 0
+    },
+    "B757_Stab_trim_R_toggle_switch_CLICK": {
+      "state_var": "B757_Stab_trim_R_toggle_switch_CLICK",
+      "positions": [
+        "NORMAL",
+        "CUTOUT"
+      ],
+      "guard": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
+      "guard_closed": 0,
+      "close_sets": 0
+    }
   },
   "status": [
     {

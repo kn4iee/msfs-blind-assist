@@ -13,6 +13,9 @@ own click code as RPN, to be replayed through the MobiFlight calculator path.
                 state_var: the L:var read back (null when the control keeps no L:var state: a button)
                 press / release / cw / ccw: RPN, null when the control has none; a switch with no click code
                 (the sim's own 3-state template) has all three null and is written through state_var
+                guard, guard_closed, close_sets: on a guarded control only (curation's "guarded"): the node of the
+                guard that covers it, the value that guard reads while closed and the value closing it writes to the
+                control (null when closing leaves the control alone). A guarded control has no click code at all.
     status[]    key, panel, label, positions[{value,label}], announce: read-only L:vars worth speaking
                 (APU state, master warning ...), listed in curation.json
 
@@ -24,12 +27,13 @@ What is derived and what is curated (curation.json):
             anyway (include_nodes: the banner stays excluded, its panel and section come from a node_panels rule),
             the app's panel names, labels the node name cannot give or the vendor got wrong, position names no
             tooltip carries, the kind of a control whose click code the extractor misreads (kinds: a toggle the
-            extractor took for a button, a radio-style select that is only ever pressed), the status rows, and the
+            extractor took for a button, a radio-style select that is only ever pressed), the guarded controls
+            (guarded: a switch whose click only runs while a guard is open), the status rows, and the
             ORDER the pilot tabs through: the panels of a section (panel_order) and the controls of a panel
-            (control_order). A curated label, position list, kind, exclusion or inclusion for a node the package
-            does not have is an error (a stale entry never hides); so is a kind or an inclusion that does nothing,
-            and so is an order that names a panel or a node that is not there. A kind only re-reads a control the
-            rules keep: for one they drop it changes nothing and is only reported.
+            (control_order). A curated label, position list, kind, guarded entry, exclusion or inclusion for a node
+            the package does not have is an error (a stale entry never hides); so is a kind or an inclusion that
+            does nothing, and so is an order that names a panel or a node that is not there. A kind only re-reads a
+            control the rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
@@ -38,6 +42,16 @@ What is derived and what is curated (curation.json):
             made in cockpit order before either is applied, so an order never renames or renumbers a control.
   a toggle, guard or select that writes a value other than 0 or 1 to its state var stops the run until its
             positions are named in curation (A/T ARM writes 10).
+  guarded   a switch whose vendor click only runs while its guard is open (the emergency lights switch, the stab trim
+            cutouts). The extractor records that gate as an '[if <test>] ' note in front of the click code, which is
+            not RPN, so none of the click is kept: press, release, cw and ccw are empty, and the control carries the
+            state var and the positions curation gives it, the guard's node, the value the guard reads while closed and
+            the value closing it writes to the control. The app opens the guard, writes the position and closes it. The
+            guard keeps its own row. Curation may take in a control the rules leave out (the emergency lights switch's
+            animation reads an O: var) or re-read one they keep (the stab trims), and the run names each; it never
+            overrides curation's own exclusions. The entry is checked against the vendor's code: the click writes the
+            state var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. Any
+            other control whose click code carries a gate note stops the run.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
 cockpit runs, so a slip the cockpit has stays a slip in the replay. Code that looks like a slip (a set without its
@@ -128,9 +142,18 @@ FLIP = re.compile(r"\(L:([^,()\s]+)[^()]*\)\s*!\s*\(>L:\1\s*[,)]")              
 MISSING_L = re.compile(r"\(>(?![A-Za-z]:)(?=[A-Za-z_])([^()]*)\)")  # "(>NAME, bool)": a set with no "L:" in front
 RANGE_SPEC = re.compile(r"range\s+(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\s+step\s+(\d+(?:\.\d+)?)$")
 
+# A 'guarded' entry holds all of these; close_sets is null when closing the guard leaves the control alone.
+GUARDED_FIELDS = ("state_var", "positions", "guard", "guard_closed", "close_sets")
+# The drop reasons that are curation's own word on a row: a guarded entry never overrides them.
+EXCLUSIONS = ("excluded banner", "excluded node")
+# The extractor writes a click that only runs inside an enclosing if{} as '[if <test>] <code>'
+# (extract_controls.split_callback). That note is not RPN, so no replayed click code may carry one: it comes first in the
+# code, or after another code when several join in one (a node with two templates).
+GATE_NOTE = re.compile(r"(?:^|\s)\[")
+
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
                  "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
-                 "kinds": dict, "spelling": dict, "status": list}
+                 "kinds": dict, "guarded": dict, "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -419,9 +442,44 @@ def reread(row, wanted):
     raise CurationError(f"curation kinds make {node} a {wanted}, but the extractor read it as a {kind}: only {allowed}")
 
 
+def guarded_control(row, cur):
+    """The control curation's 'guarded' entry describes: a switch whose vendor click only runs while its guard is open.
+
+    The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, and the emergency
+    lights switch's animation reads an O: var, so the rules find no state var for it. Nothing of the click is kept: press,
+    release, cw and ccw are empty, the state var and the positions come from the entry, and the guard's node, the value it
+    reads while closed and the value closing it writes to the control ride along (Bbs757Control.Guard, GuardClosed,
+    CloseSets), so that the app can open the guard, write the position and close it. The row gives the control's place in
+    the cockpit and the vendor's count of positions, which the entry's names must fit. The rules' own drop reasons give way
+    to the entry (a state that is not an L:var, a click the extractor cannot use); curation's exclusions never do."""
+    node, entry = row["node"], cur["guarded"][row["node"]]
+    why = drop_reason(row, cur)
+    if why in EXCLUSIONS:
+        raise CurationError(f"curation guarded names {node}, which curation also leaves out ({why})")
+    out_kind = KIND_MAP.get(row["kind"])
+    if out_kind == "switch":  # the values the vendor's code gives it, as for any switch; two for a toggle, guard or select
+        values = position_values(row)
+    elif out_kind in ("toggle", "guard", "select"):
+        values = [0, 1]
+    else:
+        values = None
+    panel, section = panel_of(row, cur)
+    close_sets = entry["close_sets"]
+    return {
+        "node": node, "section": section, "panel": panel,
+        "label": cur["labels"].get(node) or humanize(node, cur["spelling"]),
+        "kind": "switch", "state_var": entry["state_var"], "positions": expand_positions(entry["positions"], values, node),
+        "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None,
+        "guard": entry["guard"], "guard_closed": number(entry["guard_closed"]),
+        "close_sets": None if close_sets is None else number(close_sets),
+    }
+
+
 def convert_row(row, cur):
     """(control, None, suspected slips) or (None, why it is left out, [])."""
     node = row["node"]
+    if node in cur["guarded"]:
+        return guarded_control(row, cur), None, []
     why = drop_reason(row, cur)
     if why:
         return None, why, []
@@ -501,6 +559,61 @@ def tell_apart(keyed, rows_by_node, cur) -> None:
                 c["label"] = longer
                 taken[key].add(longer)
         seen[key].add(c["label"])
+
+
+def click_vars(row):
+    """(the L:vars the row's click code reads, the L:vars it writes), the code of every slot taken together."""
+    code = " ".join(c for slot in row["_clicks"].values() for _, c in slot)
+    refs = extract_controls.var_refs(code)
+    return {n for w, k, n in refs if k == "L" and not w}, {n for w, k, n in refs if k == "L" and w}
+
+
+def check_guarded(controls, first_row, cur):
+    """Each guarded entry against the vendor's own click code, so a mistyped fact, or a change of BlueBird's, stops the run
+    instead of reaching the app: the click writes the entry's state var, its gate reads the var the guard control holds, and
+    the guard's own click writes close_sets to the control (nothing, when close_sets is null)."""
+    by_node = {c["node"]: c for c in controls}
+    for node, entry in cur["guarded"].items():
+        guard, state_var = by_node[entry["guard"]], entry["state_var"]
+        reads, writes = click_vars(first_row[node])
+        if state_var not in writes:
+            raise CurationError(f"curation guarded: {node}'s click code never writes {state_var} (it writes "
+                                f"{', '.join(sorted(writes)) or 'no L:var'}): the state var is the L:var its click sets")
+        if guard["state_var"] not in reads:
+            raise CurationError(f"curation guarded: {node}'s click is not gated on {entry['guard']}'s var "
+                                f"{guard['state_var']} (it reads {', '.join(sorted(reads)) or 'no L:var'}): is that the "
+                                "guard that covers it?")
+        closing = {number(v) for code in (guard["press"], guard["release"]) for v, name in ASSIGN.findall(code or "")
+                   if name == state_var}
+        wanted = set() if entry["close_sets"] is None else {number(entry["close_sets"])}
+        if closing != wanted:
+            raise CurationError(f"curation guarded: closing {entry['guard']} writes "
+                                f"{', '.join(str(v) for v in sorted(closing)) or 'nothing'} to {state_var}, but close_sets "
+                                f"is {entry['close_sets']}")
+
+
+def reject_gate_notes(controls, cur):
+    """No control the map replays carries the extractor's gate note (GATE_NOTE) in its press, release, cw or ccw: its click
+    only runs while a guard is open, and what the app replays would never run. Such a control belongs under 'guarded'."""
+    for c in controls:
+        if c["node"] in cur["guarded"]:
+            continue
+        for field in ("press", "release", "cw", "ccw"):
+            code = c[field]
+            if code and GATE_NOTE.search(code):
+                note = re.search(r"\[[^\]]*\]", code)
+                raise CurationError(f"{c['node']}: {field} carries the extractor's gate note "
+                                    f"'{note.group(0) if note else code[:40]}': its click only runs while a guard is open, "
+                                    "so list the node under 'guarded' in curation (the app opens the guard and writes the "
+                                    "state var) or leave it out under 'exclude_nodes'")
+
+
+def guarded_how(row, cur):
+    """What curation's 'guarded' did to this row, in words, for the run's report."""
+    why = drop_reason(row, cur)
+    if why:
+        return f"taken in (the rules alone leave it out: {why})"
+    return f"re-read (the rules alone keep it as a {KIND_MAP[row['kind']]} and replay its click code)"
 
 
 def status_row(entry):
@@ -599,10 +712,18 @@ def build_map(rows, cur, aircraft, version):
     unique_labels(controls)
 
     in_package = {r["node"] for r in rows}
-    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes"):
+    first_row = {}
+    for r in rows:
+        first_row.setdefault(r["node"], r)
+    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
+    for table in ("positions", "kinds"):  # one place for a guarded control's positions and kind: its entry
+        twice = sorted(set(cur["guarded"]) & set(cur[table]))
+        if twice:
+            raise CurationError(f"curation guarded and {table} both name: {', '.join(twice)} (a guarded control is a "
+                                "switch with the positions of its guarded entry)")
     kept = {c["node"] for c in controls}
     included = set(cur["include_nodes"])
     both = sorted(included & set(cur["exclude_nodes"]))
@@ -619,19 +740,26 @@ def build_map(rows, cur, aircraft, version):
                             + ", ".join(f"{n} ({dropped_why.get(n, '?')})" for n in left_out))
     # A taken-in control must be placed by a node rule: without one it would land on a panel named after the very
     # banner that is excluded.
-    first_row = {}
-    for r in rows:
-        first_row.setdefault(r["node"], r)
     unplaced = sorted(n for n in included if node_rule(first_row[n], cur) is None)
     if unplaced:
         raise CurationError(f"curation include_nodes name nodes no node_panels rule places: {', '.join(unplaced)} "
                             "(add a node_panels rule naming their panel)")
+    for node, entry in cur["guarded"].items():  # the guard keeps its own row: the app opens it
+        guard = entry["guard"]
+        if guard not in kept:
+            reason = ("the package does not have it" if guard not in in_package
+                      else f"the rules leave it out: {dropped_why.get(guard, '?')}")
+            raise CurationError(f"curation guarded: the guard {guard} of {node} has no row in the map ({reason}); a "
+                                "guard keeps its own row, which the app opens")
+    check_guarded(controls, first_row, cur)
+    reject_gate_notes(controls, cur)
     # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).
     controls, unordered = flow_order(controls, cur)
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,
         "taken_in": sorted(included),
+        "guarded": {n: guarded_how(first_row[n], cur) for n in cur["guarded"]},
         "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions", "kinds") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
@@ -647,6 +775,27 @@ def dumps(map_) -> str:
 
 
 # ---- curation and package --------------------------------------------------------------------------------------
+def is_number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def valid_guarded(entry) -> bool:
+    """An entry of curation's 'guarded': every one of GUARDED_FIELDS, the positions as names or as {value, label} pairs, a
+    number for the value the guard reads while closed and a number or null for the value closing it writes."""
+    if not (isinstance(entry, dict) and set(entry) == set(GUARDED_FIELDS)):
+        return False
+    names = entry["positions"]
+
+    def pair(p):
+        return (isinstance(p, dict) and set(p) == {"value", "label"} and is_number(p["value"])
+                and isinstance(p["label"], str))
+
+    return (all(isinstance(entry[k], str) and entry[k] for k in ("state_var", "guard"))
+            and isinstance(names, list) and bool(names)
+            and (all(isinstance(n, str) and n for n in names) or all(pair(n) for n in names))
+            and is_number(entry["guard_closed"]) and (entry["close_sets"] is None or is_number(entry["close_sets"])))
+
+
 def load_curation(path) -> dict:
     with open(path, encoding="utf-8-sig") as fh:
         data = json.load(fh)
@@ -668,6 +817,10 @@ def load_curation(path) -> dict:
     for node, kind in cur["kinds"].items():
         if not isinstance(kind, str) or kind not in KIND_TARGETS:
             raise CurationError(f"{path}: kinds[{node!r}] is {' or '.join(KIND_TARGETS)}")
+    for node, entry in cur["guarded"].items():
+        if not valid_guarded(entry):
+            raise CurationError(f"{path}: guarded[{node!r}] is {{{', '.join(GUARDED_FIELDS)}}}: names or {{value, label}} "
+                                "for positions, numbers for guard_closed and close_sets (which may be null)")
     for rule in cur["node_panels"]:
         if "panel" not in rule or not ({"banner", "prefix"} & set(rule)):
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")
@@ -746,6 +899,10 @@ def main(argv=None) -> None:
         print(f"    {kind:8s} {n}")
     print(f"  status rows      : {len(map_['status'])}")
     print(f"  taken in by node : {len(report['taken_in'])} (under excluded banners)")
+    print(f"  guarded controls : {len(report['guarded'])} (no click code of their own: the app opens the guard and writes "
+          "the state var)")
+    for node, how in report["guarded"].items():
+        print(f"    {node}: {how}")
     print("  dropped:")
     for why, n in sorted(report["dropped"].items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"    {n:5d}  {why}")
