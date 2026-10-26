@@ -120,6 +120,15 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void Disposing_lets_go_of_a_button_still_held()
+    {
+        Set("A350_FIRE_TEST", 1);   // its 3 s hold never ends inside a test
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+        _def.Dispose();
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+    }
+
+    [Fact]
     public void A_write_that_cannot_land_is_refused_aloud()
     {
         _def.CanLand = _ => false;

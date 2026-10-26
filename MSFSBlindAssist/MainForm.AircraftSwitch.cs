@@ -825,6 +825,11 @@ public partial class MainForm
         if (oldAircraft is TFDiMD11Definition oldMd11 && !ReferenceEquals(oldAircraft, newAircraft))
             oldMd11.Dispose();
 
+        // The A350's definition lets go of any button it is still holding (a hold button's press, a spring
+        // switch's nudge) and stops writing before the next aircraft takes over.
+        if (oldAircraft is IniBuildsA350Definition oldA350 && !ReferenceEquals(oldAircraft, newAircraft))
+            oldA350.Dispose();
+
         // An armed liftoff → Hand Fly handoff must not survive the switch — its
         // confirm could otherwise fire against the new aircraft in the middle of
         // the re-registration churn below (same hygiene as the disconnect path

@@ -1510,6 +1510,10 @@ public partial class MainForm : Form
             Log.Debug("MD11", "App exit: definition disposed.");
         }
 
+        // The A350 too, before Disconnect(): a hold button or a spring switch still held owes its release,
+        // which Dispose sends while the sim is connected.
+        if (currentAircraft is IniBuildsA350Definition a350ExitDef) a350ExitDef.Dispose();
+
         // Stop listening BEFORE Disconnect(). Disconnect ends by raising ConnectionLost, whose
         // handler calls currentAircraft.OnSimContextReset() — so on this path it re-entered the
         // definition disposed six lines above and re-armed the seed gate Dispose had just
