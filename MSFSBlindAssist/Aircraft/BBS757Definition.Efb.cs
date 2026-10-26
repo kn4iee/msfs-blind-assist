@@ -14,7 +14,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// Speech follows CORE-7. The EFB window's Connect and Disconnect ground power buttons say what came of their
 /// taps themselves (<see cref="Bbs757GroundPower.Result"/>), so the row never says that change a second time:
 /// a change between <see cref="ArmGroundPowerEcho"/> (right before the taps) and <see cref="SettleGroundPowerEcho"/>
-/// (the run's end) is tracked, never spoken. The settle ends the echo at once, as a press's read-back does, so
+/// (the run's end) is tracked, never spoken. The same window also covers the EXT PWR AVAIL row
+/// (<see cref="Bbs757SharedKeys.ExtPwrAvail"/>, announced by plan 06): the GPU tap changes that light too (see
+/// <see cref="ArmGroundPowerEcho"/>). The settle ends the echo at once, as a press's read-back does, so
 /// any later change is spoken, even one after a run whose taps did not take. Any other change is spoken once
 /// ("Ground power connected"), through the same <see cref="Bbs757ChangeTracker"/> as the other state rows:
 /// BlueBird connecting its own ground power at a flight load is the first reading, a silent baseline, and a
@@ -131,12 +133,27 @@ public partial class BBS757Definition
     /// <see cref="Bbs757GroundPower.WindowRunMaxMs"/> (a run that never settles), a change of the Ground Power
     /// row is the run's own and is tracked, never spoken. The window says what came of its taps itself
     /// (<see cref="Bbs757GroundPower.Result"/>), and the screen reader read the button (CORE-7): the row saying
-    /// it too would be a second announcement of one change. A run that refuses and taps nothing never calls it.
-    /// Called by the window, through MainForm, right before its taps; on the UI thread, as the deliveries are
-    /// (the tracker is not synchronized).
+    /// it too would be a second announcement of one change.
+    ///
+    /// The EXT PWR AVAIL row (<see cref="Bbs757SharedKeys.ExtPwrAvail"/>) is armed with it, for the same time.
+    /// The GPU tap also changes the AVAIL light (<c>L:B757_OVHD_APUGENEXTPWR_R_AVAIL_DECAL</c>, measured about
+    /// 0.17 s after the tap), and plan 06 announces that light as a row of its own through <c>_changes</c>, like
+    /// every spoken row of the plan set: without this arm a window run would be heard twice, the AVAIL row's
+    /// call-out during the run and then the window's result. This does nothing until plan 06 registers that
+    /// row through the tracker, so no test here can deliver it: plan 16 tests it with both rows present.
+    ///
+    /// Called by the window, through MainForm, right before its run, on the UI thread, as the deliveries are
+    /// (the tracker is not synchronized). A press refused before any tap (a state that cannot be read, ground
+    /// power already as wished, external power on line) never calls it. A run that then taps nothing, because
+    /// the EFB cannot be reached, does: the client may wait up to about six seconds for its agent before it
+    /// reports that, and the flow then settles with nothing read. A change in that wait is tracked silently.
     /// </summary>
     internal void ArmGroundPowerEcho()
-        => _changes.ArmEcho(Bbs757SharedKeys.GpuConnected, NowMs() + Bbs757GroundPower.WindowRunMaxMs);
+    {
+        long untilMs = NowMs() + Bbs757GroundPower.WindowRunMaxMs;
+        _changes.ArmEcho(Bbs757SharedKeys.GpuConnected, untilMs);
+        _changes.ArmEcho(Bbs757SharedKeys.ExtPwrAvail, untilMs);
+    }
 
     /// <summary>
     /// The EFB window's run is over and it has said the result itself. <paramref name="after"/> is the last
@@ -145,13 +162,22 @@ public partial class BBS757Definition
     /// tracked it. Either way the echo ends here, as a press's read-back ends its own
     /// (<c>SettleOwnWriteEcho</c>), with no tail: a delivery of the state just settled is no change, and a
     /// delivery of any other state is the aircraft's and is spoken (BlueBird connecting the ground power
-    /// seconds after the window said it had not; the state after a read-back that could not be read). Called
-    /// once by the window, through MainForm, when its run ends; on the UI thread.
+    /// seconds after the window said it had not; the state after a read-back that could not be read).
+    ///
+    /// The EXT PWR AVAIL row's echo (<see cref="Bbs757SharedKeys.ExtPwrAvail"/>, armed by
+    /// <see cref="ArmGroundPowerEcho"/> because the GPU tap changes the AVAIL light too) ends here as well, with
+    /// no rebaseline: the window reads only the connection, and the light's change lands inside the run (about
+    /// 0.17 s after the tap), where the tracker has already tracked it silently. Like the arm, this does nothing
+    /// until plan 06 registers that row through the tracker; plan 16 tests it with both rows present.
+    ///
+    /// Called once by the window, through MainForm, when its run ends, even for a run that tapped nothing (the
+    /// EFB not reachable), then with nothing read; on the UI thread.
     /// </summary>
     internal void SettleGroundPowerEcho(double? after)
     {
         if (after is double value && Bbs757GroundPower.ChangePhrase(value) is { } phrase)
             _changes.Rebaseline(Bbs757SharedKeys.GpuConnected, phrase);
         _changes.ArmEcho(Bbs757SharedKeys.GpuConnected, 0);
+        _changes.ArmEcho(Bbs757SharedKeys.ExtPwrAvail, 0);
     }
 }

@@ -91,6 +91,8 @@ public class BBS757EfbForm : Form
     private const int TabletReadableWaitMs = 2500;
     // One fresh read of a registered variable (an individual definition answers within a frame or two).
     private const int LoadReadTimeoutMs = 1500;
+    // The fresh ground power reads: a batch row answers with the next 1 Hz delivery, as OnGroundReadTimeoutMs does.
+    private const int GroundPowerReadTimeoutMs = 2500;
     // How long the steering setting is watched for BlueBird's write after the click (measured: at once).
     private const int SteeringWaitMs = 3000;
     private const int SteeringPollMs = 250;
@@ -1096,7 +1098,7 @@ public class BBS757EfbForm : Form
     {
         var io = new Bbs757GroundPowerIo
         {
-            Read = (key, token) => _loadIo.Read(key, LoadReadTimeoutMs, token),
+            Read = (key, token) => _loadIo.Read(key, GroundPowerReadTimeoutMs, token),
             Run = async (seq, _) =>
             {
                 SetResult(connect ? "Connecting the ground power." : "Disconnecting the ground power.");
@@ -1109,6 +1111,11 @@ public class BBS757EfbForm : Form
             SettleEcho = _loadIo.SettleGroundPowerEcho,
         };
         var outcome = await Bbs757GroundPower.SwitchAsync(connect, io, Lifetime);
+        // One debug line per run, so a failed in-sim check can be read from debug.log: the wish, what came of it,
+        // and for a run that tapped nothing how the run ended. Names only, no text from the sim or the EFB.
+        string wish = connect ? "connect" : "disconnect";
+        string runEnd = outcome.Kind == Bbs757GroundPowerOutcomeKind.RunProblem ? $", run {outcome.Run}" : "";
+        Log.Debug("BBS757", $"Ground power {wish}: outcome {outcome.Kind}{runEnd}.");
         if (_disposed) return;
         switch (outcome.Kind)
         {

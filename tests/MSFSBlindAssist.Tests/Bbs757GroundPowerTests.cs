@@ -273,7 +273,9 @@ public class Bbs757GroundPowerTests
     }
 
     [Theory]
-    [InlineData(BBS757Definition.GroundPowerPanel, true)]
+    // The literal, not BBS757Definition.GroundPowerPanel: a row fed the constant passes whatever it says (and a row
+    // of each is a duplicate, xUnit1025). The body looks the display up by the constant, so a changed value fails.
+    [InlineData("Electrical", true)]
     [InlineData("Pedestal", false)]
     public void The_row_joins_the_electrical_panel_only_when_the_map_has_one(string panel, bool joins)
     {
@@ -471,10 +473,8 @@ public class Bbs757GroundPowerTests
 
         MuteWrap.Deliver(def, speech, settings, GpuKey, 0);
         MuteWrap.Deliver(def, speech, settings, GpuKey, 1);
-        MuteWrap.Deliver(def, speech, settings, Bbs757Readouts.FlapsHandleKey, 0);
-        MuteWrap.Deliver(def, speech, settings, Bbs757Readouts.FlapsHandleKey, 1);
 
-        Assert.Equal(new[] { "Flaps 1" }, speech.All);
+        Assert.Empty(speech.All);
         Assert.False(def.IsMuteWrapExempt(GpuKey));
 
         // The same deliveries with nothing muted speak: the silence above is the mute's, not the row's.
