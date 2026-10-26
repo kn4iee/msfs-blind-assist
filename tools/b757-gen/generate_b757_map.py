@@ -28,7 +28,8 @@ What is derived and what is curated (curation.json):
             ORDER the pilot tabs through: the panels of a section (panel_order) and the controls of a panel
             (control_order). A curated label, position list, kind, exclusion or inclusion for a node the package
             does not have is an error (a stale entry never hides); so is a kind or an inclusion that does nothing,
-            and so is an order that names a panel or a node that is not there.
+            and so is an order that names a panel or a node that is not there. A kind only re-reads a control the
+            rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
@@ -92,10 +93,14 @@ KIND_MAP = {
     "select button": "select",
     "guard": "guard",
 }
-# The kinds curation may name for a control (curation 'kinds'), and the extractor kind each is built as: the row is
-# read as if the extractor had said so, so everything downstream (state var, click code, positions) follows. Only these
-# two, because the generator builds them from what a row already carries; a switch needs its values and a guard its cover.
-KIND_OVERRIDES = {"toggle": "toggle", "button": "momentary button"}
+# What curation's 'kinds' may make of a control the rules keep: (the kind the extractor read, the kind curation asks for)
+# -> the extractor kind the row is rebuilt as, so that everything downstream (state var, click code, positions) follows.
+# Two re-readings only, each a known misreading: a click that sets the control's own state var by a gate rather than a
+# flip reads as a momentary button (the APU fire handle) and is a toggle; a radio-style select that is only ever pressed
+# (the audio mic selects) is a button. Their state var and click code come out the same either way, so only the kind,
+# and the positions that follow from it, change.
+KIND_OVERRIDES = {("momentary button", "toggle"): "toggle", ("select button", "button"): "momentary button"}
+KIND_TARGETS = tuple(dict.fromkeys(wanted for _, wanted in KIND_OVERRIDES))
 # Words the cockpit prints in capitals: they stay upper case in a label made from a node name.
 ACRONYMS = frozenset((
     "APU IRS VHF HF ADF VOR DME EEC CVR EICAS CRT TCAS ILS GPS FMC CDU MCP EFIS ND PFD AT AP FD GND ENG ELEC HYD "
@@ -377,33 +382,60 @@ def state_var_for(row, out_kind, press):
     return state_var_of(row)
 
 
-def convert_row(row, cur):
-    """(control, None, suspected slips) or (None, why it is left out, [])."""
+def drop_reason(row, cur):
+    """Why the rules leave this row out, or None. It is decided on the row as the extractor read it: curation's 'kinds'
+    comes after and never changes the answer, so a kind only ever re-reads a control the rules keep."""
     kind, node = row["kind"], row["node"]
     if row["panel"] in cur["exclude_banners"] and node not in cur["include_nodes"]:
-        return None, "excluded banner", []
+        return "excluded banner"
     if node in cur["exclude_nodes"]:
-        return None, "excluded node", []
+        return "excluded node"
     if kind not in KIND_MAP:
-        return None, kind, []
-    if node in cur["kinds"]:  # curation knows better how this control works: build it as the extractor would have said
-        kind = KIND_OVERRIDES[cur["kinds"][node]]
-        row = dict(row, kind=kind)
+        return kind
     out_kind = KIND_MAP[kind]
-    values = None
-    if out_kind == "switch":
-        values = position_values(row)
-        if values is None:
-            spec = str(row.get("positions") or "").strip()
-            return None, f"{kind} with more than 12 positions" if spec else f"{kind} without positions", []
+    if out_kind == "switch" and position_values(row) is None:
+        spec = str(row.get("positions") or "").strip()
+        return f"{kind} with more than 12 positions" if spec else f"{kind} without positions"
+    press, _release, cw, ccw = click_fields(row, out_kind)
+    state_var = state_var_for(row, out_kind, press)
+    if not (press or cw or ccw or (out_kind == "switch" and state_var)):
+        return "no click code"
+    if out_kind not in ("button", "held") and state_var is None:
+        return "state is not an L:var"
+    return None
+
+
+def reread(row, wanted):
+    """The row as the extractor would have read it had it said `wanted` (curation 'kinds'). Only the re-readings in
+    KIND_OVERRIDES are made; any other is a curation error, so that "only the kind changes" holds."""
+    node, kind = row["node"], row["kind"]
+    built_as = KIND_OVERRIDES.get((kind, wanted))
+    if built_as is not None:
+        return dict(row, kind=built_as)
+    if KIND_MAP[kind] == wanted:
+        raise CurationError(f"curation kinds name {wanted} for {node}, which the extractor already reads that way "
+                            "(the entry does nothing, remove it)")
+    allowed = " and ".join(f"a {read} can be made a {to}" for read, to in KIND_OVERRIDES)
+    raise CurationError(f"curation kinds make {node} a {wanted}, but the extractor read it as a {kind}: only {allowed}")
+
+
+def convert_row(row, cur):
+    """(control, None, suspected slips) or (None, why it is left out, [])."""
+    node = row["node"]
+    why = drop_reason(row, cur)
+    if why:
+        return None, why, []
+    if node in cur["kinds"]:  # curation knows better how this kept control works: build it as the extractor would have said
+        row = reread(row, cur["kinds"][node])
+        why = drop_reason(row, cur)
+        if why:
+            raise CurationError(f"curation kinds make {node} a {cur['kinds'][node]}, which cannot be built from it: {why}")
+    out_kind = KIND_MAP[row["kind"]]
+    values = position_values(row) if out_kind == "switch" else None
     press, release, cw, ccw = click_fields(row, out_kind)
     suspected = [f"{name}: {what}" for name, code in (("press", press), ("release", release), ("cw", cw), ("ccw", ccw))
                  for what in suspected_slips(code)]
     state_var = state_var_for(row, out_kind, press)
-    if not (press or cw or ccw or (out_kind == "switch" and state_var)):
-        return None, "no click code", []
-    if out_kind not in ("button", "held") and state_var is None:
-        return None, "state is not an L:var", []
     spelling = cur["spelling"]
     if node in cur["positions"]:
         if values is None and out_kind in ("toggle", "guard", "select"):
@@ -547,7 +579,6 @@ def build_map(rows, cur, aircraft, version):
     suspected = {}
     unmapped = set()
     dropped_why = {}
-    read_as = {}  # node -> the kind the extractor gave the row that became the control
     for index, row in enumerate(rows):
         control, why, slips = convert_row(row, cur)
         if why:
@@ -557,7 +588,6 @@ def build_map(rows, cur, aircraft, version):
             dropped["duplicate node"] += 1
         else:
             seen.add(control["node"])
-            read_as[control["node"]] = row["kind"]
             if row["panel"] not in cur["panels"] and node_rule(row, cur) is None:
                 unmapped.add(row["panel"])
             if slips:
@@ -574,10 +604,6 @@ def build_map(rows, cur, aircraft, version):
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
     kept = {c["node"] for c in controls}
-    unchanged = sorted(n for n, k in cur["kinds"].items() if n in read_as and KIND_MAP.get(read_as[n]) == k)
-    if unchanged:
-        raise CurationError(f"curation kinds name the kind these nodes already have (the entry does nothing, remove "
-                            f"it): {', '.join(unchanged)}")
     included = set(cur["include_nodes"])
     both = sorted(included & set(cur["exclude_nodes"]))
     if both:
@@ -640,8 +666,8 @@ def load_curation(path) -> dict:
         if isinstance(entry, dict) and entry.get("section", "Other") not in SECTIONS:
             raise CurationError(f"{path}: panels[{banner!r}] names an unknown section")
     for node, kind in cur["kinds"].items():
-        if not isinstance(kind, str) or kind not in KIND_OVERRIDES:
-            raise CurationError(f"{path}: kinds[{node!r}] is {' or '.join(KIND_OVERRIDES)}")
+        if not isinstance(kind, str) or kind not in KIND_TARGETS:
+            raise CurationError(f"{path}: kinds[{node!r}] is {' or '.join(KIND_TARGETS)}")
     for rule in cur["node_panels"]:
         if "panel" not in rule or not ({"banner", "prefix"} & set(rule)):
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")

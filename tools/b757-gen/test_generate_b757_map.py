@@ -467,8 +467,10 @@ class Convert(unittest.TestCase):
         node = "BBS757_FIREHANDLE1_CLICK3"
         r = apu_fire_handle_row()
         r["_state"] = ["O:_AnimProgress"]
-        c, why = self.convert(r, curation(kinds={node: "toggle"}))
-        self.assertEqual((c, why), (None, "state is not an L:var"))
+        self.assertIsNone(self.convert(r)[1], "a button needs no state var")
+        # the entry asks for what the row cannot give: the run stops, the control is not quietly dropped
+        with self.assertRaisesRegex(g.CurationError, "cannot be built from it: state is not an L:var"):
+            self.convert(r, curation(kinds={node: "toggle"}))
         # a value the click code writes that the positions do not list still stops the run
         cur = curation(kinds={node: "toggle"}, positions={node: [{"value": 0, "label": "In"}, {"value": 2, "label": "Pulled"}]})
         with self.assertRaisesRegex(g.CurationError, "writes 1 .* outside its positions"):
@@ -493,12 +495,57 @@ class Convert(unittest.TestCase):
         self.assertEqual(c["press"], press)
 
     def test_a_curated_kind_never_rescues_a_control_the_rules_drop(self):
-        node = "B757_PED_LEVER"
-        cur = curation(kinds={node: "button"})
-        self.assertEqual(self.convert(row(node=node, kind="lever", positions="", left="1 (>L:X)"), cur), (None, "lever"))
-        self.assertEqual(self.convert(row(node=node, kind="toggle", left="(L:X) ! (>L:X)"),
-                                      curation(kinds={node: "button"}, exclude_nodes=[node])),
-                         (None, "excluded node"))
+        # The rules decide first, on the row as the extractor read it, in every family of drop; a kinds entry never
+        # changes the answer. None of these comes back as the toggle or button curation asks for, and none stops the run.
+        node = "B757_PED_X"
+        cases = [
+            ("excluded banner", row(node=node, kind="momentary button", positions="-", panel="CB OVERHEAD PANEL",
+                                    left="1 (>L:X)"), {}),
+            ("excluded node", row(node=node, kind="momentary button", positions="-", left="1 (>L:X)"),
+             {"exclude_nodes": [node]}),
+            ("lever", row(node=node, kind="lever", positions="", left="1 (>L:X)"), {}),
+            ("rotary knob finite with more than 12 positions",
+             row(node=node, kind="rotary knob finite", positions="range 0..39 step 1", cw="x", ccw="y"), {}),
+            ("multi-position switch without positions",
+             row(node=node, kind="multi-position switch", positions="", left="x"), {}),
+            ("no click code", row(node=node, kind="toggle"), {}),
+            ("state is not an L:var", row(node=node, kind="toggle", state=["A:SOMETHING"], left="1 (>K:SOMETHING)"), {}),
+        ]
+        for why, r, changes in cases:
+            for wanted in ("toggle", "button"):
+                with self.subTest(why=why, wanted=wanted):
+                    self.assertEqual(self.convert(r, curation(**changes)), (None, why))
+                    self.assertEqual(self.convert(r, curation(kinds={node: wanted}, **changes)), (None, why))
+
+    def test_a_curated_kind_only_re_reads_what_it_was_made_for(self):
+        # Two re-readings and no others, a momentary button as a toggle and a select as a button, so that "only the kind
+        # changes" holds: a guard's state var, a held button's hold time and a switch's turn codes would change with it.
+        node = "B757_PED_X"
+        kept = {
+            "toggle": row(node=node, kind="toggle", left="(L:X) ! (>L:X)"),
+            "momentary button": row(node=node, kind="momentary button", positions="-", left="1 (>L:X)"),
+            "select button": row(node=node, kind="select button", positions="-", left="1 (>L:X)"),
+            "guard": row(node=node, kind="guard", left="(L:X) ! (>L:X)"),
+            "held button": row(node=node, kind="held button", positions="-", left="1 (>L:X)", release="0 (>L:X)"),
+            "rotary knob finite": row(node=node, kind="rotary knob finite", positions="3",
+                                      cw="(L:X) 1 + 2 min (>L:X)", ccw="(L:X) 1 - 0 max (>L:X)"),
+            "multi-position switch": row(node=node, kind="multi-position switch", positions="3",
+                                         left="(L:X) 1 + 2 min (>L:X)", other=[("RightSingle", "(L:X) 1 - 0 max (>L:X)")]),
+        }
+        for read, wanted in (("momentary button", "toggle"), ("select button", "button")):
+            with self.subTest(read=read, wanted=wanted):
+                c, why = self.convert(kept[read], curation(kinds={node: wanted}))
+                self.assertEqual((why, c["kind"]), (None, wanted))
+        for read, wanted in (("toggle", "button"), ("select button", "toggle"), ("guard", "toggle"), ("guard", "button"),
+                             ("held button", "toggle"), ("held button", "button"), ("rotary knob finite", "toggle"),
+                             ("multi-position switch", "button")):
+            with self.subTest(read=read, wanted=wanted):
+                with self.assertRaisesRegex(g.CurationError, f"extractor read it as a {read}"):
+                    self.convert(kept[read], curation(kinds={node: wanted}))
+        for read, wanted in (("toggle", "toggle"), ("momentary button", "button")):
+            with self.subTest(read=read, wanted=wanted, does="nothing"):
+                with self.assertRaisesRegex(g.CurationError, "does nothing"):
+                    self.convert(kept[read], curation(kinds={node: wanted}))
 
 
 class SuspectedSlips(unittest.TestCase):
@@ -651,12 +698,23 @@ class WholeMap(unittest.TestCase):
         self.assertEqual(report["overrides_on_dropped"], ["A2_CB"])
 
     def test_a_curated_kind_changes_the_control_and_only_that_control(self):
-        m, _ = self.build(cur=curation(kinds={"B757_OVHD_LIGHT_BUTTON": "button"}))
+        m, _ = self.build(cur=curation(kinds={"B757_MCP_SPD_BUTTON": "toggle"}))
         by_node = {c["node"]: c for c in m["controls"]}
-        self.assertEqual((by_node["B757_OVHD_LIGHT_BUTTON"]["kind"], by_node["B757_OVHD_LIGHT_BUTTON"]["positions"]),
-                         ("button", []))
+        spd = by_node["B757_MCP_SPD_BUTTON"]
+        self.assertEqual((spd["kind"], [p["label"] for p in spd["positions"]]), ("toggle", ["Off", "On"]))
         self.assertEqual(by_node["B757_OVHD_BATTERY_BUTTON"]["kind"], "toggle")  # untouched
-        self.assertEqual(by_node["B757_MCP_SPD_BUTTON"]["kind"], "button")
+        self.assertEqual(by_node["B757_OVHD_LIGHT_SWITCH"]["kind"], "toggle")
+
+    def test_a_curated_kind_for_a_node_the_rules_drop_is_reported_and_changes_nothing(self):
+        # Not an error (a package update may drop a control a curation entry was written for), and not a rescue either:
+        # the control stays out, counted under the rule that dropped it, and the entry is named in the report.
+        node = "B757_OVHD_HUGE_KNOB"
+        rows = self.rows() + [row(node=node, kind="rotary knob finite", positions="range 0..39 step 1",
+                                  panel="ELECTRICAL PANEL", cw="x", ccw="y")]
+        m, report = self.build(rows, curation(kinds={node: "button"}))
+        self.assertEqual(report["dropped"]["rotary knob finite with more than 12 positions"], 1)
+        self.assertEqual(report["overrides_on_dropped"], [node])
+        self.assertNotIn(node, [c["node"] for c in m["controls"]])
 
     def test_a_curated_kind_the_control_already_has_does_nothing_so_it_is_an_error(self):
         # An entry that changes nothing is a stale one: it would go on claiming a fix BlueBird's own code now makes.
