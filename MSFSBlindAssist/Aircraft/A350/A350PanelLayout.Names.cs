@@ -138,6 +138,27 @@ public static partial class A350PanelLayout
         ["FUEL_TANK_TRANSFER_LEFT"] = "Left transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right transfer",
         ["FUEL_CTR_TANK_FEED"] = "Center tank feed",
         ["VENT_AVNCS_EXTRACT"] = "Avionics extract", ["VENT_CABIN_FANS"] = "Cabin fans", ["VENT_COOLING"] = "Cooling",
+        // FCU: placards as printed; each knob by what it sets, its push and pull apart; the two sides' twins by side.
+        ["FCU_AP_1"] = "AP 1", ["FCU_AP_2"] = "AP 2", ["FCU_ATHR"] = "A/THR", ["FCU_FD"] = "FD", ["FCU_LOC"] = "LOC",
+        ["FCU_APPR"] = "APPR", ["FCU_ALT"] = "ALT", ["FCU_SPD_MACH"] = "SPD/MACH", ["FCU_TRK_FPA"] = "HDG-V/S / TRK-FPA",
+        ["FCU_METER"] = "Metric altitude", ["FCU_TRUE_MAG"] = "TRUE/MAG",
+        ["FCU_SPD_KNOB_PUSH"] = "Speed knob push", ["FCU_SPD_KNOB_PULL"] = "Speed knob pull", ["FCU_SPD_KNOB"] = "Speed knob",
+        ["FCU_HDG_KNOB_PUSH"] = "Heading knob push", ["FCU_HDG_KNOB_PULL"] = "Heading knob pull", ["FCU_HDG_KNOB"] = "Heading knob",
+        ["FCU_ALT_KNOB_PUSH"] = "Altitude knob push", ["FCU_ALT_KNOB_PULL"] = "Altitude knob pull", ["FCU_ALT_KNOB"] = "Altitude knob",
+        ["FCU_VS_KNOB_PUSH"] = "V/S knob push", ["FCU_VS_KNOB_PULL"] = "V/S knob pull", ["FCU_VS_KNOB"] = "V/S knob",
+        ["FCU_ALT_SELECTOR"] = "Altitude 100/1000 selector",
+        ["FCU_CHRONO_LEFT"] = "Captain chrono", ["FCU_CHRONO_RIGHT"] = "First officer chrono",
+        ["FCU_LOUD_SPEAKER_LEFT"] = "Captain loudspeaker", ["FCU_LOUD_SPEAKER_RIGHT"] = "First officer loudspeaker",
+        ["FCU_HUD_BRIGHTNESS_LEFT"] = "Captain HUD brightness", ["FCU_HUD_BRIGHTNESS_RIGHT"] = "First officer HUD brightness",
+        ["FCU_HUD_XWIND_LEFT"] = "Captain HUD crosswind mode", ["FCU_HUD_XWIND_RIGHT"] = "First officer HUD crosswind mode",
+        ["INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID"] = "Captain HUD declutter",
+        ["INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID"] = "First officer HUD declutter",
+        ["FCU_MASTER_CAUTION_LEFT"] = "Captain master caution", ["FCU_MASTER_CAUTION_RIGHT"] = "First officer master caution",
+        ["FCU_MASTER_WARNING_LEFT"] = "Captain master warning", ["FCU_MASTER_WARNING_RIGHT"] = "First officer master warning",
+        ["FCU_AUTO_LAND_LEFT"] = "Captain autoland", ["FCU_AUTO_LAND_RIGHT"] = "First officer autoland",
+        ["FCU_ATC_MSG_LEFT"] = "Captain ATC message", ["FCU_ATC_MSG_RIGHT"] = "First officer ATC message",
+        ["FCU_SLIDING_TABLE_BRT_LEFT"] = "Captain sliding table light", ["FCU_SLIDING_TABLE_BRT_RIGHT"] = "First officer sliding table light",
+        ["FCU_DISPLAY_BRT"] = "FCU display brightness", ["FCU_INTEG_BRT"] = "FCU integral lighting",
         // Cargo, ground hydraulics, cabin, OIS, surveillance and maintenance: abbreviations spoken whole.
         ["CARGO_AIR_COND_AFT_ISOL_VALVE"] = "Aft isolation valves",
         ["CARGO_AIR_COND_FWD_ISOL_VALVE"] = "Forward isolation valves",
@@ -159,6 +180,16 @@ public static partial class A350PanelLayout
         ["MAINT_TOW_ON_BAT_POWER"] = "Towing on battery",
     };
 
+    /// <summary>Toggles the cockpit returns by itself within a second (light tests): a row presses them, once.
+    /// Live 2026-10-26: AUTOLAND's INI_AUTOLAND_LIGHT_TEST goes back to 0 on its own.</summary>
+    private static readonly HashSet<string> MomentaryToggles = new(StringComparer.Ordinal)
+    {
+        "FCU_AUTO_LAND_LEFT", "FCU_AUTO_LAND_RIGHT",
+    };
+
+    /// <summary>Whether a toggle is pressed rather than set (<see cref="MomentaryToggles"/>).</summary>
+    public static bool IsMomentary(A350Control control) => MomentaryToggles.Contains(Short(control.Id));
+
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
     private static readonly Dictionary<string, Dictionary<double, string>> PositionOverrides = new(StringComparer.Ordinal)
     {
@@ -168,6 +199,9 @@ public static partial class A350PanelLayout
         ["SIGNS_EMER_EXIT"] = new() { [0] = "On", [1] = "Arm", [2] = "Off" },
         ["EVAC_CAPT_PURS"] = new() { [0] = "Captain only", [1] = "Captain and purser" },
         ["ELT_GUARD"] = new() { [0] = "Closed", [1] = "Open" },   // its tooltip words are the click's action
+        ["FCU_FD"] = new() { [0] = "Off", [1] = "On" },
+        ["FCU_METER"] = new() { [0] = "Off", [1] = "On" },
+        ["FCU_TRUE_MAG"] = new() { [0] = "Magnetic", [1] = "True" },
         ["CABIN_PRESS_ALTITUDE_MODE"] = new() { [0] = "Auto", [1] = "Man" },   // the button's MAN legend
         ["CABIN_PRESS_VS_MODE"] = new() { [0] = "Auto", [1] = "Man" },
     };

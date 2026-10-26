@@ -154,6 +154,12 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 
 Indicator lamps with no control of their own sit on their panel after its button lights (`A350PanelLamps.Indicators`): cargo bottle 1-3 DISCH, avionics smoke, MLG bay fire, IRS on battery, lavatory occupied.
 
+### Glareshield panels, live-tested (A350-900, 1.2.7)
+
+| Panel | Rows | Verified | Notes |
+| --- | --- | --- | --- |
+| FCU | AP 1/2, A/THR, FD, LOC, APPR, ALT, SPD/MACH, HDG-V/S / TRK-FPA, metric altitude, TRUE/MAG; the four knobs' push, pull and turn; altitude 100/1000; both sides' chrono, loudspeaker, HUD brightness, crosswind and declutter, master caution and warning, autoland, ATC message, sliding table light; FCU brightness; the four windows as status lines | every row; the knobs land on the value typed | windows (`A350FcuWindows`): `INI_AIRSPEED_DIAL` holds knots or Mach (Mach below 5), TRK-FPA swaps to `INI_TRK_DIAL` / `INI_FPA_DIAL`, `_DASHED` and `_DOT` (managed) flags; the heading truncates and V/S carries its sign, as drawn. Turns step 1 kt or 0.01 Mach, 1°, 1000 ft (100/1000 selector), 100 ft/min or 0.1°. AUTOLAND is a light test the cockpit returns within a second, so its rows press (`A350PanelLayout.MomentaryToggles`) |
+
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 
 Every section's controls and displays use one of the paths above: cockpit interaction (push, pull, scroll), the OIS (FLT OPS PLAN/STS, LOADSHEET, charts list, T.O/LDG PERF with SYNC and SEND TO FMGS, AOC, GROUND incl. GSX, MAINTENANCE, SITUATIONS, FAILURES, AUTOSAVE, PANEL STATES, OPTIONS incl. 3RD PARTY), the FCU and its managed/selected modes, the MFD and KCCU (menu bar, interactive F-PLN, vertical revisions, C/L MENU checklists), EFIS CP and baro preset, ANF and BTV arming, the noise function (MFD PERF T.O), thrust levers, RMP tuning and squawk, the MFD SURV page (DEFAULT SETTINGS, CONFIRM), the HUD, sensed and not-sensed ECAM procedures, deferred procedures, STATUS, and the automatic emergency descent.

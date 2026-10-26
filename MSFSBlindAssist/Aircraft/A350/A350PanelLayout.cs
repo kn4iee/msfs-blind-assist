@@ -153,6 +153,9 @@ public static partial class A350PanelLayout
             string name = NameFor(control);
             switch (control.Kind)
             {
+                case A350Kinds.Toggle when IsMomentary(control):
+                    rows.Add(new A350PlacedRow(control.Key, name, A350RowAction.Press, control, new Dictionary<double, string>()));
+                    break;
                 case A350Kinds.Toggle:
                 case A350Kinds.Command:
                 case A350Kinds.Selector:

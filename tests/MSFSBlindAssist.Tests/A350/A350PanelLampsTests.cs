@@ -48,6 +48,14 @@ public class A350PanelLampsTests
     }
 
     [Fact]
+    public void Two_legends_of_one_button_lit_by_one_rule_are_one_light()
+    {
+        var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
+        Assert.Single(glareshield, l => l.Node.StartsWith("FCU_ATC_MSG_LEFT_", StringComparison.Ordinal));
+        Assert.Single(glareshield, l => l.Node.StartsWith("FCU_AUTO_LAND_LEFT_", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void No_two_lamps_on_a_panel_share_a_name()
     {
         foreach (var panel in Lamps.GroupBy(l => l.Panel))

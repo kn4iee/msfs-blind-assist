@@ -82,6 +82,19 @@ public static class A350PanelLamps
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
         ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL
+        // FCU: the mode buttons' lit bar; the master lights' two halves; one light per test button.
+        ["FCU_AP_1_SEQ1_LIGHT"] = "AP 1 light", ["FCU_AP_2_SEQ1_LIGHT"] = "AP 2 light", ["FCU_ATHR_SEQ1_LIGHT"] = "A/THR light",
+        ["FCU_LOC_SEQ1_LIGHT"] = "LOC light", ["FCU_APPR_SEQ1_LIGHT"] = "APPR light", ["FCU_ALT_SEQ1_LIGHT"] = "ALT light",
+        ["FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT"] = "Captain master caution light",
+        ["FCU_MASTER_CAUTION_LEFT_SEQ2_LIGHT"] = "Captain master caution lower light",
+        ["FCU_MASTER_CAUTION_RIGHT_SEQ1_LIGHT"] = "First officer master caution light",
+        ["FCU_MASTER_CAUTION_RIGHT_SEQ2_LIGHT"] = "First officer master caution lower light",
+        ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = "Captain master warning light",
+        ["FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT"] = "Captain master warning lower light",
+        ["FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT"] = "First officer master warning light",
+        ["FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT"] = "First officer master warning lower light",
+        ["FCU_AUTO_LAND_LEFT_SEQ1_LIGHT"] = "Captain autoland light", ["FCU_AUTO_LAND_RIGHT_SEQ1_LIGHT"] = "First officer autoland light",
+        ["FCU_ATC_MSG_LEFT_SEQ1_LIGHT"] = "Captain ATC message light", ["FCU_ATC_MSG_RIGHT_SEQ1_LIGHT"] = "First officer ATC message light",
         // Each cargo isolation valve's upper legend: lit while the valve and its button disagree.
         ["CARGO_AIR_COND_AFT_ISOL_VALVE_SEQ1_LIGHT"] = "Aft isolation valves fault light",
         ["CARGO_AIR_COND_FWD_ISOL_VALVE_SEQ1_LIGHT"] = "Forward isolation valves fault light",
@@ -141,8 +154,11 @@ public static class A350PanelLamps
                     if (row.Control is not { } control || !byControl.TryGetValue(control.Id, out var own))
                         continue;
                     string? stateVar = control.StateVar is { Length: > 2 } sv && sv[1] == ':' ? sv.Substring(2) : null;
+                    var rules = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var mapLamp in own.OrderBy(l => l.Node, StringComparer.Ordinal))
                     {
+                        if (!rules.Add(mapLamp.State))
+                            continue;   // a second legend lit by the same rule (ATC MSG, AUTOLAND): one light
                         var rule = A350LampRule.Parse(mapLamp.State);
                         if (stateVar != null && rule.Inputs.All(i => i == stateVar))
                             continue;   // its switch's own position legend

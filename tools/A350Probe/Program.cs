@@ -12,6 +12,7 @@ using MSFSBlindAssist.SimConnect;
 //                                                  logs the panel's lights and the watched L:vars that changed
 // A350Probe set "key=val[#ms];..." [watch,...]   - set, read back, restore
 // A350Probe keep "key=val[#ms];..." [watch,...]  - set and read back, no restore
+// A350Probe cache "key,key"                     - MSFSBA's cached value, a fresh read, and how each key streams
 // A350Probe disp <panel> [watch,...]             - the panel's status lines and the watched L:vars, read fresh
 internal static class Program
 {
@@ -137,6 +138,14 @@ internal sealed class ProbeForm : Form
         await Task.Delay(8000);   // registration, the first batches, the calculator-path probe
         Line($"connected={_m.IsConnected} full={_m.IsFullyConnected} calcOk={_m.CanExecuteCalculatorCode} canLand={_m.CalcWriteCanLand}");
         cap.Drain();
+
+        if (_mode == "cache")
+        {
+            // What MSFSBA's cache holds for each key (what a plan is made from), then a fresh read.
+            foreach (var key in _arg!.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                Line($"{key}	cache={Fmt(_m.GetCachedVariableValue(key))}	fresh={Fmt(await Read(key))}	batch={(vars[key].ExcludeFromBatch ? "own" : "batch")}");
+            return;
+        }
 
         if (_mode == "disp")
         {

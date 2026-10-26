@@ -76,6 +76,13 @@ public class A350WritePlanTests : IDisposable
     }
 
     [Fact]
+    public void A_light_test_the_cockpit_returns_itself_is_pressed_once()
+    {
+        // Live 2026-10-26: AUTOLAND flips INI_AUTOLAND_LIGHT_TEST to 1 and the cockpit puts it back within a second.
+        Assert.Equal(new[] { "1 (>B:AIRLINER_FCU_AUTO_LAND_LEFT_Set)" }, Rpn(A350WritePlan.ForPress(C("AIRLINER_FCU_AUTO_LAND_LEFT"))));
+    }
+
+    [Fact]
     public void A_button_is_pressed_once()
     {
         Assert.Equal(new[] { "1 (>B:AIRLINER_APU_START_Set)" }, Rpn(A350WritePlan.ForPress(C("AIRLINER_APU_START"))));

@@ -71,6 +71,24 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void The_fcu_windows_are_status_lines_on_the_fcu_panel()
+    {
+        var def = new WithSections("Glareshield");
+        def.Attach(_sim);
+        def.Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null;
+        Assert.Contains("A350_FCU_ALTITUDE_WINDOW", def.GetPanelDisplayVariables()["FCU"]);
+        Assert.Equal("INI_ALTITUDE_DIAL", def.GetVariables()["A350_FCU_ALTITUDE_WINDOW"].Name);
+        _cache["A350_FCU_ALTITUDE_WINDOW"] = 12000;
+        _cache["A350_IN_INI_FCU_ALT_DOT"] = 1;
+        Assert.True(def.TryGetDisplayOverride("A350_FCU_ALTITUDE_WINDOW", 12000, out var text));
+        Assert.Equal("12000 feet, managed", text);
+    }
+
+    [Fact]
+    public void The_fcu_windows_are_absent_while_the_glareshield_is_not_offered() =>
+        Assert.DoesNotContain("A350_FCU_ALTITUDE_WINDOW", _def.GetVariables().Keys);
+
+    [Fact]
     public void Every_overhead_row_is_a_registered_variable_on_its_panel()
     {
         var placement = A350PanelLayout.Place(A350ControlMap.Load());

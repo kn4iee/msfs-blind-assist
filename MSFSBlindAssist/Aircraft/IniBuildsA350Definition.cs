@@ -28,6 +28,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string AircraftName => "iniBuilds Airbus A350";
     public override string AircraftCode => Code;
 
+    private const string FcuPanel = "FCU";
+
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
     /// (the generated names elsewhere still collide, [VAR-1]).</summary>
     internal static readonly string[] CuratedSections = { "Overhead" };
@@ -44,6 +46,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     private readonly HashSet<string> _lampInputKeys = new(StringComparer.Ordinal);
 
     private readonly Dictionary<string, List<string>> _panelDisplays;
+
+    /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
+    private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
 
     /// <summary>Each encoder's value line (<see cref="A350Readouts"/>) by key: its control and its name.</summary>
     private readonly Dictionary<string, (A350Control Control, string Name)> _values = new(StringComparer.Ordinal);
@@ -115,6 +120,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             AddDisplay(lamp.Panel, lamp.Key);
         }
 
+        if (_placement.RowsByPanel.ContainsKey(FcuPanel) && _sections.Any(s => _placement.Structure[s].Contains(FcuPanel)))
+            foreach (var window in A350FcuWindows.All)
+            {
+                _fcuWindows[window.Key] = window;
+                _lampInputKeys.Add(window.Key);
+                _lampInputKeys.UnionWith(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
+                AddDisplay(FcuPanel, window.Key);
+            }
+
         void AddDisplay(string panel, string key)
         {
             if (!_panelDisplays.TryGetValue(panel, out var lines))
@@ -160,6 +174,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             displayText = lit ? "On" : "Off";
             return true;
         }
+        if (_fcuWindows.TryGetValue(varKey, out var window) && _sim is { } fcuSim
+            && window.Compose(input => Cached(fcuSim, input == window.Inputs[0] ? window.Key : A350PanelLamps.InputKey(input))) is string shown)
+        {
+            displayText = shown;
+            return true;
+        }
         if (_values.TryGetValue(varKey, out var readout))
         {
             displayText = A350Readouts.Format(readout.Control, value);
@@ -201,6 +221,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         {
             Register(option.Key, option.Var, option.Name + " option", Array.Empty<string>());
             vars[option.Key].ValueDescriptions = new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" };
+        }
+        foreach (var window in _fcuWindows.Values)
+        {
+            var keys = new List<string> { window.Key };
+            keys.AddRange(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
+            Register(window.Key, window.Inputs[0], window.Name, keys);
+            vars[window.Key].ValueDescriptions = new Dictionary<double, string>();
+            foreach (var input in window.Inputs.Skip(1))
+                if (!vars.ContainsKey(A350PanelLamps.InputKey(input)))
+                    Register(A350PanelLamps.InputKey(input), input, input, null);
         }
         foreach (var (key, value) in _values)
         {
