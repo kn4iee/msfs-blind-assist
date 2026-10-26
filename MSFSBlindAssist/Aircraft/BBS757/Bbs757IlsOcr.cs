@@ -12,7 +12,7 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 public sealed record Bbs757IlsReading(bool Parked, double? Mhz, int? Course);
 
 /// <summary>
-/// Reads the 757's ILS control panel display from a picture. The panel is a WASM gauge (<c>wasm_gauge=ils_cont</c>,
+/// Reads the 757's ILS control panel display from a picture. The panel is a WASM gauge (<c>wasm_gauge=ils_control_lcd</c>,
 /// 668 × 93) no variable mirrors; the app lays its live view over the simulator's 2D UI page with a filter that
 /// leaves white segments on black (<c>SimConnect/BBS757/CoherentBbs757IlsDisplay.cs</c>), captures the window, crops the
 /// box (<see cref="OverlayCrop"/>) and decodes it here as a seven-segment display. Pure.

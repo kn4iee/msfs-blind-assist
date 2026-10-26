@@ -1048,14 +1048,20 @@ Full snapshot 13:52:40 to 14:08:28:
 
 A read of the DOM of the two VCockpit pages (read only; the controller, 2026-10-26, after round 5). Every BlueBird gauge
 is a `WASM-INSTRUMENT` element whose `url` carries `wasm_gauge=<name>` and whose picture is an
-`<img src="WasmGaugeLiveView_N">`, so a gauge can be found by name; the number N can differ per load. As recorded, the
-names are the first eight characters of the full gauge names in `docs/b757/evidence/package/displays.tsv` (for example
-`ils_cont` for `ils_control_lcd`).
+`<img src="WasmGaugeLiveView_N">`, so a gauge can be found by name; the number N can differ per load. The first read
+cut each url at 120 characters, so it recorded only the names' first eight characters (`ils_cont` for `ils_control_lcd`),
+and the app's gauge search, written from it, looked for `wasm_gauge=ils_cont` exactly and never found the panel (the
+owner's first in-flight use, 2026-10-26 evening: "ILS tuning unknown"). A second read that evening gave the full names
+below, which match `docs/b757/evidence/package/displays.tsv`; the search now uses `ils_control_lcd`.
 
 | View | Gauges (live view where it was read) |
 |---|---|
-| `VCockpit15` (18 small panel gauges, `_0` to `_17`) | `ils_cont` (`_12`, 668 x 93), `vor_cont` x2 (`_7`, `_8`), `radio_tu` x3 (`_9`, `_10`, `_11`), `adf_cont` x2, `xpdr_con`, `rdmi_lcd` x2, `clock_lc` x2, `adi_dh_r` x2, `fuel_qty`, `aircon_d`, `sei_lcd` |
-| `VCockpit14` (the main displays) | `pfd_l`, `pfd_r`, `nd_l`, `nd_r`, `cdu_l`, `cdu_r`, `eicas`, `eicas_lo`, `efb_l`, `irs_disp` |
+| `VCockpit15` (18 small panel gauges, `_0` to `_17`) | `ils_control_lcd` (`_12`, 668 x 93), `vor_control_lcd_l`, `vor_control_lcd_r` (`_7`, `_8`), `radio_tuning_panel_lcd_l`, `_r`, `_c` (`_9`, `_10`, `_11`), `adf_control_lcd_l`, `_r`, `xpdr_control_lcd`, `rdmi_lcd_l`, `_r`, `clock_lcd_l`, `_r`, `adi_dh_ref_lcd_l`, `_r`, `fuel_qty_lcd_display`, `aircon_display`, `sei_lcd` |
+| `VCockpit14` (the main displays) | `pfd_l`, `pfd_r`, `nd_l`, `nd_r`, `cdu_l`, `cdu_r`, `eicas`, `eicas_lower`, `efb_l`, `irs_display` (full names from `displays.tsv`) |
+
+In flight on 2026-10-26 (FL275, about 100 NM from KMIA), the same read set the owner's ILS by hand through the knob
+requests: the panel showed `-----` (parked) with course 090; one MHz click down showed 111.10 (the hidden fraction was
+.10); one more MHz click down and two fraction clicks down gave `110.90   090`, read back from the picture.
 
 What it tells later plans: the ILS read (the gauge's picture laid on `mainUi`, filtered, captured and decoded, round 5)
 can reach any of these displays by name, not only the ILS panel. The `VCockpit15` panels are mostly LCDs like the ILS

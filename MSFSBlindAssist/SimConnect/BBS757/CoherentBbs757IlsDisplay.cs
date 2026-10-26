@@ -31,7 +31,7 @@ public interface IBbs757IlsDisplay : IDisposable
 /// <summary>
 /// Reads the BlueBird 757's ILS control panel display, which no variable mirrors and no instrument view
 /// shows (docs/b757/evidence/flight-04.md, "Round 5: reading the ILS display"). The panel is the WASM gauge
-/// <c>wasm_gauge=ils_cont</c> in one of the aircraft's VCockpit pages, drawn as an
+/// <c>wasm_gauge=ils_control_lcd</c> in one of the aircraft's VCockpit pages, drawn as an
 /// <c>&lt;img src="WasmGaugeLiveView_N"&gt;</c> (N changes with the load). A live view resolves in any Coherent
 /// view, so a read lays a copy of it over the simulator's 2D UI page (<c>mainUi</c>, drawn over the whole window
 /// whatever the camera does): a fixed black box at CSS (16,16), 668 × 93, on top of everything, never taking the
@@ -149,7 +149,7 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
             string? liveView = _liveView ?? await FindGaugeAsync(ct).ConfigureAwait(false);
             if (liveView == null)
             {
-                _debug("ILS display: the ILS gauge (wasm_gauge=ils_cont) was not found in the cockpit views.");
+                _debug("ILS display: the ILS gauge (wasm_gauge=ils_control_lcd) was not found in the cockpit views.");
                 return null;
             }
             _liveView = liveView;
@@ -451,12 +451,13 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
 
     /// <summary>
     /// In a VCockpit page: the live view name of the <c>&lt;img&gt;</c> inside the <c>wasm-instrument</c> whose
-    /// <c>url</c> holds <c>wasm_gauge=ils_cont</c>, or "" when the page has none.
+    /// <c>url</c> holds <c>wasm_gauge=ils_control_lcd</c> (the full name: a probe that cut urls short once
+    /// reported "ils_cont", which matches nothing), or "" when the page has none.
     /// </summary>
     internal const string FindGaugeScript = """
         (function(){var a=document.querySelectorAll('wasm-instrument');
         for(var i=0;i<a.length;i++){var u=a[i].getAttribute('url')||'';
-        if(!/[?&]wasm_gauge=ils_cont(&|$)/.test(u))continue;
+        if(!/[?&]wasm_gauge=ils_control_lcd(&|$)/.test(u))continue;
         var im=a[i].querySelector('img[src^="WasmGaugeLiveView_"]');if(im)return im.getAttribute('src');
         var all=a[i].querySelectorAll('img');
         for(var k=0;k<all.length;k++){var m=/WasmGaugeLiveView_\d+/.exec(all[k].getAttribute('src')||'');if(m)return m[0];}}

@@ -225,7 +225,25 @@ public class Bbs757IlsOcrTests
         Assert.Contains("devicePixelRatio", js);
         Assert.Contains(CoherentBbs757IlsDisplay.OverlayId, CoherentBbs757IlsDisplay.RemoveScript);
         Assert.Contains(CoherentBbs757IlsDisplay.OverlayId, js);   // a stale box of the same id is removed first
-        Assert.Contains("wasm_gauge=ils_cont", CoherentBbs757IlsDisplay.FindGaugeScript);
+        Assert.Contains("wasm_gauge=ils_control_lcd", CoherentBbs757IlsDisplay.FindGaugeScript);
+    }
+
+    [Theory]
+    [InlineData("ils_control_lcd", true)]
+    [InlineData("vor_control_lcd_l", false)]
+    [InlineData("adf_control_lcd_r", false)]
+    [InlineData("radio_tuning_panel_lcd_c", false)]
+    [InlineData("xpdr_control_lcd", false)]
+    public void The_gauge_search_matches_the_ils_panels_real_url(string gauge, bool isTheIlsPanel)
+    {
+        // The urls as the VCockpit page holds them (read in the sim on 2026-10-26, evening). The ILS panel's gauge
+        // is ils_control_lcd: an earlier probe cut urls at 120 characters and reported "ils_cont", and a search
+        // for that exact name never found the panel. The script's own pattern is run here against each url.
+        string url = "coui://html_ui/Pages/VCockpit/Instruments/WasmInstrument/WasmInstrument.html?wasm_module=BBS752.wasm&wasm_gauge=" + gauge;
+        var literal = System.Text.RegularExpressions.Regex.Match(CoherentBbs757IlsDisplay.FindGaugeScript, @"if\(!/(.+?)/\.test\(u\)\)");
+
+        Assert.True(literal.Success, "the script tests the url with one regex literal");
+        Assert.Equal(isTheIlsPanel, System.Text.RegularExpressions.Regex.IsMatch(url, literal.Groups[1].Value));
     }
 
     [Fact]
