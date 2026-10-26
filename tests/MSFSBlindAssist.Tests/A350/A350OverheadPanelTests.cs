@@ -290,8 +290,9 @@ public class A350OverheadPanelTests
         });
     }
 
-    /// <summary>Live 2026-10-26: both modes to MAN and back, DITCHING on and off; with a mode in MAN its target steps
-    /// 100 ft (altitude) or 100 ft/min (V/S) a click, read on the panel's status lines.</summary>
+    /// <summary>Live 2026-10-26: both modes to MAN and back, DITCHING on and off; each target typed to its range ends
+    /// (-2000 and 13500 ft, -1500 and +2500 ft/min), landed by the knob's own click (100 ft, 50 ft/min), read on the
+    /// panel's status lines.</summary>
     [Fact]
     public void Cabin_pressure()
     {

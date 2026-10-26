@@ -122,6 +122,7 @@ public partial class IniBuildsA350Definition
             double? shown = await ReadFresh(sim, key, ReadoutTimeoutMs);
             if (shown is double landed && !plan.Reached(landed) && !Superseded())
             {
+                Log.Debug("A350", $"{row.Key}: the click landed {A350WritePlan.Format(landed)}, not {A350WritePlan.Format(plan.Target)}; corrected");
                 Send(sim, plan.Correction.Rpn);   // e.g. a 1000 ft altitude step, or the managed speed's own preset
                 await Delay(TypedReadBackMs);
                 if (Superseded())

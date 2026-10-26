@@ -35,8 +35,9 @@ public class A350GlareshieldPanelTests
     private const A350RowAction Set = A350RowAction.Set;
 
     /// <summary>Live 2026-10-26 through MSFSBA's path: every button presses (SPD/MACH and HDG-V/S / TRK-FPA swap their
-    /// windows' units and flip back on a second press); each knob turns both ways (speed 1 kt or 0.01 Mach, heading 1°,
-    /// altitude 1000 ft, V/S 100 ft/min, FPA 0.1°), pushes and pulls; AUTOLAND is a light test the cockpit returns.</summary>
+    /// windows' units and flip back on a second press); each knob pushes and pulls, and its value is typed (knots and
+    /// Mach, heading and track, 100 and 1000 ft increments, V/S and FPA, and every refusal); AUTOLAND is a light test
+    /// the cockpit returns.</summary>
     [Fact]
     public void Fcu()
     {

@@ -3,9 +3,9 @@ using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350;
 
 /// <summary>
-/// The value an encoder sets, shown as a status line on its panel: an encoder row only steps it, so without the line
-/// the pilot could not tell where it is. Live 2026-10-26: the cabin altitude target steps 100 ft and the cabin V/S
-/// target 100 ft/min per click (in manual mode). Pure.
+/// The value an encoder sets, shown as a status line on its panel, beside its typed field or its stepping rows.
+/// The cabin altitude target steps 100 ft and the cabin V/S target 50 ft/min a click (CabPressSystem's handlers,
+/// WASM 1.2.7; measured live 2026-10-26). Pure.
 /// </summary>
 public static class A350Readouts
 {

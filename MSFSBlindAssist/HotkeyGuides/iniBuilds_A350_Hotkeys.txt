@@ -18,6 +18,13 @@ aircraft did not move is said once ("BAT 1 did not move"). Each panel's status d
 (Ctrl+3) reads its lights, the FCU's four windows and each side's baro as the cockpit shows
 them, and a button lit by its own light reads On or Off on its row.
 
+A knob whose value the cockpit shows is a typed field, as on the other Airbus aircraft: the
+FCU Speed, Heading, Altitude and VS/FPA fields, each side's QNH (in that side's unit) and the
+cabin altitude and V/S targets. Type the value and press Enter: the aircraft's own knob lands it
+and the value the cockpit then shows is said ("FCU speed 250, selected"). A value the knob
+cannot take is said instead (a Mach number while the speed window shows knots, a QNH while
+that side is on STD).
+
 The instrument panel and pedestal, the displays (PFD, ND, E/WD, SD, MFD), the OIS and the
 aircraft's own hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until
 then the hotkeys below are the ones every aircraft shares.
