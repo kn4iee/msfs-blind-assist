@@ -77,6 +77,9 @@ internal static class A350TypedEntry
         new("A350_CAPT_QNH_SET", "QNH (in Capt unit)", "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT", Side: 1);
     public static readonly A350TypedField FirstOfficerQnh =
         new("A350_FO_QNH_SET", "QNH (in F/O unit)", "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT", Side: 2);
+    /// <summary>The captain's ISIS: its baro is the sim's third altimeter setting (live 2026-10-26: a knob click moved
+    /// KOHLSMAN SETTING MB:3 1009.1 to 1010.1).</summary>
+    public static readonly A350TypedField IsisQnh = new("A350_ISIS_QNH_SET", "Captain QNH", "AIRLINER_ISIS_KNOB_1", Side: 3);
     public static readonly A350TypedField CabinAltitudeTarget =
         new("A350_CABIN_ALT_TARGET_SET", "Cabin altitude target (feet)", "AIRLINER_CABIN_PRESS_ALTITUDE_TARGET");
     public static readonly A350TypedField CabinVsTarget =
@@ -84,7 +87,7 @@ internal static class A350TypedEntry
 
     public static readonly IReadOnlyList<A350TypedField> All = new[]
     {
-        Speed, Heading, Altitude, VerticalSpeed, CaptainQnh, FirstOfficerQnh, CabinAltitudeTarget, CabinVsTarget,
+        Speed, Heading, Altitude, VerticalSpeed, CaptainQnh, FirstOfficerQnh, IsisQnh, CabinAltitudeTarget, CabinVsTarget,
     };
 
     private static readonly Dictionary<string, A350TypedField> ByControl =
@@ -110,6 +113,7 @@ internal static class A350TypedEntry
         _ when field == VerticalSpeed => new[] { "INI_VVI_DIAL", "INI_FPA_DIAL", "INI_TRACK_FPA_STATE" },
         _ when field == CabinAltitudeTarget => new[] { "INI_CABIN_PRESS_ALTITUDE_TARGET" },
         _ when field == CabinVsTarget => new[] { "INI_CABIN_PRESS_VS_TARGET" },
+        _ when field == IsisQnh => new[] { "KOHLSMAN SETTING MB:3" },
         _ => new[] { $"KOHLSMAN SETTING MB:{field.Side}", $"XMLVAR_Baro_Selector_HPA_{field.Side}", $"XMLVAR_Baro{field.Side}_Mode" },
     };
 
@@ -127,6 +131,7 @@ internal static class A350TypedEntry
                 "Cabin altitude target", "feet"),
             _ when field == CabinVsTarget => PlanCabin(field, typed, read, "INI_CABIN_PRESS_VS_TARGET", 50, -1500, 2500,
                 "Cabin V/S target", "feet per minute"),
+            _ when field == IsisQnh => PlanIsis(typed, read),
             _ => PlanBaro(field, typed, read),
         };
     }
@@ -250,6 +255,27 @@ internal static class A350TypedEntry
                 ? (shown / MbPerInch).ToString("0.00", CultureInfo.InvariantCulture) + " inches"
                 : Whole(shown) + " hectopascals"),
             Kohlsman(targetMb, side));
+    }
+
+    /// <summary>
+    /// The ISIS keeps its unit and STD to itself (its gauge's own state, no variable), so a typed QNH is taken in either
+    /// unit by its size, as the A380's ranges, and landed from one hectopascal short; when the ISIS shows inches its
+    /// click steps a hundredth of an inch and the read-back writes the value.
+    /// </summary>
+    private static A350TypedPlan PlanIsis(double typed, Func<string, double?> read)
+    {
+        bool inches = typed >= 26.6 && typed <= 32.5;
+        double targetMb = inches ? Math.Round(typed, 2, MidpointRounding.AwayFromZero) * MbPerInch : Math.Round(typed, MidpointRounding.AwayFromZero);
+        if (!inches && (targetMb < 900 || targetMb > 1100))
+            return A350TypedPlan.Refused("QNH must be between 900 and 1100 hectopascals, or 26.6 and 32.5 inches.");
+        if (read("KOHLSMAN SETTING MB:3") is not double mb)
+            return A350TypedPlan.Refused(A350WritePlan.UnknownPositionRefusal);
+        int dir = targetMb >= mb ? 1 : -1;
+        return Landing("KOHLSMAN SETTING MB:3", targetMb, 0.1, Kohlsman(targetMb - dir, 3), Click(IsisQnh, dir),
+            (shown, _) => "ISIS altimeter set " + (inches
+                ? (shown / MbPerInch).ToString("0.00", CultureInfo.InvariantCulture) + " inches"
+                : Whole(shown) + " hectopascals"),
+            Kohlsman(targetMb, 3));
     }
 
     /// <summary>The sim's own baro event for one side: millibars ×16, then the side (the cockpit's own order).</summary>

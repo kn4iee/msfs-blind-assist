@@ -79,6 +79,15 @@ public sealed class A350FcuWindowsTests : IDisposable
     public void A_sim_variable_input_is_named_with_its_unit() =>
         Assert.Equal("millibars", A350FcuWindows.StockUnits["KOHLSMAN SETTING MB:1"]);
 
+    /// <summary>The ISIS keeps its unit and STD to itself, so its line is the setting the sim holds, in both units.</summary>
+    [Fact]
+    public void The_isis_line_is_its_qnh_setting_in_both_units()
+    {
+        var isis = W("ISIS QNH setting");
+        Assert.Equal("ISIS", isis.Panel);
+        Assert.Equal("1009 hectopascals, 29.80 inches", Read(isis, ("KOHLSMAN SETTING MB:3", 1009.14)));
+    }
+
     [Fact]
     public void An_unread_input_composes_nothing() =>
         Assert.Null(Read(W("Altitude window"), ("INI_ALTITUDE_DIAL", 10000)));

@@ -30,7 +30,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
     /// (the generated names elsewhere still collide, [VAR-1]).</summary>
-    internal static readonly string[] CuratedSections = { "Overhead", "Glareshield" };
+    internal static readonly string[] CuratedSections = { "Overhead", "Glareshield", "Instrument" };
 
     private readonly A350Placement _placement;
 
@@ -374,6 +374,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     RefreshControlWhenDefHandled = _ => true,
                 };
             }
+
+            case A350RowAction.Custom:   // a choice the knob's own clicks make (A350RunwayCondition); nothing reads it back
+                return new SimVarDefinition
+                {
+                    Name = "MSFSBA_" + row.Key,
+                    DisplayName = row.Name,
+                    Type = SimVarType.LVar,
+                    UpdateFrequency = UpdateFrequency.Never,
+                    ValueDescriptions = new Dictionary<double, string>(row.Positions),
+                };
 
             case A350RowAction.Typed:   // a "_SET" key: MainForm renders a typed field, applied by Enter
                 return new SimVarDefinition

@@ -28,6 +28,12 @@ public static class A350Options
     {
         new A350Option("INI_OPTION_FUEL_JETTISON", "Fuel jettison", new[] { "AIRLINER_JETTISON_ARM", "AIRLINER_JETTISON_ACTIVE" }),
         new A350Option("INI_OPTION_BRAKE_FANS", "Brake fans", new[] { "AIRLINER_LDG_BRK_HOT" }, Plural: true),
+        // Without it the cockpit shows no first officer's ISIS (SKEL_INT_OPTION_FO_ISIS_VISIBILITY_ON/OFF).
+        new A350Option("INI_OPTION_FO_ISIS", "First officer ISIS", new[]
+        {
+            "AIRLINER_ISIS_KNOB_BUTTON_2", "AIRLINER_ISIS_LS_2", "AIRLINER_ISIS_MENU_2", "AIRLINER_ISIS_MINUS_2",
+            "AIRLINER_ISIS_MODE_2", "AIRLINER_ISIS_PLUS_2", "AIRLINER_ISIS_KNOB_2",
+        }),
     };
 
     private static readonly Dictionary<string, A350Option> ByControl =

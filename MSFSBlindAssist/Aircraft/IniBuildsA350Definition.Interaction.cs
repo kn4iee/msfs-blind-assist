@@ -57,6 +57,7 @@ public partial class IniBuildsA350Definition
             A350RowAction.Press => A350WritePlan.ForPress(control),
             A350RowAction.Increase => A350WritePlan.ForStep(control, increase: true),
             A350RowAction.Decrease => A350WritePlan.ForStep(control, increase: false),
+            A350RowAction.Custom when control.Id == A350RunwayCondition.KnobId => A350RunwayCondition.Plan(control, value),
             _ => A350Plan.Refused(A350WritePlan.NotSettableRefusal),
         };
         // A spring switch returns to its rest, so the position to remember is the rest.

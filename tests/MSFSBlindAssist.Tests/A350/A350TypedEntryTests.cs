@@ -215,6 +215,21 @@ public class A350TypedEntryTests
     }
 
     [Fact]
+    public void The_isis_qnh_is_the_third_altimeter_typed_in_either_unit()
+    {
+        var read = State(("KOHLSMAN SETTING MB:3", 1009.14));
+        var plan = A350TypedEntry.Plan(A350TypedEntry.IsisQnh, 1013, read);
+        Assert.Equal(new[] { "16192 3 r (>K:2:KOHLSMAN_SET)", "1 (>B:AIRLINER_ISIS_KNOB_1_Set)" }, Rpns(plan));
+        Assert.Equal(("KOHLSMAN SETTING MB:3", 1013.0), (plan.ReadBackVar, plan.Target));
+        Assert.Equal("ISIS altimeter set 1013 hectopascals", plan.Confirm(1013, read));
+        var inches = A350TypedEntry.Plan(A350TypedEntry.IsisQnh, 29.92, read);
+        Assert.Equal(29.92 * 33.8639, inches.Target, 3);
+        Assert.Equal("ISIS altimeter set 29.92 inches", inches.Confirm(29.92 * 33.8639, read));
+        Assert.Equal("QNH must be between 900 and 1100 hectopascals, or 26.6 and 32.5 inches.",
+            A350TypedEntry.Plan(A350TypedEntry.IsisQnh, 500, read).Refusal);
+    }
+
+    [Fact]
     public void The_cabin_targets_take_the_aircrafts_own_steps_and_limits()
     {
         var alt = A350TypedEntry.Plan(A350TypedEntry.CabinAltitudeTarget, 3050, State(("INI_CABIN_PRESS_ALTITUDE_TARGET", 0)));
@@ -255,10 +270,10 @@ public class A350TypedEntryTests
     [Fact]
     public void Every_field_is_a_typed_box_for_its_encoder()
     {
-        Assert.Equal(8, A350TypedEntry.All.Count);
+        Assert.Equal(9, A350TypedEntry.All.Count);
         Assert.All(A350TypedEntry.All, f => Assert.Contains("_SET", f.Key));
         Assert.Equal(A350TypedEntry.All.Count, A350TypedEntry.All.Select(f => f.ControlId).Distinct().Count());
         Assert.Same(A350TypedEntry.Speed, A350TypedEntry.ForControl("AIRLINER_FCU_SPD_KNOB"));
-        Assert.Null(A350TypedEntry.ForControl("AIRLINER_ISIS_KNOB_1"));   // no value the cockpit shows yet
+        Assert.Null(A350TypedEntry.ForControl("AIRLINER_ISIS_KNOB_2"));   // the first officer's unit shows no baro the sim keeps
     }
 }

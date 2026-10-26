@@ -116,7 +116,7 @@ Failure test: OIS FAILURES → PRIM 1 FAULT gave the amber `F/CTL PRIM 1 FAULT`,
 
 MSFSBA writes a row with its own input event, `value (>B:AIRLINER_<id>_Set)`, on the calculator path (`A350WritePlan`). `tools/A350Probe` drives rows through MSFSBA's own definition and SimConnect path (`live <panel> [watched L:vars]` tries every position, reads back, restores, and logs the panel's lights and the watched variables that changed); close MSFSBA first. Probing the same path with the simconnect MCP's `execute_calculator_code`: each string lands only when the NEXT calculator string arrives, so a read straight after a write shows the previous write. Follow every probe write with a harmless unique string (`n (>L:MSFSBA_CALC_TEST)`) before reading back.
 
-Only the Overhead section is offered so far; a section joins once each of its panels has been driven live (`IniBuildsA350Definition.CuratedSections`). The panels' lights come from the map's emissive rules (`A350PanelLamps`): a lamp belongs to the row whose id is the longest prefix of its node, reads On only while its rule holds and its bus's light power (`INI_AC_LIGHTS_FAILURE` / `INI_DC_LIGHTS_FAILURE`, 1 = powered) is on, and a legend that reads nothing but its own switch is left out.
+The Overhead, Glareshield and Instrument sections are offered; a section joins once each of its panels has been driven live (`IniBuildsA350Definition.CuratedSections`). The panels' lights come from the map's emissive rules (`A350PanelLamps`): a lamp belongs to the row whose id is the longest prefix of its node, reads On only while its rule holds and its bus's light power (`INI_AC_LIGHTS_FAILURE` / `INI_DC_LIGHTS_FAILURE`, 1 = powered) is on, and a legend that reads nothing but its own switch is left out.
 
 ### Overhead subpanels, live-tested (A350-900, 1.2.7)
 
@@ -165,6 +165,18 @@ Indicator lamps with no control of their own sit on their panel after its button
 | Warnings | both sides' chrono, master caution, master warning, autoland and ATC message; their lights | every button | the A380's Warnings panel; AUTOLAND as on the FCU row |
 | HUD | both sides' HUD brightness, crosswind mode and declutter | every row | |
 | Loudspeakers and Table Lights | both sides' loudspeaker and sliding table light knobs | the knobs land on the value typed | |
+
+### Instrument panels, live-tested (A350-900, 1.2.7)
+
+| Panel | Rows | Verified | Notes |
+| --- | --- | --- | --- |
+| Gear | gear lever, anti-skid, brake fans; brakes hot light; the brake fans option line | every position; the brake fans run (`INI_Brake_Fans_ANIM`) | UP is refused on the ground by the aircraft's own interlock and said ("Gear lever did not move"). The lever writes the aircraft's key events (`INI.GEAR_UP`/`DOWN`), read on `INI_GEAR_HANDLE_STATUS` |
+| Autobrake | runway condition knob push and pull, runway condition (a choice), runway condition or braking action, A/BRK; A/BRK light | A/BRK arms and disarms (`INI_AUTOBRAKE_ARMED`; level 4 = RTO on the ground); every runway condition picked and checked in the WASM's own index | `A350RunwayCondition`: the pick is an index the WASM keeps to itself (`GEAR::Update`, 0 DRY to 5 ICE, in its memory), moved one step a click only while the knob's menu is open on the SD (pull). Five clicks up land on DRY whatever was picked, then one down per code below 6, then a push; 300 ms between clicks (at 150 ms a long frame lost one). The words are the SD menu's. `INI_AUTOBRAKE_LEVEL` stays 0 on the ground |
+| ISIS | each unit's STD/CHANGE, LS/DIR TO, menu, minus, mode, plus; the captain's QNH (typed); the first officer's set/sel knob; the ISIS QNH setting as a status line; the first officer ISIS option line | each key's command is consumed by the ISIS (`INI_ISIS1_*`, `INI_ISIS2_*` back to 0); the QNH typed in hPa and inches | the keys are holds whose set code acts only on 2. What the ISIS then shows (STD, LS, its menu) is its gauge's own state, no variable: the emulated draw answers sim variables with defaults, so it is read with the in-app display reader. The captain's baro is the sim's `KOHLSMAN SETTING MB:3` (a click moved it 1009.1 to 1010.1); the first officer's unit (an option, `INI_OPTION_FO_ISIS`) changes no sim baro |
+| Source Switching | FMS source, air data source | every position | |
+| Display Power | captain and first officer OIS displays, captain and first officer outer displays, center lower and center upper displays | each off and on | named by what went dark: `INI_EFB1_STATE` / `INI_EFB2_STATE` (the OIS displays), the captain's EFIS draw (PFD and ND), `INI_MFD_STATE` and the MFD draw (center lower), the centre draw (E/WD and SD, center upper); a display powered again runs its SAFETY TEST |
+| Captain / First Officer Side Panel | pedal light, OIS switch (EFB, NEUTRAL, AVNCS), OIS view offside, console light, map light; OIS view offside INOP and on lights | every row; the knobs land on the value typed | the OIS switch springs back to NEUTRAL, and only the cockpit sound reads it. OIS VIEW OFFSIDE shows the other side's OIS, one side at a time: the other side's button then reads INOP |
+| Captain / First Officer Individual Panel | lateral vent and defog, foot vent, heater (HIGH, LOW, OFF) | every row and position | |
 
 ### Typed values (`A350TypedEntry`)
 

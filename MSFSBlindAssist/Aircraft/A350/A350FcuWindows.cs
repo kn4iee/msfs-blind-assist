@@ -53,11 +53,12 @@ public static class A350FcuWindows
 {
     private const string TrkFpa = "INI_TRACK_FPA_STATE";
 
-    /// <summary>The sim variables a window reads, with the unit each is read in; every other input is an A350 L:var.</summary>
+    /// <summary>The sim variables a window or a typed field reads, with the unit each is read in; every other input is an A350 L:var.</summary>
     public static readonly IReadOnlyDictionary<string, string> StockUnits = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["KOHLSMAN SETTING MB:1"] = "millibars",
         ["KOHLSMAN SETTING MB:2"] = "millibars",
+        ["KOHLSMAN SETTING MB:3"] = "millibars",   // the ISIS's, read by its typed QNH
     };
 
     public static readonly IReadOnlyList<A350FcuWindow> All = new[]
@@ -77,6 +78,10 @@ public static class A350FcuWindows
                     : "V/S " + Math.Round(v("INI_VVI_DIAL")).ToString("+0;-0;0", CultureInfo.InvariantCulture) + " feet per minute")),
         Baro("Captain baro", 1, "EFIS Captain"),
         Baro("First officer baro", 2, "EFIS First Officer"),
+        // The ISIS keeps its unit and STD to itself (its gauge's own state): its line is the setting the sim holds.
+        new A350FcuWindow("ISIS QNH setting", new[] { "KOHLSMAN SETTING MB:3" },
+            v => Whole(v("KOHLSMAN SETTING MB:3")) + " hectopascals, "
+                + (v("KOHLSMAN SETTING MB:3") / 33.8639).ToString("0.00", CultureInfo.InvariantCulture) + " inches", "ISIS"),
     };
 
     /// <summary>

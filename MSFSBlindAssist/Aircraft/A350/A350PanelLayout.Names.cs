@@ -240,6 +240,32 @@ public static partial class A350PanelLayout
         ["MAINT_GROUND_HF_DATALINK"] = "Ground HF datalink",
         ["MAINT_SVCE_INT_OVRD"] = "Service interphone override",
         ["MAINT_TOW_ON_BAT_POWER"] = "Towing on battery",
+        // Instrument panel: the A380's names where it has the control (Gear lever, Anti-skid), the placards elsewhere.
+        ["LDG_LEVER"] = "Gear lever", ["LDG_ANTI_SKID"] = "Anti-skid",
+        ["LDG_RWY_COND_BRK_ACTION_SELECTOR_PUSH"] = "Runway condition knob push",
+        ["LDG_RWY_COND_BRK_ACTION_SELECTOR_PULL"] = "Runway condition knob pull",
+        ["LDG_RWY_COND_BRK_ACTION_MODE_SELECTOR"] = "Runway condition or braking action",
+        ["LDG_AUTO_BRK"] = "A/BRK",
+        ["ADIRS_FMS_FMS_SELECTOR"] = "FMS source", ["ADIRS_FMS_AIR_DATA_SELECTOR"] = "Air data source",
+        // Display power: each display by what goes dark without it (live 2026-10-26, through the display reader and the
+        // OIS's INI_EFB1/EFB2_STATE and INI_MFD_STATE); every switch's tooltip is "ON/OFF".
+        ["DISPLAY_EFB_LEFT_PWR"] = "Captain OIS display", ["DISPLAY_EFB_RIGHT_PWR"] = "First officer OIS display",
+        ["DISPLAY_EFIS_LEFT_PWR"] = "Captain outer display", ["DISPLAY_EFIS_RIGHT_PWR"] = "First officer outer display",
+        ["DISPLAY_PFDND_MFD_PWR"] = "Center lower display", ["DISPLAY_SD_PWR"] = "Center upper display",
+        // Side and individual panels: each side's panel holds its own, so the names are the placards'.
+        ["MIP_PEDAL_LT_LEFT"] = "Pedal light", ["MIP_PEDAL_LT_RIGHT"] = "Pedal light",
+        ["OIS_AVNCS_EFB_LEFT"] = "OIS switch", ["OIS_AVNCS_EFB_RIGHT"] = "OIS switch",
+        ["MIP_CONSOLE_BRT_LEFT"] = "Console light", ["MIP_CONSOLE_BRT_RIGHT"] = "Console light",
+        ["MIP_MAP_BRT_LEFT"] = "Map light", ["MIP_MAP_BRT_RIGHT"] = "Map light",
+        ["INDIV_LAT_VENT_DEFOG_LEFT"] = "Lateral vent and defog", ["INDIV_LAT_VENT_DEFOG_RIGHT"] = "Lateral vent and defog",
+        ["INDIV_FOOT_VENT_LEFT"] = "Foot vent", ["INDIV_FOOT_VENT_RIGHT"] = "Foot vent",
+        ["INDIV_HEATER_LEFT"] = "Heater", ["INDIV_HEATER_RIGHT"] = "Heater",
+        // ISIS: both units' keys on one panel, by side.
+        ["ISIS_KNOB_BUTTON_1"] = "Captain STD/CHANGE", ["ISIS_LS_1"] = "Captain LS/DIR TO", ["ISIS_MENU_1"] = "Captain menu",
+        ["ISIS_MINUS_1"] = "Captain minus", ["ISIS_MODE_1"] = "Captain mode", ["ISIS_PLUS_1"] = "Captain plus",
+        ["ISIS_KNOB_BUTTON_2"] = "First officer STD/CHANGE", ["ISIS_LS_2"] = "First officer LS/DIR TO",
+        ["ISIS_MENU_2"] = "First officer menu", ["ISIS_MINUS_2"] = "First officer minus", ["ISIS_MODE_2"] = "First officer mode",
+        ["ISIS_PLUS_2"] = "First officer plus", ["ISIS_KNOB_2"] = "First officer set/sel knob",
     };
 
     private static readonly Dictionary<double, string> NdModes = new()
@@ -265,6 +291,9 @@ public static partial class A350PanelLayout
     /// <summary>Whether a toggle is pressed rather than set (<see cref="MomentaryToggles"/>).</summary>
     public static bool IsMomentary(A350Control control) => MomentaryToggles.Contains(Short(control.Id));
 
+    /// <summary>The OIS switch's markings; declared before <see cref="PositionOverrides"/>, which reads it as it is built.</summary>
+    private static readonly Dictionary<double, string> OisSwitch = new() { [0] = "EFB", [1] = "Neutral", [2] = "AVNCS" };
+
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
     private static readonly Dictionary<string, Dictionary<double, string>> PositionOverrides = new(StringComparer.Ordinal)
     {
@@ -281,5 +310,8 @@ public static partial class A350PanelLayout
         ["EFIS_RANGE_LEFT"] = NdRanges, ["EFIS_RANGE_RIGHT"] = NdRanges,
         ["CABIN_PRESS_ALTITUDE_MODE"] = new() { [0] = "Auto", [1] = "Man" },   // the button's MAN legend
         ["CABIN_PRESS_VS_MODE"] = new() { [0] = "Auto", [1] = "Man" },
+        ["LDG_RWY_COND_BRK_ACTION_MODE_SELECTOR"] = new() { [0] = "Runway condition", [1] = "Braking action" },
+        ["ADIRS_FMS_AIR_DATA_SELECTOR"] = new() { [0] = "Captain on backup", [1] = "Auto", [2] = "First officer on backup" },
+        ["OIS_AVNCS_EFB_LEFT"] = OisSwitch, ["OIS_AVNCS_EFB_RIGHT"] = OisSwitch,
     };
 }
