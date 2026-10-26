@@ -347,7 +347,7 @@ public class Bbs757LandingAltitudeTests
         Assert.Equal(new[] { "Pressurization" }, noOverhead.GetPanelStructure()["Overhead"]);
         Assert.Equal(new[] { Bbs757LandingAltitude.SetKey }, noOverhead.GetPanelControls()["Pressurization"]);
         Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, noOverhead.GetPanelDisplayVariables()["Pressurization"]);
-        Assert.Equal(new[] { "Fuel control" }, noOverhead.GetPanelStructure()["Pedestal"]);
+        Assert.Equal("Fuel control", noOverhead.GetPanelStructure()["Pedestal"][0]);   // untouched by this panel (other plans append their own, such as plan 04's COM radios)
 
         // No controls at all.
         var empty = new Rig(new Bbs757ControlMap()).Def;
