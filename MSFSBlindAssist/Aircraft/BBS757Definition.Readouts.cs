@@ -460,16 +460,47 @@ public partial class BBS757Definition
 
     /// <summary>
     /// Plan 06's output-mode keys: Shift+1 to Shift+5 the flap maneuver speeds, Shift+6 VREF 30 and 25, from
-    /// the gross weight read fresh (<see cref="Bbs757FlapSpeeds"/>).
+    /// the gross weight read fresh (<see cref="Bbs757FlapSpeeds"/>); D and Shift+D the destination and the top
+    /// of climb or descent from the first officer's PROG page 1 (<see cref="Bbs757Prog"/>).
     /// </summary>
     partial void HandleReadoutHotkey(HotkeyAction action, SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
         Form parentForm, HotkeyManager hotkeyManager, ref bool handled)
     {
+        if (action is HotkeyAction.ReadDistanceToDest or HotkeyAction.ReadDistanceToTOD)
+        {
+            _ = ReadProgAsync(action == HotkeyAction.ReadDistanceToDest, announcer);
+            handled = true;
+            return;
+        }
         int index = FlapSpeedIndex(action);
         if (index < 0) return;
         _ = FlapManeuverSpeeds.AnnounceAsync(simConnect, announcer, R.TotalWeightKey, "BBS757",
             lbs => Bbs757FlapSpeeds.Describe(lbs, index));
         handled = true;
+    }
+
+    /// <summary>
+    /// D (<paramref name="destination"/>) or Shift+D: reads PROG page 1 on the first officer's CDU and speaks
+    /// its line, or <see cref="Bbs757Prog.NoCdu"/>. Never throws (fire and forget from the hotkey).
+    /// </summary>
+    private async Task ReadProgAsync(bool destination, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;
+            var ct = _lifetime.Token;
+            var screen = await Bbs757Prog.ReadPageOneAsync(CduPages, ct);
+            ct.ThrowIfCancellationRequested();
+            announcer.AnnounceImmediate(screen == null ? Bbs757Prog.NoCdu
+                : destination ? Bbs757Prog.DestinationPhrase(Bbs757Prog.Destination(screen))
+                : Bbs757Prog.TopPhrase(Bbs757Prog.TopOf(screen)));
+        }
+        catch (OperationCanceledException) { /* switched away */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"PROG readout failed: {ex.Message}");
+            announcer.AnnounceImmediate(Bbs757Prog.NoCdu);
+        }
     }
 
     /// <summary>The schedule index of a flap speed key (Shift+1 to Shift+6), or -1.</summary>
