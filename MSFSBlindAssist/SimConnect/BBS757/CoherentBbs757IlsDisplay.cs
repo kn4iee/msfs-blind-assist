@@ -49,7 +49,9 @@ public interface IBbs757IlsDisplay : IDisposable
 /// up to <see cref="MaxCaptures"/> captures about 50 ms apart until one decodes; at most
 /// <see cref="ReadCapMs"/> in all; the box is removed in a <c>finally</c>, on a token of its own, whatever
 /// happened (failure, timeout, the caller's cancellation), and the next inject removes any stale box of the same
-/// id first. Any failure is a null read and a <c>Log.Debug</c>. One read at a time.
+/// id first. Any failure is a null read and a <c>Log.Debug</c>; a timeout of the reader's own (the read's cap, the
+/// gauge search's, the removal's, an HTTP timeout) says where it was: "ILS display: timed out (gauge search)",
+/// "(inject)", "(capture/decode)", "(removal)". The caller's own cancellation is silent. One read at a time.
 ///
 /// Coherent ([DBG-9]: one inspector socket per view). The <c>mainUi</c> socket stays open while the reader
 /// lives (the definition disposes it on a switch away, with the radio windows), so a read costs about 0.17 s
@@ -62,9 +64,10 @@ public interface IBbs757IlsDisplay : IDisposable
 /// one-shot (<see cref="CoherentViewOwnership.TryEnterOneShot"/>). Every Coherent call is async; the capture runs
 /// on its own thread (<see cref="ScreenshotService.CaptureAsync"/>) and the decode on the pool.
 /// </summary>
-public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
+public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
 {
-    private const string DebuggerBase = "http://127.0.0.1:19999";
+    /// <summary>The Coherent GT debugger the simulator opens.</summary>
+    private const string Debugger = "127.0.0.1:19999";
 
     /// <summary>The simulator's 2D UI page's title (<c>coui://html_UI/Global/mainUI.html</c>).</summary>
     internal const string ViewNeedle = "mainUi";
@@ -89,6 +92,8 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
 
     private readonly Func<Task<byte[]?>> _capture;
     private readonly Func<Rectangle?> _clientRegion;
+    private readonly string _debugger;
+    private readonly Action<string> _debug;
     private readonly SemaphoreSlim _reads = new(1, 1);
     private readonly object _gate = new();
     private Inspector? _mainUi;
@@ -98,16 +103,24 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
     private string _lastPageSize = "";
     private bool _disposed;
 
-    public Bbs757IlsDisplay() : this(new ScreenshotService().CaptureAsync, SimClientRegion)
+    /// <summary>Where the read is, for the log line of a read that times out ("gauge search", "inject", "capture/decode").</summary>
+    private string _phase = "";
+
+    public CoherentBbs757IlsDisplay() : this(new ScreenshotService().CaptureAsync, SimClientRegion)
     {
     }
 
     /// <param name="capture">The window capture as PNG bytes (the whole window rectangle).</param>
     /// <param name="clientRegion">Where the client area lies in that capture; null: the whole capture.</param>
-    internal Bbs757IlsDisplay(Func<Task<byte[]?>> capture, Func<Rectangle?> clientRegion)
+    /// <param name="debugger">The Coherent debugger's host and port (tests: a local listener, never the sim's).</param>
+    /// <param name="debug">Where this reader's own debug lines go (tests); null: debug.log.</param>
+    internal CoherentBbs757IlsDisplay(Func<Task<byte[]?>> capture, Func<Rectangle?> clientRegion,
+        string debugger = Debugger, Action<string>? debug = null)
     {
         _capture = capture;
         _clientRegion = clientRegion;
+        _debugger = debugger;
+        _debug = debug ?? (message => Log.Debug("BBS757", message));
     }
 
     private bool IsDisposed
@@ -132,10 +145,11 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
         try
         {
             if (IsDisposed) return null;
+            _phase = "gauge search";
             string? liveView = _liveView ?? await FindGaugeAsync(ct).ConfigureAwait(false);
             if (liveView == null)
             {
-                Log.Debug("BBS757", "ILS display: the ILS gauge (wasm_gauge=ils_cont) was not found in the cockpit views.");
+                _debug("ILS display: the ILS gauge (wasm_gauge=ils_cont) was not found in the cockpit views.");
                 return null;
             }
             _liveView = liveView;
@@ -145,13 +159,19 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
             if (reading == null && !ct.IsCancellationRequested) _liveView = null;
             return reading;
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // A cap of this reader's own (the read's, the gauge search's) or an HTTP timeout, not the caller.
+            _debug($"ILS display: timed out ({_phase}).");
+            return null;
+        }
         catch (OperationCanceledException)
         {
-            return null;
+            return null;   // the caller's own cancellation (a reset, a switch away): silent
         }
         catch (Exception ex)
         {
-            Log.Debug("BBS757", $"ILS display read failed: {ex.GetType().Name}: {ex.Message}");
+            _debug($"ILS display read failed ({_phase}): {ex.GetType().Name}: {ex.Message}");
             return null;
         }
         finally
@@ -170,6 +190,7 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
         using var cap = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cap.CancelAfter(ReadCapMs);
         var token = cap.Token;
+        _phase = "inject";
 
         // Where the client area lies in the capture, before the box goes up (it does not keep it up longer).
         Rectangle? client = await Task.Run(_clientRegion, token).ConfigureAwait(false);
@@ -186,13 +207,15 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
                 injected = true;   // sent: it may land even if no answer comes
                 answer = await page.EvalAsync(inject, token).ConfigureAwait(false);
             }
+            if (answer == null) token.ThrowIfCancellationRequested();   // no answer in time: a timeout, said as one
             if (answer == null || !TryPageSize(answer, out double innerWidth, out double innerHeight, out double ratio))
             {
-                Log.Debug("BBS757", $"ILS display: the overlay was not laid ({(answer == null ? "no answer from mainUi" : "answer " + Shorten(answer))}).");
+                _debug($"ILS display: the overlay was not laid ({(answer == null ? "no answer from mainUi" : "answer " + Shorten(answer))}).");
                 return null;
             }
             LogPageSize(innerWidth, innerHeight, ratio, client);
 
+            _phase = "capture/decode";
             await Task.Delay(SettleMs, token).ConfigureAwait(false);
             for (int i = 0; i < MaxCaptures; i++)
             {
@@ -200,18 +223,18 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
                 byte[]? png = await _capture().WaitAsync(token).ConfigureAwait(false);
                 if (png == null)
                 {
-                    Log.Debug("BBS757", "ILS display: the simulator window could not be captured.");
+                    _debug("ILS display: the simulator window could not be captured.");
                     return null;
                 }
                 var (cropped, reading) = await Task.Run(() => DecodeCapture(png, client, innerWidth, innerHeight), token).ConfigureAwait(false);
                 if (!cropped)
                 {
-                    Log.Debug("BBS757", "ILS display: the overlay's box does not fit the capture at the page's scale.");
+                    _debug("ILS display: the overlay's box does not fit the capture at the page's scale.");
                     return null;
                 }
                 if (reading != null) return reading;
             }
-            Log.Debug("BBS757", $"ILS display: none of {MaxCaptures} captures decoded.");
+            _debug($"ILS display: none of {MaxCaptures} captures decoded.");
             return null;
         }
         finally
@@ -235,12 +258,17 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
                 var page = await MainUiAsync(fresh: attempt > 0, timeout.Token).ConfigureAwait(false);
                 if (page != null && await page.EvalAsync(RemoveScript, timeout.Token).ConfigureAwait(false) != null) return;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!timeout.IsCancellationRequested)
             {
-                // The page list or the connect failed, or the time ran out: one more try while there is time.
-                Log.Debug("BBS757", $"ILS display: the overlay's removal failed: {ex.GetType().Name}");
+                // The page list or the connect failed: one more try while there is time.
+                _debug($"ILS display: the overlay's removal failed: {ex.GetType().Name}");
+            }
+            catch (Exception)
+            {
+                // The time ran out: said below.
             }
         }
+        if (timeout.IsCancellationRequested) _debug("ILS display: timed out (removal).");
         Log.Warn("BBS757", "ILS display: the overlay could not be removed now; the next read removes it first.");
     }
 
@@ -261,7 +289,7 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
             $"mainUi {innerWidth}x{innerHeight} CSS px, devicePixelRatio {ratio}, client {(client is Rectangle c ? $"{c.Width}x{c.Height} at {c.X},{c.Y}" : "unknown")}");
         if (size == _lastPageSize) return;
         _lastPageSize = size;
-        Log.Debug("BBS757", $"ILS display: {size}.");
+        _debug($"ILS display: {size}.");
     }
 
     // ---- Coherent ----------------------------------------------------------------------------------------
@@ -285,7 +313,7 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
         var mainUi = pages.FirstOrDefault(IsMainUi);
         if (mainUi.Title == null) return null;
 
-        var page = await Inspector.OpenAsync(mainUi.Id, ct).ConfigureAwait(false);
+        var page = await Inspector.ConnectAsync(_debugger, mainUi.Id, ct).ConfigureAwait(false);
         if (page == null) return null;
         lock (_gate) _mainUi = page;
         return page;
@@ -321,9 +349,10 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
 
     /// <summary>
     /// The gauge's live view name ("WasmGaugeLiveView_12"), looked for in each VCockpit page this client may open
-    /// (<see cref="IsProbeable"/>) through a one-shot socket; null when none holds it.
+    /// (<see cref="IsProbeable"/>) through a one-shot socket, within <see cref="FindCapMs"/>; null when none holds
+    /// it. Throws when the cap or <paramref name="ct"/> fires (an unanswered probe included).
     /// </summary>
-    private static async Task<string?> FindGaugeAsync(CancellationToken ct)
+    private async Task<string?> FindGaugeAsync(CancellationToken ct)
     {
         using var cap = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cap.CancelAfter(FindCapMs);
@@ -332,14 +361,15 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
             if (!IsProbeable(title)) continue;
             using var oneShot = CoherentViewOwnership.TryEnterOneShot(title);
             if (oneShot == null) continue;
-            using var page = await Inspector.OpenAsync(id, cap.Token).ConfigureAwait(false);
+            using var page = await Inspector.ConnectAsync(_debugger, id, cap.Token).ConfigureAwait(false);
             if (page == null) continue;
             string? found = await page.EvalAsync(FindGaugeScript, cap.Token).ConfigureAwait(false);
             if (found != null && LiveViewName.IsMatch(found))
             {
-                Log.Debug("BBS757", $"ILS display: the ILS gauge is {found} in '{title}'.");
+                _debug($"ILS display: the ILS gauge is {found} in '{title}'.");
                 return found;
             }
+            cap.Token.ThrowIfCancellationRequested();   // a probe left unanswered by the cap: a timeout, said as one
         }
         return null;
     }
@@ -353,10 +383,10 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
            && !title.Contains(CoherentBbs757TabletClient.ViewNeedle, StringComparison.OrdinalIgnoreCase)
            && !title.Contains(CoherentBbs757EfbClient.ViewNeedle, StringComparison.OrdinalIgnoreCase);
 
-    private static async Task<List<(int Id, string Title, string Url)>> PageListAsync(CancellationToken ct)
+    private async Task<List<(int Id, string Title, string Url)>> PageListAsync(CancellationToken ct)
     {
         var pages = new List<(int, string, string)>();
-        string json = await Http.GetStringAsync($"{DebuggerBase}/pagelist.json", ct).ConfigureAwait(false);
+        string json = await Http.GetStringAsync($"http://{_debugger}/pagelist.json", ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
         foreach (var view in doc.RootElement.EnumerateArray())
         {
@@ -552,15 +582,18 @@ public sealed class Bbs757IlsDisplay : IBbs757IlsDisplay
 
         public bool IsOpen => _ws.State == WebSocketState.Open;
 
-        /// <summary>A new socket on the page; null when it cannot be had. Throws only when <paramref name="ct"/> fires.</summary>
-        public static async Task<Inspector?> OpenAsync(int pageId, CancellationToken ct)
+        /// <summary>
+        /// A new socket on the page (callers drop any old one on the same view first, [A380C-2]); null when it
+        /// cannot be had. Throws only when <paramref name="ct"/> fires.
+        /// </summary>
+        public static async Task<Inspector?> ConnectAsync(string debugger, int pageId, CancellationToken ct)
         {
             var ws = new ClientWebSocket();
             try
             {
                 using var connect = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 connect.CancelAfter(ConnectTimeoutMs);
-                await ws.ConnectAsync(new Uri($"ws://127.0.0.1:19999/devtools/inspector/{pageId.ToString(CultureInfo.InvariantCulture)}"),
+                await ws.ConnectAsync(new Uri($"ws://{debugger}/devtools/inspector/{pageId.ToString(CultureInfo.InvariantCulture)}"),
                     connect.Token).ConfigureAwait(false);
                 return new Inspector(ws);
             }

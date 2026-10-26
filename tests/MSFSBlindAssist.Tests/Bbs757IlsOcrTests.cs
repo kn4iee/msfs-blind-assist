@@ -2,6 +2,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
 
@@ -201,12 +203,12 @@ public class Bbs757IlsOcrTests
     public void The_gauge_is_looked_for_only_where_no_client_holds_the_view()
     {
         // One inspector socket per view ([DBG-9]): the tablet's and the EFB's pages are held for the 757's life.
-        Assert.True(Bbs757IlsDisplay.IsProbeable("VCockpit15"));
-        Assert.True(Bbs757IlsDisplay.IsProbeable("VCockpit30 - WasmInstrument - WasmInstrument"));
-        Assert.False(Bbs757IlsDisplay.IsProbeable("VCockpit28 - BBSTablet - WasmInstrument - WasmInstrument"));
-        Assert.False(Bbs757IlsDisplay.IsProbeable("VCockpit29 - BBSNavigraphMap"));
-        Assert.False(Bbs757IlsDisplay.IsProbeable("mainUi"));
-        Assert.False(Bbs757IlsDisplay.IsProbeable("Toolbar"));
+        Assert.True(CoherentBbs757IlsDisplay.IsProbeable("VCockpit15"));
+        Assert.True(CoherentBbs757IlsDisplay.IsProbeable("VCockpit30 - WasmInstrument - WasmInstrument"));
+        Assert.False(CoherentBbs757IlsDisplay.IsProbeable("VCockpit28 - BBSTablet - WasmInstrument - WasmInstrument"));
+        Assert.False(CoherentBbs757IlsDisplay.IsProbeable("VCockpit29 - BBSNavigraphMap"));
+        Assert.False(CoherentBbs757IlsDisplay.IsProbeable("mainUi"));
+        Assert.False(CoherentBbs757IlsDisplay.IsProbeable("Toolbar"));
     }
 
     [Fact]
@@ -214,16 +216,58 @@ public class Bbs757IlsOcrTests
     {
         // Round 5's overlay (measurements G1.1-G1.2): a fixed black box at (16,16) holding the live view at its
         // natural 668 x 93, on top of everything, never taking the mouse; white segments on black.
-        string js = Bbs757IlsDisplay.InjectScript("WasmGaugeLiveView_12");
+        string js = CoherentBbs757IlsDisplay.InjectScript("WasmGaugeLiveView_12");
 
         Assert.Contains("position:fixed;left:16px;top:16px;width:668px;height:93px;background:#000;z-index:2147483647;pointer-events:none", js);
         Assert.Contains("filter:grayscale(1) brightness(2.6) contrast(40)", js);
         Assert.Contains("\"WasmGaugeLiveView_12\"", js);
         Assert.Contains("innerWidth", js);
         Assert.Contains("devicePixelRatio", js);
-        Assert.Contains(Bbs757IlsDisplay.OverlayId, Bbs757IlsDisplay.RemoveScript);
-        Assert.Contains(Bbs757IlsDisplay.OverlayId, js);   // a stale box of the same id is removed first
-        Assert.Contains("wasm_gauge=ils_cont", Bbs757IlsDisplay.FindGaugeScript);
+        Assert.Contains(CoherentBbs757IlsDisplay.OverlayId, CoherentBbs757IlsDisplay.RemoveScript);
+        Assert.Contains(CoherentBbs757IlsDisplay.OverlayId, js);   // a stale box of the same id is removed first
+        Assert.Contains("wasm_gauge=ils_cont", CoherentBbs757IlsDisplay.FindGaugeScript);
+    }
+
+    [Fact]
+    public async Task A_read_that_times_out_says_where_and_a_canceled_one_says_nothing()
+    {
+        // A Coherent debugger that takes the connection and never answers: a local listener, never the sim's port.
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var held = new List<TcpClient>();
+        var accepting = Task.Run(async () =>
+        {
+            try
+            {
+                while (true) held.Add(await listener.AcceptTcpClientAsync());
+            }
+            catch (Exception)
+            {
+                // the listener stopped
+            }
+        });
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var display = new CoherentBbs757IlsDisplay(() => Task.FromResult<byte[]?>(null), () => null,
+            $"127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}", lines.Enqueue);
+        try
+        {
+            // The page list never answers: the gauge search's own cap ends the read, and the log says where.
+            Assert.Null(await display.ReadAsync(CancellationToken.None));
+            Assert.Contains("ILS display: timed out (gauge search).", lines);
+
+            // The caller's own cancellation (a flight load, a switch away): nothing in the log.
+            lines.Clear();
+            using var canceled = new CancellationTokenSource(200);
+            Assert.Null(await display.ReadAsync(canceled.Token));
+            Assert.Empty(lines);
+        }
+        finally
+        {
+            listener.Stop();
+            await accepting;
+            foreach (var client in held) client.Dispose();
+        }
     }
 }
 
