@@ -34,6 +34,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     private readonly A350Placement _placement;
 
+    /// <summary>The cockpit lights the curated panels show (<see cref="A350PanelLamps"/>), by key.</summary>
+    private readonly Dictionary<string, A350Lamp> _lamps = new(StringComparer.Ordinal);
+
+    /// <summary>Every key a light is made of: the lights' own, their rules' other variables, the two bus powers.</summary>
+    private readonly HashSet<string> _lampInputKeys = new(StringComparer.Ordinal);
+
+    private readonly Dictionary<string, List<string>> _panelDisplays;
+
     /// <summary>Variable key → the panel row it drives (every operable row).</summary>
     private readonly Dictionary<string, A350PlacedRow> _rows = new(StringComparer.Ordinal);
 
@@ -68,11 +76,22 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     public IniBuildsA350Definition()
     {
-        _placement = A350PanelLayout.Place(A350ControlMap.Load());
+        var map = A350ControlMap.Load();
+        _placement = A350PanelLayout.Place(map);
         foreach (var section in CuratedSections)
             foreach (var panel in _placement.Structure[section])
                 foreach (var row in _placement.RowsByPanel[panel])
                     _rows[row.Key] = row;
+
+        _panelDisplays = new Dictionary<string, List<string>>();
+        foreach (var lamp in A350PanelLamps.Resolve(map, _placement, CuratedSections))
+        {
+            _lamps[lamp.Key] = lamp;
+            _lampInputKeys.UnionWith(lamp.InputKeys);
+            if (!_panelDisplays.TryGetValue(lamp.Panel, out var lines))
+                _panelDisplays[lamp.Panel] = lines = new List<string>();
+            lines.Add(lamp.Key);
+        }
     }
 
     /// <summary>The SimConnect manager the definition writes through; MainForm calls this when the A350 is selected,
@@ -99,7 +118,20 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         CuratedSections.SelectMany(s => _placement.Structure[s])
             .ToDictionary(p => p, p => _placement.RowsByPanel[p].Select(r => r.Key).ToList());
 
-    public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new();
+    /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>
+    public override Dictionary<string, List<string>> GetPanelDisplayVariables() => _panelDisplays;
+
+    /// <summary>A light's status line as the cockpit shows it, its rule AND its bus's light power: "On" or "Off".
+    /// While an input is unread it is not composed, as on the iniBuilds A300.</summary>
+    public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
+    {
+        if (_lamps.TryGetValue(varKey, out var lamp) && _sim is { } sim && lamp.IsLit(key => Cached(sim, key)) is bool lit)
+        {
+            displayText = lit ? "On" : "Off";
+            return true;
+        }
+        return base.TryGetDisplayOverride(varKey, value, out displayText);
+    }
 
     /// <summary>
     /// One variable per panel row. Switch positions ride the continuous batches (no individual definitions); knobs
@@ -122,6 +154,37 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;
+        }
+
+        foreach (var lamp in _lamps.Values)
+            Register(lamp.Key, lamp.Rule.Inputs[0], lamp.Name, lamp.InputKeys);
+        foreach (var lamp in _lamps.Values)
+            foreach (var input in lamp.Rule.Inputs.Skip(1))
+                if (!vars.ContainsKey(lamp.KeyFor(input)))
+                    Register(lamp.KeyFor(input), input, input, null);
+        Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
+        Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
+
+        // A light streams its rule's first variable under its own key, which carries its status line; its rule's other
+        // variables and the bus powers stream once each, consumed silently. A name already batched streams on its own
+        // subscription ([VAR-7]).
+        void Register(string key, string name, string displayName, IReadOnlyList<string>? stateVariables)
+        {
+            var def = new SimVarDefinition
+            {
+                Name = name,
+                DisplayName = displayName,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,                     // consumed silently in ProcessSimVarUpdate
+                ExcludeFromMonitorManager = true,       // nothing speaks yet, so a Ctrl+M row would mute nothing ([VAR-9])
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
+                RenderAsReadOnlyStatus = stateVariables != null,
+                StateVariables = stateVariables,        // a power change repaints the line
+            };
+            if (!batchNames.Add(ContinuousBatchLayout.FullName(def)))
+                def.ExcludeFromBatch = true;
+            vars[key] = def;
         }
 
         // Every A350 write is a calculator-path string, dropped without a word when MobiFlight's WASM module is
@@ -199,6 +262,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             NotePickReached(varName, value);
             return true;
         }
+        if (_lampInputKeys.Contains(varName))
+            return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }
 

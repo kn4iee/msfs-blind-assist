@@ -129,6 +129,56 @@ public class IniBuildsA350DefinitionTests
         Assert.Equal(new[] { "BAT 1 unavailable" }, _speech.All);
     }
 
+    private const string BatFault = "A350_LT_ELEC_BAT_1_SEQ1_LIGHT";
+
+    [Fact]
+    public void A_panels_status_display_lists_its_lights()
+    {
+        var displays = _def.GetPanelDisplayVariables();
+        Assert.Contains(BatFault, displays["Electrical"]);
+        Assert.DoesNotContain("A350_LT_ELEC_BAT_1_SEQ2_LIGHT", displays["Electrical"]);   // the switch's own OFF legend
+    }
+
+    [Fact]
+    public void A_light_streams_its_rules_first_variable_and_repaints_on_its_bus_power()
+    {
+        var vars = _def.GetVariables();
+        var fault = vars[BatFault];
+        Assert.Equal("INI_BATTERY_1_FAULT", fault.Name);
+        Assert.Equal("BAT 1 fault light", fault.DisplayName);
+        Assert.True(fault.RenderAsReadOnlyStatus);
+        Assert.Contains(A350PanelLamps.DcPowerKey, fault.StateVariables!);
+        Assert.Equal(A350PanelLamps.DcPowerVar, vars[A350PanelLamps.DcPowerKey].Name);
+        Assert.Equal("INI_IRS1_STATE", vars["A350_IN_INI_IRS1_STATE"].Name);
+    }
+
+    [Fact]
+    public void A_light_reads_on_only_while_its_bus_lights_it()
+    {
+        _cache[BatFault] = 1;
+        _cache[A350PanelLamps.DcPowerKey] = 1;
+        Assert.True(_def.TryGetDisplayOverride(BatFault, 1, out var lit));
+        Assert.Equal("On", lit);
+        _cache[A350PanelLamps.DcPowerKey] = 0;
+        Assert.True(_def.TryGetDisplayOverride(BatFault, 1, out var dark));
+        Assert.Equal("Off", dark);
+    }
+
+    [Fact]
+    public void A_light_with_an_unread_input_is_not_composed()
+    {
+        _cache[BatFault] = 1;   // its bus's light power still unread: the iniBuilds A300's choice, never a guessed Off
+        Assert.False(_def.TryGetDisplayOverride(BatFault, 1, out _));
+    }
+
+    [Fact]
+    public void A_light_delivery_is_consumed_silently()
+    {
+        Assert.True(_def.ProcessSimVarUpdate(BatFault, 1, _speech));
+        Assert.True(_def.ProcessSimVarUpdate(A350PanelLamps.DcPowerKey, 0, _speech));
+        Assert.Empty(_speech.All);
+    }
+
     [Fact]
     public void The_calculator_path_probe_is_registered()
     {
