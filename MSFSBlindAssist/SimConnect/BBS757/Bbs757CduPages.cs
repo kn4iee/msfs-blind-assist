@@ -85,15 +85,16 @@ public sealed class Bbs757CduPages
     /// <summary>
     /// Brings up a page: the screen when it is already <paramref name="isWanted"/>; else, unless
     /// keys are queued, presses <paramref name="pageKey"/> and reads every 250 ms for up to 3 s until
-    /// it is. Null otherwise. A caller wanting page 1 of a set passes a predicate for any page of it,
-    /// then uses <see cref="PageCount"/> and <see cref="PressKeysAsync"/> with PREV.
+    /// it is. Null otherwise. A screen that reads null is not the page wanted: the first officer's
+    /// CDU has no frame after an aircraft load until its screen first changes, and the page key is
+    /// what brings it. A caller wanting page 1 of a set passes a predicate for any page of it, then
+    /// uses <see cref="PageCount"/> and <see cref="PressKeysAsync"/> with PREV.
     /// </summary>
     public Task<Bbs757CduScreen?> ShowPageAsync(int cdu, string pageKey, Func<Bbs757CduScreen, bool> isWanted, CancellationToken ct) =>
         Gated<Bbs757CduScreen?>($"CDU {cdu} page {pageKey}", null, ct, async () =>
         {
             var screen = await ReadCore(cdu, ct);
-            if (screen == null) return null;
-            if (isWanted(screen)) return screen;
+            if (screen != null && isWanted(screen)) return screen;
             if (Refused(cdu, new[] { pageKey })) return null;
 
             _link.PressKey(cdu, pageKey, CoherentBbs757TabletClient.KeyHoldMs);

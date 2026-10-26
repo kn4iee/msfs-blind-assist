@@ -46,6 +46,31 @@ public class Bbs757CduPagesTests
     }
 
     [Fact]
+    public async Task ShowPage_brings_up_a_cdu_with_no_frame_yet()
+    {
+        // After an aircraft load the first officer's CDU has no frame until its screen first
+        // changes: it reads null, and the page key is what brings its first frame.
+        var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", NoFrameUntilAKey = true };
+        var pages = Pages(cdu);
+
+        var screen = await pages.ShowPageAsync(Fo, Bbs757CduKeys.NavRad, IsNavRadio, CancellationToken.None);
+
+        Assert.NotNull(screen);
+        Assert.Equal("NAV RADIO", Bbs757CduPages.Title(screen!));
+        Assert.Equal(new[] { (Fo, "NAVRAD", 250) }, cdu.Presses);
+    }
+
+    [Fact]
+    public async Task ShowPage_presses_nothing_on_a_cdu_with_no_frame_while_unreachable()
+    {
+        var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", NoFrameUntilAKey = true, IsReadable = false };
+        var pages = Pages(cdu);
+
+        Assert.Null(await pages.ShowPageAsync(Fo, Bbs757CduKeys.NavRad, IsNavRadio, CancellationToken.None));
+        Assert.Empty(cdu.Presses);
+    }
+
+    [Fact]
     public async Task ShowPage_gives_up_when_the_page_never_comes()
     {
         var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", IgnorePageKeys = true };
@@ -300,6 +325,8 @@ public class Bbs757CduPagesTests
         public string? MessageAfterTyping { get; init; }
         /// <summary>What a long CLR leaves in the scratchpad (nothing, normally).</summary>
         public string LongClrLeaves { get; init; } = "";
+        /// <summary>Reads null until a key is pressed, as the first officer's CDU does after a load.</summary>
+        public bool NoFrameUntilAKey { get; init; }
 
         public List<(int Cdu, string Key, int HoldMs)> Presses { get; } = new();
         public List<string> LineEntries { get; } = new();
@@ -340,6 +367,7 @@ public class Bbs757CduPagesTests
         public Task<Bbs757CduScreen?> ScrapeAsync(int cdu, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+            if (NoFrameUntilAKey && Presses.Count == 0) return Task.FromResult<Bbs757CduScreen?>(null);
             if (_pendingTitle != null)
             {
                 if (_lagLeft > 0) _lagLeft--;
