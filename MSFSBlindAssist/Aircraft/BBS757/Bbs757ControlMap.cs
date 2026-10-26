@@ -51,6 +51,13 @@ public sealed class Bbs757ControlMap
     /// </summary>
     public static Bbs757ControlMap Load() => Cached.Value;
 
+    /// <summary>
+    /// Parses a control map from JSON text with the loader's own options, for a test to feed it a small
+    /// snippet. Unlike <see cref="Load"/> it lets a malformed document throw.
+    /// </summary>
+    internal static Bbs757ControlMap Parse(string json) =>
+        JsonSerializer.Deserialize<Bbs757ControlMap>(json, Options) ?? new Bbs757ControlMap();
+
     private static Bbs757ControlMap LoadEmbedded()
     {
         try
@@ -142,6 +149,24 @@ public sealed class Bbs757Control
     /// <summary>The vendor's click code for one step down (counterclockwise); null when the control does not step.</summary>
     [JsonPropertyName("ccw")]
     public string? Ccw { get; set; }
+
+    /// <summary>
+    /// The node of the guard control that covers this one (e.g. <c>B757_OVHD_SWITCH_GAURD</c>); null for
+    /// a control with no guard. The guard must be open before a click on this control takes.
+    /// </summary>
+    [JsonPropertyName("guard")]
+    public string? Guard { get; set; }
+
+    /// <summary>The value the <see cref="Guard"/> control reads while it is closed; null when there is no guard.</summary>
+    [JsonPropertyName("guard_closed")]
+    public double? GuardClosed { get; set; }
+
+    /// <summary>
+    /// The value BlueBird writes to this control when its <see cref="Guard"/> closes (closing the
+    /// emergency lights guard forces ARMED), or null when closing the guard leaves it alone.
+    /// </summary>
+    [JsonPropertyName("close_sets")]
+    public double? CloseSets { get; set; }
 }
 
 /// <summary>One named position of a control or status row.</summary>

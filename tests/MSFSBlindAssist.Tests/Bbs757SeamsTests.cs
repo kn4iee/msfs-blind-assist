@@ -124,6 +124,42 @@ public class Bbs757SeamsTests
         Assert.Equal(0, made);
     }
 
+    // ---- The map's guard fields (Task 6) ----------------------------------------------------------
+
+    [Fact]
+    public void Loader_reads_guard_fields()
+    {
+        // The emergency lights switch sits behind a guard: spec-gaps 3.3 measured the guard var at 0 when
+        // closed, and closing it writes 1 (ARMED) to the switch. A control without a guard carries none.
+        const string json = """
+            {
+              "controls": [
+                {
+                  "node": "B757_OVHD_EMER_LIGHTS_SWITCH", "section": "Overhead", "panel": "Emergency Lights",
+                  "label": "Emergency Lights", "kind": "switch", "state_var": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
+                  "guard": "B757_OVHD_SWITCH_GAURD", "guard_closed": 0, "close_sets": 1
+                },
+                {
+                  "node": "B757_OVHD_BATTERY_BUTTON", "section": "Overhead", "panel": "Electrical",
+                  "label": "Battery", "kind": "toggle", "state_var": "B757_OVHD_BATTERY_BUTTON"
+                }
+              ]
+            }
+            """;
+
+        var map = Bbs757ControlMap.Parse(json);
+
+        var guarded = map.Controls[0];
+        Assert.Equal("B757_OVHD_SWITCH_GAURD", guarded.Guard);
+        Assert.Equal(0.0, guarded.GuardClosed);
+        Assert.Equal(1.0, guarded.CloseSets);
+
+        var plain = map.Controls[1];
+        Assert.Null(plain.Guard);
+        Assert.Null(plain.GuardClosed);
+        Assert.Null(plain.CloseSets);
+    }
+
     internal static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
