@@ -725,6 +725,9 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         else action();
     }
 
+    /// <summary>True once <see cref="Dispose"/> has run.</summary>
+    internal bool IsDisposed => _disposed;
+
     public void Dispose()
     {
         if (_disposed) return;

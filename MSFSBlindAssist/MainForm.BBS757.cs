@@ -15,22 +15,27 @@ public partial class MainForm
     private Forms.BBS757.BBS757EfbForm? bbs757EfbForm;
 
     /// <summary>
-    /// The one client on the 757's "BBSTablet" Coherent view ([DBG-9]: one socket per view): the
-    /// CDU window reads and presses through it, and the EFB window reads the Navigraph code
-    /// through it. Created on first use, disposed in <see cref="DisposeBBS757Forms"/>; the windows
-    /// only subscribe to it.
+    /// The one client on the 757's "BBSTablet" Coherent view ([DBG-9]: one socket per view), which the
+    /// 757 definition owns (<see cref="BBS757Definition.EnsureTabletClient"/>): the CDU window reads and
+    /// presses through it, and the EFB window reads the Navigraph code through it; the windows only
+    /// subscribe to it. Null when the 757 is not the loaded aircraft. The definition disposes the
+    /// client when the pilot switches away, after closing these windows
+    /// (<see cref="CloseBbs757TabletWindows"/>, handed to it here).
     /// </summary>
-    private CoherentBbs757TabletClient? bbs757TabletClient;
-
-    /// <summary>The shared tablet-view client, created and started on first use.</summary>
-    internal CoherentBbs757TabletClient EnsureBbs757TabletClient()
+    internal CoherentBbs757TabletClient? EnsureBbs757TabletClient()
     {
-        if (bbs757TabletClient == null)
-        {
-            bbs757TabletClient = new CoherentBbs757TabletClient();
-            bbs757TabletClient.Start();
-        }
-        return bbs757TabletClient;
+        if (currentAircraft is not BBS757Definition bbs757) return null;
+        bbs757.CloseTabletWindows = CloseBbs757TabletWindows;
+        return bbs757.EnsureTabletClient();
+    }
+
+    /// <summary>The windows on the tablet client: the CDU window and the EFB window.</summary>
+    private void CloseBbs757TabletWindows()
+    {
+        if (bbs757CduForm != null && !bbs757CduForm.IsDisposed) bbs757CduForm.Dispose();
+        bbs757CduForm = null;
+        if (bbs757EfbForm != null && !bbs757EfbForm.IsDisposed) bbs757EfbForm.Dispose();
+        bbs757EfbForm = null;
     }
 
     /// <summary>
@@ -61,6 +66,7 @@ public partial class MainForm
         hotkeyManager.ExitInputHotkeyMode();
 
         var client = EnsureBbs757TabletClient();
+        if (client == null) return;
         if (bbs757CduForm == null || bbs757CduForm.IsDisposed)
             bbs757CduForm = new Forms.BBS757.BBS757CduForm(client, announcer);
         bbs757CduForm.ShowForm();
@@ -78,8 +84,9 @@ public partial class MainForm
         if (currentAircraft is not BBS757Definition) return;
         hotkeyManager.ExitInputHotkeyMode();
 
-        var efb = EnsureBbs757EfbClient();
         var tablet = EnsureBbs757TabletClient();
+        if (tablet == null) return;
+        var efb = EnsureBbs757EfbClient();
         if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
             bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync, CreateBbs757LoadIo());
         bbs757EfbForm.ShowForm();
@@ -129,22 +136,18 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Closes every 757 window, then the clients they use (windows first, so none is left
-    /// subscribed to or running on a disposed client). Called by SwitchAircraft on every switch,
-    /// and on app exit: the monitor manager's rows are snapshotted from the definition it was built
-    /// for, so a surviving one would list the outgoing definition, and each client holds the one
-    /// inspector socket Coherent allows on its view.
+    /// Closes every 757 window, then the EFB-view client (windows first, so none is left subscribed
+    /// to or running on a disposed client). Called by SwitchAircraft on every switch, and on app
+    /// exit: the monitor manager's rows are snapshotted from the definition it was built for, so a
+    /// surviving one would list the outgoing definition, and the client holds the one inspector
+    /// socket Coherent allows on its view. The tablet client is the definition's, disposed by its
+    /// OnSwitchedAway (which closes the CDU and EFB windows first).
     /// </summary>
     private void DisposeBBS757Forms()
     {
         if (bbs757MonitorManagerForm != null && !bbs757MonitorManagerForm.IsDisposed) bbs757MonitorManagerForm.Dispose();
         bbs757MonitorManagerForm = null;
-        if (bbs757CduForm != null && !bbs757CduForm.IsDisposed) bbs757CduForm.Dispose();
-        bbs757CduForm = null;
-        if (bbs757EfbForm != null && !bbs757EfbForm.IsDisposed) bbs757EfbForm.Dispose();
-        bbs757EfbForm = null;
-        bbs757TabletClient?.Dispose();
-        bbs757TabletClient = null;
+        CloseBbs757TabletWindows();
         bbs757EfbClient?.Dispose();
         bbs757EfbClient = null;
     }

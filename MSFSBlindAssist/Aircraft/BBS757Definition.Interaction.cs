@@ -308,6 +308,7 @@ public partial class BBS757Definition
         CancelLoadWatch();
         try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
         _lifetime.Dispose();
+        DisposeTabletClient();   // last: after every window on it has closed
     }
 
     /// <summary>

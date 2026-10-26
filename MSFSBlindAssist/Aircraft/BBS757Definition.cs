@@ -1,6 +1,7 @@
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Services;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.SimConnect.BBS757;
 using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
@@ -335,5 +336,61 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddCduMonitorRows(rows);       // plan 09
         AddCockpitMonitorRows(rows);   // plan 13
         return rows;
+    }
+
+    // =================================================================================
+    // The tablet view
+    // =================================================================================
+
+    private readonly object _tabletLock = new();
+    private CoherentBbs757TabletClient? _tabletClient;
+
+    /// <summary>Makes the tablet client; replaced by tests (the default starts a real one).</summary>
+    internal Func<CoherentBbs757TabletClient>? TabletClientFactory { get; init; }
+
+    /// <summary>
+    /// Closes MainForm's windows on the tablet client (the CDU and EFB windows); set by MainForm when
+    /// it hands one of them the client. <see cref="OnSwitchedAway"/> runs it before it disposes the
+    /// client: the switch calls OnSwitchedAway before it disposes the 757's windows, which would
+    /// otherwise run on a disposed client meanwhile.
+    /// </summary>
+    internal Action? CloseTabletWindows { get; set; }
+
+    /// <summary>
+    /// The one client on the 757's "BBSTablet" Coherent view ([DBG-9]: one socket per view), created and
+    /// started on first use and disposed when the pilot switches away (<see cref="OnSwitchedAway"/>), so
+    /// background features can read the CDUs from the moment the 757 loads. The CDU window and the EFB
+    /// window's Navigraph read use it through MainForm. Call it first from the UI thread: the client
+    /// raises its events on the context it was created on. After a switch away it returns the disposed
+    /// client, which reads and presses nothing, rather than opening a new socket for a dead profile.
+    /// </summary>
+    internal CoherentBbs757TabletClient EnsureTabletClient()
+    {
+        lock (_tabletLock)
+        {
+            return _tabletClient ??= (TabletClientFactory ?? StartedTabletClient)();
+        }
+    }
+
+    private static CoherentBbs757TabletClient StartedTabletClient()
+    {
+        var client = new CoherentBbs757TabletClient();
+        client.Start();
+        return client;
+    }
+
+    /// <summary>
+    /// The end of a switch away: MainForm's windows on the client close first
+    /// (<see cref="CloseTabletWindows"/>), then the client goes, socket and loop with it. Never throws:
+    /// a window that fails to close still lets the client be disposed.
+    /// </summary>
+    private void DisposeTabletClient()
+    {
+        try { CloseTabletWindows?.Invoke(); }
+        catch (Exception ex) { Log.Debug("BBS757", $"Tablet windows did not close: {ex.Message}"); }
+        CloseTabletWindows = null;
+        CoherentBbs757TabletClient? client;
+        lock (_tabletLock) client = _tabletClient;
+        client?.Dispose();
     }
 }

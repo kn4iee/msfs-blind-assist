@@ -2,7 +2,8 @@ using System.Text.RegularExpressions;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Services;
-using R = MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
+using MSFSBlindAssist.SimConnect.BBS757;
+using R =MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -75,6 +76,52 @@ public class Bbs757SeamsTests
         Assert.Equal("4743", squawk);
         Assert.True(Def.TryGetDisplayOverride(R.FlapsHandleKey, 2, out string flaps));
         Assert.Equal("5", flaps);
+    }
+
+    // ---- The definition owns the tablet client (Task 3) -------------------------------------------
+
+    /// <summary>A client that never starts: no socket, no loop.</summary>
+    private static CoherentBbs757TabletClient IdleClient() => new(() => "");
+
+    [Fact]
+    public void Tablet_client_is_created_once()
+    {
+        int made = 0;
+        var def = new BBS757Definition { TabletClientFactory = () => { made++; return IdleClient(); } };
+
+        var first = def.EnsureTabletClient();
+        var second = def.EnsureTabletClient();
+
+        Assert.Same(first, second);
+        Assert.Equal(1, made);
+    }
+
+    [Fact]
+    public void Switching_away_disposes_it_after_the_windows()
+    {
+        // The switch calls OnSwitchedAway before it disposes MainForm's 757 windows, so the definition
+        // closes the windows on its client itself, first: none is left running on a disposed client.
+        var client = IdleClient();
+        var def = new BBS757Definition { TabletClientFactory = () => client };
+        var order = new List<string>();
+        def.EnsureTabletClient();
+        def.CloseTabletWindows = () => order.Add(client.IsDisposed ? "windows closed after the client" : "windows closed");
+
+        def.OnSwitchedAway();
+
+        Assert.Equal(new[] { "windows closed" }, order);
+        Assert.True(client.IsDisposed);
+    }
+
+    [Fact]
+    public void Switching_away_makes_no_client()
+    {
+        int made = 0;
+        var def = new BBS757Definition { TabletClientFactory = () => { made++; return IdleClient(); } };
+
+        def.OnSwitchedAway();
+
+        Assert.Equal(0, made);
     }
 
     internal static string RepoRoot()
