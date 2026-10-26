@@ -114,6 +114,16 @@ Failure test: OIS FAILURES → PRIM 1 FAULT gave the amber `F/CTL PRIM 1 FAULT`,
 
 `A350_Interior.behavior.xml` holds 696 input events (RMP 192, FCU 44, EFIS 38, ECAM 32, DISPLAY 30, ELEC 26, WXR 20, MAINT 17, OXYTEST 16, AIR/FUEL/ISIS 14, FCTL 13, …). It parses with the iniBuilds `behavior_xml.py` after rewriting tags that begin with a digit. Each event's set code writes `INI_*` L:vars directly (for example `INI_SEATBELTS_SWITCH`, `INI_BATTERY_1_SWITCH`, `INI_MIXTURE_RATIO1_HANDLE` for ENG MASTER 1), so a native L:var write operates the control; live: `INI_NO_SMOKING_SWITCH` 1 → 2 changed the takeoff memo's SIGNS line from done to outstanding, and back. Position names come from each control's own tooltip expression: some count from `.1` (`SIGNS_SEAT_BELTS.1` = ON is value 0), others from `.0` (`MAINT_ELEC_BAT_VOLTAGE_SELECTOR.0` = EMER 1).
 
+MSFSBA writes a row with its own input event, `value (>B:AIRLINER_<id>_Set)`, on the calculator path (`A350WritePlan`). Probing that path with the simconnect MCP's `execute_calculator_code`: each string lands only when the NEXT calculator string arrives, so a read straight after a write shows the previous write. Follow every probe write with a harmless unique string (`n (>L:MSFSBA_CALC_TEST)`) before reading back.
+
+Only the Overhead section is offered so far; a section joins once each of its panels has been driven live (`IniBuildsA350Definition.CuratedSections`). The panels' lights come from the map's emissive rules (`A350PanelLamps`): a lamp belongs to the row whose id is the longest prefix of its node, reads On only while its rule holds and its bus's light power (`INI_AC_LIGHTS_FAILURE` / `INI_DC_LIGHTS_FAILURE`, 1 = powered) is on, and a legend that reads nothing but its own switch is left out.
+
+### Overhead subpanels, live-tested (A350-900, 1.2.7)
+
+| Panel | Rows | Verified | Notes |
+| --- | --- | --- | --- |
+| Wipers | captain and first officer wiper (6 positions), both rain repellents (hold) | every position of both selectors; the wipers sweep (`WIPER_ANIMATION_CPT`/`_FO`); each repellent holds 1 while pressed | the repellent variable is read only by the cockpit sound: a press is a spray sound and nothing else, for a sighted pilot too |
+
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 
 Every section's controls and displays use one of the paths above: cockpit interaction (push, pull, scroll), the OIS (FLT OPS PLAN/STS, LOADSHEET, charts list, T.O/LDG PERF with SYNC and SEND TO FMGS, AOC, GROUND incl. GSX, MAINTENANCE, SITUATIONS, FAILURES, AUTOSAVE, PANEL STATES, OPTIONS incl. 3RD PARTY), the FCU and its managed/selected modes, the MFD and KCCU (menu bar, interactive F-PLN, vertical revisions, C/L MENU checklists), EFIS CP and baro preset, ANF and BTV arming, the noise function (MFD PERF T.O), thrust levers, RMP tuning and squawk, the MFD SURV page (DEFAULT SETTINGS, CONFIRM), the HUD, sensed and not-sensed ECAM procedures, deferred procedures, STATUS, and the automatic emergency descent.
