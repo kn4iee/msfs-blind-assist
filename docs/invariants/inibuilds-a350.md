@@ -1,0 +1,23 @@
+# iniBuilds A350 — rules in full
+
+Each section is the complete text of one rule. Its one-line form, under the same ID, is in `.claude/rules/inibuilds-a350.md`, which Claude Code loads when it reads matching code. Background: [inibuilds-a350.md](../inibuilds-a350.md).
+
+## A350-1
+
+The A350's WASM displays are read from a read-only copy of its linear memory (`OpenProcess` with `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` only), run through the A350's own `Draw()` in a WASM runtime. They are operated only through the sim's own inputs: L:var writes, input events, and `Coherent.call("WASM_MOUSE_MOVE" | "WASM_MOUSE_DOWN" | "WASM_MOUSE_UP" | "WASM_CLICK", guid, x, y, button)` evaluated in the gauge's Coherent view. The 1.2.6 investigation moved the MFD pointer by writing the aircraft's `RequestMouseChange` slots into the sim's memory; on 1.2.7 the Coherent mouse route moves it exactly (measured 26 October 2026), so no write into another process's memory is needed, and a wrong address there could crash the sim.
+
+## A350-2
+
+Measured 26 October 2026: walking all of the sim's ~25,000 memory regions with `VirtualQueryEx` while reading the A350's (0.5 s) produced torn copies: about half the Warning Display draws came back empty or garbled, and one trapped inside `dlmalloc`. Listing only the A350 allocation's regions first (walk from its base while `AllocationBase` matches, about 10 regions) and then reading them into one preallocated buffer took 8 ms for 37.7 MB and gave 8 of 8 consistent draws. A trap during a draw still means a torn copy: take another, never report it.
+
+## A350-3
+
+The ECP keys (`INI_ECAM_CHECKLIST_LEFT`, `PUSH_ECAM_STS`, `INI_ECAM_ABN`, the `INI_ECAM_WHEEL_*_COMMAND` pair, `INI_MASTER_CAUTION_COMMAND`, …) are consumed and reset to 0 by the aircraft. One native SimConnect write of 1 is a press. Two MobiFlight calculator writes (`1 (>L:X)` then `0 (>L:X)`) executed before the aircraft's next update, so the aircraft saw 0 and nothing happened (measured with STS and ABN). KCCU keys that the aircraft does not reset (`INI_MCDU1_ND`, `INI_MCDU1_MFD`) take 1, a hold of about 180 ms, then 0.
+
+## A350-4
+
+`ND::MouseEvent` returns unless `INI_CPT_CURSOR_SCREEN` (first officer: `INI_FO_CURSOR_SCREEN`) is 1; the MFD follows the mouse while it is 2. The 1.2.6 investigation concluded the Coherent mouse calls "do not reach the A350 gauges" because the cursor was on another screen. Measured 26 October 2026: with the cursor on the ND, `WASM_MOUSE_MOVE` set the captain EFIS gauge's mouse position, and a click on the aircraft symbol opened the ND pop-up.
+
+## A350-5
+
+In `en-US.locPak`, a multi-position control's position names are `INI.TOOLTIPS.<CONTROL>.1`, `.2`, `.3`, … while its L:var counts from 0: `INI_SEATBELTS_SWITCH` 0 is `.1` ON, 1 is `.2` AUTO, 2 is `.3` OFF. Two-position push buttons use `.OFF` / `.ON`; the control's placard name is `.TITLE`.
