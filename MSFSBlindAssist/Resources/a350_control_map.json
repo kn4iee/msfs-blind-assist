@@ -11425,16 +11425,19 @@
    "area": "MIP",
    "panel": "LDG_PANEL",
    "title": "L/G LEVER",
-   "kind": "none",
+   "kind": "selector",
    "event": "AIRLINER_LDG_LEVER_Set",
-   "state_var": null,
+   "state_var": "L:INI_GEAR_HANDLE_STATUS",
    "state_unit": null,
    "scale": null,
-   "positions": {},
+   "positions": {
+    "0": "UP",
+    "1": "DOWN"
+   },
    "values": null,
    "press": null,
    "rest": null,
-   "note": "no write the map can drive",
+   "note": null,
    "checklist": null
   },
   {

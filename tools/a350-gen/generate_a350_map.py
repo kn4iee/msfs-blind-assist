@@ -261,6 +261,17 @@ def classify(entry, ie, loc):
         entry['press'] = 1
         return entry
 
+    # Levers that write the aircraft's own key events ("'INI.GEAR_UP' (>F:KeyEvent)"): Set n selects position n, and
+    # the position is the L:var the init reads (the landing gear lever, INI_GEAR_HANDLE_STATUS).
+    if '(>F:KeyEvent)' in s:
+        var, unit = state_from_init(init)
+        words = two_words(tt, loc)
+        if var and words:
+            entry['kind'] = SELECTOR
+            entry['state_var'], entry['state_unit'] = var, unit
+            entry['positions'] = words
+            return entry
+
     entry['note'] = ('drives a K: event: ' + ', '.join(sorted(set(writes_k)))) if writes_k else 'no write the map can drive'
     return entry
 

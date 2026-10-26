@@ -30,6 +30,9 @@ LOC = {
     'INI.TOOLTIPS.APU_START.TITLE': 'APU START',
     'INI.TOOLTIPS.ECAM_ENG.TITLE': 'ENG',
     'INI.TOOLTIPS.CABIN_PRESS_ALTITUDE_TARGET.TITLE': 'LDG ELEVN',
+    'INI.TOOLTIPS.LDG_LEVER.TITLE': 'L/G LEVER',
+    'INI.TOOLTIPS.LDG_LEVER.UP': 'UP',
+    'INI.TOOLTIPS.LDG_LEVER.DOWN': 'DOWN',
 }
 
 
@@ -46,6 +49,8 @@ def _fixture():
     press = f.component('CABIN_PRESS', overhead)
     pedestal = f.component('PEDESTAL', root)
     ecam = f.component('ECAM_BUTTONS', pedestal)
+    mip = f.component('MIP', root)
+    ldg = f.component('LDG_PANEL', mip)
 
     def add(owner, ie_id, title, **ie):
         f.mouserect(owner, ie_id.replace('AIRLINER_', ''), '(>B:%s_Toggle)' % ie_id, title=title, entries=[ie_id])
@@ -97,6 +102,13 @@ def _fixture():
     add(ecam, 'AIRLINER_ECAM_ENG', 'INI.TOOLTIPS.ECAM_ENG.TITLE', units='Boolean',
         set_code="p0 1 min 0 max (>O:AIRLINER_ECAM_ENG_Position) p0 2 == if{ 1 (>L:PUSH_ECAM_ENG) } els{ 0 (>L:PUSH_ECAM_ENG) }",
         tt_value=onoff('ECAM_ENG'))
+    # The gear lever writes the aircraft's own key events, not an L:var (package 1.2.7).
+    add(ldg, 'AIRLINER_LDG_LEVER', 'INI.TOOLTIPS.LDG_LEVER.TITLE', units='Boolean',
+        set_code=("p0 1 min 0 max (>O:AIRLINER_LDG_LEVER_Position) p0 0 == if{ (A:SIM ON GROUND, bool) ! if{ "
+                  "'INI.GEAR_UP' (>F:KeyEvent) } els{ 1 (>B:AIRLINER_LDG_LEVER_Set) } } els{ 'INI.GEAR_DOWN' (>F:KeyEvent) }"),
+        init="(L:INI_GEAR_HANDLE_STATUS) 1 0 l0 ? (>O:AIRLINER_LDG_LEVER_Position)",
+        tt_value=("(O:AIRLINER_LDG_LEVER_Position) 0 == if{ (R:1:INI.TOOLTIPS.LDG_LEVER.UP) } "
+                  "els{ (R:1:INI.TOOLTIPS.LDG_LEVER.DOWN) } '%s' (F:Format)"))
     return f.build()
 
 
@@ -113,7 +125,7 @@ def _by_id():
 
 class GenerateA350MapTests(unittest.TestCase):
     def test_every_control_is_read(self):
-        self.assertEqual(8, len(_map()['controls']))
+        self.assertEqual(9, len(_map()['controls']))
 
     def test_area_and_panel_come_from_the_component_tree(self):
         c = _by_id()['AIRLINER_ELEC_BAT_1']
@@ -183,3 +195,11 @@ class LampRuleTests(unittest.TestCase):
                 'l0 0 == (L:INI_ANNLT_SWITCH) 0 == or (L:INI_GENERAL_LIGHT_MULTIPLIER) * *')
         self.assertEqual(gen.lamp_rule(code),
                          ('(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 0 ==', 'DC'))
+
+
+class KeyEventLeverTests(unittest.TestCase):
+    def test_a_lever_writing_key_events_is_a_selector_on_the_l_var_its_init_reads(self):
+        c = _by_id()['AIRLINER_LDG_LEVER']
+        self.assertEqual('selector', c['kind'])
+        self.assertEqual('L:INI_GEAR_HANDLE_STATUS', c['state_var'])
+        self.assertEqual({'0': 'UP', '1': 'DOWN'}, dict(c['positions']))
