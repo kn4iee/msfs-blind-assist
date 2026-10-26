@@ -458,6 +458,32 @@ public partial class BBS757Definition
         }
     }
 
+    /// <summary>
+    /// Plan 06's output-mode keys: Shift+1 to Shift+5 the flap maneuver speeds, Shift+6 VREF 30 and 25, from
+    /// the gross weight read fresh (<see cref="Bbs757FlapSpeeds"/>).
+    /// </summary>
+    partial void HandleReadoutHotkey(HotkeyAction action, SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        Form parentForm, HotkeyManager hotkeyManager, ref bool handled)
+    {
+        int index = FlapSpeedIndex(action);
+        if (index < 0) return;
+        _ = FlapManeuverSpeeds.AnnounceAsync(simConnect, announcer, R.TotalWeightKey, "BBS757",
+            lbs => Bbs757FlapSpeeds.Describe(lbs, index));
+        handled = true;
+    }
+
+    /// <summary>The schedule index of a flap speed key (Shift+1 to Shift+6), or -1.</summary>
+    internal static int FlapSpeedIndex(HotkeyAction action) => action switch
+    {
+        HotkeyAction.ReadSpeedGD => 0,
+        HotkeyAction.ReadSpeedS => 1,
+        HotkeyAction.ReadSpeedF => 2,
+        HotkeyAction.ReadSpeedVLS => 3,
+        HotkeyAction.ReadSpeedVS => 4,
+        HotkeyAction.ReadSpeedVFE => 5,
+        _ => -1,
+    };
+
     private static async Task<string> ReadFuelAsync(McpIo io, bool kilograms, CancellationToken ct)
         => R.FuelPhrase(
             await io.Read(SimConnect.BBS757.Bbs757Loadsheet.LeftFuelKey, ct),
