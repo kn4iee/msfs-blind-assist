@@ -599,6 +599,14 @@ With D1's three-decimal values for those three (18.227, 26.248, -6.642) the resi
   textbook sector or the 27L / 27R test needs repeating. For identification this costs nothing (a localizer that is
   not received gives no reading to match), but the app must not assume that "inside the textbook sector" means the sim
   receives it.
+- **BlueBird's own navdata has the same KATL localizer frequencies** (checked afterwards, read only). BlueBird's work
+  folder holds `work\NavigationData\db.s3db` (Navigraph cycle 2610, DFD v2), whose table `tbl_pi_localizers_glideslopes`
+  has `llz_frequency`, `llz_latitude`, `llz_longitude`, `llz_truebearing`, `llz_identifier` and `runway_identifier`
+  (`RWxx`). Its KATL frequencies are the same as the app's fs2024 data, so 27L and 27R not being received is no frequency
+  mismatch. Predicted with BlueBird's own antenna positions, the differences from the measured values are -0.14 to
+  -0.41 degrees. Every received localizer is 1.09 NM or more from its antenna, and 27L and 27R (inside the sector) are
+  0.82-0.85 NM away, so BlueBird may ignore a localizer closer than about 1 NM; round 5 (G2.3) did not receive 27R at
+  0.15 NM either. BlueBird's own table is the natural source if the app ever needs the localizer list its receiver uses.
 - **No airport link.** In the fs2024 database every KATL `ils` row is an orphan (`loc_airport_ident` NULL), so a
   candidate list must come from a bounding-box query on `ils.laty` / `lonx` (as `OrphanIlsLookup.ReadOrphanCandidates`
   does), not from `loc_airport_ident`. fs2020 has the airport columns filled.
@@ -1035,3 +1043,23 @@ Full snapshot 13:52:40 to 14:08:28:
   round 2 saw this variable move on its own too. It was stable at 14:06 and was not touched.
 - Position and heading are unchanged; ND MAP, VOR L and R AUTO.
 - No Coherent socket is left open (0 ESTABLISHED on :19999).
+
+## Labelled gauges
+
+A read of the DOM of the two VCockpit pages (read only; the controller, 2026-10-26, after round 5). Every BlueBird gauge
+is a `WASM-INSTRUMENT` element whose `url` carries `wasm_gauge=<name>` and whose picture is an
+`<img src="WasmGaugeLiveView_N">`, so a gauge can be found by name; the number N can differ per load. As recorded, the
+names are the first eight characters of the full gauge names in `docs/b757/evidence/package/displays.tsv` (for example
+`ils_cont` for `ils_control_lcd`).
+
+| View | Gauges (live view where it was read) |
+|---|---|
+| `VCockpit15` (18 small panel gauges, `_0` to `_17`) | `ils_cont` (`_12`, 668 x 93), `vor_cont` x2 (`_7`, `_8`), `radio_tu` x3 (`_9`, `_10`, `_11`), `adf_cont` x2, `xpdr_con`, `rdmi_lcd` x2, `clock_lc` x2, `adi_dh_r` x2, `fuel_qty`, `aircon_d`, `sei_lcd` |
+| `VCockpit14` (the main displays) | `pfd_l`, `pfd_r`, `nd_l`, `nd_r`, `cdu_l`, `cdu_r`, `eicas`, `eicas_lo`, `efb_l`, `irs_disp` |
+
+What it tells later plans: the ILS read (the gauge's picture laid on `mainUi`, filtered, captured and decoded, round 5)
+can reach any of these displays by name, not only the ILS panel. The `VCockpit15` panels are mostly LCDs like the ILS
+one (the VOR, radio tuning, ADF, transponder and RDMI panels, the clocks and the fuel quantity); only the ILS panel's
+seven-segment decoder exists, and the other panels' fonts and layouts are unmeasured. Round 1 had already read `_4` (the
+transponder, `ATC L 1200`), `_5` and `_6` (the ADFs, `0190.0`) and `_17` (the fuel quantity panel) by what they showed
+(see C).
