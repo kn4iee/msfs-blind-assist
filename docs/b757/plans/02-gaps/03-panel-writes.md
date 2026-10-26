@@ -139,7 +139,14 @@
   - Plan 12 takes over `BBS757Definition.Overhead.cs`, `Bbs757Write.cs` and `Bbs757Rpn.cs`: the five overhead seams are implemented there now, so plan 12 adds to their bodies (a second declaration does not compile). The pick bookkeeping is shared (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync` in `Interaction.cs`); a flight load stops a guarded sequence through `_pickEpoch`. `Bbs757WriteTests.cs` (plan 12's next) uses the shared fake `Bbs757FakeIo`, which lives in `Bbs757GuardedTests.cs` (plan 03's only).
   - Plan 13: `OnOwnWrite` is called with a guarded control's node AND its guard's node, with the unlock button's node before the relock, and with `Bbs757LandingAltitude.DisplayKey` (`BBS757_LDG_ALT`) for the landing altitude. Readable for announcements (measured): `B757_OVHD_PASS_OXY_UNARMED_DECAL` (1 while the emergency lights are not ARMED) and `BBS757_CABIN_EMER_LIGHTING` (1 while they are lit).
   - Plan 10: the emergency lights ARMED and the stab trim cutouts NORMAL are set through the guarded path by `HandleUIVariableSet(node, value, …)` with the control's node (it looks the guard up).
-- **For the guide (plan 16):** after an app Unlock, a fire handle pick must follow within the cockpit's 1.5 s; a handle whose fire light is on needs no unlock.
+  - **Plan 12, the owner's decision (2026-10-26):** picking "Pulled" on a fire handle that is locked (its fire light
+    off, `L:BBS757_FIREUNLOCKn` 0) presses that handle's Unlock first, in one step, as a sighted pilot presses the
+    override and pulls. Why: after an app Unlock, BlueBird relocks in 1.5 s (plan 03 keeps that timing), too short to
+    Tab to the handle and pick Pulled with a screen reader, so a pull without a fire warning (engine severe damage) is
+    out of reach until then. Weigh the lock's purpose when building it: an accidental "Pulled" while arrowing through
+    the combo must still not pull (the pick settle covers arrowing; say in the guide that Pulled pulls).
+- **For the guide (plan 16):** a handle whose fire light is on pulls from its combo; until plan 12 lands, a pull
+  without a fire warning needs Unlock then the handle pick within the cockpit's 1.5 s.
 - **For the owner to hear in the in-sim check:** the field ("Landing Altitude value") and the status row ("Landing Altitude") share a name; a write that throws says "Landing altitude unavailable"; the unlock window above. Proposals left to the owner: pre-fill the landing altitude box with the current value (`CurrentValueSourceKey`, as the PMDG 737 and MD-11 fields do; the 757's squawk does not), and give "1.030" its own message ("Type whole feet without a thousands separator").
 
 ## Execution record
@@ -147,12 +154,13 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** code done, waiting on owner (Task 4 and the in-sim checks)
+- **Status:** landed and pushed to `kn4iee/B757` (2026-10-26); waiting on owner (Task 4 and the in-sim checks)
 - **Claimed by:** kn4iee (the owner), 2026-10-26
 - **Worked by:** kn4iee with Claude, with subagents (a fresh implementer and a reviewer per task, one whole-plan review)
 - **Started:** 2026-10-26, from `c8a80bd6f` (claim `b64fa844b`)
-- **Landed:** LANDED-AT-PUSH
-- **Tests at landing:** SUITE-AT-PUSH
+- **Landed:** 2026-10-26; last code commit `a91b42483`, pushed with this record on top of `be2ac8452`
+- **Tests at landing:** full suite passed (17,168, 0 failed) after the rebase onto `be2ac8452`; build without warnings
+  from plan 03's files
 - **Tasks:** 0-3, 5 and 6 done, each reviewed (Task 2 took one fix round), then one whole-plan review and its fix
   wave; Task 4 is the owner's. Every write's RPN was replayed live through the simconnect MCP on the ground
   (`docs/b757/evidence/flight-03.md`).
@@ -178,4 +186,5 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   rounding; R10 the row shows "-60 feet", speech says "minus 60 feet"; R12 the landing altitude's `OnOwnWrite` key is
   `BBS757_LDG_ALT`; R14 the relock keeps BlueBird's 1.5 s; R15 a started guarded sequence finishes across a newer
   pick but stops on a flight load or switch-away; R16 the private event name; R17 the shipped-map Pressurization test
-  removed, the unlock one kept.
+  removed, the unlock one kept. The owner (2026-10-26): keep BlueBird's 1.5 s relock in plan 03; plan 12 makes a
+  "Pulled" pick on a locked fire handle press its Unlock first (handoff).
