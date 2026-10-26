@@ -131,6 +131,12 @@ public static partial class A350PanelLayout
         ["ELEC_IDG_1A"] = "DRIVE 1A", ["ELEC_IDG_1B"] = "DRIVE 1B", ["ELEC_IDG_2A"] = "DRIVE 2A", ["ELEC_IDG_2B"] = "DRIVE 2B",
         ["ELEC_PAX_SYS"] = "PAX SYS",
         ["ELEC_SIDE_ISOL"] = "Side 1 and 2 isolation",
+        // Fuel: each wing tank's main and standby pump, side first ([VAR-1]).
+        ["FUEL_PUMP_LEFT_TANK_MAIN"] = "Left main pump", ["FUEL_PUMP_LEFT_TANK_STBY"] = "Left standby pump",
+        ["FUEL_PUMP_RIGHT_TANK_MAIN"] = "Right main pump", ["FUEL_PUMP_RIGHT_TANK_STBY"] = "Right standby pump",
+        ["FUEL_PUMP_CTR_TANK_LEFT"] = "Center left pump", ["FUEL_PUMP_CTR_TANK_RIGHT"] = "Center right pump",
+        ["FUEL_TANK_TRANSFER_LEFT"] = "Left transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right transfer",
+        ["FUEL_CTR_TANK_FEED"] = "Center tank feed",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>

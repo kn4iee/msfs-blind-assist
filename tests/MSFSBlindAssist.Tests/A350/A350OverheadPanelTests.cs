@@ -316,4 +316,30 @@ public class A350OverheadPanelTests
             "PAX SYS isolated light",
         }, Lights("Electrical"));
     }
+
+    /// <summary>Live 2026-10-26: every pump off and on, both crossfeeds (their OPEN legend follows the valve), both
+    /// transfers and the center tank feed (their guards are not read by the set code). iniBuilds' variables cross the
+    /// sides' inner and outer names (L TK MAIN is INI_OUTER_TANK_LEFT, R TK MAIN INI_INNER_TANK_RIGHT); the rows follow
+    /// the buttons.</summary>
+    [Fact]
+    public void Fuel()
+    {
+        const string OffOn = "0=Off, 1=On";
+        Assert.Equal(new[]
+        {
+            ("Left main pump", A350RowAction.Set, OffOn), ("Left standby pump", A350RowAction.Set, OffOn),
+            ("Right main pump", A350RowAction.Set, OffOn), ("Right standby pump", A350RowAction.Set, OffOn),
+            ("Center left pump", A350RowAction.Set, OffOn), ("Center right pump", A350RowAction.Set, OffOn),
+            ("Crossfeed A", A350RowAction.Set, OffOn), ("Crossfeed B", A350RowAction.Set, OffOn),
+            ("Left transfer", A350RowAction.Set, OffOn), ("Right transfer", A350RowAction.Set, OffOn),
+            ("Center tank feed", A350RowAction.Set, OffOn),
+        }, Rows("Fuel"));
+        Assert.Equal(new[]
+        {
+            "Left main pump fault light", "Left standby pump fault light", "Right main pump fault light",
+            "Right standby pump fault light", "Center left pump fault light", "Center right pump fault light",
+            "Crossfeed A open light", "Crossfeed B open light", "Left transfer fault light", "Right transfer fault light",
+            "Center tank feed fault light",
+        }, Lights("Fuel"));
+    }
 }
