@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Owned files: `SimConnect/BBS757/CoherentBbs757TabletClient.cs`, `Resources/coherent-bbs757-tablet-agent.js` (both from plan 01), `Aircraft/BBS757Definition.Announcements.cs` (new), `Aircraft/BBS757/Bbs757CockpitAnnouncements.cs` (new), `Aircraft/BBS757/Bbs757LightTable.cs` (new); tests `CoherentBbs757TabletClientTests.cs`, `Bbs757CockpitAnnouncementsTests.cs` (new), `Bbs757LightTableTests.cs` (new), fixture `Fixtures/bbs757-lights.json` (new); `docs/b757/evidence/flight-13.md`.
+- Owned files: `SimConnect/BBS757/CoherentBbs757TabletClient.cs`, `Resources/coherent-bbs757-tablet-agent.js` (the client from plan 08, which adds a per-key gap to `PressKey`; the agent from plan 01), `Aircraft/BBS757Definition.Announcements.cs` (new), `Aircraft/BBS757/Bbs757CockpitAnnouncements.cs` (new), `Aircraft/BBS757/Bbs757LightTable.cs` (new); tests `CoherentBbs757TabletClientTests.cs`, `Bbs757CockpitAnnouncementsTests.cs` (new), `Bbs757LightTableTests.cs` (new), fixture `Fixtures/bbs757-lights.json` (new); `docs/b757/evidence/flight-13.md`.
 - The CDU scraping, key presses and `Bbs757CduPages` behaviour of the client stay exactly as they are (plans 04, 06, 08, 09 rely on them); the watch runs on the same socket and send lock, never a second socket.
 - One owner per spoken row: a watched L:var whose name any definition row registers with `IsAnnounced` (plans 05, 06, 07 and the base rows) is never watched here; this is computed from the definition's variables at start, not hard-coded.
 - The pilot's own write is not said: a change to a control within 5 s of `OnOwnWrite(node)` for it, or while `IsPickPending(node)`, is that write's echo.

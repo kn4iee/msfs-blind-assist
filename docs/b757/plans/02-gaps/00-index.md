@@ -25,7 +25,7 @@ no CI). No per-plan pull requests, changelog fragments or "User guide:" lines: p
 | 05 | `05-mcp.md`: essentials (Alt keys, Speed Intervene, blank speed box, Mach, MCP and autoflight announcements, altitude intervene) | early | 01 |
 | 06 | `06-readouts-announcements.md`: fix (EXT PWR reads back); essentials (flap speeds, D and Shift+D, autoland status and the other essential announcements) | early | 01 |
 | 07 | `07-efb-ground-power.md`: essential (connect and disconnect ground power, announced) | early | 01 |
-| 08 | `08-cdu-fixes.md`: fix (the CDU window keeps the cursor on the pilot's line) | early | 01 |
+| 08 | `08-cdu-fixes.md`: fix (the CDU window keeps the cursor on the pilot's line); faster scratchpad typing at a measured key rate, a missed key said | early | 01 |
 | 09 | `09-cdu-presentation.md`: the CDU window for speech and braille | later | 08 |
 | 10 | `10-first-officer.md`: checklists, then actions, then flows | later | 02, 03, 06 |
 | 11 | `11-efb-rework.md`: the reworked EFB window, every ground service, doors, pushback, presets, settings | later | 07 |
@@ -48,7 +48,8 @@ change, why). "A → B" means plan B takes the file over once A has landed; neve
 | `Aircraft/BBS757Definition.Readouts.cs`, `Aircraft/BBS757/Bbs757Readouts.cs`, `Bbs757McpLights.cs`, `Bbs757FlapSpeeds.cs` (new), `Bbs757Prog.cs` (new), `Bbs757Annunciators.cs` (new) | 01 (display seam calls, Readouts only) → 06 → 14 |
 | `Aircraft/BBS757/Bbs757DisplayReads.cs`, and in `Services/GeminiService.cs` only a new `Standby757` display type and its prompt | 14 |
 | `Aircraft/BaseAircraftDefinition.cs` (the glideslope gate only) | 01 |
-| `SimConnect/BBS757/CoherentBbs757TabletClient.cs`, `Resources/coherent-bbs757-tablet-agent.js` | 01 → 13 |
+| `SimConnect/BBS757/CoherentBbs757TabletClient.cs` | 01 → 08 (the per-key gap for faster typing) → 13 |
+| `Resources/coherent-bbs757-tablet-agent.js` | 01 → 13 |
 | `SimConnect/BBS757/Bbs757CduPages.cs` (new), `Bbs757CduTitle.cs` (new), `Aircraft/BBS757/Bbs757SharedKeys.cs` (new), `docs/b757/tools/**` | 01, then frozen |
 | `Aircraft/BBS757/Bbs757ControlMap.cs` | 01 (guard fields) → 02 → 12 |
 | `tools/b757-gen/**`, `Resources/bbs757_control_map.json` | 02 → 12 |
@@ -60,7 +61,7 @@ change, why). "A → B" means plan B takes the file over once A has landed; neve
 | `Aircraft/BBS757/Bbs757AutopilotLayout.cs`, `Aircraft/BBS757Definition.Autopilot.cs`, `Forms/BBS757/BBS757AutopilotWindow.cs` | 05 → 14 |
 | `SimConnect/BBS757/Bbs757EfbLayout.cs`, `CoherentBbs757EfbClient.cs`, `Bbs757WorkFolder.cs`, `Bbs757Loadsheet.cs`, `Bbs757LoadWatch.cs`, `Bbs757GroundPower.cs` (new), `Forms/BBS757/BBS757EfbForm*.cs`, `Resources/coherent-bbs757-efb-agent.js`, `Aircraft/BBS757Definition.Efb.cs` (new), `Aircraft/BBS757Definition.LoadWatch.cs`, `MainForm.BBS757.cs` | 01 (`MainForm.BBS757.cs` only) → 07 → 11 |
 | `SimConnect/BBS757/Bbs757GroundServices.cs`, `Bbs757EfbSettings.cs`, `Bbs757EfbBridge.cs` (new); additive changes to `Forms/FBWA380/FbwEfbForm.cs` | 11 |
-| `Forms/BBS757/BBS757CduForm*.cs`, `SimConnect/BBS757/Bbs757CduFrame.cs`, `Bbs757CduKeys.cs`, `Bbs757CduRows.cs` (new) | 08 → 09 |
+| `Forms/BBS757/BBS757CduForm*.cs`, `SimConnect/BBS757/Bbs757CduFrame.cs`, `Bbs757CduKeys.cs`, `Bbs757CduRows.cs` (new), `Bbs757CduTyping.cs` (new) | 08 → 09 |
 | `SimConnect/BBS757/Bbs757CduMarkers.cs` (new), `Aircraft/BBS757Definition.CduRows.cs` (new) | 09 |
 | `FirstOfficer/BBS757/**` (new), `Aircraft/BBS757Definition.FirstOfficer.cs` (new), `Forms/FirstOfficer/FirstOfficerWindows.cs` (its 757 row), the cross-profile FO tests the 757 joins, the `paths:` list of `.claude/rules/b757.md` | 10 |
 | `Aircraft/BBS757Definition.Announcements.cs` (new), `Aircraft/BBS757/Bbs757CockpitAnnouncements.cs` (new), `Bbs757LightTable.cs` (new) | 13 |
@@ -74,7 +75,7 @@ change, why). "A → B" means plan B takes the file over once A has landed; neve
 | `MSFSBlindAssist/MSFSBlindAssist.csproj`, `tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj` | nobody: frozen. New test files, `Fixtures/*.json` and the two 757 agents need no new line (SDK globbing, wildcards, existing entries); only plan 11 may add one resource line if its bridge needs a new file |
 
 **Tests** follow their code: `Bbs757DefinitionTests.cs` 01 (loosened), then frozen; `Bbs757SeamsTests.cs`,
-`Bbs757CduPagesTests.cs`, `Bbs757GlideslopeGateTests.cs` 01; `CoherentBbs757TabletClientTests.cs` 01 → 13;
+`Bbs757CduPagesTests.cs`, `Bbs757GlideslopeGateTests.cs` 01; `CoherentBbs757TabletClientTests.cs` 01 → 08 → 13;
 `Bbs757ControlMapTests.cs` and `tools/b757-gen/test_generate_b757_map.py` 02 → 12; `Bbs757WriteTests.cs`,
 `Bbs757RpnTests.cs` 03 → 12; `Bbs757GuardedTests.cs`, `Bbs757LandingAltitudeTests.cs` 03; `Bbs757SpringControlsTests.cs`
 12; `Bbs757RadiosTests.cs`, `Bbs757NavRadTests.cs` 04; `Bbs757McpTests.cs`, `Bbs757MachTests.cs`,
@@ -82,7 +83,7 @@ change, why). "A → B" means plan B takes the file over once A has landed; neve
 `Bbs757FlightReadinessTests.cs`, `Bbs757FlapSpeedsTests.cs`, `Bbs757ProgTests.cs`, `Bbs757AnnunciatorsTests.cs` 06 → 14;
 `Bbs757DisplayReadsTests.cs` 14; `Bbs757EfbTests.cs`, `Bbs757LoadWatchTests.cs`, `Bbs757LoadsheetTests.cs`,
 `Bbs757GroundPowerTests.cs` 07 → 11; `Bbs757GroundServicesTests.cs`, `Bbs757EfbSettingsTests.cs`, `Bbs757EfbBridgeTests.cs`
-11; `Bbs757CduFrameTests.cs`, `Bbs757CduKeysTests.cs`, `Bbs757CduRowsTests.cs` 08 → 09; `Bbs757CduMarkersTests.cs` 09;
+11; `Bbs757CduFrameTests.cs`, `Bbs757CduKeysTests.cs`, `Bbs757CduRowsTests.cs`, `Bbs757CduTypingTests.cs` 08 → 09; `Bbs757CduMarkersTests.cs` 09;
 `tests/.../FirstOfficer/BBS757/**` and the FO cross-profile tests 10; `Bbs757CockpitAnnouncementsTests.cs`,
 `Bbs757LightTableTests.cs`, `Fixtures/bbs757-lights.json` 13; `Bbs757ThrustTests.cs` 15; the rest frozen. No test,
 code or CI step may read a file under `docs/b757/`: plan 16 deletes it (copy what a test needs into a fixture). Test names keep `Bbs757` so the b757 rule
@@ -150,7 +151,7 @@ each); plan 16 is docs and owner steps, worked with superpowers:executing-plans.
   "In-sim checks (owner)" list or any step that writes to the sim: it lists them under "Waiting on the owner" in the
   execution record and works the rest. What needs the owner or builds on the owner's result: plan 01 Task 7's live run
   (a saved snapshot pair will do); plan 02 Task 8; plan 03 Task 4; plan 04 Tasks 4 and 5 (their later steps branch on
-  step 1's reading) and Task 6; plan 05 Tasks 3 and 5; plan 09 Task 4; plan 10 Task 3's sim check; plan 11 Task 1, and
+  step 1's reading) and Task 6; plan 05 Tasks 3 and 5; plan 08 Task 2 (its later steps use step 1's timing); plan 09 Task 4; plan 10 Task 3's sim check; plan 11 Task 1, and
   Tasks 2-5 for the tiles it measures; plan 12 Task 2's run and Task 3; plan 13 Task 1, then Task 6; plan 15 Task 3.
 - Two plans at once: separate worktrees and separate scratch folders; never two agents on one plan or one file.
 - When the plan's tasks are done: one whole-plan review checks the ownership diff (step 5), that every Review Focus
