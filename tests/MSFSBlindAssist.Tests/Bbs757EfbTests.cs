@@ -1,4 +1,5 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
 
@@ -8,7 +9,8 @@ namespace MSFSBlindAssist.Tests;
 /// The parts of the 757 EFB window that need no simulator: the AIRAC cycle for a date, when the
 /// nav data update may click (BlueBird's REMOVE button sits where UPDATE was once the installed
 /// cycle is current), the click sequences, BlueBird's work folder and the two values read from it,
-/// and the Navigraph sign-in helpers.
+/// the Navigraph sign-in helpers, and the ground power buttons' flow (<c>Bbs757GroundPower.SwitchAsync</c>)
+/// over a fake tablet, a fake variable and a fake clock.
 /// </summary>
 public class Bbs757EfbTests
 {
@@ -364,6 +366,338 @@ public class Bbs757EfbTests
     {
         Assert.Equal("Chocks are already removed", Bbs757EfbLayout.ChocksAlreadyText(inPlace: false));
         Assert.Equal("Chocks are already in place", Bbs757EfbLayout.ChocksAlreadyText(inPlace: true));
+    }
+
+    // ---- Ground power ----------------------------------------------------------------------------
+
+    private const string GpuKey = Bbs757SharedKeys.GpuConnected;
+
+    // What the window says: the words are pinned here, as Bbs757GroundPowerTests pins them for the pure half.
+    private const string GpuUnreadSaid = "The ground power cannot be read, so nothing was tapped.";
+    private const string GpuAlreadyConnectedSaid = "Ground power is already connected.";
+    private const string GpuAlreadyDisconnectedSaid = "Ground power is already disconnected.";
+    private const string GpuOnLineSaid =
+        "Ground power is on line. Press EXT PWR on the Electrical panel to take it off, with the APU or the engines " +
+        "powering the aircraft, then try again.";
+    private const string GpuExtPwrUnreadSaid = "External power cannot be read, so nothing was tapped.";
+    private const string GpuConnectedSaid = "Ground power connected. Press EXT PWR on the Electrical panel to put it on line.";
+    private const string GpuDisconnectedSaid = "Ground power disconnected.";
+    private const string GpuNotConnectedSaid = "BlueBird did not connect the ground power.";
+    private const string GpuNotDisconnectedSaid = "BlueBird did not disconnect the ground power.";
+    private const string GpuUnreadNowSaid = "The ground power cannot be read now.";
+
+    /// <summary>
+    /// What stands behind <see cref="Bbs757GroundPowerIo"/> in these tests: the connection's reads come off a queue (the
+    /// last one repeats once it runs dry), EXT PWR is one value, the clock is virtual and moves only when the flow
+    /// waits, and everything the flow did to the echo and the tablet is logged in order: "arm", "run", then
+    /// "settle 1" ("settle null" when the last read was nothing).
+    /// </summary>
+    private sealed class GroundPowerFake
+    {
+        public const long StartMs = 5_000_000;   // not zero: a deadline is a time on a clock, not a length
+
+        private readonly Queue<double?> _reads;
+        private double? _connection;
+
+        public GroundPowerFake(params double?[] connectionReads) => _reads = new Queue<double?>(connectionReads);
+
+        public double? ExtPwr;                   // what EXT PWR reads
+        public (Bbs757EfbRunResult Result, bool MayHaveClicked) Answer = (Bbs757EfbRunResult.Done, true);   // the click sequence's answer
+        public Exception? RunThrows;             // the run throws this instead of answering
+        public bool CancelOnDelay;               // the first wait throws, as a window going away cancels it
+        public long Now = StartMs;               // virtual ms
+        public readonly List<string> Log = new();
+        public readonly List<string> Reads = new();   // the keys read, in order
+        public readonly List<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>> Runs = new();
+        public readonly List<int> Delays = new();
+
+        public Bbs757GroundPowerIo Io => new()
+        {
+            Read = (key, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                Reads.Add(key);
+                if (key == Bbs757GroundPower.ExtPwrOnKey) return Task.FromResult(ExtPwr);
+                if (key != GpuKey) throw new InvalidOperationException($"The flow read {key}.");
+                if (_reads.Count > 0) _connection = _reads.Dequeue();
+                return Task.FromResult(_connection);
+            },
+            Run = (seq, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                Log.Add("run");
+                Runs.Add(seq);
+                return RunThrows is { } ex
+                    ? Task.FromException<(Bbs757EfbRunResult Result, bool MayHaveClicked)>(ex)
+                    : Task.FromResult(Answer);
+            },
+            Delay = (ms, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                if (CancelOnDelay) throw new OperationCanceledException();
+                Delays.Add(ms);
+                Now += ms;
+                return Task.CompletedTask;
+            },
+            NowMs = () => Now,
+            ArmEcho = () => Log.Add("arm"),
+            SettleEcho = after => Log.Add("settle " + (after is double v ? v.ToString(CultureInfo.InvariantCulture) : "null")),
+        };
+    }
+
+    [Fact]
+    public async Task Connect_taps_once_and_reports()
+    {
+        var fake = new GroundPowerFake(0.0, 1.0);   // not connected; then the read-back finds it connected
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
+        // The echo opens right before the one run and ends with the connection the read-back found.
+        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
+        Assert.Equal(Bbs757EfbLayout.ToggleGroundPower(), Assert.Single(fake.Runs));
+        // The connection before the tap and again after it; a connect never looks at EXT PWR.
+        Assert.Equal(new[] { GpuKey, GpuKey }, fake.Reads);
+        Assert.Empty(fake.Delays);   // the read-back found the wish at once
+    }
+
+    [Fact]
+    public async Task Connect_when_connected_taps_nothing()
+    {
+        var fake = new GroundPowerFake(1.0);   // connected already: the tile would disconnect it
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Already, GpuAlreadyConnectedSaid), outcome);
+        Assert.Empty(fake.Log);    // no echo, no run, no settle
+        Assert.Empty(fake.Runs);
+        Assert.Equal(new[] { GpuKey }, fake.Reads);
+    }
+
+    [Fact]
+    public async Task Disconnect_when_disconnected_taps_nothing()
+    {
+        var fake = new GroundPowerFake(0.0) { ExtPwr = 1.0 };   // disconnected already: the tile would connect it
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Already, GpuAlreadyDisconnectedSaid), outcome);
+        Assert.Empty(fake.Log);
+        Assert.Empty(fake.Runs);
+        Assert.Equal(new[] { GpuKey }, fake.Reads);   // not connected, so EXT PWR is not asked
+    }
+
+    [Fact]
+    public async Task Disconnect_refused_while_on_line()
+    {
+        var fake = new GroundPowerFake(1.0) { ExtPwr = 1.0 };
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuOnLineSaid), outcome);
+        Assert.Empty(fake.Log);    // refused before any tap, and no echo opened
+        Assert.Empty(fake.Runs);
+        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey }, fake.Reads);
+    }
+
+    [Fact]
+    public async Task Disconnect_taps_once_and_reports()
+    {
+        var fake = new GroundPowerFake(1.0, 0.0) { ExtPwr = 0.0 };   // connected, EXT PWR off; then the read-back finds it gone
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuDisconnectedSaid), outcome);
+        Assert.Equal(new[] { "arm", "run", "settle 0" }, fake.Log);
+        Assert.Equal(Bbs757EfbLayout.ToggleGroundPower(), Assert.Single(fake.Runs));
+        // The connection, then EXT PWR (it is connected), both before the tap; then the read-back.
+        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey, GpuKey }, fake.Reads);
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(true, double.NaN)]
+    [InlineData(false, null)]
+    [InlineData(false, double.NaN)]
+    public async Task A_ground_power_that_cannot_be_read_taps_nothing_and_says_so(bool connect, double? reading)
+    {
+        var fake = new GroundPowerFake(reading) { ExtPwr = 1.0 };
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuUnreadSaid), outcome);
+        Assert.Empty(fake.Log);
+        Assert.Empty(fake.Runs);
+        Assert.Equal(new[] { GpuKey }, fake.Reads);   // nothing says which way a tap would go, so EXT PWR is not asked
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(double.NaN)]
+    public async Task A_disconnect_with_external_power_unread_taps_nothing(double? extPwr)
+    {
+        var fake = new GroundPowerFake(1.0) { ExtPwr = extPwr };
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuExtPwrUnreadSaid), outcome);
+        Assert.Empty(fake.Log);
+        Assert.Empty(fake.Runs);
+        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey }, fake.Reads);
+    }
+
+    [Theory]
+    [InlineData(1.0, "settle 1", GpuConnectedSaid)]        // the tile took, though the run never reported finishing
+    [InlineData(0.0, "settle 0", GpuNotConnectedSaid)]     // it did not: said so after the whole read-back
+    public async Task A_run_that_did_not_report_finishing_is_judged_from_the_variable_and_never_run_again(
+        double after, string settle, string said)
+    {
+        var fake = new GroundPowerFake(0.0, after) { Answer = (Bbs757EfbRunResult.NotFinished, true) };   // it may have clicked
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, said), outcome);
+        Assert.Single(fake.Runs);   // exactly one run: a second tap could undo the first
+        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
+    }
+
+    [Theory]
+    [InlineData(Bbs757EfbRunResult.Unreachable)]
+    [InlineData(Bbs757EfbRunResult.LayoutUnknown)]
+    [InlineData(Bbs757EfbRunResult.NotFinished)]
+    public async Task A_run_that_tapped_nothing_is_a_run_problem_and_is_not_read_back(Bbs757EfbRunResult result)
+    {
+        var fake = new GroundPowerFake(0.0) { Answer = (result, false) };
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.RunProblem, null, result), outcome);
+        Assert.Equal(new[] { "arm", "run", "settle null" }, fake.Log);   // the echo ends all the same
+        Assert.Equal(new[] { GpuKey }, fake.Reads);                      // nothing was tapped: nothing to read back
+        Assert.Empty(fake.Delays);
+    }
+
+    [Theory]
+    [InlineData(true, 0.0, "settle 0", GpuNotConnectedSaid)]
+    [InlineData(false, 1.0, "settle 1", GpuNotDisconnectedSaid)]
+    public async Task BlueBird_never_switching_is_said_after_the_whole_read_back(
+        bool connect, double unchanged, string settle, string said)
+    {
+        var fake = new GroundPowerFake(unchanged) { ExtPwr = 0.0 };
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, said), outcome);
+        // Read every 500 ms for 6 s: the flow waited out the deadline, not less and not more.
+        Assert.Equal(Bbs757GroundPower.ReadBackMs, fake.Now - GroundPowerFake.StartMs);
+        Assert.Equal(
+            Enumerable.Repeat(Bbs757GroundPower.ReadBackPollMs, Bbs757GroundPower.ReadBackMs / Bbs757GroundPower.ReadBackPollMs),
+            fake.Delays);
+        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
+    }
+
+    [Fact]
+    public async Task The_read_back_stops_at_the_first_read_of_the_wish()
+    {
+        var fake = new GroundPowerFake(0.0, 0.0, 0.0, 1.0);   // before the tap; then at once, 500 ms later, 1000 ms later
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
+        Assert.Equal(new[] { 500, 500 }, fake.Delays);
+        Assert.Equal(new[] { GpuKey, GpuKey, GpuKey, GpuKey }, fake.Reads);
+        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
+    }
+
+    [Fact]
+    public async Task A_read_back_that_could_not_read_yet_keeps_waiting()
+    {
+        var fake = new GroundPowerFake(0.0, null, double.NaN, 1.0);
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
+        Assert.Equal(new[] { 500, 500 }, fake.Delays);
+        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
+    }
+
+    [Theory]
+    [InlineData(null, "settle null")]
+    [InlineData(double.NaN, "settle NaN")]
+    public async Task A_read_back_that_stays_unread_says_so_and_settles_with_what_it_read(double? unread, string settle)
+    {
+        var fake = new GroundPowerFake(0.0, unread);   // readable before the tap, unreadable after it
+
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
+
+        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuUnreadNowSaid), outcome);
+        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
+        Assert.Equal(Bbs757GroundPower.ReadBackMs, fake.Now - GroundPowerFake.StartMs);   // waited on like a wrong reading
+    }
+
+    [Fact]
+    public async Task A_canceled_run_propagates_and_the_echo_still_ends()
+    {
+        var fake = new GroundPowerFake(0.0) { RunThrows = new OperationCanceledException() };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default));
+
+        Assert.Equal(new[] { "arm", "run", "settle null" }, fake.Log);   // the echo never outlives the run
+    }
+
+    [Fact]
+    public async Task A_cancel_during_the_read_back_ends_the_echo_with_the_last_connection_read()
+    {
+        var fake = new GroundPowerFake(0.0, 0.0) { CancelOnDelay = true };   // the window goes away while the flow waits
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default));
+
+        Assert.Equal(new[] { "arm", "run", "settle 0" }, fake.Log);
+    }
+
+    [Fact]
+    public void The_read_back_reads_every_500_ms_for_6_seconds_inside_the_echo_window()
+    {
+        Assert.Equal(6000, Bbs757GroundPower.ReadBackMs);
+        Assert.Equal(500, Bbs757GroundPower.ReadBackPollMs);
+        // The taps and the whole read-back fit the echo window the definition opens for the run: the row must not
+        // start saying the window's own change before the window has.
+        Assert.True(Bbs757EfbLayout.TotalMs(Bbs757EfbLayout.ToggleGroundPower()) + Bbs757GroundPower.ReadBackMs
+            < Bbs757GroundPower.WindowRunMaxMs);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task The_ground_power_outcomes_do_not_follow_the_pcs_culture(string culture)
+    {
+        // Readings with a fraction (they read as 0 and 1) beside the plain ones: no decision and no word may change
+        // with a decimal comma.
+        static async Task<List<Bbs757GroundPowerOutcome>> All() => new()
+        {
+            await Bbs757GroundPower.SwitchAsync(true, new GroundPowerFake(0.3, 0.7).Io, default),                      // connected
+            await Bbs757GroundPower.SwitchAsync(false, new GroundPowerFake(0.7, 0.3) { ExtPwr = 0.2 }.Io, default),   // disconnected
+            await Bbs757GroundPower.SwitchAsync(true, new GroundPowerFake(0.3).Io, default),                           // never connected
+            await Bbs757GroundPower.SwitchAsync(false, new GroundPowerFake(0.7) { ExtPwr = 0.7 }.Io, default),         // on line
+        };
+
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            var expected = await All();
+            Assert.Equal(new[] { GpuConnectedSaid, GpuDisconnectedSaid, GpuNotConnectedSaid, GpuOnLineSaid },
+                expected.Select(o => o.Text));
+
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            Assert.Equal(expected, await All());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
     }
 
     // ---- Nosewheel steering ----------------------------------------------------------------

@@ -93,10 +93,11 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The EFB window's seams: fresh reads of the variables the definition registers (the chocks),
-    /// the plan fetch for BlueBird's SimBrief ID, and the current 757 definition's load watch. Each
-    /// reads <c>simConnectManager</c> and <c>currentAircraft</c> when it is called, so a reconnect is
-    /// followed; the window is disposed on every profile switch.
+    /// The EFB window's seams: fresh reads of the variables the definition registers (the chocks, the
+    /// ground power), the plan fetch for BlueBird's SimBrief ID, and the current 757 definition's load
+    /// watch and ground power echo (the window's own ground power run, so the Ground Power row does not
+    /// say its change a second time). Each reads <c>simConnectManager</c> and <c>currentAircraft</c> when
+    /// it is called, so a reconnect is followed; the window is disposed on every profile switch.
     /// </summary>
     private Forms.BBS757.Bbs757LoadIo CreateBbs757LoadIo() => new()
     {
@@ -108,6 +109,14 @@ public partial class MainForm
         NestRunning = () => currentAircraft is BBS757Definition def ? def.NestRunning() : Aircraft.BBS757.Bbs757Nest.IsRunning(),
         StartWatch = (loads, units) => currentAircraft is BBS757Definition def && simConnectManager is { IsConnected: true } sim
             && def.StartLoadWatch(loads, units, sim, announcer),
+        ArmGroundPowerEcho = () =>
+        {
+            if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho();
+        },
+        SettleGroundPowerEcho = after =>
+        {
+            if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(after);
+        },
     };
 
     /// <summary>

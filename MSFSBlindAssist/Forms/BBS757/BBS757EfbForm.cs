@@ -26,13 +26,17 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The SimBrief fuel and payload load taps BlueBird's own IMPORT FROM SIMBRIEF and START BOARDING
 /// and hands the rest to the definition's load watch (<see cref="Bbs757LoadIo"/>, MainForm's seams),
 /// which says when the fueling and the boarding are complete. The steering switch toggles, so it is
-/// clicked only while BlueBird's setting reads the tiller.
+/// clicked only while BlueBird's setting reads the tiller. The ground power buttons read BlueBird's ground
+/// power first and tap the GPU tile (it toggles too) only when it differs from the wish, refuse a disconnect
+/// while external power is on line, and say what the ground power reads afterward
+/// (<see cref="Bbs757GroundPower.SwitchAsync"/>).
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
 /// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Weight units now
-/// pounds", "Loading Before start", "Fueling and boarding started…"). An action the window cannot do
-/// is refused aloud: the EFB unreachable, an action still running, an ID that is not digits, a preset
-/// for the other phase, a plan the tanks or holds cannot take or in other units than the aircraft's.
+/// pounds", "Loading Before start", "Fueling and boarding started…", "Ground power connected…"). An
+/// action the window cannot do is refused aloud: the EFB unreachable, an action still running, an ID
+/// that is not digits, a preset for the other phase, a plan the tanks or holds cannot take or in other
+/// units than the aircraft's, a ground power disconnect while external power is on line.
 /// The SimBrief ID is never logged or spoken; the Navigraph code is spoken letter by letter, before
 /// the browser opens, and shown in the status box, never logged. The status box is a read-only
 /// TextBox (VAT-13).
@@ -119,6 +123,8 @@ public class BBS757EfbForm : Form
     private Button _steeringButton = null!;
     private Button _removeChocksButton = null!;
     private Button _setChocksButton = null!;
+    private Button _connectGroundPowerButton = null!;
+    private Button _disconnectGroundPowerButton = null!;
     private TextBox _statusBox = null!;
     private Button _closeButton = null!;
     private readonly System.Windows.Forms.Timer _statusTimer;
@@ -142,7 +148,9 @@ public class BBS757EfbForm : Form
     /// null when it cannot be read (no simulator connection). A preset or a fuel and payload load
     /// is made only after it.
     /// </param>
-    /// <param name="loadIo">The plan fetch, the definition's load watch, and fresh reads (the chocks).</param>
+    /// <param name="loadIo">
+    /// The plan fetch, the definition's load watch, fresh reads (the chocks, the ground power) and the ground power echo.
+    /// </param>
     public BBS757EfbForm(CoherentBbs757EfbClient efb, CoherentBbs757TabletClient tablet, ScreenReaderAnnouncer announcer,
         Func<int, CancellationToken, Task<bool?>> readOnGround, Bbs757LoadIo loadIo)
         : this(efb, tablet, announcer, readOnGround, loadIo, Bbs757WorkFolder.DefaultRoots)
@@ -324,6 +332,9 @@ public class BBS757EfbForm : Form
         y += h + gap;
         _removeChocksButton = MakeButton("Remove chocks", left, halfW, () => ChocksAsync(wantInPlace: false));
         _setChocksButton = MakeButton("Set chocks", left + halfW + 10, halfW, () => ChocksAsync(wantInPlace: true));
+        y += h + gap;
+        _connectGroundPowerButton = MakeButton("Connect ground power", left, halfW, () => GroundPowerAsync(connect: true));
+        _disconnectGroundPowerButton = MakeButton("Disconnect ground power", left + halfW + 10, halfW, () => GroundPowerAsync(connect: false));
         y += h + gap + 4;
 
         var statusLabel = new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ };
@@ -1069,6 +1080,44 @@ public class BBS757EfbForm : Form
         Say(Bbs757EfbLayout.ChocksResultPhrase(wantInPlace, after));
     }
 
+    /// <summary>
+    /// Connect ground power / Disconnect ground power. The GPU tile TOGGLES BlueBird's ground power, so
+    /// <see cref="Bbs757GroundPower.SwitchAsync"/> reads it fresh first and taps the tile only when it differs
+    /// from the wish ([B757-2]'s pattern): already where wanted says so ("Ground power is already connected."),
+    /// a disconnect while external power is on line is refused (take it off first), and a connection or external
+    /// power that cannot be read taps nothing. After the tap the connection is read until it shows the wish, for
+    /// up to six seconds, and the result said: "Ground power connected…", "Ground power disconnected." or
+    /// "BlueBird did not connect the ground power.". A run that started and did not report finishing is judged
+    /// from the variable all the same, never run again; one that tapped nothing is said as any run problem. The
+    /// definition's Ground Power row does not say the change a second time while the run lasts
+    /// (<see cref="Bbs757LoadIo.ArmGroundPowerEcho"/>), so one press is one utterance (CORE-7).
+    /// </summary>
+    private async Task GroundPowerAsync(bool connect)
+    {
+        var io = new Bbs757GroundPowerIo
+        {
+            Read = (key, token) => _loadIo.Read(key, LoadReadTimeoutMs, token),
+            Run = async (seq, _) =>
+            {
+                SetResult(connect ? "Connecting the ground power." : "Disconnecting the ground power.");
+                var result = await RunAsync(Bbs757EfbRunKind.GroundPower, seq);
+                return (result, _efb.LastRunMayHaveClicked);
+            },
+            Delay = Task.Delay,
+            NowMs = () => Environment.TickCount64,
+            ArmEcho = _loadIo.ArmGroundPowerEcho,
+            SettleEcho = _loadIo.SettleGroundPowerEcho,
+        };
+        var outcome = await Bbs757GroundPower.SwitchAsync(connect, io, Lifetime);
+        if (_disposed) return;
+        switch (outcome.Kind)
+        {
+            case Bbs757GroundPowerOutcomeKind.Refused: Refuse(outcome.Text!); return;
+            case Bbs757GroundPowerOutcomeKind.RunProblem: SayRunProblem(outcome.Run); return;
+            default: Say(outcome.Text!); return;   // Already and Result: said once
+        }
+    }
+
     /// <summary>A quick start tile, which has nothing to read back: clicked, then "{name} pressed".</summary>
     private async Task QuickStartAsync(string name)
     {
@@ -1132,7 +1181,8 @@ public class BBS757EfbForm : Form
 
 /// <summary>
 /// What the EFB window needs from the app beyond the tablet, as MainForm's seams: the SimBrief fuel
-/// and payload load's plan fetch and the definition's load watch, and fresh reads (the chocks).
+/// and payload load's plan fetch and the definition's load watch, fresh reads (the chocks, the ground
+/// power), and the definition's ground power echo.
 /// Each is called on the UI thread, except <see cref="FetchOfpXml"/>, which the window runs off it.
 /// </summary>
 public sealed class Bbs757LoadIo
@@ -1154,4 +1204,17 @@ public sealed class Bbs757LoadIo
     /// (<c>BBS757Definition.StartLoadWatch</c>); false when it did not start.
     /// </summary>
     public required Func<Bbs757Loads, Bbs757WeightUnits?, bool> StartWatch { get; init; }
+
+    /// <summary>
+    /// Opens the definition's ground power echo right before the window's ground power taps
+    /// (<c>BBS757Definition.ArmGroundPowerEcho</c>): the Ground Power row then does not say a second time the
+    /// change the window says itself.
+    /// </summary>
+    public required Action ArmGroundPowerEcho { get; init; }
+
+    /// <summary>
+    /// Ends it when the run is over, with the last ground power the window read, null when none
+    /// (<c>BBS757Definition.SettleGroundPowerEcho</c>).
+    /// </summary>
+    public required Action<double?> SettleGroundPowerEcho { get; init; }
 }
