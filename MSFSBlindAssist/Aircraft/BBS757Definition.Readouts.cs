@@ -9,7 +9,8 @@ using R = MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// The 757's flight-control readouts, its MCP lights, its EXEC light and its engine rows: what is
+/// The 757's flight-control readouts, its MCP lights, its EXEC light, its engine rows and its announced
+/// lights and states (<see cref="Bbs757Annunciators"/>, plan 06; EXT PWR reads back on or off): what is
 /// registered, where it shows, what is spoken on change, the trim in BlueBird's units, and the
 /// output-mode readouts (L flaps, Shift+G gear, B the altimeters and the radio minimums, F and Shift+F
 /// fuel, W and Shift+W gross weight).
@@ -80,6 +81,18 @@ public partial class BBS757Definition
         // The MCP button lights.
         foreach (var light in Bbs757McpLights.All)
             Add(light.Key, StreamedRow(light.LightVar, light.Label, SimVarType.LVar, "number"));
+
+        // The announced lights and states (plan 06): status rows on their panel's display, or on no display.
+        foreach (var row in Bbs757Annunciators.Rows)
+        {
+            Add(row.Key, new SimVarDefinition
+            {
+                Name = row.LVar, DisplayName = row.Label, Type = SimVarType.LVar, Units = "number",
+                UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+                RenderAsReadOnlyStatus = row.Panel != null,
+                ValueDescriptions = row.States?.ToDictionary(p => p.Key, p => p.Value) ?? new Dictionary<double, string>(),
+            });
+        }
 
         // The captain's CDU EXEC light (ruling R36): spoken on change, with a Ctrl+M row of its own,
         // and on no panel or status display.
@@ -187,6 +200,9 @@ public partial class BBS757Definition
         if (controls.ContainsKey(EnginesPanel))
             Display(EnginesPanel).AddRange(R.EngineRows.Select(r => r.Key));
 
+        foreach (var row in Bbs757Annunciators.Rows)
+            if (row.Panel != null && controls.ContainsKey(row.Panel)) Display(row.Panel).Add(row.Key);
+
         if (controls.TryGetValue(TransponderPanel, out var transponder))
         {
             // The pilot reaches the squawk field second, right after the mode knob, which the map puts first on
@@ -239,6 +255,11 @@ public partial class BBS757Definition
             SpeakChange(varName, double.IsFinite(value) ? Bbs757McpLights.Phrase(light.Label, value) : null, announcer);
             return true;
         }
+        if (Bbs757Annunciators.ForKey(varName) is { } row)
+        {
+            SpeakChange(varName, row.Phrase(value, null), announcer);
+            return true;
+        }
         return false;
     }
 
@@ -277,15 +298,21 @@ public partial class BBS757Definition
         {
             "BBS757_SPOILERDOWN_CLICK" or "BBS757_SPOILERARMED_CLICK" or "BBS757_SPOILERUP_CLICK" => R.SpeedbrakeKey,
             "BBS757_PEDESTAL_Park_Brake_Lever" => R.ParkingBrakeKey,
+            Bbs757Annunciators.ExtPwrButtonNode => Bbs757SharedKeys.ExtPwrOn,
             _ => null,
         };
     }
 
-    /// <summary>A linked row's phrase for a read value: "CMD R on", "Speedbrake armed", "Parking brake set".</summary>
+    /// <summary>A linked row's phrase for a read value: "CMD R on", "Speedbrake armed", "Parking brake set", "EXT PWR on".</summary>
     internal static string LinkedPhrase(string statusKey, double? value)
     {
         if (Bbs757McpLights.ForKey(statusKey) is { } light) return Bbs757McpLights.Phrase(light.Label, value);
-        return statusKey == R.SpeedbrakeKey ? R.SpeedbrakePhrase(value) : R.ParkingBrakePhrase(value);
+        return statusKey switch
+        {
+            R.SpeedbrakeKey => R.SpeedbrakePhrase(value),
+            Bbs757SharedKeys.ExtPwrOn => Bbs757Annunciators.ExtPwrPhrase(value),
+            _ => R.ParkingBrakePhrase(value),
+        };
     }
 
     /// <summary>The app is about to write the control that moves <paramref name="statusKey"/>: its change is the write's echo for a while.</summary>
@@ -356,6 +383,11 @@ public partial class BBS757Definition
         if (Bbs757McpLights.ForKey(varKey) != null)
         {
             displayText = Bbs757McpLights.State(value);
+            return true;
+        }
+        if (Bbs757Annunciators.ForKey(varKey) is { States: { } states })
+        {
+            displayText = double.IsFinite(value) && states.TryGetValue(Math.Round(value), out string? words) ? words : "unavailable";
             return true;
         }
         if (R.EngineRows.FirstOrDefault(r => r.Key == varKey) is { } engine)
