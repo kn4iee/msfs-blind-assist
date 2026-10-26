@@ -65,7 +65,10 @@ public static class Bbs757Annunciators
                 (v, _) => OnOff(v, "External power available", "External power not available"), ElectricalPanel,
                 States("Not available", "Available")),
 
-            // The autoland status annunciator's two lines (confirmed on the owner's first autoland, flight-06.md).
+            // The autoland status annunciator's two lines. UNCONFIRMED: the values are the plan's, to be checked on
+            // the owner's first autoland (recorded in flight-06.md), with the values cold and dark and unpowered:
+            // these L:vars drive the annunciator's animation, and if one rests at 0 the Status display would read
+            // LAND 3 / NO LAND 3 with nothing armed.
             new("BBS757_ASA_UPPER", "B757_MAIN_L_AUTOLAND_1_BUTTON_ON", "Autoland Status Upper",
                 (v, _) => Asa(v, "LAND 3", "LAND 2", "upper blank"), BBS757Definition.StatusSection,
                 new Dictionary<double, string> { [0] = "LAND 3", [1] = "Blank", [2] = "LAND 2" }),

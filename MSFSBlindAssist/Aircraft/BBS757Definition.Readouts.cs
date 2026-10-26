@@ -325,7 +325,17 @@ public partial class BBS757Definition
     }
 
     /// <summary>The app is about to write the control that moves <paramref name="statusKey"/>: its change is the write's echo for a while.</summary>
-    private void ArmOwnWriteEcho(string statusKey) => _changes.ArmEcho(statusKey, NowMs() + OwnWriteEchoMs);
+    /// <remarks>
+    /// An EXT PWR press arms its AVAIL light too, for the whole window (the read-back does not end it): BlueBird
+    /// may put AVAIL out as ON lights (not measured), and the press says "EXT PWR on" itself; "External power
+    /// not available" beside it would say the press twice and sound like power lost.
+    /// </remarks>
+    private void ArmOwnWriteEcho(string statusKey)
+    {
+        long until = NowMs() + OwnWriteEchoMs;
+        _changes.ArmEcho(statusKey, until);
+        if (statusKey == Bbs757SharedKeys.ExtPwrOn) _changes.ArmEcho(Bbs757SharedKeys.ExtPwrAvail, until);
+    }
 
     /// <summary>A read-back spoke (or showed) the row's state: that is its baseline now, and later changes speak again.</summary>
     private void SettleOwnWriteEcho(string statusKey, string phrase)
@@ -334,12 +344,15 @@ public partial class BBS757Definition
         _changes.ArmEcho(statusKey, 0);
     }
 
-    /// <summary>A reconnect or a flight load: every state row's next delivery is a baseline again.</summary>
+    /// <summary>
+    /// A reconnect or a flight load: every state row's next delivery is a baseline again. The announced rows'
+    /// raw values stay: they are facts, not baselines, and the batch delivers only changes, so an IRS switch
+    /// left at NAV is not delivered again.
+    /// </summary>
     private void ResetReadoutBaselines()
     {
         _changes.Reset();
         _gearLegs.Clear();
-        _annunciatorValues.Clear();
     }
 
     public override void ResetAnnouncementBaselines()

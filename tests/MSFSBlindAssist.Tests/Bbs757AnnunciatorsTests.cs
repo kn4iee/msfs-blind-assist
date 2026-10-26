@@ -163,6 +163,60 @@ public class Bbs757AnnunciatorsTests
     }
 
     [Fact]
+    public async Task An_ext_pwr_press_is_heard_once_even_if_avail_changes_with_it()
+    {
+        // Not measured: BlueBird may put the AVAIL light out when ON lights. The press says "EXT PWR on" itself
+        // (CORE-7); an AVAIL change inside its echo must not be said beside it, nor sound like power lost.
+        var map = Bbs757ControlMap.Parse("""
+            {
+              "controls": [
+                {
+                  "node": "B757_OVHD_EXT_PWR_BUTTON", "section": "Overhead", "panel": "Electrical", "label": "EXT PWR",
+                  "kind": "button", "state_var": null,
+                  "press": "1 (>L:B757_OVHD_EXT_PWR_BUTTON, bool)", "release": "0 (>L:B757_OVHD_EXT_PWR_BUTTON, bool)"
+                }
+              ]
+            }
+            """);
+        var io = new Bbs757FakeIo { Hold = _ => true };
+        io.Fresh[OnKey] = 1;
+        long now = 100_000;
+        var def = new BBS757Definition(map) { NestRunning = () => true, NowMs = () => now, WriteIo = _ => io.Io };
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(OnKey, 0, speech);
+        def.ProcessSimVarUpdate(AvailKey, 1, speech);
+
+        def.HandleUIVariableSet(Bbs757Annunciators.ExtPwrButtonNode, 1, new SimVarDefinition(), new SimConnectManager(IntPtr.Zero), speech);
+        await io.WritesReached(1);
+        now += 300;
+        def.ProcessSimVarUpdate(OnKey, 1, speech);     // the press's own echo
+        def.ProcessSimVarUpdate(AvailKey, 0, speech);  // AVAIL out as ON lights
+        for (int i = 0; i < 200 && !speech.All.Contains("EXT PWR on"); i++)
+        {
+            for (int d = 0; d < io.Delays.Count; d++) io.Release(d);   // each wait as it is asked
+            await Task.Delay(10);
+        }
+        now += 1_000;
+        def.ProcessSimVarUpdate(AvailKey, 0, speech);
+
+        Assert.Equal(new[] { "EXT PWR on" }, speech.All);
+    }
+
+    [Fact]
+    public void An_irs_switch_value_survives_a_flight_load()
+    {
+        // A switch value is a fact, not a baseline: the batch delivers only changes, so after a flight load
+        // (the tracker reset) the switch at NAV is not delivered again, and the IRS must still say aligned.
+        var rig = new Rig();
+        rig.Deliver("BBS757_IRS_L_SWITCH_WATCH", 2);
+        rig.Deliver("BBS757_IRS_L_ALIGN", 1);
+        rig.Def.OnSimContextReset();
+        rig.Deliver("BBS757_IRS_L_ALIGN", 1);   // the baseline after the load
+        rig.Deliver("BBS757_IRS_L_ALIGN", 0);
+        Assert.Equal(new[] { "IRS L aligned" }, rig.Speech.All);
+    }
+
+    [Fact]
     public void A_ground_power_window_run_is_heard_once_with_both_rows_present()
     {
         // Plan 07's handoff: the GPU tap changes the AVAIL light too (about 0.17 s after it); the window says
