@@ -39,7 +39,10 @@ internal static class Program
 internal sealed class ProbeDefinition : IniBuildsA350Definition
 {
     private readonly string[] _watch;
-    public ProbeDefinition(string[] watch) => _watch = watch;
+    // A350_SECTIONS="Overhead,Glareshield" offers a section still being curated.
+    public ProbeDefinition(string[] watch)
+        : base((Environment.GetEnvironmentVariable("A350_SECTIONS") ?? "Overhead").Split(',', StringSplitOptions.RemoveEmptyEntries))
+        => _watch = watch;
 
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
     {

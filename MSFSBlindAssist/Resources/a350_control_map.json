@@ -13815,133 +13815,133 @@
   },
   {
    "node": "EFIS_MODE_LEFT_SEQ1_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 0 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 0 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_LEFT_SEQ2_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 1 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 1 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_LEFT_SEQ3_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 2 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 2 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_LEFT_SEQ4_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 3 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 3 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_LEFT_SEQ5_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 4 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 4 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_RIGHT_SEQ1_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 0 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 0 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_RIGHT_SEQ2_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 1 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 1 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_RIGHT_SEQ3_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 2 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 2 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_RIGHT_SEQ4_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 3 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 3 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_MODE_RIGHT_SEQ5_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 4 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_FO_SWITCH) sp0 } l0 4 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ1_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 5 <",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 5 <",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ2_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 5 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 5 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ3_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 6 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 6 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ4_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 7 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 7 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ5_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 8 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 8 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ6_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 9 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 9 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ7_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 10 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 10 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_LEFT_SEQ8_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 11 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 0 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_CAPT_SWITCH, number) sp0 } l0 11 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ1_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 5 <",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 5 <",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ2_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 5 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 5 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ3_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 6 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 6 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ4_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 7 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 7 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ5_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 8 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 8 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ6_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 9 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 9 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ7_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 10 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 10 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_RANGE_RIGHT_SEQ8_PANEL_LIGHT",
-   "state": "(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 11 ==",
-   "power": null
+   "state": "(L:INI_FMS_SELECTOR) 2 == if{ 999 sp0 } els{ (L:INI_MAP_RANGE_FO_SWITCH, number) sp0 } l0 11 ==",
+   "power": "DC"
   },
   {
    "node": "EFIS_TAXI_LEFT_SEQ1_LIGHT",

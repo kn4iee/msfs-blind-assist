@@ -170,3 +170,16 @@ class GenerateA350MapTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LampRuleTests(unittest.TestCase):
+    def test_a_lamp_with_its_power_at_the_end(self):
+        self.assertEqual(gen.lamp_rule('(L:INI_BATTERY_1_FAULT) 1 == (L:INI_ANNLT_SWITCH) 0 == + 1 min (L:INI_DC_LIGHTS_FAILURE) *'),
+                         ('(L:INI_BATTERY_1_FAULT) 1 ==', 'DC'))
+
+    def test_a_lamp_with_its_power_and_brightness_in_front(self):
+        # The EFIS selectors' position markers: power x brightness first, then the state.
+        code = ('(L:INI_DC_LIGHTS_FAILURE) 10 * (L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } '
+                'l0 0 == (L:INI_ANNLT_SWITCH) 0 == or (L:INI_GENERAL_LIGHT_MULTIPLIER) * *')
+        self.assertEqual(gen.lamp_rule(code),
+                         ('(L:INI_FMS_SELECTOR) 0 == if{ -1 sp0 } els{ (L:INI_MAP_MODE_CAPT_SWITCH) sp0 } l0 0 ==', 'DC'))

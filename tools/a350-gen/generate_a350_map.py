@@ -284,6 +284,11 @@ def lamp_rule(code):
     state, rest = code[:at].strip(), code[at:]
     power = None
     for token, bus in _POWER.items():
+        # The EFIS selectors' position markers put power x brightness first: "(L:INI_DC_LIGHTS_FAILURE) 10 * STATE".
+        lead = re.match(re.escape(token) + r' [0-9.]+ \* ', state)
+        if lead:
+            state, power = state[lead.end():].strip(), bus
+            continue
         if state.endswith(token + ' *'):
             state, power = state[:-len(token + ' *')].strip(), bus
         elif token in rest:

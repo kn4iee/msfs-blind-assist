@@ -34,6 +34,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     private readonly A350Placement _placement;
 
+    /// <summary>The sections this instance offers: <see cref="CuratedSections"/>, or a harness's own list.</summary>
+    private readonly IReadOnlyList<string> _sections;
+
     /// <summary>The cockpit lights the curated panels show (<see cref="A350PanelLamps"/>), by key.</summary>
     private readonly Dictionary<string, A350Lamp> _lamps = new(StringComparer.Ordinal);
 
@@ -77,11 +80,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>The waits inside a plan (a hold, a spring) and before a read-back; tests replace it.</summary>
     internal Func<int, Task> Delay { get; set; } = Task.Delay;
 
-    public IniBuildsA350Definition()
+    public IniBuildsA350Definition() : this(CuratedSections) { }
+
+    /// <summary>Offers <paramref name="sections"/>: <c>tools/A350Probe</c> drives a section still being curated.</summary>
+    protected IniBuildsA350Definition(IReadOnlyList<string> sections)
     {
+        _sections = sections;
         var map = A350ControlMap.Load();
         _placement = A350PanelLayout.Place(map);
-        foreach (var section in CuratedSections)
+        foreach (var section in _sections)
             foreach (var panel in _placement.Structure[section])
                 foreach (var row in _placement.RowsByPanel[panel])
                     _rows[row.Key] = row;
@@ -101,7 +108,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 AddDisplay(panel, key);
             }
         }
-        foreach (var lamp in A350PanelLamps.Resolve(map, _placement, CuratedSections))
+        foreach (var lamp in A350PanelLamps.Resolve(map, _placement, _sections))
         {
             _lamps[lamp.Key] = lamp;
             _lampInputKeys.UnionWith(lamp.InputKeys);
@@ -134,11 +141,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
     public override Dictionary<string, List<string>> GetPanelStructure() =>
-        CuratedSections.ToDictionary(s => s, s => new List<string>(_placement.Structure[s]));
+        _sections.ToDictionary(s => s, s => new List<string>(_placement.Structure[s]));
 
     /// <summary>Every panel gets an entry, even an empty one: a panel with no controls entry is never built (HS-5).</summary>
     protected override Dictionary<string, List<string>> BuildPanelControls() =>
-        CuratedSections.SelectMany(s => _placement.Structure[s])
+        _sections.SelectMany(s => _placement.Structure[s])
             .ToDictionary(p => p, p => _placement.RowsByPanel[p].Select(r => r.Key).ToList());
 
     /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>

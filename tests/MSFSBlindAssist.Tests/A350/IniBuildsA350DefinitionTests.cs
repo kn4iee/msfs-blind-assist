@@ -57,6 +57,19 @@ public class IniBuildsA350DefinitionTests
         Assert.DoesNotContain("A350_EFIS_RANGE_LEFT", _def.GetVariables().Keys);
     }
 
+    private sealed class WithSections : IniBuildsA350Definition
+    {
+        public WithSections(params string[] sections) : base(sections) { }
+    }
+
+    [Fact]
+    public void A_harness_can_offer_a_section_still_being_curated()
+    {
+        var def = new WithSections("Overhead", "Glareshield");
+        Assert.Equal(new[] { "Overhead", "Glareshield" }, def.GetPanelStructure().Keys);
+        Assert.Contains("FCU", def.GetPanelControls().Keys);
+    }
+
     [Fact]
     public void Every_overhead_row_is_a_registered_variable_on_its_panel()
     {
