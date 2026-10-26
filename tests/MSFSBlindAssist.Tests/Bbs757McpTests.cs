@@ -947,6 +947,19 @@ public class Bbs757McpTests
     }
 
     [Fact]
+    public void The_speed_window_blank_flag_is_batched_for_the_windows_and_never_spoken()
+    {
+        // One batch slot: the windows' 400 ms button refresh reads the cache (plan 05, Task 1).
+        var flag = new BBS757Definition().GetVariables()[Bbs757Mcp.IasBlankedVar];
+
+        Assert.Equal("BBS_IAS_BLANKED", flag.Name);
+        Assert.Equal(SimVarType.LVar, flag.Type);
+        Assert.Equal(UpdateFrequency.Continuous, flag.UpdateFrequency);
+        Assert.False(flag.IsAnnounced);
+        Assert.True(flag.ExcludeFromMonitorManager);   // a window's cache, never spoken: no Ctrl+M row ([VAR-9])
+    }
+
+    [Fact]
     public void The_mcp_variables_are_on_no_panel()
     {
         var onPanels = new BBS757Definition().GetPanelControls().SelectMany(p => p.Value).ToHashSet(StringComparer.Ordinal);

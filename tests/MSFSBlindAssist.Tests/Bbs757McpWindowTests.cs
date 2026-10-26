@@ -271,50 +271,131 @@ public class Bbs757McpWindowTests
             Bbs757AutopilotLayout.RequestedKeys);
     }
 
-    // ---- The MCP value windows' buttons (task 11b, ruling R34) ------------------------------------
+    // ---- The MCP value windows' buttons (task 11b, ruling R34; fixed keys and Speed Intervene: plan 05, R57) ----
 
-    private static string[] WindowLabels(HotkeyAction action)
+    /// <summary>Today's map labels, held here so these tests never depend on the map's wording (plan 02 owns it).</summary>
+    private static readonly Dictionary<string, string> Labels = new(StringComparer.Ordinal)
     {
-        var map = Bbs757ControlMap.Load();
-        return Bbs757McpWindowLayout.NodesFor(action).Select(n => map.Controls.Single(c => c.Node == n).Label).ToArray();
-    }
+        ["B757_MCP_AP_HDG_SEL_SW"] = "HDG SEL", ["B757_MCP_HOLD_1_BUTTON"] = "HDG HOLD", ["B757_MCP_LNAV_BUTTON"] = "LNAV",
+        ["B757_MCP_SPD_BUTTON"] = "SPD", ["B757_MCP_THR_BUTTON"] = "THR", ["B757_MCP_FLCH_BUTTON"] = "FLCH",
+        ["B757_MCP_AP_SPD_MACH_SW"] = "IAS/MACH", ["B757_MCP_AP_SPD_HOLD_SW"] = "AP SPD Hold",
+        ["B757_MCP_HOLD_2_BUTTON"] = "ALT HOLD", ["B757_MCP_VNAV_BUTTON"] = "VNAV", ["B757_MCP_VS_BUTTON"] = "V/S",
+    };
+
+    private static readonly HotkeyAction[] Windows =
+        { HotkeyAction.FCUSetHeading, HotkeyAction.FCUSetSpeed, HotkeyAction.FCUSetAltitude, HotkeyAction.FCUSetVS };
+
+    private static IReadOnlyList<string> WindowCaptions(HotkeyAction action) =>
+        Bbs757McpWindowLayout.Captions(Bbs757McpWindowLayout.NodesFor(action), n => Labels[n]);
 
     [Fact]
     public void Each_mcp_window_carries_the_mode_buttons_that_go_with_its_value()
     {
-        Assert.Equal(new[] { "HDG SEL", "HDG HOLD", "LNAV" }, WindowLabels(HotkeyAction.FCUSetHeading));
-        Assert.Equal(new[] { "SPD", "THR", "FLCH", "IAS/MACH" }, WindowLabels(HotkeyAction.FCUSetSpeed));
-        Assert.Equal(new[] { "ALT HOLD", "VNAV", "FLCH" }, WindowLabels(HotkeyAction.FCUSetAltitude));
-        Assert.Equal(new[] { "V/S" }, WindowLabels(HotkeyAction.FCUSetVS));
+        Assert.Equal(new[] { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_HOLD_1_BUTTON", "B757_MCP_LNAV_BUTTON" },
+            Bbs757McpWindowLayout.NodesFor(HotkeyAction.FCUSetHeading));
+        Assert.Equal(new[] { "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON", "B757_MCP_AP_SPD_MACH_SW", "B757_MCP_AP_SPD_HOLD_SW" },
+            Bbs757McpWindowLayout.NodesFor(HotkeyAction.FCUSetSpeed));
+        Assert.Equal(new[] { "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VNAV_BUTTON", "B757_MCP_FLCH_BUTTON" },
+            Bbs757McpWindowLayout.NodesFor(HotkeyAction.FCUSetAltitude));
+        Assert.Equal(new[] { "B757_MCP_VS_BUTTON" }, Bbs757McpWindowLayout.NodesFor(HotkeyAction.FCUSetVS));
         Assert.Empty(Bbs757McpWindowLayout.NodesFor(HotkeyAction.FCUSetAutopilot));
     }
 
     [Fact]
-    public void Every_window_button_is_a_map_button_and_only_hdg_sel_and_ias_mach_have_no_light()
+    public void Every_window_button_is_a_map_button_and_only_hdg_sel_ias_mach_and_speed_intervene_have_no_light()
     {
         var map = Bbs757ControlMap.Load();
-        var nodes = new[] { HotkeyAction.FCUSetHeading, HotkeyAction.FCUSetSpeed, HotkeyAction.FCUSetAltitude, HotkeyAction.FCUSetVS }
-            .SelectMany(Bbs757McpWindowLayout.NodesFor).Distinct().ToList();
+        var nodes = Windows.SelectMany(Bbs757McpWindowLayout.NodesFor).Distinct().ToList();
 
         Assert.All(nodes, n => Assert.Equal(Bbs757Kinds.Button, map.Controls.Single(c => c.Node == n).Kind));
-        Assert.Equal(new[] { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_AP_SPD_MACH_SW" },
+        Assert.Equal(new[] { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_AP_SPD_MACH_SW", "B757_MCP_AP_SPD_HOLD_SW" },
             nodes.Where(n => Bbs757McpLights.ForNode(n) == null));
     }
 
     [Fact]
-    public void A_window_buttons_access_key_is_its_last_words_first_letter()
+    public void Speed_window_keys()
     {
-        Assert.Equal(new[] { "HDG &SEL", "HDG &HOLD", "&LNAV" }, Bbs757McpWindowLayout.Captions(WindowLabels(HotkeyAction.FCUSetHeading)));
-        Assert.Equal(new[] { "&SPD", "&THR", "&FLCH", "&IAS/MACH" }, Bbs757McpWindowLayout.Captions(WindowLabels(HotkeyAction.FCUSetSpeed)));
-        Assert.Equal(new[] { "ALT &HOLD", "&VNAV", "&FLCH" }, Bbs757McpWindowLayout.Captions(WindowLabels(HotkeyAction.FCUSetAltitude)));
-        Assert.Equal(new[] { "&V/S" }, Bbs757McpWindowLayout.Captions(WindowLabels(HotkeyAction.FCUSetVS)));
+        // The PMDG windows' keys (R57): IAS/MACH moves from Alt+I to Alt+M, Speed Intervene takes Alt+I.
+        Assert.Equal(new[] { "&SPD", "&THR", "&FLCH", "IAS/&MACH", "Speed &Intervene" }, WindowCaptions(HotkeyAction.FCUSetSpeed));
     }
 
     [Fact]
-    public void Two_buttons_that_would_share_an_access_key_get_none_and_an_ampersand_shows_as_itself()
+    public void Heading_and_vs_keys_unchanged()
     {
-        Assert.Equal(new[] { "HDG SEL", "SPD", "&LNAV" }, Bbs757McpWindowLayout.Captions(new[] { "HDG SEL", "SPD", "LNAV" }));
-        Assert.Equal(new[] { "&A&&B", "1" }, Bbs757McpWindowLayout.Captions(new[] { "A&B", "1" }));
+        Assert.Equal(new[] { "HDG &SEL", "HDG &HOLD", "&LNAV" }, WindowCaptions(HotkeyAction.FCUSetHeading));
+        Assert.Equal(new[] { "ALT &HOLD", "&VNAV", "&FLCH" }, WindowCaptions(HotkeyAction.FCUSetAltitude));
+        Assert.Equal(new[] { "&V/S" }, WindowCaptions(HotkeyAction.FCUSetVS));
+    }
+
+    [Fact]
+    public void No_window_repeats_a_key()
+    {
+        foreach (var window in Windows)
+        {
+            var keys = Bbs757McpWindowLayout.NodesFor(window).Select(Bbs757McpWindowLayout.AccessKeyFor).ToList();
+            Assert.All(keys, k => Assert.NotNull(k));
+            Assert.Equal(keys.Count, keys.Distinct().Count());
+        }
+    }
+
+    [Fact]
+    public void A_key_follows_the_label_and_an_ampersand_shows_as_itself()
+    {
+        // A relabelled control keeps its key, marked on the word that starts with it; a label without the
+        // letter shows no key rather than a wrong one.
+        Assert.Equal(new[] { "Heading &Select", "&LNAV && more" },
+            Bbs757McpWindowLayout.Captions(new[] { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_LNAV_BUTTON" },
+                n => n == "B757_MCP_LNAV_BUTTON" ? "LNAV & more" : "Heading Select"));
+        Assert.Equal(new[] { "Rate" }, Bbs757McpWindowLayout.Captions(new[] { "B757_MCP_VS_BUTTON" }, _ => "Rate"));
+        Assert.Equal("Speed Intervene", Bbs757McpWindowLayout.CaptionOverride("B757_MCP_AP_SPD_HOLD_SW"));
+        Assert.Null(Bbs757McpWindowLayout.CaptionOverride("B757_MCP_SPD_BUTTON"));
+        Assert.Null(Bbs757McpWindowLayout.AccessKeyFor("B757_MCP_CMD_1_BUTTON"));
+    }
+
+    [Theory]
+    [InlineData(0.0, "Window open")]
+    [InlineData(1.0, "Window blank")]
+    [InlineData(null, "")]
+    public void Speed_intervene_state_text(double? blanked, string state)
+    {
+        var sim = new FakeSim();
+        if (blanked is double b) sim.Cache[Bbs757Mcp.IasBlankedVar] = b;
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+
+        var intervene = def.McpWindowButtons(HotkeyAction.FCUSetSpeed, new SimConnectManager(IntPtr.Zero), new SpeechCapture())
+            .Single(b => b.Label == "Speed &Intervene");
+
+        Assert.Equal(state, intervene.GetCurrentState());
+    }
+
+    [Fact]
+    public void Speed_intervene_press_is_the_panels_and_says_its_own_name()
+    {
+        var sim = new FakeSim();
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+        var intervene = def.McpWindowButtons(HotkeyAction.FCUSetSpeed, new SimConnectManager(IntPtr.Zero), speech)
+            .Single(b => b.Label == "Speed &Intervene");
+
+        intervene.OnPressed();
+
+        Assert.Equal(new[] { "Speed Intervene pressed" }, speech.All);
+        Assert.Equal(2, sim.Writes.Count);   // the press and its release
+        Assert.Contains("B757_MCP_IAS_MACH_KNOB_BUTTON", sim.Writes[1]);
+    }
+
+    [Fact]
+    public void Speed_intervene_that_cannot_land_is_refused_by_its_own_name()
+    {
+        var sim = new FakeSim { CanWrite = false };
+        var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+
+        def.McpWindowButtons(HotkeyAction.FCUSetSpeed, new SimConnectManager(IntPtr.Zero), speech)
+            .Single(b => b.Label == "Speed &Intervene").OnPressed();
+
+        Assert.Equal(new[] { "Speed Intervene unavailable" }, speech.All);
+        Assert.Empty(sim.Writes);
     }
 
     [Fact]
@@ -327,8 +408,8 @@ public class Bbs757McpWindowTests
 
         var buttons = def.McpWindowButtons(HotkeyAction.FCUSetSpeed, new SimConnectManager(IntPtr.Zero), new SpeechCapture());
 
-        Assert.Equal(new[] { "&SPD", "&THR", "&FLCH", "&IAS/MACH" }, buttons.Select(b => b.Label));
-        Assert.Equal(new[] { "On", "Off", "unavailable", "" }, buttons.Select(b => b.GetCurrentState()));
+        Assert.Equal(new[] { "&SPD", "&THR", "&FLCH", "IAS/&MACH", "Speed &Intervene" }, buttons.Select(b => b.Label));
+        Assert.Equal(new[] { "On", "Off", "unavailable", "", "" }, buttons.Select(b => b.GetCurrentState()));
         // The press speaks its own read-back once; the window's 1.2 s read-out would say it again (CORE-7).
         Assert.All(buttons, b => Assert.True(b.SuppressStateAnnounce?.Invoke()));
     }
@@ -421,6 +502,6 @@ public class Bbs757McpWindowTests
 
         var buttons = def.McpWindowButtons(HotkeyAction.FCUSetSpeed, new SimConnectManager(IntPtr.Zero), new SpeechCapture());
 
-        Assert.Equal(new[] { "&SPD", "&FLCH", "&IAS/MACH" }, buttons.Select(b => b.Label));
+        Assert.Equal(new[] { "&SPD", "&FLCH", "IAS/&MACH", "Speed &Intervene" }, buttons.Select(b => b.Label));
     }
 }

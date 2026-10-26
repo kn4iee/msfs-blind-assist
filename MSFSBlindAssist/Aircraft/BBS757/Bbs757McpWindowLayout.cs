@@ -5,19 +5,42 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <summary>
 /// The mode buttons of the four MCP value windows (Ctrl+H, S, A and V), as the PMDG 737's windows
 /// carry theirs: each window the buttons that go with its value, by map node, and their access keys.
-/// Pure; the definition takes each button's label from the map, its state from the MCP light and its
-/// press from the panel's path (BBS757Definition.Mcp.cs).
+/// Pure; the definition takes each button's label from the map (or <see cref="CaptionOverride"/>), its
+/// state from the MCP light and its press from the panel's path (BBS757Definition.Mcp.cs).
 /// </summary>
 public static class Bbs757McpWindowLayout
 {
+    /// <summary>The IAS/MACH knob's push: BlueBird's speed intervention (<c>L:B757_MCP_IAS_MACH_KNOB_BUTTON</c>).</summary>
+    public const string SpeedInterveneNode = "B757_MCP_AP_SPD_HOLD_SW";
+
     private static readonly string[] Heading = { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_HOLD_1_BUTTON", "B757_MCP_LNAV_BUTTON" };
-    private static readonly string[] Speed = { "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON", "B757_MCP_AP_SPD_MACH_SW" };
+    private static readonly string[] Speed = { "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON", "B757_MCP_AP_SPD_MACH_SW", SpeedInterveneNode };
     private static readonly string[] Altitude = { "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VNAV_BUTTON", "B757_MCP_FLCH_BUTTON" };
     private static readonly string[] VerticalSpeed = { "B757_MCP_VS_BUTTON" };
 
     /// <summary>
+    /// Each button's access key by node, fixed so a relabelled control keeps its key and the keys match
+    /// the PMDG windows (ruling R57): Alt+I is intervene, Alt+M the IAS/MACH changeover. FLCH sits in two
+    /// windows with one key.
+    /// </summary>
+    private static readonly Dictionary<string, char> Keys = new(StringComparer.Ordinal)
+    {
+        ["B757_MCP_AP_HDG_SEL_SW"] = 'S', ["B757_MCP_HOLD_1_BUTTON"] = 'H', ["B757_MCP_LNAV_BUTTON"] = 'L',
+        ["B757_MCP_SPD_BUTTON"] = 'S', ["B757_MCP_THR_BUTTON"] = 'T', ["B757_MCP_FLCH_BUTTON"] = 'F',
+        ["B757_MCP_AP_SPD_MACH_SW"] = 'M', [SpeedInterveneNode] = 'I',
+        ["B757_MCP_HOLD_2_BUTTON"] = 'H', ["B757_MCP_VNAV_BUTTON"] = 'V',
+        ["B757_MCP_VS_BUTTON"] = 'V',
+    };
+
+    /// <summary>Window captions that say what a button does where the map's label does not ("AP SPD Hold").</summary>
+    private static readonly Dictionary<string, string> Overrides = new(StringComparer.Ordinal)
+    {
+        [SpeedInterveneNode] = "Speed Intervene",
+    };
+
+    /// <summary>
     /// A window's buttons by node, in order: heading HDG SEL, HDG HOLD, LNAV; speed SPD, THR, FLCH,
-    /// IAS/MACH; altitude ALT HOLD, VNAV, FLCH; vertical speed V/S. None for any other action.
+    /// IAS/MACH, Speed Intervene; altitude ALT HOLD, VNAV, FLCH; vertical speed V/S. None for any other action.
     /// </summary>
     public static IReadOnlyList<string> NodesFor(HotkeyAction action) => action switch
     {
@@ -28,38 +51,40 @@ public static class Bbs757McpWindowLayout
         _ => Array.Empty<string>(),
     };
 
+    /// <summary>The button's fixed access key (Alt and this letter), or null for a node no window carries.</summary>
+    public static char? AccessKeyFor(string node) => Keys.TryGetValue(node, out char key) ? key : null;
+
+    /// <summary>The window caption that replaces the map's label for this node, or null to use the label.</summary>
+    public static string? CaptionOverride(string node) => Overrides.GetValueOrDefault(node);
+
     /// <summary>
-    /// A window's button texts for these labels, in order. Each takes an access key (Alt and a letter)
-    /// on the first letter of its last word: HDG SEL is Alt+S, HDG HOLD Alt+H, IAS/MACH Alt+I. Two
-    /// buttons of one window that would take the same letter get none. An ampersand in a label is
-    /// doubled, so it shows as itself rather than marking a key.
+    /// A window's button texts for these nodes, in order: <see cref="CaptionOverride"/> or
+    /// <paramref name="labelOf"/>'s label, with its fixed key marked on the last word that starts with
+    /// it ("HDG &amp;HOLD", "IAS/&amp;MACH", "Speed &amp;Intervene"); a word starts after a space or a slash.
+    /// A text where no word starts with the key shows no key rather than a wrong one. An ampersand in a
+    /// label is doubled, so it shows as itself rather than marking a key.
     /// </summary>
-    public static IReadOnlyList<string> Captions(IReadOnlyList<string> labels)
+    public static IReadOnlyList<string> Captions(IReadOnlyList<string> nodes, Func<string, string> labelOf)
     {
-        var keys = labels.Select(AccessKey).ToList();
-        var captions = new string[labels.Count];
-        for (int i = 0; i < labels.Count; i++)
+        var captions = new string[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++)
         {
-            string label = labels[i];
-            if (keys[i] is not char key || keys.Count(k => k == key) > 1)
-            {
-                captions[i] = Escape(label);
-                continue;
-            }
-            int start = LastWordStart(label);
-            captions[i] = $"{Escape(label[..start])}&{Escape(label[start..])}";
+            string text = CaptionOverride(nodes[i]) ?? labelOf(nodes[i]);
+            int at = AccessKeyFor(nodes[i]) is char key ? LastWordStartingWith(text, key) : -1;
+            captions[i] = at < 0 ? Escape(text) : $"{Escape(text[..at])}&{Escape(text[at..])}";
         }
         return captions;
     }
 
-    /// <summary>The upper-case first letter of the label's last word, or null when it does not start with a letter.</summary>
-    private static char? AccessKey(string label)
+    private static int LastWordStartingWith(string text, char key)
     {
-        int start = LastWordStart(label);
-        return start < label.Length && char.IsLetter(label[start]) ? char.ToUpperInvariant(label[start]) : null;
+        for (int i = text.Length - 1; i >= 0; i--)
+        {
+            bool wordStart = i == 0 || text[i - 1] is ' ' or '/';
+            if (wordStart && char.ToUpperInvariant(text[i]) == key) return i;
+        }
+        return -1;
     }
-
-    private static int LastWordStart(string label) => label.TrimEnd().LastIndexOf(' ') + 1;
 
     private static string Escape(string text) => text.Replace("&", "&&");
 }

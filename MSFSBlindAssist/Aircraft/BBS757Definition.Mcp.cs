@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Forms;
@@ -68,6 +69,15 @@ public partial class BBS757Definition
                 ExcludeFromMonitorManager = true,
             };
         }
+
+        // Batched, not on request: the speed window's 400 ms button refresh reads it from the cache
+        // (Speed Intervene's "Window blank"). A window's cache, never spoken: no Ctrl+M row ([VAR-9]).
+        vars.TryAdd(Bbs757Mcp.IasBlankedVar, new SimVarDefinition
+        {
+            Name = Bbs757Mcp.IasBlankedVar, DisplayName = "MCP Speed Window Blank",
+            Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.Continuous,
+            ExcludeFromMonitorManager = true,
+        });
     }
 
     /// <summary>The MCP sets' and readouts' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>
@@ -137,31 +147,35 @@ public partial class BBS757Definition
 
     /// <summary>
     /// The mode buttons of one value window (<see cref="Bbs757McpWindowLayout"/>), each with its map
-    /// label and an access key, captioned "LNAV: On" from its cached MCP light, or "HDG SEL" alone for a
-    /// button with no light (the window refreshes the captions). A press is the panel's
-    /// (<see cref="PressFromPanelAsync"/>): it reads the light back once ("LNAV on") or says "HDG SEL
-    /// pressed", or refuses aloud when nothing can land. The window's own read-out after a press is
-    /// suppressed, or the press would be said twice (CORE-7, ruling R34). A node missing from the map
-    /// is left out with a warning.
+    /// label (or the window's own caption, "Speed Intervene") and its fixed access key, captioned
+    /// "LNAV: On" from its cached MCP light, Speed Intervene from the speed window's blank flag ("Window
+    /// open" or "Window blank"), or "HDG SEL" alone for a button with neither (the window refreshes the
+    /// captions). A press is the panel's (<see cref="PressFromPanelAsync"/>): it reads the light back
+    /// once ("LNAV on") or says "Speed Intervene pressed", or refuses aloud when nothing can land, by the
+    /// window's caption. The window's own read-out after a press is suppressed, or the press would be
+    /// said twice (CORE-7, ruling R34). A node missing from the map is left out with a warning.
     /// </summary>
     internal List<ToggleButtonDef> McpWindowButtons(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         var controls = new List<Bbs757Control>();
         foreach (string node in Bbs757McpWindowLayout.NodesFor(action))
         {
-            if (_byNode.TryGetValue(node, out var control)) controls.Add(control);
+            if (_byNode.TryGetValue(node, out var control)) controls.Add(WithWindowCaption(control));
             else Log.Warn("BBS757", $"MCP window: {node} is not in the control map; its button is left out.");
         }
 
         var io = WriteIoFor(sim);
-        var captions = Bbs757McpWindowLayout.Captions(controls.Select(c => c.Label).ToList());
+        var captions = Bbs757McpWindowLayout.Captions(controls.Select(c => c.Node).ToList(),
+            node => controls.First(c => c.Node == node).Label);
         var buttons = new List<ToggleButtonDef>();
         for (int i = 0; i < controls.Count; i++)
         {
             var control = controls[i];
             Func<string> state = Bbs757McpLights.ForNode(control.Node) is { } light
                 ? () => Bbs757McpLights.State(io.Cached(light.Key))
-                : () => "";
+                : control.Node == Bbs757McpWindowLayout.SpeedInterveneNode
+                    ? () => SpeedInterveneState(io.Cached(Bbs757Mcp.IasBlankedVar))
+                    : () => "";
             buttons.Add(new ToggleButtonDef(captions[i], state,
                 () => _ = PressFromPanelAsync(control, io, announcer))   // never throws: it catches and logs
             {
@@ -169,6 +183,28 @@ public partial class BBS757Definition
             });
         }
         return buttons;
+    }
+
+    /// <summary>Speed Intervene's caption state: the speed window open (0) or blank in VNAV (1); nothing before the first reading.</summary>
+    private static string SpeedInterveneState(double? blanked) => blanked switch
+    {
+        null => "",
+        >= 0.5 => "Window blank",
+        _ => "Window open",
+    };
+
+    /// <summary>
+    /// The control with the window's caption as its label, so its press and refusal say the window's
+    /// name ("Speed Intervene pressed") rather than the map's; the map's own control is never changed. A
+    /// node with no override is returned as it is.
+    /// </summary>
+    private static Bbs757Control WithWindowCaption(Bbs757Control control)
+    {
+        if (Bbs757McpWindowLayout.CaptionOverride(control.Node) is not { } caption) return control;
+        // A copy through the map's own JSON shape, so a field the generator adds later is never dropped.
+        var copy = JsonSerializer.Deserialize<Bbs757Control>(JsonSerializer.Serialize(control))!;
+        copy.Label = caption;
+        return copy;
     }
 
     /// <summary>A profile switch closes the windows: their callbacks write through this definition, which no longer may.</summary>

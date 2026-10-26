@@ -54,6 +54,9 @@ public static class Bbs757Mcp
     public const string VsVar = "BBS_AP_TARGET_VS";
     public const string MachModeVar = "BBS_AIRSPEED_IN_MACH";
 
+    /// <summary>1 while the MCP speed window is blank (VNAV owns the speed); Speed Intervene opens it (session 8).</summary>
+    public const string IasBlankedVar = "BBS_IAS_BLANKED";
+
     /// <summary>The wait before a set is read back (the window takes a write within a frame or two; this is generous).</summary>
     public const int ReadBackMs = 1000;
 
