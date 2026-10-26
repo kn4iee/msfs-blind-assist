@@ -50,8 +50,8 @@ does; a second CLR held 1300 ms then always cleared the rest (15 of 15). The oth
 Session 8 had seen a 1 s hold clear everything (`cdu.md`); it does, most of the time. This bears on plan 01's
 `Bbs757CduPages.WipeScratchpadAsync`, whose fallback after a long CLR that leaves text is one 250 ms CLR: on this
 evidence that removes one more character and the wipe answers false (so `EnterAsync` refuses rather than typing
-over a leftover). A second long CLR would clear it. `EnterAsync` has no caller yet (plan 04 no longer enters VOR
-frequencies, R75).
+over a leftover). A second long CLR would clear it. Fixed the same day at the owner's request: the fallback is now a
+second CLR held 1300 ms (plan 01's record).
 
 ## The measurement script (not committed as a file: `docs/b757/tools/**` is frozen after plan 01)
 

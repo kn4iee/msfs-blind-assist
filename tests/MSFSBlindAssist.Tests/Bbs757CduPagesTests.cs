@@ -232,16 +232,39 @@ public class Bbs757CduPagesTests
     }
 
     [Fact]
-    public async Task Wipe_falls_back_to_one_short_clr()
+    public async Task Wipe_holds_clr_again_when_a_long_clr_removes_one_character()
     {
-        // The long CLR left a character behind (BlueBird's CLR repeat is unmeasured); one short CLR clears it.
-        var cdu = new FakeCdu { Title = "NAV RADIO", Scratchpad = "KJFK", LongClrLeaves = "K" };
+        // Measured (docs/b757/evidence/flight-08.md): a CLR held 1.3 s cleared the scratchpad 45 times in
+        // 60 and removed only its last character the other 15; a second long CLR always cleared the rest.
+        var cdu = new FakeCdu { Title = "NAV RADIO", Scratchpad = "KATL1100.5", LongClrMisses = 1 };
         var delays = new List<int>();
         var pages = Pages(cdu, delays);
 
         Assert.True(await pages.WipeScratchpadAsync(Fo, CancellationToken.None));
-        Assert.Equal(new[] { (Fo, "KEYCLR", 1300), (Fo, "KEYCLR", 250) }, cdu.Presses);
-        Assert.Equal(new[] { 1800, 900 }, delays);
+        Assert.Equal(new[] { (Fo, "KEYCLR", 1300), (Fo, "KEYCLR", 1300) }, cdu.Presses);
+        Assert.Equal(new[] { 1800, 1800 }, delays);
+    }
+
+    [Fact]
+    public async Task Wipe_answers_false_when_two_long_clrs_leave_text()
+    {
+        var cdu = new FakeCdu { Title = "NAV RADIO", Scratchpad = "KATL1100.5", LongClrMisses = 2 };
+        var pages = Pages(cdu);
+
+        Assert.False(await pages.WipeScratchpadAsync(Fo, CancellationToken.None));
+        Assert.Equal(new[] { (Fo, "KEYCLR", 1300), (Fo, "KEYCLR", 1300) }, cdu.Presses);
+    }
+
+    [Fact]
+    public async Task Enter_types_after_a_long_clr_that_needed_a_second_hold()
+    {
+        var cdu = new FakeCdu { Title = "NAV RADIO", Scratchpad = "KJFK", LongClrMisses = 1 };
+        var pages = Pages(cdu);
+
+        var screen = await pages.EnterAsync(Fo, "113.90", "L1", CancellationToken.None);
+
+        Assert.NotNull(screen);
+        Assert.Equal(new[] { "113.90" }, cdu.LineEntries);
     }
 
     [Fact]
@@ -430,8 +453,11 @@ public class Bbs757CduPagesTests
         public bool IgnorePageKeys { get; init; }
         /// <summary>A CDU message that replaces the scratchpad once a character is typed.</summary>
         public string? MessageAfterTyping { get; init; }
-        /// <summary>What a long CLR leaves in the scratchpad (nothing, normally).</summary>
-        public string LongClrLeaves { get; init; } = "";
+        /// <summary>
+        /// How many long CLRs, from the first, remove only the last character, as a short CLR does (none,
+        /// normally; measured: about one long CLR in four, flight-08.md).
+        /// </summary>
+        public int LongClrMisses { get; set; }
         /// <summary>Reads null until a key is pressed, as the first officer's CDU does after a load.</summary>
         public bool NoFrameUntilAKey { get; init; }
         /// <summary>The tablet view is lost the moment a key is pressed.</summary>
@@ -470,7 +496,8 @@ public class Bbs757CduPagesTests
             }
             if (key == "KEYCLR")
             {
-                Scratchpad = holdMs >= 1000 ? LongClrLeaves : Scratchpad.Length > 0 ? Scratchpad[..^1] : "";
+                bool clearsAll = holdMs >= 1000 && LongClrMisses-- <= 0;
+                Scratchpad = clearsAll ? "" : Scratchpad.Length > 0 ? Scratchpad[..^1] : "";
                 return;
             }
             if (key.Length == 2 && (key[0] == 'L' || key[0] == 'R'))

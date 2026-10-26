@@ -60,10 +60,11 @@ public sealed class Bbs757CduPages
     private const int PagePollMs = 250;
     private const int PageWaitMs = 3000;
     // The wipe: CLR held WipeHoldMs (the whole scratchpad), read WipeSettleMs later; if anything is
-    // left, one ordinary CLR, read ShortClrSettleMs later.
+    // left, CLR held again. One long CLR cleared the scratchpad 45 times in 60 and removed only its last
+    // character the other 15, where a second one always cleared the rest (docs/b757/evidence/flight-08.md);
+    // a short CLR would remove one more character and leave the rest.
     private const int WipeHoldMs = 1300;
     private const int WipeSettleMs = 1800;
-    private const int ShortClrSettleMs = 900;
     // Typed keys: the queue is checked every DrainPollMs, for at most a key cycle per key plus DrainSlackMs.
     private const int DrainPollMs = 100;
     private const int DrainSlackMs = 2000;
@@ -125,8 +126,8 @@ public sealed class Bbs757CduPages
 
     /// <summary>
     /// Clears the first officer's scratchpad: CLR held 1300 ms (the whole of it), then, if anything is
-    /// left, one ordinary CLR. True when the scratchpad reads blank; false when it does not, cannot be
-    /// read, keys are queued, or <paramref name="cdu"/> is not the first officer's.
+    /// left, CLR held 1300 ms again. True when the scratchpad reads blank; false when it does not, cannot
+    /// be read, keys are queued, or <paramref name="cdu"/> is not the first officer's.
     /// </summary>
     public Task<bool> WipeScratchpadAsync(int cdu, CancellationToken ct) =>
         Gated($"CDU {cdu} wipe", false, ct, async () =>
@@ -207,19 +208,16 @@ public sealed class Bbs757CduPages
 
     private async Task<bool> WipeCore(int cdu, CancellationToken ct)
     {
-        _link.PressKey(cdu, Bbs757CduKeys.Clr, WipeHoldMs);
-        await _delay(WipeSettleMs, ct);
-        if (LinkLost(cdu)) return false;
-        var screen = await ReadCore(cdu, ct);
-        if (screen != null && Scratchpad(screen).Length == 0) return true;
-
-        _link.PressKey(cdu, Bbs757CduKeys.Clr, CoherentBbs757TabletClient.KeyHoldMs);
-        await _delay(ShortClrSettleMs, ct);
-        if (LinkLost(cdu)) return false;
-        screen = await ReadCore(cdu, ct);
-        bool blank = screen != null && Scratchpad(screen).Length == 0;
-        if (!blank) Log.Debug("BBS757", $"CDU {cdu}: the scratchpad did not clear.");
-        return blank;
+        for (int attempt = 1; attempt <= 2; attempt++)
+        {
+            _link.PressKey(cdu, Bbs757CduKeys.Clr, WipeHoldMs);
+            await _delay(WipeSettleMs, ct);
+            if (LinkLost(cdu)) return false;
+            var screen = await ReadCore(cdu, ct);
+            if (screen != null && Scratchpad(screen).Length == 0) return true;
+        }
+        Log.Debug("BBS757", $"CDU {cdu}: the scratchpad did not clear.");
+        return false;
     }
 
     /// <summary>
