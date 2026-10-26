@@ -1,6 +1,7 @@
 ---
 paths:
   - "tools/a350-probe/**"
+  - "tools/a350-gen/**"
 ---
 # iniBuilds A350 rules
 
