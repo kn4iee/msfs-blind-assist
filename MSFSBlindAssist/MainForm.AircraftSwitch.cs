@@ -157,6 +157,7 @@ public partial class MainForm
             "HW_A330" => new HeadwindA330Definition(),
             "IFLY_737MAX8" => new IFly737MAXDefinition(),
             "TFDI_MD11" => new TFDiMD11Definition(),
+            IniBuildsA350Definition.Code => new IniBuildsA350Definition(),
             // Future aircraft will be added here
             _ => new FlyByWireA320Definition() // Default to A320
         };
@@ -851,6 +852,8 @@ public partial class MainForm
         // every button shows a bare label (Attach used to run only from a press or a hotkey).
         if (newAircraft is TFDiMD11Definition newMd11)
             newMd11.Attach(simConnectManager);
+        if (newAircraft is IniBuildsA350Definition newA350)
+            newA350.Attach(simConnectManager);
 
         taxiGuidanceManager.TurnLeadSeconds = newAircraft.TaxiTurnLeadSeconds;
         taxiGuidanceManager.SharpTurnLeadSeconds = newAircraft.TaxiSharpTurnLeadSeconds;
@@ -1299,6 +1302,7 @@ public partial class MainForm
         headwindA330MenuItem.Checked = false;
         ifly737MaxMenuItem.Checked = false;
         tfdiMd11MenuItem.Checked = false;
+        iniBuildsA350MenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item.
         // NOTE: HeadwindA330Definition derives from FlyByWireA320Definition, so it MUST
@@ -1306,6 +1310,10 @@ public partial class MainForm
         if (currentAircraft is TFDiMD11Definition)
         {
             tfdiMd11MenuItem.Checked = true;
+        }
+        else if (currentAircraft is IniBuildsA350Definition)
+        {
+            iniBuildsA350MenuItem.Checked = true;
         }
         else if (currentAircraft is HeadwindA330Definition)
         {

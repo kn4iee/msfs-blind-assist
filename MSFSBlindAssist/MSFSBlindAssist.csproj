@@ -162,6 +162,9 @@
     <None Update="HotkeyGuides\TFDi_MD11_Hotkeys.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="HotkeyGuides\iniBuilds_A350_Hotkeys.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <!-- User-facing guides/manuals. Shipped in full (whole folder) so the in-app
          hotkey lists' "see Guides\..." references resolve next to the exe, and any
          future per-aircraft manual added here ships automatically. -->
