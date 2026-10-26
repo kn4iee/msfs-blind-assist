@@ -43,6 +43,8 @@ trim C 0 (NORMAL), guard closed; landing altitude 1000 ft; no fire handle unlock
 
 - `1020 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)`: reads 1030, and the step var reads 0 again.
 - `-70 … 1 (>L:B757_OVHD_LDG_ELEV_CHG)`: reads -60.
+- The range edges `Bbs757LandingAltitude.Write` sends (simconnect MCP only): `-1080 … 1 …` reads -1070, `14090 … 1 …`
+  reads 14100, and one more `1 (>L:B757_OVHD_LDG_ELEV_CHG)` at 14100 still reads 14100 (BlueBird clamps at the top).
 - Put back: `990 … 1 …`: reads 1000.
 
 ## Still to check in the app (owner)
