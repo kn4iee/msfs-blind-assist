@@ -112,13 +112,23 @@ Failure test: OIS FAILURES → PRIM 1 FAULT gave the amber `F/CTL PRIM 1 FAULT`,
 
 ## Panels
 
-`A350_Interior.behavior.xml` holds 696 input events (RMP 192, FCU 44, EFIS 38, ECAM 32, DISPLAY 30, ELEC 26, WXR 20, MAINT 17, OXYTEST 16, AIR/FUEL/ISIS 14, FCTL 13, …). It parses with the iniBuilds `behavior_xml.py` after rewriting tags that begin with a digit. Each event's set code writes `INI_*` L:vars directly (for example `INI_SEATBELTS_SWITCH`, `INI_BATTERY_1_SWITCH`, `INI_MIXTURE_RATIO1_HANDLE` for ENG MASTER 1), so a native L:var write operates the control; live: `INI_NO_SMOKING_SWITCH` 1 → 2 changed the takeoff memo's SIGNS line from done to outstanding, and back. Tooltip positions are indexed from 1 (`INI.TOOLTIPS.SIGNS_SEAT_BELTS.1` = ON is value 0).
+`A350_Interior.behavior.xml` holds 696 input events (RMP 192, FCU 44, EFIS 38, ECAM 32, DISPLAY 30, ELEC 26, WXR 20, MAINT 17, OXYTEST 16, AIR/FUEL/ISIS 14, FCTL 13, …). It parses with the iniBuilds `behavior_xml.py` after rewriting tags that begin with a digit. Each event's set code writes `INI_*` L:vars directly (for example `INI_SEATBELTS_SWITCH`, `INI_BATTERY_1_SWITCH`, `INI_MIXTURE_RATIO1_HANDLE` for ENG MASTER 1), so a native L:var write operates the control; live: `INI_NO_SMOKING_SWITCH` 1 → 2 changed the takeoff memo's SIGNS line from done to outstanding, and back. Position names come from each control's own tooltip expression: some count from `.1` (`SIGNS_SEAT_BELTS.1` = ON is value 0), others from `.0` (`MAINT_ELEC_BAT_VOLTAGE_SELECTOR.0` = EMER 1).
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 
 Every section's controls and displays use one of the paths above: cockpit interaction (push, pull, scroll), the OIS (FLT OPS PLAN/STS, LOADSHEET, charts list, T.O/LDG PERF with SYNC and SEND TO FMGS, AOC, GROUND incl. GSX, MAINTENANCE, SITUATIONS, FAILURES, AUTOSAVE, PANEL STATES, OPTIONS incl. 3RD PARTY), the FCU and its managed/selected modes, the MFD and KCCU (menu bar, interactive F-PLN, vertical revisions, C/L MENU checklists), EFIS CP and baro preset, ANF and BTV arming, the noise function (MFD PERF T.O), thrust levers, RMP tuning and squawk, the MFD SURV page (DEFAULT SETTINGS, CONFIRM), the HUD, sensed and not-sensed ECAM procedures, deferred procedures, STATUS, and the automatic emergency descent.
 
-Exercised live so far: panels, FCU, EFIS, RMP, MFD INIT entry, ND pop-up, ECAM sensed/ABN/STATUS, failures, OIS T.O PERF entry, FAP navigation. Not yet exercised (same mechanisms): ANF exit selection on a mapped airport (needs a Navigraph subscription), DEFRD, the SD mailbox, MFD checklists, F-PLN revisions, printouts, HUD deployed, BAT text.
+Exercised live: panels, FCU, EFIS, RMP, MFD INIT entry, ND pop-up, ECAM sensed/ABN/STATUS, failures, OIS T.O PERF entry, FAP navigation, and in a second pass:
+
+- **A failure cascade.** OIS `AC 1 230V + 115V BUS FAULT + DC 1 BUS FAULT` gave a WD queue (A-ICE ENG 1 VLV OPEN with its steps and a 40 s timer, SURV SYS 1, CDS CAPT OUTER DU, F/CTL FLAP SYS 1, EXT LT NAV LT 1, two fuel pumps, PART SPLRs, SEC 3, PRIM 3 with its reset question, the two-line ELEC alert, `*F/CTL` and `*FUEL` secondary pages). The check-off turned the boxed steps white; CLEAR worked down the queue to LIMITATIONS and STS; the SD STATUS showed INOP SYS in two columns over several pages ("PRESS STS FOR NEXT STATUS PAGE"); RESET ALL on the OIS cleared it. A procedure's unticked action box is a 15 × 20 `DrawFrame` beside the line (cyan, white once done).
+- **DEFRD.** The page reads ("DEFERRED PROCEDURES LIST", "NO DEFERRED PROCEDURES"); none of the OIS's ground failures creates a deferred procedure. Its entries draw through the same item code as the ABN list.
+- **MFD checklists.** C/L MENU lists the ten checklists as `CheckListMenuItemUIButton`s; BEFORE START shows pilot-confirm items in cyan with `____`, sensed items green (BEACON ON), RESET, C/L COMPLETE, C/L MENU; a click ticked PARKING BRAKE to "PARKING BRAKE : CHECKED" in green.
+- **F-PLN revisions.** The F-PLN rows read with their cells as `BaseFlightPlanButton`s; a click on VCBI opened the revision menu (FROM P.POS DIR TO, INSERT NEXT WPT, DEPARTURE, OFFSET, AIRWAYS, NEW DEST, CONSTRAINTS, CMS, STEP ALTS in white; DELETE, ARRIVAL, OVERFLY, HOLD, ENABLE ALTN in grey).
+- **Printouts.** MFD DATA → PRINTER reads; its AUTO PRINT boxes are `UIRectangleCheckbox` with the state at element +64. OIS T.O PERF → COMPUTE → SEND TO FMS printed "FM ACTIVE TAKE-OFF DATA" as plain text on both printer views.
+- **BAT display.** It is blank with BAT SELECTOR at OFF; at BAT 1 it draws 27.2 (as "272" and "."), at EMER 1 27.1.
+- **HUD.** With `INI_HUD_LEFT_STATE` 1 the second HUD object draws (FD, speed and altitude, heading scale, GS, QNH), all green.
+
+Still to do with the pilot signed in: ANF exit selection for BTV (needs Navigraph) and the SD mailbox (needs a Hoppie or SayIntentions logon; the OIS fields are the pilot's to fill).
 
 ## Variants
 

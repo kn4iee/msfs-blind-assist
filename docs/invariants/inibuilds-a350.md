@@ -20,4 +20,8 @@ The ECP keys (`INI_ECAM_CHECKLIST_LEFT`, `PUSH_ECAM_STS`, `INI_ECAM_ABN`, the `I
 
 ## A350-5
 
-In `en-US.locPak`, a multi-position control's position names are `INI.TOOLTIPS.<CONTROL>.1`, `.2`, `.3`, … while its L:var counts from 0: `INI_SEATBELTS_SWITCH` 0 is `.1` ON, 1 is `.2` AUTO, 2 is `.3` OFF. Two-position push buttons use `.OFF` / `.ON`; the control's placard name is `.TITLE`.
+In `en-US.locPak`, a control's position names are `INI.TOOLTIPS.<CONTROL>.<key>` and the key a value selects is written in that control's tooltip expression (`tt_value` in the behaviour file), not by a fixed rule. Measured 26 October 2026: `SIGNS_SEAT_BELTS` and `LIGHTS_INT_ANN_LT` count from `.1` (value 0 is `.1` ON / `.1` TEST), `MAINT_ELEC_BAT_VOLTAGE_SELECTOR` from `.0` (value 0 is `.0` EMER 1, 2 is `.2` OFF, 3 is `.3` BAT 1). Two-position push buttons use `.OFF` / `.ON`; the placard name is `.TITLE`. Read the expression per control; an assumed offset names every position of half the controls wrong.
+
+## A350-6
+
+The OIS (EFB) is MSFS SDK components with its own keyboard handling (`_onKeyDown` in `ini-efb-a350.js`). Measured 26 October 2026 on T.O PERF: setting WIND, OAT, QNH and TOW with the native value setter plus `input` and `change` events showed the values in the fields and kept them across a page change, but COMPUTE produced nothing. Typing the same values as `keydown`, `keypress`, value append with `input`, and `keyup` per character, then Enter and `change`, made COMPUTE return V1 142, VR 143, V2 148, FLEX 67, flaps 2, THS 26.4 %. The airport field reacted to the plain value set, so a field that seems to work that way is no proof the others do.
