@@ -1,6 +1,6 @@
 # BlueBird 757 Thrust Levers Implementation Plan (plan 15, later: optional)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
 **Optional and last (ruling R67).** The owner flies with a hardware throttle, which moves BlueBird's levers already. This plan is for pilots who have none: BlueBird ignores the simulator's throttle keys (F1-F4 and the throttle events, measured in session 7), so without hardware a keyboard pilot cannot add taxi thrust or pull the levers to idle by hand. Build it when such a pilot needs it.
 
@@ -27,6 +27,14 @@
 - The A/T engaged: no write at all (Task 2 test).
 
 ---
+
+### Task 0 [controller]: Claim this plan
+
+**Who:** whoever runs the plan, before any other task; with subagents, the controller itself, never an implementer. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
+
+- [ ] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/15-thrust-levers.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [ ] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 15`, with the `Plan: 15` trailer.
+- [ ] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ### Task 1: Thrust logic, pure
 
@@ -84,9 +92,8 @@ After a landing (owner, in flight), try the simulator's reverser key with the le
 
 ## Execution record
 
-Kept in this file only, so no other plan's push ever touches it. Claim the plan by filling in **Claimed by** and
-setting **Status** to claimed, and push that one change before starting; if the push stops on a conflict in these
-lines, someone claimed it first. Fill in the rest as you go and when the plan lands (index, "Records").
+Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
+**Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
 - **Status:** not started (optional)
 - **Claimed by:** none

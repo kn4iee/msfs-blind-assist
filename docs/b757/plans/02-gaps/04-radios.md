@@ -1,6 +1,6 @@
 # BlueBird 757 Radios Implementation Plan (plan 04, early: fixes and essentials)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
 **Goal:** Fix first: output N reads the 757's own VOR tuning and courses instead of the simulator's NAV radios, which BlueBird does not use. Then the essentials: a COM radios panel with standby entry and transfer, every COM change announced as on the other Boeings ("COM1 active 124.850"), the 757 nav radios window on input Ctrl+N, and the ILS frequency once a flight shows how.
 
@@ -30,6 +30,14 @@
 - N with the FO CDU busy or unreachable still reads the courses and says the frequencies are unavailable (Task 1 test).
 
 ---
+
+### Task 0 [controller]: Claim this plan
+
+**Who:** whoever runs the plan, before any other task; with subagents, the controller itself, never an implementer. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
+
+- [ ] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/04-radios.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [ ] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 04`, with the `Plan: 04` trailer.
+- [ ] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ### Task 1: N reads the 757's own nav radios
 
@@ -140,9 +148,8 @@
 
 ## Execution record
 
-Kept in this file only, so no other plan's push ever touches it. Claim the plan by filling in **Claimed by** and
-setting **Status** to claimed, and push that one change before starting; if the push stops on a conflict in these
-lines, someone claimed it first. Fill in the rest as you go and when the plan lands (index, "Records").
+Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
+**Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
 - **Status:** not started
 - **Claimed by:** none

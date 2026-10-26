@@ -99,9 +99,11 @@ window capture) are in `docs/b757/tools/live/` with a README. Who measures what:
 ## Who is on which plan
 
 Each plan's own "Execution record" (at its end) holds its claim and status, so claiming never edits a shared line.
-Claim by filling in **Claimed by** and setting **Status** to claimed, and push that one change to `B757` before you
-start; one person per plan. If that push stops on a conflict in those lines, someone claimed the plan first. To see
-where every plan stands: `grep -H -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" docs/b757/plans/02-gaps/*.md`.
+Plan 01 runs first and alone; plans 02-16 are each claimed by their Task 0, before any other task: check the remote
+copy, claim on your branch, push that one commit to `B757`. A claim counts only once it is on the remote `B757`: one
+that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is
+theirs. One person per plan. To see where every plan stands on the remote: `git fetch <remote>`, then
+`git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/`.
 A later plan may start when the plans in its "After" column say landed.
 
 ## Workflow for one plan
@@ -109,7 +111,7 @@ A later plan may start when the plans in its "After" column say landed.
 1. Fetch `B757` and branch from it at the base commit for your plan's kind (bottom of this file):
    `git switch -c B757-pNN-<slug> <base-sha>`. An agent works in a worktree inside the repo
    (`.claude/worktrees/b757-pNN`), says so before creating it, and removes it when done (`dotnet build-server shutdown`
-   first).
+   first). This step is part of the plan's Task 0 (plans 02-16), which then pushes the claim before any other task.
 2. Build once before testing: `dotnet build MSFSBlindAssist.sln -c Debug -p:Platform=x64`. Close MSFSBA first if it
    runs (CORE-3), or test with `--artifacts-path` ("Running a plan with subagents").
 3. Work the tasks in order (TDD). Tests: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64`.
@@ -117,8 +119,8 @@ A later plan may start when the plans in its "After" column say landed.
    with a `Plan: NN` trailer line (next to any Co-Authored-By line), so `git log --grep "^Plan: NN"` lists the plan's
    commits.
 4. Push whenever a task is done and green (others then build on it sooner): `git fetch`, then
-   `git rebase <remote>/B757` (your commits replay on top of what others pushed; files are disjoint, so the rebase does
-   not stop, except on your own claim lines).
+   `git rebase <remote>/B757` (your commits replay on top of what others pushed; files are disjoint and your claim is
+   already on `B757`, so the rebase does not stop; in Task 0, a stop on the claim lines means someone claimed first).
 5. After the rebase, on the combined code: build and full suite green (this run is the only check that the plans work
    together); `git diff --name-only <remote>/B757...HEAD` lists only files you own.
 6. `git push <remote> HEAD:B757`. If it is rejected (someone pushed meanwhile), go back to step 4. Never force-push
@@ -142,6 +144,8 @@ each); plan 16 is docs and owner steps, worked with superpowers:executing-plans.
   cites and this index's "Shared conventions", and works only in the task's files. Where a task says "Steps 1-5" with
   test names, those are the usual five: write the named tests, run them failing, implement, full suite, commit with the
   given message.
+- Task 0 [controller], the claim, is the controller's own: it creates the plan's worktree and branch and pushes the
+  claim before Task 1 is dispatched, and is never given to an implementer.
 - The controller never dispatches an [owner], [owner present] or [in flight] task, an "owner-in-sim" step, an
   "In-sim checks (owner)" list or any step that writes to the sim: it lists them under "Waiting on the owner" in the
   execution record and works the rest. What needs the owner or builds on the owner's result: plan 01 Task 7's live run

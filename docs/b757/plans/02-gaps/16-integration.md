@@ -1,6 +1,6 @@
 # BlueBird 757 Gaps Integration Plan (plan 16, last)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to work this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to work this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, comes before any other task.
 
 **Goal:** Fold plans 01-15 into one releasable branch: apply their handoff requests, write the pilot-facing docs once (hotkey guide, the pilot's guide, `docs/b757.md`), add the new rules, run the owner's short in-sim pass, write the changelog, open the one pull request to `main`, and delete `docs/b757/` before it merges.
 
@@ -16,6 +16,14 @@
 - Rule lines at most 400 characters, one mechanism each, next free numbers, full text under `## B757-n` (CLAUDE.md "Adding or changing a rule"); `ClaudeContextBudgetTests` must pass.
 - Changelog: one fragment per category earned, written for a pilot; the PR number is read from `gh pr create`, never guessed.
 - The guide changes in the same PR (CORE-19); the in-sim pass is the owner's, a few scenarios only.
+
+## Task 0: Claim this plan
+
+Before any other task. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
+
+- [ ] Check the plan is free on the remote: `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/16-integration.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [ ] Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 16`, with the `Plan: 16` trailer.
+- [ ] Push the claim: `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ## Task 1: Merge state and handoffs
 
@@ -62,9 +70,8 @@
 
 ## Execution record
 
-Kept in this file only, so no other plan's push ever touches it. Claim the plan by filling in **Claimed by** and
-setting **Status** to claimed, and push that one change before starting; if the push stops on a conflict in these
-lines, someone claimed it first. Fill in the rest as you go and when the plan lands (index, "Records").
+Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
+**Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
 - **Status:** not started
 - **Claimed by:** none
