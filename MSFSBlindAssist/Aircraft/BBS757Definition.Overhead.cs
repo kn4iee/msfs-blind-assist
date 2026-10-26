@@ -6,10 +6,10 @@ namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
 /// The overhead panels' writes: plan 03's guarded controls (the emergency lights, the stab trim
-/// cutouts), and later plan 12's overhead panels. A guarded control is any map control whose
-/// <see cref="Bbs757Control.Guard"/> names another map control (BlueBird's guard cover): it moves
-/// only with the cover open, so a pick is planned from fresh reads of both by
-/// <see cref="Bbs757Guarded.Plan"/> and sent here.
+/// cutouts) and the fire handle unlocks' relock, and later plan 12's overhead panels. A guarded
+/// control is any map control whose <see cref="Bbs757Control.Guard"/> names another map control
+/// (BlueBird's guard cover): it moves only with the cover open, so a pick is planned from fresh
+/// reads of both by <see cref="Bbs757Guarded.Plan"/> and sent here.
 /// </summary>
 public partial class BBS757Definition
 {
@@ -129,4 +129,45 @@ public partial class BBS757Definition
 
     private static string GuardedLogValue(double? value)
         => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "nothing";
+
+    // =================================================================================
+    // Fire handle unlocks
+    // =================================================================================
+
+    /// <summary>
+    /// Called by <see cref="PressAsync"/> right after a button's press has been sent: when the button is
+    /// a fire handle unlock (<see cref="Bbs757Write.RelockAfterUnlock"/>), starts the relock that
+    /// BlueBird's own <c>O:</c> timer would have made in the cockpit and the calculator press cannot
+    /// start. Any other control starts nothing. Never throws.
+    /// </summary>
+    private void RelockIfUnlock(Bbs757Control control, Bbs757SimIo io)
+    {
+        string? relock = Bbs757Write.RelockAfterUnlock(control, out int delayMs);
+        if (relock == null) return;
+        _ = RelockAfterDelayAsync(control, relock, delayMs, io);   // never throws: it catches and logs
+    }
+
+    /// <summary>
+    /// Waits <paramref name="delayMs"/> on the profile's lifetime, then writes <paramref name="relock"/>.
+    /// Switching to another profile ends the wait and sends nothing: the handle then stays as the
+    /// cockpit would leave it. Nothing is spoken: the press already said "{label} pressed", and the
+    /// relock is the cockpit's own behaviour. The awaits keep the UI context (no ConfigureAwait(false)),
+    /// like every write here.
+    /// </summary>
+    private async Task RelockAfterDelayAsync(Bbs757Control control, string relock, int delayMs, Bbs757SimIo io)
+    {
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;   // the source is disposed once switched away: its token must not be touched
+            await io.Delay(delayMs, _lifetime.Token);
+            if (_lifetime.IsCancellationRequested) return;   // switched away as the wait ended
+            OnOwnWrite(control.Node);   // plan 13
+            io.Write(relock);
+        }
+        catch (OperationCanceledException) { /* switched away: the handle stays as the cockpit would leave it */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{control.Node}: relock failed: {ex.Message}");
+        }
+    }
 }

@@ -1,5 +1,7 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -189,5 +191,156 @@ public class Bbs757WriteTests
         Assert.False(Bbs757Write.HasReadableState(new Bbs757Control { Kind = Bbs757Kinds.Button, StateVar = "B_PRESS" }));
         Assert.False(Bbs757Write.HasReadableState(new Bbs757Control { Kind = Bbs757Kinds.Button }));
         Assert.True(Bbs757Write.HasReadableState(Toggle()));
+    }
+
+    // ---- fire handle unlocks lock again (task 3) ------------------------------------------------
+
+    // BlueBird's own unlock click (BBS_752_BASE_INTERIOR.xml, the fire handle unlocks): it sets the
+    // L:var and starts an O: timer, whose update loop relocks the handle 1.5 s later. The calculator
+    // cannot start that timer, so the app relocks it itself.
+    private const string EngineOneUnlockPress =
+        "1 (>L:BBS757_FIREUNLOCK1,bool) 1 (>O:FIRE_HANDLE_1_TIMER_ACTIVE, bool) (E:ABSOLUTE TIME, seconds) (>O:FIREHANDLE_UNLOCK_Timer)";
+
+    private static Bbs757Control Unlock(string node = "BBS757_FIREUNLOCK1", string? stateVar = "BBS757_FIREUNLOCK1",
+        string label = "Engine 1 Fire Handle Unlock", string kind = Bbs757Kinds.Button) => new()
+    {
+        Node = node, Label = label, Kind = kind, StateVar = stateVar, Press = EngineOneUnlockPress,
+    };
+
+    [Theory]
+    [InlineData("BBS757_FIREUNLOCK1", "BBS757_FIREUNLOCK1", "0 (>L:BBS757_FIREUNLOCK1)")]
+    [InlineData("BBS757_FIREUNLOCK2", "BBS757_FIREUNLOCK2", "0 (>L:BBS757_FIREUNLOCK2)")]
+    [InlineData("B757_FIREUNLOCK3", "BBS757_FIREUNLOCK3", "0 (>L:BBS757_FIREUNLOCK3)")]   // the APU unlock's node has no BBS prefix
+    public void Unlock_buttons_relock(string node, string stateVar, string relock)
+    {
+        string? write = Bbs757Write.RelockAfterUnlock(Unlock(node, stateVar), out int delayMs);
+
+        Assert.Equal(relock, write);
+        Assert.Equal(1500, delayMs);
+        Assert.Equal(Bbs757Write.FireHandleRelockMs, delayMs);
+    }
+
+    [Fact]
+    public void Other_buttons_do_not()
+    {
+        var plain = new Bbs757Control { Node = "B", Kind = Bbs757Kinds.Button, StateVar = "B_PRESS", Press = "1 (>L:B_PRESS)" };
+        // The fire handle itself: a switch on another var (it reads the unlock, it is not the unlock).
+        var handle = new Bbs757Control { Node = "BBS757_FIREHANDLE1_CLICK", Kind = Bbs757Kinds.Switch, StateVar = "B757_ENGFIRE_1_SWITCH", Positions = Positions(0, 1) };
+        var noState = new Bbs757Control { Node = "B", Kind = Bbs757Kinds.Button, Press = "1 (>L:B)" };
+        var otherCase = Unlock(stateVar: "bbs757_fireunlock1");
+
+        foreach (var control in new[] { plain, handle, noState, otherCase })
+        {
+            Assert.Null(Bbs757Write.RelockAfterUnlock(control, out int delayMs));
+            Assert.Equal(0, delayMs);
+        }
+    }
+
+    [Theory]
+    [InlineData(Bbs757Kinds.Toggle)]
+    [InlineData(Bbs757Kinds.Switch)]
+    [InlineData(Bbs757Kinds.Guard)]
+    [InlineData(Bbs757Kinds.Select)]
+    public void A_control_that_is_no_momentary_button_is_never_relocked_even_on_an_unlock_state_var(string kind)
+    {
+        // A toggle on the unlock's state var would be flipped to 0 by a relock the pilot never asked for.
+        Assert.Null(Bbs757Write.RelockAfterUnlock(Unlock(kind: kind), out int delayMs));
+        Assert.Equal(0, delayMs);
+    }
+
+    [Fact]
+    public void The_shipped_maps_three_unlock_buttons_are_the_only_controls_that_relock()
+    {
+        var relocking = Bbs757ControlMap.Load().Controls
+            .Where(c => Bbs757Write.RelockAfterUnlock(c, out _) != null)
+            .Select(c => c.Node)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(new[] { "B757_FIREUNLOCK3", "BBS757_FIREUNLOCK1", "BBS757_FIREUNLOCK2" }, relocking);
+    }
+
+    /// <summary>A 757 definition holding one control, with a fake sim behind its writes and a speech capture.</summary>
+    private sealed class Rig
+    {
+        public readonly Bbs757FakeIo Sim = new();
+        public readonly SpeechCapture Speech = new();
+        public readonly BBS757Definition Def;
+        private readonly SimConnectManager _manager = new(IntPtr.Zero);
+
+        public Rig(Bbs757Control control)
+        {
+            var map = new Bbs757ControlMap();
+            map.Controls.Add(control);
+            Def = new BBS757Definition(map) { NestRunning = () => true, WriteIo = _ => Sim.Io };
+        }
+
+        /// <summary>The panel handler's answer to a press of <paramref name="node"/>.</summary>
+        public bool Press(string node) => Def.HandleUIVariableSet(node, 1, Def.GetVariables()[node], _manager, Speech);
+    }
+
+    [Fact]
+    public void An_app_unlock_relocks_after_the_vendor_delay()
+    {
+        var unlock = Unlock();
+        var rig = new Rig(unlock);
+
+        Assert.True(rig.Press(unlock.Node));
+
+        string relock = "0 (>L:BBS757_FIREUNLOCK1)";
+        Assert.Equal(new[] { unlock.Press!, relock }, rig.Sim.Writes);
+        // The vendor's 1.5 s is awaited between the press and the relock (the read-back wait that
+        // follows is a 1.5 s wait too, so it is the order that tells them apart).
+        Assert.Equal(new[] { Bbs757FakeIo.WriteEvent(unlock.Press!), Bbs757FakeIo.DelayEvent(1500), Bbs757FakeIo.WriteEvent(relock) },
+            rig.Sim.Events.Take(3));
+        // The press said so once; the relock is the cockpit's own behaviour and says nothing.
+        Assert.Equal(new[] { "Engine 1 Fire Handle Unlock pressed" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task An_unlock_stays_unlocked_until_the_delay_has_passed()
+    {
+        var unlock = Unlock();
+        var rig = new Rig(unlock);
+        rig.Sim.Hold = ordinal => ordinal == 0;   // the relock's wait
+
+        Assert.True(rig.Press(unlock.Node));
+
+        Assert.Equal(new[] { unlock.Press! }, rig.Sim.Writes);
+        Assert.Equal(new[] { 1500, 1500 }, rig.Sim.Delays);   // the relock's wait (held), then the read-back's
+
+        rig.Sim.Release(0);
+        await rig.Sim.WritesReached(2);
+        Assert.Equal(new[] { unlock.Press!, "0 (>L:BBS757_FIREUNLOCK1)" }, rig.Sim.Writes);
+    }
+
+    [Fact]
+    public void Switching_away_before_the_relock_sends_nothing_more()
+    {
+        var unlock = Unlock();
+        var rig = new Rig(unlock);
+        rig.Sim.Hold = ordinal => ordinal == 0;   // the relock's wait
+
+        Assert.True(rig.Press(unlock.Node));
+        Assert.Equal(new[] { unlock.Press! }, rig.Sim.Writes);
+        Assert.Equal(new[] { 1500, 1500 }, rig.Sim.Delays);   // the relock's wait (held) is pending beside the read-back's
+
+        rig.Def.OnSwitchedAway();   // the pilot picks another aircraft profile: the handle stays as the cockpit would leave it
+        rig.Sim.Release(0);         // a no-op: the switch already ended the wait
+
+        Assert.Equal(1, rig.Sim.CanceledDelays);   // the held wait ended because its token was canceled
+        Assert.Equal(new[] { unlock.Press! }, rig.Sim.Writes);
+    }
+
+    [Fact]
+    public void A_button_that_is_no_unlock_schedules_no_relock()
+    {
+        var button = new Bbs757Control { Node = "B", Label = "Thing", Kind = Bbs757Kinds.Button, StateVar = "B_PRESS", Press = "1 (>L:B_PRESS)" };
+        var rig = new Rig(button);
+
+        Assert.True(rig.Press(button.Node));
+
+        Assert.Equal(new[] { "1 (>L:B_PRESS)" }, rig.Sim.Writes);
+        Assert.Equal(new[] { 1500 }, rig.Sim.Delays);   // only the read-back's wait
     }
 }

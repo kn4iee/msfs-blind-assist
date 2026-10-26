@@ -47,6 +47,21 @@ public static class Bbs757Write
     /// <summary>The hold for a held button whose template named no time (the generator's own default).</summary>
     public const int DefaultHeldMs = 1500;
 
+    /// <summary>
+    /// How long after an unlock press a fire handle relocks. BlueBird's unlock click sets the handle's
+    /// <c>L:BBS757_FIREUNLOCKn</c> and starts an <c>O:</c> timer whose update loop clears it again 1.5 s
+    /// later (BBS_752_BASE_INTERIOR.xml, the fire handle unlock components). The calculator the app
+    /// presses through cannot start an <c>O:</c> timer, so no loop ever runs and the handle would stay
+    /// unlocked forever (measured 2026-10-26): the app sends the relock itself, this long after the press.
+    /// </summary>
+    public const int FireHandleRelockMs = 1500;
+
+    /// <summary>The state vars of the engine 1, engine 2 and APU fire handle unlock buttons.</summary>
+    private static readonly HashSet<string> FireUnlockStateVars = new(StringComparer.Ordinal)
+    {
+        "BBS757_FIREUNLOCK1", "BBS757_FIREUNLOCK2", "BBS757_FIREUNLOCK3",
+    };
+
     /// <summary>True for the push kinds a panel shows as a button: a momentary or a held button.</summary>
     public static bool IsMomentary(Bbs757Control c) => c.Kind is Bbs757Kinds.Button or Bbs757Kinds.Held;
 
@@ -103,5 +118,23 @@ public static class Bbs757Write
             ? (c.HoldMs > 0 ? c.HoldMs : DefaultHeldMs)
             : ButtonHoldMs;
         return new Bbs757Press(c.Press, string.IsNullOrWhiteSpace(c.Release) ? null : c.Release, hold);
+    }
+
+    /// <summary>
+    /// The write that locks a fire handle again after the app pressed its unlock button, and in
+    /// <paramref name="delayMs"/> how long after the press to send it (<see cref="FireHandleRelockMs"/>);
+    /// null, and 0, for every other control. The three unlock buttons (engine 1, engine 2, APU) are
+    /// known by their state var, <c>BBS757_FIREUNLOCK1</c> to <c>3</c> (the APU's node is
+    /// <c>B757_FIREUNLOCK3</c>), and only as momentary buttons: a toggle or switch on the same var
+    /// would be flipped by a relock the pilot never asked for. The write is the same unconditional
+    /// 0 the cockpit's own timer makes (<see cref="Bbs757Rpn.SetLVar"/>).
+    /// </summary>
+    public static string? RelockAfterUnlock(Bbs757Control c, out int delayMs)
+    {
+        delayMs = 0;
+        if (!IsMomentary(c) || string.IsNullOrWhiteSpace(c.StateVar) || !FireUnlockStateVars.Contains(c.StateVar))
+            return null;
+        delayMs = FireHandleRelockMs;
+        return Bbs757Rpn.SetLVar(c.StateVar, 0);
     }
 }

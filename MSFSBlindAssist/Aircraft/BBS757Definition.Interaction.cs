@@ -202,6 +202,7 @@ public partial class BBS757Definition
                 await io.Delay(press.HoldMs, CancellationToken.None);
                 io.Write(press.Up);
             }
+            RelockIfUnlock(control, io);   // a fire handle unlocked from the app locks again (BBS757Definition.Overhead.cs)
             if (_lifetime.IsCancellationRequested) return;
             if (linked == null && speak && !Bbs757Write.HasReadableState(control)) announcer.Announce($"{control.Label} pressed");
 
