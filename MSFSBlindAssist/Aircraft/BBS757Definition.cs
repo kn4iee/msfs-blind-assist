@@ -351,6 +351,8 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
     private readonly object _tabletLock = new();
     private CoherentBbs757TabletClient? _tabletClient;
+    // Set by a switch away, under _tabletLock: from then on no client is made from the factory.
+    private bool _tabletRetired;
 
     /// <summary>Makes the tablet client; replaced by tests (the default starts a real one).</summary>
     internal Func<CoherentBbs757TabletClient>? TabletClientFactory { get; init; }
@@ -369,13 +371,23 @@ public partial class BBS757Definition : BaseAircraftDefinition
     /// background features can read the CDUs from the moment the 757 loads. The CDU window and the EFB
     /// window's Navigraph read use it through MainForm. Call it first from the UI thread: the client
     /// raises its events on the context it was created on. After a switch away it returns the disposed
-    /// client, which reads and presses nothing, rather than opening a new socket for a dead profile.
+    /// client, which reads and presses nothing, rather than opening a new socket for a dead profile;
+    /// when nothing had made one by then, a disposed client that never started.
     /// </summary>
     internal CoherentBbs757TabletClient EnsureTabletClient()
     {
         lock (_tabletLock)
         {
-            return _tabletClient ??= (TabletClientFactory ?? StartedTabletClient)();
+            if (_tabletClient != null) return _tabletClient;
+            if (_tabletRetired)
+            {
+                // A late call after the switch: a client made now would never be disposed, and two
+                // persistent clients on one view knock each other off its one inspector socket ([DBG-9]).
+                var retired = new CoherentBbs757TabletClient(() => "");
+                retired.Dispose();
+                return _tabletClient = retired;
+            }
+            return _tabletClient = (TabletClientFactory ?? StartedTabletClient)();
         }
     }
 
@@ -404,8 +416,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
     /// <summary>
     /// The end of a switch away: MainForm's windows on the client close first
-    /// (<see cref="CloseTabletWindows"/>), then the client goes, socket and loop with it. Never throws:
-    /// a window that fails to close still lets the client be disposed.
+    /// (<see cref="CloseTabletWindows"/>), then the client goes, socket and loop with it, and the
+    /// definition makes no other (<see cref="EnsureTabletClient"/>). Never throws: a window that fails
+    /// to close still lets the client be disposed.
     /// </summary>
     private void DisposeTabletClient()
     {
@@ -413,7 +426,11 @@ public partial class BBS757Definition : BaseAircraftDefinition
         catch (Exception ex) { Log.Debug("BBS757", $"Tablet windows did not close: {ex.Message}"); }
         CloseTabletWindows = null;
         CoherentBbs757TabletClient? client;
-        lock (_tabletLock) client = _tabletClient;
+        lock (_tabletLock)
+        {
+            _tabletRetired = true;
+            client = _tabletClient;
+        }
         client?.Dispose();
     }
 }

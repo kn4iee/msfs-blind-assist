@@ -296,19 +296,26 @@ public partial class BBS757Definition
     /// Stops every pending pick and press: a profile switch must not let one write into the next
     /// aircraft. The outgoing definition is never used again, so its lifetime source goes too.
     /// Safe to call again (a switch that threw part-way, then app exit): a canceled and disposed
-    /// source stays canceled, and Dispose is idempotent.
+    /// source stays canceled, and Dispose is idempotent. The tablet client goes even when a step
+    /// before it throws, so it never keeps the view for a profile that is gone.
     /// </summary>
     public override void OnSwitchedAway()
     {
-        base.OnSwitchedAway();
-        CloseMcpDialogs();
-        CloseAutoflightWindows();
-        CloseRadioWindows();   // plan 04
-        ResetAutoflight();     // plan 05: its resting-value timer stops with the aircraft
-        CancelLoadWatch();
-        try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
-        _lifetime.Dispose();
-        DisposeTabletClient();   // last: after every window on it has closed
+        try
+        {
+            base.OnSwitchedAway();
+            CloseMcpDialogs();
+            CloseAutoflightWindows();
+            CloseRadioWindows();   // plan 04
+            ResetAutoflight();     // plan 05: its resting-value timer stops with the aircraft
+            CancelLoadWatch();
+            try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
+            _lifetime.Dispose();
+        }
+        finally
+        {
+            DisposeTabletClient();   // last: after every window on it has closed
+        }
     }
 
     /// <summary>
@@ -332,8 +339,9 @@ public partial class BBS757Definition
     /// <summary>
     /// The BBS Nest check also rides any delivery that comes before its batch hook (see
     /// <see cref="DeferredFlushWatchVariable"/>). A control with a pick in flight is consumed
-    /// silently (see <see cref="SetPositionAsync"/>). Everything else is the base's (the trim and
-    /// glideslope call-outs) or the generic announcer's (the announced status rows).
+    /// silently (see <see cref="SetPositionAsync"/>). Everything else is the base's (the trim
+    /// call-out; the 757 has no glideslope one, see <see cref="UsesStockNavReceivers"/>) or the
+    /// generic announcer's (the announced status rows).
     /// </summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {

@@ -22,6 +22,8 @@ namespace MSFSBlindAssist.Aircraft;
 ///   • A flight load or reconnect (<see cref="OnSimContextReset"/>): radios, autoflight, thrust, announcements.
 ///   • Switching away (<see cref="OnSwitchedAway"/>): the radio windows close, the autoflight timer stops.
 ///   • The BBS Nest check settling, once per connection and flight load: <see cref="OnConnectionBatch"/>.
+///     Its announcer may be <c>Suppressed</c> then (a muted delivery can be the one that settles the
+///     check), so an implementation that speaks does it later, not inline.
 ///   • The app's own writes: <see cref="OnOwnWrite"/> (a panel press or pick), <see cref="OnOwnSquawkSet"/>,
 ///     <see cref="OnOwnAltimeterSet"/>.
 ///   • Ctrl+M (<see cref="MonitorRows"/>): rows for speech that is no variable's.
@@ -74,7 +76,7 @@ public partial class BBS757Definition
 
     // Plan 13: cockpit-wide announcements.
     partial void OnOwnWrite(string node);
-    partial void OnConnectionBatch(ScreenReaderAnnouncer announcer);
+    partial void OnConnectionBatch(ScreenReaderAnnouncer announcer);   // announcer may be Suppressed: speak later
     partial void ResetAnnouncements();
 
     // Ctrl+M rows for speech that is no variable's (plan 09: CDU messages; plan 13: lights and switches).

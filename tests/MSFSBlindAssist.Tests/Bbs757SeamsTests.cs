@@ -124,7 +124,33 @@ public class Bbs757SeamsTests
         Assert.Equal(0, made);
     }
 
-    // ---- The map's guard fields (Task 6) ----------------------------------------------------------
+    [Fact]
+    public async Task A_late_call_after_switching_away_makes_no_client()
+    {
+        // Nothing used the client before the pilot left the 757. A feature that calls in afterwards
+        // gets a disposed client that never started, never a new socket claiming the tablet view for
+        // a profile that is gone ([DBG-9]); its page service answers null (false) to everything.
+        int made = 0;
+        var def = new BBS757Definition { TabletClientFactory = () => { made++; return IdleClient(); } };
+        const int fo = Bbs757CduPages.FirstOfficer;
+        var ct = CancellationToken.None;
+
+        def.OnSwitchedAway();
+        var client = def.EnsureTabletClient();
+        var pages = def.CduPages;
+
+        Assert.Equal(0, made);
+        Assert.True(client.IsDisposed);
+        Assert.Same(client, def.EnsureTabletClient());
+        Assert.Null(await pages.ReadAsync(fo, ct));
+        Assert.Null(await pages.ShowPageAsync(fo, Bbs757CduKeys.NavRad, _ => true, ct));
+        Assert.False(await pages.WipeScratchpadAsync(fo, ct));
+        Assert.Null(await pages.EnterAsync(fo, "113.90", "L1", ct));
+        Assert.Null(await pages.PressKeysAsync(fo, new[] { "KEYDEL", "L1" }, ct));
+        Assert.Equal(0, made);
+    }
+
+    // ---- The map's guard fields (Task 6)----------------------------------------------------------
 
     [Fact]
     public void Loader_reads_guard_fields()

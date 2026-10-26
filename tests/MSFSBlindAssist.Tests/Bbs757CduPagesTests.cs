@@ -84,6 +84,42 @@ public class Bbs757CduPagesTests
         Assert.Equal(3000, delays.Sum());   // read every 250 ms for 3 s
     }
 
+    [Fact]
+    public async Task ShowPage_gives_up_after_three_seconds_of_slow_reads()
+    {
+        // While the agent is gone a read can wait about 4 s for it. The 3 s are the clock's, not the
+        // sum of the 250 ms sleeps, so the call ends after one such read instead of twelve.
+        var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", IgnorePageKeys = true, ReadTakesMs = 4000 };
+        var pages = Pages(cdu);
+
+        var screen = await pages.ShowPageAsync(Fo, Bbs757CduKeys.NavRad, IsNavRadio, CancellationToken.None);
+
+        Assert.Null(screen);
+        Assert.Single(cdu.Presses);
+        Assert.Equal(1, cdu.ReadsAfterAKey);
+    }
+
+    [Fact]
+    public async Task Presses_keys_only_on_the_first_officers_cdu()
+    {
+        // R52: the captain's CDU, the one the pilot works, never takes the app's keys; it can still be read.
+        const int captain = 1;
+        var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", Scratchpad = "KJFK" };
+        var pages = Pages(cdu);
+        var ct = CancellationToken.None;
+
+        Assert.Null(await pages.ShowPageAsync(captain, Bbs757CduKeys.NavRad, IsNavRadio, ct));
+        Assert.False(await pages.WipeScratchpadAsync(captain, ct));
+        Assert.Null(await pages.EnterAsync(captain, "113.90", "L1", ct));
+        Assert.Null(await pages.PressKeysAsync(captain, new[] { Bbs757CduKeys.Del, "L1" }, ct));
+        Assert.Empty(cdu.Presses);
+
+        Assert.NotNull(await pages.ReadAsync(captain, ct));
+        var legs = await pages.ShowPageAsync(captain, Bbs757CduKeys.Legs, s => Bbs757CduPages.Title(s) == "ACT RTE 1 LEGS", ct);
+        Assert.NotNull(legs);   // already up: nothing to press
+        Assert.Empty(cdu.Presses);
+    }
+
     // ---- Entries -------------------------------------------------------------------------------
 
     [Fact]
@@ -136,6 +172,50 @@ public class Bbs757CduPagesTests
         Assert.Null(await pages.ShowPageAsync(Fo, Bbs757CduKeys.NavRad, IsNavRadio, CancellationToken.None));
         Assert.False(await pages.WipeScratchpadAsync(Fo, CancellationToken.None));
         Assert.Empty(cdu.Presses);
+    }
+
+    [Fact]
+    public async Task Enter_types_the_entry_without_its_surrounding_spaces()
+    {
+        var cdu = new FakeCdu { Title = "NAV RADIO" };
+        var pages = Pages(cdu);
+
+        Assert.NotNull(await pages.EnterAsync(Fo, " 113.90 ", "L1", CancellationToken.None));
+        Assert.DoesNotContain(cdu.Presses, p => p.Key == Bbs757CduKeys.Space);
+        Assert.Equal(new[] { "113.90" }, cdu.LineEntries);
+
+        int pressed = cdu.Presses.Count;
+        Assert.Null(await pages.EnterAsync(Fo, "   ", "L1", CancellationToken.None));   // nothing to type
+        Assert.Equal(pressed, cdu.Presses.Count);
+    }
+
+    [Fact]
+    public async Task Enter_and_PressKeys_read_only_once_their_keys_have_gone()
+    {
+        // The keys go out one at a time through the client's queue: every read comes after it has emptied.
+        var cdu = new FakeCdu { Title = "NAV RADIO", QueuesKeys = true };
+        var pages = new Bbs757CduPages(cdu, (ms, ct) => { cdu.OneKeyGoes(); return Task.CompletedTask; }, () => cdu.NowMs);
+
+        Assert.NotNull(await pages.EnterAsync(Fo, "113.90", "L1", CancellationToken.None));
+        Assert.NotNull(await pages.PressKeysAsync(Fo, new[] { Bbs757CduKeys.Del, "L1" }, CancellationToken.None));
+
+        Assert.Equal(new[] { "113.90" }, cdu.LineEntries);
+        Assert.NotEmpty(cdu.PendingAtReads);
+        Assert.All(cdu.PendingAtReads, pending => Assert.Equal(0, pending));
+    }
+
+    [Fact]
+    public async Task No_screen_and_no_line_key_when_the_keys_never_go_out()
+    {
+        // The queue does not empty within its time: the keys have not taken effect, so a read now
+        // would show the screen before them, and a line key would land on unfinished typing.
+        var keys = new FakeCdu { Title = "NAV RADIO", QueuesKeys = true };
+        Assert.Null(await Pages(keys).PressKeysAsync(Fo, new[] { Bbs757CduKeys.Del, "L1" }, CancellationToken.None));
+
+        var entry = new FakeCdu { Title = "NAV RADIO", QueuesKeys = true };
+        Assert.Null(await Pages(entry).EnterAsync(Fo, "113.90", "L1", CancellationToken.None));
+        Assert.DoesNotContain(entry.Presses, p => p.Key == "L1");
+        Assert.Empty(entry.LineEntries);
     }
 
     [Fact]
@@ -219,6 +299,32 @@ public class Bbs757CduPagesTests
         Assert.Equal(0, unreachable.PendingKeyCount);
     }
 
+    [Theory]
+    [InlineData("page")]
+    [InlineData("wipe")]
+    [InlineData("entry")]
+    [InlineData("keys")]
+    public async Task Calls_stop_reading_once_the_tablet_view_is_lost(string call)
+    {
+        // The link drops with a call's first key: the call stops there and answers null (false), with
+        // no further read, rather than wait out reads that cannot answer.
+        var cdu = new FakeCdu { Title = "ACT RTE 1 LEGS     1/7", Scratchpad = "KJFK", IgnorePageKeys = true, UnreadableAfterAKey = true };
+        var pages = Pages(cdu);
+        var ct = CancellationToken.None;
+
+        bool failed = call switch
+        {
+            "page" => await pages.ShowPageAsync(Fo, Bbs757CduKeys.NavRad, IsNavRadio, ct) == null,
+            "wipe" => !await pages.WipeScratchpadAsync(Fo, ct),
+            "entry" => await pages.EnterAsync(Fo, "113.90", "L1", ct) == null,
+            _ => await pages.PressKeysAsync(Fo, new[] { Bbs757CduKeys.Del, "L1" }, ct) == null,
+        };
+
+        Assert.True(failed);
+        Assert.Equal(0, cdu.ReadsAfterAKey);
+        if (call == "entry") Assert.Equal(new[] { (Fo, Bbs757CduKeys.Clr, 1300) }, cdu.Presses);   // the wipe's CLR, then nothing
+    }
+
     private static async Task AssertAllFail(Bbs757CduPages pages, CancellationToken ct)
     {
         Assert.Null(await pages.ReadAsync(Fo, ct));
@@ -287,7 +393,8 @@ public class Bbs757CduPagesTests
 
     private static bool IsNavRadio(Bbs757CduScreen s) => Bbs757CduPages.Title(s) == "NAV RADIO";
 
-    private static Bbs757CduPages Pages(FakeCdu cdu, List<int>? delays = null) => new(cdu, InstantDelay(delays));
+    /// <summary>The page service over a fake CDU, on the fake's clock (still unless its reads move it).</summary>
+    private static Bbs757CduPages Pages(FakeCdu cdu, List<int>? delays = null) => new(cdu, InstantDelay(delays), () => cdu.NowMs);
 
     /// <summary>A delay that returns at once, noting how long it was asked to wait.</summary>
     private static Func<int, CancellationToken, Task> InstantDelay(List<int>? delays) => (ms, ct) =>
@@ -327,13 +434,33 @@ public class Bbs757CduPagesTests
         public string LongClrLeaves { get; init; } = "";
         /// <summary>Reads null until a key is pressed, as the first officer's CDU does after a load.</summary>
         public bool NoFrameUntilAKey { get; init; }
+        /// <summary>The tablet view is lost the moment a key is pressed.</summary>
+        public bool UnreadableAfterAKey { get; init; }
+        /// <summary>Every key pressed stays queued until <see cref="OneKeyGoes"/> lets it out.</summary>
+        public bool QueuesKeys { get; init; }
+        /// <summary>How far each read moves the clock (<see cref="NowMs"/>), as a read that waits for a lost agent does.</summary>
+        public int ReadTakesMs { get; init; }
+        /// <summary>The clock the page service is given.</summary>
+        public long NowMs { get; private set; }
 
         public List<(int Cdu, string Key, int HoldMs)> Presses { get; } = new();
         public List<string> LineEntries { get; } = new();
+        /// <summary>Reads made once a key had been pressed.</summary>
+        public int ReadsAfterAKey { get; private set; }
+        /// <summary>The keys still queued at each read.</summary>
+        public List<int> PendingAtReads { get; } = new();
+
+        /// <summary>One queued key goes out.</summary>
+        public void OneKeyGoes()
+        {
+            if (PendingKeyCount > 0) PendingKeyCount--;
+        }
 
         public void PressKey(int cdu, string key, int holdMs)
         {
             Presses.Add((cdu, key, holdMs));
+            if (UnreadableAfterAKey) IsReadable = false;
+            if (QueuesKeys) PendingKeyCount++;
             if (PageTitles.TryGetValue(key, out var title))
             {
                 if (IgnorePageKeys) return;
@@ -367,6 +494,9 @@ public class Bbs757CduPagesTests
         public Task<Bbs757CduScreen?> ScrapeAsync(int cdu, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+            NowMs += ReadTakesMs;
+            if (Presses.Count > 0) ReadsAfterAKey++;
+            PendingAtReads.Add(PendingKeyCount);
             if (NoFrameUntilAKey && Presses.Count == 0) return Task.FromResult<Bbs757CduScreen?>(null);
             if (_pendingTitle != null)
             {

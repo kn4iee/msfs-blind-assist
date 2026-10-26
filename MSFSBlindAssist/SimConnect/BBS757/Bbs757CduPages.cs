@@ -23,20 +23,27 @@ public interface IBbs757CduLink
 
 /// <summary>
 /// A CDU as a page service, for the features that read pages and make entries in the background.
-/// They use the first officer's CDU only (<see cref="FirstOfficer"/>, ruling R52), so the captain's,
-/// the one the pilot works, never changes under him.
+/// Its keys go to the first officer's CDU only (<see cref="FirstOfficer"/>, ruling R52), so the
+/// captain's, the one the pilot works, never changes under him: a call that would press a key on any
+/// other CDU refuses (null, false for the wipe) and presses nothing.
 ///
 /// One call at a time: every call takes one gate, waits at most <see cref="GateWaitMs"/> for it, and
 /// otherwise answers null (false for the wipe). The keys share the tablet client's one queue with
 /// the CDU window, so a call that would press keys refuses (null) while any key is still queued, the
 /// pilot's own included, rather than interleave with them; it refuses too while the tablet view
 /// cannot be reached, and before pressing anything when a key or a character has no CDU key.
-/// Reading is always allowed.
+/// Reading is always allowed, on either CDU.
 ///
 /// An entry is typed only into a scratchpad the wipe has cleared, and its line key is pressed only
-/// when the scratchpad shows exactly the typed text: a CDU message ("INVALID ENTRY") or a lost key
-/// gets the scratchpad wiped again and null, never a wrong entry. Only the wipe holds a key longer
-/// than <see cref="CoherentBbs757TabletClient.KeyHoldMs"/>: CLR, 1300 ms.
+/// when the scratchpad shows exactly the typed text once every typed key has gone out: a CDU message
+/// ("INVALID ENTRY"), a lost key or keys still queued get the scratchpad wiped again and null, never
+/// a wrong entry. Only the wipe holds a key longer than <see cref="CoherentBbs757TabletClient.KeyHoldMs"/>:
+/// CLR, 1300 ms.
+///
+/// Every call ends within its time. A page key's page is waited for at most <see cref="PageWaitMs"/>
+/// by the clock given to the constructor, however long each read takes (one can wait about 4 s for a
+/// lost agent), and a call that has pressed a key stops, null (false), as soon as the tablet view is
+/// lost, rather than wait out reads that cannot answer.
 ///
 /// Never throws: an exception from the link or the caller's predicate, or a canceled token, is
 /// logged and answered null (false). Every wait goes through the delay given to the constructor
@@ -49,7 +56,7 @@ public sealed class Bbs757CduPages
 
     // How long a call waits for the one before it.
     private const int GateWaitMs = 5000;
-    // A page key's new page: read every PagePollMs for up to PageWaitMs.
+    // A page key's new page: read every PagePollMs for up to PageWaitMs, by the sleeps and by the clock.
     private const int PagePollMs = 250;
     private const int PageWaitMs = 3000;
     // The wipe: CLR held WipeHoldMs (the whole scratchpad), read WipeSettleMs later; if anything is
@@ -65,27 +72,31 @@ public sealed class Bbs757CduPages
 
     private readonly IBbs757CduLink _link;
     private readonly Func<int, CancellationToken, Task> _delay;
+    private readonly Func<long> _clockMs;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     /// <param name="link">The link to the CDUs.</param>
     /// <param name="delay">Waits the given milliseconds (<see cref="Task.Delay(int, CancellationToken)"/> by default).</param>
-    public Bbs757CduPages(IBbs757CduLink link, Func<int, CancellationToken, Task>? delay = null)
+    /// <param name="clockMs">The time now in milliseconds (<see cref="Environment.TickCount64"/> by default).</param>
+    public Bbs757CduPages(IBbs757CduLink link, Func<int, CancellationToken, Task>? delay = null, Func<long>? clockMs = null)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _delay = delay ?? ((ms, ct) => Task.Delay(ms, ct));
+        _clockMs = clockMs ?? (() => Environment.TickCount64);
     }
 
     /// <summary>The page service over the 757's tablet client.</summary>
     public static Bbs757CduPages For(CoherentBbs757TabletClient client) => new(client);
 
-    /// <summary>The CDU's screen now; null when it cannot be read.</summary>
+    /// <summary>The CDU's screen now, either CDU; null when it cannot be read.</summary>
     public Task<Bbs757CduScreen?> ReadAsync(int cdu, CancellationToken ct) =>
         Gated<Bbs757CduScreen?>($"CDU {cdu} read", null, ct, () => ReadCore(cdu, ct));
 
     /// <summary>
-    /// Brings up a page: the screen when it is already <paramref name="isWanted"/>; else, unless
-    /// keys are queued, presses <paramref name="pageKey"/> and reads every 250 ms for up to 3 s until
-    /// it is. Null otherwise. A screen that reads null is not the page wanted: the first officer's
+    /// Brings up a page: the screen when it is already <paramref name="isWanted"/> (on either CDU);
+    /// else, on the first officer's CDU and unless keys are queued, presses <paramref name="pageKey"/>
+    /// and reads every 250 ms for up to 3 s until it is. Null otherwise, and at once when the tablet
+    /// view is lost meanwhile. A screen that reads null is not the page wanted: the first officer's
     /// CDU has no frame after an aircraft load until its screen first changes, and the page key is
     /// what brings it. A caller wanting page 1 of a set passes a predicate for any page of it, then
     /// uses <see cref="PageCount"/> and <see cref="PressKeysAsync"/> with PREV.
@@ -98,9 +109,13 @@ public sealed class Bbs757CduPages
             if (Refused(cdu, new[] { pageKey })) return null;
 
             _link.PressKey(cdu, pageKey, CoherentBbs757TabletClient.KeyHoldMs);
-            for (int waited = 0; waited < PageWaitMs; waited += PagePollMs)
+            // Both limits: the sleeps alone keep a test's instant delay finite; the clock keeps the
+            // wait at 3 s when each read takes seconds.
+            long pressedAt = _clockMs();
+            for (int waited = 0; waited < PageWaitMs && _clockMs() - pressedAt < PageWaitMs; waited += PagePollMs)
             {
                 await _delay(PagePollMs, ct);
+                if (LinkLost(cdu)) return null;
                 screen = await ReadCore(cdu, ct);
                 if (screen != null && isWanted(screen)) return screen;
             }
@@ -109,26 +124,28 @@ public sealed class Bbs757CduPages
         });
 
     /// <summary>
-    /// Clears the scratchpad: CLR held 1300 ms (the whole of it), then, if anything is left, one
-    /// ordinary CLR. True when the scratchpad reads blank; false when it does not, cannot be read, or
-    /// keys are queued.
+    /// Clears the first officer's scratchpad: CLR held 1300 ms (the whole of it), then, if anything is
+    /// left, one ordinary CLR. True when the scratchpad reads blank; false when it does not, cannot be
+    /// read, keys are queued, or <paramref name="cdu"/> is not the first officer's.
     /// </summary>
     public Task<bool> WipeScratchpadAsync(int cdu, CancellationToken ct) =>
         Gated($"CDU {cdu} wipe", false, ct, async () =>
             !Refused(cdu, new[] { Bbs757CduKeys.Clr }) && await WipeCore(cdu, ct));
 
     /// <summary>
-    /// Enters <paramref name="text"/> at <paramref name="lineKey"/>: wipes the scratchpad, types the
-    /// text, and presses the line key only when the scratchpad shows exactly that text. The screen
-    /// after the line key (its scratchpad may hold the CDU's answer), or null: refused, the wipe
-    /// failed, or the typing did not show (the scratchpad is wiped again).
+    /// Enters <paramref name="text"/>, without its surrounding spaces, at <paramref name="lineKey"/> on
+    /// the first officer's CDU: wipes the scratchpad, types the text, and presses the line key only
+    /// when the scratchpad shows exactly that text. The screen after the line key (its scratchpad may
+    /// hold the CDU's answer), or null: refused, the wipe failed, the tablet view was lost, or the
+    /// typing did not show or its keys did not all go out (the scratchpad is wiped again).
     /// </summary>
     public Task<Bbs757CduScreen?> EnterAsync(int cdu, string text, string lineKey, CancellationToken ct) =>
         Gated<Bbs757CduScreen?>($"CDU {cdu} entry at {lineKey}", null, ct, async () =>
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
+            string entry = text.Trim();
             var keys = new List<string>();
-            foreach (char c in text)
+            foreach (char c in entry)
             {
                 var forChar = Bbs757CduKeys.ForChar(c);
                 if (forChar.Count == 0)
@@ -142,33 +159,36 @@ public sealed class Bbs757CduPages
             if (!await WipeCore(cdu, ct)) return null;
 
             foreach (var key in keys) _link.PressKey(cdu, key, CoherentBbs757TabletClient.KeyHoldMs);
-            await DrainAsync(cdu, keys.Count, ct);
-            var typed = await ReadCore(cdu, ct);
-            if (typed == null || Scratchpad(typed) != text.Trim().ToUpperInvariant())
+            var typed = await DrainAsync(cdu, keys.Count, ct) ? await ReadCore(cdu, ct) : null;
+            if (typed == null || Scratchpad(typed) != entry.ToUpperInvariant())
             {
-                // A CDU message covers the typing, or a key was lost: the line key would enter
-                // something else.
-                Log.Debug("BBS757", $"CDU {cdu}: the scratchpad does not show the typed entry; wiped, {lineKey} not pressed.");
-                await WipeCore(cdu, ct);
+                // Keys still queued, a CDU message covers the typing, or a key was lost: the line key
+                // would enter something else. Nothing to wipe on a tablet view that has gone.
+                Log.Debug("BBS757", $"CDU {cdu}: the scratchpad does not show the typed entry; {lineKey} not pressed.");
+                if (_link.IsReadable) await WipeCore(cdu, ct);
                 return null;
             }
 
             _link.PressKey(cdu, lineKey, CoherentBbs757TabletClient.KeyHoldMs);
             await _delay(KeySettleMs, ct);
+            if (LinkLost(cdu)) return null;
             return await ReadCore(cdu, ct);
         });
 
     /// <summary>
-    /// Presses <paramref name="keys"/> in order (DEL then a line key, PREV, EXEC …), then reads the
-    /// screen once they have gone out and settled. Null when refused or unreadable.
+    /// Presses <paramref name="keys"/> in order (DEL then a line key, PREV, EXEC …) on the first
+    /// officer's CDU, then reads the screen once they have gone out and settled. Null when refused,
+    /// when the keys did not all go out in their time (a read then would show the screen before
+    /// them), or when the tablet view is lost or the screen unreadable.
     /// </summary>
     public Task<Bbs757CduScreen?> PressKeysAsync(int cdu, IReadOnlyList<string> keys, CancellationToken ct) =>
         Gated<Bbs757CduScreen?>($"CDU {cdu} keys", null, ct, async () =>
         {
             if (Refused(cdu, keys)) return null;
             foreach (var key in keys) _link.PressKey(cdu, key, CoherentBbs757TabletClient.KeyHoldMs);
-            await DrainAsync(cdu, keys.Count, ct);
+            if (!await DrainAsync(cdu, keys.Count, ct)) return null;
             await _delay(KeySettleMs, ct);
+            if (LinkLost(cdu)) return null;
             return await ReadCore(cdu, ct);
         });
 
@@ -189,11 +209,13 @@ public sealed class Bbs757CduPages
     {
         _link.PressKey(cdu, Bbs757CduKeys.Clr, WipeHoldMs);
         await _delay(WipeSettleMs, ct);
+        if (LinkLost(cdu)) return false;
         var screen = await ReadCore(cdu, ct);
         if (screen != null && Scratchpad(screen).Length == 0) return true;
 
         _link.PressKey(cdu, Bbs757CduKeys.Clr, CoherentBbs757TabletClient.KeyHoldMs);
         await _delay(ShortClrSettleMs, ct);
+        if (LinkLost(cdu)) return false;
         screen = await ReadCore(cdu, ct);
         bool blank = screen != null && Scratchpad(screen).Length == 0;
         if (!blank) Log.Debug("BBS757", $"CDU {cdu}: the scratchpad did not clear.");
@@ -202,13 +224,14 @@ public sealed class Bbs757CduPages
 
     /// <summary>
     /// Waits until no key is queued or in its cycle, at most a key cycle per key pressed plus
-    /// <see cref="DrainSlackMs"/>; false when they had not all gone by then.
+    /// <see cref="DrainSlackMs"/>; false when they had not all gone by then, or the tablet view is lost.
     /// </summary>
     private async Task<bool> DrainAsync(int cdu, int keys, CancellationToken ct)
     {
         int budget = CoherentBbs757TabletClient.KeyCycleMs * keys + DrainSlackMs;
         for (int waited = 0; _link.PendingKeyCount > 0; waited += DrainPollMs)
         {
+            if (LinkLost(cdu)) return false;
             if (waited >= budget)
             {
                 Log.Debug("BBS757", $"CDU {cdu}: keys still queued after {budget} ms.");
@@ -216,17 +239,30 @@ public sealed class Bbs757CduPages
             }
             await _delay(DrainPollMs, ct);
         }
+        return !LinkLost(cdu);
+    }
+
+    /// <summary>
+    /// Whether the tablet view has gone since the call pressed its keys, logging it: the call stops
+    /// rather than wait out a read that cannot answer (each can take seconds).
+    /// </summary>
+    private bool LinkLost(int cdu)
+    {
+        if (_link.IsReadable) return false;
+        Log.Debug("BBS757", $"CDU {cdu}: the tablet view was lost, stopped.");
         return true;
     }
 
     /// <summary>
-    /// Whether keys may not be pressed now, logging why: the tablet view cannot be reached, keys are
-    /// still queued (the pilot may be typing in the CDU window), or one is not a CDU key.
+    /// Whether keys may not be pressed now, logging why: the CDU is not the first officer's (R52), the
+    /// tablet view cannot be reached, keys are still queued (the pilot may be typing in the CDU
+    /// window), or one is not a CDU key.
     /// </summary>
     private bool Refused(int cdu, IEnumerable<string> keys)
     {
         string? why = null;
-        if (!_link.IsReadable) why = "the tablet view cannot be reached";
+        if (cdu != FirstOfficer) why = "only the first officer's CDU takes the app's keys";
+        else if (!_link.IsReadable) why = "the tablet view cannot be reached";
         else if (_link.PendingKeyCount > 0) why = "keys are still queued";
         else
         {
