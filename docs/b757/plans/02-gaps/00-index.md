@@ -151,7 +151,7 @@ each); plan 16 is docs and owner steps, worked with superpowers:executing-plans.
   "In-sim checks (owner)" list or any step that writes to the sim: it lists them under "Waiting on the owner" in the
   execution record and works the rest. What needs the owner or builds on the owner's result: plan 01 Task 7's live run
   (a saved snapshot pair will do); plan 02 Task 8; plan 03 Task 4; plan 04 Tasks 4 and 5 (their later steps branch on
-  step 1's reading) and Task 6; plan 05 Tasks 3 and 5; plan 08 Task 2 (its later steps use step 1's timing); plan 09 Task 4; plan 10 Task 3's sim check; plan 11 Task 1, and
+  step 1's reading) and Task 6; plan 05 Tasks 3 and 5; plan 08 Task 2's optional loaded-sim repeat (step 1 measured 2026-10-26: 100 ms hold, 100 ms gap); plan 09 Task 4; plan 10 Task 3's sim check; plan 11 Task 1, and
   Tasks 2-5 for the tiles it measures; plan 12 Task 2's run and Task 3; plan 13 Task 1, then Task 6; plan 15 Task 3.
 - Two plans at once: separate worktrees and separate scratch folders; never two agents on one plan or one file.
 - When the plan's tasks are done: one whole-plan review checks the ownership diff (step 5), that every Review Focus

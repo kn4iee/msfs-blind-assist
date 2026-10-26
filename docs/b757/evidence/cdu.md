@@ -64,7 +64,8 @@ Measured over the MobiFlight calculator path (each write with a unique `<n> 0 *`
 ## Open for the CDU plan
 
 - The shortest reliable hold and the fastest safe key rate (typing a route). Planned: gap plan 08 Task 2 measures it
-  (spec-gaps M10, R76) and records it in `flight-08.md`.
+  (spec-gaps M10, R76) and records it in `flight-08.md`. Measured 2026-10-26: 100 ms hold and 50 ms gap typed
+  every key; a CLR held 1.3 s cleared the scratchpad 45 times in 60 and removed one character the other 15.
 - Colors other than green (`w`, `m`, `c`, `a` …) and inverse cells: read them on a page that has them (LEGS with a
   modified route, the EXEC light).
 - The EXEC light and the MSG / OFST / DSPY annunciators: look for L:vars in the control map.

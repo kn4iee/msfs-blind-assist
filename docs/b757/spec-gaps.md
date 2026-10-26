@@ -260,7 +260,8 @@ hunt at each mode change (THR REF, VNAV, LOC and G/S capture, FLARE, ROLLOUT, A/
 glideslope sources. M5 the ILS panel: PARK, and whether the frequency knobs wrap or stop; when and on which CDU
 RW/ILS FREQ ERROR appears; whether an Alt+N read shows the tuned ILS frequency (R75). M6 the SPD button in flight.
 M7 the autoland status vars through an autoland. M8 `BBS_VNAV_TOD`. M9 reverse thrust with the sim's keys. M10 the
-fastest reliable CDU key hold and gap, on the ground (R76).
+fastest reliable CDU key hold and gap, on the ground (R76): measured 2026-10-26, 100/50 typed 5/5, 100/100 chosen
+(`evidence/flight-08.md`).
 Owners: M1, M2, M6 [05]; M3 [02, then 05]; M4 [13]; M5 [04]; M7, M8 [06]; M9 [15]; M10 [08]. The L:var snapshot tool for
 them (plan 01 commits it) is described in `docs/b757/tools/lvar-snapshot/README.md`.
 
