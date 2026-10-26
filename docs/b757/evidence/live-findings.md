@@ -192,6 +192,70 @@ identical consecutive commands are dropped by MobiFlight, [VAR-4]) and window ca
     CG 24.8 %. Neither box blocks IMPORT. The aircraft was left loaded, EFB on Home (COCKPIT PRESETS last), mirror
     removed.
 
+## Gap investigation (session 8, 2026-10-25 night, KATL gate A1, APU on, FMC programmed KATL-KMIA)
+
+For `plans/02-flight-gaps.md`. Title "BlueBird 757-200 PW NO CABIN", engines off, GPU connected but not in use, MSFSBA
+not running. Reads through the Coherent debugger (`SimVar.GetSimVarValue` in the `BBSTablet` view, all 2,173 WASM and
+XML L:var names in one call, diffed before and after each action against a noise list of the vars that drift on their
+own); writes through the MobiFlight calculator (simconnect MCP). Every change was put back; the MCP's own L:var reads
+went stale once (TCAS knob), so results were confirmed through the debugger. Pictures: window captures, the EFB through
+the ND mirror (in this session's VCockpit08 the captain's ND is the gauge at page (21,735) 704 × 859, the ADI at
+(21,8)).
+
+- **COM radios use the stock COM variables.** One `L:B757_VHF_L_FRAC_INC` +1 moved `COM STANDBY FREQUENCY:1` 120.900 →
+  120.905 (a 5 kHz step: 8.33 kHz channels); the WASM clears the request to 0. `B757_VHF_C_*` tunes COM 2 and
+  `B757_VHF_R_*` COM 3 (radio tuning panels: `BBS_RTP_L/C/R_LIGHTS` read 2, 4, 8 = VHF L, C, R selected). Holding
+  `L:B757_PED_COMHEAD_1_SWAP_BUTTON` 1 then 0 swapped COM 1 active and standby. `K:COM2_STBY_RADIO_SET_HZ` 118275000 set
+  COM 2 standby, it stayed, and a VHF C knob step then continued from it (118.280): the WASM keeps no frequency of its
+  own. Start values: COM 1 121.900 / 120.900, COM 2 121.500 / 130.800, COM 3 124.850 / 124.850.
+- **VOR and ILS are BlueBird's own receivers, not the stock NAV radios.** The VOR/DME panel showed 116.90 AUTO (window
+  capture) while `NAV ACTIVE FREQUENCY:1..3` all read 110.50 and `NAV OBS:1..3` 0, unchanged by everything below.
+  - `L:B757_MCP_VOR1_MODE_AUTO` 1; the VOR/DME 1 button (`L:B757_MCP_VORDME_1_BUTTON` 1 then 0) toggles it (0 =
+    MAN). In AUTO, `L:B757_VOR_L_FREQ_WHOLE_INC` +1 is consumed and changes nothing; in MAN the panel showed 108.40 MAN
+    after one whole step (from a preset 107.40). Back to AUTO with the same button.
+  - The CDU NAV RAD page (captain's) reads `VOR L` / `VOR R` with `116.90AGSU` (A = auto, ident GSU), `CRS`, `RADIAL`,
+    and a `PRESELECT` row; no ILS or ADF line. Typed `113.90` + LSK 1L tuned VOR L (`113.90R`, R = remote manual,
+    CRS 000); `DELETE` + 1L returned it to `116.90AGSU`. A CDU message ("INVALID ENTRY", "VOR 113.90 INVALID") covers
+    the scratchpad, and a CLR clears only the message: two earlier entries had piled up behind it. VOR R showed
+    `------` (unpowered or no station) and refused an entry.
+  - `L:B757_ILS_FREQ_WHOLE_INC` +1 was consumed and left every stock NAV variable alone; the ILS panel (aft pedestal)
+    is in no instrument view, so its LCD was not seen. Writing `L:BBS_ILS_COURSE` 95 held and left `NAV OBS:1..3` at 0.
+    No variable carries a tuned VOR or ILS frequency (BlueBird's published list agrees: course read/write only).
+  - APPROACH REF (first officer's CDU) shows the FMC's runway ILS: `ILS 09L 110.50 IHZK`, `FRONT CRS 095°`.
+- **Landing altitude**: `L:B757_OVHD_LDG_ELEV` 1000 adopts a direct write (1030 held), but the panel's drums
+  (`L:B757_OVHD_LDG_ALT_2000`, `_200`, `_20`: the thousands, hundreds and tens digits, read 1/0/0 at 1000) only
+  refresh on a knob step. One
+  `L:B757_OVHD_LDG_ELEV_CHG` +1 = +10 ft (1030 → 1040, drums 1/0/4). Exact set: write the target − 10, then one CHG +1
+  (990 + step → 1000, drums 1/0/0). No FLT ALT selector exists.
+- **Emergency lights**: `L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK` 1 (ARMED) with `L:B757_OVHD_SWITCH_GAURD` 0
+  (closed); not changed this session. The map's "Passenger Oxygen Switch Guard" is this guard.
+- **MCP**: on the ground, a `B757_MCP_SPD_BUTTON_PRESS` pulse changed no variable at all (light stayed 0, levers idle,
+  A/T armed). An IAS/MACH changeover pulse (`L:B757_MCP_AP_SPD_MACH_SW` 1, then 0 1.5 s later) changed nothing either
+  (session 4 saw the same). `L:BBS_TARGET_MACH` reads 0 in IAS mode. The speed window drums read
+  `B757_MCP_Gau_SPD_AUTO_100/10/1` = 20/10/10 at 200 kt (heading 000 = 0/10/10): a digit d reads 10·d, 0 reads 10.
+  `L:BBS_VNAV_TOD` and `BBS_VNAV_TOD_PROGRESS` read 429.24 with the route 568 NM long (distance to top of descent, a
+  guess to confirm in flight).
+- **EFB GPU tile** (Ground Services, through the ND mirror: "GPU CONNECTED", "NOT IN USE"; CHOCKS green): one tap at
+  EFB (1005,231) toggled it off: `BBS_757_GPU_AC_PWR_CONNECTED`, `_CART_VISIBLE`, `_PWR_NOT_IN_USE` 1 → 0, `_DOOR`
+  100 → 0, `B757_OVHD_APUGENEXTPWR_R_AVAIL_DECAL` (EXT PWR AVAIL) 1 → 0. A second tap reconnected it within 4 s. The
+  position was taken from the mirror's scale, then proven by the taps. The owner's AUTOMATIC GPU/JETWAY is ON.
+- **Thrust levers take a direct write**: `L:BBS757_THRUST_LEVER_L` 20 held and drove `GENERAL ENG THROTTLE LEVER
+  POSITION:1` to 15.67 %; written back to 0.
+- **VREF by weight** (first officer's APPROACH REF, a trial GROSS WT typed into 1L, then `DELETE` + 1L back to the
+  FMC's 178.6): 140.0 → VREF 20/25/30 119/111/109; 150 124/115/113; 160 128/119/117; 170 132/123/121; 178.6 (the
+  FMC's) 135/126/124; 180 136/127/125; 190 140/131/129; 200 144/135/133; 210 148/139/137; 220 151/142/140; 230
+  155/146/144; 240 158/150/148; 250 162/154/152. 120 and 130 and 255 are INVALID ENTRY (range 140-250). TAKEOFF REF
+  read flaps 5, V1/VR/V2 138/138/140, trim 4.00. The cockpit placard: MAX FLAP EXT SPEEDS 1 240, 5 220, 15 210, 20 195,
+  25 190, 30 162 kt (window capture).
+- **PROG page 1** (first officer's CDU): `TO (INTC) 1 0210Z 13.4`, `NEXT GRITZ 6 0211Z 12.8`, `DEST KMIA 568 0332Z
+  6.1`, `ECON SPD 299/.785`, `TO T/C 0218Z/ 56NM`. Page 2: winds, XTK/VTK error, TAS, SAT, fuel used, totalizer 13.7
+  and calculated 13.8.
+- **Control-map samples** (the map's own click codes): Logo Lights toggled `L:B757_OVHD_LOGO_BUTTON` and the stock
+  `LIGHT LOGO` off and on; one TCAS Mode cw step went 0 → 1 (stock `TRANSPONDER STATE:1` 5) and ccw back (1).
+- **Left as found**: frequencies, VOR AUTO, landing altitude 1000, GPU connected, logo on, TCAS STBY, levers 0, ILS
+  course 0, camera cockpit view 1, EFB Home, both CDUs on their pages. The captain's scratchpad message "TAKEOFF DATA
+  UPLINK" was cleared by a CLR.
+
 ## WASM-only variables, first reads (session 2, APU running)
 
 From `wasm-findings.md`'s list; all read through the calculator path:
