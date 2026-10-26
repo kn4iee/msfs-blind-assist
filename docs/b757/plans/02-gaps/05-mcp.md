@@ -130,23 +130,37 @@
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "757 MCP windows: fixed Alt keys matching the PMDG windows (IAS/MACH moves to Alt+M), Speed Intervene (Alt+I), Mach entry (type 0.78), a speed box closed while VNAV blanks the window (Shift+S says so); MCP value changes, A/T arm and the A/P and A/T disconnect lights are announced (each in Ctrl+M). The SPD button is the autothrottle's speed mode and does nothing on the ground." (`feature`).
+- **Pilot-facing:** "757 MCP windows: fixed Alt keys matching the PMDG windows (IAS/MACH moves to Alt+M), Speed Intervene (Alt+I, its button shows Window open or Window blank), Mach entry (type 0.78, .78 or M.78, 0.40 to 0.86; the window changes to Mach for you, and on the ground says the changeover is not available), a speed box closed while VNAV blanks the window (Shift+S says so, and reads the Mach in Mach mode); MCP heading, altitude, vertical speed, speed and Mach are announced once they stop changing, A/T arm and the A/P and A/T disconnect lights when they change (each in Ctrl+M). The SPD button is the autothrottle's speed mode: it did nothing on the ground or with VNAV engaged." (`feature`).
 - **Handoff request (optional):** `Forms/ValueInputForm.cs`: an optional read-only reason text per window, so the 757's speed box can say why it is closed.
-- **docs/b757.md:** MCP windows (key table, Mach, blank window), "Autoflight announcements".
+- **docs/b757.md:** MCP windows (key table, Mach entry and the changeover, blank window), "Autoflight announcements" (rest 1.5 s; the speed silent while blank or in Mach; a changeover or VNAV taking the speed is no knob turn; the app's own sets not repeated).
+- **HotkeyGuides/BBS757_Hotkeys.txt:** in Ctrl+S, Alt+M is IAS/MACH (was Alt+I) and Alt+I is Speed Intervene.
+- **Proposed rule lines** (`.claude/rules/b757.md`, full text from `docs/b757/evidence/flight-05.md` M1 and the review):
+  - `- [B757-n] Read the 757's MCP Mach only from the speed window's wheels (`Bbs757Mcp.MachFromDrums`), never `L:BBS_TARGET_MACH` (reads 0 in Mach mode); a wheel reading below .40 is knots (the wheels show knots for 1-2 s after a changeover), never a Mach. Full: docs/invariants/b757.md#b757-n`
+  - `- [B757-n] Never let a Mach set command past .86: BlueBird lets the target run to .95. `Bbs757Mach.Bursts` caps a burst at 25 events and `Bbs757Mach.SetMachAsync` never corrects more in the set's direction than the planned difference. Full: docs/invariants/b757.md#b757-n`
+  - `- [B757-n] A row whose call-out depends on another row of the same batch is judged once the batch is in (`EvaluateSpeedRows`), never per delivery: the batch is sorted by name, so the MCP speed and the Mach's hundredths wheel arrive before the Mach flag, the blank flag and the tenths wheel. Full: docs/invariants/b757.md#b757-n`
+- **For plan 14 (Ctrl+P):** a working A/T Arm press from Ctrl+P is silent (R29) and the new "A/T armed" row then speaks it once; if that reads as a double, plan 13's `OnOwnWrite` can arm an echo for `BBS757_AT_ARMED`. Altitude Intervene (Ctrl+P key J) waits on Task 5.
+- **Open, for whoever flies next:** the SPD button with VNAV off (ALT HOLD or V/S): does its light come on? (M6, `flight-05.md`.)
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** waiting on owner: Task 5 (Altitude Intervene) and in-sim checks 2 and 3. Tasks 1-4 landed; plan 14 may take its files.
 - **Claimed by:** Daniel Wolak (danielw97), 2026-10-26
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
+- **Worked by:** Daniel Wolak with Claude (inline, superpowers:executing-plans; one whole-plan review by a fresh reviewer)
 - **Started:** 2026-10-26, from `cf1dfce94`
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Landed:** 2026-10-26 (Tasks 1-4; the last code commit is the review fix, "fix(b757): Mach sets wait for the wheels; speed rows judged once the batch is in")
+- **Tests at landing:** full suite passed, 17,240, after the last rebase
+- **Tasks:** 0-4 done. 5 waits: the first flight's ALT SEL push was inconclusive (no constraint to delete; `flight-05.md` M3).
+- **Waiting on the owner:** Task 5 (a cruise early-descent or a climb under an "at or below" constraint); in-sim check 2 (Mach entry at cruise; time the wheels' roll after a burst and after IAS/MACH) and check 3 (autopilot disconnect; note whether the light flashes, which would repeat the call-out).
+- **In-sim results:** check 1 passed in part 2026-10-26 (Alt+I "Speed Intervene pressed", caption "Window open"; the ground Mach refusal not yet heard). In the VNAV climb and descent, Speed Intervene opened the window on the current speed and kept VNAV (`flight-05.md` M2). Checks 2 and 3: none run.
+- **Changed from the plan:**
+  - Mach is read from the speed window's wheels (`Bbs757Mcp.MachFromDrums`); `L:BBS_TARGET_MACH` reads 0 in Mach mode (M1), so it is neither registered nor watched. The Mach row watches the hundredths wheel, with a silent tenths-wheel row.
+  - Task 3's step 1 was flown 2026-10-26 (M1): one event 0.01 Mach, the knot tiers, floor .40, no ceiling before .95. The app keeps to .40-.86 itself; no burst past the 25th event; a Mach with three decimals is refused.
+  - `BBS_IAS_BLANKED` and the silent rows are IsAnnounced and consumed: a Continuous var that is not announced is never delivered (found by the owner's caption check).
+  - The knots set's in-Mach refusal now says "IAS/MACH changeover is not available now"; `MachModeSetRefusal`, `MachEntryRefusal` and `TrySpeedInput` are gone.
+  - The own-set echo is a window (during the set and 3 s after), not a fresh read after each set.
+  - Review fixes: a Mach set waits for the wheels to show a holding Mach and to roll after a burst; corrections never exceed the planned difference; the speed rows are judged once the batch is in, and a change of the blank or Mach flag rebaselines them (so Speed Intervene opening the window is silent).
+  - Variables added: 13, not 10 (10 watch rows, `BBS_IAS_BLANKED`, two wheel OnRequest keys).
+- **Rulings made while working:** Speed Intervene's press and refusal use the window caption through a copy of the control (Interaction.cs is plan 03's); the access key is marked on the last word that starts with it; an unread blank flag keeps the speed box open; a Mach set with the Mach flag unread presses nothing; a lost Mach event is not chased (honest read-back). All by Claude, recorded for the owner. Deferred minors from the review: a map without the IAS/MACH node also refuses knots sets; two Enters 250 ms apart can press the changeover twice.
