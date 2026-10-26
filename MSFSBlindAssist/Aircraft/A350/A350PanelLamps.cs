@@ -82,6 +82,10 @@ public static class A350PanelLamps
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
         ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL
+        ["ELEC_EXT_1_SEQ2_LIGHT"] = "EXT 1 on light", ["ELEC_EXT_2_SEQ2_LIGHT"] = "EXT 2 on light",
+        // The DRIVE buttons' lower legend: the IDG disconnected.
+        ["ELEC_IDG_1A_SEQ2_LIGHT"] = "DRIVE 1A off light", ["ELEC_IDG_1B_SEQ2_LIGHT"] = "DRIVE 1B off light",
+        ["ELEC_IDG_2A_SEQ2_LIGHT"] = "DRIVE 2A off light", ["ELEC_IDG_2B_SEQ2_LIGHT"] = "DRIVE 2B off light",
         ["IRS_ADR_1_SEQ2_LIGHT"] = "ADR 1 off light", ["IRS_ADR_2_SEQ2_LIGHT"] = "ADR 2 off light", ["IRS_ADR_3_SEQ2_LIGHT"] = "ADR 3 off light",
     };
 

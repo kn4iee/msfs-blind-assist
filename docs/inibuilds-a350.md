@@ -137,6 +137,7 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | Anti-Ice | wing, ENG 1, ENG 2, probe and window heat; three fault lights | each on and off | |
 | Air Conditioning | crossbleed, windshield defog, cockpit and cabin temperature knobs, ram air, packs, hot air, air flow, ENG and APU bleeds; their fault lights | every position | the temperature knobs (0-100) are written by the systems module only through the panel-state presets; what they select is on the SD COND page |
 | Cabin Pressure | cabin altitude and V/S targets (encoders) and modes, ditching; the two targets as status lines | modes to MAN and back; each target steps 100 ft or 100 ft/min a click in MAN | an encoder's value is a status line on its panel (`A350Readouts`) |
+| Electrical | BAT 1/2, BAT EMER 1/2, bus tie, commercial 1/2, ELM, EXT 1/2, galley, GEN 1A-2B, APU GEN, DRIVE 1A-2B, PAX SYS, side 1 and 2 isolation; 23 lights | every switch off and on; with the OIS GPU connected (GROUND, GPU), EXT 1 and 2 each on line and off | a battery's FAULT legend lights a moment after it goes off. The DRIVE buttons (IDG disconnect) were not pressed: lasting |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

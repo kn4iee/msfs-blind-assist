@@ -281,4 +281,39 @@ public class A350OverheadPanelTests
             ("Ditching", A350RowAction.Set, "0=Off, 1=On"),
         }, Rows("Cabin Pressure"));
     }
+
+    /// <summary>Live 2026-10-26: every switch off and on (a battery's FAULT legend lights a moment after it goes off and
+    /// clears when it is back); with the OIS GPU connected, EXT 1 and EXT 2 each put external power on line (AVAIL out,
+    /// ON lit) and off again. The DRIVE buttons were not pressed: they disconnect an IDG for good.</summary>
+    [Fact]
+    public void Electrical()
+    {
+        const string OffOn = "0=Off, 1=On";
+        Assert.Equal(new[]
+        {
+            ("BAT 1", A350RowAction.Set, OffOn), ("BAT 2", A350RowAction.Set, OffOn),
+            ("BAT EMER 1", A350RowAction.Set, OffOn), ("BAT EMER 2", A350RowAction.Set, OffOn),
+            ("Bus tie", A350RowAction.Set, OffOn),
+            ("Commercial 1", A350RowAction.Set, OffOn), ("Commercial 2", A350RowAction.Set, OffOn),
+            ("ELM", A350RowAction.Set, OffOn),
+            ("EXT 1", A350RowAction.Press, ""), ("EXT 2", A350RowAction.Press, ""),
+            ("Galley", A350RowAction.Set, OffOn),
+            ("GEN 1A", A350RowAction.Set, OffOn), ("GEN 1B", A350RowAction.Set, OffOn),
+            ("GEN 2A", A350RowAction.Set, OffOn), ("GEN 2B", A350RowAction.Set, OffOn),
+            ("APU GEN", A350RowAction.Set, OffOn),
+            ("DRIVE 1A", A350RowAction.Press, ""), ("DRIVE 1B", A350RowAction.Press, ""),
+            ("DRIVE 2A", A350RowAction.Press, ""), ("DRIVE 2B", A350RowAction.Press, ""),
+            ("PAX SYS", A350RowAction.Set, OffOn),
+            ("Side 1 and 2 isolation", A350RowAction.Set, OffOn),
+        }, Rows("Electrical"));
+        Assert.Equal(new[]
+        {
+            "BAT 1 fault light", "BAT 2 fault light", "BAT EMER 1 fault light", "BAT EMER 2 fault light", "ELM fault light",
+            "EXT 1 available light", "EXT 1 on light", "EXT 2 available light", "EXT 2 on light",
+            "GEN 1A fault light", "GEN 1B fault light", "GEN 2A fault light", "GEN 2B fault light", "APU GEN fault light",
+            "DRIVE 1A fault light", "DRIVE 1A off light", "DRIVE 1B fault light", "DRIVE 1B off light",
+            "DRIVE 2A fault light", "DRIVE 2A off light", "DRIVE 2B fault light", "DRIVE 2B off light",
+            "PAX SYS isolated light",
+        }, Lights("Electrical"));
+    }
 }

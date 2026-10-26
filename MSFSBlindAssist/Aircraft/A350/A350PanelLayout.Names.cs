@@ -124,6 +124,13 @@ public static partial class A350PanelLayout
         ["AIR_TEMP_COCKPIT"] = "Cockpit temperature",
         ["AIR_TEMP_CABIN"] = "Cabin temperature",
         ["AIR_FLOW"] = "Air flow",
+        // Electrical: placard abbreviations kept in capitals so a reader spells them as printed.
+        ["ELEC_EXT_1"] = "EXT 1", ["ELEC_EXT_2"] = "EXT 2",
+        ["ELEC_GEN_1A"] = "GEN 1A", ["ELEC_GEN_1B"] = "GEN 1B", ["ELEC_GEN_2A"] = "GEN 2A", ["ELEC_GEN_2B"] = "GEN 2B",
+        ["ELEC_GEN_APU"] = "APU GEN",
+        ["ELEC_IDG_1A"] = "DRIVE 1A", ["ELEC_IDG_1B"] = "DRIVE 1B", ["ELEC_IDG_2A"] = "DRIVE 2A", ["ELEC_IDG_2B"] = "DRIVE 2B",
+        ["ELEC_PAX_SYS"] = "PAX SYS",
+        ["ELEC_SIDE_ISOL"] = "Side 1 and 2 isolation",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
