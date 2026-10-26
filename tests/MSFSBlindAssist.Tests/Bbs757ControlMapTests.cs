@@ -252,14 +252,14 @@ public class Bbs757ControlMapTests
 
     [Theory]
     [InlineData("Electrical", "Battery|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|EXT PWR|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
-    [InlineData("Hydraulics", "L ENG HYD Pumps|R ENG HYD Pumps|R ENG ELEC Pumps|C Eng1 HYD Pumps|C Eng2 HYD Pumps|L ENG ELEC Pumps")]
-    [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Xfeed Pumps FWD|Xfeed Pumps Aft")]
+    [InlineData("Hydraulics", "L ENG HYD Pumps|R ENG HYD Pumps|R ELEC Pump|C1 ELEC Pump|C2 ELEC Pump|L ELEC Pump")]
+    [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Crossfeed FWD|Crossfeed Aft")]
     [InlineData("Exterior lights", "Anti-col Red Lights|Position Lights|Anti-col White Lights|Taxi Light|L Landing Light|R Landing Light|L Runway Turnoff|R Runway Turnoff|Wing Lights|Logo Lights")]
     [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|APU Bleed|R ENG Bleed|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
     [InlineData("Passenger signs", "Seatbelts|No Smoking")]
     [InlineData("IRS", "IRS L|IRS C|IRS R")]
     [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont|R ELEC ENG Cont")]
-    [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|AP SPD Hold|Bank Limit|BCRS 1")]
+    [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|Speed Intervene|Bank Limit|BCRS 1")]
     [InlineData("Main panel switches", "Autobrake|Takeoff Check|TOGA|CLB|CON|CRZ|TMSP 1|TMSP 2|HDG Ref|Cancel|Recall")]
     [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
     [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
@@ -452,6 +452,121 @@ public class Bbs757ControlMapTests
             .ToList();
 
         Assert.True(numbered.Count == 0, "numbered positions: " + string.Join(", ", numbered));
+    }
+
+    // ---- Plan 02, task 2: labels and kinds that match the cockpit ----
+
+    [Theory]
+    // The guard over the emergency lights switch: its node says PASS_OXY and the vendor's tip says RAT, both copied.
+    [InlineData("B757_OVHD_SWITCH_GAURD", "Emergency Lights Guard", Bbs757Kinds.Guard)]
+    // The hydraulic panel has two engine pumps and four electric ones; the vendor's nodes call the center pair ENG1 and ENG2.
+    [InlineData("B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "L ENG HYD Pumps", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_R_ENG_HYD_PUMPS_BUTTON", "R ENG HYD Pumps", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", "R ELEC Pump", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", "C1 ELEC Pump", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "C2 ELEC Pump", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON", "L ELEC Pump", Bbs757Kinds.Toggle)]
+    // The crossfeed valves, which the vendor's names and tips call pumps.
+    [InlineData("B757_OVHD_XFEED_PUMPS_FWD_BUTTON", "Crossfeed FWD", Bbs757Kinds.Toggle)]
+    [InlineData("B757_OVHD_XFEED_PUMPS_AFT_BUTTON", "Crossfeed Aft", Bbs757Kinds.Toggle)]
+    // The guards of the 1 BTL and 2 BTL cargo fire buttons (the vendor's template names the button each one covers).
+    [InlineData("B757_GAURD_11_SWITCH", "1 BTL Cargo Fire Guard", Bbs757Kinds.Guard)]
+    [InlineData("B757_GAURD_12_SWITCH", "2 BTL Cargo Fire Guard", Bbs757Kinds.Guard)]
+    [InlineData("B757_MCP_btn_autopilot_disengage", "Autopilot Disengage Bar", Bbs757Kinds.Toggle)]
+    [InlineData("BBS757_THRREF_CLICK", "Thrust Ref Pull", Bbs757Kinds.Toggle)]
+    // The IAS/MACH knob's push, which BlueBird calls the speed intervention command.
+    [InlineData("B757_MCP_AP_SPD_HOLD_SW", "Speed Intervene", Bbs757Kinds.Button)]
+    [InlineData("BBS757_FIREHANDLE1_CLICK3", "APU Fire Handle", Bbs757Kinds.Toggle)]
+    public void Labels_name_what_the_control_is(string node, string label, string kind)
+    {
+        Bbs757Control c = Find(node);
+
+        Assert.Equal(label, c.Label);
+        Assert.Equal(kind, c.Kind);
+    }
+
+    [Fact]
+    public void The_hydraulic_panel_keeps_the_electric_pumps_in_the_order_right_center_left_under_six_different_names()
+    {
+        var pumps = Map.Controls.Where(c => c.Panel == "Hydraulics").ToList();
+
+        // A label never moves a control: the order is the owner's (ruling R37), by node.
+        Assert.Equal(
+            new[]
+            {
+                "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
+                "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
+            },
+            pumps.Select(c => c.Node));
+        Assert.Equal(
+            new[] { "L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump", "L ELEC Pump" },
+            pumps.Select(c => c.Label));
+        Assert.Equal(pumps.Count, pumps.Select(c => c.Label).Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData("B757_OVHD_SWITCH_GAURD", "0=Closed|1=Open")]
+    [InlineData("B757_GAURD_11_SWITCH", "0=Closed|1=Open")]
+    [InlineData("B757_GAURD_12_SWITCH", "0=Closed|1=Open")]
+    // 1 is the bar down (its click writes 1 to AUTOPILOT_DISENGAGE_SET) and 0 the bar up.
+    [InlineData("B757_MCP_btn_autopilot_disengage", "0=Up|1=Down")]
+    // BlueBird's list: 1 = pulled (manual EPR-reference mode), 0 = pushed in.
+    [InlineData("BBS757_THRREF_CLICK", "0=In|1=Pulled")]
+    public void The_guards_the_disengage_bar_and_the_thrust_reference_pull_name_their_positions(string node, string positions)
+    {
+        Assert.Equal(positions, Spell(Find(node)));
+    }
+
+    [Fact]
+    public void Apu_fire_handle_shows_its_state()
+    {
+        // The vendor's click writes 1 or 0 to the handle's own var, which the extractor read as a momentary button with no
+        // state to show: the panel pressed it blind, and a second press stowed a handle the pilot had just pulled. As a
+        // toggle on the pulled-state var, in the engine handles' words, the generic path reads it first.
+        Bbs757Control apu = Find("BBS757_FIREHANDLE1_CLICK3");
+
+        Assert.Equal(Bbs757Kinds.Toggle, apu.Kind);
+        Assert.False(Bbs757Write.IsMomentary(apu));
+        Assert.True(Bbs757Write.HasReadableState(apu));
+        Assert.Equal("B757_APUFIRE_SWITCH", apu.StateVar);
+        Assert.Equal("0=In|1=Pulled", Spell(apu));
+        Assert.Equal(Spell(Find("BBS757_FIREHANDLE1_CLICK")), Spell(apu));
+        Assert.Equal(Spell(Find("BBS757_FIREHANDLE1_CLICK2")), Spell(apu));
+        Assert.Contains(">L:B757_APUFIRE_SWITCH", apu.Press);   // the vendor's click, replayed
+
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(apu, 1, 1).Outcome);
+        Bbs757WritePlan pull = Bbs757Write.ToPosition(apu, 0, 1);
+        Assert.Equal(Bbs757WriteOutcome.Writes, pull.Outcome);
+        Assert.Equal(new[] { apu.Press! }, pull.Calls);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(apu, null, 1).Outcome);   // never pressed unread
+    }
+
+    [Fact]
+    public void The_fourteen_audio_mic_selects_are_buttons_that_select_one_microphone_and_clear_the_rest()
+    {
+        // The vendor's click sets this microphone to 1 and the panel's other six to 0, so "Off" could never be picked:
+        // a combo of Off and On promised what the control cannot do. A button is pressed and says "pressed".
+        string[] channels = { "L", "C", "R", "LM", "RR", "PA", "INT" };
+        var nodes = new[] { 1, 2 }
+            .SelectMany(panel => channels.Select(ch => $"B757_PED_AUDIO_{panel}_MIC_{ch}_LIGHT"))
+            .ToList();
+
+        Assert.Equal(14, nodes.Count);
+        foreach (string node in nodes)
+        {
+            Bbs757Control c = Find(node);
+            char panelNo = node["B757_PED_AUDIO_".Length];
+
+            Assert.Equal(Bbs757Kinds.Button, c.Kind);
+            Assert.True(Bbs757Write.IsMomentary(c));
+            Assert.Equal(node, c.StateVar);
+            Assert.Empty(c.Positions);
+            Assert.False(Bbs757Write.HasReadableState(c));
+            foreach (string ch in channels)
+                Assert.Contains($"0 (>L:B757_PED_AUDIO_{panelNo}_MIC_{ch}_LIGHT, bool)", c.Press);
+            Assert.EndsWith($"1 (>L:{node}, bool)", c.Press);
+            Assert.Null(c.Release);
+        }
     }
 
     [Fact]

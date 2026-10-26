@@ -9,6 +9,7 @@
     "control_order: panel -> node names, the order the controls of that panel are tabbed. The listed controls come first, in that order; the rest follow in cockpit order. A panel no control is on, a node that is not in that panel, a repeat and an empty list are errors. Labels are made first, in cockpit order, so an order never renames or renumbers a control.",
     "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
     "positions: node -> position names in value order (one per value: the names are laid onto the control's own values, so two names for a control whose values are 0 and 11 name 0 and 11), or explicit [{value, label}] when the extractor counts a value the click code never rests on (the start selectors never write 2, the chronometer ET lever skips it).",
+    "kinds: node -> toggle or button, for a control whose click code the extractor misreads. Only the kind changes (and with it the positions the generator derives: none for a button, two for a toggle, unless positions names them); the state var and the click code stay the vendor's, verbatim. An entry for a node the package does not have, or one that names the kind the control already reads as, is an error.",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
@@ -20,6 +21,11 @@
     "PLAN 02 TASK 1 (2026-10-26): positions named from that list alone, unmeasured in the sim and with no preset or manual evidence of their own (the controls whose other notes cite the list have such evidence besides): B757_CABIN_CEILING (0 Off, 1 33%, 2 66%, 3 100%), B757_CABIN_WINDOW and B757_CABIN_ENTRY (0 Off, 1 50%, 2 100%), B757_OVHD_WARNING_IND_SWITCH (0 DIM, 11 BRT: its click code writes those two values, which the extractor takes as its positions), B757_MAIN_M_Gau_STBY_GYRO_SELECTOR (0 OFF, 1 ILS, 2 BCRS), B757_ECAM_LRAUTO_KNOB (0 L, 1 AUTO, 2 R) and B757_VC_P61_SWITCH_2, the Flight Recorder (0 ON, 1 AUTO, 2 TEST).",
     "B757_MAIN_CHRONO_ET_SWITCH and B757_MAIN_CHRONO_ET_SWITCH_FO (L:BBS_CHRONO_LEFT_SWITCH, _FO): 0 RUN, 1 HOLD, 3 RESET, explicit pairs without 2. The list says RESET is 3 with 2 unused, and the click code agrees: the code that steps up from HOLD writes 3 straight from 1 ('1 == if{ 3 ...'), so no step from HOLD rests on 2. The cockpit's tooltip list (RUN, HOLD, RESET: three tips for four values) puts RESET at 2, which that code never writes; the generator stops on a list that names 2 instead, because 3 is then written outside the list. The code that steps down still passes through 2 on its way from 3 to 1; that stop has no name. B757_MAIN_CHRONO_SET_SWITCH and B757_MAIN_CHRONO_SET_SWITCH_FO (L:BBS_CHRONO_RIGHT_SWITCH, _FO): 0 RUN, 1 HOLD, 2 Slow slew, 3 Fast slew (the list; the vendor's tips for them repeat the ET lever's RUN, HOLD, RESET and name nothing here). Both unmeasured in the sim.",
     "B757_VC_P61_SWITCH_3 to B757_VC_P61_SWITCH_10 are the P61 test switches: their release code writes 1, so 1 is Neutral on all of them, and the list names 0 and 2, the two tests, by the switch's label: Equip Cooling (SWITCH_3) and Yaw Damp (SWITCH_4) 'Upper test' / 'Lower test'; Wing AI Window Heat (SWITCH_6) 'Wing anti-ice test' / 'Probe heat test'; Ground Prox Hyd Gen (SWITCH_7) 'Ground proximity test' / 'Hydraulic generator test'; TO and Land Config (SWITCH_8) 'Takeoff config test' / 'Landing config test'; Air Data Stall Right (SWITCH_9) and Left (SWITCH_10) 'Air data test' / 'Stall warning test'. B757_VC_P61_SWITCH_5 (Duct Leak Fuel Qty) is the one the list gives no test names: 1 Neutral, 0 and 2 stay 'Position 0' and 'Position 2'. B757_EICAS_COMPUTER_KNOB, a second EICAS Computer knob, is named by no source either and stays numbered (plan 02 task 5 drops it). Unmeasured in the sim.",
+    "PLAN 02 TASK 2 (2026-10-26): labels and kinds that match the cockpit, from BBS_752_BASE_INTERIOR.xml (cited as XML:line) and BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21), all unmeasured in the sim. B757_OVHD_SWITCH_GAURD is the emergency lights guard, not a passenger oxygen one: the XML says so ('OVHD SWITCH GUARD is the EMERGENCY LIGHTS GUARD', XML:11362) and passes it as the GUARD_LVAR of the emergency lights switch (BBS_B757_EMERGENCY_LIGHTS_COMPONENT, XML:8106-8110); the vendor's tip on its other row, 'RAM AIR TURBINE', and the PASS_OXY in the name of the switch it covers are copies. The list calls it 'Emergency lights guard - template and interlock', 0 = closed, 1 = open, which is what its positions say.",
+    "The hydraulic panel has two engine pumps and four electric ones. B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON and B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON are the center system's two electric pumps, C1 and C2 (the 757's center system has no engine pump; the XML tips read 'C ENG1 PUMP' and 'C ENG2 PUMP', XML:7085 and 7140, and the list puts them at Left / Center and Right / Center); B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON and B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON are the left and right electric pumps (tips 'L ENG ELEC' and 'R ENG ELEC', XML:7030 and 7250; the list: 'Hydraulic electric pump selection'). B757_OVHD_L_ENG_HYD_PUMPS_BUTTON and B757_OVHD_R_ENG_HYD_PUMPS_BUTTON stay the engine pumps, 'L ENG HYD Pumps' and 'R ENG HYD Pumps', made from their node names. The six labels differ, and control_order is untouched, so the electric pumps stay in the order R, C1, C2, L. B757_OVHD_XFEED_PUMPS_FWD_BUTTON and B757_OVHD_XFEED_PUMPS_AFT_BUTTON are the fuel crossfeed valve switches, not pumps: their node names and tips say pumps (XFEED PUMP FWD and AFT, XML:8585 and 8530; the list: 'Crossfeed pumps forward button'), but the circuit breakers for the same valves are named fuel_crossfeed_valve_fwd and _aft (XML:34638, 34655).",
+    "B757_GAURD_11_SWITCH and B757_GAURD_12_SWITCH are the covers of the 1 BTL and 2 BTL cargo fire buttons: the vendor's template instances of B757_PED_1BTL_CARGOFIRE_BUTTON and B757_PED_2BTL_CARGOFIRE_BUTTON name them as their GUARD_NODE_ID (XML:15975 and 16013), so they read '1 BTL Cargo Fire Guard' and '2 BTL Cargo Fire Guard' after the buttons' own labels. The list has no row for either guard; the vendor's disabled earlier components tip them 'FWD CARGO' and 'AFT CARGO'.",
+    "B757_MCP_btn_autopilot_disengage: 0 Up, 1 Down. Its click flips its own var and passes it on to K:AUTOPILOT_DISENGAGE_SET ('if{ 1 (>K:AUTOPILOT_DISENGAGE_SET) } els{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }'), so 1 is the bar down, which disengages the autopilot, and 0 the bar up; its animation names no positions and the list has no row for it. BBS757_THRREF_CLICK (L:BBS757_THRREF_PULL): 0 In, 1 Pulled; the list: 'Manual EPR-reference mode', 1 = pulled/manual, 0 = pushed/manual off. B757_MCP_AP_SPD_HOLD_SW writes L:B757_MCP_IAS_MACH_KNOB_BUTTON, which the list calls the 'Speed intervention command' (write 1 to request it, 0 = idle): the push of the IAS/MACH knob, so it reads 'Speed Intervene', not 'AP SPD Hold'.",
+    "BBS757_FIREHANDLE1_CLICK3, the APU fire handle, is a toggle (kinds) on L:B757_APUFIRE_SWITCH, its pulled state, as the engine handles are on L:B757_ENGFIRE_1_SWITCH and _2_ (the list: 'Apufire switch', 0 = normal, 1 = fire handle pulled): 0 In, 1 Pulled. Its click writes 1 when the handle is unlocked (L:BBS757_FIREUNLOCK3) or the APU fire is active and 0 otherwise, a gate and not a flip, so the extractor read a momentary button with no state to show; the app now reads the handle before it presses. The 14 microphone selects, B757_PED_AUDIO_1_MIC_L_LIGHT to _INT_LIGHT and the seven of B757_PED_AUDIO_2_MIC_*_LIGHT, are buttons (kinds): a click sets that microphone to 1 and the panel's other six to 0, so a combo of Off and On could never reach Off. The list calls each a 'microphone selector' (0 = deselected, 1 = selected; 'a 0-to-1 transition selects the transmitter').",
     "BBS757_PEDESTAL_Park_Brake_Lever (L:B757_FC_PARK_BRAKE): 0 Released, 1 Set. A toggle whose click flips the var. measured (session 6): K:PARKING_BRAKES left the var at 1 while the stock BRAKE PARKING POSITION read 0. preset: 1 in cold and dark, before start, ready for taxi and ready for takeoff; 0 in turnaround and the four airborne states. unmeasured: releasing it with the lever click while PARKING BRAKE MODE is REALISTIC (that setting wants full pedal braking).",
     "BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK write 0, 10 and 100 to L:B757_FC_SPOILER_LEVER and keep no state of their own (buttons with a press only, replayed verbatim). measured (session 6): 10 is ARMED, 0 is down (K:SPOILERS_ARM_TOGGLE); all nine presets hold 0. unmeasured: 100 for UP (the click code only).",
     "ENGINE_Switch_ATDisc_1 is the left TO/GA button: its press writes L:GO_AROUND_PADDLE1 and fires K:AUTO_THROTTLE_TO_GA, its release clears the var, all replayed verbatim. B757_AT_DISC_1 is the A/T disconnect: press writes L:B757_AT_DISC_1 1, release 0. unmeasured in flight.",
@@ -596,8 +602,14 @@
     "B757_OVHD_HI_INT": "Wing Lights",
     "B757_OVHD_LOGO_BUTTON": "Logo Lights",
     "B757_CABIN_WORK_LT002": "Cabin Work Light",
-    "B757_OVHD_SWITCH_GAURD": "Passenger Oxygen Switch Guard",
+    "B757_OVHD_SWITCH_GAURD": "Emergency Lights Guard",
     "B757_OVHD_PASS_OXY_BUTTON": "Passenger Oxygen",
+    "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON": "R ELEC Pump",
+    "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON": "C1 ELEC Pump",
+    "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON": "C2 ELEC Pump",
+    "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON": "L ELEC Pump",
+    "B757_OVHD_XFEED_PUMPS_FWD_BUTTON": "Crossfeed FWD",
+    "B757_OVHD_XFEED_PUMPS_AFT_BUTTON": "Crossfeed Aft",
     "B757_OVHD_CABINALT_SWITCH": "Cabin Altitude",
     "B757_OVHD_AUTORATE_SWITCH": "Cabin Rate",
     "B757_OVHD_SEL_L_PACK_SWITCH": "L Pack Selector",
@@ -615,6 +627,7 @@
     "B757_MCP_SW_FD_FO": "F/O F/D",
     "B757_MCP_SW_AP_throttle": "A/T Arm",
     "BBS757_ALTSEL_CLICK": "ALT SEL Push",
+    "B757_MCP_AP_SPD_HOLD_SW": "Speed Intervene",
     "B757_MCP_btn_master_pilot": "Captain Master Warning and Caution",
     "B757_MCP_btn_master_copilot": "First Officer Master Warning and Caution",
     "B757_MCP_VORDME_1_BUTTON": "VOR/DME 1",
@@ -667,6 +680,8 @@
     "B757_PED_1BTL_CARGOFIRE_BUTTON": "1 BTL Cargo Fire",
     "B757_PED_2BTL_CARGOFIRE_BUTTON": "2 BTL Cargo Fire",
     "B757_PED_FIRE_WHLWELL_BUTTON": "Wheel Well Fire",
+    "B757_GAURD_11_SWITCH": "1 BTL Cargo Fire Guard",
+    "B757_GAURD_12_SWITCH": "2 BTL Cargo Fire Guard",
     "B757_AISLE_STAND_STAB_1_GAURD_SWITCH": "Stab Trim C Guard",
     "B757_AISLE_STAND_STAB_2_GAURD_SWITCH": "Stab Trim R Guard",
     "BBS_fuelcut_PW1": "L Fuel Control (PW)",
@@ -1091,7 +1106,36 @@
       "Air data test",
       "Neutral",
       "Stall warning test"
+    ],
+    "B757_MCP_btn_autopilot_disengage": [
+      "Up",
+      "Down"
+    ],
+    "BBS757_THRREF_CLICK": [
+      "In",
+      "Pulled"
+    ],
+    "BBS757_FIREHANDLE1_CLICK3": [
+      "In",
+      "Pulled"
     ]
+  },
+  "kinds": {
+    "BBS757_FIREHANDLE1_CLICK3": "toggle",
+    "B757_PED_AUDIO_1_MIC_L_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_C_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_R_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_LM_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_RR_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_PA_LIGHT": "button",
+    "B757_PED_AUDIO_1_MIC_INT_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_L_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_C_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_R_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_LM_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_RR_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_PA_LIGHT": "button",
+    "B757_PED_AUDIO_2_MIC_INT_LIGHT": "button"
   },
   "status": [
     {

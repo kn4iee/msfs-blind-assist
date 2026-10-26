@@ -575,7 +575,7 @@
    "node": "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
    "section": "Overhead",
    "panel": "Hydraulics",
-   "label": "R ENG ELEC Pumps",
+   "label": "R ELEC Pump",
    "kind": "toggle",
    "state_var": "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
    "positions": [
@@ -598,7 +598,7 @@
    "node": "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
    "section": "Overhead",
    "panel": "Hydraulics",
-   "label": "C Eng1 HYD Pumps",
+   "label": "C1 ELEC Pump",
    "kind": "toggle",
    "state_var": "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
    "positions": [
@@ -621,7 +621,7 @@
    "node": "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
    "section": "Overhead",
    "panel": "Hydraulics",
-   "label": "C Eng2 HYD Pumps",
+   "label": "C2 ELEC Pump",
    "kind": "toggle",
    "state_var": "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
    "positions": [
@@ -644,7 +644,7 @@
    "node": "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
    "section": "Overhead",
    "panel": "Hydraulics",
-   "label": "L ENG ELEC Pumps",
+   "label": "L ELEC Pump",
    "kind": "toggle",
    "state_var": "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
    "positions": [
@@ -690,7 +690,7 @@
    "node": "B757_OVHD_SWITCH_GAURD",
    "section": "Overhead",
    "panel": "Overhead miscellaneous",
-   "label": "Passenger Oxygen Switch Guard",
+   "label": "Emergency Lights Guard",
    "kind": "guard",
    "state_var": "B757_OVHD_SWITCH_GAURD",
    "positions": [
@@ -925,7 +925,7 @@
    "node": "B757_OVHD_XFEED_PUMPS_FWD_BUTTON",
    "section": "Overhead",
    "panel": "Fuel",
-   "label": "Xfeed Pumps FWD",
+   "label": "Crossfeed FWD",
    "kind": "toggle",
    "state_var": "B757_OVHD_XFEED_PUMPS_FWD_BUTTON",
    "positions": [
@@ -948,7 +948,7 @@
    "node": "B757_OVHD_XFEED_PUMPS_AFT_BUTTON",
    "section": "Overhead",
    "panel": "Fuel",
-   "label": "Xfeed Pumps Aft",
+   "label": "Crossfeed Aft",
    "kind": "toggle",
    "state_var": "B757_OVHD_XFEED_PUMPS_AFT_BUTTON",
    "positions": [
@@ -2720,11 +2720,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Off"
+     "label": "Up"
     },
     {
      "value": 1,
-     "label": "On"
+     "label": "Down"
     }
    ],
    "press": "(L:B757_MCP_btn_autopilot_disengage, bool) ! (>L:B757_MCP_btn_autopilot_disengage) (L:B757_MCP_btn_autopilot_disengage, bool) if{ 1 (>K:AUTOPILOT_DISENGAGE_SET) } els{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }",
@@ -2765,7 +2765,7 @@
    "node": "B757_MCP_AP_SPD_HOLD_SW",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "AP SPD Hold",
+   "label": "Speed Intervene",
    "kind": "button",
    "state_var": "B757_MCP_IAS_MACH_KNOB_BUTTON",
    "positions": [],
@@ -5476,11 +5476,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Off"
+     "label": "In"
     },
     {
      "value": 1,
-     "label": "On"
+     "label": "Pulled"
     }
    ],
    "press": "(L:BBS757_THRREF_PULL,bool) ! (>L:BBS757_THRREF_PULL,bool)",
@@ -5661,18 +5661,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic L Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5684,18 +5675,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic C Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5707,18 +5689,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic R Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5730,18 +5703,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic Lm Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5753,18 +5717,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic RR Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5776,18 +5731,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic PA Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -5799,18 +5745,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 1",
    "label": "Audio 1 Mic Int Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -6373,9 +6310,18 @@
    "section": "Pedestal",
    "panel": "Fire protection",
    "label": "APU Fire Handle",
-   "kind": "button",
+   "kind": "toggle",
    "state_var": "B757_APUFIRE_SWITCH",
-   "positions": [],
+   "positions": [
+    {
+     "value": 0,
+     "label": "In"
+    },
+    {
+     "value": 1,
+     "label": "Pulled"
+    }
+   ],
    "press": "(L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) 1 == and (L:BBS757_FIREUNLOCK3, bool) 1 == (L:B757_APU_FIRE_ACTIVE, bool) 1 == or if{ 1 (>L:B757_APUFIRE_SWITCH, bool) } els{ 0 (>L:B757_APUFIRE_SWITCH, bool) }",
    "release": null,
    "hold_ms": 0,
@@ -6459,7 +6405,7 @@
    "node": "B757_GAURD_11_SWITCH",
    "section": "Pedestal",
    "panel": "Fire protection",
-   "label": "Guard 11",
+   "label": "1 BTL Cargo Fire Guard",
    "kind": "guard",
    "state_var": "B757_GAURD_11_SWITCH",
    "positions": [
@@ -6496,7 +6442,7 @@
    "node": "B757_GAURD_12_SWITCH",
    "section": "Pedestal",
    "panel": "Fire protection",
-   "label": "Guard 12",
+   "label": "2 BTL Cargo Fire Guard",
    "kind": "guard",
    "state_var": "B757_GAURD_12_SWITCH",
    "positions": [
@@ -7141,18 +7087,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic L Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7164,18 +7101,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic C Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7187,18 +7115,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic R Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7210,18 +7129,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic Lm Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7233,18 +7143,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic RR Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7256,18 +7157,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic PA Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
@@ -7279,18 +7171,9 @@
    "section": "Pedestal",
    "panel": "Audio panel 2",
    "label": "Audio 2 Mic Int Light",
-   "kind": "select",
+   "kind": "button",
    "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
+   "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,

@@ -9,6 +9,7 @@ Run from the repo root, any of:
     python -m unittest tools/b757-gen/test_generate_b757_map.py        (without -I: -I leaves the hyphenated
                                                                          folder off the import path)
 """
+import collections
 import contextlib
 import copy
 import io
@@ -53,6 +54,7 @@ CURATION = {
     "control_order": {},
     "labels": {},
     "positions": {},
+    "kinds": {},
     "spelling": {"CENTRE": "Center"},
     "status": [],
 }
@@ -62,6 +64,19 @@ def curation(**changes):
     c = copy.deepcopy(CURATION)
     c.update(changes)
     return c
+
+
+# The APU fire handle writes 1 (pulled) when unlocked or on fire and 0 otherwise: a gate, not a flip, so the extractor
+# reads a momentary button with no positions, although the handle keeps its own state in L:B757_APUFIRE_SWITCH.
+APU_HANDLE_PRESS = ("(L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) 1 == and (L:BBS757_FIREUNLOCK3, bool) 1 == "
+                    "(L:B757_APU_FIRE_ACTIVE, bool) 1 == or if{ 1 (>L:B757_APUFIRE_SWITCH, bool) } "
+                    "els{ 0 (>L:B757_APUFIRE_SWITCH, bool) }")
+
+
+def apu_fire_handle_row():
+    return row(node="BBS757_FIREHANDLE1_CLICK3", kind="momentary button", positions="-",
+               panel="PEDESTAL GAURD SWITCH GEAR", state=["L:B757_APUFIRE_SWITCH"],
+               tips=["Pull APU Fire Switch", "Reset Engine 2 Fire Switch"], left=APU_HANDLE_PRESS)
 
 
 class Humanize(unittest.TestCase):
@@ -433,6 +448,58 @@ class Convert(unittest.TestCase):
         with self.assertRaisesRegex(g.CurationError, "writes 3 .* outside its positions"):
             self.convert(r, reset_at(2))
 
+    # Plan 02, task 2: `kinds` corrects how the extractor read a control it keeps. The click code stays the vendor's.
+    def test_a_curated_kind_turns_a_momentary_button_into_a_toggle_on_its_own_state(self):
+        node, r = "BBS757_FIREHANDLE1_CLICK3", apu_fire_handle_row()
+
+        c, _ = self.convert(r)
+        self.assertEqual((c["kind"], c["state_var"], c["positions"]), ("button", "B757_APUFIRE_SWITCH", []))
+
+        c, why = self.convert(r, curation(kinds={node: "toggle"}, positions={node: ["In", "Pulled"]}))
+
+        self.assertIsNone(why)
+        self.assertEqual((c["kind"], c["state_var"], c["release"], c["cw"], c["ccw"]),
+                         ("toggle", "B757_APUFIRE_SWITCH", None, None, None))
+        self.assertEqual([(p["value"], p["label"]) for p in c["positions"]], [(0, "In"), (1, "Pulled")])
+        self.assertEqual(c["press"], APU_HANDLE_PRESS, "the vendor's click code is replayed verbatim")
+
+    def test_a_toggle_made_by_curation_still_needs_a_state_var_and_keeps_the_safety_net(self):
+        node = "BBS757_FIREHANDLE1_CLICK3"
+        r = apu_fire_handle_row()
+        r["_state"] = ["O:_AnimProgress"]
+        c, why = self.convert(r, curation(kinds={node: "toggle"}))
+        self.assertEqual((c, why), (None, "state is not an L:var"))
+        # a value the click code writes that the positions do not list still stops the run
+        cur = curation(kinds={node: "toggle"}, positions={node: [{"value": 0, "label": "In"}, {"value": 2, "label": "Pulled"}]})
+        with self.assertRaisesRegex(g.CurationError, "writes 1 .* outside its positions"):
+            self.convert(apu_fire_handle_row(), cur)
+
+    def test_a_curated_kind_turns_a_select_into_a_button_with_no_positions(self):
+        # The audio mic selects: a press clears every microphone of the panel and sets this one, so "Off" can never be
+        # picked and a combo of Off and On promises what the control cannot do. A button is pressed and says so.
+        node = "B757_PED_AUDIO_1_MIC_L_LIGHT"
+        press = " ".join(f"0 (>L:B757_PED_AUDIO_1_MIC_{m}_LIGHT, bool)" for m in ("L", "C", "R", "LM", "RR", "PA", "INT")) \
+            + f" 1 (>L:{node}, bool)"
+        r = row(node=node, kind="select button", positions="-", panel="INDIVIDUAL AUDIO/RADIO PANELS",
+                state=["L:" + node], left=press)
+
+        c, _ = self.convert(r)
+        self.assertEqual((c["kind"], [p["label"] for p in c["positions"]]), ("select", ["Off", "On"]))
+
+        c, why = self.convert(r, curation(kinds={node: "button"}))
+
+        self.assertIsNone(why)
+        self.assertEqual((c["kind"], c["state_var"], c["positions"], c["release"]), ("button", node, [], None))
+        self.assertEqual(c["press"], press)
+
+    def test_a_curated_kind_never_rescues_a_control_the_rules_drop(self):
+        node = "B757_PED_LEVER"
+        cur = curation(kinds={node: "button"})
+        self.assertEqual(self.convert(row(node=node, kind="lever", positions="", left="1 (>L:X)"), cur), (None, "lever"))
+        self.assertEqual(self.convert(row(node=node, kind="toggle", left="(L:X) ! (>L:X)"),
+                                      curation(kinds={node: "button"}, exclude_nodes=[node])),
+                         (None, "excluded node"))
+
 
 class SuspectedSlips(unittest.TestCase):
     def test_a_set_without_its_variable_type_is_suspected(self):
@@ -572,7 +639,7 @@ class WholeMap(unittest.TestCase):
 
     def test_an_override_or_exclusion_for_a_node_not_in_the_package_is_an_error(self):
         for key, value in (("labels", {"B757_NO_SUCH_NODE": "Ghost"}), ("positions", {"B757_NO_SUCH_NODE": ["a"]}),
-                           ("exclude_nodes", ["B757_NO_SUCH_NODE"])):
+                           ("kinds", {"B757_NO_SUCH_NODE": "button"}), ("exclude_nodes", ["B757_NO_SUCH_NODE"])):
             with self.subTest(key=key):
                 with self.assertRaises(g.CurationError):
                     self.build(cur=curation(**{key: value}))
@@ -580,6 +647,23 @@ class WholeMap(unittest.TestCase):
     def test_an_override_for_a_node_that_was_dropped_is_not(self):
         m, report = self.build(cur=curation(labels={"A2_CB": "Breaker"}))
         self.assertEqual(report["overrides_on_dropped"], ["A2_CB"])
+        m, report = self.build(cur=curation(kinds={"A2_CB": "button"}))
+        self.assertEqual(report["overrides_on_dropped"], ["A2_CB"])
+
+    def test_a_curated_kind_changes_the_control_and_only_that_control(self):
+        m, _ = self.build(cur=curation(kinds={"B757_OVHD_LIGHT_BUTTON": "button"}))
+        by_node = {c["node"]: c for c in m["controls"]}
+        self.assertEqual((by_node["B757_OVHD_LIGHT_BUTTON"]["kind"], by_node["B757_OVHD_LIGHT_BUTTON"]["positions"]),
+                         ("button", []))
+        self.assertEqual(by_node["B757_OVHD_BATTERY_BUTTON"]["kind"], "toggle")  # untouched
+        self.assertEqual(by_node["B757_MCP_SPD_BUTTON"]["kind"], "button")
+
+    def test_a_curated_kind_the_control_already_has_does_nothing_so_it_is_an_error(self):
+        # An entry that changes nothing is a stale one: it would go on claiming a fix BlueBird's own code now makes.
+        with self.assertRaisesRegex(g.CurationError, "does nothing"):
+            self.build(cur=curation(kinds={"B757_OVHD_BATTERY_BUTTON": "toggle"}))
+        with self.assertRaisesRegex(g.CurationError, "does nothing"):
+            self.build(cur=curation(kinds={"B757_MCP_SPD_BUTTON": "button"}))
 
     def test_a_banner_with_no_panel_name_is_reported(self):
         rows = [row(node="B757_OVHD_X_BUTTON", panel="NEW VENDOR PANEL", left="x"),
@@ -892,6 +976,21 @@ class Curation(unittest.TestCase):
                 with self.assertRaises(g.CurationError):
                     g.load_curation(self.write(data))
 
+    def test_the_kinds_key_loads_as_a_dict_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["kinds"], {})
+        c = g.load_curation(self.write({"kinds": {"B757_X": "button", "B757_Y": "toggle"}}))
+        self.assertEqual(c["kinds"], {"B757_X": "button", "B757_Y": "toggle"})
+
+    def test_a_kind_curation_may_only_name_toggle_or_button(self):
+        # Only these two are built entirely by what the generator already does for them: a switch needs its values and
+        # a guard its cover; a kind it cannot build is refused when the file loads, never half-applied.
+        for data in ({"kinds": ["B757_X"]}, {"kinds": {"B757_X": "switch"}}, {"kinds": {"B757_X": "guard"}},
+                     {"kinds": {"B757_X": "select"}}, {"kinds": {"B757_X": "held"}}, {"kinds": {"B757_X": "lever"}},
+                     {"kinds": {"B757_X": None}}, {"kinds": {"B757_X": 1}}):
+            with self.subTest(data=data):
+                with self.assertRaises(g.CurationError):
+                    g.load_curation(self.write(data))
+
     def test_the_shipped_curation_loads(self):
         c = g.load_curation(g.DEFAULT_CURATION)
         for banner in ("CB OVERHEAD PANEL", "ADDING L VARS for CDU switches", "FO CDU CODE", "COCKPIT CAPTAIN CHAIR",
@@ -1137,6 +1236,145 @@ class Curation(unittest.TestCase):
                 numbered[node] = hits
         self.assertEqual(numbered, {"B757_VC_P61_SWITCH_5": ["Position 0", "Position 2"]})
 
+    # Plan 02, task 2: the labels, kinds and positions that match the cockpit, by node. Each row has the shape the
+    # extractor gives the vendor's own control (banner, tips, state var and click code as in BBS_752_BASE_INTERIOR.xml)
+    # and is converted with the SHIPPED curation. node -> (label, kind, [(value, label)]).
+    OFF_ON = [(0, "Off"), (1, "On")]
+    CLOSED_OPEN = [(0, "Closed"), (1, "Open")]
+    LABEL_CORRECTIONS = {
+        # the guard over the emergency lights switch (BBS_B757_EMERGENCY_LIGHTS_COMPONENT), not the passenger oxygen
+        "B757_OVHD_SWITCH_GAURD": ("Emergency Lights Guard", "guard", CLOSED_OPEN),
+        # the hydraulic panel: two engine pumps, and the four electric pumps (the vendor's names for the center pair say
+        # ENG1 and ENG2 and HYD, and for the side pair ENG ELEC)
+        "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON": ("L ENG HYD Pumps", "toggle", OFF_ON),
+        "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON": ("R ENG HYD Pumps", "toggle", OFF_ON),
+        "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON": ("R ELEC Pump", "toggle", OFF_ON),
+        "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON": ("C1 ELEC Pump", "toggle", OFF_ON),
+        "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON": ("C2 ELEC Pump", "toggle", OFF_ON),
+        "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON": ("L ELEC Pump", "toggle", OFF_ON),
+        # the crossfeed valves (the vendor's names and tips say pumps)
+        "B757_OVHD_XFEED_PUMPS_FWD_BUTTON": ("Crossfeed FWD", "toggle", OFF_ON),
+        "B757_OVHD_XFEED_PUMPS_AFT_BUTTON": ("Crossfeed Aft", "toggle", OFF_ON),
+        # the guards of the two cargo fire bottle buttons (LVAR_DOWN of their template instances)
+        "B757_GAURD_11_SWITCH": ("1 BTL Cargo Fire Guard", "guard", CLOSED_OPEN),
+        "B757_GAURD_12_SWITCH": ("2 BTL Cargo Fire Guard", "guard", CLOSED_OPEN),
+        "B757_MCP_btn_autopilot_disengage": ("Autopilot Disengage Bar", "toggle", [(0, "Up"), (1, "Down")]),
+        "BBS757_THRREF_CLICK": ("Thrust Ref Pull", "toggle", [(0, "In"), (1, "Pulled")]),
+        "B757_MCP_AP_SPD_HOLD_SW": ("Speed Intervene", "button", []),
+        # a toggle on the pulled state, as the engine handles are, so the generic path reads it before it presses
+        "BBS757_FIREHANDLE1_CLICK3": ("APU Fire Handle", "toggle", [(0, "In"), (1, "Pulled")]),
+    }
+
+    def correction_rows(self):
+        def flip(var):
+            return f"(L:{var},bool) ! (>L:{var},bool)"
+
+        def toggle(node, banner, tips):
+            return row(node=node, kind="toggle", positions="2", panel=banner, state=["L:" + node], tips=list(tips),
+                       left=flip(node))
+
+        def guard(node, banner, left, covers=None):
+            return row(node=node, kind="guard", positions="2", panel=banner, state=["L:" + node], left=left,
+                       scope={"LVAR_DOWN": covers} if covers else None)
+
+        emergency = "B757_OVHD_SWITCH_GAURD"
+        rows = {
+            emergency: guard(emergency, "LIGHT OVERRIDE",
+                             f"(L:{emergency}, bool) ! (>L:{emergency}, bool) (L:{emergency}, bool) 0 == "
+                             f"if{{ 1 (>L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK, number) }}"),
+        }
+        for node, tips in (("B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", ("L ENG PUMP OFF", "L ENG PUMPS ON")),
+                           ("B757_OVHD_R_ENG_HYD_PUMPS_BUTTON", ("R ENG PUMP OFF", "R ENG PUMPS ON")),
+                           ("B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", ("R ENG ELEC OFF", "R ENG ELEC ON")),
+                           ("B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", ("C ENG1 PUMP OFF", "C ENG1 PUMPS ON")),
+                           ("B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", ("C ENG2 PUMP OFF", "C ENG2 PUMPS ON")),
+                           ("B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON", ("L ENG ELEC OFF", "L ENG ELEC ON"))):
+            rows[node] = toggle(node, "HYDRAULIC PANEL", tips)
+        for side in ("FWD", "AFT"):
+            node = f"B757_OVHD_XFEED_PUMPS_{side}_BUTTON"
+            rows[node] = toggle(node, "FUEL PANEL", (f"XFEED PUMP {side} OFF", f"XFEED PUMP {side} ON"))
+        for node, covers in (("B757_GAURD_11_SWITCH", "B757_PED_1BTL_CARGOFIRE_BUTTON"),
+                             ("B757_GAURD_12_SWITCH", "B757_PED_2BTL_CARGOFIRE_BUTTON")):
+            rows[node] = guard(node, "PEDESTAL GAURD SWITCH GEAR", f"(L:{node}, bool) ! (>L:{node}, bool)", covers)
+        node = "B757_MCP_btn_autopilot_disengage"
+        rows[node] = row(node=node, kind="toggle", positions="2", panel="AP MASTER DISCONNECT", state=["L:" + node],
+                         left=f"(L:{node}, bool) ! (>L:{node}) (L:{node}, bool) if{{ 1 (>K:AUTOPILOT_DISENGAGE_SET) }} "
+                              f"els{{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }}")
+        node = "BBS757_THRREF_CLICK"
+        rows[node] = row(node=node, kind="toggle", positions="2", state=["L:BBS757_THRREF_PULL"],
+                         panel="EICAS KEY FUNCTIONS - FORWARD ONLY - EXCLUDE CRT BRIGHTNESS",
+                         left="(L:BBS757_THRREF_PULL,bool) ! (>L:BBS757_THRREF_PULL,bool)")
+        node = "B757_MCP_AP_SPD_HOLD_SW"
+        rows[node] = row(node=node, kind="momentary button", positions="-", panel="(after DOOR CODE)",
+                         state=["L:B757_MCP_IAS_MACH_KNOB_BUTTON"], left="1 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
+                         release="0 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)")
+        rows["BBS757_FIREHANDLE1_CLICK3"] = apu_fire_handle_row()
+        return rows
+
+    MIC_CHANNELS = ("L", "C", "R", "LM", "RR", "PA", "INT")
+
+    def mic_select_rows(self):
+        """The fourteen audio mic selects, seven to a panel: a press clears the panel's seven and sets this one."""
+        rows = {}
+        for panel in (1, 2):
+            var = {ch: f"B757_PED_AUDIO_{panel}_MIC_{ch}_LIGHT" for ch in self.MIC_CHANNELS}
+            for ch in self.MIC_CHANNELS:
+                press = " ".join(f"0 (>L:{v}, bool)" for v in var.values()) + f" 1 (>L:{var[ch]}, bool)"
+                rows[var[ch]] = row(node=var[ch], kind="select button", positions="-", state=["L:" + var[ch]],
+                                    panel="INDIVIDUAL AUDIO/RADIO PANELS", left=press)
+        return rows
+
+    def test_label_corrections(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        rows = self.correction_rows()
+
+        self.assertEqual(set(rows), set(self.LABEL_CORRECTIONS))
+        for node, expected in self.LABEL_CORRECTIONS.items():
+            with self.subTest(node=node):
+                control, why, _ = g.convert_row(rows[node], c)
+                self.assertIsNone(why)
+                self.assertEqual((control["label"], control["kind"], [(p["value"], p["label"]) for p in control["positions"]]),
+                                 expected)
+                self.assertEqual(control["press"], rows[node]["_clicks"]["left"][0][1], "the click code is the vendor's")
+        # a label never moves a control: the electric pumps keep the order the preflight flow wants, right, center, left
+        self.assertEqual(c["control_order"]["Hydraulics"],
+                         ["B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
+                          "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
+                          "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON"])
+        # each mic select is a button on its own state var: pressing selects it and clears the others
+        mics = self.mic_select_rows()
+        self.assertEqual(len(mics), 14)
+        for node, r in mics.items():
+            with self.subTest(node=node):
+                control, why, _ = g.convert_row(r, c)
+                self.assertIsNone(why)
+                self.assertEqual((control["kind"], control["state_var"], control["positions"], control["release"]),
+                                 ("button", node, [], None))
+                self.assertEqual(control["press"], r["_clicks"]["left"][0][1], "the click code is the vendor's")
+
+    def test_labels_unique_per_panel(self):
+        # [VAR-1]. The generator numbers a repeat ("L ELEC Pump 2") instead of stopping, so a clash would reach the pilot
+        # as a name that means nothing: no corrected control may need a number, and the six hydraulic pumps, which share
+        # one panel, read six different names.
+        c = g.load_curation(g.DEFAULT_CURATION)
+        rows = list(self.correction_rows().values())
+        for pump in ("L_PUMPS_FWD", "L_PUMPS_AFT", "R_PUMPS_FWD", "R_PUMPS_AFT", "C_PUMPS_L", "C_PUMPS_R"):
+            node = f"B757_OVHD_{pump}_BUTTON"
+            rows.append(row(node=node, kind="toggle", panel="FUEL PANEL", left=f"(L:{node},bool) ! (>L:{node},bool)"))
+        controls = [g.convert_row(r, c)[0] for r in rows]
+        before = [(x["node"], x["label"]) for x in controls]
+
+        g.unique_labels(controls)
+
+        self.assertEqual([(x["node"], x["label"]) for x in controls], before, "a repeated label was numbered")
+        repeats = [k for k, n in collections.Counter((x["section"], x["panel"], x["label"]) for x in controls).items() if n > 1]
+        self.assertEqual(repeats, [])
+        hydraulics = [x["label"] for x in controls if (x["section"], x["panel"]) == ("Overhead", "Hydraulics")]
+        self.assertEqual(sorted(hydraulics), sorted(["L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump",
+                                                     "C2 ELEC Pump", "L ELEC Pump"]))
+        fuel = [x["label"] for x in controls if (x["section"], x["panel"]) == ("Overhead", "Fuel")]
+        self.assertEqual(len(fuel), 8)
+
     def test_the_overhead_ignition_selector_is_labelled_ignition(self):
         # The overhead ignition selector's node says ENG START; it selects the igniters (the vendor's tooltip
         # 'Engine Ignitors'), and the panel's other two rows are the L and R ENG Start selectors.
@@ -1178,6 +1416,20 @@ class Curation(unittest.TestCase):
         self.assertIn("Position names from BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked "
                       "against source 2026-10-21), read 2026-10-25.", data["_notes"])
 
+    def test_each_label_and_kind_correction_has_its_evidence_in_the_notes(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = "\n".join(json.load(fh)["_notes"])
+        for node in ("B757_OVHD_SWITCH_GAURD", "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
+                     "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
+                     "B757_OVHD_XFEED_PUMPS_FWD_BUTTON", "B757_OVHD_XFEED_PUMPS_AFT_BUTTON", "B757_GAURD_11_SWITCH",
+                     "B757_GAURD_12_SWITCH", "B757_MCP_btn_autopilot_disengage", "BBS757_THRREF_CLICK",
+                     "B757_MCP_AP_SPD_HOLD_SW", "BBS757_FIREHANDLE1_CLICK3", "B757_PED_AUDIO_1_MIC_", "B757_PED_AUDIO_2_MIC_"):
+            with self.subTest(node=node):
+                self.assertIn(node, notes)
+        # the key that makes the two kind changes is explained where the other keys are
+        self.assertRegex(notes, r"kinds: node -> toggle or button")
+        self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
+
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.
     PANEL_ORDER = {
@@ -1200,10 +1452,10 @@ class Curation(unittest.TestCase):
     CONTROL_ORDER_LABELS = {
         "Electrical": ["Battery", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont", "R Gen Cont", "APU Gen",
                        "EXT PWR", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
-        "Hydraulics": ["L ENG HYD Pumps", "R ENG HYD Pumps", "R ENG ELEC Pumps", "C Eng1 HYD Pumps",
-                       "C Eng2 HYD Pumps", "L ENG ELEC Pumps"],
+        "Hydraulics": ["L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump",
+                       "L ELEC Pump"],
         "Fuel": ["L Pumps FWD", "L Pumps Aft", "R Pumps FWD", "R Pumps Aft", "C Pumps L", "C Pumps R",
-                 "Xfeed Pumps FWD", "Xfeed Pumps Aft"],
+                 "Crossfeed FWD", "Crossfeed Aft"],
         "Exterior lights": ["Anti-col Red Lights", "Position Lights", "Anti-col White Lights", "Taxi Light",
                             "L Landing Light", "R Landing Light", "L Runway Turnoff", "R Runway Turnoff", "Wing Lights",
                             "Logo Lights"],
@@ -1214,7 +1466,7 @@ class Curation(unittest.TestCase):
         "Engine control and yaw damper": ["L Yaw Damper", "R Yaw Damper", "L ELEC ENG Cont", "R ELEC ENG Cont"],
         "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "THR", "SPD", "LNAV", "VNAV", "FLCH", "HDG SEL", "HDG HOLD", "V/S",
                 "ALT HOLD", "LOC", "APP", "CMD L", "CMD C", "CMD R", "Autopilot Disengage Bar", "IAS/MACH",
-                "ALT SEL Push", "AP SPD Hold", "Bank Limit", "BCRS 1"],
+                "ALT SEL Push", "Speed Intervene", "Bank Limit", "BCRS 1"],
         "Main panel switches": ["Autobrake", "Takeoff Check", "TOGA", "CLB", "CON", "CRZ", "TMSP 1", "TMSP 2",
                                 "HDG Ref", "Cancel", "Recall"],
         "Control stand": ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "TO/GA",
