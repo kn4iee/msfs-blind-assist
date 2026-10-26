@@ -478,6 +478,48 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
+    public void The_flight_deck_door_switch_keeps_no_click_code_and_goes_straight_to_the_pick()
+    {
+        const string stateVar = "B757_OVHD_FLT_DK_DOOR_SWITCH";
+        Bbs757Control door = Find("B757_OVHD_FLT-DK-DOOR_SWITCH");
+
+        // A spring-return lever. The vendor's cw and ccw write 2 and 0 whatever it reads (BBS_752_BASE_INTERIOR.xml:6698-6705),
+        // so a step to Auto from either end landed on the other end. The map holds none of that code (ruling R12) and the
+        // app writes the state var; BlueBird's own 1 Hz update (XML:6684-6687) still springs it back to Auto, as after a click.
+        Assert.Equal(stateVar, door.StateVar);
+        Assert.Equal(Bbs757Kinds.Switch, door.Kind);
+        Assert.Equal("0=Unlocked|1=Auto|2=Deny", Spell(door));
+        Assert.Null(door.Press);
+        Assert.Null(door.Release);
+        Assert.Null(door.Cw);
+        Assert.Null(door.Ccw);
+
+        IReadOnlyList<string> Writes(double? current, double target)
+        {
+            Bbs757WritePlan plan = Bbs757Write.ToPosition(door, current, target);
+            Assert.Equal(Bbs757WriteOutcome.Writes, plan.Outcome);
+            return plan.Calls;
+        }
+
+        // Every pick is one absolute write of the picked value. The two the vendor's code missed are Auto from either end.
+        Assert.Equal(new[] { $"1 (>L:{stateVar})" }, Writes(2, 1));   // Deny to Auto
+        Assert.Equal(new[] { $"1 (>L:{stateVar})" }, Writes(0, 1));   // Unlocked to Auto
+        Assert.Equal(new[] { $"2 (>L:{stateVar})" }, Writes(1, 2));   // Auto to Deny
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, Writes(1, 0));   // Auto to Unlocked
+        Assert.Equal(new[] { $"2 (>L:{stateVar})" }, Writes(0, 2));   // Unlocked to Deny
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, Writes(2, 0));   // Deny to Unlocked
+        // The same writes under a comma-decimal culture (CI runs under en-US): the write is built with the invariant one.
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+        {
+            Assert.Equal(new[] { $"1 (>L:{stateVar})" }, TestCulture.Run(culture, () => Writes(2, 1)));
+            Assert.Equal(new[] { $"2 (>L:{stateVar})" }, TestCulture.Run(culture, () => Writes(0, 2)));
+        }
+        // A switch already at its pick is left alone, and a value that is no position is never picked.
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(door, 1, 1).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(door, 1, 3).Outcome);
+    }
+
+    [Fact]
     public void No_position_reads_Position_n_except_the_unpublished()
     {
         // One control keeps numbered positions because no source names them: the Duct Leak Fuel Qty test switch (its

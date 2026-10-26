@@ -1113,6 +1113,19 @@ class DirectWrite(unittest.TestCase):
               ET_FO: "FISRT OFFICER CHRONOMETER", SET_FO: "FISRT OFFICER CHRONOMETER"}
     CLICK_FIELDS = ("press", "release", "cw", "ccw")
     RUN_HOLD_RESET = [{"value": 0, "label": "RUN"}, {"value": 1, "label": "HOLD"}, {"value": 3, "label": "RESET"}]
+    # Ruling R12: the flight deck door switch is a spring-return lever (BBS_752_BASE_INTERIOR.xml:6683-6705). Its clockwise
+    # code writes 2 and its anticlockwise code writes 0, whatever it reads, and each stamps the O:var the component's own
+    # 1 Hz update counts from to spring the lever back to 1 (XML:6684-6687). So a step to Auto from either end lands on the
+    # other end, and a direct write takes every pick.
+    DOOR, DOOR_VAR = "B757_OVHD_FLT-DK-DOOR_SWITCH", "B757_OVHD_FLT_DK_DOOR_SWITCH"
+    DOOR_CW = f"2 (>L:{DOOR_VAR}) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)"
+    DOOR_CCW = f"0 (>L:{DOOR_VAR}) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)"
+    UNLOCKED_AUTO_DENY = [{"value": 0, "label": "Unlocked"}, {"value": 1, "label": "Auto"}, {"value": 2, "label": "Deny"}]
+
+    def door_row(self):
+        """The flight deck door switch as the extractor reads the vendor's: a finite knob with its three tips."""
+        return row(node=self.DOOR, kind="rotary knob finite", positions="3", panel="FDAS", state=["L:" + self.DOOR_VAR],
+                   tips=["UNLOCKED", "AUTO", "DENY"], cw=self.DOOR_CW, ccw=self.DOOR_CCW)
 
     @staticmethod
     def et_codes(var):
@@ -1168,7 +1181,7 @@ class DirectWrite(unittest.TestCase):
 
     def test_chrono_et_writes_its_state_directly(self):
         c, rows = g.load_curation(g.DEFAULT_CURATION), self.rows()
-        self.assertEqual(c["direct_write"], [self.ET, self.ET_FO])
+        self.assertEqual(c["direct_write"][:2], [self.ET, self.ET_FO])
         for node, panel in ((self.ET, "Captain chronometer"), (self.ET_FO, "First officer chronometer")):
             with self.subTest(node=node):
                 control, why, slips = g.convert_row(rows[node], c)
@@ -1199,6 +1212,44 @@ class DirectWrite(unittest.TestCase):
             x = embedded[node]
             self.assertEqual((x["kind"], x["state_var"], x["positions"], [x[f] for f in self.CLICK_FIELDS]),
                              ("switch", self.VAR[node], self.RUN_HOLD_RESET, [None] * 4), node)
+
+    def test_the_flight_deck_door_switch_writes_its_state_directly(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        self.assertEqual(c["direct_write"], [self.ET, self.ET_FO, self.DOOR])
+
+        control, why, slips = g.convert_row(self.door_row(), c)
+
+        self.assertIsNone(why)
+        self.assertEqual(control, {
+            "node": self.DOOR, "section": "Overhead", "panel": "Flight deck door", "label": "Flight Deck Door",
+            "kind": "switch", "state_var": self.DOOR_VAR, "positions": self.UNLOCKED_AUTO_DENY,
+            "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None})
+        self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
+        # The entry changes the click code and nothing else: without it the same row keeps the vendor's own code, verbatim.
+        plain, _, _ = g.convert_row(self.door_row(), dict(c, direct_write=[]))
+        self.assertEqual([plain[f] for f in self.CLICK_FIELDS], [None, None, self.DOOR_CW, self.DOOR_CCW])
+        self.assertEqual({k: v for k, v in plain.items() if k not in self.CLICK_FIELDS},
+                         {k: v for k, v in control.items() if k not in self.CLICK_FIELDS})
+        # the map the app embeds: the state var and the three positions, and no click code
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            embedded = {x["node"]: x for x in json.load(fh)["controls"]}
+        x = embedded[self.DOOR]
+        self.assertEqual((x["kind"], x["state_var"], x["positions"], [x[f] for f in self.CLICK_FIELDS]),
+                         ("switch", self.DOOR_VAR, self.UNLOCKED_AUTO_DENY, [None] * 4))
+
+    def test_a_write_to_an_o_var_beside_the_state_var_does_not_stop_direct_write(self):
+        # An O:var is component-local, and the sim's calculator cannot set one (spec 3.7 #6: the fire handle relock runs on
+        # O:vars it cannot set), so the app's replay of the click never performed that write either: leaving it out loses
+        # nothing the app could do. The run builds the control and names what it left out, as for any direct-write control.
+        m, report = self.build([self.door_row()], direct_write=[self.ET, self.ET_FO, self.DOOR])
+        by_node = {x["node"]: x for x in m["controls"]}
+
+        self.assertEqual([by_node[self.DOOR][f] for f in self.CLICK_FIELDS], [None] * 4)
+        self.assertEqual(report["direct_write"][self.DOOR], "cw, ccw left out")
+        self.assertEqual(report["suspected_slips"], {})
+        # the same row without the entry keeps the vendor's code, the O: write included
+        plain, _ = self.build([self.door_row()], direct_write=[self.ET, self.ET_FO])
+        self.assertEqual({x["node"]: x for x in plain["controls"]}[self.DOOR]["cw"], self.DOOR_CW)
 
     def test_every_click_field_is_left_out_whichever_slot_the_vendor_used(self):
         # press and release as well as cw and ccw: a switch that cycles on a click and springs back to 1 on release
@@ -1317,8 +1368,10 @@ class DirectWrite(unittest.TestCase):
                     self.build([r], direct_write=[self.ET, node])
 
     def test_direct_write_stops_on_a_click_that_writes_more_than_its_state_var(self):
-        # The premise of leaving the click code out: it writes nothing but the lever's own L:var. A BlueBird update that adds
-        # a write (another L:var, a K: or an H: event) stops the run, since the app would no longer run it.
+        # The premise of leaving the click code out: it writes nothing but the lever's own L:var (and at most O:vars: the
+        # sim's calculator cannot set those, see test_a_write_to_an_o_var_beside_the_state_var_does_not_stop_direct_write).
+        # A BlueBird update that adds a write (another L:var, a K: or an H: event) stops the run, since the app would no
+        # longer run it, and an O: write beside it does not make it pass.
         node, var = self.ET, self.VAR[self.ET]
         cw, ccw = self.et_codes(var)
 
@@ -1331,6 +1384,9 @@ class DirectWrite(unittest.TestCase):
             ("a K: event", " 1 (>K:AUTOPILOT_OFF)", "K:AUTOPILOT_OFF"),
             ("an H: event", " (>H:BBS_SOME_EVENT)", "H:BBS_SOME_EVENT"),
             ("two writes", " 1 (>L:BBS_SOME_OTHER_VAR) 1 (>K:AUTOPILOT_OFF)", "K:AUTOPILOT_OFF, L:BBS_SOME_OTHER_VAR"),
+            # the O: write is let through, so it is not named: only what the app could have run and no longer does
+            ("another L:var beside an O: write", " (>O:UpdateTime) 1 (>L:BBS_SOME_OTHER_VAR)", "L:BBS_SOME_OTHER_VAR"),
+            ("a K: event beside an O: write", " (>O:UpdateTime) 1 (>K:AUTOPILOT_OFF)", "K:AUTOPILOT_OFF"),
         ]
         for what, extra, named in cases:
             for field, r in (("cw", lever(cw_code=cw + extra)), ("ccw", lever(ccw_code=ccw + extra))):
@@ -1341,6 +1397,10 @@ class DirectWrite(unittest.TestCase):
                         self.build([r])
         # more writes of the lever's own var are no side effect: the app writes that var
         self.build([lever(cw_code=cw + f" 0 (>L:{var}, enum)")])
+        # nor is an O: write, on either code: it is component-local and the calculator cannot set it
+        self.build([lever(cw_code=cw + " (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)", ccw_code=ccw + " 1 (>O:Other, bool)")])
+        # nor is a read of anything: only a write is lost
+        self.build([lever(cw_code=cw + " (E:ABSOLUTE TIME, seconds) (L:BBS_SOME_OTHER_VAR) (O:BBS_LOCAL) +")])
 
     def test_direct_write_refuses_a_node_that_is_also_under_kinds(self):
         # kinds keeps a control's click code verbatim ("only the kind changes") and direct_write leaves it out: a node under
@@ -2599,7 +2659,9 @@ class Curation(unittest.TestCase):
                      "B757_Stab_trim_R_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
                      "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
                      # plan 02 task 4: the chronometer ET levers whose click code the map leaves out
-                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_ET_SWITCH_FO"):
+                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_ET_SWITCH_FO",
+                     # plan 02 task 6 (ruling R12): the flight deck door switch, left out the same way
+                     "B757_OVHD_FLT-DK-DOOR_SWITCH"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
         # the keys that make the kind changes, guard the switches and leave out a click code are explained where the other
@@ -2608,6 +2670,13 @@ class Curation(unittest.TestCase):
         self.assertRegex(notes, r"guarded: node -> \{state_var, positions, guard, guard_closed, close_sets\}")
         self.assertRegex(notes, r"direct_write: list of nodes whose vendor click code the map leaves out")
         self.assertRegex(notes, r"PLAN 02 TASK 4 .*B757_MAIN_CHRONO_ET_SWITCH_FO are direct_write")
+        # the door switch: why a direct write (absolute cw and ccw), why its own spring-back still works (the 1 Hz update),
+        # why an O: write may be left out (the calculator cannot set one), and whose the presentation is
+        self.assertRegex(notes, r"PLAN 02 TASK 6 .*B757_OVHD_FLT-DK-DOOR_SWITCH is direct_write")
+        self.assertRegex(notes, r"PLAN 02 TASK 6 .*XML:6684-6687")
+        self.assertRegex(notes, r"PLAN 02 TASK 6 .*calculator cannot set")
+        self.assertRegex(notes, r"PLAN 02 TASK 6 .*plan 12")
+        self.assertRegex(notes, r"direct_write: .*O:vars")   # the key's own explanation says what it lets through
         self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
 
     def test_the_cockpit_presence_rule_and_what_it_removed_have_their_evidence_in_the_notes(self):

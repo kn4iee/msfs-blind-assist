@@ -73,17 +73,21 @@ What is derived and what is curated (curation.json):
             state var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. Any
             other control whose click code carries a gate note stops the run.
   direct_write  a switch whose vendor click code cannot take a pick where it aims and writes nothing but its own L:var
-            (the chronometer ET lever: its clockwise code steps the value down and its anticlockwise code steps it up but
-            jumps HOLD straight to RESET, so a step can land on no position at all). Curation lists the node and the map
-            leaves all of its click code out: press, release, cw and ccw are empty, and the app writes the state var to
-            the picked position, as it does for any switch with no click code. The control is otherwise built by the
-            rules (state var, kind, label, panel and positions unchanged), and its positions are still checked against
-            what the vendor's code writes. The entry is checked against that code, so that a change of BlueBird's stops
-            the run instead of reaching the app: the map must keep the node, a switch with a state var and positions to
-            pick from, and not also under kinds or guarded; its click code must exist (else the entry does nothing),
-            carry no gate note (a gated click belongs under guarded, which opens the guard first) and write nothing
-            but the state var (another L:var, a K: or an H: event would no longer run). The run names each, and what it
-            left out.
+            (and O:vars; the chronometer ET lever: its clockwise code steps the value down and its anticlockwise code
+            steps it up but jumps HOLD straight to RESET, so a step can land on no position at all; the flight deck door
+            switch: its clockwise and anticlockwise codes write 2 and 0 whatever it reads, so a step to Auto from an end
+            lands on the other end). Curation lists the node and the map leaves all of its click code out: press,
+            release, cw and ccw are empty, and the app writes the state var to the picked position, as it does for any
+            switch with no click code. The control is otherwise built by the rules (state var, kind, label, panel and
+            positions unchanged), and its positions are still checked against what the vendor's code writes. The entry
+            is checked against that code, so that a change of BlueBird's stops the run instead of reaching the app: the
+            map must keep the node, a switch with a state var and positions to pick from, and not also under kinds or
+            guarded; its click code must exist (else the entry does nothing), carry no gate note (a gated click belongs
+            under guarded, which opens the guard first) and write nothing but the state var (another L:var, a K: or an
+            H: event would no longer run). A write to an O:var is let through: O:vars belong to the component, and the
+            sim's calculator cannot set one, so the app's replay never performed it and leaving it out loses nothing it
+            could do (the door switch's click stamps (>O:UpdateTime) for the component's own 1 Hz spring-back, which
+            still runs after a direct write). The run names each, and what it left out.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
 cockpit runs, so a slip the cockpit has stays a slip in the replay (a guarded or direct_write control has none). Code
@@ -752,7 +756,10 @@ def check_direct_write(controls, kept_row, dropped_why, cur):
     The click code: leaving it out must lose nothing, so a change of BlueBird's stops the run instead of reaching the app.
     There is code to leave out (else the entry does nothing), none of it gated on a guard (that control belongs under
     'guarded', which opens the guard first), and it writes nothing but the state var: another L:var, or a K: or H: event it
-    fires, would no longer run."""
+    fires, would no longer run. A write to an O:var is let through (ruling R12, the flight deck door switch: its click
+    stamps (>O:UpdateTime) beside the state var). An O:var belongs to the component, and the sim's calculator cannot set
+    one (spec 3.7 #6: the fire handle relock runs on O:vars it cannot set), so the app's replay of that click never
+    performed the write either, and leaving it out loses nothing the app could do. Reads are no loss at all."""
     by_node = {c["node"]: c for c in controls}
     for node in cur["direct_write"]:
         control = by_node.get(node)
@@ -780,8 +787,9 @@ def check_direct_write(controls, kept_row, dropped_why, cur):
                                     f"'{note.group(0) if note else code[:40]}': its click only runs while a guard is open, so "
                                     "list it under 'guarded' (the app opens the guard first), not under 'direct_write'")
         state_var = control["state_var"]
+        # An O: write is no loss (see the docstring): only another L:var, or a K: or H: event, would no longer run.
         writes = {f"{kind}:{name}" for _, code in codes for is_write, kind, name in extract_controls.var_refs(code)
-                  if is_write and (kind, name) != ("L", state_var)}
+                  if is_write and kind != "O" and (kind, name) != ("L", state_var)}
         if writes:
             raise CurationError(f"curation direct_write names {node}: its click code also writes {', '.join(sorted(writes))} "
                                 f"besides its state var {state_var}, and leaving the click code out would lose that: remove "

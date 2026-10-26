@@ -2239,8 +2239,8 @@
    "press": null,
    "release": null,
    "hold_ms": 0,
-   "cw": "2 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)",
-   "ccw": "0 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)"
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_OVHD_SW_CVR_TEST",
