@@ -174,6 +174,7 @@ public class A350OverheadPanelTests
         {
             "IR 1 fault light", "IR 1 off light", "IR 2 fault light", "IR 2 off light", "IR 3 fault light", "IR 3 off light",
             "ADR 1 fault light", "ADR 1 off light", "ADR 2 fault light", "ADR 2 off light", "ADR 3 fault light", "ADR 3 off light",
+            "IRS on battery light",
         }, Lights("ADIRS"));
     }
 
@@ -370,7 +371,8 @@ public class A350OverheadPanelTests
             ("ENG 2 agent 1", A350RowAction.Press, ""), ("ENG 2 agent 2", A350RowAction.Press, ""),
             ("Fire test", A350RowAction.Press, ""),
         }, Rows("Fire"));
-        Assert.Equal(13, Lights("Fire").Count());
+        Assert.Equal(14, Lights("Fire").Count());
+        Assert.Equal("MLG bay fire light", Lights("Fire").Last());   // an indicator with no button of its own
     }
 
     /// <summary>Live 2026-10-26: both on and off.</summary>
@@ -393,6 +395,103 @@ public class A350OverheadPanelTests
             ("Cabin fans", A350RowAction.Set, "0=Off, 1=On"),
             ("Cooling", A350RowAction.Set, "0=Off, 1=On"),
         }, Rows("Ventilation"));
-        Assert.Equal(new[] { "Avionics extract fault light", "Cooling fault light" }, Lights("Ventilation"));
+        Assert.Equal(new[] { "Avionics extract fault light", "Cooling fault light", "Avionics smoke light" }, Lights("Ventilation"));
+    }
+
+    private const string OffOn = "0=Off, 1=On";
+
+    /// <summary>Live 2026-10-26: every button off and on; both temperature knobs land on the value typed. Each isolation
+    /// valve's upper legend lights while its valve and its button disagree.</summary>
+    [Fact]
+    public void Cargo_air_conditioning()
+    {
+        Assert.Equal(new[]
+        {
+            ("Aft isolation valves", A350RowAction.Set, OffOn), ("Forward isolation valves", A350RowAction.Set, OffOn),
+            ("Bulk isolation valves", A350RowAction.Set, OffOn),
+            ("Bulk temperature", A350RowAction.Set, ""), ("Forward temperature", A350RowAction.Set, ""),
+            ("Heater", A350RowAction.Set, OffOn),
+        }, Rows("Cargo Air Conditioning"));
+        Assert.Equal(new[] { "Aft isolation valves fault light", "Forward isolation valves fault light",
+            "Bulk isolation valves fault light", "Heater fault light" }, Lights("Cargo Air Conditioning"));
+    }
+
+    /// <summary>The two agent buttons discharge a bottle (the aircraft sets DISCH): never pressed in a test pass.</summary>
+    [Fact]
+    public void Cargo_smoke()
+    {
+        Assert.Equal(new[] { ("Agent to forward", A350RowAction.Set, OffOn), ("Agent to aft", A350RowAction.Set, OffOn) },
+            Rows("Cargo Smoke"));
+        Assert.Equal(new[] { "Agent to forward smoke light", "Agent to forward discharged light",
+            "Agent to aft smoke light", "Agent to aft discharged light",
+            "Bottle 1 discharged light", "Bottle 2 discharged light", "Bottle 3 discharged light" }, Lights("Cargo Smoke"));
+    }
+
+    /// <summary>Live 2026-10-26: off and on.</summary>
+    [Fact]
+    public void Cabin_smoke()
+    {
+        Assert.Equal(new[] { ("IFEC", A350RowAction.Set, OffOn) }, Rows("Cabin Smoke"));
+        Assert.Equal(new[] { "IFEC smoke light" }, Lights("Cabin Smoke"));
+    }
+
+    /// <summary>Live 2026-10-26: each electric pump off and on, each override on (its ON legend lit) and off.</summary>
+    [Fact]
+    public void Ground_hydraulics()
+    {
+        Assert.Equal(new[]
+        {
+            ("Green electric pump", A350RowAction.Set, OffOn), ("Yellow electric pump", A350RowAction.Set, OffOn),
+            ("Green electric pump override", A350RowAction.Set, OffOn), ("Yellow electric pump override", A350RowAction.Set, OffOn),
+        }, Rows("Ground Hydraulics"));
+        Assert.Equal(new[] { "Green electric pump fault light", "Yellow electric pump fault light",
+            "Green electric pump override on light", "Yellow electric pump override on light" }, Lights("Ground Hydraulics"));
+    }
+
+    /// <summary>Live 2026-10-26: both off and on.</summary>
+    [Fact]
+    public void Cabin()
+    {
+        Assert.Equal(new[] { ("Landscape camera", A350RowAction.Set, OffOn), ("Mobile communication", A350RowAction.Set, OffOn) },
+            Rows("Cabin"));
+        Assert.Equal(new[] { "Lavatory occupied light" }, Lights("Cabin"));
+    }
+
+    /// <summary>Live 2026-10-26: each off and on.</summary>
+    [Fact]
+    public void Ois()
+    {
+        Assert.Equal(new[]
+        {
+            ("Cabin data to OIS", A350RowAction.Set, OffOn), ("Gatelink", A350RowAction.Set, OffOn),
+            ("OIS data to avionics", A350RowAction.Set, OffOn),
+        }, Rows("OIS"));
+    }
+
+    /// <summary>Live 2026-10-26: both off and on.</summary>
+    [Fact]
+    public void Surveillance()
+    {
+        Assert.Equal(new[] { ("Takeoff surveillance", A350RowAction.Set, OffOn), ("ROW/ROP", A350RowAction.Set, OffOn) },
+            Rows("Surveillance"));
+    }
+
+    /// <summary>Live 2026-10-26: every button on and off; the BAT selector through all five positions (it picks the
+    /// battery the BAT voltage display shows).</summary>
+    [Fact]
+    public void Maintenance()
+    {
+        Assert.Equal(new[]
+        {
+            ("APU economy mode", A350RowAction.Set, OffOn), ("Cockpit door locking system", A350RowAction.Set, OffOn),
+            ("COM ground connection", A350RowAction.Set, OffOn),
+            ("BAT selector", A350RowAction.Set, "0=EMER 1, 1=EMER 2, 2=Off, 3=BAT 1, 4=BAT 2"),
+            ("ELEC remote circuit breaker control", A350RowAction.Set, OffOn),
+            ("ENG 1 FADEC GND PWR", A350RowAction.Set, OffOn), ("ENG 2 FADEC GND PWR", A350RowAction.Set, OffOn),
+            ("Refuel", A350RowAction.Set, OffOn), ("Ground HF datalink", A350RowAction.Set, OffOn),
+            ("Oxygen reset", A350RowAction.Set, OffOn), ("Service interphone override", A350RowAction.Set, OffOn),
+            ("Towing on battery", A350RowAction.Set, OffOn),
+        }, Rows("Maintenance"));
+        Assert.Equal(new[] { "Refuel end light", "Oxygen reset fault light", "Oxygen reset on light" }, Lights("Maintenance"));
     }
 }

@@ -138,6 +138,25 @@ public static partial class A350PanelLayout
         ["FUEL_TANK_TRANSFER_LEFT"] = "Left transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right transfer",
         ["FUEL_CTR_TANK_FEED"] = "Center tank feed",
         ["VENT_AVNCS_EXTRACT"] = "Avionics extract", ["VENT_CABIN_FANS"] = "Cabin fans", ["VENT_COOLING"] = "Cooling",
+        // Cargo, ground hydraulics, cabin, OIS, surveillance and maintenance: abbreviations spoken whole.
+        ["CARGO_AIR_COND_AFT_ISOL_VALVE"] = "Aft isolation valves",
+        ["CARGO_AIR_COND_FWD_ISOL_VALVE"] = "Forward isolation valves",
+        ["CARGO_AIR_COND_BULK_ISOL_VALVE"] = "Bulk isolation valves",
+        ["CARGO_AIR_COND_BULK_TEMP"] = "Bulk temperature", ["CARGO_AIR_COND_FWD_TEMP"] = "Forward temperature",
+        ["CARGO_SMOKE_AGENT_TO_FWD"] = "Agent to forward", ["CARGO_SMOKE_AGENT_TO_AFT"] = "Agent to aft",
+        ["GND_HYD_GREEN_ELEC_PUMP"] = "Green electric pump", ["GND_HYD_YELLOW_ELEC_PUMP"] = "Yellow electric pump",
+        ["GND_HYD_GREEN_ELEC_PUMP_AUTO"] = "Green electric pump override",
+        ["GND_HYD_YELLOW_ELEC_PUMP_AUTO"] = "Yellow electric pump override",
+        ["CABIN_MOBILE_COM"] = "Mobile communication",
+        ["OIS_CAB_DATA"] = "Cabin data to OIS", ["OIS_TO_ANVCS"] = "OIS data to avionics",
+        ["SURV_TO_SURV"] = "Takeoff surveillance",
+        ["MAINT_APU_ECON_MODE"] = "APU economy mode",
+        ["MAINT_CKPT_DOOR_LOCKG_SYS"] = "Cockpit door locking system",
+        ["MAINT_COM_GND_CONNECTION"] = "COM ground connection",
+        ["MAINT_ELEC_REMOTE_CB_CTRL"] = "ELEC remote circuit breaker control",
+        ["MAINT_GROUND_HF_DATALINK"] = "Ground HF datalink",
+        ["MAINT_SVCE_INT_OVRD"] = "Service interphone override",
+        ["MAINT_TOW_ON_BAT_POWER"] = "Towing on battery",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>

@@ -143,6 +143,16 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | Fire | APU, ENG 1 and ENG 2 fire buttons, five agents, fire test; 13 lights | FIRE TEST held 3 s lights all thirteen (`A350WritePlan.TestHoldMs`) | the fire buttons and agents latch: not pressed in a test pass |
 | Engine Manual Start | ENG 1 and ENG 2 man start | both on and off | |
 | Ventilation | avionics extract, cabin fans, cooling; two fault lights | each off and on | |
+| Cargo Air Conditioning | aft, forward and bulk isolation valves, bulk and forward temperature knobs, heater; isolation valve and heater fault lights | every button; the knobs land on the value typed | an isolation valve's upper legend lights while the valve and its button disagree |
+| Cargo Smoke | agent to forward, agent to aft; smoke and DISCH lights, bottle 1-3 discharged | | the agents discharge a bottle: not pressed in a test pass |
+| Cabin Smoke | IFEC; its smoke light | off and on | |
+| Ground Hydraulics | green and yellow electric pumps and their overrides; fault and override ON lights | every row; an override lights its ON legend | |
+| Cabin | landscape camera, mobile communication; lavatory occupied light | both | |
+| OIS | cabin data to OIS, gatelink, OIS data to avionics | each | |
+| Surveillance | takeoff surveillance, ROW/ROP | both | |
+| Maintenance | twelve rows incl. the BAT selector (EMER 1, EMER 2, OFF, BAT 1, BAT 2); refuel end and oxygen reset lights | every row and position | the BAT selector picks what the BAT voltage display shows |
+
+Indicator lamps with no control of their own sit on their panel after its button lights (`A350PanelLamps.Indicators`): cargo bottle 1-3 DISCH, avionics smoke, MLG bay fire, IRS on battery, lavatory occupied.
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

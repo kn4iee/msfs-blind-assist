@@ -82,11 +82,30 @@ public static class A350PanelLamps
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
         ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL
+        // Each cargo isolation valve's upper legend: lit while the valve and its button disagree.
+        ["CARGO_AIR_COND_AFT_ISOL_VALVE_SEQ1_LIGHT"] = "Aft isolation valves fault light",
+        ["CARGO_AIR_COND_FWD_ISOL_VALVE_SEQ1_LIGHT"] = "Forward isolation valves fault light",
+        ["CARGO_AIR_COND_BULK_ISOL_VALVE_SEQ1_LIGHT"] = "Bulk isolation valves fault light",
+        ["GND_HYD_GREEN_ELEC_PUMP_AUTO_SEQ2_LIGHT"] = "Green electric pump override on light",
+        ["GND_HYD_YELLOW_ELEC_PUMP_AUTO_SEQ2_LIGHT"] = "Yellow electric pump override on light",
         ["ELEC_EXT_1_SEQ2_LIGHT"] = "EXT 1 on light", ["ELEC_EXT_2_SEQ2_LIGHT"] = "EXT 2 on light",
         // The DRIVE buttons' lower legend: the IDG disconnected.
         ["ELEC_IDG_1A_SEQ2_LIGHT"] = "DRIVE 1A off light", ["ELEC_IDG_1B_SEQ2_LIGHT"] = "DRIVE 1B off light",
         ["ELEC_IDG_2A_SEQ2_LIGHT"] = "DRIVE 2A off light", ["ELEC_IDG_2B_SEQ2_LIGHT"] = "DRIVE 2B off light",
         ["IRS_ADR_1_SEQ2_LIGHT"] = "ADR 1 off light", ["IRS_ADR_2_SEQ2_LIGHT"] = "ADR 2 off light", ["IRS_ADR_3_SEQ2_LIGHT"] = "ADR 3 off light",
+    };
+
+    /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after
+    /// the panel's button lights.</summary>
+    private static readonly (string Node, string Panel, string Name)[] Indicators =
+    {
+        ("CARGO_SMOKE_BOTTLE_1_DISCH_LIGHT", "Cargo Smoke", "Bottle 1 discharged light"),
+        ("CARGO_SMOKE_BOTTLE_2_DISCH_LIGHT", "Cargo Smoke", "Bottle 2 discharged light"),
+        ("CARGO_SMOKE_BOTTLE_3_DISCH_LIGHT", "Cargo Smoke", "Bottle 3 discharged light"),
+        ("VENT_AVNCS_SMOKE_SEQ1_LIGHT", "Ventilation", "Avionics smoke light"),
+        ("MLG_BAY_LIGHT_SEQ1_LIGHT", "Fire", "MLG bay fire light"),
+        ("IRS_ON_BAT_LIGHT", "ADIRS", "IRS on battery light"),
+        ("CABIN_LAVATORY_SEQ1_LIGHT", "Cabin", "Lavatory occupied light"),
     };
 
     public static string? PowerKeyFor(A350LightPower power) => power switch
@@ -112,9 +131,11 @@ public static class A350PanelLamps
                 list.Add(lamp);
             }
 
+        var byNode = map.Lamps.GroupBy(l => l.Node).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var lamps = new List<A350Lamp>();
         foreach (var section in sections)
             foreach (var panel in placement.Structure[section])
+            {
                 foreach (var row in placement.RowsByPanel[panel])
                 {
                     if (row.Control is not { } control || !byControl.TryGetValue(control.Id, out var own))
@@ -131,6 +152,10 @@ public static class A350PanelLamps
                         lamps.Add(new A350Lamp(mapLamp.Node, name, panel, rule, mapLamp.Power));
                     }
                 }
+                foreach (var (node, onPanel, name) in Indicators)
+                    if (onPanel == panel && byNode.TryGetValue(node, out var indicator))
+                        lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(indicator.State), indicator.Power));
+            }
         return lamps;
     }
 
