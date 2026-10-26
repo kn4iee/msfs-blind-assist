@@ -636,6 +636,49 @@ public class Bbs757GuardedTests
         Assert.Equal(new[] { TrimGuardPress, TrimWrite(1) }, rig.Sim.Writes);
         Assert.Empty(rig.Speech.All);
     }
+
+    // ---- a pick on a guard's own row -----------------------------------------------------------
+
+    [Fact]
+    public void Picking_a_guard_row_rereads_the_control_it_covers()
+    {
+        // Closing the guard makes BlueBird write CloseSets to the control it covers (measured: the
+        // emergency lights go to ARMED). The covered control is OnRequest, read only when its panel is
+        // built, so without its own re-read the pilot would read "Emergency Lights: OFF" over an ARMED switch.
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 0, guard, Open);
+
+        Assert.True(rig.Pick(LightsGuardNode, Closed));
+
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);
+        Assert.Equal(2, rig.Sim.Resyncs.Count);
+        Assert.Equal(new[] { LightsGuardNode, LightsState }.Order(StringComparer.Ordinal),
+            rig.Sim.Resyncs.Order(StringComparer.Ordinal));
+        Assert.Empty(rig.Speech.All);   // the screen reader read the guard's combo; the re-read speaks nothing itself
+    }
+
+    [Fact]
+    public void Picking_an_unguarding_row_rereads_only_itself()
+    {
+        // A control that guards nothing has no dependants: only its own node is read again, even
+        // with a guarded pair in the same map.
+        var plain = new Bbs757Control
+        {
+            Node = "B757_PLAIN_TOGGLE", Label = "Plain Toggle", Kind = Bbs757Kinds.Toggle, StateVar = "B757_PLAIN_TOGGLE",
+            Positions = { new(0, "Off"), new(1, "On") },
+            Press = "(L:B757_PLAIN_TOGGLE, bool) ! (>L:B757_PLAIN_TOGGLE, bool)",
+        };
+        var rig = new Rig(Lights(), LightsGuard(), plain);
+        rig.Sim.Fresh[plain.Node] = 0;
+        rig.Sim.Fresh[LightsState] = 0;
+        rig.Sim.Fresh[LightsGuardNode] = Closed;
+
+        Assert.True(rig.Pick(plain.Node, 1));
+
+        Assert.Equal(new[] { plain.Press! }, rig.Sim.Writes);
+        Assert.Equal(new[] { plain.Node }, rig.Sim.Resyncs);
+    }
 }
 
 /// <summary>

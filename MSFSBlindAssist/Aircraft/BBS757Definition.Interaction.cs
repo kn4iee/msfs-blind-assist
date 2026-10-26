@@ -12,7 +12,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// Speech follows CORE-7: a toggle or switch pick says nothing of its own (the screen reader read
 /// the combo, and the re-read after the write moves the combo to where the control really is); a
 /// button press, which has no readable state, is confirmed once with "{label} pressed"; a write
-/// that cannot be made says "{label} unavailable" and sends nothing.
+/// that cannot be made says "{label} unavailable" and sends nothing; a guarded pick that does not
+/// land says "{label} did not move" once (BBS757Definition.Overhead.cs).
 ///
 /// Every write runs on the UI thread: MainForm's panel handlers call in there, and the awaits below
 /// keep its context (no ConfigureAwait(false)), so the calculator calls, the re-read and the speech
@@ -299,7 +300,17 @@ public partial class BBS757Definition
         }
         finally
         {
-            if (EndPick(control.Node, cts) && resync) io.RequestRead(control.Node);
+            if (EndPick(control.Node, cts) && resync)
+            {
+                io.RequestRead(control.Node);
+                // Closing a guard writes CloseSets to the control it covers (BlueBird: the emergency lights
+                // go to ARMED), and map controls are read only when their panel is built: read the covered
+                // control again too, or its combo keeps the position from before the guard closed.
+                foreach (var covered in _byNode.Values)
+                {
+                    if (string.Equals(covered.Guard, control.Node, StringComparison.Ordinal)) io.RequestRead(covered.Node);
+                }
+            }
         }
         return wrote;
     }
@@ -307,9 +318,12 @@ public partial class BBS757Definition
     /// <summary>
     /// Enters a pick of <paramref name="node"/> in the pending set (the set <see cref="IsPickPending"/>,
     /// <see cref="CancelPendingPicks"/> and <see cref="ProcessSimVarUpdate"/>'s delivery consumption
-    /// read): a source linked to the profile's lifetime, after canceling any earlier pick of the node,
-    /// which a newer pick supersedes at its next await. Null once the pilot has switched away from the
-    /// profile: nothing may be written then. The pick ends with <see cref="EndPick"/>.
+    /// read): a source linked to the profile's lifetime, after canceling any earlier pick of the node.
+    /// The earlier pick ends at its next await that watches its token: every await of a positional pick
+    /// does; a guarded sequence's do too, except its step gaps once its first call has gone, so it
+    /// finishes its remaining calls and only its read-back stops (the newer pick speaks, see
+    /// <see cref="SetGuardedAsync"/>). Null once the pilot has switched away from the profile: nothing
+    /// may be written then. The pick ends with <see cref="EndPick"/>.
     /// </summary>
     private CancellationTokenSource? BeginPick(string node)
     {
@@ -384,8 +398,9 @@ public partial class BBS757Definition
     /// Cancels and forgets every pick in flight: one armed before a flight load or a dropped
     /// connection must not write into the flight that follows. Each canceled pick ends silently and
     /// makes no re-read (its entry is gone). A guarded sequence that has already sent its first call
-    /// does not watch its own token (a newer pick of its control must not cut it short), so this also
-    /// bumps <see cref="_pickEpoch"/>: it sends none of its remaining calls once it sees the count
+    /// does not watch its own token in its step gaps (a newer pick of its control must not cut it
+    /// short); its read-back does, so this ends it silently, and this also bumps
+    /// <see cref="_pickEpoch"/>, which stops its remaining calls: it sends none once it sees the count
     /// has changed.
     /// </summary>
     private void CancelPendingPicks()

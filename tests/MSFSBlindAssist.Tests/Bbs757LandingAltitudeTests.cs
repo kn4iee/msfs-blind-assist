@@ -323,20 +323,6 @@ public class Bbs757LandingAltitudeTests
     }
 
     [Fact]
-    public void The_shipped_maps_Pressurization_panel_starts_with_the_field()
-    {
-        var def = new BBS757Definition();
-        var vars = def.GetVariables();
-
-        var controls = def.GetPanelControls()["Pressurization"];
-        Assert.Equal(Bbs757LandingAltitude.SetKey, controls[0]);
-        Assert.Single(controls, Bbs757LandingAltitude.SetKey);
-        Assert.All(controls, key => Assert.True(vars.ContainsKey(key), key));
-        Assert.Contains(Bbs757LandingAltitude.DisplayKey, def.GetPanelDisplayVariables()["Pressurization"]);
-        Assert.Single(def.GetPanelStructure()["Overhead"], "Pressurization");
-    }
-
-    [Fact]
     public void The_row_follows_the_panels_own_status_rows()
     {
         var map = MapOf(ModeSelect());

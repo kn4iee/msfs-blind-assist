@@ -155,6 +155,10 @@ public partial class BBS757Definition
     /// cockpit would leave it. Nothing is spoken: the press already said "{label} pressed", and the
     /// relock is the cockpit's own behaviour. The awaits keep the UI context (no ConfigureAwait(false)),
     /// like every write here.
+    ///
+    /// It does not consult <see cref="_pickEpoch"/>, as a guarded sequence does: the write is the
+    /// cockpit's resting value (0, locked), so it is safe across a flight load or a reconnect, and
+    /// skipping it there would leave the handle unlocked, the defect this relock exists to prevent.
     /// </summary>
     private async Task RelockAfterDelayAsync(Bbs757Control control, string relock, int delayMs, Bbs757SimIo io)
     {
