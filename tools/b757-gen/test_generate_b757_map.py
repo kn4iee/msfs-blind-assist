@@ -15,6 +15,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -400,6 +401,37 @@ class Convert(unittest.TestCase):
         with self.assertRaises(g.CurationError):
             self.convert(row(node=node, kind="rotary knob finite", positions="6", cw=cw, ccw=ccw, state=["L:S"]),
                          curation(positions={node: ["GND", "AUTO", "P4", "P5", "P6"]}))
+
+    def test_a_name_list_is_laid_onto_the_controls_real_values_in_value_order(self):
+        # B757_OVHD_WARNING_IND_SWITCH rests at 0 and 11 (its code writes those two constants): two names are the pair
+        # (0, 11), not (0, 1). The list form keeps non-contiguous values; the names follow the values in ascending order.
+        node = "B757_OVHD_WARNING_IND_SWITCH"
+        r = row(node=node, kind="rotary knob finite", positions="2", state=["L:" + node],
+                cw=f"11 (>L:{node})", ccw=f"0 (>L:{node})")
+
+        c, why = self.convert(r, curation(positions={node: ["DIM", "BRT"]}))
+
+        self.assertIsNone(why)
+        self.assertEqual([(p["value"], p["label"]) for p in c["positions"]], [(0, "DIM"), (11, "BRT")])
+
+    def test_the_chronometer_ET_lever_is_named_where_its_click_code_lands_past_HOLD(self):
+        # BlueBird's list puts RESET at 3 with 2 unused; the cockpit's tooltip list puts it at 2. The vendor's code jumps
+        # from HOLD (1) straight to 3, so RESET is 3, 2 is left out, and the run refuses a list that names 2 instead.
+        node, var = "B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH"
+        r = row(node=node, kind="rotary knob finite", positions="4", state=["L:" + var],
+                cw=f"(L:{var}, enum) -- d 0 < if{{ 0 }} (>L:{var}, enum)",
+                ccw=f"(L:{var}, enum) 1 == if{{ 3 (>L:{var}, enum) }} "
+                    f"els{{ (L:{var}, enum) ++ d 3 > if{{ 3 }} (>L:{var}, enum) }}")
+
+        def reset_at(value):
+            return curation(positions={node: [{"value": v, "label": l}
+                                              for v, l in ((0, "RUN"), (1, "HOLD"), (value, "RESET"))]})
+
+        c, why = self.convert(r, reset_at(3))
+        self.assertIsNone(why)
+        self.assertEqual([(p["value"], p["label"]) for p in c["positions"]], [(0, "RUN"), (1, "HOLD"), (3, "RESET")])
+        with self.assertRaisesRegex(g.CurationError, "writes 3 .* outside its positions"):
+            self.convert(r, reset_at(2))
 
 
 class SuspectedSlips(unittest.TestCase):
@@ -974,10 +1006,7 @@ class Curation(unittest.TestCase):
         cases = [
             (self.knob("B757_MAIN_knob_gears_altn_autobrake", "BBS_AUTOBRAKE_KNOB", 8),
              n("RTO", "OFF", "DISARM", "1", "2", "3", "4", "MAX AUTO")),
-            (self.knob("B757_MAIN_knob_gears_altn_flaps", "B757_MAIN_knob_gears_altn_flaps", 8),
-             n("NORM", *[f"Position {i}" for i in range(1, 8)])),
-            (self.knob("B757_PED_TCAS_MODE_KNOB", "B757_PED_TCAS_MODE_KNOB", 5, "INDIVIDUAL AUDIO/RADIO PANELS"),
-             n("STBY", "Position 1", "Position 2", "Position 3", "TA/RA")),
+            # the alternate flaps selector and the TCAS mode knob are named by BlueBird's list: test_bluebird_position_names
             (self.knob("B757_ADI_1_TFC_KNOB", "BBS_ND1_Range_Index", 6, "EHSI/ADI"), ranges),
             (self.knob("B757_ADI_2_TFC_KNOB", "BBS_ND2_Range_Index", 6, "EHSI/ADI"), ranges),
             (self.knob("B757_ADI_1_CTR_KNOB", "B757_ADI_1_CTR_KNOB", 4, "EHSI/ADI"), modes),
@@ -1005,36 +1034,113 @@ class Curation(unittest.TestCase):
         control, _, _ = g.convert_row(r, c)
         self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "L"), (1, "R")])
 
-    def test_the_shipped_curation_names_the_flow_switches_from_panel_states_and_the_manual(self):
-        # Ruling R32: only the positions BlueBird's nine panel states and the manual's procedure text back are named;
-        # the rest keep the generator's own "Position n".
+    # Plan 02, task 1: every position BlueBird's simvar list names, by node, as (value, label) in the control's own value
+    # order. The values are the control's real ones, not 0, 1, 2 ...: the engine start selectors never write 2, the
+    # warning indicator rests at 0 and 11, and the chronometer ET lever's code jumps from HOLD (1) straight to 3.
+    BLUEBIRD_POSITIONS = {
+        "B757_IRS_CENTRE_KNOB": [(0, "L"), (1, "C"), (2, "R")],
+        "B757_IRS_LARGE_KNOB": [(0, "TK/GS"), (1, "PPOS"), (2, "WIND"), (3, "HDG/STS")],
+        "B757_OVHD_WIPER_SWITCH": [(0, "OFF"), (1, "LOW"), (2, "HIGH")],
+        "B757_OVHD_SEATBELTS_SWITCH": [(0, "OFF"), (1, "AUTO"), (2, "ON")],
+        "B757_OVHD_NO_SMOKING_SWITCH": [(0, "OFF"), (1, "AUTO"), (2, "ON")],
+        "B757_OVHD_MODE_SELECT_SWITCH": [(0, "AUTO 1"), (1, "AUTO 2"), (2, "MAN")],
+        "B757_OVHD_SEL_L_PACK_SWITCH": [(0, "OFF"), (1, "AUTO"), (2, "STBY N"), (3, "STBY C"), (4, "STBY W")],
+        "B757_OVHD_SEL_R_PACK_SWITCH": [(0, "OFF"), (1, "AUTO"), (2, "STBY N"), (3, "STBY C"), (4, "STBY W")],
+        "B757_CABIN_CEILING": [(0, "Off"), (1, "33%"), (2, "66%"), (3, "100%")],
+        "B757_CABIN_WINDOW": [(0, "Off"), (1, "50%"), (2, "100%")],
+        "B757_CABIN_ENTRY": [(0, "Off"), (1, "50%"), (2, "100%")],
+        "B757_OVHD_WARNING_IND_SWITCH": [(0, "DIM"), (11, "BRT")],
+        "B757_MCP_AP_HDG_BNKLIM": [(0, "AUTO"), (1, "5"), (2, "10"), (3, "15"), (4, "20"), (5, "25")],
+        "B757_MAIN_knob_gears_altn_flaps": [(0, "NORM"), (1, "UP"), (2, "1"), (3, "5"), (4, "15"), (5, "20"), (6, "25"),
+                                            (7, "30")],
+        "B757_MAIN_M_Gau_STBY_GYRO_SELECTOR": [(0, "OFF"), (1, "ILS"), (2, "BCRS")],
+        "B757_MAIN_CHRONO_ET_SWITCH": [(0, "RUN"), (1, "HOLD"), (3, "RESET")],
+        "B757_MAIN_CHRONO_ET_SWITCH_FO": [(0, "RUN"), (1, "HOLD"), (3, "RESET")],
+        "B757_MAIN_CHRONO_SET_SWITCH": [(0, "RUN"), (1, "HOLD"), (2, "Slow slew"), (3, "Fast slew")],
+        "B757_MAIN_CHRONO_SET_SWITCH_FO": [(0, "RUN"), (1, "HOLD"), (2, "Slow slew"), (3, "Fast slew")],
+        "B757_OVHD_ENG_START_SWITCH": [(0, "1"), (1, "2"), (2, "BOTH")],
+        "B757_OVHD_L_ENG_START_SWITCH": [(1, "GND"), (3, "AUTO"), (4, "OFF"), (5, "CONT"), (6, "FLT")],
+        "B757_OVHD_R_ENG_START_SWITCH": [(1, "GND"), (3, "AUTO"), (4, "OFF"), (5, "CONT"), (6, "FLT")],
+        "B757_PED_TCAS_MODE_KNOB": [(0, "STBY"), (1, "ALT RPTG OFF"), (2, "XPNDR"), (3, "TA ONLY"), (4, "TA/RA")],
+        "B757_EICAS_LWR_THRUST-REF_KNOB": [(0, "L"), (1, "BOTH"), (2, "R")],
+        "B757_ECAM_LRAUTO_KNOB": [(0, "L"), (1, "AUTO"), (2, "R")],
+        "B757_VC_P61_SWITCH_2": [(0, "ON"), (1, "AUTO"), (2, "TEST")],
+        # the P61 test switches: 1 is neutral on all, 0 and 2 are the two tests (BlueBird's list, by the switch's label)
+        "B757_VC_P61_SWITCH_3": [(0, "Upper test"), (1, "Neutral"), (2, "Lower test")],
+        "B757_VC_P61_SWITCH_4": [(0, "Upper test"), (1, "Neutral"), (2, "Lower test")],
+        "B757_VC_P61_SWITCH_5": [(0, "Position 0"), (1, "Neutral"), (2, "Position 2")],  # Duct Leak Fuel Qty: no names
+        "B757_VC_P61_SWITCH_6": [(0, "Wing anti-ice test"), (1, "Neutral"), (2, "Probe heat test")],
+        "B757_VC_P61_SWITCH_7": [(0, "Ground proximity test"), (1, "Neutral"), (2, "Hydraulic generator test")],
+        "B757_VC_P61_SWITCH_8": [(0, "Takeoff config test"), (1, "Neutral"), (2, "Landing config test")],
+        "B757_VC_P61_SWITCH_9": [(0, "Air data test"), (1, "Neutral"), (2, "Stall warning test")],
+        "B757_VC_P61_SWITCH_10": [(0, "Air data test"), (1, "Neutral"), (2, "Stall warning test")],
+    }
+
+    def bluebird_rows(self):
+        """One extractor-shaped row per node in BLUEBIRD_POSITIONS. A knob that counts up from 0 has as many positions
+        as it has names; the controls whose values are not simply 0 to n-1, and the P61 switches, carry the vendor's
+        own click code, as the generated map holds it."""
+        rows = {node: self.knob(node, node, len(names)) for node, names in self.BLUEBIRD_POSITIONS.items()}
+
+        node = "B757_OVHD_WARNING_IND_SWITCH"
+        rows[node] = row(node=node, kind="rotary knob finite", positions="2", state=["L:" + node],
+                         cw=f"11 (>L:{node})", ccw=f"0 (>L:{node})")
+        for node in ("B757_OVHD_L_ENG_START_SWITCH", "B757_OVHD_R_ENG_START_SWITCH"):  # the extractor counts 6
+            rows[node] = row(
+                node=node, kind="rotary knob finite", positions="6", state=["L:" + node],
+                cw=f"(L:{node}, enum) 1 == if{{ (L:{node}, enum) 2 + (>L:{node}) }} "
+                   f"els{{ (L:{node}, enum) 1 + 6 min (>L:{node}) }}",
+                ccw=f"(L:{node}, enum) 3 == if{{ (L:{node}, enum) 2 - (>L:{node}) }} "
+                    f"els{{ (L:{node}, enum) 1 - 1 max (>L:{node}) }}")
+        for node, var in (("B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH"),
+                          ("B757_MAIN_CHRONO_ET_SWITCH_FO", "BBS_CHRONO_LEFT_SWITCH_FO")):  # the extractor counts 4
+            rows[node] = row(
+                node=node, kind="rotary knob finite", positions="4", state=["L:" + var],
+                cw=f"(L:{var}, enum) -- d 0 < if{{ 0 }} (>L:{var}, enum)",
+                ccw=f"(L:{var}, enum) 1 == if{{ 3 (>L:{var}, enum) }} "
+                    f"els{{ (L:{var}, enum) ++ d 3 > if{{ 3 }} (>L:{var}, enum) }}")
+        for node, var in (("B757_MAIN_CHRONO_SET_SWITCH", "BBS_CHRONO_RIGHT_SWITCH"),
+                          ("B757_MAIN_CHRONO_SET_SWITCH_FO", "BBS_CHRONO_RIGHT_SWITCH_FO")):
+            rows[node] = row(node=node, kind="rotary knob finite", positions="4", state=["L:" + var],
+                             cw=f"(L:{var}, enum) ++ d 3 > if{{ 3 }} (>L:{var}, enum)",
+                             ccw=f"(L:{var}, enum) -- d 0 < if{{ 0 }} (>L:{var}, enum)")
+        node, var = "B757_VC_P61_SWITCH_2", "BBS757_FLT_REC_SWITCH"
+        rows[node] = row(node=node, kind="multi-position switch", positions="3", state=["L:" + var],
+                         left=f"(L:{var}) 1 + 2 min (>L:{var})",
+                         other=[("RightSingle", f"(L:{var}) 1 - 0 max (>L:{var})")])
+        for n in range(3, 11):  # no click of their own: the release puts the switch back to 1
+            node = f"B757_VC_P61_SWITCH_{n}"
+            rows[node] = row(node=node, kind="multi-position switch", positions="3", state=[f"L:{node}_TEST_SW"],
+                             release=f"1 (>L:{node}_TEST_SW, number)")
+        return rows
+
+    def test_bluebird_position_names(self):
         c = g.load_curation(g.DEFAULT_CURATION)
-        n = lambda *labels: [(i, l) for i, l in enumerate(labels)]
-        signs = n("OFF", "Position 1", "ON")
-        packs = n("OFF", "AUTO", "Position 2", "Position 3", "Position 4")
-        cases = [
-            (self.knob("B757_OVHD_SEATBELTS_SWITCH", "B757_OVHD_SEATBELTS_SWITCH", 3, "PASSENGER SIGNS"), signs),
-            (self.knob("B757_OVHD_NO_SMOKING_SWITCH", "B757_OVHD_NO_SMOKING_SWITCH", 3, "PASSENGER SIGNS"), signs),
-            (self.knob("B757_OVHD_SEL_L_PACK_SWITCH", "B757_OVHD_SEL_L_PACK_SWITCH", 5, "AIR COND"), packs),
-            (self.knob("B757_OVHD_SEL_R_PACK_SWITCH", "B757_OVHD_SEL_R_PACK_SWITCH", 5, "AIR COND"), packs),
-            (self.knob("B757_OVHD_MODE_SELECT_SWITCH", "B757_OVHD_MODE_SELECT_SWITCH", 3, "PRESSURIZATION"),
-             n("AUTO 1", "Position 1", "Position 2")),
-            (self.knob("B757_OVHD_ENG_START_SWITCH", "B757_OVHD_ENG_START_SWITCH", 3, "ENGINE START"),
-             n("1", "Position 1", "Position 2")),
-            (self.knob("B757_MCP_AP_HDG_BNKLIM", "BBS757_BANK_LIMITER", 6, "MCP"),
-             n("AUTO", *[f"Position {i}" for i in range(1, 6)])),
-            (self.knob("B757_EICAS_LWR_THRUST-REF_KNOB", "B757_EICAS_LWR_THRUST_REF_KNOB", 3, "EICAS"),
-             n("Position 0", "BOTH", "Position 2")),
-            (self.knob("B757_OVHD_WIPER_SWITCH", "B757_OVHD_WIPER_SWITCH", 3, "WIPERS"),
-             n("OFF", "Position 1", "Position 2")),
-        ]
-        for r, names in cases:
-            with self.subTest(node=r["node"]):
-                control, why, _ = g.convert_row(r, c)
+        rows = self.bluebird_rows()
+
+        self.assertEqual(set(rows), set(self.BLUEBIRD_POSITIONS))
+        for node, expected in self.BLUEBIRD_POSITIONS.items():
+            with self.subTest(node=node):
+                control, why, _ = g.convert_row(rows[node], c)
                 self.assertIsNone(why)
-                self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], names)
+                self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], expected)
+
+    def test_every_curated_position_list_but_the_unpublished_one_has_no_numbered_name(self):
+        # BlueBird names every position the curation lists; the Duct Leak Fuel Qty test switch is the one control whose 0
+        # and 2 no source names (its 1 is neutral, like the other test switches), so its list keeps "Position n".
+        c = g.load_curation(g.DEFAULT_CURATION)
+        numbered = {}
+        for node, entry in c["positions"].items():
+            labels = [p["label"] if isinstance(p, dict) else p for p in entry]
+            hits = [label for label in labels if re.fullmatch(r"Position \d+", label)]
+            if hits:
+                numbered[node] = hits
+        self.assertEqual(numbered, {"B757_VC_P61_SWITCH_5": ["Position 0", "Position 2"]})
+
+    def test_the_overhead_ignition_selector_is_labelled_ignition(self):
         # The overhead ignition selector's node says ENG START; it selects the igniters (the vendor's tooltip
         # 'Engine Ignitors'), and the panel's other two rows are the L and R ENG Start selectors.
+        c = g.load_curation(g.DEFAULT_CURATION)
         self.assertEqual(c["labels"]["B757_OVHD_ENG_START_SWITCH"], "Ignition")
 
     def test_the_shipped_curation_shows_the_chocks_without_announcing_them(self):
@@ -1063,10 +1169,14 @@ class Curation(unittest.TestCase):
                      "B757_OVHD_SEATBELTS_SWITCH", "B757_OVHD_NO_SMOKING_SWITCH", "B757_OVHD_SEL_L_PACK_SWITCH",
                      "B757_OVHD_SEL_R_PACK_SWITCH", "B757_OVHD_MODE_SELECT_SWITCH", "B757_OVHD_ENG_START_SWITCH",
                      "B757_MCP_AP_HDG_BNKLIM", "B757_EICAS_LWR_THRUST-REF_KNOB", "B757_OVHD_WIPER_SWITCH",
-                     "BBS757_vis_chocks"):
+                     "BBS757_vis_chocks",
+                     # plan 02 task 1: the choices that rest on more than BlueBird's list being read
+                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_SET_SWITCH", "B757_VC_P61_SWITCH_5"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
         self.assertIn("unmeasured", notes)
+        self.assertIn("Position names from BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked "
+                      "against source 2026-10-21), read 2026-10-25.", data["_notes"])
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.

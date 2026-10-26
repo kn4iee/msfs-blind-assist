@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using MSFSBlindAssist.Aircraft.BBS757;
 
 namespace MSFSBlindAssist.Tests;
@@ -106,8 +108,6 @@ public class Bbs757ControlMapTests
 
     // ---- Task 10a: the control stand, taken in by node from two excluded vendor banners ----
 
-    private static string[] Labels(Bbs757Control c) => c.Positions.Select(p => p.Label).ToArray();
-
     private static (double Value, string Label)[] Pairs(Bbs757Control c) =>
         c.Positions.Select(p => (p.Value, p.Label)).ToArray();
 
@@ -186,25 +186,6 @@ public class Bbs757ControlMapTests
         Assert.Equal("HDG HOLD", hdg.Label);
         Assert.Equal("ALT HOLD", alt.Label);
         Assert.All(new[] { hdg, alt }, c => Assert.Equal(("Glareshield", "MCP"), (c.Section, c.Panel)));
-    }
-
-    [Theory]
-    [InlineData("B757_OVHD_SEATBELTS_SWITCH", "OFF|Position 1|ON")]
-    [InlineData("B757_OVHD_NO_SMOKING_SWITCH", "OFF|Position 1|ON")]
-    [InlineData("B757_OVHD_SEL_L_PACK_SWITCH", "OFF|AUTO|Position 2|Position 3|Position 4")]
-    [InlineData("B757_OVHD_SEL_R_PACK_SWITCH", "OFF|AUTO|Position 2|Position 3|Position 4")]
-    [InlineData("B757_OVHD_MODE_SELECT_SWITCH", "AUTO 1|Position 1|Position 2")]
-    [InlineData("B757_OVHD_ENG_START_SWITCH", "1|Position 1|Position 2")]
-    [InlineData("B757_MCP_AP_HDG_BNKLIM", "AUTO|Position 1|Position 2|Position 3|Position 4|Position 5")]
-    [InlineData("B757_EICAS_LWR_THRUST-REF_KNOB", "Position 0|BOTH|Position 2")]
-    [InlineData("B757_OVHD_WIPER_SWITCH", "OFF|Position 1|Position 2")]
-    public void The_flow_switches_name_the_positions_the_panel_states_and_manual_back(string node, string names)
-    {
-        // Ruling R32: named only where BlueBird's nine panel states and the manual agree; the rest stay numbered.
-        Bbs757Control c = Find(node);
-
-        Assert.Equal(names.Split('|'), c.Positions.Select(p => p.Label));
-        Assert.Equal(Enumerable.Range(0, c.Positions.Count).Select(i => (double)i), c.Positions.Select(p => p.Value));
     }
 
     [Fact]
@@ -382,31 +363,95 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_transponder_names_only_what_a_source_backs()
+    public void The_transponder_side_switch_is_L_or_R()
     {
-        // 0 STBY and 4 TA/RA are the vendor panel states and the manual's wording; 1 to 3 have no source.
-        Assert.Equal(
-            new[] { (0d, "STBY"), (1d, "Position 1"), (2d, "Position 2"), (3d, "Position 3"), (4d, "TA/RA") },
-            Pairs(Find("B757_PED_TCAS_MODE_KNOB")));
         Assert.Equal(new[] { (0d, "L"), (1d, "R") }, Pairs(Find("B757_PED_TCAS_XPNDR_SWITCH")));
     }
 
-    [Fact]
-    public void The_alternate_flaps_selector_names_only_NORM()
-    {
-        Bbs757Control altn = Find("B757_MAIN_knob_gears_altn_flaps");
+    // ---- Plan 02, task 1: every position BlueBird's simvar list names ----
 
-        Assert.Equal("NORM", altn.Positions[0].Label);
-        Assert.Equal(8, altn.Positions.Count);
-        Assert.Equal(Enumerable.Range(1, 7).Select(i => $"Position {i}"), Labels(altn).Skip(1));
+    /// <summary>A control's positions as "value=label|value=label", the values in invariant culture.</summary>
+    private static string Spell(Bbs757Control c) =>
+        string.Join("|", c.Positions.Select(p => $"{p.Value.ToString(CultureInfo.InvariantCulture)}={p.Label}"));
+
+    [Theory]
+    [InlineData("B757_IRS_CENTRE_KNOB", "0=L|1=C|2=R")]
+    [InlineData("B757_IRS_LARGE_KNOB", "0=TK/GS|1=PPOS|2=WIND|3=HDG/STS")]
+    [InlineData("B757_OVHD_WIPER_SWITCH", "0=OFF|1=LOW|2=HIGH")]
+    [InlineData("B757_OVHD_SEATBELTS_SWITCH", "0=OFF|1=AUTO|2=ON")]
+    [InlineData("B757_OVHD_NO_SMOKING_SWITCH", "0=OFF|1=AUTO|2=ON")]
+    [InlineData("B757_OVHD_MODE_SELECT_SWITCH", "0=AUTO 1|1=AUTO 2|2=MAN")]
+    [InlineData("B757_OVHD_SEL_L_PACK_SWITCH", "0=OFF|1=AUTO|2=STBY N|3=STBY C|4=STBY W")]
+    [InlineData("B757_OVHD_SEL_R_PACK_SWITCH", "0=OFF|1=AUTO|2=STBY N|3=STBY C|4=STBY W")]
+    [InlineData("B757_CABIN_CEILING", "0=Off|1=33%|2=66%|3=100%")]
+    [InlineData("B757_CABIN_WINDOW", "0=Off|1=50%|2=100%")]
+    [InlineData("B757_CABIN_ENTRY", "0=Off|1=50%|2=100%")]
+    [InlineData("B757_OVHD_WARNING_IND_SWITCH", "0=DIM|11=BRT")]
+    [InlineData("B757_MCP_AP_HDG_BNKLIM", "0=AUTO|1=5|2=10|3=15|4=20|5=25")]
+    [InlineData("B757_MAIN_knob_gears_altn_flaps", "0=NORM|1=UP|2=1|3=5|4=15|5=20|6=25|7=30")]
+    [InlineData("B757_MAIN_M_Gau_STBY_GYRO_SELECTOR", "0=OFF|1=ILS|2=BCRS")]
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH", "0=RUN|1=HOLD|3=RESET")]
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH_FO", "0=RUN|1=HOLD|3=RESET")]
+    [InlineData("B757_MAIN_CHRONO_SET_SWITCH", "0=RUN|1=HOLD|2=Slow slew|3=Fast slew")]
+    [InlineData("B757_MAIN_CHRONO_SET_SWITCH_FO", "0=RUN|1=HOLD|2=Slow slew|3=Fast slew")]
+    [InlineData("B757_OVHD_ENG_START_SWITCH", "0=1|1=2|2=BOTH")]
+    [InlineData("B757_OVHD_L_ENG_START_SWITCH", "1=GND|3=AUTO|4=OFF|5=CONT|6=FLT")]
+    [InlineData("B757_OVHD_R_ENG_START_SWITCH", "1=GND|3=AUTO|4=OFF|5=CONT|6=FLT")]
+    [InlineData("B757_PED_TCAS_MODE_KNOB", "0=STBY|1=ALT RPTG OFF|2=XPNDR|3=TA ONLY|4=TA/RA")]
+    [InlineData("B757_EICAS_LWR_THRUST-REF_KNOB", "0=L|1=BOTH|2=R")]
+    [InlineData("B757_ECAM_LRAUTO_KNOB", "0=L|1=AUTO|2=R")]
+    [InlineData("B757_VC_P61_SWITCH_2", "0=ON|1=AUTO|2=TEST")]
+    // The P61 test switches: 1 is neutral on all, 0 and 2 are the two tests, by the switch's own label.
+    [InlineData("B757_VC_P61_SWITCH_3", "0=Upper test|1=Neutral|2=Lower test")]
+    [InlineData("B757_VC_P61_SWITCH_4", "0=Upper test|1=Neutral|2=Lower test")]
+    [InlineData("B757_VC_P61_SWITCH_6", "0=Wing anti-ice test|1=Neutral|2=Probe heat test")]
+    [InlineData("B757_VC_P61_SWITCH_7", "0=Ground proximity test|1=Neutral|2=Hydraulic generator test")]
+    [InlineData("B757_VC_P61_SWITCH_8", "0=Takeoff config test|1=Neutral|2=Landing config test")]
+    [InlineData("B757_VC_P61_SWITCH_9", "0=Air data test|1=Neutral|2=Stall warning test")]
+    [InlineData("B757_VC_P61_SWITCH_10", "0=Air data test|1=Neutral|2=Stall warning test")]
+    public void Positions_have_bluebirds_names(string node, string positions)
+    {
+        // The values are each control's own, in value order: the start selectors never rest on 2, the warning
+        // indicator rests at 0 and 11, and the chronometer ET lever's RESET is 3.
+        Assert.Equal(positions, Spell(Find(node)));
+    }
+
+    [Fact]
+    public void The_Duct_Leak_Fuel_Qty_test_switch_names_only_its_neutral_position()
+    {
+        // BlueBird's list gives the other test switches their two tests; this one is named by no source.
+        Assert.Equal("0=Position 0|1=Neutral|2=Position 2", Spell(Find("B757_VC_P61_SWITCH_5")));
     }
 
     [Theory]
-    [InlineData("B757_IRS_LARGE_KNOB", 4)]
-    [InlineData("B757_IRS_CENTRE_KNOB", 3)]
-    public void The_IRS_display_knobs_stay_numbered_because_nothing_names_their_positions(string node, int count)
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH")]
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH_FO", "BBS_CHRONO_LEFT_SWITCH_FO")]
+    public void The_chronometer_ET_lever_names_RESET_at_the_value_its_click_code_writes_past_HOLD(string node, string stateVar)
     {
-        Assert.Equal(Enumerable.Range(0, count).Select(i => $"Position {i}"), Labels(Find(node)));
+        Bbs757Control et = Find(node);
+
+        // BlueBird's list says RESET is 3 with 2 unused; the cockpit's tooltip list says 2. The vendor's code jumps
+        // from HOLD (1) straight to 3 (whichever of cw and ccw that is), so 3 is RESET and 2 is not a position.
+        Assert.Equal(stateVar, et.StateVar);
+        Assert.Contains($"1 == if{{ 3 (>L:{stateVar}, enum) }}", $"{et.Cw} {et.Ccw}");
+        Assert.DoesNotContain(et.Positions, p => p.Value == 2);
+    }
+
+    [Fact]
+    public void No_position_reads_Position_n_except_the_unpublished()
+    {
+        // Two controls keep numbered positions because no source names them: the Duct Leak Fuel Qty test switch (its
+        // 0 and 2) and the duplicate EICAS Computer knob (plan 02 task 5 drops it and removes this exemption).
+        string[] unpublished = { "B757_VC_P61_SWITCH_5", "B757_EICAS_COMPUTER_KNOB" };
+
+        var numbered = Map.Controls
+            .Where(c => !unpublished.Contains(c.Node))
+            .SelectMany(c => c.Positions
+                .Where(p => Regex.IsMatch(p.Label, @"^Position \d+$"))
+                .Select(p => $"{c.Node} {p.Value.ToString(CultureInfo.InvariantCulture)}={p.Label}"))
+            .ToList();
+
+        Assert.True(numbered.Count == 0, "numbered positions: " + string.Join(", ", numbered));
     }
 
     [Fact]

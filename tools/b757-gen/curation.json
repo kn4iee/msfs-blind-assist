@@ -8,14 +8,18 @@
     "panel_order: section -> panel names, the order the panels of that section are tabbed. The listed panels come first, in that order; the panels not listed follow alphabetically, and the run names them (a panel BlueBird adds later turns up there). A section the map does not have, a panel the section has none of, a repeat and an empty list are errors.",
     "control_order: panel -> node names, the order the controls of that panel are tabbed. The listed controls come first, in that order; the rest follow in cockpit order. A panel no control is on, a node that is not in that panel, a repeat and an empty list are errors. Labels are made first, in cockpit order, so an order never renames or renumbers a control.",
     "labels: node -> label, where the node name or the vendor's tooltip is wrong or unhelpful.",
-    "positions: node -> position names in value order (one per value), or explicit [{value, label}].",
+    "positions: node -> position names in value order (one per value: the names are laid onto the control's own values, so two names for a control whose values are 0 and 11 name 0 and 11), or explicit [{value, label}] when the extractor counts a value the click code never rests on (the start selectors never write 2, the chronometer ET lever skips it).",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
-    "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 to 6 are unmeasured (no CONT/FLT names are invented): measure them in the sim.",
+    "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 OFF, 5 CONT and 6 FLT are BlueBird's names (its simvar list, cited below); unmeasured in the sim.",
     "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule.",
     "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in). All sit in Pedestal / Control stand, in file order.",
     "EVIDENCE for the control stand and the position names below (2026-10-25). preset = the nine vendor panel states in Data/panel_states/*.snap (cold and dark, turnaround, before start, ready for taxi, ready for takeoff, after takeoff, cruise, approach, final approach; positional arrays, but most knob states also sit in them as named L:var pairs). manual = BlueBird's v1.01 User Procedures and Complete Flight Guide. measured = read live in the sim (docs/b757/evidence/live-findings.md). unmeasured = no live read: the name rests on the sources given and goes on the in-sim plan. Names are the panel's legends as printed (capitals), as the brief spells them; a list entry 'Position N' is a position nothing names.",
+    "Position names from BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21), read 2026-10-25.",
+    "PLAN 02 TASK 1 (2026-10-26): positions named from that list alone, unmeasured in the sim and with no preset or manual evidence of their own (the controls whose other notes cite the list have such evidence besides): B757_CABIN_CEILING (0 Off, 1 33%, 2 66%, 3 100%), B757_CABIN_WINDOW and B757_CABIN_ENTRY (0 Off, 1 50%, 2 100%), B757_OVHD_WARNING_IND_SWITCH (0 DIM, 11 BRT: its click code writes those two values, which the extractor takes as its positions), B757_MAIN_M_Gau_STBY_GYRO_SELECTOR (0 OFF, 1 ILS, 2 BCRS), B757_ECAM_LRAUTO_KNOB (0 L, 1 AUTO, 2 R) and B757_VC_P61_SWITCH_2, the Flight Recorder (0 ON, 1 AUTO, 2 TEST).",
+    "B757_MAIN_CHRONO_ET_SWITCH and B757_MAIN_CHRONO_ET_SWITCH_FO (L:BBS_CHRONO_LEFT_SWITCH, _FO): 0 RUN, 1 HOLD, 3 RESET, explicit pairs without 2. The list says RESET is 3 with 2 unused, and the click code agrees: the code that steps up from HOLD writes 3 straight from 1 ('1 == if{ 3 ...'), so no step from HOLD rests on 2. The cockpit's tooltip list (RUN, HOLD, RESET: three tips for four values) puts RESET at 2, which that code never writes; the generator stops on a list that names 2 instead, because 3 is then written outside the list. The code that steps down still passes through 2 on its way from 3 to 1; that stop has no name. B757_MAIN_CHRONO_SET_SWITCH and B757_MAIN_CHRONO_SET_SWITCH_FO (L:BBS_CHRONO_RIGHT_SWITCH, _FO): 0 RUN, 1 HOLD, 2 Slow slew, 3 Fast slew (the list; the vendor's tips for them repeat the ET lever's RUN, HOLD, RESET and name nothing here). Both unmeasured in the sim.",
+    "B757_VC_P61_SWITCH_3 to B757_VC_P61_SWITCH_10 are the P61 test switches: their release code writes 1, so 1 is Neutral on all of them, and the list names 0 and 2, the two tests, by the switch's label: Equip Cooling (SWITCH_3) and Yaw Damp (SWITCH_4) 'Upper test' / 'Lower test'; Wing AI Window Heat (SWITCH_6) 'Wing anti-ice test' / 'Probe heat test'; Ground Prox Hyd Gen (SWITCH_7) 'Ground proximity test' / 'Hydraulic generator test'; TO and Land Config (SWITCH_8) 'Takeoff config test' / 'Landing config test'; Air Data Stall Right (SWITCH_9) and Left (SWITCH_10) 'Air data test' / 'Stall warning test'. B757_VC_P61_SWITCH_5 (Duct Leak Fuel Qty) is the one the list gives no test names: 1 Neutral, 0 and 2 stay 'Position 0' and 'Position 2'. B757_EICAS_COMPUTER_KNOB, a second EICAS Computer knob, is named by no source either and stays numbered (plan 02 task 5 drops it). Unmeasured in the sim.",
     "BBS757_PEDESTAL_Park_Brake_Lever (L:B757_FC_PARK_BRAKE): 0 Released, 1 Set. A toggle whose click flips the var. measured (session 6): K:PARKING_BRAKES left the var at 1 while the stock BRAKE PARKING POSITION read 0. preset: 1 in cold and dark, before start, ready for taxi and ready for takeoff; 0 in turnaround and the four airborne states. unmeasured: releasing it with the lever click while PARKING BRAKE MODE is REALISTIC (that setting wants full pedal braking).",
     "BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK write 0, 10 and 100 to L:B757_FC_SPOILER_LEVER and keep no state of their own (buttons with a press only, replayed verbatim). measured (session 6): 10 is ARMED, 0 is down (K:SPOILERS_ARM_TOGGLE); all nine presets hold 0. unmeasured: 100 for UP (the click code only).",
     "ENGINE_Switch_ATDisc_1 is the left TO/GA button: its press writes L:GO_AROUND_PADDLE1 and fires K:AUTO_THROTTLE_TO_GA, its release clears the var, all replayed verbatim. B757_AT_DISC_1 is the A/T disconnect: press writes L:B757_AT_DISC_1 1, release 0. unmeasured in flight.",
@@ -23,19 +27,19 @@
     "B757_MCP_CMD_1_BUTTON, B757_MCP_CMD_2_BUTTON, B757_MCP_CMD_3_BUTTON are CMD L, CMD C and CMD R (the generated labels 'CMD 1' to 'CMD 3' were the node numbers): the 757 MCP's three autopilot engage buttons, left to right, as the app speaks their lights ('CMD R on', plan 01 task 10b). Each button's decal lights from L:B757_MCP_CMD_n_BUTTON (bool). unmeasured live: which of the three nodes is which side (1 = L, 3 = R is the numbering's natural reading).",
     "B757_MAIN_knob_gears_altn_autobrake (L:BBS_AUTOBRAKE_KNOB): 0 RTO, 1 OFF, 2 DISARM, 3 '1', 4 '2', 5 '3', 6 '4', 7 MAX AUTO. preset: 0 in ready for taxi and ready for takeoff (manual: the before-takeoff item AUTOBRAKES RTO); 1 in cold and dark, turnaround, before start, after takeoff and cruise (manual: AUTOBRAKES OFF after landing); 2 in approach and final approach. manual: the selector is shown 'at DISARM' with the amber AUTO BRAKES light; the vendor's landing calculator lists A/BRK 1 to 4 and MAX AUTO. unmeasured: 2 to 7. 3 to 7 follow the standard 757 selector order by elimination, and so does 2 = DISARM, although the approach presets sit on 2 where a landing setting would be expected: check by one click from OFF (the EICAS shows AUTOBRAKES on DISARM).",
     "BBS_fuelcut_PW1, BBS_fuelcut_PW2: 0 CUTOFF, 2 RUN (a left click goes to 2, a right click to 0). preset: 0 in cold and dark, turnaround and before start; 2 in all six states after engine start; manual: the shutdown item 'Fuel control switches CUTOFF'. The RR switches are the reverse (preset 2 in the cold states, 0 once running; their tips read RUN, RICH, CUTOFF), so the two lists differ on purpose. Backed by presets and manual, not read live.",
-    "B757_IRS_L_SWITCH, B757_IRS_C_SWITCH, B757_IRS_R_SWITCH: 0 OFF, 1 ALIGN, 2 NAV, 3 ATT. preset: 0 in cold and dark, 2 in the other eight; manual: 'IRS selectors OFF, THEN NAV', and 'NAV to ALIGN to NAV' for a realignment. unmeasured: 1 ALIGN (the manual's word, in the standard slot between OFF and NAV) and 3 ATT (the standard 757 selector; the manuals never say ATT). B757_IRS_LARGE_KNOB (4 positions, 3 in every preset) and B757_IRS_CENTRE_KNOB (3 positions, 0 in every preset) are the display unit's knobs: nothing names their positions, so they stay 'Position N'.",
+    "B757_IRS_L_SWITCH, B757_IRS_C_SWITCH, B757_IRS_R_SWITCH: 0 OFF, 1 ALIGN, 2 NAV, 3 ATT. preset: 0 in cold and dark, 2 in the other eight; manual: 'IRS selectors OFF, THEN NAV', and 'NAV to ALIGN to NAV' for a realignment. unmeasured: 1 ALIGN (the manual's word, in the standard slot between OFF and NAV) and 3 ATT (the standard 757 selector; the manuals never say ATT). B757_IRS_LARGE_KNOB (4 positions, 3 in every preset) and B757_IRS_CENTRE_KNOB (3 positions, 0 in every preset) are the display unit's knobs: BlueBird's simvar list names them (Large: TK/GS, PPOS, WIND, HDG/STS; Center: L, C, R); unmeasured in the sim.",
     "B757_ADI_1_TFC_KNOB, B757_ADI_2_TFC_KNOB (ND range; L:BBS_ND1_Range_Index, L:BBS_ND2_Range_Index): 0 10 NM, 1 20 NM, 2 40 NM, 3 80 NM, 4 160 NM, 5 320 NM. B757_ADI_1_CTR_KNOB, B757_ADI_2_CTR_KNOB (ND mode): 0 VOR, 1 APP, 2 MAP, 3 PLAN. The words are the vendor's tooltip lists ('320 NM' '160 NM' ... '10 NM' 6 (L:BBS_ND1_Range_Index) case and 'PLAN' 'MAP' 'APP' 'VOR' 4 (L:B757_ADI_2_CTR_KNOB) case), read with the LAST word pushed as index 0. unmeasured: that reading of the list. For it: the FO mode knob initializes to 2 and all nine presets hold 2, which is MAP only under this reading (APP under the other), and it puts the approach presets on 80 NM (base leg) and 20 NM (final) where the other reading gives 40 and 160 NM. The manual calls the approach mode ILS; the cockpit's own word APP is kept.",
-    "B757_PED_TCAS_MODE_KNOB: 0 STBY, 4 TA/RA, 1 to 3 'Position N'. preset: 0 in cold and dark and turnaround, 4 in the other seven; manual: 'set transponder TA/RA ... before start', and the panel is illustrated at 'L and STBY'. unmeasured: 1 to 3 (the standard 757 order is ALT RPTG OFF, XPNDR, TA ONLY; no BlueBird source says so). B757_PED_TCAS_XPNDR_SWITCH: 0 L, 1 R; manual: 'Select L or R for the pilot flying', illustrated at L; 0 in every preset; the WASM keeps two transponders. unmeasured: which side is 0.",
-    "B757_MAIN_knob_gears_altn_flaps (8 positions): only 0 NORM is named: 0 in all nine presets and the manual's 'ALTN FLAPS SELECTOR NORM'. 1 to 7 have no source (its animation tips are a copy of the standby power selector's) and stay 'Position N'.",
-    "RULING R32 (2026-10-25): seven controls the flows need, named only where BlueBird's nine panel states (Data/panel_states/*.snap, order as above) and the manual's procedure text agree; every other position stays 'Position N'. A misnamed position would not be caught by the in-sim preset check, which reads the same values back.",
-    "B757_OVHD_SEATBELTS_SWITCH: 0 OFF, 2 ON. preset: 0 in cold and dark and turnaround, 2 in the other seven; manual: signs ON before start, OFF at shutdown. 1 (the middle position) unmeasured.",
-    "B757_OVHD_NO_SMOKING_SWITCH: 0 OFF, 2 ON. preset: 2 in all nine (no state holds it off); OFF at 0 rests on the identical three-position seat belt switch beside it and the manual's signs OFF at shutdown. 1 and 0 unmeasured.",
-    "B757_OVHD_SEL_L_PACK_SWITCH, B757_OVHD_SEL_R_PACK_SWITCH: 0 OFF, 1 AUTO. preset: 0 in cold and dark, 1 in every powered state; manual: 'PACK SELECTORS ... OFF with no supply'. 2 to 4 unmeasured (the standard 757 selector's STBY N, STBY C, STBY W are not named by any BlueBird source).",
-    "B757_OVHD_MODE_SELECT_SWITCH: 0 AUTO 1. preset: 0 in all nine; manual: 'mode selector AUTO 1 or AUTO 2'. 1 and 2 unmeasured (AUTO 2 and MAN would be the standard order; not named).",
-    "B757_OVHD_ENG_START_SWITCH: label Ignition (the node says ENG START, the vendor's tooltip says 'Engine Ignitors'; the panel's L and R ENG Start selectors are separate rows), 0 '1'. preset: 0 in all nine; manual: 'Ignition 1 is the illustrated example'. 1 and 2 unmeasured.",
-    "B757_MCP_AP_HDG_BNKLIM (L:BBS757_BANK_LIMITER): 0 AUTO. preset: 0 in all nine; manual: 'BANK LIMIT SELECTOR ... AUTO'. 1 to 5 unmeasured (the degree settings are not named by any BlueBird source).",
-    "B757_EICAS_LWR_THRUST-REF_KNOB (L:B757_EICAS_LWR_THRUST_REF_KNOB): 1 BOTH. preset: 1 in all nine; manual: 'thrust reference BOTH'. 0 and 2 unmeasured (L and R by the standard layout; not named).",
-    "B757_OVHD_WIPER_SWITCH: 0 OFF. preset: 0 in all nine, dry weather in every state (no state runs the wipers). 1 and 2 unmeasured.",
+    "B757_PED_TCAS_MODE_KNOB: 0 STBY, 1 ALT RPTG OFF, 2 XPNDR, 3 TA ONLY, 4 TA/RA (BlueBird's simvar list). preset: 0 in cold and dark and turnaround, 4 in the other seven; manual: 'set transponder TA/RA ... before start', and the panel is illustrated at 'L and STBY'. unmeasured: 1 to 3 (they are the standard 757 order). B757_PED_TCAS_XPNDR_SWITCH: 0 L, 1 R; manual: 'Select L or R for the pilot flying', illustrated at L; 0 in every preset; the WASM keeps two transponders. unmeasured: which side is 0.",
+    "B757_MAIN_knob_gears_altn_flaps (8 positions): 0 NORM, 1 UP, 2 1, 3 5, 4 15, 5 20, 6 25, 7 30 (BlueBird's simvar list). 0 NORM: 0 in all nine presets and the manual's 'ALTN FLAPS SELECTOR NORM'. 1 to 7 unmeasured (its animation tips are a copy of the standby power selector's and name nothing).",
+    "RULING R32 (2026-10-25; the positions it left numbered are named since plan 02 task 1, from BlueBird's simvar list, cited below): seven controls the flows needed, named only where BlueBird's nine panel states (Data/panel_states/*.snap, order as above) and the manual's procedure text agree; every other position stayed 'Position N'. The presets and the manual still back the names below that they cover. A misnamed position would not be caught by the in-sim preset check, which reads the same values back.",
+    "B757_OVHD_SEATBELTS_SWITCH: 0 OFF, 1 AUTO, 2 ON. preset: 0 in cold and dark and turnaround, 2 in the other seven; manual: signs ON before start, OFF at shutdown. 1 (the middle position, BlueBird's AUTO) unmeasured.",
+    "B757_OVHD_NO_SMOKING_SWITCH: 0 OFF, 1 AUTO, 2 ON. preset: 2 in all nine (no state holds it off); OFF at 0 rests on the identical three-position seat belt switch beside it and the manual's signs OFF at shutdown. 1 and 0 unmeasured (1 is BlueBird's AUTO).",
+    "B757_OVHD_SEL_L_PACK_SWITCH, B757_OVHD_SEL_R_PACK_SWITCH: 0 OFF, 1 AUTO, 2 STBY N, 3 STBY C, 4 STBY W (BlueBird's simvar list). preset: 0 in cold and dark, 1 in every powered state; manual: 'PACK SELECTORS ... OFF with no supply'. 2 to 4 unmeasured.",
+    "B757_OVHD_MODE_SELECT_SWITCH: 0 AUTO 1, 1 AUTO 2, 2 MAN (BlueBird's simvar list). preset: 0 in all nine; manual: 'mode selector AUTO 1 or AUTO 2'. 1 and 2 unmeasured.",
+    "B757_OVHD_ENG_START_SWITCH: label Ignition (the node says ENG START, the vendor's tooltip says 'Engine Ignitors'; the panel's L and R ENG Start selectors are separate rows), 0 '1', 1 '2', 2 'BOTH' (BlueBird's simvar list). preset: 0 in all nine; manual: 'Ignition 1 is the illustrated example'. 1 and 2 unmeasured.",
+    "B757_MCP_AP_HDG_BNKLIM (L:BBS757_BANK_LIMITER): 0 AUTO, 1 5, 2 10, 3 15, 4 20, 5 25 (BlueBird's simvar list: the degrees). preset: 0 in all nine; manual: 'BANK LIMIT SELECTOR ... AUTO'. 1 to 5 unmeasured.",
+    "B757_EICAS_LWR_THRUST-REF_KNOB (L:B757_EICAS_LWR_THRUST_REF_KNOB): 0 L, 1 BOTH, 2 R (BlueBird's simvar list). preset: 1 in all nine; manual: 'thrust reference BOTH'. 0 and 2 unmeasured.",
+    "B757_OVHD_WIPER_SWITCH: 0 OFF, 1 LOW, 2 HIGH (BlueBird's simvar list). preset: 0 in all nine, dry weather in every state (no state runs the wipers). 1 and 2 unmeasured.",
     "status BBS757_vis_chocks (RULING R31): 0 Removed, 1 In place, shown on the Status display and never announced. measured 2026-10-25 (live-findings.md, EFB Ground Services): the EFB's CHOCKS tile toggles it 0 to 1 to 0. preset: 1 in cold and dark and turnaround, 0 in the other seven.",
     "RULING R37 (2026-10-25, the owner's direction after the first flight): the panels follow the manual's preflight flow and the most used controls come first in a panel (panel_order, control_order). The lists are the owner's to adjust; a control_order lists only the controls that lead, and the rest keep cockpit order. The three start selectors (Ignition, L ENG Start, R ENG Start: nodes B757_OVHD_ENG_START_SWITCH, B757_OVHD_L_ENG_START_SWITCH, B757_OVHD_R_ENG_START_SWITCH, banner LIGHT OVERRIDE) and the four fuel control switches (BBS_fuelcut_PW1, PW2, RR1, RR2) share one Pedestal panel, Engines, in start order: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then the RR pair. The three node_panels rules for the start selectors name the section Pedestal, because a B757_OVHD_ node otherwise lands in the Overhead by its prefix. TCAS and transponder lists TCAS Mode first; the app adds its Squawk Code field right after it (BBS757Definition.Readouts.cs). Each EFIS panel leads with ND Mode and ND Range."
   ],
@@ -743,15 +747,15 @@
       },
       {
         "value": 4,
-        "label": "Position 4"
+        "label": "OFF"
       },
       {
         "value": 5,
-        "label": "Position 5"
+        "label": "CONT"
       },
       {
         "value": 6,
-        "label": "Position 6"
+        "label": "FLT"
       }
     ],
     "B757_OVHD_R_ENG_START_SWITCH": [
@@ -765,15 +769,15 @@
       },
       {
         "value": 4,
-        "label": "Position 4"
+        "label": "OFF"
       },
       {
         "value": 5,
-        "label": "Position 5"
+        "label": "CONT"
       },
       {
         "value": 6,
-        "label": "Position 6"
+        "label": "FLT"
       }
     ],
     "B757_MCP_SW_AP_throttle": [
@@ -891,9 +895,9 @@
     ],
     "B757_PED_TCAS_MODE_KNOB": [
       "STBY",
-      "Position 1",
-      "Position 2",
-      "Position 3",
+      "ALT RPTG OFF",
+      "XPNDR",
+      "TA ONLY",
       "TA/RA"
     ],
     "B757_PED_TCAS_XPNDR_SWITCH": [
@@ -902,65 +906,191 @@
     ],
     "B757_MAIN_knob_gears_altn_flaps": [
       "NORM",
-      "Position 1",
-      "Position 2",
-      "Position 3",
-      "Position 4",
-      "Position 5",
-      "Position 6",
-      "Position 7"
+      "UP",
+      "1",
+      "5",
+      "15",
+      "20",
+      "25",
+      "30"
     ],
     "B757_OVHD_SEATBELTS_SWITCH": [
       "OFF",
-      "Position 1",
+      "AUTO",
       "ON"
     ],
     "B757_OVHD_NO_SMOKING_SWITCH": [
       "OFF",
-      "Position 1",
+      "AUTO",
       "ON"
     ],
     "B757_OVHD_SEL_L_PACK_SWITCH": [
       "OFF",
       "AUTO",
-      "Position 2",
-      "Position 3",
-      "Position 4"
+      "STBY N",
+      "STBY C",
+      "STBY W"
     ],
     "B757_OVHD_SEL_R_PACK_SWITCH": [
       "OFF",
       "AUTO",
-      "Position 2",
-      "Position 3",
-      "Position 4"
+      "STBY N",
+      "STBY C",
+      "STBY W"
     ],
     "B757_OVHD_MODE_SELECT_SWITCH": [
       "AUTO 1",
-      "Position 1",
-      "Position 2"
+      "AUTO 2",
+      "MAN"
     ],
     "B757_OVHD_ENG_START_SWITCH": [
       "1",
-      "Position 1",
-      "Position 2"
+      "2",
+      "BOTH"
     ],
     "B757_MCP_AP_HDG_BNKLIM": [
       "AUTO",
-      "Position 1",
-      "Position 2",
-      "Position 3",
-      "Position 4",
-      "Position 5"
+      "5",
+      "10",
+      "15",
+      "20",
+      "25"
     ],
     "B757_EICAS_LWR_THRUST-REF_KNOB": [
-      "Position 0",
+      "L",
       "BOTH",
-      "Position 2"
+      "R"
     ],
     "B757_OVHD_WIPER_SWITCH": [
       "OFF",
-      "Position 1",
+      "LOW",
+      "HIGH"
+    ],
+    "B757_IRS_CENTRE_KNOB": [
+      "L",
+      "C",
+      "R"
+    ],
+    "B757_IRS_LARGE_KNOB": [
+      "TK/GS",
+      "PPOS",
+      "WIND",
+      "HDG/STS"
+    ],
+    "B757_CABIN_CEILING": [
+      "Off",
+      "33%",
+      "66%",
+      "100%"
+    ],
+    "B757_CABIN_WINDOW": [
+      "Off",
+      "50%",
+      "100%"
+    ],
+    "B757_CABIN_ENTRY": [
+      "Off",
+      "50%",
+      "100%"
+    ],
+    "B757_OVHD_WARNING_IND_SWITCH": [
+      "DIM",
+      "BRT"
+    ],
+    "B757_MAIN_M_Gau_STBY_GYRO_SELECTOR": [
+      "OFF",
+      "ILS",
+      "BCRS"
+    ],
+    "B757_MAIN_CHRONO_ET_SWITCH": [
+      {
+        "value": 0,
+        "label": "RUN"
+      },
+      {
+        "value": 1,
+        "label": "HOLD"
+      },
+      {
+        "value": 3,
+        "label": "RESET"
+      }
+    ],
+    "B757_MAIN_CHRONO_ET_SWITCH_FO": [
+      {
+        "value": 0,
+        "label": "RUN"
+      },
+      {
+        "value": 1,
+        "label": "HOLD"
+      },
+      {
+        "value": 3,
+        "label": "RESET"
+      }
+    ],
+    "B757_MAIN_CHRONO_SET_SWITCH": [
+      "RUN",
+      "HOLD",
+      "Slow slew",
+      "Fast slew"
+    ],
+    "B757_MAIN_CHRONO_SET_SWITCH_FO": [
+      "RUN",
+      "HOLD",
+      "Slow slew",
+      "Fast slew"
+    ],
+    "B757_ECAM_LRAUTO_KNOB": [
+      "L",
+      "AUTO",
+      "R"
+    ],
+    "B757_VC_P61_SWITCH_2": [
+      "ON",
+      "AUTO",
+      "TEST"
+    ],
+    "B757_VC_P61_SWITCH_3": [
+      "Upper test",
+      "Neutral",
+      "Lower test"
+    ],
+    "B757_VC_P61_SWITCH_4": [
+      "Upper test",
+      "Neutral",
+      "Lower test"
+    ],
+    "B757_VC_P61_SWITCH_5": [
+      "Position 0",
+      "Neutral",
       "Position 2"
+    ],
+    "B757_VC_P61_SWITCH_6": [
+      "Wing anti-ice test",
+      "Neutral",
+      "Probe heat test"
+    ],
+    "B757_VC_P61_SWITCH_7": [
+      "Ground proximity test",
+      "Neutral",
+      "Hydraulic generator test"
+    ],
+    "B757_VC_P61_SWITCH_8": [
+      "Takeoff config test",
+      "Neutral",
+      "Landing config test"
+    ],
+    "B757_VC_P61_SWITCH_9": [
+      "Air data test",
+      "Neutral",
+      "Stall warning test"
+    ],
+    "B757_VC_P61_SWITCH_10": [
+      "Air data test",
+      "Neutral",
+      "Stall warning test"
     ]
   },
   "status": [

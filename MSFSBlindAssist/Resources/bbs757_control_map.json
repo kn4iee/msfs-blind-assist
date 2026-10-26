@@ -385,15 +385,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "L"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "C"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "R"
     }
    ],
    "press": null,
@@ -412,19 +412,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "TK/GS"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "PPOS"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "WIND"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "HDG/STS"
     }
    ],
    "press": null,
@@ -1050,11 +1050,11 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "LOW"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "HIGH"
     }
    ],
    "press": null,
@@ -1399,7 +1399,7 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
@@ -1426,7 +1426,7 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
@@ -1453,11 +1453,11 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO 2"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "MAN"
     }
    ],
    "press": null,
@@ -1507,15 +1507,15 @@
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "STBY N"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "STBY C"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "STBY W"
     }
    ],
    "press": null,
@@ -1542,15 +1542,15 @@
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "STBY N"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "STBY C"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "STBY W"
     }
    ],
    "press": null,
@@ -1758,19 +1758,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Off"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "33%"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "66%"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "100%"
     }
    ],
    "press": null,
@@ -1789,15 +1789,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Off"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "50%"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "100%"
     }
    ],
    "press": null,
@@ -1816,15 +1816,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Off"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "50%"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "100%"
     }
    ],
    "press": null,
@@ -2432,11 +2432,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "DIM"
     },
     {
      "value": 11,
-     "label": "Position 11"
+     "label": "BRT"
     }
    ],
    "press": null,
@@ -2789,23 +2789,23 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "5"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "10"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "15"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "20"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "25"
     }
    ],
    "press": null,
@@ -3474,31 +3474,31 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "UP"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "1"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "5"
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "15"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "20"
     },
     {
      "value": 6,
-     "label": "Position 6"
+     "label": "25"
     },
     {
      "value": 7,
-     "label": "Position 7"
+     "label": "30"
     }
    ],
    "press": null,
@@ -4143,15 +4143,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "OFF"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "ILS"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "BCRS"
     }
    ],
    "press": null,
@@ -4216,19 +4216,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "RUN"
     },
     {
      "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
+     "label": "HOLD"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "RESET"
     }
    ],
    "press": null,
@@ -4247,19 +4243,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "RUN"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "HOLD"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Slow slew"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "Fast slew"
     }
    ],
    "press": null,
@@ -4922,19 +4918,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "RUN"
     },
     {
      "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
+     "label": "HOLD"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "RESET"
     }
    ],
    "press": null,
@@ -4953,19 +4945,19 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "RUN"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "HOLD"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Slow slew"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "Fast slew"
     }
    ],
    "press": null,
@@ -5109,11 +5101,11 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "2"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "BOTH"
     }
    ],
    "press": null,
@@ -5140,15 +5132,15 @@
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "OFF"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "CONT"
     },
     {
      "value": 6,
-     "label": "Position 6"
+     "label": "FLT"
     }
    ],
    "press": null,
@@ -5198,15 +5190,15 @@
     },
     {
      "value": 4,
-     "label": "Position 4"
+     "label": "OFF"
     },
     {
      "value": 5,
-     "label": "Position 5"
+     "label": "CONT"
     },
     {
      "value": 6,
-     "label": "Position 6"
+     "label": "FLT"
     }
    ],
    "press": null,
@@ -5306,15 +5298,15 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "ALT RPTG OFF"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "XPNDR"
     },
     {
      "value": 3,
-     "label": "Position 3"
+     "label": "TA ONLY"
     },
     {
      "value": 4,
@@ -5457,7 +5449,7 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "L"
     },
     {
      "value": 1,
@@ -5465,7 +5457,7 @@
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "R"
     }
    ],
    "press": null,
@@ -5521,15 +5513,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "L"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "R"
     }
    ],
    "press": null,
@@ -7822,15 +7814,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Upper test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Lower test"
     }
    ],
    "press": null,
@@ -7849,15 +7841,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Upper test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Lower test"
     }
    ],
    "press": null,
@@ -7880,7 +7872,7 @@
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
@@ -7903,15 +7895,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Wing anti-ice test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Probe heat test"
     }
    ],
    "press": null,
@@ -7930,15 +7922,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Ground proximity test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Hydraulic generator test"
     }
    ],
    "press": null,
@@ -7957,15 +7949,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Takeoff config test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Landing config test"
     }
    ],
    "press": null,
@@ -7984,15 +7976,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Air data test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Stall warning test"
     }
    ],
    "press": null,
@@ -8011,15 +8003,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "Air data test"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "Neutral"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "Stall warning test"
     }
    ],
    "press": null,
@@ -8550,15 +8542,15 @@
    "positions": [
     {
      "value": 0,
-     "label": "Position 0"
+     "label": "ON"
     },
     {
      "value": 1,
-     "label": "Position 1"
+     "label": "AUTO"
     },
     {
      "value": 2,
-     "label": "Position 2"
+     "label": "TEST"
     }
    ],
    "press": null,
