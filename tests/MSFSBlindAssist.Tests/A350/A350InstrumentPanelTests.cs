@@ -120,31 +120,32 @@ public class A350InstrumentPanelTests
     /// <summary>The pedal light and every knob; the OIS switch springs back to NEUTRAL and only the cockpit sound reads
     /// it; OIS VIEW OFFSIDE shows the other side's OIS, one side at a time (the other side's button reads INOP).</summary>
     [Theory]
-    [InlineData("Captain Side Panel")]
-    [InlineData("First Officer Side Panel")]
-    public void Side_panels(string panel)
+    [InlineData("Captain Side Panel", "Captain")]
+    [InlineData("First Officer Side Panel", "First officer")]
+    public void Side_panels(string panel, string side)
     {
+        // Each side's name carries its side, as the glareshield's twins do: Ctrl+M lists both sides in one list.
         Assert.Equal(new[]
         {
-            ("Pedal light", A350RowAction.Set, OffOn),
-            ("OIS switch", A350RowAction.Set, "0=EFB, 1=Neutral, 2=AVNCS"),
-            ("OIS view offside", A350RowAction.Press, ""),
-            ("Console light", A350RowAction.Set, ""),
-            ("Map light", A350RowAction.Set, ""),
+            ($"{side} pedal light", A350RowAction.Set, OffOn),
+            ($"{side} OIS switch", A350RowAction.Set, "0=EFB, 1=Neutral, 2=AVNCS"),
+            ($"{side} OIS view offside", A350RowAction.Press, ""),
+            ($"{side} console light", A350RowAction.Set, ""),
+            ($"{side} map light", A350RowAction.Set, ""),
         }, Rows(panel));
-        Assert.Equal(new[] { "OIS view offside INOP light", "OIS view offside on light" }, Lights(panel));
+        Assert.Equal(new[] { $"{side} OIS view offside INOP light", $"{side} OIS view offside on light" }, Lights(panel));
     }
 
     [Theory]
-    [InlineData("Captain Individual Panel")]
-    [InlineData("First Officer Individual Panel")]
-    public void Individual_panels(string panel)
+    [InlineData("Captain Individual Panel", "Captain")]
+    [InlineData("First Officer Individual Panel", "First officer")]
+    public void Individual_panels(string panel, string side)
     {
         Assert.Equal(new[]
         {
-            ("Lateral vent and defog", A350RowAction.Set, ""),
-            ("Foot vent", A350RowAction.Set, ""),
-            ("Heater", A350RowAction.Set, "0=High, 1=Low, 2=Off"),
+            ($"{side} lateral vent and defog", A350RowAction.Set, ""),
+            ($"{side} foot vent", A350RowAction.Set, ""),
+            ($"{side} heater", A350RowAction.Set, "0=High, 1=Low, 2=Off"),
         }, Rows(panel));
     }
 }

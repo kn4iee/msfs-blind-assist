@@ -139,6 +139,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 AddDisplay(window.Panel, window.Key);
             }
 
+        _lampBoard = new A350LampBoard(_lamps.Values);
+
         foreach (var group in _lamps.Values.Where(l => l.ControlId != null).GroupBy(l => l.ControlId!))
             if (group.Count() == 1)
                 foreach (var row in _rows.Values.Where(r => r.Action == A350RowAction.Press && r.Control?.Id == group.Key))
@@ -259,7 +261,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         }
 
         foreach (var lamp in _lamps.Values)
-            Register(lamp.Key, lamp.Rule.Inputs[0], lamp.Name, lamp.InputKeys);
+        {
+            Register(lamp.Key, lamp.Rule.Inputs[0], MasterSpeakers.GetValueOrDefault(lamp.Key, lamp.Name), lamp.InputKeys);
+            // Spoken by the definition as the cockpit lights it, one Ctrl+M row each; a master light's echoes are not.
+            vars[lamp.Key].ExcludeFromMonitorManager = MasterEchoes.Contains(lamp.Key);
+        }
         foreach (var lamp in _lamps.Values)
             foreach (var input in lamp.Rule.Inputs.Skip(1))
                 if (!vars.ContainsKey(lamp.KeyFor(input)))
@@ -367,8 +373,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     Type = stockVar ? SimVarType.SimVar : SimVarType.LVar,
                     Units = stockVar ? control.StateUnit ?? "Bool" : "number",
                     UpdateFrequency = UpdateFrequency.Continuous,
-                    IsAnnounced = true,                    // batch-covered; consumed silently in ProcessSimVarUpdate
-                    ExcludeFromMonitorManager = true,      // a checkbox here would mute nothing ([VAR-9])
+                    // Spoken by MainForm's generic path when something other than the pilot's own pick moves it, one
+                    // Ctrl+M row each (the A380's switch combos); the pick itself is the echo the screen reader said.
+                    // A spring switch's return to rest follows the pilot's own press: consumed silently ([VAR-9]).
+                    IsAnnounced = true,
+                    ExcludeFromMonitorManager = control.Kind == A350Kinds.Spring,
                     ValueDescriptions = new Dictionary<double, string>(row.Positions),
                     // The combo follows a change made elsewhere: the write fires only on a user commit.
                     RefreshControlWhenDefHandled = _ => true,
@@ -410,15 +419,18 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>"L:NAME" → "NAME", "A:NAME:2" → "NAME:2" (SimVarDefinition names carry no prefix).</summary>
     private static string Bare(string stateVar) => stateVar.Length > 2 && stateVar[1] == ':' ? stateVar.Substring(2) : stateVar;
 
-    /// <summary>A row's position delivery is consumed silently: the screen reader has said the pilot's own pick, and
-    /// <see cref="NotePickReached"/> learns the switch moved.</summary>
+    /// <summary>A switch row's delivery tells <see cref="NotePickReached"/> the switch moved, then goes on to MainForm's
+    /// generic announce, which speaks a change the pilot did not pick (its echo gate keeps the pick quiet); a spring
+    /// switch's is consumed, its return to rest being the pilot's own press.</summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
-        if (_rows.ContainsKey(varName))
+        if (_rows.TryGetValue(varName, out var row))
         {
             NotePickReached(varName, value);
-            return true;
+            return row.Control?.Kind == A350Kinds.Spring;
         }
+        if (_lampBoard.Handles(varName))
+            HandleLampDelivery(varName, value, announcer);
         if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);

@@ -1,0 +1,180 @@
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A350;
+using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests.A350;
+
+/// <summary>What the A350 says on its own, and the Ctrl+M rows that mute it: the A380's convention (every switch combo
+/// spoken when something else moves it, one row each) and lights spoken as the cockpit lights them.</summary>
+public class A350AnnouncementTests
+{
+    private static readonly IniBuildsA350Definition Def = new();
+
+    private static IReadOnlySet<string> MonitorKeys() =>
+        MonitorRowBuilder.Build(Def.GetVariables()).Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+
+    [Fact]
+    public void The_a350_is_muted_by_its_own_list()
+    {
+        var s = new UserSettings { A350DisabledMonitorVariables = new() { "a350" } };
+        s.RebuildDisabledMonitorVariableCaches();
+        var set = DefAnnounceMuteSets.For(IniBuildsA350Definition.Code, s);
+        Assert.NotNull(set);
+        Assert.Equal(new[] { "a350" }, set!);
+    }
+
+    [Fact]
+    public void Ctrl_m_lists_every_switch_and_light_and_nothing_that_says_nothing()
+    {
+        var keys = MonitorKeys();
+        Assert.Contains("A350_ELEC_BAT_1", keys);                        // a switch
+        Assert.Contains("A350_SIGNS_SEAT_BELTS", keys);                  // a selector
+        Assert.Contains("A350_LT_ELEC_BAT_1_SEQ1_LIGHT", keys);          // a light
+        Assert.DoesNotContain("A350_APU_START", keys);                   // a button: its press is the pilot's own
+        Assert.DoesNotContain("A350_CABIN_ALT_TARGET_SET", keys);        // a typed field
+        Assert.DoesNotContain("A350_OIS_AVNCS_EFB_LEFT", keys);          // a spring: its return is the pilot's own press
+        Assert.DoesNotContain(A350PanelLamps.AcPowerKey, keys);          // a light's input, consumed silently
+        Assert.DoesNotContain(keys, k => k.StartsWith("A350_IN_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_switch_row_is_left_to_mainforms_generic_announce()
+    {
+        var bat = Def.GetVariables()["A350_ELEC_BAT_1"];
+        Assert.True(bat.IsAnnounced);
+        Assert.Equal(UpdateFrequency.Continuous, bat.UpdateFrequency);
+        Assert.False(bat.ExcludeFromMonitorManager);
+        Assert.False(Def.ProcessSimVarUpdate("A350_ELEC_BAT_1", 1, new SpeechCapture()));
+    }
+
+    [Fact]
+    public void A_spring_switch_is_consumed_silently()
+    {
+        var spring = Def.GetVariables()["A350_OIS_AVNCS_EFB_LEFT"];
+        Assert.True(spring.ExcludeFromMonitorManager);
+        Assert.True(Def.ProcessSimVarUpdate("A350_OIS_AVNCS_EFB_LEFT", 1, new SpeechCapture()));
+    }
+
+    [Fact]
+    public void Ctrl_m_lists_one_row_per_master_light_pair_side()
+    {
+        var keys = MonitorKeys();
+        Assert.Contains("A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT", keys);
+        Assert.Contains("A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT", keys);
+        Assert.DoesNotContain("A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ1_LIGHT", keys);   // the same light, said once
+        Assert.DoesNotContain("A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ2_LIGHT", keys);
+        Assert.Equal("Master caution", Def.GetVariables()["A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT"].DisplayName);
+    }
+}
+
+/// <summary>The definition speaking its lights: deliveries feed the light board, a batch end speaks the sentence.</summary>
+public class A350LampAnnouncementTests
+{
+    private long _now = 100_000;
+    private readonly SpeechCapture _speech = new();
+    private readonly HashSet<string> _muted = new(StringComparer.Ordinal);
+    private readonly IniBuildsA350Definition _def;
+    private readonly IReadOnlyList<A350Lamp> _lamps;
+
+    public A350LampAnnouncementTests()
+    {
+        _def = new IniBuildsA350Definition
+        {
+            Clock = () => _now,
+            CanLand = _ => true,
+            Send = (_, _) => { },
+            ReRead = (_, _) => { },
+            Delay = _ => new TaskCompletionSource().Task,
+            ReadFresh = (_, _, _) => Task.FromResult<double?>(null),
+            Cached = (_, _) => null,
+            IsMuted = key => _muted.Contains(key),
+        };
+        _def.Attach(new SimConnectManager(IntPtr.Zero));
+        _lamps = A350PanelLamps.Resolve(A350ControlMap.Load(), A350PanelLayout.Place(A350ControlMap.Load()),
+            new[] { "Overhead", "Glareshield", "Instrument" });
+    }
+
+    private A350Lamp Lamp(string key) => _lamps.Single(l => l.Key == key);
+
+    /// <summary>Delivers every input of a lamp at <paramref name="value"/>, its own key at <paramref name="first"/>.</summary>
+    private void Baseline(A350Lamp lamp, double first)
+    {
+        foreach (var key in lamp.InputKeys)
+            _def.ProcessSimVarUpdate(key, key == lamp.Key ? first : 1, _speech);
+    }
+
+    private void BatchAfter(int ms)
+    {
+        _now += ms;
+        _def.OnContinuousBatchDelivered(0);
+    }
+
+    [Fact]
+    public void A_fault_light_is_spoken_at_a_batch_end_once_gathered()
+    {
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        Baseline(bat, 0);
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);   // the baseline says nothing
+        Assert.True(_def.ProcessSimVarUpdate(bat.Key, 1, _speech));
+        BatchAfter(100);
+        Assert.Empty(_speech.All);   // still gathering
+        BatchAfter(A350LampSpeech.GatherMs);
+        Assert.Equal(new[] { bat.Name + " on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_muted_light_says_nothing()
+    {
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        _muted.Add(bat.Key);
+        Baseline(bat, 0);
+        _def.ProcessSimVarUpdate(bat.Key, 1, _speech);
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_pressed_buttons_own_light_is_left_to_its_label()
+    {
+        var abrk = Lamp("A350_LT_LDG_AUTO_BRK_SEQ1_LIGHT");
+        Baseline(abrk, 0);
+        _def.HandleUIVariableSet("A350_LDG_AUTO_BRK", 1, _def.GetVariables()["A350_LDG_AUTO_BRK"], new SimConnectManager(IntPtr.Zero), _speech);
+        _def.ProcessSimVarUpdate(abrk.Key, 1, _speech);
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);
+        _now += IniBuildsA350Definition.PressedLampMs;
+        _def.ProcessSimVarUpdate(abrk.Key, 0, _speech);   // disarmed by the aircraft later: spoken
+        BatchAfter(A350LampSpeech.OffHoldMs + 100);
+        Assert.Equal(new[] { abrk.Name + " off" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_master_light_is_spoken_once_and_only_as_it_comes_on()
+    {
+        var caution = Lamp("A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT");
+        var foCaution = Lamp("A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ1_LIGHT");
+        Baseline(caution, 0);
+        Baseline(foCaution, 0);
+        _def.ProcessSimVarUpdate(caution.Key, 1, _speech);
+        _def.ProcessSimVarUpdate(foCaution.Key, 1, _speech);
+        BatchAfter(5000);
+        Assert.Equal(new[] { "Master caution on" }, _speech.All);
+        _def.ProcessSimVarUpdate(caution.Key, 0, _speech);
+        BatchAfter(10000);
+        Assert.Single(_speech.All);   // going out is the pilot's own press of it
+    }
+
+    [Fact]
+    public void A_flight_load_resets_the_baselines()
+    {
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        Baseline(bat, 0);
+        _def.OnSimContextReset();
+        Baseline(bat, 1);      // the load's first values: a new baseline, not a change
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);
+    }
+}

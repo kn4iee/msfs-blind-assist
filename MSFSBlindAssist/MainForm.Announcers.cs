@@ -356,6 +356,13 @@ public partial class MainForm
                     return; // Skip announcement for disabled variable
                 }
 
+                // Check if disabled in the iniBuilds A350 Monitor Manager (its switch combos speak here).
+                if (currentAircraft.AircraftCode == IniBuildsA350Definition.Code &&
+                    Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(e.VarName))
+                {
+                    return; // Skip announcement for disabled variable
+                }
+
                 // Check if disabled in the A380 Monitor Manager.
                 if (currentAircraft.AircraftCode == "FBW_A380" &&
                     Settings.SettingsManager.Current.A380DisabledMonitorVariablesSet.Contains(e.VarName))

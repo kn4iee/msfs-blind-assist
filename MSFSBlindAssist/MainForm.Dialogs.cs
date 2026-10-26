@@ -347,6 +347,17 @@ public partial class MainForm
         fbwA380MonitorManagerForm.ShowForm();
     }
 
+    /// <summary>The iniBuilds A350's monitor manager (Ctrl+M). Guarded on the aircraft like the MD-11's: the definition
+    /// calls it, and a call that runs after a switch must not build an A350 list over another aircraft.</summary>
+    public void ShowA350MonitorManagerDialog()
+    {
+        if (currentAircraft is not IniBuildsA350Definition a350) return;
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (a350MonitorManagerForm == null || a350MonitorManagerForm.IsDisposed)
+            a350MonitorManagerForm = new Forms.A350.A350MonitorManagerForm(a350.GetVariables());
+        a350MonitorManagerForm.ShowForm();
+    }
+
     public void ShowA320MonitorManagerDialog()
     {
         hotkeyManager.ExitOutputHotkeyMode();

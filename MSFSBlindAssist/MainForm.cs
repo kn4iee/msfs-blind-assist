@@ -195,6 +195,9 @@ public partial class MainForm : Form
     // them individually is not a nicety here.
     private Forms.MD11.Md11MonitorManagerForm? md11MonitorManagerForm;
 
+    // iniBuilds A350 monitor manager (Ctrl+M): its switches and lights.
+    private Forms.A350.A350MonitorManagerForm? a350MonitorManagerForm;
+
     private Forms.IFly737.IFly737MonitorManagerForm? iflyMonitorManagerForm;
 
     private TakeoffAssistManager takeoffAssistManager = null!;
@@ -1463,6 +1466,8 @@ public partial class MainForm : Form
         if (md11MonitorManagerForm != null && !md11MonitorManagerForm.IsDisposed) md11MonitorManagerForm.Dispose();
         md11MonitorManagerForm = null;
         coherentMd11Efb?.Dispose();
+        if (a350MonitorManagerForm != null && !a350MonitorManagerForm.IsDisposed) a350MonitorManagerForm.Dispose();
+        a350MonitorManagerForm = null;
 
         // Clean up 787 forms + the IRS / CAS Coherent clients
         hs787FMCForm?.Dispose();

@@ -88,8 +88,10 @@ public static class A350PanelLamps
         // side's OIS) and its own ON.
         ["LDG_BRK_HOT_SEQ1_LIGHT"] = "Brakes hot light",
         ["LDG_AUTO_BRK_SEQ1_LIGHT"] = "A/BRK light",
-        ["OIS_VIEW_OFFSIDE_LEFT_SEQ1_LIGHT"] = "OIS view offside INOP light", ["OIS_VIEW_OFFSIDE_LEFT_SEQ2_LIGHT"] = "OIS view offside on light",
-        ["OIS_VIEW_OFFSIDE_RIGHT_SEQ1_LIGHT"] = "OIS view offside INOP light", ["OIS_VIEW_OFFSIDE_RIGHT_SEQ2_LIGHT"] = "OIS view offside on light",
+        ["OIS_VIEW_OFFSIDE_LEFT_SEQ1_LIGHT"] = "Captain OIS view offside INOP light",
+        ["OIS_VIEW_OFFSIDE_LEFT_SEQ2_LIGHT"] = "Captain OIS view offside on light",
+        ["OIS_VIEW_OFFSIDE_RIGHT_SEQ1_LIGHT"] = "First officer OIS view offside INOP light",
+        ["OIS_VIEW_OFFSIDE_RIGHT_SEQ2_LIGHT"] = "First officer OIS view offside on light",
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
         ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL

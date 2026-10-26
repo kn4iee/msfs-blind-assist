@@ -66,6 +66,7 @@ public partial class IniBuildsA350Definition
             : value;
         if (!Execute(row, plan, simConnect, announcer, commanded))
             return true;   // refused, already there or unavailable: nothing was written
+        NoteOwnLamps(control);   // its lights follow the pilot's own press or pick: its label says them
 
         if (commanded is double target && control.Kind is A350Kinds.Toggle or A350Kinds.Command or A350Kinds.Selector)
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);

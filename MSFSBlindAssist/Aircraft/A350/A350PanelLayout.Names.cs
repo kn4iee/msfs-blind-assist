@@ -252,14 +252,15 @@ public static partial class A350PanelLayout
         ["DISPLAY_EFB_LEFT_PWR"] = "Captain OIS display", ["DISPLAY_EFB_RIGHT_PWR"] = "First officer OIS display",
         ["DISPLAY_EFIS_LEFT_PWR"] = "Captain outer display", ["DISPLAY_EFIS_RIGHT_PWR"] = "First officer outer display",
         ["DISPLAY_PFDND_MFD_PWR"] = "Center lower display", ["DISPLAY_SD_PWR"] = "Center upper display",
-        // Side and individual panels: each side's panel holds its own, so the names are the placards'.
-        ["MIP_PEDAL_LT_LEFT"] = "Pedal light", ["MIP_PEDAL_LT_RIGHT"] = "Pedal light",
-        ["OIS_AVNCS_EFB_LEFT"] = "OIS switch", ["OIS_AVNCS_EFB_RIGHT"] = "OIS switch",
-        ["MIP_CONSOLE_BRT_LEFT"] = "Console light", ["MIP_CONSOLE_BRT_RIGHT"] = "Console light",
-        ["MIP_MAP_BRT_LEFT"] = "Map light", ["MIP_MAP_BRT_RIGHT"] = "Map light",
-        ["INDIV_LAT_VENT_DEFOG_LEFT"] = "Lateral vent and defog", ["INDIV_LAT_VENT_DEFOG_RIGHT"] = "Lateral vent and defog",
-        ["INDIV_FOOT_VENT_LEFT"] = "Foot vent", ["INDIV_FOOT_VENT_RIGHT"] = "Foot vent",
-        ["INDIV_HEATER_LEFT"] = "Heater", ["INDIV_HEATER_RIGHT"] = "Heater",
+        // Side and individual panels: each side's name carries its side, as the glareshield's twins do (Ctrl+M lists both).
+        ["MIP_PEDAL_LT_LEFT"] = "Captain pedal light", ["MIP_PEDAL_LT_RIGHT"] = "First officer pedal light",
+        ["OIS_AVNCS_EFB_LEFT"] = "Captain OIS switch", ["OIS_AVNCS_EFB_RIGHT"] = "First officer OIS switch",
+        ["OIS_VIEW_OFFSIDE_LEFT"] = "Captain OIS view offside", ["OIS_VIEW_OFFSIDE_RIGHT"] = "First officer OIS view offside",
+        ["MIP_CONSOLE_BRT_LEFT"] = "Captain console light", ["MIP_CONSOLE_BRT_RIGHT"] = "First officer console light",
+        ["MIP_MAP_BRT_LEFT"] = "Captain map light", ["MIP_MAP_BRT_RIGHT"] = "First officer map light",
+        ["INDIV_LAT_VENT_DEFOG_LEFT"] = "Captain lateral vent and defog", ["INDIV_LAT_VENT_DEFOG_RIGHT"] = "First officer lateral vent and defog",
+        ["INDIV_FOOT_VENT_LEFT"] = "Captain foot vent", ["INDIV_FOOT_VENT_RIGHT"] = "First officer foot vent",
+        ["INDIV_HEATER_LEFT"] = "Captain heater", ["INDIV_HEATER_RIGHT"] = "First officer heater",
         // ISIS: both units' keys on one panel, by side.
         ["ISIS_KNOB_BUTTON_1"] = "Captain STD/CHANGE", ["ISIS_LS_1"] = "Captain LS/DIR TO", ["ISIS_MENU_1"] = "Captain menu",
         ["ISIS_MINUS_1"] = "Captain minus", ["ISIS_MODE_1"] = "Captain mode", ["ISIS_PLUS_1"] = "Captain plus",

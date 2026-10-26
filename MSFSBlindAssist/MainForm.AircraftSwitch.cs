@@ -1036,6 +1036,13 @@ public partial class MainForm
             md11MonitorManagerForm = null;
         }
 
+        // The A350's, for the same stale-snapshot reason.
+        if (a350MonitorManagerForm != null && !a350MonitorManagerForm.IsDisposed)
+        {
+            a350MonitorManagerForm.Dispose();
+            a350MonitorManagerForm = null;
+        }
+
         // The MD-11 EFB client holds the ONE inspector socket Coherent allows for that view —
         // leaving it open would block the page for the rest of the process, so the next aircraft
         // (or a re-loaded MD-11) could never connect to its EFB again.
