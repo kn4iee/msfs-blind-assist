@@ -60,8 +60,12 @@ What is derived and what is curated (curation.json):
             leaves all of its click code out: press, release, cw and ccw are empty, and the app writes the state var to
             the picked position, as it does for any switch with no click code. The control is otherwise built by the
             rules (state var, kind, label, panel and positions unchanged), and its positions are still checked against
-            what the vendor's code writes. The map must keep the node, and the node needs a state var and positions to
-            pick from; a node that is also guarded is an error. The run names each, and what it left out.
+            what the vendor's code writes. The entry is checked against that code, so that a change of BlueBird's stops
+            the run instead of reaching the app: the map must keep the node, a switch with a state var and positions to
+            pick from, and not also under kinds or guarded; its click code must exist (else the entry does nothing),
+            carry no gate note (a gated click belongs under guarded, which opens the guard first) and write nothing
+            but the state var (another L:var, a K: or an H: event would no longer run). The run names each, and what it
+            left out.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
 cockpit runs, so a slip the cockpit has stays a slip in the replay (a guarded or direct_write control has none). Code
@@ -606,19 +610,56 @@ def check_guarded(controls, first_row, cur):
                                 f"is {entry['close_sets']}")
 
 
-def check_direct_write(controls, dropped_why, cur):
-    """Each direct_write entry against the control the map holds for it. The map must keep the node (a stale entry never
-    hides), and the app can only write a control that has a state var to write and positions to pick a value from."""
+def click_codes(row):
+    """[(press | release | cw | ccw, the vendor's code)] of what the map would replay for this row, in that order."""
+    return [(name, code) for name, code in zip(("press", "release", "cw", "ccw"), click_fields(row, KIND_MAP[row["kind"]]))
+            if code]
+
+
+def check_direct_write(controls, kept_row, dropped_why, cur):
+    """Each direct_write entry against the control the map holds for it and against the vendor's own click code, which the
+    nulling in convert_row never touches (kept_row holds the row as the extractor read it).
+
+    The control: the map must keep the node (a stale entry never hides), and the app writes the state var only of a switch
+    (the one control that may have no click code, Every_control_has_a_writer in the C# tests), so it must be one, with a
+    state var to write and positions to pick a value from, and not also under kinds, which keeps the click code verbatim.
+    The click code: leaving it out must lose nothing, so a change of BlueBird's stops the run instead of reaching the app.
+    There is code to leave out (else the entry does nothing), none of it gated on a guard (that control belongs under
+    'guarded', which opens the guard first), and it writes nothing but the state var: another L:var, or a K: or H: event it
+    fires, would no longer run."""
     by_node = {c["node"]: c for c in controls}
     for node in cur["direct_write"]:
         control = by_node.get(node)
         if control is None:
             raise CurationError(f"curation direct_write names {node}, which the map does not keep (the rules leave it out: "
                                 f"{dropped_why.get(node, '?')}): remove the entry")
+        if node in cur["kinds"]:
+            raise CurationError(f"curation direct_write and kinds both name: {node} (kinds keeps a control's click code "
+                                "verbatim, direct_write leaves it out)")
         if control["state_var"] is None:
             raise CurationError(f"curation direct_write names {node}, which has no state var: there is nothing to write")
         if not control["positions"]:
             raise CurationError(f"curation direct_write names {node}, which has no positions: there is no value to write")
+        if control["kind"] != "switch":
+            raise CurationError(f"curation direct_write names {node}, which is a {control['kind']}, not a switch: only a "
+                                "switch may have no click code and be written through its state var")
+        codes = click_codes(kept_row[node])
+        if not codes:
+            raise CurationError(f"curation direct_write names {node}, whose vendor row has no click code: the entry does "
+                                "nothing, remove it")
+        for field, code in codes:
+            if GATE_NOTE.search(code):
+                note = re.search(r"\[[^\]]*\]", code)
+                raise CurationError(f"curation direct_write names {node}: {field} carries the extractor's gate note "
+                                    f"'{note.group(0) if note else code[:40]}': its click only runs while a guard is open, so "
+                                    "list it under 'guarded' (the app opens the guard first), not under 'direct_write'")
+        state_var = control["state_var"]
+        writes = {f"{kind}:{name}" for _, code in codes for is_write, kind, name in extract_controls.var_refs(code)
+                  if is_write and (kind, name) != ("L", state_var)}
+        if writes:
+            raise CurationError(f"curation direct_write names {node}: its click code also writes {', '.join(sorted(writes))} "
+                                f"besides its state var {state_var}, and leaving the click code out would lose that: remove "
+                                "the entry, so that the app replays the click code")
 
 
 def reject_gate_notes(controls, cur):
@@ -646,10 +687,9 @@ def guarded_how(row, cur):
 
 
 def direct_write_how(row):
-    """What curation's 'direct_write' left out of this row's click code, in words, for the run's report."""
-    left_out = [name for name, code in zip(("press", "release", "cw", "ccw"), click_fields(row, KIND_MAP[row["kind"]]))
-                if code]
-    return f"{', '.join(left_out)} left out" if left_out else "no click code to leave out"
+    """What curation's 'direct_write' left out of this row's click code, in words, for the run's report (check_direct_write
+    has already stopped the run for a row with none)."""
+    return f"{', '.join(name for name, _ in click_codes(row))} left out"
 
 
 def status_row(entry):
@@ -793,7 +833,7 @@ def build_map(rows, cur, aircraft, version):
                       else f"the rules leave it out: {dropped_why.get(guard, '?')}")
             raise CurationError(f"curation guarded: the guard {guard} of {node} has no row in the map ({reason}); a "
                                 "guard keeps its own row, which the app opens")
-    check_direct_write(controls, dropped_why, cur)
+    check_direct_write(controls, kept_row, dropped_why, cur)
     check_guarded(controls, first_row, cur)
     reject_gate_notes(controls, cur)
     # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).

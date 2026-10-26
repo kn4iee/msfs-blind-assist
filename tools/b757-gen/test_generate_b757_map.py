@@ -1274,6 +1274,106 @@ class DirectWrite(unittest.TestCase):
         self.build(stab)
         self.build([no_positions])
 
+    # The premise of direct_write is that leaving the click code out loses nothing. The generator checks it against the
+    # vendor's own code on every run, so that a change of BlueBird's stops the run instead of reaching the app, and only a
+    # switch is taken: the one control the map may hold without a click code.
+    @staticmethod
+    def switch_row(node, **clicks):
+        """A three-position switch on its own L:var (the node's name), with the click code given."""
+        return row(node=node, kind="multi-position switch", positions="3", state=["L:" + node], **clicks)
+
+    def test_direct_write_needs_a_click_code_to_leave_out(self):
+        # A switch the vendor gives no click code (the fuel control switches, the P61 test switches) is written through its
+        # state var already: the entry would do nothing, and an entry that does nothing is a stale one.
+        node = "B757_PED_NOCODE_SWITCH"
+        bare = self.switch_row(node)
+
+        with self.assertRaisesRegex(g.CurationError, rf"direct_write names {node}, whose vendor row has no click code"):
+            self.build([bare], direct_write=[self.ET, node])
+        self.build([bare])   # without the entry it builds, written through its state var
+
+    def test_a_gated_click_belongs_under_guarded_and_direct_write_does_not_hide_it(self):
+        # A click that only runs while a guard is open (the extractor's '[if ...]' note: the stab trims, the emergency lights
+        # switch) stops the run unless the control is guarded. direct_write must not be a way round that: the app would write
+        # the state var with the guard closed.
+        node, guard = "B757_PED_GATED_SWITCH", "B757_PED_GATED_GUARD"
+        note = f"[if (L:{guard}, bool) 1 ==] "
+        up, down, cycle = (f"(L:{node}) 1 + 2 min (>L:{node})", f"(L:{node}) 1 - 0 max (>L:{node})",
+                           f"(L:{node}) 1 + 3 % (>L:{node})")
+        cases = [
+            ("a gated cw and ccw", "cw", self.switch_row(node, left=note + up, other=[("RightSingle", note + down)])),
+            ("a gated press", "press", self.switch_row(node, left=note + cycle)),
+            ("a gated release", "release", self.switch_row(node, left=cycle, release=note + f"1 (>L:{node})")),
+        ]
+        for what, field, r in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, rf"^{node}: {field} carries the extractor's gate note"):
+                    self.build([r])   # the rule every other control meets
+                with self.assertRaisesRegex(g.CurationError, rf"^curation direct_write names {node}: {field} carries the "
+                                                             r"extractor's gate note '\[if .*\]': .*list it under 'guarded'"):
+                    self.build([r], direct_write=[self.ET, node])
+
+    def test_direct_write_stops_on_a_click_that_writes_more_than_its_state_var(self):
+        # The premise of leaving the click code out: it writes nothing but the lever's own L:var. A BlueBird update that adds
+        # a write (another L:var, a K: or an H: event) stops the run, since the app would no longer run it.
+        node, var = self.ET, self.VAR[self.ET]
+        cw, ccw = self.et_codes(var)
+
+        def lever(cw_code=cw, ccw_code=ccw):
+            return row(node=node, kind="rotary knob finite", positions="4", panel=self.BANNER[node], state=["L:" + var],
+                       tips=["RUN", "HOLD", "RESET"], cw=cw_code, ccw=ccw_code)
+
+        cases = [
+            ("another L:var", " 1 (>L:BBS_SOME_OTHER_VAR)", "L:BBS_SOME_OTHER_VAR"),
+            ("a K: event", " 1 (>K:AUTOPILOT_OFF)", "K:AUTOPILOT_OFF"),
+            ("an H: event", " (>H:BBS_SOME_EVENT)", "H:BBS_SOME_EVENT"),
+            ("two writes", " 1 (>L:BBS_SOME_OTHER_VAR) 1 (>K:AUTOPILOT_OFF)", "K:AUTOPILOT_OFF, L:BBS_SOME_OTHER_VAR"),
+        ]
+        for what, extra, named in cases:
+            for field, r in (("cw", lever(cw_code=cw + extra)), ("ccw", lever(ccw_code=ccw + extra))):
+                with self.subTest(what, field=field):
+                    message = (rf"direct_write names {node}: its click code also writes {re.escape(named)} "
+                               rf"besides its state var {var}")
+                    with self.assertRaisesRegex(g.CurationError, message):
+                        self.build([r])
+        # more writes of the lever's own var are no side effect: the app writes that var
+        self.build([lever(cw_code=cw + f" 0 (>L:{var}, enum)")])
+
+    def test_direct_write_refuses_a_node_that_is_also_under_kinds(self):
+        # kinds keeps a control's click code verbatim ("only the kind changes") and direct_write leaves it out: a node under
+        # both would build as a toggle with its click code gone.
+        node, handle = "BBS757_FIREHANDLE1_CLICK3", apu_fire_handle_row()
+        self.assertEqual(g.load_curation(g.DEFAULT_CURATION)["kinds"][node], "toggle")
+
+        with self.assertRaisesRegex(g.CurationError, rf"direct_write and kinds both name: {node}"):
+            self.build([handle], direct_write=[self.ET, node])
+        self.build([handle])   # the kinds entry alone builds, with the vendor's click code verbatim
+
+    def test_direct_write_refuses_a_control_that_is_not_a_switch(self):
+        # Only a switch may have no click code in the map (Every_control_has_a_writer in the C# tests): a toggle, a guard or a
+        # select is pressed with its own click code.
+        def flip(n):
+            return f"(L:{n}, bool) ! (>L:{n}, bool)"
+
+        cases = [
+            ("toggle", row(node="B757_PED_T_BUTTON", kind="toggle", left=flip("B757_PED_T_BUTTON"))),
+            ("guard", row(node="B757_PED_G_GUARD", kind="guard", left=flip("B757_PED_G_GUARD"))),
+            ("select", row(node="B757_PED_S_LIGHT", kind="select button", positions="-",
+                           left="1 (>L:B757_PED_S_LIGHT, bool)")),
+        ]
+        for kind, r in cases:
+            with self.subTest(kind):
+                with self.assertRaisesRegex(g.CurationError,
+                                            rf"direct_write names {r['node']}, which is a {kind}, not a switch"):
+                    self.build([r], direct_write=[self.ET, r["node"]])
+                self.build([r])   # it builds without the entry, with its own click code
+        # the stab trim as the vendor wrote it (a gated toggle), left out of guarded: direct_write is no way round the guard
+        stab = self.stab_rows()
+        with self.subTest("a gated toggle, the stab trim"):
+            with self.assertRaisesRegex(g.CurationError,
+                                        rf"direct_write names {stab[1]['node']}, which is a toggle, not a switch"):
+                self.build(stab, guarded={}, direct_write=[self.ET, stab[1]["node"]])
+
 
 class FlowOrder(unittest.TestCase):
     """panel_order and control_order (ruling R37): the order the pilot tabs through the panels of a section and, inside
