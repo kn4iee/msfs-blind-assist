@@ -57,6 +57,7 @@ CURATION = {
     "kinds": {},
     "guarded": {},
     "direct_write": [],
+    "keep_without_node": [],
     "spelling": {"CENTRE": "Center"},
     "status": [],
 }
@@ -1375,6 +1376,440 @@ class DirectWrite(unittest.TestCase):
                 self.build(stab, guarded={}, direct_write=[self.ET, stab[1]["node"]])
 
 
+class CockpitPresence(unittest.TestCase):
+    """Plan 02, task 5 (ruling R65): the map holds only controls the cockpit has. BlueBird ships one interior model per
+    engine variant (BBS_752_PW_INTERIOR.gltf, BBS_752_RR_INTERIOR.gltf), and a control can be clicked only where a node
+    of its name is in the model. A control whose node is in neither model is left out, counted and named like every
+    other drop; a control that one model alone has says which, with (PW) or (RR) at the end of its label. The rows have
+    the shape the extractor gives (row()); the cockpit is the two models' node names (g.Cockpit)."""
+    BOTH, PW_ONLY, RR_ONLY, NEITHER = ("B757_OVHD_ALPHA_BUTTON", "B757_OVHD_BRAVO_BUTTON", "B757_OVHD_CHARLIE_BUTTON",
+                                       "B757_OVHD_DELTA_BUTTON")
+    STAB, GUARD = "B757_Stab_trim_C_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH"
+
+    @staticmethod
+    def cockpit(pw=(), rr=()):
+        return g.Cockpit(pw=set(pw), rr=set(rr))
+
+    def models(self):
+        """Alpha is in both models, Bravo in the PW one only, Charlie in the RR one only and Delta in neither."""
+        return self.cockpit(pw=[self.BOTH, self.PW_ONLY], rr=[self.BOTH, self.RR_ONLY])
+
+    @staticmethod
+    def toggles(*nodes):
+        """One toggle on its own L:var per node, in the Electrical panel, in the order given."""
+        return [row(node=n, line=i, left=f"(L:{n},bool) ! (>L:{n},bool)") for i, n in enumerate(nodes, 1)]
+
+    def build(self, rows, cockpit=None, **changes):
+        return g.build_map(rows, curation(**changes), "pkg", "1", self.models() if cockpit is None else cockpit)
+
+    def test_cockpit_presence(self):
+        pw, rr = {"BOTH", "PW_ONLY"}, {"BOTH", "RR_ONLY"}
+
+        self.assertEqual([g.cockpit_presence(n, pw, rr) for n in ("BOTH", "PW_ONLY", "RR_ONLY", "NEITHER")],
+                         ["both", "pw", "rr", "none"])
+        # a node is matched whole and as written: not as the start of a longer name, not in another case
+        self.assertEqual([g.cockpit_presence(n, pw, rr) for n in ("BOT", "BOTH_2", "both", "Pw_Only")], ["none"] * 4)
+        self.assertEqual(g.cockpit_presence("BOTH", set(), set()), "none")
+        self.assertEqual(g.cockpit_presence("PW_ONLY", pw, set()), "pw")
+
+    def test_absent_controls_dropped(self):
+        rows = self.toggles(self.BOTH, self.PW_ONLY, self.RR_ONLY, self.NEITHER)
+        models = self.models()
+
+        control, why, slips = g.convert_row(rows[3], curation(), models)
+
+        self.assertEqual((control, why, slips), (None, "no cockpit node", []))
+        self.assertEqual(g.NO_COCKPIT_NODE, "no cockpit node")
+        self.assertEqual([g.drop_reason(r, curation(), models) for r in rows], [None, None, None, "no cockpit node"])
+        self.assertIsNone(g.drop_reason(rows[3], curation()),
+                          "given no models nothing is judged: the other rules' tests have none")
+
+        m, report = g.build_map(rows, curation(), "pkg", "1", models)
+
+        self.assertEqual([c["node"] for c in m["controls"]], [self.BOTH, self.PW_ONLY, self.RR_ONLY])
+        # counted by reason like every other drop, and named, with the label it would have had and its vendor banner
+        # (the app panel it would have been on is whatever curation makes of it now, which the report does not claim)
+        self.assertEqual(report["dropped"], collections.Counter({"no cockpit node": 1}))
+        self.assertEqual(report["absent"], {self.NEITHER: {"banner": "ELECTRICAL PANEL", "label": "Delta"}})
+        # the other rules come first, so their counts stay what they were: a lever no cockpit has is still a lever
+        lever = row(node=self.NEITHER, kind="lever", positions="", left="1 (>L:X)")
+        banner = row(node=self.NEITHER, panel="CB OVERHEAD PANEL", left="1 (>L:X)")
+        self.assertEqual(g.drop_reason(lever, curation(), models), "lever")
+        self.assertEqual(g.drop_reason(banner, curation(), models), "excluded banner")
+        _, report = g.build_map([lever], curation(), "pkg", "1", models)
+        self.assertEqual((report["dropped"], report["absent"]), (collections.Counter({"lever": 1}), {}))
+
+    def test_a_panel_the_drop_empties_is_not_emitted_and_an_order_that_names_it_stops_the_run(self):
+        # Panels exist only through their controls: when none is left, the panel is gone from the map (and from the app,
+        # which builds its panels from the map's controls). An order entry for it would do nothing, so it is an error.
+        fuel = row(node=self.NEITHER, panel="FUEL PANEL", line=2, left="(L:X,bool) ! (>L:X,bool)")
+        rows = self.toggles(self.BOTH) + [fuel]
+
+        m, _ = self.build(rows)
+
+        self.assertEqual({(c["section"], c["panel"]) for c in m["controls"]}, {("Overhead", "Electrical")})
+        with self.assertRaisesRegex(g.CurationError, "panel_order names panels Overhead does not have: Fuel"):
+            self.build(rows, panel_order={"Overhead": ["Electrical", "Fuel"]})
+        with self.assertRaisesRegex(g.CurationError, "control_order names a panel no control is on: Fuel"):
+            self.build(rows, control_order={"Fuel": [self.NEITHER]})
+        with self.assertRaisesRegex(g.CurationError, rf"control_order lists nodes that are not in Electrical: "
+                                                     rf"{self.NEITHER} \(not in the map\)"):
+            self.build(rows, control_order={"Electrical": [self.BOTH, self.NEITHER]})
+
+    def test_a_curation_entry_never_rescues_a_control_no_cockpit_has(self):
+        # kinds, labels and positions about a control the rules drop change nothing and are only reported, as for any drop.
+        r = row(node=self.NEITHER, kind="momentary button", positions="-", left="1 (>L:X)")
+        for table, entry in (("kinds", {self.NEITHER: "toggle"}), ("labels", {self.NEITHER: "Delta"}),
+                             ("positions", {self.NEITHER: ["Off", "On"]})):
+            with self.subTest(table):
+                m, report = self.build([r], **{table: entry})
+
+                self.assertEqual(m["controls"], [])
+                self.assertEqual(report["dropped"], collections.Counter({"no cockpit node": 1}))
+                self.assertEqual(report["overrides_on_dropped"], [self.NEITHER], "reported, never silent")
+        self.assertEqual(g.convert_row(r, curation(kinds={self.NEITHER: "toggle"}), self.models()),
+                         (None, "no cockpit node", []))
+        # a direct_write entry is stale once its node is dropped: the run stops until it is removed
+        with self.assertRaisesRegex(g.CurationError, rf"direct_write names {self.NEITHER}, which the map does not keep "
+                                                     r"\(the rules leave it out: no cockpit node\)"):
+            self.build([r], direct_write=[self.NEITHER])
+
+    GUARDED = {STAB: {"state_var": STAB, "positions": ["NORMAL", "CUTOUT"], "guard": GUARD, "guard_closed": 0,
+                      "close_sets": 0}}
+
+    def stab_rows(self):
+        """The stab trim C cutout and its guard in the vendor's shape (BBS_752_BASE_INTERIOR.xml:15381-15397)."""
+        return [
+            row(node=self.GUARD, kind="guard", panel="PEDESTAL GAURD SWITCH GEAR", line=1, state=["L:" + self.GUARD],
+                left=f"(L:{self.GUARD}, bool) ! (>L:{self.GUARD}, bool) "
+                     f"(L:{self.GUARD}, bool) 0 == if{{ 0 (>L:{self.STAB}, number) }}"),
+            row(node=self.STAB, kind="toggle", panel="PEDESTAL GAURD SWITCH GEAR", line=2, state=["L:" + self.STAB],
+                left=f"[if (L:{self.GUARD}, bool) 1 ==] (L:{self.STAB}, number) 1 == if{{ 0 }} els{{ 1 }} "
+                     f"(>L:{self.STAB}, number)"),
+        ]
+
+    def test_a_guarded_control_and_its_guard_must_have_their_nodes(self):
+        # A guarded entry takes in what the other rules leave out, but never what no cockpit has: a switch with no node is
+        # a stale entry, and a guard with no node could never be opened.
+        rows = self.stab_rows()
+        both = self.cockpit(pw=[self.STAB, self.GUARD], rr=[self.STAB, self.GUARD])
+
+        m, _ = self.build(rows, both, guarded=self.GUARDED)
+        self.assertEqual([c["node"] for c in m["controls"]], [self.GUARD, self.STAB])
+
+        no_switch = self.cockpit(pw=[self.GUARD], rr=[self.GUARD])
+        with self.assertRaisesRegex(g.CurationError, rf"guarded names {self.STAB}, which neither cockpit model has"):
+            self.build(rows, no_switch, guarded=self.GUARDED)
+        no_guard = self.cockpit(pw=[self.STAB], rr=[self.STAB])
+        with self.assertRaisesRegex(g.CurationError, rf"the guard {self.GUARD} of {self.STAB} has no row in the map "
+                                                     r"\(the rules leave it out: no cockpit node\)"):
+            self.build(rows, no_guard, guarded=self.GUARDED)
+
+    def test_a_taken_in_node_no_cockpit_has_stops_the_run(self):
+        banner, node = "RIGHT WINDOW RAIN EFFECTS", "BBS757_PEDESTAL_Park_Brake_Lever"
+        rows = [row(node=node, panel=banner, state=["L:B"], left="(L:B,bool) ! (>L:B,bool)")]
+        changes = dict(exclude_banners=["CB OVERHEAD PANEL", banner], include_nodes=[node],
+                       node_panels=[{"prefix": "BBS757_PEDESTAL_", "panel": "Control stand", "section": "Pedestal"}])
+
+        m, _ = self.build(rows, self.cockpit(pw=[node], rr=[node]), **changes)
+        self.assertEqual([c["node"] for c in m["controls"]], [node])
+
+        with self.assertRaisesRegex(g.CurationError, rf"include_nodes name nodes the rules still leave out: "
+                                                     rf"{node} \(no cockpit node\)"):
+            self.build(rows, self.cockpit(), **changes)
+
+    def test_variant_suffix_not_doubled(self):
+        rows = self.toggles(self.BOTH, self.PW_ONLY, self.RR_ONLY)
+
+        m, report = self.build(rows)
+
+        self.assertEqual([c["label"] for c in m["controls"]], ["Alpha", "Bravo (PW)", "Charlie (RR)"])
+        self.assertEqual(report["variant_only"], {
+            self.PW_ONLY: {"variant": "pw", "label": "Bravo (PW)"},
+            self.RR_ONLY: {"variant": "rr", "label": "Charlie (RR)"}})
+        self.assertEqual(report["dropped"], collections.Counter(), "a control one model has is kept")
+        # a label that already ends with its variant is left as it is, never "(PW) (PW)": the fuel control switches
+        named = {self.PW_ONLY: "L Fuel Control (PW)", self.RR_ONLY: "L Fuel Control (RR)"}
+        m, report = self.build(rows, labels=named)
+        self.assertEqual([c["label"] for c in m["controls"]][1:], ["L Fuel Control (PW)", "L Fuel Control (RR)"])
+        self.assertEqual(report["variant_only"][self.PW_ONLY]["label"], "L Fuel Control (PW)")
+        # and a second pass changes nothing
+        g.mark_variants(m["controls"], self.models())
+        self.assertEqual([c["label"] for c in m["controls"]][1:], ["L Fuel Control (PW)", "L Fuel Control (RR)"])
+        # the shipped curation's four fuel control labels are such labels
+        c = g.load_curation(g.DEFAULT_CURATION)
+        fuel = {"BBS_fuelcut_PW1": "pw", "BBS_fuelcut_PW2": "pw", "BBS_fuelcut_RR1": "rr", "BBS_fuelcut_RR2": "rr"}
+        controls = [{"node": n, "label": c["labels"][n]} for n in fuel]
+        found = g.mark_variants(controls, self.cockpit(pw=[n for n, v in fuel.items() if v == "pw"],
+                                                       rr=[n for n, v in fuel.items() if v == "rr"]))
+        self.assertEqual([x["label"] for x in controls],
+                         ["L Fuel Control (PW)", "R Fuel Control (PW)", "L Fuel Control (RR)", "R Fuel Control (RR)"])
+        self.assertEqual(found, fuel)
+
+    def test_one_name_for_a_control_per_model_is_two_names_not_a_number(self):
+        # The cockpits never have both, but the app lists both: the suffix tells them apart before any numbering does.
+        rows = self.toggles(self.BOTH, self.PW_ONLY, self.RR_ONLY)
+
+        m, _ = self.build(rows, labels={self.PW_ONLY: "Fuel Control", self.RR_ONLY: "Fuel Control"})
+        self.assertEqual([c["label"] for c in m["controls"]][1:], ["Fuel Control (PW)", "Fuel Control (RR)"])
+
+        m, _ = self.build(rows, labels={self.BOTH: "Fuel Control", self.PW_ONLY: "Fuel Control"})
+        self.assertEqual([c["label"] for c in m["controls"]][:2], ["Fuel Control", "Fuel Control (PW)"])
+
+        # two controls of one model that still share a name are numbered after the suffix, as any repeat is
+        m, _ = self.build(rows, labels={self.PW_ONLY: "Fuel Control", self.RR_ONLY: "Fuel Control"},
+                          cockpit=self.cockpit(pw=[self.BOTH, self.PW_ONLY, self.RR_ONLY], rr=[self.BOTH]))
+        self.assertEqual([c["label"] for c in m["controls"]][1:], ["Fuel Control (PW)", "Fuel Control (PW) 2"])
+
+    def test_a_label_that_names_another_variant_than_the_cockpit_has_stops_the_run(self):
+        rows = self.toggles(self.BOTH, self.PW_ONLY)
+        cases = [
+            ("RR on a control only the PW cockpit has", {self.PW_ONLY: "Bravo (RR)"},
+             rf"{self.PW_ONLY}: its label 'Bravo \(RR\)' says only the RR cockpit has it, but only the PW cockpit does"),
+            ("PW on a control both have", {self.BOTH: "Alpha (PW)"},
+             rf"{self.BOTH}: its label 'Alpha \(PW\)' says only the PW cockpit has it, but both do"),
+            ("RR on a control both have", {self.BOTH: "Alpha (RR)"},
+             rf"{self.BOTH}: its label 'Alpha \(RR\)' says only the RR cockpit has it, but both do"),
+        ]
+        for what, labels, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build(rows, labels=labels)
+
+    def test_without_models_no_label_is_touched(self):
+        m, report = g.build_map(self.toggles(self.BOTH, self.PW_ONLY), curation(), "pkg", "1")
+
+        self.assertEqual([c["label"] for c in m["controls"]], ["Alpha", "Bravo"])
+        self.assertEqual((report["absent"], report["variant_only"], report["kept_without_node"]), ({}, {}, []))
+
+    # Curation's keep_without_node: a control BlueBird's published list proves real although neither model has a node of its
+    # name. Like every curation entry it is reported, and one that is stale, conflicting or does nothing stops the run.
+    def test_keep_without_node_keeps_a_control_no_cockpit_has_and_the_run_names_it(self):
+        rows = self.toggles(self.BOTH, self.NEITHER)
+
+        m, report = self.build(rows, keep_without_node=[self.NEITHER])
+
+        # kept as the rules build it, with no variant in its label: neither cockpit has it
+        self.assertEqual([(c["node"], c["label"]) for c in m["controls"]], [(self.BOTH, "Alpha"), (self.NEITHER, "Delta")])
+        self.assertEqual(report["kept_without_node"], [self.NEITHER])
+        self.assertEqual((report["absent"], report["variant_only"], report["dropped"]), ({}, {}, collections.Counter()))
+        m, report = self.build(rows)   # without the entry it is left out
+        self.assertEqual(([c["node"] for c in m["controls"]], report["kept_without_node"]), ([self.BOTH], []))
+
+    def test_keep_without_node_errors(self):
+        lever = row(node="B757_PED_LEVER", kind="lever", positions="", left="1 (>L:X)")
+        rows = self.toggles(self.BOTH, self.NEITHER) + [lever]
+        cases = [
+            ("a node the package does not have", dict(keep_without_node=["B757_NO_SUCH_NODE"]),
+             "keep_without_node name nodes the package does not have: B757_NO_SUCH_NODE"),
+            ("a node a cockpit model has", dict(keep_without_node=[self.BOTH]),
+             rf"keep_without_node names nodes a cockpit model has \(the entry does nothing, remove it\): {self.BOTH}"),
+            ("a node curation also leaves out", dict(keep_without_node=[self.NEITHER], exclude_nodes=[self.NEITHER]),
+             rf"keep_without_node and exclude_nodes both name: {self.NEITHER}"),
+            ("a node the rules still leave out", dict(keep_without_node=[lever["node"]]),
+             rf"keep_without_node names nodes the rules still leave out: {lever['node']} \(lever\)"),
+        ]
+        for what, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build(rows, **changes)
+        self.build(rows, keep_without_node=[self.NEITHER])
+
+    def test_a_kept_control_cannot_name_the_wrong_variant(self):
+        # in neither model, so a (PW) or (RR) label on it is as wrong as on a control the other model has
+        with self.assertRaisesRegex(g.CurationError, rf"{self.NEITHER}: its label 'Delta \(PW\)' says only the PW cockpit "
+                                                     r"has it, but neither does"):
+            self.build(self.toggles(self.BOTH, self.NEITHER), keep_without_node=[self.NEITHER],
+                       labels={self.NEITHER: "Delta (PW)"})
+
+    # What BlueBird's two interior models say of the map the app embeds (read from the models 2026-10-26: PW 3104 nodes, RR
+    # 3116, 3094 in both). The generator is run against the installed package, so this is what its run report names.
+    ABSENT = (
+        "B757_EICAS_COMPUTER_KNOB",   # a second EICAS Computer knob: the EICAS computer switch is B757_ECAM_LRAUTO_KNOB
+        "B757_PED_ADF_TONE_SWITCH", "B757_PED_ADF_L_TEST_SWITCH", "B757_PED_ADF_R_TEST_SWITCH", "B757_PED_ADF_L_SWITCH",
+        "B757_PED_ADF_R_SWITCH",      # the ADF panel's five switches: its tuning knobs have nodes, and are dropped as knobs
+        "B757_PED_WX_R_TEST_BUTTON",  # the left weather radar test button has a node, the right one has none
+        "B757_P6_DISPLAY_1_EADI_BUTTON", "B757_P6_DISPLAY_1_EHSI_BUTTON", "B757_P6_DISPLAY_1_EICAS_BUTTON",
+        "B757_P6_DISPLAY_2_EICAS_BUTTON", "B757_P6_DISPLAY_2_EADI_BUTTON", "B757_P6_DISPLAY_2_EHSI_BUTTON",
+        "B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON", "B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON",
+        "B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON", "B757_P6_EVENT_REC_TEST_SWITCH_BUTTON",
+        "B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON",
+        "B757_GAURD_13_SWITCH", "B757_GAURD_14_SWITCH", "B757_GAURD_15_SWITCH", "B757_P61_PANEL_SWITCH_GAURD",
+    )
+    VARIANT_ONLY = {
+        "BBS_fuelcut_PW1": "L Fuel Control (PW)", "BBS_fuelcut_PW2": "R Fuel Control (PW)",
+        "BBS_fuelcut_RR1": "L Fuel Control (RR)", "BBS_fuelcut_RR2": "R Fuel Control (RR)",
+        "B757_OVHD_L_ELEC-ENG-CONT_BUTTON": "L ELEC ENG Cont (RR)",
+        "B757_OVHD_R_ELEC-ENG-CONT_BUTTON": "R ELEC ENG Cont (RR)",
+        "B757_GAURD_1_SWITCH": "Elec Eng Cont 1 Guard (RR)", "B757_GAURD_2_SWITCH": "Elec Eng Cont 2 Guard (RR)",
+    }
+
+    def embedded(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_the_embedded_map_holds_only_controls_the_cockpit_has(self):
+        controls = self.embedded()["controls"]
+        by_node = {c["node"]: c for c in controls}
+
+        self.assertEqual(len(self.ABSENT), 22)
+        self.assertEqual(sorted(n for n in self.ABSENT if n in by_node), [], "no node in either model, yet in the map")
+        # the ADF panel held only those five switches and is gone; the other panels lose just the controls named above
+        self.assertNotIn("ADF", {c["panel"] for c in controls})
+        self.assertIn("B757_PED_WX_L_TEST_BUTTON", by_node)
+        self.assertIn("B757_ECAM_LRAUTO_KNOB", by_node)
+        # the six guarded switches and guards of task 3 are in both models: they stay
+        for node in ("B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_Stab_trim_C_toggle_switch_CLICK",
+                     "B757_Stab_trim_R_toggle_switch_CLICK", "B757_OVHD_SWITCH_GAURD",
+                     "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", "B757_AISLE_STAND_STAB_2_GAURD_SWITCH"):
+            self.assertIn(node, by_node)
+
+    def test_the_embedded_map_labels_what_one_model_alone_has_and_nothing_else(self):
+        controls = self.embedded()["controls"]
+        by_node = {c["node"]: c for c in controls}
+
+        self.assertEqual({n: by_node[n]["label"] for n in self.VARIANT_ONLY}, self.VARIANT_ONLY)
+        tagged = {c["node"] for c in controls if re.search(r"\((PW|RR)\)$", c["label"])}
+        self.assertEqual(tagged, set(self.VARIANT_ONLY))
+        self.assertEqual([c["label"] for c in controls if re.search(r"\((PW|RR)\).*\((PW|RR)\)", c["label"])], [])
+
+    def test_no_curation_entry_lingers_for_a_control_the_map_dropped(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        by_node = {x["node"]: x for x in self.embedded()["controls"]}
+
+        self.assertEqual(c["keep_without_node"], [], "BlueBird's list names a variable, not a cockpit control")
+        for table in ("labels", "positions", "kinds", "guarded"):
+            self.assertEqual([n for n in self.ABSENT if n in c[table]], [], table)
+        self.assertEqual([n for n in self.ABSENT if n in c["direct_write"] or n in c["include_nodes"]], [])
+        for panel, nodes in c["control_order"].items():
+            self.assertEqual([n for n in nodes if n in self.ABSENT], [], panel)
+        # every node rule still places a control of the map: the ADF rule went with the switches it named
+        for rule in c["node_panels"]:
+            if "prefix" in rule:
+                with self.subTest(prefix=rule["prefix"]):
+                    self.assertTrue(any(n.startswith(rule["prefix"]) for n in by_node), "a rule that places nothing")
+
+    def test_the_run_leaves_out_what_the_cockpit_lacks_and_names_it(self):
+        nodes = (self.BOTH, self.PW_ONLY, self.RR_ONLY, self.NEITHER)
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_presence_package(d, nodes, pw=[self.BOTH, self.PW_ONLY], rr=[self.BOTH, self.RR_ONLY])
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+            with open(cur_path, "w", encoding="utf-8") as fh:
+                json.dump({"panels": {"ELECTRICAL PANEL": "Electrical"}}, fh)
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                g.main([str(pkg), "--out", out, "--curation", cur_path])
+            with open(out, encoding="utf-8") as fh:
+                m = json.load(fh)
+        printed = stdout.getvalue()
+
+        self.assertEqual([(c["node"], c["label"]) for c in m["controls"]],
+                         [(self.BOTH, "Alpha"), (self.PW_ONLY, "Bravo (PW)"), (self.RR_ONLY, "Charlie (RR)")])
+        self.assertRegex(printed, r"no cockpit node\s*: 1 ")
+        self.assertIn(f"{self.NEITHER}: Delta (vendor banner ELECTRICAL PANEL)", printed)
+        self.assertRegex(printed, r"1\s+no cockpit node")   # in the counts of what was dropped, with the other reasons
+        self.assertRegex(printed, r"one variant only\s*: 2 ")
+        self.assertIn(f"{self.PW_ONLY}: PW only, Bravo (PW)", printed)
+        self.assertIn(f"{self.RR_ONLY}: RR only, Charlie (RR)", printed)
+        self.assertRegex(printed, rf"{g.INTERIOR_MODELS['pw']}.*{g.INTERIOR_MODELS['rr']}")
+
+    def test_the_run_names_a_control_kept_without_a_node(self):
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_presence_package(d, (self.BOTH, self.NEITHER), pw=[self.BOTH], rr=[self.BOTH])
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+            with open(cur_path, "w", encoding="utf-8") as fh:
+                json.dump({"panels": {"ELECTRICAL PANEL": "Electrical"}, "keep_without_node": [self.NEITHER]}, fh)
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                g.main([str(pkg), "--out", out, "--curation", cur_path])
+            with open(out, encoding="utf-8") as fh:
+                nodes = [c["node"] for c in json.load(fh)["controls"]]
+
+        self.assertEqual(nodes, [self.BOTH, self.NEITHER])
+        self.assertRegex(stdout.getvalue(), r"kept without node\s*: 1 ")
+        self.assertIn(f"{self.NEITHER}: kept without a cockpit node", stdout.getvalue())
+
+
+class CockpitModels(unittest.TestCase):
+    """The two interior models are read from the package: the names of their nodes, and nothing else. A package without
+    both cannot tell which controls the cockpit has, so the run stops (a CurationError, as for any curation that does not
+    fit the package) rather than keep, or drop, every control."""
+
+    def package(self, **models):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        write_cockpit_models(pathlib.Path(d), **models)
+        return pathlib.Path(d)
+
+    def test_the_node_names_of_each_model_are_read(self):
+        pkg = self.package(pw=["A", "B", "PW_ONLY"], rr=["A", "B", "RR_ONLY"])
+
+        cockpit = g.read_cockpit(pkg)
+
+        self.assertEqual((cockpit.pw, cockpit.rr), ({"A", "B", "PW_ONLY"}, {"A", "B", "RR_ONLY"}))
+        self.assertEqual(g.INTERIOR_MODELS, {"pw": "BBS_752_PW_INTERIOR.gltf", "rr": "BBS_752_RR_INTERIOR.gltf"})
+
+    def test_a_missing_model_stops_the_run(self):
+        for variant, kept in (("pw", {"rr": ["A"]}), ("rr", {"pw": ["A"]})):
+            with self.subTest(missing=variant):
+                pkg = self.package(**{"pw": None, "rr": None, **kept})
+
+                with self.assertRaisesRegex(g.CurationError, rf"{g.INTERIOR_MODELS[variant]}.*is not in "):
+                    g.read_cockpit(pkg)
+        with self.assertRaises(g.CurationError):
+            g.read_cockpit(self.package(pw=None, rr=None))
+
+    def test_main_stops_without_writing_a_map_when_a_model_is_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_package(d)
+            (pkg / "SimObjects" / "Airplanes" / "bbs-757-200-rr" / "model" / g.INTERIOR_MODELS["rr"]).unlink()
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+            with open(cur_path, "w", encoding="utf-8") as fh:
+                json.dump({}, fh)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as stopped:
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+            written = os.path.exists(out)
+
+        self.assertIn(g.INTERIOR_MODELS["rr"], str(stopped.exception))
+        self.assertFalse(written, "a stopped run writes no map")
+
+    def test_a_model_that_cannot_be_read_as_a_gltf_with_nodes_stops_the_run(self):
+        # an empty node list would drop every control without a word: it is an error, never an empty cockpit
+        cases = [
+            ("not JSON", "{not json"),
+            ("not an object", "[]"),
+            ("no nodes", json.dumps({"asset": {"version": "2.0"}})),
+            ("an empty node list", json.dumps({"nodes": []})),
+            ("nodes without names", json.dumps({"nodes": [{"mesh": 0}, {"children": [0]}]})),
+        ]
+        for what, text in cases:
+            with self.subTest(what):
+                pkg = self.package()
+                (pkg / "SimObjects" / "Airplanes" / "bbs-757-200-pw" / "model" / g.INTERIOR_MODELS["pw"]).write_text(
+                    text, encoding="utf-8")
+
+                with self.assertRaisesRegex(g.CurationError, rf"{g.INTERIOR_MODELS['pw']}"):
+                    g.read_cockpit(pkg)
+
+    def test_a_byte_order_mark_does_not_hide_the_nodes(self):
+        pkg = self.package()
+        path = pkg / "SimObjects" / "Airplanes" / "bbs-757-200-pw" / "model" / g.INTERIOR_MODELS["pw"]
+        path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"nodes": [{"name": "A"}]}).encode("utf-8"))
+
+        self.assertEqual(g.read_cockpit(pkg).pw, {"A"})
+
+    def test_a_model_found_in_two_places_is_ambiguous_and_stops_the_run(self):
+        pkg = self.package()
+        copy_ = pkg / "SimObjects" / "Airplanes" / "bbs-757-200-pw-copy" / "model"
+        copy_.mkdir(parents=True)
+        (copy_ / g.INTERIOR_MODELS["pw"]).write_text(json.dumps({"nodes": [{"name": "Z"}]}), encoding="utf-8")
+
+        with self.assertRaisesRegex(g.CurationError, rf"{g.INTERIOR_MODELS['pw']}.* more than one"):
+            g.read_cockpit(pkg)
+
+
 class FlowOrder(unittest.TestCase):
     """panel_order and control_order (ruling R37): the order the pilot tabs through the panels of a section and, inside
     a panel, through the controls. What is not listed keeps the old order (panels alphabetical, controls in cockpit
@@ -1611,6 +2046,17 @@ class Curation(unittest.TestCase):
             with self.subTest(data=data):
                 with self.assertRaisesRegex(g.CurationError, "direct_write (must be|is a list)"):   # not "unknown key(s)"
                     g.load_curation(self.write({"direct_write": data}))
+
+    def test_the_keep_without_node_key_loads_as_a_list_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["keep_without_node"], [])
+        c = g.load_curation(self.write({"keep_without_node": ["B757_X", "B757_Y"]}))
+        self.assertEqual(c["keep_without_node"], ["B757_X", "B757_Y"])
+
+    def test_a_keep_without_node_entry_that_is_not_a_node_name_is_refused(self):
+        for data in ({"B757_X": 1}, "B757_X", [1], [None], [""], [["B757_X"]], ["B757_X", 2]):
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, "keep_without_node (must be|is a list)"):   # not unknown key
+                    g.load_curation(self.write({"keep_without_node": data}))
 
     def test_the_shipped_curation_loads(self):
         c = g.load_curation(g.DEFAULT_CURATION)
@@ -2061,6 +2507,25 @@ class Curation(unittest.TestCase):
         self.assertRegex(notes, r"PLAN 02 TASK 4 .*B757_MAIN_CHRONO_ET_SWITCH_FO are direct_write")
         self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
 
+    def test_the_cockpit_presence_rule_and_what_it_removed_have_their_evidence_in_the_notes(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = "\n".join(json.load(fh)["_notes"])
+
+        # the key is explained where the others are, and the task's own note says what the two models hold
+        self.assertRegex(notes, r"keep_without_node: list of nodes")
+        self.assertRegex(notes, r"PLAN 02 TASK 5 .*BBS_752_PW_INTERIOR\.gltf.*BBS_752_RR_INTERIOR\.gltf")
+        # why none is kept: BlueBird's list names variables, and the run's own stop on a stale entry stays the check
+        self.assertRegex(notes, r"PLAN 02 TASK 5 .*support\.bluebirdsim\.com/docs/simvars")
+        self.assertRegex(notes, r"PLAN 02 TASK 5 .*keep_without_node (stays|is) empty")
+        # every control it left out and every one it labeled by variant is named, so a regeneration that changes either set
+        # is a change someone sees
+        for node in CockpitPresence.ABSENT + tuple(CockpitPresence.VARIANT_ONLY):
+            with self.subTest(node=node):
+                self.assertIn(node, notes)
+        # the exemption task 1 left for the second EICAS Computer knob went with the control
+        self.assertNotIn("plan 02 task 5 drops it", notes)
+        self.assertNotIn("stays numbered", notes)
+
     # Plan 02, task 3: the brief's values, written out here so a change to them is a visible one.
     GUARDED = {
         "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK": {
@@ -2105,8 +2570,9 @@ class Curation(unittest.TestCase):
                           "Standby attitude indicator", "Captain DDRMI", "Captain chronometer", "Oxygen",
                           "Cockpit miscellaneous", "First officer EFIS", "First officer autoland status",
                           "First officer DDRMI", "First officer chronometer"],
+        # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
         "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Radio tuning panel 1",
-                     "Audio panel 1", "Fire protection", "Stabilizer trim", "Weather radar left", "ADF",
+                     "Audio panel 1", "Fire protection", "Stabilizer trim", "Weather radar left",
                      "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "Weather radar right",
                      "Pedestal radio panels"],
         "Other": ["P61 panel"],
@@ -2205,10 +2671,27 @@ class FindPackage(unittest.TestCase):
 
 LONG_CODE = "(L:X_LONG, bool) ! (>L:X_LONG, bool) " + " ".join(f"{i} (>L:PAD_{i})" for i in range(60))
 
+# The nodes the fixture packages' interiors use, so that the cockpit holds them all (write_cockpit_models).
+FIXTURE_NODES = ("B757_OVHD_BATTERY_BUTTON", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
+                 "B757_Stab_trim_C_toggle_switch_CLICK", "B757_MAIN_CHRONO_ET_SWITCH")
+
+
+def write_cockpit_models(pkg, pw=FIXTURE_NODES, rr=FIXTURE_NODES):
+    """The two interior models the generator reads for the cockpit (g.INTERIOR_MODELS), in the folders BlueBird keeps them
+    in. A glTF is JSON and the generator reads only the names of its nodes, so each holds nothing else. A variant given as
+    None gets no model."""
+    for variant, names in (("pw", pw), ("rr", rr)):
+        if names is None:
+            continue
+        folder = pathlib.Path(pkg, "SimObjects", "Airplanes", f"bbs-757-200-{variant}", "model")
+        folder.mkdir(parents=True, exist_ok=True)
+        gltf = {"asset": {"version": "2.0"}, "nodes": [{"name": n} for n in names]}
+        (folder / g.INTERIOR_MODELS[variant]).write_text(json.dumps(gltf), encoding="utf-8")
+
 
 def write_package(root):
     """A one-control package: model.cfg names an interior that holds one switch with a click longer than the TSV's
-    400-character clip."""
+    400-character clip. Its cockpit models hold every node the fixture packages use (write_cockpit_models)."""
     pkg = pathlib.Path(root, "bluebirdsim-aircraft-757-200")
     model = pkg / "SimObjects" / "Airplanes" / "a" / "model"
     model.mkdir(parents=True)
@@ -2230,6 +2713,7 @@ def write_package(root):
 </Component>
 </Behaviors></ModelInfo>
 """, encoding="utf-8")
+    write_cockpit_models(pkg)
     return pkg
 
 
@@ -2336,6 +2820,26 @@ def write_chrono_package(root):
     """write_package's package, its interior replaced by CHRONO_ET_INTERIOR."""
     pkg = write_package(root)
     (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(CHRONO_ET_INTERIOR, encoding="utf-8")
+    return pkg
+
+
+def write_presence_package(root, nodes, pw, rr):
+    """write_package's package, its interior replaced by one switch per node of `nodes` (each flips its own L:var), and its
+    cockpit models by two that hold the node names `pw` and `rr`: a node in one list, in both or in neither."""
+    pkg = write_package(root)
+    switches = "\n".join(f"""<Component ID="{n}_COMP" Node="{n}">
+  <UseTemplate Name="ASOBO_GT_Switch_Code">
+    <ANIM_NAME>{n}</ANIM_NAME>
+    <ANIM_CODE>(L:{n}, bool) 100 *</ANIM_CODE>
+    <ANIMTIP_0>{n} OFF</ANIMTIP_0>
+    <ANIMTIP_1>{n} ON</ANIMTIP_1>
+    <LEFT_SINGLE_CODE>(L:{n}, bool) ! (&gt;L:{n}, bool)</LEFT_SINGLE_CODE>
+  </UseTemplate>
+</Component>""" for n in nodes)
+    (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(
+        f'<?xml version="1.0"?>\n<ModelInfo><Behaviors>\n<!-- ======== ELECTRICAL PANEL ======== -->\n{switches}\n'
+        "</Behaviors></ModelInfo>\n", encoding="utf-8")
+    write_cockpit_models(pkg, pw=pw, rr=rr)
     return pkg
 
 

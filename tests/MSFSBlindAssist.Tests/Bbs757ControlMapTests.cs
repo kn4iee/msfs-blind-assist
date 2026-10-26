@@ -242,7 +242,7 @@ public class Bbs757ControlMapTests
     [InlineData("Overhead", "Electrical|APU|IRS|Engine control and yaw damper|Hydraulics|Overhead miscellaneous|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Air conditioning and bleed|Cabin lights|IRS keypad|Switch guards|Flight deck door|CVR|SELCAL and cabin call|Ground service|Warning lights test")]
     [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
     [InlineData("Forward panel", "Main panel switches|Landing gear|Captain EFIS|Yokes|Captain autoland status|Standby attitude indicator|Captain DDRMI|Captain chronometer|Oxygen|Cockpit miscellaneous|First officer EFIS|First officer autoland status|First officer DDRMI|First officer chronometer")]
-    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar left|ADF|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Weather radar right|Pedestal radio panels")]
+    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar left|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Weather radar right|Pedestal radio panels")]
     [InlineData("Other", "P61 panel")]
     public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
     {
@@ -259,7 +259,8 @@ public class Bbs757ControlMapTests
     [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|APU Bleed|R ENG Bleed|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
     [InlineData("Passenger signs", "Seatbelts|No Smoking")]
     [InlineData("IRS", "IRS L|IRS C|IRS R")]
-    [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont|R ELEC ENG Cont")]
+    // The two ELEC ENG Cont switches are on the RR cockpit only (no node in the PW one), so their labels say so.
+    [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont (RR)|R ELEC ENG Cont (RR)")]
     [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|Speed Intervene|Bank Limit|BCRS 1")]
     [InlineData("Main panel switches", "Autobrake|Takeoff Check|TOGA|CLB|CON|CRZ|TMSP 1|TMSP 2|HDG Ref|Cancel|Recall")]
     [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
@@ -479,9 +480,9 @@ public class Bbs757ControlMapTests
     [Fact]
     public void No_position_reads_Position_n_except_the_unpublished()
     {
-        // Two controls keep numbered positions because no source names them: the Duct Leak Fuel Qty test switch (its
-        // 0 and 2) and the duplicate EICAS Computer knob (plan 02 task 5 drops it and removes this exemption).
-        string[] unpublished = { "B757_VC_P61_SWITCH_5", "B757_EICAS_COMPUTER_KNOB" };
+        // One control keeps numbered positions because no source names them: the Duct Leak Fuel Qty test switch (its
+        // 0 and 2). The second, the duplicate EICAS Computer knob, is gone: no cockpit model has a node for it.
+        string[] unpublished = { "B757_VC_P61_SWITCH_5" };
 
         var numbered = Map.Controls
             .Where(c => !unpublished.Contains(c.Node))
@@ -676,6 +677,76 @@ public class Bbs757ControlMapTests
             .ToList();
 
         Assert.True(carrying.Count == 0, "gate note in: " + string.Join(", ", carrying));
+    }
+
+    // ---- Plan 02, task 5: only controls the cockpit has ----
+
+    /// <summary>
+    /// The controls the generator found in BlueBird's XML but whose node is in neither of the two interior models
+    /// (BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf, read 2026-10-26): a switch the pilot could never find in the
+    /// cockpit, so the map holds none of them. The ADF panel held only its five switches (its tuning knobs are dropped as
+    /// infinite knobs), so the panel went with them.
+    /// </summary>
+    private static readonly string[] NoCockpitNode =
+    {
+        "B757_EICAS_COMPUTER_KNOB",
+        "B757_PED_ADF_TONE_SWITCH", "B757_PED_ADF_L_TEST_SWITCH", "B757_PED_ADF_R_TEST_SWITCH",
+        "B757_PED_ADF_L_SWITCH", "B757_PED_ADF_R_SWITCH",
+        "B757_PED_WX_R_TEST_BUTTON",
+        "B757_P6_DISPLAY_1_EADI_BUTTON", "B757_P6_DISPLAY_1_EHSI_BUTTON", "B757_P6_DISPLAY_1_EICAS_BUTTON",
+        "B757_P6_DISPLAY_2_EICAS_BUTTON", "B757_P6_DISPLAY_2_EADI_BUTTON", "B757_P6_DISPLAY_2_EHSI_BUTTON",
+        "B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON", "B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON",
+        "B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON", "B757_P6_EVENT_REC_TEST_SWITCH_BUTTON",
+        "B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON",
+        "B757_GAURD_13_SWITCH", "B757_GAURD_14_SWITCH", "B757_GAURD_15_SWITCH", "B757_P61_PANEL_SWITCH_GAURD",
+    };
+
+    [Fact]
+    public void No_control_without_a_cockpit_node()
+    {
+        Assert.Equal(22, NoCockpitNode.Distinct().Count());
+
+        var present = NoCockpitNode.Where(n => Map.Controls.Any(c => c.Node == n)).ToList();
+
+        Assert.True(present.Count == 0, "no node in either cockpit model, but in the map: " + string.Join(", ", present));
+        // The ADF panel is gone with its switches; the panels that lost one control keep the rest, and the left weather
+        // radar test button and the real EICAS computer switch, which have nodes, stay.
+        Assert.DoesNotContain(Map.Controls, c => c.Panel == "ADF");
+        Assert.DoesNotContain(Map.Controls, c => c.Label == "WX R Test");
+        Assert.Contains(Map.Controls, c => c.Panel == "Weather radar right");
+        Assert.Contains(Map.Controls, c => c.Node == "B757_PED_WX_L_TEST_BUTTON");
+        Assert.Contains(Map.Controls, c => c.Node == "B757_ECAM_LRAUTO_KNOB");
+        // The emergency lights and stab trim switches and their guards are in both models: they all stay.
+        foreach (string node in new[]
+                 {
+                     "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_Stab_trim_C_toggle_switch_CLICK",
+                     "B757_Stab_trim_R_toggle_switch_CLICK", "B757_OVHD_SWITCH_GAURD",
+                     "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
+                 })
+        {
+            Find(node);
+        }
+    }
+
+    [Fact]
+    public void A_control_only_one_engine_variants_cockpit_has_says_which()
+    {
+        // Nodes in one interior model only: the PW cockpit has the two PW fuel control switches; the RR cockpit has the
+        // two RR ones, the two ELEC ENG Cont switches and the two guards over them. The label says which, once.
+        string[] expected =
+        {
+            "BBS_fuelcut_PW1=L Fuel Control (PW)", "BBS_fuelcut_PW2=R Fuel Control (PW)",
+            "BBS_fuelcut_RR1=L Fuel Control (RR)", "BBS_fuelcut_RR2=R Fuel Control (RR)",
+            "B757_OVHD_L_ELEC-ENG-CONT_BUTTON=L ELEC ENG Cont (RR)",
+            "B757_OVHD_R_ELEC-ENG-CONT_BUTTON=R ELEC ENG Cont (RR)",
+            "B757_GAURD_1_SWITCH=Elec Eng Cont 1 Guard (RR)", "B757_GAURD_2_SWITCH=Elec Eng Cont 2 Guard (RR)",
+        };
+
+        var tagged = Map.Controls.Where(c => c.Label.EndsWith("(PW)") || c.Label.EndsWith("(RR)"))
+            .Select(c => $"{c.Node}={c.Label}");
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), tagged.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(Map.Controls, c => Regex.IsMatch(c.Label, @"\((PW|RR)\).*\((PW|RR)\)"));
     }
 
     [Fact]

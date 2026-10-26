@@ -30,13 +30,30 @@ What is derived and what is curated (curation.json):
             tooltip carries, the kind of a control whose click code the extractor misreads (kinds: a toggle the
             extractor took for a button, a radio-style select that is only ever pressed), the guarded controls
             (guarded: a switch whose click only runs while a guard is open), the switches whose click code is left
-            out (direct_write: a lever whose code cannot take a pick where it aims), the status rows, and the
-            ORDER the pilot tabs through: the panels of a section (panel_order) and the controls of a panel
-            (control_order). A curated label, position list, kind, guarded or direct_write entry, exclusion or
-            inclusion for a node the package does not have is an error (a stale entry never hides); so is a kind or
-            an inclusion that does nothing, and so is an order that names a panel or a node that is not there. A kind
-            only re-reads a control the rules keep: for one they drop it changes nothing and is only reported.
+            out (direct_write: a lever whose code cannot take a pick where it aims), the nodes kept although no
+            cockpit model has them (keep_without_node), the status rows, and the ORDER the pilot tabs through: the
+            panels of a section (panel_order) and the controls of a panel (control_order). A curated label, position
+            list, kind, guarded, direct_write or keep_without_node entry, exclusion or inclusion for a node the
+            package does not have is an error (a stale entry never hides); so is a kind or an inclusion that does
+            nothing, and so is an order that names a panel or a node that is not there. A kind only re-reads a control
+            the rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
+  cockpit   BlueBird ships one interior model per engine variant, and a control can be clicked only where a node of its
+            name is in the model. The run reads the node names of BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf
+            from the package (it stops when either is missing, found twice or not a glTF with nodes), and the map holds
+            only controls the cockpit has. A control whose node is in neither model is left out: the last of the drop
+            rules, counted as "no cockpit node" and named in the run's report with the label it would have had and its
+            vendor banner (the rules before it keep their own counts). A control that one model alone has says which,
+            with " (PW)" or " (RR)" at the end of its label unless the label already ends so ("L Fuel Control (PW)"
+            stays), and the run names each. A label that says (PW) or (RR) is true of exactly that model's cockpit: on a
+            control the other model has too, or only the other has, it stops the run. Curation's keep_without_node keeps
+            a control BlueBird's own list proves real although neither model has a node for it; it is empty unless that
+            list proves one, and the run names each. An entry for a node the package does not have, that a model has,
+            that curation also excludes or that the rules leave out for another reason is an error. No curation entry
+            brings back a control no cockpit has: a guarded or an include_nodes entry for one stops the run, a kind,
+            label or positions entry for one changes nothing and is only reported, and an order or a direct_write entry
+            that names it, or an order that names a panel the drop emptied, is a stale one. A panel with no control left
+            is not in the map (panels exist only through their controls).
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
             alphabetically, and the run names them (a panel BlueBird adds later turns up there). A node in
@@ -74,12 +91,15 @@ nothing is changed.
 
 Dropped, and counted in the printed report: circuit breakers, CDU keys, levers, infinite knobs, finite knobs with
 more than 12 positions, anything in an excluded banner or node (but an include_nodes node under an excluded banner
-is kept), controls with no click code or whose state is not an L:var, and the second row of a node the interior
-files repeat (the PW and RR variants).
+is kept), controls with no click code or whose state is not an L:var, controls the cockpit does not have (no node in
+either interior model: "no cockpit node", named in the report), and the second row of a node the interior files
+repeat (the PW and RR variants).
 
 Usage:  python -I tools/b757-gen/generate_b757_map.py [<package folder>] [--out <json>] [--curation <json>]
         With no folder the package is looked for in Community and Community2024 under
-        %LOCALAPPDATA%\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalCache\\Packages. Reads the package only.
+        %LOCALAPPDATA%\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalCache\\Packages. Reads the package only (its
+        interior behavior files and the node names of its two interior models, BBS_752_PW_INTERIOR.gltf and
+        BBS_752_RR_INTERIOR.gltf).
 Tests:  python -I tools/b757-gen/test_generate_b757_map.py   (stdlib unittest, no aircraft needed)
 """
 import argparse
@@ -166,9 +186,23 @@ EXCLUSIONS = ("excluded banner", "excluded node")
 # code, or after another code when several join in one (a node with two templates).
 GATE_NOTE = re.compile(r"(?:^|\s)\[")
 
+# The cockpit. BlueBird ships one interior model per engine variant, and a control can be clicked only where a node of its
+# name is in the model. The models are found by name under the package's SimObjects folder; of each only the node names
+# are read.
+INTERIOR_MODELS = {"pw": "BBS_752_PW_INTERIOR.gltf", "rr": "BBS_752_RR_INTERIOR.gltf"}
+# What a label says of a control that exactly one model has (the variants as cockpit_presence names them).
+VARIANT_TAGS = {"pw": "(PW)", "rr": "(RR)"}
+# The drop reason of a control no cockpit has: the last of the rules, so it counts only what the others keep.
+NO_COCKPIT_NODE = "no cockpit node"
+# Who has a control, as cockpit_presence answers, for the error of a label that names the wrong variant.
+WHO_HAS = {"both": "both do", "pw": "only the PW cockpit does", "rr": "only the RR cockpit does", "none": "neither does"}
+
+Cockpit = collections.namedtuple("Cockpit", "pw rr")  # the node names of the PW and of the RR interior model
+
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
                  "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
-                 "kinds": dict, "guarded": dict, "direct_write": list, "spelling": dict, "status": list}
+                 "kinds": dict, "guarded": dict, "direct_write": list, "keep_without_node": list, "spelling": dict,
+                 "status": list}
 
 
 class CurationError(Exception):
@@ -306,6 +340,72 @@ def positions_for(row, spelling=None):
     return [{"value": v, "label": l} for v, l in zip(values, fallback)]
 
 
+# ---- the cockpit -----------------------------------------------------------------------------------------------
+def cockpit_presence(node: str, pw: set, rr: set) -> str:
+    """Which of the two cockpit models have a node of this name: "both", "pw", "rr" or "none". The name is matched whole and
+    as written (the XML's names and the models' agree to the letter, every one of the controls the models have)."""
+    in_pw, in_rr = node in pw, node in rr
+    return "both" if in_pw and in_rr else "pw" if in_pw else "rr" if in_rr else "none"
+
+
+def model_nodes(path: pathlib.Path) -> set:
+    """The names of the nodes of a glTF model. The file is JSON and nodes[i].name is all the generator reads of it. A file
+    that is not a glTF, or names no node, is an error: an empty set would leave every control out without a word."""
+    try:
+        data = json.loads(extract_controls.read_text(path))
+    except (OSError, ValueError) as e:
+        raise CurationError(f"{path.name} cannot be read as a glTF model ({e})") from None
+    nodes = data.get("nodes") if isinstance(data, dict) else None
+    names = {n["name"] for n in nodes if isinstance(n, dict) and isinstance(n.get("name"), str) and n["name"]} \
+        if isinstance(nodes, list) else set()
+    if not names:
+        raise CurationError(f"{path.name} holds no named nodes (the 'nodes' of a glTF model): without them every control "
+                            "would be left out")
+    return names
+
+
+def find_cockpit_model(pkg: pathlib.Path, variant: str) -> pathlib.Path:
+    """The one file called INTERIOR_MODELS[variant] under the package's SimObjects folder."""
+    name, root = INTERIOR_MODELS[variant], pkg / "SimObjects"
+    found = sorted(p for p in root.rglob(name) if p.is_file()) if root.is_dir() else []
+    if not found:
+        raise CurationError(f"{name} (the {variant.upper()} cockpit model) is not in {root}: the map holds only controls "
+                            "the cockpit has, which the generator cannot tell without both interior models")
+    if len(found) > 1:
+        raise CurationError(f"{name} (the {variant.upper()} cockpit model) is in more than one place under {root}: "
+                            + ", ".join(extract_controls.rel(p, pkg) for p in found))
+    return found[0]
+
+
+def read_cockpit(pkg: pathlib.Path) -> Cockpit:
+    """The node names of the two interior models, which say what the cockpit has. A model that is missing, found twice or
+    not a glTF with nodes stops the run (CurationError): without both, no control could be judged."""
+    return Cockpit(**{variant: model_nodes(find_cockpit_model(pkg, variant)) for variant in INTERIOR_MODELS})
+
+
+def mark_variants(controls, cockpit) -> dict:
+    """Says in the label of each control that exactly one model has which cockpit that is, " (PW)" or " (RR)" at the end,
+    unless the label already ends so ("L Fuel Control (PW)"): the suffix is never doubled. Returns {node: "pw" | "rr"},
+    in the order of `controls`; the labels are changed in place. A label that already names a variant is true of exactly
+    that model's cockpit, so one on a control the other model has too, or only the other has, or neither has, is an
+    error. Given no cockpit it judges nothing. Made before unique_labels, so that two controls of one name, one per
+    model, are told apart by the suffix and not by a number."""
+    if cockpit is None:
+        return {}
+    only = {}
+    for c in controls:
+        where = cockpit_presence(c["node"], cockpit.pw, cockpit.rr)
+        for variant, tag in VARIANT_TAGS.items():
+            if c["label"].endswith(tag) and where != variant:
+                raise CurationError(f"{c['node']}: its label {c['label']!r} says only the {variant.upper()} cockpit has it, "
+                                    f"but {WHO_HAS[where]}")
+        if where in VARIANT_TAGS:
+            only[c["node"]] = where
+            if not c["label"].endswith(VARIANT_TAGS[where]):
+                c["label"] += " " + VARIANT_TAGS[where]
+    return only
+
+
 # ---- one control -----------------------------------------------------------------------------------------------
 def section_of(node: str) -> str:
     for prefix, section in SECTION_PREFIXES:
@@ -420,9 +520,12 @@ def state_var_for(row, out_kind, press):
     return state_var_of(row)
 
 
-def drop_reason(row, cur):
+def drop_reason(row, cur, cockpit=None):
     """Why the rules leave this row out, or None. It is decided on the row as the extractor read it: curation's 'kinds'
-    comes after and never changes the answer, so a kind only ever re-reads a control the rules keep."""
+    comes after and never changes the answer, so a kind only ever re-reads a control the rules keep. The cockpit comes last:
+    a control the other rules keep, and that neither interior model has a node for, is left out as NO_COCKPIT_NODE unless
+    curation lists it under keep_without_node. Given no cockpit (the models' node names, read_cockpit) nothing is judged
+    on it: the tests of the other rules have rows and no models."""
     kind, node = row["kind"], row["node"]
     if row["panel"] in cur["exclude_banners"] and node not in cur["include_nodes"]:
         return "excluded banner"
@@ -440,6 +543,9 @@ def drop_reason(row, cur):
         return "no click code"
     if out_kind not in ("button", "held") and state_var is None:
         return "state is not an L:var"
+    if cockpit is not None and cockpit_presence(node, cockpit.pw, cockpit.rr) == "none" \
+            and node not in cur["keep_without_node"]:
+        return NO_COCKPIT_NODE
     return None
 
 
@@ -457,7 +563,7 @@ def reread(row, wanted):
     raise CurationError(f"curation kinds make {node} a {wanted}, but the extractor read it as a {kind}: only {allowed}")
 
 
-def guarded_control(row, cur):
+def guarded_control(row, cur, cockpit=None):
     """The control curation's 'guarded' entry describes: a switch whose vendor click only runs while its guard is open.
 
     The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, and the emergency
@@ -466,11 +572,15 @@ def guarded_control(row, cur):
     reads while closed and the value closing it writes to the control ride along (Bbs757Control.Guard, GuardClosed,
     CloseSets), so that the app can open the guard, write the position and close it. The row gives the control's place in
     the cockpit and the vendor's count of positions, which the entry's names must fit. The rules' own drop reasons give way
-    to the entry (a state that is not an L:var, a click the extractor cannot use); curation's exclusions never do."""
+    to the entry (a state that is not an L:var, a click the extractor cannot use); curation's exclusions never do, and nor
+    does a cockpit without the node: a switch no model has is not there to be guarded (a stale entry)."""
     node, entry = row["node"], cur["guarded"][row["node"]]
-    why = drop_reason(row, cur)
+    why = drop_reason(row, cur, cockpit)
     if why in EXCLUSIONS:
         raise CurationError(f"curation guarded names {node}, which curation also leaves out ({why})")
+    if why == NO_COCKPIT_NODE:
+        raise CurationError(f"curation guarded names {node}, which neither cockpit model has a node for: an entry never "
+                            "keeps a control no cockpit has (remove it, or list the node under keep_without_node)")
     out_kind = KIND_MAP.get(row["kind"])
     if out_kind == "switch":  # the values the vendor's code gives it, as for any switch; two for a toggle, guard or select
         values = position_values(row)
@@ -490,17 +600,23 @@ def guarded_control(row, cur):
     }
 
 
-def convert_row(row, cur):
+def label_for(row, out_kind, cur):
+    """The label a control has before any numbering: curation's, else a guard's own name, else one made from its node."""
+    node, spelling = row["node"], cur["spelling"]
+    return cur["labels"].get(node) or guard_label(row, out_kind, spelling) or humanize(node, spelling)
+
+
+def convert_row(row, cur, cockpit=None):
     """(control, None, suspected slips) or (None, why it is left out, [])."""
     node = row["node"]
     if node in cur["guarded"]:
-        return guarded_control(row, cur), None, []
-    why = drop_reason(row, cur)
+        return guarded_control(row, cur, cockpit), None, []
+    why = drop_reason(row, cur, cockpit)
     if why:
         return None, why, []
     if node in cur["kinds"]:  # curation knows better how this kept control works: build it as the extractor would have said
         row = reread(row, cur["kinds"][node])
-        why = drop_reason(row, cur)
+        why = drop_reason(row, cur, cockpit)
         if why:
             raise CurationError(f"curation kinds make {node} a {cur['kinds'][node]}, which cannot be built from it: {why}")
     out_kind = KIND_MAP[row["kind"]]
@@ -530,8 +646,7 @@ def convert_row(row, cur):
         suspected = []  # code that is not replayed has no slip to suspect
     panel, section = panel_of(row, cur)
     control = {
-        "node": node, "section": section, "panel": panel,
-        "label": cur["labels"].get(node) or guard_label(row, out_kind, spelling) or humanize(node, spelling),
+        "node": node, "section": section, "panel": panel, "label": label_for(row, out_kind, cur),
         "kind": out_kind, "state_var": state_var, "positions": positions,
         "press": press, "release": release, "hold_ms": hold_ms_of(row) if out_kind == "held" else 0,
         "cw": cw, "ccw": ccw,
@@ -692,6 +807,27 @@ def direct_write_how(row):
     return f"{', '.join(name for name, _ in click_codes(row))} left out"
 
 
+def check_keep_without_node(kept, dropped_why, cur, cockpit):
+    """Each keep_without_node entry must do what it says: keep a control the rules would keep but for its node, which
+    neither interior model has. So it may not also be excluded (conflicting), may not name a node a model has (it would do
+    nothing) and may not name one the rules leave out for another reason (the entry would not bring it back). An entry for
+    a node the package does not have is caught with the other tables. Given no cockpit there is nothing to judge an entry
+    against."""
+    both = sorted(set(cur["keep_without_node"]) & set(cur["exclude_nodes"]))
+    if both:
+        raise CurationError(f"curation keep_without_node and exclude_nodes both name: {', '.join(both)}")
+    if cockpit is None:
+        return
+    has_node = sorted(n for n in cur["keep_without_node"] if cockpit_presence(n, cockpit.pw, cockpit.rr) != "none")
+    if has_node:
+        raise CurationError("curation keep_without_node names nodes a cockpit model has (the entry does nothing, remove "
+                            "it): " + ", ".join(has_node))
+    left_out = sorted(n for n in cur["keep_without_node"] if n not in kept)
+    if left_out:
+        raise CurationError("curation keep_without_node names nodes the rules still leave out: "
+                            + ", ".join(f"{n} ({dropped_why.get(n, '?')})" for n in left_out))
+
+
 def status_row(entry):
     for field in ("key", "label", "panel", "announce"):
         if field not in entry:
@@ -761,19 +897,27 @@ def flow_order(controls, cur):
     return ordered, unlisted
 
 
-def build_map(rows, cur, aircraft, version):
-    """(the map, a report of what was dropped and which curation entries did nothing)."""
+def build_map(rows, cur, aircraft, version, cockpit=None):
+    """(the map, a report of what was dropped and which curation entries did nothing).
+
+    cockpit is what read_cockpit made of the package's two interior models: with it the map holds only controls the cockpit
+    has (a control no model has a node for is left out, named in the report under "absent", and one only one model has says
+    so in its label, named under "variant_only"). Given None nothing is judged on the cockpit, which is what the tests of
+    the other rules want; the run itself always has one."""
     keyed, seen = [], set()
     dropped = collections.Counter()
     suspected = {}
     unmapped = set()
     dropped_why = {}
+    absent = {}
     kept_row = {}
     for index, row in enumerate(rows):
-        control, why, slips = convert_row(row, cur)
+        control, why, slips = convert_row(row, cur, cockpit)
         if why:
             dropped[why] += 1
             dropped_why[row["node"]] = why
+            if why == NO_COCKPIT_NODE and row["node"] not in absent:  # named by the label it would have had, and its banner
+                absent[row["node"]] = {"banner": row["panel"], "label": label_for(row, KIND_MAP[row["kind"]], cur)}
         elif control["node"] in seen:
             dropped["duplicate node"] += 1
         else:
@@ -787,13 +931,15 @@ def build_map(rows, cur, aircraft, version):
     keyed.sort(key=lambda kc: kc[0])
     tell_apart(keyed, {r["node"]: r for r in reversed(rows)}, cur)
     controls = [c for _, c in keyed]
+    variant_only = mark_variants(controls, cockpit)  # before unique_labels: the suffix tells two same-named controls apart
     unique_labels(controls)
 
     in_package = {r["node"] for r in rows}
     first_row = {}
     for r in rows:
         first_row.setdefault(r["node"], r)
-    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "direct_write"):
+    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "direct_write",
+                  "keep_without_node"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
@@ -807,6 +953,7 @@ def build_map(rows, cur, aircraft, version):
         raise CurationError(f"curation guarded and direct_write both name: {', '.join(twice)} (a guarded control already "
                             "has no click code: the app opens its guard and writes the position)")
     kept = {c["node"] for c in controls}
+    check_keep_without_node(kept, dropped_why, cur, cockpit)
     included = set(cur["include_nodes"])
     both = sorted(included & set(cur["exclude_nodes"]))
     if both:
@@ -841,6 +988,10 @@ def build_map(rows, cur, aircraft, version):
     banners = {r["panel"] for r in rows}
     report = {
         "dropped": dropped,
+        "absent": absent,
+        "variant_only": {c["node"]: {"variant": variant_only[c["node"]], "label": c["label"]}
+                         for c in controls if c["node"] in variant_only},
+        "kept_without_node": sorted(set(cur["keep_without_node"])) if cockpit is not None else [],
         "taken_in": sorted(included),
         "guarded": {n: guarded_how(first_row[n], cur) for n in cur["guarded"]},
         "direct_write": {n: direct_write_how(kept_row[n]) for n in cur["direct_write"]},
@@ -905,8 +1056,9 @@ def load_curation(path) -> dict:
         if not valid_guarded(entry):
             raise CurationError(f"{path}: guarded[{node!r}] is {{{', '.join(GUARDED_FIELDS)}}}: names or {{value, label}} "
                                 "for positions, numbers for guard_closed and close_sets (which may be null)")
-    if not all(isinstance(node, str) and node for node in cur["direct_write"]):
-        raise CurationError(f"{path}: direct_write is a list of node names")
+    for key in ("direct_write", "keep_without_node"):
+        if not all(isinstance(node, str) and node for node in cur[key]):
+            raise CurationError(f"{path}: {key} is a list of node names")
     for rule in cur["node_panels"]:
         if "panel" not in rule or not ({"banner", "prefix"} & set(rule)):
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")
@@ -960,6 +1112,10 @@ def main(argv=None) -> None:
     if not (pkg / "manifest.json").is_file():
         sys.exit(f"{pkg} has no manifest.json: pass the package folder itself")
 
+    try:  # first, before the slow reading of the behavior files: without both models no control can be judged
+        cockpit = read_cockpit(pkg)
+    except CurationError as e:
+        sys.exit(f"curation: {e}")
     rows, _lights, summary = extract_controls.extract(pkg)
     if summary["errors"]:
         print("files that did not parse: " + "; ".join(summary["errors"]), file=sys.stderr)
@@ -967,7 +1123,7 @@ def main(argv=None) -> None:
         sys.exit(f"no controls found in {pkg}")
     try:
         cur = load_curation(args.curation)
-        map_, report = build_map(rows, cur, pkg.name, package_version(pkg))
+        map_, report = build_map(rows, cur, pkg.name, package_version(pkg), cockpit)
     except CurationError as e:
         sys.exit(f"curation: {e}")
 
@@ -993,6 +1149,19 @@ def main(argv=None) -> None:
           "state var to the picked position)")
     for node, how in report["direct_write"].items():
         print(f"    {node}: {how}")
+    print(f"  cockpit models   : {INTERIOR_MODELS['pw']} ({len(cockpit.pw)} nodes), {INTERIOR_MODELS['rr']} "
+          f"({len(cockpit.rr)} nodes)")
+    print(f"  no cockpit node  : {len(report['absent'])} (left out: a node of neither model)")
+    for node, what in report["absent"].items():
+        print(f"    {node}: {what['label']} (vendor banner {what['banner']})")
+    print(f"  one variant only : {len(report['variant_only'])} (labeled {VARIANT_TAGS['pw']} or {VARIANT_TAGS['rr']}: "
+          "a node of one model only)")
+    for node, what in report["variant_only"].items():
+        print(f"    {node}: {what['variant'].upper()} only, {what['label']}")
+    print(f"  kept without node: {len(report['kept_without_node'])} (curation's keep_without_node: a control no model has a "
+          "node for, kept)")
+    for node in report["kept_without_node"]:
+        print(f"    {node}: kept without a cockpit node")
     print("  dropped:")
     for why, n in sorted(report["dropped"].items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"    {n:5d}  {why}")

@@ -483,7 +483,7 @@
    "node": "B757_OVHD_L_ELEC-ENG-CONT_BUTTON",
    "section": "Overhead",
    "panel": "Engine control and yaw damper",
-   "label": "L ELEC ENG Cont",
+   "label": "L ELEC ENG Cont (RR)",
    "kind": "toggle",
    "state_var": "B757_OVHD_L_ELEC_ENG_CONT_BUTTON",
    "positions": [
@@ -506,7 +506,7 @@
    "node": "B757_OVHD_R_ELEC-ENG-CONT_BUTTON",
    "section": "Overhead",
    "panel": "Engine control and yaw damper",
-   "label": "R ELEC ENG Cont",
+   "label": "R ELEC ENG Cont (RR)",
    "kind": "toggle",
    "state_var": "B757_OVHD_R_ELEC_ENG_CONT_BUTTON",
    "positions": [
@@ -2058,7 +2058,7 @@
    "node": "B757_GAURD_1_SWITCH",
    "section": "Overhead",
    "panel": "Switch guards",
-   "label": "Elec Eng Cont 1 Guard",
+   "label": "Elec Eng Cont 1 Guard (RR)",
    "kind": "guard",
    "state_var": "GAURD_1_SWITCH",
    "positions": [
@@ -2081,7 +2081,7 @@
    "node": "B757_GAURD_2_SWITCH",
    "section": "Overhead",
    "panel": "Switch guards",
-   "label": "Elec Eng Cont 2 Guard",
+   "label": "Elec Eng Cont 2 Guard (RR)",
    "kind": "guard",
    "state_var": "GAURD_2_SWITCH",
    "positions": [
@@ -5443,33 +5443,6 @@
    "ccw": null
   },
   {
-   "node": "B757_EICAS_COMPUTER_KNOB",
-   "section": "Pedestal",
-   "panel": "EICAS control",
-   "label": "EICAS Computer",
-   "kind": "switch",
-   "state_var": "B757_EICAS_COMPUTER_KNOB",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Position 0"
-    },
-    {
-     "value": 1,
-     "label": "Position 1"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "(L:B757_EICAS_COMPUTER_KNOB, enum) ++ d 2 > if{ 2 } (>L:B757_EICAS_COMPUTER_KNOB, enum)",
-   "ccw": "(L:B757_EICAS_COMPUTER_KNOB, enum) -- d 0 < if{ 0 } (>L:B757_EICAS_COMPUTER_KNOB, enum)"
-  },
-  {
    "node": "B757_EICAS_LWR_THRUST-REF_KNOB",
    "section": "Pedestal",
    "panel": "EICAS control",
@@ -6744,129 +6717,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_ADF_TONE_SWITCH",
-   "section": "Pedestal",
-   "panel": "ADF",
-   "label": "ADF Tone",
-   "kind": "toggle",
-   "state_var": "B757_PED_ADF_TONE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_ADF_TONE_SWITCH,bool) ! (>L:B757_PED_ADF_TONE_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_ADF_L_TEST_SWITCH",
-   "section": "Pedestal",
-   "panel": "ADF",
-   "label": "ADF L Test",
-   "kind": "toggle",
-   "state_var": "B757_PED_ADF_L_TEST_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_ADF_L_TEST_SWITCH,bool) ! (>L:B757_PED_ADF_L_TEST_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_ADF_R_TEST_SWITCH",
-   "section": "Pedestal",
-   "panel": "ADF",
-   "label": "ADF R Test",
-   "kind": "toggle",
-   "state_var": "B757_PED_ADF_R_TEST_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_ADF_R_TEST_SWITCH,bool) ! (>L:B757_PED_ADF_R_TEST_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_ADF_L_SWITCH",
-   "section": "Pedestal",
-   "panel": "ADF",
-   "label": "ADF L",
-   "kind": "switch",
-   "state_var": "B757_PED_ADF_L_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "ADF"
-    },
-    {
-     "value": 1,
-     "label": "Ant"
-    },
-    {
-     "value": 2,
-     "label": "Off"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_ADF_R_SWITCH",
-   "section": "Pedestal",
-   "panel": "ADF",
-   "label": "ADF R",
-   "kind": "switch",
-   "state_var": "B757_PED_ADF_R_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "ADF"
-    },
-    {
-     "value": 1,
-     "label": "Ant"
-    },
-    {
-     "value": 2,
-     "label": "Off"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_COMHEAD_2_SWAP_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 2",
@@ -7696,20 +7546,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_WX_R_TEST_BUTTON",
-   "section": "Pedestal",
-   "panel": "Weather radar right",
-   "label": "WX R Test",
-   "kind": "button",
-   "state_var": "B757_PED_WX_R_TEST_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_WX_R_TEST_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_WX_R_TEST_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_ILS_TEST_BUTTON",
    "section": "Pedestal",
    "panel": "Pedestal radio panels",
@@ -7949,259 +7785,6 @@
    "positions": [],
    "press": "1 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 1 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_PressTime, second)",
    "release": "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_1_EADI_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 1 EADI",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_1_EADI_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_1_EADI_BUTTON,bool) ! (>L:B757_P6_DISPLAY_1_EADI_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_1_EHSI_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 1 EHSI",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_1_EHSI_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_1_EHSI_BUTTON,bool) ! (>L:B757_P6_DISPLAY_1_EHSI_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_1_EICAS_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 1 EICAS",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_1_EICAS_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_1_EICAS_BUTTON,bool) ! (>L:B757_P6_DISPLAY_1_EICAS_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_2_EICAS_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 2 EICAS",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_2_EICAS_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_2_EICAS_BUTTON,bool) ! (>L:B757_P6_DISPLAY_2_EICAS_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_2_EADI_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 2 EADI",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_2_EADI_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_2_EADI_BUTTON,bool) ! (>L:B757_P6_DISPLAY_2_EADI_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_DISPLAY_2_EHSI_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Display 2 EHSI",
-   "kind": "toggle",
-   "state_var": "B757_P6_DISPLAY_2_EHSI_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_DISPLAY_2_EHSI_BUTTON,bool) ! (>L:B757_P6_DISPLAY_2_EHSI_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Event Auto Test",
-   "kind": "toggle",
-   "state_var": "B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON,bool) ! (>L:B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Event Man Test",
-   "kind": "toggle",
-   "state_var": "B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON,bool) ! (>L:B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Event Main Test",
-   "kind": "toggle",
-   "state_var": "B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON,bool) ! (>L:B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_EVENT_REC_TEST_SWITCH_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Event Rec Test",
-   "kind": "toggle",
-   "state_var": "B757_P6_EVENT_REC_TEST_SWITCH_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_EVENT_REC_TEST_SWITCH_BUTTON,bool) ! (>L:B757_P6_EVENT_REC_TEST_SWITCH_BUTTON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Event Erase Test",
-   "kind": "toggle",
-   "state_var": "B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON,bool) ! (>L:B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON,bool)",
-   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -8477,98 +8060,6 @@
    "hold_ms": 0,
    "cw": "(L:BBS757_FLT_REC_SWITCH) 1 + 2 min (>L:BBS757_FLT_REC_SWITCH)",
    "ccw": "(L:BBS757_FLT_REC_SWITCH) 1 - 0 max (>L:BBS757_FLT_REC_SWITCH)"
-  },
-  {
-   "node": "B757_GAURD_13_SWITCH",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Left Guard",
-   "kind": "guard",
-   "state_var": "GAURD_13_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:GAURD_13_SWITCH,bool) ! (>L:GAURD_13_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_GAURD_14_SWITCH",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Center Guard",
-   "kind": "guard",
-   "state_var": "GAURD_14_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:GAURD_14_SWITCH,bool) ! (>L:GAURD_14_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_GAURD_15_SWITCH",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Right Guard",
-   "kind": "guard",
-   "state_var": "GAURD_15_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:GAURD_15_SWITCH,bool) ! (>L:GAURD_15_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P61_PANEL_SWITCH_GAURD",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Panel Guard",
-   "kind": "guard",
-   "state_var": "P61_PANEL_SWITCH_GAURD",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:P61_PANEL_SWITCH_GAURD,bool) ! (>L:P61_PANEL_SWITCH_GAURD,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
   }
  ],
  "status": [
