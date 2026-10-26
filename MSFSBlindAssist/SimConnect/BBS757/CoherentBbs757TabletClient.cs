@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
@@ -14,31 +15,38 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// (re)connect (its VCockpit number changes on each aircraft load), and
 /// <c>Resources/coherent-bbs757-tablet-agent.js</c> is installed into it (window.__MSFSBA_BBS757).
 ///
-/// ONE client per view ([DBG-9]): MainForm owns a single lazily created instance that the CDU
-/// window and the EFB window share; the windows subscribe and unsubscribe, never dispose it. The
-/// client CLAIMS its view (<see cref="CoherentViewOwnership"/>) from Start to Stop, reconnect gaps
-/// included, as <see cref="CoherentA32nxMcduClient"/> does. A still-open socket whose agent went
+/// ONE client per view ([DBG-9]): the 757's definition owns a single instance
+/// (<c>BBS757Definition.EnsureTabletClient</c>, started on first use, disposed on a switch away) that
+/// the CDU window, the EFB window and the background page service (<see cref="Bbs757CduPages"/>)
+/// share; the windows subscribe and unsubscribe, never dispose it. The client CLAIMS its view
+/// (<see cref="CoherentViewOwnership"/>) from Start to Stop, reconnect gaps included, as
+/// <see cref="CoherentA32nxMcduClient"/> does. A still-open socket whose agent went
 /// missing gets the agent re-installed on it; any other socket is aborted and disposed before a
 /// new one connects ([A380C-2]). An agent is only ever taken as installed while it can hear the
 /// Comm Bus: an install the page answers NOT_READY (an aircraft reload, the view's scripts not run
 /// yet) is retried on the same socket, and a scrape that shows no listener, or one still not ready
 /// after <see cref="ListenerReadyTimeoutMs"/>, installs it again (<see cref="NeedsReinstall"/>).
 /// Whenever the link is lost the queued keys are dropped, never sent later to a page nobody has
-/// checked (<see cref="KeysDropped"/>). On-demand calls (<see cref="GetNavigraphAsync"/>, key presses)
-/// only ever use the loop's socket and never connect themselves, so they cannot race the loop's
-/// connection setup ([A380C-3]).
+/// checked (<see cref="KeysDropped"/>). On-demand calls (<see cref="GetNavigraphAsync"/>,
+/// <see cref="ScrapeAsync"/>, key presses) only ever use the loop's socket and never connect
+/// themselves, so they cannot race the loop's connection setup ([A380C-3]). Every scrape answers
+/// the agent's version: one older than <see cref="AgentVersion"/> (an app update over a loaded
+/// flight) is installed again on the open socket.
 ///
 /// Screens: the agent keeps each CDU's last Comm Bus frame (they arrive only on change); the loop
 /// scrapes the ACTIVE CDU only, every <see cref="PollIntervalMs"/> ms while the CDU window is
 /// shown and every <see cref="IdleIntervalMs"/> ms while it is hidden, and raises
-/// <see cref="ScreenUpdated"/> when that CDU's frame changed.
+/// <see cref="ScreenUpdated"/> when that CDU's frame changed. <see cref="ScrapeAsync"/> reads
+/// either CDU once, on demand.
 ///
-/// Keys: one queue for both CDUs, so presses never overlap. The agent holds each key 250 ms
-/// (a CLR held about a second clears the whole scratchpad, so the hold is the agent's, fixed);
-/// the next key goes out <see cref="KeyGapMs"/> ms after the release.
+/// Keys: one queue for both CDUs, so presses never overlap. Each key carries its hold, the caller's:
+/// <see cref="KeyHoldMs"/> by default, since a CLR held about a second clears the whole scratchpad;
+/// only <see cref="Bbs757CduPages.WipeScratchpadAsync"/> holds CLR 1300 ms, to do just that. Holds
+/// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. The next
+/// key goes out <see cref="KeyGapMs"/> ms after the release.
 /// Restart is not supported: dispose and create a new instance.
 /// </summary>
-public sealed class CoherentBbs757TabletClient : IDisposable
+public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
 {
     private const string DebuggerBase = "http://127.0.0.1:19999";
     public const string ViewNeedle = "BBSTablet";
@@ -59,6 +67,16 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     // Installs answered with something other than the marker (the view's scripts have not run
     // yet) before the view is resolved again from the page list.
     private const int InstallRetriesPerSocket = 5;
+    // How long an on-demand scrape waits, for the loop's agent and for its answer together.
+    private const int OnDemandScrapeTimeoutMs = 4000;
+
+    /// <summary>
+    /// The agent version this client needs (the agent's VERSION, answered with every scrape): 4 is
+    /// the first whose press takes the hold. A scrape answered by an agent without a version or an
+    /// older one (an app update over a loaded flight) has the agent installed again
+    /// (<see cref="AgentIsCurrent"/>); the install replaces an agent of another version.
+    /// </summary>
+    internal const int AgentVersion = 4;
 
     /// <summary>
     /// How long an installed agent's Comm Bus listener may stay not ready before it is installed
@@ -67,13 +85,22 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     /// </summary>
     internal const int ListenerReadyTimeoutMs = 5000;
 
-    /// <summary>How long the agent holds a key down (its HOLD_MS).</summary>
+    /// <summary>How long a key is held down unless its caller says otherwise (the agent's HOLD_MS).</summary>
     public const int KeyHoldMs = 250;
+
+    /// <summary>The shortest hold a key may have (the agent's MIN_HOLD_MS).</summary>
+    internal const int MinHoldMs = 100;
+
+    /// <summary>The longest hold a key may have (the agent's MAX_HOLD_MS).</summary>
+    internal const int MaxHoldMs = 1500;
 
     /// <summary>The pause after a key's release before the next key (docs/b757/evidence/cdu.md).</summary>
     public const int KeyGapMs = 400;
 
-    /// <summary>One key's whole cycle in the queue: hold, release, gap.</summary>
+    /// <summary>
+    /// One key's whole cycle in the queue at the default hold: hold, release, gap. A key with its
+    /// own hold takes that hold plus <see cref="KeyGapMs"/>.
+    /// </summary>
     public const int KeyCycleMs = KeyHoldMs + KeyGapMs;
 
     /// <summary>A CDU's screen changed (1 captain, 2 first officer); posted to the UI context.</summary>
@@ -99,8 +126,9 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
     private readonly WakeableDelay _wake = new();
-    // Read by the key pump and drained by DropQueuedKeys, so not single-reader.
-    private readonly Channel<(int Cdu, string Key)> _keys = Channel.CreateUnbounded<(int, string)>(
+    // Read by the key pump and drained by DropQueuedKeys, so not single-reader. Each key carries
+    // its clamped hold.
+    private readonly Channel<(int Cdu, string Key, int HoldMs)> _keys = Channel.CreateUnbounded<(int, string, int)>(
         new UnboundedChannelOptions { SingleReader = false });
     private readonly Func<string> _readAgent;
 
@@ -228,11 +256,19 @@ public sealed class CoherentBbs757TabletClient : IDisposable
 
     /// <summary>
     /// Queues one key for a CDU (<c>L1</c>, <c>LEGS</c>, <c>KEYA</c>, <c>KEYCLR</c> …, the cockpit's
-    /// own names, <see cref="Bbs757CduKeys"/>). Keys go out one at a time, <see cref="KeyCycleMs"/>
-    /// apart. When the link is lost every queued key is dropped (<see cref="KeysDropped"/>); the
-    /// window refuses aloud before queueing when <see cref="IsReadable"/> is false.
+    /// own names, <see cref="Bbs757CduKeys"/>), held <see cref="KeyHoldMs"/>. Keys go out one at a
+    /// time, <see cref="KeyCycleMs"/> apart. When the link is lost every queued key is dropped
+    /// (<see cref="KeysDropped"/>); the window refuses aloud before queueing when
+    /// <see cref="IsReadable"/> is false.
     /// </summary>
-    public void PressKey(int cdu, string key)
+    public void PressKey(int cdu, string key) => PressKey(cdu, key, KeyHoldMs);
+
+    /// <summary>
+    /// Queues one key held <paramref name="holdMs"/> (clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/>);
+    /// the next key goes out <see cref="KeyGapMs"/> after its release. Only the scratchpad wipe holds
+    /// a key longer than <see cref="KeyHoldMs"/>: a CLR held about a second clears the whole scratchpad.
+    /// </summary>
+    public void PressKey(int cdu, string key, int holdMs)
     {
         if ((cdu != 1 && cdu != 2) || !Bbs757CduKeys.IsKey(key))
         {
@@ -240,7 +276,61 @@ public sealed class CoherentBbs757TabletClient : IDisposable
             return;
         }
         Interlocked.Increment(ref _pendingKeys);
-        if (!_keys.Writer.TryWrite((cdu, key))) Interlocked.Decrement(ref _pendingKeys);
+        if (!_keys.Writer.TryWrite((cdu, key, ClampHold(holdMs)))) Interlocked.Decrement(ref _pendingKeys);
+    }
+
+    /// <summary>A key's hold within <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/>, as the agent clamps it.</summary>
+    private static int ClampHold(int holdMs) => Math.Clamp(holdMs, MinHoldMs, MaxHoldMs);
+
+    /// <summary>
+    /// The agent call that presses one key for <paramref name="holdMs"/> (clamped), e.g.
+    /// <c>__MSFSBA_BBS757.press(2,"KEYCLR",1300)</c>. The key must be one of <see cref="Bbs757CduKeys"/>. Pure.
+    /// </summary>
+    internal static string PressExpression(int cdu, string key, int holdMs) =>
+        "__MSFSBA_BBS757.press(" + cdu.ToString(CultureInfo.InvariantCulture) + "," + JsonSerializer.Serialize(key)
+        + "," + ClampHold(holdMs).ToString(CultureInfo.InvariantCulture) + ")";
+
+    /// <summary>Whether a scrape's agent version is the one this client needs (missing or older is not). Pure.</summary>
+    internal static bool AgentIsCurrent(int? version) => version >= AgentVersion;
+
+    /// <summary>The agent call that scrapes one CDU, its frame sent only when its tag differs from <paramref name="since"/>.</summary>
+    private static string ScrapeExpression(int cdu, string since) =>
+        $"window.__MSFSBA_BBS757 ? JSON.stringify(__MSFSBA_BBS757.scrape({cdu},{JsonSerializer.Serialize(since)})) : '{NoAgent}'";
+
+    /// <summary>
+    /// One CDU's screen now, read on demand whichever CDU the loop is scraping (the page service
+    /// reads the first officer's this way). It asks for the whole frame and leaves the loop's change
+    /// tags and agent state alone. It waits at most <see cref="OnDemandScrapeTimeoutMs"/> in all, for
+    /// the loop's agent and for the answer, and never connects ([A380C-3]). Null when the view, the
+    /// agent or the CDU's frame is missing, the agent is older than <see cref="AgentVersion"/> or
+    /// cannot hear the Comm Bus, or <paramref name="ct"/> fires; never throws.
+    /// </summary>
+    public async Task<Bbs757CduScreen?> ScrapeAsync(int cdu, CancellationToken ct)
+    {
+        if ((cdu != 1 && cdu != 2) || _disposed) return null;
+        try
+        {
+            using var bound = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
+            bound.CancelAfter(OnDemandScrapeTimeoutMs);
+            if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(OnDemandScrapeTimeoutMs), bound.Token)) return null;
+            // Sent under the loop's token alone: .NET aborts a WebSocket whose send is canceled, and
+            // the socket is the loop's. A caller that gives up stops waiting; the eval ends on its
+            // own timeout.
+            string raw = await EvalAsync(ScrapeExpression(cdu, ""), _loopToken).WaitAsync(bound.Token);
+            if (raw.Length == 0) return null;
+            if (raw == NoAgent) { _wake.Wake(); return null; }   // the loop installs it again
+            var result = JsonSerializer.Deserialize<ScrapeResult>(raw);
+            if (result == null || !result.ok) return null;
+            if (!AgentIsCurrent(result.version)) { _wake.Wake(); return null; }
+            if (!result.listening || !result.ready || !result.hasFrame || result.frame == null) return null;
+            return Bbs757CduFrame.Parse(result.frame);
+        }
+        catch (Exception ex)
+        {
+            // The frame itself is never logged.
+            Log.Debug("BBS757", $"CDU {cdu} on-demand read failed: {ex.GetType().Name}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -270,7 +360,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     {
         try
         {
-            if (!await WaitForAgentAsync(TimeSpan.FromSeconds(6))) return (false, null, null);
+            if (!await WaitForAgentAsync(TimeSpan.FromSeconds(6), _loopToken)) return (false, null, null);
             string raw = await EvalAsync("window.__MSFSBA_BBS757 ? JSON.stringify(__MSFSBA_BBS757.navigraph()) : ''", _loopToken);
             if (string.IsNullOrEmpty(raw)) return (false, null, null);
             using var doc = JsonDocument.Parse(raw);
@@ -290,17 +380,21 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         }
     }
 
-    /// <summary>Waits until the loop has the agent installed on an open socket, waking it meanwhile.</summary>
-    private async Task<bool> WaitForAgentAsync(TimeSpan timeout)
+    /// <summary>
+    /// Waits until the loop has the agent installed on an open socket, waking it meanwhile. False at
+    /// once on a client never started; <paramref name="ct"/> (the loop's token, or one linked to it)
+    /// ends the wait.
+    /// </summary>
+    private async Task<bool> WaitForAgentAsync(TimeSpan timeout, CancellationToken ct)
     {
         var until = DateTime.UtcNow + timeout;
-        while (!_loopToken.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
             var ws = _ws;
             if (ws != null && ws.State == WebSocketState.Open && _agentInstalled) return true;
             if (_cts == null || DateTime.UtcNow >= until) return false;
             _wake.Wake();
-            await Task.Delay(100, _loopToken);
+            await Task.Delay(100, ct);
         }
         return false;
     }
@@ -311,7 +405,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     {
         try
         {
-            await foreach (var (cdu, key) in _keys.Reader.ReadAllAsync(ct))
+            await foreach (var (cdu, key, holdMs) in _keys.Reader.ReadAllAsync(ct))
             {
                 try
                 {
@@ -322,7 +416,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
                         DropQueuedKeys(alreadyDropped: 1);
                         continue;
                     }
-                    string expr = $"window.__MSFSBA_BBS757 ? __MSFSBA_BBS757.press({cdu},{JsonSerializer.Serialize(key)}) : '{NoAgent}'";
+                    string expr = $"window.__MSFSBA_BBS757 ? {PressExpression(cdu, key, holdMs)} : '{NoAgent}'";
                     string result = await EvalAsync(expr, ct);
                     if (result != "ok")
                         Log.Debug("BBS757", $"CDU {cdu} key {key}: {(result.Length == 0 ? "no answer" : result)}");
@@ -332,9 +426,9 @@ public sealed class CoherentBbs757TabletClient : IDisposable
                         DropQueuedKeys(alreadyDropped: 1);
                         continue;
                     }
-                    // Timed from the answer: the press ran before it, so its release (250 ms
+                    // Timed from the answer: the press ran before it, so its release (its hold
                     // later in the page) is at least KeyGapMs before the next key.
-                    await Task.Delay(KeyCycleMs, ct);
+                    await Task.Delay(holdMs + KeyGapMs, ct);
                 }
                 finally
                 {
@@ -575,8 +669,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     {
         int cdu = _activeCdu;
         string since = _tags[cdu];
-        string raw = await EvalAsync(
-            $"window.__MSFSBA_BBS757 ? JSON.stringify(__MSFSBA_BBS757.scrape({cdu},{JsonSerializer.Serialize(since)})) : '{NoAgent}'", ct);
+        string raw = await EvalAsync(ScrapeExpression(cdu, since), ct);
         if (string.IsNullOrEmpty(raw)) { _emptyEvalStreak++; return; }
         _emptyEvalStreak = 0;
         if (raw == NoAgent)
@@ -591,6 +684,15 @@ public sealed class CoherentBbs757TabletClient : IDisposable
         try { result = JsonSerializer.Deserialize<ScrapeResult>(raw); }
         catch (JsonException) { return; }
         if (result == null || !result.ok) return;
+
+        // An agent of an older version (an app update over a loaded flight) would ignore the hold
+        // of a key: install the current one, which replaces it.
+        if (!AgentIsCurrent(result.version))
+        {
+            Log.Debug("BBS757", $"Tablet agent version {result.version?.ToString(CultureInfo.InvariantCulture) ?? "none"}, needs {AgentVersion}: re-installing.");
+            AgentUnusable();
+            return;
+        }
 
         // An agent that cannot hear the Comm Bus would freeze CDU 1 on its seed and never get
         // CDU 2: install it again (the agent registers a new listener then).
@@ -744,6 +846,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable
     private sealed class ScrapeResult
     {
         public bool ok { get; set; }
+        public int? version { get; set; }
         public int cdu { get; set; }
         public bool listening { get; set; }
         public bool ready { get; set; }

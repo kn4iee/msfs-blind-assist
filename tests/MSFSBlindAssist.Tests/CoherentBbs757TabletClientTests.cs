@@ -73,5 +73,76 @@ public class CoherentBbs757TabletClientTests
         Assert.False(client.IsReadable);
         Assert.False(client.HasFrame(1));
         Assert.Equal((false, (string?)null, (string?)null), await client.GetNavigraphAsync());
+        Assert.Null(await client.ScrapeAsync(2, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_disposed_client_scrapes_nothing()
+    {
+        // After a switch away the definition hands out its disposed client: a background read
+        // through it answers null, never throws.
+        var client = new CoherentBbs757TabletClient(() => "");
+        client.Dispose();
+
+        Assert.Null(await client.ScrapeAsync(2, CancellationToken.None));
+        Assert.Null(await client.ScrapeAsync(1, new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void PressExpression_carries_the_hold()
+    {
+        Assert.Equal("__MSFSBA_BBS757.press(2,\"KEYCLR\",1300)", CoherentBbs757TabletClient.PressExpression(2, "KEYCLR", 1300));
+        Assert.Equal("__MSFSBA_BBS757.press(1,\"L1\",250)", CoherentBbs757TabletClient.PressExpression(1, "L1", CoherentBbs757TabletClient.KeyHoldMs));
+        // Clamped to 100-1500 ms, as the agent clamps it.
+        Assert.Equal("__MSFSBA_BBS757.press(2,\"KEYCLR\",1500)", CoherentBbs757TabletClient.PressExpression(2, "KEYCLR", 5000));
+        Assert.Equal("__MSFSBA_BBS757.press(2,\"KEYCLR\",100)", CoherentBbs757TabletClient.PressExpression(2, "KEYCLR", 10));
+    }
+
+    [Fact]
+    public void A_key_with_its_own_hold_is_queued_like_any_other()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");
+
+        client.PressKey(2, "KEYCLR", 1300);
+        client.PressKey(2, "KEYA");
+        client.PressKey(2, "KEYCLR_LONG", 1300);   // not a key: not queued
+
+        Assert.Equal(2, client.PendingKeyCount);
+    }
+
+    [Fact]
+    public void Agent_press_takes_a_hold_argument()
+    {
+        string code = AgentCode();
+
+        Assert.Contains("A.press = function (cdu, key, holdMs)", code);
+        Assert.Contains("var HOLD_MS = 250;", code);
+        Assert.Contains("var MIN_HOLD_MS = 100;", code);
+        Assert.Contains("var MAX_HOLD_MS = 1500;", code);
+        // A missing or non-numeric hold is HOLD_MS; the release waits the clamped hold.
+        Assert.Contains("typeof holdMs === 'number' && isFinite(holdMs) ? holdMs : HOLD_MS", code);
+        Assert.Matches(@"(?s)setTimeout\(function \(\) \{.*?\}, hold\);", code);
+        Assert.DoesNotContain("}, HOLD_MS);", code);
+    }
+
+    [Fact]
+    public void Agent_version_check()
+    {
+        Assert.False(CoherentBbs757TabletClient.AgentIsCurrent(CoherentBbs757TabletClient.AgentVersion - 1));
+        Assert.True(CoherentBbs757TabletClient.AgentIsCurrent(CoherentBbs757TabletClient.AgentVersion));
+        Assert.False(CoherentBbs757TabletClient.AgentIsCurrent(null));
+
+        // The agent the client installs is the version it asks for, and its scrape says so: an
+        // agent older than the client's would be installed again on every poll.
+        string code = AgentCode();
+        Assert.Contains("var VERSION = " + CoherentBbs757TabletClient.AgentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";", code);
+        Assert.Contains("version: A.version", code);
+    }
+
+    /// <summary>The tablet agent's source with its line comments removed.</summary>
+    private static string AgentCode()
+    {
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-tablet-agent.js"));
+        return System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
     }
 }

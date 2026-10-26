@@ -9,8 +9,11 @@
 // element (lastMobiFlightCduPayload), which seeds CDU 1 at install. The first officer's has no
 // cache: it arrives on its next change only (docs/b757/evidence/cdu.md).
 //
-// Keys: L:B757_CDU_<1|2>_<KEY> held at 1 for HOLD_MS, then 0. The hold is fixed and short on
-// purpose: a CLR held about a second clears the whole scratchpad, as on the aircraft.
+// Keys: L:B757_CDU_<1|2>_<KEY> held at 1 for the app's hold, then 0: HOLD_MS when the app gives
+// none, clamped to MIN_HOLD_MS-MAX_HOLD_MS. The default is short on purpose: a CLR held about a
+// second clears the whole scratchpad, as on the aircraft, so the app holds CLR 1300 ms only to wipe it.
+//
+// Version: every scrape answers VERSION; the app installs this agent again over an older one.
 //
 // Install: an agent that cannot listen is no agent. When the view's own scripts have not run yet
 // (an aircraft reload: the app can reach a new view before they do), RegisterViewListener or
@@ -30,10 +33,13 @@
 (function () {
   try {
     // 3: the registration cap, and `ready` only after both handlers are on.
-    var VERSION = 3;
+    // 4: press takes the hold; scrape answers the version.
+    var VERSION = 4;
     var MARK = 'MSFSBA_BBS757_TABLET_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_TABLET_NOT_READY:';
     var HOLD_MS = 250;
+    var MIN_HOLD_MS = 100;
+    var MAX_HOLD_MS = 1500;
     var REREGISTER_MS = 4000;
     var MAX_REGISTRATIONS = 3;
 
@@ -131,6 +137,7 @@
       var tag = state.inst + ':' + state.seq[cdu];
       return {
         ok: true,
+        version: A.version,
         cdu: cdu,
         listening: !!state.listener,
         ready: state.ready,
@@ -154,16 +161,20 @@
     A.KEYS = {};
     for (var k = 0; k < KEY_NAMES.length; k++) A.KEYS[KEY_NAMES[k]] = true;
 
-    // One key: 1, held HOLD_MS, then 0. Spacing between keys is the app's (400 ms after release).
-    A.press = function (cdu, key) {
+    // One key: 1, held holdMs (HOLD_MS when missing or not a number; clamped), then 0. Spacing
+    // between keys is the app's (400 ms after release).
+    A.press = function (cdu, key, holdMs) {
       if (cdu !== 1 && cdu !== 2) return 'bad-cdu';
       if (typeof key !== 'string' || !A.KEYS[key]) return 'bad-key';
+      var hold = typeof holdMs === 'number' && isFinite(holdMs) ? holdMs : HOLD_MS;
+      if (hold < MIN_HOLD_MS) hold = MIN_HOLD_MS;
+      if (hold > MAX_HOLD_MS) hold = MAX_HOLD_MS;
       var name = 'L:B757_CDU_' + cdu + '_' + key;
       try { SimVar.SetSimVarValue(name, 'number', 1); }
       catch (e) { return 'error: ' + (e && e.message); }
       setTimeout(function () {
         try { SimVar.SetSimVarValue(name, 'number', 0); } catch (e) { }
-      }, HOLD_MS);
+      }, hold);
       return 'ok';
     };
 

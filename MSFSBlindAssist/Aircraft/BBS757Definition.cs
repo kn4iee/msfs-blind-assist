@@ -386,6 +386,22 @@ public partial class BBS757Definition : BaseAircraftDefinition
         return client;
     }
 
+    private Bbs757CduPages? _cduPages;
+
+    /// <summary>
+    /// The page service the gap plans' background features read and type on the first officer's
+    /// CDU with (<see cref="Bbs757CduPages.FirstOfficer"/>), over <see cref="EnsureTabletClient"/>'s
+    /// client: one per definition, made on first use (from the UI thread, as that client is). After a
+    /// switch away it is over the disposed client, so every call answers null (false).
+    /// </summary>
+    internal Bbs757CduPages CduPages
+    {
+        get
+        {
+            lock (_tabletLock) return _cduPages ??= Bbs757CduPages.For(EnsureTabletClient());
+        }
+    }
+
     /// <summary>
     /// The end of a switch away: MainForm's windows on the client close first
     /// (<see cref="CloseTabletWindows"/>), then the client goes, socket and loop with it. Never throws:
