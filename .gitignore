@@ -190,3 +190,4 @@ tools/a350-probe/*.cwasm
 tools/a350-probe/*.bin
 tools/a350-probe/*.json
 tools/a350-probe/__pycache__/
+tools/a350-probe/*.txt
