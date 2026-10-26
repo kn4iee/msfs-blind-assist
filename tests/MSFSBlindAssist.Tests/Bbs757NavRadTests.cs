@@ -44,6 +44,15 @@ public class Bbs757NavRadTests
 
     private static readonly Bbs757VorTuning NotTuned = new(null, null, null);
 
+    /// <summary>The ILS control panel as the app counts it, on a channel.</summary>
+    private static Bbs757IlsDial IlsAt(double mhz)
+    {
+        Assert.True(Bbs757IlsPanel.TryDialFor(mhz, out var dial));
+        return dial;
+    }
+
+    private static readonly Bbs757IlsDial IlsParked = Bbs757IlsDial.LoadState;
+
     private static void InCulture(string name, Action body)
     {
         CultureInfo saved = CultureInfo.CurrentCulture;
@@ -51,6 +60,20 @@ public class Bbs757NavRadTests
         {
             CultureInfo.CurrentCulture = new CultureInfo(name);
             body();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    private static async Task InCultureAsync(string name, Func<Task> body)
+    {
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(name);
+            await body();
         }
         finally
         {
@@ -209,20 +232,25 @@ public class Bbs757NavRadTests
     {
         var page = new Bbs757NavRadPage(new Bbs757VorTuning(116.90, 'A', "GSU"), NotTuned);
 
-        // With the page: each VOR's tuning, then the ILS course. An auto-tuned or untuned VOR has no
-        // course to say (measured: the CDU blanks its CRS field and ignores an entry).
-        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095.",
-            Bbs757NavRad.Readout(page, 95, 0, 95));
-        // Without it (the first officer's CDU busy or unreachable): the courses, and why there is no more.
-        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable.",
-            Bbs757NavRad.Readout(null, 95, 0, 95));
+        // With the page: each VOR's tuning, then the ILS course, then the ILS panel as the app counts it.
+        // An auto-tuned or untuned VOR has no course to say (measured: the CDU blanks its CRS field and
+        // ignores an entry).
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS 110.50.",
+            Bbs757NavRad.Readout(page, 95, 0, 95, IlsAt(110.50)));
+        // Without it (the first officer's CDU busy or unreachable): the courses, the counted ILS, and why
+        // there is no more.
+        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. ILS 110.50. Frequencies unavailable.",
+            Bbs757NavRad.Readout(null, 95, 0, 95, IlsAt(110.50)));
         // An ILS course that cannot be read says so, in both forms.
-        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course unavailable.",
-            Bbs757NavRad.Readout(page, null, 0, null));
-        Assert.Equal("VOR L course 095, VOR R course unavailable, ILS course unavailable. Frequencies unavailable.",
-            Bbs757NavRad.Readout(null, 95, null, null));
-        Assert.Equal("VOR L course unavailable, VOR R course unavailable, ILS course unavailable. Frequencies unavailable.",
-            Bbs757NavRad.Readout(null, null, null, null));
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course unavailable. ILS parked.",
+            Bbs757NavRad.Readout(page, null, 0, null, IlsParked));
+        Assert.Equal("VOR L course 095, VOR R course unavailable, ILS course unavailable. ILS parked. Frequencies unavailable.",
+            Bbs757NavRad.Readout(null, 95, null, null, IlsParked));
+        // A panel the app has not counted says so, in both forms.
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS tuning unknown.",
+            Bbs757NavRad.Readout(page, 95, 0, 95, null));
+        Assert.Equal("VOR L course unavailable, VOR R course unavailable, ILS course unavailable. ILS tuning unknown. Frequencies unavailable.",
+            Bbs757NavRad.Readout(null, null, null, null, null));
     }
 
     [Fact]
@@ -233,19 +261,19 @@ public class Bbs757NavRadTests
         var auto = new Bbs757VorTuning(116.90, 'A', "GSU");
 
         // Hand-tuned from the CDU (R) or on the VOR/DME panel (M): the course applies, whichever side.
-        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R 117.40 manual, course 270. ILS course 095.",
-            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, manual), 95, 270, 95));
+        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R 117.40 manual, course 270. ILS course 095. ILS parked.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, manual), 95, 270, 95, IlsParked));
         // One hand-tuned, the other auto or untuned: only the hand-tuned one has a course.
-        Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 manual, course 270. ILS course 095.",
-            Bbs757NavRad.Readout(new Bbs757NavRadPage(auto, manual), 95, 270, 95));
-        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R not tuned. ILS course 095.",
-            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), 95, 270, 95));
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 manual, course 270. ILS course 095. ILS parked.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(auto, manual), 95, 270, 95, IlsParked));
+        Assert.Equal("VOR L 116.90 remote, GSU, course 095. VOR R not tuned. ILS course 095. ILS parked.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), 95, 270, 95, IlsParked));
         // A hand-tuned VOR whose course cannot be read says so.
-        Assert.Equal("VOR L 116.90 remote, GSU, course unavailable. VOR R not tuned. ILS course 095.",
-            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), null, 270, 95));
+        Assert.Equal("VOR L 116.90 remote, GSU, course unavailable. VOR R not tuned. ILS course 095. ILS parked.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(remote, NotTuned), null, 270, 95, IlsParked));
         // A side the page could not be read for: nothing is known of its course either.
-        Assert.Equal("VOR L frequency unavailable. VOR R 117.40 manual, course 270. ILS course 095.",
-            Bbs757NavRad.Readout(new Bbs757NavRadPage(null, manual), 95, 270, 95));
+        Assert.Equal("VOR L frequency unavailable. VOR R 117.40 manual, course 270. ILS course 095. ILS parked.",
+            Bbs757NavRad.Readout(new Bbs757NavRadPage(null, manual), 95, 270, 95, IlsParked));
     }
 
     [Theory]
@@ -254,15 +282,17 @@ public class Bbs757NavRadTests
     public void The_page_and_the_sentences_do_not_depend_on_the_pcs_culture(string culture)
     {
         // CI runs under en-US: under a comma-decimal culture "116.90" must still be 116.9 (not 11690)
-        // and be spoken with a dot.
+        // and be spoken with a dot, and so must the counted ILS.
         InCulture(culture, () =>
         {
             var page = Bbs757NavRad.Parse(NavRadio("116.90AGSU", "GSUR117.40"));
 
             Assert.Equal(116.90, page!.Left!.Mhz);
             Assert.Equal(117.40, page.Right!.Mhz);
-            Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 remote, GSU, course 270. ILS course 095.",
-                Bbs757NavRad.Readout(page, 95, 270, 95));
+            Assert.Equal("VOR L 116.90 auto, GSU. VOR R 117.40 remote, GSU, course 270. ILS course 095. ILS 110.55.",
+                Bbs757NavRad.Readout(page, 95, 270, 95, IlsAt(110.55)));
+            Assert.Equal("VOR L course 095, VOR R course 270, ILS course 095. ILS 108.10. Frequencies unavailable.",
+                Bbs757NavRad.Readout(null, 95, 270, 95, IlsAt(108.10)));
         });
     }
 
@@ -289,8 +319,9 @@ public class Bbs757NavRadTests
     [Fact]
     public void Courses_are_three_digits()
     {
-        Assert.Equal("VOR L course 005, VOR R course 000, ILS course 360. Frequencies unavailable.",
-            Bbs757NavRad.Readout(null, 5, 0, 360));
+        // ...and an ILS frequency two decimals ("108.10", never "108.1").
+        Assert.Equal("VOR L course 005, VOR R course 000, ILS course 360. ILS 108.10. Frequencies unavailable.",
+            Bbs757NavRad.Readout(null, 5, 0, 360, IlsAt(108.10)));
     }
 
     // ---- The ILS course typed in ----------------------------------------------------------------
@@ -557,7 +588,7 @@ public class Bbs757NavRadTests
     {
         // Until now N fell through to MainForm's readout of the stock NAV radios, which BlueBird does
         // not use. With the CDU service answering null, the action is still the 757's, and it still
-        // speaks the courses.
+        // speaks the courses. (A new definition has not seen a flight load: its ILS count is unknown.)
         var def = DefWithNoCdu(Courses(95, 0, 95));
         var speech = new SpeechCapture();
 
@@ -565,7 +596,8 @@ public class Bbs757NavRadTests
 
         Assert.True(handled);
         Assert.True(await WaitUntil(() => speech.Interrupts.Count > 0), "N said nothing");
-        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable." }, speech.Interrupts.ToArray());
+        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. Frequencies unavailable." },
+            speech.Interrupts.ToArray());
     }
 
     [Fact]
@@ -577,7 +609,7 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS tuning unknown." }, speech.Interrupts);
         Assert.Empty(cdu.Presses);   // already on the page: no key
     }
 
@@ -590,7 +622,7 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 113.90 remote, course 095. VOR R not tuned. ILS course 095." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 113.90 remote, course 095. VOR R not tuned. ILS course 095. ILS tuning unknown." }, speech.Interrupts);
         Assert.Equal(new[] { (Fo, Bbs757NavRad.PageKey, 250) }, cdu.Presses);   // R52: the captain's CDU is never touched
     }
 
@@ -604,7 +636,8 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. Frequencies unavailable." },
+            speech.Interrupts);
         Assert.Empty(cdu.Presses);
     }
 
@@ -617,7 +650,8 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. Frequencies unavailable." },
+            speech.Interrupts);
     }
 
     [Fact]
@@ -629,7 +663,8 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
 
-        Assert.Equal(new[] { "VOR L 113.90 remote, course unavailable. VOR R not tuned. ILS course unavailable." }, speech.Interrupts);
+        Assert.Equal(new[] { "VOR L 113.90 remote, course unavailable. VOR R not tuned. ILS course unavailable. ILS tuning unknown." },
+            speech.Interrupts);
     }
 
     [Fact]
@@ -649,8 +684,73 @@ public class Bbs757NavRadTests
 
         await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(new FakeCdu()));
 
-        Assert.Equal(new[] { "VOR L course unavailable, VOR R course unavailable, ILS course unavailable. Frequencies unavailable." },
+        Assert.Equal(new[] { "VOR L course unavailable, VOR R course unavailable, ILS course unavailable. ILS tuning unknown. Frequencies unavailable." },
             speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task N_that_fails_still_says_the_counted_ils()
+    {
+        // The count is the app's own: a readout whose sim reads fail still has it.
+        var def = new BBS757Definition
+        {
+            NestRunning = () => true,
+            ReadoutIo = _ => new McpIo
+            {
+                Read = (_, _) => throw new InvalidOperationException("no link"),
+                Write = _ => { },
+                Delay = (_, _) => Task.CompletedTask,
+            },
+        };
+        def.OnSimContextReset();   // a flight load: the panel loads parked
+        var speech = new SpeechCapture();
+
+        await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(new FakeCdu()));
+
+        Assert.Equal(new[] { "VOR L course unavailable, VOR R course unavailable, ILS course unavailable. ILS parked. Frequencies unavailable." },
+            speech.Interrupts);
+    }
+
+    [Fact]
+    public async Task N_says_the_counted_ils()
+    {
+        // No variable holds the ILS frequency: N says what the app counted, after the courses.
+        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU") };
+        var sim = new IlsSim();
+        var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95), WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+        var simConnect = new SimConnectManager(IntPtr.Zero);
+
+        async Task<string> N()
+        {
+            speech.Interrupts.Clear();
+            await def.ReadNavRadiosAsync(simConnect, speech, Pages(cdu));
+            return Assert.Single(speech.Interrupts);
+        }
+
+        // MSFSBA started, or the 757 picked, after the flight loaded: the panel was never counted.
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS tuning unknown.", await N());
+
+        def.OnSimContextReset();   // a flight load: the panel loads parked
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS parked.", await N());
+
+        await def.SetIlsAsync(110.50, simConnect, speech);
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS 110.50.", await N());
+
+        // The first officer's CDU busy on another page: the courses and the count, then why there is no more.
+        cdu.Screen = Legs();
+        cdu.PendingKeyCount = 3;
+        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. ILS 110.50. Frequencies unavailable.", await N());
+        cdu.Screen = NavRadio("116.90AGSU");
+        cdu.PendingKeyCount = 0;
+
+        // A comma-decimal PC still hears a dot.
+        await InCultureAsync("de-DE", async () =>
+            Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS 110.50.", await N()));
+
+        def.OnSimContextReset();   // a dropped connection: MainForm.OnConnectionLost calls both
+        def.OnVariableCacheCleared();
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS tuning unknown.", await N());
     }
 
     [Fact]
@@ -685,7 +785,8 @@ public class Bbs757NavRadTests
 
     private const string Reading = "Reading the nav radios…";
 
-    private const string TunedAuto = "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095.";
+    /// <summary>N's sentence for the FO CDU on NAV RADIO with VOR L auto-tuned, from a definition that has seen no flight load.</summary>
+    private const string TunedAuto = "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS tuning unknown.";
 
     /// <summary>A simulated aircraft behind the ILS course write: what a fresh read answers, the writes and waits made.</summary>
     private sealed class IlsSim
@@ -888,7 +989,7 @@ public class Bbs757NavRadTests
         var form = rig.Open();
         await rig.Def.NavRadiosFill!;
 
-        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. Frequencies unavailable. FMC runway ILS unavailable.",
+        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. Frequencies unavailable. FMC runway ILS unavailable.",
             form.StatusText);
         Assert.Empty(rig.Cdu.Presses);
     }
@@ -959,13 +1060,24 @@ public class Bbs757NavRadTests
         Assert.Null(def.NavRadiosWindow);
     }
 
+    /// <summary>A window on its own, whose fields hand over to nothing.</summary>
+    private static Forms.BBS757.BBS757NavRadiosForm NewForm() => new(new SpeechCapture(), _ => null, _ => null, () => { });
+
+    private static readonly System.Reflection.MethodInfo OnKeyDown =
+        typeof(Control).GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    private static readonly System.Reflection.MethodInfo OnClick =
+        typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    private static TextBox Box(Form form, string name) => form.Controls.OfType<TextBox>().Single(t => t.AccessibleName == name);
+
     [Fact]
     public void The_window_has_a_read_only_status_box_first_and_the_ils_course_box_with_its_label()
     {
-        using var form = new Forms.BBS757.BBS757NavRadiosForm(new SpeechCapture(), _ => null);
+        using var form = NewForm();
 
         var boxes = form.Controls.OfType<TextBox>().OrderBy(t => t.TabIndex).ToList();
-        Assert.Equal(2, boxes.Count);   // no VOR boxes: the CDU sets a VOR's course
+        Assert.Equal(3, boxes.Count);   // the status, the ILS course and the ILS frequency: no VOR boxes, the CDU sets a VOR's course
         Assert.True(boxes[0].ReadOnly);   // the status, first ([VAT-13])
         Assert.False(boxes[1].ReadOnly);
         Assert.Equal("757 Nav Radios", form.Text);
@@ -976,12 +1088,30 @@ public class Bbs757NavRadTests
     }
 
     [Fact]
+    public void The_ils_frequency_box_and_the_ils_park_button_follow_the_ils_course_box()
+    {
+        using var form = NewForm();
+
+        // Tab order: status, ILS course, ILS frequency, ILS park, then Close.
+        var tabOrder = form.Controls.Cast<Control>()
+            .Where(c => c.TabStop && c is TextBox or Button)
+            .OrderBy(c => c.TabIndex)
+            .Select(c => c.AccessibleName ?? c.Text)
+            .ToList();
+        Assert.Equal(new[] { "Nav radios status", "ILS course", "ILS frequency", "ILS park", "Close" }, tabOrder);
+
+        var frequency = Box(form, "ILS frequency");
+        Assert.False(frequency.ReadOnly);
+        var label = form.Controls.OfType<Label>().Single(l => l.Text.Replace("&", "") == "ILS frequency");
+        Assert.InRange(label.TabIndex, Box(form, "ILS course").TabIndex + 1, frequency.TabIndex - 1);   // its label, right before it
+    }
+
+    [Fact]
     public void Escape_closes_the_window()
     {
-        var form = new Forms.BBS757.BBS757NavRadiosForm(new SpeechCapture(), _ => null);
+        var form = NewForm();
 
-        var onKeyDown = typeof(Control).GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-        onKeyDown.Invoke(form, new object[] { new KeyEventArgs(Keys.Escape) });
+        OnKeyDown.Invoke(form, new object[] { new KeyEventArgs(Keys.Escape) });
 
         Assert.True(form.IsDisposed);
     }
@@ -1097,6 +1227,103 @@ public class Bbs757NavRadTests
 
         Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // a validation error always speaks
         Assert.Equal(said, form.StatusText);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    // ---- The ILS frequency and park (counted knob clicks) -------------------------------------------
+
+    /// <summary>The clicks from the panel as a flight loads it (PARK, .10) to 110.50: WHOLE -1 x2, FRAC +1 x4.</summary>
+    private static readonly string[] LoadStateTo11050 =
+    {
+        "-1 (>L:B757_ILS_FREQ_WHOLE_INC)", "-1 (>L:B757_ILS_FREQ_WHOLE_INC)",
+        "1 (>L:B757_ILS_FREQ_FRAC_INC)", "1 (>L:B757_ILS_FREQ_FRAC_INC)", "1 (>L:B757_ILS_FREQ_FRAC_INC)", "1 (>L:B757_ILS_FREQ_FRAC_INC)",
+    };
+
+    /// <summary>A window opened after a flight load (the ILS counted from PARK, .10) and filled.</summary>
+    private static async Task<(WindowRig Rig, Forms.BBS757.BBS757NavRadiosForm Form)> OpenAfterAFlightLoad()
+    {
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") });
+        rig.Def.OnSimContextReset();
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+        rig.Speech.Interrupts.Clear();
+        return (rig, form);
+    }
+
+    [Fact]
+    public async Task The_window_status_says_the_counted_ils()
+    {
+        var (_, form) = await OpenAfterAFlightLoad();
+
+        Assert.Equal("VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095. ILS parked. FMC runway ILS unavailable.", form.StatusText);
+    }
+
+    [Fact]
+    public async Task Enter_in_the_ils_frequency_box_sets_that_frequency_only()
+    {
+        var (rig, form) = await OpenAfterAFlightLoad();
+        var presses = rig.Cdu.Presses.Count;
+        Box(form, "ILS course").Text = "270";   // typed, not applied
+        var frequency = Box(form, "ILS frequency");
+        frequency.Text = " 110.50 ";
+
+        OnKeyDown.Invoke(frequency, new object[] { new KeyEventArgs(Keys.Enter) });
+
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
+        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);
+        Assert.Equal("ILS 110.50 set", form.StatusText);
+        Assert.Equal(LoadStateTo11050, rig.Sim.Writes);                         // the knob clicks only: no course write (R55)
+        Assert.Equal(Enumerable.Repeat(250, 5), rig.Sim.Delays);                // 250 ms between clicks
+        Assert.Equal(presses, rig.Cdu.Presses.Count);                           // no CDU key for it
+    }
+
+    [Theory]
+    [InlineData("", "Type a frequency first.")]
+    [InlineData("110.52", "ILS frequency must be 108.10 to 111.95, on an ILS channel.")]
+    [InlineData("118.00", "ILS frequency must be 108.10 to 111.95, on an ILS channel.")]
+    public async Task A_frequency_that_is_no_ils_channel_is_refused_aloud_and_nothing_is_written(string typed, string said)
+    {
+        var (rig, form) = await OpenAfterAFlightLoad();
+
+        form.ApplyIlsFrequency(typed);
+
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // a validation error always speaks
+        Assert.Equal(said, form.StatusText);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task The_ils_park_button_parks_it()
+    {
+        var (rig, form) = await OpenAfterAFlightLoad();
+        form.ApplyIlsFrequency("110.50");
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
+        rig.Speech.Interrupts.Clear();
+        rig.Sim.Writes.Clear();
+        var park = form.Controls.OfType<Button>().Single(b => b.AccessibleName == "ILS park");
+
+        OnClick.Invoke(park, new object[] { EventArgs.Empty });
+
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
+        Assert.Equal(new[] { "ILS parked" }, rig.Speech.Interrupts);
+        Assert.Equal("ILS parked", form.StatusText);
+        Assert.Equal(new[] { "1 (>L:B757_ILS_FREQ_WHOLE_INC)", "1 (>L:B757_ILS_FREQ_WHOLE_INC)" }, rig.Sim.Writes);   // 110, 111, PARK
+    }
+
+    [Fact]
+    public async Task Before_any_flight_load_the_window_refuses_the_ils_frequency_and_park_aloud()
+    {
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") });
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+        rig.Speech.Interrupts.Clear();
+
+        form.ApplyIlsFrequency("110.50");
+        form.ParkIls();
+
+        const string refusal = "ILS tuning unknown: use ILS sync first.";
+        Assert.Equal(new[] { refusal, refusal }, rig.Speech.Interrupts);
+        Assert.Equal(refusal, form.StatusText);
         Assert.Empty(rig.Sim.Writes);
     }
 

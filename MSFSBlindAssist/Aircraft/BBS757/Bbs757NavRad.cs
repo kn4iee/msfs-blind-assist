@@ -34,8 +34,9 @@ public sealed record Bbs757RunwayIls(string Runway, double Mhz, string Ident, in
 /// own and leave the stock NAV variables alone (measured, docs/b757/spec-gaps.md 3.2), so the stock NAV
 /// radios are never read here. The courses are BlueBird's L:vars; the VOR frequencies are on the CDU's NAV
 /// RADIO page, and the FMC's runway ILS on APPROACH REF, both read on the first officer's CDU
-/// (<see cref="Bbs757CduPages"/>, ruling R52). The members here read screens and build sentences; they press
-/// no key.
+/// (<see cref="Bbs757CduPages"/>, ruling R52). The tuned ILS frequency is in no variable and on no page: the
+/// readout says the app's count of the ILS control panel (<see cref="Bbs757IlsPanel"/>). The members here
+/// read screens and build sentences; they press no key.
 ///
 /// The measured NAV RADIO page (CDU 2, 2026-10-26): row 0 the title <c>NAV RADIO</c>, row 1 the labels
 /// <c>VOR L … VOR R</c>, row 2 the tunings, row 3 <c>CRS RADIAL CRS</c>, row 4 the courses. The two sides
@@ -199,15 +200,17 @@ public static class Bbs757NavRad
     /// <summary>
     /// What N says. With the page, each VOR's tuning ("VOR L 116.90 auto, GSU."), its course only while it is
     /// tuned by hand (a frequency and a mode other than auto: "VOR L 113.90 remote, course 095."), then "ILS
-    /// course 095." Without the page (the first officer's CDU busy or unreachable): "VOR L course 095, VOR R
-    /// course 000, ILS course 095. Frequencies unavailable." A course that was not read is "course
-    /// unavailable".
+    /// course 095.", then the ILS control panel as the app counts it (<paramref name="ilsDial"/>, through
+    /// <see cref="Bbs757IlsPanel.Phrase"/>): "ILS 110.50.", "ILS parked." or "ILS tuning unknown.". Without
+    /// the page (the first officer's CDU busy or unreachable): "VOR L course 095, VOR R course 000, ILS course
+    /// 095. ILS 110.50. Frequencies unavailable." A course that was not read is "course unavailable".
     /// </summary>
-    public static string Readout(Bbs757NavRadPage? page, int? vorL, int? vorR, int? ils)
+    public static string Readout(Bbs757NavRadPage? page, int? vorL, int? vorR, int? ils, Bbs757IlsDial? ilsDial)
     {
+        string counted = $"{Bbs757IlsPanel.Phrase(ilsDial)}.";
         if (page == null)
-            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. Frequencies unavailable.";
-        return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}.";
+            return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {counted} Frequencies unavailable.";
+        return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}. {counted}";
     }
 
     /// <summary>One VOR's sentence: the tuning, and its course only when it is tuned by hand.</summary>
