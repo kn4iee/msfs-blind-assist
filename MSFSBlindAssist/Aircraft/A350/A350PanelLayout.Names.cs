@@ -93,6 +93,13 @@ public static partial class A350PanelLayout
         ["EVAC_COMMAND"] = "EVAC command",
         ["EVAC_HORN_OFF"] = "EVAC horn off",
         ["EVAC_CAPT_PURS"] = "EVAC CAPT and PURS",
+        // Recorder: the CVR's two buttons carry only "TEST" and "ERASE"; placard abbreviations kept as printed.
+        ["RCD_RCDR_GND_CTRL"] = "RCDR GND CTL",
+        ["CVR_TEST"] = "CVR test",
+        ["CVR_ERASE"] = "CVR erase",
+        // Emergency electrical power: iniBuilds titles the EMER GEN button after its FAULT light.
+        ["EMER_ELEC_RAT"] = "RAT MAN ON",
+        ["EMER_ELEC_GEN_FAULT"] = "EMER GEN",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
@@ -103,5 +110,6 @@ public static partial class A350PanelLayout
         ["LIGHTS_INT_STBY_COMPASS"] = new() { [0] = "Compass and eye reference", [1] = "Ice indicator", [2] = "Off" },
         ["SIGNS_EMER_EXIT"] = new() { [0] = "On", [1] = "Arm", [2] = "Off" },
         ["EVAC_CAPT_PURS"] = new() { [0] = "Captain only", [1] = "Captain and purser" },
+        ["ELT_GUARD"] = new() { [0] = "Closed", [1] = "Open" },   // its tooltip words are the click's action
     };
 }

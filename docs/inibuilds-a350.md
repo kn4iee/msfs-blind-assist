@@ -124,6 +124,10 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | --- | --- | --- | --- |
 | Wipers | captain and first officer wiper (6 positions), both rain repellents (hold) | every position of both selectors; the wipers sweep (`WIPER_ANIMATION_CPT`/`_FO`); each repellent holds 1 while pressed | the repellent variable is read only by the cockpit sound: a press is a spray sound and nothing else, for a sighted pilot too |
 | Calls and Evacuation | nine call buttons, EMER, EVAC command, EVAC horn off, EVAC CAPT and PURS; lights EMER call, EVAC | every row through MSFSBA's path; EVAC command lights the EVAC legend (`INI_EVAC_LIGHT`) within seconds and puts it out when off | the systems read only FWD, PURS and the EVAC variables; the other calls are chimes. EMER CALL lights only on a cabin call. Each guarded button's set code ignores its guard |
+| Oxygen | crew supply, mask man on | both rows, both positions | MASK MAN ON drops the cabin masks; its set code ignores its guard |
+| Recorder | ACMS trigger, DFDR event, RCDR GND CTL, CVR test, CVR erase | the four buttons press | RCDR GND CTL flips and the aircraft clears it at once: `GENERAL_SYSTEMS::Update` sets `INI_GND_CTL` to 0 with an engine at N2 52 % or more or off the ground (`AcfVariables` 3, SIM ON GROUND), and it did so on the ground with both engines stopped. A click runs the same set code, so this is the aircraft |
+| ELT | ELT (TEST/RESET, ARMED, ON), ELT guard | every position | TEST/RESET is taken only with the guard open (`INI_ELT_SWITCH_GUARD` 1); otherwise the switch springs back. The guard's tooltip words are the click's action (OPEN at 0) |
+| Emergency Electrical Power | RAT MAN ON, EMER GEN; EMER GEN fault light | EMER GEN both positions | RAT MAN ON is not pressed in a test pass: it deploys the RAT |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

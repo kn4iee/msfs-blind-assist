@@ -171,6 +171,14 @@ internal sealed class ProbeForm : Form
             return;
         }
 
+        // Lasting effects a restore cannot undo: driven by hand with `keep`, never in a live pass.
+        var skip = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "A350_EMER_ELEC_RAT",
+            "A350_FIRE_ENG_1_AGENT_1", "A350_FIRE_ENG_1_AGENT_2", "A350_FIRE_ENG_2_AGENT_1", "A350_FIRE_ENG_2_AGENT_2",
+            "A350_FIRE_APU_AGENT", "A350_CARGO_SMOKE_AGENT_TO_AFT", "A350_CARGO_SMOKE_AGENT_TO_FWD",
+        };
+
         if (_mode == "live")
         {
             foreach (var (panel, keys) in panels)
@@ -181,6 +189,7 @@ internal sealed class ProbeForm : Form
                 {
                     if (!wholePanel && key != _arg) continue;
                     var d = vars[key];
+                    if (skip.Contains(key)) { Line($"{panel}	{key}	SKIPPED (lasting effect: drive by hand)"); continue; }
                     if (d.RenderAsSlider) { Line($"{panel}\t{key}\tslider\tSKIPPED (knob: drive by hand)"); continue; }
                     var lightsBefore = await Snapshot(def, lights);
                     if (d.RenderAsButton)
