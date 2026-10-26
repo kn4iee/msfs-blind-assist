@@ -50,10 +50,11 @@ What is derived and what is curated (curation.json):
             a control BlueBird's own list proves real although neither model has a node for it; it is empty unless that
             list proves one, and the run names each. An entry for a node the package does not have, that a model has,
             that curation also excludes or that the rules leave out for another reason is an error. No curation entry
-            brings back a control no cockpit has: a guarded or an include_nodes entry for one stops the run, a kind,
-            label or positions entry for one changes nothing and is only reported, and an order or a direct_write entry
-            that names it, or an order that names a panel the drop emptied, is a stale one. A panel with no control left
-            is not in the map (panels exist only through their controls).
+            brings back a control no cockpit has, whatever the other rules make of it (their reason comes before the
+            cockpit's): a guarded or an include_nodes entry for one stops the run, a kind, label or positions entry for
+            one changes nothing and is only reported, and an order or a direct_write entry that names it, or an order
+            that names a panel the drop emptied, is a stale one. Only keep_without_node keeps such a control. A panel
+            with no control left is not in the map (panels exist only through their controls).
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
             alphabetically, and the run names them (a panel BlueBird adds later turns up there). A node in
@@ -348,6 +349,15 @@ def cockpit_presence(node: str, pw: set, rr: set) -> str:
     return "both" if in_pw and in_rr else "pw" if in_pw else "rr" if in_rr else "none"
 
 
+def lacks_cockpit_node(node: str, cur: dict, cockpit) -> bool:
+    """True when the cockpit is known, neither interior model has a node of this name and curation does not keep the control
+    (keep_without_node). The one place that says so: the cockpit rule of drop_reason asks it, and so does curation's guarded
+    entry, which takes in controls the other rules leave out. The rules answer first, so for such a control their reason is
+    never the cockpit's: a mechanism that keeps what they drop must ask here, or it would keep a control the cockpit lacks."""
+    return (cockpit is not None and node not in cur["keep_without_node"]
+            and cockpit_presence(node, cockpit.pw, cockpit.rr) == "none")
+
+
 def model_nodes(path: pathlib.Path) -> set:
     """The names of the nodes of a glTF model. The file is JSON and nodes[i].name is all the generator reads of it. A file
     that is not a glTF, or names no node, is an error: an empty set would leave every control out without a word."""
@@ -524,8 +534,8 @@ def drop_reason(row, cur, cockpit=None):
     """Why the rules leave this row out, or None. It is decided on the row as the extractor read it: curation's 'kinds'
     comes after and never changes the answer, so a kind only ever re-reads a control the rules keep. The cockpit comes last:
     a control the other rules keep, and that neither interior model has a node for, is left out as NO_COCKPIT_NODE unless
-    curation lists it under keep_without_node. Given no cockpit (the models' node names, read_cockpit) nothing is judged
-    on it: the tests of the other rules have rows and no models."""
+    curation lists it under keep_without_node (lacks_cockpit_node). Given no cockpit (the models' node names, read_cockpit)
+    nothing is judged on it: the tests of the other rules have rows and no models."""
     kind, node = row["kind"], row["node"]
     if row["panel"] in cur["exclude_banners"] and node not in cur["include_nodes"]:
         return "excluded banner"
@@ -543,8 +553,7 @@ def drop_reason(row, cur, cockpit=None):
         return "no click code"
     if out_kind not in ("button", "held") and state_var is None:
         return "state is not an L:var"
-    if cockpit is not None and cockpit_presence(node, cockpit.pw, cockpit.rr) == "none" \
-            and node not in cur["keep_without_node"]:
+    if lacks_cockpit_node(node, cur, cockpit):
         return NO_COCKPIT_NODE
     return None
 
@@ -573,12 +582,14 @@ def guarded_control(row, cur, cockpit=None):
     CloseSets), so that the app can open the guard, write the position and close it. The row gives the control's place in
     the cockpit and the vendor's count of positions, which the entry's names must fit. The rules' own drop reasons give way
     to the entry (a state that is not an L:var, a click the extractor cannot use); curation's exclusions never do, and nor
-    does a cockpit without the node: a switch no model has is not there to be guarded (a stale entry)."""
+    does a cockpit without the node, WHATEVER the other rules say of the row: a switch no model has is not there to be
+    guarded (a stale entry). Their reason comes first, so for a switch they leave out (the emergency lights switch) it is
+    never the cockpit's, and this asks the cockpit itself (lacks_cockpit_node)."""
     node, entry = row["node"], cur["guarded"][row["node"]]
     why = drop_reason(row, cur, cockpit)
     if why in EXCLUSIONS:
         raise CurationError(f"curation guarded names {node}, which curation also leaves out ({why})")
-    if why == NO_COCKPIT_NODE:
+    if lacks_cockpit_node(node, cur, cockpit):
         raise CurationError(f"curation guarded names {node}, which neither cockpit model has a node for: an entry never "
                             "keeps a control no cockpit has (remove it, or list the node under keep_without_node)")
     out_kind = KIND_MAP.get(row["kind"])

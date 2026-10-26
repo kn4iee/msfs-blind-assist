@@ -1505,6 +1505,107 @@ class CockpitPresence(unittest.TestCase):
                                                      r"\(the rules leave it out: no cockpit node\)"):
             self.build(rows, no_guard, guarded=self.GUARDED)
 
+    EMERGENCY, EMERGENCY_GUARD = "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"
+    EMERGENCY_ENTRY = {EMERGENCY: {"state_var": EMERGENCY, "positions": ["OFF", "ARMED", "ON"], "guard": EMERGENCY_GUARD,
+                                   "guard_closed": 0, "close_sets": 1}}
+
+    def emergency_rows(self):
+        """The emergency lights switch and its guard in the vendor's shape (BBS_752_BASE_INTERIOR.xml:8106-8120). The
+        switch's animation reads an O: var, so the other rules leave it out ("state is not an L:var") and curation's
+        guarded entry TAKES IT IN: the shape in which the cockpit rule, the last of the rules, is never the reason they give."""
+        node, guard = self.EMERGENCY, self.EMERGENCY_GUARD
+
+        def gated(code):
+            return f"[if (L:{guard}, bool) 1 ==] {code}"
+
+        up = f"(L:{node}, number) 1 + 2 min (>L:{node}, number)"
+        down = f"(L:{node}, number) 1 - 0 max (>L:{node}, number)"
+        return [
+            row(node=guard, kind="guard", panel="LIGHT OVERRIDE", line=1, state=["L:" + guard],
+                left=f"(L:{guard}, bool) ! (>L:{guard}, bool) (L:{guard}, bool) 0 == if{{ 1 (>L:{node}, number) }}"),
+            row(node=node, kind="multi-position switch", positions="3", panel="LIGHT OVERRIDE", line=2,
+                state=[f"O:{node}_SUBMOVEMENT"], left=gated(up), other=[("RightSingle", gated(down))]),
+        ]
+
+    def test_a_taken_in_guarded_switch_needs_its_node_too(self):
+        # The other rules leave this switch out and say so ("state is not an L:var"), so the cockpit rule, which comes last,
+        # never answers for it: a guarded entry has to ask the cockpit itself, or it would keep a switch no cockpit has.
+        rows, entry, node, guard = self.emergency_rows(), self.EMERGENCY_ENTRY, self.EMERGENCY, self.EMERGENCY_GUARD
+        both = self.cockpit(pw=[node, guard], rr=[node, guard])
+        self.assertEqual(g.drop_reason(rows[1], curation(), both), "state is not an L:var")
+
+        m, report = self.build(rows, both, guarded=entry)
+        self.assertEqual([c["node"] for c in m["controls"]], [guard, node])
+        self.assertRegex(report["guarded"][node], r"^taken in .*the rules alone leave it out: state is not an L:var")
+
+        no_switch = self.cockpit(pw=[guard], rr=[guard])
+        with self.assertRaisesRegex(g.CurationError, rf"guarded names {node}, which neither cockpit model has"):
+            self.build(rows, no_switch, guarded=entry)
+        # one model's cockpit has it: it stays, and its label says whose
+        m, _ = self.build(rows, self.cockpit(pw=[node, guard], rr=[guard]), guarded=entry, labels={node: "Emergency Lights"})
+        self.assertEqual({c["node"]: c["label"] for c in m["controls"]}[node], "Emergency Lights (PW)")
+        # keep_without_node is the way to keep it, and the run names it
+        m, report = self.build(rows, no_switch, guarded=entry, keep_without_node=[node])
+        self.assertEqual([c["node"] for c in m["controls"]], [guard, node])
+        self.assertEqual(report["kept_without_node"], [node])
+        # its guard is a control of its own and needs its node as well
+        with self.assertRaisesRegex(g.CurationError, rf"the guard {guard} of {node} has no row in the map "
+                                                     r"\(the rules leave it out: no cockpit node\)"):
+            self.build(rows, self.cockpit(pw=[node], rr=[node]), guarded=entry)
+
+    def outcome(self, rows, node, keep=False, **changes):
+        """What the run does with `node` when no cockpit model has it (every other node of `rows` is in both models): "kept",
+        "left out" or "stops the run". `keep` lists it under keep_without_node."""
+        others = [r["node"] for r in rows if r["node"] != node]
+        try:
+            m, _ = self.build(rows, self.cockpit(pw=others, rr=others), keep_without_node=[node] if keep else [], **changes)
+        except g.CurationError:
+            return "stops the run"
+        return "kept" if node in {c["node"] for c in m["controls"]} else "left out"
+
+    def test_a_control_no_cockpit_has_is_never_kept_whichever_mechanism_takes_it_in_unless_keep_without_node_names_it(self):
+        # The contract, by every curation mechanism that takes a control in, re-reads it or builds it, in the shapes where the
+        # other rules keep it (only the cockpit rule drops it) and where they leave it out (an earlier rule answers first,
+        # because the cockpit rule comes last). Without keep_without_node the control is never in the map: the run leaves it
+        # out or stops. With it, the control is kept exactly where the rules would keep it, and the entry stops the run where
+        # they still would not.
+        node = self.NEITHER
+        flip = f"(L:{node},bool) ! (>L:{node},bool)"
+        banner, included = "RIGHT WINDOW RAIN EFFECTS", "BBS757_PEDESTAL_Park_Brake_Lever"
+        taken_in = dict(exclude_banners=["CB OVERHEAD PANEL", banner], include_nodes=[included],
+                        node_panels=[{"prefix": "BBS757_PEDESTAL_", "panel": "Control stand", "section": "Pedestal"}])
+        toggle = [row(node=node, left=flip)]
+        lever = [row(node=node, kind="lever", positions="", left="1 (>L:X)")]
+        cases = [
+            # what, rows, the control asked about, curation, without keep_without_node, with it
+            ("no entry at all", toggle, node, {}, "left out", "kept"),
+            ("a label and positions", toggle, node, dict(labels={node: "Delta"}, positions={node: ["Off", "On"]}),
+             "left out", "kept"),
+            ("a kind, on a control the rules keep",
+             [row(node=node, kind="momentary button", positions="-", state=["L:" + node], left=f"1 (>L:{node}, bool)")],
+             node, dict(kinds={node: "toggle"}), "left out", "kept"),
+            ("a kind, on a control the rules leave out", lever, node, dict(kinds={node: "toggle"}),
+             "left out", "stops the run"),
+            ("direct_write, on a switch the rules keep",
+             [row(node=node, kind="multi-position switch", positions="3", state=["L:" + node],
+                  left=f"(L:{node}) 1 + 3 % (>L:{node})")],
+             node, dict(direct_write=[node]), "stops the run", "kept"),
+            ("guarded, re-read: the rules keep the stab trim", self.stab_rows(), self.STAB, dict(guarded=self.GUARDED),
+             "stops the run", "kept"),
+            ("guarded, taken in: the rules leave the emergency lights switch out", self.emergency_rows(), self.EMERGENCY,
+             dict(guarded=self.EMERGENCY_ENTRY), "stops the run", "kept"),
+            ("include_nodes, on a control the rules keep",
+             [row(node=included, panel=banner, state=["L:B"], left="(L:B,bool) ! (>L:B,bool)")], included, taken_in,
+             "stops the run", "kept"),
+            ("include_nodes, on a control the rules leave out",
+             [row(node=included, kind="lever", positions="", panel=banner, left="1 (>L:X)")], included, taken_in,
+             "stops the run", "stops the run"),
+        ]
+        for what, rows, asked, changes, without, with_keep in cases:
+            with self.subTest(what):
+                self.assertEqual(self.outcome(rows, asked, **changes), without)
+                self.assertEqual(self.outcome(rows, asked, keep=True, **changes), with_keep)
+
     def test_a_taken_in_node_no_cockpit_has_stops_the_run(self):
         banner, node = "RIGHT WINDOW RAIN EFFECTS", "BBS757_PEDESTAL_Park_Brake_Lever"
         rows = [row(node=node, panel=banner, state=["L:B"], left="(L:B,bool) ! (>L:B,bool)")]
