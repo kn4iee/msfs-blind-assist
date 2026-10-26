@@ -100,6 +100,24 @@ public partial class BBS757Definition
         Sim = simConnect;
         var io = WriteIoFor(simConnect);
 
+        // A guarded control (the emergency lights, a stab trim cutout) moves only with its guard open
+        // (BBS757Definition.Overhead.cs). A guard the map does not list is a map error: nothing is
+        // sent, and the combo goes back to where the aircraft is.
+        if (!string.IsNullOrWhiteSpace(control.Guard))
+        {
+            if (_byNode.TryGetValue(control.Guard, out var guard))
+            {
+                _ = SetGuardedAsync(control, guard, value, io, announcer);   // never throws: it catches and logs
+            }
+            else
+            {
+                Log.Warn("BBS757", $"{control.Node}: its guard {control.Guard} is not in the control map; nothing sent.");
+                SayUnavailable(control, announcer);
+                io.RequestRead(control.Node);
+            }
+            return true;
+        }
+
         if (Bbs757Write.IsMomentary(control))
         {
             _ = PressFromPanelAsync(control, io, announcer);   // never throws: it catches and logs

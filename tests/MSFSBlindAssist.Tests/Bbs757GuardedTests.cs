@@ -1,5 +1,7 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -10,7 +12,10 @@ namespace MSFSBlindAssist.Tests;
 /// position (emergency lights ARMED, stab trim cutouts NORMAL), and the app writes that position
 /// itself after closing so the control lands whether or not the guard's own click wrote it; a reading
 /// that is unread, not a number, or a pick that is none of the control's positions sends nothing.
-/// Controls are built in memory with BlueBird's own click code, never from the shipped map.
+/// The definition's half (task 2): a pick on a control with a <c>Guard</c> is settled, planned from
+/// fresh reads of the control and its guard, sent a pause apart, read back, and says
+/// "{label} did not move" only when it did not land. Controls are built in memory with BlueBird's own
+/// click code, never from the shipped map.
 /// </summary>
 public class Bbs757GuardedTests
 {
@@ -323,5 +328,382 @@ public class Bbs757GuardedTests
     {
         // The guard's click and animation must land before the state write follows it.
         Assert.Equal(300, Bbs757Guarded.StepGapMs);
+    }
+
+    // ---- picks through the definition (task 2) -------------------------------------------------
+
+    /// <summary>A 757 definition built from in-memory controls, with a fake sim behind its writes and a speech capture.</summary>
+    private sealed class Rig
+    {
+        public readonly Bbs757FakeIo Sim = new();
+        public readonly SpeechCapture Speech = new();
+        public readonly BBS757Definition Def;
+        private readonly SimConnectManager _manager = new(IntPtr.Zero);
+
+        public Rig(params Bbs757Control[] controls)
+        {
+            var map = new Bbs757ControlMap();
+            foreach (var control in controls) map.Controls.Add(control);
+            Def = new BBS757Definition(map) { NestRunning = () => true, WriteIo = _ => Sim.Io };
+        }
+
+        /// <summary>The panel handler's answer to a pick of <paramref name="node"/>.</summary>
+        public bool Pick(string node, double value)
+            => Def.HandleUIVariableSet(node, value, new SimVarDefinition(), _manager, Speech);
+
+        /// <summary>The aircraft takes the app's writes: a state write is what the control reads afterwards, a guard press flips the guard.</summary>
+        public Rig TakingWrites(Bbs757Control control, Bbs757Control guard)
+        {
+            string suffix = $" (>L:{control.StateVar})";
+            Sim.OnWrite = rpn =>
+            {
+                if (rpn == guard.Press)
+                    Sim.Fresh[guard.Node] = Sim.Fresh[guard.Node] == Closed ? Open : Closed;
+                else if (rpn.EndsWith(suffix, StringComparison.Ordinal))
+                    Sim.Fresh[control.Node] = double.Parse(rpn[..^suffix.Length], CultureInfo.InvariantCulture);
+            };
+            return this;
+        }
+
+        /// <summary>What the cockpit reads before the pick.</summary>
+        public Rig Reading(Bbs757Control control, double controlAt, Bbs757Control guard, double guardAt)
+        {
+            Sim.Fresh[control.Node] = controlAt;
+            Sim.Fresh[guard.Node] = guardAt;
+            return this;
+        }
+    }
+
+    [Fact]
+    public void Guarded_pick_sends_the_plan()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        var calls = new[] { LightsGuardPress, "0 (>L:B757_OVHD_PASS_OXY_Toggle_Switch_CLICK)" };
+        Assert.Equal(calls, rig.Sim.Writes);
+        // Nothing but the settle comes before the first call, and one step gap lies between the two.
+        var events = rig.Sim.Events;
+        int first = events.IndexOf(Bbs757FakeIo.WriteEvent(calls[0]));
+        Assert.All(events.Take(first), e => Assert.StartsWith("delay", e));
+        Assert.Equal(new[] { Bbs757FakeIo.WriteEvent(calls[0]), Bbs757FakeIo.DelayEvent(Bbs757Guarded.StepGapMs), Bbs757FakeIo.WriteEvent(calls[1]) },
+            events.Skip(first).Take(3));
+        // The screen reader read the combo, and the control reads back as picked: nothing more to say.
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void Guarded_pick_that_does_not_land_says_so()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        // The aircraft takes no write: the switch still reads ARMED at the read-back.
+        var rig = new Rig(lights, guard).Reading(lights, 1, guard, Closed);
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(0) }, rig.Sim.Writes);
+        Assert.Equal(new[] { "Emergency Lights did not move" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_read_back_that_cannot_be_read_counts_as_not_landed()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.OnWrite = rpn => { if (rpn == LightsWrite(0)) rig.Sim.Fresh[LightsState] = null; };
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        Assert.Equal(new[] { "Emergency Lights did not move" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task Two_quick_picks_send_only_the_last()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal < 2;   // both picks sit in their settle
+
+        rig.Pick(LightsState, 2);   // arrowing past ON ...
+        rig.Pick(LightsState, 0);   // ... on to OFF
+        Assert.Equal(1, rig.Sim.CanceledDelays);   // the first pick's settle ended when the second arrived
+        Assert.Empty(rig.Sim.Writes);
+
+        rig.Sim.Release(1);          // the second pick's settle
+        await rig.Sim.ResyncsReached(2);
+
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(0) }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);   // the first pick says nothing, not even that it was dropped
+    }
+
+    [Fact]
+    public async Task A_newer_pick_does_not_cut_a_sequence_short()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal is 1 or 2;   // the first pick's gap between its calls, the second pick's settle
+
+        rig.Pick(LightsState, 0);   // sends the guard's press, then waits out the step gap
+        Assert.Equal(new[] { LightsGuardPress }, rig.Sim.Writes);
+        rig.Pick(LightsState, 2);   // supersedes it while it waits
+
+        rig.Sim.Release(1);
+        await rig.Sim.WritesReached(2);
+        // The guard is not left open with no state write behind it.
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(0) }, rig.Sim.Writes);
+
+        rig.Sim.Release(2);
+        await rig.Sim.ResyncsReached(2);
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(0), LightsWrite(2) }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_superseded_pick_that_finished_its_calls_leaves_the_speaking_to_the_newer_pick()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        // The aircraft takes no write, so the first pick's read-back would say "did not move" if it ran.
+        var rig = new Rig(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.Hold = ordinal => ordinal is 1 or 2;
+
+        rig.Pick(LightsState, 0);
+        rig.Pick(LightsState, 2);
+        rig.Sim.Release(1);
+        await rig.Sim.WritesReached(2);
+        rig.Sim.Release(2);
+        await rig.Sim.ResyncsReached(2);
+
+        Assert.Equal(new[] { LightsGuardPress, LightsWrite(0), LightsGuardPress, LightsWrite(2) }, rig.Sim.Writes);
+        Assert.Equal(new[] { "Emergency Lights did not move" }, rig.Speech.All);   // once, the newer pick's
+        Assert.Equal(new[] { LightsState, LightsGuardNode }, rig.Sim.Resyncs);     // and only it re-reads
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Unread_state_says_unavailable_and_writes_nothing(bool controlUnread, bool guardUnread)
+    {
+        var rig = new Rig(Lights(), LightsGuard());
+        rig.Sim.Fresh[LightsState] = controlUnread ? null : 1;
+        rig.Sim.Fresh[LightsGuardNode] = guardUnread ? null : Closed;
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        Assert.Equal(new[] { "Emergency Lights unavailable" }, rig.Speech.All);
+        Assert.Empty(rig.Sim.Writes);
+        // Both rows are asked again, so the combos show where the aircraft really is.
+        Assert.Equal(new[] { LightsState, LightsGuardNode }, rig.Sim.Resyncs);
+    }
+
+    [Fact]
+    public void A_pick_with_no_write_path_says_unavailable_and_writes_nothing()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).Reading(lights, 1, guard, Closed);
+        rig.Sim.CanWrite = false;
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        Assert.Equal(new[] { "Emergency Lights unavailable" }, rig.Speech.All);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public void A_guard_missing_from_the_map_says_unavailable()
+    {
+        var orphan = Lights();
+        orphan.Guard = "B757_NO_SUCH_GUARD";
+        var rig = new Rig(orphan);   // the guard's row is not in the map
+        rig.Sim.Fresh[LightsState] = 1;
+        rig.Sim.Fresh[LightsGuardNode] = Closed;
+
+        Assert.True(rig.Pick(LightsState, 0));
+
+        Assert.Equal(new[] { "Emergency Lights unavailable" }, rig.Speech.All);
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Equal(new[] { LightsState }, rig.Sim.Resyncs);   // the combo goes back to the aircraft's position
+    }
+
+    [Fact]
+    public void Both_rows_are_read_back_after_a_write()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).TakingWrites(lights, guard).Reading(lights, 1, guard, Closed);
+
+        rig.Pick(LightsState, 2);
+
+        Assert.Equal(new[] { LightsState, LightsGuardNode }, rig.Sim.Resyncs);
+    }
+
+    [Fact]
+    public void A_pick_that_is_already_there_says_nothing_and_writes_nothing()
+    {
+        var lights = Lights();
+        var guard = LightsGuard();
+        var rig = new Rig(lights, guard).Reading(lights, 2, guard, Open);
+
+        Assert.True(rig.Pick(LightsState, 2));
+
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public void A_stab_trim_cutout_pick_opens_its_guard_first()
+    {
+        // The route is the control's Guard field, not its kind: a toggle goes the same way.
+        var trim = TrimC();
+        var guard = TrimGuard();
+        var rig = new Rig(trim, guard).TakingWrites(trim, guard).Reading(trim, 0, guard, Closed);
+
+        Assert.True(rig.Pick(TrimState, 1));
+
+        Assert.Equal(new[] { TrimGuardPress, TrimWrite(1) }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+}
+
+/// <summary>
+/// A simulated sim behind the 757 definition's panel writes (<c>WriteIo = _ =&gt; fake.Io</c>): fresh and
+/// cached reads by key, every write and wait in the order they happened (<see cref="Events"/>), and the
+/// resyncs asked. A wait ends at once unless <see cref="Hold"/> keeps it open, so a pick with nothing
+/// held finishes inside <c>HandleUIVariableSet</c> and a test needs no clock; to interleave two picks it
+/// holds the waits it wants, lets them go one at a time with <see cref="Release"/> and awaits
+/// <see cref="WritesReached"/> or <see cref="ResyncsReached"/>. A held wait ends canceled when its
+/// token is canceled, as a real one does.
+/// </summary>
+internal sealed class Bbs757FakeIo
+{
+    private readonly object _lock = new();
+    private readonly Dictionary<int, TaskCompletionSource> _held = new();
+    private readonly List<(Func<bool> Done, TaskCompletionSource Signal)> _waiters = new();
+    private int _canceledDelays;
+
+    /// <summary>What <c>CanWrite</c> answers.</summary>
+    public bool CanWrite = true;
+
+    /// <summary>The fresh read of a key; a missing key or a null value is an unread variable.</summary>
+    public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
+
+    /// <summary>The cached read of a key.</summary>
+    public readonly Dictionary<string, double?> Cache = new(StringComparer.Ordinal);
+
+    /// <summary>The calculator writes made, in order.</summary>
+    public readonly List<string> Writes = new();
+
+    /// <summary>The forced re-reads asked, in order.</summary>
+    public readonly List<string> Resyncs = new();
+
+    /// <summary>Every wait asked for, in order, in milliseconds.</summary>
+    public readonly List<int> Delays = new();
+
+    /// <summary>Every write and wait in the order they happened: <see cref="WriteEvent"/> and <see cref="DelayEvent"/> strings.</summary>
+    public readonly List<string> Events = new();
+
+    /// <summary>Called after each write is recorded, so a test can make the aircraft follow it (a fresh read that changes).</summary>
+    public Action<string>? OnWrite;
+
+    /// <summary>True for the 0-based ordinals of the waits that stay open until <see cref="Release"/>; null holds none.</summary>
+    public Func<int, bool>? Hold;
+
+    /// <summary>How many held waits ended because their token was canceled.</summary>
+    public int CanceledDelays => Volatile.Read(ref _canceledDelays);
+
+    public static string WriteEvent(string rpn) => "write " + rpn;
+
+    public static string DelayEvent(int milliseconds) => "delay " + milliseconds.ToString(CultureInfo.InvariantCulture);
+
+    public Bbs757SimIo Io => new()
+    {
+        CanWrite = () => CanWrite,
+        ReadFresh = (key, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null);
+        },
+        Cached = key => Cache.TryGetValue(key, out double? v) ? v : null,
+        Write = rpn =>
+        {
+            lock (_lock) { Writes.Add(rpn); Events.Add(WriteEvent(rpn)); }
+            OnWrite?.Invoke(rpn);
+            Signal();
+        },
+        RequestRead = key =>
+        {
+            lock (_lock) Resyncs.Add(key);
+            Signal();
+        },
+        Delay = Wait,
+    };
+
+    /// <summary>Lets the held wait with this 0-based ordinal go.</summary>
+    public void Release(int ordinal)
+    {
+        TaskCompletionSource? gate;
+        lock (_lock) _held.Remove(ordinal, out gate);
+        gate?.TrySetResult();
+    }
+
+    /// <summary>Completes when at least <paramref name="count"/> writes have been made.</summary>
+    public Task WritesReached(int count) => Reached(() => Writes.Count >= count);
+
+    /// <summary>Completes when at least <paramref name="count"/> re-reads have been asked.</summary>
+    public Task ResyncsReached(int count) => Reached(() => Resyncs.Count >= count);
+
+    private Task Wait(int milliseconds, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        int ordinal;
+        lock (_lock)
+        {
+            ordinal = Delays.Count;
+            Delays.Add(milliseconds);
+            Events.Add(DelayEvent(milliseconds));
+        }
+        if (Hold?.Invoke(ordinal) != true) return Task.CompletedTask;
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock) _held[ordinal] = gate;
+        ct.Register(() =>
+        {
+            if (gate.TrySetCanceled(ct)) Interlocked.Increment(ref _canceledDelays);
+        });
+        return gate.Task;
+    }
+
+    private Task Reached(Func<bool> done)
+    {
+        var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock)
+        {
+            if (done()) signal.SetResult();
+            else _waiters.Add((done, signal));
+        }
+        // The timeout only keeps a broken test from hanging; no passing test waits on it.
+        return signal.Task.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    private void Signal()
+    {
+        lock (_lock)
+        {
+            for (int i = _waiters.Count - 1; i >= 0; i--)
+            {
+                if (!_waiters[i].Done()) continue;
+                _waiters[i].Signal.TrySetResult();
+                _waiters.RemoveAt(i);
+            }
+        }
     }
 }
