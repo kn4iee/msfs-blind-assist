@@ -23,7 +23,7 @@
 
 - A guarded control whose value or guard state cannot be read writes nothing and says "{label} unavailable" (Task 1 test).
 - Two quick picks on the emergency lights within the pick settle: only the last is sent (Task 2, the pick-supersede machinery).
-- A landing altitude typed under de-DE ("1.030", "1030,0") is the pilot's 1030 ft and goes out invariant (Task 5 test).
+- A landing altitude typed under de-DE ("1.030", "1030,0") is the pilot's 1030 ft and goes out invariant (Task 5 test). Amended while working (CORE-17): "1030,0" is 1030 ft; "1.030" could be a thousands group, so it is refused, never guessed.
 - A landing altitude that does not take (BBS Nest stopped) speaks the value read back (Task 6).
 
 ---
@@ -135,11 +135,12 @@
   - `- [B757-13] After an app press of a fire handle unlock, relock it (`Bbs757Write.RelockAfterUnlock`, 1.5 s): the cockpit relocks on `O:` timers a calculator write never starts, so without it the handle stays unlocked (measured). Full: docs/invariants/b757.md#b757-13`
 - **Requests for frozen files:** none.
 - **For other plans:**
-  - Plan 02: `HandleUIVariableSet` sends any control whose `Guard` names a map row through the guarded writer (plan 02's guarded rows: kind `switch`, state var, positions, guard fields, no click code); a `Guard` naming no row says "{label} unavailable". Two plan 03 tests read the shipped map (the three fire handle unlocks are the only controls that relock; the Pressurization panel gets the field): if plan 02's map changes those rows, tell plan 03's owner rather than editing the tests.
-  - Plan 12 takes over `BBS757Definition.Overhead.cs`, `Bbs757Write.cs` and `Bbs757Rpn.cs`: the five overhead seams are implemented there now, so plan 12 adds to their bodies (a second declaration does not compile). The pick bookkeeping is shared (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync` in `Interaction.cs`); a flight load stops a guarded sequence through `_pickEpoch`.
+  - Plan 02: `HandleUIVariableSet` sends any control whose `Guard` names a map row through the guarded writer (plan 02's guarded rows: kind `switch`, state var, positions, guard fields, no click code); a `Guard` naming no row says "{label} unavailable" at run time, so please pin "every `Guard` names a map control" in `Bbs757ControlMapTests`. A pick on a guard row now also re-reads every control that guard covers (closing writes `CloseSets` to it). One plan 03 test reads the shipped map on purpose (`The_shipped_maps_three_unlock_buttons_are_the_only_controls_that_relock`: it ties the relock's state vars to BlueBird's own identifiers): if plan 02's map changes the three unlock rows, tell plan 03's owner rather than editing the test.
+  - Plan 12 takes over `BBS757Definition.Overhead.cs`, `Bbs757Write.cs` and `Bbs757Rpn.cs`: the five overhead seams are implemented there now, so plan 12 adds to their bodies (a second declaration does not compile). The pick bookkeeping is shared (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync` in `Interaction.cs`); a flight load stops a guarded sequence through `_pickEpoch`. `Bbs757WriteTests.cs` (plan 12's next) uses the shared fake `Bbs757FakeIo`, which lives in `Bbs757GuardedTests.cs` (plan 03's only).
   - Plan 13: `OnOwnWrite` is called with a guarded control's node AND its guard's node, with the unlock button's node before the relock, and with `Bbs757LandingAltitude.DisplayKey` (`BBS757_LDG_ALT`) for the landing altitude. Readable for announcements (measured): `B757_OVHD_PASS_OXY_UNARMED_DECAL` (1 while the emergency lights are not ARMED) and `BBS757_CABIN_EMER_LIGHTING` (1 while they are lit).
-  - Plan 10: the emergency lights ARMED and the stab trim cutouts NORMAL can be set through the same guarded path.
-- **For the owner to hear in the in-sim check:** the field ("Landing Altitude value") and the status row ("Landing Altitude") share a name; a write that throws says "Landing altitude unavailable"; after an app Unlock, a fire handle pick must follow within the cockpit's 1.5 s (a handle whose fire light is on needs no unlock).
+  - Plan 10: the emergency lights ARMED and the stab trim cutouts NORMAL are set through the guarded path by `HandleUIVariableSet(node, value, …)` with the control's node (it looks the guard up).
+- **For the guide (plan 16):** after an app Unlock, a fire handle pick must follow within the cockpit's 1.5 s; a handle whose fire light is on needs no unlock.
+- **For the owner to hear in the in-sim check:** the field ("Landing Altitude value") and the status row ("Landing Altitude") share a name; a write that throws says "Landing altitude unavailable"; the unlock window above. Proposals left to the owner: pre-fill the landing altitude box with the current value (`CurrentValueSourceKey`, as the PMDG 737 and MD-11 fields do; the 757's squawk does not), and give "1.030" its own message ("Type whole feet without a thousands separator").
 
 ## Execution record
 
@@ -152,11 +153,13 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Started:** 2026-10-26, from `c8a80bd6f` (claim `b64fa844b`)
 - **Landed:** LANDED-AT-PUSH
 - **Tests at landing:** SUITE-AT-PUSH
-- **Tasks:** 0-3, 5 and 6 done, each reviewed (Task 2 took one fix round); Task 4 is the owner's. Every write's RPN was
-  replayed live through the simconnect MCP on the ground (`docs/b757/evidence/flight-03.md`).
+- **Tasks:** 0-3, 5 and 6 done, each reviewed (Task 2 took one fix round), then one whole-plan review and its fix
+  wave; Task 4 is the owner's. Every write's RPN was replayed live through the simconnect MCP on the ground
+  (`docs/b757/evidence/flight-03.md`).
 - **Waiting on the owner:** Task 4 in the app (Emergency Lights OFF, ARMED, ON, ARMED; Stab Trim C CUTOUT then NORMAL;
-  a fire handle unlock reads locked after 1.5 s) and "In-sim checks (owner)" 2 (type 1030, then 645). Both need plan
-  02's guarded rows for the emergency lights and stab trims; the landing altitude and the relock work without them.
+  a fire handle unlock reads locked after 1.5 s) and "In-sim checks (owner)" 2 (type 1030, then 645). The emergency
+  lights and stab trim steps need plan 02's guarded rows in the map first; the fire handle relock and the landing
+  altitude can be checked now.
 - **In-sim results:** no check in the app yet. Claude's MCP replays (2026-10-26, 757 RR cold and dark at KATL, BBS
   Nest running): the emergency lights write and its guard close, the stab trim C write and its guard close, the fire
   handle relock, and the landing altitude at 1030, -60, -1070 and 14100 all landed and were put back.
@@ -164,12 +167,15 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   registered, not one (the field's never-sent event is named `BBS757.LDG_ALT_SET`); `HandleOverheadSet` claims the
   field so its event is never sent; the pick bookkeeping `SetPositionAsync` and the guarded writer share
   (`BeginPick`, `EndPick`, `SettleAndCheckWriteAsync`), and a flight load stops a guarded sequence part-way
-  (`_pickEpoch`); a `Guard` naming no map row also re-reads the combo; a landing altitude write that throws says
-  "Landing altitude unavailable" (the squawk's way); tests added beyond the plan's for each Review Focus line, the
-  relock's scheduling and switch-away, and the field's refusals and registration.
+  (`_pickEpoch`); a pick on a guard row also re-reads the controls it covers (whole-plan review); a `Guard` naming no
+  map row also re-reads the combo; `SetGuardedAsync` is `internal` so tests can await a dropped sequence; a landing
+  altitude write that throws says "Landing altitude unavailable" (the squawk's way); one test reads the shipped map on
+  purpose (the three unlock rows, see the handoff), an exception to the index's in-memory rule; tests added beyond the
+  plan's for each Review Focus line, the relock's scheduling and switch-away, and the field's refusals and registration.
 - **Rulings made while working** (Claude as controller; the owner may reverse any): R2 the guarded planner also
   refuses a reading or target off the positions and a guard it cannot toggle; R4 `OnOwnWrite` for the guard too; R5
   the unlock buttons by state var, 1500 ms; R7 CORE-17 over "1.030"; R8 645 rounds to 650 (away from zero), range after
   rounding; R10 the row shows "-60 feet", speech says "minus 60 feet"; R12 the landing altitude's `OnOwnWrite` key is
   `BBS757_LDG_ALT`; R14 the relock keeps BlueBird's 1.5 s; R15 a started guarded sequence finishes across a newer
-  pick but stops on a flight load or switch-away; R16 the private event name.
+  pick but stops on a flight load or switch-away; R16 the private event name; R17 the shipped-map Pressurization test
+  removed, the unlock one kept.
