@@ -8,7 +8,7 @@ using MSFSBlindAssist.SimConnect;
 // HandleUIVariableSet exactly as the panel does. See README.md before running it against a sim.
 //
 // A350Probe list [panel]                         - offline: every offered row (panel, key, action, name, positions)
-// A350Probe live <panel|key> [watch,watch]       - every position of every row (presses too), read back, restore;
+// A350Probe live <panel|key,key> [watch,watch]       - every position of every row (presses too), read back, restore;
 //                                                  logs the panel's lights and the watched L:vars that changed
 // A350Probe set "key=val[#ms];..." [watch,...]   - set, read back, restore
 // A350Probe keep "key=val[#ms];..." [watch,...]  - set and read back, no restore
@@ -187,7 +187,7 @@ internal sealed class ProbeForm : Form
                 var lights = displays.GetValueOrDefault(panel) ?? new List<string>();
                 foreach (var key in keys)
                 {
-                    if (!wholePanel && key != _arg) continue;
+                    if (!wholePanel && !_arg!.Split(',').Contains(key)) continue;
                     var d = vars[key];
                     if (skip.Contains(key)) { Line($"{panel}	{key}	SKIPPED (lasting effect: drive by hand)"); continue; }
                     if (d.RenderAsSlider) { Line($"{panel}\t{key}\tslider\tSKIPPED (knob: drive by hand)"); continue; }

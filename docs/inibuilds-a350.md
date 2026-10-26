@@ -128,6 +128,9 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | Recorder | ACMS trigger, DFDR event, RCDR GND CTL, CVR test, CVR erase | the four buttons press | RCDR GND CTL flips and the aircraft clears it at once: `GENERAL_SYSTEMS::Update` sets `INI_GND_CTL` to 0 with an engine at N2 52 % or more or off the ground (`AcfVariables` 3, SIM ON GROUND), and it did so on the ground with both engines stopped. A click runs the same set code, so this is the aircraft |
 | ELT | ELT (TEST/RESET, ARMED, ON), ELT guard | every position | TEST/RESET is taken only with the guard open (`INI_ELT_SWITCH_GUARD` 1); otherwise the switch springs back. The guard's tooltip words are the click's action (OPEN at 0) |
 | Emergency Electrical Power | RAT MAN ON, EMER GEN; EMER GEN fault light | EMER GEN both positions | RAT MAN ON is not pressed in a test pass: it deploys the RAT |
+| Fuel Jettison | fuel jettison arm, fuel jettison active; their lights; the option line | with the option fitted, both rows and the valve (OPEN legend) | an equipment option (`INI_OPTION_FUEL_JETTISON`, OIS options page): without it the cockpit hides the panel and `UpdateFuelJettison` clears all three variables every frame, so MSFSBA refuses a press aloud and the panel's status line says "Not fitted" (`A350Options`) |
+| Flight Controls | PRIM 1-3, SEC 1-3; their fault lights | each off and back on | |
+| ADIRS | ADIRS 1-3 (OFF, NAV, ATT), IR 1-3, ADR 1-3; their fault and OFF lights | every IR and ADR; ADIRS 3 through every position; ADIRS 1 and 2 to ATT and back | an IR off drops its IRS's alignment flag (`INI_IRSn_ALIGNED`) until it is back on; ADIRS OFF loses the alignment, which restarts at NAV. The ADR 2 and 3 FAULT lamps read `INI_ADF2_FAULT` / `INI_ADF3_FAULT` (iniBuilds' spelling) |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

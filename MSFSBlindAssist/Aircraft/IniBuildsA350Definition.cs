@@ -84,13 +84,22 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     _rows[row.Key] = row;
 
         _panelDisplays = new Dictionary<string, List<string>>();
+        foreach (var row in _rows.Values)
+            if (row.Control is { } control && A350Options.For(control.Id) is { } option)
+                AddDisplay(_placement.RowsByPanel.First(p => p.Value.Contains(row)).Key, option.Key);
         foreach (var lamp in A350PanelLamps.Resolve(map, _placement, CuratedSections))
         {
             _lamps[lamp.Key] = lamp;
             _lampInputKeys.UnionWith(lamp.InputKeys);
-            if (!_panelDisplays.TryGetValue(lamp.Panel, out var lines))
-                _panelDisplays[lamp.Panel] = lines = new List<string>();
-            lines.Add(lamp.Key);
+            AddDisplay(lamp.Panel, lamp.Key);
+        }
+
+        void AddDisplay(string panel, string key)
+        {
+            if (!_panelDisplays.TryGetValue(panel, out var lines))
+                _panelDisplays[panel] = lines = new List<string>();
+            if (!lines.Contains(key))
+                lines.Add(key);
         }
     }
 
@@ -162,6 +171,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             foreach (var input in lamp.Rule.Inputs.Skip(1))
                 if (!vars.ContainsKey(lamp.KeyFor(input)))
                     Register(lamp.KeyFor(input), input, input, null);
+        foreach (var option in A350Options.All)
+        {
+            Register(option.Key, option.Var, option.Name + " option", Array.Empty<string>());
+            vars[option.Key].ValueDescriptions = new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" };
+        }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
 
@@ -180,7 +194,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 ExcludeFromMonitorManager = true,       // nothing speaks yet, so a Ctrl+M row would mute nothing ([VAR-9])
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
                 RenderAsReadOnlyStatus = stateVariables != null,
-                StateVariables = stateVariables,        // a power change repaints the line
+                StateVariables = stateVariables is { Count: > 0 } ? stateVariables : null,   // a power change repaints a light
             };
             if (!batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
@@ -262,7 +276,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             NotePickReached(varName, value);
             return true;
         }
-        if (_lampInputKeys.Contains(varName))
+        if (_lampInputKeys.Contains(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }

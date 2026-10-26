@@ -40,6 +40,14 @@ public partial class IniBuildsA350Definition
             return false;   // a base variable: MainForm's generic path
         _sim = simConnect;
 
+        // An option the aircraft is built without: the cockpit hides its controls and clears their variables.
+        if (A350Options.For(control.Id) is { } option && Cached(simConnect, option.Key) is double fitted && fitted < 0.5)
+        {
+            announcer.Announce(option.NotFitted);
+            ReRead(row.Key, simConnect);
+            return true;
+        }
+
         var plan = row.Action switch
         {
             A350RowAction.Set => A350WritePlan.ForSet(control, value, CurrentValue(row.Key, simConnect)),

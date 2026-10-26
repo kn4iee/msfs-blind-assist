@@ -100,6 +100,13 @@ public static partial class A350PanelLayout
         // Emergency electrical power: iniBuilds titles the EMER GEN button after its FAULT light.
         ["EMER_ELEC_RAT"] = "RAT MAN ON",
         ["EMER_ELEC_GEN_FAULT"] = "EMER GEN",
+        // Fuel jettison: the panel's two buttons are ARM and ACTIVE (iniBuilds: "ACTIVATE").
+        ["JETTISON_ACTIVE"] = "Fuel jettison active",
+        // Flight controls: the computers by their own names ("F/CTL PRIM 1" reads as a fraction).
+        ["FCTL_PRIM_1"] = "PRIM 1", ["FCTL_PRIM_2"] = "PRIM 2", ["FCTL_PRIM_3"] = "PRIM 3",
+        ["FCTL_SEC_1"] = "SEC 1", ["FCTL_SEC_2"] = "SEC 2", ["FCTL_SEC_3"] = "SEC 3",
+        // ADIRS: iniBuilds titles the three mode selectors "ADR n MODE SELECTOR".
+        ["IRS_MODE_1"] = "ADIRS 1", ["IRS_MODE_2"] = "ADIRS 2", ["IRS_MODE_3"] = "ADIRS 3",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>

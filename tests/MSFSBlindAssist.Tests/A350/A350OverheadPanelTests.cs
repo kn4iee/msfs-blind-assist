@@ -118,4 +118,62 @@ public class A350OverheadPanelTests
         }, Rows("Emergency Electrical Power"));
         Assert.Equal(new[] { "EMER GEN fault light" }, Lights("Emergency Electrical Power"));
     }
+
+    /// <summary>Live 2026-10-26: with INI_OPTION_FUEL_JETTISON 1 (OIS options), ARM and ACTIVE both move and ACTIVE opens
+    /// the jettison valve (its OPEN legend lights) and closes it again. Without the option the cockpit hides the panel and
+    /// the aircraft clears all three variables every frame (A350Options).</summary>
+    [Fact]
+    public void Fuel_jettison()
+    {
+        Assert.Equal(new[]
+        {
+            ("Fuel jettison arm", A350RowAction.Set, "0=Off, 1=On"),
+            ("Fuel jettison active", A350RowAction.Set, "0=Close, 1=Open"),
+        }, Rows("Fuel Jettison"));
+        Assert.Equal(new[] { "Fuel jettison arm fault light", "Fuel jettison active open light" }, Lights("Fuel Jettison"));
+    }
+
+    /// <summary>Live 2026-10-26: each PRIM and SEC goes off and back on (their guards are not read by the set code).</summary>
+    [Fact]
+    public void Flight_controls()
+    {
+        Assert.Equal(new[]
+        {
+            ("PRIM 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("PRIM 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("PRIM 3", A350RowAction.Set, "0=Off, 1=On"),
+            ("SEC 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("SEC 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("SEC 3", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Flight Controls"));
+        Assert.Equal(new[] { "PRIM 1 fault light", "PRIM 2 fault light", "PRIM 3 fault light",
+            "SEC 1 fault light", "SEC 2 fault light", "SEC 3 fault light" }, Lights("Flight Controls"));
+    }
+
+    /// <summary>Live 2026-10-26: every IR and ADR goes off and on, its OFF legend following (lit only while its ADIRS
+    /// runs); an IR off drops its IRS's alignment flag, back once on. ADIRS 3 went to ATT, NAV and OFF (OFF loses the
+    /// alignment, which then restarts); ADIRS 1 and 2 to ATT and back. The ADR 2 and 3 FAULT legends read INI_ADF2/3_FAULT
+    /// (iniBuilds' spelling): the status line reads what the cockpit lamp reads.</summary>
+    [Fact]
+    public void Adirs()
+    {
+        const string Modes = "0=Off, 1=Nav, 2=Att";
+        Assert.Equal(new[]
+        {
+            ("ADIRS 1", A350RowAction.Set, Modes),
+            ("ADIRS 2", A350RowAction.Set, Modes),
+            ("ADIRS 3", A350RowAction.Set, Modes),
+            ("IR 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("IR 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("IR 3", A350RowAction.Set, "0=Off, 1=On"),
+            ("ADR 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("ADR 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("ADR 3", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("ADIRS"));
+        Assert.Equal(new[]
+        {
+            "IR 1 fault light", "IR 1 off light", "IR 2 fault light", "IR 2 off light", "IR 3 fault light", "IR 3 off light",
+            "ADR 1 fault light", "ADR 1 off light", "ADR 2 fault light", "ADR 2 off light", "ADR 3 fault light", "ADR 3 off light",
+        }, Lights("ADIRS"));
+    }
 }

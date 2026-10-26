@@ -179,6 +179,37 @@ public class IniBuildsA350DefinitionTests
         Assert.Empty(_speech.All);
     }
 
+    private const string JettisonOption = "A350_OPT_INI_OPTION_FUEL_JETTISON";
+
+    [Fact]
+    public void An_option_the_aircraft_is_built_without_refuses_its_controls_aloud()
+    {
+        _cache[JettisonOption] = 0;
+        _cache["A350_JETTISON_ARM"] = 0;
+        Assert.True(Set("A350_JETTISON_ARM", 1));
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { "Fuel jettison is not fitted. It is an option on the OIS options page." }, _speech.All);
+    }
+
+    [Fact]
+    public void A_fitted_option_lets_its_controls_through()
+    {
+        _cache[JettisonOption] = 1;
+        _cache["A350_JETTISON_ARM"] = 0;
+        Set("A350_JETTISON_ARM", 1);
+        Assert.Equal(new[] { "1 (>B:AIRLINER_JETTISON_ARM_Set)" }, _sent);
+    }
+
+    [Fact]
+    public void An_options_panel_shows_whether_it_is_fitted()
+    {
+        Assert.Contains(JettisonOption, _def.GetPanelDisplayVariables()["Fuel Jettison"]);
+        var option = _def.GetVariables()[JettisonOption];
+        Assert.Equal("INI_OPTION_FUEL_JETTISON", option.Name);
+        Assert.Equal("Fuel jettison option", option.DisplayName);
+        Assert.Equal(new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" }, option.ValueDescriptions);
+    }
+
     [Fact]
     public void The_calculator_path_probe_is_registered()
     {
