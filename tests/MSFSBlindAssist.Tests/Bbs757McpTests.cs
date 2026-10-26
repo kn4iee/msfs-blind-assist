@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils;
 
@@ -342,6 +343,7 @@ public class Bbs757McpTests
             new(@"^(\d+) sp0 :1 l0 0 > if\{ \(>K:AP_SPD_VAR_(INC|DEC)\) l0 1 - sp0 g1 \}$");
 
         public double? Speed = 200, Heading = 0, Altitude = 10000, Vs = 0, Mach = 0;
+        public double? Blanked = 0, Drum100, Drum10;   // the speed window's blank flag; its tenths and hundredths wheels
         public bool Tiered = true;
         public bool IgnoresSpeedEvents;
         public int EventsCountedPerBurst = int.MaxValue;
@@ -439,6 +441,9 @@ public class Bbs757McpTests
                     Bbs757Mcp.AltitudeVar => Altitude,
                     Bbs757Mcp.VsVar => Vs,
                     Bbs757Mcp.MachModeVar => Mach,
+                    Bbs757Mcp.IasBlankedVar => Blanked,
+                    Bbs757Mcp.MachTenthsDrumVar => Drum100,
+                    Bbs757Mcp.MachHundredthsDrumVar => Drum10,
                     _ => (double?)null,
                 });
             },
@@ -911,6 +916,108 @@ public class Bbs757McpTests
         var mcp = new FakeMcp { Speed = 250, Mach = 1 };
 
         Assert.Equal(Bbs757Mcp.MachModeReadNote, await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
+    }
+
+    // ---- The speed window while blank, and Mach (plan 05, Task 2; flight-05.md) --------------
+
+    [Theory]
+    [InlineData(1.0, 0.0, 250.0, null, "MCP speed window blank. Speed Intervene opens it.")]
+    [InlineData(1.0, 1.0, 250.0, 0.78, "MCP speed window blank. Speed Intervene opens it.")]   // blank wins
+    [InlineData(0.0, 1.0, 281.1, 0.78, "MCP Mach 0.78")]
+    [InlineData(0.0, 1.0, 281.1, null, "MCP is in Mach mode. Mach is not read yet.")]
+    [InlineData(0.0, 0.0, 250.0, null, "Speed 250")]
+    [InlineData(null, null, 250.0, null, "Speed 250")]                                         // nothing known: today's words
+    [InlineData(0.0, 0.0, null, null, "Speed unavailable")]
+    public void Speed_readout_cases(double? blanked, double? machFlag, double? knots, double? mach, string said)
+    {
+        Assert.Equal(said, Bbs757Mcp.SpeedReadout(blanked, machFlag, knots, mach));
+        InCulture("de-DE", () => Assert.Equal(said, Bbs757Mcp.SpeedReadout(blanked, machFlag, knots, mach)));
+    }
+
+    [Theory]
+    // Measured at FL290 (flight-05.md M1): the tenths wheel reads 10·d, the hundredths wheel 10·(d+1).
+    [InlineData(70.0, 40.0, 0.73)]
+    [InlineData(70.0, 50.0, 0.74)]
+    [InlineData(70.0, 100.0, 0.79)]
+    [InlineData(60.0, 100.0, 0.69)]
+    [InlineData(40.0, 10.0, 0.40)]
+    [InlineData(80.0, 60.0, 0.85)]
+    [InlineData(90.0, 60.0, 0.95)]
+    public void Mach_from_the_window_wheels(double tenths, double hundredths, double mach)
+    {
+        Assert.Equal(mach, Bbs757Mcp.MachFromDrums(tenths, hundredths)!.Value, 3);
+    }
+
+    [Theory]
+    [InlineData(null, 40.0)]
+    [InlineData(70.0, null)]
+    [InlineData(70.0, 45.0)]     // a wheel caught between digits: not a reading
+    [InlineData(74.0, 40.0)]
+    [InlineData(70.0, 0.0)]      // the hundredths wheel never reads below 10
+    [InlineData(70.0, 110.0)]
+    [InlineData(100.0, 40.0)]
+    [InlineData(double.NaN, 40.0)]
+    public void Wheels_that_are_not_a_mach_read_as_unread(double? tenths, double? hundredths)
+    {
+        Assert.Null(Bbs757Mcp.MachFromDrums(tenths, hundredths));
+    }
+
+    [Fact]
+    public async Task Shift_s_says_the_window_is_blank_rather_than_the_held_speed()
+    {
+        // Measured in the VNAV climb: the window blank, the bug still 250 behind it.
+        var mcp = new FakeMcp { Blanked = 1, Speed = 250 };
+
+        Assert.Equal("MCP speed window blank. Speed Intervene opens it.", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
+    }
+
+    [Fact]
+    public async Task Shift_s_reads_mach_from_the_wheels()
+    {
+        var mcp = new FakeMcp { Blanked = 0, Mach = 1, Speed = 281.1, Drum100 = 70, Drum10 = 40 };
+
+        Assert.Equal("MCP Mach 0.73", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
+    }
+
+    [Fact]
+    public void The_mach_wheels_are_read_on_request_for_the_readout()
+    {
+        var vars = new BBS757Definition().GetVariables();
+
+        foreach (string key in new[] { Bbs757Mcp.MachTenthsDrumVar, Bbs757Mcp.MachHundredthsDrumVar })
+        {
+            Assert.Equal(key, vars[key].Name);
+            Assert.Equal(UpdateFrequency.OnRequest, vars[key].UpdateFrequency);
+            Assert.True(vars[key].ExcludeFromMonitorManager);
+        }
+        Assert.Equal("B757_MCP_Gau_SPD_AUTO_100", Bbs757Mcp.MachTenthsDrumVar);
+        Assert.Equal("B757_MCP_Gau_SPD_AUTO_10", Bbs757Mcp.MachHundredthsDrumVar);
+    }
+
+    [Theory]
+    [InlineData(1.0, false)]
+    [InlineData(0.0, true)]
+    [InlineData(null, true)]     // nothing delivered yet: the box stays open, as before
+    public void Speed_box_closed_while_blank(double? blanked, bool open)
+    {
+        var cache = new Dictionary<string, double?>(StringComparer.Ordinal) { [Bbs757Mcp.IasBlankedVar] = blanked };
+        var def = new BBS757Definition
+        {
+            NestRunning = () => true,
+            WriteIo = _ => new Bbs757SimIo
+            {
+                CanWrite = () => true,
+                ReadFresh = (_, _) => Task.FromResult<double?>(null),
+                Cached = key => cache.GetValueOrDefault(key),
+                Write = _ => { },
+                RequestRead = _ => { },
+                Delay = (_, _) => Task.CompletedTask,
+            },
+        };
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        Assert.Equal(open, def.McpInputEnabled(HotkeyAction.FCUSetSpeed, sim)!());
+        Assert.Null(def.McpInputEnabled(HotkeyAction.FCUSetHeading, sim));   // the other windows never close
     }
 
     [Fact]

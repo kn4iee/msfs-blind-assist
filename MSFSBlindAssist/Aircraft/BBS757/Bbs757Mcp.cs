@@ -57,6 +57,18 @@ public static class Bbs757Mcp
     /// <summary>1 while the MCP speed window is blank (VNAV owns the speed); Speed Intervene opens it (session 8).</summary>
     public const string IasBlankedVar = "BBS_IAS_BLANKED";
 
+    /// <summary>
+    /// The speed window's hundreds wheel; in Mach mode it shows the tenths digit (10·d). The Mach is read
+    /// from the wheels: <c>L:BBS_TARGET_MACH</c> stays 0 in Mach mode (measured, flight-05.md M1).
+    /// </summary>
+    public const string MachTenthsDrumVar = "B757_MCP_Gau_SPD_AUTO_100";
+
+    /// <summary>The speed window's tens wheel; in Mach mode it shows the hundredths digit (10·(d+1), so 0 reads 10).</summary>
+    public const string MachHundredthsDrumVar = "B757_MCP_Gau_SPD_AUTO_10";
+
+    /// <summary>What Shift+S says while VNAV has blanked the speed window (ruling R58).</summary>
+    public const string BlankWindowNote = "MCP speed window blank. Speed Intervene opens it.";
+
     /// <summary>The wait before a set is read back (the window takes a write within a frame or two; this is generous).</summary>
     public const int ReadBackMs = 1000;
 
@@ -431,13 +443,55 @@ public static class Bbs757Mcp
         => VsPhrase(await io.Read(VsVar, ct));
 
     /// <summary>
-    /// The IAS target, unless the MCP is in Mach mode: the window then shows Mach, and the IAS
-    /// target (still held) would be passed off as what the pilot is looking at.
+    /// Shift+S: what the speed window shows. Read fresh in order, stopping at the first that decides:
+    /// the blank flag, then the Mach flag, then the Mach wheels or the IAS target. Never the IAS target
+    /// while the window is blank or in Mach: VNAV holds a stale one behind the blank window (250 while
+    /// flying 262, measured), and in Mach it is the Mach's IAS equivalent.
     /// </summary>
     public static async Task<string> ReadSpeedAsync(McpIo io, CancellationToken ct)
     {
-        double? mach = await io.Read(MachModeVar, ct);
-        if (mach is > 0.5) return MachModeReadNote;
-        return SpeedPhrase(await io.Read(SpeedVar, ct));
+        double? blanked = await io.Read(IasBlankedVar, ct);
+        if (blanked is >= 0.5) return SpeedReadout(blanked, null, null, null);
+        double? machFlag = await io.Read(MachModeVar, ct);
+        if (machFlag is >= 0.5)
+            return SpeedReadout(blanked, machFlag, null,
+                MachFromDrums(await io.Read(MachTenthsDrumVar, ct), await io.Read(MachHundredthsDrumVar, ct)));
+        return SpeedReadout(blanked, machFlag, await io.Read(SpeedVar, ct), null);
+    }
+
+    /// <summary>
+    /// The speed window in words: blank ("MCP speed window blank. Speed Intervene opens it."), in Mach
+    /// ("MCP Mach 0.78", or <see cref="MachModeReadNote"/> while the Mach is unread), else the IAS target
+    /// ("Speed 250"). An unread flag counts as not set, so a window nothing is known about reads as before.
+    /// </summary>
+    public static string SpeedReadout(double? blanked, double? machFlag, double? knots, double? mach)
+    {
+        if (blanked is >= 0.5) return BlankWindowNote;
+        if (machFlag is >= 0.5)
+            return mach is double m ? $"MCP Mach {m.ToString("0.00", CultureInfo.InvariantCulture)}" : MachModeReadNote;
+        return SpeedPhrase(knots);
+    }
+
+    /// <summary>
+    /// The Mach the speed window's wheels show: tenths from the hundreds wheel (10·d), hundredths from
+    /// the tens wheel (10·(d+1)); measured at FL290, .40 to .95 (flight-05.md M1). Null when either is
+    /// unread, not a digit (a wheel caught between digits reads between multiples of 10), or the result is
+    /// not a Mach the window can show.
+    /// </summary>
+    public static double? MachFromDrums(double? tenthsWheel, double? hundredthsWheel)
+    {
+        if (Digit(tenthsWheel, 0) is not int tenths || Digit(hundredthsWheel, 1) is not int hundredths) return null;
+        return tenths == 0 ? null : (tenths * 10 + hundredths) / 100.0;
+
+        // A wheel position 10·(d + offset) within 1 of a multiple of 10, for a digit d of 0 to 9.
+        static int? Digit(double? wheel, int offset)
+        {
+            if (wheel is not double w || !double.IsFinite(w)) return null;
+            double steps = w / 10.0;
+            long nearest = (long)Math.Round(steps, MidpointRounding.AwayFromZero);
+            if (Math.Abs(steps - nearest) > 0.1) return null;
+            long d = nearest - offset;
+            return d is >= 0 and <= 9 ? (int)d : null;
+        }
     }
 }

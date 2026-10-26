@@ -50,6 +50,8 @@ public partial class BBS757Definition
         (Bbs757Mcp.SpeedVar, "MCP Speed"),
         (Bbs757Mcp.VsVar, "MCP Vertical Speed"),
         (Bbs757Mcp.MachModeVar, "MCP Speed Mach Mode"),
+        (Bbs757Mcp.MachTenthsDrumVar, "MCP Speed Window Hundreds Wheel"),
+        (Bbs757Mcp.MachHundredthsDrumVar, "MCP Speed Window Tens Wheel"),
     };
 
     /// <summary>
@@ -144,7 +146,8 @@ public partial class BBS757Definition
             {
                 // The validator has accepted this text; parsing again is the only way the callback gets the number.
                 if (entry.Parse(input, out int value, out _)) _ = entry.Apply(value);
-            });
+            },
+            McpInputEnabled(action, sim));
 
         dialog.ShowCancelButton = false;
         dialog.FormClosed += (_, _) =>
@@ -194,6 +197,20 @@ public partial class BBS757Definition
             });
         }
         return buttons;
+    }
+
+    /// <summary>
+    /// Whether a value window's box takes a value: the speed box is closed while VNAV blanks the window
+    /// (cached <see cref="Bbs757Mcp.IasBlankedVar"/> 1, ruling R58) and opens again when Speed Intervene
+    /// opens the window; nothing delivered yet keeps it open. Null for the other windows, which never close.
+    /// The window re-checks it on its own refresh; Shift+S and the Speed Intervene caption say why it is
+    /// closed, since <see cref="ValueInputForm"/>'s own words are generic.
+    /// </summary>
+    internal Func<bool>? McpInputEnabled(HotkeyAction action, SimConnectManager sim)
+    {
+        if (action != HotkeyAction.FCUSetSpeed) return null;
+        var io = WriteIoFor(sim);
+        return () => io.Cached(Bbs757Mcp.IasBlankedVar) is not >= 0.5;
     }
 
     /// <summary>Speed Intervene's caption state: the speed window open (0) or blank in VNAV (1); nothing before the first reading.</summary>
