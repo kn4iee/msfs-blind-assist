@@ -15,6 +15,7 @@ using MSFSBlindAssist.SimConnect;
 // A350Probe cache "key,key"                     - MSFSBA's cached value, a fresh read, and how each key streams
 // A350Probe disp <panel> [watch,...]             - the panel's status lines and the watched L:vars, read fresh
 // A350Probe rpn "code#ms;code#ms" [watch,...]  - raw calculator strings, paced, then the watched L:vars
+// A350Probe listen <seconds>                     - what MSFSBA would say on its own meanwhile (lights, switches)
 internal static class Program
 {
     [STAThread]
@@ -68,6 +69,7 @@ internal sealed class Cap : ScreenReaderAnnouncer
     public override void AnnounceQueued(string m) { lock (Said) Said.Add(m); }
     public override void AnnounceWithQueue(string m) { lock (Said) Said.Add(m); }
     public string Drain() { lock (Said) { var s = string.Join(" / ", Said); Said.Clear(); return s; } }
+    public List<string> DrainList() { lock (Said) { var s = Said.ToList(); Said.Clear(); return s; } }
 }
 
 internal sealed class ProbeForm : Form
@@ -132,7 +134,8 @@ internal sealed class ProbeForm : Form
 
         _m = new SimConnectManager(Handle) { CurrentAircraft = def };
         def.Attach(_m);
-        _m.SimVarUpdated += (_, e) => { try { def.ProcessSimVarUpdate(e.VarName, e.Value, cap); } catch { } };
+        if (_mode != "listen")   // listen feeds the definition itself, with its own announcer
+            _m.SimVarUpdated += (_, e) => { try { def.ProcessSimVarUpdate(e.VarName, e.Value, cap); } catch { } };
         _m.Connect();
         Line("connecting...");
         for (int i = 0; i < 40 && !_m.IsFullyConnected; i++) await Task.Delay(500);
@@ -148,6 +151,42 @@ internal sealed class ProbeForm : Form
             return;
         }
 
+        if (_mode == "listen")
+        {
+            // What MSFSBA would say on its own for _arg seconds: the definition's own speech (lights, at each batch
+            // end) and MainForm's generic announce of a row the definition leaves to it (a switch changed by anything
+            // but the pilot's pick), baseline-first like SimVarMonitor. Move things from outside meanwhile.
+            // MainForm's monitor has seen every value delivered since the connect: seed from the cache.
+            var baseline = new Dictionary<string, double>(StringComparer.Ordinal);
+            foreach (var (key, d0) in vars)
+                if (d0.IsAnnounced && d0.UpdateFrequency == UpdateFrequency.Continuous && _m.GetCachedVariableValue(key) is double v0)
+                    baseline[key] = v0;
+            var started = DateTime.Now;
+            void Say(string text) => Line($"{(DateTime.Now - started).TotalSeconds,6:0.0}s\t{text}");
+            var said = new Cap(Handle);
+            _m.ContinuousBatchDelivered += (_, n) =>
+            {
+                def.OnContinuousBatchDelivered(n);
+                foreach (var text in said.DrainList()) Say(text);
+            };
+            _m.SimVarUpdated += (_, e) =>
+            {
+                if (!vars.TryGetValue(e.VarName, out var d)) return;
+                bool handled;
+                try { handled = def.ProcessSimVarUpdate(e.VarName, e.Value, said); } catch { return; }
+                foreach (var text in said.DrainList()) Say(text);
+                if (handled || !d.IsAnnounced || d.UpdateFrequency != UpdateFrequency.Continuous) return;
+                bool first = !baseline.TryGetValue(e.VarName, out var was);
+                baseline[e.VarName] = e.Value;
+                if (first || Math.Abs(was - e.Value) < 0.001) return;
+                string word = d.ValueDescriptions.TryGetValue(e.Value, out var w) ? w : Fmt(e.Value);
+                Say($"[generic] {d.DisplayName}: {word}");
+            };
+            await Task.Delay(int.Parse(_arg!) * 1000);
+            Line("done");
+            return;
+        }
+
         if (_mode == "rpn")
         {
             // Raw calculator strings through MSFSBA's own sender, each followed by its pause ("code#ms;code#ms"), then
@@ -160,6 +199,18 @@ internal sealed class ProbeForm : Form
             }
             foreach (var name in _watch)
                 Line($"{name}\t{Fmt(await Read("W:" + name))}");
+            return;
+        }
+
+        if (_mode == "labels")
+        {
+            // What each row of a panel reads on its label beside its name, from live values (the button states).
+            var keys = panels.GetValueOrDefault(_arg!) ?? new List<string>();
+            foreach (var key in keys.Concat(keys.SelectMany(k => vars[k].StateVariables ?? Array.Empty<string>())).Distinct())
+                if (vars.TryGetValue(key, out var v) && v.UpdateFrequency == UpdateFrequency.Continuous)
+                    await Read(key);
+            foreach (var key in keys)
+                Line($"{vars[key].DisplayName}\t{(def.TryDescribeControlState(key, out var state) ? state : "-")}");
             return;
         }
 

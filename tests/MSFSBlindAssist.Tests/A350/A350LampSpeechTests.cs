@@ -115,6 +115,19 @@ public class A350LampBoardTests
     }
 
     [Fact]
+    public void A_seed_fills_only_unread_inputs_and_baselines_silently()
+    {
+        var board = new A350LampBoard(Lamps);
+        var lamp = Lamps.Single(l => l.Key == BatFault);
+        Assert.True(board.Seed(BatFault, 1));
+        foreach (var key in lamp.InputKeys.Where(k => k != BatFault))
+            board.Seed(key, 1);
+        Assert.False(board.Seed(BatFault, 0));                      // already read: a seed never overwrites
+        var change = Assert.Single(board.Update(BatFault, 0));      // the seeded baseline makes this a change
+        Assert.False(change.On);
+    }
+
+    [Fact]
     public void A_light_power_flag_is_a_shared_input()
     {
         var board = new A350LampBoard(Lamps);

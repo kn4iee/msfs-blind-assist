@@ -168,6 +168,22 @@ public class A350LampAnnouncementTests
     }
 
     [Fact]
+    public void After_a_reset_lights_that_did_not_change_are_seeded_from_the_cache()
+    {
+        // A flight load re-delivers only changed values: without a seed, a light's first real change would be taken
+        // for its baseline and never spoken.
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        var cache = bat.InputKeys.ToDictionary(k => k, k => k == bat.Key ? 1.0 : 1.0);   // lit
+        _def.Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null;
+        _def.OnSimContextReset();
+        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
+            BatchAfter(1000);
+        _def.ProcessSimVarUpdate(bat.Key, 0, _speech);
+        BatchAfter(A350LampSpeech.OffHoldMs + 100);
+        Assert.Equal(new[] { bat.Name + " off" }, _speech.All);
+    }
+
+    [Fact]
     public void A_flight_load_resets_the_baselines()
     {
         var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");

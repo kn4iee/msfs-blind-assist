@@ -17,6 +17,13 @@ public partial class IniBuildsA350Definition
     /// button's new state, [CORE-7]): the 1 Hz light delivery and the gather window (the iniBuilds A300's value).</summary>
     public const long PressedLampMs = 3000;
 
+    /// <summary>How many batch ends after a reset (a connect, a flight load) the lights still unread are seeded from the
+    /// cache: a load re-delivers only the values it changed, so without a seed a light's first real change would be
+    /// taken for its baseline. Three batch ends (about 3 s) let the load's own deliveries come first.</summary>
+    public const int SeedAfterBatches = 3;
+
+    private int _seedCountdown = SeedAfterBatches;
+
     /// <summary>The two master lights that speak, and what they say.</summary>
     private static readonly Dictionary<string, string> MasterSpeakers = new(StringComparer.Ordinal)
     {
@@ -76,6 +83,10 @@ public partial class IniBuildsA350Definition
     public override void OnContinuousBatchDelivered(int batchNum)
     {
         base.OnContinuousBatchDelivered(batchNum);
+        if (_seedCountdown > 0 && --_seedCountdown == 0 && _sim is { } sim)
+            foreach (var key in _lampBoard.InputKeys)
+                if (Cached(sim, key) is double cached)
+                    _lampBoard.Seed(key, cached);
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
     }
@@ -87,5 +98,6 @@ public partial class IniBuildsA350Definition
         _lampBoard.Reset();
         _lampSpeech.Clear();
         _ownLampsUntil.Clear();
+        _seedCountdown = SeedAfterBatches;
     }
 }
