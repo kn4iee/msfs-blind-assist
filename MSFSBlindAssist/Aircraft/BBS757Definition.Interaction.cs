@@ -78,6 +78,17 @@ public partial class BBS757Definition
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
+        // The gap plans' own fields and controls (BBS757Definition.Hooks.cs).
+        bool handled = false;
+        HandleRadioSet(varKey, value, simConnect, announcer, ref handled);                   // plan 04
+        if (!handled) HandleOverheadSet(varKey, value, simConnect, announcer, ref handled);   // plan 03, then 12
+        if (!handled) HandleThrustSet(varKey, value, simConnect, announcer, ref handled);     // plan 15
+        if (handled)
+        {
+            Sim = simConnect;
+            return true;
+        }
+
         if (varKey == Bbs757Squawk.SetKey)
         {
             Sim = simConnect;
@@ -157,6 +168,7 @@ public partial class BBS757Definition
             // The state the window's caption shows now, to tell a press the aircraft refused.
             double? before = linked != null && !speak && Bbs757McpLights.ForKey(linked) != null ? io.Cached(linked) : null;
             if (linked != null) ArmOwnWriteEcho(linked);
+            OnOwnWrite(control.Node);   // plan 13
             io.Write(press.Down);
             if (press.Up != null)
             {
@@ -245,6 +257,7 @@ public partial class BBS757Definition
             // is read back below.
             string? linked = LinkedStatusKey(control.Node);
             if (linked != null) ArmOwnWriteEcho(linked);
+            OnOwnWrite(control.Node);   // plan 13
             foreach (var call in plan.Calls) io.Write(call);
 
             await io.Delay(ReadBackDelayMs, ct);
@@ -290,6 +303,8 @@ public partial class BBS757Definition
         base.OnSwitchedAway();
         CloseMcpDialogs();
         CloseAutoflightWindows();
+        CloseRadioWindows();   // plan 04
+        ResetAutoflight();     // plan 05: its resting-value timer stops with the aircraft
         CancelLoadWatch();
         try { _lifetime.Cancel(); } catch (ObjectDisposedException) { /* switched away before */ }
         _lifetime.Dispose();
@@ -323,6 +338,12 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
+        // The gap plans' rows (BBS757Definition.Hooks.cs); the first to claim a delivery ends it.
+        bool handled = false;
+        ProcessRadioUpdate(varName, value, announcer, ref handled);                   // plan 04
+        if (!handled) ProcessAutoflightUpdate(varName, value, announcer, ref handled);   // plan 05
+        if (!handled) ProcessEfbUpdate(varName, value, announcer, ref handled);          // plan 07, then 11
+        if (handled) return true;
         // Flaps, gear, speedbrake, parking brake, the MCP lights and the EXEC light speak their own
         // changes (BBS757Definition.Readouts.cs); MainForm's mute wrap gates them ([VAR-8]).
         if (ProcessReadoutUpdate(varName, value, announcer)) return true;
@@ -357,16 +378,15 @@ public partial class BBS757Definition
     {
         if (_nestSettled) return;
         _nestRunning ??= NestRunning();
-        if (_nestRunning == true)
+        if (_nestRunning != true)
         {
-            _nestSettled = true;
-            return;
+            if (announcer.Suppressed) return;
+            Log.Warn("BBS757", $"{Bbs757Nest.ProcessName} is not running; the 757's systems will not respond.");
+            announcer.Announce(NestMissingWarning);
         }
-        if (announcer.Suppressed) return;
 
         _nestSettled = true;
-        Log.Warn("BBS757", $"{Bbs757Nest.ProcessName} is not running; the 757's systems will not respond.");
-        announcer.Announce(NestMissingWarning);
+        OnConnectionBatch(announcer);   // plan 13: once per connection and per flight load
     }
 
     /// <summary>
@@ -383,6 +403,10 @@ public partial class BBS757Definition
         CancelMcpSets();
         CancelLoadWatch();
         ResetReadoutBaselines();   // the new flight's flaps, gear and lights are no change
+        ResetRadios();          // plan 04
+        ResetAutoflight();      // plan 05
+        ResetThrust();          // plan 15
+        ResetAnnouncements();   // plan 13
     }
 
     // =================================================================================
@@ -393,6 +417,12 @@ public partial class BBS757Definition
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         Sim = simConnect;
+
+        // The gap plans' hotkeys (BBS757Definition.Hooks.cs).
+        bool handled = false;
+        HandleRadioHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);                 // plan 04
+        if (!handled) HandleReadoutHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 06, then 14
+        if (handled) return true;
 
         switch (action)
         {

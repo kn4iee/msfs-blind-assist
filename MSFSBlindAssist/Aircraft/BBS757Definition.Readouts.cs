@@ -321,6 +321,18 @@ public partial class BBS757Definition
     /// </summary>
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
+        // The gap plans' rows first (BBS757Definition.Hooks.cs); the first to set the text wins.
+        string? text = null;
+        FormatOverheadDisplay(varKey, value, ref text);                  // plan 03, then 12
+        if (text == null) FormatRadioDisplay(varKey, value, ref text);   // plan 04
+        if (text == null) FormatEfbDisplay(varKey, value, ref text);     // plan 07, then 11
+        if (text == null) FormatThrustDisplay(varKey, value, ref text);  // plan 15
+        if (text != null)
+        {
+            displayText = text;
+            return true;
+        }
+
         switch (varKey)
         {
             case R.GearNoseKey:

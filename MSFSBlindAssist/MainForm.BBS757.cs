@@ -124,7 +124,7 @@ public partial class MainForm
     {
         if (currentAircraft is not BBS757Definition bbs757) return;
         if (bbs757MonitorManagerForm == null || bbs757MonitorManagerForm.IsDisposed)
-            bbs757MonitorManagerForm = new Forms.BBS757.BBS757MonitorManagerForm(bbs757.GetVariables());
+            bbs757MonitorManagerForm = new Forms.BBS757.BBS757MonitorManagerForm(bbs757.MonitorRows());
         bbs757MonitorManagerForm.ShowForm();
     }
 

@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Services;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
 
@@ -157,6 +158,13 @@ public partial class BBS757Definition : BaseAircraftDefinition
         // radio minimums, the gross weight and the squawk; see BBS757Definition.Readouts.cs.
         AddReadoutVariables(vars);
 
+        // The gap plans' variables (BBS757Definition.Hooks.cs); each call compiles away until its plan lands.
+        AddOverheadVariables(vars);       // plan 03, then 12
+        AddRadioVariables(vars);          // plan 04
+        AddEfbVariables(vars);            // plan 07, then 11
+        AddThrustVariables(vars);         // plan 15
+        AddFirstOfficerVariables(vars);   // plan 10
+
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");
         return vars;
     }
@@ -301,8 +309,31 @@ public partial class BBS757Definition : BaseAircraftDefinition
         // The app's own rows and fields, after the map's (BBS757Definition.Readouts.cs).
         AddReadoutPanels(structure, controls, displays);
 
+        // The gap plans' panels and fields (BBS757Definition.Hooks.cs).
+        AddOverheadPanels(structure, controls, displays);   // plan 03, then 12
+        AddRadioPanels(structure, controls, displays);      // plan 04
+        AddEfbPanels(structure, controls, displays);        // plan 07, then 11
+        AddThrustPanels(structure, controls, displays);     // plan 15
+
         _panelControls = controls;
         _panelDisplays = displays;
         _panelStructure = structure;
+    }
+
+    // =================================================================================
+    // Ctrl+M
+    // =================================================================================
+
+    /// <summary>
+    /// The 757 Monitor Manager's rows: every announced variable's, as on every aircraft
+    /// (<see cref="MonitorRowBuilder"/>), then the rows of speech that is no variable's, which the
+    /// gap plans add through <see cref="AddCduMonitorRows"/> and <see cref="AddCockpitMonitorRows"/>.
+    /// </summary>
+    public IReadOnlyList<MonitorRow> MonitorRows()
+    {
+        var rows = MonitorRowBuilder.Build(GetVariables());
+        AddCduMonitorRows(rows);       // plan 09
+        AddCockpitMonitorRows(rows);   // plan 13
+        return rows;
     }
 }

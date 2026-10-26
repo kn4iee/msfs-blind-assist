@@ -83,7 +83,11 @@ public partial class BBS757Definition
     /// <summary>Sets all three altimeters and speaks what they read ("Altimeter: 1020, 30.12"); "Altimeter unavailable" when nothing can land.</summary>
     internal Task SetAltimetersAsync(uint parameter, SimConnectManager sim, ScreenReaderAnnouncer announcer, Action<string>? onSaid = null)
         => RunMcpSetAsync(AltimeterSetKey, (int)parameter, ignoreSameValueInFlight: true, "Altimeter unavailable", sim, announcer,
-            (io, ct) => Bbs757Altimeters.SetAltimetersAsync(io, parameter, ct), onSaid);
+            (io, ct) =>
+            {
+                OnOwnAltimeterSet();   // plan 06, then 14
+                return Bbs757Altimeters.SetAltimetersAsync(io, parameter, ct);
+            }, onSaid);
 
     /// <summary>Steps the radio minimums and speaks the decision height read ("DH 200"); "DH unavailable" when nothing can land.</summary>
     internal Task SetMinimumsAsync(int feet, SimConnectManager sim, ScreenReaderAnnouncer announcer, Action<string>? onSaid = null)
@@ -97,6 +101,17 @@ public partial class BBS757Definition
     public override bool HandleUITypedText(string varKey, string text, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
+        // The gap plans' own text fields (BBS757Definition.Hooks.cs).
+        bool handled = false;
+        HandleOverheadTypedText(varKey, text, simConnect, announcer, ref handled);                 // plan 03, then 12
+        if (!handled) HandleRadioTypedText(varKey, text, simConnect, announcer, ref handled);       // plan 04
+        if (!handled) HandleThrustTypedText(varKey, text, simConnect, announcer, ref handled);      // plan 15
+        if (handled)
+        {
+            Sim = simConnect;
+            return true;
+        }
+
         if (varKey != Bbs757Squawk.SetKey)
             return base.HandleUITypedText(varKey, text, varDef, simConnect, announcer);
         Sim = simConnect;
@@ -138,6 +153,7 @@ public partial class BBS757Definition
                 announcer.AnnounceImmediate("Squawk unavailable");
                 return;
             }
+            OnOwnSquawkSet(code);   // plan 06, then 14
             sim.ExecuteCalculatorCodeUnique(Bbs757Squawk.Write(code));
             await Task.Delay(ReadBackDelayMs, _lifetime.Token);
             double? read = await sim.ReadFreshAsync(Bbs757Squawk.CodeKey, FreshReadTimeoutMs, _lifetime.Token);
