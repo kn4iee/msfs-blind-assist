@@ -88,4 +88,29 @@ public class A350GlareshieldPanelTests
             "Captain ARPT light", "Captain VOR 1 light", "Captain WX light", "Captain TERR light", "Captain TRAF light",
             "Captain VOR 2 light" }, Lights("EFIS Captain"));
     }
+
+    /// <summary>Live 2026-10-26: the first officer's panel, as the captain's (its baro is XMLVAR_Baro2_Mode, unit flag
+    /// XMLVAR_Baro_Selector_HPA_2, setting KOHLSMAN SETTING MB:2).</summary>
+    [Fact]
+    public void Efis_first_officer()
+    {
+        Assert.Equal(new[]
+        {
+            ("First officer ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
+            ("First officer ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
+                + "7=40 NM, 8=80 NM, 9=160 NM, 10=320 NM, 11=640 NM"),
+            ("First officer baro knob push", Press, ""), ("First officer baro knob pull", Press, ""),
+            ("First officer baro knob increase", A350RowAction.Increase, ""),
+            ("First officer baro knob decrease", A350RowAction.Decrease, ""),
+            ("First officer baro unit", Press, ""),
+            ("First officer CSTR", Press, ""), ("First officer WPT", Press, ""), ("First officer VORD", Press, ""),
+            ("First officer NDB", Press, ""), ("First officer ARPT", Press, ""),
+            ("First officer VOR 1", Press, ""), ("First officer WX", Press, ""), ("First officer TERR", Press, ""),
+            ("First officer TRAF", Press, ""), ("First officer VOR 2", Press, ""),
+            ("First officer LS", Set, OffOn), ("First officer taxi", Set, OffOn), ("First officer VV", Set, OffOn),
+        }, Rows("EFIS First Officer"));
+        Assert.Equal(new[] { "First officer CSTR light", "First officer WPT light", "First officer VORD light",
+            "First officer NDB light", "First officer ARPT light", "First officer VOR 1 light", "First officer WX light",
+            "First officer TERR light", "First officer TRAF light", "First officer VOR 2 light" }, Lights("EFIS First Officer"));
+    }
 }
