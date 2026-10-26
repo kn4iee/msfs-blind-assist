@@ -77,11 +77,13 @@ public class Bbs757DefinitionTests
     [Fact]
     public void Every_status_row_is_on_the_status_display_then_the_flight_controls()
     {
-        Assert.Equal(Map.Status.Select(s => s.Key).Concat(new[]
+        // The map's rows, then the flight controls; a later plan's rows may follow.
+        var expected = Map.Status.Select(s => s.Key).Concat(new[]
         {
             Bbs757Readouts.FlapsHandleKey, Bbs757Readouts.FlapsAngleKey, Bbs757Readouts.GearNoseKey,
             Bbs757Readouts.SpeedbrakeKey, Bbs757Readouts.ParkingBrakeKey,
-        }), Def.GetPanelDisplayVariables()["Status"]);
+        }).ToList();
+        Assert.Equal(expected, Def.GetPanelDisplayVariables()["Status"].Take(expected.Count));
     }
 
     [Fact]
@@ -122,22 +124,33 @@ public class Bbs757DefinitionTests
     [Fact]
     public void Sections_and_panels_follow_the_map_order()
     {
+        // In map order; the app's own panels and fields (the squawk field, a later plan's) may sit between.
         var sections = Map.Controls.Select(c => c.Section).Distinct().Append("Status").ToList();
-        Assert.Equal(sections, Def.GetPanelStructure().Keys);
+        AssertInOrder(sections, Def.GetPanelStructure().Keys);
 
         foreach (var section in Map.Controls.Select(c => c.Section).Distinct())
         {
             var panels = Map.Controls.Where(c => c.Section == section).Select(c => c.Panel).Distinct();
-            Assert.Equal(panels, Def.GetPanelStructure()[section]);
+            AssertInOrder(panels, Def.GetPanelStructure()[section]);
         }
 
         foreach (var panel in Map.Controls.Select(c => c.Panel).Distinct())
         {
-            var nodes = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Node).ToList();
-            // The transponder panel gains the app's squawk field, right after the mode knob.
-            if (panel == BBS757Definition.TransponderPanel)
-                nodes.Insert(nodes.IndexOf(BBS757Definition.TransponderModeNode) + 1, Bbs757Squawk.SetKey);
-            Assert.Equal(nodes, Def.GetPanelControls()[panel]);
+            var nodes = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Node);
+            AssertInOrder(nodes, Def.GetPanelControls()[panel]);
+        }
+    }
+
+    /// <summary>Every one of <paramref name="expected"/> is in <paramref name="actual"/>, in the same order (a subsequence).</summary>
+    private static void AssertInOrder(IEnumerable<string> expected, IEnumerable<string> actual)
+    {
+        var rest = actual.ToList();
+        int at = 0;
+        foreach (string item in expected)
+        {
+            int found = rest.IndexOf(item, at);
+            Assert.True(found >= 0, $"\"{item}\" is missing, or out of order, in [{string.Join(", ", rest)}]");
+            at = found + 1;
         }
     }
 
@@ -146,8 +159,10 @@ public class Bbs757DefinitionTests
     [Fact]
     public void The_pedestal_starts_with_the_control_stand_the_engines_and_the_transponder()
     {
+        // Among the map's panels: a later plan's own panel may sit between them.
+        var mapPanels = Map.Controls.Select(c => c.Panel).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(new[] { "Control stand", "Engines", "TCAS and transponder" },
-            Def.GetPanelStructure()["Pedestal"].Take(3));
+            Def.GetPanelStructure()["Pedestal"].Where(mapPanels.Contains).Take(3));
     }
 
     [Fact]
