@@ -6,6 +6,7 @@ using MSFSBlindAssist.Forms;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
+using A = MSFSBlindAssist.Aircraft.BBS757.Bbs757AutoflightAnnouncements;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -76,21 +77,181 @@ public partial class BBS757Definition
         // (Speed Intervene's "Window blank"). Only a Continuous AND IsAnnounced var joins the batch; one
         // that is not announced gets no subscription and is never delivered (measured 2026-10-26).
         // Never spoken: ProcessAutoflightUpdate consumes it, and it has no Ctrl+M row ([VAR-9]).
-        vars.TryAdd(Bbs757Mcp.IasBlankedVar, new SimVarDefinition
-        {
-            Name = Bbs757Mcp.IasBlankedVar, DisplayName = "MCP Speed Window Blank",
-            Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.Continuous,
-            IsAnnounced = true, ExcludeFromMonitorManager = true,
-        });
+        vars.TryAdd(Bbs757Mcp.IasBlankedVar, Watch(Bbs757Mcp.IasBlankedVar, "MCP Speed Window Blank", silent: true));
+
+        // The autoflight call-outs (Task 4): batched rows on BlueBird's own variables, each sharing its Name
+        // with an OnRequest key above at most ([VAR-7]: never two Continuous), so the sets' fresh reads are
+        // unchanged ([SIM-1]). Two are silent: they only feed another row's call-out.
+        vars.TryAdd(A.HeadingWatchKey, Watch(Bbs757Mcp.HeadingVar, "MCP Heading"));
+        vars.TryAdd(A.AltitudeWatchKey, Watch(Bbs757Mcp.AltitudeVar, "MCP Altitude"));
+        vars.TryAdd(A.VsWatchKey, Watch(Bbs757Mcp.VsVar, "MCP Vertical Speed"));
+        vars.TryAdd(A.SpeedWatchKey, Watch(Bbs757Mcp.SpeedVar, "MCP Speed"));
+        vars.TryAdd(A.MachWatchKey, Watch(Bbs757Mcp.MachHundredthsDrumVar, "MCP Mach"));
+        vars.TryAdd(A.MachTenthsWatchKey, Watch(Bbs757Mcp.MachTenthsDrumVar, "MCP Mach Tenths", silent: true));
+        vars.TryAdd(A.ModeWatchKey, Watch(Bbs757Mcp.MachModeVar, "MCP Speed Mode", silent: true));
+        vars.TryAdd(A.AtArmedKey, Watch(A.AtArmedVar, "A/T Armed"));
+        vars.TryAdd(A.ApDiscLightKey, Watch(A.ApDiscLightVar, "Autopilot Disconnect"));
+        vars.TryAdd(A.AtDiscLightKey, Watch(A.AtDiscLightVar, "Autothrottle Disconnect"));
     }
 
+    /// <summary>A batched announced L:var row with no panel; a silent one has no Ctrl+M row ([VAR-9]).</summary>
+    private static SimVarDefinition Watch(string name, string label, bool silent = false) => new()
+    {
+        Name = name, DisplayName = label,
+        Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.Continuous,
+        IsAnnounced = true, ExcludeFromMonitorManager = silent,
+    };
+
+    // =================================================================================
+    // Autoflight call-outs (Task 4)
+    // =================================================================================
+
+    /// <summary>One resting value per MCP row that speaks once it rests (<see cref="A.RestingRows"/>).</summary>
+    private readonly Dictionary<string, Bbs757RestingValue> _resting =
+        A.RestingRows.ToDictionary(k => k, _ => new Bbs757RestingValue(), StringComparer.Ordinal);
+
+    // The rows a call-out depends on, as last delivered: ProcessSimVarUpdate gets no SimConnectManager.
+    private double? _lastBlanked, _lastMachFlag, _lastMachTenths;
+
     /// <summary>
-    /// Plan 05's deliveries (the seam in BBS757Definition.Hooks.cs): the speed window's blank flag is
-    /// consumed silently; it is cached for the window's captions and never spoken.
+    /// How long after one of the app's own MCP sets the row it moved is the set's echo: the set spoke the
+    /// value it read back ("Heading 090"), and the batch delivers the change up to a second later.
+    /// </summary>
+    internal const int OwnSetEchoMs = 3000;
+
+    /// <summary>Per resting row, when its own-set echo window ends; during a set the row is the set's too.</summary>
+    private readonly Dictionary<string, long> _ownSetEchoUntil = new(StringComparer.Ordinal);
+
+    /// <summary>Whether a UI-thread timer releases the resting values; tests turn it off and call <see cref="ReleaseRestedAutoflight"/>.</summary>
+    internal bool UseRestTimer { get; init; } = true;
+
+    private System.Windows.Forms.Timer? _restTimer;
+    private ScreenReaderAnnouncer? _restAnnouncer;
+
+    /// <summary>The release's tick: often enough that a value is heard within a quarter second of resting.</summary>
+    private const int RestTickMs = 250;
+
+    /// <summary>
+    /// Plan 05's deliveries (the seam in BBS757Definition.Hooks.cs). The blank flag, the Mach flag and the
+    /// Mach's tenths wheel are kept and consumed silently. The five MCP rows feed their resting values: the
+    /// speed only while the window is open and in IAS, the Mach only in Mach mode; otherwise, and during or
+    /// just after the app's own set of that value, the value counts as spoken (a VNAV target behind a blank
+    /// window, the Mach's IAS equivalent, a set that speaks its own read-back). They are spoken by the
+    /// release, outside MainForm's mute wrap, which checks each row's mute itself ([VAR-8]). A/T arm and the
+    /// disconnect lights speak here, once per change, through the state tracker; MainForm's wrap mutes them.
     /// </summary>
     partial void ProcessAutoflightUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
-        if (varName == Bbs757Mcp.IasBlankedVar) handled = true;
+        switch (varName)
+        {
+            case Bbs757Mcp.IasBlankedVar:
+                _lastBlanked = value;
+                break;
+            case A.ModeWatchKey:
+                _lastMachFlag = value;
+                break;
+            case A.MachTenthsWatchKey:
+                _lastMachTenths = value;
+                break;
+            case A.HeadingWatchKey:
+                Feed(varName, Bbs757Mcp.HeadingVar, double.IsFinite(value) ? A.HeadingPhrase(value) : null, speakable: true, announcer);
+                break;
+            case A.AltitudeWatchKey:
+                Feed(varName, Bbs757Mcp.AltitudeVar, double.IsFinite(value) ? A.AltitudePhrase(value) : null, speakable: true, announcer);
+                break;
+            case A.VsWatchKey:
+                Feed(varName, Bbs757Mcp.VsVar, double.IsFinite(value) ? A.VsPhrase(value) : null, speakable: true, announcer);
+                break;
+            case A.SpeedWatchKey:
+                Feed(varName, Bbs757Mcp.SpeedVar, double.IsFinite(value) ? A.SpeedPhrase(value) : null,
+                    speakable: _lastBlanked is not >= 0.5 && _lastMachFlag is not >= 0.5, announcer);
+                break;
+            case A.MachWatchKey:
+                double? mach = Bbs757Mcp.MachFromDrums(_lastMachTenths, value);
+                Feed(varName, Bbs757Mcp.SpeedVar, mach is double m ? A.MachPhrase(m) : null,
+                    speakable: _lastMachFlag is >= 0.5 && _lastBlanked is not >= 0.5, announcer);
+                break;
+            case A.AtArmedKey:
+                SpeakChange(varName, A.AtArmedPhrase(value), announcer);
+                break;
+            case A.ApDiscLightKey:
+            case A.AtDiscLightKey:
+                string what = varName == A.ApDiscLightKey ? "Autopilot" : "Autothrottle";
+                // The tracker sees both states, so the light coming on again is a change; only "on" is spoken.
+                if (double.IsFinite(value)
+                    && _changes.Observe(varName, A.DiscLightPhrase(what, value) ?? $"{what} disconnect off", NowMs()) is { } said
+                    && A.DiscLightPhrase(what, value) != null)
+                    announcer.Announce(said);
+                break;
+            default:
+                return;
+        }
+        handled = true;
+    }
+
+    /// <summary>
+    /// One resting row's delivery: a change while it may be spoken, else the value counts as spoken. A row
+    /// whose value is being set by the app (<paramref name="setKey"/> in flight), or was within
+    /// <see cref="OwnSetEchoMs"/>, is the set's. An unreadable value does nothing.
+    /// </summary>
+    private void Feed(string row, string setKey, string? phrase, bool speakable, ScreenReaderAnnouncer announcer)
+    {
+        if (phrase == null) return;
+        var resting = _resting[row];
+        long now = NowMs();
+        bool ownSet = _mcpSets.ContainsKey(setKey)
+                      || (_ownSetEchoUntil.TryGetValue(setKey, out long until) && now < until);
+        if (!speakable || ownSet)
+        {
+            resting.Rebaseline(phrase);
+            return;
+        }
+        resting.Changed(phrase, now);
+        if (resting.Pending) StartRestTimer(announcer);
+    }
+
+    private void StartRestTimer(ScreenReaderAnnouncer announcer)
+    {
+        _restAnnouncer = announcer;
+        if (!UseRestTimer) return;
+        if (_restTimer == null)
+        {
+            _restTimer = new System.Windows.Forms.Timer { Interval = RestTickMs };
+            _restTimer.Tick += (_, _) =>
+            {
+                if (_restAnnouncer is { } a) ReleaseRestedAutoflight(NowMs(), a);
+            };
+        }
+        if (!_restTimer.Enabled) _restTimer.Start();
+    }
+
+    /// <summary>
+    /// The release (the timer's tick, or a test with its clock): each resting row whose value has rested
+    /// is spoken, unless the pilot muted its Ctrl+M row, when it is dropped. The timer stops once nothing
+    /// waits. Speaks outside MainForm's mute wrap, so the mute is checked here ([VAR-8]).
+    /// </summary>
+    internal void ReleaseRestedAutoflight(long nowMs, ScreenReaderAnnouncer announcer)
+    {
+        foreach (string row in A.RestingRows)
+        {
+            if (_resting[row].TakeDue(nowMs) is { } phrase && !IsMonitorMuted(row))
+                announcer.Announce(phrase);
+        }
+        if (_resting.Values.All(r => !r.Pending)) _restTimer?.Stop();
+    }
+
+    /// <summary>A set of <paramref name="setKey"/> just ended: its row's next deliveries are its echo for a while.</summary>
+    private void ArmOwnSetEcho(string setKey) => _ownSetEchoUntil[setKey] = NowMs() + OwnSetEchoMs;
+
+    /// <summary>A flight load, a reconnect or a switch away: every row's next value is a baseline; the timer stops.</summary>
+    partial void ResetAutoflight()
+    {
+        foreach (var resting in _resting.Values) resting.Reset();
+        _ownSetEchoUntil.Clear();
+        _lastBlanked = _lastMachFlag = _lastMachTenths = null;
+        _restTimer?.Stop();
+        _restTimer?.Dispose();
+        _restTimer = null;
     }
 
     /// <summary>The MCP sets' and readouts' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>
@@ -398,7 +559,7 @@ public partial class BBS757Definition
         }
         finally
         {
-            _mcpSets.TryRemove(new KeyValuePair<string, McpSetInFlight>(key, mine));
+            if (_mcpSets.TryRemove(new KeyValuePair<string, McpSetInFlight>(key, mine))) ArmOwnSetEcho(key);
             cts.Dispose();
         }
     }
