@@ -87,7 +87,8 @@
 
 ### Task 4 [owner]: In-sim check of the fixes
 
-- [ ] On the ground, APU running: Emergency Lights OFF (guard opens), ARMED (guard closes), ON, ARMED; Stab Trim C Cutout CUTOUT then NORMAL (ground only); a fire handle unlock, wait past the relock time, the handle reads locked. Record anything unexpected in `docs/b757/evidence/flight-03.md`.
+- [x] On the ground: a fire handle unlock, wait past the relock time, the handle reads locked (owner, passed 2026-10-26). Record anything unexpected in `docs/b757/evidence/flight-03.md`.
+- Moved to plan 16's in-sim pass (closed here): on the ground, APU running, Emergency Lights OFF (guard opens), ARMED (guard closes), ON, ARMED; Stab Trim C Cutout CUTOUT then NORMAL (ground only). They need plan 02's guarded rows in the map, and plan 02 had not landed when plan 03 closed.
 
 ### Task 5: Landing altitude, pure
 
@@ -123,8 +124,8 @@
 
 ## In-sim checks (owner)
 
-1. The fixes: Task 4.
-2. The essential: Pressurization, type 1030 → "Landing altitude 1030 feet"; type 645 → "Landing altitude 650 feet".
+1. The fixes: Task 4 (the fire handle relock passed, owner, 2026-10-26; the emergency lights and stab trim steps moved to plan 16's pass).
+2. The essential: Pressurization, type 1030 → "Landing altitude 1030 feet"; type 645 → "Landing altitude 650 feet" (passed, owner, 2026-10-26).
 
 ## Handoff to plan 16
 
@@ -145,6 +146,9 @@
     Tab to the handle and pick Pulled with a screen reader, so a pull without a fire warning (engine severe damage) is
     out of reach until then. Weigh the lock's purpose when building it: an accidental "Pulled" while arrowing through
     the combo must still not pull (the pick settle covers arrowing; say in the guide that Pulled pulls).
+- **For plan 16's in-sim pass:** plan 03's Task 4 steps that need plan 02's guarded rows: Emergency Lights OFF (guard
+  opens), ARMED (guard closes), ON, ARMED (the gate's "Emergency Lights ARMED and back" covers most of it); Stab Trim C
+  Cutout CUTOUT then NORMAL, on the ground (not in the gate yet: please add it).
 - **For the guide (plan 16):** a handle whose fire light is on pulls from its combo; until plan 12 lands, a pull
   without a fire warning needs Unlock then the handle pick within the cockpit's 1.5 s.
 - **For the owner to hear in the in-sim check:** the field ("Landing Altitude value") and the status row ("Landing Altitude") share a name; a write that throws says "Landing altitude unavailable"; the unlock window above. Proposals left to the owner: pre-fill the landing altitude box with the current value (`CurrentValueSourceKey`, as the PMDG 737 and MD-11 fields do; the 757's squawk does not), and give "1.030" its own message ("Type whole feet without a thousands separator").
@@ -154,7 +158,8 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed and pushed to `kn4iee/B757` (2026-10-26); waiting on owner (Task 4 and the in-sim checks)
+- **Status:** done (2026-10-26): landed and pushed to `kn4iee/B757`, the owner's in-sim checks passed; the emergency
+  lights and stab trim checks moved to plan 16's in-sim pass (they need plan 02's guarded rows)
 - **Claimed by:** kn4iee (the owner), 2026-10-26
 - **Worked by:** kn4iee with Claude, with subagents (a fresh implementer and a reviewer per task, one whole-plan review)
 - **Started:** 2026-10-26, from `c8a80bd6f` (claim `b64fa844b`)
@@ -162,15 +167,15 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Tests at landing:** full suite passed (17,168, 0 failed) after the rebase onto `be2ac8452`; build without warnings
   from plan 03's files
 - **Tasks:** 0-3, 5 and 6 done, each reviewed (Task 2 took one fix round), then one whole-plan review and its fix
-  wave; Task 4 is the owner's. Every write's RPN was replayed live through the simconnect MCP on the ground
-  (`docs/b757/evidence/flight-03.md`).
-- **Waiting on the owner:** Task 4 in the app (Emergency Lights OFF, ARMED, ON, ARMED; Stab Trim C CUTOUT then NORMAL;
-  a fire handle unlock reads locked after 1.5 s) and "In-sim checks (owner)" 2 (type 1030, then 645). The emergency
-  lights and stab trim steps need plan 02's guarded rows in the map first; the fire handle relock and the landing
-  altitude can be checked now.
-- **In-sim results:** no check in the app yet. Claude's MCP replays (2026-10-26, 757 RR cold and dark at KATL, BBS
-  Nest running): the emergency lights write and its guard close, the stab trim C write and its guard close, the fire
-  handle relock, and the landing altitude at 1030, -60, -1070 and 14100 all landed and were put back.
+  wave; Task 4 the owner ran (its emergency lights and stab trim steps moved to plan 16). Every write's RPN was replayed
+  live through the simconnect MCP on the ground (`docs/b757/evidence/flight-03.md`).
+- **Waiting on the owner:** nothing for plan 03. Its emergency lights and stab trim checks are in plan 16's in-sim pass
+  (handoff), because they need plan 02's guarded rows.
+- **In-sim results:** the owner, 2026-10-26, in the app (Debug build of `0bb05ff55`): the landing altitude typed as
+  1030 and as 645 (heard 650) and a fire handle unlock relocking all passed. Claude's MCP replays the same day (757 RR
+  cold and dark at KATL, BBS Nest running): the emergency lights write and its guard close, the stab trim C write and
+  its guard close, the fire handle relock, and the landing altitude at 1030, -60, -1070 and 14100 all landed and were
+  put back.
 - **Changed from the plan:** "1.030" is refused, not read as 1030 (CORE-17; Review Focus 3 amended); two keys are
   registered, not one (the field's never-sent event is named `BBS757.LDG_ALT_SET`); `HandleOverheadSet` claims the
   field so its event is never sent; the pick bookkeeping `SetPositionAsync` and the guarded writer share

@@ -47,7 +47,14 @@ trim C 0 (NORMAL), guard closed; landing altitude 1000 ft; no fire handle unlock
   reads 14100, and one more `1 (>L:B757_OVHD_LDG_ELEV_CHG)` at 14100 still reads 14100 (BlueBird clamps at the top).
 - Put back: `990 … 1 …`: reads 1000.
 
-## Still to check in the app (owner)
+## Checked in the app (owner, 2026-10-26)
 
-Plan 03 Task 4 and "In-sim checks (owner)": the same moves from the panels with MSFSBA running, which also checks the
-speech, the combos' read-back and the pick timing.
+Debug build of `B757` at `0bb05ff55` (plan 03 and plan 05's Mach entry): the landing altitude typed on the Pressurization
+panel as 1030 and as 645 (heard 650), and a fire handle unlock that relocks after 1.5 s: all passed. The emergency
+lights and stab trim checks need plan 02's guarded rows and moved to plan 16's in-sim pass.
+
+## Auto rate (read only, simconnect MCP)
+
+The cockpit sets `L:B757_OVHD_AUTORATE_SWITCH` to 3.5, the index, once on load (XML 10153-10156: range 0 to 13 in
+steps of 0.1); after the owner's flight reload it read 3.5. Right after that reload every MCP calculator read returned
+0, even `(A:PLANE ALTITUDE, feet)`, until the MCP was reconnected: an MCP quirk, not the aircraft's.
