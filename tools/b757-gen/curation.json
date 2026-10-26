@@ -12,13 +12,14 @@
     "kinds: node -> toggle or button, for a control whose click code the extractor misreads. Two re-readings only: a momentary button made a toggle (its click sets its own state var by a gate, not a flip) and a select made a button (a radio-style choice that is only ever pressed). Only the kind changes (and with it the positions the generator derives: two for a toggle, none for a button, unless positions names them); the state var and the click code stay the vendor's, verbatim. The rules decide first, on the row as the extractor read it, so an entry never brings back a control they drop: it changes nothing and is only reported, like a label for a dropped node. An entry for a node the package does not have, for a control the extractor already reads that way, for any other re-reading, or for a kind the control cannot be built as (a toggle needs an L:var state), is an error.",
     "guarded: node -> {state_var, positions, guard, guard_closed, close_sets}: a switch whose vendor click only runs while its guard is open. The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, so none of the click is kept: the control is emitted as a switch on state_var with the named positions (laid onto the control's own values, as under positions), the guard's node, the value the guard reads while closed (guard_closed) and the value closing it writes to the control (close_sets, null when closing leaves it alone), and press, release, cw and ccw are empty: the app opens the guard, writes the position and closes the guard. The guard keeps its own row. An entry takes in a control the rules leave out (the emergency lights switch) or re-reads one they keep (the stab trims), and the run names each; it never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped fact or a change of BlueBird's stops the run: the click writes state_var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. An entry for a node or a guard the package does not have, names that do not fit the vendor's count of positions, a positions or kinds entry for the same node, and any other control whose click code carries the gate note are errors.",
     "direct_write: list of nodes whose vendor click code the map leaves out: the control is emitted as the rules build it (state var, kind, label, panel and positions unchanged, the positions still checked against what the vendor's code writes) and press, release, cw and ccw are empty, so the app writes the state var to the picked position, as it does for any switch with no click code. For a switch whose code cannot take a pick where it aims and writes nothing but its own L:var, and at most O:vars (the chronometer ET levers; the flight deck door switch). It is checked against the vendor's code, so that a change of BlueBird's stops the run instead of reaching the app: the click code must exist (else the entry does nothing), carry no gate note (a gated click belongs under guarded, which opens the guard first) and write nothing but the state var (another L:var, a K: or an H: event would no longer run; an O:var write is let through, because O:vars are component-local and the sim's calculator cannot set them, so the app's replay never performed it). The run names each, and what it left out. An entry for a node the package does not have or the map does not keep, a node also under guarded or kinds, a control that is not a switch or has no state var or no positions, and a click code that fails those checks are errors.",
-    "keep_without_node: list of nodes kept although neither cockpit model has a node of that name. The generator reads the node names of the package's two interior models, BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf (it stops when either is missing), and leaves out every control the other rules keep whose node is in neither: a switch the cockpit does not have is noise to a pilot who cannot find it, and the run names each one. A control one model alone has says which, with (PW) or (RR) at the end of its label unless the label already does (L Fuel Control (PW)); a label that names the wrong variant stops the run. An entry here keeps a control BlueBird's published list proves real, and the run names each; it stays empty unless that list proves one. An entry for a node the package does not have, for a node a model has (it does nothing), for a node also in exclude_nodes or for one the rules leave out for another reason is an error, and so is a guarded or include_nodes entry for a node no cockpit has that this list does not keep. A direct_write entry for one stops the run until it is removed, and a kinds, labels or positions entry for one changes nothing and is only reported.",
+    "levers: node -> {state_var, positions}: a lever the rules leave out and the pilot needs (the gear lever and the flap lever: drag handles, which the extractor reads as a 'lever' with no click code a pick could replay). BlueBird publishes the state var of each with its detents ('Write a detent position'), so the entry gives the state var and the positions with their values, [{value, label}] in the order of the lever's travel (a lever's row names no values a list of names could be laid onto: the flap lever runs 0..150), and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each lever it takes in. The label comes from labels, the place from the banner table or a node_panels rule, and a lever under an excluded banner (the flap lever) needs include_nodes as well, which keeps the banner's other controls out: an entry never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the lever's whole component reads or writes (the extractor keeps that per row as _component_vars), and each position must lie in the range the lever's own code clamps to, where the extractor found one. An entry for a node the package does not have, for a node the rules keep or leave out for another reason than being a lever, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under guarded, direct_write, kinds or positions, for a state var the lever's component never touches and for a position outside the lever's range is an error.",
+    "keep_without_node: list of nodes kept although neither cockpit model has a node of that name. The generator reads the node names of the package's two interior models, BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf (it stops when either is missing), and leaves out every control the other rules keep whose node is in neither: a switch the cockpit does not have is noise to a pilot who cannot find it, and the run names each one. A control one model alone has says which, with (PW) or (RR) at the end of its label unless the label already does (L Fuel Control (PW)); a label that names the wrong variant stops the run. An entry here keeps a control BlueBird's published list proves real, and the run names each; it stays empty unless that list proves one. An entry for a node the package does not have, for a node a model has (it does nothing), for a node also in exclude_nodes or for one the rules leave out for another reason is an error, and so is a guarded, levers or include_nodes entry for a node no cockpit has that this list does not keep. A direct_write entry for one stops the run until it is removed, and a kinds, labels or positions entry for one changes nothing and is only reported.",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
     "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 OFF, 5 CONT and 6 FLT are BlueBird's names (its simvar list, cited below); unmeasured in the sim.",
     "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule.",
-    "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in). All sit in Pedestal / Control stand, in file order.",
+    "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in); BBS757_lever_flaps (banner RIGHT WINDOW RAIN EFFECTS: the flap lever, which the rules still drop as a lever, so it is under levers as well). All sit in Pedestal / Control stand, in the order control_order gives.",
     "EVIDENCE for the control stand and the position names below (2026-10-25). preset = the nine vendor panel states in Data/panel_states/*.snap (cold and dark, turnaround, before start, ready for taxi, ready for takeoff, after takeoff, cruise, approach, final approach; positional arrays, but most knob states also sit in them as named L:var pairs). manual = BlueBird's v1.01 User Procedures and Complete Flight Guide. measured = read live in the sim (docs/b757/evidence/live-findings.md). unmeasured = no live read: the name rests on the sources given and goes on the in-sim plan. Names are the panel's legends as printed (capitals), as the brief spells them; a list entry 'Position N' is a position nothing names.",
     "Position names from BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21), read 2026-10-25.",
     "PLAN 02 TASK 1 (2026-10-26): positions named from that list alone, unmeasured in the sim and with no preset or manual evidence of their own (the controls whose other notes cite the list have such evidence besides): B757_CABIN_CEILING (0 Off, 1 33%, 2 66%, 3 100%), B757_CABIN_WINDOW and B757_CABIN_ENTRY (0 Off, 1 50%, 2 100%), B757_OVHD_WARNING_IND_SWITCH (0 DIM, 11 BRT: its click code writes those two values, which the extractor takes as its positions), B757_MAIN_M_Gau_STBY_GYRO_SELECTOR (0 OFF, 1 ILS, 2 BCRS), B757_ECAM_LRAUTO_KNOB (0 L, 1 AUTO, 2 R) and B757_VC_P61_SWITCH_2, the Flight Recorder (0 ON, 1 AUTO, 2 TEST).",
@@ -33,6 +34,7 @@
     "PLAN 02 TASK 4 (2026-10-26, ruling R10): B757_MAIN_CHRONO_ET_SWITCH and B757_MAIN_CHRONO_ET_SWITCH_FO are direct_write: the map holds none of their click code and the app writes L:BBS_CHRONO_LEFT_SWITCH (_FO) to the picked value. Read from the vendor's code (BBS_752_BASE_INTERIOR.xml:26725-26735 and 28542-28552), unmeasured in the sim: the clockwise code lowers the value one step, '(L:BBS_CHRONO_LEFT_SWITCH, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_LEFT_SWITCH, enum)', so 3 goes to 2 to 1 to 0, and the anticlockwise code raises it but jumps HOLD straight to RESET, '(L:BBS_CHRONO_LEFT_SWITCH, enum) 1 == if{ 3 (>L:BBS_CHRONO_LEFT_SWITCH, enum) } els{ (L:BBS_CHRONO_LEFT_SWITCH, enum) ++ d 3 > if{ 3 } (>L:BBS_CHRONO_LEFT_SWITCH, enum) }', so 0 goes to 1 to 3. The positions are 0 RUN, 1 HOLD and 3 RESET, with 2 unused (BlueBird's list; task 1 left it out). The map's cw was that clockwise code, so the app's step up lowered the value; swapping cw and ccw would fix the direction and not the steps: a step down from RESET still lands on 2, which is no position, and the app then refuses every later pick. The vendor code writes nothing but that one L:var (the generator checks that on every run), so writing the picked value directly loses nothing, and it also takes a pick from a lever a cockpit click has left on 2. The positions stay checked against that code: a list that names RESET at 2 still stops the run.",
     "PLAN 02 TASK 5 (2026-10-26, ruling R65): the map holds only controls the cockpit has. Read from the package's two interior models, BBS_752_PW_INTERIOR.gltf (3104 nodes) and BBS_752_RR_INTERIOR.gltf (3116 nodes, 3094 of them in both), by node name, whole and as written (no node of either has one of the names below in another case). Of the 425 controls the other rules kept, 395 have a node in both models, 2 in the PW model only, 6 in the RR model only and 22 in neither. In the PW model only: BBS_fuelcut_PW1 and BBS_fuelcut_PW2, whose labels already end (PW). In the RR model only: BBS_fuelcut_RR1 and BBS_fuelcut_RR2, whose labels already end (RR); B757_OVHD_L_ELEC-ENG-CONT_BUTTON and B757_OVHD_R_ELEC-ENG-CONT_BUTTON, which now read L ELEC ENG Cont (RR) and R ELEC ENG Cont (RR); and their guards B757_GAURD_1_SWITCH and B757_GAURD_2_SWITCH, Elec Eng Cont 1 Guard (RR) and Elec Eng Cont 2 Guard (RR). In neither, so the map leaves them out: B757_EICAS_COMPUTER_KNOB (a second EICAS Computer knob: the EICAS computer switch is B757_ECAM_LRAUTO_KNOB); the five switches of the ADF panel, B757_PED_ADF_TONE_SWITCH, B757_PED_ADF_L_TEST_SWITCH, B757_PED_ADF_R_TEST_SWITCH, B757_PED_ADF_L_SWITCH and B757_PED_ADF_R_SWITCH; B757_PED_WX_R_TEST_BUTTON (the left test button has a node); the six P6 display buttons, B757_P6_DISPLAY_1_EADI_BUTTON, B757_P6_DISPLAY_1_EHSI_BUTTON, B757_P6_DISPLAY_1_EICAS_BUTTON, B757_P6_DISPLAY_2_EICAS_BUTTON, B757_P6_DISPLAY_2_EADI_BUTTON and B757_P6_DISPLAY_2_EHSI_BUTTON; the five P6 event buttons, B757_P6_EVENT_AUTO_TEST_SWITCH_BUTTON, B757_P6_EVENT_MAN_TEST_SWITCH_BUTTON, B757_P6_EVENT_MAIN_TEST_SWITCH_BUTTON, B757_P6_EVENT_REC_TEST_SWITCH_BUTTON and B757_P6_EVENT_ERASE_TEST_SWITCH_BUTTON; and B757_GAURD_13_SWITCH, B757_GAURD_14_SWITCH, B757_GAURD_15_SWITCH and B757_P61_PANEL_SWITCH_GAURD. That is the 28 controls without a node in the PW cockpit and the 24 in the RR one that docs/b757/spec-gaps.md 3.7 counts. The ADF panel held only those five switches (its tuning knobs have nodes, and are dropped as infinite knobs), so the panel is gone and its node_panels rule and its panel_order entry went with it. The six guarded switches and guards of plan 02 task 3 are in both models, and stay. keep_without_node stays empty: BlueBird's list (support.bluebirdsim.com/docs/simvars, read 2026-10-26) has a row for 20 of the 22, but each is a variable the XML declares, and a row does not say the control is in the cockpit. For the ADF L and R switches (0 ADF, 1 ANT, 2 OFF) it says 'Model selector position. Functional system behavior depends on its binding'; for the ADF tone and test switches and the P6 buttons 'Maintained state'; for the guards 13 to 15 (P61 left, center and right button guard) and the P61 panel cover that the XML maps the state to animation endpoints. It has no row for B757_EICAS_COMPUTER_KNOB or B757_PED_WX_R_TEST_BUTTON. Read from the package's files, not the sim.",
     "PLAN 02 TASK 6 (2026-10-26, ruling R12): B757_OVHD_FLT-DK-DOOR_SWITCH is direct_write: the map holds none of its click code and the app writes L:B757_OVHD_FLT_DK_DOOR_SWITCH to the picked value, 0 Unlocked, 1 Auto, 2 Deny (positions unchanged: the vendor's tips UNLOCKED, AUTO and DENY). The replay test of plan 02 task 6 found that its click code is absolute and no step: read from BBS_752_BASE_INTERIOR.xml:6698-6705, unmeasured in the sim, the clockwise code is '2 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)' and the anticlockwise code '0 (>L:B757_OVHD_FLT_DK_DOOR_SWITCH) (E:ABSOLUTE TIME, seconds) (>O:UpdateTime)', so a step to Auto from Unlocked or from Deny landed on the other end, and the other four picks landed where they aim. The lever is spring-loaded: the component's own update (XML:6684-6687, 1 Hz) writes 1 once (E:ABSOLUTE TIME) - (O:UpdateTime) > 1, so Unlocked and Deny are momentary and the lever is back on Auto within a second or so after a click, and after a direct write at the update's next tick. The click writes the state var and an O:var and nothing else, and leaving the O: write out loses nothing the app could do: O:vars belong to the component and the sim's calculator cannot set them (docs/b757/spec-gaps.md 3.7 #6: the fire handle relock runs on O:vars the calculator cannot set), so the app's replay of this click never performed (>O:UpdateTime) either. For that reason the generator's direct_write check lets an O: write through, and it still refuses another L:var, a K: or an H: event, a gate note, a row with no click code, a kinds entry and a control that is not a switch. How the app presents the lever as a spring-loaded control (a momentary pick that rests on Auto) is plan 12's.",
+    "PLAN 02 TASK 7 (2026-10-26): the gear lever and the flap lever are under levers, read from BBS_752_BASE_INTERIOR.xml (cited as XML:line) and BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21, read 2026-10-26). Both are drag handles the extractor reads as a 'lever', which the rules leave out, and both are in the PW and the RR cockpit model. The gear lever is B757_MAIN_Landing_Gear_Y, the node the pilot grabs and pulls (the component Gear_Handle_Interact, XML:25038-25096; label Gear Lever; the Forward panel's Landing gear panel, first on it). Its state var is L:B757_GEAR_HANDLE_POS: the component's Update sets it once from the sim's gear handle ('(A:GEAR HANDLE POSITION,bool) (>L:B757_GEAR_HANDLE_POS,number)', XML:25042) and the lever's rotation animation shows it ('(L:B757_GEAR_HANDLE_POS,number) 20 *' over 20 frames, XML:25052-25053, so 0 to 1 is the whole travel and the half is frame 10). The node's own code never mentions it, which is why the extractor keeps what the whole component reads and writes (_component_vars) and the generator checks the state var against that: the node's animation is the pull, L:B757_GEAR_HANDLE_PULL (XML:25062), and its drag writes the grab, the pull and L:B757_GEAR_HANDLE_POS_DELTA (XML:25074-25094), only while airborne ('(A:SIM ON GROUND,bool) 0 == if{ ...', XML:25093). BlueBird's list: B757_GEAR_HANDLE_POS 'Gear handle position', read and write, '0 = UP; 0.5 = OFF; 1 = DOWN', 'Write a detent position. Gear lock and aircraft logic apply.'; its delta row says 'For hardware, use B757_GEAR_HANDLE_POS detents.' So the positions are 0 UP, 0.5 OFF and 1 DOWN, written straight to the state var. The OFF detent is the one the simulator's gear keys cannot select, and the after-takeoff checklist's 'gear UP, then OFF' needs it. The flap lever is BBS757_lever_flaps (the component B757_CUSTOM_FLAP_HANDLE, XML:32844-32907, one drag template at XML:32845; label Flap Lever). Its banner, RIGHT WINDOW RAIN EFFECTS, is excluded, so it is under include_nodes too, and a node_panels rule puts it on the Pedestal's Control stand, right after Speedbrake Up. Its state var is L:B757_FC_FLAP_LEVER: the drag writes it ('150 (M:DragPercent) * (>L:B757_FC_FLAP_LEVER,number)', XML:32850, and the axis codes step it with 1 - 0 max and 1 + 150 min, XML:32858 and XML:32861) and the animation reads it (XML:32855, over 150 frames), so the lever runs 0 to 150, which the generator checks every position against. BlueBird's list: B757_FC_FLAP_LEVER 'Flight control flap lever', read and write, '0 = UP; 17 = 1; 41 = 5; 67 = 15; 95 = 20; 125 = 25; 150 = 30', 'Write a detent position; the aircraft normalizes the handle to its detent.' measured (docs/b757/evidence/live-findings.md, session 6): K:FLAPS_INCR moved the stock FLAPS HANDLE INDEX to 1 and L:B757_FC_FLAP_LEVER from 0 to 17 (surfaces stayed up, no hydraulics), K:FLAPS_UP returned both to 0. unmeasured in the sim: a write of any other detent of either lever and the gear lever's OFF, to be tried airborne after takeoff only (the gear lever's UP is never sent on the ground, by a test or by a sweep).",
     "BBS757_PEDESTAL_Park_Brake_Lever (L:B757_FC_PARK_BRAKE): 0 Released, 1 Set. A toggle whose click flips the var. measured (session 6): K:PARKING_BRAKES left the var at 1 while the stock BRAKE PARKING POSITION read 0. preset: 1 in cold and dark, before start, ready for taxi and ready for takeoff; 0 in turnaround and the four airborne states. unmeasured: releasing it with the lever click while PARKING BRAKE MODE is REALISTIC (that setting wants full pedal braking).",
     "BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK write 0, 10 and 100 to L:B757_FC_SPOILER_LEVER and keep no state of their own (buttons with a press only, replayed verbatim). measured (session 6): 10 is ARMED, 0 is down (K:SPOILERS_ARM_TOGGLE); all nine presets hold 0. unmeasured: 100 for UP (the click code only).",
     "ENGINE_Switch_ATDisc_1 is the left TO/GA button: its press writes L:GO_AROUND_PADDLE1 and fires K:AUTO_THROTTLE_TO_GA, its release clears the var, all replayed verbatim. B757_AT_DISC_1 is the A/T disconnect: press writes L:B757_AT_DISC_1 1, release 0. unmeasured in flight.",
@@ -103,7 +105,8 @@
     "BBS757_SPOILERARMED_CLICK",
     "BBS757_SPOILERUP_CLICK",
     "ENGINE_Switch_ATDisc_1",
-    "B757_AT_DISC_1"
+    "B757_AT_DISC_1",
+    "BBS757_lever_flaps"
   ],
   "panels": {
     "YOKES + RUDDER + TILLER SYSTEM": {
@@ -380,6 +383,11 @@
       "prefix": "B757_AT_DISC_1",
       "panel": "Control stand",
       "section": "Pedestal"
+    },
+    {
+      "prefix": "BBS757_lever_flaps",
+      "panel": "Control stand",
+      "section": "Pedestal"
     }
   ],
   "panel_order": {
@@ -576,8 +584,12 @@
       "BBS757_SPOILERARMED_CLICK",
       "BBS757_SPOILERDOWN_CLICK",
       "BBS757_SPOILERUP_CLICK",
+      "BBS757_lever_flaps",
       "ENGINE_Switch_ATDisc_1",
       "B757_AT_DISC_1"
+    ],
+    "Landing gear": [
+      "B757_MAIN_Landing_Gear_Y"
     ],
     "Engines": [
       "B757_OVHD_ENG_START_SWITCH",
@@ -747,7 +759,9 @@
     "BBS757_SPOILERARMED_CLICK": "Speedbrake Armed",
     "BBS757_SPOILERUP_CLICK": "Speedbrake Up",
     "ENGINE_Switch_ATDisc_1": "TO/GA",
-    "B757_AT_DISC_1": "A/T Disconnect"
+    "B757_AT_DISC_1": "A/T Disconnect",
+    "B757_MAIN_Landing_Gear_Y": "Gear Lever",
+    "BBS757_lever_flaps": "Flap Lever"
   },
   "positions": {
     "B757_OVHD_APU_SWITCH": [
@@ -1177,6 +1191,58 @@
       "guard": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
       "guard_closed": 0,
       "close_sets": 0
+    }
+  },
+  "levers": {
+    "B757_MAIN_Landing_Gear_Y": {
+      "state_var": "B757_GEAR_HANDLE_POS",
+      "positions": [
+        {
+          "value": 0,
+          "label": "UP"
+        },
+        {
+          "value": 0.5,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "DOWN"
+        }
+      ]
+    },
+    "BBS757_lever_flaps": {
+      "state_var": "B757_FC_FLAP_LEVER",
+      "positions": [
+        {
+          "value": 0,
+          "label": "UP"
+        },
+        {
+          "value": 17,
+          "label": "1"
+        },
+        {
+          "value": 41,
+          "label": "5"
+        },
+        {
+          "value": 67,
+          "label": "15"
+        },
+        {
+          "value": 95,
+          "label": "20"
+        },
+        {
+          "value": 125,
+          "label": "25"
+        },
+        {
+          "value": 150,
+          "label": "30"
+        }
+      ]
     }
   },
   "direct_write": [

@@ -112,16 +112,18 @@ public class Bbs757ControlMapTests
         c.Positions.Select(p => (p.Value, p.Label)).ToArray();
 
     [Fact]
-    public void The_control_stand_holds_exactly_the_six_controls_taken_in_by_node()
+    public void The_control_stand_holds_the_six_controls_taken_in_by_node_and_the_flap_lever()
     {
         var stand = Map.Controls.Where(c => c.Panel == "Control stand").ToList();
 
         Assert.All(stand, c => Assert.Equal("Pedestal", c.Section));
+        // The six taken in from the excluded banners by node, and the flap lever (plan 02 task 7: a lever the rules leave
+        // out, built from the generator's levers key; its banner is one of the excluded ones).
         Assert.Equal(
             new[]
             {
                 "B757_AT_DISC_1", "BBS757_PEDESTAL_Park_Brake_Lever", "BBS757_SPOILERARMED_CLICK",
-                "BBS757_SPOILERDOWN_CLICK", "BBS757_SPOILERUP_CLICK", "ENGINE_Switch_ATDisc_1",
+                "BBS757_SPOILERDOWN_CLICK", "BBS757_SPOILERUP_CLICK", "BBS757_lever_flaps", "ENGINE_Switch_ATDisc_1",
             },
             stand.Select(c => c.Node).OrderBy(n => n, StringComparer.Ordinal));
         // The banners stay excluded: the right-hand TO/GA and A/T disconnect and the speed brake lever
@@ -263,7 +265,9 @@ public class Bbs757ControlMapTests
     [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont (RR)|R ELEC ENG Cont (RR)")]
     [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|Speed Intervene|Bank Limit|BCRS 1")]
     [InlineData("Main panel switches", "Autobrake|Takeoff Check|TOGA|CLB|CON|CRZ|TMSP 1|TMSP 2|HDG Ref|Cancel|Recall")]
-    [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
+    // Plan 02 task 7: the flap lever right after Speedbrake Up, and the gear lever first on the Landing gear panel.
+    [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|Flap Lever|TO/GA|A/T Disconnect")]
+    [InlineData("Landing gear", "Gear Lever")]
     [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
     [InlineData("TCAS and transponder", "TCAS Mode")]
     [InlineData("Captain EFIS", "ND Mode|ND Range")]
@@ -282,6 +286,7 @@ public class Bbs757ControlMapTests
     [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Mode Knob Test")]
     [InlineData("Captain EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
     [InlineData("First officer EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
+    [InlineData("Landing gear", 1, "Gear Lock Override")]
     [InlineData("Main panel switches", 11, "L Flt Dir|L Flt Nav|L Foot Heaters|L Shoulder Heaters|L EFI|L IRS|L Airdata|L Brake Reserve|L Leading Edge|L Trailing Edge|L Flap Ovrd|G/S Inhibit|L Gear Ovrd|L Terr Ovrd|Altn Gear Guard|Altn Gear|Stdby EICAS|Alternate Flaps Selector|Flap Override Guard|Gear Override Guard|Terrain Override Guard|R Flt Dir|R Flt Nav|R Foot Heaters|R Shoulder Heaters|R EFI|R IRS|R Airdata")]
     public void The_controls_an_order_does_not_list_follow_in_cockpit_order(string panel, int listed, string rest)
     {
@@ -789,6 +794,74 @@ public class Bbs757ControlMapTests
 
         Assert.Equal(expected.Order(StringComparer.Ordinal), tagged.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(Map.Controls, c => Regex.IsMatch(c.Label, @"\((PW|RR)\).*\((PW|RR)\)"));
+    }
+
+    // ---- Plan 02, task 7: the gear lever with its OFF detent and the flap lever ----
+
+    [Fact]
+    public void Gear_and_flap_levers_are_on_the_panels()
+    {
+        // The simulator's gear keys cannot select the OFF detent, and the after-takeoff checklist's "gear UP, then OFF" needs
+        // it. BlueBird publishes each lever's state var with its detents and says to write one ("Write a detent position",
+        // support.bluebirdsim.com/docs/simvars), so both are switches with no click code of their own: the generic path
+        // writes the state var to the picked detent (ruling R7). This only builds the writes; nothing here is sent to a sim.
+        Bbs757Control gear = Find("B757_MAIN_Landing_Gear_Y");
+        Bbs757Control flaps = Find("BBS757_lever_flaps");
+
+        Assert.Equal(("Gear Lever", "Forward panel", "Landing gear", Bbs757Kinds.Switch, "B757_GEAR_HANDLE_POS"),
+            (gear.Label, gear.Section, gear.Panel, gear.Kind, gear.StateVar));
+        Assert.Equal(new[] { (0d, "UP"), (0.5, "OFF"), (1d, "DOWN") }, Pairs(gear));
+        Assert.Equal(("Flap Lever", "Pedestal", "Control stand", Bbs757Kinds.Switch, "B757_FC_FLAP_LEVER"),
+            (flaps.Label, flaps.Section, flaps.Panel, flaps.Kind, flaps.StateVar));
+        Assert.Equal(
+            new[] { (0d, "UP"), (17d, "1"), (41d, "5"), (67d, "15"), (95d, "20"), (125d, "25"), (150d, "30") },
+            Pairs(flaps));
+        Assert.All(new[] { gear, flaps }, c =>
+        {
+            Assert.Null(c.Press);
+            Assert.Null(c.Release);
+            Assert.Null(c.Cw);
+            Assert.Null(c.Ccw);
+            Assert.Equal(0, c.HoldMs);
+            Assert.Null(c.Guard);
+            Assert.False(Bbs757Write.IsMomentary(c));
+            Assert.True(Bbs757Write.HasReadableState(c));
+        });
+
+        // Their places: the gear lever is the first control of the Landing gear panel (the gear lock override follows it, as it
+        // came first before), and the flap lever is the one right after Speedbrake Up on the Pedestal's Control stand.
+        Assert.Equal(new[] { "Gear Lever", "Gear Lock Override" },
+            Map.Controls.Where(c => c.Panel == "Landing gear").Select(c => c.Label));
+        var stand = Map.Controls.Where(c => c.Panel == "Control stand").Select(c => c.Label).ToList();
+        Assert.Equal("Flap Lever", stand[stand.IndexOf("Speedbrake Up") + 1]);
+
+        IReadOnlyList<string> Writes(Bbs757Control c, double? current, double target)
+        {
+            Bbs757WritePlan plan = Bbs757Write.ToPosition(c, current, target);
+            Assert.Equal(Bbs757WriteOutcome.Writes, plan.Outcome);
+            return plan.Calls;
+        }
+
+        // One absolute write of the picked detent. The checklist's path: gear UP, then OFF (0.5, a value no gear key sets).
+        Assert.Equal(new[] { "0.5 (>L:B757_GEAR_HANDLE_POS)" }, Writes(gear, 0, 0.5));
+        Assert.Equal(new[] { "1 (>L:B757_GEAR_HANDLE_POS)" }, Writes(gear, 0.5, 1));
+        Assert.Equal(new[] { "0.5 (>L:B757_GEAR_HANDLE_POS)" }, Writes(gear, 0.73, 0.5));   // read between detents: still written
+        Assert.Equal(new[] { "41 (>L:B757_FC_FLAP_LEVER)" }, Writes(flaps, 0, 41));         // UP to 5
+        Assert.Equal(new[] { "150 (>L:B757_FC_FLAP_LEVER)" }, Writes(flaps, 41, 150));      // 5 to 30
+        Assert.Equal(new[] { "17 (>L:B757_FC_FLAP_LEVER)" }, Writes(flaps, 23.5, 17));      // read between detents: still written
+        // The same writes under a comma-decimal culture (CI runs under en-US): the OFF detent must stay "0.5", not "0,5".
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+        {
+            Assert.Equal(new[] { "0.5 (>L:B757_GEAR_HANDLE_POS)" }, TestCulture.Run(culture, () => Writes(gear, 0, 0.5)));
+            Assert.Equal(new[] { "0.5 (>L:B757_GEAR_HANDLE_POS)" }, TestCulture.Run(culture, () => Writes(gear, 1, 0.5)));
+            Assert.Equal(new[] { "41 (>L:B757_FC_FLAP_LEVER)" }, TestCulture.Run(culture, () => Writes(flaps, 0, 41)));
+        }
+        // A lever already at its detent is left alone, and a value that is no detent is never picked.
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(gear, 0.5, 0.5).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(flaps, 95, 95).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(gear, 0, 0.75).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(flaps, 0, 20).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(gear, null, 0.5).Outcome);   // nothing delivered
     }
 
     [Fact]

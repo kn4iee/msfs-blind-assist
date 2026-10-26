@@ -32,11 +32,14 @@ import generate_b757_map as g  # noqa: E402
 import rpn_replay  # noqa: E402
 
 def row(node="B757_OVHD_TEST_BUTTON", kind="toggle", panel="ELECTRICAL PANEL", line=1, positions="2",
-        state=None, tips=None, left=None, release=None, cw=None, ccw=None, other=None, scope=None, file="x.xml"):
-    """One extractor row, the parts the generator reads. Click codes are given as plain strings."""
+        state=None, tips=None, left=None, release=None, cw=None, ccw=None, other=None, scope=None, file="x.xml",
+        component=None):
+    """One extractor row, the parts the generator reads. Click codes are given as plain strings. `component` is what the
+    extractor keeps of the whole component the control sits in, {"reads": [L:var names], "writes": [...]}: only a row that
+    curation's 'levers' names needs it."""
     def items(code):
         return [("", code)] if code else []
-    return {
+    r = {
         "file": file, "line": line, "panel": panel, "node": node, "kind": kind, "positions": positions,
         "_state": ["L:" + node] if state is None else state,
         "_tips": tips or [],
@@ -44,6 +47,9 @@ def row(node="B757_OVHD_TEST_BUTTON", kind="toggle", panel="ELECTRICAL PANEL", l
                     "other": list(other or [])},
         "_scope": scope or {},
     }
+    if component is not None:
+        r["_component_vars"] = component
+    return r
 
 
 CURATION = {
@@ -58,6 +64,7 @@ CURATION = {
     "positions": {},
     "kinds": {},
     "guarded": {},
+    "levers": {},
     "direct_write": [],
     "keep_without_node": [],
     "spelling": {"CENTRE": "Center"},
@@ -69,6 +76,21 @@ def curation(**changes):
     c = copy.deepcopy(CURATION)
     c.update(changes)
     return c
+
+
+def shipped_for(nodes, **changes):
+    """The shipped curation cut down to `nodes`: a table entry for a node the package lacks is an error, so each table keeps
+    only what the rows have (an order only when every node it lists is there too)."""
+    cur = g.load_curation(g.DEFAULT_CURATION)
+    here = set(nodes)
+    for table in ("labels", "positions", "kinds", "guarded", "levers"):
+        cur[table] = {n: v for n, v in cur[table].items() if n in here}
+    for table in ("direct_write", "exclude_nodes", "include_nodes", "keep_without_node"):
+        cur[table] = [n for n in cur[table] if n in here]
+    cur["panel_order"] = {}
+    cur["control_order"] = {p: ns for p, ns in cur["control_order"].items() if set(ns) <= here}
+    cur.update(changes)
+    return cur
 
 
 # The APU fire handle writes 1 (pulled) when unlocked or on fire and 0 otherwise: a gate, not a flip, so the extractor
@@ -907,7 +929,7 @@ class Guarded(unittest.TestCase):
         """The shipped curation, cut down to the nodes of rows(): a table entry for a node the package lacks is an error."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(self.rows())
-        for table in ("labels", "positions", "kinds", "guarded"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1167,7 +1189,7 @@ class DirectWrite(unittest.TestCase):
         """The shipped curation, cut down to the nodes of `rows`: a table entry for a node the package lacks is an error."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(rows)
-        for table in ("labels", "positions", "kinds", "guarded"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1438,6 +1460,272 @@ class DirectWrite(unittest.TestCase):
                 self.build(stab, guarded={}, direct_write=[self.ET, stab[1]["node"]])
 
 
+class Levers(unittest.TestCase):
+    """Plan 02, task 7: curation's 'levers'. The gear lever and the flap lever are drag handles: the extractor reads each as a
+    "lever", which the rules leave out (no click code a pick could replay), and the pilot needs both. The after-takeoff
+    checklist's "gear UP, then OFF" needs the OFF detent the simulator's gear keys cannot select. BlueBird publishes each
+    lever's state var with its detents ("Write a detent position", support.bluebirdsim.com/docs/simvars), so an entry gives the
+    state var and the positions with their values, and the control is built as a switch with no click code: the app writes the
+    state var to the picked position, as for any switch with none (Bbs757Write.ToPosition). Nothing here sends anything to a
+    sim, the gear lever's UP least of all. The rows have the shape the extractor gives the vendor's own controls
+    (BBS_752_BASE_INTERIOR.xml: the gear lever's component at 25038, the flap lever's at 32844) and are converted with the
+    SHIPPED curation."""
+    GEAR, GEAR_VAR = "B757_MAIN_Landing_Gear_Y", "B757_GEAR_HANDLE_POS"
+    FLAP, FLAP_VAR = "BBS757_lever_flaps", "B757_FC_FLAP_LEVER"
+    LOCK_OVRD = "B757_MAIN_LOCK_OVRD_SWITCH"
+    GEAR_POSITIONS = [{"value": 0, "label": "UP"}, {"value": 0.5, "label": "OFF"}, {"value": 1, "label": "DOWN"}]
+    FLAP_POSITIONS = [{"value": v, "label": l} for v, l in
+                      ((0, "UP"), (17, "1"), (41, "5"), (67, "15"), (95, "20"), (125, "25"), (150, "30"))]
+    CLICK_FIELDS = ("press", "release", "cw", "ccw")
+    LEVER_DRAG = ("DRAG_CODE",
+                  "(A:SIM ON GROUND,bool) 0 == if{ (O:_Delta,number) 8 * (>L:B757_GEAR_HANDLE_POS_DELTA,number) }")
+    GRAB = "0 (>L:B757_GEAR_HANDLE_GRAB,bool) 0 (>L:B757_GEAR_HANDLE_PULL,bool) 0 (>L:B757_GEAR_HANDLE_POS_DELTA,number)"
+
+    def gear_row(self):
+        """The gear lever as the extractor reads it: the node the pilot grabs, whose own animation is the pull of the handle
+        (L:B757_GEAR_HANDLE_PULL) and whose own code writes the grab, the pull and the drag delta. B757_GEAR_HANDLE_POS is in
+        none of that: the component's other animation (the lever's rotation) reads it and its Update sets it."""
+        return row(node=self.GEAR, kind="lever", positions="", panel="LANDING GEAR", line=25069,
+                   state=["L:B757_GEAR_HANDLE_PULL"], release=self.GRAB,
+                   other=[self.LEVER_DRAG,
+                          ("LOCK_CODE", "0 (>O:_Delta,number) 1 (>L:B757_GEAR_HANDLE_GRAB,bool) "
+                                        "1 (>L:B757_GEAR_HANDLE_PULL,bool) 0 (>L:B757_GEAR_HANDLE_POS_DELTA,number)"),
+                          ("UNLOCK_CODE", self.GRAB)],
+                   component={"reads": [self.GEAR_VAR, "B757_GEAR_HANDLE_PULL"],
+                              "writes": [self.GEAR_VAR, "B757_GEAR_HANDLE_POS_DELTA", "B757_GEAR_HANDLE_GRAB",
+                                         "B757_GEAR_HANDLE_PULL"]})
+
+    def flap_row(self):
+        """The flap lever as the extractor reads it: one drag template whose animation reads the state var and whose drag and
+        axis codes write it, under a banner curation leaves out (RIGHT WINDOW RAIN EFFECTS)."""
+        var = self.FLAP_VAR
+        return row(node=self.FLAP, kind="lever", positions="range 0..150 step 1", panel="RIGHT WINDOW RAIN EFFECTS",
+                   line=32845, state=["L:" + var], scope={"TOOLTIPID": "Flap Lever"},
+                   other=[("DRAG_CODE", f"150 (M:DragPercent) * (>L:{var},number)"),
+                          ("NEGATIVE_AXIS_CODE", f"(L:{var},number) 1 + 150 min (>L:{var},number)"),
+                          ("POSITIVE_AXIS_CODE", f"(L:{var},number) 1 - 0 max (>L:{var},number)")],
+                   component={"reads": [var], "writes": [var]})
+
+    def lock_override_row(self):
+        """The gear lock override toggle, the one control the Landing gear panel has without the lever (cockpit order puts
+        it first: its line is before the lever's)."""
+        var = "BBS757_GEAR_LOCK_OVRD_BUTTON"
+        return row(node=self.LOCK_OVRD, kind="toggle", panel="LANDING GEAR", line=25026, state=["L:" + var],
+                   left=f"(L:{var}, bool) ! (>L:{var}, bool)")
+
+    def stand_rows(self):
+        """The six controls of the Control stand as the extractor reads them (all under excluded banners), in cockpit order."""
+        flip = "(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)"
+        rows = {"BBS757_PEDESTAL_Park_Brake_Lever": row(
+            node="BBS757_PEDESTAL_Park_Brake_Lever", panel="RIGHT WINDOW RAIN EFFECTS", line=32700,
+            state=["L:B757_FC_PARK_BRAKE"], left=flip)}
+        for i, (node, value) in enumerate((("BBS757_SPOILERDOWN_CLICK", 0), ("BBS757_SPOILERARMED_CLICK", 10),
+                                           ("BBS757_SPOILERUP_CLICK", 100))):
+            rows[node] = row(node=node, kind="momentary button", positions="-", panel="RIGHT WINDOW RAIN EFFECTS",
+                             line=32800 + i, state=[], left=f"{value} (>L:B757_FC_SPOILER_LEVER, number)")
+        rows["ENGINE_Switch_ATDisc_1"] = row(
+            node="ENGINE_Switch_ATDisc_1", kind="momentary button", positions="-", panel="THROTTLES MAIN", line=33000,
+            state=["L:GO_AROUND_PADDLE1"], left="1 (>L:GO_AROUND_PADDLE1, bool) 1 (>K:AUTO_THROTTLE_TO_GA)",
+            release="0 (>L:GO_AROUND_PADDLE1, bool)")
+        rows["B757_AT_DISC_1"] = row(
+            node="B757_AT_DISC_1", kind="momentary button", positions="-", panel="THROTTLES MAIN", line=33010,
+            state=["L:B757_AT_DISC_1"], left="1 (>L:B757_AT_DISC_1, bool)", release="0 (>L:B757_AT_DISC_1, bool)")
+        return rows
+
+    def rows(self):
+        return {self.LOCK_OVRD: self.lock_override_row(), self.GEAR: self.gear_row(), self.FLAP: self.flap_row()}
+
+    def build(self, rows=None, cockpit=None, **changes):
+        rows = rows or self.rows()
+        return g.build_map(list(rows.values()), shipped_for(rows, **changes), "pkg", "1", cockpit)
+
+    def entry(self, node, **changes):
+        """The shipped 'levers' table with some fields of one node's entry changed: whatever a test changes is the one thing
+        that is wrong with it."""
+        table = shipped_for(self.rows())["levers"]
+        table[node] = dict(table[node], **changes)
+        return table
+
+    def test_the_gear_and_flap_levers_are_switches_with_no_click_code(self):
+        rows, c = self.rows(), shipped_for(self.rows())
+
+        def switch(node, section, panel, label, state_var, positions):
+            return {"node": node, "section": section, "panel": panel, "label": label, "kind": "switch",
+                    "state_var": state_var, "positions": positions,
+                    "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None}
+
+        expected = {
+            self.GEAR: switch(self.GEAR, "Forward panel", "Landing gear", "Gear Lever", self.GEAR_VAR, self.GEAR_POSITIONS),
+            self.FLAP: switch(self.FLAP, "Pedestal", "Control stand", "Flap Lever", self.FLAP_VAR, self.FLAP_POSITIONS),
+        }
+        for node, want in expected.items():
+            with self.subTest(node=node):
+                control, why, slips = g.convert_row(rows[node], c)
+
+                self.assertIsNone(why)
+                self.assertEqual(control, want)
+                self.assertEqual(list(control), list(want), "the keys keep the JSON order")
+                self.assertEqual([control[f] for f in self.CLICK_FIELDS], [None] * 4,
+                                 "none of the vendor's drag code is replayed: the app writes the state var")
+                self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
+
+    def test_without_the_entry_the_rules_leave_a_lever_out_and_nothing_else_takes_it_in(self):
+        rows, c = self.rows(), shipped_for(self.rows())
+        bare = dict(c, levers={})
+
+        self.assertEqual(g.drop_reason(rows[self.GEAR], c), "lever")
+        self.assertEqual(g.drop_reason(rows[self.FLAP], c), "lever", "include_nodes lets it past its excluded banner")
+        self.assertEqual(g.convert_row(rows[self.GEAR], bare), (None, "lever", []))
+        self.assertEqual(g.convert_row(rows[self.FLAP], bare), (None, "lever", []))
+        # the flap lever's banner is curation's own word: an entry for it does not override that (include_nodes does)
+        self.assertEqual(g.drop_reason(rows[self.FLAP], dict(c, include_nodes=[])), "excluded banner")
+        # the include_nodes entry alone is not enough either: the rules still drop it, and the run stops on that
+        with self.assertRaisesRegex(g.CurationError, rf"include_nodes name nodes the rules still leave out: "
+                                                     rf"{self.FLAP} \(lever\)"):
+            self.build(levers={})
+
+    def test_the_gear_lever_leads_its_panel(self):
+        # Cockpit order puts the lock override first (its line is before the lever's); the shipped control_order does not.
+        m, _ = self.build()
+
+        self.assertEqual([(c["label"], c["section"]) for c in m["controls"] if c["panel"] == "Landing gear"],
+                         [("Gear Lever", "Forward panel"), ("Gear Lock Override", "Forward panel")])
+        plain, _ = self.build(control_order={})
+        self.assertEqual([c["label"] for c in plain["controls"] if c["panel"] == "Landing gear"],
+                         ["Gear Lock Override", "Gear Lever"])
+
+    def test_the_flap_lever_follows_speedbrake_up_on_the_control_stand(self):
+        rows = {**self.stand_rows(), self.FLAP: self.flap_row()}
+
+        m, _ = self.build(rows)
+
+        stand = [(c["label"], c["section"], c["panel"]) for c in m["controls"] if c["panel"] == "Control stand"]
+        self.assertEqual([label for label, _, _ in stand],
+                         ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "Flap Lever", "TO/GA",
+                          "A/T Disconnect"])
+        self.assertEqual({(section, panel) for _, section, panel in stand}, {("Pedestal", "Control stand")})
+
+    def test_the_run_names_each_lever_it_takes_in_and_counts_none_as_dropped(self):
+        m, report = self.build()
+
+        self.assertEqual(sorted(report["levers"]), sorted((self.GEAR, self.FLAP)))
+        for node in (self.GEAR, self.FLAP):
+            self.assertEqual(report["levers"][node], "taken in (the rules alone leave it out: lever)")
+        self.assertEqual(report["dropped"], collections.Counter(), "a lever taken in is not counted as dropped")
+        self.assertEqual(report["taken_in"], [self.FLAP], "taken_in stays include_nodes' own")
+        self.assertEqual({c["node"] for c in m["controls"]}, {self.LOCK_OVRD, self.GEAR, self.FLAP})
+        # none named, none reported, and the rules' own count says what they do with a lever (the gear lever's place in its
+        # panel's order goes too: an order that names a node the map does not have is a stale one, and stops the run)
+        with self.assertRaisesRegex(g.CurationError, rf"control_order lists nodes that are not in Landing gear: "
+                                                     rf"{self.GEAR} \(not in the map\)"):
+            self.build(levers={}, include_nodes=[])
+        _, none = self.build(levers={}, include_nodes=[], control_order={})
+        self.assertEqual(none["levers"], {})
+        self.assertEqual(none["dropped"], collections.Counter({"lever": 1, "excluded banner": 1}))
+
+    def test_a_levers_entry_that_does_not_fit_the_package_stops_the_run(self):
+        # Each case changes the shipped curation, or adds one row, in one way and nothing else, so the one check it is meant
+        # for is the one that stops the run; the shipped curation itself passes all of them.
+        gear, flap = self.GEAR, self.FLAP
+        ghost = "B757_NO_SUCH_NODE"
+        breaker = row(node="B757_OVHD_X_CB", kind="circuit breaker", panel="ELECTRICAL PANEL", left="x")
+        extra = {breaker["node"]: breaker}
+        entry = self.entry(gear)[gear]
+        cases = [
+            ("a node the package does not have", {}, dict(levers={**self.entry(gear), ghost: entry}),
+             rf"levers name nodes the package does not have: {ghost}"),
+            ("a node the rules keep", {}, dict(levers={**self.entry(gear), self.LOCK_OVRD: entry}),
+             rf"levers names {self.LOCK_OVRD}, which the rules keep as a toggle"),
+            ("a node the rules leave out for another reason", extra,
+             dict(levers={**self.entry(gear), breaker["node"]: entry}),
+             rf"levers names {breaker['node']}, which the rules leave out for another reason than being a lever "
+             r"\(circuit breaker\)"),
+            ("a node curation leaves out", {}, dict(exclude_nodes=[gear]),
+             rf"levers names {gear}, which curation also leaves out \(excluded node\)"),
+            ("a node under a banner curation leaves out", {}, dict(include_nodes=[]),
+             rf"levers names {flap}, which curation also leaves out \(excluded banner\)"),
+            ("a state var the lever's code never touches", {}, dict(levers=self.entry(gear, state_var=self.GEAR_VAR + "_X")),
+             rf"{gear}'s own vendor code never reads or writes {self.GEAR_VAR}_X"),
+            ("another lever's state var", {}, dict(levers=self.entry(flap, state_var=self.GEAR_VAR)),
+             rf"{flap}'s own vendor code never reads or writes {self.GEAR_VAR} "),
+            ("a position past the range the code clamps to",
+             {}, dict(levers=self.entry(flap, positions=self.FLAP_POSITIONS[:-1] + [{"value": 151, "label": "30"}])),
+             rf"{flap} lists the position 151, which is outside the range 0..150 its own code clamps to"),
+            ("a position below that range",
+             {}, dict(levers=self.entry(flap, positions=[{"value": -1, "label": "UP"}] + self.FLAP_POSITIONS[1:])),
+             rf"{flap} lists the position -1, which is outside the range 0..150"),
+            ("a guarded entry too", {}, dict(guarded={gear: dict(state_var=self.GEAR_VAR, positions=["UP", "DOWN"],
+                                                                 guard="G", guard_closed=0, close_sets=None)}),
+             rf"levers and guarded both name: {gear}"),
+            ("a direct_write entry too", {}, dict(direct_write=[gear]), rf"levers and direct_write both name: {gear}"),
+            ("a kinds entry too", {}, dict(kinds={gear: "button"}), rf"levers and kinds both name: {gear}"),
+            ("a positions entry too", {}, dict(positions={gear: ["UP", "OFF", "DOWN"]}),
+             rf"levers and positions both name: {gear}"),
+        ]
+        for what, more, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build({**self.rows(), **more}, **changes)
+        self.build()                                    # the shipped curation passes each of them: alone,
+        self.build({**self.rows(), **extra})            # and with the extra row
+
+    def test_the_state_var_is_checked_against_the_whole_component_not_the_nodes_own_row(self):
+        # The gear lever's state var is in neither the row's state (the pull animation) nor its click codes: only the lever's
+        # other animation reads it and the component's Update sets it, which the extractor keeps as _component_vars. A row
+        # without them (an extractor that kept none) cannot confirm any state var, and the entry is refused.
+        rows = self.rows()
+        codes = [code for slot in rows[self.GEAR]["_clicks"].values() for _, code in slot]
+        touched = {name for code in codes for _write, _kind, name in extract_controls.var_refs(code)}
+        self.assertNotIn(self.GEAR_VAR, touched)
+        self.assertNotIn("L:" + self.GEAR_VAR, rows[self.GEAR]["_state"])
+        self.build(rows)
+
+        del rows[self.GEAR]["_component_vars"]
+        with self.assertRaisesRegex(g.CurationError, rf"{self.GEAR}'s own vendor code never reads or writes "
+                                                     rf"{self.GEAR_VAR} \(its component reads no L:var and writes no L:var\)"):
+            self.build(rows)
+        # a write is as good as a read, either confirms the var
+        rows = self.rows()
+        rows[self.FLAP]["_component_vars"] = {"reads": [], "writes": [self.FLAP_VAR]}
+        self.build(rows)
+        rows[self.FLAP]["_component_vars"] = {"reads": [self.FLAP_VAR], "writes": []}
+        self.build(rows)
+
+    def test_a_lever_no_cockpit_has_stops_the_run_unless_keep_without_node_names_it(self):
+        both = g.Cockpit(pw={self.LOCK_OVRD, self.GEAR, self.FLAP}, rr={self.LOCK_OVRD, self.GEAR, self.FLAP})
+        no_gear = g.Cockpit(pw={self.LOCK_OVRD, self.FLAP}, rr={self.LOCK_OVRD, self.FLAP})
+
+        m, _ = self.build(cockpit=both)
+        self.assertEqual({c["node"] for c in m["controls"]}, {self.LOCK_OVRD, self.GEAR, self.FLAP})
+        with self.assertRaisesRegex(g.CurationError, rf"levers names {self.GEAR}, which neither cockpit model has a node for"):
+            self.build(cockpit=no_gear)
+        m, report = self.build(cockpit=no_gear, keep_without_node=[self.GEAR])
+        self.assertIn(self.GEAR, {c["node"] for c in m["controls"]})
+        self.assertEqual(report["kept_without_node"], [self.GEAR])
+        # one model's cockpit has it: it stays, and its label says whose
+        only_pw = g.Cockpit(pw={self.LOCK_OVRD, self.GEAR, self.FLAP}, rr={self.LOCK_OVRD, self.FLAP})
+        m, _ = self.build(cockpit=only_pw)
+        self.assertEqual({c["node"]: c["label"] for c in m["controls"]}[self.GEAR], "Gear Lever (PW)")
+
+    def test_the_embedded_map_holds_the_two_levers_on_their_panels(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = json.load(fh)["controls"]
+        by_node = {c["node"]: c for c in controls}
+
+        for node, panel, section, label, var, positions in (
+                (self.GEAR, "Landing gear", "Forward panel", "Gear Lever", self.GEAR_VAR, self.GEAR_POSITIONS),
+                (self.FLAP, "Control stand", "Pedestal", "Flap Lever", self.FLAP_VAR, self.FLAP_POSITIONS)):
+            with self.subTest(node=node):
+                x = by_node[node]
+                self.assertEqual((x["kind"], x["section"], x["panel"], x["label"], x["state_var"], x["positions"]),
+                                 ("switch", section, panel, label, var, positions))
+                self.assertEqual([x[f] for f in self.CLICK_FIELDS], [None] * 4)
+                self.assertNotIn("guard", x)
+        self.assertEqual([c["label"] for c in controls if c["panel"] == "Landing gear"][:1], ["Gear Lever"])
+        stand = [c["label"] for c in controls if c["panel"] == "Control stand"]
+        self.assertEqual(stand[stand.index("Speedbrake Up") + 1], "Flap Lever")
+
+
 class CockpitPresence(unittest.TestCase):
     """Plan 02, task 5 (ruling R65): the map holds only controls the cockpit has. BlueBird ships one interior model per
     engine variant (BBS_752_PW_INTERIOR.gltf, BBS_752_RR_INTERIOR.gltf), and a control can be clicked only where a node
@@ -1638,6 +1926,14 @@ class CockpitPresence(unittest.TestCase):
                         node_panels=[{"prefix": "BBS757_PEDESTAL_", "panel": "Control stand", "section": "Pedestal"}])
         toggle = [row(node=node, left=flip)]
         lever = [row(node=node, kind="lever", positions="", left="1 (>L:X)")]
+        # a drag handle whose own code and component read and write its state var, and curation's levers entry for it
+        drag = [("DRAG_CODE", f"150 (M:DragPercent) * (>L:{node},number)")]
+        own = {"reads": [node], "writes": [node]}
+        handle = [row(node=node, kind="lever", positions="", other=drag, component=own)]
+        under_banner = [row(node=node, kind="lever", positions="", panel=banner, other=drag, component=own)]
+        entry = {node: {"state_var": node, "positions": [{"value": 0, "label": "UP"}, {"value": 150, "label": "DOWN"}]}}
+        handle_taken_in = dict(exclude_banners=["CB OVERHEAD PANEL", banner], include_nodes=[node],
+                               node_panels=[{"prefix": node, "panel": "Control stand", "section": "Pedestal"}])
         cases = [
             # what, rows, the control asked about, curation, without keep_without_node, with it
             ("no entry at all", toggle, node, {}, "left out", "kept"),
@@ -1656,6 +1952,9 @@ class CockpitPresence(unittest.TestCase):
              "stops the run", "kept"),
             ("guarded, taken in: the rules leave the emergency lights switch out", self.emergency_rows(), self.EMERGENCY,
              dict(guarded=self.EMERGENCY_ENTRY), "stops the run", "kept"),
+            ("levers: the rules leave a lever out", handle, node, dict(levers=entry), "stops the run", "kept"),
+            ("levers, under a banner curation leaves out and include_nodes takes in", under_banner, node,
+             dict(levers=entry, **handle_taken_in), "stops the run", "kept"),
             ("include_nodes, on a control the rules keep",
              [row(node=included, panel=banner, state=["L:B"], left="(L:B,bool) ! (>L:B,bool)")], included, taken_in,
              "stops the run", "kept"),
@@ -2199,6 +2498,35 @@ class Curation(unittest.TestCase):
                 with self.assertRaisesRegex(g.CurationError, r"guarded(\[| must be)"):   # not "unknown key(s) guarded"
                     g.load_curation(self.write({"guarded": data}))
 
+    LEVER_ENTRY = {"state_var": "B757_X",
+                   "positions": [{"value": 0, "label": "UP"}, {"value": 1, "label": "DOWN"}]}
+
+    def test_the_levers_key_loads_as_a_dict_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["levers"], {})
+        entry = copy.deepcopy(self.LEVER_ENTRY)
+        self.assertEqual(g.load_curation(self.write({"levers": {"B757_X": entry}}))["levers"], {"B757_X": entry})
+        # a fractional value is a position like any other: the gear lever's OFF detent is 0.5
+        half = dict(entry, positions=[{"value": 0, "label": "UP"}, {"value": 0.5, "label": "OFF"},
+                                      {"value": 1, "label": "DOWN"}])
+        self.assertEqual(g.load_curation(self.write({"levers": {"B757_X": half}}))["levers"], {"B757_X": half})
+
+    def test_a_levers_entry_that_is_not_whole_is_refused(self):
+        # A state var and at least two positions with their values (a lever's row names no values a list of names could be
+        # laid onto), the values rising in the order of the lever's travel and each label its own.
+        entry = self.LEVER_ENTRY
+        up, down = {"value": 0, "label": "UP"}, {"value": 1, "label": "DOWN"}
+        bad = [["B757_X"], {"B757_X": "lever"}, {"B757_X": {}}, {"B757_X": dict(entry, extra=1)}]
+        bad += [{"B757_X": {k: v for k, v in entry.items() if k != field}} for field in entry]
+        bad += [{"B757_X": dict(entry, positions=positions)} for positions in (
+            [], "UP", [up], ["UP", "DOWN"], [up, {"value": 1}], [up, {"label": "DOWN"}], [up, dict(down, extra=1)],
+            [up, {"value": "1", "label": "DOWN"}], [up, {"value": True, "label": "DOWN"}], [up, dict(down, label="")],
+            [up, dict(down, label=1)], [up, dict(down, value=0)], [down, up], [up, dict(down, label="up")])]
+        bad += [{"B757_X": dict(entry, state_var=state_var)} for state_var in ("", None, 1)]
+        for data in bad:
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, r"levers(\[| must be)"):   # not "unknown key(s) levers"
+                    g.load_curation(self.write({"levers": data}))
+
     def test_the_direct_write_key_loads_as_a_list_and_defaults_to_empty(self):
         self.assertEqual(g.load_curation(self.write({}))["direct_write"], [])
         c = g.load_curation(self.write({"direct_write": ["B757_X", "B757_Y"]}))
@@ -2252,6 +2580,8 @@ class Curation(unittest.TestCase):
         "BBS757_SPOILERUP_CLICK": "RIGHT WINDOW RAIN EFFECTS",
         "ENGINE_Switch_ATDisc_1": "THROTTLES MAIN",
         "B757_AT_DISC_1": "THROTTLES MAIN",
+        # plan 02 task 7: the flap lever, a lever the rules leave out too (it is also under levers, which takes it in)
+        "BBS757_lever_flaps": "RIGHT WINDOW RAIN EFFECTS",
     }
 
     def test_the_shipped_curation_takes_in_the_control_stand_by_node_and_keeps_the_banners_out(self):
@@ -2661,7 +2991,9 @@ class Curation(unittest.TestCase):
                      # plan 02 task 4: the chronometer ET levers whose click code the map leaves out
                      "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_ET_SWITCH_FO",
                      # plan 02 task 6 (ruling R12): the flight deck door switch, left out the same way
-                     "B757_OVHD_FLT-DK-DOOR_SWITCH"):
+                     "B757_OVHD_FLT-DK-DOOR_SWITCH",
+                     # plan 02 task 7: the levers the rules leave out, and the state vars their own code reads and writes
+                     "B757_MAIN_Landing_Gear_Y", "BBS757_lever_flaps", "B757_GEAR_HANDLE_POS", "B757_FC_FLAP_LEVER"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
         # the keys that make the kind changes, guard the switches and leave out a click code are explained where the other
@@ -2677,6 +3009,14 @@ class Curation(unittest.TestCase):
         self.assertRegex(notes, r"PLAN 02 TASK 6 .*calculator cannot set")
         self.assertRegex(notes, r"PLAN 02 TASK 6 .*plan 12")
         self.assertRegex(notes, r"direct_write: .*O:vars")   # the key's own explanation says what it lets through
+        # the lever key is explained where the others are, and the task's note cites BlueBird's wording and the vendor's code
+        # (XML:line) for each state var: the gear lever's is set by its component's Update and shown by its rotation animation,
+        # the flap lever's is read by its animation and written by its drag
+        self.assertRegex(notes, r"levers: node -> \{state_var, positions\}")
+        self.assertRegex(notes, r"PLAN 02 TASK 7 .*B757_GEAR_HANDLE_POS.*XML:25042.*XML:25052")
+        self.assertRegex(notes, r"PLAN 02 TASK 7 .*B757_FC_FLAP_LEVER.*XML:32850.*XML:32855")
+        self.assertRegex(notes, r"PLAN 02 TASK 7 .*Write a detent position")
+        self.assertRegex(notes, r"PLAN 02 TASK 7 .*unmeasured in the sim")
         self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
 
     def test_the_cockpit_presence_rule_and_what_it_removed_have_their_evidence_in_the_notes(self):
@@ -2730,6 +3070,47 @@ class Curation(unittest.TestCase):
         self.assertEqual(c["control_order"]["Overhead miscellaneous"],
                          ["B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"])
 
+    # Plan 02, task 7: BlueBird's published detents (support.bluebirdsim.com/docs/simvars, read 2026-10-26: the gear handle's
+    # "0 = UP; 0.5 = OFF; 1 = DOWN", the flap lever's "0 = UP; 17 = 1; 41 = 5; 67 = 15; 95 = 20; 125 = 25; 150 = 30"),
+    # written out here so a change to them is a visible one.
+    LEVERS = {
+        "B757_MAIN_Landing_Gear_Y": {
+            "state_var": "B757_GEAR_HANDLE_POS",
+            "positions": [{"value": 0, "label": "UP"}, {"value": 0.5, "label": "OFF"}, {"value": 1, "label": "DOWN"}]},
+        "BBS757_lever_flaps": {
+            "state_var": "B757_FC_FLAP_LEVER",
+            "positions": [{"value": 0, "label": "UP"}, {"value": 17, "label": "1"}, {"value": 41, "label": "5"},
+                          {"value": 67, "label": "15"}, {"value": 95, "label": "20"}, {"value": 125, "label": "25"},
+                          {"value": 150, "label": "30"}]},
+    }
+
+    def test_the_shipped_curation_gives_the_gear_and_flap_levers_bluebirds_detents(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        gear, flap = self.LEVERS
+
+        self.assertEqual(c["levers"], self.LEVERS)
+        self.assertEqual([c["labels"][node] for node in self.LEVERS], ["Gear Lever", "Flap Lever"])
+        # no other table speaks for a lever, and none leaves it out
+        for node in self.LEVERS:
+            with self.subTest(node=node):
+                self.assertNotIn(node, c["positions"])
+                self.assertNotIn(node, c["kinds"])
+                self.assertNotIn(node, c["guarded"])
+                self.assertNotIn(node, c["direct_write"])
+                self.assertNotIn(node, c["exclude_nodes"])
+        # the gear lever's banner is a panel of its own; the flap lever's banner is curation's own exclusion, so the flap lever
+        # is taken in by node (which names the banner it is under) and placed by a node rule
+        self.assertNotIn(gear, c["include_nodes"])
+        self.assertIn(flap, c["include_nodes"])
+        self.assertIn("RIGHT WINDOW RAIN EFFECTS", c["exclude_banners"])
+        self.assertEqual(g.panel_of(row(node=gear, panel="LANDING GEAR"), c), ("Landing gear", "Forward panel"))
+        self.assertEqual(g.panel_of(row(node=flap, panel="RIGHT WINDOW RAIN EFFECTS"), c), ("Control stand", "Pedestal"))
+        # the gear lever is first on its panel, the flap lever is right after Speedbrake Up
+        self.assertEqual(c["control_order"]["Landing gear"], [gear])
+        stand = c["control_order"]["Control stand"]
+        self.assertEqual(stand[stand.index("BBS757_SPOILERUP_CLICK") + 1], flap)
+        self.assertEqual(len(stand), len(set(stand)))
+
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.
     PANEL_ORDER = {
@@ -2771,8 +3152,9 @@ class Curation(unittest.TestCase):
                 "ALT SEL Push", "Speed Intervene", "Bank Limit", "BCRS 1"],
         "Main panel switches": ["Autobrake", "Takeoff Check", "TOGA", "CLB", "CON", "CRZ", "TMSP 1", "TMSP 2",
                                 "HDG Ref", "Cancel", "Recall"],
-        "Control stand": ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "TO/GA",
-                          "A/T Disconnect"],
+        "Control stand": ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "Flap Lever", "TO/GA",
+                          "A/T Disconnect"],   # plan 02 task 7: the flap lever right after Speedbrake Up
+        "Landing gear": ["Gear Lever"],        # plan 02 task 7: first on its panel, the lock override follows in cockpit order
         "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
                     "L Fuel Control (RR)", "R Fuel Control (RR)"],
         "TCAS and transponder": ["TCAS Mode"],   # the app's Squawk Code field follows it (BBS757Definition.Readouts.cs)
@@ -2995,6 +3377,77 @@ def write_chrono_package(root):
     return pkg
 
 
+# The vendor's gear lever and flap lever, trimmed (BBS_752_BASE_INTERIOR.xml:25038-25096 and 32844-32866). The gear lever's
+# component holds an Update that sets L:B757_GEAR_HANDLE_POS from the sim's gear handle, the lever's rotation animation that
+# reads it (node B757_MAIN_Landing_Gear_Lever), the pull animation and the drag of the node the pilot grabs
+# (B757_MAIN_Landing_Gear_Y), whose own code never touches that var. The flap lever is one drag template under a banner
+# the curation leaves out.
+LEVER_INTERIOR = """<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<!-- ======== LANDING GEAR ======== -->
+<Component ID="Gear_Handle_Interact" Node="B757_MAIN_Landing_Gear_Y">
+  <Update Frequency="2.0">
+    (O:IsInit) 0 == if{
+    1 (&gt;O:IsInit)
+    (A:GEAR HANDLE POSITION,bool) (&gt;L:B757_GEAR_HANDLE_POS,number)
+    0 (&gt;L:B757_GEAR_HANDLE_POS_DELTA, number)
+    0 (&gt;L:B757_GEAR_HANDLE_GRAB, number)
+    0 (&gt;L:B757_GEAR_HANDLE_PULL, number)
+    }
+  </Update>
+  <UseTemplate Name="ASOBO_GT_Anim_Code">
+    <NODE_ID>B757_MAIN_Landing_Gear_Lever</NODE_ID>
+    <ANIM_NAME>B757_MAIN_Landing_Gear_Lever</ANIM_NAME>
+    <ANIM_CODE>(L:B757_GEAR_HANDLE_POS,number) 20 *</ANIM_CODE>
+    <ANIM_LENGTH>20</ANIM_LENGTH>
+  </UseTemplate>
+  <UseTemplate Name="ASOBO_GT_Anim_Code">
+    <NODE_ID>B757_MAIN_Landing_Gear_Y</NODE_ID>
+    <ANIM_NAME>B757_MAIN_Landing_Gear_Y</ANIM_NAME>
+    <ANIM_CODE>(L:B757_GEAR_HANDLE_PULL,number) 10 *</ANIM_CODE>
+    <ANIM_LENGTH>10</ANIM_LENGTH>
+  </UseTemplate>
+  <UseTemplate Name="ASOBO_GT_Lever_DraggingWheelLeftDrag_Axis">
+    <HIGHLIGHT_NODE_ID>B757_MAIN_Landing_Gear_Y</HIGHLIGHT_NODE_ID>
+    <AXIS>Y</AXIS>
+    <LOCK_CODE>
+      0 (&gt;O:_Delta,number)
+      1 (&gt;L:B757_GEAR_HANDLE_GRAB,bool)
+      1 (&gt;L:B757_GEAR_HANDLE_PULL,bool)
+      0 (&gt;L:B757_GEAR_HANDLE_POS_DELTA,number)
+    </LOCK_CODE>
+    <DRAG_CODE>
+      (A:SIM ON GROUND,bool) 0 == if{ (O:_Delta,number) 8 * (&gt;L:B757_GEAR_HANDLE_POS_DELTA,number) }
+    </DRAG_CODE>
+  </UseTemplate>
+</Component>
+<!-- ======== RIGHT WINDOW RAIN EFFECTS ======== -->
+<Component ID="B757_CUSTOM_FLAP_HANDLE" Node="BBS757_lever_flaps">
+  <UseTemplate Name="ASOBO_GT_Lever_DraggingWheelLeftDrag_Axis">
+    <CURSOR>Grab</CURSOR>
+    <DRAG_CODE>150 (M:DragPercent) * (&gt;L:B757_FC_FLAP_LEVER,number)</DRAG_CODE>
+    <ANIM_NAME>BBS_757_lever_flaps</ANIM_NAME>
+    <ANIM_LENGTH>150</ANIM_LENGTH>
+    <ANIM_CODE>(L:B757_FC_FLAP_LEVER, number)</ANIM_CODE>
+    <POSITIVE_AXIS_CODE>(L:B757_FC_FLAP_LEVER,number) 1 - 0 max (&gt;L:B757_FC_FLAP_LEVER,number)</POSITIVE_AXIS_CODE>
+    <NEGATIVE_AXIS_CODE>(L:B757_FC_FLAP_LEVER,number) 1 + 150 min (&gt;L:B757_FC_FLAP_LEVER,number)</NEGATIVE_AXIS_CODE>
+    <TOOLTIPID>Flap Lever</TOOLTIPID>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+"""
+
+LEVER_NODES = ("B757_MAIN_Landing_Gear_Y", "B757_MAIN_Landing_Gear_Lever", "BBS757_lever_flaps")
+
+
+def write_lever_package(root):
+    """write_package's package, its interior replaced by LEVER_INTERIOR and both cockpit models holding the lever nodes."""
+    pkg = write_package(root)
+    (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(LEVER_INTERIOR, encoding="utf-8")
+    write_cockpit_models(pkg, pw=LEVER_NODES, rr=LEVER_NODES)
+    return pkg
+
+
 def write_presence_package(root, nodes, pw, rr):
     """write_package's package, its interior replaced by one switch per node of `nodes` (each flips its own L:var), and its
     cockpit models by two that hold the node names `pw` and `rr`: a node in one list, in both or in neither."""
@@ -3144,6 +3597,106 @@ class Extractor(unittest.TestCase):
         self.assertNotIn(f"{node}: cw, ccw left out", printed_plain)
         self.assertRegex(printed, r"direct-write\s+: 1 ")
         self.assertIn(f"{node}: cw, ccw left out", printed)
+
+    GEAR, FLAP = "B757_MAIN_Landing_Gear_Y", "BBS757_lever_flaps"
+
+    def test_a_row_keeps_the_l_vars_its_whole_component_reads_and_writes(self):
+        # The gear lever's state var is set by the component's Update and shown by its OTHER animation (the lever's rotation):
+        # the row of the node the pilot grabs, whose own animation is the pull of the handle, holds neither, so the row keeps
+        # what the whole component reads and writes, as private data for the generator to check an entry against.
+        with tempfile.TemporaryDirectory() as d:
+            controls, _, _ = extract_controls.extract(write_lever_package(d))
+        by_node = {r["node"]: r for r in controls}
+        gear, flap = by_node[self.GEAR], by_node[self.FLAP]
+
+        self.assertEqual((gear["kind"], flap["kind"]), ("lever", "lever"))
+        self.assertEqual(gear["_state"], ["L:B757_GEAR_HANDLE_PULL"])
+        self.assertNotIn("L:B757_GEAR_HANDLE_POS", gear["_state"] + gear["_writes"], "not in the row's own code")
+        self.assertEqual(sorted(gear["_component_vars"]["reads"]), ["B757_GEAR_HANDLE_POS", "B757_GEAR_HANDLE_PULL"])
+        self.assertEqual(sorted(gear["_component_vars"]["writes"]),
+                         ["B757_GEAR_HANDLE_GRAB", "B757_GEAR_HANDLE_POS", "B757_GEAR_HANDLE_POS_DELTA",
+                          "B757_GEAR_HANDLE_PULL"])
+        self.assertEqual(flap["_component_vars"], {"reads": ["B757_FC_FLAP_LEVER"], "writes": ["B757_FC_FLAP_LEVER"]})
+        # only L: vars count (an A: or O: var is no state var), and the components of two controls are not mixed
+        everything = {n for r in controls for part in r["_component_vars"].values() for n in part}
+        self.assertEqual(everything, {"B757_GEAR_HANDLE_POS", "B757_GEAR_HANDLE_PULL", "B757_GEAR_HANDLE_GRAB",
+                                      "B757_GEAR_HANDLE_POS_DELTA", "B757_FC_FLAP_LEVER"})
+        self.assertNotIn("B757_FC_FLAP_LEVER", gear["_component_vars"]["reads"] + gear["_component_vars"]["writes"])
+
+    def test_a_component_keeps_what_its_update_reads_too(self):
+        # A var an Update only reads is the component's own code as much as one it writes.
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_package(d)
+            (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text("""<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<Component ID="BATT" Node="B757_OVHD_BATTERY_BUTTON">
+  <Update Frequency="1.0">(L:B757_ONLY_READ_BY_AN_UPDATE, bool) if{ 1 (&gt;L:B757_ONLY_WRITTEN_BY_AN_UPDATE, bool) }</Update>
+  <UseTemplate Name="ASOBO_GT_Switch_Code">
+    <ANIM_CODE>(L:B757_OVHD_BATTERY_BUTTON, bool) 100 *</ANIM_CODE>
+    <LEFT_SINGLE_CODE>(L:B757_OVHD_BATTERY_BUTTON, bool) ! (&gt;L:B757_OVHD_BATTERY_BUTTON, bool)</LEFT_SINGLE_CODE>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+""", encoding="utf-8")
+            controls, _, _ = extract_controls.extract(pkg)
+
+        (battery,) = controls
+        self.assertEqual(sorted(battery["_component_vars"]["reads"]),
+                         ["B757_ONLY_READ_BY_AN_UPDATE", "B757_OVHD_BATTERY_BUTTON"])
+        self.assertEqual(sorted(battery["_component_vars"]["writes"]),
+                         ["B757_ONLY_WRITTEN_BY_AN_UPDATE", "B757_OVHD_BATTERY_BUTTON"])
+
+    def test_levers_from_the_package_are_emitted_without_click_code_and_the_run_names_them(self):
+        # The vendor's own XML for both levers through the extractor, the generator and its printed report.
+        gear, flap = self.GEAR, self.FLAP
+        levers = {
+            gear: {"state_var": "B757_GEAR_HANDLE_POS",
+                   "positions": [{"value": 0, "label": "UP"}, {"value": 0.5, "label": "OFF"}, {"value": 1, "label": "DOWN"}]},
+            flap: {"state_var": "B757_FC_FLAP_LEVER",
+                   "positions": [{"value": 0, "label": "UP"}, {"value": 17, "label": "1"}, {"value": 150, "label": "30"}]},
+        }
+        base = {"panels": {"LANDING GEAR": {"name": "Landing gear", "section": "Forward panel"}},
+                "exclude_banners": ["RIGHT WINDOW RAIN EFFECTS"],
+                "node_panels": [{"prefix": flap, "panel": "Control stand", "section": "Pedestal"}],
+                "labels": {gear: "Gear Lever", flap: "Flap Lever"}}
+        wrong = {**levers, gear: dict(levers[gear], state_var="B757_GEAR_HANDLE_POSITION")}
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_lever_package(d)
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+
+            def run(data):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                with open(out, encoding="utf-8") as fh:
+                    return json.load(fh)["controls"], stdout.getvalue()
+
+            bare, printed_bare = run(base)
+            controls, printed = run(dict(base, include_nodes=[flap], levers=levers))
+            with self.assertRaises(SystemExit) as stopped:
+                run(dict(base, include_nodes=[flap], levers=wrong))
+
+        self.assertEqual(bare, [], "without the entry the rules leave both levers out")
+        self.assertRegex(printed_bare, r"levers\s+: 0 ")
+        self.assertRegex(printed_bare, r"1\s+lever\n")
+        self.assertRegex(printed_bare, r"1\s+excluded banner")
+        by_node = {c["node"]: c for c in controls}
+        self.assertEqual(sorted(by_node), sorted((gear, flap)))
+        for node, (panel, section, label) in ((gear, ("Landing gear", "Forward panel", "Gear Lever")),
+                                              (flap, ("Control stand", "Pedestal", "Flap Lever"))):
+            c = by_node[node]
+            self.assertEqual((c["kind"], c["panel"], c["section"], c["label"], c["state_var"], c["positions"]),
+                             ("switch", panel, section, label, levers[node]["state_var"], levers[node]["positions"]))
+            self.assertEqual([c[f] for f in ("press", "release", "cw", "ccw")], [None] * 4)
+        self.assertRegex(printed, r"levers\s+: 2 ")
+        for node in (gear, flap):
+            self.assertIn(f"{node}: taken in (the rules alone leave it out: lever)", printed)
+        self.assertNotRegex(printed, r"\d\s+lever\n", "a lever taken in is not counted as dropped")
+        self.assertRegex(str(stopped.exception), rf"^curation: curation levers: {gear}'s own vendor code never reads or "
+                                                 r"writes B757_GEAR_HANDLE_POSITION")
 
 
 class RpnReplay(unittest.TestCase):

@@ -6,7 +6,8 @@ Usage:  python -I extract_controls.py <package-folder> <output-folder>
         (the package folder is the one holding manifest.json and layout.json, e.g. Community\\<vendor>-aircraft-757)
 As a module (generate_b757_map.py does this): extract(package) -> (control rows, light rows, summary data): the rows the
         tables are made from, unclipped. A control row keeps its click codes as _clicks {slot: [(label, code)]}, its
-        ANIMTIP texts as _tips [(n, text)], its state code as _state_code and its template parameters as _scope.
+        ANIMTIP texts as _tips [(n, text)], its state code as _state_code, its template parameters as _scope and the L:vars
+        the whole component it sits in reads and writes as _component_vars {"reads": [name], "writes": [name]}.
 Needs:  nothing running. Reads the package's files only; never executes, imports or writes inside the package.
 How:    every model.cfg names an interior XML; it and each base it pulls in with <IncludeBase> are parsed with expat
         (comments kept: the vendor's banner comments name the panels). Templates defined in those files or in the
@@ -332,12 +333,13 @@ class Banners:
 
 
 class Frame:
-    """One open <Component>: its ID and Node after substitution, whether the file wrote it (not a template), and the
-    template calls made inside it."""
+    """One open <Component>: its ID and Node after substitution, whether the file wrote it (not a template), the template
+    calls made inside it and the code of the Updates it holds."""
 
     def __init__(self, cid, node, authored):
         self.cid, self.node, self.authored = cid, node, authored
         self.parts = []
+        self.updates = []
 
 
 class Extractor:
@@ -542,9 +544,10 @@ class Extractor:
 
     # ---- collecting ------------------------------------------------------------------------------------------
     def add_update(self, code: str, line: int) -> None:
+        frame = self.authored_frame()
+        frame.updates.append(code)  # all of it, reads too: component_vars
         writes = [n for w, k, n in var_refs(code) if w and k == "L"]
         if writes:
-            frame = self.authored_frame()
             init = bool(re.search(r"IsInit|INIT", code)) and code.count("if{") <= 2
             self.updates.append((frame.cid, writes, clip(code, 200), init))
 
@@ -605,14 +608,29 @@ class Extractor:
         if code.strip():
             row["code"] = uniq(row["code"] + [squash(code)])
 
+    @staticmethod
+    def component_vars(frame: Frame) -> dict:
+        """The L:vars the whole component reads and writes in its own code, each in order of first appearance: its animations'
+        codes, every template parameter of its interactions (their click codes and their ANIM_CODE) and the code of its
+        Updates. A control's row holds the code of its own node only, and a lever's position var can be set by an Update and
+        shown by ANOTHER node's animation of the same component (the gear lever's rotation: L:B757_GEAR_HANDLE_POS), which no
+        code of the node the pilot grabs mentions."""
+        codes = [part["state"] if part["anim"] else " ".join(part["scope"].values()) for part in frame.parts]
+        refs = [(is_write, name) for code in codes + frame.updates for is_write, kind, name in var_refs(code) if kind == "L"]
+        return {"reads": uniq(name for is_write, name in refs if not is_write),
+                "writes": uniq(name for is_write, name in refs if is_write)}
+
     def close_frame(self, frame: Frame) -> None:
         groups = collections.OrderedDict()
         for part in frame.parts:
             groups.setdefault(part["node"], []).append(part)
+        component = self.component_vars(frame) if groups else {}
         for node, parts in groups.items():
             live = [p for p in parts if not p["anim"]]
             if live:
-                self.controls.append(self.make_row(node, live, [p for p in parts if p["anim"]]))
+                row = self.make_row(node, live, [p for p in parts if p["anim"]])
+                row["_component_vars"] = {kind: list(names) for kind, names in component.items()}
+                self.controls.append(row)
 
     # ---- one control -----------------------------------------------------------------------------------------
     def make_row(self, node: str, live: list, anims: list) -> dict:
@@ -958,8 +976,8 @@ SUFFIXES = ("_PRESS", "_ON", "_DECAL", "_BULB_FAILED", "_HELD", "_STATE", "_LIGH
 def extract(pkg: pathlib.Path):
     """Read the package: (control rows, light rows, summary data), unclipped, in file order. A control row holds the
     TSV's cells (clipped) and, under underscore keys, the unclipped click codes (_clicks), ANIMTIP texts (_tips), state
-    code and template parameters (_scope); summary holds what write_summary reports (manifest, interior files,
-    template use, errors)."""
+    code and template parameters (_scope) and the L:vars its whole component reads and writes (_component_vars);
+    summary holds what write_summary reports (manifest, interior files, template use, errors)."""
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))  # deeply nested vendor templates
     loc = load_loc(pkg)
     errors = []

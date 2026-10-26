@@ -3784,6 +3784,33 @@
    "ccw": null
   },
   {
+   "node": "B757_MAIN_Landing_Gear_Y",
+   "section": "Forward panel",
+   "panel": "Landing gear",
+   "label": "Gear Lever",
+   "kind": "switch",
+   "state_var": "B757_GEAR_HANDLE_POS",
+   "positions": [
+    {
+     "value": 0,
+     "label": "UP"
+    },
+    {
+     "value": 0.5,
+     "label": "OFF"
+    },
+    {
+     "value": 1,
+     "label": "DOWN"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_LOCK_OVRD_SWITCH",
    "section": "Forward panel",
    "panel": "Landing gear",
@@ -5084,6 +5111,49 @@
    "state_var": null,
    "positions": [],
    "press": "100 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_lever_flaps",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Flap Lever",
+   "kind": "switch",
+   "state_var": "B757_FC_FLAP_LEVER",
+   "positions": [
+    {
+     "value": 0,
+     "label": "UP"
+    },
+    {
+     "value": 17,
+     "label": "1"
+    },
+    {
+     "value": 41,
+     "label": "5"
+    },
+    {
+     "value": 67,
+     "label": "15"
+    },
+    {
+     "value": 95,
+     "label": "20"
+    },
+    {
+     "value": 125,
+     "label": "25"
+    },
+    {
+     "value": 150,
+     "label": "30"
+    }
+   ],
+   "press": null,
    "release": null,
    "hold_ms": 0,
    "cw": null,
