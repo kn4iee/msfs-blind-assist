@@ -62,4 +62,30 @@ public class A350GlareshieldPanelTests
             "Captain ATC message light", "First officer ATC message light",
         }, Lights("FCU"));
     }
+
+    /// <summary>Live 2026-10-26 through MSFSBA's path: every position of the ND mode and range selectors; baro PUSH
+    /// selects STD (XMLVAR_Baro1_Mode 3) and PULL QNH (0); the unit button swaps hPa and inHg; each filter button toggles
+    /// its light (WPT, VORD and NDB exclude each other); LS, TAXI and VV on and off. The ZOOM range positions step from
+    /// 0.2 to 5 NM (the manual: "from a maximum of 5nm down to a minimum of 0.2nm"; the middle three are inferred).</summary>
+    [Fact]
+    public void Efis_captain()
+    {
+        Assert.Equal(new[]
+        {
+            ("Captain ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
+            ("Captain ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
+                + "7=40 NM, 8=80 NM, 9=160 NM, 10=320 NM, 11=640 NM"),
+            ("Captain baro knob push", Press, ""), ("Captain baro knob pull", Press, ""),
+            ("Captain baro knob increase", A350RowAction.Increase, ""), ("Captain baro knob decrease", A350RowAction.Decrease, ""),
+            ("Captain baro unit", Press, ""),
+            ("Captain CSTR", Press, ""), ("Captain WPT", Press, ""), ("Captain VORD", Press, ""), ("Captain NDB", Press, ""),
+            ("Captain ARPT", Press, ""),
+            ("Captain VOR 1", Press, ""), ("Captain WX", Press, ""), ("Captain TERR", Press, ""), ("Captain TRAF", Press, ""),
+            ("Captain VOR 2", Press, ""),
+            ("Captain LS", Set, OffOn), ("Captain taxi", Set, OffOn), ("Captain VV", Set, OffOn),
+        }, Rows("EFIS Captain"));
+        Assert.Equal(new[] { "Captain CSTR light", "Captain WPT light", "Captain VORD light", "Captain NDB light",
+            "Captain ARPT light", "Captain VOR 1 light", "Captain WX light", "Captain TERR light", "Captain TRAF light",
+            "Captain VOR 2 light" }, Lights("EFIS Captain"));
+    }
 }

@@ -56,6 +56,19 @@ public class A350PanelLampsTests
     }
 
     [Fact]
+    public void A_selectors_position_markers_are_left_out()
+    {
+        // Each ND mode and range position has a marker light; the selector row already says the position.
+        var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
+        Assert.DoesNotContain(glareshield, l => l.Node.StartsWith("EFIS_MODE_", StringComparison.Ordinal));
+        Assert.DoesNotContain(glareshield, l => l.Node.StartsWith("EFIS_RANGE_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_lamp_knows_the_control_it_lights() =>
+        Assert.Equal("AIRLINER_ELEC_BAT_1", Lamp("ELEC_BAT_1_SEQ1_LIGHT").ControlId);
+
+    [Fact]
     public void No_two_lamps_on_a_panel_share_a_name()
     {
         foreach (var panel in Lamps.GroupBy(l => l.Panel))

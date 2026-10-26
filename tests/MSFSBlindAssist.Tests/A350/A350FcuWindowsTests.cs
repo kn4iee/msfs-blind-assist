@@ -19,7 +19,8 @@ public sealed class A350FcuWindowsTests : IDisposable
 
     [Fact]
     public void The_four_windows_are_on_the_fcu_panel_in_cockpit_order() =>
-        Assert.Equal(new[] { "Speed window", "Heading window", "Altitude window", "V/S window" }, A350FcuWindows.All.Select(w => w.Name));
+        Assert.Equal(new[] { "Speed window", "Heading window", "Altitude window", "V/S window" },
+            A350FcuWindows.All.Where(w => w.Panel == "FCU").Select(w => w.Name));
 
     [Fact]
     public void Speed_reads_knots_or_mach_from_one_variable()
@@ -57,6 +58,26 @@ public sealed class A350FcuWindowsTests : IDisposable
         Assert.Equal("V/S +500 feet per minute", Read(W("V/S window"), ("INI_VVI_DIAL", 500), ("INI_FPA_DIAL", 0), ("INI_FCU_VS_DASHED", 0), ("INI_TRACK_FPA_STATE", 0)));
         Assert.Equal("FPA -3.0 degrees", Read(W("V/S window"), ("INI_VVI_DIAL", -1200), ("INI_FPA_DIAL", -3), ("INI_FCU_VS_DASHED", 0), ("INI_TRACK_FPA_STATE", 1)));
     }
+
+    [Fact]
+    public void Each_side_has_its_baro_on_its_efis_panel()
+    {
+        Assert.Equal("EFIS Captain", W("Captain baro").Panel);
+        Assert.Equal("EFIS First Officer", W("First officer baro").Panel);
+    }
+
+    [Fact]
+    public void The_baro_reads_qnh_in_its_unit_or_std()
+    {
+        var baro = W("Captain baro");
+        Assert.Equal("QNH 1009 hectopascals", Read(baro, ("KOHLSMAN SETTING MB:1", 1009.125), ("XMLVAR_Baro1_Mode", 0), ("XMLVAR_Baro_Selector_HPA_1", 1)));
+        Assert.Equal("QNH 29.80 inches", Read(baro, ("KOHLSMAN SETTING MB:1", 1009.125), ("XMLVAR_Baro1_Mode", 0), ("XMLVAR_Baro_Selector_HPA_1", 0)));
+        Assert.Equal("STD", Read(baro, ("KOHLSMAN SETTING MB:1", 1013.25), ("XMLVAR_Baro1_Mode", 3), ("XMLVAR_Baro_Selector_HPA_1", 1)));
+    }
+
+    [Fact]
+    public void A_sim_variable_input_is_named_with_its_unit() =>
+        Assert.Equal("millibars", A350FcuWindows.StockUnits["KOHLSMAN SETTING MB:1"]);
 
     [Fact]
     public void An_unread_input_composes_nothing() =>

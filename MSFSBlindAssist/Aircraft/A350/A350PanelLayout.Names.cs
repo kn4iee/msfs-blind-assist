@@ -159,6 +159,15 @@ public static partial class A350PanelLayout
         ["FCU_ATC_MSG_LEFT"] = "Captain ATC message", ["FCU_ATC_MSG_RIGHT"] = "First officer ATC message",
         ["FCU_SLIDING_TABLE_BRT_LEFT"] = "Captain sliding table light", ["FCU_SLIDING_TABLE_BRT_RIGHT"] = "First officer sliding table light",
         ["FCU_DISPLAY_BRT"] = "FCU display brightness", ["FCU_INTEG_BRT"] = "FCU integral lighting",
+        // EFIS control panels: each side's twin by side; the filter buttons by their placard.
+        ["EFIS_MODE_LEFT"] = "Captain ND mode", ["EFIS_RANGE_LEFT"] = "Captain ND range",
+        ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH"] = "Captain baro knob push", ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL"] = "Captain baro knob pull",
+        ["EFIS_QNH_PRESSURE_SELECTOR_LEFT"] = "Captain baro knob", ["EFIS_QNH_UNIT_SELECTOR_LEFT"] = "Captain baro unit",
+        ["EFIS_TSK_1_LEFT"] = "Captain CSTR", ["EFIS_TSK_2_LEFT"] = "Captain WPT", ["EFIS_TSK_3_LEFT"] = "Captain VORD",
+        ["EFIS_TSK_4_LEFT"] = "Captain NDB", ["EFIS_TSK_5_LEFT"] = "Captain ARPT",
+        ["EFIS_BSK_1_LEFT"] = "Captain VOR 1", ["EFIS_BSK_2_LEFT"] = "Captain WX", ["EFIS_BSK_3_LEFT"] = "Captain TERR",
+        ["EFIS_BSK_4_LEFT"] = "Captain TRAF", ["EFIS_BSK_5_LEFT"] = "Captain VOR 2",
+        ["EFIS_LS_LEFT"] = "Captain LS", ["EFIS_TAXI_LEFT"] = "Captain taxi", ["EFIS_VV_LEFT"] = "Captain VV",
         // Cargo, ground hydraulics, cabin, OIS, surveillance and maintenance: abbreviations spoken whole.
         ["CARGO_AIR_COND_AFT_ISOL_VALVE"] = "Aft isolation valves",
         ["CARGO_AIR_COND_FWD_ISOL_VALVE"] = "Forward isolation valves",
@@ -178,6 +187,19 @@ public static partial class A350PanelLayout
         ["MAINT_GROUND_HF_DATALINK"] = "Ground HF datalink",
         ["MAINT_SVCE_INT_OVRD"] = "Service interphone override",
         ["MAINT_TOW_ON_BAT_POWER"] = "Towing on battery",
+    };
+
+    private static readonly Dictionary<double, string> NdModes = new()
+    {
+        [0] = "Rose LS", [1] = "Rose VOR", [2] = "Rose NAV", [3] = "Arc", [4] = "Plan",
+    };
+
+    /// <summary>The ND range: five ZOOM positions (the manual: "from a maximum of 5nm down to a minimum of 0.2nm"; the
+    /// middle three are inferred), then 10 to 640 NM.</summary>
+    private static readonly Dictionary<double, string> NdRanges = new()
+    {
+        [0] = "Zoom 0.2 NM", [1] = "Zoom 0.5 NM", [2] = "Zoom 1 NM", [3] = "Zoom 2 NM", [4] = "Zoom 5 NM", [5] = "10 NM",
+        [6] = "20 NM", [7] = "40 NM", [8] = "80 NM", [9] = "160 NM", [10] = "320 NM", [11] = "640 NM",
     };
 
     /// <summary>Toggles the cockpit returns by itself within a second (light tests): a row presses them, once.
@@ -202,6 +224,8 @@ public static partial class A350PanelLayout
         ["FCU_FD"] = new() { [0] = "Off", [1] = "On" },
         ["FCU_METER"] = new() { [0] = "Off", [1] = "On" },
         ["FCU_TRUE_MAG"] = new() { [0] = "Magnetic", [1] = "True" },
+        ["EFIS_MODE_LEFT"] = NdModes, ["EFIS_MODE_RIGHT"] = NdModes,
+        ["EFIS_RANGE_LEFT"] = NdRanges, ["EFIS_RANGE_RIGHT"] = NdRanges,
         ["CABIN_PRESS_ALTITUDE_MODE"] = new() { [0] = "Auto", [1] = "Man" },   // the button's MAN legend
         ["CABIN_PRESS_VS_MODE"] = new() { [0] = "Auto", [1] = "Man" },
     };

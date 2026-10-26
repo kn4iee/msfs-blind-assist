@@ -7,8 +7,9 @@ public sealed class A350Lamp
 {
     private readonly IReadOnlyDictionary<string, string> _keyOf;
 
-    internal A350Lamp(string node, string name, string panel, A350LampRule rule, A350LightPower power)
+    internal A350Lamp(string node, string name, string panel, A350LampRule rule, A350LightPower power, string? controlId = null)
     {
+        ControlId = controlId;
         Node = node;
         Name = name;
         Panel = panel;
@@ -24,6 +25,10 @@ public sealed class A350Lamp
 
     /// <summary>The lamp's node in the generated map, e.g. <c>ELEC_BAT_1_SEQ1_LIGHT</c>.</summary>
     public string Node { get; }
+
+    /// <summary>The map control whose button this lamp is on, or null for an indicator of its own.</summary>
+    public string? ControlId { get; }
+
     public string Name { get; }
     public string Panel { get; }
     public A350LampRule Rule { get; }
@@ -155,17 +160,25 @@ public static class A350PanelLamps
                         continue;
                     string? stateVar = control.StateVar is { Length: > 2 } sv && sv[1] == ':' ? sv.Substring(2) : null;
                     var rules = new HashSet<string>(StringComparer.Ordinal);
+                    var rowLamps = new List<(A350MapLamp Lamp, A350LampRule Rule, string Legend)>();
                     foreach (var mapLamp in own.OrderBy(l => l.Node, StringComparer.Ordinal))
                     {
+                        if (control.Kind == A350Kinds.Selector && mapLamp.Node.EndsWith("_PANEL_LIGHT", StringComparison.Ordinal))
+                            continue;   // a selector position's marker: the row already says the position
                         if (!rules.Add(mapLamp.State))
                             continue;   // a second legend lit by the same rule (ATC MSG, AUTOLAND): one light
                         var rule = A350LampRule.Parse(mapLamp.State);
                         if (stateVar != null && rule.Inputs.All(i => i == stateVar))
                             continue;   // its switch's own position legend
-                        string legend = LegendOf(mapLamp.Node, rule, stateVar);
+                        rowLamps.Add((mapLamp, rule, LegendOf(mapLamp.Node, rule, stateVar)));
+                    }
+                    foreach (var (mapLamp, rule, legend) in rowLamps)
+                    {
+                        // A button's only light with no legend word of its own is just its light (CSTR, VOR 1).
+                        bool alone = rowLamps.Count == 1 && legend is "upper legend" or "lower legend" or "";
                         string name = NameOverrides.TryGetValue(mapLamp.Node, out var given) ? given
-                            : legend.Length == 0 ? $"{row.Name} light" : $"{row.Name} {legend} light";
-                        lamps.Add(new A350Lamp(mapLamp.Node, name, panel, rule, mapLamp.Power));
+                            : alone || legend.Length == 0 ? $"{row.Name} light" : $"{row.Name} {legend} light";
+                        lamps.Add(new A350Lamp(mapLamp.Node, name, panel, rule, mapLamp.Power, control.Id));
                     }
                 }
                 foreach (var (node, onPanel, name) in Indicators)

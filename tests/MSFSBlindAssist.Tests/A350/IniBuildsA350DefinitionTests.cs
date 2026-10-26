@@ -85,6 +85,37 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void A_button_lit_by_its_own_light_reads_that_light()
+    {
+        var def = new WithSections("Glareshield");
+        def.Attach(_sim);
+        def.Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null;
+        const string Cstr = "A350_EFIS_TSK_1_LEFT", Lamp = "A350_LT_EFIS_TSK_1_LEFT_SEQ1_LIGHT";
+        Assert.Contains(Lamp, def.GetVariables()[Cstr].StateVariables!);
+        // (L:INI_FMS_SELECTOR) 0 == (L:INI_FCU_BACKUP_FMS1) 0 == or if{ 0 sp0 } els{ (L:INI_SHOW_CONSTRAINTS) sp0 } l0
+        _cache[Lamp] = 1;   // the rule's first input, INI_FMS_SELECTOR: 1 is the normal FMS
+        _cache["A350_IN_INI_FCU_BACKUP_FMS1"] = 1;
+        _cache["A350_IN_INI_SHOW_CONSTRAINTS"] = 1;
+        _cache[A350PanelLamps.DcPowerKey] = 1;
+        _cache[A350PanelLamps.AcPowerKey] = 1;
+        Assert.True(def.TryDescribeControlState(Cstr, out var state));
+        Assert.Equal("On", state);
+    }
+
+    [Fact]
+    public void The_baro_line_replaces_the_baro_knobs_value_line()
+    {
+        var def = new WithSections("Glareshield");
+        var lines = def.GetPanelDisplayVariables()["EFIS Captain"];
+        Assert.Contains("A350_FCU_CAPTAIN_BARO", lines);
+        Assert.DoesNotContain("A350_VAL_EFIS_QNH_PRESSURE_SELECTOR_LEFT", lines);   // its map state is the unit flag
+        var baro = def.GetVariables()["A350_FCU_CAPTAIN_BARO"];
+        Assert.Equal("KOHLSMAN SETTING MB:1", baro.Name);
+        Assert.Equal(SimVarType.SimVar, baro.Type);
+        Assert.Equal("millibars", baro.Units);
+    }
+
+    [Fact]
     public void The_fcu_windows_are_absent_while_the_glareshield_is_not_offered() =>
         Assert.DoesNotContain("A350_FCU_ALTITUDE_WINDOW", _def.GetVariables().Keys);
 

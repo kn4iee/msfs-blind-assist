@@ -7,19 +7,25 @@ public sealed class A350FcuWindow
 {
     private readonly Func<Func<string, double>, string> _compose;
 
-    internal A350FcuWindow(string name, IReadOnlyList<string> inputs, Func<Func<string, double>, string> compose)
+    internal A350FcuWindow(string name, IReadOnlyList<string> inputs, Func<Func<string, double>, string> compose,
+        string panel = "FCU")
     {
         Name = name;
+        Panel = panel;
         Inputs = inputs;
         _compose = compose;
     }
 
     public string Name { get; }
 
+    /// <summary>The panel whose status display shows it.</summary>
+    public string Panel { get; }
+
     /// <summary>Its MSFSBA variable key: <c>A350_FCU_</c> plus its name, upper case.</summary>
     public string Key => "A350_FCU_" + Name.ToUpperInvariant().Replace(' ', '_').Replace('/', '_');
 
-    /// <summary>The A350 L:vars it reads; the first streams under <see cref="Key"/>.</summary>
+    /// <summary>The variables it reads, A350 L:vars or sim variables (<see cref="A350FcuWindows.StockUnits"/>); the first
+    /// streams under <see cref="Key"/>.</summary>
     public IReadOnlyList<string> Inputs { get; }
 
     /// <summary>The window as the FCU shows it, from values read by L:var name; null while an input is unread.</summary>
@@ -47,6 +53,13 @@ public static class A350FcuWindows
 {
     private const string TrkFpa = "INI_TRACK_FPA_STATE";
 
+    /// <summary>The sim variables a window reads, with the unit each is read in; every other input is an A350 L:var.</summary>
+    public static readonly IReadOnlyDictionary<string, string> StockUnits = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["KOHLSMAN SETTING MB:1"] = "millibars",
+        ["KOHLSMAN SETTING MB:2"] = "millibars",
+    };
+
     public static readonly IReadOnlyList<A350FcuWindow> All = new[]
     {
         new A350FcuWindow("Speed window", new[] { "INI_AIRSPEED_DIAL", "INI_FCU_SPD_DASHED", "INI_FCU_SPD_DOT" },
@@ -62,7 +75,23 @@ public static class A350FcuWindows
             v => Window(v("INI_FCU_VS_DASHED"), 0,
                 v(TrkFpa) >= 0.5 ? "FPA " + v("INI_FPA_DIAL").ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " degrees"
                     : "V/S " + Math.Round(v("INI_VVI_DIAL")).ToString("+0;-0;0", CultureInfo.InvariantCulture) + " feet per minute")),
+        Baro("Captain baro", 1, "EFIS Captain"),
+        Baro("First officer baro", 2, "EFIS First Officer"),
     };
+
+    /// <summary>
+    /// A side's baro as its FCU window shows it (live 2026-10-26): STD while <c>XMLVAR_BaroN_Mode</c> is 3 (the knob
+    /// pushed), else QNH, the sim's own altimeter setting in the unit <c>XMLVAR_Baro_Selector_HPA_N</c> picks (1 hPa,
+    /// 0 inHg). The setting is the sim's <c>KOHLSMAN SETTING</c>: the A350 keeps no copy of its own.
+    /// </summary>
+    private static A350FcuWindow Baro(string name, int side, string panel)
+    {
+        string setting = $"KOHLSMAN SETTING MB:{side}", mode = $"XMLVAR_Baro{side}_Mode", unit = $"XMLVAR_Baro_Selector_HPA_{side}";
+        return new A350FcuWindow(name, new[] { setting, mode, unit }, v =>
+            Math.Abs(v(mode) - 3) < 0.5 ? "STD"
+            : v(unit) >= 0.5 ? "QNH " + Whole(v(setting)) + " hectopascals"
+            : "QNH " + (v(setting) / 33.8639).ToString("0.00", CultureInfo.InvariantCulture) + " inches", panel);
+    }
 
     private static string Window(double dashed, double dot, string value) =>
         (dashed >= 0.5 ? "Dashes" : value) + (dot >= 0.5 ? ", managed" : "");

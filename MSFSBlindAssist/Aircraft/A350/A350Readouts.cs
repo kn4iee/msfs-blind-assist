@@ -16,6 +16,16 @@ public static class A350Readouts
         ["AIRLINER_CABIN_PRESS_VS_TARGET"] = "feet per minute",
     };
 
+    /// <summary>Encoders whose map state variable is not their value: the baro knobs' is the hPa/inHg flag, and their
+    /// value is the side's baro line (<see cref="A350FcuWindows"/>).</summary>
+    private static readonly HashSet<string> NoValueLine = new(StringComparer.Ordinal)
+    {
+        "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT", "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT",
+    };
+
+    /// <summary>Whether an encoder gets a value line of its own.</summary>
+    public static bool HasValueLine(A350Control control) => control.StateVar is { Length: > 0 } && !NoValueLine.Contains(control.Id);
+
     /// <summary>The value line's MSFSBA key: <c>A350_VAL_</c> plus the control's id after <c>AIRLINER_</c>.</summary>
     public static string KeyFor(A350Control control) =>
         "A350_VAL_" + (control.Id.StartsWith("AIRLINER_", StringComparison.Ordinal) ? control.Id.Substring(9) : control.Id);

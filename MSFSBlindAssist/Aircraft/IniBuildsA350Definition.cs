@@ -28,8 +28,6 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string AircraftName => "iniBuilds Airbus A350";
     public override string AircraftCode => Code;
 
-    private const string FcuPanel = "FCU";
-
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
     /// (the generated names elsewhere still collide, [VAR-1]).</summary>
     internal static readonly string[] CuratedSections = { "Overhead" };
@@ -46,6 +44,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     private readonly HashSet<string> _lampInputKeys = new(StringComparer.Ordinal);
 
     private readonly Dictionary<string, List<string>> _panelDisplays;
+
+    /// <summary>A button row's own light (its only lamp): the row reads it, as a sighted pilot sees the button lit.</summary>
+    private readonly Dictionary<string, A350Lamp> _buttonLamps = new(StringComparer.Ordinal);
 
     /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
     private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
@@ -106,7 +107,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             string panel = _placement.RowsByPanel.First(p => p.Value.Contains(row)).Key;
             if (A350Options.For(control.Id) is { } option)
                 AddDisplay(panel, option.Key);
-            if (row.Action == A350RowAction.Increase && control.StateVar is { Length: > 0 })
+            if (row.Action == A350RowAction.Increase && A350Readouts.HasValueLine(control))
             {
                 string key = A350Readouts.KeyFor(control);
                 _values[key] = (control, row.Name.EndsWith(" increase", StringComparison.Ordinal) ? row.Name[..^" increase".Length] : row.Name);
@@ -120,14 +121,20 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             AddDisplay(lamp.Panel, lamp.Key);
         }
 
-        if (_placement.RowsByPanel.ContainsKey(FcuPanel) && _sections.Any(s => _placement.Structure[s].Contains(FcuPanel)))
-            foreach (var window in A350FcuWindows.All)
+        var offeredPanels = _sections.SelectMany(s => _placement.Structure[s]).ToHashSet(StringComparer.Ordinal);
+        foreach (var window in A350FcuWindows.All)
+            if (offeredPanels.Contains(window.Panel))
             {
                 _fcuWindows[window.Key] = window;
                 _lampInputKeys.Add(window.Key);
                 _lampInputKeys.UnionWith(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
-                AddDisplay(FcuPanel, window.Key);
+                AddDisplay(window.Panel, window.Key);
             }
+
+        foreach (var group in _lamps.Values.Where(l => l.ControlId != null).GroupBy(l => l.ControlId!))
+            if (group.Count() == 1)
+                foreach (var row in _rows.Values.Where(r => r.Action == A350RowAction.Press && r.Control?.Id == group.Key))
+                    _buttonLamps[row.Key] = group.First();
 
         void AddDisplay(string panel, string key)
         {
@@ -164,6 +171,17 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => _panelDisplays;
+
+    /// <summary>A button row lit by its own light reads "On" or "Off", as the cockpit shows it.</summary>
+    public override bool TryDescribeControlState(string varKey, out string stateText)
+    {
+        if (_buttonLamps.TryGetValue(varKey, out var lamp) && _sim is { } sim && lamp.IsLit(key => Cached(sim, key)) is bool lit)
+        {
+            stateText = lit ? "On" : "Off";
+            return true;
+        }
+        return base.TryDescribeControlState(varKey, out stateText);
+    }
 
     /// <summary>A light's status line as the cockpit shows it, its rule AND its bus's light power: "On" or "Off".
     /// While an input is unread it is not composed, as on the iniBuilds A300.</summary>
@@ -206,6 +224,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (vars.ContainsKey(row.Key))
                 continue;   // never shadow a base variable
             var def = BuildRowVariable(row);
+            if (_buttonLamps.TryGetValue(row.Key, out var buttonLamp))
+                def.StateVariables = buttonLamp.InputKeys;   // the label repaints when its light changes
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;
@@ -257,6 +277,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 RenderAsReadOnlyStatus = stateVariables != null,
                 StateVariables = stateVariables is { Count: > 0 } ? stateVariables : null,   // a power change repaints a light
             };
+            if (A350FcuWindows.StockUnits.TryGetValue(name, out var units))
+            {
+                def.Type = SimVarType.SimVar;   // a window input that is a sim variable (the baro setting), in its unit
+                def.Units = units;
+            }
             if (!batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[key] = def;
