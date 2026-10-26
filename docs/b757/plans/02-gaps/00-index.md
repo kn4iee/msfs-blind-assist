@@ -206,6 +206,7 @@ each); plan 16 is docs and owner steps, worked with superpowers:executing-plans.
 
 ## Base commits
 
-- Early plans (02-08) start from the commit plan 01 records here: `<filled in by 01>`.
+- Early plans (02-08) start from the commit plan 01 records here: `cf1dfce94` (plan 01 with its record, merged with
+  `origin/main` at f5ead55c2).
 - Later plans (09-15) start from `B757` once their "After" plans have landed; record the commit you started from in
   your plan's execution record ("Started").
