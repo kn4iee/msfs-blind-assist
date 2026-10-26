@@ -52,6 +52,9 @@ public sealed class A350FcuWindow
 public static class A350FcuWindows
 {
     private const string TrkFpa = "INI_TRACK_FPA_STATE";
+    private const string RollMode = "INI_ROLL_MODE";
+
+    private const double NavRollMode = A350TypedEntry.NavRollMode;
 
     /// <summary>The sim variables a window or a typed field reads, with the unit each is read in; every other input is an A350 L:var.</summary>
     public static readonly IReadOnlyDictionary<string, string> StockUnits = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -63,13 +66,21 @@ public static class A350FcuWindows
 
     public static readonly IReadOnlyList<A350FcuWindow> All = new[]
     {
-        new A350FcuWindow("Speed window", new[] { "INI_AIRSPEED_DIAL", "INI_FCU_SPD_DASHED", "INI_FCU_SPD_DOT" },
-            v => Window(v("INI_FCU_SPD_DASHED"), v("INI_FCU_SPD_DOT"),
-                v("INI_AIRSPEED_DIAL") < 5 ? "Mach " + v("INI_AIRSPEED_DIAL").ToString("0.00", CultureInfo.InvariantCulture)
-                    : Whole(v("INI_AIRSPEED_DIAL")) + " knots")),
-        new A350FcuWindow("Heading window", new[] { "INI_HEADING_DIAL", "INI_TRK_DIAL", TrkFpa, "INI_FCU_HDG_DASHED", "INI_FCU_HDG_DOT" },
+        // A turn while the speed is managed shows the preset for 45 s (FCU::Draw reads INI_Preset_Dial while its timer
+        // runs); the WASM drops the dashes exactly then, so managed and not dashed is the preset (live in flight).
+        new A350FcuWindow("Speed window", new[]
+            {
+                "INI_AIRSPEED_DIAL", "INI_FCU_SPD_DASHED", "INI_FCU_SPD_DOT", "INI_MANAGED_SPEED", "INI_PRESET_DIAL",
+                "INI_PRESET_DIAL_IS_MACH",
+            },
+            v => v("INI_FCU_SPD_DASHED") < 0.5 && v("INI_MANAGED_SPEED") >= 0.5
+                ? Speed(v("INI_PRESET_DIAL"), v("INI_PRESET_DIAL_IS_MACH") >= 0.5) + ", preset"
+                : Window(v("INI_FCU_SPD_DASHED"), v("INI_FCU_SPD_DOT"), Speed(v("INI_AIRSPEED_DIAL"), v("INI_AIRSPEED_DIAL") < 5))),
+        // In NAV (INI_ROLL_MODE 1; HDG is 2, TRK 11) a turn shows the preset heading for 45 s.
+        new A350FcuWindow("Heading window", new[] { "INI_HEADING_DIAL", "INI_TRK_DIAL", TrkFpa, "INI_FCU_HDG_DASHED", "INI_FCU_HDG_DOT", RollMode },
             v => Window(v("INI_FCU_HDG_DASHED"), v("INI_FCU_HDG_DOT"),
-                v(TrkFpa) >= 0.5 ? "Track " + Degrees(v("INI_TRK_DIAL")) : "Heading " + Degrees(v("INI_HEADING_DIAL")))),
+                (v(TrkFpa) >= 0.5 ? "Track " + Degrees(v("INI_TRK_DIAL")) : "Heading " + Degrees(v("INI_HEADING_DIAL")))
+                + (v("INI_FCU_HDG_DASHED") < 0.5 && Math.Abs(v(RollMode) - NavRollMode) < 0.5 ? ", preset" : ""))),
         new A350FcuWindow("Altitude window", new[] { "INI_ALTITUDE_DIAL", "INI_FCU_ALT_DOT" },
             v => Window(0, v("INI_FCU_ALT_DOT"), Whole(v("INI_ALTITUDE_DIAL")) + " feet")),
         new A350FcuWindow("V/S window", new[] { "INI_VVI_DIAL", "INI_FPA_DIAL", TrkFpa, "INI_FCU_VS_DASHED" },
@@ -92,14 +103,26 @@ public static class A350FcuWindows
     private static A350FcuWindow Baro(string name, int side, string panel)
     {
         string setting = $"KOHLSMAN SETTING MB:{side}", mode = $"XMLVAR_Baro{side}_Mode", unit = $"XMLVAR_Baro_Selector_HPA_{side}";
-        return new A350FcuWindow(name, new[] { setting, mode, unit }, v =>
-            Math.Abs(v(mode) - 3) < 0.5 ? "STD"
-            : v(unit) >= 0.5 ? "QNH " + Whole(v(setting)) + " hectopascals"
+        string preset = A350TypedEntry.PresetVar(side), shown = preset + "_SHOW";
+        return new A350FcuWindow(name, new[] { setting, mode, unit, preset, shown }, v =>
+            Math.Abs(v(mode) - 3) < 0.5
+                ? v(shown) >= 0.5
+                    ? "STD, preset " + (v(unit) >= 0.5 ? Whole(v(preset)) + " hectopascals"
+                        : (v(preset) / 100).ToString("0.00", CultureInfo.InvariantCulture) + " inches")
+                    : "STD"
+            : v(unit) >= 0.5 ? "QNH " + Hectopascals(v(setting)) + " hectopascals"
             : "QNH " + (v(setting) / 33.8639).ToString("0.00", CultureInfo.InvariantCulture) + " inches", panel);
     }
 
     private static string Window(double dashed, double dot, string value) =>
         (dashed >= 0.5 ? "Dashes" : value) + (dot >= 0.5 ? ", managed" : "");
+
+    /// <summary>A side's QNH in hectopascals as the cockpit reads it: floored (the baro knob's tooltip, flr '%dhPa'), so
+    /// 1015.81 reads 1015.</summary>
+    public static string Hectopascals(double mb) => Math.Floor(mb + 1e-6).ToString("0", CultureInfo.InvariantCulture);
+
+    private static string Speed(double v, bool mach) =>
+        mach ? "Mach " + v.ToString("0.00", CultureInfo.InvariantCulture) : Whole(v) + " knots";
 
     private static string Whole(double v) => Math.Round(v).ToString("0", CultureInfo.InvariantCulture);
 

@@ -116,6 +116,11 @@ public partial class IniBuildsA350Definition
                         return;
                 }
             }
+            if (plan.Stepper is { } stepper)
+            {
+                await StepAsync(row, typed, plan, stepper, read, sim, announcer, Superseded);
+                return;
+            }
             string key = KeyForInput(plan.ReadBackVar);
             await Delay(TypedReadBackMs);
             if (Superseded())
@@ -143,6 +148,43 @@ public partial class IniBuildsA350Definition
         {
             Log.Warn("A350", $"A typed value for {row.Key} failed: {ex.Message}");
         }
+    }
+
+    /// <summary>Clicks toward a value read between clicks (<see cref="A350TypedStepper"/>): said when the knob shows none,
+    /// else confirmed as the cockpit shows it once reached, or what it shows after the last round.</summary>
+    private async Task StepAsync(A350PlacedRow row, double typed, A350TypedPlan plan, A350TypedStepper stepper,
+        Func<string, double?> read, SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<bool> superseded)
+    {
+        double? now = null;
+        for (int round = 0; round <= A350TypedStepper.MaxRounds; round++)
+        {
+            await Delay(A350TypedStepper.SettleMs);
+            if (superseded())
+                return;
+            if (await ReadFresh(sim, KeyForInput(stepper.ShowVar), ReadoutTimeoutMs) is not >= 0.5)
+            {
+                announcer.Announce(stepper.NotShown);
+                return;
+            }
+            now = await ReadFresh(sim, KeyForInput(stepper.ValueVar), ReadoutTimeoutMs);
+            if (now is not double value || superseded())
+                return;
+            int clicks = (int)Math.Round(stepper.Target - value);
+            if (clicks == 0 || round == A350TypedStepper.MaxRounds)
+                break;
+            for (int i = 0; i < Math.Abs(clicks); i++)
+            {
+                Send(sim, stepper.Click(Math.Sign(clicks)).Rpn);
+                await Delay(A350TypedStepper.GapMs);
+                if (superseded())
+                    return;
+            }
+        }
+        if (now is not double shown)
+            return;
+        announcer.Announce(plan.Reached(shown)
+            ? plan.Confirm(shown, read)
+            : $"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(shown, read)}");
     }
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>

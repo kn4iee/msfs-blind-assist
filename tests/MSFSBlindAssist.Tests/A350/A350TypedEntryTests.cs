@@ -66,7 +66,7 @@ public class A350TypedEntryTests
         Assert.Equal(new[] { "1 (>B:AIRLINER_FCU_SPD_KNOB_Set)" }, Rpns(plan));
         Assert.Equal(("INI_PRESET_DIAL", 250.0), (plan.ReadBackVar, plan.Target));
         Assert.Equal("250 (>L:INI_PRESET_DIAL)", plan.Correction.Rpn);
-        Assert.Equal("FCU speed 250, managed", plan.Confirm(250, read));
+        Assert.Equal("FCU speed 250, preset", plan.Confirm(250, read));   // live in flight: the window shows the preset
     }
 
     [Theory]
@@ -91,8 +91,37 @@ public class A350TypedEntryTests
         Assert.Equal(A350WritePlan.UnknownPositionRefusal, A350TypedEntry.Plan(A350TypedEntry.Speed, 250, _ => null).Refusal);
     }
 
-    private static Func<string, double?> Heading(double hdg, double trk = 0, double trkFpa = 0) =>
-        State(("INI_HEADING_DIAL", hdg), ("INI_TRK_DIAL", trk), ("INI_TRACK_FPA_STATE", trkFpa), ("INI_FCU_HDG_DOT", 0));
+    private static Func<string, double?> Heading(double hdg, double trk = 0, double trkFpa = 0, double dashed = 0) =>
+        State(("INI_HEADING_DIAL", hdg), ("INI_TRK_DIAL", trk), ("INI_TRACK_FPA_STATE", trkFpa), ("INI_FCU_HDG_DOT", 0),
+            ("INI_FCU_HDG_DASHED", dashed), ("INI_ROLL_MODE", dashed >= 0.5 ? 1 : 2 + 9 * trkFpa));
+
+    /// <summary>Live in flight 2026-10-26: a turn of a dashed window (NAV, V/S not engaged) is a preset the pilot pulls
+    /// to use, as on the FCU; the mode stays as it was.</summary>
+    [Fact]
+    public void A_value_typed_into_a_dashed_window_is_confirmed_as_a_preset()
+    {
+        var nav = Heading(192, dashed: 1);
+        Assert.Equal("FCU heading 300, preset", A350TypedEntry.Plan(A350TypedEntry.Heading, 300, nav).Confirm(300, nav));
+        var vs = State(("INI_VVI_DIAL", 0), ("INI_FPA_DIAL", 0), ("INI_TRACK_FPA_STATE", 0), ("INI_FCU_VS_DASHED", 1), ("INI_PITCH_MODE", 12));
+        Assert.Equal("FCU vertical speed -1000, preset", A350TypedEntry.Plan(A350TypedEntry.VerticalSpeed, -1000, vs).Confirm(-1000, vs));
+    }
+
+    /// <summary>Live in flight: a second value typed while the first preset still shows (window no longer dashed) is a
+    /// preset too while NAV (INI_ROLL_MODE 1) or a vertical mode other than V/S 8 and FPA 11 (ALT is 12) is engaged.</summary>
+    [Fact]
+    public void A_value_typed_over_a_preset_is_a_preset_while_the_mode_is_not_engaged()
+    {
+        var nav = State(("INI_HEADING_DIAL", 310), ("INI_TRK_DIAL", 0), ("INI_TRACK_FPA_STATE", 0), ("INI_FCU_HDG_DOT", 0),
+            ("INI_FCU_HDG_DASHED", 0), ("INI_ROLL_MODE", 1));
+        Assert.Equal("FCU heading 305, preset", A350TypedEntry.Plan(A350TypedEntry.Heading, 305, nav).Confirm(305, nav));
+        var hdg = State(("INI_HEADING_DIAL", 310), ("INI_TRK_DIAL", 0), ("INI_TRACK_FPA_STATE", 0), ("INI_FCU_HDG_DOT", 0),
+            ("INI_FCU_HDG_DASHED", 0), ("INI_ROLL_MODE", 2));
+        Assert.Equal("FCU heading 305, selected", A350TypedEntry.Plan(A350TypedEntry.Heading, 305, hdg).Confirm(305, hdg));
+        var alt = State(("INI_VVI_DIAL", -500), ("INI_FPA_DIAL", 0), ("INI_TRACK_FPA_STATE", 0), ("INI_FCU_VS_DASHED", 0), ("INI_PITCH_MODE", 12));
+        Assert.Equal("FCU vertical speed -700, preset", A350TypedEntry.Plan(A350TypedEntry.VerticalSpeed, -700, alt).Confirm(-700, alt));
+        var vsMode = State(("INI_VVI_DIAL", -500), ("INI_FPA_DIAL", 0), ("INI_TRACK_FPA_STATE", 0), ("INI_FCU_VS_DASHED", 0), ("INI_PITCH_MODE", 8));
+        Assert.Equal("FCU vertical speed -700", A350TypedEntry.Plan(A350TypedEntry.VerticalSpeed, -700, vsMode).Confirm(-700, vsMode));
+    }
 
     [Fact]
     public void A_heading_goes_the_short_way_round()
@@ -137,7 +166,7 @@ public class A350TypedEntryTests
     }
 
     private static Func<string, double?> Vertical(double trkFpa) =>
-        State(("INI_VVI_DIAL", 0), ("INI_FPA_DIAL", 0), ("INI_TRACK_FPA_STATE", trkFpa));
+        State(("INI_VVI_DIAL", 0), ("INI_FPA_DIAL", 0), ("INI_TRACK_FPA_STATE", trkFpa), ("INI_FCU_VS_DASHED", 0), ("INI_PITCH_MODE", 8 + 3 * trkFpa));
 
     [Fact]
     public void A_vertical_speed_rounds_to_100_and_an_fpa_to_a_tenth()
@@ -208,10 +237,21 @@ public class A350TypedEntryTests
     }
 
     [Fact]
-    public void A_qnh_typed_while_std_is_said_because_the_knob_does_nothing_then()
+    public void A_qnh_typed_while_std_is_a_preset_the_knob_steps_to()
     {
-        Assert.Equal("Captain baro is on STD: the knob sets no QNH until it is pulled.",
-            A350TypedEntry.Plan(A350TypedEntry.CaptainQnh, 1013, Baro(1, 1013.25, mode: 3)).Refusal);
+        // Live in flight: on STD the first click shows the preset, each further click a step, paced; the pull sets it.
+        var plan = A350TypedEntry.Plan(A350TypedEntry.CaptainQnh, 1013, Baro(1, 1013.25, mode: 3));
+        Assert.Null(plan.Refusal);
+        Assert.Equal(new[] { "1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)" }, Rpns(plan));
+        var stepper = plan.Stepper!;
+        Assert.Equal(("INI_BARO_PRESET_CPT", "INI_BARO_PRESET_CPT_SHOW", 1013.0), (stepper.ValueVar, stepper.ShowVar, stepper.Target));
+        Assert.Equal("1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)", stepper.Click(1).Rpn);
+        Assert.Equal("-1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)", stepper.Click(-1).Rpn);
+        Assert.Equal("Captain altimeter preset 1013 hectopascals", plan.Confirm(1013, _ => 0));
+        Assert.Equal("Captain baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first.", stepper.NotShown);
+        var fo = A350TypedEntry.Plan(A350TypedEntry.FirstOfficerQnh, 29.92, Baro(2, 1013.25, hpa: 0, mode: 3));
+        Assert.Equal(("INI_BARO_PRESET_FO", 2992.0), (fo.Stepper!.ValueVar, fo.Stepper.Target));   // hundredths of an inch
+        Assert.Equal("First officer altimeter preset 29.92 inches", fo.Confirm(2992, _ => 0));
     }
 
     [Fact]

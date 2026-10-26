@@ -14,6 +14,7 @@ using MSFSBlindAssist.SimConnect;
 // A350Probe keep "key=val[#ms];..." [watch,...]  - set and read back, no restore
 // A350Probe cache "key,key"                     - MSFSBA's cached value, a fresh read, and how each key streams
 // A350Probe disp <panel> [watch,...]             - the panel's status lines and the watched L:vars, read fresh
+// A350Probe rpn "code#ms;code#ms" [watch,...]  - raw calculator strings, paced, then the watched L:vars
 internal static class Program
 {
     [STAThread]
@@ -144,6 +145,21 @@ internal sealed class ProbeForm : Form
             // What MSFSBA's cache holds for each key (what a plan is made from), then a fresh read.
             foreach (var key in _arg!.Split(',', StringSplitOptions.RemoveEmptyEntries))
                 Line($"{key}	cache={Fmt(_m.GetCachedVariableValue(key))}	fresh={Fmt(await Read(key))}	batch={(vars[key].ExcludeFromBatch ? "own" : "batch")}");
+            return;
+        }
+
+        if (_mode == "rpn")
+        {
+            // Raw calculator strings through MSFSBA's own sender, each followed by its pause ("code#ms;code#ms"), then
+            // the watched L:vars read fresh: for timing measurements the MCP's round trips cannot pace.
+            foreach (var item in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var hash = item.Split('#');
+                _m.ExecuteCalculatorCodeUnique(hash[0]);
+                await Task.Delay(hash.Length > 1 ? int.Parse(hash[1]) : 100);
+            }
+            foreach (var name in _watch)
+                Line($"{name}\t{Fmt(await Read("W:" + name))}");
             return;
         }
 

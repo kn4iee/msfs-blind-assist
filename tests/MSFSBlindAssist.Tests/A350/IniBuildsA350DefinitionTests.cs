@@ -415,6 +415,37 @@ public class IniBuildsA350ReadBackTests
     }
 
     [Fact]
+    public async Task A_qnh_typed_on_std_is_stepped_to_from_the_shown_preset()
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, sent, speech, readBacks) = Typed(cache);
+        cache[def.KeyForInput("KOHLSMAN SETTING MB:1")] = 1013.25;
+        cache[def.KeyForInput("XMLVAR_Baro1_Mode")] = 3;
+        cache[def.KeyForInput("XMLVAR_Baro_Selector_HPA_1")] = 1;
+        foreach (var v in new double?[] { 1, 1010, 1, 1013 })   // shown, its value; shown, the value after three clicks
+            readBacks.Enqueue(v);
+        def.HandleUIVariableSet("A350_CAPT_QNH_SET", 1013, def.GetVariables()["A350_CAPT_QNH_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Equal(Enumerable.Repeat("1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)", 4), sent);
+        Assert.Equal(new[] { "Captain altimeter preset 1013 hectopascals" }, speech.All);
+    }
+
+    [Fact]
+    public async Task A_qnh_typed_on_std_where_no_preset_shows_is_said()
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, sent, speech, readBacks) = Typed(cache);
+        cache[def.KeyForInput("KOHLSMAN SETTING MB:1")] = 1013.25;
+        cache[def.KeyForInput("XMLVAR_Baro1_Mode")] = 3;
+        cache[def.KeyForInput("XMLVAR_Baro_Selector_HPA_1")] = 1;
+        readBacks.Enqueue(0);   // not shown: on the ground the knob shows no preset
+        def.HandleUIVariableSet("A350_CAPT_QNH_SET", 1013, def.GetVariables()["A350_CAPT_QNH_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Single(sent);
+        Assert.Equal(new[] { "Captain baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first." }, speech.All);
+    }
+
+    [Fact]
     public async Task A_typed_value_the_aircraft_will_not_take_says_what_it_shows()
     {
         var cache = new Dictionary<string, double>();
