@@ -23,7 +23,7 @@ before the branch merges.
 
 | # | Asked | What we found | Plan |
 |---|---|---|---|
-| 1 | Set the nav radios with input Ctrl+N | BlueBird's VOR and ILS receivers are its own: the sim's NAV 1-3 frequencies and courses never change (measured), so the shared Ctrl+N window (stock NAV events) would do nothing. VOR frequencies are tuned on the CDU's NAV RAD page (measured: typing 113.90 and pressing 1L tuned VOR L; DELETE returned it to auto). Courses are BlueBird variables that take a direct write (`BBS_VOR_L_COURSE`, `BBS_VOR_R_COURSE`, `BBS_ILS_COURSE`). The ILS frequency has no readable value; its knobs take steps only (§3.2). | 04 |
+| 1 | Set the nav radios with input Ctrl+N | BlueBird's VOR and ILS receivers are its own: the sim's NAV 1-3 frequencies and courses never change (measured), so the shared Ctrl+N window (stock NAV events) would do nothing. VOR frequencies are tuned on the CDU's NAV RAD page (measured: typing 113.90 and pressing 1L tuned VOR L; DELETE returned it to auto). Courses are BlueBird variables that take a direct write (`BBS_VOR_L_COURSE`, `BBS_VOR_R_COURSE`, `BBS_ILS_COURSE`). The ILS frequency has no readable value; its knobs take steps only (§3.2). Owner, 2026-10-26 (R75): Ctrl+N carries only what the FMC cannot set (the ILS course and frequency, and the VOR courses only if the CDU cannot set them); a VOR is tuned in the CDU window. | 04 |
 | 2 | Output D and Shift+D | Silent today. The CDU's PROG page 1 has the destination, its distance, ETA and fuel, and "TO T/C" (later "TO T/D") with time and distance (measured on the first officer's CDU), the iFly's source for the same keys. | 06 |
 | 3 | COM changes are not announced | BlueBird's three VHF radios store their frequencies in the sim's own COM 1-3 variables (measured: VHF L is COM 1, VHF C is COM 2, VHF R is COM 3; the knobs step 8.33 kHz channels; a stock standby set sticks). So COM changes can be announced, and standby frequencies typed in, as on the PMDG 737. | 04 |
 | 4 | "Position 1, Position 2" names | 35 controls still read "Position n". BlueBird's list names every one but two (table in §3.6). | 02 |
@@ -167,7 +167,7 @@ only (BlueBird's list), unmeasured.
 Numbering continues plan 01's rulings.
 - R51: Plan files follow the FenixV3 layout: one foundation plan lays seams, every other plan owns its files, shared
   docs go through the integration plan (owner, 2026-10-25: "no file conflicts").
-- R52: Background CDU reads and writes (N, D, Shift+D, Ctrl+N's VOR frequencies) use the first officer's CDU, as the
+- R52: Background CDU reads and writes (N, D, Shift+D, the FMC's runway ILS in Ctrl+N; R75) use the first officer's CDU, as the
   iFly reads PROG; the captain's CDU is never touched. The FO CDU is left on the page the app used. If wrong: a
   pilot using the FO CDU in the CDU window sees its page change.
 - R53 (owner, Q1): COM words are the other Boeings': "COM1 active 124.850", "COM2 standby 121.500"; COM 1 is VHF L,
@@ -176,7 +176,8 @@ Numbering continues plan 01's rulings.
   own storage); a transfer tries the stock `COMn_RADIO_SWAP` first and falls back to the tuning panel's transfer
   button whose panel selects that radio.
 - R55: Ctrl+N's Enter applies only the field it is pressed in (the PMDG window applies all four): a VOR frequency
-  goes through the CDU, so touching unchanged fields would cost seconds and FO CDU keys.
+  goes through the CDU, so touching unchanged fields would cost seconds and FO CDU keys. (Since R75 the window has no
+  VOR frequency; the rule holds for its remaining fields, and the ILS frequency's knob steps cost seconds too.)
 - R56: The shared glideslope call-out is off on the 757 until a BlueBird source is found (M4, plan 13); its Ctrl+M row
   goes too ([VAR-9]).
 - R57: The MCP windows get fixed access keys: Heading S/H/L; Speed S SPD, T THR, F FLCH, M IAS/MACH, I Speed
@@ -202,8 +203,8 @@ Numbering continues plan 01's rulings.
   LAND 2, NO LAND 3, NO AUTOLAND), A/T armed, A/P and A/T disconnect lights, altitude alert, configuration warning,
   EXT PWR available / on, ground power connected, IRS aligned, start valves, doors, squawk and TCAS mode, COM.
   Not the GPWS, stall or callout lights: the aircraft voices them.
-- R67 (owner, Q2): the owner flies with a hardware throttle, so plan 08 (thrust levers from the keyboard, for pilots
-  without one) is optional and last.
+- R67 (owner, Q2): the owner flies with a hardware throttle, so plan 15 (thrust levers from the keyboard, for pilots
+  without one; numbered 08 before the plans were renumbered) is optional and last.
 - R68 (owner, 2026-10-25: "the earlier plans to be essentials and fixes and adding new items/features as later
   plans"): plan 01 is the foundation; plans 02-08 are fixes and essentials (fixes first inside each), so a full
   A-to-B flight is possible once they land; plans 09-15 are new features; plan 16 integrates. Plans of the same kind
@@ -224,6 +225,19 @@ Numbering continues plan 01's rulings.
   BlueBird's screen (WASM-drawn, unreadable); it shows the app's model of what BlueBird's variables and settings say.
 - R74: V-speed announcements are not planned: no variable holds them, and reading TAKEOFF REF on a timer would keep
   flipping the first officer's CDU; the pilot reads them in the CDU window.
+- R75 (owner, 2026-10-26, Q7): Ctrl+N carries only what the FMC cannot set. BlueBird's manual (Complete Flight Guide
+  v1.01, pp. 43, 94, 192; the procedures' ILS profile FP-1): the VORs are normally AUTO (the FMC tunes them) and a
+  particular station is tuned on the CDU's NAV RADIO page or the VOR/DME panel in MAN; the ILS is tuned by hand on the
+  ILS control panel and parked when not needed, the FMC does not tune it and posts RW/ILS FREQ ERROR or RW/ILS CRS
+  ERROR when the tuned ILS differs. So the window drops the VOR frequency boxes and auto buttons (the CDU window tunes a
+  VOR) and keeps the ILS course, the ILS frequency and park per M5, the FMC's runway ILS from APPROACH REF as a
+  reference, and the VOR courses only if the CDU cannot set them (plan 04). If wrong: a pilot who wants a VOR tuned
+  from Ctrl+N uses the CDU window.
+- R76 (owner, 2026-10-26, Q8): typed CDU entries go faster. Each key is held 250 ms with 400 ms after its release
+  (0.65 s a character), safe but never measured as the minimum (`evidence/cdu.md`). Plan 08 measures the fastest
+  reliable hold and gap (M10) and uses it for entries typed in the CDU window's scratchpad box only; the window's
+  single keys and `Bbs757CduPages` keep 250/400; a typed entry the CDU missed a key of is said ("Scratchpad shows
+  KAT"). The tablet client passes 01 → 08 → 13 for the per-key gap. If wrong: typing stays at 0.65 s a character.
 
 ## 5. Contracts between plans
 
@@ -243,9 +257,11 @@ Plan 01 creates these; later plans use them as written.
 Each item belongs to the plan that needs it (in brackets). M1 Mach changeover, `BBS_TARGET_MACH`, the knob's Mach step and tiers, the drums in Mach. M2 speed intervene in
 VNAV (`BBS_IAS_BLANKED`). M3 the altitude selector push in a VNAV climb or descent with a constraint. M4 an L:var
 hunt at each mode change (THR REF, VNAV, LOC and G/S capture, FLARE, ROLLOUT, A/P and A/T disconnect) for FMA and
-glideslope sources. M5 the ILS panel: PARK, and whether the frequency knobs wrap or stop. M6 the SPD button in flight.
-M7 the autoland status vars through an autoland. M8 `BBS_VNAV_TOD`. M9 reverse thrust with the sim's keys.
-Owners: M1, M2, M6 [05]; M3 [02, then 05]; M4 [13]; M5 [04]; M7, M8 [06]; M9 [15]. The L:var snapshot tool for
+glideslope sources. M5 the ILS panel: PARK, and whether the frequency knobs wrap or stop; when and on which CDU
+RW/ILS FREQ ERROR appears; whether an Alt+N read shows the tuned ILS frequency (R75). M6 the SPD button in flight.
+M7 the autoland status vars through an autoland. M8 `BBS_VNAV_TOD`. M9 reverse thrust with the sim's keys. M10 the
+fastest reliable CDU key hold and gap, on the ground (R76).
+Owners: M1, M2, M6 [05]; M3 [02, then 05]; M4 [13]; M5 [04]; M7, M8 [06]; M9 [15]; M10 [08]. The L:var snapshot tool for
 them (plan 01 commits it) is described in `docs/b757/tools/lvar-snapshot/README.md`.
 
 ## 7. Toward PMDG parity
@@ -275,9 +291,13 @@ EICAS and FMA text (not published). Sizes are rough: S a day or less, M a few da
 ## 8. Owner's answers (2026-10-25)
 
 1. Q1, COM words: "like the other Boeings" (R53).
-2. Q2, thrust: flies with a hardware throttle; plan 08 is optional (R67).
+2. Q2, thrust: flies with a hardware throttle; plan 15 (thrust levers) is optional (R67).
 3. Q3, MCP windows: Alt+letter keys (R57, plan 05).
 4. Q4, measurement flight: no separate plan; measured during the owner's own flights (R69).
 5. Q5, flap speeds: the standard table (R61).
 6. Q6, parity: the First Officer, the EFB with a reworked window, the rest of the panels with tests, cockpit-wide
    announcements, and a CDU presentation plan for speech and braille (R70). Order: fixes first (R68).
+7. Q7 (2026-10-26), Ctrl+N: "there's not really a need to have a ctrl n box since you can tune via fmc"; after the
+   manual showed the ILS cannot be tuned through the FMC: Ctrl+N only for what the FMC cannot set (R75).
+8. Q8 (2026-10-26), CDU typing: "speed up scratchpad entry in the cdu and include that in the relevant plan" (R76,
+   plan 08).

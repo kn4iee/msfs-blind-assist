@@ -14,10 +14,11 @@
 
 ## Global Constraints
 
-- Owned files (from plan 08): `Forms/BBS757/BBS757CduForm.cs`, `BBS757CduForm.Designer.cs`, `SimConnect/BBS757/Bbs757CduFrame.cs`, `Bbs757CduKeys.cs`, `Bbs757CduRows.cs`, `Bbs757CduMarkers.cs` (new), `Aircraft/BBS757Definition.CduRows.cs` (new, the Ctrl+M row hook); tests `Bbs757CduFrameTests.cs`, `Bbs757CduKeysTests.cs`, `Bbs757CduRowsTests.cs`, `Bbs757CduMarkersTests.cs` (new); fixtures `bbs757-cdu-*.json`; `docs/b757/evidence/flight-09.md`.
+- Owned files (from plan 08): `Forms/BBS757/BBS757CduForm.cs`, `BBS757CduForm.Designer.cs`, `SimConnect/BBS757/Bbs757CduFrame.cs`, `Bbs757CduKeys.cs`, `Bbs757CduRows.cs`, `Bbs757CduTyping.cs` (plan 08's typing timing and the missed-key check, test `Bbs757CduTypingTests.cs`), `Bbs757CduMarkers.cs` (new), `Aircraft/BBS757Definition.CduRows.cs` (new, the Ctrl+M row hook); tests `Bbs757CduFrameTests.cs`, `Bbs757CduKeysTests.cs`, `Bbs757CduRowsTests.cs`, `Bbs757CduMarkersTests.cs` (new); fixtures `bbs757-cdu-*.json`; `docs/b757/evidence/flight-09.md`.
 - `Bbs757CduScreen.Lines` and `Bbs757CduKeys.ForChar` keep their meaning; new data is added, never changed.
 - Rows never exceed 40 cells and never end in spaces; interior spaces are kept.
 - Rulings (spec R71, R72): a label row made only of 20 or more dashes is dropped; CDU scratchpad messages are spoken while the window is closed, once each, with a check box in the window to turn it off.
+- Plan 08's typed-entry check (spec R76) speaks the scratchpad once, while the window is open, when a typed entry did not land ("Scratchpad shows INVALID ENTRY"); R72's message speech is for the closed window. A message is never said twice.
 
 ## Review Focus
 
