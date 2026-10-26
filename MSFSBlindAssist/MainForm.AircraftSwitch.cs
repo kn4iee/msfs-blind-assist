@@ -838,6 +838,7 @@ public partial class MainForm
 
         // Update the aircraft instance
         currentAircraft = newAircraft;
+        WatchPanelVariant();
 
         // A profile picked while a flight is still loading (AircraftLoaded fired, the new aircraft has not
         // published yet) would take the pre-publish values as its FCU callout baselines and then speak the
@@ -853,6 +854,8 @@ public partial class MainForm
             newMd11.Attach(simConnectManager);
 
         taxiGuidanceManager.TurnLeadSeconds = newAircraft.TaxiTurnLeadSeconds;
+        taxiGuidanceManager.SharpTurnLeadSeconds = newAircraft.TaxiSharpTurnLeadSeconds;
+        taxiGuidanceManager.TurnLeadMaxDegrees = newAircraft.TaxiTurnLeadMaxDegrees;
 
         // Refresh aircraft-conditional menu items (FMC Settings is PMDG-only).
         UpdateAircraftSpecificMenuItems();
