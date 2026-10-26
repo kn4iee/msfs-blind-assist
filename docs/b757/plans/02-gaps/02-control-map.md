@@ -225,18 +225,18 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Claimed by:** Robin Kipp (robin24), 2026-10-26
 - **Worked by:** Robin Kipp with Claude (superpowers:subagent-driven-development: a Sonnet implementer and a Sonnet task reviewer per task, an Opus whole-plan review, then a Sonnet implementer for the final fix wave and this record)
 - **Started:** 2026-10-26, from `cf1dfce94`
-- **Landed:** 2026-10-26. The plan's commits on `B757` are the ones named under Tasks, from the claim to the final fix wave, and the record commit last; `git log --grep "^Plan: 02"` lists them. They were rebased onto `kn4iee/B757` at `14944413c` before the push; `git diff --name-only` against it lists only the plan's own files (`tools/b757-gen/**`, the map, `Bbs757ControlMap.cs`, `Bbs757ControlMapTests.cs` and this file).
-- **Tests at landing:** the full suite passed: 17,751 tests, 0 failed, on the final fix wave after the rebase onto `14944413c` (17,750 on the last task commit, before the final wave's general test; 17,003 at Task 7 before the rebase), with no new warning from the plan's files. The generator tests passed too: 238, as `python -I tools/b757-gen/test_generate_b757_map.py` and in CI's form `python -m unittest discover -s tools/b757-gen -p "test_*.py"`; `Bbs757ControlMapTests` has 130. A regeneration of the map from the installed package (0.1.0) is byte-identical to the committed one.
+- **Landed:** 2026-10-26. The plan's commits on `B757` are the ones named under Tasks, from the claim to the final fix wave, and the record commit last; `git log --grep "^Plan: 02"` lists them. They were rebased onto `kn4iee/B757` at `5fa654ce6` before the push; `git diff --name-only` against it lists only the plan's own files (`tools/b757-gen/**`, the map, `Bbs757ControlMap.cs`, `Bbs757ControlMapTests.cs` and this file).
+- **Tests at landing:** the full suite passed: 17,751 tests, 0 failed, on the final fix wave rebased onto `14944413c` (the only commit since, `5fa654ce6`, changes one plan file) (17,750 on the last task commit, before the final wave's general test; 17,003 at Task 7 before the rebase), with no new warning from the plan's files. The generator tests passed too: 238, as `python -I tools/b757-gen/test_generate_b757_map.py` and in CI's form `python -m unittest discover -s tools/b757-gen -p "test_*.py"`; `Bbs757ControlMapTests` has 130. A regeneration of the map from the installed package (0.1.0) is byte-identical to the committed one.
 - **Tasks:** Tasks 1-7 done, each reviewed by a task reviewer: Tasks 1, 3, 6 and 7 passed at once, Tasks 2, 4 and 5 took one fix round each. Task 8 is left: it needs the owner's flight. The map went from 424 controls to 425 (Task 3), 403 (Task 5) and 405 (Task 7).
   - Task 0, the claim: 6734d0e09 (pushed to `kn4iee/B757` before Task 1).
-  - Task 1, the position names: cb0e29f48.
-  - Task 2, labels and kinds: 8d9aed5e9, fix round c7ee6b5b9 (a curated `kinds` entry never rescues a control the rules drop).
-  - Task 3, guarded controls: bcc47a403.
-  - Task 4, the chronometer ET switch: ebeccb34f (`direct_write`, ruling R10), fix round 14aa5e849 (a `direct_write` control must write only its own state: the premise is now checked).
-  - Task 5, only controls the cockpit has: d9d59bfb3, fix round 89bd002e8 (a `guarded` entry could still keep a control no cockpit has).
-  - Task 6, the replay test: 7d3823d9f, then 1aa0cda66 (ruling R12: the flight deck door switch, which the replay found).
-  - Task 7, the gear lever and the flap lever: 2bea94171.
-  - Final review (Opus; no Critical, three Important) and its fix wave: 69090a4ff (the gear lever note, the guarded switches' note, a general test that every `Guard` names a guard row, wording), then this record.
+  - Task 1, the position names: eb9320100.
+  - Task 2, labels and kinds: abb287b5d, fix round 81c0f1035 (a curated `kinds` entry never rescues a control the rules drop).
+  - Task 3, guarded controls: e6d03400a.
+  - Task 4, the chronometer ET switch: 7b04f0533 (`direct_write`, ruling R10), fix round 685da68ab (a `direct_write` control must write only its own state: the premise is now checked).
+  - Task 5, only controls the cockpit has: 2b77692d1, fix round e1665a0bc (a `guarded` entry could still keep a control no cockpit has).
+  - Task 6, the replay test: 918cea525, then c156f6a93 (ruling R12: the flight deck door switch, which the replay found).
+  - Task 7, the gear lever and the flap lever: d3054c54f.
+  - Final review (Opus; no Critical, three Important) and its fix wave: e3dc2863a (the gear lever note, the guarded switches' note, a general test that every `Guard` names a guard row, wording), then this record.
   - Task 8 [in flight], Altitude Intervene or not: not started.
 - **Waiting on the owner:** Task 8 [in flight] and the in-sim checks above. The first check (the gear lock on the ground) decides whether the gear lever's UP pick is safe on the ground (ruling R13); run it before any other gear check.
 - **In-sim results:** none run yet.
