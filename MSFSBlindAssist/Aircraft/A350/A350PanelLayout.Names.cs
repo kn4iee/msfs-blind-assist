@@ -115,6 +115,15 @@ public static partial class A350PanelLayout
         ["SIGNS_EMER_EXIT"] = "EMER exit light",
         ["SIGNS_NO_SMOKING"] = "No smoking and no PED",
         ["ANTI_ICE_PROBE_WINDOW_HEAT"] = "Probe and window heat",
+        // Cabin pressure: the manual targets, without "TRGT SEL".
+        ["CABIN_PRESS_ALTITUDE_TARGET"] = "Cabin altitude target",
+        ["CABIN_PRESS_VS_TARGET"] = "Cabin V/S target",
+        ["CABIN_PRESS_ALTITUDE_MODE"] = "Cabin altitude mode",
+        // Air conditioning: "XBLEED", "COCKPIT SEL", "CABIN SEL", "AIR FLOW SEL" spoken whole.
+        ["AIR_X_BLEED"] = "Crossbleed",
+        ["AIR_TEMP_COCKPIT"] = "Cockpit temperature",
+        ["AIR_TEMP_CABIN"] = "Cabin temperature",
+        ["AIR_FLOW"] = "Air flow",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
@@ -126,5 +135,7 @@ public static partial class A350PanelLayout
         ["SIGNS_EMER_EXIT"] = new() { [0] = "On", [1] = "Arm", [2] = "Off" },
         ["EVAC_CAPT_PURS"] = new() { [0] = "Captain only", [1] = "Captain and purser" },
         ["ELT_GUARD"] = new() { [0] = "Closed", [1] = "Open" },   // its tooltip words are the click's action
+        ["CABIN_PRESS_ALTITUDE_MODE"] = new() { [0] = "Auto", [1] = "Man" },   // the button's MAN legend
+        ["CABIN_PRESS_VS_MODE"] = new() { [0] = "Auto", [1] = "Man" },
     };
 }

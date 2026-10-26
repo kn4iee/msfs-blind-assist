@@ -135,6 +135,8 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | APU | master switch, start; master fault, start AVAIL and ON lights | master on, start: the APU ran up and AVAIL lit within a minute | |
 | Interior Lighting and Signs | annunciator light, standby compass light, EMER exit light, no mobile, no smoking and no PED, seat belts, three occupant light knobs, coat stowage light | every position; the knobs land on the value typed | the signs reach `INI_NO_SMOKING_ON` / `INI_SEATBELTS_ON` |
 | Anti-Ice | wing, ENG 1, ENG 2, probe and window heat; three fault lights | each on and off | |
+| Air Conditioning | crossbleed, windshield defog, cockpit and cabin temperature knobs, ram air, packs, hot air, air flow, ENG and APU bleeds; their fault lights | every position | the temperature knobs (0-100) are written by the systems module only through the panel-state presets; what they select is on the SD COND page |
+| Cabin Pressure | cabin altitude and V/S targets (encoders) and modes, ditching; the two targets as status lines | modes to MAN and back; each target steps 100 ft or 100 ft/min a click in MAN | an encoder's value is a status line on its panel (`A350Readouts`) |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

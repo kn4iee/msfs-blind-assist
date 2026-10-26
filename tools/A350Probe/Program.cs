@@ -231,9 +231,7 @@ internal sealed class ProbeForm : Form
         var shown = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in lights)
         {
-            // A light is composed from every key it is made of: refresh them all so the cache is current.
-            foreach (var input in def.GetVariables()[key].StateVariables ?? new[] { key })
-                await Read(input);
+            // A light's inputs stream every second: the cache is what the status display shows.
             double? v = _m!.GetCachedVariableValue(key);
             shown[def.GetVariables()[key].DisplayName] = v is double x && def.TryGetDisplayOverride(key, x, out var text) ? text : Fmt(v);
         }

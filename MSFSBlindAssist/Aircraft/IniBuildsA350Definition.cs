@@ -42,6 +42,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     private readonly Dictionary<string, List<string>> _panelDisplays;
 
+    /// <summary>Each encoder's value line (<see cref="A350Readouts"/>) by key: its control and its name.</summary>
+    private readonly Dictionary<string, (A350Control Control, string Name)> _values = new(StringComparer.Ordinal);
+
     /// <summary>Variable key → the panel row it drives (every operable row).</summary>
     private readonly Dictionary<string, A350PlacedRow> _rows = new(StringComparer.Ordinal);
 
@@ -85,8 +88,19 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
         _panelDisplays = new Dictionary<string, List<string>>();
         foreach (var row in _rows.Values)
-            if (row.Control is { } control && A350Options.For(control.Id) is { } option)
-                AddDisplay(_placement.RowsByPanel.First(p => p.Value.Contains(row)).Key, option.Key);
+        {
+            if (row.Control is not { } control)
+                continue;
+            string panel = _placement.RowsByPanel.First(p => p.Value.Contains(row)).Key;
+            if (A350Options.For(control.Id) is { } option)
+                AddDisplay(panel, option.Key);
+            if (row.Action == A350RowAction.Increase && control.StateVar is { Length: > 0 })
+            {
+                string key = A350Readouts.KeyFor(control);
+                _values[key] = (control, row.Name.EndsWith(" increase", StringComparison.Ordinal) ? row.Name[..^" increase".Length] : row.Name);
+                AddDisplay(panel, key);
+            }
+        }
         foreach (var lamp in A350PanelLamps.Resolve(map, _placement, CuratedSections))
         {
             _lamps[lamp.Key] = lamp;
@@ -139,6 +153,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             displayText = lit ? "On" : "Off";
             return true;
         }
+        if (_values.TryGetValue(varKey, out var readout))
+        {
+            displayText = A350Readouts.Format(readout.Control, value);
+            return true;
+        }
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
 
@@ -175,6 +194,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         {
             Register(option.Key, option.Var, option.Name + " option", Array.Empty<string>());
             vars[option.Key].ValueDescriptions = new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" };
+        }
+        foreach (var (key, value) in _values)
+        {
+            Register(key, Bare(value.Control.StateVar!), value.Name, Array.Empty<string>());
+            vars[key].ValueDescriptions = new Dictionary<double, string>();
         }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
@@ -276,7 +300,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             NotePickReached(varName, value);
             return true;
         }
-        if (_lampInputKeys.Contains(varName) || A350Options.All.Any(o => o.Key == varName))
+        if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }

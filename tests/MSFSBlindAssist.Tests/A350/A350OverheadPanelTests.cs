@@ -240,4 +240,45 @@ public class A350OverheadPanelTests
         }, Rows("Anti-Ice"));
         Assert.Equal(new[] { "Wing anti ice fault light", "ENG 1 anti ice fault light", "ENG 2 anti ice fault light" }, Lights("Anti-Ice"));
     }
+
+    /// <summary>Live 2026-10-26: every position of every switch and selector. The two temperature selectors are
+    /// 0-100 knobs; only the panel-state presets in the systems module write them, and what they select shows on the
+    /// SD COND page (the display reader's).</summary>
+    [Fact]
+    public void Air_conditioning()
+    {
+        Assert.Equal(new[]
+        {
+            ("Crossbleed", A350RowAction.Set, "0=Close, 1=Auto, 2=Open"),
+            ("Windshield defog", A350RowAction.Set, "0=Off, 1=On"),
+            ("Cockpit temperature", A350RowAction.Set, ""),
+            ("Cabin temperature", A350RowAction.Set, ""),
+            ("Ram air", A350RowAction.Set, "0=Off, 1=On"),
+            ("Pack 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("Pack 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("Hot air 1", A350RowAction.Set, "0=Off, 1=On"),
+            ("Hot air 2", A350RowAction.Set, "0=Off, 1=On"),
+            ("Air flow", A350RowAction.Set, "0=Man, 1=Lo, 2=Norm, 3=Hi"),
+            ("ENG 1 bleed", A350RowAction.Set, "0=Off, 1=On"),
+            ("ENG 2 bleed", A350RowAction.Set, "0=Off, 1=On"),
+            ("APU bleed", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Air Conditioning"));
+    }
+
+    /// <summary>Live 2026-10-26: both modes to MAN and back, DITCHING on and off; with a mode in MAN its target steps
+    /// 100 ft (altitude) or 100 ft/min (V/S) a click, read on the panel's status lines.</summary>
+    [Fact]
+    public void Cabin_pressure()
+    {
+        Assert.Equal(new[]
+        {
+            ("Cabin altitude target increase", A350RowAction.Increase, ""),
+            ("Cabin altitude target decrease", A350RowAction.Decrease, ""),
+            ("Cabin altitude mode", A350RowAction.Set, "0=Auto, 1=Man"),
+            ("Cabin V/S mode", A350RowAction.Set, "0=Auto, 1=Man"),
+            ("Cabin V/S target increase", A350RowAction.Increase, ""),
+            ("Cabin V/S target decrease", A350RowAction.Decrease, ""),
+            ("Ditching", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Cabin Pressure"));
+    }
 }

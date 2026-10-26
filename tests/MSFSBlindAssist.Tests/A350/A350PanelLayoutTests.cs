@@ -85,8 +85,8 @@ public class A350PanelLayoutTests
     public void An_encoder_is_an_increase_and_a_decrease_row()
     {
         var rows = Placement.RowsByPanel["Cabin Pressure"].Select(r => r.Name).ToList();
-        Assert.Contains("Cabin alt trgt sel increase", rows);
-        Assert.Contains("Cabin alt trgt sel decrease", rows);
+        Assert.Contains("Cabin altitude target increase", rows);
+        Assert.Contains("Cabin altitude target decrease", rows);
     }
 
     [Fact]

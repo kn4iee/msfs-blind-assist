@@ -210,6 +210,35 @@ public class IniBuildsA350DefinitionTests
         Assert.Equal(new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" }, option.ValueDescriptions);
     }
 
+    private const string CabinAltitudeTarget = "A350_VAL_CABIN_PRESS_ALTITUDE_TARGET";
+
+    [Fact]
+    public void An_encoders_value_is_a_status_line_on_its_panel()
+    {
+        Assert.Contains(CabinAltitudeTarget, _def.GetPanelDisplayVariables()["Cabin Pressure"]);
+        var value = _def.GetVariables()[CabinAltitudeTarget];
+        Assert.Equal("INI_CABIN_PRESS_ALTITUDE_TARGET", value.Name);
+        Assert.Equal("Cabin altitude target", value.DisplayName);
+    }
+
+    [Fact]
+    public void An_encoders_value_reads_with_its_unit()
+    {
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+        try
+        {
+            Assert.True(_def.TryGetDisplayOverride(CabinAltitudeTarget, 2200, out var text));
+            Assert.Equal("2200 feet", text);
+            Assert.True(_def.TryGetDisplayOverride("A350_VAL_CABIN_PRESS_VS_TARGET", -350.4, out var vs));
+            Assert.Equal("-350 feet per minute", vs);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
     [Fact]
     public void The_calculator_path_probe_is_registered()
     {
