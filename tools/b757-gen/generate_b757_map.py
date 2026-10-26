@@ -12,7 +12,8 @@ own click code as RPN, to be replayed through the MobiFlight calculator path.
                 kind: toggle | switch | button | held | select | guard
                 state_var: the L:var read back (null when the control keeps no L:var state: a button)
                 press / release / cw / ccw: RPN, null when the control has none; a switch with no click code
-                (the sim's own 3-state template) has all three null and is written through state_var
+                (the sim's own 3-state template), or whose click code curation leaves out ("direct_write"), has all
+                three null and is written through state_var
                 guard, guard_closed, close_sets: on a guarded control only (curation's "guarded"): the node of the
                 guard that covers it, the value that guard reads while closed and the value closing it writes to the
                 control (null when closing leaves the control alone). A guarded control has no click code at all.
@@ -28,12 +29,13 @@ What is derived and what is curated (curation.json):
             the app's panel names, labels the node name cannot give or the vendor got wrong, position names no
             tooltip carries, the kind of a control whose click code the extractor misreads (kinds: a toggle the
             extractor took for a button, a radio-style select that is only ever pressed), the guarded controls
-            (guarded: a switch whose click only runs while a guard is open), the status rows, and the
+            (guarded: a switch whose click only runs while a guard is open), the switches whose click code is left
+            out (direct_write: a lever whose code cannot take a pick where it aims), the status rows, and the
             ORDER the pilot tabs through: the panels of a section (panel_order) and the controls of a panel
-            (control_order). A curated label, position list, kind, guarded entry, exclusion or inclusion for a node
-            the package does not have is an error (a stale entry never hides); so is a kind or an inclusion that
-            does nothing, and so is an order that names a panel or a node that is not there. A kind only re-reads a
-            control the rules keep: for one they drop it changes nothing and is only reported.
+            (control_order). A curated label, position list, kind, guarded or direct_write entry, exclusion or
+            inclusion for a node the package does not have is an error (a stale entry never hides); so is a kind or
+            an inclusion that does nothing, and so is an order that names a panel or a node that is not there. A kind
+            only re-reads a control the rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
@@ -52,10 +54,19 @@ What is derived and what is curated (curation.json):
             overrides curation's own exclusions. The entry is checked against the vendor's code: the click writes the
             state var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. Any
             other control whose click code carries a gate note stops the run.
+  direct_write  a switch whose vendor click code cannot take a pick where it aims and writes nothing but its own L:var
+            (the chronometer ET lever: its clockwise code steps the value down and its anticlockwise code steps it up but
+            jumps HOLD straight to RESET, so a step can land on no position at all). Curation lists the node and the map
+            leaves all of its click code out: press, release, cw and ccw are empty, and the app writes the state var to
+            the picked position, as it does for any switch with no click code. The control is otherwise built by the
+            rules (state var, kind, label, panel and positions unchanged), and its positions are still checked against
+            what the vendor's code writes. The map must keep the node, and the node needs a state var and positions to
+            pick from; a node that is also guarded is an error. The run names each, and what it left out.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
-cockpit runs, so a slip the cockpit has stays a slip in the replay. Code that looks like a slip (a set without its
-'L:', a closing brace nothing opened) is only reported, as suspected_slips; nothing is changed.
+cockpit runs, so a slip the cockpit has stays a slip in the replay (a guarded or direct_write control has none). Code
+that looks like a slip (a set without its 'L:', a closing brace nothing opened) is only reported, as suspected_slips;
+nothing is changed.
 
 Dropped, and counted in the printed report: circuit breakers, CDU keys, levers, infinite knobs, finite knobs with
 more than 12 positions, anything in an excluded banner or node (but an include_nodes node under an excluded banner
@@ -153,7 +164,7 @@ GATE_NOTE = re.compile(r"(?:^|\s)\[")
 
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
                  "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
-                 "kinds": dict, "guarded": dict, "spelling": dict, "status": list}
+                 "kinds": dict, "guarded": dict, "direct_write": list, "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -510,6 +521,9 @@ def convert_row(row, cur):
             raise CurationError(f"{node} writes {odd} to its state var {state_var}, outside its positions "
                                 f"{sorted(listed)}: name its positions under 'positions' in curation, or exclude "
                                 f"the node under 'exclude_nodes'")
+    if node in cur["direct_write"]:  # the vendor's click is left out whole: the app writes the state var to the pick
+        press = release = cw = ccw = None
+        suspected = []  # code that is not replayed has no slip to suspect
     panel, section = panel_of(row, cur)
     control = {
         "node": node, "section": section, "panel": panel,
@@ -592,6 +606,21 @@ def check_guarded(controls, first_row, cur):
                                 f"is {entry['close_sets']}")
 
 
+def check_direct_write(controls, dropped_why, cur):
+    """Each direct_write entry against the control the map holds for it. The map must keep the node (a stale entry never
+    hides), and the app can only write a control that has a state var to write and positions to pick a value from."""
+    by_node = {c["node"]: c for c in controls}
+    for node in cur["direct_write"]:
+        control = by_node.get(node)
+        if control is None:
+            raise CurationError(f"curation direct_write names {node}, which the map does not keep (the rules leave it out: "
+                                f"{dropped_why.get(node, '?')}): remove the entry")
+        if control["state_var"] is None:
+            raise CurationError(f"curation direct_write names {node}, which has no state var: there is nothing to write")
+        if not control["positions"]:
+            raise CurationError(f"curation direct_write names {node}, which has no positions: there is no value to write")
+
+
 def reject_gate_notes(controls, cur):
     """No control the map replays carries the extractor's gate note (GATE_NOTE) in its press, release, cw or ccw: its click
     only runs while a guard is open, and what the app replays would never run. Such a control belongs under 'guarded'."""
@@ -614,6 +643,13 @@ def guarded_how(row, cur):
     if why:
         return f"taken in (the rules alone leave it out: {why})"
     return f"re-read (the rules alone keep it as a {KIND_MAP[row['kind']]} and replay its click code)"
+
+
+def direct_write_how(row):
+    """What curation's 'direct_write' left out of this row's click code, in words, for the run's report."""
+    left_out = [name for name, code in zip(("press", "release", "cw", "ccw"), click_fields(row, KIND_MAP[row["kind"]]))
+                if code]
+    return f"{', '.join(left_out)} left out" if left_out else "no click code to leave out"
 
 
 def status_row(entry):
@@ -692,6 +728,7 @@ def build_map(rows, cur, aircraft, version):
     suspected = {}
     unmapped = set()
     dropped_why = {}
+    kept_row = {}
     for index, row in enumerate(rows):
         control, why, slips = convert_row(row, cur)
         if why:
@@ -701,6 +738,7 @@ def build_map(rows, cur, aircraft, version):
             dropped["duplicate node"] += 1
         else:
             seen.add(control["node"])
+            kept_row[control["node"]] = row
             if row["panel"] not in cur["panels"] and node_rule(row, cur) is None:
                 unmapped.add(row["panel"])
             if slips:
@@ -715,7 +753,7 @@ def build_map(rows, cur, aircraft, version):
     first_row = {}
     for r in rows:
         first_row.setdefault(r["node"], r)
-    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded"):
+    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "direct_write"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
@@ -724,6 +762,10 @@ def build_map(rows, cur, aircraft, version):
         if twice:
             raise CurationError(f"curation guarded and {table} both name: {', '.join(twice)} (a guarded control is a "
                                 "switch with the positions of its guarded entry)")
+    twice = sorted(set(cur["guarded"]) & set(cur["direct_write"]))
+    if twice:
+        raise CurationError(f"curation guarded and direct_write both name: {', '.join(twice)} (a guarded control already "
+                            "has no click code: the app opens its guard and writes the position)")
     kept = {c["node"] for c in controls}
     included = set(cur["include_nodes"])
     both = sorted(included & set(cur["exclude_nodes"]))
@@ -751,6 +793,7 @@ def build_map(rows, cur, aircraft, version):
                       else f"the rules leave it out: {dropped_why.get(guard, '?')}")
             raise CurationError(f"curation guarded: the guard {guard} of {node} has no row in the map ({reason}); a "
                                 "guard keeps its own row, which the app opens")
+    check_direct_write(controls, dropped_why, cur)
     check_guarded(controls, first_row, cur)
     reject_gate_notes(controls, cur)
     # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).
@@ -760,6 +803,7 @@ def build_map(rows, cur, aircraft, version):
         "dropped": dropped,
         "taken_in": sorted(included),
         "guarded": {n: guarded_how(first_row[n], cur) for n in cur["guarded"]},
+        "direct_write": {n: direct_write_how(kept_row[n]) for n in cur["direct_write"]},
         "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions", "kinds") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
@@ -821,6 +865,8 @@ def load_curation(path) -> dict:
         if not valid_guarded(entry):
             raise CurationError(f"{path}: guarded[{node!r}] is {{{', '.join(GUARDED_FIELDS)}}}: names or {{value, label}} "
                                 "for positions, numbers for guard_closed and close_sets (which may be null)")
+    if not all(isinstance(node, str) and node for node in cur["direct_write"]):
+        raise CurationError(f"{path}: direct_write is a list of node names")
     for rule in cur["node_panels"]:
         if "panel" not in rule or not ({"banner", "prefix"} & set(rule)):
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")
@@ -902,6 +948,10 @@ def main(argv=None) -> None:
     print(f"  guarded controls : {len(report['guarded'])} (no click code of their own: the app opens the guard and writes "
           "the state var)")
     for node, how in report["guarded"].items():
+        print(f"    {node}: {how}")
+    print(f"  direct-write     : {len(report['direct_write'])} (the vendor's click code is left out: the app writes the "
+          "state var to the picked position)")
+    for node, how in report["direct_write"].items():
         print(f"    {node}: {how}")
     print("  dropped:")
     for why, n in sorted(report["dropped"].items(), key=lambda kv: (-kv[1], kv[0])):

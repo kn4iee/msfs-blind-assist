@@ -4260,8 +4260,8 @@
    "press": null,
    "release": null,
    "hold_ms": 0,
-   "cw": "(L:BBS_CHRONO_LEFT_SWITCH, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_LEFT_SWITCH, enum)",
-   "ccw": "(L:BBS_CHRONO_LEFT_SWITCH, enum) 1 == if{ 3 (>L:BBS_CHRONO_LEFT_SWITCH, enum) } els{ (L:BBS_CHRONO_LEFT_SWITCH, enum) ++ d 3 > if{ 3 } (>L:BBS_CHRONO_LEFT_SWITCH, enum) }"
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_MAIN_CHRONO_SET_SWITCH",
@@ -4962,8 +4962,8 @@
    "press": null,
    "release": null,
    "hold_ms": 0,
-   "cw": "(L:BBS_CHRONO_LEFT_SWITCH_FO, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_LEFT_SWITCH_FO, enum)",
-   "ccw": "(L:BBS_CHRONO_LEFT_SWITCH_FO, enum) 1 == if{ 3 (>L:BBS_CHRONO_LEFT_SWITCH_FO, enum) } els{ (L:BBS_CHRONO_LEFT_SWITCH_FO, enum) ++ d 3 > if{ 3 } (>L:BBS_CHRONO_LEFT_SWITCH_FO, enum) }"
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_MAIN_CHRONO_SET_SWITCH_FO",

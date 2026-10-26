@@ -56,6 +56,7 @@ CURATION = {
     "positions": {},
     "kinds": {},
     "guarded": {},
+    "direct_write": [],
     "spelling": {"CENTRE": "Center"},
     "status": [],
 }
@@ -905,6 +906,7 @@ class Guarded(unittest.TestCase):
         here = set(self.rows())
         for table in ("labels", "positions", "kinds", "guarded"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
+        cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
         cur["control_order"] = {p: ns for p, ns in cur["control_order"].items() if set(ns) <= here}
         cur.update(changes)
@@ -1090,6 +1092,187 @@ class Guarded(unittest.TestCase):
         with self.assertRaisesRegex(g.CurationError, rf"guarded names {self.STAB_C}, which curation also leaves out "
                                                      r"\(excluded banner\)"):
             self.build(exclude_banners=banners)
+
+
+class DirectWrite(unittest.TestCase):
+    """Plan 02, task 4 (ruling R10): curation's 'direct_write'. The chronometer ET lever's click code cannot take a pick where
+    it aims: the vendor's clockwise code steps the value DOWN (3, 2, 1, 0) and its anticlockwise code steps it up but jumps
+    HOLD (1) straight to RESET (3), and 2 is no position, so a step down from RESET would land on a value the app then
+    refuses every pick from. The code writes nothing but the lever's own L:var, so the map leaves all of it out and the app
+    writes that var to the picked value (Bbs757Write.ToPosition's path for a control with no click code). The rows have the
+    shape the extractor gives the vendor's own controls (BBS_752_BASE_INTERIOR.xml: the captain's lever at 26713, the first
+    officer's at 28529) and are converted with the SHIPPED curation."""
+    ET, ET_FO = "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_ET_SWITCH_FO"
+    SET, SET_FO = "B757_MAIN_CHRONO_SET_SWITCH", "B757_MAIN_CHRONO_SET_SWITCH_FO"
+    VAR = {ET: "BBS_CHRONO_LEFT_SWITCH", ET_FO: "BBS_CHRONO_LEFT_SWITCH_FO",
+           SET: "BBS_CHRONO_RIGHT_SWITCH", SET_FO: "BBS_CHRONO_RIGHT_SWITCH_FO"}
+    BANNER = {ET: "CAPT CHRONOMETER", SET: "CAPT CHRONOMETER",
+              ET_FO: "FISRT OFFICER CHRONOMETER", SET_FO: "FISRT OFFICER CHRONOMETER"}
+    CLICK_FIELDS = ("press", "release", "cw", "ccw")
+    RUN_HOLD_RESET = [{"value": 0, "label": "RUN"}, {"value": 1, "label": "HOLD"}, {"value": 3, "label": "RESET"}]
+
+    @staticmethod
+    def et_codes(var):
+        """(cw, ccw) of an ET lever as the vendor wrote them: clockwise lowers the value one step, anticlockwise raises it
+        and jumps HOLD (1) straight to RESET (3)."""
+        return (f"(L:{var}, enum) -- d 0 < if{{ 0 }} (>L:{var}, enum)",
+                f"(L:{var}, enum) 1 == if{{ 3 (>L:{var}, enum) }} "
+                f"els{{ (L:{var}, enum) ++ d 3 > if{{ 3 }} (>L:{var}, enum) }}")
+
+    @staticmethod
+    def set_codes(var):
+        """(cw, ccw) of a SET lever beside it: the other way round, clockwise raises the value and anticlockwise lowers it."""
+        return (f"(L:{var}, enum) ++ d 3 > if{{ 3 }} (>L:{var}, enum)",
+                f"(L:{var}, enum) -- d 0 < if{{ 0 }} (>L:{var}, enum)")
+
+    def rows(self):
+        """node -> row: the two ET levers and the two SET levers beside them, as the extractor reads the vendor's."""
+        rows = {}
+        for node, codes in ((self.ET, self.et_codes), (self.ET_FO, self.et_codes),
+                            (self.SET, self.set_codes), (self.SET_FO, self.set_codes)):
+            var = self.VAR[node]
+            cw, ccw = codes(var)
+            rows[node] = row(node=node, kind="rotary knob finite", positions="4", panel=self.BANNER[node],
+                             state=["L:" + var], tips=["RUN", "HOLD", "RESET"], cw=cw, ccw=ccw)
+        return rows
+
+    def stab_rows(self):
+        """A guarded control for the one case that needs one: the stab trim C cutout and its guard, in the vendor's shape
+        (BBS_752_BASE_INTERIOR.xml:15381-15397)."""
+        node, guard = "B757_Stab_trim_C_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH"
+        return [
+            row(node=guard, kind="guard", panel="PEDESTAL GAURD SWITCH GEAR", line=15381, state=["L:" + guard],
+                left=f"(L:{guard}, bool) ! (>L:{guard}, bool) (L:{guard}, bool) 0 == if{{ 0 (>L:{node}, number) }}"),
+            row(node=node, kind="toggle", panel="PEDESTAL GAURD SWITCH GEAR", line=15397, state=["L:" + node],
+                left=f"[if (L:{guard}, bool) 1 ==] (L:{node}, number) 1 == if{{ 0 }} els{{ 1 }} (>L:{node}, number)"),
+        ]
+
+    def shipped(self, rows, **changes):
+        """The shipped curation, cut down to the nodes of `rows`: a table entry for a node the package lacks is an error."""
+        cur = g.load_curation(g.DEFAULT_CURATION)
+        here = set(rows)
+        for table in ("labels", "positions", "kinds", "guarded"):
+            cur[table] = {n: v for n, v in cur[table].items() if n in here}
+        cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
+        cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
+        cur["control_order"] = {p: ns for p, ns in cur["control_order"].items() if set(ns) <= here}
+        cur.update(changes)
+        return cur
+
+    def build(self, extra=(), **changes):
+        rows = {**self.rows(), **{r["node"]: r for r in extra}}
+        return g.build_map(list(rows.values()), self.shipped(rows, **changes), "pkg", "1")
+
+    def test_chrono_et_writes_its_state_directly(self):
+        c, rows = g.load_curation(g.DEFAULT_CURATION), self.rows()
+        self.assertEqual(c["direct_write"], [self.ET, self.ET_FO])
+        for node, panel in ((self.ET, "Captain chronometer"), (self.ET_FO, "First officer chronometer")):
+            with self.subTest(node=node):
+                control, why, slips = g.convert_row(rows[node], c)
+
+                self.assertIsNone(why)
+                self.assertEqual(control, {
+                    "node": node, "section": "Forward panel", "panel": panel, "label": "Chrono ET", "kind": "switch",
+                    "state_var": self.VAR[node], "positions": self.RUN_HOLD_RESET,
+                    "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None})
+                self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
+                # The entry changes the click code and nothing else: without it the same row keeps the vendor's own code,
+                # verbatim, and every other field is the same.
+                plain, _, _ = g.convert_row(rows[node], dict(c, direct_write=[]))
+                cw, ccw = self.et_codes(self.VAR[node])
+                self.assertEqual([plain[f] for f in self.CLICK_FIELDS], [None, None, cw, ccw])
+                self.assertEqual({k: v for k, v in plain.items() if k not in self.CLICK_FIELDS},
+                                 {k: v for k, v in control.items() if k not in self.CLICK_FIELDS})
+                self.assertEqual(list(plain), list(control), "the keys keep the JSON order")
+                # The vendor's code is no longer replayed, but it still stands as the evidence for the positions: naming
+                # RESET at 2, as the cockpit's own tooltip list does, stops the run because that code writes 3.
+                at_two = [{"value": v, "label": l} for v, l in ((0, "RUN"), (1, "HOLD"), (2, "RESET"))]
+                with self.assertRaisesRegex(g.CurationError, "writes 3 .* outside its positions"):
+                    g.convert_row(rows[node], dict(c, positions=dict(c["positions"], **{node: at_two})))
+        # the map the app embeds: both levers keep their state var and positions and hold no click code
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            embedded = {x["node"]: x for x in json.load(fh)["controls"]}
+        for node in (self.ET, self.ET_FO):
+            x = embedded[node]
+            self.assertEqual((x["kind"], x["state_var"], x["positions"], [x[f] for f in self.CLICK_FIELDS]),
+                             ("switch", self.VAR[node], self.RUN_HOLD_RESET, [None] * 4), node)
+
+    def test_every_click_field_is_left_out_whichever_slot_the_vendor_used(self):
+        # press and release as well as cw and ccw: a switch that cycles on a click and springs back to 1 on release
+        node = "B757_VC_P61_SWITCH_X"
+        r = row(node=node, kind="multi-position switch", positions="3", state=["L:V"], left="(L:V) 1 + 3 % (>L:V)",
+                release="1 (>L:V)")
+
+        plain, _, _ = g.convert_row(r, curation())
+        direct, _, _ = g.convert_row(r, curation(direct_write=[node]))
+
+        self.assertEqual([plain[f] for f in self.CLICK_FIELDS], ["(L:V) 1 + 3 % (>L:V)", "1 (>L:V)", None, None])
+        self.assertEqual([direct[f] for f in self.CLICK_FIELDS], [None] * 4)
+        self.assertEqual({k: v for k, v in direct.items() if k not in self.CLICK_FIELDS},
+                         {k: v for k, v in plain.items() if k not in self.CLICK_FIELDS})
+
+    def test_a_slip_in_a_click_code_the_map_leaves_out_is_not_reported(self):
+        # Suspected slips are about code the app replays verbatim: code that is left out has none to suspect.
+        node, var = self.ET, self.VAR[self.ET]
+        cw, ccw = self.et_codes(var)
+        r = row(node=node, kind="rotary knob finite", positions="4", panel=self.BANNER[node], state=["L:" + var],
+                cw=cw + " }", ccw=ccw)
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        _, _, replayed = g.convert_row(r, dict(c, direct_write=[]))
+        _, _, left_out = g.convert_row(r, c)
+
+        self.assertEqual(replayed, ["cw: closing brace nothing opened"])
+        self.assertEqual(left_out, [])
+
+    def test_only_the_listed_levers_lose_their_click_code_and_the_report_names_them(self):
+        m, report = self.build()
+        by_node = {x["node"]: x for x in m["controls"]}
+
+        for node in (self.ET, self.ET_FO):
+            self.assertEqual([by_node[node][f] for f in self.CLICK_FIELDS], [None] * 4, node)
+        for node in (self.SET, self.SET_FO):  # the SET levers beside them step the right way: their code stays, verbatim
+            cw, ccw = self.set_codes(self.VAR[node])
+            self.assertEqual([by_node[node][f] for f in self.CLICK_FIELDS], [None, None, cw, ccw], node)
+        # the run lists the direct-write controls in curation's order, as it lists the guarded ones, with what it left out
+        self.assertEqual(report["direct_write"], {self.ET: "cw, ccw left out", self.ET_FO: "cw, ccw left out"})
+        self.assertEqual(report["suspected_slips"], {})
+        self.assertEqual(report["dropped"], collections.Counter())
+        _, none_listed = self.build(direct_write=[])
+        self.assertEqual(none_listed["direct_write"], {})
+
+    def test_direct_write_errors(self):
+        # Each case changes the shipped curation, or adds one row, in one way and nothing else, so the one check it is meant
+        # for is the one that stops the run; the shipped curation itself passes all of them.
+        et, ghost = self.ET, "B757_NO_SUCH_NODE"
+        lever = row(node="B757_PED_X_LEVER", kind="lever", positions="", left="1 (>L:X)")
+        no_state = row(node="B757_PED_X_BUTTON", kind="momentary button", positions="-", state=["O:_AnimProgress"],
+                       left="1 (>L:X)")
+        no_positions = row(node="B757_PED_Y_BUTTON", kind="momentary button", positions="-", state=["L:Y"], left="1 (>L:Y)")
+        stab = self.stab_rows()
+        guarded_node = stab[1]["node"]
+        cases = [
+            ("a node the package does not have", (), dict(direct_write=[et, ghost]),
+             rf"direct_write name nodes the package does not have: {ghost}"),
+            ("a node curation leaves out", (), dict(exclude_nodes=[et]),
+             rf"direct_write names {et}, which the map does not keep \(the rules leave it out: excluded node\)"),
+            ("a node the rules drop", (lever,), dict(direct_write=[et, lever["node"]]),
+             rf"direct_write names {lever['node']}, which the map does not keep \(the rules leave it out: lever\)"),
+            ("a node with no state var", (no_state,), dict(direct_write=[et, no_state["node"]]),
+             rf"direct_write names {no_state['node']}, which has no state var"),
+            ("a node with no positions", (no_positions,), dict(direct_write=[et, no_positions["node"]]),
+             rf"direct_write names {no_positions['node']}, which has no positions"),
+            ("a node that is also guarded", stab, dict(direct_write=[et, guarded_node]),
+             rf"guarded and direct_write both name: {guarded_node}"),
+        ]
+        for what, extra, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build(extra, **changes)
+        self.build()
+        # a guarded control, and a control with a state var and no positions, are only a problem under direct_write
+        self.build(stab)
+        self.build([no_positions])
 
 
 class FlowOrder(unittest.TestCase):
@@ -1317,6 +1500,17 @@ class Curation(unittest.TestCase):
             with self.subTest(data=data):
                 with self.assertRaisesRegex(g.CurationError, r"guarded(\[| must be)"):   # not "unknown key(s) guarded"
                     g.load_curation(self.write({"guarded": data}))
+
+    def test_the_direct_write_key_loads_as_a_list_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["direct_write"], [])
+        c = g.load_curation(self.write({"direct_write": ["B757_X", "B757_Y"]}))
+        self.assertEqual(c["direct_write"], ["B757_X", "B757_Y"])
+
+    def test_a_direct_write_entry_that_is_not_a_node_name_is_refused(self):
+        for data in ({"B757_X": 1}, "B757_X", [1], [None], [""], [["B757_X"]], ["B757_X", 2]):
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, "direct_write (must be|is a list)"):   # not "unknown key(s)"
+                    g.load_curation(self.write({"direct_write": data}))
 
     def test_the_shipped_curation_loads(self):
         c = g.load_curation(g.DEFAULT_CURATION)
@@ -1754,12 +1948,17 @@ class Curation(unittest.TestCase):
                      # plan 02 task 3: the guarded switches and their guards
                      "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_Stab_trim_C_toggle_switch_CLICK",
                      "B757_Stab_trim_R_toggle_switch_CLICK", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
-                     "B757_AISLE_STAND_STAB_2_GAURD_SWITCH"):
+                     "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
+                     # plan 02 task 4: the chronometer ET levers whose click code the map leaves out
+                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_ET_SWITCH_FO"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
-        # the keys that make the kind changes and guard the switches are explained where the other keys are
+        # the keys that make the kind changes, guard the switches and leave out a click code are explained where the other
+        # keys are
         self.assertRegex(notes, r"kinds: node -> toggle or button")
         self.assertRegex(notes, r"guarded: node -> \{state_var, positions, guard, guard_closed, close_sets\}")
+        self.assertRegex(notes, r"direct_write: list of nodes whose vendor click code the map leaves out")
+        self.assertRegex(notes, r"PLAN 02 TASK 4 .*B757_MAIN_CHRONO_ET_SWITCH_FO are direct_write")
         self.assertIn("support.bluebirdsim.com/docs/simvars", notes)
 
     # Plan 02, task 3: the brief's values, written out here so a change to them is a visible one.
@@ -2004,6 +2203,42 @@ def write_gated_package(root):
     return pkg
 
 
+# The vendor's captain's chronometer ET lever, trimmed (BBS_752_BASE_INTERIOR.xml:26713-26737): a finite knob whose
+# clockwise code steps the value down and whose anticlockwise code steps it up, jumping HOLD (1) straight to RESET (3).
+CHRONO_ET_INTERIOR = """<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<!-- ======== CAPT CHRONOMETER ======== -->
+<Component ID="CHRONO_LEFT_ET_SWITCH" Node="B757_MAIN_CHRONO_ET_SWITCH">
+  <UseTemplate Name="ASOBO_GT_Knob_Finite_Code">
+    <ANIM_NAME>B757_MAIN_CHRONO_ET_SWITCH</ANIM_NAME>
+    <ANIM_CODE>(L:BBS_CHRONO_LEFT_SWITCH, enum)</ANIM_CODE>
+    <ANIMTIP_0>RUN</ANIMTIP_0>
+    <ANIMTIP_1>HOLD</ANIMTIP_1>
+    <ANIMTIP_2>RESET</ANIMTIP_2>
+    <ANIM_LENGTH>3</ANIM_LENGTH>
+    <CLOCKWISE_CODE>
+      (L:BBS_CHRONO_LEFT_SWITCH, enum) -- d 0 &lt; if{ 0 } (&gt;L:BBS_CHRONO_LEFT_SWITCH, enum)
+    </CLOCKWISE_CODE>
+    <ANTICLOCKWISE_CODE>
+      (L:BBS_CHRONO_LEFT_SWITCH, enum) 1 == if{
+      3 (&gt;L:BBS_CHRONO_LEFT_SWITCH, enum)
+      } els{
+      (L:BBS_CHRONO_LEFT_SWITCH, enum) ++ d 3 &gt; if{ 3 } (&gt;L:BBS_CHRONO_LEFT_SWITCH, enum)
+      }
+    </ANTICLOCKWISE_CODE>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+"""
+
+
+def write_chrono_package(root):
+    """write_package's package, its interior replaced by CHRONO_ET_INTERIOR."""
+    pkg = write_package(root)
+    (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(CHRONO_ET_INTERIOR, encoding="utf-8")
+    return pkg
+
+
 class Extractor(unittest.TestCase):
     def test_extract_returns_unclipped_rows_lights_and_summary(self):
         with tempfile.TemporaryDirectory() as d:
@@ -2097,6 +2332,42 @@ class Extractor(unittest.TestCase):
         self.assertEqual(by_node[guard]["kind"], "guard", "the guard keeps its own row")
         self.assertIn("guarded controls", printed)
         self.assertIn(f"{node}: re-read", printed)
+
+    def test_a_direct_write_lever_from_the_package_is_emitted_without_its_click_code_and_the_run_names_it(self):
+        # The vendor's own XML for the chronometer ET lever through the extractor, the generator and its printed report.
+        node, var = "B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH"
+        pairs = [{"value": v, "label": l} for v, l in ((0, "RUN"), (1, "HOLD"), (3, "RESET"))]
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_chrono_package(d)
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+
+            def run(**curation_):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump({"panels": {"CAPT CHRONOMETER": "Captain chronometer"}, "positions": {node: pairs},
+                               **curation_}, fh)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                with open(out, encoding="utf-8") as fh:
+                    return json.load(fh)["controls"], stdout.getvalue()
+
+            plain, printed_plain = run()
+            direct, printed = run(direct_write=[node])
+
+        self.assertEqual(len(plain), 1)
+        self.assertEqual(len(direct), 1)
+        self.assertEqual((plain[0]["press"], plain[0]["release"]), (None, None))
+        self.assertIn("-- d 0 <", plain[0]["cw"], "without the entry the vendor's code is replayed, verbatim")
+        self.assertIn(f"1 == if{{ 3 (>L:{var}, enum) }}", plain[0]["ccw"])
+        self.assertEqual([direct[0][f] for f in ("press", "release", "cw", "ccw")], [None] * 4)
+        self.assertEqual({k: v for k, v in direct[0].items() if k not in ("cw", "ccw")},
+                         {k: v for k, v in plain[0].items() if k not in ("cw", "ccw")})
+        self.assertEqual((direct[0]["kind"], direct[0]["state_var"], direct[0]["positions"]), ("switch", var, pairs))
+        self.assertRegex(printed_plain, r"direct-write\s+: 0 ")
+        self.assertNotIn(f"{node}: cw, ccw left out", printed_plain)
+        self.assertRegex(printed, r"direct-write\s+: 1 ")
+        self.assertIn(f"{node}: cw, ccw left out", printed)
 
 
 if __name__ == "__main__":

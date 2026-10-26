@@ -427,15 +427,53 @@ public class Bbs757ControlMapTests
     [Theory]
     [InlineData("B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH")]
     [InlineData("B757_MAIN_CHRONO_ET_SWITCH_FO", "BBS_CHRONO_LEFT_SWITCH_FO")]
-    public void The_chronometer_ET_lever_names_RESET_at_the_value_its_click_code_writes_past_HOLD(string node, string stateVar)
+    public void The_chronometer_ET_lever_keeps_no_click_code_and_names_RESET_at_3(string node, string stateVar)
     {
         Bbs757Control et = Find(node);
 
-        // BlueBird's list says RESET is 3 with 2 unused; the cockpit's tooltip list says 2. The vendor's code jumps
-        // from HOLD (1) straight to 3 (whichever of cw and ccw that is), so 3 is RESET and 2 is not a position.
+        // BlueBird's list says RESET is 3 with 2 unused; the cockpit's tooltip list says 2. The vendor's click code steps
+        // down 3, 2, 1, 0 and up 0, 1, 3 (HOLD jumps straight to RESET), so no step of it lands where a pick aims, and the
+        // map holds none of it (ruling R10): the app writes the state var. 3 is RESET and 2 is not a position.
         Assert.Equal(stateVar, et.StateVar);
-        Assert.Contains($"1 == if{{ 3 (>L:{stateVar}, enum) }}", $"{et.Cw} {et.Ccw}");
+        Assert.Equal(Bbs757Kinds.Switch, et.Kind);
+        Assert.Equal("RESET", Assert.Single(et.Positions, p => p.Value == 3).Label);
         Assert.DoesNotContain(et.Positions, p => p.Value == 2);
+        Assert.Null(et.Press);
+        Assert.Null(et.Release);
+        Assert.Null(et.Cw);
+        Assert.Null(et.Ccw);
+    }
+
+    [Theory]
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH", "BBS_CHRONO_LEFT_SWITCH")]
+    [InlineData("B757_MAIN_CHRONO_ET_SWITCH_FO", "BBS_CHRONO_LEFT_SWITCH_FO")]
+    public void Chronometer_ET_goes_straight_to_the_pick(string node, string stateVar)
+    {
+        Bbs757Control et = Find(node);
+
+        IReadOnlyList<string> Writes(double? current, double target)
+        {
+            Bbs757WritePlan plan = Bbs757Write.ToPosition(et, current, target);
+            Assert.Equal(Bbs757WriteOutcome.Writes, plan.Outcome);
+            return plan.Calls;
+        }
+
+        // One absolute write of the picked value, whatever the lever reads. The vendor's code would have gone from RESET
+        // down through 2, which is no position, and from HOLD up to RESET in one jump.
+        Assert.Equal(new[] { $"1 (>L:{stateVar})" }, Writes(3, 1));   // RESET to HOLD
+        Assert.Equal(new[] { $"3 (>L:{stateVar})" }, Writes(0, 3));   // RUN to RESET
+        // A cockpit click can still leave the lever on 2, which is no position: the pick is written all the same.
+        Assert.Equal(new[] { $"1 (>L:{stateVar})" }, Writes(2, 1));
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, Writes(2, 0));
+        // The same writes under a comma-decimal culture (CI runs under en-US): the write is built with the invariant one.
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+        {
+            Assert.Equal(new[] { $"1 (>L:{stateVar})" }, TestCulture.Run(culture, () => Writes(3, 1)));
+            Assert.Equal(new[] { $"3 (>L:{stateVar})" }, TestCulture.Run(culture, () => Writes(2, 3)));
+        }
+        // A lever already at its pick is left alone, and 2, which is no position, is never picked.
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(et, 1, 1).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(et, 1, 2).Outcome);
     }
 
     [Fact]
