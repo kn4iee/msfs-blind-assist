@@ -139,10 +139,10 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
+- **Status:** claimed
+- **Claimed by:** Daniel Wolak (danielw97), 2026-10-26
 - **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** (date; the `B757` commit you branched from)
+- **Started:** 2026-10-26, from `cf1dfce94`
 - **Landed:** (date; the last commit of this plan on `B757`)
 - **Tests at landing:** (full suite passed / failed, after the last rebase)
 - **Tasks:** (done; left, and why)
