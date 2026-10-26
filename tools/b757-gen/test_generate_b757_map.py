@@ -1,7 +1,8 @@
 """Rules of the BlueBird 757-200 control-map generator, on tiny in-memory rows.
 
 No aircraft package is needed: rows are built by hand in the shape extract_controls.extract() returns, and the
-extractor's own new interface (unclipped codes) is checked on a one-control package written to a temp folder.
+extractor's own new interface (unclipped codes) is checked on a one-control package written to a temp folder. The last
+two classes test rpn_replay.py and replay the click code of every control of the committed map.
 
 Run from the repo root, any of:
     python -I tools/b757-gen/test_generate_b757_map.py
@@ -28,6 +29,7 @@ if HERE not in sys.path:  # -I puts neither the script's folder nor the current 
 
 import extract_controls  # noqa: E402
 import generate_b757_map as g  # noqa: E402
+import rpn_replay  # noqa: E402
 
 def row(node="B757_OVHD_TEST_BUTTON", kind="toggle", panel="ELECTRICAL PANEL", line=1, positions="2",
         state=None, tips=None, left=None, release=None, cw=None, ccw=None, other=None, scope=None, file="x.xml"):
@@ -3073,6 +3075,492 @@ class Extractor(unittest.TestCase):
         self.assertNotIn(f"{node}: cw, ccw left out", printed_plain)
         self.assertRegex(printed, r"direct-write\s+: 1 ")
         self.assertIn(f"{node}: cw, ccw left out", printed)
+
+
+class RpnReplay(unittest.TestCase):
+    """Plan 02, task 6: rpn_replay.replay runs the subset of the sim's RPN that the cockpit's click code uses, on a copy of
+    the L:vars it is given. These pin the interpreter on small code; ClickCodeReplay runs it over every control of the map."""
+
+    @staticmethod
+    def run_code(code, **lvars):
+        return rpn_replay.replay(code, lvars)
+
+    def test_arithmetic_takes_its_operands_in_stack_order(self):
+        after = self.run_code("7 2 - (>L:SUB) 7 2 + (>L:ADD) 4 ++ (>L:INC) 4 -- (>L:DEC) -1.5 (>L:NEG)")
+        self.assertEqual([after[k] for k in ("SUB", "ADD", "INC", "DEC", "NEG")], [5, 9, 5, 3, -1.5])
+
+    def test_a_set_pops_the_top_of_the_stack(self):
+        after = self.run_code("2 3 (>L:A) (>L:B)")
+        self.assertEqual((after["A"], after["B"]), (3, 2))
+
+    def test_units_are_ignored_whether_or_not_a_space_follows_the_comma(self):
+        after = self.run_code("(L:A, bool) (>L:B,enum) (L:A) (>L:C, number) (L:A,bool) (>L:D)", A=1)
+        self.assertEqual([after[k] for k in "BCD"], [1, 1, 1])
+
+    def test_a_variable_never_set_reads_zero(self):
+        self.assertEqual(self.run_code("(L:NEVER_SET) 1 + (>L:X)")["X"], 1)
+
+    def test_not_is_a_logical_not(self):
+        after = self.run_code("(L:A) ! (>L:NOT_A) (L:B) ! (>L:NOT_B)", A=0, B=7)
+        self.assertEqual((after["NOT_A"], after["NOT_B"]), (1, 0))
+
+    def test_comparisons_and_logic_push_one_or_zero(self):
+        after = self.run_code("1 2 < (>L:LT) 1 2 > (>L:GT) 2 2 == (>L:EQ) 1 2 == (>L:NE) "
+                              "1 1 and (>L:AND1) 1 0 and (>L:AND0) 0 0 or (>L:OR0) 0 5 or (>L:OR1)")
+        self.assertEqual([after[k] for k in ("LT", "GT", "EQ", "NE", "AND1", "AND0", "OR0", "OR1")],
+                         [1, 0, 1, 0, 1, 0, 0, 1])
+
+    def test_min_and_max_hold_a_step_at_the_ends(self):
+        up, down = "(L:X, enum) 1 + 2 min (>L:X)", "(L:X, enum) 1 - 0 max (>L:X)"
+        self.assertEqual([self.run_code(up, X=x)["X"] for x in (0, 1, 2)], [1, 2, 2])
+        self.assertEqual([self.run_code(down, X=x)["X"] for x in (0, 1, 2)], [0, 0, 1])
+
+    def test_dup_and_the_increment_steps_run_the_chronometer_lever_code(self):
+        # B757_MAIN_CHRONO_SET_SWITCH's cw and ccw, as the vendor wrote them: step, test the copy, clamp
+        cw, ccw = "(L:S, enum) ++ d 3 > if{ 3 } (>L:S, enum)", "(L:S, enum) -- d 0 < if{ 0 } (>L:S, enum)"
+        self.assertEqual([self.run_code(cw, S=s)["S"] for s in range(4)], [1, 2, 3, 3])
+        self.assertEqual([self.run_code(ccw, S=s)["S"] for s in range(4)], [0, 0, 1, 2])
+
+    def test_modulo_keeps_the_remainder(self):
+        self.assertEqual(self.run_code("7 4 % (>L:X)")["X"], 3)
+        with self.assertRaisesRegex(rpn_replay.ReplayError, "modulo by zero"):
+            self.run_code("7 0 % (>L:X)")
+
+    def test_if_runs_its_block_on_a_nonzero_condition_and_els_on_zero(self):
+        code = "(L:C) if{ 1 (>L:X) } els{ 2 (>L:X) } 9 (>L:Y)"
+        on, off = self.run_code(code, C=1), self.run_code(code, C=0)
+        self.assertEqual((on["X"], on["Y"], off["X"], off["Y"]), (1, 9, 2, 9), "the code after a block still runs")
+
+    def test_if_without_els_and_nested_blocks(self):
+        code = "(L:A) if{ (L:B) if{ 1 (>L:X) } els{ 2 (>L:X) } }"
+        got = {(a, b): self.run_code(code, A=a, B=b).get("X") for a in (0, 1) for b in (0, 1)}
+        self.assertEqual(got, {(0, 0): None, (0, 1): None, (1, 0): 2, (1, 1): 1})
+
+    def test_the_engine_fire_handle_press_gates_on_its_rotation_unlock_and_fire(self):
+        # BBS757_FIREHANDLE1_CLICK's press as the map has it: and, or and an if inside an els
+        press = ("(L:ROT, enum) 1 == (L:UNLOCK, bool) 1 == (L:FIRE, bool) 1 == or and if{ 1 (>L:SW, bool) } "
+                 "els{ (L:ROT, enum) 1 == if{ 0 (>L:SW, bool) } }")
+
+        def switch(**state):
+            return self.run_code(press, **state)["SW"]
+
+        self.assertEqual(switch(ROT=1, UNLOCK=1, SW=0), 1, "rotated and unlocked: pulled")
+        self.assertEqual(switch(ROT=1, FIRE=1, SW=0), 1, "rotated with the fire active: pulled")
+        self.assertEqual(switch(ROT=1, SW=1), 0, "rotated, locked, no fire: pushed in")
+        self.assertEqual(switch(UNLOCK=1, SW=1), 1, "not rotated: nothing happens")
+        self.assertEqual(switch(SW=0), 0)
+
+    def test_k_and_h_events_are_recorded_and_change_no_variable(self):
+        after = self.run_code("1 (>K:AUTOPILOT_OFF) (>H:BBS_757_EICAS_DEBUG) 5 (>L:X)")
+        self.assertEqual(after["X"], 5)
+        self.assertEqual(after["K:AUTOPILOT_OFF"], 1, "the value the event was sent with")
+        self.assertIn("H:BBS_757_EICAS_DEBUG", after)
+        self.assertEqual(sorted(after), ["H:BBS_757_EICAS_DEBUG", "K:AUTOPILOT_OFF", "X"], "no L:var of those names")
+
+    def test_o_vars_read_zero_until_written_and_their_writes_are_recorded(self):
+        after = self.run_code("(O:LOCK) 1 + (>L:X) 4 (>O:LOCK) (O:LOCK) (>L:Y)")
+        self.assertEqual((after["X"], after["Y"], after["O:LOCK"]), (1, 4, 4))
+        self.assertNotIn("LOCK", after, "an O:var is not the L:var of the same name")
+
+    def test_e_and_a_vars_read_zero_unless_given(self):
+        code = "(E:SIMULATION TIME, second) 1 + (>L:X) (A:CIRCUIT ON:27, bool) 2 + (>L:Y)"
+        after = self.run_code(code)
+        self.assertEqual((after["X"], after["Y"]), (1, 2))
+        self.assertEqual(self.run_code(code, **{"A:CIRCUIT ON:27": 1})["Y"], 3, "given under its prefixed name")
+
+    def test_a_pop_from_an_empty_stack_gives_zero(self):
+        # the cockpit's code relies on it (the bus tie buttons write a var and then run a `!`); unmeasured in the sim
+        self.assertEqual(self.run_code("! (>L:X)")["X"], 1)
+        self.assertEqual(self.run_code("(>L:X)", X=5)["X"], 0)
+
+    def test_the_variables_passed_in_are_not_changed(self):
+        before = {"X": 1}
+        after = rpn_replay.replay("5 (>L:X)", before)
+        self.assertEqual((before, after), ({"X": 1}, {"X": 5}))
+
+    def test_code_it_cannot_parse_is_an_error_naming_the_problem(self):
+        cases = {
+            "2 3 pow": "unknown token 'pow'",
+            "1 }": "a closing brace nothing opened",
+            "1 if{ 2": "a block that is never closed",
+            "1 els{ 2 }": "els{ with no if{",
+            "(L:X": "an opening parenthesis that is never closed",
+            "1 (>X, bool)": "a variable with no type",
+            "1 (>B:X)": "unsupported variable type 'B'",
+            "(K:X)": "K: variables cannot be read",
+            "1 (>A:X)": "A: variables cannot be written",
+            "1 { 2": "unexpected '{'",
+        }
+        for code, why in cases.items():
+            with self.subTest(code=code):
+                with self.assertRaisesRegex(rpn_replay.ReplayError, re.escape(why)):
+                    rpn_replay.replay(code, {})
+
+
+# ---- every control's click code ---------------------------------------------------------------------------------------
+CLICK_FIELDS = ("press", "release", "cw", "ccw")
+SLACK = 0.001   # Bbs757Rpn.ValueTolerance: the app compares a value read back with a position to this slack
+
+# Vendor clicks that act only while another L:var allows it, so they take their control to another position only from the
+# right state of that var. node -> (why: the click code it comes from, {the control's start value: the L:vars it needs
+# from there}); the key None stands for every start value the entry does not name. The control is replayed from each of
+# its positions as for any other, with those vars set; an entry that is not needed, or that does not make the click work,
+# is reported like any other failure: never an exemption.
+PRECONDITIONS = {
+    # The fire handles (BBS_752_BASE_INTERIOR.xml, cited as XML:line). A handle is pulled while it is unlocked or its fire
+    # is active, and pushed in when neither is so; the engine handles also want their rotation at 1 (Center).
+    "BBS757_FIREHANDLE1_CLICK": (
+        "press (XML:15572-15579) writes 1 when L:BBS757_ENG1_FIRE_HANDLE_ROTATION reads 1 and L:BBS757_FIREUNLOCK1 or "
+        "L:B757_L_ENG_FIRE_ACTIVE does, else 0 when the rotation reads 1",
+        {0: {"BBS757_ENG1_FIRE_HANDLE_ROTATION": 1, "BBS757_FIREUNLOCK1": 1},
+         1: {"BBS757_ENG1_FIRE_HANDLE_ROTATION": 1, "BBS757_FIREUNLOCK1": 0, "B757_L_ENG_FIRE_ACTIVE": 0}}),
+    "BBS757_FIREHANDLE1_CLICK2": (
+        "press (XML:15669-15676) writes 1 when L:BBS757_ENG2_FIRE_HANDLE_ROTATION reads 1 and L:BBS757_FIREUNLOCK2 or "
+        "L:B757_R_ENG_FIRE_ACTIVE does, else 0 when the rotation reads 1",
+        {0: {"BBS757_ENG2_FIRE_HANDLE_ROTATION": 1, "BBS757_FIREUNLOCK2": 1},
+         1: {"BBS757_ENG2_FIRE_HANDLE_ROTATION": 1, "BBS757_FIREUNLOCK2": 0, "B757_R_ENG_FIRE_ACTIVE": 0}}),
+    # The APU handle's press (XML:15766-15774) has its `and` right after the rotation test, with no second operand, so
+    # the rotation plays no part (this replay pops an empty stack as 0): a gate on the unlock and the fire alone.
+    "BBS757_FIREHANDLE1_CLICK3": (
+        "press (XML:15766-15774) writes 1 when L:BBS757_FIREUNLOCK3 or L:B757_APU_FIRE_ACTIVE reads 1, else 0",
+        {0: {"BBS757_FIREUNLOCK3": 1},
+         1: {"BBS757_FIREUNLOCK3": 0, "B757_APU_FIRE_ACTIVE": 0}}),
+    # The handles' rotation: cw and ccw step it only while the handle is pulled; while it is in, both write 1 (Center).
+    "B757_PED_Fire_DISCH_1": (
+        "cw and ccw (XML:15608-15617) step L:BBS757_ENG1_FIRE_HANDLE_ROTATION only while L:B757_ENGFIRE_1_SWITCH reads 1, "
+        "else both write 1",
+        {None: {"B757_ENGFIRE_1_SWITCH": 1}}),
+    "B757_PED_Fire_DISCH_2": (
+        "cw and ccw (XML:15705-15714) step L:BBS757_ENG2_FIRE_HANDLE_ROTATION only while L:B757_ENGFIRE_2_SWITCH reads 1, "
+        "else both write 1",
+        {None: {"B757_ENGFIRE_2_SWITCH": 1}}),
+    "B757_PED_Fire_DISCH_3": (
+        "cw and ccw (XML:15801-15810) step L:BBS757_APU_FIRE_HANDLE_ROTATION only while L:B757_APUFIRE_SWITCH reads 1, "
+        "else both write 1",
+        {None: {"B757_APUFIRE_SWITCH": 1}}),
+}
+
+# The vendor's own click code that no RPN parser accepts, found by this replay and listed in curation.json under
+# _suspected_slips (the generator prints the same list). node -> {field: what is wrong}. The map holds the vendor's code
+# verbatim, and what the sim does with such a click (run it, stop at the slip, refuse it whole) is unmeasured, so the
+# replay neither accepts the slip nor leaves the control unchecked: the code must still fail to parse as pinned, and with
+# the slipped token left out (without_slips) it must do what the map says.
+VENDOR_SLIPS = {
+    **{node: {"press": "a set with no variable type: (>B757_..._ON, bool) after the flip of the button's own var"}
+       for node in ("B757_OVHD_L_PUMPS_FWD_BUTTON", "B757_OVHD_L_PUMPS_AFT_BUTTON", "B757_OVHD_R_PUMPS_FWD_BUTTON",
+                    "B757_OVHD_R_PUMPS_AFT_BUTTON", "B757_OVHD_C_PUMPS_L_BUTTON", "B757_OVHD_C_PUMPS_R_BUTTON",
+                    "B757_OVHD_XFEED_PUMPS_FWD_BUTTON", "B757_OVHD_XFEED_PUMPS_AFT_BUTTON")},
+    "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO": {"press": "a closing brace nothing opened, after the flip of its var"},
+}
+
+
+def near(a, b):
+    return abs(a - b) < SLACK
+
+
+def without_slips(code):
+    """The code with the slipped token left out: a set with no variable type, a closing brace nothing opened."""
+    code, depth, kept = g.MISSING_L.sub("", code), 0, []
+    for piece in re.split(r"(if\{|els\{|\})", code):
+        if piece in ("if{", "els{"):
+            depth += 1
+        elif piece == "}":
+            if depth == 0:
+                continue
+            depth -= 1
+        kept.append(piece)
+    return "".join(kept)
+
+
+def shape(c):
+    """What the app does with this control (Bbs757Write.ToPosition, Bbs757Rpn.ToggleTo and StepTo), which decides what is
+    checked: "skip" (no click code: guarded, direct_write and the sim's own 3-state switches are written through their
+    state var), "parse" (a button, a held button, or a switch with only a release: the code only has to parse), "press"
+    (a toggle, guard or select: one press moves it), "steps" (a switch with cw and ccw: one step per position), "cycle" (a
+    switch with a press only: presses cycle forward, wrapping). None when no check covers the control's shape."""
+    if not any(c[f] for f in CLICK_FIELDS):
+        return "skip"
+    if c["kind"] in ("button", "held"):
+        return "parse"
+    if c["kind"] in ("toggle", "guard", "select") and c["press"]:
+        return "press"
+    if c["kind"] == "switch":
+        if c["cw"] and c["ccw"]:
+            return "steps"
+        if c["press"] and not (c["cw"] or c["ccw"]):
+            return "cycle"
+        if not (c["press"] or c["cw"] or c["ccw"]):
+            return "parse"
+    return None
+
+
+def landing_failures(c, how, codes, needs):
+    """Replay the control's code from each of its positions: where does the state var land?"""
+    node, var = c["node"], c["state_var"]
+    values = [p["value"] for p in c["positions"]]
+    failures = []
+
+    def lands_on(field, start):
+        state = dict(needs.get(start, needs.get(None, {})))
+        state[var] = start
+        try:
+            return rpn_replay.replay(codes[field], state)[var]
+        except rpn_replay.ReplayError as e:   # an error only some start states reach: the parse check cannot see it
+            failures.append(f"{node}: {field} from {start:g} cannot run ({e}): {codes[field]}")
+            return None
+
+    for i, start in enumerate(values):
+        if how == "press":
+            got = lands_on("press", start)
+            if got is not None and (near(got, start) or not any(near(got, v) for v in values)):
+                failures.append(f"{node}: press from {start:g} lands on {got:g}, not on another of its positions "
+                                f"{[f'{v:g}' for v in values]}: {codes['press']}")
+            continue
+        if how == "cycle":
+            wanted = [("press", values[(i + 1) % len(values)])]
+        else:
+            wanted = [("cw", values[min(i + 1, len(values) - 1)]), ("ccw", values[max(i - 1, 0)])]
+        for field, want in wanted:
+            got = lands_on(field, start)
+            if got is not None and not near(got, want):
+                failures.append(f"{node}: {field} from {start:g} lands on {got:g}, not on {want:g}: {codes[field]}")
+    return failures
+
+
+def control_failures(c, needs, slips):
+    node, how = c["node"], shape(c)
+    if how is None:
+        return [f"{node}: no check covers a {c['kind']} with {[f for f in CLICK_FIELDS if c[f]]}"]
+    failures, codes = [], {}
+    for field in CLICK_FIELDS:
+        code = c[field]
+        if not code:
+            if field in slips:
+                failures.append(f"{node}: pinned as a vendor slip in {field}, which has no code")
+            continue
+        try:
+            rpn_replay.replay(code, {})
+            if field in slips:
+                failures.append(f"{node}: {field} is pinned as a vendor slip ({slips[field]}) but parses: unpin it")
+            codes[field] = code
+        except rpn_replay.ReplayError as e:
+            if field not in slips:
+                failures.append(f"{node}: {field} does not parse ({e}): {code}")
+                continue
+            codes[field] = without_slips(code)
+            try:
+                rpn_replay.replay(codes[field], {})
+            except rpn_replay.ReplayError as e2:
+                failures.append(f"{node}: {field} still does not parse with its slip left out ({e2}): {codes[field]}")
+                codes.pop(field)
+    if how in ("press", "steps", "cycle"):
+        if not c["state_var"] or len(c["positions"]) < 2:
+            return failures + [f"{node}: a {how} control needs a state var and two positions to check"]
+        for start, state in (needs or {}).items():   # a typo would excuse nothing, so a stale entry is an error
+            if start is not None and not any(near(start, p["value"]) for p in c["positions"]):
+                failures.append(f"{node}: a precondition names the start {start:g}, which is not one of its positions")
+            for var in state:
+                if not any(re.search(rf"L:{re.escape(var)}\b", code) for code in codes.values()):
+                    failures.append(f"{node}: a precondition sets {var}, which no click code of the control reads")
+        if all(f in codes for f in CLICK_FIELDS if c[f] and f != "release"):
+            failures += landing_failures(c, how, codes, needs or {})
+            if needs and not landing_failures(c, how, codes, {}):
+                failures.append(f"{node}: its precondition is not needed: the click works without it")
+    elif needs:
+        failures.append(f"{node}: a precondition is of no use: no click code of this control is replayed from a position")
+    return failures
+
+
+def replay_failures(controls, preconditions=None, slips=None):
+    """One message per failure, each naming its control and its click code (empty when every control checks out). The
+    codes are replayed through rpn_replay.replay; what is checked follows shape(). The tables are PRECONDITIONS and
+    VENDOR_SLIPS (given empty, none is allowed): a control they name that the map lacks is reported too."""
+    preconditions, slips = preconditions or {}, slips or {}
+    nodes = {c["node"] for c in controls}
+    failures = [f"{node}: {what} names a control the map does not have"
+                for what, table in (("a precondition", preconditions), ("a pinned vendor slip", slips))
+                for node in table if node not in nodes]
+    for c in controls:
+        _why, needs = preconditions.get(c["node"], (None, None))
+        failures += control_failures(c, needs, slips.get(c["node"], {}))
+    return failures
+
+
+def control(kind, positions=(0, 1), node="B757_X", **codes):
+    """A map control as the generator writes it, on state var X, with only the click codes given."""
+    return {"node": node, "kind": kind, "state_var": "X",
+            "positions": [{"value": v, "label": f"P{v}"} for v in positions],
+            **{f: codes.get(f) for f in CLICK_FIELDS}}
+
+
+class ClickCodeReplay(unittest.TestCase):
+    """Plan 02, task 6: the app moves a control by replaying the cockpit's own click code, so a pick lands where it aims only
+    if that code does what the map says. replay_failures runs every control's code through rpn_replay.replay offline and
+    checks it the way the app uses it: a toggle, guard or select is pressed once and must land on another of its positions; a
+    switch with cw and ccw is stepped from each position and must land on the next or previous one, or stay at an end; a
+    switch with only a press cycles forward; every code, a button's included, must parse. Nothing here reads the package."""
+
+    def embedded(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_every_control_replays_to_its_positions(self):
+        failures = replay_failures(self.embedded()["controls"], PRECONDITIONS, VENDOR_SLIPS)
+
+        self.assertEqual(failures, [], "\n" + "\n".join(failures))
+
+    def test_the_embedded_map_has_controls_for_every_check(self):
+        counts = collections.Counter(shape(c) for c in self.embedded()["controls"])
+
+        self.assertNotIn(None, counts, "a control no check covers")
+        for how in ("parse", "press", "steps"):
+            self.assertGreater(counts[how], 0, how)
+
+    def test_a_broken_click_code_in_the_embedded_map_is_reported_by_node(self):
+        controls = copy.deepcopy(self.embedded()["controls"])
+        before = replay_failures(controls, PRECONDITIONS, VENDOR_SLIPS)
+        toggle = next(c for c in controls if shape(c) == "press" and c["node"] not in PRECONDITIONS)
+        switch = next(c for c in controls if shape(c) == "steps" and c["node"] not in PRECONDITIONS)
+        toggle["press"] = f"(L:{toggle['state_var']}) (>L:{toggle['state_var']})"    # writes back what it read
+        switch["cw"], switch["ccw"] = switch["ccw"], switch["cw"]                     # steps the wrong way
+
+        failures = replay_failures(controls, PRECONDITIONS, VENDOR_SLIPS)
+
+        new = [m for m in failures if m not in before]
+        self.assertEqual({m.split(":")[0] for m in new}, {toggle["node"], switch["node"]})
+
+    def test_the_pinned_vendor_slips_are_the_ones_the_generator_suspects(self):
+        # curation.json's _suspected_slips lists the same nodes, and the generator prints them on every run
+        suspected = {c["node"]: [f for f in CLICK_FIELDS if g.suspected_slips(c[f])] for c in self.embedded()["controls"]}
+
+        self.assertEqual({n: fields for n, fields in suspected.items() if fields},
+                         {n: [f for f in CLICK_FIELDS if f in pinned] for n, pinned in VENDOR_SLIPS.items()})
+
+    def test_a_toggle_guard_or_select_must_land_on_its_other_position(self):
+        flip = "(L:X) ! (>L:X)"
+        self.assertEqual(replay_failures([control(k, node=f"B757_{k.upper()}", press=flip)
+                                          for k in ("toggle", "guard", "select")]), [])
+        stuck = control("toggle", node="B757_STUCK", press="(L:X) (>L:X)")          # writes back what it read
+        off_map = control("guard", node="B757_OFF_MAP", press="5 (>L:X)")            # lands on no position
+        failures = replay_failures([stuck, off_map])
+
+        self.assertEqual([m.split(":")[0] for m in failures], ["B757_STUCK"] * 2 + ["B757_OFF_MAP"] * 2,
+                         "each position is a start of its own")
+        self.assertTrue(all(stuck["press"] in m for m in failures[:2]) and all(off_map["press"] in m for m in failures[2:]))
+
+    def test_a_switch_must_step_to_the_next_or_previous_position_and_stay_at_an_end(self):
+        up, down = "(L:X) 1 + 2 min (>L:X)", "(L:X) 1 - 0 max (>L:X)"
+        self.assertEqual(replay_failures([control("switch", (0, 1, 2), cw=up, ccw=down)]), [])
+        # positions that are not consecutive numbers: the next listed one is the next step
+        self.assertEqual(replay_failures([control("switch", (0, 11), cw="11 (>L:X)", ccw="0 (>L:X)")]), [])
+        jumps = control("switch", (0, 1, 2), node="B757_JUMPS", cw="(L:X) 2 + 2 min (>L:X)", ccw=down)
+        wraps = control("switch", (0, 1, 2), node="B757_WRAPS", cw="(L:X) 1 + 3 % (>L:X)", ccw=down)
+        reversed_ = control("switch", (0, 1, 2), node="B757_REVERSED", cw=down, ccw=up)
+
+        self.assertEqual([m.split(": ")[1].split(" lands")[0] for m in replay_failures([jumps])], ["cw from 0"])
+        self.assertEqual([m.split(": ")[1].split(" lands")[0] for m in replay_failures([wraps])], ["cw from 2"])
+        self.assertEqual(len(replay_failures([reversed_])), 6)
+
+    def test_a_switch_with_a_press_only_cycles_forward_through_its_positions(self):
+        self.assertEqual(replay_failures([control("switch", (0, 1, 2), press="(L:X) 1 + 3 % (>L:X)")]), [])
+        backwards = control("switch", (0, 1, 2), node="B757_BACK", press="(L:X) 1 - 0 max (>L:X)")
+
+        self.assertEqual(len(replay_failures([backwards])), 3)
+
+    def test_a_control_with_no_click_code_is_skipped_and_a_button_is_only_parsed(self):
+        guarded = control("switch", (0, 1, 2), node="B757_GUARDED")                   # no press, release, cw or ccw
+        button = control("button", (), press="1 (>L:Y)", release="0 (>L:Y)")          # writes nothing it must land on
+        spring = control("switch", (0, 1, 2), node="B757_SPRING", release="1 (>L:X)")
+        self.assertEqual(replay_failures([guarded, button, spring]), [])
+
+        failures = replay_failures([control("held", (), node="B757_BROKEN", press="1 (>L:Y", release="0 (>L:Y)")])
+
+        self.assertEqual(len(failures), 1)
+        self.assertTrue(failures[0].startswith("B757_BROKEN: press does not parse ("))
+        self.assertTrue(failures[0].endswith("): 1 (>L:Y"), failures[0])
+
+    def test_code_that_does_not_parse_is_reported_by_node_with_the_code(self):
+        bad = control("toggle", node="B757_BAD", press="(L:X) ! (>L:X) }")
+
+        self.assertEqual(replay_failures([bad]), ["B757_BAD: press does not parse (a closing brace nothing opened): "
+                                                  "(L:X) ! (>L:X) }"])
+
+    def test_an_error_only_some_start_states_reach_is_reported_by_node_not_raised(self):
+        divides = control("toggle", node="B757_DIVIDES", press="2 (L:X) 1 - % (>L:X)")   # divides by zero from position 1
+
+        failures = replay_failures([divides])
+
+        self.assertEqual([m.split(" lands")[0].split(" cannot")[0] for m in failures],
+                         ["B757_DIVIDES: press from 0", "B757_DIVIDES: press from 1"])
+        self.assertIn("cannot run (modulo by zero)", failures[1])
+
+    def test_a_shape_no_check_covers_is_reported_not_passed(self):
+        odd = control("switch", (0, 1, 2), node="B757_ODD", press="1 (>L:X)", cw="(L:X) 1 + 2 min (>L:X)")
+
+        [message] = replay_failures([odd])
+
+        self.assertTrue(message.startswith("B757_ODD: no check covers"), message)
+
+    def test_a_precondition_gives_a_gated_click_the_state_it_needs_and_is_never_an_exemption(self):
+        gated = control("toggle", node="B757_GATED", press="(L:G, bool) if{ 1 (>L:X) } els{ 0 (>L:X) }")
+        needs = {"B757_GATED": ("press writes 1 while L:G reads 1 and 0 otherwise", {0: {"G": 1}})}
+
+        [message] = replay_failures([gated])
+
+        self.assertIn("B757_GATED: press from 0 lands on 0", message)      # G unset: the press writes 0 from 0 too
+        self.assertEqual(replay_failures([gated], needs), [])
+        # a state that does not make the click work excuses nothing
+        useless = {"B757_GATED": ("why", {0: {"G": 0}})}
+        self.assertEqual(len(replay_failures([gated], useless)), 1)
+        # the key None stands for every start the entry does not name, and a start it names takes its own state
+        rotate = control("switch", (0, 1, 2), node="B757_ROTATE",
+                         cw="(L:G) if{ (L:X) 1 + 2 min (>L:X) } els{ 1 (>L:X) }",
+                         ccw="(L:G) if{ (L:X) 1 - 0 max (>L:X) } els{ 1 (>L:X) }")
+        self.assertEqual(len(replay_failures([rotate])), 4, "while G reads 0 every step writes 1")
+        self.assertEqual(replay_failures([rotate], {"B757_ROTATE": ("why", {None: {"G": 1}})}), [])
+        stepped = replay_failures([rotate], {"B757_ROTATE": ("why", {None: {"G": 1}, 1: {"G": 0}})})
+        self.assertEqual([m.split(" lands")[0] for m in stepped], ["B757_ROTATE: cw from 1", "B757_ROTATE: ccw from 1"])
+        # a start that is no position, or a var no click code reads, is a typo and is reported
+        [message] = replay_failures([gated], {"B757_GATED": ("why", {0: {"G": 1}, 5: {"G": 1}})})
+        self.assertIn("B757_GATED: a precondition names the start 5, which is not one of its positions", message)
+        [message] = replay_failures([gated], {"B757_GATED": ("why", {0: {"G": 1, "NOPE": 1}})})
+        self.assertIn("B757_GATED: a precondition sets NOPE, which no click code of the control reads", message)
+        # one the click does not need, or for a control the map lacks, is reported
+        plain = control("toggle", node="B757_PLAIN", press="(L:X) ! (>L:X) (L:G) (>L:Y)")    # reads G, never needs it
+        self.assertEqual(replay_failures([plain], {"B757_PLAIN": ("why", {0: {"G": 1}})}),
+                         ["B757_PLAIN: its precondition is not needed: the click works without it"])
+        self.assertEqual(replay_failures([plain], {"B757_NONE": ("why", {})}),
+                         ["B757_NONE: a precondition names a control the map does not have"])
+        button = control("button", (), node="B757_BUTTON", press="1 (>L:Y)")
+        [message] = replay_failures([button], {"B757_BUTTON": ("why", {None: {"G": 1}})})
+        self.assertTrue(message.startswith("B757_BUTTON: a precondition is of no use"), message)
+
+    def test_without_slips_leaves_out_only_the_slipped_token(self):
+        fine = "(L:C) if{ 1 (>L:X) } els{ 2 (>L:X) } (L:Y) ! (>L:Y, bool)"
+
+        self.assertEqual(without_slips(fine), fine)
+        self.assertEqual(without_slips("(L:C) if{ 1 (>L:X) } } 2 (>L:Y)"), "(L:C) if{ 1 (>L:X) }  2 (>L:Y)")
+        self.assertEqual(without_slips("(L:Y) ! (>L:Y, bool) (L:Z) ! (>Z, bool)"), "(L:Y) ! (>L:Y, bool) (L:Z) ! ")
+
+    def test_a_pinned_vendor_slip_must_still_fail_to_parse_and_the_rest_of_the_click_must_still_work(self):
+        brace = control("toggle", node="B757_BRACE", press="(L:X) ! (>L:X) }")
+        no_type = control("toggle", node="B757_NO_TYPE", press="(L:X) ! (>L:X) (L:X_ON) ! (>X_ON, bool)")
+        slips = {"B757_BRACE": {"press": "a closing brace nothing opened"}, "B757_NO_TYPE": {"press": "a set with no type"}}
+
+        self.assertEqual(replay_failures([brace, no_type], slips=slips), [])
+        self.assertEqual(len(replay_failures([brace, no_type])), 2, "unpinned, each is a parse failure")
+        # the code is fixed, or the pinned field has no code, or the control is gone: the pin is stale
+        fixed = control("toggle", node="B757_FIXED", press="(L:X) ! (>L:X)")
+        [stale] = replay_failures([fixed], slips={"B757_FIXED": {"press": "a slip"}})
+        self.assertIn("B757_FIXED: press is pinned as a vendor slip (a slip) but parses", stale)
+        [no_code] = replay_failures([fixed], slips={"B757_FIXED": {"cw": "a slip"}})
+        self.assertIn("pinned as a vendor slip in cw, which has no code", no_code)
+        self.assertEqual(replay_failures([fixed], slips={"B757_NONE": {"press": "a slip"}}),
+                         ["B757_NONE: a pinned vendor slip names a control the map does not have"])
+        # a slip is not the only thing wrong: what is left of the click is checked as any other
+        both = control("toggle", node="B757_BOTH", press="(L:X) (>L:X) }")
+        still = replay_failures([both], slips={"B757_BOTH": {"press": "a closing brace nothing opened"}})
+        self.assertEqual([m.split(" lands")[0] for m in still], ["B757_BOTH: press from 0", "B757_BOTH: press from 1"])
 
 
 if __name__ == "__main__":
