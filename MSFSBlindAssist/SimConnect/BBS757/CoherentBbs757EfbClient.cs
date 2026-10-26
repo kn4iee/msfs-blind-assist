@@ -73,7 +73,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// UPDATE spot without the update's page guards. An older agent on the page answers "no agent"
     /// to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 3;
+    internal const int AgentVersion = 5;   // 4: mirror(on) for the tablet reader; 5: wheel(x, y, deltaY)
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
@@ -388,6 +388,37 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or JsonException
                                        or ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Turns the tablet reader's mirror on or off (the agent's mirror(): the tablet's live image laid
+    /// over the captain's ND, so the ND pop-out shows the tablet; <see cref="Bbs757EfbPopout"/>).
+    /// True when the agent did it, false when it answered that it could not (no gauge, no image),
+    /// null when the view or agent could not be reached. Like <see cref="ReadPageAsync"/> it never
+    /// connects ([A380C-3]); it may run while no click run is going and takes no run's place.
+    /// </summary>
+    public async Task<bool?> SetMirrorAsync(bool on, CancellationToken ct)
+    {
+        if (_viewClaim == null || _disposed) return null;
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
+            if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), linked.Token)) return null;
+            string arg = on ? "true" : "false";
+            string raw = await EvalAsync(
+                $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} && __MSFSBA_BBS757EFB.mirror ? JSON.stringify(__MSFSBA_BBS757EFB.mirror({arg})) : '{NoAgent}'",
+                linked.Token);
+            if (raw.Length == 0) { NoteUnansweredEval(); return null; }
+            if (raw == NoAgent) { AgentUnusable(); return null; }
+            using var doc = JsonDocument.Parse(raw);
+            bool ok = doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
+            if (!ok) Log.Debug("BBS757", $"EFB mirror({arg}) refused: {Shorten(raw)}");
+            return ok;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or JsonException)
         {
             return null;
         }

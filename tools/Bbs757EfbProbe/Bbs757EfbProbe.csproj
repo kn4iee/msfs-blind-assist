@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Live probe for the BlueBird 757 tablet reader: pops out the captain's ND, mirrors the tablet onto
+    it, captures, OCRs and parses it, taps by text. Compiles the app's own reader files (linked, not
+    copied) so what it proves is the shipped code. Not part of the solution; build on its own:
+      dotnet build tools/Bbs757EfbProbe -c Debug
+    See tools/Bbs757EfbProbe/README.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPopout.cs" Link="Linked\Bbs757EfbPopout.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbOcr.cs" Link="Linked\Bbs757EfbOcr.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbScreen.cs" Link="Linked\Bbs757EfbScreen.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbVocabulary.cs" Link="Linked\Bbs757EfbVocabulary.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPageReader.cs" Link="Linked\Bbs757EfbPageReader.cs" />
+    <None Include="..\..\MSFSBlindAssist\Resources\coherent-bbs757-efb-agent.js" Link="coherent-bbs757-efb-agent.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
+

@@ -36,7 +36,9 @@
 (function () {
   try {
     // 3: the unguarded-update refusal. The app's clickSeq call asks for this version or later.
-    var VERSION = 3;
+    // 4: mirror(on), for the tablet reader (Bbs757EfbPopout / Bbs757EfbPageReader).
+    // 5: wheel(x, y, deltaY), for scrolling a long tablet page.
+    var VERSION = 5;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -121,6 +123,79 @@
         return 'ok';
       } catch (e) {
         return 'error: ' + (e && e.message);
+      }
+    };
+
+    // One mouse-wheel step at a tablet-local point (the canvas's own onMouseWheel handler, a
+    // WASM_MOUSE_WHEEL call), for the reader to scroll a list longer than the page (Settings >
+    // Callouts). deltaY as the browser gives it: positive scrolls down. 'ok', or why not.
+    A.wheel = function (x, y, deltaY) {
+      try {
+        if (coherentProblem()) return 'no-coherent';
+        var c = findCanvas();
+        var p = canvasProblem(c);
+        if (p) return 'no-canvas: ' + p;
+        if (typeof c.onMouseWheel !== 'function') return 'no-wheel';
+        var r = c.getBoundingClientRect();
+        if (!isWhole(x) || !isWhole(y) || x < 0 || y < 0 || x >= r.width || y >= r.height) return 'bad-point';
+        if (typeof deltaY !== 'number' || !isFinite(deltaY) || Math.abs(deltaY) > 2000) return 'bad-delta';
+        var ev = { clientX: r.left + x, clientY: r.top + y, deltaY: deltaY, button: 0, preventDefault: function () { } };
+        c.onMouseMove(ev);
+        c.onMouseWheel(ev);
+        return 'ok';
+      } catch (e) {
+        return 'error: ' + (e && e.message);
+      }
+    };
+
+    // The tablet reader's mirror. The tablet is drawn natively and nothing in this page can read
+    // its pixels (getImageData is NotSupported in Coherent GT, toDataURL is empty: measured). But
+    // the tablet's live image (an <img> inside the efb_l instrument, src "WasmGaugeLiveView_N")
+    // can be laid over the captain's ND (nd_l) in this same page, and the app's pop-out window of
+    // that ND then shows the tablet at full brightness, cold and dark included. The overlay keeps
+    // the tablet's aspect: the ND's width, its height scaled (the top 528 of the ND's 859 rows).
+    // While it is on, the ND in the 3D cockpit shows the tablet too, so the app turns it on only for
+    // a read. Both gauges are found by NAME, never by position or live-view number (both change).
+    // mirror(true) adds or refreshes it, mirror(false) removes it:
+    // {ok, on, nd:[x,y,w,h], efb:[w,h]} or {ok:false, error}.
+    var MIRROR_ID = 'msfsba_bbs757_efb_mirror';
+    function gaugeInstrument(name) {
+      var insts = document.querySelectorAll('wasm-instrument');
+      var re = new RegExp('[?&]wasm_gauge=' + name + '(&|$)');
+      for (var i = 0; i < insts.length; i++) {
+        if (re.test(insts[i].getAttribute('url') || '')) return insts[i];
+      }
+      return null;
+    }
+    A.mirror = function (on) {
+      try {
+        var old = document.getElementById(MIRROR_ID);
+        if (!on) {
+          if (old && old.parentNode) old.parentNode.removeChild(old);
+          return { ok: true, on: false };
+        }
+        var nd = gaugeInstrument('nd_l'), efb = gaugeInstrument('efb_l');
+        if (!nd || !efb) return { ok: false, error: 'no-gauge' };
+        var live = efb.querySelector('img');
+        var src = live && live.getAttribute('src');
+        if (!src) return { ok: false, error: 'no-efb-image' };
+        var nr = nd.getBoundingClientRect(), er = efb.getBoundingClientRect();
+        if (!(nr.width > 0) || !(er.width > 0)) return { ok: false, error: 'no-size' };
+        var h = Math.round(nr.width * er.height / er.width);
+        var el = old;
+        if (!el) {
+          el = document.createElement('img');
+          el.id = MIRROR_ID;
+          document.body.appendChild(el);
+        }
+        if (el.getAttribute('src') !== src) el.setAttribute('src', src);
+        el.style.cssText = 'position:absolute;left:' + Math.round(nr.left) + 'px;top:' + Math.round(nr.top)
+          + 'px;width:' + Math.round(nr.width) + 'px;height:' + h + 'px;z-index:99999;pointer-events:none;';
+        return { ok: true, on: true,
+                 nd: [Math.round(nr.left), Math.round(nr.top), Math.round(nr.width), Math.round(nr.height)],
+                 efb: [Math.round(er.width), Math.round(er.height)] };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message) };
       }
     };
 
