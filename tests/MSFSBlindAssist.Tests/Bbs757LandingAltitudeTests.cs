@@ -1,5 +1,7 @@
 using System.Globalization;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -9,7 +11,9 @@ namespace MSFSBlindAssist.Tests;
 /// (measured: <c>1020 (&gt;L:B757_OVHD_LDG_ELEV) 1 (&gt;L:B757_OVHD_LDG_ELEV_CHG)</c> reads 1030) and the
 /// phrases. CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch a culture leak:
 /// de-DE's "1.030" is a thousands group and "1030,0" a decimal, and sv-SE writes its minus sign as
-/// U+2212, which the RPN parser rejects.
+/// U+2212, which the RPN parser rejects. The second half is the definition's: the field first on the
+/// Pressurization panel with its read-back row, the typed text written, read back fresh and spoken as
+/// read (a write that did not take speaks the old value), and the panel set the field never sends.
 /// </summary>
 public class Bbs757LandingAltitudeTests
 {
@@ -38,8 +42,7 @@ public class Bbs757LandingAltitudeTests
         Assert.Equal("BBS757_LDG_ALT", Bbs757LandingAltitude.DisplayKey);
         Assert.Equal(-1070, Bbs757LandingAltitude.MinFeet);
         Assert.Equal(14100, Bbs757LandingAltitude.MaxFeet);
-        Assert.Equal($"Landing altitude must be from {Bbs757LandingAltitude.MinFeet} to {Bbs757LandingAltitude.MaxFeet} feet.",
-            Bbs757LandingAltitude.InvalidMessage);
+        Assert.Equal("Landing altitude must be from -1070 to 14100 feet.", Bbs757LandingAltitude.InvalidMessage);
     }
 
     // ---- Typed text ---------------------------------------------------------------------------
@@ -255,5 +258,341 @@ public class Bbs757LandingAltitudeTests
             Assert.DoesNotContain(',', Bbs757LandingAltitude.Display(14100));
             Assert.DoesNotContain('.', Bbs757LandingAltitude.Display(14100));
         });
+    }
+
+    // ---- The definition: the field on the Pressurization panel ----------------------------------------
+
+    private const string ModeSelectNode = "B757_OVHD_MODE_SELECT_SWITCH";
+    private const string WriteFor1030 = "1020 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)";
+
+    /// <summary>A Pressurization control, built in memory (never the shipped map's rows).</summary>
+    private static Bbs757Control ModeSelect() => new()
+    {
+        Node = ModeSelectNode, Section = "Overhead", Panel = "Pressurization", Label = "Mode Select",
+        Kind = Bbs757Kinds.Switch, StateVar = ModeSelectNode,
+        Positions = { new(0, "AUTO 1"), new(1, "AUTO 2"), new(2, "MAN") },
+    };
+
+    private static Bbs757Control Electrical() => new()
+    {
+        Node = "B757_OVHD_BATTERY_BUTTON", Section = "Overhead", Panel = "Electrical", Label = "Battery",
+        Kind = Bbs757Kinds.Toggle, StateVar = "B757_OVHD_BATTERY_BUTTON",
+        Positions = { new(0, "Off"), new(1, "On") },
+    };
+
+    private static Bbs757Control FuelCrossfeed() => new()
+    {
+        Node = "B757_PED_XFEED", Section = "Pedestal", Panel = "Fuel control", Label = "Crossfeed",
+        Kind = Bbs757Kinds.Toggle, StateVar = "B757_PED_XFEED",
+        Positions = { new(0, "Closed"), new(1, "Open") },
+    };
+
+    private static Bbs757ControlMap MapOf(params Bbs757Control[] controls)
+    {
+        var map = new Bbs757ControlMap();
+        foreach (var control in controls) map.Controls.Add(control);
+        return map;
+    }
+
+    /// <summary>A 757 definition built from in-memory controls, with a fake sim behind its writes and a speech capture.</summary>
+    private sealed class Rig
+    {
+        public readonly Bbs757FakeIo Sim = new();
+        public readonly SpeechCapture Speech = new();
+        public readonly SimConnectManager Manager = new(IntPtr.Zero);
+        public readonly BBS757Definition Def;
+
+        public Rig(Bbs757ControlMap? map = null)
+        {
+            Def = new BBS757Definition(map ?? MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => Sim.Io };
+        }
+
+        /// <summary>The panel's text box applying <paramref name="text"/>: MainForm's call into the definition.</summary>
+        public bool Type(string text)
+            => Def.HandleUITypedText(Bbs757LandingAltitude.SetKey, text, Def.GetVariables()[Bbs757LandingAltitude.SetKey], Manager, Speech);
+    }
+
+    [Fact]
+    public void Pressurization_panel_starts_with_the_field()
+    {
+        var def = new Rig().Def;
+
+        Assert.Equal(new[] { Bbs757LandingAltitude.SetKey, ModeSelectNode }, def.GetPanelControls()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, def.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { "Pressurization" }, def.GetPanelStructure()["Overhead"]);   // the panel is listed once
+    }
+
+    [Fact]
+    public void The_shipped_maps_Pressurization_panel_starts_with_the_field()
+    {
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+
+        var controls = def.GetPanelControls()["Pressurization"];
+        Assert.Equal(Bbs757LandingAltitude.SetKey, controls[0]);
+        Assert.Single(controls, Bbs757LandingAltitude.SetKey);
+        Assert.All(controls, key => Assert.True(vars.ContainsKey(key), key));
+        Assert.Contains(Bbs757LandingAltitude.DisplayKey, def.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Single(def.GetPanelStructure()["Overhead"], "Pressurization");
+    }
+
+    [Fact]
+    public void The_row_follows_the_panels_own_status_rows()
+    {
+        var map = MapOf(ModeSelect());
+        map.Status.Add(new Bbs757StatusRow { Key = "B757_PRESS_CABIN_ALT", Panel = "Pressurization", Label = "Cabin Altitude" });
+        var def = new Rig(map).Def;
+
+        Assert.Equal(new[] { "B757_PRESS_CABIN_ALT", Bbs757LandingAltitude.DisplayKey }, def.GetPanelDisplayVariables()["Pressurization"]);
+    }
+
+    [Fact]
+    public void A_map_without_a_pressurization_panel_still_gets_the_field()
+    {
+        // The Overhead section has other panels: the new panel is appended to them.
+        var withOverhead = new Rig(MapOf(Electrical())).Def;
+        Assert.Equal(new[] { "Electrical", "Pressurization" }, withOverhead.GetPanelStructure()["Overhead"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.SetKey }, withOverhead.GetPanelControls()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, withOverhead.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { "B757_OVHD_BATTERY_BUTTON" }, withOverhead.GetPanelControls()["Electrical"]);   // the others are untouched
+
+        // No Overhead section at all: it is created.
+        var noOverhead = new Rig(MapOf(FuelCrossfeed())).Def;
+        Assert.Equal(new[] { "Pressurization" }, noOverhead.GetPanelStructure()["Overhead"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.SetKey }, noOverhead.GetPanelControls()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, noOverhead.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { "Fuel control" }, noOverhead.GetPanelStructure()["Pedestal"]);
+
+        // No controls at all.
+        var empty = new Rig(new Bbs757ControlMap()).Def;
+        Assert.Equal(new[] { "Pressurization" }, empty.GetPanelStructure()["Overhead"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.SetKey }, empty.GetPanelControls()["Pressurization"]);
+    }
+
+    [Fact]
+    public void Registers_the_field_and_the_row()
+    {
+        var vars = new Rig().Def.GetVariables();
+
+        // The field: an Event registration (a key containing "_SET" is a text box Enter applies), never sent.
+        var field = vars[Bbs757LandingAltitude.SetKey];
+        Assert.Equal(SimVarType.Event, field.Type);
+        Assert.Equal("BBS757.LDG_ALT_SET", field.Name);
+        Assert.Equal("Landing Altitude", field.DisplayName);
+        Assert.Equal(UpdateFrequency.OnRequest, field.UpdateFrequency);
+        Assert.True(field.UnparseableTextAsNaN);
+
+        // The row: BlueBird's landing altitude in feet, read on request, shown and never announced.
+        var row = vars[Bbs757LandingAltitude.DisplayKey];
+        Assert.Equal(SimVarType.LVar, row.Type);
+        Assert.Equal("B757_OVHD_LDG_ELEV", row.Name);
+        Assert.Equal("feet", row.Units);
+        Assert.Equal("Landing Altitude", row.DisplayName);
+        Assert.Equal(UpdateFrequency.OnRequest, row.UpdateFrequency);
+        Assert.True(row.RenderAsReadOnlyStatus);
+        Assert.True(row.ExcludeFromMonitorManager);
+        Assert.False(row.IsAnnounced);
+    }
+
+    [Fact]
+    public void Display_says_feet()
+    {
+        var def = new Rig().Def;
+
+        Assert.True(def.TryGetDisplayOverride(Bbs757LandingAltitude.DisplayKey, 1030, out string feet));
+        Assert.Equal("1030 feet", feet);
+        Assert.True(def.TryGetDisplayOverride(Bbs757LandingAltitude.DisplayKey, -60, out string below));
+        Assert.Equal("-60 feet", below);
+        Assert.True(def.TryGetDisplayOverride(Bbs757LandingAltitude.DisplayKey, double.NaN, out string nothing));
+        Assert.Equal("unavailable", nothing);
+
+        // Any other row is left to the rest of the definition.
+        Assert.False(def.TryGetDisplayOverride(ModeSelectNode, 1, out _));
+
+        InCulture("de-DE", () =>
+        {
+            Assert.True(def.TryGetDisplayOverride(Bbs757LandingAltitude.DisplayKey, 14100, out string de));
+            Assert.Equal("14100 feet", de);   // never "14.100"
+        });
+    }
+
+    // ---- The definition: typed text ---------------------------------------------------------------
+
+    [Fact]
+    public async Task Typed_altitude_writes_and_reads_back()
+    {
+        var rig = new Rig();
+        rig.Sim.Hold = ordinal => ordinal == 0;   // the wait before the read-back
+        rig.Sim.Cache[Bbs757LandingAltitude.DisplayKey] = 1000;   // a stale cached value must not be what is read
+
+        Assert.True(rig.Type("1030"));
+
+        // The write is out and the app waits before it reads: nothing is said or re-read yet.
+        Assert.Equal(new[] { WriteFor1030 }, rig.Sim.Writes);
+        Assert.Equal(new[] { 1500 }, rig.Sim.Delays);
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Sim.Resyncs);
+
+        rig.Sim.Fresh[Bbs757LandingAltitude.DisplayKey] = 1030;   // the panel has taken it by then
+        rig.Sim.Release(0);
+        await rig.Sim.ResyncsReached(1);
+
+        Assert.Equal(new[] { Bbs757FakeIo.WriteEvent(WriteFor1030), Bbs757FakeIo.DelayEvent(1500) }, rig.Sim.Events);
+        Assert.Equal(new[] { "Landing altitude 1030 feet" }, rig.Speech.All);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, rig.Sim.Resyncs);   // so the status row shows it
+    }
+
+    [Theory]
+    [InlineData("1030", 1030.0, WriteFor1030, "Landing altitude 1030 feet")]
+    [InlineData("1030", 1000.0, WriteFor1030, "Landing altitude 1000 feet")]   // the write did not take (BBS Nest stopped): what is read back
+    [InlineData("1030", null, WriteFor1030, "Landing altitude unavailable")]   // nothing read back
+    [InlineData("1030,0", 1030.0, WriteFor1030, "Landing altitude 1030 feet")]
+    [InlineData("645", 650.0, "640 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)", "Landing altitude 650 feet")]   // typed 645: the step is 10
+    [InlineData("-65", -70.0, "-80 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)", "Landing altitude minus 70 feet")]
+    [InlineData("14100", 14100.0, "14090 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)", "Landing altitude 14100 feet")]
+    public async Task Typed_altitude_speaks_what_came_back(string typed, double? readBack, string write, string said)
+    {
+        var rig = new Rig();
+        if (readBack is double value) rig.Sim.Fresh[Bbs757LandingAltitude.DisplayKey] = value;
+
+        Assert.True(rig.Type(typed));
+        await rig.Sim.ResyncsReached(1);
+
+        Assert.Equal(new[] { write }, rig.Sim.Writes);
+        Assert.Equal(new[] { said }, rig.Speech.All);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // a typed number's confirmation always speaks
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, rig.Sim.Resyncs);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    [InlineData("en-US")]
+    public void Typed_altitude_reads_and_goes_out_the_same_in_any_culture(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            var rig = new Rig();
+            rig.Sim.Fresh[Bbs757LandingAltitude.DisplayKey] = -60;
+
+            Assert.True(rig.Type("-60"));
+            Assert.True(rig.Type("1030,0"));
+            Assert.True(rig.Type("1.030"));   // a possible thousands group: refused, never guessed
+
+            Assert.Equal(new[] { "-70 (>L:B757_OVHD_LDG_ELEV) 1 (>L:B757_OVHD_LDG_ELEV_CHG)", WriteFor1030 }, rig.Sim.Writes);
+            Assert.Equal(new[]
+            {
+                "Landing altitude minus 60 feet",
+                "Landing altitude minus 60 feet",   // the fake still reads -60 back
+                Bbs757LandingAltitude.InvalidMessage,
+            }, rig.Speech.All);
+        });
+    }
+
+    [Theory]
+    [InlineData("", true, "Type the landing altitude in feet first.")]
+    [InlineData("   ", true, "Type the landing altitude in feet first.")]
+    [InlineData("", false, "Type the landing altitude in feet first.")]
+    [InlineData("1.030", true, "Landing altitude must be from -1070 to 14100 feet.")]
+    [InlineData("20000", true, "Landing altitude must be from -1070 to 14100 feet.")]
+    [InlineData("-1080", true, "Landing altitude must be from -1070 to 14100 feet.")]
+    [InlineData("abc", true, "Landing altitude must be from -1070 to 14100 feet.")]
+    [InlineData("1030", false, "Landing altitude unavailable")]   // valid, but a write cannot land
+    public void Refusals_speak_and_write_nothing(string typed, bool canWrite, string said)
+    {
+        var rig = new Rig();
+        rig.Sim.CanWrite = canWrite;
+        rig.Sim.Fresh[Bbs757LandingAltitude.DisplayKey] = 1030;
+
+        Assert.True(rig.Type(typed));
+
+        Assert.Equal(new[] { said }, rig.Speech.All);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);   // a validation error always speaks
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Empty(rig.Sim.Resyncs);
+    }
+
+    [Fact]
+    public void A_panel_set_of_the_field_sends_nothing()
+    {
+        // The registration's event is never sent (ruling R13): the definition claims the key, so the
+        // generic path cannot transmit it, and nothing is written, waited for, said or re-read.
+        var rig = new Rig();
+        var field = rig.Def.GetVariables()[Bbs757LandingAltitude.SetKey];
+
+        Assert.True(rig.Def.HandleUIVariableSet(Bbs757LandingAltitude.SetKey, 1030, field, rig.Manager, rig.Speech));
+        Assert.True(rig.Def.HandleUIVariableSet(Bbs757LandingAltitude.SetKey, double.NaN, field, rig.Manager, rig.Speech));
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Empty(rig.Sim.Resyncs);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_field_does_not_take_the_squawk_boxs_text_nor_the_other_way_round()
+    {
+        var rig = new Rig();
+
+        // Another box is not claimed here: the squawk's own path answers it.
+        Assert.True(rig.Def.HandleUITypedText(Bbs757Squawk.SetKey, "12a4", rig.Def.GetVariables()[Bbs757Squawk.SetKey], rig.Manager, rig.Speech));
+        Assert.Equal(new[] { Bbs757Squawk.InvalidMessage }, rig.Speech.Interrupts);
+        Assert.False(rig.Def.HandleUITypedText("SOME_OTHER_SET", "12", new SimVarDefinition(), rig.Manager, rig.Speech));
+        Assert.Empty(rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task A_switch_away_during_the_wait_ends_the_flow_silently()
+    {
+        var rig = new Rig();
+        rig.Sim.Hold = ordinal => ordinal == 0;
+
+        var typed = rig.Def.SetLandingAltitudeAsync("1030", rig.Manager, rig.Speech);
+        Assert.Equal(new[] { WriteFor1030 }, rig.Sim.Writes);   // the write is out, the wait is held
+
+        rig.Def.OnSwitchedAway();   // the pilot picks another aircraft profile
+        await typed.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(1, rig.Sim.CanceledDelays);
+        Assert.Empty(rig.Speech.All);    // nothing is said into the other aircraft's session
+        Assert.Empty(rig.Sim.Resyncs);
+        Assert.Equal(new[] { WriteFor1030 }, rig.Sim.Writes);
+    }
+
+    [Theory]
+    [InlineData("1030")]
+    [InlineData("")]
+    [InlineData("20000")]
+    public void Typing_after_a_switch_away_writes_and_says_nothing(string typed)
+    {
+        var rig = new Rig();
+        rig.Def.OnSwitchedAway();
+
+        Assert.True(rig.Type(typed));
+
+        Assert.Empty(rig.Speech.All);
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Empty(rig.Sim.Resyncs);
+    }
+
+    [Fact]
+    public async Task A_read_that_throws_is_said_and_never_escapes()
+    {
+        var sim = new Bbs757FakeIo();
+        var io = sim.Io;
+        var failing = new Bbs757SimIo
+        {
+            CanWrite = io.CanWrite, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
+            ReadFresh = (_, _) => throw new InvalidOperationException("no link"),
+        };
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing };
+        var speech = new SpeechCapture();
+
+        await def.SetLandingAltitudeAsync("1030", new SimConnectManager(IntPtr.Zero), speech);
+
+        Assert.Equal(new[] { WriteFor1030 }, sim.Writes);
+        Assert.Equal(new[] { "Landing altitude unavailable" }, speech.All);   // a typed number never goes unanswered
     }
 }
