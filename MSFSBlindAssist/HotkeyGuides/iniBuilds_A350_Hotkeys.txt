@@ -11,13 +11,16 @@ Tip: Press the same bracket key again to cancel a mode you activated by accident
 
 READ THIS FIRST - WHAT THIS AIRCRAFT CAN DO TODAY
 
-The A350 is being built section by section. Its overhead panel is in the Sections list
-(Ctrl+1): every switch, selector, guarded button and knob, named as on the panel and in
-the manual's order. A switch the aircraft did not move is said once ("BAT 1 did not move").
+The A350 is being built section by section. Its overhead panel and its glareshield (the
+FCU and both EFIS control panels) are in the Sections list (Ctrl+1): every switch, selector,
+guarded button and knob, named as on the panel and in the manual's order. A switch the
+aircraft did not move is said once ("BAT 1 did not move"). Each panel's status display
+(Ctrl+3) reads its lights, the FCU's four windows and each side's baro as the cockpit shows
+them, and a button lit by its own light reads On or Off on its row.
 
-The glareshield, instrument panel and pedestal, the displays (PFD, ND, E/WD, SD, MFD), the
-OIS and the aircraft's own hotkeys (FCU, autopilot, ECAM) follow, and this list grows with
-them. Until then the hotkeys below are the ones every aircraft shares.
+The instrument panel and pedestal, the displays (PFD, ND, E/WD, SD, MFD), the OIS and the
+aircraft's own hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until
+then the hotkeys below are the ones every aircraft shares.
 
 The A350 tunes its radios only through its radio management panels; the stock COM radio
 the other aircraft use does not exist in it.
