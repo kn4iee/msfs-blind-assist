@@ -11,8 +11,10 @@ namespace MSFSBlindAssist.Tests;
 /// keeps its own count of the panel, from the state a flight loads in (PARK, fraction .10), and turns the
 /// knobs one click per write, each after a fresh read and 250 ms apart. The knob model is round 1's
 /// measurement (docs/b757/evidence/flight-04.md, "C. ILS panel on the ground"), copied here as data; the
-/// step timing is round 4's ("Round 4: ILS step timing and localizer detection"). CI runs under en-US, so
-/// the de-DE and sv-SE cases are the ones that catch a culture leak.
+/// step timing is round 4's ("Round 4: ILS step timing and localizer detection"). Task 6b reads the panel's
+/// display (round 5): a set reads it, clicks and reads again, and says what it shows; the count stands in, and
+/// says so, when the display cannot be read, which is how the rig's fake display answers unless a test shows it
+/// the panel. CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch a culture leak.
 /// </summary>
 public class Bbs757IlsPanelTests
 {
@@ -354,6 +356,29 @@ public class Bbs757IlsPanelTests
     /// <summary>The fresh read made before every click: the ILS course, the variable the course set reads back.</summary>
     private const string ReadBefore = "read BBS757_ILS_COURSE";
 
+    /// <summary>A read of the ILS panel's display (task 6b), in the sim's log.</summary>
+    private const string ReadDisplay = "read display";
+
+    /// <summary>A set or park refused: no count, and the display could not be read.</summary>
+    private const string UnknownRefusal = "ILS tuning unknown: the ILS display could not be read.";
+
+    /// <summary>What a set says when it went by the count alone (the display could not be read).</summary>
+    private static string ByCount(string phrase) => $"{phrase} by count: the ILS display could not be read.";
+
+    /// <summary>What the panel's display shows for a dial (the course window as 095).</summary>
+    private static Bbs757IlsReading ReadingOf(Bbs757IlsDial panel)
+        => panel.Mhz is double mhz ? new Bbs757IlsReading(false, mhz, 95) : new Bbs757IlsReading(true, null, 95);
+
+    /// <summary>The click a calculator write makes, or null for any other write.</summary>
+    private static (Bbs757IlsKnob Knob, int Direction)? ClickOf(string rpn) => rpn switch
+    {
+        WholeUp => (W, +1),
+        WholeDown => (W, -1),
+        FractionUp => (F, +1),
+        FractionDown => (F, -1),
+        _ => null,
+    };
+
     /// <summary>
     /// The sim behind the definition's ILS set, as the set sees it: whether a write can land, the answer to a
     /// fresh read, a clock the waits move, and, in order, every read, wait and write it makes.
@@ -375,6 +400,12 @@ public class Bbs757IlsPanelTests
         /// <summary>Runs at each write, with the write's number (1 for the first), before it is recorded.</summary>
         public Action<int>? OnWrite;
 
+        /// <summary>The ILS control panel itself, when a test gives one: each click written turns it by the knob model.</summary>
+        public Bbs757IlsDial? Panel;
+
+        /// <summary>Whether the click of this write's number (1 for the first) goes nowhere on the panel.</summary>
+        public Func<int, bool>? LoseClick;
+
         private int _waits;
 
         public Bbs757SimIo Io => new()
@@ -392,6 +423,8 @@ public class Bbs757IlsPanelTests
                 OnWrite?.Invoke(Writes.Count + 1);
                 Writes.Add(rpn);
                 Log.Add(rpn);
+                if (Panel is Bbs757IlsDial panel && ClickOf(rpn) is (var knob, var direction) && LoseClick?.Invoke(Writes.Count) != true)
+                    Panel = Bbs757IlsPanel.Step(panel, knob, direction);
             },
             RequestRead = key => throw new InvalidOperationException($"the ILS set re-read {key}"),
             Delay = (ms, ct) =>
@@ -405,15 +438,34 @@ public class Bbs757IlsPanelTests
         };
     }
 
-    /// <summary>A definition whose writes go to <see cref="Sim"/> on its clock, and what it said and gave the window's status box.</summary>
+    /// <summary>
+    /// A definition whose writes go to <see cref="Sim"/> on its clock and whose ILS display is <see cref="Display"/>
+    /// (unreadable unless a test shows it the panel: 6a's tests are the count's), and what it said and gave the
+    /// window's status box.
+    /// </summary>
     private sealed class Rig
     {
         public readonly PanelSim Sim = new();
         public readonly SpeechCapture Speech = new();
         public readonly List<string> Status = new();
+        public readonly FakeIlsDisplay Display;
         public readonly BBS757Definition Def;
 
-        public Rig() => Def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => Sim.Io, NowMs = () => Sim.Now };
+        public Rig()
+        {
+            Display = new FakeIlsDisplay(Sim.Log);
+            Def = new BBS757Definition
+            {
+                NestRunning = () => true, WriteIo = _ => Sim.Io, NowMs = () => Sim.Now, IlsDisplayFor = _ => Display,
+            };
+        }
+
+        /// <summary>The panel is <paramref name="panel"/>, the clicks turn it, and the display shows it.</summary>
+        public void ShowPanel(Bbs757IlsDial panel)
+        {
+            Sim.Panel = panel;
+            Display.Answer = () => ReadingOf(Sim.Panel!.Value);
+        }
 
         /// <summary>A set from the window: a frequency, or PARK (null).</summary>
         public Task Set(double? mhz) => Def.SetIlsAsync(mhz, new SimConnectManager(IntPtr.Zero), Speech, Status.Add);
@@ -486,14 +538,14 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(110.50);
 
-        Assert.Equal(new[] { "ILS tuning unknown: use ILS sync first." }, rig.Speech.Interrupts);
-        Assert.Empty(rig.Sim.Log);
+        Assert.Equal(new[] { UnknownRefusal }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { ReadDisplay }, rig.Sim.Log);   // the display tried: nothing written, nothing waited
 
         rig.ComDelivered();
         await rig.Set(110.50);
 
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes);
-        Assert.Equal("ILS 110.50 set", rig.Speech.Interrupts[^1]);
+        Assert.Equal(ByCount("ILS 110.50 set"), rig.Speech.Interrupts[^1]);
     }
 
     [Fact]
@@ -511,12 +563,13 @@ public class Bbs757IlsPanelTests
         rig.Sim.Now += 400;
         await rig.Set(null);     // 400 ms later: no wait
 
+        // Each set first tries the display (unreadable here: the count's clicks follow).
         Assert.Equal(new[]
         {
-            ReadBefore, WholeUp,
-            ReadBefore, "wait 250", WholeDown,
-            ReadBefore, "wait 150", WholeUp,
-            ReadBefore, WholeDown,
+            ReadDisplay, ReadBefore, WholeUp,
+            ReadDisplay, ReadBefore, "wait 250", WholeDown,
+            ReadDisplay, ReadBefore, "wait 150", WholeUp,
+            ReadDisplay, ReadBefore, WholeDown,
         }, rig.Sim.Log);
     }
 
@@ -533,7 +586,7 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(110.50);
 
-        Assert.Equal(new[] { ReadBefore, WholeDown, ReadBefore }, rig.Sim.Log);
+        Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeDown, ReadBefore }, rig.Sim.Log);
         Assert.Equal(new[] { WholeDown }, rig.Sim.Writes);
         Assert.Equal(new[] { "ILS unavailable" }, rig.Speech.Interrupts);
         Assert.Equal(new Bbs757IlsDial(3, 0), rig.Def.IlsDial);   // the click sent is counted: 111.10
@@ -568,11 +621,10 @@ public class Bbs757IlsPanelTests
         await rig.Set(110.50);
         await rig.Set(null);
 
-        const string refusal = "ILS tuning unknown: use ILS sync first.";
-        Assert.Equal(new[] { refusal, refusal }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { UnknownRefusal, UnknownRefusal }, rig.Speech.Interrupts);
         Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);
-        Assert.Equal(new[] { refusal, refusal }, rig.Status);   // the window's status says it too
-        Assert.Empty(rig.Sim.Log);                               // nothing written, nothing waited
+        Assert.Equal(new[] { UnknownRefusal, UnknownRefusal }, rig.Status);   // the window's status says it too
+        Assert.Equal(new[] { ReadDisplay, ReadDisplay }, rig.Sim.Log);        // the display tried: nothing written or waited
         Assert.Null(rig.Def.IlsDial);
     }
 
@@ -586,9 +638,11 @@ public class Bbs757IlsPanelTests
 
         await rig.Set(110.50);
 
-        // Each click after a fresh read; from the second on, the gap after it.
+        // Each click after a fresh read; from the second on, the gap after it. (The display, tried first,
+        // could not be read: the clicks are the count's.)
         Assert.Equal(new[]
         {
+            ReadDisplay,
             ReadBefore, WholeDown,
             ReadBefore, "wait 250", WholeDown,
             ReadBefore, "wait 250", FractionUp,
@@ -598,10 +652,10 @@ public class Bbs757IlsPanelTests
         }, rig.Sim.Log);
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes);
         Assert.Equal(250, BBS757Definition.IlsStepGapMs);
-        // Said once, from the count: never "tuned" (nothing can read the panel back).
-        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);
+        // Said once, from the count, and saying so: never "tuned".
+        Assert.Equal(new[] { ByCount("ILS 110.50 set") }, rig.Speech.Interrupts);
         Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);
-        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Status);
+        Assert.Equal(new[] { ByCount("ILS 110.50 set") }, rig.Status);
     }
 
     [Fact]
@@ -616,8 +670,8 @@ public class Bbs757IlsPanelTests
         await rig.Set(null);
 
         // 110, 111, PARK; pressed right after the set, so its first click waits out the gap too.
-        Assert.Equal(new[] { ReadBefore, "wait 250", WholeUp, ReadBefore, "wait 250", WholeUp }, rig.Sim.Log);
-        Assert.Equal(new[] { "ILS parked" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { ReadDisplay, ReadBefore, "wait 250", WholeUp, ReadBefore, "wait 250", WholeUp }, rig.Sim.Log);
+        Assert.Equal(new[] { ByCount("ILS parked") }, rig.Speech.Interrupts);
         Assert.Equal(new Bbs757IlsDial(4, 4), rig.Def.IlsDial);              // PARK, remembering .50
     }
 
@@ -633,7 +687,8 @@ public class Bbs757IlsPanelTests
         await rig.Set(110.50);
 
         Assert.Empty(rig.Sim.Writes);
-        Assert.Equal(new[] { "ILS already parked", "ILS 110.50 set", "ILS already 110.50" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { ByCount("ILS already parked"), ByCount("ILS 110.50 set"), ByCount("ILS already 110.50") },
+            rig.Speech.Interrupts);
         Assert.Equal(rig.Speech.Interrupts, rig.Status);
     }
 
@@ -679,11 +734,11 @@ public class Bbs757IlsPanelTests
         await rig.Set(110.50);
 
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes);   // the park sent nothing
-        Assert.Equal(new[] { "ILS tuning in progress", "ILS 110.50 set" }, rig.Speech.Interrupts);
+        Assert.Equal(new[] { "ILS tuning in progress", ByCount("ILS 110.50 set") }, rig.Speech.Interrupts);
         Assert.Equal(Dial(110.50), rig.Def.IlsDial);
 
         await rig.Set(null);   // finished: the next set runs
-        Assert.Equal("ILS parked", rig.Speech.Interrupts[^1]);
+        Assert.Equal(ByCount("ILS parked"), rig.Speech.Interrupts[^1]);
     }
 
     [Fact]
@@ -745,7 +800,7 @@ public class Bbs757IlsPanelTests
 
         rig.Sim.OnWrite = null;
         await rig.Set(110.50);           // and a set from an unknown count is refused
-        Assert.Equal("ILS tuning unknown: use ILS sync first.", rig.Speech.Interrupts[^1]);
+        Assert.Equal(UnknownRefusal, rig.Speech.Interrupts[^1]);
     }
 
     [Fact]
@@ -778,7 +833,193 @@ public class Bbs757IlsPanelTests
             await rig.Set(110.50);
 
             Assert.Equal(LoadStateTo11050, rig.Sim.Writes);   // "-1", never "−1"
-            Assert.Equal(new[] { "ILS 110.50 set", "ILS already 110.50" }, rig.Speech.Interrupts);
+            Assert.Equal(new[] { ByCount("ILS 110.50 set"), ByCount("ILS already 110.50") }, rig.Speech.Interrupts);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    // ==== Reading the panel's display (task 6b) =============================================================
+
+    [Fact]
+    public async Task Set_reads_clicks_and_verifies()
+    {
+        // MSFSBA started over a running flight: no count. The display says where the panel is, the clicks
+        // are planned from that, and the display read after them is what is said.
+        var rig = new Rig();
+        rig.ShowPanel(Dial(109.30));
+
+        await rig.Set(110.50);
+
+        Assert.Equal(new[]
+        {
+            ReadDisplay,                         // 109.30
+            ReadBefore, FractionUp,              // .35
+            ReadBefore, "wait 250", FractionUp,  // .50
+            ReadBefore, "wait 250", WholeUp,     // 110.50
+            ReadDisplay,                         // the panel shows the target
+        }, rig.Sim.Log);
+        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);   // said once, from the read
+        Assert.Equal(rig.Speech.Interrupts, rig.Speech.All);
+        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Status);
+        Assert.Equal(Dial(110.50), rig.Def.IlsDial);   // the read is the count now
+
+        // Already there by the read: nothing turned.
+        rig.Sim.Log.Clear();
+        await rig.Set(110.50);
+        Assert.Equal(new[] { ReadDisplay }, rig.Sim.Log);
+        Assert.Equal("ILS already 110.50", rig.Speech.Interrupts[^1]);
+
+        // PARK the same way: the whole knob, then the read.
+        rig.Sim.Log.Clear();
+        rig.Sim.Now += 1000;
+        await rig.Set(null);
+        Assert.Equal(new[] { ReadDisplay, ReadBefore, WholeUp, ReadBefore, "wait 250", WholeUp, ReadDisplay }, rig.Sim.Log);
+        Assert.Equal("ILS parked", rig.Speech.Interrupts[^1]);
+        Assert.Equal(new Bbs757IlsDial(Bbs757IlsDial.Park, 4), rig.Def.IlsDial);   // PARK keeps the fraction the count had (.50)
+    }
+
+    [Fact]
+    public async Task Set_from_park_learns_the_fraction()
+    {
+        // Parked, the display shows "-----": the fraction PARK remembers is hidden, and the fraction knob does
+        // nothing while parked. With no count to know it, the whole knob takes the panel out of PARK once (+1
+        // gives 108.xx) and the display shows the fraction.
+        var rig = new Rig();
+        rig.ShowPanel(new Bbs757IlsDial(Bbs757IlsDial.Park, 7));   // PARK, remembering .75
+
+        await rig.Set(null);   // PARK wanted: the read is enough
+        Assert.Equal(new[] { ReadDisplay }, rig.Sim.Log);
+        Assert.Equal(new[] { "ILS already parked" }, rig.Speech.Interrupts);
+        Assert.Null(rig.Def.IlsDial);   // parked, fraction unknown: still no count
+
+        rig.Sim.Log.Clear();
+        await rig.Set(110.50);
+
+        Assert.Equal(new[]
+        {
+            ReadDisplay,                           // -----
+            ReadBefore, WholeUp,                   // out of PARK
+            ReadDisplay,                           // 108.75: the fraction
+            ReadBefore, "wait 250", FractionDown,  // .70
+            ReadBefore, "wait 250", FractionDown,  // .55
+            ReadBefore, "wait 250", FractionDown,  // .50
+            ReadBefore, "wait 250", WholeUp,       // 109.50
+            ReadBefore, "wait 250", WholeUp,       // 110.50
+            ReadDisplay,
+        }, rig.Sim.Log);
+        Assert.Equal("ILS 110.50 set", rig.Speech.Interrupts[^1]);
+        Assert.Equal(Dial(110.50), rig.Def.IlsDial);
+
+        // With the count knowing the fraction (a flight load: PARK, .10), the read of PARK needs no learning click.
+        var loaded = new Rig();
+        loaded.FlightLoad();
+        loaded.ShowPanel(Bbs757IlsDial.LoadState);
+        await loaded.Set(110.50);
+        Assert.Equal(LoadStateTo11050, loaded.Sim.Writes);
+        Assert.Equal(new[] { "ILS 110.50 set" }, loaded.Speech.Interrupts);
+        Assert.Equal(2, loaded.Display.Reads);
+    }
+
+    [Fact]
+    public async Task Set_retries_once_then_reports()
+    {
+        // A click the panel lost: the read after the clicks shows where it is, and the set plans once more from there.
+        var rig = new Rig();
+        rig.ShowPanel(Dial(110.10));
+        rig.Sim.LoseClick = n => n == 2;
+
+        await rig.Set(110.50);
+
+        // .15 .30 (lost) .35 .50 counted; the panel shows 110.35, one more click.
+        Assert.Equal(Enumerable.Repeat(FractionUp, 5), rig.Sim.Writes);
+        Assert.Equal(3, rig.Display.Reads);
+        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);
+        Assert.Equal(Dial(110.50), rig.Def.IlsDial);
+
+        // A knob that turns nothing: after the second try the set says what the panel shows, never "set".
+        var stuck = new Rig();
+        stuck.ShowPanel(Dial(110.55));
+        stuck.Sim.LoseClick = _ => true;
+
+        await stuck.Set(110.50);
+
+        Assert.Equal(new[] { FractionDown, FractionDown }, stuck.Sim.Writes);   // the plan, then the plan once more
+        Assert.Equal(3, stuck.Display.Reads);
+        Assert.Equal(new[] { "ILS shows 110.55, not 110.50" }, stuck.Speech.Interrupts);
+        Assert.Equal(new[] { "ILS shows 110.55, not 110.50" }, stuck.Status);
+        Assert.Equal(Dial(110.55), stuck.Def.IlsDial);   // the count is what the panel shows
+    }
+
+    [Fact]
+    public async Task Unreadable_display_falls_back_to_the_count()
+    {
+        var rig = new Rig();   // its display cannot be read
+
+        // No count either: nothing to go on, nothing turned.
+        await rig.Set(110.50);
+        Assert.Equal(new[] { UnknownRefusal }, rig.Speech.Interrupts);
+        Assert.Empty(rig.Sim.Writes);
+
+        // A flight load gives the count: 6a's clicks, and the words say it was by the count, once.
+        rig.FlightLoad();
+        await rig.Set(110.50);
+        Assert.Equal(LoadStateTo11050, rig.Sim.Writes);
+        Assert.Equal(new[] { UnknownRefusal, "ILS 110.50 set by count: the ILS display could not be read." }, rig.Speech.Interrupts);
+        Assert.Equal(2, rig.Display.Reads);   // one per set: a display that failed is not read again after the clicks
+
+        rig.Sim.Now += 1000;
+        await rig.Set(null);
+        Assert.Equal("ILS parked by count: the ILS display could not be read.", rig.Speech.Interrupts[^1]);
+
+        // Read before the clicks but not after: the set ends on its count, and says so.
+        var late = new Rig();
+        late.ShowPanel(Dial(109.30));
+        late.Sim.OnWrite = n =>
+        {
+            if (n == 1) late.Display.Answer = () => null;
+        };
+
+        await late.Set(110.50);
+
+        Assert.Equal(new[] { FractionUp, FractionUp, WholeUp }, late.Sim.Writes);
+        Assert.Equal(new[] { "ILS 110.50 set by count: the ILS display could not be read." }, late.Speech.Interrupts);
+        Assert.Equal(Dial(110.50), late.Def.IlsDial);
+
+        // The words never depend on the PC's culture.
+        var german = new Rig();
+        german.FlightLoad();
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            await german.Set(109.35);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+        Assert.Equal("ILS 109.35 set by count: the ILS display could not be read.", german.Speech.Interrupts[^1]);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task What_the_display_shows_is_said_with_no_culture(string culture)
+    {
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var stuck = new Rig();
+            stuck.ShowPanel(Dial(109.35));
+            stuck.Sim.LoseClick = _ => true;
+
+            await stuck.Set(110.50);
+
+            Assert.Equal(new[] { "ILS shows 109.35, not 110.50" }, stuck.Speech.Interrupts);
         }
         finally
         {

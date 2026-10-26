@@ -56,8 +56,10 @@ public readonly record struct Bbs757IlsDial(int Whole, int Fraction)
 ///     goes right), .95 to .10 with no carry into the megahertz. While parked it does nothing, and PARK
 ///     remembers the fraction.
 ///   • A write of 2 moves one channel: one write is one click. Two writes landing in one frame count once.
-/// So the app cannot read the panel back, nor confirm a click: it counts the clicks it sends from a state it
-/// knows (<see cref="Bbs757IlsDial.LoadState"/>) and its words never claim more than that count.
+/// The panel's display can be read from a picture (round 5, <see cref="Bbs757IlsOcr"/>): a set reads it, clicks
+/// and reads it again, and what it says is what the display shows. When the display cannot be read the app
+/// counts the clicks it sends from a state it knows (<see cref="Bbs757IlsDial.LoadState"/>, or the last
+/// reading) and its words say it went by the count (<see cref="ByCount"/>).
 /// </summary>
 public static class Bbs757IlsPanel
 {
@@ -72,8 +74,11 @@ public static class Bbs757IlsPanel
     /// <summary>A set refused because no calculator write can land.</summary>
     public const string UnavailablePhrase = "ILS unavailable";
 
-    /// <summary>A set refused because the app does not know the panel's state (it has not seen the flight load).</summary>
-    public const string UnknownRefusal = "ILS tuning unknown: use ILS sync first.";
+    /// <summary>
+    /// A set refused because the app does not know the panel's state: it has no count (it has not seen the
+    /// flight load) and the display could not be read.
+    /// </summary>
+    public const string UnknownRefusal = "ILS tuning unknown: the ILS display could not be read.";
 
     /// <summary>A set refused because another is still turning the knobs.</summary>
     public const string InProgressPhrase = "ILS tuning in progress";
@@ -200,7 +205,7 @@ public static class Bbs757IlsPanel
 
     /// <summary>
     /// The panel as counted: "ILS 110.50", "ILS parked", or "ILS tuning unknown" when the app has no count.
-    /// What the count says, never more: nothing reads the panel back.
+    /// What the count says, never more: said when the display cannot be read (<see cref="ReadPhrase"/> when it can).
     /// </summary>
     public static string Phrase(Bbs757IlsDial? dial)
     {
@@ -214,6 +219,53 @@ public static class Bbs757IlsPanel
     /// <summary>A set that needed no click: "ILS already 110.50", "ILS already parked".</summary>
     public static string AlreadyPhrase(Bbs757IlsDial dial)
         => dial.Mhz is double mhz ? $"ILS already {Frequency(mhz)}" : "ILS already parked";
+
+    /// <summary>
+    /// A set's words when it went by the count alone, the display unreadable: "ILS 110.50 set by count: the ILS
+    /// display could not be read."
+    /// </summary>
+    public static string ByCount(string phrase) => $"{phrase} by count: the ILS display could not be read.";
+
+    // ---- The display (round 5: the panel read from a picture, Bbs757IlsOcr) --------------------------------
+
+    /// <summary>What the display shows, as said: "ILS 110.50", "ILS parked". Only what the panel shows, never a station received.</summary>
+    public static string ReadPhrase(Bbs757IlsReading reading)
+        => !reading.Parked && reading.Mhz is double mhz ? $"ILS {Frequency(mhz)}" : "ILS parked";
+
+    /// <summary>A set the display shows done: "ILS 110.50 set", "ILS parked".</summary>
+    public static string SetPhrase(Bbs757IlsReading reading) => reading.Parked ? "ILS parked" : $"{ReadPhrase(reading)} set";
+
+    /// <summary>A set the display shows needed no click: "ILS already 110.50", "ILS already parked".</summary>
+    public static string AlreadyPhrase(Bbs757IlsReading reading)
+        => !reading.Parked && reading.Mhz is double mhz ? $"ILS already {Frequency(mhz)}" : "ILS already parked";
+
+    /// <summary>
+    /// A set the display shows short of its target after the second try: "ILS shows 110.55, not 110.50", "ILS
+    /// shows parked, not 110.50", "ILS shows 110.55, not parked".
+    /// </summary>
+    public static string ShowsPhrase(Bbs757IlsReading reading, Bbs757IlsDial? target)
+    {
+        string shown = !reading.Parked && reading.Mhz is double mhz ? Frequency(mhz) : "parked";
+        string wanted = target is { Mhz: double t } ? Frequency(t) : "parked";
+        return $"ILS shows {shown}, not {wanted}";
+    }
+
+    /// <summary>Whether the display shows <paramref name="target"/> (null, or a parked dial: PARK, whatever fraction it names).</summary>
+    public static bool Shows(Bbs757IlsReading reading, Bbs757IlsDial? target)
+    {
+        if (target is not { IsParked: false } frequency) return reading.Parked;
+        return !reading.Parked && reading.Mhz is double mhz && TryDialFor(mhz, out var shown) && shown == frequency;
+    }
+
+    /// <summary>
+    /// The count a reading gives: a frequency, its whole dial; PARK, the fraction <paramref name="count"/> had
+    /// (the display hides it while parked), or null, unknown, when there was no count.
+    /// </summary>
+    public static Bbs757IlsDial? DialFrom(Bbs757IlsReading reading, Bbs757IlsDial? count)
+    {
+        if (reading.Parked) return count is Bbs757IlsDial c ? new Bbs757IlsDial(Bbs757IlsDial.Park, c.Fraction) : null;
+        return reading.Mhz is double mhz && TryDialFor(mhz, out var dial) ? dial : null;
+    }
 
     // A click is one step either way.
     private static int Click(int direction)

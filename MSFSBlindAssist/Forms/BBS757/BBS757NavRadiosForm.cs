@@ -12,8 +12,10 @@ namespace MSFSBlindAssist.Forms.BBS757;
 ///
 /// What is read and set is the definition's (BBS757Definition.Radios.cs). This window speaks only a typed
 /// value it cannot take (a validation error always speaks); the definition speaks the status once it is
-/// filled, the ILS course it reads back and the ILS frequency or park it sent. The window stays open for the
-/// next value; Escape closes it and gives focus back to the window that was in front, as the value dialogs do.
+/// filled, the ILS course it reads back and the ILS frequency or park the panel's display shows after the
+/// knobs turned (or, when the display cannot be read, the clicks it counted, saying so). The window stays open
+/// for the next value; Escape closes it and gives focus back to the window that was in front, as the value
+/// dialogs do.
 /// </summary>
 public sealed class BBS757NavRadiosForm : Form
 {

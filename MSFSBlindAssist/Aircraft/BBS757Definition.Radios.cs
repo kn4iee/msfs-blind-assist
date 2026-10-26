@@ -24,8 +24,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// from APPROACH REF, read on the first officer's CDU in the background (<see cref="ReadRunwayIlsAsync"/>),
 /// which is left on NAV RADIO; the status is spoken once, when it is filled. The ILS course is written as a
 /// calculator write and read back (<see cref="SetIlsCourseAsync"/>). The ILS frequency and park turn the ILS
-/// control panel's knobs, which nothing reads back: the app counts the panel from the state a flight loads
-/// it in and turns the knobs from that count (<see cref="SetIlsAsync"/>); N says the count. The VORs are not
+/// control panel's knobs, which no variable reads back: the app reads the panel's display from a picture
+/// (<see cref="Bbs757IlsDisplay"/>), turns the knobs from that read and reads it again
+/// (<see cref="SetIlsAsync"/>), and N says the read. When the display cannot be read, the app's count of the
+/// panel, from the state a flight loads it in and the clicks it sent, stands in, and says so. The VORs are not
 /// in it: a VOR is tuned, and its course set, on the CDU.
 ///
 /// The COM radios. BlueBird's VHF L, C and R are the simulator's own COM 1, 2 and 3 (measured), so the six
@@ -528,19 +530,21 @@ public partial class BBS757Definition
 
     /// <summary>
     /// N's sentence (<see cref="Bbs757NavRad.Readout"/>): the three courses read fresh, the first officer's CDU
-    /// brought to NAV RADIO (or found there). Throws when a course read throws or the token fires; the page
-    /// service itself never does, so a CDU that cannot be had gives the readout without frequencies.
+    /// brought to NAV RADIO (or found there), then one read of the ILS panel's display: what it shows is said
+    /// (and is the count), else the count. Throws when a course read throws or the token fires; the page service
+    /// and the display never do, so a CDU or a display that cannot be had gives the readout without them.
     /// </summary>
     private async Task<string> NavRadiosReadoutAsync(SimConnectManager sim, Bbs757CduPages pages, CancellationToken ct)
     {
         var io = ReadoutIo?.Invoke(sim) ?? ReadoutIoFor(sim);
         int? vorL = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.VorLCourseKey, ct));
         int? vorR = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.VorRCourseKey, ct));
-        int? ils = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.IlsCourseKey, ct));
+        int? ilsCourse = Bbs757NavRad.Course(await io.Read(Bbs757NavRad.IlsCourseKey, ct));
 
         var screen = await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757NavRad.PageKey, Bbs757NavRad.IsNavRadio, ct);
         ct.ThrowIfCancellationRequested();
-        return Bbs757NavRad.Readout(screen == null ? null : Bbs757NavRad.Parse(screen), vorL, vorR, ils, _ilsDial);
+        var ilsRead = await ReadIlsDisplayAsync(sim, bySet: false, ct);
+        return Bbs757NavRad.Readout(screen == null ? null : Bbs757NavRad.Parse(screen), vorL, vorR, ilsCourse, _ilsDial, ilsRead);
     }
 
     // =================================================================================
@@ -758,23 +762,101 @@ public partial class BBS757Definition
 
     /// <summary>
     /// The ILS control panel as the app counts it (<see cref="Bbs757IlsPanel"/>): <see cref="Bbs757IlsDial.LoadState"/>
-    /// once a flight loaded and runs (<see cref="_ilsLoadPending"/>), then moved by every click the app sends.
-    /// Null, unknown, until then (a definition made after the flight loaded: MSFSBA started, or the 757
-    /// picked; a flight still loading) and after a dropped connection (<see cref="OnVariableCacheCleared"/>).
-    /// Touched on the UI thread only.
+    /// once a flight loaded and runs (<see cref="_ilsLoadPending"/>), set by every reading of the panel's display
+    /// (<see cref="ApplyIlsReading"/>), and moved by every click the app sends. Null, unknown, until then (a
+    /// definition made after the flight loaded: MSFSBA started, or the 757 picked; a flight still loading; a
+    /// display read PARK with no count to say its fraction) and after a dropped connection
+    /// (<see cref="OnVariableCacheCleared"/>). Touched on the UI thread only.
     /// </summary>
     private Bbs757IlsDial? _ilsDial;
 
     /// <summary>
     /// A flight was loaded (<see cref="ResetRadios"/>) and has not shown it runs yet. AircraftLoaded fires
     /// during the loading screen, before BlueBird's panel runs, so a click then could be lost while the count
-    /// moved: the count starts at the first delivery of a COM row after it (<see cref="ProcessRadioUpdate"/>).
-    /// A dropped connection clears it. UI thread only.
+    /// moved: the count starts at the first delivery of a COM row after it (<see cref="ProcessRadioUpdate"/>),
+    /// or at a reading of the panel's display (<see cref="ApplyIlsReading"/>). A dropped connection clears it.
+    /// UI thread only.
     /// </summary>
     private bool _ilsLoadPending;
 
     /// <summary>The counted ILS panel, for the tests.</summary>
     internal Bbs757IlsDial? IlsDial => _ilsDial;
+
+    // =================================================================================
+    // The ILS panel's display: read from a picture
+    // =================================================================================
+
+    /// <summary>
+    /// The ILS display reader a read uses, replaced by tests (a fake: they never touch the sim); null: the
+    /// definition's own <see cref="Bbs757IlsDisplay"/>, made at the first read, and only while SimConnect is
+    /// connected (no simulator, nothing to read).
+    /// </summary>
+    internal Func<SimConnectManager, IBbs757IlsDisplay?>? IlsDisplayFor { get; init; }
+
+    private readonly object _ilsDisplayLock = new();
+
+    /// <summary>The definition's own display reader: its Coherent socket on <c>mainUi</c> stays open while it lives.</summary>
+    private Bbs757IlsDisplay? _ilsDisplay;
+
+    /// <summary>Set by a switch away (<see cref="CloseRadioWindows"/>): from then on no reader is made.</summary>
+    private bool _ilsDisplayRetired;
+
+    /// <summary>Moves on at every restart of the count (<see cref="RestartIlsCount"/>): a reading begun before one is not applied after it.</summary>
+    private int _ilsCountEpoch;
+
+    private IBbs757IlsDisplay? IlsDisplayReader(SimConnectManager sim)
+    {
+        if (IlsDisplayFor != null) return IlsDisplayFor(sim);
+        if (!sim.IsConnected) return null;
+        lock (_ilsDisplayLock)
+        {
+            if (_ilsDisplayRetired) return null;
+            return _ilsDisplay ??= new Bbs757IlsDisplay();
+        }
+    }
+
+    /// <summary>
+    /// One read of the ILS control panel's display (about 0.2 s; a black box shows top left for about a tenth
+    /// of a second, <see cref="Bbs757IlsDisplay"/>); null when it could not be read. A reading is also the
+    /// count from then on (<see cref="ApplyIlsReading"/>), unless the count restarted meanwhile or, for a read
+    /// that is no set's (<paramref name="bySet"/> false: output N, the window), an ILS set is turning the knobs:
+    /// its own reads keep the count. Throws only when <paramref name="ct"/> fires.
+    /// </summary>
+    private async Task<Bbs757IlsReading?> ReadIlsDisplayAsync(SimConnectManager sim, bool bySet, CancellationToken ct)
+    {
+        var display = IlsDisplayReader(sim);
+        if (display == null) return null;
+        int epoch = _ilsCountEpoch;
+        var reading = await display.ReadAsync(ct);
+        ct.ThrowIfCancellationRequested();
+        if (reading != null && epoch == _ilsCountEpoch && (bySet || Volatile.Read(ref _ilsSet) == null)) ApplyIlsReading(reading);
+        return reading;
+    }
+
+    /// <summary>
+    /// A reading is the count, and shows the flight runs (a pending load ends): a frequency gives the whole
+    /// dial; PARK keeps the fraction the count had (the flight load's .10 when the load was pending) and leaves
+    /// the count unknown when there was none (<see cref="Bbs757IlsPanel.DialFrom"/>).
+    /// </summary>
+    private void ApplyIlsReading(Bbs757IlsReading reading)
+    {
+        var count = _ilsLoadPending ? Bbs757IlsDial.LoadState : _ilsDial;
+        _ilsLoadPending = false;
+        _ilsDial = Bbs757IlsPanel.DialFrom(reading, count);
+    }
+
+    /// <summary>The switch away: no reader from now on, and the one made is disposed (its socket and its view's claim go).</summary>
+    private void RetireIlsDisplay()
+    {
+        Bbs757IlsDisplay? display;
+        lock (_ilsDisplayLock)
+        {
+            _ilsDisplayRetired = true;
+            display = _ilsDisplay;
+            _ilsDisplay = null;
+        }
+        display?.Dispose();
+    }
 
     /// <summary>The token of the ILS set turning the knobs now, linked to the lifetime; null when none runs.</summary>
     private CancellationTokenSource? _ilsSet;
@@ -783,20 +865,32 @@ public partial class BBS757Definition
     private long? _lastIlsClickMs;
 
     /// <summary>
-    /// Sets the ILS control panel to <paramref name="mhz"/>, or parks it when null, by turning its knobs from
-    /// the count. Refused aloud, nothing sent: a frequency that is no ILS channel, no calculator write that
-    /// can land ("ILS unavailable"), no count, or a flight still loading ("ILS tuning unknown: use ILS sync
-    /// first."), another set still turning the knobs ("ILS tuning in progress"). Otherwise the clicks
-    /// <see cref="Bbs757IlsPanel.PlanSteps"/> plans: none needed says "ILS already 110.50" or "ILS already
-    /// parked"; else each click waits for a fresh read of the ILS course (the sim's next frame), then for
-    /// <see cref="IlsStepGapMs"/> after the click before it, the first one for what is left of that gap since
-    /// the last click of any set; it is one calculator write, counted as it is sent. A read the sim does not
-    /// answer stops the set there ("ILS unavailable"; the count keeps the clicks sent). The end says "ILS 110.50
-    /// set" or "ILS parked": what was sent, never that the ILS is tuned (nothing reads the panel back). Every
-    /// result also goes to <paramref name="onSaid"/> (the window's status). A flight load, a dropped connection
-    /// or a profile switch stops the set between clicks, silently: after a load or a drop the status shows the
-    /// count, unsaid. A click that throws leaves the count unknown. Runs on the UI thread, whose context the
-    /// awaits keep. Never throws.
+    /// Sets the ILS control panel to <paramref name="mhz"/>, or parks it when null, by reading its display,
+    /// turning its knobs and reading it again. Refused aloud, nothing sent: a frequency that is no ILS channel,
+    /// no calculator write that can land ("ILS unavailable"), another set still turning the knobs ("ILS tuning
+    /// in progress").
+    ///
+    /// The display read (<see cref="ReadIlsDisplayAsync"/>, which also makes it the count): parked with the
+    /// fraction unknown (no count to say what PARK remembers; the fraction knob does nothing while parked) and
+    /// a frequency wanted, the whole knob takes it out of PARK once (+1: 108.xx) and the display is read again.
+    /// Then the clicks <see cref="Bbs757IlsPanel.PlanSteps"/> plans from the read, the display read again and,
+    /// short of the target, planned once more from that read, clicked and read. The words are what the display
+    /// shows: "ILS already 110.50" (no click), "ILS 110.50 set", "ILS parked", or after the second try "ILS
+    /// shows 110.55, not 110.50". A display that cannot be read after the clicks ends the set on its count:
+    /// "ILS 110.50 set by count: the ILS display could not be read."
+    ///
+    /// A display that cannot be read at all: 6a's count, as before. No count, or a flight still loading: "ILS
+    /// tuning unknown: the ILS display could not be read." Else the count's clicks and its words with
+    /// <see cref="Bbs757IlsPanel.ByCount"/>: "ILS 110.50 set by count: …", "ILS already parked by count: …".
+    ///
+    /// Each click waits for a fresh read of the ILS course (the sim's next frame), then for
+    /// <see cref="IlsStepGapMs"/> after the click before it, the first one for what is left of that gap since the
+    /// last click of any set; it is one calculator write, counted as it is sent. A read the sim does not answer
+    /// stops the set there ("ILS unavailable"; the count keeps the clicks sent). Never a claim that a station is
+    /// received: the display says only what the panel shows. Every result also goes to <paramref name="onSaid"/>
+    /// (the window's status). A flight load, a dropped connection or a profile switch stops the set between
+    /// clicks or during a read, silently: after a load or a drop the status shows the count, unsaid. A click that
+    /// throws leaves the count unknown. Runs on the UI thread, whose context the awaits keep. Never throws.
     /// </summary>
     internal async Task SetIlsAsync(double? mhz, SimConnectManager sim, ScreenReaderAnnouncer announcer, Action<string>? onSaid = null)
     {
@@ -829,11 +923,6 @@ public partial class BBS757Definition
                 Say(Bbs757IlsPanel.UnavailablePhrase);
                 return;
             }
-            if (_ilsDial is not Bbs757IlsDial dial)
-            {
-                Say(Bbs757IlsPanel.UnknownRefusal);
-                return;
-            }
 
             var claim = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
             if (Interlocked.CompareExchange(ref _ilsSet, claim, null) != null)
@@ -845,42 +934,98 @@ public partial class BBS757Definition
             mine = claim;
             var ct = mine.Token;
 
-            var plan = Bbs757IlsPanel.PlanSteps(dial, to);
-            if (plan.Count == 0)
+            // Turns the knobs by a plan, the count following each click sent (when there is one). False when a
+            // read the sim did not answer stopped it (said).
+            async Task<bool> TurnAsync(IReadOnlyList<(Bbs757IlsKnob Knob, int Direction)> plan)
             {
-                Say(Bbs757IlsPanel.AlreadyPhrase(dial));
+                for (int i = 0; i < plan.Count; i++)
+                {
+                    // The sim answers a fresh read in a frame after the last click went out.
+                    double? framed = await io.ReadFresh(Bbs757NavRad.IlsCourseKey, ct);
+                    ct.ThrowIfCancellationRequested();   // a read that ended just before a reset or switch canceled the set
+                    if (framed is null)
+                    {
+                        Log.Debug("BBS757", $"ILS set: the read before click {i + 1} of {plan.Count} was not answered; stopped.");
+                        Say(Bbs757IlsPanel.UnavailablePhrase);
+                        return false;
+                    }
+
+                    int wait = i > 0 ? IlsStepGapMs : GapLeftSinceLastIlsClick();
+                    if (wait > 0)
+                    {
+                        await io.Delay(wait, ct);
+                        ct.ThrowIfCancellationRequested();   // a wait that ended just before a reset or switch canceled the set
+                    }
+
+                    var (knob, direction) = plan[i];
+                    OnOwnWrite(Bbs757IlsPanel.Variable(knob));   // plan 13
+                    _lastIlsClickMs = NowMs();
+                    sending = true;
+                    io.Write(Bbs757IlsPanel.StepCode(knob, direction));
+                    sending = false;
+                    if (_ilsDial is Bbs757IlsDial counted) _ilsDial = Bbs757IlsPanel.Step(counted, knob, direction);
+                }
+                return true;
+            }
+
+            var reading = await ReadIlsDisplayAsync(sim, bySet: true, ct);
+            if (reading == null)
+            {
+                // The display cannot be read: the count's clicks, said as the count's.
+                if (_ilsDial is not Bbs757IlsDial dial)
+                {
+                    Say(Bbs757IlsPanel.UnknownRefusal);
+                    return;
+                }
+                var plan = Bbs757IlsPanel.PlanSteps(dial, to);
+                if (plan.Count == 0)
+                {
+                    Say(Bbs757IlsPanel.ByCount(Bbs757IlsPanel.AlreadyPhrase(dial)));
+                    return;
+                }
+                if (!await TurnAsync(plan)) return;
+                Say(Bbs757IlsPanel.ByCount(Bbs757IlsPanel.SetPhrase(_ilsDial!.Value)));
                 return;
             }
 
-            for (int i = 0; i < plan.Count; i++)
+            bool turned = false;
+            if (to != null && reading.Parked && _ilsDial == null)
             {
-                // The sim answers a fresh read in a frame after the last click went out.
-                double? framed = await io.ReadFresh(Bbs757NavRad.IlsCourseKey, ct);
-                ct.ThrowIfCancellationRequested();   // a read that ended just before a reset or switch canceled the set
-                if (framed is null)
+                // Parked, the fraction hidden: out of PARK once (+1 gives 108.xx), and the display shows it.
+                if (!await TurnAsync(new[] { (Bbs757IlsKnob.Whole, +1) })) return;
+                turned = true;
+                reading = await ReadIlsDisplayAsync(sim, bySet: true, ct);
+                if (reading == null)
                 {
-                    Log.Debug("BBS757", $"ILS set: the read before click {i + 1} of {plan.Count} was not answered; stopped.");
-                    Say(Bbs757IlsPanel.UnavailablePhrase);
+                    Say(Bbs757IlsPanel.UnknownRefusal);
+                    return;
+                }
+            }
+
+            for (int tries = 0; ; tries++)
+            {
+                if (Bbs757IlsPanel.Shows(reading, to))
+                {
+                    Say(turned ? Bbs757IlsPanel.SetPhrase(reading) : Bbs757IlsPanel.AlreadyPhrase(reading));
+                    return;
+                }
+                if (tries == 2 || _ilsDial is not Bbs757IlsDial from)
+                {
+                    Log.Debug("BBS757", $"ILS set: {Bbs757IlsPanel.ShowsPhrase(reading, to)} after {tries} tries.");
+                    Say(Bbs757IlsPanel.ShowsPhrase(reading, to));
                     return;
                 }
 
-                int wait = i > 0 ? IlsStepGapMs : GapLeftSinceLastIlsClick();
-                if (wait > 0)
+                if (!await TurnAsync(Bbs757IlsPanel.PlanSteps(from, to))) return;
+                turned = true;
+                var after = await ReadIlsDisplayAsync(sim, bySet: true, ct);
+                if (after == null)
                 {
-                    await io.Delay(wait, ct);
-                    ct.ThrowIfCancellationRequested();   // a wait that ended just before a reset or switch canceled the set
+                    Say(Bbs757IlsPanel.ByCount(Bbs757IlsPanel.SetPhrase(_ilsDial!.Value)));
+                    return;
                 }
-
-                var (knob, direction) = plan[i];
-                OnOwnWrite(Bbs757IlsPanel.Variable(knob));   // plan 13
-                _lastIlsClickMs = NowMs();
-                sending = true;
-                io.Write(Bbs757IlsPanel.StepCode(knob, direction));
-                sending = false;
-                dial = Bbs757IlsPanel.Step(dial, knob, direction);
-                _ilsDial = dial;
+                reading = after;
             }
-            Say(Bbs757IlsPanel.SetPhrase(dial));
         }
         catch (OperationCanceledException)
         {
@@ -914,6 +1059,7 @@ public partial class BBS757Definition
     {
         CancelTransfers();
         RestartIlsCount(loadPending: true);
+        lock (_ilsDisplayLock) _ilsDisplay?.ForgetGauge();   // the load may number the gauge's live view anew
     }
 
     /// <summary>
@@ -937,6 +1083,7 @@ public partial class BBS757Definition
     {
         _ilsDial = null;
         _ilsLoadPending = loadPending;
+        _ilsCountEpoch++;
         if (Interlocked.Exchange(ref _ilsSet, null) is { } running)
         {
             try { running.Cancel(); } catch (ObjectDisposedException) { /* it finished meanwhile */ }
@@ -947,9 +1094,14 @@ public partial class BBS757Definition
     private int GapLeftSinceLastIlsClick()
         => _lastIlsClickMs is long last ? (int)Math.Clamp(IlsStepGapMs - (NowMs() - last), 0, IlsStepGapMs) : 0;
 
-    /// <summary>Closes and disposes the radio windows (a profile switch): the Ctrl+N window.</summary>
+    /// <summary>
+    /// Closes and disposes the radio windows (a profile switch): the Ctrl+N window, and the ILS display
+    /// reader's Coherent socket with it (<see cref="RetireIlsDisplay"/>; a read still running takes its box
+    /// down first).
+    /// </summary>
     partial void CloseRadioWindows()
     {
+        RetireIlsDisplay();
         var form = _navRadiosForm;
         _navRadiosForm = null;
         if (form == null || form.IsDisposed) return;

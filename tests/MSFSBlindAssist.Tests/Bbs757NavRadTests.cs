@@ -766,6 +766,64 @@ public class Bbs757NavRadTests
     }
 
     [Fact]
+    public async Task N_says_the_read()
+    {
+        // N reads the ILS panel's display once, after the CDU, and says what it shows; the read is the count from then on.
+        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU") };
+        var display = new FakeIlsDisplay();
+        var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95), IlsDisplayFor = _ => display };
+        var speech = new SpeechCapture();
+        var simConnect = new SimConnectManager(IntPtr.Zero);
+
+        async Task<string> N()
+        {
+            speech.Interrupts.Clear();
+            await def.ReadNavRadiosAsync(simConnect, speech, Pages(cdu));
+            return Assert.Single(speech.Interrupts);
+        }
+
+        const string Vors = "VOR L 116.90 auto, GSU. VOR R not tuned. ILS course 095.";
+
+        // MSFSBA started over a running flight: no count, but the display reads.
+        display.Answer = () => new Bbs757IlsReading(false, 110.50, 95);
+        Assert.Equal($"{Vors} ILS 110.50.", await N());
+        Assert.Equal(1, display.Reads);   // one read
+        Assert.Equal(IlsAt(110.50), def.IlsDial);
+
+        // The panel turned by hand: the read wins over the count.
+        display.Answer = () => new Bbs757IlsReading(false, 109.30, 95);
+        Assert.Equal($"{Vors} ILS 109.30.", await N());
+        Assert.Equal(IlsAt(109.30), def.IlsDial);
+
+        // PARK: said from the read, and the count keeps the fraction it had (.30).
+        display.Answer = () => new Bbs757IlsReading(true, null, 95);
+        Assert.Equal($"{Vors} ILS parked.", await N());
+        Assert.Equal(new Bbs757IlsDial(Bbs757IlsDial.Park, 2), def.IlsDial);
+
+        // A comma-decimal PC still hears a dot.
+        display.Answer = () => new Bbs757IlsReading(false, 109.35, 95);
+        await InCultureAsync("de-DE", async () => Assert.Equal($"{Vors} ILS 109.35.", await N()));
+
+        // A flight loading: no count. An unreadable display gives the count's words...
+        def.OnSimContextReset();
+        display.Answer = () => null;
+        Assert.Equal($"{Vors} ILS tuning unknown.", await N());
+        // ...and a read ends the pending load: the flight runs, its panel PARK with the .10 it loads with.
+        display.Answer = () => new Bbs757IlsReading(true, null, 95);
+        Assert.Equal($"{Vors} ILS parked.", await N());
+        Assert.Equal(Bbs757IlsDial.LoadState, def.IlsDial);
+        def.ProcessSimVarUpdate(Bbs757Radios.ActiveKey(1), 121.9, new SpeechCapture());   // the first COM row: no second load
+        Assert.Equal(Bbs757IlsDial.LoadState, def.IlsDial);
+
+        // The window's status says the read too.
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") }, display: display);
+        display.Answer = () => new Bbs757IlsReading(false, 111.95, 95);
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+        Assert.Equal($"{Vors} ILS 111.95. FMC runway ILS unavailable.", form.StatusText);
+    }
+
+    [Fact]
     public async Task N_after_switching_away_says_nothing()
     {
         var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95) };
@@ -824,23 +882,29 @@ public class Bbs757NavRadTests
         };
     }
 
-    /// <summary>A definition wired to a fake first officer's CDU, a simulated aircraft and a window nothing shows.</summary>
+    /// <summary>
+    /// A definition wired to a fake first officer's CDU, a simulated aircraft, an ILS display (unreadable unless
+    /// a test gives one that reads) and a window nothing shows.
+    /// </summary>
     private sealed class WindowRig
     {
         public readonly SpeechCapture Speech = new();
         public readonly FakeCdu Cdu;
         public readonly IlsSim Sim = new();
+        public readonly FakeIlsDisplay Display;
         public readonly BBS757Definition Def;
         public int Shown;
 
         /// <param name="gate">When set, the courses read waits for it (the window is then still opening).</param>
-        public WindowRig(FakeCdu cdu, Task? gate = null, double? vorL = 95, double? vorR = 0, double? ils = 95)
+        public WindowRig(FakeCdu cdu, Task? gate = null, double? vorL = 95, double? vorR = 0, double? ils = 95, FakeIlsDisplay? display = null)
         {
             Cdu = cdu;
+            Display = display ?? new FakeIlsDisplay();
             Def = new BBS757Definition
             {
                 NestRunning = () => true,
                 WriteIo = _ => Sim.Io,
+                IlsDisplayFor = _ => Display,
                 ShowRadioForm = (_, _) => Shown++,
                 ReadoutIo = _ => new McpIo
                 {
@@ -1283,8 +1347,9 @@ public class Bbs757NavRadTests
         OnKeyDown.Invoke(frequency, new object[] { new KeyEventArgs(Keys.Enter) });
 
         Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
-        Assert.Equal(new[] { "ILS 110.50 set" }, rig.Speech.Interrupts);
-        Assert.Equal("ILS 110.50 set", form.StatusText);
+        const string byCount = "ILS 110.50 set by count: the ILS display could not be read.";   // the rig's display is unreadable
+        Assert.Equal(new[] { byCount }, rig.Speech.Interrupts);
+        Assert.Equal(byCount, form.StatusText);
         Assert.Equal(LoadStateTo11050, rig.Sim.Writes);                         // the knob clicks only: no course write (R55)
         Assert.Equal(Enumerable.Repeat(250, 5), rig.Sim.Delays);                // 250 ms between clicks
         Assert.Equal(presses, rig.Cdu.Presses.Count);                           // no CDU key for it
@@ -1318,8 +1383,9 @@ public class Bbs757NavRadTests
         OnClick.Invoke(park, new object[] { EventArgs.Empty });
 
         Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count > 0));
-        Assert.Equal(new[] { "ILS parked" }, rig.Speech.Interrupts);
-        Assert.Equal("ILS parked", form.StatusText);
+        const string byCount = "ILS parked by count: the ILS display could not be read.";
+        Assert.Equal(new[] { byCount }, rig.Speech.Interrupts);
+        Assert.Equal(byCount, form.StatusText);
         Assert.Equal(new[] { "1 (>L:B757_ILS_FREQ_WHOLE_INC)", "1 (>L:B757_ILS_FREQ_WHOLE_INC)" }, rig.Sim.Writes);   // 110, 111, PARK
     }
 
@@ -1332,9 +1398,11 @@ public class Bbs757NavRadTests
         rig.Speech.Interrupts.Clear();
 
         form.ApplyIlsFrequency("110.50");
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count == 1));   // the display is tried first
         form.ParkIls();
+        Assert.True(await WaitUntil(() => rig.Speech.Interrupts.Count == 2));
 
-        const string refusal = "ILS tuning unknown: use ILS sync first.";
+        const string refusal = "ILS tuning unknown: the ILS display could not be read.";
         Assert.Equal(new[] { refusal, refusal }, rig.Speech.Interrupts);
         Assert.Equal(refusal, form.StatusText);
         Assert.Empty(rig.Sim.Writes);
