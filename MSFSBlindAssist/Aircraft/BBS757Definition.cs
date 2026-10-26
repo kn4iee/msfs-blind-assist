@@ -109,6 +109,13 @@ public partial class BBS757Definition : BaseAircraftDefinition
     public override bool PlaysOwnTakeoffSpeedCallouts => true;
 
     /// <summary>
+    /// BlueBird's VOR and ILS receivers are its own: tuning them changed no stock NAV variable
+    /// (measured, docs/b757/spec-gaps.md 3.2), so the shared glideslope call-out, which reads NAV 1,
+    /// is off on the 757 (ruling R56).
+    /// </summary>
+    public override bool UsesStockNavReceivers => false;
+
+    /// <summary>
     /// Alt+P / Alt+N / Alt+E / Alt+S read the ADI, the EHSI and the upper and lower EICAS by AI vision
     /// on the measured instrument views; <c>BaseAircraftDefinition.HandleHotkeyAction</c> dispatches the table.
     /// </summary>

@@ -37,6 +37,14 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     // Glideslope alive/lost tracking
     private bool _previousGlideSlopeAlive = false;
 
+    /// <summary>
+    /// True when the aircraft's VOR and ILS receivers are the sim's own NAV radios, so the stock
+    /// NAV variables say what the cockpit shows. False for an aircraft whose own receivers leave
+    /// the sim's NAV radios untouched: it registers no glideslope row (and so no Ctrl+M row) and the
+    /// shared "Glideslope alive / lost" call-out never speaks, since NAV 1 would be wrong there.
+    /// </summary>
+    public virtual bool UsesStockNavReceivers => true;
+
     // Abstract members from IAircraftDefinition that must be implemented
     public abstract string AircraftName { get; }
     public abstract string AircraftCode { get; }
@@ -58,7 +66,7 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     /// </summary>
     protected virtual Dictionary<string, SimConnect.SimVarDefinition> GetBaseVariables()
     {
-        return new Dictionary<string, SimConnect.SimVarDefinition>
+        var vars = new Dictionary<string, SimConnect.SimVarDefinition>
         {
             // Ground state - universal SimConnect variable that works with all aircraft
             ["SIM_ON_GROUND"] = new SimConnect.SimVarDefinition
@@ -267,6 +275,11 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 Units = "degrees"
             }
         };
+
+        // NAV 1's glideslope is wrong on an aircraft whose own receivers leave the sim's NAV radios
+        // untouched (the BlueBird 757, docs/b757/spec-gaps.md 3.2): no row, so no Ctrl+M row either.
+        if (!UsesStockNavReceivers) vars.Remove("MON_GlideSlopeAlive");
+        return vars;
     }
 
     /// <summary>
@@ -777,6 +790,8 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
 
         if (varName == "MON_GlideSlopeAlive")
         {
+            // NAV 1 is not this aircraft's receiver: never registered, and silent should it arrive.
+            if (!UsesStockNavReceivers) return true;
             bool alive = value > 0;
             if (alive && !_previousGlideSlopeAlive)
                 announcer.Announce("Glideslope alive");

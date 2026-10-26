@@ -10,7 +10,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// like every other aircraft's (every Continuous + IsAnnounced variable minus those flagged
 /// ExcludeFromMonitorManager, so the announced status rows (APU, master warning and caution), the
 /// flight-control call-outs (flaps, gear, speedbrake, parking brake), the fourteen MCP lights and the
-/// shared ones (ground state, glideslope, trim)), then the rows of speech that is no variable's.
+/// shared ones (ground state, trim; no glideslope: the 757 does not use the sim's NAV radios)), then
+/// the rows of speech that is no variable's.
 /// Unticked keys go to UserSettings.BBS757DisabledMonitorVariables, which MainForm honors at
 /// the generic gate and through the Suppressed wrap (Services/DefAnnounceMuteSets). All behavior
 /// lives in <see cref="MonitorManagerFormBase"/>.
