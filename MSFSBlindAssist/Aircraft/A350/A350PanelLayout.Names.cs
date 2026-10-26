@@ -107,6 +107,14 @@ public static partial class A350PanelLayout
         ["FCTL_SEC_1"] = "SEC 1", ["FCTL_SEC_2"] = "SEC 2", ["FCTL_SEC_3"] = "SEC 3",
         // ADIRS: iniBuilds titles the three mode selectors "ADR n MODE SELECTOR".
         ["IRS_MODE_1"] = "ADIRS 1", ["IRS_MODE_2"] = "ADIRS 2", ["IRS_MODE_3"] = "ADIRS 3",
+        // Lights and signs: placard abbreviations spoken whole.
+        ["LIGHTS_EXT_LANDING"] = "Landing",
+        ["APU_MASTER_SWITCH"] = "Master switch",
+        ["LIGHTS_INT_ANN_LT"] = "Annunciator light",
+        ["LIGHTS_INT_STBY_COMPASS"] = "Standby compass light",
+        ["SIGNS_EMER_EXIT"] = "EMER exit light",
+        ["SIGNS_NO_SMOKING"] = "No smoking and no PED",
+        ["ANTI_ICE_PROBE_WINDOW_HEAT"] = "Probe and window heat",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>

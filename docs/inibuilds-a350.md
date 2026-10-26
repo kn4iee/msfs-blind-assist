@@ -131,6 +131,10 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | Fuel Jettison | fuel jettison arm, fuel jettison active; their lights; the option line | with the option fitted, both rows and the valve (OPEN legend) | an equipment option (`INI_OPTION_FUEL_JETTISON`, OIS options page): without it the cockpit hides the panel and `UpdateFuelJettison` clears all three variables every frame, so MSFSBA refuses a press aloud and the panel's status line says "Not fitted" (`A350Options`) |
 | Flight Controls | PRIM 1-3, SEC 1-3; their fault lights | each off and back on | |
 | ADIRS | ADIRS 1-3 (OFF, NAV, ATT), IR 1-3, ADR 1-3; their fault and OFF lights | every IR and ADR; ADIRS 3 through every position; ADIRS 1 and 2 to ATT and back | an IR off drops its IRS's alignment flag (`INI_IRSn_ALIGNED`) until it is back on; ADIRS OFF loses the alignment, which restarts at NAV. The ADR 2 and 3 FAULT lamps read `INI_ADF2_FAULT` / `INI_ADF3_FAULT` (iniBuilds' spelling) |
+| Exterior Lighting | beacon, landing, logo, nav, nose, strobe, wing | every position | beacon and wing follow on the sim's own light state; the nav lights are drawn from `INI_LIGHTS_NAV` by the model, so the stock LIGHT NAV stays on whatever the switch |
+| APU | master switch, start; master fault, start AVAIL and ON lights | master on, start: the APU ran up and AVAIL lit within a minute | |
+| Interior Lighting and Signs | annunciator light, standby compass light, EMER exit light, no mobile, no smoking and no PED, seat belts, three occupant light knobs, coat stowage light | every position; the knobs land on the value typed | the signs reach `INI_NO_SMOKING_ON` / `INI_SEATBELTS_ON` |
+| Anti-Ice | wing, ENG 1, ENG 2, probe and window heat; three fault lights | each on and off | |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

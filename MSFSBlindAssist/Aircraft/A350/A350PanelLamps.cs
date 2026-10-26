@@ -81,6 +81,7 @@ public static class A350PanelLamps
         ["EVAC_COMMAND_SEQ1_LIGHT"] = "EVAC light",
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
+        ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL
         ["IRS_ADR_1_SEQ2_LIGHT"] = "ADR 1 off light", ["IRS_ADR_2_SEQ2_LIGHT"] = "ADR 2 off light", ["IRS_ADR_3_SEQ2_LIGHT"] = "ADR 3 off light",
     };
 

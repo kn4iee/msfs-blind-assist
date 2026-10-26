@@ -176,4 +176,68 @@ public class A350OverheadPanelTests
             "ADR 1 fault light", "ADR 1 off light", "ADR 2 fault light", "ADR 2 off light", "ADR 3 fault light", "ADR 3 off light",
         }, Lights("ADIRS"));
     }
+
+    /// <summary>Live 2026-10-26: every position of every switch; beacon and wing follow on the sim's own light state.
+    /// The nav lights are drawn from INI_LIGHTS_NAV by the model, so the stock LIGHT NAV stays on whatever the switch.</summary>
+    [Fact]
+    public void Exterior_lighting()
+    {
+        Assert.Equal(new[]
+        {
+            ("Beacon", A350RowAction.Set, "0=Off, 1=On"),
+            ("Landing", A350RowAction.Set, "0=Off, 1=On"),
+            ("Logo", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Nav", A350RowAction.Set, "0=1, 1=2, 2=Off"),
+            ("Nose", A350RowAction.Set, "0=T.O, 1=Taxi, 2=Off"),
+            ("Strobe", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Wing", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Exterior Lighting"));
+    }
+
+    /// <summary>Live 2026-10-26: MASTER SW on, then START: the APU ran up and AVAIL lit within a minute.</summary>
+    [Fact]
+    public void Apu()
+    {
+        Assert.Equal(new[]
+        {
+            ("Master switch", A350RowAction.Set, "0=Off, 1=On"),
+            ("Start", A350RowAction.Press, ""),
+        }, Rows("APU"));
+        Assert.Equal(new[] { "Master switch fault light", "Start available light", "Start on light" }, Lights("APU"));
+    }
+
+    /// <summary>Live 2026-10-26: every position of every selector; NO SMKG and SEAT BELTS reach their signs
+    /// (INI_NO_SMOKING_ON, INI_SEATBELTS_ON); the three occupant light knobs land on the value typed.</summary>
+    [Fact]
+    public void Interior_lighting_and_signs()
+    {
+        Assert.Equal(new[]
+        {
+            ("Annunciator light", A350RowAction.Set, "0=Test, 1=Brt, 2=Dim"),
+            ("Standby compass light", A350RowAction.Set, "0=Compass and eye reference, 1=Ice indicator, 2=Off"),
+            ("EMER exit light", A350RowAction.Set, "0=On, 1=Arm, 2=Off"),
+            ("No mobile", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("No smoking and no PED", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Seat belts", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Third occupant console light", A350RowAction.Set, ""),
+            ("Third occupant reading light", A350RowAction.Set, ""),
+            ("Fourth occupant reading light", A350RowAction.Set, ""),
+            ("Coat stowage light", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Interior Lighting and Signs"));
+    }
+
+    /// <summary>Live 2026-10-26: each anti-ice and the probe and window heat on and off; wing and engine 1 reach their
+    /// system state.</summary>
+    [Fact]
+    public void Anti_ice()
+    {
+        Assert.Equal(new[]
+        {
+            ("Wing anti ice", A350RowAction.Set, "0=Off, 1=On"),
+            ("ENG 1 anti ice", A350RowAction.Set, "0=Off, 1=On"),
+            ("ENG 2 anti ice", A350RowAction.Set, "0=Off, 1=On"),
+            ("Probe and window heat", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Anti-Ice"));
+        Assert.Equal(new[] { "Wing anti ice fault light", "ENG 1 anti ice fault light", "ENG 2 anti ice fault light" }, Lights("Anti-Ice"));
+    }
 }
