@@ -342,4 +342,57 @@ public class A350OverheadPanelTests
             "Center tank feed fault light",
         }, Lights("Fuel"));
     }
+
+    /// <summary>Live 2026-10-26: each engine pump off and on. The four SUPPLY buttons (fire shutoff valves) only ever
+    /// set their variable to 1, as the released real button is reset on the ground: not pressed in a test pass.</summary>
+    [Fact]
+    public void Hydraulics()
+    {
+        Assert.Equal(new[]
+        {
+            ("Green ENG 1 pump", A350RowAction.Set, "0=Off, 1=On"), ("Yellow ENG 1 pump", A350RowAction.Set, "0=Off, 1=On"),
+            ("Green ENG 2 pump", A350RowAction.Set, "0=Off, 1=On"), ("Yellow ENG 2 pump", A350RowAction.Set, "0=Off, 1=On"),
+            ("Green ENG 1 supply", A350RowAction.Press, ""), ("Yellow ENG 1 supply", A350RowAction.Press, ""),
+            ("Green ENG 2 supply", A350RowAction.Press, ""), ("Yellow ENG 2 supply", A350RowAction.Press, ""),
+        }, Rows("Hydraulics"));
+    }
+
+    /// <summary>Live 2026-10-26: FIRE TEST held 3 s lights all thirteen fire legends (each fire button, each agent's
+    /// SQUIB and DISCH). The fire buttons and agents latch (released, discharged): never pressed in a test pass.</summary>
+    [Fact]
+    public void Fire()
+    {
+        Assert.Equal(new[]
+        {
+            ("APU fire", A350RowAction.Press, ""), ("ENG 1 fire", A350RowAction.Press, ""), ("ENG 2 fire", A350RowAction.Press, ""),
+            ("APU agent", A350RowAction.Press, ""),
+            ("ENG 1 agent 1", A350RowAction.Press, ""), ("ENG 1 agent 2", A350RowAction.Press, ""),
+            ("ENG 2 agent 1", A350RowAction.Press, ""), ("ENG 2 agent 2", A350RowAction.Press, ""),
+            ("Fire test", A350RowAction.Press, ""),
+        }, Rows("Fire"));
+        Assert.Equal(13, Lights("Fire").Count());
+    }
+
+    /// <summary>Live 2026-10-26: both on and off.</summary>
+    [Fact]
+    public void Engine_manual_start()
+    {
+        Assert.Equal(new[]
+        {
+            ("ENG 1 man start", A350RowAction.Set, "0=Off, 1=On"), ("ENG 2 man start", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Engine Manual Start"));
+    }
+
+    /// <summary>Live 2026-10-26: every button off and on.</summary>
+    [Fact]
+    public void Ventilation()
+    {
+        Assert.Equal(new[]
+        {
+            ("Avionics extract", A350RowAction.Set, "0=Off, 1=On"),
+            ("Cabin fans", A350RowAction.Set, "0=Off, 1=On"),
+            ("Cooling", A350RowAction.Set, "0=Off, 1=On"),
+        }, Rows("Ventilation"));
+        Assert.Equal(new[] { "Avionics extract fault light", "Cooling fault light" }, Lights("Ventilation"));
+    }
 }

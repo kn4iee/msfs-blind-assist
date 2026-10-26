@@ -67,6 +67,15 @@ public class A350WritePlanTests : IDisposable
     }
 
     [Fact]
+    public void The_fire_test_is_held_long_enough_to_run()
+    {
+        // Live 2026-10-26: the test lights every fire legend and the master warning only while held; a 250 ms tap
+        // flickers them. The manual's step is "press and hold".
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "wait 3000", "0 (>B:AIRLINER_FIRE_TEST_Set)" },
+            Rpn(A350WritePlan.ForPress(C("AIRLINER_FIRE_TEST"))));
+    }
+
+    [Fact]
     public void A_button_is_pressed_once()
     {
         Assert.Equal(new[] { "1 (>B:AIRLINER_APU_START_Set)" }, Rpn(A350WritePlan.ForPress(C("AIRLINER_APU_START"))));

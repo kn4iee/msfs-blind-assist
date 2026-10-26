@@ -139,6 +139,10 @@ Only the Overhead section is offered so far; a section joins once each of its pa
 | Cabin Pressure | cabin altitude and V/S targets (encoders) and modes, ditching; the two targets as status lines | modes to MAN and back; each target steps 100 ft or 100 ft/min a click in MAN | an encoder's value is a status line on its panel (`A350Readouts`) |
 | Electrical | BAT 1/2, BAT EMER 1/2, bus tie, commercial 1/2, ELM, EXT 1/2, galley, GEN 1A-2B, APU GEN, DRIVE 1A-2B, PAX SYS, side 1 and 2 isolation; 23 lights | every switch off and on; with the OIS GPU connected (GROUND, GPU), EXT 1 and 2 each on line and off | a battery's FAULT legend lights a moment after it goes off. The DRIVE buttons (IDG disconnect) were not pressed: lasting |
 | Fuel | six pumps, crossfeed A and B, left and right transfer, center tank feed; their fault and OPEN lights | every row off and on; the crossfeed OPEN legend follows its valve | iniBuilds' variables cross the inner and outer names (L TK MAIN is `INI_OUTER_TANK_LEFT`); rows follow the buttons. Refuel through the OIS: LOADSHEET, fuel load, SET FUEL, Instant Refuel |
+| Hydraulics | four engine pumps, four SUPPLY buttons; fault, OFF and overheat lights | each pump off and on | the SUPPLY buttons (fire shutoff valves) only ever set 1: not pressed in a test pass |
+| Fire | APU, ENG 1 and ENG 2 fire buttons, five agents, fire test; 13 lights | FIRE TEST held 3 s lights all thirteen (`A350WritePlan.TestHoldMs`) | the fire buttons and agents latch: not pressed in a test pass |
+| Engine Manual Start | ENG 1 and ENG 2 man start | both on and off | |
+| Ventilation | avionics extract, cabin fans, cooling; two fault lights | each off and on | |
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

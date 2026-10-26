@@ -46,7 +46,11 @@ public static class A350WritePlan
 
     /// <summary>Test buttons that need a longer press, measured per subpanel (empty until measured).</summary>
     public static readonly IReadOnlyDictionary<string, int> TestHoldMs =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            // The fire test lights every fire legend and the master warning only while held ("press and hold").
+            ["AIRLINER_FIRE_TEST"] = 3000,
+        };
 
     /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>
     public static readonly IReadOnlyDictionary<string, int> SpringHolds =

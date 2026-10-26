@@ -137,6 +137,7 @@ public static partial class A350PanelLayout
         ["FUEL_PUMP_CTR_TANK_LEFT"] = "Center left pump", ["FUEL_PUMP_CTR_TANK_RIGHT"] = "Center right pump",
         ["FUEL_TANK_TRANSFER_LEFT"] = "Left transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right transfer",
         ["FUEL_CTR_TANK_FEED"] = "Center tank feed",
+        ["VENT_AVNCS_EXTRACT"] = "Avionics extract", ["VENT_CABIN_FANS"] = "Cabin fans", ["VENT_COOLING"] = "Cooling",
     };
 
     /// <summary>Position words where iniBuilds' tooltip is a sentence: the switch's own markings instead.</summary>
