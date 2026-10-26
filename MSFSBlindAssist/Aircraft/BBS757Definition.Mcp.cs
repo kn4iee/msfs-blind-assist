@@ -71,13 +71,24 @@ public partial class BBS757Definition
         }
 
         // Batched, not on request: the speed window's 400 ms button refresh reads it from the cache
-        // (Speed Intervene's "Window blank"). A window's cache, never spoken: no Ctrl+M row ([VAR-9]).
+        // (Speed Intervene's "Window blank"). Only a Continuous AND IsAnnounced var joins the batch; one
+        // that is not announced gets no subscription and is never delivered (measured 2026-10-26).
+        // Never spoken: ProcessAutoflightUpdate consumes it, and it has no Ctrl+M row ([VAR-9]).
         vars.TryAdd(Bbs757Mcp.IasBlankedVar, new SimVarDefinition
         {
             Name = Bbs757Mcp.IasBlankedVar, DisplayName = "MCP Speed Window Blank",
             Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.Continuous,
-            ExcludeFromMonitorManager = true,
+            IsAnnounced = true, ExcludeFromMonitorManager = true,
         });
+    }
+
+    /// <summary>
+    /// Plan 05's deliveries (the seam in BBS757Definition.Hooks.cs): the speed window's blank flag is
+    /// consumed silently; it is cached for the window's captions and never spoken.
+    /// </summary>
+    partial void ProcessAutoflightUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
+    {
+        if (varName == Bbs757Mcp.IasBlankedVar) handled = true;
     }
 
     /// <summary>The MCP sets' and readouts' sim access, replaced by tests (a SimConnectManager cannot read in them); null: the real one.</summary>

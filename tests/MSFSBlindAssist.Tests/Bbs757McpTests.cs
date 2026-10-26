@@ -949,14 +949,29 @@ public class Bbs757McpTests
     [Fact]
     public void The_speed_window_blank_flag_is_batched_for_the_windows_and_never_spoken()
     {
-        // One batch slot: the windows' 400 ms button refresh reads the cache (plan 05, Task 1).
+        // One batch slot: the windows' 400 ms button refresh reads the cache (plan 05, Task 1). Only a
+        // Continuous AND IsAnnounced var joins the batch; one that is not announced gets no subscription
+        // at all and was never delivered (measured 2026-10-26: Speed Intervene's caption stayed blank).
         var flag = new BBS757Definition().GetVariables()[Bbs757Mcp.IasBlankedVar];
 
         Assert.Equal("BBS_IAS_BLANKED", flag.Name);
         Assert.Equal(SimVarType.LVar, flag.Type);
         Assert.Equal(UpdateFrequency.Continuous, flag.UpdateFrequency);
-        Assert.False(flag.IsAnnounced);
+        Assert.True(flag.IsAnnounced);
+        Assert.False(flag.ExcludeFromBatch);
         Assert.True(flag.ExcludeFromMonitorManager);   // a window's cache, never spoken: no Ctrl+M row ([VAR-9])
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    public void The_speed_window_blank_flag_is_consumed_silently(double value)
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+
+        Assert.True(def.ProcessSimVarUpdate(Bbs757Mcp.IasBlankedVar, value, speech));
+        Assert.Empty(speech.All);
     }
 
     [Fact]
