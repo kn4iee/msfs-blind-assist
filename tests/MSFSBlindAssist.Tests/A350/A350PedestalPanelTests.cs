@@ -67,7 +67,7 @@ public class A350PedestalPanelTests
             ("Gravity gear extension cover", Set, "0=Closed, 1=Open"),
             ("Gravity gear extension guard 1", Set, "0=Closed, 1=Open"),
             ("Gravity gear extension guard 2", Set, "0=Closed, 1=Open"),
-            ("Gravity gear extension", Set, "0=Off, 1=Reset, 2=Down"));
+            ("Gravity gear extension", Set, "0=Reset, 1=Off, 2=Down"));
     }
 
     [Fact]

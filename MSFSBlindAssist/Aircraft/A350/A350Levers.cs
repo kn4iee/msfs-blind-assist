@@ -6,12 +6,12 @@ namespace MSFSBlindAssist.Aircraft.A350;
 /// position (null where its own input event does).</summary>
 /// <param name="Words">Position → the word its row reads, the other aircraft's words (A380, A320).</param>
 /// <param name="Write">(position, state value) → the string the cockpit's own lever code would send.</param>
-/// <param name="Nudge">A press that holds a spring switch at <c>Side</c> for <see cref="A350Levers.NudgeMs"/>, then
-/// returns it to <c>Back</c>.</param>
+/// <param name="Press">A press that takes several strings: a nudge holds spring switches off center for
+/// <see cref="A350Levers.NudgeMs"/>, then returns them.</param>
 /// <param name="Steps">A pick that takes more than one string (a key held, then let go), instead of
 /// <paramref name="Write"/>.</param>
 internal sealed record A350Lever(A350Control Control, IReadOnlyDictionary<double, string> Words, Func<double, double, string>? Write,
-    (double Side, double Back)? Nudge = null, Func<double, IReadOnlyList<A350Step>>? Steps = null);
+    Func<IReadOnlyList<A350Step>>? Press = null, Func<double, IReadOnlyList<A350Step>>? Steps = null);
 
 /// <summary>
 /// The pedestal's levers, hand-written because they bypass their input events (the map lists them as "none"). Each is
@@ -29,6 +29,8 @@ internal sealed record A350Lever(A350Control Control, IReadOnlyDictionary<double
 /// <item>Rudder trim: the switch trims while held off center (about 1.6 degrees a second); as on the A380 and the
 /// Fenix it is two nudge buttons (left 2, right 0, rest 1), never a combo left trimming. Reset fires
 /// <c>'INI.RUDDER_TRIM_RESET'</c>, a button.</item>
+/// <item>Pitch trim: each of the two switches trims the THS while held (0 nose up, 2 nose down, 1 off), alone or both
+/// together; two nudges move both together, as a pilot moves them.</item>
 /// </list>
 /// "All thrust levers", "Ground spoilers" and "System display page" have no input event of their own: they are the
 /// A380's rows. The page is <c>INI_ECAM_ACTIVE_PAGE</c>; a pick presses that page's ECP key through its input event
@@ -38,8 +40,12 @@ internal static class A350Levers
 {
     public const int FlapStep = 4096;
 
-    /// <summary>How long a nudge holds the rudder trim switch: about 0.4 degrees.</summary>
+    /// <summary>How long a nudge holds the rudder trim switch: about 0.4 degrees (it trims 1.6 degrees a second).</summary>
     public const int NudgeMs = 300;
+
+    /// <summary>How long a nudge holds the pitch trim switches: about 0.2 degrees (the THS trims about 0.19 degrees a
+    /// second, live 2026-10-27; the A350 sets its takeoff trim itself, so these are small corrections).</summary>
+    public const int PitchNudgeMs = 1000;
     public const int KeyEventFull = 16384;
 
     /// <summary>The SD pages the ECP has a key for: the page value, the A380's word, the key's input event; declared before
@@ -76,6 +82,10 @@ internal static class A350Levers
         // The running switch is not a row: its nudges are (Extras).
         ["AIRLINER_RUDDER_TRIM"] = Lever("AIRLINER_RUDDER_TRIM", "Rudder trim", A350Kinds.None, null,
             Array.Empty<(double, string)>(), null),
+        ["AIRLINER_PITCH_TRIM_LEFT"] = Lever("AIRLINER_PITCH_TRIM_LEFT", "Left pitch trim", A350Kinds.None, null,
+            Array.Empty<(double, string)>(), null),
+        ["AIRLINER_PITCH_TRIM_RIGHT"] = Lever("AIRLINER_PITCH_TRIM_RIGHT", "Right pitch trim", A350Kinds.None, null,
+            Array.Empty<(double, string)>(), null),
         ["AIRLINER_RUDDER_TRIM_RESET"] = Lever("AIRLINER_RUDDER_TRIM_RESET", "Rudder trim reset", A350Kinds.Button, null,
             Array.Empty<(double, string)>(), null),
     };
@@ -93,8 +103,12 @@ internal static class A350Levers
                 : "'INI.SPOILERS_ARM_OFF' (>F:KeyEvent)",
             key: "A350_SPOILERS_ARM")),
         ("AIRLINER_ECAM_SD_KNOB_PUSH", true, SystemDisplayPage()),
-        ("AIRLINER_RUDDER_TRIM", false, Nudge("LEFT", "left", 2)),
-        ("AIRLINER_RUDDER_TRIM", false, Nudge("RIGHT", "right", 0)),
+        ("AIRLINER_RUDDER_TRIM", false, Nudge("RUDDER_TRIM_LEFT", "Rudder trim left (nudge)", 2, NudgeMs, "AIRLINER_RUDDER_TRIM_Set")),
+        ("AIRLINER_RUDDER_TRIM", false, Nudge("RUDDER_TRIM_RIGHT", "Rudder trim right (nudge)", 0, NudgeMs, "AIRLINER_RUDDER_TRIM_Set")),
+        ("AIRLINER_PITCH_TRIM_RIGHT", false, Nudge("PITCH_TRIM_UP", "Pitch trim nose up (nudge)", 0, PitchNudgeMs,
+            "AIRLINER_PITCH_TRIM_LEFT_Set", "AIRLINER_PITCH_TRIM_RIGHT_Set")),
+        ("AIRLINER_PITCH_TRIM_RIGHT", false, Nudge("PITCH_TRIM_DOWN", "Pitch trim nose down (nudge)", 2, PitchNudgeMs,
+            "AIRLINER_PITCH_TRIM_LEFT_Set", "AIRLINER_PITCH_TRIM_RIGHT_Set")),
     };
 
     private static readonly Dictionary<string, A350Lever> ById =
@@ -134,9 +148,9 @@ internal static class A350Levers
     public static IReadOnlyList<A350Step>? StepsFor(A350Control control, double position) =>
         ById.TryGetValue(control.Id, out var lever) && lever.Steps is { } steps ? steps(position) : null;
 
-    /// <summary>The nudge a press makes, or null for any other control.</summary>
-    public static (double Side, double Back)? NudgeFor(A350Control control) =>
-        ById.TryGetValue(control.Id, out var lever) ? lever.Nudge : null;
+    /// <summary>The steps a press takes where one Set does not do it (a nudge), or null.</summary>
+    public static IReadOnlyList<A350Step>? PressStepsFor(A350Control control) =>
+        ById.TryGetValue(control.Id, out var lever) && lever.Press is { } press ? press() : null;
 
     /// <summary>The string that moves a lever to <paramref name="position"/>, or null where its own Set does.</summary>
     public static string? WriteFor(A350Control control, double position) =>
@@ -170,12 +184,18 @@ internal static class A350Levers
         };
     }
 
-    private static A350Lever Nudge(string side, string word, double position)
+    /// <summary>A button that holds spring switches at <paramref name="side"/> for <paramref name="holdMs"/>, then puts them
+    /// back to 1 (off), through their input events.</summary>
+    private static A350Lever Nudge(string name, string title, double side, int holdMs, params string[] events)
     {
-        var lever = Lever($"MSFSBA_RUDDER_TRIM_{side}", $"Rudder trim {word} (nudge)", A350Kinds.Button, null,
-            Array.Empty<(double, string)>(), null, key: $"A350_RUDDER_TRIM_{side}");
-        lever.Control.Event = "AIRLINER_RUDDER_TRIM_Set";
-        return lever with { Nudge = (position, 1) };
+        var lever = Lever($"MSFSBA_{name}", title, A350Kinds.Button, null, Array.Empty<(double, string)>(), null,
+            key: $"A350_{name}");
+        lever.Control.Event = events[0];
+        string Write(double position) => string.Join(" ", events.Select(e => $"{Format(position)} (>B:{e})"));
+        return lever with
+        {
+            Press = () => new A350Step[] { new A350CalcStep(Write(side)), new A350DelayStep(holdMs), new A350CalcStep(Write(1)) },
+        };
     }
 
     private static A350Lever ThrustLever(int n) =>

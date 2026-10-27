@@ -127,6 +127,24 @@ public class A350LeversTests
         Assert.True(A350WritePlan.ForSet(page.Control, 12, 12).IsEmpty);
     }
 
+    /// <summary>The pitch trim switches trim the THS while held, each alone or both together (live 2026-10-27): two
+    /// nudges move both together, never a combo left trimming.</summary>
+    [Theory]
+    [InlineData("A350_PITCH_TRIM_UP", "Pitch trim nose up (nudge)", 0)]
+    [InlineData("A350_PITCH_TRIM_DOWN", "Pitch trim nose down (nudge)", 2)]
+    public void Pitch_trim_nudges_hold_both_switches_then_return_them(string key, string name, int side)
+    {
+        var nudge = Row(key);
+        Assert.Equal((name, A350RowAction.Press), (nudge.Name, nudge.Action));
+        Assert.Equal(new A350Step[]
+        {
+            new A350CalcStep($"{side} (>B:AIRLINER_PITCH_TRIM_LEFT_Set) {side} (>B:AIRLINER_PITCH_TRIM_RIGHT_Set)"),
+            new A350DelayStep(A350Levers.PitchNudgeMs),   // about 0.2 degrees: the THS trims about 0.19 degrees a second
+            new A350CalcStep("1 (>B:AIRLINER_PITCH_TRIM_LEFT_Set) 1 (>B:AIRLINER_PITCH_TRIM_RIGHT_Set)"),
+        }, A350WritePlan.ForPress(nudge.Control!).Steps);
+        Assert.DoesNotContain(Placement.RowsByPanel.Values.SelectMany(r => r), r => r.Key is "A350_PITCH_TRIM_LEFT" or "A350_PITCH_TRIM_RIGHT");
+    }
+
     [Fact]
     public void Rudder_trim_reset_is_a_button()
     {

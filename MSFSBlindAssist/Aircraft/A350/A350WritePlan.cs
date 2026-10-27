@@ -137,8 +137,8 @@ public static class A350WritePlan
         }
     }
 
-    public static A350Plan ForPress(A350Control control) => A350Levers.NudgeFor(control) is { } nudge
-        ? Steps(Set(control, nudge.Side), new A350DelayStep(A350Levers.NudgeMs), Set(control, nudge.Back))
+    public static A350Plan ForPress(A350Control control) => A350Levers.PressStepsFor(control) is { } nudge
+        ? new A350Plan(nudge, null)   // a nudge: switches held off center, then returned (A350Levers)
         : control.Kind switch
     {
         A350Kinds.Button => Steps(Set(control, control.Press ?? 1)),

@@ -428,11 +428,13 @@ public static partial class A350PanelLayout
         ["OIS_AVNCS_EFB_LEFT"] = OisSwitch, ["OIS_AVNCS_EFB_RIGHT"] = OisSwitch,
         // iniBuilds' master tooltips are swapped (the OFF key reads ON): both engines running read 1 (live 2026-10-27).
         ["ENG_MASTER_1"] = new() { [0] = "Off", [1] = "On" }, ["ENG_MASTER_2"] = new() { [0] = "Off", [1] = "On" },
-        // The cover's tooltip words are the click's action; the handle takes DOWN only with the cover and both guards at 1.
+        // The cover's tooltip words are the click's action. The handle's tooltip reads state n as key n+1 and iniBuilds has
+        // no third key, so its words come from what it does: 2 is DOWN (taken only with the cover and both guards at 1),
+        // and it rests at 1, OFF (live 2026-10-27).
         ["GRAVITY_GEAR_COVER"] = new() { [0] = "Closed", [1] = "Open" },
         ["GRAVITY_GEAR_GUARD_1"] = new() { [0] = "Closed", [1] = "Open" },
         ["GRAVITY_GEAR_GUARD_2"] = new() { [0] = "Closed", [1] = "Open" },
-        ["GRAVITY_GEAR_HANDLE"] = new() { [0] = "Off", [1] = "Reset", [2] = "Down" },
+        ["GRAVITY_GEAR_HANDLE"] = new() { [0] = "Reset", [1] = "Off", [2] = "Down" },
         // The left switch's tooltip reads Off/On, the right's NORM/X-WIND: both read the right's.
         ["FCU_HUD_XWIND_LEFT"] = new() { [0] = "Norm", [1] = "X-wind" }, ["FCU_HUD_XWIND_RIGHT"] = new() { [0] = "Norm", [1] = "X-wind" },
     };

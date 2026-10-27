@@ -79,6 +79,8 @@ public class IniBuildsA350DefinitionTests
     [InlineData("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", 1.26, "1.3 degrees right")]
     [InlineData("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", 0.03, "Neutral")]
     [InlineData("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", 0.366, "37 percent")]
+    [InlineData("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", 5.48, "5.5 degrees up")]
+    [InlineData("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", -1.24, "1.2 degrees down")]
     public void A_pedestal_status_line_reads_what_the_lever_did(string key, string beside, string var, double value, string text)
     {
         var def = new WithSections("Pedestal");

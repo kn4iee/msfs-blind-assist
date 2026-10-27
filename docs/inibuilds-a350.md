@@ -220,8 +220,11 @@ A380 and the Fenix, never a combo left trimming. The stock `SPOILERS HANDLE POSI
 against 0.366), so there is no fine speed brake slider; quarters stand in for it. The stock fuel tanks and rudder trim do not
 follow the aircraft either: refuel through the OIS (LOADSHEET, FUEL LOAD, SET FUEL, Instant Refuel).
 
-Status lines beside them (`A350StatusLines`, shown, never spoken): "Rudder trim: 1.2 degrees left" (or Neutral) and "Speed
-brake handle: 37 percent". The levers speak as the A380's do (`A350LeverSpeech`): "Thrust lever 1 Climb", "All thrust levers
+Pitch trim is two nudges too (nose up, nose down), each holding both pitch trim switches for 1 s (0 nose up, 2 nose down,
+1 off): the THS trims about 0.19 degrees a second, so a nudge is about 0.2 degrees. Either switch alone trims as well; the
+A350 sets its takeoff trim itself (`FMGS_TO_TRIM_DEG`). Status lines beside them (`A350StatusLines`, shown, never spoken):
+"Rudder trim: 1.2 degrees left" (or Neutral), "Pitch trim: 1.3 degrees up" (the stock `ELEVATOR TRIM POSITION`, which
+follows the A350's `ELEV_TRIM_RATIO`), "Speed brake handle: 37 percent". The levers speak as the A380's do (`A350LeverSpeech`): "Thrust lever 1 Climb", "All thrust levers
 Climb" once both sit there, nothing mid-travel; "Spoilers 40 percent", "Spoilers full", "Spoilers retracted" by tenths; each
 under its own Ctrl+M row, after a silent baseline seeded from the cache after a load. Flaps, ground spoilers and the parking
 brake are spoken by the generic path ("Flaps: 2").

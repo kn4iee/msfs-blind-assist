@@ -327,7 +327,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         }
         foreach (var line in _statusLines.Values)
         {
-            Register(line.Key, line.Var, line.Name, Array.Empty<string>());
+            Register(line.Key, line.Var, line.Name, Array.Empty<string>(), line.Unit);
             vars[line.Key].ValueDescriptions = new Dictionary<double, string>();
         }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
@@ -357,7 +357,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         // A light streams its rule's first variable under its own key, which carries its status line; its rule's other
         // variables and the bus powers stream once each, consumed silently. A name already batched streams on its own
         // subscription ([VAR-7]).
-        void Register(string key, string name, string displayName, IReadOnlyList<string>? stateVariables)
+        void Register(string key, string name, string displayName, IReadOnlyList<string>? stateVariables, string? stockUnit = null)
         {
             var def = new SimVarDefinition
             {
@@ -371,7 +371,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 RenderAsReadOnlyStatus = stateVariables != null,
                 StateVariables = stateVariables is { Count: > 0 } ? stateVariables : null,   // a power change repaints a light
             };
-            if (A350FcuWindows.StockUnits.TryGetValue(name, out var units))
+            if (stockUnit is { } units || A350FcuWindows.StockUnits.TryGetValue(name, out units))
             {
                 def.Type = SimVarType.SimVar;   // a window input that is a sim variable (the baro setting), in its unit
                 def.Units = units;
