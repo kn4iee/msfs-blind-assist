@@ -393,13 +393,15 @@ public partial class BBS757EfbForm : Form
         flight.Controls.Add(_closeButton);
         // The Flight page's controls, or the Settings page's top and a few rows (its rows scroll), and the tab
         // control's frame (the tab strip and borders); both pages scroll should a large font need more.
-        ClientSize = new Size(470 + 10, Math.Max(y + h + 15, 560) + 32);
+        ClientSize = new Size(470 + 10, Math.Max(y + h + 15, 620) + 32);
 
         BuildSettingsTab(_settingsPage);
 
         KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Escape && !e.Alt && !e.Control && !e.Shift)
+            // Escape closes an open list first (a choice list's, the preset's), then the window.
+            if (e.KeyCode == Keys.Escape && !e.Alt && !e.Control && !e.Shift
+                && ActiveControl is not ComboBox { DroppedDown: true })
             {
                 e.Handled = true;
                 e.SuppressKeyPress = true;
@@ -429,6 +431,8 @@ public partial class BBS757EfbForm : Form
             : "EFB not reachable. Is the aircraft loaded?";
         string text = _lastResult.Length > 0 ? link + Environment.NewLine + _lastResult : link;
         if (_statusBox.Text != text) _statusBox.Text = text;
+        // The Settings page shows the same text, below its Navigraph and nav data buttons.
+        if (_settingsEfbStatusBox.Text != text) _settingsEfbStatusBox.Text = text;
     }
 
     private void SetResult(string text)

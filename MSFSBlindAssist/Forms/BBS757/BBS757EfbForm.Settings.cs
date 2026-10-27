@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using MSFSBlindAssist.SimConnect.BBS757;
 using MSFSBlindAssist.Utils.Logging;
@@ -13,19 +11,20 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The page also holds
 // Sign in to Navigraph and Update nav data, its only live controls, with the window's own handlers.
 //
-// Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the two buttons, the Section
-// list (the tablet's pages) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a
-// choice list for the tablet's words, a label, a box and Set for a number or text. A registration section starts with
-// the registrations its rows apply to. Picking a section rebuilds only the rows' panel; everything else (a save, the
-// simulator closing, the page opening) updates the rows in place, so no control is recreated and focus never moves.
+// Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the two buttons, the EFB
+// status (the Flight page's, the same text, so the Navigraph code can be read here), the Section list (the tablet's
+// pages) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice list for the
+// tablet's words, a label, a box and Set for a number or text. A registration section starts with the registrations its
+// rows apply to. Picking a section rebuilds only the rows' panel; everything else (a save, the simulator closing, the
+// page opening) updates the rows in place, so no control is recreated and focus never moves.
 //
 // The page is writable only while Bbs757SimGuard.SettingsWritable holds, checked when the page opens, on every 1 s
 // status tick while the window shows, and by every write. While it does not, every input stays focusable and readable
 // but does not change (a check box does not toggle, a choice list swallows what would change it, a box is read-only)
 // and an attempt says why, at once. So does a row that waits for another (the announcement categories) or that cannot
-// change for its own state (unreadable, automatic). A save checks first that every key it writes is in its file, then
-// makes Bbs757EfbSettings.WritesFor's writes in order through Bbs757SettingsFile (which logs each save and refusal),
-// stops at the first one that is not saved everywhere, and reads the files again.
+// change for its own state (unreadable, automatic). A save is Bbs757SettingsSave.Run's: every key checked first, the
+// writes in order through Bbs757SettingsFile (which logs each save and refusal), the first not done everywhere stopping
+// the rest, and the wording; this page reads the files for it, says the outcome and reads the files again.
 //
 // Speech (CORE-7): a check box or a choice list that saved says nothing, as the reader has said its new state; a number
 // or text box says "<label> saved"; every failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a
@@ -40,12 +39,8 @@ public partial class BBS757EfbForm
     private const int RowStep = 30;
     private const int RowWidth = 412;
 
-    // A switch's choices are Off, then On (Bbs757SettingKind.OnOff).
+    // A switch's choices are Off, then On (Bbs757SettingKind.OnOff; On's index is Bbs757SettingsRows.OnChoiceIndex).
     private const int OffChoice = 0;
-    private const int OnChoice = 1;
-
-    // The EFB brightness takes a value only while this setting reads Manual (the rows' Automatic state).
-    private const string BrightnessModePath = "auto_brightness";
 
     private static readonly Bbs757SettingSection[] Sections = Enum.GetValues<Bbs757SettingSection>();
 
@@ -61,6 +56,9 @@ public partial class BBS757EfbForm
     private readonly List<SettingControl> _settingControls = new();
 
     private TextBox _settingsStatusBox = null!;
+    // The Flight page's EFB status, shown here too (UpdateStatus sets both): the Navigraph code and the nav data update's
+    // outcome can be read where their buttons are.
+    private TextBox _settingsEfbStatusBox = null!;
     private ComboBox _sectionCombo = null!;
     private Panel _sectionPanel = null!;
     // The registrations line of a registration section; null in the others.
@@ -87,7 +85,7 @@ public partial class BBS757EfbForm
 
     /// <summary>
     /// Builds the Settings page, top to bottom in tab order: the status box, Sign in to Navigraph, Update nav data, the
-    /// Section list and the panel of the chosen section's rows (General first).
+    /// EFB status, the Section list and the panel of the chosen section's rows (General first).
     /// </summary>
     private void BuildSettingsTab(TabPage page)
     {
@@ -119,7 +117,26 @@ public partial class BBS757EfbForm
         _updateButton = new Button { Text = "Update nav data", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
         _updateButton.Click += (_, _) => RunAction(UpdateNavDataAsync);
         page.Controls.Add(_updateButton);
-        y += h + gap + 4;
+        y += h + gap;
+
+        // What the two buttons say stays readable here, character by character (the Navigraph code): the Flight page's
+        // EFB status, the same text.
+        page.Controls.Add(new Label { Text = "EFB status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ });
+        y += 20;
+        _settingsEfbStatusBox = new TextBox
+        {
+            Location = new Point(left, y),
+            Size = new Size(fullW, statusH),
+            Multiline = true,
+            ReadOnly = true,
+            TabStop = true,
+            ScrollBars = ScrollBars.Vertical,
+            BorderStyle = BorderStyle.FixedSingle,
+            AccessibleName = "EFB status",
+            TabIndex = tab++,
+        };
+        page.Controls.Add(_settingsEfbStatusBox);
+        y += statusH + gap + 4;
 
         page.Controls.Add(new Label { Text = "Section", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ });
         _sectionCombo = new ComboBox
@@ -278,7 +295,15 @@ public partial class BBS757EfbForm
             AccessibleName = setting.Label,
             TabIndex = tab++,
         };
-        var set = new Button { Text = "Set", Location = new Point(RowInputLeft + 150, y - 1), Size = new Size(60, 27), TabIndex = tab++ };
+        // Which box a Set saves, in its description: an AccessibleName would shadow its text.
+        var set = new Button
+        {
+            Text = "Set",
+            AccessibleDescription = $"Saves {setting.Label}",
+            Location = new Point(RowInputLeft + 150, y - 1),
+            Size = new Size(60, 27),
+            TabIndex = tab++,
+        };
         var boxRow = new SettingControl(setting, box) { Box = box };
         box.KeyDown += (_, e) =>
         {
@@ -336,7 +361,8 @@ public partial class BBS757EfbForm
     {
         if (_disposed) return;
         using SettingsFiles files = SettingsFiles.Read(_settingsFolder);
-        IReadOnlyList<Bbs757SettingRow> rows = Bbs757SettingsRows.For(_shownSection, files.GlobalRoot, files.RegistrationRoots);
+        Bbs757SettingsSnapshot snapshot = files.Snapshot;
+        IReadOnlyList<Bbs757SettingRow> rows = Bbs757SettingsRows.For(_shownSection, snapshot.Global, snapshot.Registrations);
         for (int i = 0; i < rows.Count && i < _settingControls.Count; i++)
         {
             SettingControl control = _settingControls[i];
@@ -344,13 +370,7 @@ public partial class BBS757EfbForm
             // Both are the section's settings in the catalog's order; never a row on another setting's control.
             if (row.Setting.Path != control.Setting.Path) continue;
             control.Row = row;
-            control.StateReason = row.State switch
-            {
-                Bbs757RowState.Unreadable => files.WhyNot(row.Setting.File, row.Setting.Path, row.Setting.Type)
-                                             ?? Bbs757SettingsFile.NotInFileReason,
-                Bbs757RowState.Automatic => AutomaticReason(),
-                _ => null,
-            };
+            control.StateReason = Bbs757SettingsSave.CannotChangeReason(row, snapshot);
             ShowRow(control);
         }
         if (_registrationsBox != null)
@@ -368,7 +388,7 @@ public partial class BBS757EfbForm
         if (control.Check is { } check)
         {
             CheckState state = row.State != Bbs757RowState.Value ? CheckState.Indeterminate
-                : row.ChoiceIndex == OnChoice ? CheckState.Checked
+                : row.ChoiceIndex == Bbs757SettingsRows.OnChoiceIndex ? CheckState.Checked
                 : CheckState.Unchecked;
             if (check.CheckState != state) check.CheckState = state;
             // A box that holds neither word (unreadable, or different in the registrations) says what it holds here.
@@ -483,7 +503,8 @@ public partial class BBS757EfbForm
         }
         else
         {
-            text = CouldNotSave(control.Setting.Label, control.StateReason ?? Bbs757SettingsFile.NotInFileReason);
+            text = Bbs757SettingsSave.CouldNotSave(control.Setting.Label,
+                control.StateReason ?? Bbs757SettingsFile.NotInFileReason);
         }
         _announcer.AnnounceImmediate(text);
     }
@@ -501,7 +522,7 @@ public partial class BBS757EfbForm
             SayCannotChange(control);
             return;
         }
-        int choice = check.CheckState == CheckState.Checked ? OnChoice : OffChoice;
+        int choice = check.CheckState == CheckState.Checked ? Bbs757SettingsRows.OnChoiceIndex : OffChoice;
         SaveSetting(control.Setting, control.Setting.Choices[choice].Stored);
     }
 
@@ -533,161 +554,69 @@ public partial class BBS757EfbForm
         }
         if (!Bbs757EfbSettings.TryParseEntry(control.Setting, box.Text, out Bbs757Value value, out string? reason))
         {
-            _announcer.AnnounceImmediate(CouldNotSave(control.Setting.Label, reason ?? "type another value"));
+            _announcer.AnnounceImmediate(
+                Bbs757SettingsSave.CouldNotSave(control.Setting.Label, reason ?? "type another value"));
             return;
         }
         SaveSetting(control.Setting, value);
     }
 
     /// <summary>
-    /// Saves <paramref name="setting"/> as <paramref name="value"/>: every key <see cref="Bbs757EfbSettings.WritesFor"/>
-    /// plans is checked in its file first, and with one missing nothing is written; then each write is made in order,
-    /// the settings file's by <c>Bbs757SettingsFile.Save</c> and the registrations' by
-    /// <see cref="Bbs757SettingsFile.SaveToRegistrations"/>, each asking the guard again, and the first one that is not
-    /// saved everywhere stops the rest. Then the rows are read again, in place, and the outcome said: a failure at once,
-    /// with the callouts of the group that were switched off and showed on; a number or text box's "&lt;label&gt;
-    /// saved"; nothing more for a check box or a choice list (CORE-7).
+    /// Saves <paramref name="setting"/> as <paramref name="value"/> through <see cref="Bbs757SettingsSave.Run"/>, which
+    /// checks every key first, makes the writes in order and words the outcome; each write asks the simulator guard again
+    /// (<see cref="MayWriteSettings"/>) and makes the safety copy first. Then the rows are read again, in place, and the
+    /// outcome is said: a failure at once, anything else queued behind the reader; a check box or a choice list that
+    /// saved says nothing more (CORE-7).
     /// </summary>
     private void SaveSetting(Bbs757Setting setting, Bbs757Value value)
     {
         if (_disposed) return;
-        string? message;
-        bool failed;
+        Bbs757SettingSaveOutcome outcome;
         try
         {
-            (message, failed) = WriteSetting(setting, value);
+            outcome = WriteSetting(setting, value);
         }
         catch (Exception ex)
         {
-            // The type only: a message about a value could carry the pilot's codes.
-            Log.Error("BBS757", $"settings: {setting.Path} not saved: {ex.GetType().Name}");
-            (message, failed) = (CouldNotSave(setting.Label, Bbs757SettingsFile.UnreadableReason), true);
+            // The type and where it was thrown, never the message: a message about a value could carry the pilot's codes.
+            Log.Error("BBS757",
+                $"settings: {setting.Path} not saved: {ex.GetType().Name}{Environment.NewLine}{ex.StackTrace}");
+            outcome = new Bbs757SettingSaveOutcome(
+                Bbs757SettingsSave.CouldNotSave(setting.Label, Bbs757SettingsFile.UnreadableReason), true, Array.Empty<string>());
         }
         // What the files hold now: a change that failed shows the stored value again.
         RefreshSettingValues();
-        if (message == null) return;
-        if (failed) _announcer.AnnounceImmediate(message);
-        else _announcer.Announce(message);
+        if (outcome.Spoken is not { } spoken) return;
+        if (outcome.Immediate) _announcer.AnnounceImmediate(spoken);
+        else _announcer.Announce(spoken);
     }
 
-    // The writes of one save and what to say of them; null when there is nothing to say.
-    private (string? Message, bool Failed) WriteSetting(Bbs757Setting setting, Bbs757Value value)
+    // The files read just before the writes, the rows as shown, and the two writes for the work folder.
+    private Bbs757SettingSaveOutcome WriteSetting(Bbs757Setting setting, Bbs757Value value)
     {
-        string? folder = _settingsFolder;
-        if (folder == null) return (CouldNotSave(setting.Label, Bbs757SettingsFile.MissingReason), true);
-        IReadOnlyList<Bbs757SettingWrite> writes = Bbs757EfbSettings.WritesFor(setting, value);
-
-        // Every key before the first write: a change of several keys (Units with units, a callout with the rest of its
-        // group) never stops halfway at a key that is not there.
-        using (SettingsFiles files = SettingsFiles.Read(folder))
+        if (_settingsFolder is not { } folder)
         {
-            foreach (Bbs757SettingWrite write in writes)
-            {
-                if (files.WhyNot(write.File, write.Path, write.Value.Type) is { } reason)
-                {
-                    Log.Info("BBS757", $"settings: {write.Path} not saved: {reason}");
-                    return (CouldNotSave(setting.Label, reason), true);
-                }
-            }
+            return new Bbs757SettingSaveOutcome(
+                Bbs757SettingsSave.CouldNotSave(setting.Label, Bbs757SettingsFile.MissingReason), true, Array.Empty<string>());
         }
-
-        // What the rows showed before the save, for the group's callouts it switches off.
-        var shownBefore = new Dictionary<string, Bbs757SettingRow>(StringComparer.Ordinal);
-        foreach (SettingControl shown in _settingControls)
-        {
-            if (shown.Row is { } row) shownBefore[shown.Setting.Path] = row;
-        }
-
         string globalFile = Path.Combine(folder, Bbs757WorkFolder.SettingsFile);
-        var sentences = new List<string>();
-        string? failure = null;
-        foreach (Bbs757SettingWrite write in writes)
-        {
-            // The setting's own key, or the key its choice also writes (Units' units); any other is a callout of its
-            // group switched off.
-            bool own = write.Setting.Path == setting.Path;
-            failure = write.File == Bbs757SettingFile.Global
-                ? SaveGlobal(globalFile, write)
-                : SaveRegistrations(folder, write, own);
-            if (failure != null) break;
-            if (!own && shownBefore.TryGetValue(write.Setting.Path, out Bbs757SettingRow? before) && ShowedOn(before))
-                sentences.Add($"{write.Setting.Label} turned off");
-        }
-
-        if (failure != null) sentences.Insert(0, failure);
-        else if (setting.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text) sentences.Add($"{setting.Label} saved");
-        return (sentences.Count == 0 ? null : JoinSentences(sentences), failure != null);
+        Bbs757SettingRow[] shown = _settingControls.Select(control => control.Row).OfType<Bbs757SettingRow>().ToArray();
+        using SettingsFiles files = SettingsFiles.Read(folder);
+        return Bbs757SettingsSave.Run(setting, value, files.Snapshot, shown,
+            (path, written) => Bbs757SettingsFile.Save(globalFile, path, written, MayWriteSettings, _settingsBackup,
+                MayLogKey(setting, path)),
+            (path, written) => Bbs757SettingsFile.SaveToRegistrations(folder, path, written, MayWriteSettings,
+                _settingsBackup, MayLogKey(setting, path)),
+            line => Log.Info("BBS757", line));
     }
 
-    // One write to the settings file: null when it holds the value now, else what to say.
-    private string? SaveGlobal(string file, Bbs757SettingWrite write)
-    {
-        Bbs757SaveResult result = Bbs757SettingsFile.Save(file, write.Path, write.Value, MayWriteSettings,
-            _settingsBackup, write.Setting.MayLog);
-        return result.Status == Bbs757SaveStatus.Refused
-            ? CouldNotSave(write.Setting.Label, result.Reason ?? Bbs757SettingsFile.UnreadableReason)
-            : null;
-    }
-
-    // One write to every registration's file: null when each holds the value now; else "Couldn't save <label>: <reason>"
-    // when none was saved, or "Saved for N of M registrations; ..." when some were. A callout of the group switched off
-    // in some files only is named first, as the pilot pressed another.
-    private string? SaveRegistrations(string folder, Bbs757SettingWrite write, bool own)
-    {
-        IReadOnlyList<(string Registration, Bbs757SaveResult Result)> results = Bbs757SettingsFile.SaveToRegistrations(
-            folder, write.Path, write.Value, MayWriteSettings, _settingsBackup, write.Setting.MayLog);
-        if (results.Count == 0) return CouldNotSave(write.Setting.Label, Bbs757SettingsFile.MissingReason);
-        string[] notSaved = results
-            .Where(r => r.Result.Status == Bbs757SaveStatus.Refused)
-            .Select(r => r.Registration)
-            .ToArray();
-        if (notSaved.Length == 0) return null;
-        if (notSaved.Length == results.Count)
-            return CouldNotSave(write.Setting.Label, results[0].Result.Reason ?? Bbs757SettingsFile.UnreadableReason);
-        string text = SavedForSome(results.Count - notSaved.Length, results.Count, notSaved);
-        return own ? text : $"{write.Setting.Label}: {char.ToLowerInvariant(text[0])}{text[1..]}";
-    }
-
-    // "Saved for 2 of 3 registrations; G-XXXXX's file could not be read.", naming every registration not saved.
-    private static string SavedForSome(int saved, int total, IReadOnlyList<string> notSaved)
-    {
-        string files = notSaved.Count == 1
-            ? $"{notSaved[0]}'s file"
-            : $"{string.Join(", ", notSaved.Take(notSaved.Count - 1).Select(r => r + "'s"))} and {notSaved[^1]}'s files";
-        return string.Create(CultureInfo.InvariantCulture,
-            $"Saved for {saved} of {total} registrations; {files} could not be read.");
-    }
-
-    // Whether a row showed a switch on: its On word, or values that differ between the registrations (on in some).
-    private static bool ShowedOn(Bbs757SettingRow row) =>
-        row.State == Bbs757RowState.Differs || (row.State == Bbs757RowState.Value && row.ChoiceIndex == OnChoice);
+    // Whether a write's value may be logged: the saved setting's and the key's own setting's both may (the linked units
+    // is no setting of its own, and goes as Units does). The pilot's identifiers never do.
+    private static bool MayLogKey(Bbs757Setting saved, string path) =>
+        saved.MayLog && (Bbs757EfbSettings.ByPath(path)?.MayLog ?? true);
 
     private static Bbs757Setting? EnabledBy(Bbs757Setting setting) =>
         setting.EnabledBy is { } path ? Bbs757EfbSettings.ByPath(path) : null;
-
-    // Why the EFB brightness takes no value while it reads Automatic: the tablet takes one only in its manual mode.
-    private static string AutomaticReason()
-    {
-        Bbs757Setting? mode = Bbs757EfbSettings.ByPath(BrightnessModePath);
-        Bbs757SettingChoice? manual = mode?.Choices.FirstOrDefault(c => c.Stored == Bbs757Value.Of(false));
-        return mode != null && manual != null
-            ? $"set {mode.Label} to {manual.Word} first"
-            : "BlueBird sets it automatically";
-    }
-
-    private static string CouldNotSave(string label, string reason) => $"Couldn't save {label}: {reason}";
-
-    // Sentences said as one: ". " between two, a space only after one that ends with its own full stop.
-    private static string JoinSentences(IReadOnlyList<string> sentences)
-    {
-        var text = new StringBuilder();
-        foreach (string sentence in sentences)
-        {
-            if (text.Length > 0) text.Append(text[text.Length - 1] == '.' ? " " : ". ");
-            text.Append(sentence);
-        }
-        return text.ToString();
-    }
 
     // ------------------------------------------------------------------
     // Rows and files
@@ -721,26 +650,31 @@ public partial class BBS757EfbForm
     }
 
     // One read of BlueBird's files, the settings file and every registration's, parsed: for the rows, for why a row
-    // cannot change and for the checks before a save. Disposed at once; nothing of it is kept or logged.
+    // cannot change and for the checks before a save (Snapshot). Disposed at once, after which Snapshot is not used;
+    // nothing of it is kept or logged.
     private sealed class SettingsFiles : IDisposable
     {
         private readonly JsonDocument? _global;
-        private readonly bool _globalExists;
         private readonly List<JsonDocument> _registrations = new();
 
         private SettingsFiles(string? folder)
         {
             RegistrationNames = Array.Empty<string>();
-            if (folder == null) return;
-            string globalFile = Path.Combine(folder, Bbs757WorkFolder.SettingsFile);
-            _globalExists = File.Exists(globalFile);
-            _global = Bbs757SettingsFile.Read(globalFile);
-            IReadOnlyList<(string Registration, string Path)> files = Bbs757WorkFolder.RegistrationFiles(folder);
-            RegistrationNames = files.Select(f => f.Registration).ToArray();
-            foreach (var (_, file) in files)
+            bool globalExists = false;
+            if (folder != null)
             {
-                if (Bbs757SettingsFile.Read(file) is { } document) _registrations.Add(document);
+                string globalFile = Path.Combine(folder, Bbs757WorkFolder.SettingsFile);
+                globalExists = File.Exists(globalFile);
+                _global = Bbs757SettingsFile.Read(globalFile);
+                IReadOnlyList<(string Registration, string Path)> files = Bbs757WorkFolder.RegistrationFiles(folder);
+                RegistrationNames = files.Select(f => f.Registration).ToArray();
+                foreach (var (_, file) in files)
+                {
+                    if (Bbs757SettingsFile.Read(file) is { } document) _registrations.Add(document);
+                }
             }
+            Snapshot = new Bbs757SettingsSnapshot(_global?.RootElement, globalExists,
+                _registrations.Select(document => document.RootElement).ToArray(), RegistrationNames.Count);
         }
 
         /// <summary>The files of the work folder, none when there is no folder.</summary>
@@ -749,28 +683,8 @@ public partial class BBS757EfbForm
         /// <summary>Every registration BlueBird has a file for, readable or not: a save goes to each.</summary>
         public IReadOnlyList<string> RegistrationNames { get; }
 
-        public JsonElement? GlobalRoot => _global?.RootElement;
-
-        public IReadOnlyList<JsonElement> RegistrationRoots => _registrations.Select(d => d.RootElement).ToArray();
-
-        /// <summary>
-        /// Null when the key at <paramref name="path"/> reads as <paramref name="type"/> in its file (for a registration
-        /// key, in at least one registration's file); else why not, in the file layer's words: the file missing, unreadable,
-        /// or without the key.
-        /// </summary>
-        public string? WhyNot(Bbs757SettingFile file, string path, Bbs757ValueType type)
-        {
-            if (file == Bbs757SettingFile.Global)
-            {
-                if (_global == null) return _globalExists ? Bbs757SettingsFile.UnreadableReason : Bbs757SettingsFile.MissingReason;
-                return Bbs757SettingsFile.ValueAt(_global.RootElement, path, type) == null ? Bbs757SettingsFile.NotInFileReason : null;
-            }
-            if (RegistrationNames.Count == 0) return Bbs757SettingsFile.MissingReason;
-            if (_registrations.Count == 0) return Bbs757SettingsFile.UnreadableReason;
-            return _registrations.Any(d => Bbs757SettingsFile.ValueAt(d.RootElement, path, type) != null)
-                ? null
-                : Bbs757SettingsFile.NotInFileReason;
-        }
+        /// <summary>What the read found, valid until this is disposed.</summary>
+        public Bbs757SettingsSnapshot Snapshot { get; }
 
         public void Dispose()
         {

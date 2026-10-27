@@ -95,10 +95,15 @@ public static class Bbs757SettingsRows
 
     // The tablet's brightness slider is the stored brightness only in manual mode (the mode is stored false then).
     private const string BrightnessPath = "display_brightness";
-    private const string BrightnessModePath = "auto_brightness";
 
-    // A switch's choices are Off, then On.
-    private const int OnChoiceIndex = 1;
+    /// <summary>
+    /// The EFB brightness mode's key: the brightness takes a value only while it reads manual (stored false), and a row
+    /// of the brightness is <see cref="Bbs757RowState.Automatic"/> otherwise. Internal for the tab's reasons.
+    /// </summary>
+    internal const string BrightnessModePath = "auto_brightness";
+
+    /// <summary>A switch's choices are Off, then On: On's index. Internal for the tab and its saves.</summary>
+    internal const int OnChoiceIndex = 1;
 
     /// <summary>
     /// What a row shows for a value of the right type that none of the tablet's words stores:

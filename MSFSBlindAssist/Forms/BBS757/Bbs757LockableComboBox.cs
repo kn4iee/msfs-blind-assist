@@ -70,8 +70,9 @@ internal sealed class Bbs757LockableComboBox : ComboBox
 
     protected override void OnKeyPress(KeyPressEventArgs e)
     {
-        // A character selects the next item it begins; Enter, Escape and Backspace change nothing.
-        if (_locked && !char.IsControl(e.KeyChar))
+        // A character selects the next item it begins; Enter, Escape and Backspace change nothing, and neither does an
+        // Alt+letter (WM_SYSCHAR, a mnemonic no control took).
+        if (_locked && !char.IsControl(e.KeyChar) && (ModifierKeys & Keys.Alt) == 0)
         {
             e.Handled = true;
             Attempt(_keyRepeat);
