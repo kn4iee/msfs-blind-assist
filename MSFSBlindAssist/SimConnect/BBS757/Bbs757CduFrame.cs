@@ -88,17 +88,6 @@ public static class Bbs757CduFrame
     /// row numbered "n:" (Ctrl+n or Alt+n presses that key); then the scratchpad. Trailing spaces
     /// are dropped, leading ones kept, so a right-hand field stays on the right in braille.
     /// </summary>
-    public static IReadOnlyList<string> ToDisplayLines(Bbs757CduScreen screen)
-    {
-        var lines = new List<string> { screen.Lines[0].TrimEnd() };
-        for (int key = 1; key <= 6; key++)
-        {
-            string label = screen.Lines[key * 2 - 1].TrimEnd();
-            string data = screen.Lines[key * 2].TrimEnd();
-            if (label.Trim().Length > 0) lines.Add("   " + label);
-            lines.Add(data.Trim().Length > 0 ? $"{key}: {data}" : $"{key}:");
-        }
-        lines.Add(screen.Lines[ScratchpadRow].TrimEnd());
-        return lines;
-    }
+    public static IReadOnlyList<string> ToDisplayLines(Bbs757CduScreen screen) =>
+        Bbs757CduRows.Build(screen).Select(r => r.Text).ToList();
 }

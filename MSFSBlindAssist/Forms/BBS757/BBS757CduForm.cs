@@ -14,7 +14,7 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The window never disposes the client: MainForm owns it (the EFB window shares it). The window
 /// only subscribes, and unsubscribes in Dispose.
 ///
-/// Speech (CORE-7): a page title is spoken when it changes, and the scratchpad is read back by
+/// Speech (CORE-7): a page title is spoken when the page changes (not when ACT turns into MOD), and the scratchpad is read back by
 /// <see cref="CduScratchpadAnnouncer"/> once every queued key has had its cycle, which is the
 /// state the screen reader cannot know. A key the window cannot deliver is refused aloud. Ctrl+Tab
 /// says only which CDU is shown. While the window is hidden only one thing speaks: keys the pilot
@@ -44,7 +44,9 @@ public partial class BBS757CduForm : Form
     // The latest screen per CDU (index 1 captain, 2 first officer); null until one arrives.
     private readonly Bbs757CduScreen?[] _screens = new Bbs757CduScreen?[3];
     private int _cdu = 1;
+    // The last title row shown (raw, line 0), and the rows the list shows (their identities).
     private string _previousTitle = "";
+    private IReadOnlyList<Bbs757CduRow> _rows = Array.Empty<Bbs757CduRow>();
     private readonly CduScratchpadAnnouncer _scratchpad = new();
 
     // True while the key now being handled is an auto-repeat (held down): one physical press is
@@ -195,10 +197,12 @@ public partial class BBS757CduForm : Form
     private string WaitingTextFor(int cdu) => cdu == 1 ? WaitingText : WaitingFirstOfficerText;
 
     /// <summary>
-    /// Shows the selected CDU's screen. A changed page title is spoken (while the window is shown)
-    /// and moves the list to its first line, as in the HS787 window; otherwise the reading position
-    /// is kept, since CDU lines are positional. <paramref name="announceTitle"/> false shows the
-    /// screen as it is and leaves the title to the next push (the CDU switch).
+    /// Shows the selected CDU's screen. Another page (<see cref="Bbs757CduRows.IsPageChange"/>: a new
+    /// page, or NEXT PAGE) speaks its title (while the window is shown) and moves the cursor to line 1's
+    /// value row. Anything else, ACT turning into MOD after an entry included, speaks nothing and keeps
+    /// the cursor on the pilot's row by its identity (<see cref="Bbs757CduRows.Restore"/>), so a label
+    /// appearing or going above it does not move it (plan 08). <paramref name="announceTitle"/> false
+    /// shows the screen as it is and leaves the title to the next push (the CDU switch).
     /// </summary>
     private void Render(bool announceTitle = true)
     {
@@ -210,29 +214,35 @@ public partial class BBS757CduForm : Form
             Forms.DisplayList.UpdateInPlace(cduDisplay, new[] { WaitingTextFor(_cdu) });
             if (cduDisplay.Items.Count > 0 && cduDisplay.SelectedIndex != 0) cduDisplay.SelectedIndex = 0;
             _previousTitle = "";   // the first page that arrives is announced
+            _rows = Array.Empty<Bbs757CduRow>();
             return;
         }
 
         int savedIndex = cduDisplay.SelectedIndex;
-        Forms.DisplayList.UpdateInPlace(cduDisplay, Bbs757CduFrame.ToDisplayLines(screen));
+        var before = _rows;
+        var rows = Bbs757CduRows.Build(screen);
+        _rows = rows;
+        Forms.DisplayList.UpdateInPlace(cduDisplay, rows.Select(r => r.Text).ToList());
 
-        string title = screen.Title;
+        string titleRow = screen.Lines[0];
+        int target;
         if (!announceTitle)
         {
-            if (savedIndex >= 0 && savedIndex < cduDisplay.Items.Count && cduDisplay.SelectedIndex != savedIndex)
-                cduDisplay.SelectedIndex = savedIndex;
+            target = savedIndex;
         }
-        else if (title.Length > 0 && title != _previousTitle)
+        else if (screen.Title.Length > 0 && Bbs757CduRows.IsPageChange(_previousTitle, titleRow))
         {
-            if (Visible) _announcer.Announce(title);
-            _previousTitle = title;
-            if (cduDisplay.Items.Count > 0)
-                cduDisplay.SelectedIndex = 0;
+            if (Visible) _announcer.Announce(Bbs757CduTitle.Spoken(titleRow));
+            _previousTitle = titleRow;
+            target = Bbs757CduRows.PageStart(rows);
         }
-        else if (savedIndex >= 0 && savedIndex < cduDisplay.Items.Count && cduDisplay.SelectedIndex != savedIndex)
+        else
         {
-            cduDisplay.SelectedIndex = savedIndex;
+            if (screen.Title.Length > 0) _previousTitle = titleRow;   // ACT -> MOD: the same page, now MOD
+            target = Bbs757CduRows.Restore(before, savedIndex, rows);
         }
+        if (target >= 0 && target < cduDisplay.Items.Count && cduDisplay.SelectedIndex != target)
+            cduDisplay.SelectedIndex = target;
     }
 
     /// <summary>Re-seeds the scratchpad read-back silently on what the selected CDU shows now.</summary>

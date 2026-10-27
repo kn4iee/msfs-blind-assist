@@ -1,0 +1,152 @@
+using System.Text;
+using MSFSBlindAssist.SimConnect.BBS757;
+using Xunit;
+
+namespace MSFSBlindAssist.Tests;
+
+/// <summary>Plan 08 Task 1: the CDU window's rows carry an identity, so the cursor stays on the pilot's line.</summary>
+public class Bbs757CduRowsTests
+{
+    private static Bbs757CduScreen Fixture(string name) =>
+        Bbs757CduFrame.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name), Encoding.UTF8));
+
+    /// <summary>The screen with some of its 14 lines replaced (each padded or cut to 24 characters).</summary>
+    private static Bbs757CduScreen With(Bbs757CduScreen screen, params (int Line, string Text)[] changes)
+    {
+        var lines = screen.Lines.ToArray();
+        foreach (var (line, text) in changes)
+            lines[line] = text.PadRight(Bbs757CduFrame.Columns)[..Bbs757CduFrame.Columns];
+        return new Bbs757CduScreen(lines);
+    }
+
+    private static Bbs757CduScreen Legs => Fixture("bbs757-cdu-legs.json");
+
+    [Fact]
+    public void Kinds_and_lines()
+    {
+        var rows = Bbs757CduRows.Build(Legs);
+
+        Assert.Equal(Bbs757CduRowKind.Title, rows[0].Kind);
+        Assert.Equal(Bbs757CduRowKind.Scratchpad, rows[^1].Kind);
+        Assert.Equal("FLT NUMBER UPLINK", rows[^1].Text);
+        for (int line = 1; line <= 6; line++)
+            Assert.Single(rows, r => r.Kind == Bbs757CduRowKind.Value && r.Line == line);
+        // LEGS shows a label (the course and distance) above lines 1-5 and the dashed line above 6.
+        Assert.Equal(6, rows.Count(r => r.Kind == Bbs757CduRowKind.Label));
+        Assert.All(rows.Where(r => r.Kind is Bbs757CduRowKind.Title or Bbs757CduRowKind.Scratchpad), r => Assert.Equal(0, r.Line));
+        // The texts are the window's today.
+        Assert.Equal(Bbs757CduFrame.ToDisplayLines(Legs), rows.Select(r => r.Text).ToList());
+        Assert.StartsWith("1: SEA", rows.Single(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 1).Text);
+    }
+
+    [Fact]
+    public void Restore_follows_the_row_when_a_label_above_goes()
+    {
+        var before = Bbs757CduRows.Build(Legs);
+        int onLine4 = before.ToList().FindIndex(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 4);
+
+        // Line 2's label goes blank: every row below it moves up one.
+        var after = Bbs757CduRows.Build(With(Legs, (3, "")));
+        int restored = Bbs757CduRows.Restore(before, onLine4, after);
+
+        Assert.Equal(onLine4 - 1, restored);
+        Assert.Equal(Bbs757CduRowKind.Value, after[restored].Kind);
+        Assert.Equal(4, after[restored].Line);
+    }
+
+    private static Bbs757CduScreen NavRadio => Fixture("bbs757-cdu-navradio.json");
+
+    [Fact]
+    public void Nav_radio_lists_only_the_labels_it_shows()
+    {
+        // Captured live 2026-10-27 (first officer's CDU): labels on lines 1, 2 and 6 only.
+        var rows = Bbs757CduRows.Build(NavRadio);
+        Assert.Equal("        NAV RADIO", rows[0].Text);
+        Assert.Equal(new[] { 1, 2, 6 }, rows.Where(r => r.Kind == Bbs757CduRowKind.Label).Select(r => r.Line));
+        Assert.Equal(6, rows.Count(r => r.Kind == Bbs757CduRowKind.Value));
+        Assert.Equal("NAV DATA OUT OF DATE", rows[^1].Text);
+        Assert.Equal(Bbs757CduFrame.ToDisplayLines(NavRadio), rows.Select(r => r.Text).ToList());
+    }
+
+    [Fact]
+    public void Restore_follows_the_row_when_a_label_above_appears()
+    {
+        // On NAV RADIO's PRESELECT line (6), a label appearing on line 3 pushes every row below it down one.
+        var before = Bbs757CduRows.Build(NavRadio);
+        int onLine6 = before.ToList().FindIndex(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 6);
+
+        var after = Bbs757CduRows.Build(With(NavRadio, (5, "ADF L              ADF R")));
+        int restored = Bbs757CduRows.Restore(before, onLine6, after);
+
+        Assert.Equal(onLine6 + 1, restored);
+        Assert.Equal(Bbs757CduRowKind.Value, after[restored].Kind);
+        Assert.Equal(6, after[restored].Line);
+    }
+
+    [Fact]
+    public void Restore_on_a_label_that_goes_lands_on_its_value()
+    {
+        var before = Bbs757CduRows.Build(Legs);
+        int onLabel2 = before.ToList().FindIndex(r => r.Kind == Bbs757CduRowKind.Label && r.Line == 2);
+
+        var after = Bbs757CduRows.Build(With(Legs, (3, "")));
+        int restored = Bbs757CduRows.Restore(before, onLabel2, after);
+
+        Assert.Equal(Bbs757CduRowKind.Value, after[restored].Kind);
+        Assert.Equal(2, after[restored].Line);
+    }
+
+    [Fact]
+    public void Restore_keeps_the_title_and_the_scratchpad()
+    {
+        var before = Bbs757CduRows.Build(Legs);
+        var after = Bbs757CduRows.Build(With(Legs, (3, ""), (5, "")));
+
+        Assert.Equal(0, Bbs757CduRows.Restore(before, 0, after));
+        Assert.Equal(after.Count - 1, Bbs757CduRows.Restore(before, before.Count - 1, after));
+    }
+
+    [Fact]
+    public void Restore_with_nothing_to_go_on_keeps_the_index_clamped()
+    {
+        var after = Bbs757CduRows.Build(Legs);
+        Assert.Equal(3, Bbs757CduRows.Restore(Array.Empty<Bbs757CduRow>(), 3, after));
+        Assert.Equal(after.Count - 1, Bbs757CduRows.Restore(Array.Empty<Bbs757CduRow>(), 99, after));
+        Assert.Equal(0, Bbs757CduRows.Restore(after, -1, after));
+        Assert.Equal(-1, Bbs757CduRows.Restore(after, 2, Array.Empty<Bbs757CduRow>()));
+    }
+
+    [Fact]
+    public void Act_to_mod_is_not_a_page_change()
+    {
+        var mod = With(Legs, (0, "  MOD RTE 1 LEGS     1/2"));
+        Assert.False(Bbs757CduRows.IsPageChange(Legs.Lines[0], mod.Lines[0]));
+
+        // An entry that turns ACT into MOD (a speed on line 2) keeps the cursor on the line just edited.
+        var before = Bbs757CduRows.Build(Legs);
+        int onLine2 = before.ToList().FindIndex(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 2);
+        var after = Bbs757CduRows.Build(With(mod, (4, "NORMY         250/------")));
+        Assert.Equal(onLine2, Bbs757CduRows.Restore(before, onLine2, after));
+    }
+
+    [Fact]
+    public void Next_page_is_a_page_change()
+    {
+        Assert.True(Bbs757CduRows.IsPageChange("  ACT RTE 1 LEGS     1/2", "  ACT RTE 1 LEGS     2/2"));
+        Assert.True(Bbs757CduRows.IsPageChange("  ACT RTE 1 LEGS     1/2", "       NAV RADIO"));
+        Assert.True(Bbs757CduRows.IsPageChange("", "  ACT RTE 1 LEGS     1/2"));
+        Assert.False(Bbs757CduRows.IsPageChange("  ACT RTE 1 LEGS     1/2", "  ACT RTE 1 LEGS     1/2"));
+    }
+
+    [Fact]
+    public void PageStart_is_line_one_value()
+    {
+        var rows = Bbs757CduRows.Build(Legs);
+        int start = Bbs757CduRows.PageStart(rows);
+        Assert.Equal(Bbs757CduRowKind.Value, rows[start].Kind);
+        Assert.Equal(1, rows[start].Line);
+        // LEGS has a label above line 1, so its value is the third row.
+        Assert.Equal(2, start);
+        Assert.Equal(0, Bbs757CduRows.PageStart(Array.Empty<Bbs757CduRow>()));
+    }
+}
