@@ -29,7 +29,8 @@ public readonly record struct Bbs757Value(Bbs757ValueType Type, bool Bool, long 
     /// <summary>
     /// The value as the JSON text BlueBird's files hold: <c>true</c>, <c>12</c>, <c>1.0</c>, <c>"abc"</c>. Always invariant:
     /// a float has a decimal point (never a comma), an integer the plain minus sign (sv-SE's own is U+2212). Text is
-    /// escaped as little as JSON allows, so a code with an accent stays readable in the file.
+    /// escaped as little as JSON allows, so a code with an accent stays readable in the file. Throws
+    /// <see cref="ArgumentException"/> for a float that is NaN or infinity: JSON has no such number.
     /// </summary>
     public string ToJson() => Type switch
     {
@@ -41,9 +42,13 @@ public readonly record struct Bbs757Value(Bbs757ValueType Type, bool Bool, long 
     };
 
     // "R" is the shortest text that reads back as the same double. A whole number gets ".0" so the file keeps
-    // the float it held; an exponent already marks a decimal number.
+    // the float it held; an exponent already marks a decimal number. NaN and infinity are refused: "NaN.0" or
+    // "Infinity.0" is not JSON, and the check sits here, where the text is made, so it holds however the value was built.
     private static string FloatToJson(double v)
     {
+        if (!double.IsFinite(v))
+            throw new ArgumentException("A float that is not finite (NaN or infinity) cannot be written as JSON.", nameof(v));
+
         string text = v.ToString("R", CultureInfo.InvariantCulture);
         return text.Contains('.') || text.Contains('E') || text.Contains('e') ? text : text + ".0";
     }
@@ -155,9 +160,12 @@ public sealed record Bbs757SettingWrite(Bbs757Setting Setting, string Path, Bbs7
 
 /// <summary>
 /// The catalog of BlueBird's tablet settings: for each one its key, file, tablet label, the tablet's words and the
-/// value BlueBird stores for each. Every value was measured (docs/b757/evidence/efb-settings.md, sections 2 to 8),
-/// except Hoppie ACARS's On, taken by type (switching it on could log on to Hoppie); the app writes only values
-/// BlueBird itself writes. The keys the tablet does not show (<c>units</c> on its own,
+/// value BlueBird stores for each. The words and stored values were measured on the tablet
+/// (docs/b757/evidence/efb-settings.md, sections 2 to 7), with three exceptions. Hoppie ACARS's On is taken by type: it
+/// was never tapped, as switching it on could log on to Hoppie. The AIRAC data "not set" values (<c>simbrief_id</c> -1,
+/// the two codes "") come from the spec and earlier notes, not from this measurement: section 8 was not tapped. The TOD
+/// pause distance range of 1 to 999 is a ruling: the tablet's keypad limits were not measured. The app writes only
+/// values BlueBird itself writes. The keys the tablet does not show (<c>units</c> on its own,
 /// <c>options.model_visibility.*</c>, the charts and map state) are not here, so nothing can change them.
 /// Pure: no files, no simulator.
 /// </summary>
@@ -204,9 +212,16 @@ public static class Bbs757EfbSettings
     /// a state the tablet can produce. Anything else writes the setting's own value, then, when the setting has an
     /// <see cref="Bbs757Setting.Also"/> key and the choice storing the value has an
     /// <see cref="Bbs757SettingChoice.AlsoStored"/>, that key too (UNITS writes <c>units</c>), carrying the same setting.
+    /// The app writes only values BlueBird itself stores, so a switch or a choice takes only the value one of its choices
+    /// stores: anything else throws <see cref="ArgumentException"/>, before anything is returned. A number or text box's
+    /// value comes from <see cref="TryParseEntry"/> and is written as given.
     /// </summary>
     public static IReadOnlyList<Bbs757SettingWrite> WritesFor(Bbs757Setting setting, Bbs757Value value)
     {
+        var choice = setting.Choices.FirstOrDefault(c => c.Stored == value);
+        if (choice is null && setting.Kind is Bbs757SettingKind.OnOff or Bbs757SettingKind.Choice)
+            throw new ArgumentException($"BlueBird has no choice of '{setting.Label}' that stores {value}.", nameof(value));
+
         var writes = new List<Bbs757SettingWrite>();
 
         if (setting.ExclusiveGroup is { } groupName && value.Type == Bbs757ValueType.Bool && value.Bool)
@@ -220,8 +235,7 @@ public static class Bbs757EfbSettings
 
         writes.Add(new Bbs757SettingWrite(setting, setting.Path, setting.File, value));
 
-        if (setting.Also is { } also
-            && setting.Choices.FirstOrDefault(c => c.Stored == value)?.AlsoStored is { } alsoValue)
+        if (setting.Also is { } also && choice?.AlsoStored is { } alsoValue)
         {
             writes.Add(new Bbs757SettingWrite(setting, also.Path, also.File, alsoValue));
         }
@@ -437,7 +451,8 @@ public static class Bbs757EfbSettings
         return new[]
         {
             TwoWords(section, "automatic_cockpit_lighting", "Adaptive cockpit lighting", "Automatic", "Manual"),
-            // Off is -1 (an empty box); switched on, the tablet stores 40 and then what its keypad types.
+            // Off is -1 (an empty box); switched on, the tablet stores 40 and then what its keypad types. The range 1 to
+            // 999 is a ruling: the keypad's limits were not measured.
             Box(section, "tod_pause_distance", "TOD pause distance (NM)", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
                 emptyStored: Bbs757Value.Of(-1L), range: new Bbs757NumberRange(Bbs757NumberEntry.Whole, 1, 999)),
             TwoWords(section, "tiller_realistic", "Nosewheel steering", "Realistic", "Rudder"),
@@ -463,7 +478,8 @@ public static class Bbs757EfbSettings
         };
     }
 
-    // AIRAC data (efb_settings.json), evidence section 8. The pilot's own identifiers: never logged.
+    // AIRAC data (efb_settings.json), evidence section 8, which lists these rows but was not tapped: the "not set"
+    // values (-1 and "") come from the spec and earlier notes. The pilot's own identifiers: never logged.
     private static Bbs757Setting[] AiracDataSettings()
     {
         const Bbs757SettingSection section = Bbs757SettingSection.AiracData;

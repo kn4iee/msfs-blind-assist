@@ -270,6 +270,33 @@ public class Bbs757EfbSettingsTests
     }
 
     [Fact]
+    public void The_two_long_choice_lists_are_pinned_by_hand()
+    {
+        // The table above builds these two lists with the same loops production does. Here they are written out, so a
+        // slip in those loops (a word off by one, a missing end) cannot also move what the test expects.
+        static (string Word, Bbs757Value Stored) At(IReadOnlyList<Bbs757SettingChoice> choices, int index) =>
+            (choices[index].Word, choices[index].Stored);
+
+        var fadeOut = Setting("notification_popback_seconds").Choices;
+        Assert.Equal(29, fadeOut.Count);   // 3 sec to 30 sec is 28 words, then Never
+        Assert.Equal(("3 sec", Bbs757Value.Of(3L)), At(fadeOut, 0));
+        Assert.Equal(("4 sec", Bbs757Value.Of(4L)), At(fadeOut, 1));
+        Assert.Equal(("15 sec", Bbs757Value.Of(15L)), At(fadeOut, 12));
+        Assert.Equal(("29 sec", Bbs757Value.Of(29L)), At(fadeOut, 26));
+        Assert.Equal(("30 sec", Bbs757Value.Of(30L)), At(fadeOut, 27));
+        Assert.Equal(("Never", Bbs757Value.Of(0L)), At(fadeOut, 28));
+        Assert.Equal(Bbs757Value.Of(30L), Stored("notification_popback_seconds", "30 sec"));
+
+        var background = Setting("background_num").Choices;
+        Assert.Equal(10, background.Count);   // Default, then 1 to 9
+        Assert.Equal(("Default", Bbs757Value.Of(0L)), At(background, 0));
+        Assert.Equal(("1", Bbs757Value.Of(1L)), At(background, 1));
+        Assert.Equal(("5", Bbs757Value.Of(5L)), At(background, 5));
+        Assert.Equal(("9", Bbs757Value.Of(9L)), At(background, 9));
+        Assert.Equal(Bbs757Value.Of(9L), Stored("background_num", "9"));
+    }
+
+    [Fact]
     public void The_pilot_s_identifiers_are_never_logged()
     {
         string[] identifiers = { "simbrief_id", "hoppie_logon_code", "sayintentions_acars_key" };
@@ -369,16 +396,48 @@ public class Bbs757EfbSettingsTests
     }
 
     [Fact]
-    public void A_choice_with_no_linked_value_writes_only_its_own_key()
+    public void A_setting_with_no_linked_key_writes_only_its_own_key()
     {
         var one = Bbs757EfbSettings.WritesFor(Setting("loading_speed"), Bbs757Value.Of(2L));
         Assert.Equal(new[] { ("loading_speed", Bbs757SettingFile.Global, Bbs757Value.Of(2L)) },
             one.Select(w => (w.Path, w.File, w.Value)));
 
-        // A value that is no choice of Units has no linked value to carry.
-        var stone = Bbs757EfbSettings.WritesFor(Setting("options.general.weight_unit"), Bbs757Value.Of("stone"));
-        Assert.Equal(new[] { ("options.general.weight_unit", Bbs757SettingFile.Registration, Bbs757Value.Of("stone")) },
-            stone.Select(w => (w.Path, w.File, w.Value)));
+        // A number or text box's value comes from TryParseEntry and is written as given.
+        var distance = Bbs757EfbSettings.WritesFor(Setting("tod_pause_distance"), Bbs757Value.Of(120L));
+        Assert.Equal(new[] { ("tod_pause_distance", Bbs757SettingFile.Global, Bbs757Value.Of(120L)) },
+            distance.Select(w => (w.Path, w.File, w.Value)));
+        var code = Bbs757EfbSettings.WritesFor(Setting("hoppie_logon_code"), Bbs757Value.Of("AB1"));
+        Assert.Equal(new[] { ("hoppie_logon_code", Bbs757SettingFile.Global, Bbs757Value.Of("AB1")) },
+            code.Select(w => (w.Path, w.File, w.Value)));
+    }
+
+    [Fact]
+    public void A_switch_or_choice_takes_only_a_value_one_of_its_choices_stores()
+    {
+        var switchSetting = Setting("baro_sync");
+        var exclusiveCallout = Setting(Egpws + "decide");
+        var choice = Setting("loading_speed");
+        var units = Setting("options.general.weight_unit");
+
+        // The app writes only values BlueBird itself stores: a switch takes false or true and nothing else.
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(switchSetting, Bbs757Value.Of(1L)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(switchSetting, Bbs757Value.Of("true")));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(exclusiveCallout, Bbs757Value.OfFloat(1.0)));
+        // A choice takes only what one of its words stores: BlueBird has no fifth rate, and the float 2.0 is not 2.
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(choice, Bbs757Value.Of(4L)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(choice, Bbs757Value.OfFloat(2.0)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(choice, Bbs757Value.Of(true)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(units, Bbs757Value.Of("stone")));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(units, Bbs757Value.Of("LBS")));
+        Assert.Equal("value",
+            Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(units, Bbs757Value.Of("stone"))).ParamName);
+
+        // Nothing the catalog itself stores is refused: every choice's value is writable, as that setting's own write.
+        foreach (var s in Bbs757EfbSettings.All.Where(s => s.Kind is Bbs757SettingKind.OnOff or Bbs757SettingKind.Choice))
+        {
+            foreach (var c in s.Choices)
+                Assert.Contains(Bbs757EfbSettings.WritesFor(s, c.Stored), w => w.Path == s.Path && w.Value == c.Stored);
+        }
     }
 
     [Fact]
@@ -631,6 +690,14 @@ public class Bbs757EfbSettingsTests
     }
 
     [Fact]
+    public void A_float_that_is_not_finite_is_never_written_as_json()
+    {
+        // JSON has no NaN or infinity: "NaN.0" in BlueBird's file would not be JSON at all.
+        foreach (double notFinite in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+            Assert.Throws<ArgumentException>(() => Bbs757Value.OfFloat(notFinite).ToJson());
+    }
+
+    [Fact]
     public void Text_is_json_escaped_and_readable()
     {
         Assert.Equal("\"A\\\"B\\\\C é\"", Bbs757Value.Of("A\"B\\C é").ToJson());
@@ -661,6 +728,7 @@ public class Bbs757EfbSettingsTests
         Assert.Null(Bbs757Value.From(Json("1"), Bbs757ValueType.Text));
         Assert.Null(Bbs757Value.From(Json("2.5"), Bbs757ValueType.Integer));
         Assert.Null(Bbs757Value.From(Json("9223372036854775808"), Bbs757ValueType.Integer));   // too big for a long
+        Assert.Null(Bbs757Value.From(Json("1e999"), Bbs757ValueType.Float));   // too big for a double: never an infinity
         foreach (var type in Enum.GetValues<Bbs757ValueType>())
         {
             Assert.Null(Bbs757Value.From(Json("null"), type));
