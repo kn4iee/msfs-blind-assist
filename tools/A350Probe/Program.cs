@@ -92,6 +92,9 @@ internal sealed class ProbeForm : Form
             {
                 // A copy of what was printed, in %TEMP% so a run never leaves files in the worktree.
                 File.WriteAllText(Path.Combine(Path.GetTempPath(), $"a350probe_{_mode}.tsv"), _out.ToString());
+                // A key still held (FIRE TEST's 3 s, a spring switch) is let go before the connection goes, as MSFSBA's
+                // definition does when it is disposed; without this the last row of a run stays pressed.
+                try { _def?.Dispose(); await Task.Delay(500); } catch { }
                 try { _m?.Disconnect(); } catch { }
                 Close();
             }
@@ -106,12 +109,15 @@ internal sealed class ProbeForm : Form
 
     private void Line(string s) { _out.AppendLine(s); Console.WriteLine(s); }
 
+    private ProbeDefinition? _def;
+
     private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("0.###") : "null";
 
     private async Task Run()
     {
         var cap = new Cap(Handle);
         var def = new ProbeDefinition(_watch);
+        _def = def;
         var vars = def.GetVariables();
         var panels = def.GetPanelControls();
         var displays = def.GetPanelDisplayVariables();
@@ -277,6 +283,10 @@ internal sealed class ProbeForm : Form
             "A350_ELEC_IDG_1A", "A350_ELEC_IDG_1B", "A350_ELEC_IDG_2A", "A350_ELEC_IDG_2B",
             "A350_FIRE_ENG_1", "A350_FIRE_ENG_2", "A350_FIRE_APU",
             "A350_HYD_SUPPLY_ENG_1_GREEN", "A350_HYD_SUPPLY_ENG_1_YELLOW", "A350_HYD_SUPPLY_ENG_2_GREEN", "A350_HYD_SUPPLY_ENG_2_YELLOW",
+            // Driven as whole procedures instead: a master's restore cannot restart its engine without IGN START, the
+            // thrust levers would reach TOGA on the stand, and the gravity gear takes Down only with its guards open.
+            "A350_ENG_MASTER_1", "A350_ENG_MASTER_2", "A350_ENGINE_THROTTLE_1", "A350_ENGINE_THROTTLE_2", "A350_THRUST_LEVERS_ALL",
+            "A350_GRAVITY_GEAR_HANDLE",
         };
 
         if (_mode == "live")

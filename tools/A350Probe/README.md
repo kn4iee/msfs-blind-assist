@@ -28,7 +28,10 @@ that drive the aircraft, or it speaks every change as well; the reading modes (`
 
 The listed L:vars are registered for the run only (as `W:<name>`) and read as data, never through the calculator,
 for reading back a downstream effect the row's own variable does not show. A `live` pass changes the aircraft while
-it runs; anything a restore cannot undo (a fire agent, a jettison) is driven by hand, never through `live`.
+it runs; anything a restore cannot undo (a fire agent, a jettison, an engine master, the thrust levers) is driven by hand,
+never through `live`. A `live` pass presses each button once and does not press it back: a latching button (an EFIS filter,
+A/BRK, OIS VIEW OFFSIDE, TCAS ABV) is left toggled, and one left on can block another row (OIS VIEW OFFSIDE blocks OIS ON
+CENTER). Press them back with `keep` after a sweep.
 
 Environment: `A350_SECTIONS="Overhead,Glareshield,Instrument"` picks the sections offered (default `Overhead`), and
 `A350_MUTE="key,key"` unticks those Ctrl+M rows for a `listen`, in memory only (the settings file is never written).
