@@ -83,14 +83,14 @@ public static class Bbs757EfbOcr
         }).ToList();
     }
 
-    /// <summary>Pass A's lines, plus every pass B line that overlaps none of them; top to bottom
-    /// in 12-pixel bands, then left to right.</summary>
+    /// <summary>Pass A's lines, plus every pass B line that overlaps none of them, in reading order
+    /// (<see cref="Bbs757EfbReadingOrder"/>).</summary>
     public static IReadOnlyList<Bbs757EfbTextLine> Merge(IReadOnlyList<Bbs757EfbTextLine> a, IReadOnlyList<Bbs757EfbTextLine> b)
     {
         var all = new List<Bbs757EfbTextLine>(a);
         foreach (var l in b)
             if (!a.Any(m => m.Box.IntersectsWith(l.Box))) all.Add(l);
-        return all.OrderBy(l => l.Box.Y / 12).ThenBy(l => l.Box.X).ToList();
+        return Bbs757EfbReadingOrder.Lines(all);
     }
 
     private static async Task<List<Bbs757EfbTextLine>> PassAsync(OcrEngine engine, Bitmap src, bool gamma, char pass, double scale, Filter filter, CancellationToken ct)

@@ -58,6 +58,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private const int MirrorRefreshMs = 10_000;
     private const int StalePageMs = 20_000;
     private const int AfterTapMs = 700;
+    private const int SettleGapMs = 250;
+    private const int SettleMaxMs = 2500;
+    private const int ChangeMaxMs = 3000;
+    private const int NavigateMaxMs = 4000;
 
     private readonly CoherentBbs757EfbClient _client;
     private readonly Bbs757EfbPopout _popout;
@@ -74,6 +78,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private bool _mirrorOn;
     private long _mirrorAtMs;
     private byte[]? _lastSignature;
+    private Bitmap? _lastReadFrame;
+    private string? _lastFingerprint;
     private long _lastReadMs;
     private bool _forceRead = true;
     private Bbs757EfbScreenModel? _model;
@@ -93,6 +99,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     public bool IsBridgeConnected => _client.IsReady && _popoutReady;
+
+    /// <summary>
+    /// True (as shipped since the team review of 2026-10-27): the window reads the tablet and moves
+    /// between its pages, and refuses everything else. A misread must never become a press; the classic
+    /// window does the pressing, checked against a variable or BlueBird's settings file.
+    /// </summary>
+    public bool ReadOnly { get; init; } = true;
 
     /// <summary>Starts the bridge's loop (once). It reads only while <see cref="SetActive"/> says the
     /// window is shown.</summary>
@@ -186,24 +199,113 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         await _wake.WaitAsync(ms, ct);
     }
 
-    /// <summary>Captures the tablet; reads it when the picture changed (status bar excluded: its clock),
-    /// a read was asked for, or the last read is old.</summary>
+    /// <summary>
+    /// Captures the tablet and reads it when the picture changed (status bar excluded: its clock), a read
+    /// was asked for, or the last read is old AND the pixels moved since. What the pilot hears must not
+    /// change unless the tablet did (plan 11 feedback: "the presentation changed upon refreshes"):
+    /// <list type="bullet">
+    /// <item>a picture that has not really changed (rendering noise only, <see cref="Bbs757EfbFrameCompare"/>) is
+    /// never read again on its own: OCR noise was all a re-read could add;</item>
+    /// <item>a read waits for the picture to hold still (a page still animating in read as garbage);</item>
+    /// <item>a picture that never holds still is read from two captures, and the page is taken only when
+    /// the two reads agree; else a third read decides, and when it agrees with neither the page is shown
+    /// with a warning that it may be wrong;</item>
+    /// <item>a read that says the same as the page already shown is not pushed again.</item>
+    /// </list>
+    /// </summary>
     private async Task<bool> ReadIfChangedAsync(CancellationToken ct, bool force = false)
     {
-        using var bmp = _popout.CaptureTablet();
+        var bmp = _popout.CaptureTablet();
         if (bmp == null) { _popoutReady = false; Status("The tablet reader's window closed. Opening it again."); return false; }
-        var sig = Signature(bmp);
-        bool changed = _lastSignature == null || Differs(sig, _lastSignature);
-        long now = Environment.TickCount64;
-        if (!force && !_forceRead && !changed && now - _lastReadMs < StalePageMs) return false;
-        _forceRead = false;
-        var read = await Bbs757EfbPageReader.ReadAsync(bmp, ct);
-        _lastSignature = sig;
-        _lastReadMs = Environment.TickCount64;
-        _model = read.Model;
-        Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, {read.Rereads} re-reads");
-        Push();
-        return true;
+        try
+        {
+            var sig = Signature(bmp);
+            bool changed = _lastSignature == null || Differs(sig, _lastSignature);
+            long now = Environment.TickCount64;
+            bool stale = now - _lastReadMs >= StalePageMs;
+            if (!force && !_forceRead && !changed && !stale) return false;
+            // Nothing really moved since the last read (rendering noise only): reading again could only add OCR noise.
+            if (!force && !_forceRead && _lastReadFrame != null && Bbs757EfbFrameCompare.Same(bmp, _lastReadFrame))
+            {
+                _lastSignature = sig;
+                _lastReadMs = now;
+                return false;
+            }
+            _forceRead = false;
+
+            // Wait for two captures in a row that show the same thing (Bbs757EfbFrameCompare).
+            bool still = false;
+            long settleUntil = Environment.TickCount64 + SettleMaxMs;
+            while (Environment.TickCount64 < settleUntil)
+            {
+                await Task.Delay(SettleGapMs, ct);
+                var next = _popout.CaptureTablet();
+                if (next == null) break;
+                bool same = Bbs757EfbFrameCompare.Same(bmp, next);
+                bmp.Dispose();
+                bmp = next;
+                if (same) { still = true; break; }
+            }
+
+            var read = await Bbs757EfbPageReader.ReadAsync(bmp, ct);
+            int reads = 1;
+            bool unclear = false;
+            if (!still)
+            {
+                // Never held still (something on the page animates): agree twice before the page is taken.
+                string fp1 = Fingerprint(read.Model);
+                var read2 = await ReadFreshCaptureAsync(ct);
+                if (read2 != null)
+                {
+                    reads++;
+                    string fp2 = Fingerprint(read2.Model);
+                    if (fp2 != fp1)
+                    {
+                        var read3 = await ReadFreshCaptureAsync(ct);
+                        if (read3 != null)
+                        {
+                            reads++;
+                            string fp3 = Fingerprint(read3.Model);
+                            if (fp3 == fp2) read = read2;
+                            else if (fp3 != fp1) { read = read3; unclear = true; }
+                        }
+                        else unclear = true;
+                    }
+                }
+            }
+
+            _lastSignature = Signature(bmp);
+            _lastReadFrame?.Dispose();
+            _lastReadFrame = new Bitmap(bmp);
+            _lastReadMs = Environment.TickCount64;
+            string fp = Fingerprint(read.Model);
+            Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, {read.Rereads} re-reads, "
+                + $"still={still}, reads={reads}, unclear={unclear}, same-as-shown={fp == _lastFingerprint}");
+            if (unclear)
+                Alert("The tablet read differently each time, so this page may not be right. Use Read the tablet again.");
+            if (fp == _lastFingerprint && !unclear) return true;
+            _lastFingerprint = fp;
+            _model = read.Model;
+            Push();
+            return true;
+        }
+        finally { bmp.Dispose(); }
+    }
+
+    private async Task<Bbs757EfbPageRead?> ReadFreshCaptureAsync(CancellationToken ct)
+    {
+        using var b = _popout.CaptureTablet();
+        return b == null ? null : await Bbs757EfbPageReader.ReadAsync(b, ct);
+    }
+
+    /// <summary>What a page says, as one string: two reads that say the same thing give the same one.</summary>
+    internal static string Fingerprint(Bbs757EfbScreenModel m)
+    {
+        var sb = new System.Text.StringBuilder(m.PageName).Append('\n');
+        foreach (var i in m.Menu.Concat(m.Items))
+            sb.Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
+              .Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected).Append('\n');
+        return sb.ToString();
     }
 
     /// <summary>A 32 x 24 grey thumbnail of the tablet below its status bar.</summary>
@@ -273,13 +375,23 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 return;
             case Bbs757EfbElements.ActionKind.ScrollDown:
             case Bbs757EfbElements.ActionKind.ScrollUp:
-                await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y,
-                    act.Kind == Bbs757EfbElements.ActionKind.ScrollDown ? Bbs757EfbScreen.WheelStep : -Bbs757EfbScreen.WheelStep, ct);
-                await Task.Delay(400, ct);
+                using (var before = _popout.CaptureTablet())
+                {
+                    await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y,
+                        act.Kind == Bbs757EfbElements.ActionKind.ScrollDown ? Bbs757EfbScreen.WheelStep : -Bbs757EfbScreen.WheelStep, ct);
+                    await WaitForChangeAsync(before, ct);
+                }
                 await ReadIfChangedAsync(ct, force: true);
                 return;
         }
         var item = act.Item;
+        // Read-only: only page navigation is tapped (Home, the tablet's menus); a wrong one only changes
+        // the page shown. Everything else is the classic window's.
+        if (ReadOnly && !(item != null && (item.Kind == Bbs757EfbKind.Menu || item.Key == "btn:HOME")))
+        {
+            Alert(Bbs757EfbElements.ReadOnlyRefusal);
+            return;
+        }
         if (act.Kind == Bbs757EfbElements.ActionKind.Tap && item != null)
         {
             string words = item.Key.StartsWith("btn:", StringComparison.Ordinal) ? item.Key.Substring(4).Split('|').Last().Split('@')[0] : "";
@@ -314,14 +426,70 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             }
         }
         if (item == null) return;
-        await TapAsync(item.Hit, ct);
-        await Task.Delay(AfterTapMs, ct);
+        using (var before = _popout.CaptureTablet())
+        {
+            await TapAsync(item.Hit, ct);
+            await WaitForChangeAsync(before, ct);
+        }
         await ReadIfChangedAsync(ct, force: true);
+
+        // Page navigation is checked by the page it lands on. Measured live 2026-10-27: the first change
+        // after an app tap is often the icon's press highlight, and the page itself follows 0.4-2.4 s later,
+        // so a read on the first change can still be the old page. Read again until the page name is the
+        // one tapped, and say so when it never is.
+        string? expect = item.Key == "btn:HOME" ? "Home" : item.Kind == Bbs757EfbKind.Menu ? item.Text : null;
+        if (expect == null) return;
+        long until = Environment.TickCount64 + NavigateMaxMs;
+        while (!PageIs(_model, expect) && Environment.TickCount64 < until)
+        {
+            await Task.Delay(500, ct);
+            await ReadIfChangedAsync(ct, force: true);
+        }
+        if (!PageIs(_model, expect))
+        {
+            Log.Debug("BBS757", $"EFB reader: tapped '{expect}', page reads '{_model?.PageName}'");
+            Alert($"The tablet did not show {expect}. Try again, or use Read the tablet again.");
+        }
+    }
+
+    /// <summary>Whether the page read is the one a navigation tap asked for (app or section name).</summary>
+    internal static bool PageIs(Bbs757EfbScreenModel? m, string expect)
+    {
+        if (m == null) return false;
+        string want = expect.Replace(" (current page)", "").Trim();
+        return m.PageName.Equals(want, StringComparison.OrdinalIgnoreCase)
+            || m.PageName.StartsWith(want + ",", StringComparison.OrdinalIgnoreCase)
+            || m.PageName.EndsWith(", " + want, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// After a tap or a scroll, waits for the picture to change from <paramref name="before"/> (at most
+    /// <see cref="ChangeMaxMs"/>); the read that follows then settles as usual. Measured live 2026-10-27:
+    /// the tablet's new page reaches the ND pop-out late enough that a read 700 ms after the tap caught
+    /// the OLD page on 4 of 5 app taps — and an unchanged old page looks perfectly still, so the settle
+    /// alone cannot see it. That was the "reads needed repeating" of the first in-sim test.
+    /// </summary>
+    private async Task WaitForChangeAsync(Bitmap? before, CancellationToken ct)
+    {
+        if (before == null) { await Task.Delay(AfterTapMs, ct); return; }
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < ChangeMaxMs)
+        {
+            await Task.Delay(100, ct);
+            using var now = _popout.CaptureTablet();
+            if (now != null && !Bbs757EfbFrameCompare.Same(before, now))
+            {
+                Log.Debug("BBS757", $"EFB reader: picture changed {sw.ElapsedMilliseconds} ms after the tap");
+                return;
+            }
+        }
+        Log.Debug("BBS757", $"EFB reader: no change in {ChangeMaxMs} ms after the tap");
     }
 
     private async Task SetAsync(int aidx, string value, CancellationToken ct)
     {
         if (_built == null || !_built.Actions.TryGetValue(aidx, out var act) || act.Item is not { } item) return;
+        if (ReadOnly) { Alert(Bbs757EfbElements.ReadOnlyRefusal); Push(); return; }
         if (act.Kind == Bbs757EfbElements.ActionKind.Refuse) { Alert(act.Refusal ?? "That cannot be changed from here."); Push(); return; }
         if (Bbs757EfbScreen.UpdateGuard.Contains(item.Hit))
         {
@@ -492,7 +660,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private void Push()
     {
         string? alert = _alert != null && Environment.TickCount64 < _alertUntilMs ? _alert : null;
-        _built = Bbs757EfbElements.Build(_model, alert);
+        _built = Bbs757EfbElements.Build(_model, alert, ReadOnly);
         Raise(StateTypeElements, _built.Data);
     }
 

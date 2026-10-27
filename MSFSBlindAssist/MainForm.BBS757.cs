@@ -76,16 +76,20 @@ public partial class MainForm
     private Forms.FBWA380.FbwEfbForm? bbs757EfbReaderForm;
     private Bbs757EfbBridge? bbs757EfbBridge;
 
+    /// <summary>Shift+T on the 757: the classic EFB window, whose every press is checked against a
+    /// variable or BlueBird's settings file. The tablet screen reader is a button in it.</summary>
+    private void ShowBBS757EfbDialog() => ShowBBS757ClassicEfbDialog();
+
     /// <summary>
-    /// Shift+T on the 757: BlueBird's tablet in the shared accessible EFB window (R73; plan 11), read from
-    /// its pixels and operated by the EFB client's clicks (<see cref="Bbs757EfbBridge"/>). The first time it
-    /// shows, the tablet reader's pop-out is made as the A300 and A330 CDU windows make theirs: the camera
-    /// goes to the captain's instrument view, the simulator comes to the front for a moment, and the camera
-    /// is put back. While the window is shown the tablet is mirrored onto the captain's ND and read; hidden,
-    /// nothing is read and the ND is the ND. The classic window (<see cref="ShowBBS757ClassicEfbDialog"/>) is
-    /// a button in it: SimBrief load, Navigraph sign-in, nav data update.
+    /// The 757 tablet screen reader (plan 11; read-only since the team review of 2026-10-27): BlueBird's
+    /// tablet in the shared accessible EFB window, read from its pixels (<see cref="Bbs757EfbBridge"/>).
+    /// It only reads, and moves between the tablet's pages; anything that changes the aircraft is done
+    /// from the classic window. The first time it shows, the tablet reader's pop-out is made as the A300
+    /// and A330 CDU windows make theirs: the camera goes to the captain's instrument view, the simulator
+    /// comes to the front for a moment, and the camera is put back. While the window is shown the tablet
+    /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND.
     /// </summary>
-    private void ShowBBS757EfbDialog()
+    private void ShowBBS757EfbReader()
     {
         if (currentAircraft is not BBS757Definition) return;
         hotkeyManager.ExitInputHotkeyMode();
@@ -98,7 +102,7 @@ public partial class MainForm
         }
         if (bbs757EfbReaderForm == null || bbs757EfbReaderForm.IsDisposed)
         {
-            var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "BlueBird 757 EFB", "tablet", "BlueBird tablet");
+            var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "BlueBird 757 tablet screen", "tablet", "BlueBird tablet");
             var bridge = bbs757EfbBridge;
             form.VisibleChanged += (_, _) => bridge.SetActive(form.Visible && !form.IsDisposed);
             bbs757EfbReaderForm = form;
@@ -157,7 +161,10 @@ public partial class MainForm
         if (tablet == null) return;
         var efb = EnsureBbs757EfbClient();
         if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
-            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync, CreateBbs757LoadIo());
+            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync, CreateBbs757LoadIo())
+            {
+                OpenScreenReader = ShowBBS757EfbReader,
+            };
         bbs757EfbForm.ShowForm();
     }
 

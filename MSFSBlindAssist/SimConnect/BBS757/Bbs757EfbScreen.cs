@@ -410,7 +410,7 @@ public static class Bbs757EfbScreen
             var box = new Rectangle(at.X - w / 2, at.Y - 6, w, 12);
             o.Add(new Bbs757EfbTextLine(text, box, new[] { new Bbs757EfbWord(text, box) }, 'K'));
         }
-        return o.OrderBy(l => l.Box.Top / 10).ThenBy(l => l.Box.Left).ToList();
+        return Bbs757EfbReadingOrder.Lines(o, 5);
     }
 
     // ------------------------------------------------------------------ cleaning
@@ -425,7 +425,7 @@ public static class Bbs757EfbScreen
             if (IsNoise(t)) continue;
             o.Add(l with { Text = t });
         }
-        return o.OrderBy(l => l.Box.Top / 10).ThenBy(l => l.Box.Left).ToList();
+        return Bbs757EfbReadingOrder.Lines(o, 5);
     }
 
     private static bool IsNoise(string t)
@@ -455,7 +455,7 @@ public static class Bbs757EfbScreen
     private static Bbs757EfbScreenModel ParseHome(List<Bbs757EfbTextLine> body)
     {
         var items = new List<Bbs757EfbItem>();
-        foreach (var l in body.OrderBy(l => l.Box.Top / 20).ThenBy(l => l.Box.Left))
+        foreach (var l in Bbs757EfbReadingOrder.Lines(body, 10))
         {
             var app = HomeApp(l.Text);
             if (app != null && l.Box.Top > 220 && l.Box.Top < 300)
@@ -1216,7 +1216,7 @@ public static class Bbs757EfbScreen
         return rows.Select(r => r.OrderBy(l => l.Box.Left).ToList());
     }
 
-    /// <summary>Reading order: top to bottom in bands of 14 px, then left to right.</summary>
+    /// <summary>Reading order: rows of items within 7 px of each other, then left to right (<see cref="Bbs757EfbReadingOrder"/>).</summary>
     private static List<Bbs757EfbItem> Order(List<Bbs757EfbItem> items) =>
-        items.OrderBy(i => i.Box.Top / 14).ThenBy(i => i.Box.Left).ToList();
+        Bbs757EfbReadingOrder.Order(items, i => i.Box, 7);
 }

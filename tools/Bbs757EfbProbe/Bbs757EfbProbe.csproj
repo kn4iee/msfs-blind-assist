@@ -21,6 +21,8 @@
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbScreen.cs" Link="Linked\Bbs757EfbScreen.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbVocabulary.cs" Link="Linked\Bbs757EfbVocabulary.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPageReader.cs" Link="Linked\Bbs757EfbPageReader.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbReadingOrder.cs" Link="Linked\Bbs757EfbReadingOrder.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbFrameCompare.cs" Link="Linked\Bbs757EfbFrameCompare.cs" />
     <None Include="..\..\MSFSBlindAssist\Resources\coherent-bbs757-efb-agent.js" Link="coherent-bbs757-efb-agent.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

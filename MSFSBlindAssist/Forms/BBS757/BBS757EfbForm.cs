@@ -128,7 +128,16 @@ public class BBS757EfbForm : Form
     private Button _connectGroundPowerButton = null!;
     private Button _disconnectGroundPowerButton = null!;
     private TextBox _statusBox = null!;
+    private Button _readScreenButton = null!;
     private Button _closeButton = null!;
+
+    /// <summary>
+    /// Opens the read-only tablet reader (plan 11): BlueBird's tablet read from its pixels, for what no
+    /// variable gives us (notifications, the OFP, the pages themselves). It never decides a press; every
+    /// control in this window stays checked against a variable or BlueBird's settings file. Set by MainForm.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action? OpenScreenReader { get; set; }
     private readonly System.Windows.Forms.Timer _statusTimer;
 
     private IntPtr _previousWindow = IntPtr.Zero;
@@ -356,6 +365,15 @@ public class BBS757EfbForm : Form
         };
         Controls.Add(_statusBox);
         y += 90 + gap;
+
+        _readScreenButton = new Button { Text = "Read the tablet screen", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
+        _readScreenButton.Click += (_, _) =>
+        {
+            if (OpenScreenReader == null) { _announcer.AnnounceImmediate("The tablet screen reader is not available."); return; }
+            OpenScreenReader();
+        };
+        Controls.Add(_readScreenButton);
+        y += h + gap;
 
         _closeButton = new Button { Text = "Close", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
         _closeButton.Click += (_, _) => HideAndRestore();

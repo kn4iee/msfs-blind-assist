@@ -24,6 +24,10 @@ public static class Bbs757EfbElements
     public const string ClassicWindowText =
         "Classic 757 EFB window: SimBrief load, Navigraph sign-in, nav data update, steering and ground power";
     public const string ReadAgainText = "Read the tablet again";
+    public const string ReadOnlyNote =
+        "This window only reads the tablet. To change anything, use the classic 757 EFB window.";
+    public const string ClassicWindowReadOnlyText = "Classic 757 EFB window";
+    public const string ReadOnlyRefusal = "This window only reads the tablet. Use the classic 757 EFB window to change it.";
     public const string SaveLoadRefusal =
         "Custom panel states are not offered here: BlueBird keeps SAVE or LOAD armed, invisibly, for the next tile.";
     public const string GuardRefusal =
@@ -33,7 +37,14 @@ public static class Bbs757EfbElements
 
     private const char OptionSeparator = (char)0x1f;
 
-    public static Built Build(Bbs757EfbScreenModel? model, string? alert)
+    /// <param name="readOnly">
+    /// The tablet screen reader as shipped (team review of 2026-10-27): the tablet is READ from its pixels,
+    /// and a misread must never become a press. Only page navigation stays pressable (Home, the tablet's
+    /// menus, scrolling), since a wrong one only changes the page shown; every button, switch, check box
+    /// and slider is plain text with the state read for it. False keeps the operable window for the tests
+    /// and for a later decision to bring it back.
+    /// </param>
+    public static Built Build(Bbs757EfbScreenModel? model, string? alert, bool readOnly = false)
     {
         var data = new Dictionary<string, string>(StringComparer.Ordinal) { ["page"] = model?.PageName ?? "BlueBird tablet" };
         var actions = new Dictionary<int, Action>();
@@ -89,7 +100,8 @@ public static class Bbs757EfbElements
             Add("Scroll up", kind: "button", clickable: true, key: "btn:scroll-up", action: new Action(ActionKind.ScrollUp));
         }
         Add("More", level: 2, key: "h:more");
-        Add(ClassicWindowText, kind: "button", clickable: true, key: "btn:classic", action: new Action(ActionKind.Classic));
+        if (readOnly) Add(ReadOnlyNote, key: "txt:read-only");
+        Add(readOnly ? ClassicWindowReadOnlyText : ClassicWindowText, kind: "button", clickable: true, key: "btn:classic", action: new Action(ActionKind.Classic));
         Add(ReadAgainText, kind: "button", clickable: true, key: "btn:refresh", action: new Action(ActionKind.Refresh));
         return new Built(data, actions, n);
 
@@ -98,6 +110,7 @@ public static class Bbs757EfbElements
             // On a page that scrolls, a control in the update guard is scrolled out of it and then tapped.
             if (!it.Clickable && model.Scrollable && Bbs757EfbScreen.UpdateGuard.Contains(it.Hit))
                 it = it with { Clickable = true };
+            if (readOnly && AddReadOnly(it)) return;
             switch (it.Kind)
             {
                 case Bbs757EfbKind.Heading:
@@ -158,6 +171,38 @@ public static class Bbs757EfbElements
                     }
                     break;
                 }
+            }
+        }
+
+        // A control as text in the read-only window; false for the kinds that render the same either way
+        // (headings, text, rows, the menus).
+        bool AddReadOnly(Bbs757EfbItem it)
+        {
+            switch (it.Kind)
+            {
+                case Bbs757EfbKind.Button:
+                    Add(it.Text, key: it.Key);
+                    return true;
+                case Bbs757EfbKind.Toggle:
+                case Bbs757EfbKind.Checkbox:
+                {
+                    string state = it.Value.Length > 0 && !(it.Value.Equals("On", StringComparison.OrdinalIgnoreCase) || it.Value.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                        ? it.Value
+                        : it.On switch { true => "On", false => "Off", _ => "state not read" };
+                    Add(it.Text + ": " + state, key: it.Key);
+                    return true;
+                }
+                case Bbs757EfbKind.Slider:
+                {
+                    string value = it.Value;
+                    if (value.Length == 0 && it.Slider is { } sl && sl.TrackRight > sl.TrackLeft)
+                        value = Math.Clamp(Math.Round(100.0 * (sl.KnobX - sl.TrackLeft) / (sl.TrackRight - sl.TrackLeft)), 0, 100)
+                            .ToString(CultureInfo.InvariantCulture) + " percent";
+                    Add(value.Length > 0 ? it.Text + ": " + value : it.Text, key: it.Key);
+                    return true;
+                }
+                default:
+                    return false;
             }
         }
     }

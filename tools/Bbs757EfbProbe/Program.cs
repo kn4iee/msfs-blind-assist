@@ -9,6 +9,10 @@
 //   Bbs757EfbProbe latency                     how long after mirror-on the pop-out shows the tablet
 //   Bbs757EfbProbe mirror on|off
 //   Bbs757EfbProbe close                       close the pop-out
+//   Bbs757EfbProbe stability [n]               read the page shown n times, 1 s apart: how often it reads differently
+//   Bbs757EfbProbe noise                       what changes between two captures of an unchanged page
+//   Bbs757EfbProbe tour [n]                    Home, every app and every section, each read n times as the app reads
+//                                              it (navigation taps only); flight-11.md section 8
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -132,6 +136,38 @@ internal static class Program
             }
             case "read":
                 return await Read(args[1], args[2], args.Skip(3).ToArray());
+            case "stability":   // stability [n]   read the page as it is n times, 1 s apart: how often it differs
+                return await Stability(args.Length > 1 ? int.Parse(args[1]) : 10);
+            case "noise":       // noise   what changes between two captures 250 ms apart
+            {
+                await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
+                await Task.Delay(MirrorSettleMs);
+                for (int run = 0; run < 4; run++)
+                {
+                    using var a = Popout.CaptureTablet();
+                    await Task.Delay(250);
+                    using var b = Popout.CaptureTablet();
+                    if (a == null || b == null) return 3;
+                    var pa = Bbs757EfbPixels.FromBitmap(a); var pb = Bbs757EfbPixels.FromBitmap(b);
+                    int n = 0, maxD = 0, x0 = int.MaxValue, y0 = int.MaxValue, x1 = 0, y1 = 0;
+                    var hist = new int[5];
+                    for (int y = Bbs757EfbScreen.StatusBottom + 4; y < a.Height; y++)
+                        for (int x = 0; x < a.Width; x++)
+                        {
+                            var ca = pa.At(x, y); var cb = pb.At(x, y);
+                            int d = Math.Max(Math.Abs(ca.R - cb.R), Math.Max(Math.Abs(ca.G - cb.G), Math.Abs(ca.B - cb.B)));
+                            if (d == 0) continue;
+                            n++; maxD = Math.Max(maxD, d);
+                            hist[d <= 2 ? 0 : d <= 8 ? 1 : d <= 32 ? 2 : d <= 96 ? 3 : 4]++;
+                            x0 = Math.Min(x0, x); y0 = Math.Min(y0, y); x1 = Math.Max(x1, x); y1 = Math.Max(y1, y);
+                        }
+                    Console.WriteLine($"  run {run + 1}: {n} pixels differ of {a.Width * a.Height}, max {maxD}, box {x0},{y0}-{x1},{y1}, "
+                        + $"by size <=2:{hist[0]} <=8:{hist[1]} <=32:{hist[2]} <=96:{hist[3]} more:{hist[4]}");
+                }
+                return 0;
+            }
+            case "tour":        // tour [n]   every menu entry of the page shown, each read n times (menu taps only)
+                return await Tour(args.Length > 1 ? int.Parse(args[1]) : 3);
         }
         Console.WriteLine("unknown command"); return 1;
     }
@@ -170,6 +206,170 @@ internal static class Program
         File.WriteAllText(Path.Combine(dir, name + ".txt"), sb.ToString());
         Console.Write(sb);
         Console.WriteLine($"  timing: mirror on {tMirror} ms, captured at {tCapture} ms, mirror off at {tOff} ms, OCR {tOcr} ms");
+        return 0;
+    }
+
+    // ------------------------------------------------------------------ reliability (2026-10-27 review)
+
+    private static string Fp(Bbs757EfbScreenModel m)
+    {
+        var sb = new StringBuilder(m.PageName).Append('\n');
+        foreach (var i in m.Menu.Concat(m.Items))
+            sb.Append(i.Kind).Append('|').Append(i.Text).Append('|').Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected).Append('\n');
+        return sb.ToString();
+    }
+
+    private static ulong Hash(Bitmap bmp)
+    {
+        int top = Math.Min(bmp.Height, Bbs757EfbScreen.StatusBottom + 4);
+        var rect = new Rectangle(0, top, bmp.Width, bmp.Height - top);
+        var data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int rowBytes = rect.Width * 4; var row = new byte[rowBytes]; ulong h = 14695981039346656037UL;
+            for (int y = 0; y < rect.Height; y++)
+            {
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, rowBytes);
+                for (int x = 0; x < rowBytes; x++) { h ^= row[x]; h *= 1099511628211UL; }
+            }
+            return h;
+        }
+        finally { bmp.UnlockBits(data); }
+    }
+
+    /// <summary>Captures until two in a row are pixel-identical (the shipped bridge's settle).</summary>
+    private static async Task<(Bitmap? Bmp, bool Still, long Ms)> Settled()
+    {
+        var sw = Stopwatch.StartNew();
+        var bmp = Popout.CaptureTablet();
+        if (bmp == null) return (null, false, 0);
+        while (sw.ElapsedMilliseconds < 2500)
+        {
+            await Task.Delay(250);
+            var next = Popout.CaptureTablet();
+            if (next == null) break;
+            bool same = Bbs757EfbFrameCompare.Same(bmp, next);
+            bmp.Dispose(); bmp = next;
+            if (same) return (bmp, true, sw.ElapsedMilliseconds);
+        }
+        return (bmp, false, sw.ElapsedMilliseconds);
+    }
+
+    private static void PrintDiff(string a, string b)
+    {
+        var la = a.Split('\n'); var lb = b.Split('\n');
+        foreach (var l in la.Except(lb)) if (l.Length > 0) Console.WriteLine("      - " + l);
+        foreach (var l in lb.Except(la)) if (l.Length > 0) Console.WriteLine("      + " + l);
+    }
+
+    private static async Task<int> Stability(int n)
+    {
+        if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
+        await Task.Delay(MirrorSettleMs);
+        var hashes = new List<ulong>(); var fps = new List<string>(); var ms = new List<long>();
+        Bitmap? prev = null; int sameAsPrev = 0;
+        for (int i = 0; i < n; i++)
+        {
+            using var t = Popout.CaptureTablet();
+            if (t == null) { Console.WriteLine("capture failed"); return 3; }
+            hashes.Add(Hash(t));
+            if (prev != null) { if (Bbs757EfbFrameCompare.Same(prev, t)) sameAsPrev++; prev.Dispose(); }
+            prev = new Bitmap(t);
+            var r = await Bbs757EfbPageReader.ReadAsync(t);
+            fps.Add(Fp(r.Model)); ms.Add(r.OcrMs);
+            if (i == 0)
+            {
+                var again = await Bbs757EfbPageReader.ReadAsync(t);
+                Console.WriteLine($"  page: {r.Model.PageName}, {r.Model.Menu.Count} menu + {r.Model.Items.Count} items");
+                Console.WriteLine($"  same picture read twice gives the same page: {Fp(again.Model) == fps[0]}");
+            }
+            await Task.Delay(1000);
+        }
+        var common = fps.GroupBy(f => f).OrderByDescending(g => g.Count()).First().Key;
+        Console.WriteLine($"  {n} captures: {hashes.Distinct().Count()} distinct pictures, {fps.Distinct().Count()} distinct readings, "
+            + $"{fps.Count(f => f == common)}/{n} match the usual one; {sameAsPrev}/{n - 1} captures 'the same' as the one before; OCR {ms.Min()}-{ms.Max()} ms");
+        for (int i = 0; i < n; i++)
+            if (fps[i] != common) { Console.WriteLine($"    read {i + 1} (picture {(hashes[i] == hashes[fps.IndexOf(common)] ? "same" : "different")}):"); PrintDiff(common, fps[i]); }
+        return 0;
+    }
+
+    private static int _pages, _stablePages, _landed, _unstill;
+
+    private static readonly List<long> _changeMs = new();
+
+    /// <summary>Taps, then waits (up to 4 s) for the picture to change from the one before the tap.</summary>
+    private static async Task Tap(Point p)
+    {
+        using var before = Popout.CaptureTablet();
+        await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.click({p.X},{p.Y}))");
+        var sw = Stopwatch.StartNew();
+        while (before != null && sw.ElapsedMilliseconds < 4000)
+        {
+            await Task.Delay(100);
+            using var now = Popout.CaptureTablet();
+            if (now != null && !Bbs757EfbFrameCompare.Same(before, now)) { _changeMs.Add(sw.ElapsedMilliseconds); return; }
+        }
+        Console.WriteLine($"    (tap {p.X},{p.Y}: no change seen in 4 s)");
+    }
+
+    /// <summary>Reads the page shown n times (settled, as the app does); prints the verdict; returns the first model.</summary>
+    private static async Task<Bbs757EfbScreenModel?> ReadPage(string label, string expect, int n)
+    {
+        var fps = new List<string>(); Bbs757EfbScreenModel? first = null; bool allStill = true; long settle = 0, ocr = 0;
+        // As the app: read until the page name is the one tapped (at most 4 s), then the n reads.
+        var nav = Stopwatch.StartNew(); int tries = 0;
+        while (expect.Length > 0 && nav.ElapsedMilliseconds < 4000)
+        {
+            var (b0, _, _) = await Settled();
+            if (b0 == null) break;
+            tries++;
+            using (b0) { var r0 = await Bbs757EfbPageReader.ReadAsync(b0); if (r0.Model.PageName.Contains(expect, StringComparison.OrdinalIgnoreCase)) break; }
+            await Task.Delay(500);
+        }
+        if (tries > 1) Console.WriteLine($"    ({label.Trim()}: right page after {tries} reads, {nav.ElapsedMilliseconds} ms)");
+        for (int i = 0; i < n; i++)
+        {
+            var (b, still, sms) = await Settled();
+            if (b == null) break;
+            allStill &= still; settle = Math.Max(settle, sms);
+            using (b) { var r = await Bbs757EfbPageReader.ReadAsync(b); first ??= r.Model; fps.Add(Fp(r.Model)); ocr = Math.Max(ocr, r.OcrMs); }
+            if (i < n - 1) await Task.Delay(700);
+        }
+        if (first == null) { Console.WriteLine($"  {label}: capture failed"); return null; }
+        bool stable = fps.Distinct().Count() == 1;
+        bool landed = expect.Length == 0 || first.PageName.Contains(expect, StringComparison.OrdinalIgnoreCase);
+        _pages++; if (stable) _stablePages++; if (landed) _landed++; if (!allStill) _unstill++;
+        Console.WriteLine($"  {label}: '{first.PageName}', {first.Items.Count} items, {(stable ? "SAME" : "DIFFERENT")} x{fps.Count}, "
+            + $"still={allStill}, settle<={settle} ms, OCR<={ocr} ms{(landed ? "" : "  <-- not the page tapped")}");
+        if (!stable) for (int i = 1; i < fps.Count; i++) if (fps[i] != fps[0]) { Console.WriteLine($"    read {i + 1} vs read 1:"); PrintDiff(fps[0], fps[i]); }
+        return first;
+    }
+
+    private static async Task<int> Tour(int n)
+    {
+        if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
+        await Task.Delay(MirrorSettleMs);
+        await Tap(Bbs757EfbScreen.HomeButton);
+        var home = await ReadPage("Home", "Home", n);
+        if (home == null) return 3;
+        var apps = home.Items.Where(i => i.Kind == Bbs757EfbKind.Menu && i.Clickable).ToList();
+        foreach (var app in apps)
+        {
+            await Tap(Bbs757EfbScreen.HomeButton);
+            await Tap(app.Hit);
+            var page = await ReadPage(app.Text, app.Text, n);
+            if (page == null) continue;
+            foreach (var m in page.Menu.Where(m => m.Kind == Bbs757EfbKind.Menu && m.Clickable && !m.Selected))
+            {
+                await Tap(m.Hit);
+                await ReadPage("  " + app.Text + " > " + m.Text, m.Text, n);
+            }
+        }
+        await Tap(Bbs757EfbScreen.HomeButton);
+        if (_changeMs.Count > 0) Console.WriteLine($"  page change seen {_changeMs.Min()}-{_changeMs.Max()} ms after a tap (median {_changeMs.OrderBy(x => x).ElementAt(_changeMs.Count / 2)})");
+        Console.WriteLine($"  SUMMARY: {_pages} pages; {_stablePages} read the same every time; {_landed} were the page tapped; {_unstill} never held still");
         return 0;
     }
 

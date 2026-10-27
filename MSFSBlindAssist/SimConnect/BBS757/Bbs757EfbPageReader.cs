@@ -74,7 +74,7 @@ public static class Bbs757EfbPageReader
             lines.AddRange(again);
         }
         var regions = controlRegions.Concat(textRegions).ToList();
-        lines = lines.OrderBy(l => l.Box.Y / 12).ThenBy(l => l.Box.X).ToList();
+        lines = Bbs757EfbReadingOrder.Lines(lines);
         return new Bbs757EfbPageRead(Bbs757EfbScreen.Parse(lines, px), lines, sw.ElapsedMilliseconds, regions.Count);
     }
 
