@@ -51,12 +51,102 @@
     'mapcontrol-recenter': 'Recenter', 'mapcontrol-zoomin': 'Zoom in', 'mapcontrol-zoomout': 'Zoom out'
   };
 
-  // A button's name: its icon's, the map-type panel's tab ("<"), or its text.
+  // Icon pictures inside buttons, by file (GROUND's pushback chevrons).
+  A.IMAGE_NAMES = { 'chevron-left': 'Left', 'chevron-right': 'Right', 'chevron-up': 'Up', 'chevron-down': 'Down' };
+  A.PUSHBACK_NAMES = { 'chevron-left': 'Push back, turn left', 'chevron-right': 'Push back, turn right', 'chevron-down': 'Push back straight' };
+
+  A.sectionTitle = function (e) {
+    var row = e.closest ? e.closest('.row') : null;
+    var h = row ? row.querySelector('h1,h2,h3') : null;
+    return h ? A.norm(h.textContent) : '';
+  };
+
+  // A button's name: its icon's, the map-type panel's tab ("<"), its picture's, or its text.
   A.buttonText = function (b) {
     if (b.id && A.ICON_NAMES[b.id]) return A.ICON_NAMES[b.id];
     var t = A.norm(b.innerText);
     if (/^[<>]$/.test(t) && b.closest && b.closest('#enroutemap-sidebar')) return 'Map types';
+    if (!t) {
+      var img = b.querySelector('img');
+      var file = img ? (/([^\/]+)\.\w+$/.exec(img.getAttribute('src') || '') || [])[1] : '';
+      if (file) return (A.sectionTitle(b) === 'PUSHBACK' && A.PUSHBACK_NAMES[file]) || A.IMAGE_NAMES[file] || '';
+    }
     return t;
+  };
+
+  // GROUND's door map: a clickspot per door, its indicator's colour its state, keyed on the page:
+  // green Closed, blue Armed, red Open, orange Transit.
+  A.colourState = function (c) {
+    c = String(c || '').toLowerCase().replace(/\s/g, '');
+    var named = { blue: [0, 0, 255], navy: [0, 0, 128], darkblue: [0, 0, 139], green: [0, 128, 0], lime: [0, 255, 0],
+      darkgreen: [0, 100, 0], red: [255, 0, 0], darkred: [139, 0, 0], maroon: [128, 0, 0], orange: [255, 165, 0], darkorange: [255, 140, 0] };
+    var m = /^rgba?\((\d+),(\d+),(\d+)/.exec(c), rgb = m ? [+m[1], +m[2], +m[3]] : named[c];
+    if (!rgb && /^#[0-9a-f]{6}$/.test(c)) rgb = [parseInt(c.substr(1, 2), 16), parseInt(c.substr(3, 2), 16), parseInt(c.substr(5, 2), 16)];
+    if (!rgb) return '';
+    var r = rgb[0], g = rgb[1], b = rgb[2];
+    if (b > r && b > g) return 'Armed';
+    if (g > r && g > b) return 'Closed';
+    if (r > b && g > 80) return 'Transit';
+    if (r > g && r > b) return 'Open';
+    return '';
+  };
+  A.doorState = function (spot) {
+    var ind = spot && spot.querySelector('.door-indicator');
+    return ind ? A.colourState(ind.style.backgroundColor) : '';
+  };
+  A.doorName = function (id) {
+    var m = /^door-([lr]\d)$/.exec(id);
+    if (m) return 'Door ' + m[1].toUpperCase();
+    return { 'door-fwd-cargo': 'Forward cargo door', 'door-aft-cargo': 'Aft cargo door', 'door-bulk-cargo': 'Bulk cargo door' }[id] || 'Door';
+  };
+  // The sidebar's cargo buttons press the same doors.
+  A.CARGO_DOORS = { 'FWD CARGO': 'door-fwd-cargo', 'AFT CARGO': 'door-aft-cargo', 'BULK CARGO': 'door-bulk-cargo' };
+
+  // The title of the section a button sits in: the nearest earlier cell of its row holding a heading
+  // (GROUND's sidebar: DOORS & EXITS, LIGHTS, EXTERIOR).
+  A.headingBefore = function (b) {
+    var row = b.closest ? b.closest('.row') : null;
+    if (!row) return '';
+    var cell = b;
+    while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
+    for (var k = cell.previousElementSibling; k; k = k.previousElementSibling) {
+      var h = k.querySelector && k.querySelector('h1,h2,h3');
+      if (h) return A.norm(h.textContent);
+    }
+    return '';
+  };
+
+  // GROUND's sidebar toggles: a light or the covers is lit green when on; the avionics bay door takes
+  // the door key's colours. -> {name, state}, or null for any other button.
+  A.sidebarToggle = function (b, text) {
+    if (!(b.closest && b.closest('.doors-sidebar'))) return null;
+    var section = A.headingBefore(b), bg = b.style.backgroundColor;
+    if (section === 'LIGHTS') return { name: text + ' light', state: A.colourState(bg) === 'Closed' ? 'On' : 'Off' };
+    if (text === 'COVERS') return { name: text, state: A.colourState(bg) === 'Closed' ? 'On' : 'Off' };
+    if (section === 'DOORS & EXITS' && text === 'AVIONICS BAY') return { name: text + ' door', state: A.colourState(bg) || 'Closed' };
+    return null;
+  };
+
+  // A button's state where the page shows it elsewhere: a cargo door's colour, the chocks' picture.
+  A.buttonState = function (b, text) {
+    if (b.closest && b.closest('.doors-sidebar') && A.CARGO_DOORS[text])
+      return A.doorState(document.getElementById(A.CARGO_DOORS[text]));
+    if (text === 'CHOCKS') {
+      var ch = document.getElementById('chocks_nose_front');
+      if (ch) return parseFloat(ch.style.opacity || '0') > 0 ? 'Placed' : 'Removed';
+    }
+    return '';
+  };
+
+  // A control outside the rows: its <label for> (GROUND's GSX switch), else the title above its
+  // container (the snow slider under COLD WEATHER ACCUMULATION). -> the label element, or null.
+  A.ownLabelEl = function (input) {
+    if (input.id) {
+      var l = document.querySelector('label[for="' + input.id + '"]');
+      if (l) return l;
+    }
+    var prev = input.parentElement && input.parentElement.previousElementSibling;
+    return prev && prev.querySelector && !A.holdsControl(prev) && prev.querySelector('h1,h2,h3,h4') ? prev : null;
   };
 
   // The pictures the OIS draws, read as what they are.
@@ -145,6 +235,8 @@
     if (!row) return [];
     var cell = input;
     while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
+    // Only a grid cell of the row is labelled by it (GROUND's fixed GSX panel sits in the doors' row).
+    if (!/(^|\s)col(-|\s|$)/.test(A.cls(cell))) return [];
     var first = row.firstElementChild, stop = null;
     if (!A.hasCls(cell, 'col-sm-12')) {
       for (var b = cell.previousElementSibling; b; b = b.previousElementSibling)
@@ -200,7 +292,8 @@
       input.setAttribute(A.LABEL, label);
       A.memo[memoKey] = label;
     } else {
-      label = input.getAttribute(A.LABEL) || A.memo[memoKey] || A.boxName(input);
+      var ol = A.ownLabelEl(input);
+      label = (ol && A.text(ol)) || input.getAttribute(A.LABEL) || A.memo[memoKey] || A.boxName(input);
     }
     var said = status.join(', ');
     return { label: label, text: label && said ? label + ', ' + said : (label || said) };
@@ -212,6 +305,7 @@
     if (input.closest && input.closest('.option-group')) return;
     var cells = A.labelCells(input);
     for (var i = 0; i < cells.length; i++) A.own(cells[i]);
+    if (!cells.length) { var ol = A.ownLabelEl(input); if (ol) A.own(ol); }
   };
 
   // An options button's name from its row: the label cells beside it ("FROM RWY" + AUTO). When the
@@ -361,7 +455,7 @@
           var type = (e.type || 'text').toLowerCase();
           if (type === 'radio' || type === 'hidden') continue;
           if (type === 'checkbox') {
-            push(e, { kind: '', controlType: 'checkbox', text: A.rowLabel(e), value: e.checked ? 'true' : 'false' });
+            push(e, { kind: '', controlType: 'checkbox', text: A.fieldLabel(e, page + '|checkbox|' + (seen.cb = (seen.cb || 0) + 1)).text, value: e.checked ? 'true' : 'false' });
             continue;
           }
           var fk = page + '|' + type;
@@ -413,7 +507,16 @@
             push(e, { kind: 'button', text: rowName + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + rowName });
             continue;
           }
-          var active = A.hasCls(e, 'active');
+          var tg = A.sidebarToggle(e, bt);
+          if (tg) {
+            push(e, { kind: 'button', text: tg.name + ': ' + tg.state, clickable: true, disabled: e.disabled === true, key: 'button:' + tg.name, announceChange: true });
+            continue;
+          }
+          var active = A.hasCls(e, 'active'), bs = A.buttonState(e, bt);
+          if (bs) {
+            push(e, { kind: 'button', text: bt + ': ' + bs, clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+            continue;
+          }
           push(e, { kind: 'button', text: bt + (active ? ' (selected)' : ''), clickable: true, disabled: e.disabled === true, key: 'button:' + bt });
           continue;
         }
@@ -438,6 +541,14 @@
             A.own(pin);
             push(pin, { kind: 'button', text: 'Pin ' + ct, clickable: true, key: 'pin:' + ct });
           }
+          continue;
+        }
+
+        if (A.hasCls(e, 'door-clickspot')) {
+          A.own(e);
+          var dn = A.doorName(e.id), ds = A.doorState(e);
+          // The OIS listens on the indicator (live: a press on the clickspot itself does nothing).
+          push(e.querySelector('.door-indicator') || e, { kind: 'button', text: ds ? dn + ': ' + ds : dn, clickable: true, key: 'door:' + e.id, announceChange: true });
           continue;
         }
 

@@ -14,6 +14,7 @@ function load(fixtureName, opts) {
   const dom = new JSDOM('<!DOCTYPE html><html><body>' + html + '</body></html>');
   const { window } = dom;
   global.window = window; global.document = window.document;
+  for (const k of ['MouseEvent', 'KeyboardEvent', 'Event', 'HTMLInputElement']) global[k] = window[k];
   window.Element.prototype.getBoundingClientRect = function () {
     const r = this.getAttribute('data-rect');   // "top,left,right,bottom", for a test that places one
     if (r) { const p = r.split(',').map(Number); return { top: p[0], left: p[1], right: p[2], bottom: p[3], width: p[2] - p[1], height: p[3] - p[0], x: p[1], y: p[0] }; }
