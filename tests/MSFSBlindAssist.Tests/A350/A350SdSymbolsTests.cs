@@ -90,8 +90,11 @@ public class A350SdSymbolsTests
             "Pack 1 outlet: flow, green", "Pack 2 outlet: flow, green",
             "Hot air 1 valve: open, green", "Hot air 2 valve: open, green", "Ram air valve: closed, green",
             "Hot air 1 outlet: flow, green", "Hot air 2 outlet: flow, green",
-            "Forward cargo isolation valve: open, white", "Aft cargo isolation valve: open, white",
-            "Bulk cargo isolation valve: open, white",
+            "Forward cargo isolation valve: open, green", "Aft cargo isolation valve: open, green",
+            "Bulk cargo isolation valve: open, green",
+            "Cockpit air inlet: flow, green", "Forward cabin air inlet: flow, green",
+            "Forward cargo air inlet: flow, green", "Aft cargo air inlet: flow, green", "Mixer outlet: flow, green",
+            "Avionics overboard valve: 97 percent open, green", "Avionics air valve: open, green",
         }, Apu(6));
     }
 
@@ -153,6 +156,48 @@ public class A350SdSymbolsTests
         }, p.Where(l => l.Contains("aileron") || l.Contains("elevator") || l.Contains("spoiler") || l.StartsWith("Rudder")));
     }
 
+    // WHEEL: gear and gear doors are sprites (a door's line lies flat when closed), the accumulators are
+    // pointers on an arc marked 1.6 and 3.5 (x 1000 PSI), the BRAKES gauge two bars on a scale stretched
+    // below 1. Live: parking brake set, no hydraulics, gear down.
+    [Fact]
+    public void Wheel_reads_gear_accumulators_and_brakes()
+    {
+        var p = Apu(12);
+        Assert.Equal(new[]
+        {
+            "Nose gear door, left: closed, green", "Nose gear door, right: closed, green", "Nose gear: down and locked, green",
+            "Left main gear door: closed, green", "Left main gear: down and locked, green",
+            "Right main gear door: closed, green", "Right main gear: down and locked, green",
+            "Y accumulator pressure: 3.4 thousand PSI, green", "G accumulator pressure: 3.4 thousand PSI, green",
+            "Left brake pressure: 3.5 thousand PSI, green", "Right brake pressure: 3.5 thousand PSI, green",
+        }, p.Where(l => !l.Contains("spoiler")));
+        Assert.Equal(14, p.Count(l => l.Contains("spoiler: retracted, amber") || l.Contains("spoiler") && l.EndsWith("retracted, amber")));
+    }
+
+    [Theory]
+    [InlineData(453, 0)]
+    [InlineData(395, 1)]
+    [InlineData(380, 2)]
+    [InlineData(357, 3.5)]
+    public void The_brakes_gauge_is_stretched_below_1(float top, double kpsi)
+    {
+        Assert.Equal(kpsi, A350SdSymbols.BrakeKpsi(top), 1);
+    }
+
+    // APU page: live, APU running; APU bleed on then off (the valve turns across its line).
+    [Fact]
+    public void Apu_reads_its_generator_and_bleed_valve()
+    {
+        Assert.Equal(new[] { "APU generator supply: supplying, green", "APU generator: white", "APU bleed valve: open, green" }, Apu(9));
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sdsym_apu_9_bleed_off.json")))!;
+        Assert.Contains("APU bleed valve: closed, green", A350SdSymbols.Read(cap.Shapes, 9));
+        var text = A350SdPage.Read(A350Ewd.Parse(cap).SystemDisplay, 9);
+        Assert.Contains("APU generator load: 54 %, green", text);
+        Assert.Contains("APU generator voltage: 233 V, green", text);
+        Assert.Contains("APU generator frequency: 398 HZ, green", text);
+    }
+
     [Fact]
     public void An_opened_door_reads_open_in_amber()
     {
@@ -181,7 +226,15 @@ public class A350SdSymbolsTests
     [InlineData(45, 50)]
     public void A_flap_is_open_by_how_far_it_stands_up(float turn, double percent)
     {
-        Assert.Equal(percent, A350SdSymbols.FlapOpenPercent(turn));
+        Assert.Equal(percent, A350SdSymbols.FlapOpenPercent(turn, 0));
+    }
+
+    // A flap in a slanted skin (COND's avionics overboard valve, skin at 37 degrees) is open by its angle to that skin.
+    [Fact]
+    public void A_flap_is_measured_against_its_own_skin()
+    {
+        Assert.Equal(97, A350SdSymbols.FlapOpenPercent(124, 37));
+        Assert.Equal(0, A350SdSymbols.FlapOpenPercent(37, 37));
     }
 
     // A valve is open when its bar lies along the flow line, whatever way the sprite is turned.

@@ -55,10 +55,19 @@ public static class A350SdSymbols
         // Bus diamonds: filled green, filled amber, white outline.
         [(644, 18)] = new("state", "green"), [(669, 18)] = new("state", "amber"), [(694, 18)] = new("state", "white"),
         // Flaps (a ring and a bar): cargo isolation valves, outflow valves.
-        [(1566, 301)] = new("valve", "white", Bar: 0), [(1563, 381)] = new("flap", "green"), [(1619, 382)] = new("flap", "green"),
+        [(1566, 301)] = new("valve", "green", Bar: 0), [(1562, 317)] = new("flap", "green"),
+        [(1563, 381)] = new("flap", "green"), [(1619, 382)] = new("flap", "green"),
+        [(1626, 321)] = new("arrow", "green", Word: "up"),
         // Doors (green: closed).
         [(995, 190)] = new("door", "green"), [(995, 218)] = new("door", "green"), [(995, 240)] = new("door", "green"),
         [(994, 271)] = new("door", "green"), [(1050, 240)] = new("door", "green"),
+        // APU: the bleed valve drawn open (in line, with its arrow; closed it is the plain valve across), the
+        // APU GEN legend (white; amber on a fault, Airbus colours).
+        [(1165, 126)] = new("state", "green", Word: "open"),
+        [(1191, 51)] = new("state", "white"),
+        // Landing gear (striped triangles): green down and locked, red in transit, amber disagree.
+        [(654, 446)] = new("state", "green", Word: "down and locked"), [(515, 446)] = new("state", "red", Word: "in transit"),
+        [(584, 446)] = new("state", "amber", Word: "disagree"),
         [(1022, 190)] = new("door", "amber"),   // live: door L1 opened from the OIS
         // Engine numbers, large and small: amber while the engine is not running.
         [(934, 17)] = new("number", "white"), [(962, 17)] = new("number", "white"),
@@ -88,11 +97,11 @@ public static class A350SdSymbols
         return d < 45 || d > 135 ? "open" : "closed";
     }
 
-    /// <summary>A flap in a horizontal skin line: flat is shut, upright fully open (live: the outflow valves
-    /// stand upright on the ground with the packs on).</summary>
-    internal static double FlapOpenPercent(float turn)
+    /// <summary>A flap in a skin line at <paramref name="skin"/> degrees: lying along it is shut, square to it fully
+    /// open (live: the outflow valves stand upright in the horizontal skin on the ground with the packs on).</summary>
+    internal static double FlapOpenPercent(float turn, int skin)
     {
-        float a = Math.Abs(turn) % 180;
+        float a = Math.Abs(turn - skin) % 180;
         return Math.Round(Math.Min(a, 180 - a) / 90 * 100);
     }
 
@@ -100,16 +109,35 @@ public static class A350SdSymbols
     internal static string BarWord(SdBar bar, float y0, float y1)
     {
         float up = bar.Base0 - y0, down = y1 - bar.Base1;
+        if (bar.Spoiler && bar.PxPerDegree <= 0) return up <= 1 ? "retracted" : "extended";   // WHEEL's small wing
         if (bar.Spoiler) return up <= 1 ? "retracted" : $"{Math.Round(up / bar.PxPerDegree):0} degrees up";
         if (up > 0.5f) return $"{Math.Round(up / bar.PxPerDegree):0} degrees up";
         if (down > 0.5f) return $"{Math.Round(down / bar.PxPerDegree):0} degrees down";
         return "neutral";
     }
 
+    /// <summary>WHEEL's BRAKES gauge (x 1000 PSI): 0 at y 453, 1 at 395, then 2 at 380 and 3 at 364, 3.5 at the top.</summary>
+    internal static double BrakeKpsi(float top) =>
+        Math.Max(0, top >= 395 ? (453 - top) / 58.0 : 1 + (395 - top) / 15.5);
+
+    /// <summary>An accumulator pointer's turn to its pressure (x 1000 PSI) and band: the arc's 1.6 tick lies at
+    /// 107 degrees and its 3.5 end at 21 (counter-clockwise from the right); green from 60 down, amber from 107 up.</summary>
+    internal static (double Kpsi, string Band) Accumulator(float turn)
+    {
+        float at = 90 - turn;
+        return (1.6 + (107 - at) * (3.5 - 1.6) / (107 - 21), at <= 60 ? "green" : at >= 107 ? "amber" : "white");
+    }
+
     private static IEnumerable<string> ReadBars(IReadOnlyList<DrawnShape> shapes, int page)
     {
         if (!Bars.TryGetValue(page, out var bars)) yield break;
         var fills = shapes.Where(s => s.Image == 0 && s.Kind == "fill").ToList();
+        if (page == 12)
+            foreach (var (label, x0) in new[] { ("Left brake pressure", 610f), ("Right brake pressure", 692f) })
+            {
+                var b = fills.FirstOrDefault(s => Math.Abs(s.X0 - x0) <= 2 && s.Y0 >= 340 && s.Y1 <= 460 && s.Y1 - s.Y0 > 1);
+                if (b != null) yield return $"{label}: {BrakeKpsi(b.Y0):0.0} thousand PSI, {A350Rgba.NameOf(b.Colour)}";
+            }
         foreach (var bar in bars)
         {
             // The bar is the plain fill in the surface's column that touches its neutral band (the limit ticks
@@ -150,29 +178,55 @@ public static class A350SdSymbols
             Spoiler("Right spoiler 5", 604, 619, 777), Spoiler("Right spoiler 6", 633, 648, 777),
             Spoiler("Right spoiler 7", 662, 677, 777),
         },
+        // WHEEL's small wing (live): spoiler lines at y 309 (outer five) and 315 (inner two), no degree scale.
+        [12] = new[]
+        {
+            Coarse("Left spoiler 1", 303, 316, 315), Coarse("Left spoiler 2", 282, 295, 315),
+            Coarse("Left spoiler 3", 250, 263, 309), Coarse("Left spoiler 4", 227, 240, 309),
+            Coarse("Left spoiler 5", 205, 218, 309), Coarse("Left spoiler 6", 182, 195, 309),
+            Coarse("Left spoiler 7", 159, 172, 309),
+            Coarse("Right spoiler 1", 352, 365, 315), Coarse("Right spoiler 2", 373, 386, 315),
+            Coarse("Right spoiler 3", 405, 418, 309), Coarse("Right spoiler 4", 428, 441, 309),
+            Coarse("Right spoiler 5", 450, 463, 309), Coarse("Right spoiler 6", 473, 486, 309),
+            Coarse("Right spoiler 7", 495, 508, 309),
+        },
     };
+
+    private static SdBar Coarse(string label, float x0, float x1, float baseY) => new(label, x0, x1, baseY, baseY, 0, Spoiler: true);
+
+    private static readonly (int X, int Y)[] ClosedGearDoors = { (37, 522), (96, 522), (337, 522), (449, 522), (37, 613), (96, 613), (337, 613), (449, 613) };
+
+    /// <summary>A gear door: a line of the atlas's gear rows (green above y 575, amber below), flat when closed.</summary>
+    private static SdSprite? GearDoorAt(float x, float y) =>
+        y is > 480 and < 700 && x < 940 ? new SdSprite("gear door", y < 575 ? "green" : "amber",
+            Word: ClosedGearDoors.Any(d => Math.Abs(d.X - x) <= 4 && Math.Abs(d.Y - y) <= 4) ? "closed" : "open") : null;
 
     public static IReadOnlyList<string> Read(IReadOnlyList<DrawnShape>? shapes, int page)
     {
         var o = new List<string>();
         if (shapes == null) return o;
-        o.AddRange(ReadBars(shapes, page));
-        if (!Pages.TryGetValue(page, out var symbols)) return o;
+        if (!Pages.TryGetValue(page, out var symbols)) symbols = Array.Empty<SdSymbol>();
         var sprites = shapes.Where(s => s.Image == Atlas).ToList();
         foreach (var sym in symbols)
         {
             var shape = sprites.Where(s => Math.Abs((s.X0 + s.X1) / 2 - sym.X) <= Reach && Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y) <= Reach)
                 .OrderBy(s => Math.Abs((s.X0 + s.X1) / 2 - sym.X) + Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y)).FirstOrDefault();
             if (shape == null) continue;
+            if (sym.Kind == "accumulator")
+            {
+                var (kpsi, band) = Accumulator(A350ShapeReader.AngleDegrees(shape));
+                o.Add($"{sym.Label}: {kpsi:0.0} thousand PSI, {band}");
+                continue;
+            }
             var (sx, sy) = A350ShapeReader.SpriteCentre(shape);
-            var sprite = SpriteAt(sx, sy);
+            var sprite = SpriteAt(sx, sy) ?? GearDoorAt(sx, sy);
             if (sprite == null) { MSFSBlindAssist.Utils.Logging.Log.Debug("A350Display", $"SD {page}: unknown sprite {sx:0},{sy:0} at {sym.Label}"); continue; }
             var tint = A350Rgba.NameOf(shape.Colour);
             var colour = tint == "white" ? sprite.Colour : tint;
             string? word = sprite.Kind switch
             {
                 "valve" => ValveWord(sprite, A350ShapeReader.AngleDegrees(shape), sym.Flow),
-                "flap" => $"{FlapOpenPercent(A350ShapeReader.AngleDegrees(shape)):0} percent open",
+                "flap" => $"{FlapOpenPercent(A350ShapeReader.AngleDegrees(shape), sym.Flow):0} percent open",
                 "door" => colour == "green" ? "closed" : "open",
                 "level" => $"{Math.Round((sym.Bottom - (shape.Y0 + shape.Y1) / 2) / (sym.Bottom - sym.Top) * 100):0} percent",
                 _ => sprite.Word,
@@ -180,6 +234,7 @@ public static class A350SdSymbols
             if (sym.Say != null) word = sym.Say(word, colour);
             o.Add(word == null ? $"{sym.Label}: {colour}" : $"{sym.Label}: {word}, {colour}");
         }
+        o.AddRange(ReadBars(shapes, page));
         return o;
     }
 
@@ -256,11 +311,16 @@ public static class A350SdSymbols
             Said("Hot air 1 outlet", 196, 725, Flow), Said("Hot air 2 outlet", 618, 725, Flow),
             V("Forward cargo isolation valve", 270, 640, 45), V("Aft cargo isolation valve", 561, 640, 45),
             V("Bulk cargo isolation valve", 677, 640, 45),
+            Said("Cockpit air inlet", 130, 463, Flow), Said("Forward cabin air inlet", 183, 463, Flow),
+            Said("Forward cargo air inlet", 277, 522, Flow), Said("Aft cargo air inlet", 592, 522, Flow),
+            Said("Mixer outlet", 398, 755, Flow),
+            // The overboard flap sits in the nose skin, which slants down at about 37 degrees there.
+            new SdSymbol("Avionics overboard valve", 40, 655, "flap", 37), V("Avionics air valve", 156, 651, 90),
         },
         [7] = new[]
         {
-            new SdSymbol("Avionics extract overboard valve", 158, 839, "flap"),
-            new SdSymbol("Forward outflow valve", 324, 803, "flap"), new SdSymbol("Aft outflow valve", 588, 803, "flap"),
+            new SdSymbol("Avionics extract overboard valve", 158, 839, "flap", 0),
+            new SdSymbol("Forward outflow valve", 324, 803, "flap", 0), new SdSymbol("Aft outflow valve", 588, 803, "flap", 0),
             Said("Pack 1 inlet", 104, 866, Flow), Said("Pack 2 inlet", 689, 866, Flow),
         },
         [11] = new[]
@@ -270,6 +330,18 @@ public static class A350SdSymbols
             // The two hatches by the nose: not the OIS avionics bay door (live: opening that moved neither).
             D("Nose hatch, left", 292, 364), D("Nose hatch, right", 327, 384),
             D("Forward cargo door", 341, 471), D("Aft cargo door", 341, 761), D("Bulk cargo door", 272, 801),
+        },
+        [9] = new[]
+        {
+            Said("APU generator supply", 201, 328, Supply), S("APU generator", 199, 364),
+            V("APU bleed valve", 639, 360, 90),
+        },
+        [12] = new[]
+        {
+            S("Nose gear door, left", 242, 433), S("Nose gear door, right", 298, 433), S("Nose gear", 270, 453),
+            S("Left main gear door", 127, 537), S("Left main gear", 124, 557),
+            S("Right main gear door", 413, 537), S("Right main gear", 418, 557),
+            new SdSymbol("Y accumulator pressure", 710, 615, "accumulator"), new SdSymbol("G accumulator pressure", 710, 843, "accumulator"),
         },
     };
 }

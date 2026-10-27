@@ -192,6 +192,9 @@ public static class A350SdPage
         {
             new SdField("APU bleed pressure", 630, 464, "PSI"), new SdField("APU fuel used", 453, 538, "{weight}"),
             new SdField("APU N", 244, 692, "%"), new SdField("APU EGT", 266, 882, "°C"),
+            // The APU GEN box (live, APU running): its units are drawn in the sprite, not as text.
+            new SdField("APU generator load", 208, 403, "%"), new SdField("APU generator voltage", 208, 431, "V"),
+            new SdField("APU generator frequency", 208, 459, "HZ"),
         },
         [10] = new[]
         {
