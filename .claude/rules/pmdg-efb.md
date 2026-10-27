@@ -23,3 +23,6 @@ Loaded when Claude reads matching code. Background: docs/pmdg-efb.md. Full text 
 Mirrored from md11.md (they govern the MD-11 view, key and `announceChange` plumbing in CoherentPmdgEfbClient.cs; change them there and here together):
 - [MD11-13] Stepper options come from the FIRST React fiber with `options`, never hand-listed and never past an empty array; a press is the pointer sequence plus `el.click()` and NOTHING ELSE; refuse targets under `pointer-events-none` (`A.isInert`); stamp a stable `key` in the reader, never a shared-shell text heuristic. (more: see full) Full: docs/invariants/md11.md#md11-13
 - [MD11-26] The EFB shell speaks a pressed control's changed label ONLY where the reader flags it `announceChange: true` (the two stepper arrows, the tile button, the state tile's ACTION button), never unconditionally and never by suffix or by who was pressed; the per-item `live` hint cannot do this job. Full: docs/invariants/md11.md#md11-26
+
+Mirrored from inibuilds-a350.md (it governs the A350 OIS side probe in CoherentPmdgEfbClient.cs; change it there and here together):
+- [A350-8] Tell the two OIS views apart by the page each loads (`ini-efb-a350-cpt` / `-fo`, the side probe in `CoherentPmdgEfbClient.ForA350Ois`), never by their VCockpit number. Full: docs/invariants/inibuilds-a350.md#a350-8

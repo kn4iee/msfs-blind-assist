@@ -16,7 +16,7 @@ Everything the A350 shows or lets a pilot do is readable and operable without pi
 | PFD, ND, VD | yes | yes | read: EFIS draw; ND clicks (pop-ups, ANF, BTV exit) through Coherent `WASM_MOUSE_*` with the KCCU cursor on the ND |
 | E/WD and SD (every SD page) | yes | yes | read: CTR draw, any SD page drawn on the copy; operate: ECP L:vars |
 | ECAM procedures (sensed, ABN, DEFRD, STATUS) | yes | yes | procedure lines with colour; the ECP selection is the cyan `DrawWideFrame` |
-| Failures | yes | yes | OIS FAILURES page (Coherent) |
+| Failures | yes | yes | the OIS Situation Manager's FAILURES tab (Coherent), on the preferred seat side's OIS only |
 | SFD and SND standby displays | yes | yes | ISIS-class draws; their buttons are input events |
 | RMP 1-3 | yes | yes | RMP draw (frequencies come from cached CustomVariable values); keypad input events |
 | OIS/EFB, both sides | yes | yes | ordinary HTML over Coherent (`iniEfbA350` views): pages, fields, selects, buttons |
@@ -283,6 +283,47 @@ A knob whose value the cockpit shows is one typed field in place of its increase
 - On STD the knob sets a preset QNH, in flight only (on the ground it shows none). The WASM keeps it in its own memory (`INI_BARO_PRESET_CPT`/`_FO` are its output, whole hectopascals or hundredths of an inch, shown while `…_SHOW`): the first click shows it, each click while it shows is a step, and clicks one MCP round trip apart let it lapse. The pull sets the QNH from it (29.85 stepped to 29.89, the pull set 29.89). A typed QNH on STD is therefore stepped to by clicks 300 ms apart, read between them (`A350TypedStepper`), and confirmed "Captain altimeter preset 1015 hectopascals"; the status line reads "STD, preset 1015 hectopascals". Where no preset shows, it is said.
 - The cabin targets drive the A350's own cabin model, not the stock pressurization variables (frozen): in MAN, a typed 3,000 ft target moved the cabin from 1,250 ft at 450 ft/min (CAB PRESS page, read with the display reader). Switching to MAN seeds the target from the cabin.
 - The 100/1000 ft altitude increment is a value the WASM keeps to itself: a typed altitude with the 1000 ft increment lands on the 1000 ft grid and the read-back writes the typed value.
+
+## The OIS (live 2026-10-27, 1.2.7)
+
+The OIS is plain HTML in two Coherent views, `VCockpit10/11 - iniEfbA350`. Which is which is told by
+the page each loads (`ini-efb-a350-cpt` or `-fo`), never by the view number: the PMDG tablet client
+takes a side probe for this (`CoherentPmdgEfbClient.ForA350Ois`). It opens in the PMDG tablets'
+window: Input mode > Shift+T for the captain's, Ctrl+Shift+T for the first officer's (output
+mode's Ctrl+Shift+T stays Cold Temperature Altitude Correction, as on the PMDG 777). The agent,
+`Resources/coherent-a350-ois-agent.js`, is its own (the flyPad agent's scrape missed the OIS's
+option groups and fields); its behaviour is pinned by jsdom tests on live-captured pages in
+`tools/a350-ois-test` (`node --test`, not run by CI; re-take a fixture with its `capture.js`),
+and every page was walked on both sides through the real client with `A350Probe ois`.
+
+How the OIS is built, and how each part reads:
+
+| What | How it reads |
+| --- | --- |
+| page | its `.page-title`; the chart and map pages have none, so the bottom bar's active button names them |
+| option groups | a choice of their radio labels, a field with its limits, a slider, a switch per checkbox (RA CALLOUTS: 5); a free-standing YES/NO set (THROTTLE CALIBRATION, SITUATIONS) is a choice labelled by the cell or heading beside it; a pick presses the label |
+| fields | labelled by their row (`TOW, x1000 LBS`); in a stacked row (LOADSHEET) by their own title cell and unit. The OIS writes a field's result into its label cell (`<OK>`) and can re-create the field: the label is kept on the field and in a page-wide map, else named by the box placeholder (four boxes AIRP, three RWY), so it reads "AIRP, OK". Typing is key events then Enter [A350-6] |
+| input buttons | cyclers that step a value (RWY COND: DRY, said again after a press); the picked-runway button opens the runway list, so it is a plain button |
+| options buttons | named by their row (FROM RWY: AUTO); in a field's row, that field's unit (BLOCK unit: WEIGHT). They open an options pop-up, whose title is spoken |
+| lists behind a button | PANEL STATES, SET FUEL, the header's EFB menu: "(expanded)" or "(collapsed)", only for a list hidden by `d-none` (IDLE's reverse-calibration buttons are not its list) |
+| spoken as they appear (kind alert) | the red `ERR:` line after COMPUTE, the notie toasts (a spent one sits above the screen and is skipped), the fixed-overlay dialogs and `.popup-overlay` pop-ups (TURNAROUND START, Navigraph notice, Resend Loadsheet), sentences spaced at `<br>` |
+| results and read-outs | two-cell rows "V1: 141 kt"; LOADSHEET cards "FWD ECO: 0 PAX, FWD ECO 0 LBS"; MAINTENANCE gauges "BATTERY 1 STATUS: 95.0%" and levels from their bar's width "Y: 30.5L, 74%"; tank figures by tank |
+| state drawn in colour | GROUND's door map by the page's key (green Closed, blue Armed, red Open, orange Transit; the OIS listens on the indicator, not the clickspot), the cargo buttons from their door, lights and covers On when green, the avionics bay door Open when red, CHOCKS from the chock pictures, the engine cowls Open when red, a failure Active when `bg-danger`, tyres and brakes as a colour summary; any other painted button says its colour |
+| pictures | the chart and the en-route map read "Chart picture (not readable)", "Map picture (not readable)"; the chart and map icon buttons are named (Zoom in, Pan left, Chart list, Recenter, Map types); the pushback chevrons "Push back, turn left" |
+| company messages | the AOC tree (boxes are buttons, folders headings), a message per row "FLIGHTREPORT, 1016Z, new", the open message line by line |
+
+Learned on the way:
+
+- SITUATIONS and OPTIONS show only on the OIS of the side chosen as PREFERRED SEAT SIDE (OIS
+  SETTINGS); the first officer's menu lacks them while that is CPT. The failures are the
+  Situation Manager's FAILURES tab; a press toggles one at once.
+- GROUND refuses door toggles with "Unable to toggle when moving or engines running" while an
+  engine master is on, even with the engines stopped (a flight test left both on).
+- COMPUTE results arrive a few seconds after the press; like the PMDG tablets' performance pages
+  they are browsed, not spoken.
+- The OIS shows "LDA 1019 FT" for VCBI 22 against a 10,961 ft runway: its own value, read as shown.
+- The OIS keeps the last opened company message on screen when another box is chosen; an AOC
+  request box (LOADSHEET, ADC DELAY, DIVERSION) shows no form without a SimBrief plan.
 
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 

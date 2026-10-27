@@ -45,9 +45,17 @@ lever 1: Climb", "Flaps: 2"), and they say where they went ("All thrust levers C
 on their panel ("Pitch trim: 1.3 degrees up"). The System display page combo shows the SD
 page and picks one.
 
-The radio management panels, the displays (PFD, ND, E/WD, SD, MFD), the OIS and the
-aircraft's own hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until
-then the hotkeys below are the ones every aircraft shares.
+The OIS, the A350's electronic flight bag, opens in a window like the PMDG tablets: the
+captain's with Input mode > Shift+T, the first officer's with Input mode > Ctrl+Shift+T. Every
+page reads in browse mode, from the FLT OPS menu to T.O PERF and LDG PERF (type, pick the
+runway, COMPUTE, read the results), the loadsheet and refuel, charts, company messages,
+GROUND (each door with its state, lights, chocks, pushback), MAINTENANCE, the options and, on
+the preferred seat side's OIS, the Situation Manager with its failures (each Active or
+Inactive). Its own messages, errors and confirmation questions are spoken as they appear.
+
+The radio management panels, the displays (PFD, ND, E/WD, SD, MFD) and the aircraft's own
+hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until then the other
+hotkeys below are the ones every aircraft shares.
 
 The A350 tunes its radios only through its radio management panels; the stock COM radio
 the other aircraft use does not exist in it.
@@ -174,6 +182,10 @@ SayIntentions:
                apply. Review the fields and press Calculate Route to start
                guidance, or turn on auto-start in the SayIntentions section
                of Settings > Taxi Guidance.
+
+OIS (the A350's EFB, one on each side):
+  Shift+T       Captain's OIS
+  Ctrl+Shift+T  First Officer's OIS
 
 General:
   Escape     Exit active hotkey mode
