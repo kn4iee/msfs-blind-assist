@@ -180,10 +180,10 @@ public sealed record Bbs757SettingWrite(Bbs757Setting Setting, string Path, Bbs7
 /// The catalog of BlueBird's tablet settings: for each one its key, file, tablet label, the tablet's words and the
 /// value BlueBird stores for each. The words and stored values were measured on the tablet
 /// (docs/b757/evidence/efb-settings.md, sections 2 to 7), with three exceptions. Hoppie ACARS's On is taken by type: it
-/// was never tapped, as switching it on could log on to Hoppie. The AIRAC data "not set" values (<c>simbrief_id</c> -1,
-/// the two codes "") come from the spec and earlier notes, not from this measurement: section 8 was not tapped. The TOD
-/// pause distance range of 1 to 999 is a ruling: the tablet's keypad limits were not measured. The app writes only
-/// values BlueBird itself writes. The keys the tablet does not show (<c>units</c> on its own,
+/// was not tapped when measuring, as switching it on could log on to Hoppie. The AIRAC data "not set" values
+/// (<c>simbrief_id</c> -1, the two codes "") come from the spec and earlier notes, not from this measurement: section 8
+/// was not tapped. The TOD pause distance range of 1 to 999 is a ruling: the tablet's keypad limits were not measured.
+/// The app writes only values BlueBird itself writes. The keys the tablet does not show (<c>units</c> on its own,
 /// <c>options.model_visibility.*</c>, the charts and map state) are not here, so nothing can change them.
 /// Pure: no files, no simulator.
 /// </summary>
@@ -263,11 +263,15 @@ public static class Bbs757EfbSettings
 
     // ---- number and text boxes ----------------------------------------------------------------------
 
+    // The one box whose empty value is the tablet's switch turned off; for the others that can be cleared it is "not set".
+    private const string TodPauseDistancePath = "tod_pause_distance";
+
     /// <summary>
     /// What a Number or Text box shows for the stored value, as the tablet shows it. Digits and Whole: the integer, or
-    /// an empty box for <see cref="Bbs757Setting.EmptyStored"/> ("not set"). Percent: <c>floor(v * 100)</c> clamped to
-    /// the range (the tablet shows 0.99901 as 99%). Decimal: one decimal ("2.0" for 1.9952623149688795, as the tablet
-    /// does). Text: the text. Always invariant. Throws <see cref="ArgumentException"/> for any other kind.
+    /// an empty box for <see cref="Bbs757Setting.EmptyStored"/> (off for the TOD pause distance, "not set" for the
+    /// SimBrief ID: <see cref="EmptyHint"/>). Percent: <c>floor(v * 100)</c> clamped to the range (the tablet shows
+    /// 0.99901 as 99%). Decimal: one decimal ("2.0" for 1.9952623149688795, as the tablet does). Text: the text. Always
+    /// invariant. Throws <see cref="ArgumentException"/> for any other kind.
     /// </summary>
     public static string NumberText(Bbs757Setting setting, Bbs757Value stored)
     {
@@ -295,7 +299,9 @@ public static class Bbs757EfbSettings
     /// <see cref="NumberParsing.TryParseTyped"/> ("2,5" and "2.5" are both 2.5 on any Windows culture), Whole and Percent
     /// need a whole number, and all three must lie in the range. A percent p is stored as <c>(p + 0.4) / 100</c> (1.0
     /// for 100), so the tablet shows p whether it floors or rounds. Text is stored trimmed. On a refusal
-    /// <paramref name="reason"/> says what to type. Throws <see cref="ArgumentException"/> for any other kind.
+    /// <paramref name="reason"/> says what to type: for the TOD pause distance also that an empty box switches it off,
+    /// and for the SimBrief ID that it is digits, not 0 ("0" is digits, and refused). Throws
+    /// <see cref="ArgumentException"/> for any other kind.
     /// </summary>
     public static bool TryParseEntry(Bbs757Setting setting, string typed, out Bbs757Value value, out string? reason)
     {
@@ -343,6 +349,23 @@ public static class Bbs757EfbSettings
         }
     }
 
+    /// <summary>
+    /// What an empty box means, for the box's description: "Leave empty to switch it off." for the TOD pause distance,
+    /// whose empty box is the tablet's switch turned off, and "Leave empty for not set." for every other Number or Text
+    /// setting that can be cleared (<see cref="Bbs757Setting.EmptyStored"/>: the SimBrief ID and the two codes). Null for
+    /// a setting that cannot be cleared or is no box.
+    /// </summary>
+    public static string? EmptyHint(Bbs757Setting setting)
+    {
+        if (setting.Kind is not (Bbs757SettingKind.Number or Bbs757SettingKind.Text) || setting.EmptyStored is null)
+            return null;
+        return EmptyMeansOff(setting) ? "Leave empty to switch it off." : "Leave empty for not set.";
+    }
+
+    // Whether the setting's empty box is the tablet's switch turned off, not "not set".
+    private static bool EmptyMeansOff(Bbs757Setting setting) =>
+        setting.EmptyStored is not null && setting.Path == TodPauseDistancePath;
+
     private static bool TryWholeNumber(string text, Bbs757NumberRange range, out long whole)
     {
         whole = 0;
@@ -357,7 +380,8 @@ public static class Bbs757EfbSettings
     // tablet that rounds. 100 is 1.0: the tablet's brightness goes no higher.
     private static double StoredPercent(long percent) => percent >= 100 ? 1.0 : (percent + 0.4) / 100;
 
-    // What the pilot is told to type when an entry is refused. The numbers are invariant and have no decimals.
+    // What the pilot is told to type when an entry is refused, and for the TOD pause distance how to switch it off. The
+    // numbers are invariant and have no decimals.
     private static string RefusalReason(Bbs757Setting setting)
     {
         if (setting.Kind == Bbs757SettingKind.Text) return "type some text";
@@ -365,9 +389,11 @@ public static class Bbs757EfbSettings
         var range = RangeOf(setting);
         return range.Entry switch
         {
-            Bbs757NumberEntry.Digits => "type digits only",
+            // Digits is the SimBrief ID's entry (Bbs757NumberEntry.Digits): "0" is digits and refused too.
+            Bbs757NumberEntry.Digits => "type a SimBrief ID number (digits, not 0)",
             Bbs757NumberEntry.Whole or Bbs757NumberEntry.Percent =>
-                string.Create(CultureInfo.InvariantCulture, $"type a whole number from {range.Min:0} to {range.Max:0}"),
+                string.Create(CultureInfo.InvariantCulture, $"type a whole number from {range.Min:0} to {range.Max:0}")
+                + (EmptyMeansOff(setting) ? ", or leave the box empty to switch it off" : ""),
             Bbs757NumberEntry.Decimal =>
                 string.Create(CultureInfo.InvariantCulture, $"type a number from {range.Min:0} to {range.Max:0}"),
             _ => throw new ArgumentException($"Unknown number entry {range.Entry}.", nameof(setting)),
@@ -471,7 +497,7 @@ public static class Bbs757EfbSettings
             TwoWords(section, "automatic_cockpit_lighting", "Adaptive cockpit lighting", "Automatic", "Manual"),
             // Off is -1 (an empty box); switched on, the tablet stores 40 and then what its keypad types. The range 1 to
             // 999 is a ruling: the keypad's limits were not measured.
-            Box(section, "tod_pause_distance", "TOD pause distance (NM)", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
+            Box(section, TodPauseDistancePath, "TOD pause distance (NM)", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
                 emptyStored: Bbs757Value.Of(-1L), range: new Bbs757NumberRange(Bbs757NumberEntry.Whole, 1, 999)),
             TwoWords(section, "tiller_realistic", "Nosewheel steering", "Realistic", "Rudder"),
             TwoWords(section, "displays_bootup_realistic", "Displays bootup speed", "Realistic", "Fast"),

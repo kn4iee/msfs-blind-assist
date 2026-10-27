@@ -24,20 +24,27 @@ public sealed record Bbs757SettingSaveOutcome(string? Spoken, bool Immediate, IR
 
 /// <summary>
 /// One save of the 757 EFB window's Settings tab, from the writes <see cref="Bbs757EfbSettings.WritesFor"/> plans to what
-/// is said. First every key is checked in the files as read (<see cref="WhyNot"/>): with one missing nothing is written
-/// and the write's own label says why, so a change of several keys (Units with its units, a callout with the rest of its
-/// group) never stops halfway at a key that is not there. Then the writes are made in order and the first one not done
-/// everywhere stops the rest. A write switching off another callout of the saved setting's exclusive group is the
-/// exception to both: it is not checked first, and a file refusing it because the key is not there
-/// (<see cref="Bbs757SettingsFile.NotInFileReason"/>) counts as done, as a callout BlueBird does not have cannot be on, so
-/// one older livery file never blocks the group. The setting's own write and its linked key keep the strict rules.
+/// is said. First every key is checked in the files as read (<see cref="WhyNot"/>): with one missing from the settings
+/// file, or from every registration file, nothing is written and the write's own label says why, so a change of several
+/// keys (Units with its units, a callout with the rest of its group) never stops halfway at a key that is not there. A
+/// registration key that only some files lack is written to the others, and each file without it is named. Then the
+/// writes are made in order and the first one not done everywhere stops the rest. A write switching off another callout
+/// of the saved setting's exclusive group is the exception to both: it is not checked first, and a file refusing it
+/// because the key is not there (<see cref="Bbs757SettingsFile.NotInFileReason"/>) counts as done, as a callout BlueBird
+/// does not have cannot be on, so one older livery file never blocks the group. The setting's own write and its linked
+/// key keep the strict rules.
 ///
-/// What is said: a failure, at once ("Couldn't save &lt;label&gt;: &lt;reason&gt;", or "Saved for N of M registrations;
-/// &lt;reg&gt;: &lt;reason&gt;." when some registrations took it); each callout of the group switched off whose row showed
-/// on or different values ("&lt;label&gt; turned off"); a number or text box's "&lt;label&gt; saved". A check box or a
-/// choice list that saved says nothing more. A refusal before any write is logged as the file layer logs its own, its value
-/// only when the setting may be logged; the writes log themselves. Pure: the caller reads the files and writes them
-/// through the two delegates, which ask the simulator guard themselves.
+/// What is said: a failure, at once ("Couldn't save &lt;label&gt;: &lt;reason&gt;"; with several registrations and none
+/// saved, each one named with its reason, "Couldn't save &lt;label&gt;: &lt;reg&gt;: &lt;reason&gt;; &lt;reg&gt;:
+/// &lt;reason&gt;."; "Saved for N of M registrations; &lt;reg&gt;: &lt;reason&gt;." when some took it, N counting the files
+/// that saved it or held it already); a group's other callout that could not be switched off is said under the callout
+/// pressed, which then was saved nowhere ("Couldn't save &lt;pressed&gt;: &lt;callout&gt; could not be turned off:
+/// &lt;reason&gt;", or "Couldn't save &lt;pressed&gt;: &lt;callout&gt; turned off for N of M registrations; &lt;reg&gt;:
+/// &lt;reason&gt;."); each callout of the group switched off whose row showed on or different values ("&lt;label&gt;
+/// turned off"); a number or text box's "&lt;label&gt; saved". A check box or a choice list that saved says nothing more.
+/// A refusal before any write is logged in the file layer's words but naming no file (it is about the files as read),
+/// its value only when the setting may be logged; the writes log themselves, each naming its file. Pure: the caller reads
+/// the files and writes them through the two delegates, which ask the simulator guard themselves.
 /// </summary>
 public static class Bbs757SettingsSave
 {
@@ -74,7 +81,7 @@ public static class Bbs757SettingsSave
         {
             bool switchesOff = SwitchesOffAnother(setting, write);
             failure = write.File == Bbs757SettingFile.Global
-                ? GlobalFailure(write, saveGlobal(write.Path, write.Value), switchesOff)
+                ? GlobalFailure(setting, write, saveGlobal(write.Path, write.Value), switchesOff)
                 : RegistrationsFailure(setting, write, saveRegistrations(write.Path, write.Value), switchesOff);
             if (failure != null) break;
             if (switchesOff && ShowedOn(shown, write.Setting.Path)) turnedOff.Add(write.Setting.Label);
@@ -113,8 +120,9 @@ public static class Bbs757SettingsSave
     /// <summary>
     /// Why a row cannot change for its own state, in words that follow "Couldn't save &lt;label&gt;: "; null when its state
     /// lets it. An unreadable row says why its key does not read (<see cref="WhyNot"/>). The EFB brightness reading
-    /// Automatic sends the pilot to the brightness mode's manual word, unless the mode itself cannot be read, which is said
-    /// as that row would say it.
+    /// Automatic sends the pilot to the brightness mode's manual word, unless the mode itself cannot be read: then the
+    /// reason names the mode ("EFB brightness mode is not readable in this BlueBird version"), not the brightness, whose
+    /// own key is there.
     /// </summary>
     public static string? CannotChangeReason(Bbs757SettingRow row, Bbs757SettingsSnapshot files) => row.State switch
     {
@@ -139,35 +147,51 @@ public static class Bbs757SettingsSave
         result.Status != Bbs757SaveStatus.Refused
         || (switchesOff && result.Reason == Bbs757SettingsFile.NotInFileReason);
 
-    private static string? GlobalFailure(Bbs757SettingWrite write, Bbs757SaveResult result, bool switchesOff) =>
+    private static string? GlobalFailure(Bbs757Setting saved, Bbs757SettingWrite write, Bbs757SaveResult result,
+        bool switchesOff) =>
         Done(result, switchesOff)
             ? null
-            : CouldNotSave(write.Setting.Label, result.Reason ?? Bbs757SettingsFile.UnreadableReason);
+            : NotSaved(saved, write, switchesOff, result.Reason ?? Bbs757SettingsFile.UnreadableReason);
 
-    // Null when every registration took the write; else "Couldn't save <label>: <reason>" when none did, or "Saved for N
-    // of M registrations; <reg>: <reason>." when some did, a group's other callout named first as the pilot pressed
-    // another.
+    // Null when every registration took the write. Else, when no file saved it (or held it already): "Couldn't save
+    // <label>: <reason>" with one registration, and with several each one not done named with its reason ("Couldn't save
+    // <label>: G-AAAA: <reason>; G-BBBB: <reason>."). When some did: "Saved for N of M registrations; <reg>: <reason>.".
+    // N counts the files that saved it or held it already: a file without a group's other callout is done, as the
+    // callout cannot be on there, but nothing was saved in it. A group's other callout is said under the callout pressed
+    // (NotSaved), which the chain then never wrote.
     private static string? RegistrationsFailure(Bbs757Setting saved, Bbs757SettingWrite write,
         IReadOnlyList<(string Registration, Bbs757SaveResult Result)> results, bool switchesOff)
     {
         // With no registration file there is no callout to switch off, and nowhere to write the setting's own value.
         if (results.Count == 0)
             return switchesOff ? null : CouldNotSave(write.Setting.Label, Bbs757SettingsFile.MissingReason);
-        var notDone = results.Where(r => !Done(r.Result, switchesOff)).ToArray();
+        var notDone = results.Where(r => !Done(r.Result, switchesOff))
+            .Select(r => (r.Registration, Reason: r.Result.Reason ?? Bbs757SettingsFile.UnreadableReason))
+            .ToArray();
         if (notDone.Length == 0) return null;
-        if (notDone.Length == results.Count)
-            return CouldNotSave(write.Setting.Label, notDone[0].Result.Reason ?? Bbs757SettingsFile.UnreadableReason);
-        string text = SavedForSome(results.Count - notDone.Length, results.Count,
-            notDone.Select(r => (r.Registration, r.Result.Reason ?? Bbs757SettingsFile.UnreadableReason)).ToArray());
-        return write.Setting.Path == saved.Path
-            ? text
-            : $"{write.Setting.Label}: {char.ToLowerInvariant(text[0])}{text[1..]}";
+
+        int savedCount = results.Count(r => r.Result.Status is Bbs757SaveStatus.Saved or Bbs757SaveStatus.Unchanged);
+        if (savedCount == 0)
+            return NotSaved(saved, write, switchesOff, results.Count == 1 ? notDone[0].Reason : $"{EachWithReason(notDone)}.");
+
+        string forSome = string.Create(CultureInfo.InvariantCulture,
+            $"for {savedCount} of {results.Count} registrations; {EachWithReason(notDone)}.");
+        return switchesOff
+            ? CouldNotSave(saved.Label, $"{write.Setting.Label} turned off {forSome}")
+            : $"Saved {forSome}";
     }
 
-    // "Saved for 2 of 3 registrations; G-CCCC: the file is in use.", each registration not saved with its own reason.
-    private static string SavedForSome(int saved, int total, IReadOnlyList<(string Registration, string Reason)> notSaved) =>
-        string.Create(CultureInfo.InvariantCulture,
-            $"Saved for {saved} of {total} registrations; {string.Join("; ", notSaved.Select(n => $"{n.Registration}: {n.Reason}"))}.");
+    // A write not done anywhere: "Couldn't save <label>: <reason>", the write's own setting's label (for the linked key
+    // too, which carries the setting the pilot changed). A group's other callout that could not be switched off is said
+    // under the callout pressed: "Couldn't save <pressed>: <callout> could not be turned off: <reason>".
+    private static string NotSaved(Bbs757Setting saved, Bbs757SettingWrite write, bool switchesOff, string reason) =>
+        switchesOff
+            ? CouldNotSave(saved.Label, $"{write.Setting.Label} could not be turned off: {reason}")
+            : CouldNotSave(write.Setting.Label, reason);
+
+    // "G-BBBB: the file is in use; G-CCCC: the file could not be read", each registration with its own reason.
+    private static string EachWithReason(IReadOnlyList<(string Registration, string Reason)> notDone) =>
+        string.Join("; ", notDone.Select(n => $"{n.Registration}: {n.Reason}"));
 
     // Whether the row shown for a callout showed it on: its On word, or values that differ between the registrations.
     private static bool ShowedOn(IReadOnlyList<Bbs757SettingRow> shown, string path) =>
@@ -175,13 +199,20 @@ public static class Bbs757SettingsSave
         && (row.State == Bbs757RowState.Differs
             || (row.State == Bbs757RowState.Value && row.ChoiceIndex == Bbs757SettingsRows.OnChoiceIndex));
 
-    // The EFB brightness takes a value only in its mode's manual word: "set EFB brightness mode to Manual first", or the
-    // mode's own reason when it cannot be read.
+    // The EFB brightness takes a value only in its mode's manual word: "set EFB brightness mode to Manual first". A mode
+    // that does not read is named ("EFB brightness mode is not readable in this BlueBird version"): the file's own words
+    // ("this BlueBird version doesn't have it") would read as if the brightness were missing. A settings file that is
+    // missing or unreadable keeps its reason, true of the brightness too (the rows then make it Unreadable, not Automatic).
     private static string AutomaticReason(Bbs757SettingsSnapshot files)
     {
         if (Bbs757EfbSettings.ByPath(Bbs757SettingsRows.BrightnessModePath) is not { } mode)
             return "BlueBird sets it automatically";
-        if (WhyNot(files, mode.File, mode.Path, mode.Type) is { } unreadable) return unreadable;
+        if (WhyNot(files, mode.File, mode.Path, mode.Type) is { } unreadable)
+        {
+            return unreadable == Bbs757SettingsFile.NotInFileReason
+                ? $"{mode.Label} is not readable in this BlueBird version"
+                : unreadable;
+        }
         Bbs757SettingChoice? manual = mode.Choices.FirstOrDefault(choice => choice.Stored == Bbs757Value.Of(false));
         return manual is null ? "BlueBird sets it automatically" : $"set {mode.Label} to {manual.Word} first";
     }

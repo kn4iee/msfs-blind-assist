@@ -21,16 +21,19 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // The page is writable only while Bbs757SimGuard.SettingsWritable holds, checked when the page opens, on every 1 s
 // status tick while the window shows, and by every write. While it does not, every input stays focusable and readable
 // but does not change (a check box does not toggle, a choice list swallows what would change it, a box is read-only)
-// and an attempt says why, at once. So does a row that waits for another (the announcement categories) or that cannot
-// change for its own state (unreadable, automatic). A save is Bbs757SettingsSave.Run's: every key checked first, the
-// writes in order through Bbs757SettingsFile (which logs each save and refusal), the first not done everywhere stopping
-// the rest, and the wording; this page reads the files for it, says the outcome and reads the files again.
+// and an attempt says why, at once (ReadOnlyAttemptText). So does a row that waits for another (the announcement
+// categories) or that cannot change for its own state (unreadable, automatic). A box that can be cleared says in its
+// description what empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's: every key checked
+// first, the writes in order through Bbs757SettingsFile (which logs each save and refusal), the first not done
+// everywhere stopping the rest, and the wording; this page reads the files for it, says the outcome and reads the files
+// again.
 //
 // Speech (CORE-7): a check box or a choice list that saved says nothing, as the reader has said its new state; a number
 // or text box says "<label> saved"; every failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a
 // save switched off that showed on is named ("<label> turned off"); the simulator starting or closing while the window
-// shows is said once. The pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key are shown in plain text and
-// never logged: no value, write or row goes into a log line or an exception message here.
+// shows, or the app no longer able to tell whether it runs, is said once (SimChangeText). The pilot's SimBrief ID, Hoppie
+// logon code and SayIntentions ACARS key are shown in plain text and never logged: no value, write or row goes into a
+// log line or an exception message here.
 public partial class BBS757EfbForm
 {
     // The rows inside the section panel: the label column, the input column, one row's height, the rows' width.
@@ -353,9 +356,9 @@ public partial class BBS757EfbForm
 
     /// <summary>
     /// Reads BlueBird's files again and shows what they hold in the rows of the section shown, in place: each control's
-    /// value, its description (an inactive row's <see cref="Bbs757SettingsRows.InactiveText"/>) and whether it may
-    /// change. No control is recreated and focus does not move. After every save, when the page opens and when the
-    /// simulator closes.
+    /// value, its description (an inactive row's <see cref="Bbs757SettingsRows.InactiveText"/>, a box's
+    /// <see cref="Bbs757EfbSettings.EmptyHint"/>) and whether it may change. No control is recreated and focus does not
+    /// move. After every save, when the page opens and when the simulator closes.
     /// </summary>
     private void RefreshSettingValues()
     {
@@ -404,13 +407,17 @@ public partial class BBS757EfbForm
             if (box.Text != row.Text) box.Text = row.Text;
         }
         if (row.Inactive && EnabledBy(row.Setting) is { } enabledBy)
-        {
-            string inactive = Bbs757SettingsRows.InactiveText(enabledBy);
-            description = description == null ? inactive : $"{description}. {inactive}";
-        }
+            description = JoinDescription(description, Bbs757SettingsRows.InactiveText(enabledBy));
+        // What an empty box means, after any other description: off (TOD pause distance) or not set (the identifiers).
+        if (control.Box != null && Bbs757EfbSettings.EmptyHint(control.Setting) is { } hint)
+            description = JoinDescription(description, hint);
         if (control.Input.AccessibleDescription != description) control.Input.AccessibleDescription = description;
         ApplyLock(control);
     }
+
+    // Two descriptions said as one: ". " between them, a space alone after one that ends with its own full stop.
+    private static string JoinDescription(string? first, string next) =>
+        first == null ? next : first.EndsWith('.') ? $"{first} {next}" : $"{first}. {next}";
 
     // The tablet's words, and when the row holds none of them (Other, Differs, Unreadable) its text as one more item,
     // selected; that item goes once a word is selected, so the selection never passes through none.
@@ -453,15 +460,16 @@ public partial class BBS757EfbForm
     /// Whether BlueBird's settings may change now, on every 1 s status tick while the window shows and when the page
     /// opens: the simulator checked (<see cref="Bbs757SimGuard.Check()"/>), the settings file looked for, the status box
     /// set and every input locked or unlocked. The first check after the window shows only remembers the simulator's
-    /// state. After it, a simulator that starts is said once (<see cref="Bbs757SimGuard.SimStartedText"/>), and one that
-    /// closes has BlueBird's folder and files read again and is said once (<see cref="Bbs757SimGuard.SimClosedText"/>)
-    /// when the settings can then be changed.
+    /// state. After it, a change is said once (<see cref="SimChangeText"/>): a simulator that starts, a check that starts
+    /// failing (the status box's words for it), and a simulator that closes, which also has BlueBird's folder and files
+    /// read again and is said only when the settings can then be changed.
     /// </summary>
     private void UpdateSettingsGuard()
     {
         if (_disposed) return;
         Bbs757SimState state = Bbs757SimGuard.Check();
-        bool changed = _lastSimState is { } before && before != state;
+        Bbs757SimState? before = _lastSimState;
+        bool changed = before is { } was && was != state;
         _lastSimState = state;
         bool closed = changed && state == Bbs757SimState.NotRunning;
         // BlueBird may have written its files while the simulator ran, or made a work folder's first.
@@ -478,11 +486,43 @@ public partial class BBS757EfbForm
         if (closed) RefreshSettingValues();
         else if (lockChanged) ApplyLocks();
 
-        // A background change, said once and queued behind what the reader is saying.
-        if (!changed) return;
-        if (state == Bbs757SimState.Running) _announcer.Announce(Bbs757SimGuard.SimStartedText);
-        // "can be changed" only when they can: not while BlueBird has made no settings file yet.
-        else if (closed && writable) _announcer.Announce(Bbs757SimGuard.SimClosedText);
+        // A background change, said once and queued behind what the reader is saying (CORE-7).
+        if (before is { } previous && SimChangeText(previous, state, writable) is { } said) _announcer.Announce(said);
+    }
+
+    // The status box's words while the process check fails: also what a change into that state and a blocked attempt say.
+    private static readonly string CannotTellText = Bbs757SimGuard.StatusText(Bbs757SimState.Unknown, true, null);
+
+    /// <summary>
+    /// What a change of the simulator's state from <paramref name="before"/> to <paramref name="now"/> says, once, or
+    /// null: <see cref="Bbs757SimGuard.SimStartedText"/> for a simulator that starts; for a check that starts failing the
+    /// status box's words for it ("The app can't tell whether the simulator is running, so BlueBird's settings are
+    /// read-only."); <see cref="Bbs757SimGuard.SimClosedText"/> for one that closes, from running or from a failed check,
+    /// only when the settings can then be changed (<paramref name="writable"/>: not while BlueBird has made no settings
+    /// file yet). No change says nothing. Pure; internal for the tests.
+    /// </summary>
+    internal static string? SimChangeText(Bbs757SimState before, Bbs757SimState now, bool writable)
+    {
+        if (before == now) return null;
+        return now switch
+        {
+            Bbs757SimState.Running => Bbs757SimGuard.SimStartedText,
+            Bbs757SimState.NotRunning => writable ? Bbs757SimGuard.SimClosedText : null,
+            // Unknown, or a state that is none of the three: the check failed, as the status box reads it too.
+            _ => CannotTellText,
+        };
+    }
+
+    /// <summary>
+    /// What a change tried while BlueBird's settings are read-only says, at once: with no settings file, the status box's
+    /// words for that (closing the simulator is not what is missing); while the process check fails, the status box's words
+    /// for that ("The app can't tell whether the simulator is running, so BlueBird's settings are read-only."); with a
+    /// simulator running, <see cref="Bbs757SimGuard.LockedText"/>. Pure; internal for the tests.
+    /// </summary>
+    internal static string ReadOnlyAttemptText(Bbs757SimState state, bool settingsFileExists)
+    {
+        if (!settingsFileExists) return Bbs757SimGuard.StatusText(Bbs757SimState.NotRunning, false, null);
+        return state is Bbs757SimState.Running or Bbs757SimState.NotRunning ? Bbs757SimGuard.LockedText : CannotTellText;
     }
 
     // Why a change was not made, said at once: the settings read-only, the row waiting for another, or its own state.
@@ -492,10 +532,8 @@ public partial class BBS757EfbForm
         string text;
         if (!_settingsWritable)
         {
-            // With no settings file, closing the simulator is not what is missing: the status box's own words.
-            text = _settingsFileExists
-                ? Bbs757SimGuard.LockedText
-                : Bbs757SimGuard.StatusText(Bbs757SimState.NotRunning, false, null);
+            // A state never checked is not known: read-only as a failed check is (Bbs757SimState's default, Unknown).
+            text = ReadOnlyAttemptText(_lastSimState ?? Bbs757SimState.Unknown, _settingsFileExists);
         }
         else if (control.Row is { Inactive: true } && EnabledBy(control.Setting) is { } enabledBy)
         {

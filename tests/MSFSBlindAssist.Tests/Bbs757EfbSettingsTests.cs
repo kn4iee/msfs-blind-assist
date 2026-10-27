@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Tests;
 /// The catalog of BlueBird's tablet settings (<see cref="Bbs757EfbSettings"/>): every setting's key, file, tablet
 /// label and words, the value BlueBird stores for each word (measured, docs/b757/evidence/efb-settings.md), the
 /// writes one change makes (the tablet's three rules, evidence section 9), and how a number or text box shows and
-/// reads what is typed. Pure: no files, no simulator.
+/// reads what is typed, and what its empty box means. Pure: no files, no simulator.
 /// </summary>
 public class Bbs757EfbSettingsTests
 {
@@ -544,8 +544,10 @@ public class Bbs757EfbSettingsTests
         Assert.Equal(Bbs757Value.Of(999L), Accepted("tod_pause_distance", "999"));
         Assert.Equal(Bbs757Value.Of(-1L), Accepted("tod_pause_distance", ""));
         Assert.Equal(Bbs757Value.Of(-1L), Accepted("tod_pause_distance", "   "));
+        // The refusal says how to switch it off too: the tablet's switch is the empty box.
         foreach (var bad in new[] { "0", "12.5", "1000", "-5", "abc", "12 3", "99999999999999999999" })
-            Assert.Equal("type a whole number from 1 to 999", Refused("tod_pause_distance", bad));
+            Assert.Equal("type a whole number from 1 to 999, or leave the box empty to switch it off",
+                Refused("tod_pause_distance", bad));
 
         // EFB brightness: a whole percent, stored a hair above so the tablet shows it whether it floors or rounds.
         var p29 = Accepted("display_brightness", "29");
@@ -567,12 +569,11 @@ public class Bbs757EfbSettingsTests
         Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", "abc"));
         Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", ""));
 
-        // SimBrief ID: digits only, or empty for not set.
+        // SimBrief ID: digits only, not 0, or empty for not set. "0" is digits, so the refusal says "not 0" too.
         Assert.Equal(Bbs757Value.Of(1234567L), Accepted("simbrief_id", " 1234567"));
         Assert.Equal(Bbs757Value.Of(-1L), Accepted("simbrief_id", ""));
-        Assert.Equal("type digits only", Refused("simbrief_id", "12a"));
-        Assert.Equal("type digits only", Refused("simbrief_id", "-12"));
-        Assert.Equal("type digits only", Refused("simbrief_id", "12 34"));
+        foreach (var bad in new[] { "12a", "-12", "12 34", "0", "000" })
+            Assert.Equal("type a SimBrief ID number (digits, not 0)", Refused("simbrief_id", bad));
 
         // The two codes: the text as typed, trimmed.
         Assert.Equal(Bbs757Value.Of("AB1"), Accepted("hoppie_logon_code", "  AB1 "));
@@ -660,12 +661,33 @@ public class Bbs757EfbSettingsTests
             Refused("failures.random_multiplier", "0,5"),
             Refused("tod_pause_distance", "0"),
             Refused("display_brightness", "101"),
+            Refused("simbrief_id", "0"),
         });
 
         Assert.Equal(new[]
         {
-            "type a number from 1 to 1000", "type a whole number from 1 to 999", "type a whole number from 0 to 100",
+            "type a number from 1 to 1000", "type a whole number from 1 to 999, or leave the box empty to switch it off",
+            "type a whole number from 0 to 100", "type a SimBrief ID number (digits, not 0)",
         }, reasons);
+    }
+
+    [Fact]
+    public void An_empty_box_says_what_it_means()
+    {
+        // TOD pause distance's empty box is the tablet's switch turned off; the pilot's identifiers' is "not set".
+        Assert.Equal("Leave empty to switch it off.", Bbs757EfbSettings.EmptyHint(Setting("tod_pause_distance")));
+        foreach (string path in new[] { "simbrief_id", "hoppie_logon_code", "sayintentions_acars_key" })
+            Assert.Equal("Leave empty for not set.", Bbs757EfbSettings.EmptyHint(Setting(path)));
+
+        // A box that cannot be cleared has none, and nor has a switch or a choice: exactly the boxes with an empty value.
+        Assert.Null(Bbs757EfbSettings.EmptyHint(Setting("display_brightness")));
+        Assert.Null(Bbs757EfbSettings.EmptyHint(Setting("failures.random_multiplier")));
+        Assert.Null(Bbs757EfbSettings.EmptyHint(Setting("baro_sync")));
+        Assert.Null(Bbs757EfbSettings.EmptyHint(Setting("loading_speed")));
+        Assert.All(Bbs757EfbSettings.All, s => Assert.True(
+            (s.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text && s.EmptyStored is not null)
+                == (Bbs757EfbSettings.EmptyHint(s) is not null),
+            s.Path));
     }
 
     // ---- the values themselves --------------------------------------------------------------------

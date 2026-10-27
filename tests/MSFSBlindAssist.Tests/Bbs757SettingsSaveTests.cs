@@ -155,17 +155,31 @@ public class Bbs757SettingsSaveTests
     [Fact]
     public void A_callout_of_the_group_refused_for_another_reason_stops_the_rest()
     {
-        var files = new FakeFiles();
-        files.Registrations[Egpws + "2500"] = new[] { ("G-AAAA", Refused(InUse)), ("G-BBBB", Refused(InUse)) };
+        // One registration: said under the callout the pilot pressed, which was not saved, naming the one not turned off.
+        var one = new FakeFiles();
+        one.Registrations[Egpws + "2500"] = new[] { ("G-BBS75", Refused(InUse)) };
 
-        var outcome = files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+        var outcome = one.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
             On(Egpws + "2500"));
 
         // Radio altimeter is never written: both on would be a state the tablet cannot make.
-        Assert.Equal(new[] { $"registrations {Egpws}2500 = false" }, files.Writes);
-        Assert.Equal("Couldn't save 2500: the file is in use", outcome.Spoken);
+        Assert.Equal(new[] { $"registrations {Egpws}2500 = false" }, one.Writes);
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 could not be turned off: the file is in use", outcome.Spoken);
         Assert.True(outcome.Immediate);
         Assert.Empty(outcome.TurnedOff);
+
+        // Several registrations, none turned off: each one named with its reason.
+        var two = new FakeFiles();
+        two.Registrations[Egpws + "2500"] = new[] { ("G-AAAA", Refused(InUse)), ("G-BBBB", Refused(Bbs757SettingsFile.UnreadableReason)) };
+
+        var both = two.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+            On(Egpws + "2500"));
+
+        Assert.Equal(new[] { $"registrations {Egpws}2500 = false" }, two.Writes);
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 could not be turned off: G-AAAA: the file is in use; "
+            + "G-BBBB: the file could not be read.", both.Spoken);
+        Assert.True(both.Immediate);
+        Assert.Empty(both.TurnedOff);
     }
 
     [Fact]
@@ -178,8 +192,49 @@ public class Bbs757SettingsSaveTests
             On(Egpws + "2500"));
 
         Assert.Equal(new[] { $"registrations {Egpws}2500 = false" }, files.Writes);
-        Assert.Equal("2500: saved for 1 of 2 registrations; G-BBBB: the file is in use.", outcome.Spoken);
+        // The callout pressed comes first: it was saved nowhere, as the chain stopped before its own write.
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 turned off for 1 of 2 registrations; G-BBBB: the file is in use.",
+            outcome.Spoken);
         Assert.True(outcome.Immediate);
+        Assert.Empty(outcome.TurnedOff);
+    }
+
+    [Fact]
+    public void A_file_without_the_callout_is_not_counted_as_one_that_turned_it_off()
+    {
+        // G-BBBB has no 2500: its refusal counts as done (the callout cannot be on there), but nothing was saved in it.
+        var files = new FakeFiles();
+        files.Registrations[Egpws + "2500"] = new[]
+        {
+            ("G-AAAA", Saved), ("G-BBBB", Refused(NotInFile)), ("G-CCCC", Refused(InUse)),
+        };
+
+        var some = files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+            On(Egpws + "2500"));
+
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 turned off for 1 of 3 registrations; G-CCCC: the file is in use.",
+            some.Spoken);
+
+        // Already off counts, as a file that holds the value already is saved.
+        files.Registrations[Egpws + "2500"] = new[]
+        {
+            ("G-AAAA", Unchanged), ("G-BBBB", Refused(NotInFile)), ("G-CCCC", Refused(InUse)),
+        };
+
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 turned off for 1 of 3 registrations; G-CCCC: the file is in use.",
+            files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+                On(Egpws + "2500")).Spoken);
+
+        // With nothing turned off anywhere, it is no partial save: the one file that failed is named.
+        files.Registrations[Egpws + "2500"] = new[] { ("G-AAAA", Refused(NotInFile)), ("G-BBBB", Refused(InUse)) };
+
+        var none = files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+            On(Egpws + "2500"));
+
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 could not be turned off: G-BBBB: the file is in use.",
+            none.Spoken);
+        Assert.True(none.Immediate);
+        Assert.Empty(none.TurnedOff);
     }
 
     // ---- "turned off" ----------------------------------------------------------------------------------
@@ -238,7 +293,8 @@ public class Bbs757SettingsSaveTests
         var outcome = files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
             On(Egpws + "2500"));
 
-        Assert.Equal("Couldn't save Radio altimeter (2500): the file is in use. 2500 turned off", outcome.Spoken);
+        Assert.Equal("Couldn't save Radio altimeter (2500): G-AAAA: the file is in use; G-BBBB: the file is in use. 2500 turned off",
+            outcome.Spoken);
         Assert.True(outcome.Immediate);
         Assert.Equal(new[] { "2500" }, outcome.TurnedOff);
     }
@@ -318,7 +374,7 @@ public class Bbs757SettingsSaveTests
     }
 
     [Fact]
-    public void No_registration_saved_says_the_first_reason()
+    public void No_registration_saved_names_each_one_with_its_own_reason()
     {
         var files = new FakeFiles();
         files.Registrations[V1] = new[]
@@ -329,8 +385,16 @@ public class Bbs757SettingsSaveTests
 
         var outcome = files.Save(Setting(V1), Bbs757Value.Of(false), Files(SettingsJson, LiveryJson));
 
-        Assert.Equal("Couldn't save V1: the file is in use", outcome.Spoken);
+        Assert.Equal("Couldn't save V1: G-AAAA: the file is in use; G-BBBB: the file could not be read.", outcome.Spoken);
         Assert.True(outcome.Immediate);
+
+        // With one registration there is nothing to tell apart: its reason alone.
+        files.Registrations[V1] = new[] { ("G-BBS75", Refused(InUse)) };
+
+        var one = files.Save(Setting(V1), Bbs757Value.Of(false), Files(SettingsJson, LiveryJson));
+
+        Assert.Equal("Couldn't save V1: the file is in use", one.Spoken);
+        Assert.True(one.Immediate);
     }
 
     [Fact]
@@ -390,6 +454,16 @@ public class Bbs757SettingsSaveTests
             return files.Save(Setting(V1), Bbs757Value.Of(false), Files(SettingsJson, LiveryJson)).Spoken;
         });
         Assert.Equal("Saved for 1 of 2 registrations; G-BBBB: the file is in use.", spoken);
+
+        string? turnedOff = TestCulture.Run("de-DE", () =>
+        {
+            var files = new FakeFiles();
+            files.Registrations[Egpws + "2500"] = new[] { ("G-AAAA", Saved), ("G-BBBB", Refused(InUse)) };
+            return files.Save(Setting(Egpws + "radio_altimeter"), Bbs757Value.Of(true), Files(SettingsJson, LiveryJson),
+                On(Egpws + "2500")).Spoken;
+        });
+        Assert.Equal("Couldn't save Radio altimeter (2500): 2500 turned off for 1 of 2 registrations; G-BBBB: the file is in use.",
+            turnedOff);
     }
 
     // ---- why a row cannot change for its own state --------------------------------------------------------
@@ -411,14 +485,26 @@ public class Bbs757SettingsSaveTests
     }
 
     [Fact]
-    public void The_brightness_with_a_mode_that_cannot_be_read_says_why_the_mode_cannot()
+    public void The_brightness_with_a_mode_that_cannot_be_read_names_the_mode()
     {
-        var files = Files(Replaced(SettingsJson, "\"auto_brightness\":true,", ""));
-        Assert.Equal(Bbs757RowState.Automatic,
-            Bbs757SettingsRows.For(Bbs757SettingSection.General, files.Global, files.Registrations)
-                .Single(row => row.Setting.Path == "display_brightness").State);
+        // The mode missing, or of another type: the brightness itself is in the file, so its reason names the mode.
+        foreach (string json in new[]
+                 {
+                     Replaced(SettingsJson, "\"auto_brightness\":true,", ""),
+                     Replaced(SettingsJson, "\"auto_brightness\":true", "\"auto_brightness\":\"false\""),
+                 })
+        {
+            var files = Files(json);
+            Assert.Equal(Bbs757RowState.Automatic,
+                Bbs757SettingsRows.For(Bbs757SettingSection.General, files.Global, files.Registrations)
+                    .Single(row => row.Setting.Path == "display_brightness").State);
 
-        Assert.Equal(NotInFile, ReasonOf(Bbs757SettingSection.General, "display_brightness", files));
+            string? reason = ReasonOf(Bbs757SettingSection.General, "display_brightness", files);
+
+            Assert.Equal("EFB brightness mode is not readable in this BlueBird version", reason);
+            Assert.Equal("Couldn't save EFB brightness: EFB brightness mode is not readable in this BlueBird version",
+                Bbs757SettingsSave.CouldNotSave("EFB brightness", reason!));
+        }
     }
 
     [Fact]

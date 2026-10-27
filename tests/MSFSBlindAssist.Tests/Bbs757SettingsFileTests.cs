@@ -293,6 +293,31 @@ public class Bbs757SettingsFileTests
     }
 
     [Fact]
+    public void ValueAt_past_a_key_name_with_an_unpaired_surrogate_escape_reads_null_and_never_throws()
+    {
+        // A name at least as long as the key looked for is unescaped to be compared, and a lone \uD800 cannot be: the
+        // lookup throws, though the file parses. (A shorter name is passed over unread, so it never gets this far.)
+        using var doc = JsonDocument.Parse("{\"loading_speed\":2,\"\\uD800abcdefghijk\":1}");
+        Assert.Throws<InvalidOperationException>(() => doc.RootElement.TryGetProperty("loading_speed", out _));
+
+        Assert.Null(Bbs757SettingsFile.ValueAt(doc.RootElement, "loading_speed", Bbs757ValueType.Integer));
+        Assert.Null(Bbs757SettingsFile.ValueAt(doc.RootElement, "loading_speed.x", Bbs757ValueType.Integer));
+    }
+
+    [Fact]
+    public void ValueAt_on_a_disposed_document_throws_and_is_never_read_as_a_missing_key()
+    {
+        // A caller's mistake (the rows and the save's checks need their documents undisposed) must not pass as "unreadable".
+        var doc = JsonDocument.Parse("{\"loading_speed\":2,\"failures\":{\"random_enabled\":true}}");
+        JsonElement root = doc.RootElement;
+        doc.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => Bbs757SettingsFile.ValueAt(root, "loading_speed", Bbs757ValueType.Integer));
+        Assert.Throws<ObjectDisposedException>(() =>
+            Bbs757SettingsFile.ValueAt(root, "failures.random_enabled", Bbs757ValueType.Bool));
+    }
+
+    [Fact]
     public void Read_parses_the_file_and_is_null_when_it_is_missing_too_large_or_not_json()
     {
         using var tmp = new TempDir();
@@ -465,17 +490,35 @@ public class Bbs757SettingsFileTests
         Save("simbrief_id", Bbs757Value.Of(555L), simulatorClosed: false, mayLog: false);
         Save("hoppie_logon_code", Bbs757Value.Of("SECRET-LOGON"), simulatorClosed: true, mayLog: false);
 
+        // Each line names its file, by name only: a registration save makes one line for every registration's file.
         Assert.Equal(new[]
         {
-            "settings: loading_speed = 3",
-            "settings: irs_align_time = 2 not saved: the simulator is running",
-            "settings: no_such_key = 1 not saved: this BlueBird version doesn't have it",
-            "settings: simbrief_id changed",
-            "settings: simbrief_id not saved: the simulator is running",
-            "settings: hoppie_logon_code changed",
+            "settings: efb_settings.json: loading_speed = 3",
+            "settings: efb_settings.json: irs_align_time = 2 not saved: the simulator is running",
+            "settings: efb_settings.json: no_such_key = 1 not saved: this BlueBird version doesn't have it",
+            "settings: efb_settings.json: simbrief_id changed",
+            "settings: efb_settings.json: simbrief_id not saved: the simulator is running",
+            "settings: efb_settings.json: hoppie_logon_code changed",
         }, lines);
         Assert.DoesNotContain(lines, line => line.Contains("987654") || line.Contains("555") || line.Contains("SECRET"));
+        Assert.DoesNotContain(lines, line => line.Contains(tmp.Path, StringComparison.OrdinalIgnoreCase));   // never the folder
         Assert.Contains("\"simbrief_id\":987654", File.ReadAllText(file));   // saved all the same
+
+        // A registration's file, saved and refused.
+        string liveries = tmp.Sub("liveries");
+        Directory.CreateDirectory(liveries);
+        string livery = Path.Combine(liveries, "G-BBS75-opt.json");
+        File.Copy(LiveryFixture, livery);
+        lines.Clear();
+
+        Bbs757SettingsFile.Save(livery, "options.ehsi.up_reference", Bbs757Value.Of("trk"), () => true, backup, true, lines.Add);
+        Bbs757SettingsFile.Save(livery, "options.ehsi.up_reference", Bbs757Value.Of("hdg"), () => false, backup, true, lines.Add);
+
+        Assert.Equal(new[]
+        {
+            "settings: G-BBS75-opt.json: options.ehsi.up_reference = \"trk\"",
+            "settings: G-BBS75-opt.json: options.ehsi.up_reference = \"hdg\" not saved: the simulator is running",
+        }, lines);
     }
 
     [Fact]

@@ -5,12 +5,12 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// <summary>
 /// A choice list (DropDownList) that can be held at its selection without leaving the tab order. While
 /// <see cref="Locked"/>, what would change the selection does nothing: the arrow keys, Page Up, Page Down, Home, End,
-/// F4, Alt+Down and Alt+Up, a character (which selects the next item it begins), the mouse wheel and the drop-down
-/// (opened by a click or the screen reader, and closed again at once). Each attempt raises <see cref="LockedAttempt"/>
-/// once: a held key's repeats and one turn of the wheel are one attempt, so the window says why once, not on every
-/// repeat. Focus, the screen reader's reading and the selection shown stay as they are, where a disabled control would
-/// drop out of the tab order. The 757 EFB window's Settings page holds its choice lists with it while BlueBird's
-/// settings are read-only.
+/// F4, Alt+Down and Alt+Up, a character (which selects the next item it begins; one typed with AltGr too), the mouse
+/// wheel and the drop-down (opened by a click or the screen reader, and closed again at once). Each attempt raises
+/// <see cref="LockedAttempt"/> once: a held key's repeats and one turn of the wheel are one attempt, so the window says
+/// why once, not on every repeat. Focus, the screen reader's reading and the selection shown stay as they are, where a
+/// disabled control would drop out of the tab order. The 757 EFB window's Settings page holds its choice lists with it
+/// while BlueBird's settings are read-only.
 /// </summary>
 internal sealed class Bbs757LockableComboBox : ComboBox
 {
@@ -70,9 +70,10 @@ internal sealed class Bbs757LockableComboBox : ComboBox
 
     protected override void OnKeyPress(KeyPressEventArgs e)
     {
-        // A character selects the next item it begins; Enter, Escape and Backspace change nothing, and neither does an
-        // Alt+letter (WM_SYSCHAR, a mnemonic no control took).
-        if (_locked && !char.IsControl(e.KeyChar) && (ModifierKeys & Keys.Alt) == 0)
+        // A character selects the next item it begins; Enter, Escape and Backspace change nothing, and neither does a
+        // plain Alt+letter (WM_SYSCHAR, a mnemonic no control took). AltGr is Ctrl+Alt and types a character (@ on a
+        // German keyboard), so only Alt without Ctrl gets through.
+        if (_locked && !char.IsControl(e.KeyChar) && (ModifierKeys & (Keys.Alt | Keys.Control)) != Keys.Alt)
         {
             e.Handled = true;
             Attempt(_keyRepeat);

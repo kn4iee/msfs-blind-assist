@@ -197,4 +197,46 @@ public class Bbs757SimGuardTests
         Assert.Equal("Simulator started: BlueBird's settings are read-only.", Bbs757SimGuard.SimStartedText);
         Assert.Equal("Simulator closed: BlueBird's settings can be changed.", Bbs757SimGuard.SimClosedText);
     }
+
+    // ---- what the tab says for a change tried while read-only, and for a change of state --------------
+    // The 757 EFB window's Settings page decides these (BBS757EfbForm.Settings.cs) from the guard's state and texts.
+
+    private const string LockedText = "Close the simulator to change BlueBird's settings.";
+    private const string StartedText = "Simulator started: BlueBird's settings are read-only.";
+    private const string ClosedSpokenText = "Simulator closed: BlueBird's settings can be changed.";
+
+    [Theory]
+    // A simulator running: close it.
+    [InlineData(Bbs757SimState.Running, true, LockedText)]
+    // The check failing: closing the simulator may not be what is missing, so the status box's own words.
+    [InlineData(Bbs757SimState.Unknown, true, UnknownText)]
+    // No settings file, whatever the simulator does: the status box's words for that.
+    [InlineData(Bbs757SimState.Running, false, NoSettingsText)]
+    [InlineData(Bbs757SimState.Unknown, false, NoSettingsText)]
+    [InlineData(Bbs757SimState.NotRunning, false, NoSettingsText)]
+    public void A_change_tried_while_read_only_says_why(Bbs757SimState state, bool settingsFileExists, string expected)
+    {
+        Assert.Equal(expected, MSFSBlindAssist.Forms.BBS757.BBS757EfbForm.ReadOnlyAttemptText(state, settingsFileExists));
+    }
+
+    [Theory]
+    [InlineData(Bbs757SimState.NotRunning, Bbs757SimState.Running, false, StartedText)]
+    [InlineData(Bbs757SimState.Unknown, Bbs757SimState.Running, false, StartedText)]
+    [InlineData(Bbs757SimState.Running, Bbs757SimState.NotRunning, true, ClosedSpokenText)]
+    [InlineData(Bbs757SimState.Unknown, Bbs757SimState.NotRunning, true, ClosedSpokenText)]   // the check works again
+    // Closed, but BlueBird has made no settings file: nothing can be changed, so nothing is said.
+    [InlineData(Bbs757SimState.Running, Bbs757SimState.NotRunning, false, null)]
+    [InlineData(Bbs757SimState.Unknown, Bbs757SimState.NotRunning, false, null)]
+    // The check starts failing: the status box's words, said once.
+    [InlineData(Bbs757SimState.NotRunning, Bbs757SimState.Unknown, false, UnknownText)]
+    [InlineData(Bbs757SimState.Running, Bbs757SimState.Unknown, false, UnknownText)]
+    // No change, nothing said: a failure that lasts too.
+    [InlineData(Bbs757SimState.NotRunning, Bbs757SimState.NotRunning, true, null)]
+    [InlineData(Bbs757SimState.Running, Bbs757SimState.Running, false, null)]
+    [InlineData(Bbs757SimState.Unknown, Bbs757SimState.Unknown, false, null)]
+    public void A_change_of_the_simulator_s_state_is_said_once(Bbs757SimState before, Bbs757SimState now, bool writable,
+        string? expected)
+    {
+        Assert.Equal(expected, MSFSBlindAssist.Forms.BBS757.BBS757EfbForm.SimChangeText(before, now, writable));
+    }
 }

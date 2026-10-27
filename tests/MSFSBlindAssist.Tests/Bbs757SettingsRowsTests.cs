@@ -7,6 +7,7 @@ namespace MSFSBlindAssist.Tests;
 /// What each control of BlueBird's Settings tab shows (<see cref="Bbs757SettingsRows"/>): for a section, the rows built
 /// from the parsed <c>efb_settings.json</c> and the registrations' files. A row shows the tablet's word for the stored
 /// value, "Other (stored value N)" for a value the tablet has no word for, "Differs between registrations",
+/// "Differs between BlueBird's files" (Units, against the settings file's <c>units</c>),
 /// "Not readable in this BlueBird version" or "Automatic", and says whether the control may change. Pure: parsed JSON in,
 /// rows out, no files and no simulator. The fixtures are the settings file with made-up IDs and codes and
 /// G-BBS75-opt.json as BlueBird wrote it; a test changes one by replacing a stored value in its text.
@@ -476,12 +477,6 @@ public class Bbs757SettingsRowsTests
             Assert.Equal((Bbs757RowState.Unreadable, Bbs757SettingsRows.UnreadableText),
                 RowSummary(RowsOf(Bbs757SettingSection.LiveryOptions, null, lacking), WeightUnit));
         }
-
-        static (Bbs757RowState, string) RowSummary(IReadOnlyList<Bbs757SettingRow> rows, string path)
-        {
-            var row = RowFor(rows, path);
-            return (row.State, row.Text);
-        }
     }
 
     [Fact]
@@ -502,9 +497,81 @@ public class Bbs757SettingsRowsTests
         Assert.Equal((Bbs757RowState.Differs, -1, Bbs757SettingsRows.DiffersText), (differs.State, differs.ChoiceIndex, differs.Text));
         Assert.True(differs.CanEdit(true));
 
-        // The row reads the registrations, not the global `units` the tablet writes with them.
+        // The value shown is the registrations' own; the settings file's `units` only says whether the two files agree.
         string metricGlobal = Replaced(SettingsJson, "\"units\":1", "\"units\":0");
-        Assert.Equal("Imperial", RowFor(RowsOf(Bbs757SettingSection.LiveryOptions, metricGlobal, LiveryJson), WeightUnit).Text);
+        Assert.Equal("Imperial", RowFor(RowsOf(Bbs757SettingSection.LiveryOptions, SettingsJson, LiveryJson), WeightUnit).Text);
+        Assert.Equal("Metric", RowFor(RowsOf(Bbs757SettingSection.LiveryOptions, metricGlobal, kilos), WeightUnit).Text);
+    }
+
+    [Fact]
+    public void Units_differ_when_the_settings_file_holds_the_other_unit_s_units()
+    {
+        const string WeightUnit = "options.general.weight_unit";
+        string kilos = Replaced(LiveryJson, "\"weight_unit\":\"lbs\"", "\"weight_unit\":\"kg\"");
+        string metricGlobal = Replaced(SettingsJson, "\"units\":1", "\"units\":0");
+
+        // The registrations agree on pounds while the settings file's `units` is 0, metric's (and the other way round):
+        // BlueBird's two files disagree, which the tablet's one UNITS switch never leaves them in.
+        foreach (var (global, registrations) in new[]
+                 {
+                     (metricGlobal, new[] { LiveryJson }),
+                     (metricGlobal, new[] { LiveryJson, LiveryJson }),
+                     (SettingsJson, new[] { kilos }),
+                     // A units value the tablet never stores is another value too.
+                     (Replaced(SettingsJson, "\"units\":1", "\"units\":7"), new[] { LiveryJson }),
+                 })
+        {
+            var row = RowFor(RowsOf(Bbs757SettingSection.LiveryOptions, global, registrations), WeightUnit);
+
+            Assert.Equal((Bbs757RowState.Differs, -1, "Differs between BlueBird's files"), (row.State, row.ChoiceIndex, row.Text));
+            Assert.Equal(Bbs757SettingsRows.LinkedDiffersText, row.Text);
+            Assert.False(row.Inactive);
+            Assert.True(row.CanEdit(true));     // setting Units writes both files again
+            Assert.False(row.CanEdit(false));
+        }
+
+        // Registrations that differ among themselves keep their own text, whatever the settings file holds.
+        Assert.Equal((Bbs757RowState.Differs, Bbs757SettingsRows.DiffersText),
+            RowSummary(RowsOf(Bbs757SettingSection.LiveryOptions, metricGlobal, LiveryJson, kilos), WeightUnit));
+        Assert.Equal((Bbs757RowState.Differs, Bbs757SettingsRows.DiffersText),
+            RowSummary(RowsOf(Bbs757SettingSection.LiveryOptions, SettingsJson, LiveryJson, kilos), WeightUnit));
+
+        // A unit no word stores has no `units` of its own to compare: it stays Other.
+        string stone = Replaced(LiveryJson, "\"weight_unit\":\"lbs\"", "\"weight_unit\":\"stone\"");
+        Assert.Equal((Bbs757RowState.Other, "Other (stored value \"stone\")"),
+            RowSummary(RowsOf(Bbs757SettingSection.LiveryOptions, metricGlobal, stone), WeightUnit));
+
+        // Only Units has a linked key: the other Livery options rows read the registrations alone.
+        var livery = RowsOf(Bbs757SettingSection.LiveryOptions, metricGlobal, LiveryJson);
+        Assert.Equal((Bbs757RowState.Value, "HDG"), RowSummary(livery, "options.ehsi.up_reference"));
+        Assert.Equal((Bbs757RowState.Value, "Option 1"), RowSummary(livery, "options.general.vnav_takeoff_activation"));
+    }
+
+    [Fact]
+    public void Units_show_the_registrations_when_the_settings_file_s_units_does_not_read()
+    {
+        const string WeightUnit = "options.general.weight_unit";
+
+        // No settings file read, `units` missing, and `units` of another type: nothing to compare with, so the row
+        // shows what the registrations agree on.
+        foreach (string? global in new[]
+                 {
+                     null,
+                     Replaced(SettingsJson, ",\"units\":1", ""),
+                     Replaced(SettingsJson, "\"units\":1", "\"units\":\"0\""),
+                     Replaced(SettingsJson, "\"units\":1", "\"units\":0.5"),
+                     Replaced(SettingsJson, "\"units\":1", "\"units\":null"),
+                 })
+        {
+            Assert.Equal((Bbs757RowState.Value, "Imperial"),
+                RowSummary(RowsOf(Bbs757SettingSection.LiveryOptions, global, LiveryJson), WeightUnit));
+        }
+    }
+
+    private static (Bbs757RowState, string) RowSummary(IReadOnlyList<Bbs757SettingRow> rows, string path)
+    {
+        var row = RowFor(rows, path);
+        return (row.State, row.Text);
     }
 
     // ---- the announcement categories ----------------------------------------------------------------
@@ -650,6 +717,7 @@ public class Bbs757SettingsRowsTests
     {
         Assert.Equal("Not readable in this BlueBird version", Bbs757SettingsRows.UnreadableText);
         Assert.Equal("Differs between registrations", Bbs757SettingsRows.DiffersText);
+        Assert.Equal("Differs between BlueBird's files", Bbs757SettingsRows.LinkedDiffersText);
         Assert.Equal("Automatic", Bbs757SettingsRows.AutomaticText);
         Assert.Equal("Other (stored value 7)", Bbs757SettingsRows.OtherText("7"));
         Assert.Equal("Other (stored value \"stone\")", Bbs757SettingsRows.OtherText("\"stone\""));

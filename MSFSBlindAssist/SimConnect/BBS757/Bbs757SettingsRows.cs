@@ -24,7 +24,10 @@ public enum Bbs757RowState
     /// </summary>
     Unreadable,
 
-    /// <summary>The registrations' files hold different values for the setting.</summary>
+    /// <summary>
+    /// The registrations' files hold different values for the setting, or, for a setting with a linked key (Units and
+    /// <c>units</c>), they agree and the settings file's linked key holds another value than their choice stores there.
+    /// </summary>
     Differs,
 
     /// <summary>
@@ -44,9 +47,10 @@ public enum Bbs757RowState
 /// <param name="Text">
 /// What the control shows: the chosen choice's word for a switch or a choice, <see cref="Bbs757EfbSettings.NumberText"/>
 /// for a number or text box, and for every other state that state's own text (<see cref="Bbs757SettingsRows.OtherText"/>,
-/// <see cref="Bbs757SettingsRows.DiffersText"/>, <see cref="Bbs757SettingsRows.UnreadableText"/>,
-/// <see cref="Bbs757SettingsRows.AutomaticText"/>). For the pilot's identifiers (SimBrief ID, Hoppie logon code,
-/// SayIntentions ACARS key) it is the stored value itself, so a row never goes into a log.
+/// <see cref="Bbs757SettingsRows.DiffersText"/> or <see cref="Bbs757SettingsRows.LinkedDiffersText"/>,
+/// <see cref="Bbs757SettingsRows.UnreadableText"/>, <see cref="Bbs757SettingsRows.AutomaticText"/>). For the pilot's
+/// identifiers (SimBrief ID, Hoppie logon code, SayIntentions ACARS key) it is the stored value itself, so a row never
+/// goes into a log.
 /// </param>
 /// <param name="Inactive">
 /// The setting waits for another one (<see cref="Bbs757Setting.EnabledBy"/>) that does not read On. An inactive row keeps
@@ -73,14 +77,17 @@ public sealed record Bbs757SettingRow(Bbs757Setting Setting, Bbs757RowState Stat
 /// Aircraft, AIRAC data and Failures) reads that file. A setting of the registrations (Livery options, Callouts and
 /// Cabin audio) reads every registration's file in which its key reads: they agree, and the row shows the value; they
 /// differ, and it says so; none reads, and it is unreadable. A registration whose file lacks the key, or holds another
-/// type there, is left out and does not change what the others show (the save that reaches it says so). A value of the
-/// right type that none of the tablet's words stores shows as "Other (stored value N)", and the control can still be set
-/// to a word. The EFB brightness is the stored brightness only while the file says the brightness mode is manual: when it
-/// says automatic, or says nothing that can be read, the row is <see cref="Bbs757RowState.Automatic"/> and cannot change,
-/// so brightness is written only while the mode is known to be manual (with no settings file at all, every row of that
-/// file, this one too, is unreadable). A setting that waits for another is inactive unless that one reads On. Pure: it
-/// reads the JSON it is given and nothing else, so the tab calls it again after every save and when the simulator
-/// closes. The rows never hold a <see cref="JsonElement"/>.
+/// type there, is left out and does not change what the others show (the save that reaches it says so). Units, whose
+/// tablet switch writes the settings file's <c>units</c> with it, also differs (<see cref="LinkedDiffersText"/>) when
+/// the registrations agree on a unit and <c>units</c> reads but holds another value than that unit's; a settings file or
+/// a <c>units</c> that does not read leaves the registrations' unit shown. A value of the right type that none of the
+/// tablet's words stores shows as "Other (stored value N)", and the control can still be set to a word. The EFB
+/// brightness is the stored brightness only while the file says the brightness mode is manual: when it says automatic,
+/// or says nothing that can be read, the row is <see cref="Bbs757RowState.Automatic"/> and cannot change, so brightness
+/// is written only while the mode is known to be manual (with no settings file at all, every row of that file, this one
+/// too, is unreadable). A setting that waits for another is inactive unless that one reads On. Pure: it reads the JSON it
+/// is given and nothing else, so the tab calls it again after every save and when the simulator closes. The rows never
+/// hold a <see cref="JsonElement"/>.
 /// </summary>
 public static class Bbs757SettingsRows
 {
@@ -89,6 +96,12 @@ public static class Bbs757SettingsRows
 
     /// <summary>What a registration setting shows when the registrations' files hold different values.</summary>
     public const string DiffersText = "Differs between registrations";
+
+    /// <summary>
+    /// What Units shows when the registrations agree on a unit and the settings file's <c>units</c> holds another value
+    /// than that unit's: BlueBird's two files disagree, where one tap of the tablet's UNITS switch writes both.
+    /// </summary>
+    public const string LinkedDiffersText = "Differs between BlueBird's files";
 
     /// <summary>What the EFB brightness shows while its mode is automatic.</summary>
     public const string AutomaticText = "Automatic";
@@ -186,7 +199,21 @@ public static class Bbs757SettingsRows
             if (agreed is not { } first) agreed = held;
             else if (held != first) return new Bbs757SettingRow(setting, Bbs757RowState.Differs, -1, DiffersText);
         }
-        return agreed is { } common ? Shown(setting, common) : Unreadable(setting);
+        if (agreed is not { } common) return Unreadable(setting);
+        return LinkedKeyDiffers(setting, common, global)
+            ? new Bbs757SettingRow(setting, Bbs757RowState.Differs, -1, LinkedDiffersText)
+            : Shown(setting, common);
+    }
+
+    // Whether the settings file's copy of the setting's linked key (Units' `units`) reads and holds another value than the
+    // choice the registrations agree on stores there. A settings file that was not read, a linked key that does not read
+    // as its type, and a value that is no choice's (Other: no choice says what the key should hold) say nothing. Only a
+    // linked key in the settings file is compared: the catalog has no other.
+    private static bool LinkedKeyDiffers(Bbs757Setting setting, Bbs757Value agreed, JsonElement? global)
+    {
+        if (setting.Also is not { File: Bbs757SettingFile.Global } also || global is not { } root) return false;
+        if (setting.Choices.FirstOrDefault(choice => choice.Stored == agreed)?.AlsoStored is not { } linked) return false;
+        return Bbs757SettingsFile.ValueAt(root, also.Path, linked.Type) is { } held && held != linked;
     }
 
     // The row for a value that was read: the tablet's word, "Other" for a value of no word, or the box's text.

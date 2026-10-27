@@ -34,8 +34,8 @@ public sealed record Bbs757EditResult(byte[]? Bytes, string? Refusal);
 /// loaded (docs/b757/evidence/efb-settings.md, section 1). It never creates a file, and refuses rather than guesses: a
 /// missing file or key, a value of another type, a file that is not JSON, that names a key on the way twice or whose text
 /// there cannot be read. The files hold the pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key: their
-/// content is never logged; each save or refusal is logged with its key, and with its value only when the caller says
-/// the setting may be logged.
+/// content is never logged; each save or refusal is logged with the file's name alone and its key, and with its value
+/// only when the caller says the setting may be logged.
 /// </summary>
 public static class Bbs757SettingsFile
 {
@@ -92,22 +92,27 @@ public static class Bbs757SettingsFile
     /// The value at <paramref name="path"/> (keys dotted through the file's objects: <c>options.egpws_callouts.80</c>) as
     /// <paramref name="type"/>, or null when a key on the way is missing or holds no object, the value does not fit the
     /// type (<see cref="Bbs757Value.From"/>), or a key's name on the way cannot be read (an unpaired surrogate escape, on
-    /// which the lookup throws). Never throws for the file's content.
+    /// which the lookup throws). Never throws for the file's content. A document already disposed throws
+    /// <see cref="ObjectDisposedException"/>: a caller's mistake is never read as a missing key.
     /// </summary>
     public static Bbs757Value? ValueAt(JsonElement root, string path, Bbs757ValueType type)
     {
         JsonElement element = root;
         foreach (string key in path.Split('.'))
         {
+            if (element.ValueKind != JsonValueKind.Object) return null;
+            JsonElement inner;
             try
             {
-                if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(key, out JsonElement inner)) return null;
-                element = inner;
+                if (!element.TryGetProperty(key, out inner)) return null;
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex) when (ex is not ObjectDisposedException)
             {
+                // A key's name the lookup unescaped to compare holds an unpaired surrogate escape: the file parses, but
+                // the name cannot be read.
                 return null;
             }
+            element = inner;
         }
         return Bbs757Value.From(element, type);
     }
@@ -158,9 +163,11 @@ public static class Bbs757SettingsFile
     /// may have started meanwhile; the safety copy (<paramref name="backup"/>); the changed bytes written to
     /// <c>&lt;file&gt;.msfsba-tmp</c> and moved over the file (failing: the temp file removed, <see cref="InUseReason"/>).
     /// A refused save leaves the file as it was. Logs one line for a save and one for a refusal, none when unchanged: the
-    /// key, the value only when <paramref name="mayLog"/> (never for the pilot's identifiers), and a refusal's reason.
-    /// Never throws for the file; throws <see cref="ArgumentException"/> for a float that is not finite, before the file
-    /// is read.
+    /// file's name alone (<c>efb_settings.json</c>, <c>G-BBS75-opt.json</c>: a registration save makes one line for each
+    /// registration's file, and the EFB window logs the work folder itself when it finds it), the key, the value only when
+    /// <paramref name="mayLog"/> (never for the pilot's identifiers), and a refusal's reason:
+    /// <c>settings: G-BBS75-opt.json: options.ehsi.up_reference = "trk"</c>. Never throws for the file; throws
+    /// <see cref="ArgumentException"/> for a float that is not finite, before the file is read.
     /// </summary>
     public static Bbs757SaveResult Save(string filePath, string path, Bbs757Value value, Func<bool> mayWrite,
         Bbs757SettingsBackup backup, bool mayLog) =>
@@ -176,13 +183,16 @@ public static class Bbs757SettingsFile
     {
         string json = value.ToJson();
         var result = SaveWithoutLog(filePath, path, value, mayWrite, backup);
+        // The file by its name alone, which tells one registration's file from another's (registration names are not
+        // private); the EFB window logs the work folder when it finds it.
+        string key = $"{Path.GetFileName(filePath)}: {path}";
         switch (result.Status)
         {
             case Bbs757SaveStatus.Saved:
-                log(mayLog ? $"settings: {path} = {json}" : $"settings: {path} changed");
+                log(mayLog ? $"settings: {key} = {json}" : $"settings: {key} changed");
                 break;
             case Bbs757SaveStatus.Refused:
-                log(mayLog ? $"settings: {path} = {json} not saved: {result.Reason}" : $"settings: {path} not saved: {result.Reason}");
+                log(mayLog ? $"settings: {key} = {json} not saved: {result.Reason}" : $"settings: {key} not saved: {result.Reason}");
                 break;
         }
         return result;

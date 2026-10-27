@@ -165,10 +165,12 @@ control was checked against both whole files (only HOPPIE ACARS was left alone).
 ## 10. Handoff to plan 16
 
 The Settings tab is built and reviewed: commits `4287a3663` (sections 1 to 9 above) to `7d7d6194d` on
-`b757-efb-settings`, then the one that adds rule B757-17 and this section. This work is not one of the numbered gap
-plans, and it edited none of the files plan 16 owns for the docs: `docs/b757.md`, `guide/**`,
+`b757-efb-settings`, then two that add rule B757-17 and this section (`3d690136e`, and `016c42d4b`, which says exactly
+what was measured), then the fixes from the whole-branch review. This work is not one of the numbered gap plans, and it
+edited none of the files plan 16 owns for the docs: `docs/b757.md`, `guide/**`,
 `MSFSBlindAssist/HotkeyGuides/BBS757_Hotkeys.txt` and `changelog.d/**`. This section says what each needs. Line numbers
-are as of `7d7d6194d`: check them against the file before editing. The in-sim checks (last list) have not been run.
+are as of the review's fixes (the commit after `016c42d4b`): check them against the file before editing. The in-sim
+checks (last list) have not been run.
 
 **What changed for a pilot** (the text for `docs/b757.md`'s EFB section, the hotkey guide and the guide):
 
@@ -176,17 +178,23 @@ are as of `7d7d6194d`: check them against the file before editing. The in-sim ch
   them.
 - Settings shows every BlueBird tablet setting in seven sections (General, Aircraft, AIRAC data, Failures, Livery
   options, Callouts, Cabin audio), read from BlueBird's own files. While no simulator runs, a change is saved to the
-  files at once and BlueBird applies it when the 757 next loads. While any simulator process runs, or the app cannot
-  tell whether one does, everything is read-only and an attempt says "Close the simulator to change BlueBird's
-  settings." A status box at the top of the tab says which case it is (with work folders under both simulators, its
-  closed-simulator text ends "Changes go to the MSFS 2024 folder.", or the MSFS 2020 folder), and a simulator that
-  starts or closes while the window is open is said once ("Simulator started: BlueBird's settings are read-only." and
-  "Simulator closed: BlueBird's settings can be changed.").
+  files at once and BlueBird applies it when the 757 next loads. While any simulator process runs, everything is
+  read-only and an attempt says "Close the simulator to change BlueBird's settings."; while the app cannot tell whether
+  one does, everything is read-only too and an attempt says "The app can't tell whether the simulator is running, so
+  BlueBird's settings are read-only." A status box at the top of the tab says which case it is (with work folders under
+  both simulators, its closed-simulator text ends "Changes go to the MSFS 2024 folder.", or the MSFS 2020 folder), and a
+  simulator that starts or closes while the window is open is said once ("Simulator started: BlueBird's settings are
+  read-only." and "Simulator closed: BlueBird's settings can be changed."), as is the app losing track of it (the
+  can't-tell text).
 - A switch is a check box, the tablet's named values are a choice list, and a number or text is a box with a Set
   button (Enter sets too; it says `<label> saved`, or "Couldn't save <label>: <reason>"). The SimBrief ID, Hoppie
-  logon code and SayIntentions ACARS key show in plain text. A row can also read "Other (stored value N)", "Not
-  readable in this BlueBird version", "Differs between registrations" (the Livery options, Callouts and Cabin audio
-  sections change every registration's file) or, for EFB brightness while its mode is Auto, "Automatic".
+  logon code and SayIntentions ACARS key show in plain text. An empty box means off (TOD pause distance) or not set
+  (the SimBrief ID and the two codes), and each of those boxes says so in its description. A row can also read "Other
+  (stored value N)", "Not readable in this BlueBird version", "Differs between registrations" (the Livery options,
+  Callouts and Cabin audio sections change every registration's file), "Differs between BlueBird's files" (Units, when
+  the registrations agree on a unit and `efb_settings.json`'s `units` holds another value) or, for EFB brightness while
+  its mode is Auto, "Automatic". A check box reading "differs" (half checked) switches off everywhere on its first
+  press.
 - The Livery options, Callouts and Cabin audio sections start with a line naming the registrations whose files their
   rows change ("Applies to 1 registration: G-BBS75", "Applies to 3 registrations: A, B, C"; with no registration file
   yet, "BlueBird has no registration options yet. Fly a livery once to create them.").
@@ -245,12 +253,13 @@ files):
 - Plan 16 removes `docs/b757/` before the merge. These comments cite this file by path: `Bbs757SimGuard.cs` line 25,
   `Bbs757SettingsFile.cs` line 34, `Bbs757EfbSettings.cs` lines 152 and 182, `BBS757EfbForm.Settings.cs` line 11 and
   `Bbs757EfbSettingsTests.cs` line 9. Ten more cite only "evidence section N", so `git grep "docs/b757/"` will not
-  find them: `Bbs757EfbSettings.cs` lines 228, 436, 464, 488, 499, 516, 530, 552 and 583, and
+  find them: `Bbs757EfbSettings.cs` lines 228, 462, 490, 514, 525, 542, 556, 578 and 609, and
   `Bbs757EfbSettingsTests.cs` line 10. Four cite "the spec", which is not committed (`docs/superpowers` is
-  git-ignored): `Bbs757EfbSettings.cs` lines 184 and 500, and `Bbs757SimGuardTests.cs` lines 10 and 21. B757-17's full
-  text restates sections 1 and 9 and stands alone, so point the comments about section 1 or 9 there. Sections 2 to 8
-  (each tablet label, key and stored value) are the authority for the catalog and `Bbs757EfbSettingsTests`: fold them
-  into `docs/b757.md` first.
+  git-ignored): `Bbs757EfbSettings.cs` lines 184 and 526, and `Bbs757SimGuardTests.cs` lines 10 and 21. B757-17's own
+  full text (`docs/invariants/b757.md`) cites this file by path on line 30 and as "evidence section N" on lines 37 and
+  38, and line 40 sends the reader to in-sim check 7 of this section. That full text restates sections 1 and 9 and
+  stands alone, so point the comments about section 1 or 9 there. Sections 2 to 8 (each tablet label, key and stored
+  value) are the authority for the catalog and `Bbs757EfbSettingsTests`: fold them into `docs/b757.md` first.
 
 **Notes for plan 11's owner and plan 16.**
 
@@ -276,8 +285,8 @@ files):
 **User guide (CORE-19) and the changelog.**
 
 - The PR line: while plan 16 has not updated the guide, `User guide: needed: 757 EFB window` (plan 16 updates `guide/`
-  with the rest of the 757); once plan 16 bundles the guide, its own `User guide: updated: <chapters>` line covers the
-  757 EFB window chapter.
+  with the rest of the 757). A PR that updates `guide/` itself needs no `User guide:` line (CORE-19), so the line goes
+  once plan 16's guide update is in the same PR.
 - Proposed changelog fragment (category `aircraft` or `feature`, as plan 16 bundles it): "The 757 EFB window has a
   Settings tab: every BlueBird tablet setting can be read and changed with the screen reader while the simulator is
   closed, and BlueBird applies it at the next load."
@@ -285,34 +294,44 @@ files):
 **Still to run in the simulator** (this work's in-sim plan and what its reviews added; plan 16's Task 5 can take them
 into the owner's pass):
 
-1. Simulator closed: Shift+T, Ctrl+Tab to Settings. Check the status box, the section list, the tab order and what is
-   spoken. Change Nosewheel steering, Boarding & load rate, IRS alignment time, Units, one callout, the SimBrief ID and
+1. Simulator closed and BBS Nest running, as usual: Shift+T, Ctrl+Tab to Settings. Check the status box, the section
+   list, the tab order and what is spoken (the TOD pause distance and SimBrief ID boxes' descriptions say what empty
+   means). Change Nosewheel steering, Boarding & load rate, IRS alignment time, Units, one callout, the SimBrief ID and
    a Hoppie logon code; each choice keeps focus. Switch on Radio altimeter (2500): "2500 turned off" is spoken. Switch
-   Announcements off: the two categories say "Turn on Announcements to change this." Optional: Hoppie ACARS on (never
-   tapped on the tablet).
-2. The locked lists: arrows, Left/Right, the Page keys, Home/End, a letter, Alt+Down, F4, the wheel and a click each
-   speak "Close the simulator to change BlueBird's settings." once and change nothing; a held key speaks once;
-   Alt+letter and Escape still work (Escape closes an open list, not the window).
+   Announcements off: the two categories say "Turn on Announcements to change this." Optional: Hoppie ACARS on (not
+   tapped when measuring).
+2. The locked lists: arrows, Left/Right, the Page keys, Home/End, a letter, an AltGr character (@ on a German
+   keyboard), Alt+Down, F4, the wheel and a click each speak "Close the simulator to change BlueBird's settings." once
+   and change nothing; a held key speaks once; Alt+letter and Escape still work (Escape closes an open list, not the
+   window).
 3. A refused save puts the stored value back (an arrow commit and an open-list commit). An open list, an arrow, then
    Tab away: nothing saved, nothing said? (to see)
 4. NVDA's order: "checked" before "2500 turned off"; focus never moves after a save, "Simulator closed" or opening.
 5. Simulator start and close: spoken within about a second; the status box follows; the tab is editable again, with
    what BlueBird left.
 6. With the 757 loaded: the values set in 1 are in effect (both files read; Settings > Aircraft, Livery options,
-   Callouts and AIRAC data captured). Sign in to Navigraph and Update nav data work from the Settings tab, and the
-   Navigraph code is readable in the tab's EFB status box.
+   Callouts and AIRAC data captured). After the Units change and this load, read both `options.general.weight_unit`
+   (each registration file) and `units` (`efb_settings.json`). Sign in to Navigraph and Update nav data work from the
+   Settings tab, and the Navigraph code is readable in the tab's EFB status box.
 7. The premise of the group rule (`Bbs757SettingsSave`: a callout missing from a livery file counts as off): with the
    simulator closed, remove `options.egpws_callouts.minimum` from `G-BBS75-opt.json`, load the 757, read the file (is
    the key absent, added off or added on?), then restore the key.
 8. Timing: a five-member callout group save with the guard checking before every write (about 6 ms a check).
 9. Layout at the owner's DPI, measured and not looked at: the Flight tab without a scroll bar; the Settings rows scroll
    with focus.
-10. From the catalog's own notes and section 9, not in the list above: what was never measured. Clear the SimBrief ID,
-    the Hoppie logon code and the SayIntentions ACARS key on the tab (the safety copy then holds the real values), load
-    the 757 and read what BlueBird holds (-1, "" and "" expected; section 8 was not tapped). With the 757 loaded, set
-    and then clear each of those three boxes on the tablet itself, and switch Hoppie ACARS on and off if the owner
-    agrees (on, it could log on to Hoppie with his code), diffing both whole files after every change as in section 1:
-    section 9's check was not made on these four controls, so whether any of them writes a second key is unmeasured.
-    Then close the simulator and set the three again on the tab (the safety copy holds them). Set the TOD pause
-    distance to 1 and to 999 and see what the tablet shows (the range is a ruling; the tablet's keypad limits were not
-    measured).
+10. From the catalog's own notes and section 9, not in the list above: what was never measured. First note the real
+    SimBrief ID, Hoppie logon code and SayIntentions ACARS key: the safety copy holds them only if the window's first
+    write to `efb_settings.json` came before they changed. Clear the three on the tab, load the 757 and read what
+    BlueBird holds (-1, "" and "" expected; section 8 was not tapped). With the 757 loaded, set and then clear each of
+    those three boxes on the tablet itself, and switch Hoppie ACARS on and off if the owner agrees (on, it could log on
+    to Hoppie with his code), diffing both whole files after every change as the Method paragraph at the top and
+    section 9 describe: section 9's check was not made on these four controls, so whether any of them writes a second
+    key is unmeasured. Then close the simulator and set the three again on the tab, from the values noted. Last, the
+    TOD pause distance's range (a ruling; the tablet's keypad limits were not measured): set it to 1 on the tab, load
+    the 757 and read Settings > Aircraft through the probe capture and `tod_pause_distance` in the file BlueBird writes
+    back; then the same with 999.
+11. Typed numbers as the tablet reads them: with EFB brightness mode on Manual, set EFB brightness to 29 (stored
+    0.294, so that the tablet shows 29 whether it floors or rounds), set Random failure frequency to 2.5 and clear TOD
+    pause distance on the tab. Load the 757 and read the tablet through the probe (Settings > General's percent, the
+    Failures page's FREQUENCY, Settings > Aircraft's TOD pause distance) and the files (`display_brightness` 0.294,
+    `failures.random_multiplier` 2.5 and `tod_pause_distance` -1 expected).
