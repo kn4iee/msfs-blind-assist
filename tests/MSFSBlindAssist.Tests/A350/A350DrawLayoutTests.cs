@@ -14,6 +14,19 @@ public class A350DrawLayoutTests
 
     private static string Show(IReadOnlyList<DrawnCell> row) => string.Join(" | ", row.Select(c => c.Text + "{" + c.Colour + "}"));
 
+    // Live 2026-10-27 (IRs aligning): the captain's EFIS draws the ND on its left half and the PFD on its right
+    // ("ATT" flag at x 1163); the first officer's the other way round ("ATT" at x 327).
+    [Fact]
+    public void Each_side_draws_its_pfd_on_its_own_half()
+    {
+        var cpt = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "efis0_aligning.json")))!;
+        Assert.Contains(A350DrawLayout.Region(cpt.Texts, A350DrawLayout.EfisPfd(0)), t => t.Text == "ATT");
+        Assert.Contains(A350DrawLayout.Region(cpt.Texts, A350DrawLayout.EfisNd(0)), t => t.Text == "MAP NOT AVAIL");
+        Assert.True(A350DrawLayout.EfisPfd(1).Contains(327, 399));
+        Assert.True(A350DrawLayout.EfisNd(1).Contains(1098, 332));
+    }
+
     [Fact]
     public void The_warning_display_reads_in_rows_with_colours()
     {

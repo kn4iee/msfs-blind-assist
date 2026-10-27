@@ -25,9 +25,10 @@ public static class A350DrawLayout
     public static readonly A350Rect CtrPermanentData = new(0, 940, 822, Far);
     public static readonly A350Rect CtrWarningDisplay = new(822, 0, Far, Far);
 
-    /// <summary>EFIS: the PFD on the left half, the ND on the right (the ND subtracts 836 itself).</summary>
-    public static readonly A350Rect EfisPfd = new(0, 0, 836, Far);
-    public static readonly A350Rect EfisNd = new(836, 0, Far, Far);
+    /// <summary>EFIS: each side draws its PFD on its outboard half, mirrored (live): the captain's (side 0) on the
+    /// right half, the ND on the left; the first officer's (side 1) the PFD on the left, the ND on the right.</summary>
+    public static A350Rect EfisPfd(int side) => side == 0 ? new(836, 0, Far, Far) : new(0, 0, 836, Far);
+    public static A350Rect EfisNd(int side) => side == 0 ? new(0, 0, 836, Far) : new(836, 0, Far, Far);
 
     public static IReadOnlyList<DrawnText> Region(IEnumerable<DrawnText> texts, A350Rect r) =>
         texts.Where(t => r.Contains(t.X, t.Y)).ToList();
