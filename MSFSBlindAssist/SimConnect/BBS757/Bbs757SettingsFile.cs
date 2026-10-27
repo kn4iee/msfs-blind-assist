@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MSFSBlindAssist.Utils.Logging;
@@ -31,9 +32,10 @@ public sealed record Bbs757EditResult(byte[]? Bytes, string? Refusal);
 /// over it. A save writes only while the caller's guard allows, asked before reading and again just before writing: no
 /// simulator may run, since BlueBird reads these files once, when the 757 loads, and writes its own copy back while it is
 /// loaded (docs/b757/evidence/efb-settings.md, section 1). It never creates a file, and refuses rather than guesses: a
-/// missing file or key, a value of another type, a file that is not JSON or that names a key on the way twice. The files
-/// hold the pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key: their content is never logged, and a
-/// changed value only when the caller says the setting may be logged.
+/// missing file or key, a value of another type, a file that is not JSON, that names a key on the way twice or whose text
+/// there cannot be read. The files hold the pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key: their
+/// content is never logged; each save or refusal is logged with its key, and with its value only when the caller says
+/// the setting may be logged.
 /// </summary>
 public static class Bbs757SettingsFile
 {
@@ -88,53 +90,64 @@ public static class Bbs757SettingsFile
 
     /// <summary>
     /// The value at <paramref name="path"/> (keys dotted through the file's objects: <c>options.egpws_callouts.80</c>) as
-    /// <paramref name="type"/>, or null when a key on the way is missing or holds no object, or the value does not fit the
-    /// type (<see cref="Bbs757Value.From"/>).
+    /// <paramref name="type"/>, or null when a key on the way is missing or holds no object, the value does not fit the
+    /// type (<see cref="Bbs757Value.From"/>), or a key's name on the way cannot be read (an unpaired surrogate escape, on
+    /// which the lookup throws). Never throws for the file's content.
     /// </summary>
     public static Bbs757Value? ValueAt(JsonElement root, string path, Bbs757ValueType type)
     {
         JsonElement element = root;
         foreach (string key in path.Split('.'))
         {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(key, out JsonElement inner)) return null;
-            element = inner;
+            try
+            {
+                if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(key, out JsonElement inner)) return null;
+                element = inner;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
         return Bbs757Value.From(element, type);
     }
 
     /// <summary>
     /// <paramref name="original"/> with the value at <paramref name="path"/> changed to <paramref name="value"/> and every
-    /// other byte kept, or why not: <see cref="UnreadableReason"/> when the file is not JSON or names a key on the path
-    /// twice (which one BlueBird reads is unknown); <see cref="NotInFileReason"/> when the key is missing, holds an object
-    /// or a list, or holds a value that <paramref name="value"/>'s type does not read (<see cref="Bbs757Value.From"/>);
-    /// <see cref="VerifyReason"/> when the result, parsed, does not read back the value or differs anywhere else. A UTF-8
-    /// byte order mark before the JSON is kept. Pure. Throws <see cref="ArgumentException"/> for a float that is not
-    /// finite (<see cref="Bbs757Value.ToJson"/>).
+    /// other byte kept, or why not: <see cref="UnreadableReason"/> when the file is not JSON, names a key on the path twice
+    /// (which one BlueBird reads is unknown), or has text that cannot be read where the edit must read it (an unpaired
+    /// surrogate escape in the value's string or in a key's name); <see cref="NotInFileReason"/> when the key is missing,
+    /// holds an object or a list, or holds a value that <paramref name="value"/>'s type does not read
+    /// (<see cref="Bbs757Value.From"/>); <see cref="VerifyReason"/> when the result, parsed, does not read back the value or
+    /// differs anywhere else. A UTF-8 byte order mark before the JSON is kept. Pure. Throws
+    /// <see cref="ArgumentException"/> for a float that is not finite (<see cref="Bbs757Value.ToJson"/>), and never for the
+    /// file's content.
     /// </summary>
     public static Bbs757EditResult Edit(byte[] original, string path, Bbs757Value value)
     {
         byte[] token = Encoding.UTF8.GetBytes(value.ToJson());
         int bom = BomLength(original);
 
-        int start, length;
         try
         {
-            string? refusal = FindToken(original.AsSpan(bom), path.Split('.'), value.Type, out start, out length);
+            string? refusal = FindToken(original.AsSpan(bom), path.Split('.'), value.Type, out int start, out int length);
             if (refusal != null) return new Bbs757EditResult(null, refusal);
+            start += bom;
+
+            byte[] edited = new byte[original.Length - length + token.Length];
+            original.AsSpan(0, start).CopyTo(edited);
+            token.CopyTo(edited, start);
+            original.AsSpan(start + length).CopyTo(edited.AsSpan(start + token.Length));
+
+            string? problem = Verify(original, edited, path, value);
+            return problem == null ? new Bbs757EditResult(edited, null) : new Bbs757EditResult(null, problem);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
+            // Not JSON, or a key's name the walk or the check had to read holds an unpaired surrogate escape: reading
+            // such a name throws InvalidOperationException, though the file parses.
             return new Bbs757EditResult(null, UnreadableReason);
         }
-        start += bom;
-
-        byte[] edited = new byte[original.Length - length + token.Length];
-        original.AsSpan(0, start).CopyTo(edited);
-        token.CopyTo(edited, start);
-        original.AsSpan(start + length).CopyTo(edited.AsSpan(start + token.Length));
-
-        string? problem = Verify(original, edited, path, value);
-        return problem == null ? new Bbs757EditResult(edited, null) : new Bbs757EditResult(null, problem);
     }
 
     /// <summary>
@@ -144,12 +157,39 @@ public static class Bbs757SettingsFile
     /// already; the <see cref="Edit"/>, refused for its reason; <paramref name="mayWrite"/> asked again, as the simulator
     /// may have started meanwhile; the safety copy (<paramref name="backup"/>); the changed bytes written to
     /// <c>&lt;file&gt;.msfsba-tmp</c> and moved over the file (failing: the temp file removed, <see cref="InUseReason"/>).
-    /// A refused save leaves the file as it was. Logs the key, with the value only when <paramref name="mayLog"/> (never for
-    /// the pilot's identifiers). Never throws for the file; throws <see cref="ArgumentException"/> for a float that is not
-    /// finite, as <see cref="Edit"/> does.
+    /// A refused save leaves the file as it was. Logs one line for a save and one for a refusal, none when unchanged: the
+    /// key, the value only when <paramref name="mayLog"/> (never for the pilot's identifiers), and a refusal's reason.
+    /// Never throws for the file; throws <see cref="ArgumentException"/> for a float that is not finite, before the file
+    /// is read.
     /// </summary>
     public static Bbs757SaveResult Save(string filePath, string path, Bbs757Value value, Func<bool> mayWrite,
-        Bbs757SettingsBackup backup, bool mayLog)
+        Bbs757SettingsBackup backup, bool mayLog) =>
+        Save(filePath, path, value, mayWrite, backup, mayLog, static line => Log.Info("BBS757", line));
+
+    /// <summary>
+    /// <see cref="Save(string, string, Bbs757Value, Func{bool}, Bbs757SettingsBackup, bool)"/> with its log line given to
+    /// <paramref name="log"/>. Internal, so the tests read what a save logs without the app's process-wide logger (its
+    /// <c>Log.Redirect</c> hook belongs to the VirtualPilot harness alone, rule VP-1).
+    /// </summary>
+    internal static Bbs757SaveResult Save(string filePath, string path, Bbs757Value value, Func<bool> mayWrite,
+        Bbs757SettingsBackup backup, bool mayLog, Action<string> log)
+    {
+        string json = value.ToJson();
+        var result = SaveWithoutLog(filePath, path, value, mayWrite, backup);
+        switch (result.Status)
+        {
+            case Bbs757SaveStatus.Saved:
+                log(mayLog ? $"settings: {path} = {json}" : $"settings: {path} changed");
+                break;
+            case Bbs757SaveStatus.Refused:
+                log(mayLog ? $"settings: {path} = {json} not saved: {result.Reason}" : $"settings: {path} not saved: {result.Reason}");
+                break;
+        }
+        return result;
+    }
+
+    private static Bbs757SaveResult SaveWithoutLog(string filePath, string path, Bbs757Value value, Func<bool> mayWrite,
+        Bbs757SettingsBackup backup)
     {
         if (!mayWrite()) return Refused(SimRunningReason);
 
@@ -193,6 +233,9 @@ public static class Bbs757SettingsFile
                 // On the disk before the move, so a power cut cannot leave the file renamed but empty.
                 stream.Flush(flushToDisk: true);
             }
+            // Accepted race: a delete in the milliseconds since the read, with no simulator running, would let this move
+            // recreate the file (BlueBird's own content plus the one change). File.Replace with no backup name can lose
+            // the file on its error 1176, so the move stays.
             File.Move(temp, filePath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
@@ -202,7 +245,6 @@ public static class Bbs757SettingsFile
             return Refused(InUseReason);
         }
 
-        Log.Info("BBS757", mayLog ? $"settings: {path} = {value.ToJson()}" : $"settings: {path} changed");
         return new Bbs757SaveResult(Bbs757SaveStatus.Saved);
     }
 
@@ -288,7 +330,12 @@ public static class Bbs757SettingsFile
                         start = checked((int)reader.TokenStartIndex);
                         // A string's value span is its raw text, escapes and all, without the two quotes.
                         length = reader.ValueSpan.Length + (reader.TokenType == JsonTokenType.String ? 2 : 0);
-                        if (Bbs757Value.From(JsonElement.ParseValue(ref reader), type) is null) return NotInFileReason;
+                        JsonElement stored = JsonElement.ParseValue(ref reader);
+                        // A string read as text fits unless its text cannot be read (an unpaired surrogate escape).
+                        if (Bbs757Value.From(stored, type) is null)
+                            return stored.ValueKind == JsonValueKind.String && type == Bbs757ValueType.Text
+                                ? UnreadableReason
+                                : NotInFileReason;
                     }
                     valueIsTarget = false;
                     valueLevel = -1;
@@ -366,9 +413,11 @@ public static class Bbs757SettingsFile
 }
 
 /// <summary>
-/// The safety copy of BlueBird's settings files: before the first write to a file, the file as it was is copied to the
-/// backup folder under its own name, replacing the copy an earlier session left (one copy is kept for each file). Once
-/// for each file in this object's life, so the copy always holds the file from before the first change.
+/// The safety copy of BlueBird's settings files: before the first write to a file, the file as it was is copied to
+/// <c>&lt;backup folder&gt;\&lt;folder key&gt;\&lt;file name&gt;</c>, replacing the copy an earlier session left (one copy
+/// is kept for each file). The folder key stands for the file's own folder, so files of one name in two folders (the
+/// MSFS 2020 and MSFS 2024 work folders, a registration flown in both) keep a copy each. Once for each file in this
+/// object's life, so the copy always holds the file from before the first change.
 /// </summary>
 public sealed class Bbs757SettingsBackup
 {
@@ -389,9 +438,11 @@ public sealed class Bbs757SettingsBackup
     {
         try
         {
-            if (!_copied.Add(Path.GetFullPath(filePath))) return;
-            Directory.CreateDirectory(_folder);
-            File.Copy(filePath, Path.Combine(_folder, Path.GetFileName(filePath)), overwrite: true);
+            string file = Path.GetFullPath(filePath);
+            if (!_copied.Add(file)) return;
+            string copies = Path.Combine(_folder, FolderKey(Path.GetDirectoryName(file) ?? file));
+            Directory.CreateDirectory(copies);
+            File.Copy(file, Path.Combine(copies, Path.GetFileName(file)), overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
                                        or NotSupportedException or System.Security.SecurityException)
@@ -399,4 +450,9 @@ public sealed class Bbs757SettingsBackup
             // Best effort: the save goes on without a copy.
         }
     }
+
+    // The first 8 hex digits of SHA-256 over the folder's full path, upper-cased invariantly first: the same for every
+    // run and every spelling of the path's case (never string.GetHashCode, which changes from one process to the next).
+    private static string FolderKey(string folder) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(folder.ToUpperInvariant())), 0, 4);
 }

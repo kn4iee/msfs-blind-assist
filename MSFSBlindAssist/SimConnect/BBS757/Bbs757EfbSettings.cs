@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -56,7 +57,8 @@ public readonly record struct Bbs757Value(Bbs757ValueType Type, bool Bool, long 
     /// <summary>
     /// The value of a JSON element as <paramref name="type"/>, or null when it does not fit: Bool from true or false;
     /// Integer from a number written as a whole number that fits a long; Float from any finite number (a stored 1 is a
-    /// valid Float); Text from a string. Null, an object, an array and an undefined element fit no type.
+    /// valid Float); Text from a string that can be read. Null, an object, an array, an undefined element and a string
+    /// with an unpaired surrogate escape (<c>"\uD800x"</c>: it parses, but no string can hold it) fit no type.
     /// </summary>
     public static Bbs757Value? From(JsonElement e, Bbs757ValueType type) => type switch
     {
@@ -65,9 +67,25 @@ public readonly record struct Bbs757Value(Bbs757ValueType Type, bool Bool, long 
         Bbs757ValueType.Integer when e.ValueKind == JsonValueKind.Number && e.TryGetInt64(out long whole) => Of(whole),
         Bbs757ValueType.Float when e.ValueKind == JsonValueKind.Number && e.TryGetDouble(out double number)
             && double.IsFinite(number) => OfFloat(number),
-        Bbs757ValueType.Text when e.ValueKind == JsonValueKind.String => Of(e.GetString()!),
+        Bbs757ValueType.Text when e.ValueKind == JsonValueKind.String && TryGetText(e, out string? text) => Of(text),
         _ => null,
     };
+
+    // GetString throws InvalidOperationException for a string whose escapes are not valid UTF-16 (an unpaired
+    // surrogate such as \uD800), which JsonDocument parses all the same: such a string reads as no text.
+    private static bool TryGetText(JsonElement e, [NotNullWhen(true)] out string? text)
+    {
+        try
+        {
+            text = e.GetString();
+            return text != null;
+        }
+        catch (InvalidOperationException)
+        {
+            text = null;
+            return false;
+        }
+    }
 }
 
 /// <summary>Which of BlueBird's files holds a key.</summary>

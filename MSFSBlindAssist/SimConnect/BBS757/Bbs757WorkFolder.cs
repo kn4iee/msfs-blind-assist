@@ -25,7 +25,7 @@ public enum Bbs757WeightUnits
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key.
 /// This class's own readers take only the keys they name (<c>simbrief_id</c>, <c>units</c>,
 /// <c>tiller_realistic</c>, and the cycle file's <c>cycle</c>) and never log a file's content;
-/// <see cref="Bbs757SettingsFile"/> logs a changed value only for settings that may be logged
+/// <see cref="Bbs757SettingsFile"/> logs a value (saved or refused) only for settings that may be logged
 /// (<see cref="Bbs757Setting.MayLog"/>), and never the SimBrief ID, the Hoppie logon code or the
 /// SayIntentions ACARS key. The SimBrief ID is the pilot's own identifier: callers never log it
 /// either. Pure, with the folder candidates passed in.

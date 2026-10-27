@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -85,6 +86,12 @@ public class Bbs757SettingsFileTests
     }
 
     private static Bbs757SaveResult Refused(string reason) => new(Bbs757SaveStatus.Refused, reason);
+
+    // Where a file's safety copies go inside the backup folder: the first 8 hex digits of SHA-256 over its folder's full
+    // path in upper case, worked out here on its own so that a change of scheme (string.GetHashCode differs per process)
+    // fails a test.
+    private static string BackupKeyOf(string folder) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(folder).ToUpperInvariant())))[..8];
 
     // ---- changing the bytes -----------------------------------------------------------------------
 
@@ -202,6 +209,46 @@ public class Bbs757SettingsFileTests
         byte[] expected = [0xEF, 0xBB, 0xBF, .. Utf8("{\"loading_speed\":3}")];
 
         Assert.Equal(expected, Bbs757SettingsFile.Edit(original, "loading_speed", Bbs757Value.Of(3L)).Bytes);
+    }
+
+    [Fact]
+    public void Text_with_an_unpaired_surrogate_escape_is_refused_and_never_throws()
+    {
+        using var tmp = new TempDir();
+        // JSON allows any \u escape, so the file parses, but no string can hold a lone \uD800.
+        string file = tmp.Sub("efb_settings.json");
+        File.WriteAllText(file, File.ReadAllText(SettingsFixture)
+            .Replace("\"hoppie_logon_code\":\"NOT-A-REAL-CODE\"", "\"hoppie_logon_code\":\"\\uD800x\""));
+        byte[] before = File.ReadAllBytes(file);
+        var backup = new Bbs757SettingsBackup(tmp.Sub("bk"));
+
+        using (var doc = Bbs757SettingsFile.Read(file))
+        {
+            Assert.NotNull(doc);
+            JsonElement code = doc!.RootElement.GetProperty("hoppie_logon_code");
+            Assert.Throws<InvalidOperationException>(() => code.GetString());   // what reading it as text must survive
+            Assert.Null(Bbs757Value.From(code, Bbs757ValueType.Text));
+            Assert.Null(Bbs757SettingsFile.ValueAt(doc.RootElement, "hoppie_logon_code", Bbs757ValueType.Text));
+        }
+        Assert.Equal(Bbs757SettingsFile.UnreadableReason,
+            Bbs757SettingsFile.Edit(before, "hoppie_logon_code", Bbs757Value.Of("NEW-CODE")).Refusal);
+        Assert.Equal(Refused(Bbs757SettingsFile.UnreadableReason),
+            Bbs757SettingsFile.Save(file, "hoppie_logon_code", Bbs757Value.Of("NEW-CODE"), () => true, backup, false));
+        Assert.Equal(before, File.ReadAllBytes(file));
+
+        // Elsewhere it is never read: another value saves, and the text stays as it was.
+        Assert.Equal(Bbs757SaveStatus.Saved,
+            Bbs757SettingsFile.Save(file, "loading_speed", Bbs757Value.Of(3L), () => true, backup, true).Status);
+        Assert.Contains("\"hoppie_logon_code\":\"\\uD800x\"", File.ReadAllText(file));
+
+        // In a key's name: refused, not thrown, whether the name comes before or after the value.
+        foreach (string json in new[] { "{\"\\uD800x\":1,\"loading_speed\":2}", "{\"loading_speed\":2,\"\\uD800x\":1}" })
+        {
+            Assert.Equal(Bbs757SettingsFile.UnreadableReason,
+                Bbs757SettingsFile.Edit(Utf8(json), "loading_speed", Bbs757Value.Of(3L)).Refusal);
+            using var doc = JsonDocument.Parse(json);
+            _ = Bbs757SettingsFile.ValueAt(doc.RootElement, "loading_speed", Bbs757ValueType.Integer);
+        }
     }
 
     [Fact]
@@ -369,6 +416,69 @@ public class Bbs757SettingsFileTests
     }
 
     [Fact]
+    public void A_save_whose_move_fails_leaves_the_file_and_no_temp_file()
+    {
+        using var tmp = new TempDir();
+        string file = WriteFixtureSettings(tmp);
+        byte[] before = File.ReadAllBytes(file);
+        int calls = 0;
+        FileStream? reader = null;
+        try
+        {
+            // Opened at the second guard check, after the read: the backup and the temp file still succeed, but a file
+            // open without FileShare.Delete cannot be replaced.
+            var r = Bbs757SettingsFile.Save(file, "loading_speed", Bbs757Value.Of(3L), () =>
+            {
+                if (++calls == 2) reader = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return true;
+            }, new Bbs757SettingsBackup(tmp.Sub("bk")), true);
+
+            Assert.Equal(Refused(Bbs757SettingsFile.InUseReason), r);
+            Assert.Equal(2, calls);
+            Assert.Single(Directory.GetFiles(tmp.Sub("bk"), "*", SearchOption.AllDirectories));   // the backup was made
+        }
+        finally
+        {
+            reader?.Dispose();
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.False(File.Exists(file + ".msfsba-tmp"));
+    }
+
+    [Fact]
+    public void A_save_logs_its_key_its_value_only_when_it_may_and_why_it_was_refused()
+    {
+        using var tmp = new TempDir();
+        string file = WriteFixtureSettings(tmp);
+        var backup = new Bbs757SettingsBackup(tmp.Sub("bk"));
+        var lines = new List<string>();
+        void Save(string path, Bbs757Value value, bool simulatorClosed, bool mayLog) =>
+            Bbs757SettingsFile.Save(file, path, value, () => simulatorClosed, backup, mayLog, lines.Add);
+
+        Save("loading_speed", Bbs757Value.Of(3L), simulatorClosed: true, mayLog: true);
+        Save("loading_speed", Bbs757Value.Of(3L), simulatorClosed: true, mayLog: true);         // unchanged: no line
+        Save("irs_align_time", Bbs757Value.Of(2L), simulatorClosed: false, mayLog: true);
+        Save("no_such_key", Bbs757Value.Of(1L), simulatorClosed: true, mayLog: true);
+        // The pilot's identifiers: their key, never their value, saved or refused.
+        Save("simbrief_id", Bbs757Value.Of(987654L), simulatorClosed: true, mayLog: false);
+        Save("simbrief_id", Bbs757Value.Of(555L), simulatorClosed: false, mayLog: false);
+        Save("hoppie_logon_code", Bbs757Value.Of("SECRET-LOGON"), simulatorClosed: true, mayLog: false);
+
+        Assert.Equal(new[]
+        {
+            "settings: loading_speed = 3",
+            "settings: irs_align_time = 2 not saved: the simulator is running",
+            "settings: no_such_key = 1 not saved: this BlueBird version doesn't have it",
+            "settings: simbrief_id changed",
+            "settings: simbrief_id not saved: the simulator is running",
+            "settings: hoppie_logon_code changed",
+        }, lines);
+        Assert.DoesNotContain(lines, line => line.Contains("987654") || line.Contains("555") || line.Contains("SECRET"));
+        Assert.Contains("\"simbrief_id\":987654", File.ReadAllText(file));   // saved all the same
+    }
+
+    [Fact]
     public void A_missing_file_is_refused_and_never_created()
     {
         using var tmp = new TempDir();
@@ -400,11 +510,36 @@ public class Bbs757SettingsFileTests
         Assert.Equal(Bbs757SaveStatus.Saved,
             Bbs757SettingsFile.Save(file, "irs_align_time", Bbs757Value.Of(2L), () => true, backup, true).Status);
 
-        // One copy, under the file's own name, of the file as it was before the first save.
-        string copy = Assert.Single(Directory.GetFiles(tmp.Sub("bk")));
-        Assert.Equal("efb_settings.json", Path.GetFileName(copy));
+        // One copy, under the file's own name in its folder's key, of the file as it was before the first save.
+        string copy = Assert.Single(Directory.GetFiles(tmp.Sub("bk"), "*", SearchOption.AllDirectories));
+        Assert.Equal(Path.Combine(tmp.Sub("bk"), BackupKeyOf(tmp.Path), "efb_settings.json"), copy);
         Assert.Equal(original, File.ReadAllBytes(copy));
         Assert.NotEqual(original, File.ReadAllBytes(file));
+    }
+
+    [Fact]
+    public void Files_of_one_name_in_two_folders_keep_a_backup_each()
+    {
+        using var tmp = new TempDir();
+        string msfs2020 = tmp.Sub("msfs2020-work"), msfs2024 = tmp.Sub("msfs2024-work");
+        Directory.CreateDirectory(msfs2020);
+        Directory.CreateDirectory(msfs2024);
+        string first = Path.Combine(msfs2020, "efb_settings.json"), second = Path.Combine(msfs2024, "efb_settings.json");
+        File.Copy(SettingsFixture, first);
+        File.WriteAllText(second, WithValue(File.ReadAllText(SettingsFixture), "loading_speed", "1"));
+        byte[] firstOriginal = File.ReadAllBytes(first), secondOriginal = File.ReadAllBytes(second);
+        Assert.NotEqual(firstOriginal, secondOriginal);
+        var backup = new Bbs757SettingsBackup(tmp.Sub("bk"));
+
+        Assert.Equal(Bbs757SaveStatus.Saved,
+            Bbs757SettingsFile.Save(first, "irs_align_time", Bbs757Value.Of(2L), () => true, backup, true).Status);
+        Assert.Equal(Bbs757SaveStatus.Saved,
+            Bbs757SettingsFile.Save(second, "irs_align_time", Bbs757Value.Of(2L), () => true, backup, true).Status);
+
+        // Two copies, each in its own folder's key and holding its own file's bytes from before its save.
+        Assert.Equal(2, Directory.GetFiles(tmp.Sub("bk"), "*", SearchOption.AllDirectories).Length);
+        Assert.Equal(firstOriginal, File.ReadAllBytes(Path.Combine(tmp.Sub("bk"), BackupKeyOf(msfs2020), "efb_settings.json")));
+        Assert.Equal(secondOriginal, File.ReadAllBytes(Path.Combine(tmp.Sub("bk"), BackupKeyOf(msfs2024), "efb_settings.json")));
     }
 
     // ---- every registration -------------------------------------------------------------------------
