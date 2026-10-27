@@ -26,14 +26,15 @@ public static class A350MfdPage
 
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
 
-    private sealed record Cell(string Text, string Colour, float X, float Y);
+    /// <summary>A drawn text; <see cref="Index"/> is its place in the draw order.</summary>
+    private sealed record Cell(string Text, string Colour, float X, float Y, int Index);
 
     public static IReadOnlyList<MfdLine> Read(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
-        var cells = capture.Texts.Where(t => Mine(t.X) && !string.IsNullOrWhiteSpace(t.Text))
-            .Select(t => new Cell(Spaces.Replace(A350Ewd.WithoutLeaders(t.Text), " "), t.ColourName, t.X - shift, t.Y))
+        var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
+            .Select(p => new Cell(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " "), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
@@ -55,7 +56,10 @@ public static class A350MfdPage
         foreach (var e in capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0))
         {
             float x0 = e.X - shift, y0 = e.Y, x1 = x0 + e.RectW, y1 = y0 + e.RectH + 4;
-            var inside = cells.Where(c => !used.Contains(c) && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1)
+            // A control holds only what was drawn after it began: an open menu covers list rows drawn before it.
+            // The scratchpad's message is drawn before its box (live).
+            int from = e.Class == "NotepadTextbox" ? 0 : e.TextStart;
+            var inside = cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1)
                 .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
             string value = Words(inside.Select(c => c.Text));

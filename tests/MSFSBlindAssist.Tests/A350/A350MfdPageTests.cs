@@ -130,6 +130,23 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.Contains("DISCONTINUITY") && l.Contains("END OF F-PLN"));
     }
 
+    // P.POS's revisions menu open over the F-PLN (live, no flight plan): a menu item holds only what was drawn after it began
+    // (DrawnElement.TextStart), never the list rows under it.
+    [Fact]
+    public void An_open_menu_reads_its_own_items_only()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_fpln_revisions.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        // With no flight plan every item but HOLD is unavailable (grey).
+        Assert.Contains("FROM P.POS DIR TO button, grey", lines);
+        Assert.Contains("INSERT NEXT WPT button, grey", lines);
+        Assert.Contains("DEPARTURE button, grey", lines);
+        Assert.Contains("NEW DEST button, grey", lines);
+        Assert.Contains("HOLD button", lines);
+        Assert.Contains("- - - - - - DISCONTINUITY - - - - - -, white", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
