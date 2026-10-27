@@ -19,6 +19,18 @@ public class A350SdPageTests
     private static IReadOnlyList<string> Live(int page) => Page(page, "ctr_sd_live_");
 
     [Fact]
+    public void The_permanent_data_line_names_each_value()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sd_live_4.json")))!;
+        Assert.Equal(new[]
+        {
+            "TAT: XX °C, amber", "FLT, white", "Flight time: 00:00, green", "Gross weight: -- LBS, cyan",
+            "SAT: XX °C, amber", "Gross weight CG: -- %, cyan", "UTC: 16:31:57, green", "Fuel on board: 243700 LBS, green",
+        }, A350SdPage.ReadPermanentData(A350Ewd.Parse(cap).PermanentData));
+    }
+
+    [Fact]
     public void Live_dc_page_names_an_emergency_battery_that_is_off()
     {
         var p = Live(3);

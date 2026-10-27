@@ -22,28 +22,35 @@ public static class A350SdPage
 
     private static bool IsUnit(DrawnCell c) => c.Colour == "cyan" && Unit.IsMatch(c.Text);
 
-    public static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, int page)
+    public static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, int page) =>
+        Read(rows, Pages.GetValueOrDefault(page, Array.Empty<SdField>()), ColumnSplit.GetValueOrDefault(page, float.MaxValue));
+
+    /// <summary>The SD's bottom line, under every page: TAT, SAT, flight time, UTC, GW, GWCG, FOB.</summary>
+    public static IReadOnlyList<string> ReadPermanentData(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>
+        Read(rows, PermanentData, float.MaxValue);
+
+    private static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split)
     {
-        var fields = Pages.GetValueOrDefault(page, Array.Empty<SdField>());
         var all = rows.SelectMany(r => r).ToList();
         string? PageUnit(params string[] options) => all.FirstOrDefault(c => IsUnit(c) && options.Contains(c.Text))?.Text;
         var weight = PageUnit("LBS", "KG");
         var flow = PageUnit("LBS/H", "KG/H");
 
+        // A field gathers its texts across rows: UTC's colons are drawn a few pixels below its digits.
+        var byField = new Dictionary<SdField, (int Row, List<DrawnCell> Cells)>();
+        var units = new Dictionary<SdField, string>();
         var items = new List<(int Row, float X, string Text)>();
         for (int r = 0; r < rows.Count; r++)
         {
             var row = rows[r].Select(c => c with { Text = c.Text.TrimStart('.').Trim() }).Where(c => c.Text.Length > 0).ToList();
-            var byField = new Dictionary<SdField, List<DrawnCell>>();
-            var units = new Dictionary<SdField, string>();
             var loose = new List<DrawnCell>();
             foreach (var c in row)
             {
                 if (IsUnit(c))
                 {
                     // A unit reads with the field drawn just left of it; else with a loose value; alone it is a caption.
-                    var owner = byField.Where(kv => kv.Value.Count > 0 && c.X - kv.Value[^1].X is >= 0 and <= UnitReach)
-                        .OrderBy(kv => c.X - kv.Value[^1].X).Select(kv => kv.Key).FirstOrDefault();
+                    var owner = byField.Where(kv => kv.Value.Row == r && c.X - kv.Value.Cells[^1].X is >= 0 and <= UnitReach)
+                        .OrderBy(kv => c.X - kv.Value.Cells[^1].X).Select(kv => kv.Key).FirstOrDefault();
                     if (owner != null) units[owner] = c.Text;
                     else if (loose.Count > 0 && c.X - loose[^1].X is >= 0 and <= UnitReach && !IsUnit(loose[^1])) loose.Add(c);
                     continue;
@@ -51,20 +58,24 @@ public static class A350SdPage
                 var f = fields.Where(f => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx)
                     .OrderBy(f => Math.Abs(c.X - f.X)).FirstOrDefault();
                 if (f == null) { loose.Add(c); continue; }
-                if (!byField.TryGetValue(f, out var cells)) byField[f] = cells = new List<DrawnCell>();
-                cells.Add(c);
-            }
-            foreach (var (f, cells) in byField)
-            {
-                var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
-                items.Add((r, cells[0].X, f.Label + ": " + SpeakWithUnit(cells, string.IsNullOrEmpty(unit) ? null : unit)));
+                if (!byField.TryGetValue(f, out var entry)) byField[f] = entry = (r, new List<DrawnCell>());
+                entry.Cells.Add(c);
             }
             foreach (var cluster in Clusters(loose))
                 items.Add((r, cluster[0].X, A350DrawLayout.Speak(cluster)));
         }
-        float split = ColumnSplit.GetValueOrDefault(page, float.MaxValue);
+        foreach (var (f, (row, cells)) in byField)
+        {
+            var ordered = cells.OrderBy(c => c.X).ToList();
+            var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
+            var value = TimeColon.Replace(SpeakWithUnit(ordered, string.IsNullOrEmpty(unit) ? null : unit), ":");
+            items.Add((row, ordered[0].X, f.Label + ": " + value));
+        }
         return items.OrderBy(i => i.X >= split).ThenBy(i => i.Row).ThenBy(i => i.X).Select(i => i.Text).ToList();
     }
+
+    /// <summary>A time drawn as separate texts ("16 : 31 : 57") reads as one ("16:31:57").</summary>
+    private static readonly Regex TimeColon = new(@"(?<=\d) : (?=\d)", RegexOptions.Compiled);
 
     /// <summary>The value's colour runs, the unit after the last run's text ("26, green; TO, white; 27 °C, green").</summary>
     private static string SpeakWithUnit(IReadOnlyList<DrawnCell> cells, string? unit)
@@ -93,6 +104,15 @@ public static class A350SdPage
 
     private static IEnumerable<SdField> Row(float y, string? unit, params (string Label, float X)[] cells) =>
         cells.Select(c => new SdField(c.Label, c.X, y, unit));
+
+    /// <summary>The permanent data line (EcamCommon.png): its labels left of each value.</summary>
+    private static readonly SdField[] PermanentData =
+    {
+        new("TAT", 180, 956, "°C"), new("SAT", 180, 987, "°C"),
+        new("Flight time", 423, 958, Width: 9), new("UTC", 377, 998, Width: 70),
+        new("Gross weight", 718, 956, "{weight}"), new("Gross weight CG", 718, 986, "%"),
+        new("Fuel on board", 723, 1013, "{weight}"),
+    };
 
     /// <summary>Pages split by a rule into two columns, read one after the other: DOOR's oxygen and rain
     /// repellent column right of the aircraft.</summary>

@@ -34,7 +34,7 @@ public static class A350EwdText
             o.AddRange(view.SystemDisplay.Select(A350DrawLayout.Speak));
         }
         o.Add("Permanent data:");
-        o.AddRange(view.PermanentData.Select(A350DrawLayout.Speak));
+        o.AddRange(A350SdPage.ReadPermanentData(view.PermanentData));
         return string.Join("\n", o);
     }
 }
