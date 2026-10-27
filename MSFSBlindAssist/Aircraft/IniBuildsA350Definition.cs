@@ -52,6 +52,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>A button row with no light whose state the cockpit shows elsewhere (<see cref="A350ButtonStates"/>).</summary>
     private readonly Dictionary<string, A350ButtonState> _buttonStates = new(StringComparer.Ordinal);
 
+    /// <summary>The status lines beside offered rows (<see cref="A350StatusLines"/>), by key.</summary>
+    private readonly Dictionary<string, A350StatusLine> _statusLines = new(StringComparer.Ordinal);
+
     /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
     private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
 
@@ -141,6 +144,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 _lampInputKeys.Add(window.Key);
                 _lampInputKeys.UnionWith(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
                 AddDisplay(window.Panel, window.Key);
+            }
+
+        foreach (var line in A350StatusLines.All)
+            if (_rows.ContainsKey(line.Beside))
+            {
+                _statusLines[line.Key] = line;
+                _lampInputKeys.Add(line.Key);   // consumed silently: shown, never spoken
+                AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == line.Beside)).Key, line.Key);
             }
 
         _lampBoard = new A350LampBoard(_lamps.Values);
@@ -244,6 +255,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             displayText = shown;
             return true;
         }
+        if (_statusLines.TryGetValue(varKey, out var line))
+        {
+            displayText = line.Format(value);
+            return true;
+        }
         if (_values.TryGetValue(varKey, out var readout))
         {
             displayText = A350Readouts.Format(readout.Control, value);
@@ -308,6 +324,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         {
             Register(key, Bare(value.Control.StateVar!), value.Name, Array.Empty<string>());
             vars[key].ValueDescriptions = new Dictionary<double, string>();
+        }
+        foreach (var line in _statusLines.Values)
+        {
+            Register(line.Key, line.Var, line.Name, Array.Empty<string>());
+            vars[line.Key].ValueDescriptions = new Dictionary<double, string>();
         }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
@@ -455,6 +476,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// switch's is consumed, its return to rest being the pilot's own press.</summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        if (HandleLeverDelivery(varName, value, announcer))
+            return true;
         if (_rows.TryGetValue(varName, out var row))
         {
             NotePickReached(varName, value);

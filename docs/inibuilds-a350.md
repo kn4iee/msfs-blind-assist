@@ -193,13 +193,38 @@ Indicator lamps with no control of their own sit on their panel after its button
 ### Flying the A350 for a test
 
 `tools/A350Probe rpn "code#ms;…"` sends calculator strings through MSFSBA's own sender with exact pauses, for timing the MCP's
-round trips cannot pace. The thrust levers follow only the throttle axis (`K:THROTTLE1_AXIS_SET_EX1`, -16384 idle): the
-WASM owns the lever (it rewrites the cockpit's lever position from `INI_3D_THROTTLE_LEVER_POSITION_*_ANIMATION` each frame),
-`B:ENGINE_Throttle_n_Set` and `K:THROTTLE1_SET` are overwritten, and the detents read on `L:INI_AUTOTHRUST_TLA:n` (CLB 25,
-FLX/MCT 35, TOGA 45; TLA = (axis input + 1) / 2 × 45). Above idle the lever moved only part of the way per axis event and
-stopped short of CLB, so A/THR could not be made active from the MCP: still to solve before a flight test needs speed
-control. Put back on the ground with the gear lever still up, the aircraft sits on its belly until the gear is down and it is
-placed again.
+round trips cannot pace. The thrust levers go straight to an angle written into `L:INI_TLA1_REQUEST` / `INI_TLA2_REQUEST`
+(the cockpit's own lever-drag code writes it; the aircraft takes it and puts the request back to -1), so a flight test sets
+CLB with `25 (>L:INI_TLA1_REQUEST) 25 (>L:INI_TLA2_REQUEST)`. The axis events (`K:THROTTLE1_AXIS_SET_EX1`) moved the lever only
+part of the way per event. Put back on the ground with the gear lever still up, the aircraft sits on its belly until the gear
+is down and it is placed again.
+
+### Pedestal levers (`A350Levers`, live 2026-10-27)
+
+The map lists the levers as "none": each bypasses its input event, so they are written in C# the way the cockpit's own
+lever code writes them, with the A380's rows and words (the A320 and Fenix agree where they overlap):
+
+| Row | Positions | Written with | Read from |
+|---|---|---|---|
+| Flaps | Up, 1, 2, 3, Full | `n×4096 (>B:AIRLINER_Flaps_Set)` (its set code fires `'INI.FLAPS_SET'`); the aircraft picks 1+F itself | `INI_FLAPS_HANDLE_INDEX` 0 to 4 |
+| All thrust levers, Thrust lever 1, 2 | Reverse (-20), Reverse idle (-6), Idle (0), Climb (25), Flex/MCT (35), TOGA (45) | `tla (>L:INI_TLAn_REQUEST)` | `INI_AUTOTHRUST_TLA:n`; All reads lever 1 |
+| Speed brake | Retracted, Quarter, Half, Three quarters, Full | `'INI.SPOILERS_ARM_OFF' (>F:KeyEvent) x 'INI.SPOILERS_SET' (>F:KeyEvent)` (x 0 to 16384) | `INI_SPOILERS_HANDLE_POSITION` 0 to 1 |
+| Ground spoilers | Disarmed, Armed | arm: `0 'INI.SPOILERS_SET'` then `'INI.SPOILERS_ARM_ON'`; disarm: `'INI.SPOILERS_ARM_OFF'` | `INI_SPOILERS_ARMED` |
+| Parking brake | Off, On | its input event (the toggle `K:PARKING_BRAKES`), only when the state differs | stock `BRAKE PARKING POSITION` |
+| Rudder trim left / right (nudge) | press | the switch at 2 (left) or 0 (right) for 300 ms, then 1: about 0.43 degrees | `RUDDER_TRIM_ACTUAL_ANGLE`, negative left |
+| Rudder trim reset | press | its input event (`'INI.RUDDER_TRIM_RESET'`) | the trim back to 0 |
+
+Reverse idle is -6: the commanded N1 (`INI_ENGINE1_TLA_N1`) rises 0.95 per degree from idle (21.3) to -6 and 1.29 per degree
+from there to -20 (45). The rudder trim switch trims about 1.6 degrees a second while held, so it is two nudges, as on the
+A380 and the Fenix, never a combo left trimming. The stock `SPOILERS HANDLE POSITION` does not follow the A350's handle (51 %
+against 0.366), so there is no fine speed brake slider; quarters stand in for it. The stock fuel tanks and rudder trim do not
+follow the aircraft either: refuel through the OIS (LOADSHEET, FUEL LOAD, SET FUEL, Instant Refuel).
+
+Status lines beside them (`A350StatusLines`, shown, never spoken): "Rudder trim: 1.2 degrees left" (or Neutral) and "Speed
+brake handle: 37 percent". The levers speak as the A380's do (`A350LeverSpeech`): "Thrust lever 1 Climb", "All thrust levers
+Climb" once both sit there, nothing mid-travel; "Spoilers 40 percent", "Spoilers full", "Spoilers retracted" by tenths; each
+under its own Ctrl+M row, after a silent baseline seeded from the cache after a load. Flaps, ground spoilers and the parking
+brake are spoken by the generic path ("Flaps: 2").
 
 ### Typed values (`A350TypedEntry`)
 

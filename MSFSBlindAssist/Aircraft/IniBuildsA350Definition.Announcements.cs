@@ -52,7 +52,37 @@ public partial class IniBuildsA350Definition
 
     /// <summary>A delivery that changes several lights (a light power flag, a shared rule input) checks each light's
     /// own row here, so MainForm must not wrap it in one row's mute ([VAR-8]).</summary>
-    public override bool IsMuteWrapExempt(string varName) => _lampBoard.SharedInputKeys.Contains(varName);
+    public override bool IsMuteWrapExempt(string varName) =>
+        _lampBoard.SharedInputKeys.Contains(varName) || varName is A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2;
+
+    /// <summary>The thrust levers and the speed brake speak as the A380's do (<see cref="A350LeverSpeech"/>). A thrust
+    /// lever's delivery may speak the "All thrust levers" row's sentence, so its rows are exempt from MainForm's mute
+    /// wrap and each sentence checks its own row; the All row's own delivery says nothing (the levers spoke).</summary>
+    private bool HandleLeverDelivery(string key, double value, ScreenReaderAnnouncer announcer)
+    {
+        switch (key)
+        {
+            case A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2:
+                NotePickReached(key, value);
+                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value) is { } thrust
+                    && !announcer.Suppressed && !IsMuted(thrust.Row) && !_disposed)
+                    announcer.Announce(thrust.Text);
+                return true;
+            case A350LeverSpeech.AllLevers:
+                NotePickReached(key, value);
+                return true;
+            case SpeedBrakeKey:
+                NotePickReached(key, value);
+                if (_leverSpeech.SpeedBrake(value) is { } spoilers && !announcer.Suppressed && !IsMuted(key) && !_disposed)
+                    announcer.Announce(spoilers);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private const string SpeedBrakeKey = "A350_FCTL_SPD_BRK_LEVER";
+    private readonly A350LeverSpeech _leverSpeech = new();
 
     /// <summary>A pressed or picked control's lights are its label's for <see cref="PressedLampMs"/>.</summary>
     private void NoteOwnLamps(A350Control control) => _ownLampsUntil[control.Id] = Clock() + PressedLampMs;
@@ -84,9 +114,18 @@ public partial class IniBuildsA350Definition
     {
         base.OnContinuousBatchDelivered(batchNum);
         if (_seedCountdown > 0 && --_seedCountdown == 0 && _sim is { } sim)
+        {
             foreach (var key in _lampBoard.InputKeys)
                 if (Cached(sim, key) is double cached)
                     _lampBoard.Seed(key, cached);
+            // The levers the same way, where their rows are offered: a load re-delivers only what it changed.
+            if (_rows.ContainsKey(A350LeverSpeech.Lever1) && Cached(sim, A350LeverSpeech.Lever1) is double tla1)
+                _leverSpeech.SeedThrust(1, tla1);
+            if (_rows.ContainsKey(A350LeverSpeech.Lever2) && Cached(sim, A350LeverSpeech.Lever2) is double tla2)
+                _leverSpeech.SeedThrust(2, tla2);
+            if (_rows.ContainsKey(SpeedBrakeKey) && Cached(sim, SpeedBrakeKey) is double handle)
+                _leverSpeech.SeedSpeedBrake(handle);
+        }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
     }
@@ -97,6 +136,7 @@ public partial class IniBuildsA350Definition
         base.OnSimContextReset();
         _lampBoard.Reset();
         _lampSpeech.Clear();
+        _leverSpeech.Reset();
         _ownLampsUntil.Clear();
         _seedCountdown = SeedAfterBatches;
     }

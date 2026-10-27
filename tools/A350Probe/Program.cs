@@ -181,6 +181,8 @@ internal sealed class ProbeForm : Form
             _m.SimVarUpdated += (_, e) =>
             {
                 if (!vars.TryGetValue(e.VarName, out var d)) return;
+                // The base variables (ground speed, altitude…) are MainForm's own readouts, never this generic path.
+                if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal)) return;
                 bool handled;
                 bool wrap = MSFSBlindAssist.Services.DefAnnounceMuteSets.ShouldWrap(def, e.VarName, settings);
                 if (wrap) said.Suppressed = true;

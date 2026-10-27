@@ -194,3 +194,97 @@ public class A350LampAnnouncementTests
         Assert.Empty(_speech.All);
     }
 }
+
+/// <summary>The pedestal's levers speak as the A380's (A350LeverSpeech), each sentence under its own Ctrl+M row.</summary>
+public class A350LeverAnnouncementTests
+{
+    private sealed class Pedestal : IniBuildsA350Definition
+    {
+        public Pedestal() : base(new[] { "Pedestal" }) { }
+    }
+
+    private readonly SpeechCapture _speech = new();
+    private readonly HashSet<string> _muted = new(StringComparer.Ordinal);
+    private readonly Pedestal _def;
+
+    public A350LeverAnnouncementTests()
+    {
+        _def = new Pedestal
+        {
+            CanLand = _ => true,
+            Send = (_, _) => { },
+            ReRead = (_, _) => { },
+            Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
+            IsMuted = key => _muted.Contains(key),
+        };
+        _def.Attach(new SimConnectManager(IntPtr.Zero));
+    }
+
+    private readonly Dictionary<string, double> _cache = new(StringComparer.Ordinal);
+
+    private bool Deliver(string key, double value) => _def.ProcessSimVarUpdate(key, value, _speech);
+
+    private void Baseline()
+    {
+        Deliver(A350LeverSpeech.Lever1, 0);
+        Deliver(A350LeverSpeech.Lever2, 0);
+    }
+
+    [Fact]
+    public void The_thrust_levers_speak_their_detents_after_a_silent_baseline()
+    {
+        Baseline();
+        Assert.True(Deliver(A350LeverSpeech.Lever1, 25));
+        Assert.True(Deliver(A350LeverSpeech.Lever2, 25));
+        Assert.True(Deliver(A350LeverSpeech.AllLevers, 25));   // the All row's own delivery: the levers spoke
+        Assert.Equal(new[] { "Thrust lever 1 Climb", "All thrust levers Climb" }, _speech.All);
+    }
+
+    [Fact]
+    public void Each_sentence_obeys_its_own_row()
+    {
+        _muted.Add(A350LeverSpeech.AllLevers);
+        Baseline();
+        Deliver(A350LeverSpeech.Lever1, 25);
+        Deliver(A350LeverSpeech.Lever2, 25);
+        Assert.Equal(new[] { "Thrust lever 1 Climb" }, _speech.All);
+        Assert.True(_def.IsMuteWrapExempt(A350LeverSpeech.Lever1));   // its delivery may speak the All row's sentence
+        Assert.True(_def.IsMuteWrapExempt(A350LeverSpeech.Lever2));
+    }
+
+    [Fact]
+    public void The_speed_brake_speaks_in_tenths_and_keeps_its_ctrl_m_row()
+    {
+        Assert.True(Deliver("A350_FCTL_SPD_BRK_LEVER", 0));
+        Assert.True(Deliver("A350_FCTL_SPD_BRK_LEVER", 0.366));
+        Assert.Equal(new[] { "Spoilers 40 percent" }, _speech.All);
+        var rows = MonitorRowBuilder.Build(_def.GetVariables()).Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("A350_FCTL_SPD_BRK_LEVER", rows);
+        Assert.Contains(A350LeverSpeech.Lever1, rows);
+        Assert.Contains(A350LeverSpeech.AllLevers, rows);
+        Assert.DoesNotContain("A350_STAT_SPEED_BRAKE", rows);
+    }
+
+    [Fact]
+    public void Levers_unseen_after_a_load_are_seeded_from_the_cache_so_their_first_move_speaks()
+    {
+        _cache[A350LeverSpeech.Lever1] = 25;
+        _cache[A350LeverSpeech.Lever2] = 25;
+        _cache["A350_FCTL_SPD_BRK_LEVER"] = 0;
+        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
+            _def.OnContinuousBatchDelivered(i);
+        Deliver(A350LeverSpeech.Lever1, 0);
+        Deliver("A350_FCTL_SPD_BRK_LEVER", 1);
+        Assert.Equal(new[] { "Thrust lever 1 Idle", "Spoilers full" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_flight_load_takes_a_fresh_baseline()
+    {
+        Baseline();
+        _def.OnSimContextReset();
+        Deliver(A350LeverSpeech.Lever1, 45);
+        Deliver(A350LeverSpeech.Lever2, 45);
+        Assert.Empty(_speech.All);
+    }
+}

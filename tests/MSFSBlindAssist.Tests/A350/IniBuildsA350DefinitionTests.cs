@@ -72,6 +72,37 @@ public class IniBuildsA350DefinitionTests
         Assert.Contains("FCU", def.GetPanelControls().Keys);
     }
 
+    /// <summary>What a nudge or a lever did, as the A380 reads it: the rudder trim in degrees and the speed brake
+    /// handle in percent, status lines beside their controls, never spoken.</summary>
+    [Theory]
+    [InlineData("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", -0.42, "0.4 degrees left")]
+    [InlineData("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", 1.26, "1.3 degrees right")]
+    [InlineData("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", 0.03, "Neutral")]
+    [InlineData("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", 0.366, "37 percent")]
+    public void A_pedestal_status_line_reads_what_the_lever_did(string key, string beside, string var, double value, string text)
+    {
+        var def = new WithSections("Pedestal");
+        def.Attach(_sim);
+        string panel = def.GetPanelControls().Single(p => p.Value.Contains(beside)).Key;
+        Assert.Contains(key, def.GetPanelDisplayVariables()[panel]);
+        var line = def.GetVariables()[key];
+        Assert.Equal(var, line.Name);
+        Assert.True(line.ExcludeFromMonitorManager);   // shown, never spoken
+        Assert.True(def.TryGetDisplayOverride(key, value, out var shown));
+        Assert.Equal(text, shown);
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            def.TryGetDisplayOverride(key, value, out var german);
+            Assert.Equal(text, german);   // invariant digits under a comma culture
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
+
     [Fact]
     public void The_fcu_windows_are_status_lines_on_the_fcu_panel()
     {

@@ -81,7 +81,9 @@ public static partial class A350PanelLayout
     /// word in sentence case, else "Position n".</summary>
     public static IReadOnlyDictionary<double, string> PositionWords(A350Control control)
     {
-        PositionOverrides.TryGetValue(Short(control.Id), out var overrides);
+        // A lever's words are already spoken (the A380's and A320's, A350Levers).
+        IReadOnlyDictionary<double, string>? overrides =
+            PositionOverrides.TryGetValue(Short(control.Id), out var own) ? own : A350Levers.WordsFor(control.Id);
         var words = new Dictionary<double, string>();
         foreach (var (position, label) in control.OrderedPositions())
         {
@@ -153,7 +155,7 @@ public static partial class A350PanelLayout
         foreach (var section in SectionOrder)
             placement.Structure[section] = new List<string>();
 
-        foreach (var control in map.Controls)
+        foreach (var control in A350Levers.Merge(map.Controls))   // the levers are hand-written (A350Levers)
         {
             if (!IsPlaced(control))
                 continue;
