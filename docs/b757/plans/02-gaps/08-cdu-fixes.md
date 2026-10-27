@@ -99,12 +99,14 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** waiting on owner (in-sim checks 1 and 2 in the app's Shift+M window, by ear; the code has landed)
+- **Status:** done (2026-10-27): landed and pushed to `kn4iee/B757`; the owner's in-sim checks 1 and 2 passed (2026-10-27)
 - **Claimed by:** Declan Webster, 2026-10-26; taken back by the owner (kn4iee) 2026-10-27 to finish it
 - **Worked by:** Declan Webster, with Claude (no subagents); 2026-10-27 the owner (kn4iee), with Claude: the
   scratchpad read-back fix, a whole-plan review (one review subagent) and its fixes
 - **Started:** 2026-10-27, branched from the base commit `cf1dfce94` and rebased onto `B757` 744b4cce
-- **Landed:** (date; the last commit of this plan on `B757`)
+- **Landed:** 2026-10-27; Declan's tasks first landed with a6026ec9a; the owner's finishing commits were rebased onto
+  `kn4iee/B757` at 9f231a7f6 (plan 13's claim) and pushed: last code commit a9d01169c (the VNAV page identity),
+  then the record. `git log --grep "^Plan: 08"` lists the plan's commits.
 - **Tests at landing:** full suite passed 2026-10-27 after the rebase onto `B757` 744b4cce: 17,969 passed, 0 failed;
   the owner's finishing commits (read-back, review fixes, VNAV) after the rebase onto `B757` 9f231a7f6: build clean,
   17,992 passed, 0 failed; `git diff --name-only` lists only plan 08's files
@@ -113,11 +115,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   `Bbs757CduFrame.ToDisplayLines` now lists the rows' texts, unchanged. 2 done: the client's four-argument
   `PressKey` and `CycleMs`, `Bbs757CduTyping`, the window's typed entries at the typing timing with the scratchpad
   check; step 1's measurement repeated on a busier sim (flight-08.md).
-- **Waiting on the owner:** what can only be heard, in the Shift+M window: a page change speaks its title once, an
-  ACT/MOD change speaks the new title, a typed entry is read back once ("KATL"), a missed key says "Scratchpad
-  shows …", a line select key right after Enter says no false "Scratchpad is empty"; check 1's deleted constraint
-  and page total change on LEGS (no route with constraints was loaded; the rules are pinned by
-  `Bbs757CduRowsTests`); a speed entered on a VNAV page: the new title said, the cursor kept.
+- **Waiting on the owner:** nothing. In-sim checks 1 and 2 (what can only be heard in the Shift+M window: page and
+  title changes, the LEGS and VNAV entries, the typed-entry read-back, a line select key right after Enter) passed:
+  the owner, 2026-10-27, in flight ("In sim checks pass").
 - **In-sim results:** 2026-10-27, MSFS 2024, BlueBird 757-200 PW 0.1.0, on the ground: aircraft powered with the EFB's
   Before start preset (APU, external power); the first officer's CDU's NAV RADIO frame captured live as the fixture
   `bbs757-cdu-navradio.json` and passing the row tests; the typing timing re-measured through the tablet agent's own
