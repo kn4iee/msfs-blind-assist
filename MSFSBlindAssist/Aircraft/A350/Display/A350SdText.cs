@@ -16,6 +16,7 @@ public static class A350SdText
         if (!view.Powered) return head + "\r\nThe SD is off: no power.";
         var o = new List<string> { head };
         o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
+        o.AddRange(A350SdSymbols.Read(capture.Shapes, (int)Math.Round(page)));
         o.Add("Permanent data:");
         o.AddRange(A350SdPage.ReadPermanentData(view.PermanentData));
         return string.Join("\r\n", o);

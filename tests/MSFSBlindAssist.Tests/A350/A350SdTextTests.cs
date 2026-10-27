@@ -32,6 +32,18 @@ public class A350SdTextTests
     }
 
     [Fact]
+    public void The_page_reads_its_symbols_after_its_values()
+    {
+        var lines = A350SdText.Build(Fixture("ctr_sdsym_2"), 2).Split("\r\n").ToList();
+        int pressure = lines.IndexOf("Green system pressure: 0 PSI, amber");
+        int pump = lines.IndexOf("Engine 1 green pump: LO, amber");
+        Assert.True(pressure > 0 && pump > pressure);
+        Assert.True(pump < lines.IndexOf("Permanent data:"));
+        var ewd = A350EwdText.Build(Fixture("ctr_sdsym_8"), 8).Split('\n');
+        Assert.Contains("Crossfeed A valve: closed, green", ewd);
+    }
+
+    [Fact]
     public void No_draw_and_no_power_are_said_after_the_page_name()
     {
         Assert.Equal("Fuel page\r\nThe A350 displays are not available yet.", A350SdText.Build(null, 8));

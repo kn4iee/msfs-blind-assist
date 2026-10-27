@@ -27,6 +27,7 @@ public static class A350EwdText
         {
             o.Add("System display: " + A350SdText.PageName(page) + " page");
             o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
+            o.AddRange(A350SdSymbols.Read(capture.Shapes, (int)Math.Round(page)));
         }
         else
         {

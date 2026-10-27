@@ -75,7 +75,7 @@ public sealed class A350DisplayService : IDisposable
             if (!cached) Spoken?.Invoke(A350DisplayStatus.GettingReady);
             _engine = A350ModuleCache.CreateEngine();
             _module = A350ModuleCache.LoadOrBuild(_engine, path, _localAppData, out _);
-            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar };
+            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, RecordShapes = true };   // the SD's symbols
             _reader = new A350MemoryReader(_facts.Anchors);
             State = A350DisplayState.Ready;
             if (!cached) Spoken?.Invoke(A350DisplayStatus.Ready);
