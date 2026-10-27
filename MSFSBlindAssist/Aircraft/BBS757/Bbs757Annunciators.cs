@@ -19,7 +19,8 @@ public sealed record Bbs757AnnunciatorRow(string Key, string LVar, string Label,
 /// The 757's announced lights and states (plan 06): BlueBird's published L:vars, each spoken on change
 /// through the definition's <see cref="Bbs757ChangeTracker"/> (the cockpit as found is a silent baseline):
 /// EXT PWR, the autoland status annunciator, the altitude alert, the configuration warning, each IRS aligned,
-/// the engine start valves and the doors. Pure: the table and the words.
+/// the engine start valves and the doors; and the words of plan 14's squawk, TCAS mode and altimeter
+/// watches. Pure: the table and the words.
 /// </summary>
 public static class Bbs757Annunciators
 {
@@ -52,6 +53,45 @@ public static class Bbs757Annunciators
     /// <summary>The EXT PWR read-back: "EXT PWR on", "EXT PWR off", or "EXT PWR unavailable" when it was not read.</summary>
     public static string ExtPwrPhrase(double? value)
         => value is double v && ByKey[Bbs757SharedKeys.ExtPwrOn].Phrase(v, null) is { } phrase ? phrase : "EXT PWR unavailable";
+
+    // ---- The squawk, TCAS mode and altimeter watches (plan 14) ------------------------------------
+    // Spoken on a change from any source; not annunciator rows (two are stock variables, and the
+    // altimeter speaks once it rests), so the definition registers and speaks them itself.
+
+    /// <summary>The squawk watch: stock <c>TRANSPONDER CODE:1</c> (BCO16) on the 1 Hz batch.</summary>
+    public const string SquawkWatchKey = "BBS757_SQUAWK_WATCH";
+
+    /// <summary>The TCAS mode watch: <c>L:B757_PED_TCAS_MODE_KNOB</c> (STBY 0 to TA/RA 4) on the 1 Hz batch.</summary>
+    public const string TcasModeWatchKey = "BBS757_TCAS_MODE_WATCH";
+
+    /// <summary>The altimeter watch: stock <c>KOHLSMAN SETTING MB:1</c> on the 1 Hz batch, spoken once it rests.</summary>
+    public const string AltimeterWatchKey = "BBS757_ALTIMETER_WATCH";
+
+    /// <summary>The TCAS mode knob's map node, whose pick moves <see cref="TcasModeWatchKey"/>.</summary>
+    public const string TcasModeNode = "B757_PED_TCAS_MODE_KNOB";
+
+    private static readonly string[] TcasModes = { "STBY", "ALT RPTG OFF", "XPNDR", "TA ONLY", "TA/RA" };
+
+    /// <summary>"Squawk 4743", the squawk field's own read-back words; null when the code is not a number.</summary>
+    public static string? SquawkPhrase(double bco16)
+        => double.IsFinite(bco16) && bco16 >= 0 ? $"Squawk {Bbs757Squawk.Decode(bco16)}" : null;
+
+    /// <summary>"TCAS STBY", "TCAS ALT RPTG OFF", "TCAS XPNDR", "TCAS TA ONLY", "TCAS TA/RA"; null off the knob's five positions.</summary>
+    public static string? TcasModePhrase(double value)
+    {
+        if (!double.IsFinite(value)) return null;
+        double i = Math.Round(value);
+        return Math.Abs(value - i) < 0.01 && i >= 0 && i < TcasModes.Length ? $"TCAS {TcasModes[(int)i]}" : null;
+    }
+
+    /// <summary>
+    /// The captain's altimeter in the B key's words ("Altimeter: 1020, 30.12", "Altimeter standard"); null
+    /// when it is not a pressure (unpowered reads 0).
+    /// </summary>
+    public static string? AltimeterPhrase(double millibars)
+        => double.IsFinite(millibars) && millibars > 0
+            ? Aircraft.AltimeterPhrase.Sentence(millibars / Aircraft.AltimeterPhrase.HpaPerInHg)
+            : null;
 
     private static List<Bbs757AnnunciatorRow> BuildRows()
     {

@@ -389,6 +389,225 @@ public class Bbs757AnnunciatorsTests
         Assert.Equal(22, Bbs757Annunciators.Rows.Count);
     }
 
+    // ---- Plan 14: squawk, TCAS mode and altimeter changes -------------------------------------------
+
+    private const string SquawkKey = Bbs757Annunciators.SquawkWatchKey;
+    private const string TcasKey = Bbs757Annunciators.TcasModeWatchKey;
+    private const string AltimeterKey = Bbs757Annunciators.AltimeterWatchKey;
+
+    private static BBS757Definition WatchDef(Func<long> now, Func<string, bool>? muted = null)
+        => new() { NestRunning = () => true, NowMs = now, UseAltimeterTimer = false, IsMonitorMuted = muted ?? (_ => false) };
+
+    [Fact]
+    public void Squawk_change_from_elsewhere_is_spoken()
+    {
+        var rig = new Rig();
+        rig.Deliver(SquawkKey, 0x1200);   // the cockpit as found: silent
+        rig.Deliver(SquawkKey, 0x4743);
+
+        Assert.Equal(new[] { "Squawk 4743" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void Own_squawk_set_not_repeated()
+    {
+        long now = 100_000;
+        var def = WatchDef(() => now);
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(SquawkKey, 0x1200, speech);
+
+        def.ArmOwnSquawkEcho();   // the squawk field's set (OnOwnSquawkSet); its read-back speaks
+        now += 1500;
+        def.ProcessSimVarUpdate(SquawkKey, 0x4743, speech);
+        Assert.Empty(speech.All);
+
+        now += BBS757Definition.OwnWriteEchoMs;   // later, another tool's change is heard again
+        def.ProcessSimVarUpdate(SquawkKey, 0x7000, speech);
+        Assert.Equal(new[] { "Squawk 7000" }, speech.All);
+    }
+
+    [Theory]
+    [InlineData(0.0, "TCAS STBY")]
+    [InlineData(1.0, "TCAS ALT RPTG OFF")]
+    [InlineData(2.0, "TCAS XPNDR")]
+    [InlineData(3.0, "TCAS TA ONLY")]
+    [InlineData(4.0, "TCAS TA/RA")]
+    [InlineData(5.0, null)]
+    [InlineData(2.5, null)]
+    [InlineData(double.NaN, null)]
+    public void Tcas_mode_words(double value, string? said)
+    {
+        Assert.Equal(said, Bbs757Annunciators.TcasModePhrase(value));
+    }
+
+    [Fact]
+    public void Tcas_mode_change_from_elsewhere_is_spoken_and_a_pick_is_the_picks()
+    {
+        var rig = new Rig();
+        rig.Deliver(TcasKey, 2);
+        rig.Deliver(TcasKey, 4);
+        Assert.Equal(new[] { "TCAS TA/RA" }, rig.Speech.All);
+
+        // A pick on the panel arms the row's echo (the screen reader read the combo) and settles on its read-back.
+        Assert.Equal(TcasKey, BBS757Definition.LinkedStatusKey(Bbs757Annunciators.TcasModeNode));
+        Assert.Equal("TCAS XPNDR", BBS757Definition.LinkedPhrase(TcasKey, 2));
+        Assert.Equal("TCAS mode unavailable", BBS757Definition.LinkedPhrase(TcasKey, null));
+    }
+
+    [Fact]
+    public async Task A_tcas_pick_on_the_panel_is_not_said_again()
+    {
+        long now = 0;
+        var sim = new FakeTcasSim();
+        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io };
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(TcasKey, 2, speech);
+        sim.OnWrite = () => def.ProcessSimVarUpdate(TcasKey, 4, speech);   // the change arrives during the pick
+        sim.Fresh[Bbs757Annunciators.TcasModeNode] = 2;
+        sim.Fresh[TcasKey] = 4;
+
+        var knob = Bbs757Annunciators.TcasModeNode;
+        def.HandleUIVariableSet(knob, 4, def.GetVariables()[knob], new SimConnectManager(IntPtr.Zero), speech);
+        await sim.Done;
+
+        Assert.NotEmpty(sim.Writes);
+        Assert.Empty(speech.All);
+    }
+
+    /// <summary>A simulated sim for one pick: fresh reads by key, the writes, and a hook on each write.</summary>
+    private sealed class FakeTcasSim
+    {
+        public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
+        public readonly List<string> Writes = new();
+        public Action? OnWrite;
+        private readonly TaskCompletionSource _done = new();
+        public Task Done => Task.WhenAny(_done.Task, Task.Delay(2000));
+
+        public Bbs757SimIo Io => new()
+        {
+            CanWrite = () => true,
+            ReadFresh = (key, ct) => Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null),
+            Cached = key => Fresh.TryGetValue(key, out double? v) ? v : null,
+            Write = rpn => { Writes.Add(rpn); OnWrite?.Invoke(); },
+            RequestRead = _ => _done.TrySetResult(),
+            Delay = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+        };
+    }
+
+    [Fact]
+    public void Altimeter_spoken_once_it_rests_without_another_delivery()
+    {
+        long now = 100_000;
+        var def = WatchDef(() => now);
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(AltimeterKey, 1013.25, speech);   // baseline: silent
+
+        // A baro knob turning: a new value each second, then nothing (the row is delivered only on change).
+        foreach (double mb in new[] { 1015.0, 1017.0, 1020.0 })
+        {
+            def.ProcessSimVarUpdate(AltimeterKey, mb, speech);
+            now += 1000;
+            def.ReleaseRestedAltimeter(now, speech);
+        }
+        Assert.Empty(speech.All);   // still turning
+
+        now += Bbs757RestingValue.RestMs;
+        def.ReleaseRestedAltimeter(now, speech);
+        now += 5000;
+        def.ReleaseRestedAltimeter(now, speech);
+
+        Assert.Equal(new[] { "Altimeter: 1020, 30.12" }, speech.All);
+    }
+
+    [Fact]
+    public void Altimeter_set_to_standard_says_standard()
+    {
+        long now = 100_000;
+        var def = WatchDef(() => now);
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(AltimeterKey, 1020, speech);
+        def.ProcessSimVarUpdate(AltimeterKey, 1013.25, speech);
+        now += Bbs757RestingValue.RestMs;
+        def.ReleaseRestedAltimeter(now, speech);
+
+        Assert.Equal(new[] { "Altimeter standard" }, speech.All);
+    }
+
+    [Fact]
+    public void Muted_altimeter_row_is_dropped()
+    {
+        long now = 100_000;
+        var def = WatchDef(() => now, key => key == AltimeterKey);
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(AltimeterKey, 1013.25, speech);
+        def.ProcessSimVarUpdate(AltimeterKey, 1020, speech);
+        now += Bbs757RestingValue.RestMs;
+        def.ReleaseRestedAltimeter(now, speech);
+
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public void Own_altimeter_set_not_repeated()
+    {
+        long now = 100_000;
+        var def = WatchDef(() => now);
+        var speech = new SpeechCapture();
+        def.ProcessSimVarUpdate(AltimeterKey, 1013.25, speech);
+
+        def.ArmOwnAltimeterEcho();   // Ctrl+B's set (OnOwnAltimeterSet); its read-back speaks
+        now += 1000;
+        def.ProcessSimVarUpdate(AltimeterKey, 1020, speech);
+        now += Bbs757RestingValue.RestMs;
+        def.ReleaseRestedAltimeter(now, speech);
+        Assert.Empty(speech.All);
+
+        now += BBS757Definition.OwnWriteEchoMs;   // later, a knob turned in the cockpit is heard
+        def.ProcessSimVarUpdate(AltimeterKey, 1009, speech);
+        now += Bbs757RestingValue.RestMs;
+        def.ReleaseRestedAltimeter(now, speech);
+        Assert.Equal(new[] { "Altimeter: 1009, 29.80" }, speech.All);
+    }
+
+    [Fact]
+    public void Watches_registered_as_announced_rows_with_ctrl_m_rows_on_no_panel()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var vars = def.GetVariables();
+        foreach (var (key, name, label) in new[]
+                 {
+                     (SquawkKey, "TRANSPONDER CODE:1", "Squawk"),
+                     (TcasKey, "B757_PED_TCAS_MODE_KNOB", "TCAS Mode"),
+                     (AltimeterKey, "KOHLSMAN SETTING MB:1", "Altimeter"),
+                 })
+        {
+            var v = vars[key];
+            Assert.Equal(name, v.Name);
+            Assert.Equal(label, v.DisplayName);
+            Assert.Equal(UpdateFrequency.Continuous, v.UpdateFrequency);
+            Assert.True(v.IsAnnounced);
+            Assert.False(v.ExcludeFromMonitorManager);
+            Assert.DoesNotContain(def.GetPanelDisplayVariables().Values, rows => rows.Contains(key));
+        }
+    }
+
+    [Fact]
+    public void Watch_phrases_under_a_comma_decimal_culture()
+    {
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+        {
+            InCulture(culture, () =>
+            {
+                Assert.Equal("Altimeter: 1020, 30.12", Bbs757Annunciators.AltimeterPhrase(1020));
+                Assert.Equal("Altimeter: 1009, 29.80", Bbs757Annunciators.AltimeterPhrase(1009));
+                Assert.Equal("Squawk 0421", Bbs757Annunciators.SquawkPhrase(0x0421));
+                Assert.Equal("TCAS TA/RA", Bbs757Annunciators.TcasModePhrase(4));
+            });
+        }
+        Assert.Null(Bbs757Annunciators.AltimeterPhrase(0));
+        Assert.Null(Bbs757Annunciators.SquawkPhrase(double.NaN));
+    }
+
     [Fact]
     public void Every_row_speaks_the_same_under_a_comma_decimal_culture()
     {

@@ -99,6 +99,13 @@ public partial class BBS757Definition
             });
         }
 
+        // Plan 14's watches: a squawk, TCAS mode or altimeter change from any source is spoken, each
+        // with its Ctrl+M row and on no panel. The squawk's display row reads the same variable, but
+        // only while its display is shown, never in the batch ([VAR-7]).
+        Add(Bbs757Annunciators.SquawkWatchKey, WatchRow("TRANSPONDER CODE:1", "Squawk", SimVarType.SimVar, "BCO16"));
+        Add(Bbs757Annunciators.TcasModeWatchKey, WatchRow(Bbs757Annunciators.TcasModeNode, "TCAS Mode", SimVarType.LVar, "number"));
+        Add(Bbs757Annunciators.AltimeterWatchKey, WatchRow("KOHLSMAN SETTING MB:1", "Altimeter", SimVarType.SimVar, "millibars"));
+
         // The captain's CDU EXEC light (ruling R36): spoken on change, with a Ctrl+M row of its own,
         // and on no panel or status display.
         Add(R.ExecLightKey, new SimVarDefinition
@@ -137,6 +144,12 @@ public partial class BBS757Definition
         UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
         RenderAsReadOnlyStatus = true,
         ValueDescriptions = descriptions ?? new Dictionary<double, string>(),
+    };
+
+    private static SimVarDefinition WatchRow(string name, string label, SimVarType type, string units) => new()
+    {
+        Name = name, DisplayName = label, Type = type, Units = units,
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
     };
 
     private static SimVarDefinition DisplayedRow(string name, string label, string units) => new()
@@ -254,6 +267,15 @@ public partial class BBS757Definition
                     && !IsMonitorMuted(R.GearNoseKey))
                     announcer.Announce(said);
                 return true;
+            case Bbs757Annunciators.SquawkWatchKey:
+                SpeakChange(varName, Bbs757Annunciators.SquawkPhrase(value), announcer);
+                return true;
+            case Bbs757Annunciators.TcasModeWatchKey:
+                SpeakChange(varName, Bbs757Annunciators.TcasModePhrase(value), announcer);
+                return true;
+            case Bbs757Annunciators.AltimeterWatchKey:
+                FeedAltimeter(Bbs757Annunciators.AltimeterPhrase(value), announcer);
+                return true;
         }
         if (Bbs757McpLights.ForKey(varName) is { } light)
         {
@@ -308,11 +330,12 @@ public partial class BBS757Definition
             "BBS757_SPOILERDOWN_CLICK" or "BBS757_SPOILERARMED_CLICK" or "BBS757_SPOILERUP_CLICK" => R.SpeedbrakeKey,
             "BBS757_PEDESTAL_Park_Brake_Lever" => R.ParkingBrakeKey,
             Bbs757Annunciators.ExtPwrButtonNode => Bbs757SharedKeys.ExtPwrOn,
+            Bbs757Annunciators.TcasModeNode => Bbs757Annunciators.TcasModeWatchKey,   // the screen reader read the pick
             _ => null,
         };
     }
 
-    /// <summary>A linked row's phrase for a read value: "CMD R on", "Speedbrake armed", "Parking brake set", "EXT PWR on".</summary>
+    /// <summary>A linked row's phrase for a read value: "CMD R on", "Speedbrake armed", "Parking brake set", "EXT PWR on", "TCAS TA/RA".</summary>
     internal static string LinkedPhrase(string statusKey, double? value)
     {
         if (Bbs757McpLights.ForKey(statusKey) is { } light) return Bbs757McpLights.Phrase(light.Label, value);
@@ -320,6 +343,8 @@ public partial class BBS757Definition
         {
             R.SpeedbrakeKey => R.SpeedbrakePhrase(value),
             Bbs757SharedKeys.ExtPwrOn => Bbs757Annunciators.ExtPwrPhrase(value),
+            Bbs757Annunciators.TcasModeWatchKey
+                => value is double v ? Bbs757Annunciators.TcasModePhrase(v) ?? "TCAS mode unavailable" : "TCAS mode unavailable",
             _ => R.ParkingBrakePhrase(value),
         };
     }
@@ -344,6 +369,83 @@ public partial class BBS757Definition
         _changes.ArmEcho(statusKey, 0);
     }
 
+    // ---- Plan 14: the pilot's own squawk and altimeter sets, and the altimeter once it rests ----------
+
+    /// <summary>
+    /// The squawk field is about to set <paramref name="code"/>: its read-back ("Squawk 4743") is the one
+    /// confirmation, so the watch's change is that set's echo for a while (CORE-7).
+    /// </summary>
+    partial void OnOwnSquawkSet(string code) => ArmOwnSquawkEcho();
+
+    /// <summary>Ctrl+B is about to set the altimeters: its read-back is the one confirmation (CORE-7).</summary>
+    partial void OnOwnAltimeterSet() => ArmOwnAltimeterEcho();
+
+    internal void ArmOwnSquawkEcho() => _changes.ArmEcho(Bbs757Annunciators.SquawkWatchKey, NowMs() + OwnWriteEchoMs);
+
+    /// <summary>The captain's altimeter, held until it rests (a baro knob turning is heard once, where it stops).</summary>
+    private readonly Bbs757RestingValue _altimeterResting = new();
+
+    /// <summary>Until when a change of the altimeter watch is the app's own set's echo.</summary>
+    private long _altimeterEchoUntil;
+
+    /// <summary>Whether a UI-thread timer releases the altimeter; tests turn it off and call <see cref="ReleaseRestedAltimeter"/>.</summary>
+    internal bool UseAltimeterTimer { get; init; } = true;
+
+    private System.Windows.Forms.Timer? _altimeterTimer;
+    private ScreenReaderAnnouncer? _altimeterAnnouncer;
+
+    /// <summary>The release's tick: a value is heard within a quarter second of resting.</summary>
+    private const int AltimeterTickMs = 250;
+
+    internal void ArmOwnAltimeterEcho()
+    {
+        _altimeterEchoUntil = NowMs() + OwnWriteEchoMs;
+        if (_altimeterResting.Pending) _altimeterResting.Rebaseline("");   // a knob turn under way is overtaken by the set
+    }
+
+    /// <summary>
+    /// One delivery of the altimeter watch: while the app's own set runs, or within its echo window (armed at
+    /// the set's start, and again by the MCP sets' machinery when it ends), the value counts as spoken; else
+    /// it waits to rest. An unreadable value does nothing.
+    /// </summary>
+    private void FeedAltimeter(string? phrase, ScreenReaderAnnouncer announcer)
+    {
+        if (phrase == null) return;
+        long now = NowMs();
+        bool ownSet = now < _altimeterEchoUntil || _mcpSets.ContainsKey(AltimeterSetKey)
+                      || (_ownSetEchoUntil.TryGetValue(AltimeterSetKey, out long until) && now < until);
+        if (ownSet)
+        {
+            _altimeterResting.Rebaseline(phrase);
+            return;
+        }
+        _altimeterResting.Changed(phrase, now);
+        if (!_altimeterResting.Pending) return;
+        _altimeterAnnouncer = announcer;
+        if (!UseAltimeterTimer) return;
+        if (_altimeterTimer == null)
+        {
+            _altimeterTimer = new System.Windows.Forms.Timer { Interval = AltimeterTickMs };
+            _altimeterTimer.Tick += (_, _) =>
+            {
+                if (_altimeterAnnouncer is { } a) ReleaseRestedAltimeter(NowMs(), a);
+            };
+        }
+        if (!_altimeterTimer.Enabled) _altimeterTimer.Start();
+    }
+
+    /// <summary>
+    /// The release (the timer's tick, or a test with its clock): the altimeter once it has rested, unless the
+    /// pilot muted its Ctrl+M row, when it is dropped. Speaks outside MainForm's mute wrap, so the mute is
+    /// checked here ([VAR-8]). The timer stops once nothing waits.
+    /// </summary>
+    internal void ReleaseRestedAltimeter(long nowMs, ScreenReaderAnnouncer announcer)
+    {
+        if (_altimeterResting.TakeDue(nowMs) is { } phrase && !IsMonitorMuted(Bbs757Annunciators.AltimeterWatchKey))
+            announcer.Announce(phrase);
+        if (!_altimeterResting.Pending) _altimeterTimer?.Stop();
+    }
+
     /// <summary>
     /// A reconnect or a flight load: every state row's next delivery is a baseline again. The announced rows'
     /// raw values stay: they are facts, not baselines, and the batch delivers only changes, so an IRS switch
@@ -353,6 +455,9 @@ public partial class BBS757Definition
     {
         _changes.Reset();
         _gearLegs.Clear();
+        _altimeterResting.Reset();
+        _altimeterEchoUntil = 0;
+        _altimeterTimer?.Stop();
     }
 
     public override void ResetAnnouncementBaselines()
