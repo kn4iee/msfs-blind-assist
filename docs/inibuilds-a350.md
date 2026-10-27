@@ -53,7 +53,7 @@ Each hook prepends a call to WASI `path_readlink` (an import never used while dr
 | `nvgTranslate`, `nvgScale`, `nvgRotate` | 0x7E5B-0x7E5D | ctx and the arguments |
 | `nvgResetTransform`, `nvgReset`, `nvgTransform` | 0x7E5E-0x7E60 | ctx |
 | `DrawFrame`, `DrawWideFrame` | 0x7E61 + 0x7E62 | rectangle, then colour (wide flag set): the ECAM selection box is a cyan wide frame |
-| every `<Class>::draw(NVGcontext*, bool, int)` UI element (41 classes) | 0x7E65 | element pointer, ctx, class index: rectangle at element +4/+8/+12/+16 |
+| every `<Class>::draw(NVGcontext*, bool, int)` UI element (40 classes in 1.2.7) | 0x7E65 | element pointer, ctx, class index: rectangle at element +4/+8/+12/+16 |
 
 Exports added: `CTR::Draw`, `EFIS::Draw`, `FCU::Draw`, `HUD::Draw`, `ISIS::Draw`, `RMP::Draw`, `BAT::Draw`, `MFD::Draw`, `FMGS::Draw`, `SFD::Draw(int)`, `SND::Draw(int)`, `Systems::Draw`, `nvgBeginFrame`, `nvgEndFrame`. Texts must be placed with the tracked transform: the CTR draws the SD and WD with `nvgTranslate`, so raw positions overlap.
 

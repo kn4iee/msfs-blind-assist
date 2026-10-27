@@ -31,6 +31,7 @@ internal static class Program
         string mode = args.Length > 0 ? args[0] : "list";
         string? arg = args.Length > 1 ? args[1] : null;
         var watch = args.Length > 2 ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
+        if (DisplayModes.Handles(mode)) return DisplayModes.Run(mode, args.Skip(1).ToArray());
         ApplicationConfiguration.Initialize();
         var f = new ProbeForm(mode, arg, watch);
         Application.Run(f);

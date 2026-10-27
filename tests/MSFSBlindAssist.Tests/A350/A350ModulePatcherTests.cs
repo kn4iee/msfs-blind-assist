@@ -14,7 +14,7 @@ public class A350ModulePatcherTests
 
     /// <summary>A module with every name the patcher hooks or exports, each a stub of the A350's shape.
     /// nvgText stores 99 at address 0 so a test can tell the hook ran before the original body.</summary>
-    internal static byte[] Sample(string? leaveOut = null, bool withUiDraw = true)
+    public static byte[] Sample(string? leaveOut = null, bool withUiDraw = true)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
