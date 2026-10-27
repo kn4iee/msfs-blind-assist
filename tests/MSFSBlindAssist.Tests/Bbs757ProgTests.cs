@@ -62,6 +62,17 @@ public class Bbs757ProgTests
     }
 
     [Fact]
+    public void Step_climb_holds_the_top_line()
+    {
+        // 2026-10-27, DAL356 to KLAX in cruise: a planned step climb takes the line, four-digit miles.
+        var page = PageOne("   ECON SPD    TO STEP CLB", ".801       1740Z/ 1219NM");
+
+        Assert.Equal(new Bbs757ProgTop("STEP CLB", 1219, "1740"), Bbs757Prog.TopOf(page));
+        Assert.Equal("Step climb in 1219 miles, 17:40 Zulu, top of descent after it",
+            Bbs757Prog.TopPhrase(Bbs757Prog.TopOf(page)));
+    }
+
+    [Fact]
     public void No_top_line()
     {
         // After the top of descent the line goes: there is no top ahead.
