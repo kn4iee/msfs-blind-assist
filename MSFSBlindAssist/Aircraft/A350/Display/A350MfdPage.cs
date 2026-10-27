@@ -147,9 +147,21 @@ public static class A350MfdPage
         used.UnionWith(fields.Where(f => f.Label != null).Select(f => f.Label!));
         used.UnionWith(headers);
 
-        foreach (var row in A350DrawLayout.Rows(cells.Where(c => !used.Contains(c))
-                     .Select(c => new DrawnText(c.Text, c.X, c.Y, c.X, c.Y, 0, ColourOf(c.Colour)))))
-            lines.Add((row[0].Y - 14, row[0].X, new MfdLine("text", A350DrawLayout.Speak(row), row[0].X, row[0].Y - 7)));
+        var rows = A350DrawLayout.Rows(cells.Where(c => !used.Contains(c))
+            .Select(c => new DrawnText(c.Text, c.X, c.Y, c.X, c.Y, 0, ColourOf(c.Colour)))).ToList();
+        var paired = new HashSet<int>();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (paired.Contains(i) || rows[i].Count < 2 || rows[i].Any(c => c.Colour != "white")) continue;
+            int j = ValuesUnder(rows, i, paired);
+            if (j < 0) continue;
+            paired.Add(i);
+            paired.Add(j);
+            lines.Add((rows[i][0].Y - 14, rows[i][0].X, new MfdLine("text", Table(rows[i], rows[j]), rows[j][0].X, rows[j][0].Y - 7)));
+        }
+        for (int i = 0; i < rows.Count; i++)
+            if (!paired.Contains(i))
+                lines.Add((rows[i][0].Y - 14, rows[i][0].X, new MfdLine("text", A350DrawLayout.Speak(rows[i]), rows[i][0].X, rows[i][0].Y - 7)));
 
         return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
     }
@@ -252,6 +264,39 @@ public static class A350MfdPage
                     dx + dest.RectW / 2, dest.Y + dest.RectH / 2)));
             }
         }
+    }
+
+    /// <summary>The row of values under a row of white headings: the first row within 60 px below it, all of it not white,
+    /// under the headings' span (DEPARTURE's FROM VCBI row sits between its headings and their values); -1 if none.</summary>
+    private static int ValuesUnder(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, int header, HashSet<int> paired)
+    {
+        var h = rows[header];
+        float x0 = h.Min(c => c.X) - 40, x1 = h.Max(c => c.X) + 80;
+        for (int j = header + 1; j < rows.Count && rows[j][0].Y - h[0].Y <= 60; j++)
+        {
+            var v = rows[j];
+            if (paired.Contains(j) || v.Any(c => c.Colour == "white") || v.All(c => c.Colour == "grey")) continue;
+            if (v.All(c => c.X >= x0 && c.X <= x1)) return j;
+        }
+        return -1;
+    }
+
+    /// <summary>Headings and their values as one line: "RWY none, LENGTH none M, CRS none°, green". A grey unit belongs
+    /// to the value left of it (its "d" a degree sign); values pair with headings in order when the counts match,
+    /// else with the nearest heading.</summary>
+    private static string Table(IReadOnlyList<DrawnCell> headers, IReadOnlyList<DrawnCell> values)
+    {
+        var vals = values.Where(c => c.Colour != "grey").OrderBy(c => c.X).ToList();
+        string With(DrawnCell v)
+        {
+            var unit = values.Where(u => u.Colour == "grey" && u.X > v.X && vals.LastOrDefault(o => o.X < u.X) == v).Select(u => u.Text).FirstOrDefault();
+            return Word(v.Text) + (unit == null ? "" : unit == "d" ? "°" : " " + unit);
+        }
+        var hs = headers.OrderBy(c => c.X).ToList();
+        var parts = vals.Count == hs.Count
+            ? hs.Select((h, i) => $"{h.Text} {With(vals[i])}")
+            : vals.Select(v => $"{hs.OrderBy(h => Math.Abs(h.X - v.X)).First().Text} {With(v)}");
+        return $"{string.Join(", ", parts)}, {vals.First().Colour}";
     }
 
     private static bool IsField(DrawnElement e) => e.Class != "NotepadTextbox" && e.RectW > 0 && e.RectH > 0

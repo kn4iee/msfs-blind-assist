@@ -191,6 +191,25 @@ public class A350MfdPageTests
         Assert.Contains("IRS ALIGNED ON GNSS POS:, white; 07°10.5N/079°53.1E, green", lines);
     }
 
+    // A row of white headings over a row of values (live: DEPARTURE's RWY LENGTH CRS, its EOSID FREQ/CHAN SID TRANS,
+    // DATA/STATUS's ACTIVE and SECOND database dates) reads each value with its heading, a grey unit after its value
+    // (the font's "d" a degree sign); by order when the counts match (LENGTH's value ends nearer CRS than LENGTH).
+    private static IReadOnlyList<string> Page(string fixture) => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
+        File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures",
+            fixture + ".json")))!, 0).Select(l => l.Spoken).ToList();
+
+    [Fact]
+    public void Headings_over_values_read_each_value_with_its_heading()
+    {
+        var departure = Page("mfd_departure_empty");
+        Assert.Contains("RWY none, LENGTH none M, CRS none°, green", departure);
+        Assert.Contains("EOSID NONE, FREQ/CHAN none, SID none, TRANS none, green", departure);
+        Assert.Contains("FROM, white; VCBI, green", departure);
+        var status = Page("mfd_data_status_db");
+        Assert.Contains("ACTIVE 01OCT-28OCT, SECOND 01OCT-28OCT, green", status);
+        Assert.DoesNotContain(status, l => l.StartsWith("ACTIVE SECOND"));
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
