@@ -81,14 +81,14 @@
 
 ## In-sim checks (owner)
 
-1. Shift+M on the LEGS page: enter a speed constraint on a line (ACT becomes MOD): "MOD RTE 1 LEGS …" is said and the cursor stays on that line; insert a waypoint until the page total changes (1/2 → 1/3): the title is said, the cursor stays; NEXT PAGE: the page is spoken and the cursor is on line 1; delete a constraint above the cursor: the cursor stays on its line.
+1. Shift+M on the LEGS page: enter a speed constraint on a line (ACT becomes MOD): "MOD RTE 1 LEGS …" is said and the cursor stays on that line; insert a waypoint until the page total changes (1/2 → 1/3): the title is said, the cursor stays; NEXT PAGE: the page is spoken and the cursor is on line 1; delete a constraint above the cursor: the cursor stays on its line. On a VNAV page (CLB or DES), enter a speed: the new title is said and the cursor stays on that line.
 2. Shift+M, the scratchpad box (Alt+S): type `KATL` and Enter: it is in the scratchpad in about 1.6 s (0.4 s a key, see "Changed from the plan"; 2.6 s before), and BA reads it back once: "KATL". On RTE, type `KATL`, Enter and at once Ctrl+1: ORIGIN takes it, and nothing like "Scratchpad is empty" is said. Type a long entry while the sim is busy: if a key is missed, "Scratchpad shows …" is said.
 
 ## Handoff to plan 16
 
 - **Pilot-facing:** "757 CDU window: the cursor stays on your line when the page changes around it, including when an entry turns ACT into MOD; a new page still moves you to line 1." Changelog `fix`. "757 CDU window: what you type in the scratchpad box goes into the CDU faster (about 0.4 s a character instead of 0.65 s), and if the CDU missed a key the window says what the scratchpad shows." Changelog `improvement`.
 - **docs/b757.md:** the CDU section (row identity, page change rules, the typing timing and its measurement).
-- **For plan 09 (takes the window over):** the typed-entry check (`Bbs757TypedEntryCheck`, pure, tested) reads the scratchpad back once after every typed entry (as shown when it landed, "Scratchpad shows …" when it did not, `Bbs757CduTyping.ReadBack`); any other key ends it, keys are never held; plan 09's CDU message speech (R72) should not say the same message twice. A changed title is spoken on the same page too (never make ACT → MOD silent again: the owner's ruling).
+- **For plan 09 (takes the window over):** the typed-entry check (`Bbs757TypedEntryCheck`, pure, tested) reads the scratchpad back once after every typed entry (as shown when it landed, "Scratchpad shows …" when it did not, `Bbs757CduTyping.ReadBack`); any other key ends it, keys are never held; plan 09's CDU message speech (R72) should not say the same message twice. Plan 09's Global Constraints line "Plan 08's typed-entry check (spec R76) speaks the scratchpad once … when a typed entry did not land" is out of date (plan 09's file, so not edited here): it now speaks after every typed entry. A changed title is spoken on the same page too (never make ACT → MOD silent again: the owner's ruling). The three VNAV pages share one identity in `Bbs757CduRows` (their titles change with the speed mode) and are told apart by page number.
 - **Also seen on (its own issue, not this plan):** the HS787 FMC window, which the 757 window was cloned from, still restores the cursor by index and jumps to line 1 on any title change.
 - **Rule candidates (plan 09 or 16):** "restore the CDU cursor by row identity, never by index" and "never shorten `Bbs757CduTyping.GapMs` on one quiet measurement" (the review, 2026-10-27).
 - **For plan 13 (takes the client over):** `PressKey` now has a four-argument form with the gap (clamped 50-1000 ms, `CycleMs`); the key queue carries it. Every other caller keeps 250 / 400.
@@ -99,8 +99,8 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** waiting on owner (in-sim checks 1 and 2 in the app's Shift+M window; the code has landed)
-- **Claimed by:** Declan Webster, 2026-10-26
+- **Status:** waiting on owner (in-sim checks 1 and 2 in the app's Shift+M window, by ear; the code has landed)
+- **Claimed by:** Declan Webster, 2026-10-26; taken back by the owner (kn4iee) 2026-10-27 to finish it
 - **Worked by:** Declan Webster, with Claude (no subagents); 2026-10-27 the owner (kn4iee), with Claude: the
   scratchpad read-back fix, a whole-plan review (one review subagent) and its fixes
 - **Started:** 2026-10-27, branched from the base commit `cf1dfce94` and rebased onto `B757` 744b4cce
@@ -115,9 +115,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   ACT/MOD change speaks the new title, a typed entry is read back once ("KATL"), a missed key says "Scratchpad
   shows …", a line select key right after Enter says no false "Scratchpad is empty"; check 1's deleted constraint
   and page total change on LEGS (no route with constraints was loaded; the rules are pinned by
-  `Bbs757CduRowsTests`). Not measured: whether a speed entered on VNAV retitles the page ("ACT ECON CLB" → "MOD
-  250KT CLB", as on other Boeing FMCs); if it does, the window takes it for a new page (title said, cursor to
-  line 1) and `Bbs757CduTitle.Identity` needs a VNAV rule.
+  `Bbs757CduRowsTests`); a speed entered on a VNAV page: the new title said, the cursor kept.
 - **In-sim results:** 2026-10-27, MSFS 2024, BlueBird 757-200 PW 0.1.0, on the ground: aircraft powered with the EFB's
   Before start preset (APU, external power); the first officer's CDU's NAV RADIO frame captured live as the fixture
   `bbs757-cdu-navradio.json` and passing the row tests; the typing timing re-measured through the tablet agent's own
@@ -134,6 +132,15 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
     EGLL and EGCC 1.7 and 1.9 s. Nothing was missed, so the missed-key line could not be heard; speech is the
     owner's to hear.
   The test left an EGLL-EGCC route active in the captain's CDU.
+  2026-10-27 evening, the owner's flight in cruise (FL337-FL380, DELTA 773), MSFSBA closed except where said:
+  - The read-back fix, this branch's Debug build, first officer's CDU on NAV RADIO: `5` then `7` typed in the
+    scratchpad box were read back "5" and "57" about 1 s after Enter (debug.log: `CDU 2 typed entry '5': 5`,
+    `'7': 57`). Claude drove that window with synthetic keys; the owner stopped it (they were using the PC), so the
+    rest was not tried in the app. The "5I" it left (a key of the owner's reached the box) was cleared with a held
+    CLR through the SimConnect MCP and the scratchpad read blank through the debugger.
+  - The VNAV titles, read with page keys only (VNAV, PREV, NEXT, NAV RAD as L:var presses through the MCP, the
+    screen through the debugger; the MCP cannot read CDU text): `               CLB  1/3 `, `     ACT ECON CRZ
+    2/3`, `              DES   3/3 ` (DES showing SEL SPD 300). The first officer's CDU was put back on NAV RADIO.
 - **Changed from the plan:** the typing gap is 300 ms, not 100 (flight-08.md): on a busier sim 100 / 100 lost a
   repeated digit in 4 of 10 entries; 100 / 200 never missed (15 of 15), and the margin step was taken half-way to
   the grid's 400 (100 / 300, 10 of 10), since 400 would leave typing nearly as slow as before. So the pilot-facing
@@ -171,4 +178,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   page change: `IsPageChange` compares the page number only (ruling 2); the check's state moved into the pure
   `Bbs757TypedEntryCheck` with tests (the review's recommendation); the client's summary and `MinGapMs` comments
   (a 50 ms floor is not a safe gap); a de-DE/sv-SE read-back test. Left: the VNAV retitle question (see "Waiting
-  on the owner"), the rule candidates and the HS787 note (handoff).
+  on the owner"), the rule candidates and the HS787 note (handoff). The VNAV question was then answered: "The
+  title does change on vnav such as climb or descent when entering a speed" (the owner, 2026-10-27), so the three
+  VNAV pages are one page identity told apart by page number (`Bbs757CduRows`; `Bbs757CduTitle` is plan 01's and
+  frozen).

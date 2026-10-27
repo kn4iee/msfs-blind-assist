@@ -150,6 +150,35 @@ public class Bbs757CduRowsTests
         Assert.False(Bbs757CduRows.IsPageChange("     RTE 1           1/2", "   ACT RTE 1         1/2"));
     }
 
+    // The first officer's VNAV pages in cruise, read live 2026-10-27 (FL380): the three pages and their counters.
+    private const string VnavClb = "               CLB  1/3 ";
+    private const string VnavCrz = "     ACT ECON CRZ    2/3";
+    private const string VnavDes = "              DES   3/3 ";
+
+    [Fact]
+    public void A_speed_entered_on_a_vnav_page_keeps_the_page()
+    {
+        // A VNAV page retitles when a speed is entered (the owner, 2026-10-27; e.g. ECON CLB -> 250KT CLB on
+        // Boeing FMCs, the BlueBird's exact words not captured): the same page, so the cursor stays and the
+        // new title is said.
+        Assert.False(Bbs757CduRows.IsPageChange("     ACT ECON CLB    1/3", "    MOD 250KT CLB    1/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavDes, "     MOD 300KT DES   3/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     MOD M.800 CRZ   2/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     ACT LRC CRZ     2/3"));
+        // A new cruise altitude on the CRZ page: still page 2.
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     MOD CRZ CLB     2/3"));
+        Assert.True(Bbs757CduRows.IsTitleChange("     ACT ECON CLB    1/3", "    MOD 250KT CLB    1/3"));
+    }
+
+    [Fact]
+    public void Another_vnav_page_is_a_page_change()
+    {
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, VnavClb));   // PREV PAGE
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, VnavDes));   // NEXT PAGE twice
+        Assert.True(Bbs757CduRows.IsPageChange("        NAV RADIO       ", VnavCrz));   // the VNAV key
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, "  ACT RTE 1 LEGS     1/2"));
+    }
+
     [Fact]
     public void Any_changed_title_is_a_title_change()
     {
