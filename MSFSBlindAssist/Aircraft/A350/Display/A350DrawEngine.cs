@@ -31,6 +31,11 @@ public sealed class A350DrawEngine : IDisposable
     private List<DrawnText> _texts = new();
     private List<DrawnFrame> _frames = new();
     private List<DrawnElement> _elements = new();
+    private List<DrawnShape> _shapes = new();
+
+    /// <summary>Also record what NanoVG renders (fills, strokes, images) into <see cref="A350DrawCapture.Shapes"/>:
+    /// the SD's valves, pumps and needles. Off, the render calls cost nothing.</summary>
+    public bool RecordShapes { get; set; }
 
     private readonly Dictionary<string, int> _avarIds = new(), _unitIds = new();
     private readonly Dictionary<int, (string Name, uint Address)> _customVars = new();
@@ -89,6 +94,18 @@ public sealed class A350DrawEngine : IDisposable
                 {
                     int outPtr = a[2].AsInt32();
                     if (outPtr != 0 && LVar(a[0].AsInt32()) is double v) _memory.WriteDouble(outPtr, v);
+                },
+                "fsRenderFill" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+                {
+                    if (RecordShapes && A350ShapeReader.Fill(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
+                },
+                "fsRenderStroke" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+                {
+                    if (RecordShapes && A350ShapeReader.Stroke(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[6].AsInt32(), a[7].AsInt32()) is { } s) _shapes.Add(s);
+                },
+                "fsRenderTriangles" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+                {
+                    if (RecordShapes && A350ShapeReader.Triangles(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[4].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "execute_calculator_code" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
@@ -357,7 +374,7 @@ public sealed class A350DrawEngine : IDisposable
     /// "FCU", "RMP" (0-2), "SFD", "SND", "ISIS", "BAT", "HUD". A trap is returned as the capture's error.</summary>
     public A350DrawCapture Draw(string cls, int index = 0)
     {
-        _texts = new(); _frames = new(); _elements = new(); _state.Clear();
+        _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
         var objs = Objects(cls);
         if (index >= objs.Count) return new A350DrawCapture(cls, _texts, _frames, _elements, $"no {cls} object #{index}", 0);
         var sw = Stopwatch.StartNew();
@@ -373,14 +390,15 @@ public sealed class A350DrawEngine : IDisposable
             {
                 Restore();
                 if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
-                _texts = new(); _frames = new(); _elements = new(); _state.Clear();
+                _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
             }
             Restore();
             if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; _fresh = true; }
         catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; }
-        return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds);
+        return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds)
+            { Shapes = RecordShapes ? _shapes : null };
     }
 
     public void Dispose() => _store.Dispose();

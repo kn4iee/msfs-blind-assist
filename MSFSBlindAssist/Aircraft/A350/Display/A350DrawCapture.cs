@@ -44,4 +44,7 @@ public sealed record A350DrawCapture(
     IReadOnlyList<DrawnElement> Elements, string? Error, double Milliseconds)
 {
     public bool Ok => Error == null;
+
+    /// <summary>What NanoVG rendered, when the engine records shapes (<see cref="A350DrawEngine.RecordShapes"/>).</summary>
+    public IReadOnlyList<DrawnShape>? Shapes { get; init; }
 }

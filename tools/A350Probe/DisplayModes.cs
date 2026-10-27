@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep";
 
     public static int Run(string mode, string[] args)
     {
@@ -28,6 +28,7 @@ internal static class DisplayModes
             case "ecamlisten": return EcamListen(args);
             case "sdmap": return SdMap(args);
             case "sdtext": return SdText(args);
+            case "sdsweep": return SdSweep(args);
             default: return 2;
         }
     }
@@ -78,6 +79,7 @@ internal static class DisplayModes
         Console.Error.WriteLine($"module {(built ? "built" : "from cache")} in {sw.ElapsedMilliseconds} ms");
         sw.Restart();
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
+        draw.RecordShapes = Environment.GetEnvironmentVariable("A350_SHAPES") == "1";
         Console.Error.WriteLine($"instantiated in {sw.ElapsedMilliseconds} ms");
         A350MemoryCopy copy;
         A350MemoryReader? reader = null;
@@ -256,6 +258,54 @@ internal static class DisplayModes
         return 0;
     }
 
+    /// <summary>`sdsweep copy.bin page NAME=v1,v2 [NAME=...]`: what one variable's values do to an SD page. NAME is
+    /// "L:x" (a CustomVariable) or "V:x" (the 1.2.7 Variables array); each value set in the copy, the page drawn,
+    /// and every shape and text that differs from the copy's own value printed.</summary>
+    private static int SdSweep(string[] args)
+    {
+        const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
+        var src = A350ModuleCache.FindInstalledModule()!;
+        var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
+        var facts = A350ModuleFacts.From(mod);
+        using var engine = A350ModuleCache.CreateEngine();
+        using var module = A350ModuleCache.LoadOrBuild(engine, src, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), out _);
+        using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts) { RecordShapes = true };
+        var copy = A350MemoryCopy.Load(args[0]);
+        draw.Load(copy);
+        copy.WriteInt32(SdPage, int.Parse(args[1]));
+        var addr = new Dictionary<string, uint>();
+        foreach (var cv in draw.CustomVariables) addr["L:" + cv.Name] = cv.Address + 16;
+        for (int i = 0; i < VarCount; i++)
+        {
+            var p = copy.Read(VarNames + (uint)(4 * i), 4);
+            if (p.Length == 4 && mod.CString((int)BitConverter.ToUInt32(p)) is string n) addr.TryAdd("V:" + n, VarValues + (uint)(8 * i));
+        }
+        static List<string> Items(A350DrawCapture c) =>
+            (c.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => A350DrawLayout.CtrSystemDisplay.Contains((sh.X0 + sh.X1) / 2, (sh.Y0 + sh.Y1) / 2))
+                .Where(sh => !(sh.Kind == "triangles" && sh.Image == 1))
+                .Select(sh => $"{sh.Kind} ({sh.X0:0},{sh.Y0:0},{sh.X1:0},{sh.Y1:0}) img{sh.Image} {A350Rgba.NameOf(sh.Colour)}" + (sh.Image > 1 ? $" @{A350ShapeReader.SpriteCentre(sh).X:0},{A350ShapeReader.SpriteCentre(sh).Y:0} r{A350ShapeReader.AngleDegrees(sh):0}" : ""))
+                .Concat(A350DrawLayout.Region(c.Texts, A350DrawLayout.CtrSystemDisplay).Where(t => !string.IsNullOrWhiteSpace(t.Text))
+                    .Select(t => $"text ({t.X:0},{t.Y:0}) {t.Text.Trim()} {t.ColourName}")).ToList();
+        var baseItems = Items(draw.Draw("CTR"));
+        if (args.Length == 2) foreach (var i in baseItems) Console.WriteLine(i);
+        foreach (var spec in args.Skip(2))
+        {
+            var kv = spec.Split('=');
+            if (!addr.TryGetValue(kv[0], out var a)) { Console.WriteLine($"{kv[0]}: unknown"); continue; }
+            var old = copy.Read(a, 8).ToArray();
+            Console.WriteLine($"===== {kv[0]} (copy: {BitConverter.ToDouble(old)})");
+            foreach (var v in kv[1].Split(','))
+            {
+                copy.WriteDouble(a, double.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
+                var items = Items(draw.Draw("CTR"));
+                var gone = baseItems.Except(items).ToList(); var came = items.Except(baseItems).ToList();
+                Console.WriteLine($"  = {v}: " + (gone.Count + came.Count == 0 ? "same" : string.Join(" | ", gone.Select(g => "-" + g).Concat(came.Select(c => "+" + c)))));
+            }
+            copy.WriteDouble(a, BitConverter.ToDouble(old));
+        }
+        return 0;
+    }
+
     /// <summary>`sdtext ctr.json page`: a saved CTR draw read as the ECAM Control Panel's status display reads it.</summary>
     private static int SdText(string[] args)
     {
@@ -279,6 +329,7 @@ internal static class DisplayModes
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
         var copy = A350MemoryCopy.Load(args[0]);
         draw.Load(copy);
+        draw.RecordShapes = true;
         var targets = new List<(string Name, uint Address)>();
         foreach (var cv in draw.CustomVariables) targets.Add(("L:" + cv.Name, cv.Address + 16));
         for (int i = 0; i < VarCount; i++)
@@ -291,6 +342,20 @@ internal static class DisplayModes
         static Dictionary<(int, int), string> Cells(A350DrawCapture c) =>
             A350DrawLayout.Region(c.Texts, A350DrawLayout.CtrSystemDisplay).Where(t => !string.IsNullOrWhiteSpace(t.Text))
                 .GroupBy(t => ((int)MathF.Round(t.X), (int)MathF.Round(t.Y))).ToDictionary(g => g.Key, g => string.Join("|", g.Select(t => t.Text.Trim() + "{" + t.ColourName + "}")));
+        // A shape by its box (rounded), what it is: its kind, image and colour. A moved needle is a new box.
+        static Dictionary<(int, int, int, int), string> Shapes(A350DrawCapture c)
+        {
+            var d = new Dictionary<(int, int, int, int), string>();
+            foreach (var sh in c.Shapes ?? Array.Empty<DrawnShape>())
+            {
+                if (!A350DrawLayout.CtrSystemDisplay.Contains((sh.X0 + sh.X1) / 2, (sh.Y0 + sh.Y1) / 2)) continue;
+                if (sh.Kind == "triangles" && sh.Image == 1) continue;   // font glyphs: read as text already
+                var k = ((int)MathF.Round(sh.X0), (int)MathF.Round(sh.Y0), (int)MathF.Round(sh.X1), (int)MathF.Round(sh.Y1));
+                var v = $"{sh.Kind}/{sh.Image}/{A350Rgba.NameOf(sh.Colour)}" + (sh.Image > 1 ? $"@{sh.X0 - sh.PatternX:0},{sh.Y0 - sh.PatternY:0}" : "");
+                d[k] = d.TryGetValue(k, out var o) ? o + "+" + v : v;
+            }
+            return d;
+        }
         foreach (var pageArg in args.Skip(1))
         {
             int page = int.Parse(pageArg);
@@ -298,25 +363,39 @@ internal static class DisplayModes
             var baseCap = draw.Draw("CTR");
             if (!baseCap.Ok) { Console.WriteLine($"page {page}: base draw failed {baseCap.Error}"); continue; }
             var baseCells = Cells(baseCap);
+            var baseShapes = Shapes(baseCap);
+            Console.WriteLine($"----- page {page}: {baseShapes.Count} shapes");
+            foreach (var kv in baseShapes.OrderBy(k => k.Key.Item2).ThenBy(k => k.Key.Item1))
+                Console.WriteLine($"shape {kv.Key} {kv.Value}");
+            var shapeHits = new List<string>();
             Console.WriteLine($"===== page {page}: {baseCells.Count} cells");
             var hits = new Dictionary<(int, int), List<string>>();
             foreach (var (name, addr) in targets)
             {
                 var old = copy.Read(addr, 8).ToArray();
                 if (old.Length != 8) continue;
-                copy.WriteDouble(addr, 4321);
+                foreach (var probe in (Environment.GetEnvironmentVariable("A350_SDMAP_VALUES") ?? "4321").Split(',').Select(double.Parse))
+                {
+                if (probe == BitConverter.ToDouble(old)) continue;
+                copy.WriteDouble(addr, probe);
                 var cap = draw.Draw("CTR");
                 copy.WriteDouble(addr, BitConverter.ToDouble(old));
                 if (!cap.Ok) continue;
                 var cells = Cells(cap);
+                var shapes = Shapes(cap);
+                var changed = baseShapes.Keys.Union(shapes.Keys).Where(k => baseShapes.GetValueOrDefault(k) != shapes.GetValueOrDefault(k)).ToList();
+                if (changed.Count > 0 && name != "V:INI_EWD_VALID")
+                    shapeHits.Add($"{name}={probe} (copy {BitConverter.ToDouble(old)}): {changed.Count} shapes: " + string.Join("; ", changed.Take(8).Select(k => $"{k} {baseShapes.GetValueOrDefault(k) ?? "-"} -> {shapes.GetValueOrDefault(k) ?? "-"}")));
                 foreach (var key in baseCells.Keys.Union(cells.Keys))
                 {
                     baseCells.TryGetValue(key, out var a); cells.TryGetValue(key, out var b);
                     if (a == b) continue;
                     if (!hits.TryGetValue(key, out var l)) hits[key] = l = new();
-                    l.Add($"{name} ({a ?? "-"} -> {b ?? "-"})");
+                    l.Add($"{name}={probe} ({a ?? "-"} -> {b ?? "-"})");
+                }
                 }
             }
+            foreach (var h in shapeHits) Console.WriteLine("SHAPE " + h);
             foreach (var kv in hits.OrderBy(k => k.Key.Item2).ThenBy(k => k.Key.Item1))
                 Console.WriteLine($"{kv.Key.Item1},{kv.Key.Item2} [{(baseCells.TryGetValue(kv.Key, out var t0) ? t0 : "new")}]: {string.Join("; ", kv.Value.Take(6))}{(kv.Value.Count > 6 ? $" (+{kv.Value.Count - 6})" : "")}");
         }
