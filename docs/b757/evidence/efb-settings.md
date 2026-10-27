@@ -178,14 +178,20 @@ are as of `7d7d6194d`: check them against the file before editing. The in-sim ch
   options, Callouts, Cabin audio), read from BlueBird's own files. While no simulator runs, a change is saved to the
   files at once and BlueBird applies it when the 757 next loads. While any simulator process runs, or the app cannot
   tell whether one does, everything is read-only and an attempt says "Close the simulator to change BlueBird's
-  settings." A status box at the top of the tab says which case it is, and a simulator that starts or closes while the
-  window is open is said once ("Simulator started: BlueBird's settings are read-only." and "Simulator closed:
-  BlueBird's settings can be changed.").
+  settings." A status box at the top of the tab says which case it is (with work folders under both simulators, its
+  closed-simulator text ends "Changes go to the MSFS 2024 folder.", or the MSFS 2020 folder), and a simulator that
+  starts or closes while the window is open is said once ("Simulator started: BlueBird's settings are read-only." and
+  "Simulator closed: BlueBird's settings can be changed.").
 - A switch is a check box, the tablet's named values are a choice list, and a number or text is a box with a Set
   button (Enter sets too; it says `<label> saved`, or "Couldn't save <label>: <reason>"). The SimBrief ID, Hoppie
   logon code and SayIntentions ACARS key show in plain text. A row can also read "Other (stored value N)", "Not
   readable in this BlueBird version", "Differs between registrations" (the Livery options, Callouts and Cabin audio
   sections change every registration's file) or, for EFB brightness while its mode is Auto, "Automatic".
+- The Livery options, Callouts and Cabin audio sections start with a line naming the registrations whose files their
+  rows change ("Applies to 1 registration: G-BBS75", "Applies to 3 registrations: A, B, C"; with no registration file
+  yet, "BlueBird has no registration options yet. Fly a livery once to create them.").
+- Escape closes an open list first (a choice list on the Settings tab, the Cockpit preset list on the Flight tab) and
+  closes the window only when no list is open; it closed the window at once before.
 - Sign in to Navigraph and Update nav data moved to the Settings tab (they still need the 757 loaded). An "EFB status"
   box there shows the same last message as the Flight tab's Status box, the Navigraph code included.
 - Removed from the Flight tab: the SimBrief ID box with Set SimBrief ID (the ID is set once on the Settings tab with the
@@ -196,9 +202,10 @@ are as of `7d7d6194d`: check them against the file before editing. The in-sim ch
 - The tab copies the tablet's own rules (section 9): Units writes two keys; switching on one callout of an exclusive
   group says `<label> turned off` for the one it replaced; the two announcement categories say "Turn on Announcements
   to change this." while Announcements is off.
-- Before the first write of a session, each file is copied to
-  `%APPDATA%\MSFSBlindAssist\backups\bbs757\<folder key>\<file name>` (the folder key is 8 hex digits of SHA-256 of the
-  source folder's path).
+- Before a file's first write, the app copies it to `%APPDATA%\MSFSBlindAssist\backups\bbs757\<folder key>\<file name>`
+  (the folder key is 8 hex digits of SHA-256 of the source folder's path), once for each file for the life of the EFB
+  window (made at the first Shift+T, closed when the profile switches away from the 757). A window made again after a
+  profile switch copies the already-changed file on its first write, replacing the earlier copy.
 
 **Stale places** (they describe the removed buttons, the window as one page, or the app never writing BlueBird's
 files):
@@ -207,17 +214,19 @@ files):
   Set SimBrief ID (296-303), "Set your SimBrief ID first." in Load fuel and payload's text (361-363) and Set steering to
   rudder (387-395). The "757 EFB (Shift+T):" intro (259-264) also describes one page, with the Status box "at the
   bottom", and lists Sign in to Navigraph and Update nav data (265-295) as its buttons: describe the two tabs and put
-  those two entries under Settings.
-- `guide/boeing-aircraft-and-the-md-11.md`, lines 488, 491 and 494: the same three. Also 470 (set your SimBrief ID in the
-  EFB window), 482 (the window as "a column of buttons, a Status box and a Close button") and 486-487 (Navigraph and
-  nav data). The chapter "The EFB" (`#boeing-757-efb`) gains the Settings tab.
+  those two entries under Settings. Line 408 (Escape, "Close the window") is stale too: Escape closes an open list
+  first.
+- `guide/boeing-aircraft-and-the-md-11.md`, lines 488, 491 and 494: the same three. Also 470 (set your SimBrief ID in
+  the EFB window), 482 (the window as "a column of buttons, a Status box and a Close button", and "Escape closes the
+  window") and 486-487 (Navigraph and nav data). The chapter "The EFB" (`#boeing-757-efb`) gains the Settings tab.
 - `guide/hotkey-reference.md`, line 541: the same two buttons in the list. Also 537-538 (Tab moves to "the SimBrief ID
-  box"; Enter in it sets the ID). The section (`#efb-window-input-shift-t`) gains the Settings tab.
-- `docs/b757.md`, lines 264, 276-277, 293-301 and 335: 264 says `Bbs757WorkFolder` reads `tiller_realistic` and never
-  writes BlueBird's files; it now reads only `simbrief_id`, `units` and the installed cycle, and the app writes
-  BlueBird's files while no simulator runs (B757-17). 276-277 are the SimBrief ID entry, 293-301 Set steering to rudder
-  (and `Bbs757EfbLayout.MayClickSteering`, which no longer exists), 335 "Set your SimBrief ID first." The file map
-  (lines 18-23) calls `Bbs757WorkFolder` "read only" and lists none of the new files. The EFB section gains the
+  box"; Enter in it sets the ID) and 539 ("Escape — Close.": it closes an open list first). The section
+  (`#efb-window-input-shift-t`) gains the Settings tab.
+- `docs/b757.md`, lines 264-265, 276-277, 293-301 and 335: 264 says `Bbs757WorkFolder` reads `tiller_realistic`, and 265
+  that it never writes BlueBird's files; it now reads only `simbrief_id`, `units` and the installed cycle, and the app
+  writes BlueBird's files while no simulator runs (B757-17). 276-277 are the SimBrief ID entry, 293-301 Set steering to
+  rudder (and `Bbs757EfbLayout.MayClickSteering`, which no longer exists), 335 "Set your SimBrief ID first." The file
+  map (lines 18-23) calls `Bbs757WorkFolder` "read only" and lists none of the new files. The EFB section gains the
   Settings tab: what it writes and when (B757-17), the guard, the safety copy, the catalog (sections 2 to 8), the
   tablet's three rules (section 9), what is spoken and what is read-only.
 - `docs/b757/plans/02-gaps/11-efb-rework.md`, lines 147-148 (plan 11's own text): tablet toggles judged on a variable
@@ -226,17 +235,22 @@ files):
 **The rule and the places that cite this file.**
 
 - B757-17 is in (`.claude/rules/b757.md`; full text in `docs/invariants/b757.md`), added here although the index
-  reserves the rule lines of those two files for plan 16. B757-5 to B757-16 are promised to other plans (plan 16's Task 2 lists B757-5 to B757-11), so the
-  rule file runs from B757-4 to B757-17 until they land: do not renumber. This work also took the steering half out of
-  B757-2 (`Bbs757EfbLayout.MayClickSteering`, `Bbs757WorkFolder.ReadTillerRealistic` and the tablet reader's steering
-  branch are gone). Plan 11's handoff (`11-efb-rework.md`, line 112) proposes extending B757-2 with "each settings
-  switch on its file key": with steering gone and the reader read-only, the app taps no settings switch, so check that
-  the extension still has something to guard.
-- Plan 16 removes `docs/b757/` before the merge. These comments cite this file: `Bbs757SimGuard.cs` line 25,
+  reserves the rule lines of those two files for plan 16. B757-5 to B757-16 are promised to other plans (plan 16's
+  Task 2 lists B757-5 to B757-11), so the rule file runs from B757-4 to B757-17 until they land: do not renumber. This
+  work also took the steering half out of B757-2 (`Bbs757EfbLayout.MayClickSteering`,
+  `Bbs757WorkFolder.ReadTillerRealistic` and the tablet reader's steering branch are gone). Plan 11's handoff
+  (`11-efb-rework.md`, line 112) proposes extending B757-2 with "each settings switch on its file key": with steering
+  gone and the reader read-only, the app taps no settings switch, so check that the extension still has something to
+  guard.
+- Plan 16 removes `docs/b757/` before the merge. These comments cite this file by path: `Bbs757SimGuard.cs` line 25,
   `Bbs757SettingsFile.cs` line 34, `Bbs757EfbSettings.cs` lines 152 and 182, `BBS757EfbForm.Settings.cs` line 11 and
-  `Bbs757EfbSettingsTests.cs` line 9. B757-17's full text restates sections 1 and 9 and stands alone, so point the
-  comments about section 1 there. Sections 2 to 8 (each tablet label, key and stored value) are the authority for the
-  catalog and `Bbs757EfbSettingsTests`: fold them into `docs/b757.md` first.
+  `Bbs757EfbSettingsTests.cs` line 9. Ten more cite only "evidence section N", so `git grep "docs/b757/"` will not
+  find them: `Bbs757EfbSettings.cs` lines 228, 436, 464, 488, 499, 516, 530, 552 and 583, and
+  `Bbs757EfbSettingsTests.cs` line 10. Four cite "the spec", which is not committed (`docs/superpowers` is
+  git-ignored): `Bbs757EfbSettings.cs` lines 184 and 500, and `Bbs757SimGuardTests.cs` lines 10 and 21. B757-17's full
+  text restates sections 1 and 9 and stands alone, so point the comments about section 1 or 9 there. Sections 2 to 8
+  (each tablet label, key and stored value) are the authority for the catalog and `Bbs757EfbSettingsTests`: fold them
+  into `docs/b757.md` first.
 
 **Notes for plan 11's owner and plan 16.**
 
@@ -248,11 +262,12 @@ files):
   and plan 11's Task 3 (`11-efb-rework.md`, lines 73-75) reserve them for a settings-file reader that never writes, and
   plan 11's execution record says Task 3 was replaced, not built. This work built files of those names as the settings
   catalog, and it writes BlueBird's files. It also added files no row of the index names: `Bbs757SettingsFile.cs`,
-  `Bbs757SimGuard.cs`, `Bbs757SettingsRows.cs`, `Bbs757SettingsSave.cs`, `Forms/BBS757/BBS757EfbForm.Settings.cs` and
-  `Forms/BBS757/Bbs757LockableComboBox.cs`, with their tests. The existing files it changed all belong to plan 11's EFB
-  work: `BBS757EfbForm.cs`, `Bbs757EfbLayout.cs` (the SimBrief ID keypad entry and the steering sequence are gone),
-  `Bbs757EfbBridge.cs`, `Bbs757EfbElements.cs`, `Bbs757WorkFolder.cs` (`ReadTillerRealistic` is gone; `ExistingFolders`,
-  `SimulatorOf` and `RegistrationFiles` are new) and `Bbs757EfbTests.cs`.
+  `Bbs757SimGuard.cs`, `Bbs757SettingsRows.cs`, `Bbs757SettingsSave.cs` and `Forms/BBS757/Bbs757LockableComboBox.cs`,
+  with their tests; and `Forms/BBS757/BBS757EfbForm.Settings.cs`, which the index's `BBS757EfbForm*.cs` row (line 62)
+  already gives to plan 11. The existing files it changed all belong to plan 11's EFB work: `BBS757EfbForm.cs`,
+  `Bbs757EfbLayout.cs` (the SimBrief ID keypad entry and the steering sequence are gone), `Bbs757EfbBridge.cs`,
+  `Bbs757EfbElements.cs`, `Bbs757WorkFolder.cs` (`ReadTillerRealistic` is gone; `ExistingFolders`, `SimulatorOf` and
+  `RegistrationFiles` are new) and `Bbs757EfbTests.cs`.
 - Also seen, older than this work: `Bbs757WorkFolder`'s readers (`ReadSimBriefId`, `ReadUnits`, `ReadInstalledCycle`)
   call `TryGetProperty` and `GetString` outside a guard. A hand-edited file with an unpaired surrogate escape in a key
   name or value would throw out of them (BlueBird itself writes plain ASCII). `Bbs757SettingsFile.ValueAt` shows the
@@ -260,7 +275,9 @@ files):
 
 **User guide (CORE-19) and the changelog.**
 
-- The PR line: `User guide: needed: 757 EFB window` (plan 16 updates `guide/` with the rest of the 757).
+- The PR line: while plan 16 has not updated the guide, `User guide: needed: 757 EFB window` (plan 16 updates `guide/`
+  with the rest of the 757); once plan 16 bundles the guide, its own `User guide: updated: <chapters>` line covers the
+  757 EFB window chapter.
 - Proposed changelog fragment (category `aircraft` or `feature`, as plan 16 bundles it): "The 757 EFB window has a
   Settings tab: every BlueBird tablet setting can be read and changed with the screen reader while the simulator is
   closed, and BlueBird applies it at the next load."
@@ -290,7 +307,12 @@ into the owner's pass):
 8. Timing: a five-member callout group save with the guard checking before every write (about 6 ms a check).
 9. Layout at the owner's DPI, measured and not looked at: the Flight tab without a scroll bar; the Settings rows scroll
    with focus.
-10. From the catalog's own notes, not in the list above: the values that were never measured. Clear the SimBrief ID,
-    the Hoppie logon code and the SayIntentions ACARS key on the tab, load the 757 and read what BlueBird holds (-1, ""
-    and "" expected; section 8 was not tapped). Set the TOD pause distance to 1 and to 999 and see what the tablet
-    shows (the range is a ruling; the tablet's keypad limits were not measured).
+10. From the catalog's own notes and section 9, not in the list above: what was never measured. Clear the SimBrief ID,
+    the Hoppie logon code and the SayIntentions ACARS key on the tab (the safety copy then holds the real values), load
+    the 757 and read what BlueBird holds (-1, "" and "" expected; section 8 was not tapped). With the 757 loaded, set
+    and then clear each of those three boxes on the tablet itself, and switch Hoppie ACARS on and off if the owner
+    agrees (on, it could log on to Hoppie with his code), diffing both whole files after every change as in section 1:
+    section 9's check was not made on these four controls, so whether any of them writes a second key is unmeasured.
+    Then close the simulator and set the three again on the tab (the safety copy holds them). Set the TOD pause
+    distance to 1 and to 999 and see what the tablet shows (the range is a ruling; the tablet's keypad limits were not
+    measured).
