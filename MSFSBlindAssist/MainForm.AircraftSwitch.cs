@@ -687,6 +687,13 @@ public partial class MainForm
         var avars = new Aircraft.A350.Display.A350AVarAnswers(key => simConnectManager?.GetCachedVariableValue(key),
             ask => Log.Info("A350Display", "draw code asked an A: var MSFSBA does not stream: " + ask));
         a350DisplayService.AVarAnswer = avars.Answer;
+        // The idents it asks through calculator code (NAV 2, both ADFs): from the NAV radio read, every 2 s.
+        var idents = new Aircraft.A350.Display.A350CalcStrings();
+        a350DisplayService.CalcStringAnswer = idents.Answer;
+        a350IdentTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        a350IdentTimer.Tick += (_, _) => simConnectManager?.RequestNavRadioInfo(d =>
+            idents.Update(d.Nav1Ident ?? "", d.Nav2Ident ?? "", d.Adf1Ident ?? "", d.Adf2Ident ?? ""));
+        a350IdentTimer.Start();
         var service = a350DisplayService;
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
             async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
@@ -717,6 +724,8 @@ public partial class MainForm
             a350.Ecam = null;
             a350.Pfd = null;
         }
+        a350IdentTimer?.Dispose();
+        a350IdentTimer = null;
         a350EcamMonitor?.Dispose();
         a350EcamMonitor = null;
         a350PfdMonitor?.Dispose();

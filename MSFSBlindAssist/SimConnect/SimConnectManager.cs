@@ -873,6 +873,10 @@ public partial class SimConnectManager
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string Nav2Name;
         public double Nav2Obs;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string Adf1Ident;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string Adf2Ident;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]

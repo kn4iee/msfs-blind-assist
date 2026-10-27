@@ -25,6 +25,7 @@ public sealed class A350DisplayService : IDisposable
     private A350MemoryReader? _reader;
     private A350ModuleFacts? _facts;
     private Func<string, double?> _aVar = _ => null;
+    private Func<string, string?> _calcString = _ => null;
     private bool _disposed;
 
     /// <summary>A status sentence to speak (getting ready, ready, not available).</summary>
@@ -37,6 +38,12 @@ public sealed class A350DisplayService : IDisposable
     public Func<string, double?> AVarAnswer
     {
         set { _aVar = value; _work.Add(() => { if (_draw != null) _draw.AVarAnswer = value; }); }
+    }
+
+    /// <summary>The strings the draw code asks through calculator code ("(A:NAV IDENT:2, String)").</summary>
+    public Func<string, string?> CalcStringAnswer
+    {
+        set { _calcString = value; _work.Add(() => { if (_draw != null) _draw.CalcStringAnswer = value; }); }
     }
 
     public A350DisplayService(string? localAppData = null)
@@ -75,7 +82,7 @@ public sealed class A350DisplayService : IDisposable
             if (!cached) Spoken?.Invoke(A350DisplayStatus.GettingReady);
             _engine = A350ModuleCache.CreateEngine();
             _module = A350ModuleCache.LoadOrBuild(_engine, path, _localAppData, out _);
-            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, RecordShapes = true };   // the SD's symbols
+            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, CalcStringAnswer = _calcString, RecordShapes = true };   // the SD's symbols
             _reader = new A350MemoryReader(_facts.Anchors);
             State = A350DisplayState.Ready;
             if (!cached) Spoken?.Invoke(A350DisplayStatus.Ready);

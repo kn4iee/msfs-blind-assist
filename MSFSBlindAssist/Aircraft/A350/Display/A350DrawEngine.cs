@@ -48,6 +48,25 @@ public sealed class A350DrawEngine : IDisposable
     /// <summary>The value of an A: var asked by the draw code: "KOHLSMAN SETTING HG:1|inches of mercury".</summary>
     public Func<string, double?> AVarAnswer { get; set; } = _ => null;
 
+    /// <summary>The string a calculator code asked by the draw code returns ("(A:NAV IDENT:2, String)"), or null.</summary>
+    public Func<string, string?> CalcStringAnswer { get; set; } = _ => null;
+
+    /// <summary>Answered strings live in the memory's last page: 64 MB past the copy, never the copy's or the
+    /// module's heap. Slots of 64 bytes in turn, so the strings of one draw stay put while it runs.</summary>
+    private const int StringSlot = 64, StringSlots = 64;
+    private int _nextSlot;
+
+    private int PutString(string text)
+    {
+        long page = _memory.GetLength() - StringSlot * StringSlots;
+        int at = (int)(page + StringSlot * (_nextSlot++ % StringSlots));
+        var bytes = Encoding.Latin1.GetBytes(text.Length >= StringSlot ? text[..(StringSlot - 1)] : text);
+        var span = _memory.GetSpan(at, StringSlot);
+        span.Clear();
+        bytes.CopyTo(span);
+        return at;
+    }
+
     public A350DrawEngine(Engine engine, Module module, IReadOnlyList<string> uiClasses, A350ModuleFacts facts)
     {
         _uiClasses = uiClasses;
@@ -109,8 +128,17 @@ public sealed class A350DrawEngine : IDisposable
                 },
                 "execute_calculator_code" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    Asked.Add("CALC " + CStr(_memory, a[0].AsInt32()));
-                    r[0] = 0;
+                    // (code, FLOAT64* fvalue, SINT32* ivalue, PCSTRINGZ* svalue): a string answer is written to the
+                    // memory's last page and *svalue pointed at it.
+                    string code = CStr(_memory, a[0].AsInt32());
+                    Asked.Add("CALC " + code);
+                    int svalue = a.Length > 3 ? a[3].AsInt32() : 0;
+                    if (svalue != 0 && CalcStringAnswer(code) is { } text)
+                    {
+                        _memory.WriteInt32(svalue, PutString(text));
+                        r[0] = 1;
+                    }
+                    else r[0] = 0;
                 },
                 _ => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => Zero(rs, r),
             };

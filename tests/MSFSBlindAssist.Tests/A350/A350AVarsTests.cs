@@ -56,6 +56,21 @@ public class A350AVarsTests
         Assert.Empty(unknown);
     }
 
+    // The EFIS also runs calculator code for three idents (live, in flight): answered as strings from the NAV
+    // radio read; an ident not yet read, or a code not listed, answers nothing.
+    [Fact]
+    public void A_calculator_ident_ask_is_answered_as_a_string()
+    {
+        var idents = new A350CalcStrings();
+        Assert.Null(idents.Answer("(A:NAV IDENT:2, String)"));
+        idents.Update(nav1: "KAT", nav2: "IKW", adf1: "CB", adf2: "");
+        Assert.Equal("IKW", idents.Answer("(A:NAV IDENT:2, String)"));
+        Assert.Equal("KAT", idents.Answer("(A:NAV IDENT:1, String)"));
+        Assert.Equal("CB", idents.Answer("(A:ADF IDENT:1, String)"));
+        Assert.Equal("", idents.Answer("(A:ADF IDENT:2, String)"));
+        Assert.Null(idents.Answer("(A:ATC ID, String)"));
+    }
+
     [Fact]
     public void The_definition_streams_each_one_silently()
     {

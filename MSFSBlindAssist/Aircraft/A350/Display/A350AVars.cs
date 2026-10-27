@@ -59,3 +59,24 @@ public sealed class A350AVarAnswers
         return null;
     }
 }
+
+/// <summary>
+/// The idents the EFIS asks through calculator code (live, in flight: <c>(A:NAV IDENT:2, String)</c> and both
+/// ADF idents), answered as strings from MSFSBA's NAV radio read. Safe from the display thread: each value is
+/// replaced whole.
+/// </summary>
+public sealed class A350CalcStrings
+{
+    private volatile IReadOnlyDictionary<string, string>? _values;
+
+    /// <summary>The latest idents from the sim (an empty string: no station).</summary>
+    public void Update(string nav1, string nav2, string adf1, string adf2) =>
+        _values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["(A:NAV IDENT:1, String)"] = nav1, ["(A:NAV IDENT:2, String)"] = nav2,
+            ["(A:ADF IDENT:1, String)"] = adf1, ["(A:ADF IDENT:2, String)"] = adf2,
+        };
+
+    /// <summary>The string a calculator code asks for, or null when it is not one of the idents or none is read yet.</summary>
+    public string? Answer(string code) => _values is { } v && v.TryGetValue(code, out var s) ? s : null;
+}

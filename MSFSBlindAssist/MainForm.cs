@@ -157,6 +157,8 @@ public partial class MainForm : Form
     private Aircraft.A350.Display.A350DisplayService? a350DisplayService;
     private Aircraft.A350.Display.A350EcamMonitor? a350EcamMonitor;
     private Aircraft.A350.Display.A350PfdMonitor? a350PfdMonitor;
+    // The NAV and ADF idents the A350's EFIS asks through calculator code, read every 2 s on the UI thread.
+    private System.Windows.Forms.Timer? a350IdentTimer;
 
     private Forms.FBWA380.FBWA380OansForm? fbwA380OansForm;
 
@@ -1445,6 +1447,7 @@ public partial class MainForm : Form
         coherentEFBClient?.Dispose();
         coherentNDClient?.Dispose();
         coherentEWDClient?.Dispose();
+        a350IdentTimer?.Dispose();
         a350EcamMonitor?.Dispose();
         a350PfdMonitor?.Dispose();
         a350DisplayService?.Dispose();
