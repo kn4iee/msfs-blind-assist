@@ -16,3 +16,12 @@ test('an OIS error line is one assertive alert', () => {
 test('a page with no error has no alert', () => {
   assert.equal(scrape('toperf_rwy_ok').filter(e => e.kind === 'alert').length, 0);
 });
+
+// A notie toast slides up off the screen when it is done (top: -112px) and stays in the DOM at full
+// size: it is gone for a sighted pilot, so it is not read.
+test('a toast slid off the top is not read', () => {
+  const els = scrape('plan_toast', { before: w => {
+    w.document.querySelector('.notie-container').setAttribute('data-rect', '-112,0,2355,0');
+  } });
+  assert.ok(!els.some(e => /departure airport/.test(e.text || '')));
+});

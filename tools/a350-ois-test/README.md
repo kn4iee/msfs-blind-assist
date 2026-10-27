@@ -32,3 +32,8 @@ first seen.
 | plan_toast | FLT OPS PLAN with a notie toast up |
 | plan_popup | FLT OPS PLAN, FROM VCBI, the FROM RWY options pop-up open, the Navigraph notice |
 | menu_turnaround | FLT OPS MENU with the TURNAROUND START confirmation open |
+| loadsheet | LOADSHEET, empty (cabin and hold cards, ZFW and FUEL LOAD, tank figures) |
+| ldgperf | LDG PERF computed, VCBI 22 |
+| enroute | ENROUTE map, map-type panel slid out |
+| terml_chart | TERML CHART before a search (icon controls) |
+| terml_chart_list | TERML CHART after searching VCBI (the sim's charts) |

@@ -15,6 +15,8 @@ function load(fixtureName, opts) {
   const { window } = dom;
   global.window = window; global.document = window.document;
   window.Element.prototype.getBoundingClientRect = function () {
+    const r = this.getAttribute('data-rect');   // "top,left,right,bottom", for a test that places one
+    if (r) { const p = r.split(',').map(Number); return { top: p[0], left: p[1], right: p[2], bottom: p[3], width: p[2] - p[1], height: p[3] - p[0], x: p[1], y: p[0] }; }
     const zero = this.getAttribute('data-vis') === '0';
     return { top: 0, left: 0, right: zero ? 0 : 100, bottom: zero ? 0 : 20, width: zero ? 0 : 100, height: zero ? 0 : 20, x: 0, y: 0 };
   };

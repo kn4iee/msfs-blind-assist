@@ -37,9 +37,33 @@
 
   A.norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, ''); };
 
+  // Drawn, and not slid off the side of the screen (ENROUTE's map-type panel waits at right: -300px).
   A.visible = function (e) {
     var r = e.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
+    return r.width > 0 && r.height > 0 && r.right > 0 && r.left < window.innerWidth;
+  };
+
+  // The icon buttons, which carry no text: TERML CHART's chart controls, ENROUTE's map controls.
+  A.ICON_NAMES = {
+    ctrlZoomIn: 'Zoom in', ctrlZoomOut: 'Zoom out', ctrlReset: 'Reset view', ctrlSidebar: 'Chart list',
+    ctrlDarkLight: 'Dark or light', ctrlPanUp: 'Pan up', ctrlPanLeft: 'Pan left', ctrlPanRight: 'Pan right',
+    ctrlPanDown: 'Pan down', ctrlPrevPage: 'Previous page', ctrlNextPage: 'Next page', filter_pinned: 'Pinned',
+    'mapcontrol-recenter': 'Recenter', 'mapcontrol-zoomin': 'Zoom in', 'mapcontrol-zoomout': 'Zoom out'
+  };
+
+  // A button's name: its icon's, the map-type panel's tab ("<"), or its text.
+  A.buttonText = function (b) {
+    if (b.id && A.ICON_NAMES[b.id]) return A.ICON_NAMES[b.id];
+    var t = A.norm(b.innerText);
+    if (/^[<>]$/.test(t) && b.closest && b.closest('#enroutemap-sidebar')) return 'Map types';
+    return t;
+  };
+
+  // The pictures the OIS draws, read as what they are.
+  A.picture = function (e) {
+    if (e.id === 'enroutemap' || A.hasCls(e, 'leaflet-container')) return 'Map picture (not readable)';
+    if (e.id === 'chart_image_box') return 'Chart picture (not readable)';
+    return '';
   };
 
   A.ownText = function (e) {
@@ -94,12 +118,15 @@
   // A text with a space where the OIS breaks a line ("...the turnaround?<br>This will..."): Coherent's
   // innerText runs the two together.
   A.text = function (e) {
-    var s = '';
-    for (var c = e.firstChild; c; c = c.nextSibling) {
-      if (c.nodeType === 3) s += c.nodeValue;
-      else if (c.nodeType === 1) s += c.tagName === 'BR' ? ' ' : A.text(c);
-    }
-    return A.norm(s);
+    var raw = function (n) {
+      var s = '';
+      for (var c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) s += c.nodeValue;
+        else if (c.nodeType === 1) s += c.tagName === 'BR' ? ' ' : raw(c);
+      }
+      return s;
+    };
+    return A.norm(raw(e));
   };
 
   // A cell holding a control of its own (a fuel row's unit button) is read as that control, never as
@@ -107,16 +134,35 @@
   A.CONTROL = 'button, select, input:not([type=hidden])';
   A.holdsControl = function (cell) { return !!(cell.querySelector && cell.querySelector(A.CONTROL)); };
 
-  // The texts of a field's row other than its own cell ("TOW", "x1000 LBS").
-  A.rowParts = function (input) {
+  // A full-width cell: a title over what follows it in a stacked row (LOADSHEET's "ZFW" over its
+  // field and unit, then "FUEL LOAD" over the next).
+  A.isTitleCell = function (k) { return A.hasCls(k, 'col-sm-12') && !A.holdsControl(k); };
+
+  // The cells that label a field: the other plain cells of its row ("TOW", "x1000 LBS"); in a stacked
+  // row, those from its title cell up to the next title.
+  A.labelCells = function (input) {
     var row = input.closest ? input.closest('.row') : null;
     if (!row) return [];
     var cell = input;
     while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
-    var parts = [];
-    for (var k = row.firstElementChild; k; k = k.nextElementSibling) {
-      if (k === cell || A.holdsControl(k)) continue;
-      var t = A.norm(k.innerText || k.textContent);
+    var first = row.firstElementChild, stop = null;
+    if (!A.hasCls(cell, 'col-sm-12')) {
+      for (var b = cell.previousElementSibling; b; b = b.previousElementSibling)
+        if (A.isTitleCell(b)) { first = b; break; }
+      for (var f = cell.nextElementSibling; f; f = f.nextElementSibling)
+        if (A.isTitleCell(f)) { stop = f; break; }
+    }
+    var cells = [];
+    for (var k = first; k && k !== stop; k = k.nextElementSibling)
+      if (k !== cell && !A.holdsControl(k)) cells.push(k);
+    return cells;
+  };
+
+  // The texts of a field's label cells.
+  A.rowParts = function (input) {
+    var cells = A.labelCells(input), parts = [];
+    for (var i = 0; i < cells.length; i++) {
+      var t = A.norm(cells[i].innerText || cells[i].textContent);
       if (t) parts.push(t);
     }
     return parts;
@@ -163,11 +209,9 @@
   // Claims a field's row-mates (its label and unit cells) before the walk reaches them, so they are
   // read once, inside the field's label, never also as loose text above it.
   A.claimRowCells = function (input) {
-    var row = input.closest ? input.closest('.row') : null;
-    if (!row || (input.closest && input.closest('.option-group'))) return;
-    var cell = input;
-    while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
-    for (var k = row.firstElementChild; k; k = k.nextElementSibling) if (k !== cell && !A.holdsControl(k)) A.own(k);
+    if (input.closest && input.closest('.option-group')) return;
+    var cells = A.labelCells(input);
+    for (var i = 0; i < cells.length; i++) A.own(cells[i]);
   };
 
   // An options button's name from its row: the label cells beside it ("FROM RWY" + AUTO). When the
@@ -192,10 +236,11 @@
     return name && field ? name + ' unit' : name;
   };
 
-  // A dialog: a fixed overlay over the page with a title, a message and its buttons (TURNAROUND START:
+  // A dialog: a fixed overlay (or the OIS's .popup-overlay: Resend Loadsheet) over the page with a title, a message and its buttons (TURNAROUND START:
   // CANCEL / START). -> its title and message as one line, owning both; null when e is not one.
   A.dialogText = function (e) {
-    if (!e.style || e.style.position !== 'fixed' || !e.querySelector('button')) return null;
+    var over = (e.style && e.style.position === 'fixed') || A.hasCls(e, 'popup-overlay');
+    if (!over || !e.querySelector('button')) return null;
     var h = e.querySelector('h1,h2,h3,h4,h5,h6');
     var title = h ? A.text(h) : '', msg = [];
     if (h) A.own(h);
@@ -237,7 +282,10 @@
       }
       var buttons = document.body.querySelectorAll('button');
       for (i = 0; i < buttons.length; i++) if (A.visible(buttons[i])) A.buttonRowName(buttons[i]);
-      var out = [], page = '', idx = 0, seen = {};
+      // The bottom bar's active page names the page; a page title, when it has one, replaces it (the
+      // chart and map pages have none). Fields' remembered labels are kept per page.
+      var act = document.querySelector('.bottom-bar-button.active');
+      var out = [], page = act ? A.norm(act.innerText) : '', idx = 0, seen = {};
       var push = function (el, item) {
         if (el) { idx++; el.setAttribute(A.ATTR, String(idx)); item.idx = idx; } else item.idx = 0;
         out.push(item);
@@ -252,6 +300,8 @@
         // Pop-ups answer a press and are spoken as they appear: the notie toast ("Please enter a
         // departure airport") and a confirmation dialog, whose buttons are read after it.
         if (A.hasCls(e, 'notie-container')) {
+          // A spent toast slides up off the screen (top: -112px) and stays in the DOM at full size.
+          if (e.getBoundingClientRect().bottom <= 0) { A.own(e); continue; }
           var inner = e.querySelector('.notie-textbox-inner') || e;
           A.own(inner);
           if (inner !== e) A.own(e);
@@ -347,7 +397,7 @@
         }
 
         if (tag === 'BUTTON' || A.hasCls(e, 'is-button')) {
-          var bt = A.norm(e.innerText);
+          var bt = A.buttonText(e);
           A.own(e);
           if (!bt) continue;
           var above = A.headingAbove(e);
@@ -377,6 +427,35 @@
           continue;
         }
 
+        // TERML CHART's list: a pressable card per chart (its title, then its type), and its pin.
+        if (A.hasCls(e, 'chart-button')) {
+          A.own(e);
+          var ch = e.querySelector('h1,h2,h3'), cp = e.querySelector('p');
+          var ct = ch ? A.text(ch) : A.text(e), ctype = cp ? A.text(cp) : '';
+          push(e, { kind: 'button', text: ctype && ctype !== ct ? ct + ', ' + ctype : ct, clickable: true, key: 'chart:' + ct });
+          var pin = e.nextElementSibling;
+          if (pin && A.hasCls(pin, 'chart-pin-button')) {
+            A.own(pin);
+            push(pin, { kind: 'button', text: 'Pin ' + ct, clickable: true, key: 'pin:' + ct });
+          }
+          continue;
+        }
+
+        var pic = A.picture(e);
+        if (pic) {
+          A.own(e);
+          push(null, { kind: 'static', text: pic });
+          continue;
+        }
+
+        // LOADSHEET's tank figures, drawn over the aircraft picture: named by their tank.
+        if (A.hasCls(e, 'fuel-container')) {
+          A.own(e);
+          var tank = A.hasCls(e, 'left-fuel') ? 'Left tank' : A.hasCls(e, 'right-fuel') ? 'Right tank' : 'Center tank';
+          push(null, { kind: 'static', text: tank + ': ' + A.text(e), key: 'readout:' + tank });
+          continue;
+        }
+
         if (!own || A.decor(own)) continue;
 
         // The OIS's error line ("ERR: NO WIND INPUT", red, after COMPUTE): a validation error the
@@ -387,13 +466,17 @@
           continue;
         }
 
-        // A row of plain texts reads as one line ("DEPARTURE" "to" "ARRIVAL").
+        // A row of plain texts reads as one line ("DEPARTURE" "to" "ARRIVAL"); a card, a title cell over
+        // its values, as "title: values" (LOADSHEET: "FWD ECO: 0 PAX, FWD ECO 0 LBS").
         var pr = e.parentElement;
-        if (pr && A.hasCls(pr, 'row') && pr.children.length > 2 && !A.holdsControl(pr) && !pr.querySelector('.row')) {
+        var plain = pr && A.hasCls(pr, 'row') && !A.holdsControl(pr) && !pr.querySelector('.row');
+        var card = plain && pr.firstElementChild === e && A.hasCls(e, 'col-sm-12') && pr.children.length >= 2;
+        if (card || (plain && pr.children.length > 2)) {
           A.own(pr);
           var line = [];
           for (var lc = pr.firstElementChild; lc; lc = lc.nextElementSibling) { var lt = A.text(lc); if (lt) line.push(lt); }
-          push(null, { kind: 'static', text: line.join(' ') });
+          push(null, { kind: 'static', text: card ? line[0] + ': ' + line.slice(1).join(', ') : line.join(' '),
+            key: card ? 'readout:' + line[0] : undefined });
           continue;
         }
 
@@ -416,12 +499,18 @@
 
         // A section title is a heading to jump by: a full-width row title ("CONDITIONS", "RESULTS") or
         // a menu column's ("MISSION", "PERFORMANCE").
-        if ((A.hasCls(e, 'col-sm-12') || A.hasCls(e, 'menu-column-title')) && !e.querySelector('input,button')) {
+        if ((A.hasCls(e, 'col-sm-12') || A.hasCls(e, 'menu-column-title')) && !e.firstElementChild) {
           A.own(e);
           push(null, { kind: 'heading', level: 2, text: own });
           continue;
         }
 
+        // A text with inline parts ("28.35 <span>% GWCG</span>") reads whole, once.
+        if (e.firstElementChild) {
+          A.own(e);
+          push(null, { kind: 'static', text: A.text(e) });
+          continue;
+        }
         push(null, { kind: 'static', text: own });
       }
       return JSON.stringify({ ok: true, page: page, elements: out });
