@@ -46,4 +46,7 @@ first seen.
 | opt_callouts | OPTIONS, CALLOUTS (the RA callout switches) |
 | opt_volume_control | OPTIONS, VOLUME CONTROL |
 | opt_throttle_calibration | OPTIONS, THROTTLE CALIBRATION |
+| situations | The captain's Situation Manager, SITUATIONS (system disabled) |
+| failures | The captain's Situation Manager, FAILURES |
+| card_neighbour | Hand-made: a situation card beside a bottom-bar button |
 | opt_sound_cabin_options | OPTIONS, SOUND/CABIN OPTIONS (CABIN LIGHTING with nothing picked) |

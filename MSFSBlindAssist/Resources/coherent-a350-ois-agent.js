@@ -445,12 +445,23 @@
     return title && m ? title + ': ' + m : (title || m);
   };
 
+  // The Situation Manager's cards: a .menu-button box (not a button) with a title and a description,
+  // its button below. -> the card's title for an element inside the card's column, or ''.
+  A.cardTitle = function (e) {
+    // The card is a child of one of the button's near ancestors (its column), never a cousin further off.
+    for (var p = e.parentElement, n = 0; p && n < 4; p = p.parentElement, n++)
+      for (var c = p.firstElementChild; c; c = c.nextElementSibling)
+        if (c.tagName === 'DIV' && A.hasCls(c, 'menu-button') && c.firstElementChild && c.firstElementChild.tagName === 'H1')
+          return A.text(c.firstElementChild);
+    return '';
+  };
+
   // A free-standing radio set (THROTTLE CALIBRATION: an .option-group-label cell, then a cell of
   // YES / NO radios): its container and its label element.
   A.radioSet = function (radio) {
     if (radio.closest && radio.closest('.option-group')) return null;
     var box = radio.parentElement, prev = box && box.previousElementSibling;
-    var lab = prev && (A.hasCls(prev, 'option-group-label') ? prev : prev.querySelector && prev.querySelector('.option-group-label'));
+    var lab = prev && (A.hasCls(prev, 'option-group-label') ? prev : prev.querySelector && prev.querySelector('.option-group-label, h1, h2, h3, h4'));
     return box ? { box: box, labelEl: lab ? prev : null, label: lab ? A.text(lab) : '' } : null;
   };
 
@@ -648,6 +659,17 @@
             push(e, { kind: 'button', text: rowName + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + rowName });
             continue;
           }
+          if (A.hasCls(e, 'failure-button')) {
+            // FAILURES: a press toggles the failure; an active one is drawn bg-danger.
+            push(e, { kind: 'button', text: bt + ': ' + (A.hasCls(e, 'bg-danger') ? 'Active' : 'Inactive'), clickable: true,
+              key: 'failure:' + bt, announceChange: true });
+            continue;
+          }
+          var ct = A.cardTitle(e);
+          if (ct) {
+            push(e, { kind: 'button', text: ct + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + ct, announceChange: true });
+            continue;
+          }
           var tg = A.sidebarToggle(e, bt);
           if (tg) {
             push(e, { kind: 'button', text: tg.name + ': ' + tg.state, clickable: true, disabled: e.disabled === true, key: 'button:' + tg.name, announceChange: true });
@@ -693,6 +715,13 @@
           var dd = document.getElementById('efb-dropdown-menu-content');
           push(e, { kind: 'button', text: 'EFB menu' + (dd && A.visible(dd) ? ' (expanded)' : ' (collapsed)'), clickable: true,
             key: 'button:EFB menu', announceChange: true });
+          continue;
+        }
+
+        if (tag === 'DIV' && A.hasCls(e, 'menu-button') && e.querySelector('h1')) {
+          A.own(e);
+          var sh = e.querySelector('h1'), st = A.text(sh), sd = A.norm(A.text(e).replace(st, ''));
+          push(null, { kind: 'static', text: sd ? st + ': ' + sd : st });
           continue;
         }
 
