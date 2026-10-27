@@ -114,6 +114,45 @@ public class A350PfdTests
         Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_level6000"), 0), l => l.StartsWith("Localizer") || l.StartsWith("Glideslope"));
     }
 
+    // The heading scale's sprites (PFDA350Elements.png, by atlas place): the selected heading bug (shown in HDG,
+    // gone in LOC) and the track diamond; a target off the scale is a cyan number beside it instead (the bug
+    // waits at the scale's edge). The flap indication at the bottom: "S" and "F" labels and the configuration,
+    // cyan while moving, green once there.
+    [Theory]
+    [InlineData("efis0_level6000", "Selected heading: 031, cyan", "Track: 034")]
+    [InlineData("efis0_climb", "Selected heading: 031, cyan", "Track: 033")]
+    [InlineData("efis0_turn_left", "Selected heading: 330, cyan", "Track: 024")]
+    public void The_heading_scale_reads_the_selected_heading_and_track(string fixture, string selected, string track)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        Assert.Contains(selected, lines);
+        Assert.Contains(track, lines);
+        Assert.DoesNotContain("330, cyan", lines);
+    }
+
+    [Fact]
+    public void In_loc_there_is_no_selected_heading_and_the_flaps_read_their_configuration()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_ils_below"), 0);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Selected heading"));
+        Assert.Contains("Track: 037", lines);
+        Assert.Contains("Flaps: 3, cyan", lines);
+        Assert.DoesNotContain(lines, l => l is "S, white" or "F, white" or "3, cyan");
+    }
+
+    // Live near 2200 ft the altitude tape's "015" label passed through the baro's area and read as
+    // "QNH: 015, white; ...": a tape label is never part of the baro.
+    [Fact]
+    public void A_tape_label_never_reads_as_the_baro()
+    {
+        var cap = Fixture("efis0_ils_below");
+        var texts = cap.Texts.ToList();
+        texts.Add(new DrawnText("015", 836 + 595, 657, 595, 657, 1, new A350Rgba(1, 1, 1, 1)));
+        var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
+        Assert.Contains(lines, l => l.StartsWith("QNH: "));
+        Assert.DoesNotContain(lines, l => l.Contains("015"));
+    }
+
     [Fact]
     public void A_turn_reads_its_bank()
     {

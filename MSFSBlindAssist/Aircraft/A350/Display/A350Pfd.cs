@@ -44,6 +44,14 @@ public static class A350Pfd
     /// 146.75 px (G/S) in.</summary>
     private const float DotPx = 70.25f, LocCentre = 146.25f, GsCentre = 146.75f;
 
+    /// <summary>Heading scale sprites by where they sit in their atlas (the shape's box less its pattern origin):
+    /// the selected heading bug, the track diamond.</summary>
+    private static readonly (float X, float Y) SelectedHeadingAtlas = (811, 333), TrackAtlas = (296, 281);
+
+    private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas) =>
+        capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
+            && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
+
     private static IEnumerable<DrawnShape> PfdSprites(A350DrawCapture capture, int side, float w, float h) =>
         (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Image > 1 && Math.Abs(s.X1 - s.X0 - w) < 1.5f
             && Math.Abs(s.Y1 - s.Y0 - h) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
@@ -143,7 +151,7 @@ public static class A350Pfd
             used.Add(c);
             o.Add($"Vertical speed: {int.Parse(c.Text) * 100} feet per minute {(c.Y < WindowY ? "up" : "down")}, {c.Colour}");
         }
-        var baro = cells.Where(c => c.X is >= 580 and < 720 && c.Y is >= 640 and < 680).ToList();
+        var baro = cells.Where(c => !used.Contains(c) && c.X is >= 580 and < 720 && c.Y is >= 640 and < 680).ToList();
         if (baro.Count > 0)
         {
             used.UnionWith(baro);
@@ -183,6 +191,30 @@ public static class A350Pfd
             var nearest = scale.OrderBy(c => Math.Abs(c.X - HeadingIndexX)).First();
             double heading = (int.Parse(nearest.Text) * 10 + (HeadingIndexX - nearest.X) / HeadingPxPerDegree + 360) % 360;
             o.Add($"Heading: {Math.Round(heading) % 360:0}");
+
+            static string Degrees(double d) => $"{((int)Math.Round(d) % 360 + 360) % 360:000}";
+            float At(DrawnShape sh) => (sh.X0 + sh.X1) / 2 - shift;
+            // The selected heading: a cyan number beside the scale while the target is off it (the bug then
+            // waits at the scale's edge), else the bug (shown in HDG, not in LOC or NAV).
+            var offScale = cells.Where(c => c.Colour == "cyan" && c.Y is >= 675 and < 705 && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
+            if (offScale.Count > 0)
+            {
+                used.UnionWith(offScale);
+                o.Add($"Selected heading: {offScale[0].Text}, cyan");
+            }
+            else if (Sprite(capture, side, SelectedHeadingAtlas) is { } bug)
+                o.Add($"Selected heading: {Degrees(heading + (At(bug) - HeadingIndexX) / HeadingPxPerDegree)}, cyan");
+            if (Sprite(capture, side, TrackAtlas) is { } track)
+                o.Add($"Track: {Degrees(heading + (At(track) - HeadingIndexX) / HeadingPxPerDegree)}");
+        }
+
+        // The flap indication at the bottom: "S" and "F" labels and the configuration, cyan while moving.
+        var flaps = cells.Where(c => c.X < 330 && c.Y >= 900).ToList();
+        var config = flaps.Where(c => c.Text is not ("S" or "F")).ToList();
+        if (config.Count > 0)
+        {
+            used.UnionWith(flaps);
+            o.Add("Flaps: " + A350DrawLayout.Speak(config));
         }
 
         // Everything else as drawn: flags, messages, the line under the heading scale.

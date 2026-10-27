@@ -14,6 +14,8 @@ public class A350AVarsTests
     [InlineData("TURB ENG N2:2|Percent", "TURB ENG N2:2", "Percent")]
     [InlineData("KOHLSMAN SETTING HG:1|inches of mercury", "KOHLSMAN SETTING HG:1", "inches of mercury")]
     [InlineData("KOHLSMAN SETTING HG:3|inches of mercury", "KOHLSMAN SETTING HG:3", "inches of mercury")]
+    [InlineData("PLANE LATITUDE:0|Degrees", "PLANE LATITUDE", "Degrees")]     // asked in flight; index 0 is none
+    [InlineData("PLANE LONGITUDE:0|Degrees", "PLANE LONGITUDE", "Degrees")]
     public void A_draw_code_ask_maps_to_a_stock_variable(string ask, string name, string units)
     {
         var v = Assert.Single(A350AVars.All, a => a.Ask == ask);
@@ -40,6 +42,18 @@ public class A350AVarsTests
         Assert.Null(answers.Answer("AIRSPEED INDICATED:1|knots"));
         Assert.Null(answers.Answer("AIRSPEED INDICATED:1|knots"));
         Assert.Equal(new[] { "AIRSPEED INDICATED:1|knots" }, unknown);
+    }
+
+    // The EFIS asks the first officer's baro in millibars too (live, in flight): answered from the inches.
+    [Fact]
+    public void A_baro_asked_in_millibars_is_converted_from_the_inches()
+    {
+        var cache = new Dictionary<string, double> { ["A350_AVAR_KOHLSMAN_SETTING_HG_2"] = 29.92 };
+        var unknown = new List<string>();
+        var answers = new A350AVarAnswers(k => cache.TryGetValue(k, out var v) ? v : null, unknown.Add);
+        Assert.Equal(1013.2, answers.Answer("KOHLSMAN SETTING HG:2|millibar")!.Value, 1);
+        Assert.Null(answers.Answer("KOHLSMAN SETTING HG:1|millibar"));   // inches not yet read
+        Assert.Empty(unknown);
     }
 
     [Fact]
