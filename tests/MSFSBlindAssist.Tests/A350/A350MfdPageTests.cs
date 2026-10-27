@@ -63,6 +63,20 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.StartsWith("Field:"));
     }
 
+    // A checklist (live, C/L MENU > COCKPIT PREPARATION): an item's dot leader reads as a colon, as on the E/WD,
+    // and the line to fill ("____") as blank; cyan is still to do.
+    [Fact]
+    public void A_checklist_item_reads_without_its_dot_leader()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_cl_cockpit_prep.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("GEAR PINS & COVERS: REMOVED button, cyan", lines);
+        Assert.Contains("FUEL QUANTITY: blank KG button, cyan", lines);
+        Assert.Contains("BARO REF: blank (BOTH) button, cyan", lines);
+        Assert.Contains("C/L COMPLETE button", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

@@ -32,7 +32,8 @@ public static class A350MfdPage
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
         var cells = capture.Texts.Where(t => Mine(t.X) && !string.IsNullOrWhiteSpace(t.Text))
-            .Select(t => new Cell(Spaces.Replace(t.Text.Trim(), " "), t.ColourName, t.X - shift, t.Y)).ToList();
+            .Select(t => new Cell(Spaces.Replace(A350Ewd.WithoutLeaders(t.Text), " "), t.ColourName, t.X - shift, t.Y))
+            .Where(c => c.Text.Length > 0).ToList();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy)>();
@@ -106,12 +107,14 @@ public static class A350MfdPage
     private static bool IsField(DrawnElement e) => e.Class != "NotepadTextbox" && e.RectW > 0 && e.RectH > 0
         && (e.Class.EndsWith("TextBox", StringComparison.Ordinal) || e.Class.EndsWith("Textbox", StringComparison.Ordinal));
 
-    /// <summary>A field's drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet,
-    /// "dC" degrees Celsius.</summary>
+    /// <summary>A drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet, "dC" degrees
+    /// Celsius, a checklist's line to fill ("____") blank. Dot leaders are colons already (<see cref="A350Ewd"/>).</summary>
     private static string Word(string token) =>
         token.Length > 0 && token.All(ch => ch == 'o') ? "required"
         : token.Length > 0 && token.All(ch => ch == '-') ? "none"
-        : token == "dC" ? "°C" : token;
+        : token == "dC" ? "°C" : Blank.Replace(token, "blank");
+
+    private static readonly Regex Blank = new(@"_{3,}", RegexOptions.Compiled);
 
     private static A350Rgba ColourOf(string name) => name switch
     {

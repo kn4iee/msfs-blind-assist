@@ -155,8 +155,16 @@ internal static class DisplayModes
                 string.Join(", ", caps.Select(c => $"{c.Gauge} {c.Texts.Count}t {c.Milliseconds:F1}ms{(c.Ok ? "" : " " + c.Error)}"))));
         }
         if (caps != null)
+        {
             foreach (var row in A350DrawLayout.Rows(A350DrawLayout.Region(caps[0].Texts, A350DrawLayout.CtrWarningDisplay)))
                 Console.WriteLine("  WD: " + A350DrawLayout.Speak(row));
+            // `A350_SD=<page>`: also the engine display and that SD page as MSFSBA reads them.
+            if (double.TryParse(Environment.GetEnvironmentVariable("A350_SD"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sd))
+            {
+                Console.WriteLine(A350EwdText.Build(caps[0], sd));
+                Console.WriteLine(A350SdText.Build(caps[0], sd));
+            }
+        }
         return 0;
     }
 
@@ -269,10 +277,24 @@ internal static class DisplayModes
         return 0;
     }
 
-    /// <summary>`mfdlines mfd.json side`: a saved MFD draw read as the MFD window's lines, with each line's click point.</summary>
+    /// <summary>`mfdlines mfd.json side`: a saved MFD draw read as the MFD window's lines, with each line's click
+    /// point; `mfdlines live side` draws the sim's MFD now.</summary>
     private static int MfdLines(string[] args)
     {
-        var cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        A350DrawCapture cap;
+        if (args[0] == "live")
+        {
+            using var svc = new A350DisplayService();
+            svc.Start();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+            var caps = svc.DrawAsync(("MFD", 0)).GetAwaiter().GetResult();
+            if (caps == null || caps.Count == 0) { Console.WriteLine($"no draw ({svc.State} {svc.Reason})"); return 1; }
+            cap = caps[0];
+            if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
+                File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(cap));
+        }
+        else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
         foreach (var l in A350MfdPage.Read(cap, int.Parse(args[1])))
             Console.WriteLine($"{l.Kind,-10} {l.ClickX,6:0},{l.ClickY,5:0}  {l.Spoken}");
         return 0;
