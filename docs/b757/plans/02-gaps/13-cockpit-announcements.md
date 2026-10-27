@@ -128,7 +128,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Worked by:** Daniel Wolak, inline (superpowers:executing-plans), one whole-plan review by a fresh reviewer
 - **Started:** 2026-10-27; 924129a8d
 - **Landed:** 2026-10-27
-- **Tests at landing:** full suite passed, 18,007 (2026-10-27, before the rebase; the remote had no new commits)
+- **Tests at landing:** full suite passed, 18,007 (2026-10-27) before the rebase; the rebase took in plan 08's last six commits (CDU files only) and the suite was run again after it : 18,023 passed
 - **Tasks:** 0, 2, 3, 4, 5 done (4 and 5 in one commit: one class and one partial serve both). Left: Task 1 (owner's flight: FMA and capture snapshots), Task 6 (builds on it).
 - **Waiting on the owner:** Task 1 [in flight]; in-sim checks 1 (a preset, a mouse or hardware switch move, the app's own pick not repeated) and 2 (Ctrl+M group and panel mutes). Also worth timing: one watch read (about 356 L:vars every 500 ms) in debug.log, and whether BlueBird's panel set-up after a flight load lands after the 5 s settle quiet (it would say one "Panel state changed" line).
 - **In-sim results:** none run
