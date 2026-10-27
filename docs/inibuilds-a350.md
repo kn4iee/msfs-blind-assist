@@ -108,6 +108,18 @@ The gauge host views forward mouse input with `Coherent.call("WASM_MOUSE_MOVE" |
 
 Verified live: a move put the captain MFD pointer exactly where sent; a move-down-up-click on ACCEPT dismissed the crash-report dialog; clicking the FROM box focused it; `INI_MCDU1_V`, `_C`, `_B`, `_I`, `_ENTER` entered VCBI, and TO WMKK made DEPARTURE available and CRZ FL a required (amber) box; a click on the aircraft symbol opened the ND pop-up (P.POS, DIR TO), and a click on empty map closed it; the first officer's MFD takes x + 836. No write into the sim's memory is needed, so the investigation's pointer request is not used.
 
+## The E/WD in MSFSBA (live 2026-10-27)
+
+`A350EcamMonitor` draws the CTR twice a second through the display service whenever the A350 is active; `A350Ewd` cuts the capture into the engine block, the warning display (WD), the SD page and its permanent data line; `A350EcamAnnouncer` speaks each WD line that appears, with each colour run's colour ("SURV TCAS STBY, amber"), once two reads agree. The first agreed read is a silent baseline; an unpowered CTR draws nothing, so a cold-and-dark power-up speaks the whole list as it comes up. Speech sits behind one Ctrl+M row, `A350_ECAM_WD` ("ECAM E/WD call-outs"), which Ctrl+E flips; Alt+E opens `FbwEwdWindow` over `A350EwdText`.
+
+How the WD draws, measured on a power-up at VCBI (BAT 1, BAT 2, GPU from the OIS, EXT 1, EXT 2):
+
+- Texts are placed at their baseline. Rows of only dots are the collapsed-procedure marks and are skipped; a dot leader inside a line ("APU MASTER SW ......OFF") reads as a colon.
+- The ECAM cursor is a cyan wide `DrawWideFrame` around a row; an action box is a 15 x 20 `DrawFrame` left of a row, cyan while to do. Both belong to the row whose glyphs they overlap most. Airbus colours carry the state: an action done turns white (APU MASTER SW: OFF white with the APU off; cyan again once APU MASTER was switched on with APU EMER SHUTDOWN active).
+- The power-up order: the SD shows "SAFETY TEST IN PROGRESS (MAX 30 SECONDS)" (green) for about 30 s, then the WD lists FWS FWS 1+2 & CPIOM FAULT with its cyan instructions and the amber FUNCTIONS NOT AVAIL list (12 lines), and about 35 s later the boot-up alerts (SURV SYS 1 FAULT, F/CTL SLAT SYS 1+2 FAULT, APU EMER SHUTDOWN, ELEC BAT EMER 1 and 2 OFF, SURV TCAS STBY). Batteries alone leave the CTR dark.
+- The first draw of a gauge on a fresh Wasmtime instance draws only the WD titles; the engine throws that warm-up draw away.
+- The engine block's labels (N1, EGT, N2, FF) are textures: its numbers read unlabelled until they are mapped by position (a capture with engines running).
+
 ## ECAM control panel
 
 The ECP buttons are L:vars the aircraft resets itself after reading. Press with ONE native SimConnect write of 1; two calculator writes (1 then 0) land in the same frame and do nothing. Verified: `INI_ECAM_CHECKLIST_LEFT` (check-off), `PUSH_ECAM_STS`, `INI_ECAM_ABN`, `INI_ECAM_WHEEL_L_MINUS_COMMAND` (selection down; PLUS is up), `INI_MASTER_CAUTION_COMMAND`. The other ECP keys follow the same pattern in their input events' set code.

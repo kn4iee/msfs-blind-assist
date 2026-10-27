@@ -53,15 +53,30 @@ GROUND (each door with its state, lights, chocks, pushback), MAINTENANCE, the op
 the preferred seat side's OIS, the Situation Manager with its failures (each Active or
 Inactive). Its own messages, errors and confirmation questions are spoken as they appear.
 
-The radio management panels, the displays (PFD, ND, E/WD, SD, MFD) and the aircraft's own
-hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until then the other
-hotkeys below are the ones every aircraft shares.
+The E/WD speaks on its own, window open or closed: each warning, caution, memo and procedure
+line that appears is said with its colour, as the cockpit shows it ("APU EMER SHUTDOWN, amber",
+"APU MASTER SW: OFF, cyan"), from power-up on. Ctrl+E turns these call-outs off and on; they are
+also a row in the Monitor Manager (Ctrl+M). Alt+E opens the whole E/WD as a window: the engine
+block, the warning display with the ECAM cursor ("selected") and each action box ("to do",
+"done"), the SD page and its permanent data line. The first start after an A350 update says "A350
+displays getting ready" while MSFSBA prepares them (about 15 seconds), then "ready".
+
+The radio management panels, the other displays (PFD, ND, SD pages in full, MFD) and the
+aircraft's own hotkeys (FCU, autopilot) follow, and this list grows with them. Until then the
+other hotkeys below are the ones every aircraft shares.
 
 The A350 tunes its radios only through its radio management panels; the stock COM radio
 the other aircraft use does not exist in it.
 
 
 OUTPUT MODE - Press ] to activate
+
+Displays:
+  Alt+E      Open the E/WD (Engine/Warning Display) window: engine block, every warning
+             display line with its colour, the ECAM cursor and action boxes, the SD and its
+             permanent data. Read with the arrow keys; auto-refreshes, F5 refreshes now,
+             Escape closes.
+  Ctrl+E     Toggle the E/WD auto call-outs (also in the Monitor Manager, Ctrl+M)
 
 Location:
   C          Read Nearest City
