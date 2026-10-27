@@ -43,6 +43,30 @@ Every pair typed every character, repeats included. The timers fired about 17-20
 the gate with the cockpit view was measured. The one-step margin in G and the missed-key check (plan 08 Task 2)
 cover a slower frame; if a loaded sim drops keys, the next step is 100/200.
 
+## Repeat on a busier sim (2026-10-27): the chosen pair moved to 100 / 300
+
+The "Not done" above was run, and it changed the choice. On the ground, APU running (cockpit preset Before start
+loaded from the EFB for plan 08's checks, at the owner's request), BBS Nest running, MSFSBA closed; the plan 11 EFB
+reader's ND pop-out was open and rendering off-screen, so the sim was busier than on 2026-10-26. Run by Claude over
+the Coherent debugger in the `BBSTablet` view with the app's tablet agent (installed from
+`Resources/coherent-bbs757-tablet-agent.js`), pressing through its own `press(2, key, hold)` as the app's key pump
+does, the next key `hold + gap` after the previous press (an in-page `setTimeout` chain). Only CDU 2's scratchpad was
+written; its page was set to NAV RADIO with one NAV RAD press (its frame is now the test fixture
+`bbs757-cdu-navradio.json`). Before every run the scratchpad was cleared with long CLRs (1300 ms) and read back
+empty: a single long CLR between runs again left text sometimes, and the first three sets below that relied on it
+were discarded ("KATL1100KATL1100.5"). `FRAME RATE` was still not readable.
+
+| Hold / gap (ms) | Typed right | What a miss left |
+|---|---|---|
+| 100 / 100 | 6/10 | "KATL100.5", "KATL110.5", "KATL10.5" (a repeated "1" or "0" lost) |
+| 100 / 200 | 15/15 | |
+| 100 / 300 | 10/10 | |
+
+**Chosen (the plan's rule, now on both days):** the fastest pair with no miss is 100 / 200; one step slower in G
+gives 100 / 300: 0.4 s a key against 0.65 s before, "KATL" about 1.6 s instead of 2.6 s. The grid's next step (400)
+would leave typing nearly as slow as today, so the step was taken half-way; plan 08's record says so. The missed-key
+check (Task 2) still says what the scratchpad shows if a slower frame drops one.
+
 ## Finding: one long CLR does not always clear the scratchpad
 
 In 15 of the 60 runs, the CLR held 1300 ms removed only the last character ("KATL1100." was left), as a short CLR

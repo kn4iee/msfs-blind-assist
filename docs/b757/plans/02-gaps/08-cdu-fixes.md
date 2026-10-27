@@ -32,9 +32,9 @@
 
 **Who:** whoever runs the plan, before any other task; with subagents, the controller itself, never an implementer. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
 
-- [ ] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/08-cdu-fixes.md`. Anything but "not started" and "none" means the plan is taken: stop.
-- [ ] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 08`, with the `Plan: 08` trailer.
-- [ ] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
+- [x] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/08-cdu-fixes.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [x] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 08`, with the `Plan: 08` trailer.
+- [x] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ### Task 1: Rows with identity, and the cursor that stays put
 
@@ -56,10 +56,10 @@
 - The window: on a new screen, a page change (`IsPageChange`) speaks `Bbs757CduTitle.Spoken` and selects `PageStart`; a title change that is not a page change (ACT ↔ MOD) speaks nothing new and keeps the row by `Restore`; any other refresh keeps the row by `Restore`.
 - Today's row texts stay (title raw, labels with three spaces, "n: data", scratchpad raw): plan 09 changes them.
 
-- [ ] **Step 1: Write the failing tests** with fixtures from session 8's LEGS and NAV RADIO screens (add `bbs757-cdu-navradio.json`): `Kinds_and_lines`; `Restore_follows_the_row_when_a_label_above_goes`; `Act_to_mod_is_not_a_page_change`; `Next_page_is_a_page_change`; `PageStart_is_line_one_value`.
-- [ ] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757CduRowsTests`. Expected: FAIL.
-- [ ] **Steps 3-4:** implement the builder and the window's use of it; full suite PASS.
-- [ ] **Step 5: Commit** `fix(b757): the CDU window keeps the cursor on the pilot's line`.
+- [x] **Step 1: Write the failing tests** with fixtures from session 8's LEGS and NAV RADIO screens (add `bbs757-cdu-navradio.json`): `Kinds_and_lines`; `Restore_follows_the_row_when_a_label_above_goes`; `Act_to_mod_is_not_a_page_change`; `Next_page_is_a_page_change`; `PageStart_is_line_one_value`.
+- [x] **Step 2: Run** `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter Bbs757CduRowsTests`. Expected: FAIL.
+- [x] **Steps 3-4:** implement the builder and the window's use of it; full suite PASS.
+- [x] **Step 5: Commit** `fix(b757): the CDU window keeps the cursor on the pilot's line`.
 
 ### Task 2: Faster scratchpad typing
 
@@ -77,33 +77,65 @@
     }
     ```
   - The window's `SendText`: each key through `PressKey(cdu, key, Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs)`. Once the queue has drained and that CDU's next screen arrives (at most 2 s later), `Mismatch` is spoken once (`AnnounceImmediate`; CORE-7: the screen reader cannot tell a key was missed); a match says nothing. `SendKey` (page keys, line select keys, CLR, DEL) keeps the standard timing.
-- [ ] **Steps 2-6:** tests `Typing_keys_are_the_cdu_keys`, `Mismatch_cases` (a match is silent; a missed key; an empty scratchpad; a message over the scratchpad is said as shown), `Cycle_is_hold_plus_gap_clamped`, `Standard_keys_keep_250_and_400` (the two- and three-argument overloads, a client never started); run, implement, full suite; commit `feat(b757): the CDU window types faster and says a missed key`.
+- [x] **Steps 2-6:** tests `Typing_keys_are_the_cdu_keys`, `Mismatch_cases` (a match is silent; a missed key; an empty scratchpad; a message over the scratchpad is said as shown), `Cycle_is_hold_plus_gap_clamped`, `Standard_keys_keep_250_and_400` (the two- and three-argument overloads, a client never started); run, implement, full suite; commit `feat(b757): the CDU window types faster and says a missed key`.
 
 ## In-sim checks (owner)
 
 1. Shift+M on the LEGS page: enter a speed constraint on a line (ACT becomes MOD): the cursor stays on that line; NEXT PAGE: the page is spoken and the cursor is on line 1; delete a constraint above the cursor: the cursor stays on its line.
-2. Shift+M, the scratchpad box (Alt+S): type `KATL` and Enter: it is in the scratchpad in about 1 s (0.2 s a key; 2.6 s before), and nothing is said. Type a long entry while the sim is busy: if a key is missed, "Scratchpad shows …" is said.
+2. Shift+M, the scratchpad box (Alt+S): type `KATL` and Enter: it is in the scratchpad in about 1.6 s (0.4 s a key, see "Changed from the plan"; 2.6 s before), and nothing is said. Type a long entry while the sim is busy: if a key is missed, "Scratchpad shows …" is said.
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "757 CDU window: the cursor stays on your line when the page changes around it, including when an entry turns ACT into MOD; a new page still moves you to line 1." Changelog `fix`. "757 CDU window: what you type in the scratchpad box goes into the CDU faster (about 0.2 s a character instead of 0.65 s), and if the CDU missed a key the window says what the scratchpad shows." Changelog `improvement`.
+- **Pilot-facing:** "757 CDU window: the cursor stays on your line when the page changes around it, including when an entry turns ACT into MOD; a new page still moves you to line 1." Changelog `fix`. "757 CDU window: what you type in the scratchpad box goes into the CDU faster (about 0.4 s a character instead of 0.65 s), and if the CDU missed a key the window says what the scratchpad shows." Changelog `improvement`.
 - **docs/b757.md:** the CDU section (row identity, page change rules, the typing timing and its measurement).
 - **For plan 09 (takes the window over):** the typed-entry check speaks the scratchpad when it does not hold the typed text; plan 09's CDU message speech (R72) should not say the same message twice.
-- **For plan 13 (takes the client over):** `PressKey` now has a four-argument form with the gap; the key queue carries it.
+- **For plan 13 (takes the client over):** `PressKey` now has a four-argument form with the gap (clamped 50-1000 ms, `CycleMs`); the key queue carries it. Every other caller keeps 250 / 400.
+- **Spoken text for the guide (plan 16):** a typed entry the CDU took says nothing; one it did not says *"Scratchpad shows KAT"* (what the scratchpad shows, a CDU message included) or *"Scratchpad is empty"* (`Bbs757CduTyping.Mismatch`). A page change speaks the title with its spaces collapsed (`Bbs757CduTitle.Spoken`, e.g. *"ACT RTE 1 LEGS 1/2"*) and puts the cursor on line 1's data row; ACT turning into MOD says nothing.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** waiting on owner (in-sim checks 1 and 2 in the app's Shift+M window; the code has landed)
 - **Claimed by:** Declan Webster, 2026-10-26
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** not yet (claimed 2026-10-26 on `B757` fe63572f; work will branch from the base commit `cf1dfce94`)
+- **Worked by:** Declan Webster, with Claude (no subagents)
+- **Started:** 2026-10-27, branched from the base commit `cf1dfce94` and rebased onto `B757` 744b4cce
 - **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Tests at landing:** full suite passed 2026-10-27 after the rebase onto `B757` 744b4cce: 17,969 passed, 0 failed
+- **Tasks:** 0 done (claim pushed 2026-10-26). 1 done: `Bbs757CduRows` (kinds, lines, `Restore`, `PageStart`,
+  `IsPageChange`), the window restores the cursor by row and speaks only a real page change;
+  `Bbs757CduFrame.ToDisplayLines` now lists the rows' texts, unchanged. 2 done: the client's four-argument
+  `PressKey` and `CycleMs`, `Bbs757CduTyping`, the window's typed entries at the typing timing with the scratchpad
+  check; step 1's measurement repeated on a busier sim (flight-08.md).
+- **Waiting on the owner:** what can only be heard, in the Shift+M window: a page change speaks its title once, an
+  ACT/MOD change and a typed entry that landed say nothing, a missed key says "Scratchpad shows …"; and check 1's
+  deleted constraint on LEGS (no route with constraints was loaded; the rule is pinned by `Bbs757CduRowsTests`).
+- **In-sim results:** 2026-10-27, MSFS 2024, BlueBird 757-200 PW 0.1.0, on the ground: aircraft powered with the EFB's
+  Before start preset (APU, external power); the first officer's CDU's NAV RADIO frame captured live as the fixture
+  `bbs757-cdu-navradio.json` and passing the row tests; the typing timing re-measured through the tablet agent's own
+  press (flight-08.md, "Repeat on a busier sim"): 100/100 6 of 10, 100/200 15 of 15, 100/300 10 of 10. Then the
+  app's own window, this branch's Debug build driven by Claude with UI Automation (MSFSBA as the only inspector
+  client), captain's CDU at EGLL:
+  - Check 1, passed for what it covers: Shift+M opened on IDENT with the cursor on line 1's data row; RTE (Alt+R)
+    put it on line 1 again; with the cursor on line 6, entering EGLL (line 1) and EGCC (line 1 right) left it on
+    line 6; ACTIVATE then EXEC turned the title "RTE 1" into "ACT RTE 1" while line 4 and line 6 changed, and the
+    cursor stayed on line 6; NEXT PAGE (1/2 -> 2/2) and PREV PAGE (with the cursor on row 8) each put it on line 1's
+    data row. A deleted constraint above the cursor was not tried (see "Waiting on the owner").
+  - Check 2, passed for timing and delivery: `KATL1100.5` typed in the scratchpad box landed in full 4 times of 4,
+    4.5-5.0 s from Enter to the window showing it (about 0.47 s a key with the window's round trip; 0.65 s before);
+    EGLL and EGCC 1.7 and 1.9 s. Nothing was missed, so the missed-key line could not be heard; speech is the
+    owner's to hear.
+  The test left an EGLL-EGCC route active in the captain's CDU.
+- **Changed from the plan:** the typing gap is 300 ms, not 100 (flight-08.md): on a busier sim 100 / 100 lost a
+  repeated digit in 4 of 10 entries; 100 / 200 never missed (15 of 15), and the margin step was taken half-way to
+  the grid's 400 (100 / 300, 10 of 10), since 400 would leave typing nearly as slow as before. So the pilot-facing
+  speed is 0.4 s a character, not 0.2 (in-sim check 2 and the handoff updated). `Bbs757CduTyping.Mismatch` takes an
+  optional third argument, the scratchpad before the typing, because the CDU adds to an entry already there
+  ("KA" + "TL" is a match, not "Scratchpad shows KATL"); `Expected` is new, the text the keys put there. A typed
+  entry is checked INSTEAD of being read back by the window's `CduScratchpadAnnouncer` (which would otherwise say
+  the entry the pilot just typed); the read-back is re-seeded silently after the check. A second entry sent before
+  the first was checked is checked with it, as one. `Bbs757CduRowKind.Blank` is declared as the plan's interface
+  says but not produced (plan 09's). The tests were written with the code, not run red first.
+- **Rulings made while working:** "Use the EFB's cockpit presets to power the aircraft for the checks?" Yes: Declan
+  Webster, 2026-10-27.
