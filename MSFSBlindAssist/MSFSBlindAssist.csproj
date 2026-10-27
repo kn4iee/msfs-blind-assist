@@ -121,6 +121,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.9" />
     <PackageReference Include="TimeZoneConverter" Version="7.2.0" />
+    <PackageReference Include="Wasmtime" Version="48.0.2" />
   </ItemGroup>
 
   <ItemGroup>
