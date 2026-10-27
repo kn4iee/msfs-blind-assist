@@ -570,7 +570,7 @@ public class Bbs757AnnunciatorsTests
     }
 
     [Fact]
-    public void Watches_registered_as_announced_rows_with_ctrl_m_rows_on_no_panel()
+    public void Watches_registered_as_announced_rows_with_ctrl_m_rows()
     {
         var def = new BBS757Definition { NestRunning = () => true };
         var vars = def.GetVariables();
@@ -587,8 +587,13 @@ public class Bbs757AnnunciatorsTests
             Assert.Equal(UpdateFrequency.Continuous, v.UpdateFrequency);
             Assert.True(v.IsAnnounced);
             Assert.False(v.ExcludeFromMonitorManager);
-            Assert.DoesNotContain(def.GetPanelDisplayVariables().Values, rows => rows.Contains(key));
         }
+
+        // The squawk is the transponder panel's read-back row itself (one variable, [VAR-7]); the others are on no display.
+        Assert.Equal(Bbs757Squawk.CodeKey, SquawkKey);
+        Assert.True(vars[SquawkKey].RenderAsReadOnlyStatus);
+        Assert.Contains(def.GetPanelDisplayVariables().Values, rows => rows.Contains(SquawkKey));
+        Assert.DoesNotContain(def.GetPanelDisplayVariables().Values, rows => rows.Contains(TcasKey) || rows.Contains(AltimeterKey));
     }
 
     [Fact]

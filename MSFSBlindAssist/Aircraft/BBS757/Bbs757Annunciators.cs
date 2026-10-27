@@ -58,8 +58,12 @@ public static class Bbs757Annunciators
     // Spoken on a change from any source; not annunciator rows (two are stock variables, and the
     // altimeter speaks once it rests), so the definition registers and speaks them itself.
 
-    /// <summary>The squawk watch: stock <c>TRANSPONDER CODE:1</c> (BCO16) on the 1 Hz batch.</summary>
-    public const string SquawkWatchKey = "BBS757_SQUAWK_WATCH";
+    /// <summary>
+    /// The squawk watch: the squawk field's own read-back row (stock <c>TRANSPONDER CODE:1</c>, BCO16), made
+    /// announced on the 1 Hz batch rather than a second row: two continuous rows of one name would shift
+    /// every later batch slot ([VAR-7]).
+    /// </summary>
+    public const string SquawkWatchKey = Bbs757Squawk.CodeKey;
 
     /// <summary>The TCAS mode watch: <c>L:B757_PED_TCAS_MODE_KNOB</c> (STBY 0 to TA/RA 4) on the 1 Hz batch.</summary>
     public const string TcasModeWatchKey = "BBS757_TCAS_MODE_WATCH";

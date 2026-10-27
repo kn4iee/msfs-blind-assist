@@ -99,7 +99,7 @@ public class Bbs757FlightReadinessTests
         // Silent rows earn no checkbox that mutes nothing ([VAR-9]).
         Assert.DoesNotContain(R.FlapsAngleKey, keys);
         Assert.All(R.EngineRows, e => Assert.DoesNotContain(e.Key, keys));
-        Assert.DoesNotContain(Bbs757Squawk.CodeKey, keys);
+        Assert.Contains(Bbs757Squawk.CodeKey, keys);   // spoken on change since plan 14, so it has its checkbox
         Assert.Contains(rows, r => r.Key == Bbs757McpLights.ForNode("B757_MCP_CMD_3_BUTTON")!.Key);
     }
 
@@ -299,7 +299,7 @@ public class Bbs757FlightReadinessTests
 
         Assert.False(rig.Def.ProcessSimVarUpdate(R.FlapsAngleKey, 5, rig.Speech));
         Assert.False(rig.Def.ProcessSimVarUpdate(R.EngineRows[0].Key, 20, rig.Speech));
-        Assert.False(rig.Def.ProcessSimVarUpdate(Bbs757Squawk.CodeKey, 0x4743, rig.Speech));
+        Assert.True(rig.Def.ProcessSimVarUpdate(Bbs757Squawk.CodeKey, 0x4743, rig.Speech));   // plan 14: a baseline, silent
         Assert.True(rig.Def.ProcessSimVarUpdate(R.FlapsHandleKey, 0, rig.Speech));
         Assert.Empty(rig.Speech.All);
     }

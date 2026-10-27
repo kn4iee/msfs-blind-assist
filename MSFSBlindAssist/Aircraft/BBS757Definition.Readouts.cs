@@ -22,7 +22,7 @@ namespace MSFSBlindAssist.Aircraft;
 /// A readout is spoken at once (AnnounceImmediate), never refused silently.
 ///
 /// The data-definition budget: the announced rows ride the 1 Hz batch (no individual definition), the
-/// flap angle, the squawk and the ten engine rows are read while their display is shown, and the
+/// flap angle and the ten engine rows are read while their display is shown, and the
 /// altimeters, the decision height, the gear lever and the gross weight are read on request. The
 /// whole profile stays under 900 variables (Bbs757DefinitionTests).
 /// </summary>
@@ -100,9 +100,11 @@ public partial class BBS757Definition
         }
 
         // Plan 14's watches: a squawk, TCAS mode or altimeter change from any source is spoken, each
-        // with its Ctrl+M row and on no panel. The squawk's display row reads the same variable, but
-        // only while its display is shown, never in the batch ([VAR-7]).
-        Add(Bbs757Annunciators.SquawkWatchKey, WatchRow("TRANSPONDER CODE:1", "Squawk", SimVarType.SimVar, "BCO16"));
+        // with its Ctrl+M row. The squawk is the transponder panel's read-back row itself, now on the
+        // batch: a second continuous row of the same name would shift every later slot ([VAR-7]).
+        var squawk = WatchRow("TRANSPONDER CODE:1", "Squawk", SimVarType.SimVar, "BCO16");
+        squawk.RenderAsReadOnlyStatus = true;
+        Add(Bbs757Annunciators.SquawkWatchKey, squawk);
         Add(Bbs757Annunciators.TcasModeWatchKey, WatchRow(Bbs757Annunciators.TcasModeNode, "TCAS Mode", SimVarType.LVar, "number"));
         Add(Bbs757Annunciators.AltimeterWatchKey, WatchRow("KOHLSMAN SETTING MB:1", "Altimeter", SimVarType.SimVar, "millibars"));
 
@@ -117,7 +119,6 @@ public partial class BBS757Definition
         // Silent rows, read while their status display is shown (no Ctrl+M row: they speak nothing).
         Add(R.FlapsAngleKey, DisplayedRow("TRAILING EDGE FLAPS LEFT ANGLE", "Flap Angle", "degrees"));
         foreach (var row in R.EngineRows) Add(row.Key, DisplayedRow(row.SimVar, row.Label, row.Units));
-        Add(Bbs757Squawk.CodeKey, DisplayedRow("TRANSPONDER CODE:1", "Squawk", "BCO16"));
 
         // Read on request only: the readouts and the windows' read-backs.
         Add(R.GearHandleKey, RequestedRead("GEAR HANDLE POSITION", "Gear Lever", "bool"));
