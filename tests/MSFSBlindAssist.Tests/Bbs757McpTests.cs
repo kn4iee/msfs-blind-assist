@@ -951,6 +951,37 @@ public class Bbs757McpTests
         Assert.Equal("MCP Mach 0.73", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
     }
 
+    [Theory]
+    [InlineData(1.0, 0.0, "MCP speed window blank. Speed Intervene opens it.")]
+    [InlineData(0.0, 1.0, "Speed 250")]
+    public async Task Shift_s_takes_the_blank_flag_from_the_cache_not_a_fresh_read(double cached, double fresh, string expected)
+    {
+        // The flag is batched: a fresh read of it waited up to a second for the next batch (2026-10-27).
+        var mcp = new FakeMcp { Blanked = fresh, Speed = 250 };
+        var reads = new List<string>();
+        var inner = mcp.Io;
+        var io = new McpIo
+        {
+            Read = (key, ct) => { reads.Add(key); return inner.Read(key, ct); },
+            Write = inner.Write,
+            Delay = inner.Delay,
+            Cached = key => key == Bbs757Mcp.IasBlankedVar ? cached : null,
+        };
+
+        Assert.Equal(expected, await Bbs757Mcp.ReadSpeedAsync(io, default));
+        Assert.DoesNotContain(Bbs757Mcp.IasBlankedVar, reads);
+    }
+
+    [Fact]
+    public async Task Shift_s_reads_the_blank_flag_fresh_when_nothing_is_cached()
+    {
+        var mcp = new FakeMcp { Blanked = 1, Speed = 250 };
+        var inner = mcp.Io;
+        var io = new McpIo { Read = inner.Read, Write = inner.Write, Delay = inner.Delay, Cached = _ => null };
+
+        Assert.Equal("MCP speed window blank. Speed Intervene opens it.", await Bbs757Mcp.ReadSpeedAsync(io, default));
+    }
+
     [Fact]
     public void The_mach_wheels_are_read_on_request_for_the_readout()
     {

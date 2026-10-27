@@ -334,6 +334,7 @@ public partial class BBS757Definition
         Read = (key, ct) => sim.ReadFreshAsync(key, FreshReadTimeoutMs, ct),
         Write = sim.ExecuteCalculatorCodeUnique,
         Delay = Task.Delay,
+        Cached = sim.GetCachedVariableValue,
     };
 
     // =================================================================================
