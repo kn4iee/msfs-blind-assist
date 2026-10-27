@@ -53,20 +53,23 @@ public static class A350DrawLayout
 
     private static int RowOf(float y, float rowHeight) => (int)MathF.Floor(y / rowHeight + 0.5f);   // JavaScript Math.round
 
-    /// <summary>Non-blank texts as rows in reading order (the prototype's toLines).</summary>
+    /// <summary>Non-blank texts as rows in reading order: a row is the texts within half a row height of its top
+    /// text, read left to right (live: MFD IRS 3's texts at y 430 and 432 straddled a fixed bucket's edge).</summary>
     public static IReadOnlyList<IReadOnlyList<DrawnCell>> Rows(IEnumerable<DrawnText> texts, float rowHeight = 12)
     {
-        var rows = new List<IReadOnlyList<DrawnCell>>();
+        var rows = new List<List<DrawnCell>>();
         List<DrawnCell>? row = null;
-        int? last = null;
-        foreach (var t in texts.Where(t => !string.IsNullOrWhiteSpace(t.Text))
-                     .OrderBy(t => RowOf(t.Y, rowHeight)).ThenBy(t => t.X))
+        float top = 0;
+        foreach (var t in texts.Where(t => !string.IsNullOrWhiteSpace(t.Text)).OrderBy(t => t.Y).ThenBy(t => t.X))
         {
-            int k = RowOf(t.Y, rowHeight);
-            if (row == null || k != last) { row = new List<DrawnCell>(); rows.Add(row); last = k; }
+            if (row == null || t.Y - top > rowHeight / 2) { row = new List<DrawnCell>(); rows.Add(row); top = t.Y; }
             row.Add(new DrawnCell(t.Text.Trim(), t.ColourName, t.X, t.Y));
         }
-        foreach (var r in rows) JoinDecimals((List<DrawnCell>)r);
+        foreach (var r in rows)
+        {
+            r.Sort((a, b) => a.X.CompareTo(b.X));
+            JoinDecimals(r);
+        }
         return rows;
     }
 

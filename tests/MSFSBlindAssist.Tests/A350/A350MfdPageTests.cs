@@ -179,6 +179,18 @@ public class A350MfdPageTests
         Assert.Contains("Scratchpad: NAV ACCURACY UPGRADED, black", lines);
     }
 
+    // POSITION/IRS (live, aligned): IRS 3's texts sit at y 430 and 432, either side of a fixed 12 px bucket's edge;
+    // a row is the texts near each other, wherever they fall. A position's "d" is its degree sign.
+    [Fact]
+    public void A_row_is_texts_near_each_other_and_a_position_reads_degrees()
+    {
+        var lines = A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_irs.json")))!, 0)
+            .Select(l => l.Spoken).ToList();
+        Assert.Contains("IRS 3, white; NAV 0.1, green; NM, grey", lines);
+        Assert.Contains("IRS ALIGNED ON GNSS POS:, white; 07°10.5N/079°53.1E, green", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

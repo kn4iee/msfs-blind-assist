@@ -44,7 +44,8 @@ public class A350DrawLayoutTests
     {
         var rows = A350DrawLayout.Rows(A350DrawLayout.Region(Ctr().Texts, A350DrawLayout.CtrPermanentData)).Select(Show).ToList();
         Assert.Equal("+28{green} | FLT{white} | 00{green} | :{green} | 06{green} | --{cyan} | LBS{cyan}", rows[0]);
-        Assert.Equal("ISA{white} | +14{green}", rows[^1]);
+        // ISA +14 (y 1015) and the fuel on board (y 1013) are one visual line, read together.
+        Assert.Equal("ISA{white} | +14{green} | 223700{green} | LBS{cyan}", rows[^1]);
     }
 
     [Fact]

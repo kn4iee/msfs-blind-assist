@@ -26,6 +26,9 @@ public static class A350MfdPage
 
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
 
+    /// <summary>The font's degree sign inside a position: "07d10.5N/079d53.1E".</summary>
+    private static readonly Regex PositionDegrees = new(@"(?<=\d)d(?=\d)", RegexOptions.Compiled);
+
     /// <summary>A drawn text; <see cref="Index"/> is its place in the draw order.</summary>
     private sealed record Cell(string Text, string Colour, float X, float Y, int Index);
 
@@ -34,7 +37,7 @@ public static class A350MfdPage
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
         var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
-            .Select(p => new Cell(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " "), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
+            .Select(p => new Cell(PositionDegrees.Replace(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " "), "°"), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
