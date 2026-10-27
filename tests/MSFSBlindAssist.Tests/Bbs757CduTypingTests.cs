@@ -54,4 +54,28 @@ public class Bbs757CduTypingTests
         // Nothing typable typed: nothing to check.
         Assert.Null(Bbs757CduTyping.Mismatch("#", WithScratchpad("")));
     }
+
+    [Fact]
+    public void A_landed_entry_is_read_back_as_the_scratchpad_shows_it()
+    {
+        // The guide's promise, as every other CDU window does: after typing, the pilot hears what the CDU took.
+        Assert.Equal("KATL", Bbs757CduTyping.ReadBack("katl", WithScratchpad("KATL")));
+        Assert.Equal("1100.5", Bbs757CduTyping.ReadBack("1100.5", WithScratchpad("1100.5")));
+        // Typed onto an entry already there: the whole scratchpad, as the CDU shows it.
+        Assert.Equal("KATL", Bbs757CduTyping.ReadBack("TL", WithScratchpad("KATL"), scratchpadBefore: "KA"));
+    }
+
+    [Fact]
+    public void A_missed_key_is_read_back_as_the_mismatch()
+    {
+        Assert.Equal("Scratchpad shows KAT", Bbs757CduTyping.ReadBack("KATL", WithScratchpad("KAT")));
+        Assert.Equal("Scratchpad is empty", Bbs757CduTyping.ReadBack("KATL", WithScratchpad("")));
+        Assert.Equal("Scratchpad shows INVALID ENTRY", Bbs757CduTyping.ReadBack("KATL", WithScratchpad("INVALID ENTRY")));
+    }
+
+    [Fact]
+    public void Nothing_to_read_back_when_nothing_typable_landed_on_an_empty_scratchpad()
+    {
+        Assert.Null(Bbs757CduTyping.ReadBack("#", WithScratchpad("")));
+    }
 }

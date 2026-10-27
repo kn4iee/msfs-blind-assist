@@ -18,7 +18,7 @@
 - `Bbs757CduScreen.Lines` and `Bbs757CduKeys.ForChar` keep their meaning; new data is added, never changed.
 - Rows never exceed 40 cells and never end in spaces; interior spaces are kept.
 - Rulings (spec R71, R72): a label row made only of 20 or more dashes is dropped; CDU scratchpad messages are spoken while the window is closed, once each, with a check box in the window to turn it off.
-- Plan 08's typed-entry check (spec R76) speaks the scratchpad once, while the window is open, when a typed entry did not land ("Scratchpad shows INVALID ENTRY"); R72's message speech is for the closed window. A message is never said twice.
+- Plan 08's typed-entry check (spec R76) speaks the scratchpad once after every typed entry, while the window is open: as it shows it when the entry landed ("KATL"), "Scratchpad shows INVALID ENTRY" when it did not; R72's message speech is for the closed window. A message is never said twice.
 
 ## Review Focus
 

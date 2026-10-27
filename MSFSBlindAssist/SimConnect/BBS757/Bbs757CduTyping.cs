@@ -2,7 +2,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
 /// The CDU window's typed entries (the scratchpad box, Alt+S then Enter): the keys, the faster key
-/// timing they go out at, and the check that the scratchpad holds what was typed (plan 08).
+/// timing they go out at, and the check that the scratchpad holds what was typed, read back once the keys
+/// have gone out (plan 08).
 ///
 /// Every other key keeps the tablet client's standard 250 ms hold and 400 ms gap (0.65 s a key):
 /// page keys, line select keys, CLR and DEL, and every key of the CDU page service. Typed entries go
@@ -48,4 +49,13 @@ public static class Bbs757CduTyping
         if (before.Length > 0 && shows == (before + Expected(typed)).Trim()) return null;
         return shows.Length == 0 ? "Scratchpad is empty" : "Scratchpad shows " + shows;
     }
+
+    /// <summary>
+    /// What the window says once a typed entry's keys have gone out: the scratchpad as it shows it when it
+    /// holds the entry ("KATL"; the read-back every CDU window gives, and the guide's promise that the pilot
+    /// hears what the CDU took), else <see cref="Mismatch"/>'s "Scratchpad shows KAT". Null when there is
+    /// nothing to say (nothing typable typed on an empty scratchpad).
+    /// </summary>
+    public static string? ReadBack(string typed, Bbs757CduScreen screen, string scratchpadBefore = "") =>
+        Mismatch(typed, screen, scratchpadBefore) ?? (screen.Scratchpad.Length > 0 ? screen.Scratchpad : null);
 }
