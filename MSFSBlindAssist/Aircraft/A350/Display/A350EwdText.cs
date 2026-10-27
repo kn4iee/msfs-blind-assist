@@ -12,7 +12,7 @@ public static class A350EwdText
         if (!view.Powered) return "The E/WD and SD are off: no power.";
 
         var o = new List<string> { "Engine display:" };
-        o.AddRange(view.Engine.Select(A350DrawLayout.Speak));
+        o.AddRange(A350SdPage.ReadEngineBlock(view.Engine));
         o.Add("Warning display:");
         if (view.Warning.Count == 0) o.Add("No messages");
         foreach (var l in view.Warning)

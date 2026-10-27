@@ -29,6 +29,19 @@ public static class A350SdPage
     public static IReadOnlyList<string> ReadPermanentData(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>
         Read(rows, PermanentData, float.MaxValue);
 
+    /// <summary>The E/WD's engine block above the warning display: the thrust limit, each engine's THR, N1 and EGT
+    /// (their labels are TopEngineStatic.png).</summary>
+    public static IReadOnlyList<string> ReadEngineBlock(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>
+        Read(rows, EngineBlock, float.MaxValue);
+
+    private static readonly SdField[] EngineBlock =
+    {
+        new("Thrust limit mode", 345, 41), new("Thrust limit", 438, 41, "%", 20),
+        new("Engine 1 THR", 346, 174, "%"), new("Engine 2 THR", 594, 174, "%"),
+        new("Engine 1 N1", 304, 232, "%"), new("Engine 2 N1", 554, 232, "%"),
+        new("Engine 1 EGT", 153, 239, "°C"), new("Engine 2 EGT", 728, 239, "°C"),
+    };
+
     private static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split)
     {
         var all = rows.SelectMany(r => r).ToList();
@@ -99,6 +112,9 @@ public static class A350SdPage
         if (cur != null) yield return cur;
     }
 
+    private static SdField[] Eng(string what, float x1, float w1, float x2, float w2, float y, string? unit) =>
+        new[] { new SdField("Engine 1 " + what, x1, y, unit, w1), new SdField("Engine 2 " + what, x2, y, unit, w2) };
+
     private static SdField[] Pair(string label1, string label2, float x1, float x2, float y, string? unit = null) =>
         new[] { new SdField(label1, x1, y, unit), new SdField(label2, x2, y, unit) };
 
@@ -122,17 +138,16 @@ public static class A350SdPage
     // for what only shows powered (EXT power, a battery's OFF), the live one.
     internal static readonly IReadOnlyDictionary<int, SdField[]> Pages = new Dictionary<int, SdField[]>
     {
+        // Engine 2's numbers are right-aligned up to 57 px right of where its XX sits (live, engine running);
+        // engine 1's fuel flow sits 30 px left of its XX: each field spans both.
         [1] = new[]
         {
-            Pair("Engine 1 fuel flow", "Engine 2 fuel flow", 223, 585, 333, "{flow}"),
-            Pair("Engine 1 N2", "Engine 2 N2", 220, 588, 395, "%"),
-            Pair("Engine 1 N3", "Engine 2 N3", 220, 588, 430, "%"),
-            Pair("Engine 1 oil quantity", "Engine 2 oil quantity", 215, 593, 521, "QT"),
-            Pair("Engine 1 oil temperature", "Engine 2 oil temperature", 212, 596, 556, "°C"),
-            Pair("Engine 1 oil pressure", "Engine 2 oil pressure", 212, 596, 627, "PSI"),
-            Pair("Engine 1 vibration N1", "Engine 2 vibration N1", 207, 601, 696),
-            Pair("Engine 1 vibration N2", "Engine 2 vibration N2", 207, 601, 730),
-            Pair("Engine 1 vibration N3", "Engine 2 vibration N3", 207, 601, 765),
+            Eng("fuel flow", 185, 40, 585, 40, 333, "{flow}"),
+            Eng("N2", 218, 4, 588, 60, 395, "%"), Eng("N3", 218, 4, 588, 60, 430, "%"),
+            Eng("oil quantity", 215, 5, 593, 50, 521, "QT"), Eng("oil temperature", 212, 5, 596, 10, 556, "°C"),
+            Eng("oil pressure", 212, 10, 596, 50, 627, "PSI"),
+            Eng("vibration N1", 205, 4, 601, 30, 696, null), Eng("vibration N2", 205, 4, 601, 30, 730, null),
+            Eng("vibration N3", 205, 4, 601, 30, 765, null),
         }.SelectMany(p => p).ToArray(),
         [2] = Pair("Green system pressure", "Yellow system pressure", 226, 695, 354, "PSI"),
         [3] = Row(424, null, ("BAT 1 voltage", 132), ("BAT EMER 1 voltage", 302), ("BAT EMER 2 voltage", 534), ("BAT 2 voltage", 710))

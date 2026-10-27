@@ -61,6 +61,9 @@ public static class A350SdSymbols
         // Doors (green: closed).
         [(995, 190)] = new("door", "green"), [(995, 218)] = new("door", "green"), [(995, 240)] = new("door", "green"),
         [(994, 271)] = new("door", "green"), [(1050, 240)] = new("door", "green"),
+        // ENG: the start valve (in line open, across closed) and the grey box behind N3 during a start sequence.
+        [(345, 100)] = new("valve", "green", Bar: 90), [(345, 184)] = new("valve", "green", Bar: 0),
+        [(225, 276)] = new("state", "", Word: "in progress"),
         // APU: the bleed valve drawn open (in line, with its arrow; closed it is the plain valve across), the
         // APU GEN legend (white; amber on a fault, Airbus colours).
         [(1165, 126)] = new("state", "green", Word: "open"),
@@ -232,7 +235,7 @@ public static class A350SdSymbols
                 _ => sprite.Word,
             };
             if (sym.Say != null) word = sym.Say(word, colour);
-            o.Add(word == null ? $"{sym.Label}: {colour}" : $"{sym.Label}: {word}, {colour}");
+            o.Add(word == null ? $"{sym.Label}: {colour}" : colour.Length == 0 ? $"{sym.Label}: {word}" : $"{sym.Label}: {word}, {colour}");
         }
         o.AddRange(ReadBars(shapes, page));
         return o;
@@ -255,6 +258,11 @@ public static class A350SdSymbols
     // Screen centres from the copy's draws (A350Probe sdsweep copy page); names from the panel's own controls.
     internal static readonly IReadOnlyDictionary<int, SdSymbol[]> Pages = new Dictionary<int, SdSymbol[]>
     {
+        [1] = new[]
+        {
+            V("Engine 1 start valve", 192, 855, 90), V("Engine 2 start valve", 619, 852, 90),
+            S("Engine 1 start sequence", 190, 418), S("Engine 2 start sequence", 619, 418),
+        },
         [2] = new[]
         {
             Said("Green system pressure", 172, 301, Pressure), Said("Yellow system pressure", 632, 301, Pressure),

@@ -47,7 +47,25 @@ public static class A350DrawLayout
             if (row == null || k != last) { row = new List<DrawnCell>(); rows.Add(row); last = k; }
             row.Add(new DrawnCell(t.Text.Trim(), t.ColourName, t.X, t.Y));
         }
+        foreach (var r in rows) JoinDecimals((List<DrawnCell>)r);
         return rows;
+    }
+
+    /// <summary>A number with a decimal is drawn as two texts, "58." and a smaller "1" anchored a few pixels
+    /// away (live: the SD ENG page, the E/WD engine block); they read as one, "58.1".</summary>
+    private static void JoinDecimals(List<DrawnCell> row)
+    {
+        for (int i = 0; i < row.Count; i++)
+        {
+            var a = row[i];
+            if (!a.Text.EndsWith('.') || a.Text.Length < 2 || !char.IsDigit(a.Text[^2])) continue;
+            int j = row.FindIndex(b => !ReferenceEquals(b, a) && b.Text.Length <= 2 && b.Text.All(char.IsDigit)
+                && Math.Abs(b.X - a.X) <= 4 && b.Colour == a.Colour);
+            if (j < 0) continue;
+            row[i] = a with { Text = a.Text + row[j].Text };
+            row.RemoveAt(j);
+            if (j < i) i--;
+        }
     }
 
     /// <summary>A row as spoken: each run of one colour, then that colour ("PARK BRK, green; ON, amber").</summary>
