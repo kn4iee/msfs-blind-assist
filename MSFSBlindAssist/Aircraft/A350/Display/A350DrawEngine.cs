@@ -17,9 +17,12 @@ public sealed class A350DrawEngine : IDisposable
     /// <summary>Head room above the copy for the draw code's own allocations (the prototype's 64 MB).</summary>
     public const long ExtraBytes = 64L << 20;
 
-    private readonly Store _store;
-    private readonly Instance _instance;
-    private readonly Memory _memory;
+    private readonly Engine _engine;
+    private readonly Module _module;
+    private Store _store = null!;
+    private Instance _instance = null!;
+    private Memory _memory = null!;
+    private bool _fresh;   // set after a trap: the next draw starts a new instance
     private readonly IReadOnlyList<string> _uiClasses;
     private readonly A350ModuleFacts _facts;
     private readonly A350DrawState _state = new();
@@ -43,10 +46,20 @@ public sealed class A350DrawEngine : IDisposable
     {
         _uiClasses = uiClasses;
         _facts = facts;
-        _store = new Store(engine);
-        using var linker = new Linker(engine);
-        Memory? mem = null;
-        foreach (var imp in module.Imports)
+        _engine = engine;
+        _module = module;
+        Instantiate();
+    }
+
+    /// <summary>A new store and instance. A trap leaves the old one mid-call: its globals (the stack
+    /// pointer above all) are not part of the memory copy, so restoring memory does not repair it, and
+    /// every later draw on it traps (live, and in the prototype).</summary>
+    private void Instantiate()
+    {
+        _store?.Dispose();
+        _store = new Store(_engine);
+        using var linker = new Linker(_engine);
+        foreach (var imp in _module.Imports)
         {
             if (imp is not FunctionImport fi) continue;
             var ps = fi.Parameters.ToArray();
@@ -55,38 +68,72 @@ public sealed class A350DrawEngine : IDisposable
             {
                 A350ModulePatcher.HookImport => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    Hook(mem!, a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32(), a[3].AsInt32(), a[4].AsInt32(), a[5].AsInt32());
+                    Hook(_memory, a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32(), a[3].AsInt32(), a[4].AsInt32(), a[5].AsInt32());
                     r[0] = 0;
                 },
                 "get_aircraft_var_enum" or "fsVarsGetAircraftVarId" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
-                    r[0] = IdFor(_avarIds, CStr(mem!, a[0].AsInt32())),
+                    r[0] = IdFor(_avarIds, CStr(_memory, a[0].AsInt32())),
                 "get_units_enum" or "fsVarsGetUnitId" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
-                    r[0] = IdFor(_unitIds, CStr(mem!, a[0].AsInt32())),
+                    r[0] = IdFor(_unitIds, CStr(_memory, a[0].AsInt32())),
                 "aircraft_varget" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                     r[0] = AVar(a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32()),
                 "fsVarsAircraftVarGet" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
                     int outPtr = a[3].AsInt32();
-                    if (outPtr != 0) mem!.WriteDouble(outPtr, AVar(a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32()));
+                    if (outPtr != 0) _memory.WriteDouble(outPtr, AVar(a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32()));
                     r[0] = 0;
                 },
                 "fsVarsNamedVarGet" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
                     int outPtr = a[2].AsInt32();
-                    if (outPtr != 0 && LVar(a[0].AsInt32()) is double v) mem!.WriteDouble(outPtr, v);
+                    if (outPtr != 0 && LVar(a[0].AsInt32()) is double v) _memory.WriteDouble(outPtr, v);
                 },
                 "execute_calculator_code" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    Asked.Add("CALC " + CStr(mem!, a[0].AsInt32()));
+                    Asked.Add("CALC " + CStr(_memory, a[0].AsInt32()));
                     r[0] = 0;
                 },
                 _ => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => Zero(rs, r),
             };
-            linker.Define(imp.ModuleName, imp.Name, Function.FromCallback(_store, body, ps, rs));
+            linker.Define(imp.ModuleName, imp.Name, Function.FromCallback(_store, Guard(imp.Name, body, rs, OnHostError), ps, rs));
         }
-        _instance = linker.Instantiate(_store, module);
-        _memory = mem = _instance.GetMemory("memory") ?? throw new A350ModuleException("A350 module exports no memory");
+        _instance = linker.Instantiate(_store, _module);
+        _memory = _instance.GetMemory("memory") ?? throw new A350ModuleException("A350 module exports no memory");
+        if (_copy != null) GrowFor(_copy);
     }
+
+    private void GrowFor(A350MemoryCopy copy)
+    {
+        long needPages = ((long)copy.End + ExtraBytes) / 65536 + 1;
+        long have = _memory.GetSize();
+        if (needPages > have) _memory.Grow(needPages - have);
+    }
+
+    /// <summary>Host callback errors so far (a torn copy hands the callbacks garbage pointers).</summary>
+    public int HostErrors { get; private set; }
+
+    /// <summary>Called with the import's name and the exception a guarded callback caught.</summary>
+    public Action<string, Exception>? HostError { get; set; }
+
+    private void OnHostError(string name, Exception ex)
+    {
+        HostErrors++;
+        HostError?.Invoke(name, ex);
+    }
+
+    /// <summary>Wraps a host callback so nothing escapes into Wasmtime's native frames: an exception there
+    /// fails the whole process fast (live: 0xC0000409 during an EFIS draw). A throw answers zero.</summary>
+    public static Function.UntypedCallbackDelegate Guard(string name, Function.UntypedCallbackDelegate inner, ValueKind[] results,
+        Action<string, Exception> onError) =>
+        (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+        {
+            try { inner(c, a, r); }
+            catch (Exception ex)
+            {
+                Zero(results, r);
+                try { onError(name, ex); } catch (Exception) { }
+            }
+        };
 
     private static void Zero(ValueKind[] kinds, Span<ValueBox> r)
     {
@@ -189,9 +236,7 @@ public sealed class A350DrawEngine : IDisposable
     public void Load(A350MemoryCopy copy)
     {
         _copy = copy;
-        long needPages = ((long)copy.End + ExtraBytes) / 65536 + 1;
-        long have = _memory.GetSize();
-        if (needPages > have) _memory.Grow(needPages - have);
+        GrowFor(copy);
         ScanCustomVariables();
         foreach (var cls in _objects.Keys.ToList())
         {
@@ -290,12 +335,13 @@ public sealed class A350DrawEngine : IDisposable
         string? error = null;
         try
         {
+            if (_fresh) { Instantiate(); _fresh = false; }
             Restore();
             var f = _instance.GetFunction(A350ModulePatcher.ExportName(cls + "::Draw()"))
                 ?? throw new A350ModuleException("no export for " + cls);
             if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
         }
-        catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; }
+        catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; _fresh = true; }
         catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; }
         return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds);
     }

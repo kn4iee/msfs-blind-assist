@@ -5,15 +5,25 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny";
 
     public static int Run(string mode, string[] args)
     {
+        if (Environment.GetEnvironmentVariable("A350_BIG_STACK") == "1" && Thread.CurrentThread.Name != "big")
+        {
+            int rc = 0;
+            var t = new Thread(() => rc = Run(mode, args), 256 << 20) { Name = "big" };
+            t.Start(); t.Join();
+            return rc;
+        }
         switch (mode)
         {
             case "patch": return Patch(args);
             case "snapshot": return Snapshot(args);
             case "draw": return Draw(args);
+            case "service": return Service(args);
+            case "trap": return TrapTest(args);
+            case "traptiny": return TrapTiny();
             default: return 2;
         }
     }
@@ -51,8 +61,16 @@ internal static class DisplayModes
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
         var facts = A350ModuleFacts.From(mod);
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        using var engine = A350ModuleCache.CreateEngine();
-        using var module = A350ModuleCache.LoadOrBuild(engine, src, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), out bool built);
+        var variant = Environment.GetEnvironmentVariable("A350_WT_VARIANT");
+        var cacheRoot = variant == null ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+            : Path.Combine(Path.GetTempPath(), "a350wt-" + variant);
+        using var engine = variant switch
+        {
+            "guard0" => new Wasmtime.Engine(new Wasmtime.Config().WithOptimizationLevel(Wasmtime.OptimizationLevel.Speed)
+                .WithMemoryGuardSize(0).WithStaticMemoryMaximumSize(0).WithMemoryReservationForGrowth(0)),
+            _ => A350ModuleCache.CreateEngine(),
+        };
+        using var module = A350ModuleCache.LoadOrBuild(engine, src, cacheRoot, out bool built);
         Console.Error.WriteLine($"module {(built ? "built" : "from cache")} in {sw.ElapsedMilliseconds} ms");
         sw.Restart();
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
@@ -69,10 +87,19 @@ internal static class DisplayModes
         sw.Restart();
         draw.Load(copy);
         Console.Error.WriteLine($"loaded copy in {sw.ElapsedMilliseconds} ms, {draw.CustomVariableCount} custom vars");
+        draw.HostError = (n, ex) => Console.Error.WriteLine($"HOST ERROR {n}: {ex.GetType().Name} {ex.Message.Split((char)10)[0]}");
         draw.AVarAnswer = k => k.StartsWith("KOHLSMAN SETTING HG") ? 29.92 : k.StartsWith("TURB ENG N2") ? 0 : null;
         static string F0(float v) => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
         foreach (var g in args.Skip(1))
         {
+            if (g == "reload")
+            {
+                if (reader == null) { Console.Error.WriteLine("reload needs live"); continue; }
+                Console.Error.WriteLine("snapshot..."); var c2 = reader.Snapshot();
+                Console.Error.WriteLine("load..."); draw.Load(c2);
+                Console.Error.WriteLine("reloaded");
+                continue;
+            }
             var parts = g.Split('#');
             var cap = draw.Draw(parts[0], parts.Length > 1 ? int.Parse(parts[1]) : 0);
             var jsonDir = Environment.GetEnvironmentVariable("A350_DRAW_JSON");
@@ -89,6 +116,80 @@ internal static class DisplayModes
         }
         foreach (var q in draw.Asked) Console.Error.WriteLine("asked " + q);
         reader?.Dispose();
+        return 0;
+    }
+
+    /// <summary>`service [rounds]`: the A350DisplayService as MSFSBA runs it: ready, then rounds of CTR, EFIS 0/1
+    /// and MFD on one fresh copy each, timed, with the WD rows of the last round.</summary>
+    private static int Service(string[] args)
+    {
+        int rounds = args.Length > 0 ? int.Parse(args[0]) : 10;
+        using var svc = new A350DisplayService();
+        svc.Spoken += s => Console.WriteLine("SAY: " + s);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        svc.Start();
+        while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+        Console.WriteLine($"state {svc.State} after {sw.ElapsedMilliseconds} ms {svc.Reason}");
+        IReadOnlyList<A350DrawCapture>? caps = null;
+        for (int r = 0; r < rounds; r++)
+        {
+            sw.Restart();
+            caps = svc.DrawAsync(("CTR", 0), ("EFIS", 0), ("EFIS", 1), ("MFD", 0)).GetAwaiter().GetResult();
+            Console.WriteLine($"round {r}: {sw.ElapsedMilliseconds} ms total; " + (caps == null ? "null" :
+                string.Join(", ", caps.Select(c => $"{c.Gauge} {c.Texts.Count}t {c.Milliseconds:F1}ms{(c.Ok ? "" : " " + c.Error)}"))));
+        }
+        if (caps != null)
+            foreach (var row in A350DrawLayout.Rows(A350DrawLayout.Region(caps[0].Texts, A350DrawLayout.CtrWarningDisplay)))
+                Console.WriteLine("  WD: " + A350DrawLayout.Speak(row));
+        return 0;
+    }
+
+    /// <summary>`trap <export> <arg>`: calls an export of the patched module with a nonsense argument on an
+    /// empty instance, to see how a trap inside the A350 code comes back to .NET.</summary>
+    private static int TrapTest(string[] args)
+    {
+        var src = A350ModuleCache.FindInstalledModule()!;
+        var variant = Environment.GetEnvironmentVariable("A350_WT_VARIANT");
+        var cfg = new Wasmtime.Config().WithOptimizationLevel(variant == "noopt" ? Wasmtime.OptimizationLevel.None : Wasmtime.OptimizationLevel.Speed);
+        if (variant == "unwind") cfg = cfg.WithUnwindInfo(true);
+        if (variant == "debug") cfg = cfg.WithDebugInfo(true);
+        if (variant == "guard0") cfg = cfg.WithMemoryGuardSize(0).WithStaticMemoryMaximumSize(0).WithMemoryReservationForGrowth(0);
+        using var engine = new Wasmtime.Engine(cfg);
+        var root = variant == null ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) : Path.Combine(Path.GetTempPath(), "a350wt-" + variant);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        using var module = A350ModuleCache.LoadOrBuild(engine, src, root, out _);
+        Console.WriteLine($"module ready in {sw.ElapsedMilliseconds} ms");
+        using var store = new Wasmtime.Store(engine);
+        using var linker = new Wasmtime.Linker(engine);
+        foreach (var imp in module.Imports)
+            if (imp is Wasmtime.FunctionImport fi)
+            {
+                var rs = fi.Results.ToArray();
+                linker.Define(imp.ModuleName, imp.Name, Wasmtime.Function.FromCallback(store,
+                    (Wasmtime.Caller c, ReadOnlySpan<Wasmtime.ValueBox> a, Span<Wasmtime.ValueBox> r) =>
+                    { for (int i = 0; i < r.Length; i++) r[i] = rs[i] == Wasmtime.ValueKind.Float64 ? 0d : rs[i] == Wasmtime.ValueKind.Int64 ? 0L : rs[i] == Wasmtime.ValueKind.Float32 ? 0f : 0; },
+                    fi.Parameters.ToArray(), rs));
+            }
+        var inst = linker.Instantiate(store, module);
+        Console.WriteLine("calling " + args[0] + "(" + args[1] + ")");
+        try { inst.GetFunction(args[0])!.Invoke(int.Parse(args[1])); Console.WriteLine("returned"); }
+        catch (Exception ex) { Console.WriteLine("caught " + ex.GetType().Name + ": " + ex.Message.Split((char)10)[0]); }
+        return 0;
+    }
+
+    /// <summary>`traptiny`: a two-instruction module whose only function reads out of bounds.</summary>
+    private static int TrapTiny()
+    {
+        // (module (memory 2) (func (export "oob") i32.const -16 i32.load drop))
+        var bytes = new byte[] { 0,0x61,0x73,0x6D,1,0,0,0, 1,4,1,0x60,0,0, 3,2,1,0, 5,3,1,0,2, 7,7,1,3,0x6F,0x6F,0x62,0,0,
+            10,10,1,8,0,0x41,0x70,0x28,2,0,0x1A,0x0B };
+        using var engine = A350ModuleCache.CreateEngine();
+        using var module = Wasmtime.Module.FromBytes(engine, "tiny", bytes);
+        using var store = new Wasmtime.Store(engine);
+        using var linker = new Wasmtime.Linker(engine);
+        var inst = linker.Instantiate(store, module);
+        try { inst.GetFunction("oob")!.Invoke(); Console.WriteLine("returned"); }
+        catch (Exception ex) { Console.WriteLine("caught " + ex.GetType().Name + ": " + ex.Message.Split((char)10)[0]); }
         return 0;
     }
 

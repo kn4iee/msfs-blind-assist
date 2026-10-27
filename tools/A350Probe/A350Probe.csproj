@@ -2,6 +2,7 @@
   <!-- Standalone live harness for the iniBuilds A350 definition; not part of MSFSBlindAssist.sln.
        Build: dotnet build tools/A350Probe -c Debug -p:Platform=x64   See tools/A350Probe/README.md. -->
   <PropertyGroup>
+    <CETCompat>false</CETCompat>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>

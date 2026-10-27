@@ -65,6 +65,8 @@
     <!-- Build Settings -->
     <Deterministic>true</Deterministic>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- [A350-9] Wasmtime leaves a trap with a non-local jump; a CET shadow stack fast-fails it (0xC0000409). -->
+    <CETCompat>false</CETCompat>
 
     <!-- COM Interop -->
     <EnableComHosting>true</EnableComHosting>

@@ -14,6 +14,14 @@ internal sealed class WasmTestModule
     private readonly List<(string Name, int Type, byte[] Locals, byte[] Body)> _funcs = new();
     private readonly List<(string Name, int Func)> _exports = new();
     private readonly List<(int Base, byte[] Bytes)> _data = new();
+    private readonly List<int> _globals = new();
+
+    /// <summary>A mutable i32 global with its initial value; returns its index.</summary>
+    public int AddGlobal(int initial)
+    {
+        _globals.Add(initial);
+        return _globals.Count - 1;
+    }
 
     public int AddType(byte[] parameters, byte[] results)
     {
@@ -60,6 +68,13 @@ internal sealed class WasmTestModule
         Section(o, 3, funcs);
 
         Section(o, 5, new List<byte> { 1, 0, 2 });   // one memory, min 2 pages
+
+        if (_globals.Count > 0)
+        {
+            var globals = new List<byte>(U(_globals.Count));
+            foreach (var g in _globals) { globals.Add(I32); globals.Add(1); globals.Add(0x41); globals.AddRange(S(g)); globals.Add(0x0B); }
+            Section(o, 6, globals);
+        }
 
         var exports = new List<byte>(U(_exports.Count + 1));
         exports.AddRange(Name("memory")); exports.Add(2); exports.Add(0);
