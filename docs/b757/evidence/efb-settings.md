@@ -305,7 +305,7 @@ into the owner's pass):
    and change nothing; a held key speaks once; Alt+letter and Escape still work (Escape closes an open list, not the
    window).
 3. A refused save puts the stored value back (an arrow commit and an open-list commit). An open list, an arrow, then
-   Tab away: nothing saved, nothing said? (to see)
+   Tab away: nothing saved, nothing said? (to find out)
 4. NVDA's order: "checked" before "2500 turned off"; focus never moves after a save, "Simulator closed" or opening.
 5. Simulator start and close: spoken within about a second; the status box follows; the tab is editable again, with
    what BlueBird left.
