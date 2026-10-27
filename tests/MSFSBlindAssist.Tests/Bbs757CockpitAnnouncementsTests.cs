@@ -152,6 +152,57 @@ public class Bbs757CockpitAnnouncementsTests
     }
 
     [Fact]
+    public void Watched_switches_leave_out_what_other_rows_speak_and_keep_silent_rows()
+    {
+        var def = new MSFSBlindAssist.Aircraft.BBS757Definition();
+        var names = def.CockpitWatched().Switches.Select(c => c.StateVar).ToHashSet(StringComparer.Ordinal);
+
+        // Spoken already under another variable: the Flaps readout, the gear call-out, the parking
+        // brake readout, the A/T armed announcement.
+        Assert.DoesNotContain("B757_FC_FLAP_LEVER", names);
+        Assert.DoesNotContain("B757_GEAR_HANDLE_POS", names);
+        Assert.DoesNotContain("B757_FC_PARK_BRAKE", names);
+        Assert.DoesNotContain("AT_ARM_SWITCH", names);
+        // A silent row (the IRS switch watch, read only to phrase the align light) speaks nothing of
+        // the selector itself, so the selector is watched.
+        Assert.Contains("B757_IRS_L_SWITCH", names);
+    }
+
+    [Fact]
+    public void A_flood_of_lights_is_one_line()
+    {
+        var lights = Enumerable.Range(1, 12).Select(i => new Bbs757Light("L" + i, "Light " + i, $"Light {i} light on", $"Light {i} light off")).ToList();
+        var a = new Bbs757CockpitAnnouncements(lights, new[] { Seatbelts }, () => _now);
+        a.Settle();
+        _now += Bbs757CockpitAnnouncements.SettleQuietMs;
+        var changes = lights.Take(9).ToDictionary(l => l.LVar, _ => 1.0);
+        changes["SEATBELTS_STATE"] = 2;
+
+        Assert.Equal(new[] { "Seatbelts ON", "9 lights on" }, a.Changes(changes, None, None));
+
+        // Going out together, mixed with one coming on, within the window.
+        _now += 300;
+        var mixed = lights.Take(9).ToDictionary(l => l.LVar, _ => 0.0);
+        mixed["L10"] = 1;
+        Assert.Equal(new[] { "1 light on, 9 off" }, a.Changes(mixed, None, None));
+
+        // A few lights later on are each said again.
+        _now += Bbs757CockpitAnnouncements.BurstWindowMs;
+        Assert.Equal(new[] { "Light 11 light on" }, a.Changes(Of(("L11", 1)), None, None));
+    }
+
+    [Fact]
+    public void All_lights_row_mutes_the_light_summary()
+    {
+        var lights = Enumerable.Range(1, 8).Select(i => new Bbs757Light("L" + i, "Light " + i, $"Light {i} light on", null)).ToList();
+        var a = new Bbs757CockpitAnnouncements(lights, Array.Empty<Bbs757Control>(), () => _now);
+        a.Settle();
+        _now += Bbs757CockpitAnnouncements.SettleQuietMs;
+
+        Assert.Empty(a.Changes(lights.ToDictionary(l => l.LVar, _ => 1.0), None, k => k == Bbs757CockpitAnnouncements.AllLightsKey));
+    }
+
+    [Fact]
     public void Unknown_names_are_ignored()
     {
         Assert.Empty(Make().Changes(Of(("SOMETHING_ELSE", 1)), None, None));

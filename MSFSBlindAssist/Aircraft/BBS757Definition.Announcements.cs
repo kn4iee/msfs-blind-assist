@@ -18,13 +18,28 @@ public partial class BBS757Definition
     private (IReadOnlyList<Bbs757Light> Lights, IReadOnlyList<Bbs757Control> Switches)? _cockpitWatched;
 
     /// <summary>
+    /// Map controls whose moves another row already speaks under a different variable, so the watch
+    /// would say them twice: the flap lever (the Flaps readout on the stock <c>FLAPS HANDLE INDEX</c>),
+    /// the gear lever (the gear call-out on the stock gear positions), the parking brake (its readout,
+    /// registered under the readout's own key) and the A/T arm switch (the "A/T armed" announcement on
+    /// <c>BBS_AUTO_THROTTLE</c>).
+    /// </summary>
+    internal static readonly IReadOnlyList<string> SpokenByOtherRows = new[]
+    {
+        "B757_FC_FLAP_LEVER", "B757_GEAR_HANDLE_POS", Bbs757Readouts.ParkingBrakeVar, "AT_ARM_SWITCH",
+    };
+
+    /// <summary>
     /// The lights and switches the cockpit-wide announcements watch: the light table and the map's
-    /// switches, less every name a definition row announces itself. Computed once from the variables.
+    /// switches, less every name a definition row speaks itself (an announced row with a Ctrl+M row:
+    /// a silent row, read only to phrase another's, speaks nothing of its own) and
+    /// <see cref="SpokenByOtherRows"/>. Computed once from the variables.
     /// </summary>
     internal (IReadOnlyList<Bbs757Light> Lights, IReadOnlyList<Bbs757Control> Switches) CockpitWatched()
     {
         if (_cockpitWatched is { } done) return done;
-        var announced = GetVariables().Values.Where(v => v.IsAnnounced).Select(v => v.Name).ToHashSet(StringComparer.Ordinal);
+        var announced = GetVariables().Values.Where(v => v.IsAnnounced && !v.ExcludeFromMonitorManager)
+            .Select(v => v.Name).Concat(SpokenByOtherRows).ToHashSet(StringComparer.Ordinal);
         var names = Bbs757LightTable.WatchSet(Bbs757LightTable.All, Map.Controls, announced).ToHashSet(StringComparer.Ordinal);
         var lights = Bbs757LightTable.All.Where(l => names.Contains(l.LVar)).ToList();
         var lightNames = lights.Select(l => l.LVar).ToHashSet(StringComparer.Ordinal);

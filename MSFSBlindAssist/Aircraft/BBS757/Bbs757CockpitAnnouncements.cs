@@ -10,8 +10,8 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// the mouse) says "{label} {position}" from the control map. The pilot's own write is its echo and
 /// is never said: within <see cref="OwnWriteEchoMs"/> of <see cref="OwnWrite"/> for the control, or
 /// while its pick is pending. A burst (more than <see cref="BurstSize"/> switch moves in one read or
-/// within <see cref="BurstWindowMs"/>) is said as one "Panel state changed: N switches" line; lights
-/// are never summed away. Nothing is said until the flight has settled (<see cref="Settle"/>, then
+/// within <see cref="BurstWindowMs"/>) is said as one "Panel state changed: N switches" line, and a
+/// flood of lights (a lights test, power on or off) as one "N lights on, M off" line. Nothing is said until the flight has settled (<see cref="Settle"/>, then
 /// <see cref="SettleQuietMs"/> of quiet), so a flight load's flood of changes stays silent.
 ///
 /// Each light and switch has a Ctrl+M row (<see cref="MonitorRows"/>), and group rows mute all lights,
@@ -47,6 +47,7 @@ public sealed class Bbs757CockpitAnnouncements
     private readonly Dictionary<string, long> _ownWrites = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _lightOn = new(StringComparer.Ordinal);
     private readonly Queue<(long At, int Count)> _recentSwitches = new();
+    private readonly Queue<(long At, int Count)> _recentLights = new();
     private long? _settledAt;
 
     public Bbs757CockpitAnnouncements(IReadOnlyList<Bbs757Light> lights, IReadOnlyList<Bbs757Control> controls, Func<long> nowMs)
@@ -71,6 +72,7 @@ public sealed class Bbs757CockpitAnnouncements
         _ownWrites.Clear();
         _lightOn.Clear();
         _recentSwitches.Clear();
+        _recentLights.Clear();
     }
 
     /// <summary>
@@ -83,7 +85,7 @@ public sealed class Bbs757CockpitAnnouncements
         long now = _nowMs();
         bool speaking = _settledAt is long s && now - s >= SettleQuietMs;
         var switchLines = new List<string>();
-        var lightLines = new List<string>();
+        var lightLines = new List<(string Phrase, bool On)>();
 
         foreach (var (name, value) in changes)
         {
@@ -94,7 +96,7 @@ public sealed class Bbs757CockpitAnnouncements
                 _lightOn[name] = on;
                 if (!speaking || (known && wasOn == on)) continue;
                 string? phrase = on ? light.OnPhrase : light.OffPhrase;
-                if (phrase != null && !IsMuted(name, true, null, inMuteSet)) lightLines.Add(phrase);
+                if (phrase != null && !IsMuted(name, true, null, inMuteSet)) lightLines.Add((phrase, on));
             }
             else if (_switches.TryGetValue(name, out var control))
             {
@@ -109,18 +111,42 @@ public sealed class Bbs757CockpitAnnouncements
         var said = new List<string>();
         if (switchLines.Count > 0)
         {
-            while (_recentSwitches.Count > 0 && now - _recentSwitches.Peek().At >= BurstWindowMs) _recentSwitches.Dequeue();
-            int recent = _recentSwitches.Sum(r => r.Count);
-            _recentSwitches.Enqueue((now, switchLines.Count));
-            if (switchLines.Count > BurstSize || recent + switchLines.Count > BurstSize)
+            if (IsBurst(_recentSwitches, switchLines.Count, now))
             {
                 if (!inMuteSet(AllSwitchesKey))
                     said.Add($"Panel state changed: {switchLines.Count.ToString(CultureInfo.InvariantCulture)} switches");
             }
             else said.AddRange(switchLines);
         }
-        said.AddRange(lightLines);
+        if (lightLines.Count > 0)
+        {
+            // A lights test, or power coming on or going off, changes dozens at once: one line.
+            if (IsBurst(_recentLights, lightLines.Count, now)) said.Add(LightSummary(lightLines.Count(l => l.On), lightLines.Count(l => !l.On)));
+            else said.AddRange(lightLines.Select(l => l.Phrase));
+        }
         return said;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="count"/> changes now, with those of the last <see cref="BurstWindowMs"/>,
+    /// make a burst (more than <see cref="BurstSize"/>); records them.
+    /// </summary>
+    private static bool IsBurst(Queue<(long At, int Count)> recentChanges, int count, long now)
+    {
+        while (recentChanges.Count > 0 && now - recentChanges.Peek().At >= BurstWindowMs) recentChanges.Dequeue();
+        int recent = recentChanges.Sum(r => r.Count);
+        recentChanges.Enqueue((now, count));
+        return count > BurstSize || recent + count > BurstSize;
+    }
+
+    /// <summary>"9 lights on", "3 lights off", "1 light on, 9 off".</summary>
+    private static string LightSummary(int on, int off)
+    {
+        static string N(int n) => n.ToString(CultureInfo.InvariantCulture);
+        string lights(int n) => n == 1 ? "light" : "lights";
+        if (off == 0) return $"{N(on)} {lights(on)} on";
+        if (on == 0) return $"{N(off)} {lights(off)} off";
+        return $"{N(on)} {lights(on)} on, {N(off)} off";
     }
 
     /// <summary>A position's own name, or the value itself (invariant) when the map names none.</summary>
