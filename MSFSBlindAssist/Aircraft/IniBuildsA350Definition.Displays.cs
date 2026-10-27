@@ -25,9 +25,9 @@ public partial class IniBuildsA350Definition
         new("First Officer PFD", PfdFirstOfficerKey, "EFIS", 1, c => A350Pfd.Read(c, 1)),
         new("Captain ND", "A350_DISP_ND_CPT", "EFIS", 0, c => A350GroundDisplays.ReadNd(c, 0)),
         new("First Officer ND", "A350_DISP_ND_FO", "EFIS", 1, c => A350GroundDisplays.ReadNd(c, 1)),
-        // The MFD read as drawn until its own window lists and operates its fields.
-        new("Captain MFD", "A350_DISP_MFD_CPT", "MFD", 0, c => Rows(c, x => x < 836)),
-        new("First Officer MFD", "A350_DISP_MFD_FO", "MFD", 0, c => Rows(c, x => x >= 836)),
+        // The MFD as lines (A350MfdPage); its window operates them.
+        new("Captain MFD", "A350_DISP_MFD_CPT", "MFD", 0, c => A350MfdPage.Read(c, 0).Select(l => l.Spoken).ToList()),
+        new("First Officer MFD", "A350_DISP_MFD_FO", "MFD", 0, c => A350MfdPage.Read(c, 1).Select(l => l.Spoken).ToList()),
         new("FCU display", "A350_DISP_FCU", "FCU", 0, A350GroundDisplays.ReadFcu),
         new("RMP 1 display", "A350_DISP_RMP_1", "RMP", 0, A350GroundDisplays.ReadRmp),
         new("RMP 2 display", "A350_DISP_RMP_2", "RMP", 1, A350GroundDisplays.ReadRmp),
@@ -36,9 +36,6 @@ public partial class IniBuildsA350Definition
         new("Standby navigation display", "A350_DISP_SND", "SND", 0, A350GroundDisplays.ReadSnd),
         new("BAT display", "A350_DISP_BAT", "BAT", 0, A350GroundDisplays.ReadBat),
     };
-
-    private static IReadOnlyList<string> Rows(A350DrawCapture c, Func<float, bool> half) =>
-        A350DrawLayout.Rows(c.Texts.Where(t => half(t.X))).Select(A350DrawLayout.Speak).ToList();
 
     /// <summary>The display reader, or null while it is not running.</summary>
     public A350DisplayService? Displays { get; set; }
