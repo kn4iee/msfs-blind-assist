@@ -20,7 +20,7 @@ node ../a350-probe/ceval.mjs VCockpit11 capture.js | sed -E 's/ data-a350-ois-la
 
 `capture.js` keeps what is drawn, marks an element drawn with no size `data-vis="0"`, keeps small
 hidden lists whole (the runway choices), drops styles except a fixed overlay's (dialogs), a colour
-(door indicators, lit buttons) and an opacity (the chock pictures), and the agent's own attributes. The sed drops labels a previous agent kept, so the fixture is the OIS as
+(door indicators, lit buttons), an opacity (the chock pictures), a percentage width (fluid bars), and the agent's own attributes. The sed drops labels a previous agent kept, so the fixture is the OIS as
 first seen.
 
 | Fixture | Page |
@@ -41,3 +41,4 @@ first seen.
 | ground_light_on | GROUND with the cargo bay light on |
 | aoc | COMPANY COM: the tree, one new message |
 | aoc_message | COMPANY COM with that message open |
+| maintenance | MAINTENANCE: battery gauges, fluid bars, tyre and brake boxes |

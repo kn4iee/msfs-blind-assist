@@ -17,7 +17,7 @@
   all=c.querySelectorAll('[data-cap-v]');
   for(var j=0;j<all.length;j++){var e=all[j];if(e.getAttribute('data-cap-v')==='0')e.setAttribute('data-vis','0');
     e.removeAttribute('data-cap-v');e.removeAttribute('data-cap-k');
-    e.removeAttribute('data-a350-ois-idx');e.removeAttribute('data-a350-ois-own');if(!/position:\s*fixed|background-color|opacity/.test(e.getAttribute('style')||''))e.removeAttribute('style');
+    e.removeAttribute('data-a350-ois-idx');e.removeAttribute('data-a350-ois-own');if(!/position:\s*fixed|background-color|opacity|width:\s*[\d.]+%/.test(e.getAttribute('style')||''))e.removeAttribute('style');
     if(e.tagName==='INPUT'&&e.value)e.setAttribute('value',e.value);
     if(e.tagName==='INPUT'&&e.checked)e.setAttribute('checked','');}
   return c.innerHTML.replace(/\n\s*\n/g,'\n');

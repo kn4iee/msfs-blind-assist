@@ -76,12 +76,32 @@
 
   // GROUND's door map: a clickspot per door, its indicator's colour its state, keyed on the page:
   // green Closed, blue Armed, red Open, orange Transit.
-  A.colourState = function (c) {
+  // A CSS colour as [r, g, b], or null.
+  A.rgb = function (c) {
     c = String(c || '').toLowerCase().replace(/\s/g, '');
     var named = { blue: [0, 0, 255], navy: [0, 0, 128], darkblue: [0, 0, 139], green: [0, 128, 0], lime: [0, 255, 0],
-      darkgreen: [0, 100, 0], red: [255, 0, 0], darkred: [139, 0, 0], maroon: [128, 0, 0], orange: [255, 165, 0], darkorange: [255, 140, 0] };
+      darkgreen: [0, 100, 0], red: [255, 0, 0], darkred: [139, 0, 0], maroon: [128, 0, 0], orange: [255, 165, 0],
+      darkorange: [255, 140, 0], yellow: [255, 255, 0], gold: [255, 215, 0], black: [0, 0, 0], white: [255, 255, 255] };
     var m = /^rgba?\((\d+),(\d+),(\d+)/.exec(c), rgb = m ? [+m[1], +m[2], +m[3]] : named[c];
     if (!rgb && /^#[0-9a-f]{6}$/.test(c)) rgb = [parseInt(c.substr(1, 2), 16), parseInt(c.substr(3, 2), 16), parseInt(c.substr(5, 2), 16)];
+    return rgb || null;
+  };
+
+  // A colour as the word a pilot would say: green, amber, red, blue, white, black.
+  A.colourWord = function (c) {
+    var rgb = A.rgb(c);
+    if (!rgb) return '';
+    var r = rgb[0], g = rgb[1], b = rgb[2];
+    if (r > 200 && g > 200 && b > 200) return 'white';
+    if (r < 40 && g < 40 && b < 40) return 'black';
+    if (b > r && b > g) return 'blue';
+    if (g > r && g > b) return 'green';
+    if (r > b && g > 80) return 'amber';
+    return 'red';
+  };
+
+  A.colourState = function (c) {
+    var rgb = A.rgb(c);
     if (!rgb) return '';
     var r = rgb[0], g = rgb[1], b = rgb[2];
     if (b > r && b > g) return 'Armed';
@@ -119,6 +139,9 @@
   // GROUND's sidebar toggles: a light or the covers is lit green when on; the avionics bay door takes
   // the door key's colours. -> {name, state}, or null for any other button.
   A.sidebarToggle = function (b, text) {
+    // MAINTENANCE's engine cowls: red while open.
+    if (text === 'LEFT ENG' || text === 'RIGHT ENG')
+      return { name: text + ' cowl', state: A.colourWord(b.style.backgroundColor) === 'red' ? 'Open' : 'Closed' };
     if (!(b.closest && b.closest('.doors-sidebar'))) return null;
     var section = A.headingBefore(b), bg = b.style.backgroundColor;
     if (section === 'LIGHTS') return { name: text + ' light', state: A.colourState(bg) === 'Closed' ? 'On' : 'Off' };
@@ -147,6 +170,60 @@
     }
     var prev = input.parentElement && input.parentElement.previousElementSibling;
     return prev && prev.querySelector && !A.holdsControl(prev) && prev.querySelector('h1,h2,h3,h4') ? prev : null;
+  };
+
+  // MAINTENANCE's rows of two cells: a gauge (a bordered value beside its label, either way round)
+  // reads "label: value"; a fluid level (its quantity beside a bar as wide as it is full) reads
+  // "Y: 30.5L, 74%". -> the line, owning the row; '' when h is in neither.
+  A.gaugeLine = function (h) {
+    var cell = h.parentElement, row = cell && cell.parentElement;
+    if (!row || !A.hasCls(row, 'row') || row.children.length !== 2 || A.holdsControl(row)) return '';
+    var other = row.firstElementChild === cell ? row.lastElementChild : row.firstElementChild;
+    var hs = row.querySelectorAll('h1,h2,h3,h4');
+    if (hs.length === 2) {
+      var val = A.hasCls(hs[0], 'border') ? hs[0] : A.hasCls(hs[1], 'border') ? hs[1] : null;
+      if (!val) return '';
+      A.own(row);
+      return A.text(val === hs[0] ? hs[1] : hs[0]) + ': ' + A.text(val);
+    }
+    var bar = hs.length === 1 && !A.text(other) ? other.querySelector('.h-100') : null;
+    if (!bar) return '';
+    var w = /([\d.]+)%/.exec(bar.style.width || '');
+    var pct = w ? Math.round(parseFloat(w[1])) : (A.hasCls(bar, 'w-100') ? 100 : null);
+    A.own(row);
+    var q = A.text(h);
+    return pct === null ? q : q + (/\d/.test(q) ? ', ' : ': ') + pct + '%';
+  };
+
+  // MAINTENANCE's tyre (_w_) and brake (_b_) boxes on the gear picture: their colours, summed up.
+  A.WHEEL = /^(nose|main)_(?:([lr])([frm])_)?([wb])_(left|right)$/;
+  A.wheelName = function (m) {
+    if (m[1] === 'nose') return 'nose ' + m[5];
+    return (m[2] === 'l' ? 'left' : 'right') + ' main ' + { f: 'front', r: 'rear', m: 'middle' }[m[3]] + ' ' + m[5];
+  };
+  A.wheelLines = function () {
+    var all = document.querySelectorAll('[id]'), groups = { w: [], b: [] };
+    for (var i = 0; i < all.length; i++) {
+      var m = A.WHEEL.exec(all[i].id);
+      if (!m || !A.visible(all[i])) continue;
+      A.own(all[i]);
+      groups[m[4]].push({ name: A.wheelName(m), colour: A.colourWord(all[i].style.backgroundColor) || 'unknown' });
+    }
+    var lines = [];
+    var sum = function (title, list) {
+      if (!list.length) return;
+      var count = {}, most = '';
+      for (var j = 0; j < list.length; j++) {
+        count[list[j].colour] = (count[list[j].colour] || 0) + 1;
+        if (!most || count[list[j].colour] > count[most]) most = list[j].colour;
+      }
+      var odd = [];
+      for (var k = 0; k < list.length; k++) if (list[k].colour !== most) odd.push(list[k].name + ': ' + list[k].colour);
+      lines.push(title + ': ' + (odd.length ? most + ', except ' + odd.join(', ') : 'all ' + most));
+    };
+    sum('Tyres', groups.w);
+    sum('Brakes', groups.b);
+    return lines;
   };
 
   // The pictures the OIS draws, read as what they are.
@@ -517,11 +594,19 @@
             push(e, { kind: 'button', text: bt + ': ' + bs, clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
             continue;
           }
+          // Painted by the OIS with no known meaning: its colour, as a sighted pilot sees it.
+          var paint = A.colourWord(e.style.backgroundColor) || A.colourWord((/^\s*([a-z]+|#[0-9a-f]{6}|rgba?\([^)]*\))/i.exec(e.style.background || '') || [])[1]);
+          if (paint && paint !== 'black' && paint !== 'white') {
+            push(e, { kind: 'button', text: bt + ' (' + paint + ')', clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+            continue;
+          }
           push(e, { kind: 'button', text: bt + (active ? ' (selected)' : ''), clickable: true, disabled: e.disabled === true, key: 'button:' + bt });
           continue;
         }
 
         if (/^H[1-6]$/.test(tag)) {
+          var gl = A.gaugeLine(e);
+          if (gl) { push(null, { kind: 'static', text: gl, key: 'readout:' + gl.split(':')[0] }); continue; }
           var nb = e.nextElementSibling;
           if (nb && (nb.tagName === 'BUTTON' || A.hasCls(nb, 'is-button'))) continue;   // read with its button
           var ht = A.norm(e.innerText);
@@ -576,6 +661,12 @@
             var ln = A.norm(lines[li]);
             if (ln && !/^[-.=_*\s]+$/.test(ln)) push(null, { kind: 'static', text: ln });
           }
+          continue;
+        }
+
+        if (e.id && A.WHEEL.test(e.id)) {
+          var wl = A.wheelLines();
+          for (var wi = 0; wi < wl.length; wi++) push(null, { kind: 'static', text: wl[wi], key: 'readout:' + wl[wi].split(':')[0] });
           continue;
         }
 
