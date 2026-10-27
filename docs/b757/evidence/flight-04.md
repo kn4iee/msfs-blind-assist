@@ -1113,3 +1113,58 @@ Fixtures from this round (668 x 93 crops): `raw_108.10_223_night.png` (unfiltere
 
 Not measured: the box's draw time in flight (H2 was paused), daylight unfiltered with a frequency tuned (round 5's
 unfiltered fixture is PARK), other resolutions and UI scales, HDR.
+
+## Round 7: the display read in a window that is not 16:9
+
+Measured 2026-10-27, 18:50-19:10 local, on Declan's MSFS 2024 (1.9.21.0) with the BlueBird 757-200 PW N/W parked cold
+and dark at night (`E:TIME OF DAY` 3), MSFSBA closed. Plan 04's own reader (`CoherentBbs757IlsDisplay` and
+`Bbs757IlsOcr`, `B757` at 924129a8) was run from a scratch xUnit test against the live simulator; writes were
+`SimVar.SetSimVarValue` in a VCockpit view.
+
+Setup (`UserCfg.opt`): Windowed 1, Resolution 1278 1360, DLSS ultra performance, no frame generation, VSync on, HDR off,
+PrimaryScaling 1. The window was 1294 x 1399 at (1273,0) on a 2560 x 1440 screen (snapped to its right half), its client
+1278 x 1360 at (8,31) in the capture.
+
+J1. Every read was refused. `mainUi` answered 1278 x 719 CSS px (`--viewportHeight` 719, devicePixelRatio 1, `--uiScale`
+1) in a 1278 x 1360 client, so `OverlayCrop` found no one scale and returned null: debug.log said "the overlay's box
+does not fit the capture at the page's scale" at every read, and every set went by the count.
+
+J2. Where the page is. Two 668 x 93 marker boxes were laid in `mainUi`, at CSS (16,16) and at (innerWidth - 684,
+innerHeight - 109), and captured by PrintWindow and by a screen copy. The first was at capture x 24-690, y 367-459, the
+second at x 602-1268, y 961-1053, the same in both captures. So the page is drawn at one scale (one CSS pixel is one
+pixel here) and centred: client y + 320, which is floor((1360 - 719) / 2). In a window taller than 16:9 the simulator
+draws its UI page 16:9, letterboxed. Wider than 16:9: not measured.
+
+J3. The fix (round 7's commit). When the page does not fill the client at one scale, `OverlayCrop` fits it in the client
+and centres it, but only with the client area known; a page that fills the client takes exactly the old path. Checked
+against a copy of the old function on 2,286 sizes the old one accepted (clients 1024-3840 px wide, UI scales 1 to 3,
+with and without a window frame, client known and not): every crop identical. With no client area every refused case
+is still refused.
+
+J4. Live, with the fix, at night, unfiltered. The battery on (the ILS panel is on standby power), then:
+
+| State (knob or write) | Read |
+|---|---|
+| PARK (the load state) | `----- 000` |
+| WHOLE +1 | `108.10 000` |
+| FRAC +1, `BBS_ILS_COURSE` 95 | `108.15 095` |
+| course 0, FRAC -1, WHOLE -1 | `----- 000` |
+
+With the panel unpowered every read was "no reading" (the dark display decodes as nothing, never a guess).
+
+J5. Timing on this machine (open, not changed by the fix). The box appeared 0.35-0.5 s after the inject on most reads
+(round 5: by 0.15 s), usually in capture 3, about 0.5 s in, close to the read's limit of four captures; back-to-back
+reads found it in capture 1. The first read of each test process failed three times out of three: it spends part of
+its 1 s cap on the page list, the socket and the gauge search, and ran out after two captures without the box. In the
+app the socket stays open, so this costs the first read of a session, which falls to the count. Candidates: a longer
+cap for a read that has to connect, or captures kept going to a longer cap instead of stopping at four.
+
+J6. The count's load state is not BlueBird's every preset. The factory panel states (`Data/panel_states/*.snap`, the
+EFB's presets) store the ILS as `[whole, fraction]` after the two VOR entries (`[true,117,40]`), whole -1 for PARK:
+`approachbaseleg` and `beforelandingflaps30` load 110.30, `quickturn` PARK with .30 hidden, the other six PARK with .10.
+The display read recovers from this (a set's second try plans from the read), but `Bbs757IlsDial.LoadState` (PARK, .10)
+is wrong after one of those presets, and so is a count used when the display cannot be read.
+
+Put back: the ILS PARK with .10 (proved by the reads), `BBS_ILS_COURSE` 0, the battery off. The `ils-display-fail*.png`
+files the test reads left in the logs folder were deleted. No element with an id starting `msfsba` was left in `mainUi`
+or the VCockpit pages, and no socket on :19999.

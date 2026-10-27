@@ -241,7 +241,14 @@ public class Bbs757IlsOcrTests
         Assert.Equal(new Rectangle(24, 47, 668, 93),
             Bbs757IlsOcr.OverlayCrop(new Size(1936, 1119), new Rectangle(8, 31, 1920, 1080), 1920, 1080));
 
-        // A page that does not fill the picture at one scale, or no page size: no crop, rather than a guess.
+        // Round 7, a windowed 1278 x 1360 simulator: the 1278 x 719 CSS px page is drawn fitted and centred, 320 px
+        // down the client (measured with two marker boxes: the one laid at CSS (16,16) was at capture x 24-690,
+        // y 367-459). Before round 7 this was refused and every read fell back to the count.
+        Assert.Equal(new Rectangle(24, 367, 668, 93),
+            Bbs757IlsOcr.OverlayCrop(new Size(1294, 1399), new Rectangle(8, 31, 1278, 1360), 1278, 719));
+
+        // A page that does not fill the picture at one scale with no client area known (the frame cannot be told
+        // from the page), or no page size: no crop, rather than a guess.
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(1936, 1119), null, 1920, 1080));
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(1920, 1080), null, 0, 0));
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(600, 80), null, 600, 80));   // the box would not fit

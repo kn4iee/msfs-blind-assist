@@ -161,8 +161,11 @@ public static class Bbs757IlsOcr
     /// simulator's client area lies in the capture (null: the whole capture, a borderless window); the UI page
     /// covers it, <paramref name="innerWidth"/> × <paramref name="innerHeight"/> CSS pixels, so one CSS pixel is
     /// the client's width over <paramref name="innerWidth"/> pixels (never assumed 1:1: round 5 measured only
-    /// 1920 × 1080 at 96 DPI and UI scale 1). Null when there is no page size, when the page does not fill the
-    /// client at one scale (within 1 %), or when the box would not fit in the capture.
+    /// 1920 × 1080 at 96 DPI and UI scale 1). A page that does not fill the client at one scale (more than 1 %
+    /// apart) is fitted in it and centred, as the simulator draws it (round 7: a 1278 × 1360 window drew its
+    /// 1278 × 719 CSS px page 320 px down), but only with <paramref name="client"/> known: without it a window's
+    /// frame cannot be told from the page's edge. Null when there is no page size, when such a page comes with no
+    /// client area, or when the box would not fit in the capture.
     /// </summary>
     public static Rectangle? OverlayCrop(Size capture, Rectangle? client, double innerWidth, double innerHeight)
     {
@@ -170,11 +173,20 @@ public static class Bbs757IlsOcr
         if (!(innerWidth > 0) || !(innerHeight > 0) || area.Width <= 0 || area.Height <= 0) return null;
 
         double scale = area.Width / innerWidth;
-        if (Math.Abs(area.Height / innerHeight - scale) > 0.01 * scale) return null;
+        int left = area.X, top = area.Y;
+        if (Math.Abs(area.Height / innerHeight - scale) > 0.01 * scale)
+        {
+            // Letterboxed (a window taller than the page) or pillarboxed: one scale, centred. A page that fills the
+            // client never comes here, so its crop is exactly what it was before round 7.
+            if (client == null) return null;
+            scale = Math.Min(area.Width / innerWidth, area.Height / innerHeight);
+            left += (int)Math.Floor((area.Width - innerWidth * scale) / 2);
+            top += (int)Math.Floor((area.Height - innerHeight * scale) / 2);
+        }
 
         int Px(double css) => (int)Math.Round(css * scale, MidpointRounding.AwayFromZero);
-        var box = Rectangle.FromLTRB(area.X + Px(OverlayLeft), area.Y + Px(OverlayTop),
-            area.X + Px(OverlayLeft + Width), area.Y + Px(OverlayTop + Height));
+        var box = Rectangle.FromLTRB(left + Px(OverlayLeft), top + Px(OverlayTop),
+            left + Px(OverlayLeft + Width), top + Px(OverlayTop + Height));
         return new Rectangle(Point.Empty, capture).Contains(box) ? box : null;
     }
 
