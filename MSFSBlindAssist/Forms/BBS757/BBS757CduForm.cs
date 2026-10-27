@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Settings;
 using MSFSBlindAssist.SimConnect.BBS757;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Forms.BBS757;
 
@@ -14,9 +15,11 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The window never disposes the client: MainForm owns it (the EFB window shares it). The window
 /// only subscribes, and unsubscribes in Dispose.
 ///
-/// Speech (CORE-7): a page title is spoken when the page changes (not when ACT turns into MOD), and the scratchpad is read back by
-/// <see cref="CduScratchpadAnnouncer"/> once every queued key has had its cycle, which is the
-/// state the screen reader cannot know. A key the window cannot deliver is refused aloud. Ctrl+Tab
+/// Speech (CORE-7): a page title is spoken when the page changes (not when ACT turns into MOD), and
+/// the scratchpad is read back by <see cref="CduScratchpadAnnouncer"/> once every queued key has had
+/// its cycle, which is the state the screen reader cannot know. An entry typed in the scratchpad box is
+/// checked instead: it says nothing when the scratchpad holds it, and what the scratchpad shows when the
+/// CDU missed a key (plan 08). A key the window cannot deliver is refused aloud. Ctrl+Tab
 /// says only which CDU is shown. While the window is hidden only one thing speaks: keys the pilot
 /// sent that were dropped because the link went ("CDU connection lost, keys not sent").
 /// </summary>
@@ -37,6 +40,8 @@ public partial class BBS757CduForm : Form
     private const int PollTickMs = 350;
     // After the last queued key, how long the scratchpad waits before it is read back.
     private const int ScratchpadSettleMs = 300;
+    // After a typed entry's last key, how long the check waits for a newer screen before it judges.
+    private const int TypedCheckMaxMs = 2000;
 
     private readonly CoherentBbs757TabletClient _client;
     private readonly ScreenReaderAnnouncer _announcer;
@@ -48,6 +53,21 @@ public partial class BBS757CduForm : Form
     private string _previousTitle = "";
     private IReadOnlyList<Bbs757CduRow> _rows = Array.Empty<Bbs757CduRow>();
     private readonly CduScratchpadAnnouncer _scratchpad = new();
+
+    // When each CDU's latest screen arrived (index 1 captain, 2 first officer).
+    private readonly DateTime[] _screenAt = new DateTime[3];
+
+    /// <summary>A typed entry waiting for its scratchpad check: what was typed into which CDU, what the
+    /// scratchpad held before, and when the last key's cycle ended (null while keys are still queued).</summary>
+    private sealed class TypedEntry
+    {
+        public required int Cdu { get; init; }
+        public required string Typed { get; init; }
+        public required string Before { get; init; }
+        public DateTime? DrainedAt { get; set; }
+    }
+
+    private TypedEntry? _typed;
 
     // True while the key now being handled is an auto-repeat (held down): one physical press is
     // one CDU key, so a held Backspace never queues a run of CLRs.
@@ -130,6 +150,7 @@ public partial class BBS757CduForm : Form
     {
         if (_disposed) return;
         _screens[cdu] = screen;
+        _screenAt[cdu] = DateTime.UtcNow;
         if (cdu == _cdu) Render();
     });
 
@@ -147,6 +168,7 @@ public partial class BBS757CduForm : Form
     private void Client_KeysDropped(int count) => SafeBeginInvoke(() =>
     {
         if (_disposed) return;
+        _typed = null;   // its keys are gone: KeysDroppedText says so
         _announcer.Announce(KeysDroppedText);
     });
 
@@ -173,9 +195,45 @@ public partial class BBS757CduForm : Form
             var until = now.AddMilliseconds(ScratchpadSettleMs);
             if (until > _scratchpad.SuppressUntil) _scratchpad.SuppressUntil = until;
         }
+        // A typed entry is checked instead of read back: one that landed says nothing (the pilot typed
+        // it), one the CDU missed a key of says what the scratchpad shows (plan 08).
+        if (_typed != null)
+        {
+            CheckTypedEntry(now);
+            return;
+        }
         var screen = _screens[_cdu];
         if (screen != null && _scratchpad.OnPoll(screen.Scratchpad, now) is { } say)
             _announcer.Announce(say);
+    }
+
+    /// <summary>
+    /// Judges a typed entry once its keys have gone out: ScratchpadSettleMs after the last key's cycle,
+    /// a scratchpad that holds the entry ends the check silently; one that does not is said once, from a
+    /// screen newer than the last key, or from the latest one TypedCheckMaxMs after it. Either way the
+    /// scratchpad read-back is then re-seeded silently on what the CDU shows, so it does not say it again.
+    /// </summary>
+    private void CheckTypedEntry(DateTime now)
+    {
+        var entry = _typed!;
+        if (_client.PendingKeyCount > 0) { entry.DrainedAt = null; return; }
+        entry.DrainedAt ??= now;
+        var drained = entry.DrainedAt.Value;
+        if (now < drained.AddMilliseconds(ScratchpadSettleMs)) return;
+
+        var screen = _screens[entry.Cdu];
+        string? say = screen == null ? Bbs757CduTyping.Mismatch(entry.Typed, Bbs757CduFrame.Blank, entry.Before)
+            : Bbs757CduTyping.Mismatch(entry.Typed, screen, entry.Before);
+        if (say != null && _screenAt[entry.Cdu] <= drained && now < drained.AddMilliseconds(TypedCheckMaxMs))
+            return;   // not landed yet on what we hold: wait for a newer screen
+
+        _typed = null;
+        if (say != null)
+        {
+            Log.Debug("BBS757", $"CDU {entry.Cdu} typed entry '{entry.Typed}': {say}");
+            _announcer.AnnounceImmediate(say);
+        }
+        ReseedScratchpad();
     }
 
     private void UpdateStatus()
@@ -288,17 +346,25 @@ public partial class BBS757CduForm : Form
         _client.PressKey(_cdu, key);
     }
 
-    /// <summary>Types the scratchpad box's text into the selected CDU (Bbs757CduKeys.ForChar; characters with no key are skipped).</summary>
+    /// <summary>
+    /// Types the scratchpad box's text into the selected CDU (<see cref="Bbs757CduTyping.Keys"/>;
+    /// characters with no key are skipped) at the measured typing timing, then checks the scratchpad
+    /// holds it (<see cref="CheckTypedEntry"/>). A second entry sent before the first was checked is
+    /// checked with it, as one.
+    /// </summary>
     private void SendText(string text)
     {
-        var keys = text.SelectMany(Bbs757CduKeys.ForChar).ToList();
+        var keys = Bbs757CduTyping.Keys(text);
         if (keys.Count == 0) return;
         if (!_client.IsReadable)
         {
             _announcer.AnnounceImmediate(NotReachableText);
             return;
         }
-        foreach (var key in keys) _client.PressKey(_cdu, key);
+        _typed = _typed != null && _typed.Cdu == _cdu
+            ? new TypedEntry { Cdu = _cdu, Typed = _typed.Typed + text, Before = _typed.Before }
+            : new TypedEntry { Cdu = _cdu, Typed = text, Before = _screens[_cdu]?.Scratchpad ?? "" };
+        foreach (var key in keys) _client.PressKey(_cdu, key, Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs);
     }
 
     // ------------------------------------------------------------------
@@ -455,7 +521,7 @@ public partial class BBS757CduForm : Form
         if (_disposed) return;
         _client.SetActive(Visible);
         if (Visible) _pollTimer.Start();
-        else _pollTimer.Stop();
+        else { _pollTimer.Stop(); _typed = null; }
     }
 
     protected override void Dispose(bool disposing)

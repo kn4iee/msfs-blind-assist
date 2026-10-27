@@ -97,9 +97,16 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// <summary>The pause after a key's release before the next key (docs/b757/evidence/cdu.md).</summary>
     public const int KeyGapMs = 400;
 
+    /// <summary>The shortest pause a key may have after its release (plan 08: typing measured 5/5 down to 50).</summary>
+    internal const int MinGapMs = 50;
+
+    /// <summary>The longest pause a key may have after its release.</summary>
+    internal const int MaxGapMs = 1000;
+
     /// <summary>
     /// One key's whole cycle in the queue at the default hold: hold, release, gap. A key with its
-    /// own hold takes that hold plus <see cref="KeyGapMs"/>.
+    /// own hold takes that hold plus <see cref="KeyGapMs"/>, a key with its own gap its hold plus that gap
+    /// (<see cref="CycleMs"/>).
     /// </summary>
     public const int KeyCycleMs = KeyHoldMs + KeyGapMs;
 
@@ -127,8 +134,8 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pending = new();
     private readonly WakeableDelay _wake = new();
     // Read by the key pump and drained by DropQueuedKeys, so not single-reader. Each key carries
-    // its clamped hold.
-    private readonly Channel<(int Cdu, string Key, int HoldMs)> _keys = Channel.CreateUnbounded<(int, string, int)>(
+    // its clamped hold and the clamped pause after its release.
+    private readonly Channel<(int Cdu, string Key, int HoldMs, int GapMs)> _keys = Channel.CreateUnbounded<(int, string, int, int)>(
         new UnboundedChannelOptions { SingleReader = false });
     private readonly Func<string> _readAgent;
 
@@ -268,7 +275,15 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// the next key goes out <see cref="KeyGapMs"/> after its release. Only the scratchpad wipe holds
     /// a key longer than <see cref="KeyHoldMs"/>: a CLR held about a second clears the whole scratchpad.
     /// </summary>
-    public void PressKey(int cdu, string key, int holdMs)
+    public void PressKey(int cdu, string key, int holdMs) => PressKey(cdu, key, holdMs, KeyGapMs);
+
+    /// <summary>
+    /// Queues one key held <paramref name="holdMs"/> (clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/>),
+    /// the next key going out <paramref name="gapMs"/> after its release (clamped to
+    /// <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>). Only the CDU window's typed entries use a shorter
+    /// cycle (<see cref="Bbs757CduTyping"/>, measured, plan 08); every other key keeps the standard one.
+    /// </summary>
+    public void PressKey(int cdu, string key, int holdMs, int gapMs)
     {
         if ((cdu != 1 && cdu != 2) || !Bbs757CduKeys.IsKey(key))
         {
@@ -276,11 +291,25 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
             return;
         }
         Interlocked.Increment(ref _pendingKeys);
-        if (!_keys.Writer.TryWrite((cdu, key, ClampHold(holdMs)))) Interlocked.Decrement(ref _pendingKeys);
+        if (!_keys.Writer.TryWrite((cdu, key, ClampHold(holdMs), ClampGap(gapMs)))) Interlocked.Decrement(ref _pendingKeys);
     }
 
     /// <summary>A key's hold within <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/>, as the agent clamps it.</summary>
     private static int ClampHold(int holdMs) => Math.Clamp(holdMs, MinHoldMs, MaxHoldMs);
+
+    /// <summary>A key's pause after release within <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>.</summary>
+    private static int ClampGap(int gapMs) => Math.Clamp(gapMs, MinGapMs, MaxGapMs);
+
+    /// <summary>One key's whole cycle in the queue: its hold plus the pause after it, both clamped. Pure.</summary>
+    internal static int CycleMs(int holdMs, int gapMs) => ClampHold(holdMs) + ClampGap(gapMs);
+
+    /// <summary>Takes every queued key off the queue, as queued (tests: what <see cref="PressKey(int, string, int, int)"/> put there).</summary>
+    internal IReadOnlyList<(int Cdu, string Key, int HoldMs, int GapMs)> DrainQueuedKeysForTests()
+    {
+        var o = new List<(int, string, int, int)>();
+        while (_keys.Reader.TryRead(out var k)) { o.Add(k); Interlocked.Decrement(ref _pendingKeys); }
+        return o;
+    }
 
     /// <summary>
     /// The agent call that presses one key for <paramref name="holdMs"/> (clamped), e.g.
@@ -405,7 +434,7 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     {
         try
         {
-            await foreach (var (cdu, key, holdMs) in _keys.Reader.ReadAllAsync(ct))
+            await foreach (var (cdu, key, holdMs, gapMs) in _keys.Reader.ReadAllAsync(ct))
             {
                 try
                 {
@@ -427,8 +456,8 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
                         continue;
                     }
                     // Timed from the answer: the press ran before it, so its release (its hold
-                    // later in the page) is at least KeyGapMs before the next key.
-                    await Task.Delay(holdMs + KeyGapMs, ct);
+                    // later in the page) is at least the key's gap before the next key.
+                    await Task.Delay(holdMs + gapMs, ct);
                 }
                 finally
                 {

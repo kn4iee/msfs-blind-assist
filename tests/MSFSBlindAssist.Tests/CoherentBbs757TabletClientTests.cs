@@ -111,6 +111,38 @@ public class CoherentBbs757TabletClientTests
     }
 
     [Fact]
+    public void Cycle_is_hold_plus_gap_clamped()
+    {
+        Assert.Equal(200, CoherentBbs757TabletClient.CycleMs(100, 100));
+        Assert.Equal(CoherentBbs757TabletClient.KeyCycleMs, CoherentBbs757TabletClient.CycleMs(CoherentBbs757TabletClient.KeyHoldMs, CoherentBbs757TabletClient.KeyGapMs));
+        // Hold 100-1500, gap 50-1000.
+        Assert.Equal(100 + 50, CoherentBbs757TabletClient.CycleMs(10, 0));
+        Assert.Equal(1500 + 1000, CoherentBbs757TabletClient.CycleMs(9000, 9000));
+    }
+
+    [Fact]
+    public void Standard_keys_keep_250_and_400()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");   // never started
+
+        client.PressKey(1, "RTE");
+        client.PressKey(2, "KEYCLR", 1300);
+        client.PressKey(2, "KEYA", Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs);
+        client.PressKey(2, "KEYB", 10, 5000);   // clamped
+        client.PressKey(2, "NOT_A_KEY", 100, 100);   // not queued
+
+        var queued = client.DrainQueuedKeysForTests();
+        Assert.Equal(new[]
+        {
+            (1, "RTE", 250, 400),
+            (2, "KEYCLR", 1300, 400),
+            (2, "KEYA", 100, 300),
+            (2, "KEYB", 100, 1000),
+        }, queued);
+        Assert.Equal(0, client.PendingKeyCount);
+    }
+
+    [Fact]
     public void Agent_press_takes_a_hold_argument()
     {
         string code = AgentCode();
