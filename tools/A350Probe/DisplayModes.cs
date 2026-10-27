@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap";
 
     public static int Run(string mode, string[] args)
     {
@@ -26,6 +26,7 @@ internal static class DisplayModes
             case "traptiny": return TrapTiny();
             case "ecamwatch": return EcamWatch(args);
             case "ecamlisten": return EcamListen(args);
+            case "sdmap": return SdMap(args);
             default: return 2;
         }
     }
@@ -94,7 +95,14 @@ internal static class DisplayModes
         static string F0(float v) => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
         foreach (var g in args.Skip(1))
         {
-            if (g == "reload")
+            if (g.StartsWith("poke:"))   // poke:linear=value on this copy only, then reload it into the engine
+            {
+                var kv = g[5..].Split('=');
+                Console.Error.WriteLine($"poke {kv[0]}={kv[1]}: {copy.WriteInt32(uint.Parse(kv[0]), int.Parse(kv[1]))}");
+                draw.Load(copy);
+                continue;
+            }
+                        if (g == "reload")
             {
                 if (reader == null) { Console.Error.WriteLine("reload needs live"); continue; }
                 Console.Error.WriteLine("snapshot..."); var c2 = reader.Snapshot();
@@ -244,6 +252,65 @@ internal static class DisplayModes
             line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
         mon.Start();
         Thread.Sleep(seconds * 1000);
+        return 0;
+    }
+
+    /// <summary>`sdmap copy.bin page [page...]`: which variable each drawn SD value shows. On the copy only:
+    /// each CustomVariable value and each Variables-array slot (1.2.7: names at 920832, values at 1344512,
+    /// 1939 entries) in turn set to 4321, the page redrawn, and every SD text that changed reported with the
+    /// variable's name. The SD page is set in the copy (1451120).</summary>
+    private static int SdMap(string[] args)
+    {
+        const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
+        var src = A350ModuleCache.FindInstalledModule()!;
+        var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
+        var facts = A350ModuleFacts.From(mod);
+        using var engine = A350ModuleCache.CreateEngine();
+        using var module = A350ModuleCache.LoadOrBuild(engine, src, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), out _);
+        using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
+        var copy = A350MemoryCopy.Load(args[0]);
+        draw.Load(copy);
+        var targets = new List<(string Name, uint Address)>();
+        foreach (var cv in draw.CustomVariables) targets.Add(("L:" + cv.Name, cv.Address + 16));
+        for (int i = 0; i < VarCount; i++)
+        {
+            var p = copy.Read(VarNames + (uint)(4 * i), 4);
+            var name = p.Length == 4 ? mod.CString((int)BitConverter.ToUInt32(p)) : null;
+            targets.Add(("V:" + (name ?? "#" + i), VarValues + (uint)(8 * i)));
+        }
+        Console.Error.WriteLine($"{targets.Count} variables");
+        static Dictionary<(int, int), string> Cells(A350DrawCapture c) =>
+            A350DrawLayout.Region(c.Texts, A350DrawLayout.CtrSystemDisplay).Where(t => !string.IsNullOrWhiteSpace(t.Text))
+                .GroupBy(t => ((int)MathF.Round(t.X), (int)MathF.Round(t.Y))).ToDictionary(g => g.Key, g => string.Join("|", g.Select(t => t.Text.Trim() + "{" + t.ColourName + "}")));
+        foreach (var pageArg in args.Skip(1))
+        {
+            int page = int.Parse(pageArg);
+            copy.WriteInt32(SdPage, page);
+            var baseCap = draw.Draw("CTR");
+            if (!baseCap.Ok) { Console.WriteLine($"page {page}: base draw failed {baseCap.Error}"); continue; }
+            var baseCells = Cells(baseCap);
+            Console.WriteLine($"===== page {page}: {baseCells.Count} cells");
+            var hits = new Dictionary<(int, int), List<string>>();
+            foreach (var (name, addr) in targets)
+            {
+                var old = copy.Read(addr, 8).ToArray();
+                if (old.Length != 8) continue;
+                copy.WriteDouble(addr, 4321);
+                var cap = draw.Draw("CTR");
+                copy.WriteDouble(addr, BitConverter.ToDouble(old));
+                if (!cap.Ok) continue;
+                var cells = Cells(cap);
+                foreach (var key in baseCells.Keys.Union(cells.Keys))
+                {
+                    baseCells.TryGetValue(key, out var a); cells.TryGetValue(key, out var b);
+                    if (a == b) continue;
+                    if (!hits.TryGetValue(key, out var l)) hits[key] = l = new();
+                    l.Add($"{name} ({a ?? "-"} -> {b ?? "-"})");
+                }
+            }
+            foreach (var kv in hits.OrderBy(k => k.Key.Item2).ThenBy(k => k.Key.Item1))
+                Console.WriteLine($"{kv.Key.Item1},{kv.Key.Item2} [{(baseCells.TryGetValue(kv.Key, out var t0) ? t0 : "new")}]: {string.Join("; ", kv.Value.Take(6))}{(kv.Value.Count > 6 ? $" (+{kv.Value.Count - 6})" : "")}");
+        }
         return 0;
     }
 

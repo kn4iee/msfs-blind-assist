@@ -145,6 +145,10 @@ internal static class A350Levers
         }
     }
 
+    /// <summary>The SD page's name by its page number (`INI_ECAM_ACTIVE_PAGE`: 8 is "Fuel"), or null.</summary>
+    public static string? SdPageWord(double page) =>
+        SdPages.Where(p => p.Page == page).Select(p => p.Word).FirstOrDefault();
+
     /// <summary>A lever's position words, or null for any other control.</summary>
     public static IReadOnlyDictionary<double, string>? WordsFor(string controlId) =>
         ById.TryGetValue(controlId, out var lever) && lever.Words.Count > 0 ? lever.Words : null;

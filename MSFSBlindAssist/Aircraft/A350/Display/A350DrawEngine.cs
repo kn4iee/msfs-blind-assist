@@ -314,6 +314,10 @@ public sealed class A350DrawEngine : IDisposable
 
     internal double? LVarValue(int id) => LVar(id);
 
+    /// <summary>Every CustomVariable the copy holds: id, name, address (diagnostics: A350Probe sdmap).</summary>
+    public IReadOnlyList<(int Id, string Name, uint Address)> CustomVariables =>
+        _customVars.Select(kv => (kv.Key, kv.Value.Name, kv.Value.Address)).ToList();
+
     /// <summary>The name of the CustomVariable at an address if it still holds this id, else null.</summary>
     private static string? NameAt(A350MemoryCopy copy, uint address, uint id)
     {

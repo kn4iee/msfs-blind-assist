@@ -81,6 +81,29 @@ public sealed class A350MemoryCopy
         return ReadOnlySpan<byte>.Empty;
     }
 
+    /// <summary>Changes four bytes of THIS copy (never the sim's memory [A350-1]): drawing a state the
+    /// copy did not capture, as the SD page another page key would show. False outside the copy.</summary>
+    public bool WriteInt32(uint linear, int value)
+    {
+        for (int i = 0; i < _regions.Count; i++)
+        {
+            var (lin, len) = _regions[i];
+            if (linear >= lin && (ulong)linear + 4 <= (ulong)lin + (ulong)len)
+            {
+                BitConverter.GetBytes(value).CopyTo(Buffer, _offsets[i] + (int)(linear - lin));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Changes eight bytes of THIS copy (never the sim's [A350-1]); false outside the copy.</summary>
+    public bool WriteDouble(uint linear, double value)
+    {
+        var b = BitConverter.GetBytes(value);
+        return WriteInt32(linear, BitConverter.ToInt32(b, 0)) && WriteInt32(linear + 4, BitConverter.ToInt32(b, 4));
+    }
+
     public void Save(string path)
     {
         using var f = File.Create(path);

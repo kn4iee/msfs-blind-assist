@@ -154,6 +154,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == line.Beside)).Key, line.Key);
             }
 
+        // The ECAM Control Panel's status display reads the SD page shown (A350SdText), as the A380's does:
+        // the page row's line carries the page's name and content.
+        if (_rows.ContainsKey(SdPageKey))
+            AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == SdPageKey)).Key, SdPageKey);
+
         _lampBoard = new A350LampBoard(_lamps.Values);
 
         foreach (var group in _lamps.Values.Where(l => l.ControlId != null).GroupBy(l => l.ControlId!))
@@ -253,6 +258,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             && window.Compose(input => Cached(fcuSim, input == window.Inputs[0] ? window.Key : A350PanelLamps.InputKey(input))) is string shown)
         {
             displayText = shown;
+            return true;
+        }
+        if (varKey == SdPageKey)
+        {
+            displayText = A350.Display.A350SdText.Build(Ecam?.LatestCapture, value);
             return true;
         }
         if (_statusLines.TryGetValue(varKey, out var line))
