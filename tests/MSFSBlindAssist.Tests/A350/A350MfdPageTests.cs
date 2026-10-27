@@ -46,6 +46,23 @@ public class A350MfdPageTests
         Assert.Contains("TROPO: 36090 FT, cyan", lines);
     }
 
+    // RAD NAV (live, KCCU RADNAV): IDENT, FREQ and CRS sit between the VOR 1 and VOR 2 columns and serve both, so
+    // each field takes its column's header too; the LS fields have their own labels.
+    [Fact]
+    public void A_label_shared_by_two_columns_takes_each_columns_header()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_radnav.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("VOR 1 IDENT: KAT, cyan", lines);
+        Assert.Contains("VOR 2 IDENT: KAT, cyan", lines);
+        Assert.Contains("VOR 1 FREQ: 114.10, cyan", lines);
+        Assert.Contains("VOR 2 CRS: empty", lines);
+        Assert.Contains("IDENT: empty", lines);
+        Assert.Contains("FREQ/CHAN: empty", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Field:"));
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
