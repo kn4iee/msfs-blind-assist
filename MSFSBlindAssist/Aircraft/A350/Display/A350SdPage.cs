@@ -42,7 +42,9 @@ public static class A350SdPage
         new("Engine 1 EGT", 153, 239, "°C"), new("Engine 2 EGT", 728, 239, "°C"),
     };
 
-    private static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split)
+    /// <summary>Rows read against a field table (any display's): a field with an empty label swallows what it
+    /// matches (a caption the reading already names).</summary>
+    internal static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split)
     {
         var all = rows.SelectMany(r => r).ToList();
         string? PageUnit(params string[] options) => all.FirstOrDefault(c => IsUnit(c) && options.Contains(c.Text))?.Text;
@@ -79,6 +81,7 @@ public static class A350SdPage
         }
         foreach (var (f, (row, cells)) in byField)
         {
+            if (f.Label.Length == 0) continue;
             var ordered = cells.OrderBy(c => c.X).ToList();
             var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
             var value = TimeColon.Replace(SpeakWithUnit(ordered, string.IsNullOrEmpty(unit) ? null : unit), ":");

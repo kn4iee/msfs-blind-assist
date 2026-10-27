@@ -17,7 +17,7 @@ public class A350PfdMonitorTests
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
         var fo = Fixture("efis1_fd_stand");
         var said = new List<string>();
-        var m = new A350PfdMonitor(side => Task.FromResult(side == 0 ? cpt.Dequeue() : fo), _ => false, said.Add);
+        var m = new A350PfdMonitor((g, side) => Task.FromResult(g != "EFIS" ? null : side == 0 ? cpt.Dequeue() : fo), _ => false, said.Add);
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
         Assert.Same(fo, m.Latest(1));
@@ -29,7 +29,7 @@ public class A350PfdMonitorTests
     {
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
         var said = new List<string>();
-        var m = new A350PfdMonitor(side => Task.FromResult(side == 0 ? cpt.Dequeue() : null),
+        var m = new A350PfdMonitor((g, side) => Task.FromResult(g == "EFIS" && side == 0 ? cpt.Dequeue() : null),
             key => key == A350FmaAnnouncer.KeyFor("engagement"), said.Add);
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Empty(said);

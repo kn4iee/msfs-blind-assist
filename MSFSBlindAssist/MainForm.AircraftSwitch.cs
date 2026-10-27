@@ -692,10 +692,10 @@ public partial class MainForm
             async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
             () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
             line => announcer.Announce(line));
-        // The PFDs: the captain's drawn twice a second for the FMA call-outs (one Ctrl+M row per column), the
-        // first officer's once a second; each side's latest draw feeds its PFD status display.
+        // The displays: the captain's EFIS drawn twice a second for the FMA call-outs (one Ctrl+M row per column),
+        // the first officer's once a second, the others in turn; each display's latest draw feeds its status display.
         a350PfdMonitor = new Aircraft.A350.Display.A350PfdMonitor(
-            async side => (await service.DrawAsync(("EFIS", side)))?.FirstOrDefault(),
+            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(),
             key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
             line => announcer.Announce(line));
         if (currentAircraft is IniBuildsA350Definition a350)

@@ -255,16 +255,16 @@ internal static class DisplayModes
         var sw = System.Diagnostics.Stopwatch.StartNew();
         svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
         svc.Start();
-        using var mon = new A350PfdMonitor(async side => (await svc.DrawAsync(("EFIS", side)))?.FirstOrDefault(), _ => false,
+        using var mon = new A350PfdMonitor(async (g, i) => (await svc.DrawAsync((g, i)))?.FirstOrDefault(), _ => false,
             line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
         mon.Start();
         Thread.Sleep(seconds * 1000);
-        for (int side = 0; side < 2; side++)
-            if (mon.Latest(side) is { } cap)
-            {
-                Console.WriteLine($"--- PFD side {side}");
-                foreach (var line in A350Pfd.Read(cap, side)) Console.WriteLine(line);
-            }
+        foreach (var d in MSFSBlindAssist.Aircraft.IniBuildsA350Definition.DisplayPanels)
+        {
+            Console.WriteLine($"--- {d.Panel}");
+            if (mon.Latest(d.Gauge, d.Index) is { } cap) foreach (var line in d.Read(cap)) Console.WriteLine(line);
+            else Console.WriteLine("(not drawn)");
+        }
         return 0;
     }
 

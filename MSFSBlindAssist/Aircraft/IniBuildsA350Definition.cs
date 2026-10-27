@@ -158,8 +158,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         // the page row's line carries the page's name and content.
         if (_rows.ContainsKey(SdPageKey))
             AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == SdPageKey)).Key, SdPageKey);
-        AddDisplay(PfdCaptainPanel, PfdCaptainKey);
-        AddDisplay(PfdFirstOfficerPanel, PfdFirstOfficerKey);
+        foreach (var d in DisplayPanels)
+            AddDisplay(d.Panel, d.Key);
 
         _lampBoard = new A350LampBoard(_lamps.Values);
 
@@ -215,7 +215,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override Dictionary<string, List<string>> GetPanelStructure()
     {
         var structure = _sections.ToDictionary(s => s, s => new List<string>(_placement.Structure[s]));
-        structure[DisplaysSection] = new List<string> { PfdCaptainPanel, PfdFirstOfficerPanel };
+        structure[DisplaysSection] = DisplayPanels.Select(d => d.Panel).ToList();
         return structure;
     }
 
@@ -225,8 +225,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     {
         var controls = _sections.SelectMany(s => _placement.Structure[s])
             .ToDictionary(p => p, p => _placement.RowsByPanel[p].Select(r => r.Key).ToList());
-        controls[PfdCaptainPanel] = new List<string>();
-        controls[PfdFirstOfficerPanel] = new List<string>();
+        foreach (var d in DisplayPanels)
+            controls[d.Panel] = new List<string>();
         return controls;
     }
 
@@ -261,9 +261,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// While an input is unread it is not composed, as on the iniBuilds A300.</summary>
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
-        if (varKey is PfdCaptainKey or PfdFirstOfficerKey)
+        if (DisplayPanels.FirstOrDefault(d => d.Key == varKey) is { } display)
         {
-            displayText = PfdText(varKey == PfdCaptainKey ? 0 : 1);
+            displayText = DisplayText(display);
             return true;
         }
         if (_lamps.TryGetValue(varKey, out var lamp) && _sim is { } sim && lamp.IsLit(key => Cached(sim, key)) is bool lit)
@@ -368,12 +368,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _lampInputKeys.Add(a.Key);
         }
 
-        // The PFD lines: carried by the FD switch's variable (any streamed one would do); the text is the side's
-        // latest PFD read (PfdText), refreshed by the status display's tick. Consumed silently.
-        foreach (var (key, name) in new[] { (PfdCaptainKey, PfdCaptainPanel), (PfdFirstOfficerKey, PfdFirstOfficerPanel) })
+        // The display lines: carried by the FD switch's variable (any streamed one would do); the text is the
+        // display's latest read (DisplayText), refreshed by the status display's tick. Consumed silently.
+        foreach (var d in DisplayPanels)
         {
-            Register(key, "INI_FD_ON", name, null);
-            _lampInputKeys.Add(key);
+            Register(d.Key, "INI_FD_ON", d.Panel, null);
+            _lampInputKeys.Add(d.Key);
         }
 
         // What a typed value is planned from and read back in, where nothing above streams it yet.
