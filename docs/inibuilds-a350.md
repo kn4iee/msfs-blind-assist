@@ -230,7 +230,16 @@ round trips cannot pace. The thrust levers go straight to an angle written into 
 (the cockpit's own lever-drag code writes it; the aircraft takes it and puts the request back to -1), so a flight test sets
 CLB with `25 (>L:INI_TLA1_REQUEST) 25 (>L:INI_TLA2_REQUEST)`. The axis events (`K:THROTTLE1_AXIS_SET_EX1`) moved the lever only
 part of the way per event. Put back on the ground with the gear lever still up, the aircraft sits on its belly until the gear
-is down and it is placed again.
+is down and it is placed again; a placement also lets the parking brake go, so set it again at once.
+
+Flight test, live 2026-10-27, all through MSFSBA's own rows (`A350Probe keep`), placed at 12,000 ft and 250 kt: All thrust
+levers to Climb, then the FCU A/THR button, engaged A/THR (N1 87 %, `INI_ATHR_LIGHT` 1); AP 1 engaged from the FCU; each
+A/THR disconnect button put the A/THR light out and each sidestick takeover disconnected AP 1 (re-engaged between); typed FCU
+speed and altitude with the knob's pull flew an open climb; the speed brake extended the spoilers (`INI_SPOILERS_OUT` 1,
+"Spoilers 50 percent") and retracted; the gravity gear extension (cover, both guards, Down) let all three gear legs fall to
+100 % with the gear lever still up; EMER DESCENT armed its function (the ARMED light) and disarmed it on a second press (the
+automatic descent itself starts only on a depressurisation). Put a test's FCU targets back afterwards: a speed left at 100
+knots from ground tests had the A/THR pulling idle in the air.
 
 ### Pedestal levers (`A350Levers`, live 2026-10-27)
 
