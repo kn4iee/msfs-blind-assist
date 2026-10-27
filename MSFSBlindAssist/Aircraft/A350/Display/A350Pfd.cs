@@ -39,6 +39,36 @@ public static class A350Pfd
         capture.Shapes?.FirstOrDefault(s => Math.Abs(s.PatternW - w) < 2 && Math.Abs(s.PatternH - h) < 2
             && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
 
+    /// <summary>The LS scales and diamonds (PFDA350Elements.png), by drawn size: the LOC scale 294 x 35 under the
+    /// attitude, the G/S scale 12 x 294 beside it; their dots 70.25 px apart around a centre 146.25 px (LOC) and
+    /// 146.75 px (G/S) in.</summary>
+    private const float DotPx = 70.25f, LocCentre = 146.25f, GsCentre = 146.75f;
+
+    private static IEnumerable<DrawnShape> PfdSprites(A350DrawCapture capture, int side, float w, float h) =>
+        (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Image > 1 && Math.Abs(s.X1 - s.X0 - w) < 1.5f
+            && Math.Abs(s.Y1 - s.Y0 - h) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
+
+    /// <summary>The ILS deviation in dots, where the aircraft is (the A380's words): a diamond right of centre is
+    /// the localizer right of the aircraft. Nothing while the scales are not drawn (LS off).</summary>
+    private static IEnumerable<string> Deviation(A350DrawCapture capture, int side)
+    {
+        static string Dots(double dots, string more, string less, string beam) =>
+            Math.Abs(dots) < 0.05 ? $"on the {beam}"
+            : $"{Math.Abs(dots).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} dots {(dots > 0 ? more : less)} {beam}";
+        if (PfdSprites(capture, side, 294, 35).FirstOrDefault() is { } loc)
+        {
+            var diamond = PfdSprites(capture, side, 40, 28).FirstOrDefault(d => (d.Y0 + d.Y1) / 2 >= loc.Y0 - 10 && (d.Y0 + d.Y1) / 2 <= loc.Y1 + 10);
+            yield return "Localizer: " + (diamond == null ? "off scale"
+                : Dots(((diamond.X0 + diamond.X1) / 2 - (loc.X0 + LocCentre)) / DotPx, "left of", "right of", "localizer"));
+        }
+        if (PfdSprites(capture, side, 12, 294).FirstOrDefault() is { } gs)
+        {
+            var diamond = PfdSprites(capture, side, 27, 39).FirstOrDefault(d => (d.X0 + d.X1) / 2 >= gs.X0 - 20 && (d.X0 + d.X1) / 2 <= gs.X1 + 20);
+            yield return "Glideslope: " + (diamond == null ? "off scale"
+                : Dots(((diamond.Y0 + diamond.Y1) / 2 - (gs.Y0 + GsCentre)) / DotPx, "above", "below", "glideslope"));
+        }
+    }
+
     public static IReadOnlyList<string> Read(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? PfdWidth : 0;
@@ -122,6 +152,20 @@ public static class A350Pfd
             o.Add(label != null && value.Count > 0
                 ? $"{label.Text}: {A350DrawLayout.Speak(value)}"
                 : "Baro: " + A350DrawLayout.Speak(baro));
+        }
+
+        o.AddRange(Deviation(capture, side));
+
+        // The LS block, lower left (LS on): ident, frequency (drawn "109." and "90"), DME and its "nm", magenta.
+        var lsBlock = cells.Where(c => c.X < 200 && c.Y is >= 670 and < 760 && (c.Colour == "magenta" || c.Text.Trim() == "nm"))
+            .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();   // the heading scale's labels share the band, white
+        if (lsBlock.FirstOrDefault(c => c.Colour == "magenta" && c.Text.All(char.IsLetter)) is { } ident)
+        {
+            used.UnionWith(lsBlock);
+            var rows = lsBlock.Where(c => c != ident && c.Text.Trim() != "nm").GroupBy(c => (int)MathF.Round(c.Y / 12)).OrderBy(g => g.Key)
+                .Select(g => string.Concat(g.OrderBy(c => c.X).Select(c => c.Text))).ToList();
+            string freq = rows.Count > 0 ? " " + rows[0] : "", dme = rows.Count > 1 ? $", {rows[1]} NM" : "";
+            o.Add($"LS: {ident.Text}{freq}{dme}, {ident.Colour}");
         }
 
         // The radio altitude, under the aircraft symbol.

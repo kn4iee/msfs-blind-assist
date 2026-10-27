@@ -91,6 +91,29 @@ public class A350PfdTests
         Assert.Contains("Heading: 18", lines);   // mid-turn towards 330
     }
 
+    // The ILS 04 at VCBI (live 2026-10-27, LS on, LOC engaged, G/S armed): the deviation diamonds read in dots
+    // against their scales (PFDA350Elements.png: dots 70.25 px apart, the LOC scale's centre 146.25 px in, the
+    // G/S scale's 146.75 px down), where the aircraft is, as the A380 says it; a diamond off its scale is not
+    // drawn. The LS block reads as one line: ident, frequency (drawn "109." and "90"), DME.
+    [Theory]
+    [InlineData("efis0_ils_above", "Localizer: 0.1 dots left of localizer", "Glideslope: 1.4 dots above glideslope", "LS: IKW 109.90, 7.8 NM, magenta")]
+    [InlineData("efis0_ils_gs_off", "Localizer: on the localizer", "Glideslope: off scale", "LS: IKW 109.90, 6.6 NM, magenta")]
+    [InlineData("efis0_ils_below", "Localizer: on the localizer", "Glideslope: 0.5 dots below glideslope", "LS: IKW 109.90, 10.0 NM, magenta")]
+    public void The_ils_deviation_reads_in_dots(string fixture, string loc, string gs, string ls)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        Assert.Contains(loc, lines);
+        Assert.Contains(gs, lines);
+        Assert.Contains(ls, lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("IKW"));
+    }
+
+    [Fact]
+    public void Without_ls_there_is_no_deviation_line()
+    {
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_level6000"), 0), l => l.StartsWith("Localizer") || l.StartsWith("Glideslope"));
+    }
+
     [Fact]
     public void A_turn_reads_its_bank()
     {
