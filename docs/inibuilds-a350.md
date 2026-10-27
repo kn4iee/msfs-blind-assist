@@ -120,6 +120,16 @@ The Overhead, Glareshield and Instrument sections are offered; a section joins o
 
 A button row shows its state beside its name wherever the cockpit shows one (`TryDescribeControlState`, `A350ButtonStates`): a button with one light reads On or Off. A button with several reads its lit legends ("EXT 1: Available", "APU agent: Squib and discharged", "Green ENG 1 supply: Shut"), a master light's lower half reading On, and reads Off when none is lit. A button with no light reads the state it switches, as the FCU and EFIS show it: SPD/MACH (Knots, Mach), HDG-V/S / TRK-FPA, each baro unit (Hectopascals, Inches), each baro knob's push and pull (STD, QNH), and each FCU knob's push and pull (speed and heading Managed or Selected; altitude Managed while its managed dot shows; V/S Engaged while V/S or FPA is the pitch mode). Each row's label repaints when that state changes. Momentary keys with nothing to show (calls, chronos, tests, the ISIS keys, the RWY COND knob) read nothing. Checked live with `A350Probe labels <panel>` against the aircraft's own variables.
 
+### Announcements
+
+What changes on its own is spoken, as on the A380, and each spoken thing has its own Ctrl+M row in the A350 Monitor Manager (`A350MonitorManagerForm`, list `UserSettings.A350DisabledMonitorVariables`):
+
+- **Switches.** Every switch, selector and knob row is Continuous and announced, spoken by MainForm's generic path with its row's words ("Seat belts: On", "BAT 1: Off"); the pilot's own pick is not repeated (the echo gate, [CORE-8]). Spring and press rows are not listed.
+- **Lights.** The definition speaks them as the cockpit lights them, rule × bus light power (`A350LampBoard`), at a batch end in one netted sentence (`A350LampSpeech`, the iniBuilds A300's timings: 1.5 s gather, 3 s off-hold so a flash reads once, 2.5 s settle after a light power change). A light's first value is a silent baseline; three batch ends after a connect or flight load the lights still unread are seeded from the cache. The master caution and warning speak "on" once (the captain's upper legend, `MasterSpeakers`); the other six legends are echoes with no row. A pressed button's own light is left to its label for 3 s (`PressedLampMs`).
+- **Mutes.** A switch row is muted at MainForm's generic gate; a light inside the definition (`IsMuted`). A delivery that changes several lights (a light power flag, a shared input) is exempt from MainForm's mute wrap and checks each light's own row (`IsMuteWrapExempt`, [VAR-8]).
+
+Live 2026-10-27 (`A350Probe listen <seconds>`, which applies both of MainForm's gates; `A350_MUTE=key,key` unticks rows in memory only): seat belts, no smoking and BAT 1 moved from outside were spoken, and with seat belts and the BAT 1 fault light muted, neither said anything while BAT 1 and the master caution still did. Earlier: "BAT 1 fault light on/off", "A/BRK light off", "Master caution on" (its reset silent).
+
 ### Overhead subpanels, live-tested (A350-900, 1.2.7)
 
 Panels take the FlyByWire A380's names and order wherever the two cockpits share a panel (`A350PanelLayout.PanelOrder`); a control iniBuilds files under another group moves to the panel the A380 puts it on (`ControlPanels`).

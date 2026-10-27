@@ -64,10 +64,11 @@ internal sealed class Cap : ScreenReaderAnnouncer
 {
     public readonly List<string> Said = new();
     public Cap(IntPtr h) : base(h) { }
-    public override void Announce(string m) { lock (Said) Said.Add(m); }
+    // Announce and AnnounceWithQueue drop speech while Suppressed, as ScreenReaderAnnouncer's do.
+    public override void Announce(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
     public override void AnnounceImmediate(string m) { lock (Said) Said.Add(m); }
     public override void AnnounceQueued(string m) { lock (Said) Said.Add(m); }
-    public override void AnnounceWithQueue(string m) { lock (Said) Said.Add(m); }
+    public override void AnnounceWithQueue(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
     public string Drain() { lock (Said) { var s = string.Join(" / ", Said); Said.Clear(); return s; } }
     public List<string> DrainList() { lock (Said) { var s = Said.ToList(); Said.Clear(); return s; } }
 }
@@ -89,7 +90,8 @@ internal sealed class ProbeForm : Form
             catch (Exception ex) { Line("FATAL " + ex); ExitCode = 2; }
             finally
             {
-                File.WriteAllText($"probe_{_mode}.tsv", _out.ToString());
+                // A copy of what was printed, in %TEMP% so a run never leaves files in the worktree.
+                File.WriteAllText(Path.Combine(Path.GetTempPath(), $"a350probe_{_mode}.tsv"), _out.ToString());
                 try { _m?.Disconnect(); } catch { }
                 Close();
             }
@@ -161,6 +163,13 @@ internal sealed class ProbeForm : Form
             foreach (var (key, d0) in vars)
                 if (d0.IsAnnounced && d0.UpdateFrequency == UpdateFrequency.Continuous && _m.GetCachedVariableValue(key) is double v0)
                     baseline[key] = v0;
+            // A350_MUTE="key,key" unticks those Ctrl+M rows in memory only (never saved), so MainForm's two gates can be
+            // checked: the def's mute wrap (DefAnnounceMuteSets.ShouldWrap) and the generic Step-6 gate.
+            var settings = MSFSBlindAssist.Settings.SettingsManager.Current;
+            foreach (var key in (Environment.GetEnvironmentVariable("A350_MUTE") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                settings.A350DisabledMonitorVariables.Add(key);
+            settings.RebuildDisabledMonitorVariableCaches();
+            Line($"muted: {string.Join(", ", settings.A350DisabledMonitorVariables)}");
             var started = DateTime.Now;
             void Say(string text) => Line($"{(DateTime.Now - started).TotalSeconds,6:0.0}s\t{text}");
             var said = new Cap(Handle);
@@ -173,14 +182,18 @@ internal sealed class ProbeForm : Form
             {
                 if (!vars.TryGetValue(e.VarName, out var d)) return;
                 bool handled;
+                bool wrap = MSFSBlindAssist.Services.DefAnnounceMuteSets.ShouldWrap(def, e.VarName, settings);
+                if (wrap) said.Suppressed = true;
                 try { handled = def.ProcessSimVarUpdate(e.VarName, e.Value, said); } catch { return; }
+                finally { if (wrap) said.Suppressed = false; }
                 foreach (var text in said.DrainList()) Say(text);
                 if (handled || !d.IsAnnounced || d.UpdateFrequency != UpdateFrequency.Continuous) return;
+                bool muted = settings.A350DisabledMonitorVariablesSet.Contains(e.VarName);   // MainForm's Step-6 gate
                 bool first = !baseline.TryGetValue(e.VarName, out var was);
                 baseline[e.VarName] = e.Value;
                 if (first || Math.Abs(was - e.Value) < 0.001) return;
                 string word = d.ValueDescriptions.TryGetValue(e.Value, out var w) ? w : Fmt(e.Value);
-                Say($"[generic] {d.DisplayName}: {word}");
+                Say(muted ? $"[generic, muted] ({d.DisplayName}: {word})" : $"[generic] {d.DisplayName}: {word}");
             };
             await Task.Delay(int.Parse(_arg!) * 1000);
             Line("done");
@@ -245,7 +258,10 @@ internal sealed class ProbeForm : Form
                     await Task.Delay(2500);
                     restore = $"\trestored={Fmt(await Read(key))}";
                 }
-                Line($"{key}\tset {val}\tbefore={Fmt(before)} after={Fmt(after)}{restore}\t{Diff(lightsBefore, lightsAfter)}\tsaid: {cap.Drain()}");
+                var watched = new List<string>();
+                foreach (var name in _watch)
+                    watched.Add($"{name}={Fmt(await Read("W:" + name))}");   // a data read: sends no calculator string
+                Line($"{key}\tset {val}\tbefore={Fmt(before)} after={Fmt(after)}{restore}\t{Diff(lightsBefore, lightsAfter)}\tsaid: {cap.Drain()}\t{string.Join(" ", watched)}");
             }
             return;
         }
