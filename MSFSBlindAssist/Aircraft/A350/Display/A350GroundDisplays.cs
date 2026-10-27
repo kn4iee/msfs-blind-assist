@@ -27,7 +27,7 @@ public static class A350GroundDisplays
     public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? 0 : HalfWidth;
-        var cells = Cells(A350DrawLayout.Region(capture.Texts, A350DrawLayout.EfisNd(side)).Select(t => t with { X = t.X - shift })
+        var cells = Cells(A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd, A350DrawLayout.EfisNd(side)).Select(t => t with { X = t.X - shift })
             .Where(t => t.X is >= 0 and < HalfWidth));
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();

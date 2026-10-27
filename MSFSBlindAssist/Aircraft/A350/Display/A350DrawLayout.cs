@@ -30,6 +30,24 @@ public static class A350DrawLayout
     public static A350Rect EfisPfd(int side) => side == 0 ? new(836, 0, Far, Far) : new(0, 0, 836, Far);
     public static A350Rect EfisNd(int side) => side == 0 ? new(0, 0, 836, Far) : new(836, 0, Far, Far);
 
+    /// <summary>An EFIS draw cut into its ND part and its PFD part. Both sides draw the ND first, then the PFD
+    /// (live); an ND map label can land on the PFD's half (the display clips it), so the cut is where the draw
+    /// best changes from texts outside the PFD's half to texts inside it.</summary>
+    public static (IReadOnlyList<DrawnText> Nd, IReadOnlyList<DrawnText> Pfd) SplitEfis(IReadOnlyList<DrawnText> texts, int side)
+    {
+        var pfd = EfisPfd(side);
+        var inPfd = texts.Select(t => pfd.Contains(t.X, t.Y) && t.X is >= 0 and < 1672).ToArray();
+        int best = 0, bestScore = int.MinValue, before = 0, after = inPfd.Count(x => x);
+        for (int k = 0; k <= texts.Count; k++)
+        {
+            int score = before + after;   // ND-side texts before the cut, PFD texts after it
+            if (score > bestScore) { bestScore = score; best = k; }
+            if (k == texts.Count) break;
+            if (inPfd[k]) after--; else before++;
+        }
+        return (texts.Take(best).ToList(), texts.Skip(best).ToList());
+    }
+
     public static IReadOnlyList<DrawnText> Region(IEnumerable<DrawnText> texts, A350Rect r) =>
         texts.Where(t => r.Contains(t.X, t.Y)).ToList();
 

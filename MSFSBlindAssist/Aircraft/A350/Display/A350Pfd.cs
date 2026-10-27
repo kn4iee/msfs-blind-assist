@@ -11,8 +11,10 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// </summary>
 public static class A350Pfd
 {
-    private const float PfdWidth = 836, FmaBottom = 100, BottomLine = 860;
-    private const float DrumWindowY = 422, DrumPxPerFoot = 21.75f / 20, HeadingIndexX = 359, HeadingPxPerDegree = 7;
+    private const float PfdWidth = 836, FmaBottom = 125, BottomLine = 860;   // the FMA has three rows (live: A/THR at y 113)
+    private const float WindowY = 389, TapePxPerFoot = 0.35f, DrumPxPerFoot = 21.75f / 20, HeadingIndexX = 359, HeadingPxPerDegree = 7;
+    private const float SpeedPxPerKnot = 4.875f, SpeedRefPattern = -885.2f, SpeedRefKnots = 240.2f;
+    private const float PitchPxPerDegree = 8.61f, PitchZeroImageY = 620.5f;
 
     /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability, and the AP/FD/A/THR
     /// engagement column (live: "1 FD 2" at x 685-761).</summary>
@@ -21,16 +23,27 @@ public static class A350Pfd
         ("autothrust", 0, 170), ("vertical", 170, 340), ("lateral", 340, 510), ("approach", 510, 640), ("engagement", 640, PfdWidth),
     };
 
-    /// <summary>The altitude a drum shows: the hundreds from its big digits, plus the tens label's value at
-    /// the window (a label below the window is a value already passed).</summary>
-    internal static int DrumAltitude(int hundreds, int label, float labelY) =>
-        (int)Math.Round(hundreds * 100 + label + (labelY - DrumWindowY) / DrumPxPerFoot);
+    /// <summary>The altitude at the window (y 389): the tape's label gives it roughly (0.35 px a foot), the drum's
+    /// tens label exactly (21.75 px per 20 ft); the reading is the value with the drum's last two digits nearest
+    /// the tape's.</summary>
+    internal static int Altitude(int tapeHundreds, float tapeY, int tens, float tensY)
+    {
+        double rough = tapeHundreds * 100 + (tapeY - WindowY) / TapePxPerFoot;
+        double last = tens + (tensY - WindowY) / DrumPxPerFoot;
+        return (int)Math.Round(Math.Round((rough - last) / 100) * 100 + last, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>A pattern by its drawn size (the image numbers change per session): the speed tape 75 x 2285,
+    /// the horizon 298 x 1168.</summary>
+    private static DrawnShape? PatternOf(A350DrawCapture capture, int side, float w, float h) =>
+        capture.Shapes?.FirstOrDefault(s => Math.Abs(s.PatternW - w) < 2 && Math.Abs(s.PatternH - h) < 2
+            && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
 
     public static IReadOnlyList<string> Read(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? PfdWidth : 0;
-        var texts = A350DrawLayout.Region(capture.Texts, A350DrawLayout.EfisPfd(side))
-            .Select(t => t with { X = t.X - shift }).ToList();
+        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Pfd, A350DrawLayout.EfisPfd(side))
+            .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList();
         var cells = A350DrawLayout.Rows(texts).SelectMany(r => r).ToList();
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
@@ -38,13 +51,39 @@ public static class A350Pfd
         // The altitude tape's scale labels reach up into the FMA strip: never read as text.
         used.UnionWith(cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)));
 
+        // The selected altitude, at the top of the altitude tape, reaches up into the FMA strip too: taken out
+        // first, read after the FMA.
+        var selectedAltitude = cells.Where(c => c.X is >= 585 and < 620 && c.Y < 640 && c.Colour == "cyan").ToList();
+        used.UnionWith(selectedAltitude);
+
         // The FMA strip, one column at a time.
         foreach (var (name, x0, x1) in FmaColumns)
         {
             var col = cells.Where(c => !used.Contains(c) && c.Y < FmaBottom && c.X >= x0 && c.X < x1).ToList();
             if (col.Count == 0) continue;
             used.UnionWith(col);
-            o.Add($"FMA {name}: " + string.Join("; ", A350DrawLayout.Rows(col.Select(ToText)).Select(A350DrawLayout.Speak)));
+            var rows = A350DrawLayout.Rows(col.Select(ToText));
+            o.Add($"FMA {name}: " + (rows.SelectMany(r => r).Select(c => c.Colour).Distinct().Count() == 1
+                ? string.Join("; ", rows.Select(r => string.Join(" ", r.Select(c => c.Text)))) + ", " + rows[0][0].Colour
+                : string.Join("; ", rows.Select(A350DrawLayout.Speak))));
+        }
+
+        foreach (var c in selectedAltitude) o.Add($"Selected altitude: {c.Text}, cyan");
+
+        // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre.
+        if (PatternOf(capture, side, 75, 2285) is { } speedTape)
+            o.Add($"Speed: {Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero):0} knots");
+        if (PatternOf(capture, side, 298, 1168) is { } horizon)
+        {
+            float dx = HeadingIndexX + (side == 0 ? PfdWidth : 0) - horizon.PatternX, dy = WindowY - horizon.PatternY;
+            float det = horizon.PatternA * horizon.PatternD - horizon.PatternB * horizon.PatternC;
+            if (Math.Abs(det) > 1e-6f)
+            {
+                double pitch = (PitchZeroImageY - (-horizon.PatternB * dx + horizon.PatternA * dy) / det) / PitchPxPerDegree;
+                o.Add($"Pitch: {Math.Abs(pitch).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} degrees {(pitch >= 0 ? "up" : "down")}");
+                double bank = A350ShapeReader.AngleDegrees(horizon);
+                o.Add(Math.Abs(bank) < 1 ? "Bank: wings level" : $"Bank: {Math.Abs(Math.Round(bank)):0} degrees {(bank > 0 ? "left" : "right")}");
+            }
         }
 
         // The speed tape: its target in cyan.
@@ -54,24 +93,25 @@ public static class A350Pfd
             o.Add($"Selected speed: {c.Text}, cyan");
         }
 
-        // The altitude tape: scale labels (skipped), target (cyan), drum (read as the altitude), QNH.
+        // The altitude: the tape's label nearest the window and the drum's tens label nearest it; the drum's big
+        // digits only repeat it.
+        var tapeLabels = cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
         var drumTens = cells.Where(c => c.X is >= 658 and < 676 && c.Y is >= 330 and < 460 && c.Colour == "green"
             && c.Text.Length == 2 && c.Text.All(char.IsDigit)).ToList();
-        var drumBig = cells.Where(c => c.X is >= 605 and < 658 && c.Y is >= 330 and < 460 && c.Colour == "green").ToList();
-        if (drumTens.Count > 0 && drumBig.Count > 0)
+        used.UnionWith(drumTens);
+        used.UnionWith(cells.Where(c => c.X is >= 605 and < 658 && c.Y is >= 330 and < 460 && c.Colour == "green"));
+        if (tapeLabels.Count > 0 && drumTens.Count > 0)
         {
-            used.UnionWith(drumTens);
-            used.UnionWith(drumBig);
-            var tens = drumTens.OrderBy(c => Math.Abs(c.Y - DrumWindowY)).First();
-            var middle = drumBig.GroupBy(c => (int)MathF.Round(c.Y)).OrderBy(g => Math.Abs(g.Key - 393 - (DrumWindowY - 422))).First()
-                .OrderBy(c => c.X).Where(c => c.X >= 640);
-            if (int.TryParse(string.Concat(middle.Select(c => c.Text)), out int hundreds))
-                o.Add($"Altitude: {DrumAltitude(hundreds, int.Parse(tens.Text), tens.Y)} feet");
+            var tape = tapeLabels.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
+            var tens = drumTens.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
+            o.Add($"Altitude: {Altitude(int.Parse(tape.Text), tape.Y, int.Parse(tens.Text), tens.Y)} feet");
         }
-        foreach (var c in cells.Where(c => c.X is >= 585 and < 620 && c.Y < 640 && c.Colour == "cyan" && !used.Contains(c)))
+
+        // The vertical speed, in hundreds of feet a minute beside the altitude tape: above the window climbing.
+        foreach (var c in cells.Where(c => c.X >= 720 && c.Y is >= FmaBottom and < BottomLine && c.Text.All(char.IsDigit) && c.Text.Length is 1 or 2))
         {
             used.Add(c);
-            o.Add($"Selected altitude: {c.Text}, cyan");
+            o.Add($"Vertical speed: {int.Parse(c.Text) * 100} feet per minute {(c.Y < WindowY ? "up" : "down")}, {c.Colour}");
         }
         var baro = cells.Where(c => c.X is >= 580 and < 720 && c.Y is >= 640 and < 680).ToList();
         if (baro.Count > 0)
