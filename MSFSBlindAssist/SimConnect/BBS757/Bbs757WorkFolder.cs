@@ -16,11 +16,11 @@ public enum Bbs757WeightUnits
 /// downloaded: which install locations hold one (<see cref="Find"/>, <see cref="ExistingFolders"/>)
 /// and the simulator each belongs to (<see cref="SimulatorOf"/>), its registrations' settings files
 /// (<see cref="RegistrationFiles"/>), and the four values this class reads from it: the SimBrief ID
-/// (to confirm an entry made on the EFB took), the unit system (to say what the weight units answer
-/// did), the nosewheel steering setting (so the steering button never clicks its toggle when it is
-/// already rudder) and the installed AIRAC cycle (so the nav data update never clicks where BlueBird
-/// shows REMOVE). The app writes BlueBird's files only through <see cref="Bbs757SettingsFile"/>,
-/// under rule [B757-17].
+/// (the Fetch SimBrief flight and fuel and payload buttons refuse without one, and fetch the plan with
+/// it), the unit system (to say what the weight units answer did), the nosewheel steering setting (so
+/// the tablet reader taps that toggle only when the setting differs from the wish) and the installed
+/// AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). The app writes
+/// BlueBird's files only through <see cref="Bbs757SettingsFile"/>, under rule [B757-17].
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key.
 /// This class's own readers take only the keys they name (<c>simbrief_id</c>, <c>units</c>,

@@ -12,7 +12,7 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// so this window operates it for the pilot, by scripted clicks through the tablet's own mouse
 /// handler (<see cref="CoherentBbs757EfbClient"/>, positions in <see cref="Bbs757EfbLayout"/>), and
 /// checks each result where it can be read: BlueBird's work folder (<see cref="Bbs757WorkFolder"/>)
-/// for the nav data cycle, the SimBrief ID, the units and the nosewheel steering, and the hidden helper view
+/// for the nav data cycle, the SimBrief ID and the units, and the hidden helper view
 /// (<see cref="CoherentBbs757TabletClient"/>) for the Navigraph sign-in.
 ///
 /// Both clients are MainForm's: this window uses them and disposes neither.
@@ -25,18 +25,17 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// A cockpit preset loads only in its phase: a ground one on the ground, a flight one airborne.
 /// The SimBrief fuel and payload load taps BlueBird's own IMPORT FROM SIMBRIEF and START BOARDING
 /// and hands the rest to the definition's load watch (<see cref="Bbs757LoadIo"/>, MainForm's seams),
-/// which says when the fueling and the boarding are complete. The steering switch toggles, so it is
-/// clicked only while BlueBird's setting reads the tiller. The ground power buttons read BlueBird's ground
-/// power first and tap the GPU tile (it toggles too) only when it differs from the wish, refuse a disconnect
+/// which says when the fueling and the boarding are complete. The ground power buttons read BlueBird's ground
+/// power first and tap the GPU tile (it toggles) only when it differs from the wish, refuse a disconnect
 /// while external power is on line, and say what the ground power reads afterward
 /// (<see cref="Bbs757GroundPower.SwitchAsync"/>).
 ///
 /// Speech (CORE-7): the screen reader says the button; the window says once what came of it, which
-/// the reader cannot know ("Nav data cycle 2610 installed…", "SimBrief ID saved", "Weight units now
-/// pounds", "Loading Before start", "Fueling and boarding started…", "Ground power connected…"). An
-/// action the window cannot do is refused aloud: the EFB unreachable, an action still running, an ID
-/// that is not digits, a preset for the other phase, a plan the tanks or holds cannot take or in other
-/// units than the aircraft's, a ground power disconnect while external power is on line.
+/// the reader cannot know ("Nav data cycle 2610 installed…", "Weight units now pounds", "Loading Before
+/// start", "Fueling and boarding started…", "Ground power connected…"). An action the window cannot do
+/// is refused aloud: the EFB unreachable, an action still running, a preset for the other phase, a plan
+/// the tanks or holds cannot take or in other units than the aircraft's, a ground power disconnect while
+/// external power is on line.
 /// The SimBrief ID is never logged or spoken; the Navigraph code is spoken letter by letter, before
 /// the browser opens, and shown in the status box, never logged. The status box is a read-only
 /// TextBox (VAT-13).
@@ -68,7 +67,7 @@ public partial class BBS757EfbForm : Form
     public const string FoldersDisagreeText =
         "More than one BlueBird work folder was found and they disagree. Update from the EFB in the sim.";
     public const string GroundStateUnknownText = "The aircraft's ground state cannot be read, so no preset was loaded.";
-    public const string SetSimBriefIdFirstText = "Set your SimBrief ID first.";
+    public const string SetSimBriefIdFirstText = "Your SimBrief ID isn't set. Close the simulator and set it on the Settings tab.";
     public const string LoadOnGroundOnlyText = "Fuel and payload load only on the ground.";
     public const string LoadGroundUnknownText = "The aircraft's ground state cannot be read, so nothing was loaded.";
     public const string PlanUnreadableText = "The SimBrief plan's fuel and weights could not be read. Nothing was loaded.";
@@ -82,10 +81,8 @@ public partial class BBS757EfbForm : Form
     private const int StatusTickMs = 1000;
     private const int CyclePollMs = 1000;
     private const int CycleWaitMs = 20000;
-    private const int SimBriefWaitMs = 3000;
-    private const int SimBriefPollMs = 250;
     // How long the units setting is watched for BlueBird's write after Accept units (it is written
-    // at once, as the SimBrief ID is), and after Keep units, which should leave it as it was.
+    // at once), and after Keep units, which should leave it as it was.
     private const int UnitsAcceptWaitMs = 3000;
     private const int UnitsKeepWaitMs = 1000;
     private const int UnitsPollMs = 250;
@@ -97,9 +94,6 @@ public partial class BBS757EfbForm : Form
     private const int LoadReadTimeoutMs = 1500;
     // The fresh ground power reads: a batch row answers with the next 1 Hz delivery, as OnGroundReadTimeoutMs does.
     private const int GroundPowerReadTimeoutMs = 2500;
-    // How long the steering setting is watched for BlueBird's write after the click (measured: at once).
-    private const int SteeringWaitMs = 3000;
-    private const int SteeringPollMs = 250;
     // The chocks are read back this long after the tile's tap.
     private const int ChocksReadBackDelayMs = 1500;
 
@@ -116,8 +110,6 @@ public partial class BBS757EfbForm : Form
 
     private Button _navigraphButton = null!;
     private Button _updateButton = null!;
-    private TextBox _simBriefBox = null!;
-    private Button _setSimBriefButton = null!;
     private Button _fetchButton = null!;
     private Button _acceptUnitsButton = null!;
     private Button _keepUnitsButton = null!;
@@ -126,7 +118,6 @@ public partial class BBS757EfbForm : Form
     private Button _loadPresetButton = null!;
     private Button _apuButton = null!;
     private Button _irsButton = null!;
-    private Button _steeringButton = null!;
     private Button _removeChocksButton = null!;
     private Button _setChocksButton = null!;
     private Button _connectGroundPowerButton = null!;
@@ -302,29 +293,6 @@ public partial class BBS757EfbForm : Form
             return b;
         }
 
-        var simBriefLabel = new Label { Text = "SimBrief ID", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ };
-        _simBriefBox = new TextBox
-        {
-            Location = new Point(left + 90, y + 2),
-            Size = new Size(140, 25),
-            MaxLength = 10,
-            AccessibleName = "SimBrief ID",
-            TabIndex = tab++,
-        };
-        _simBriefBox.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Return && !e.Alt && !e.Control)
-            {
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-                RunAction(SetSimBriefIdAsync);
-            }
-        };
-        flight.Controls.Add(simBriefLabel);
-        flight.Controls.Add(_simBriefBox);
-        _setSimBriefButton = MakeButton("Set SimBrief ID", left + 245, 195, SetSimBriefIdAsync);
-        y += h + gap;
-
         _fetchButton = MakeButton("Fetch SimBrief flight", left, fullW, FetchSimBriefFlightAsync);
         y += h + gap;
         _acceptUnitsButton = MakeButton("Accept units", left, halfW, () => AnswerUnitsAsync(accept: true));
@@ -351,8 +319,6 @@ public partial class BBS757EfbForm : Form
 
         _apuButton = MakeButton("APU quick start", left, halfW, () => QuickStartAsync("APU quick start"));
         _irsButton = MakeButton("IRS rapid align", left + halfW + 10, halfW, () => QuickStartAsync("IRS rapid align"));
-        y += h + gap;
-        _steeringButton = MakeButton("Set steering to rudder", left, fullW, SetSteeringToRudderAsync);
         y += h + gap;
         _removeChocksButton = MakeButton("Remove chocks", left, halfW, () => ChocksAsync(wantInPlace: false));
         _setChocksButton = MakeButton("Set chocks", left + halfW + 10, halfW, () => ChocksAsync(wantInPlace: true));
@@ -758,54 +724,6 @@ public partial class BBS757EfbForm : Form
             Say("The update did not finish. Try again after reloading the flight.");
     }
 
-    private async Task SetSimBriefIdAsync()
-    {
-        string digits = _simBriefBox.Text.Trim();
-        if (digits.Length == 0)
-        {
-            Refuse("Type your SimBrief ID first.");
-            return;
-        }
-        if (!Bbs757EfbLayout.IsSimBriefId(digits))
-        {
-            Refuse("The SimBrief ID must be digits only.");
-            return;
-        }
-
-        // The stored ID before, to tell "not taken" from "taken as something else" after. Neither
-        // value is ever spoken or logged.
-        string? folder = ResolveWorkFolder();
-        long? before = folder == null ? null : Bbs757WorkFolder.ReadSimBriefId(folder);
-
-        SetResult("Entering the SimBrief ID.");
-        var result = await RunAsync(Bbs757EfbRunKind.SimBriefId, Bbs757EfbLayout.EnterSimBriefId(digits));
-        if (result != Bbs757EfbRunResult.Done)
-        {
-            SayRunProblem(result);
-            return;
-        }
-
-        if (folder == null)
-        {
-            Say($"SimBrief ID entered. {FolderMissingText}, so it could not be checked.");
-            return;
-        }
-        long typed = Bbs757EfbLayout.SimBriefIdValue(digits);
-        long? after = Bbs757WorkFolder.ReadSimBriefId(folder);
-        var until = DateTime.UtcNow.AddMilliseconds(SimBriefWaitMs);
-        while (after != typed && DateTime.UtcNow < until)
-        {
-            await Task.Delay(SimBriefPollMs, Lifetime);
-            after = Bbs757WorkFolder.ReadSimBriefId(folder);
-        }
-        switch (Bbs757EfbLayout.JudgeSimBriefEntry(before, after, typed))
-        {
-            case Bbs757SimBriefEntry.Saved: Say("SimBrief ID saved"); break;
-            case Bbs757SimBriefEntry.NotSaved: Say("BlueBird did not save the SimBrief ID"); break;
-            default: Say("BlueBird stored a different SimBrief ID"); break;
-        }
-    }
-
     /// <summary>
     /// FETCH SIMBRIEF OFP on the ACARS dashboard. Afterwards the app fetches the same latest plan itself,
     /// off the UI thread, to learn its weight units: when they differ from the aircraft's, BlueBird is
@@ -1034,53 +952,6 @@ public partial class BBS757EfbForm : Form
             return;
         }
         Say($"Loading {preset}");
-    }
-
-    /// <summary>
-    /// NOSEWHEEL STEERING to RUDDER (BlueBird's default is REALISTIC, the tiller, which a pilot steering
-    /// with the rudder pedals cannot use). The switch TOGGLES, so it is clicked only while BlueBird's
-    /// <c>tiller_realistic</c> reads true (<see cref="Bbs757EfbLayout.MayClickSteering"/>): already
-    /// rudder says so and clicks nothing; unreadable (no work folder, no such setting) refuses. After the
-    /// click the setting is read back (BlueBird writes it at once, measured) and the result said:
-    /// "Steering set to rudder", or that it did not change or could not be read. A run that started
-    /// and did not report finishing is judged from the setting all the same; it is never run again.
-    /// </summary>
-    private async Task SetSteeringToRudderAsync()
-    {
-        string? folder = ResolveWorkFolder();
-        if (folder == null)
-        {
-            Refuse($"{FolderMissingText}, so the steering setting cannot be checked. Nothing was clicked.");
-            return;
-        }
-        bool? tiller = Bbs757WorkFolder.ReadTillerRealistic(folder);
-        if (tiller == false)
-        {
-            Say(Bbs757EfbLayout.SteeringAlreadyRudderText);
-            return;
-        }
-        if (!Bbs757EfbLayout.MayClickSteering(tiller))
-        {
-            Refuse("BlueBird's steering setting cannot be read, so nothing was clicked.");
-            return;
-        }
-
-        SetResult("Setting the steering to rudder.");
-        var result = await RunAsync(Bbs757EfbRunKind.Steering, Bbs757EfbLayout.SetSteeringToRudder());
-        if (result != Bbs757EfbRunResult.Done && !_efb.LastRunMayHaveClicked)
-        {
-            SayRunProblem(result);
-            return;
-        }
-
-        bool? after = Bbs757WorkFolder.ReadTillerRealistic(folder);
-        var until = DateTime.UtcNow.AddMilliseconds(SteeringWaitMs);
-        while (after != false && DateTime.UtcNow < until)
-        {
-            await Task.Delay(SteeringPollMs, Lifetime);
-            after = Bbs757WorkFolder.ReadTillerRealistic(folder);
-        }
-        Say(Bbs757EfbLayout.SteeringResultPhrase(after));
     }
 
     /// <summary>
