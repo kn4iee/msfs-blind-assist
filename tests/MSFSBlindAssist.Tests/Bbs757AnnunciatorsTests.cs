@@ -305,12 +305,15 @@ public class Bbs757AnnunciatorsTests
     }
 
     [Fact]
-    public void Start_valves_open_and_close()
+    public void Start_valve_closed_is_said_at_cutout_and_open_is_quiet()
     {
-        Assert.Equal(new[] { "Left start valve open", "Left start valve closed" },
-            Said(("BBS757_L_START_VALVE", 0), ("BBS757_L_START_VALVE", 1), ("BBS757_L_START_VALVE", 0)));
-        Assert.Equal(new[] { "Right start valve open" },
-            Said(("BBS757_R_START_VALVE", 0), ("BBS757_R_START_VALVE", 1)));
+        // The start switch (GND 1, AUTO 3): the pilot picks GND (heard as the pick), BlueBird releases it to
+        // AUTO at cutout (2026-10-27). Only the cutout speaks.
+        Assert.Equal(new[] { "Left start valve closed" },
+            Said(("BBS757_L_START_VALVE", 3), ("BBS757_L_START_VALVE", 1), ("BBS757_L_START_VALVE", 3)));
+        Assert.Empty(Said(("BBS757_R_START_VALVE", 3), ("BBS757_R_START_VALVE", 1)));
+        // CONT and FLT are closed too; moving between them says nothing.
+        Assert.Empty(Said(("BBS757_R_START_VALVE", 3), ("BBS757_R_START_VALVE", 5), ("BBS757_R_START_VALVE", 6)));
     }
 
     public static TheoryData<string, string, string, string?> Task4Rows => new()
@@ -322,8 +325,8 @@ public class Bbs757AnnunciatorsTests
         { "BBS757_IRS_L_ALIGN", "B757_OVHD_IRS_L_ALIGN_DECAL", "IRS L Aligned", null },
         { "BBS757_IRS_C_ALIGN", "B757_OVHD_IRS_C_ALIGN_DECAL", "IRS C Aligned", null },
         { "BBS757_IRS_R_ALIGN", "B757_OVHD_IRS_R_ALIGN_DECAL", "IRS R Aligned", null },
-        { "BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_VALVE_DECAL", "Left Start Valve", "Engines" },
-        { "BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_VALVE_DECAL", "Right Start Valve", "Engines" },
+        { "BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_SWITCH", "Left Start Valve", "Engines" },
+        { "BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_SWITCH", "Right Start Valve", "Engines" },
         { "BBS757_DOOR_L1", "B757_DOORS_PAX_L1", "Door L1", null },
         { "BBS757_DOOR_L2", "B757_DOORS_PAX_L2", "Door L2", null },
         { "BBS757_DOOR_L3", "B757_DOORS_PAX_L3", "Door L3", null },
