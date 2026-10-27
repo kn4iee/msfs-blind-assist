@@ -4,8 +4,8 @@ using MSFSBlindAssist.Services;
 namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
-/// The BlueBird 757-200's four AI display reads and the instrument camera view each one needs. The
-/// ADI, the EHSI and both EICAS CRTs are WASM-rendered gauges with no DOM and no text behind them
+/// The BlueBird 757-200's five AI display reads and the instrument camera view each one needs. The
+/// ADI, the EHSI, both EICAS CRTs and the standby instruments are WASM-rendered gauges with no DOM and no text behind them
 /// (docs/b757/spec.md §3.4), so AI vision on a camera capture is the only way to read them.
 ///
 /// The view indices are 0-based into the aircraft's cameras.cfg instrument cameras, so the sim's
@@ -24,7 +24,8 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <c>BaseAircraftDefinition.TryReadDisplayFor</c>, shared with every other aircraft that reads
 /// displays this way. The hotkey actions keep the Airbus-derived names the rest of the app uses:
 /// Alt+P (<see cref="HotkeyAction.ReadDisplayPFD"/>) reads the ADI, the 757's PFD-equivalent;
-/// Alt+N the EHSI; Alt+E the upper EICAS; Alt+S the lower EICAS.
+/// Alt+N the EHSI; Alt+E the upper EICAS; Alt+S the lower EICAS; Alt+I
+/// (<see cref="HotkeyAction.ReadDisplayISIS"/>, the PMDG 737's ISFD key) the standby instruments.
 /// </summary>
 internal static class Bbs757DisplayReads
 {
@@ -40,5 +41,6 @@ internal static class Bbs757DisplayReads
         new AiDisplayRead(HotkeyAction.ReadDisplayND, GeminiService.DisplayType.Ehsi757, "EHSI", AdiEhsiView),
         new AiDisplayRead(HotkeyAction.ReadDisplayUpperECAM, GeminiService.DisplayType.UpperEicas757, "Upper EICAS", EicasView),
         new AiDisplayRead(HotkeyAction.ReadDisplayLowerECAM, GeminiService.DisplayType.LowerEicas757, "Lower EICAS", EicasView),
+        new AiDisplayRead(HotkeyAction.ReadDisplayISIS, GeminiService.DisplayType.Standby757, "Standby instruments", EicasView),
     };
 }
