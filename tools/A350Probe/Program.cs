@@ -143,17 +143,36 @@ internal sealed class ProbeForm : Form
         var first = await Next(15000);
         if (first == null) { Line("no push"); client.Dispose(); return; }
         if (parts.Length < 2) { Print(first); client.Dispose(); return; }
-        int count = int.Parse(first["count"]);
-        string? idx = null;
-        for (int i = 0; i < count; i++)
-            if (first[$"items.{i}.text"].Equals(parts[1], StringComparison.OrdinalIgnoreCase)) idx = first[$"items.{i}.aidx"];
-        if (idx == null) { Line($"no element {parts[1]}"); client.Dispose(); return; }
-        last = null;
-        client.EnqueueCommand("click_display_element", new Dictionary<string, string> { ["index"] = idx });
-        await Task.Delay(2500);
-        client.EnqueueCommand("get_display_elements");
-        var after = await Next(8000);
-        if (after != null) Print(after);
+        // Steps joined by " > ": "TEXT" presses the element whose text is TEXT (exact, else the first
+        // starting with it), "TEXT=VALUE" sets it, "@N" presses agent index N; the page after the last
+        // step is printed (A350_OIS_ALL=1 prints after every step).
+        var cur = first;
+        bool all = Environment.GetEnvironmentVariable("A350_OIS_ALL") == "1";
+        var steps = parts[1].Split(" > ");
+        for (int s = 0; s < steps.Length; s++)
+        {
+            string step = steps[s].Trim(), find = step, val = "";
+            int eq = step.IndexOf('=');
+            if (eq > 0) { find = step[..eq]; val = step[(eq + 1)..]; }
+            int count = int.Parse(cur["count"]);
+            string? idx = find.StartsWith('@') ? find[1..] : null;
+            for (int i = 0; i < count && idx == null; i++)
+                if (cur[$"items.{i}.text"].Equals(find, StringComparison.OrdinalIgnoreCase)) idx = cur[$"items.{i}.aidx"];
+            for (int i = 0; i < count && idx == null; i++)
+                if (cur[$"items.{i}.text"].StartsWith(find, StringComparison.OrdinalIgnoreCase)) idx = cur[$"items.{i}.aidx"];
+            if (idx == null) { Line($"no element {find}"); Print(cur); client.Dispose(); return; }
+            last = null;
+            if (eq > 0)
+                client.EnqueueCommand("set_element_value", new Dictionary<string, string> { ["index"] = idx, ["value"] = val });
+            else
+                client.EnqueueCommand("click_display_element", new Dictionary<string, string> { ["index"] = idx });
+            await Task.Delay(2500);
+            client.EnqueueCommand("get_display_elements");
+            var after = await Next(8000);
+            if (after == null) { Line($"no push after {step}"); break; }
+            cur = after;
+            if (all || s == steps.Length - 1) { Line($"--- after {step}"); Print(cur); }
+        }
         client.Dispose();
     }
 

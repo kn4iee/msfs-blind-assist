@@ -91,19 +91,73 @@
     t.blur();
   };
 
-  // A field's label: the texts of its row other than its own cell ("TOW x1000 LBS" -> "TOW, x1000 LBS").
-  A.rowLabel = function (input) {
+  // A text with a space where the OIS breaks a line ("...the turnaround?<br>This will..."): Coherent's
+  // innerText runs the two together.
+  A.text = function (e) {
+    var s = '';
+    for (var c = e.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType === 3) s += c.nodeValue;
+      else if (c.nodeType === 1) s += c.tagName === 'BR' ? ' ' : A.text(c);
+    }
+    return A.norm(s);
+  };
+
+  // A cell holding a control of its own (a fuel row's unit button) is read as that control, never as
+  // part of a neighbour's label.
+  A.CONTROL = 'button, select, input:not([type=hidden])';
+  A.holdsControl = function (cell) { return !!(cell.querySelector && cell.querySelector(A.CONTROL)); };
+
+  // The texts of a field's row other than its own cell ("TOW", "x1000 LBS").
+  A.rowParts = function (input) {
     var row = input.closest ? input.closest('.row') : null;
-    if (!row) return '';
+    if (!row) return [];
     var cell = input;
     while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
     var parts = [];
     for (var k = row.firstElementChild; k; k = k.nextElementSibling) {
-      if (k === cell) continue;
+      if (k === cell || A.holdsControl(k)) continue;
       var t = A.norm(k.innerText || k.textContent);
       if (t) parts.push(t);
     }
-    return parts.join(', ');
+    return parts;
+  };
+
+  // A field's label: its row's texts ("TOW x1000 LBS" -> "TOW, x1000 LBS").
+  A.rowLabel = function (input) { return A.rowParts(input).join(', '); };
+
+  // The OIS writes a field's validation result into its label cell in angle brackets (an accepted
+  // airport's "AIRP" becomes "<OK>"), and may re-create the field when it does. The label is kept on
+  // the field and in a page-wide map that outlives the agent being re-installed; a field first seen
+  // with only its result is named by its box placeholder (four boxes are an airport, three a runway).
+  A.STATUS = /^<(.+)>$/;
+  A.BOX_NAMES = { '[][][][]': 'AIRP', '[][][]': 'RWY' };
+  A.memo = window.__MSFSBA_A350_OIS_LABELS || (window.__MSFSBA_A350_OIS_LABELS = {});
+
+  A.boxName = function (input) {
+    var ph = input.getAttribute('placeholder');
+    if (!ph && input.parentElement) {
+      var p = input.parentElement.querySelector('input[placeholder]');
+      ph = p ? p.getAttribute('placeholder') : '';
+    }
+    return A.BOX_NAMES[ph] || '';
+  };
+
+  // -> {label, text}: the field's own name, and that name with the OIS's result ("AIRP, OK").
+  A.fieldLabel = function (input, memoKey) {
+    var parts = A.rowParts(input), names = [], status = [];
+    for (var i = 0; i < parts.length; i++) {
+      var m = A.STATUS.exec(parts[i]);
+      if (m) status.push(A.norm(m[1])); else names.push(parts[i]);
+    }
+    var label = names.join(', ');
+    if (label) {
+      input.setAttribute(A.LABEL, label);
+      A.memo[memoKey] = label;
+    } else {
+      label = input.getAttribute(A.LABEL) || A.memo[memoKey] || A.boxName(input);
+    }
+    var said = status.join(', ');
+    return { label: label, text: label && said ? label + ', ' + said : (label || said) };
   };
 
   // Claims a field's row-mates (its label and unit cells) before the walk reaches them, so they are
@@ -113,7 +167,53 @@
     if (!row || (input.closest && input.closest('.option-group'))) return;
     var cell = input;
     while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
-    for (var k = row.firstElementChild; k; k = k.nextElementSibling) if (k !== cell) A.own(k);
+    for (var k = row.firstElementChild; k; k = k.nextElementSibling) if (k !== cell && !A.holdsControl(k)) A.own(k);
+  };
+
+  // An options button's name from its row: the label cells beside it ("FROM RWY" + AUTO). When the
+  // row also holds a field, the button is that field's unit ("BLOCK" + field + WEIGHT).
+  A.buttonRowName = function (button) {
+    var row = button.closest ? button.closest('.row') : null;
+    if (!row) return '';
+    var cell = button;
+    while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
+    if (cell === button) return '';
+    var names = [], field = false;
+    for (var k = row.firstElementChild; k; k = k.nextElementSibling) {
+      if (k === cell) continue;
+      if (k.querySelector('input[type=text],input[type=number],input:not([type])')) field = true;
+      else if (A.hasCls(k, 'text-end') && !A.holdsControl(k)) {
+        var t = A.norm(k.innerText || k.textContent);
+        if (t) names.push(t);
+        A.own(k);
+      }
+    }
+    var name = names.join(', ');
+    return name && field ? name + ' unit' : name;
+  };
+
+  // A dialog: a fixed overlay over the page with a title, a message and its buttons (TURNAROUND START:
+  // CANCEL / START). -> its title and message as one line, owning both; null when e is not one.
+  A.dialogText = function (e) {
+    if (!e.style || e.style.position !== 'fixed' || !e.querySelector('button')) return null;
+    var h = e.querySelector('h1,h2,h3,h4,h5,h6');
+    var title = h ? A.text(h) : '', msg = [];
+    if (h) A.own(h);
+    // The message: every text of the overlay outside its title and its controls (it may share a row
+    // with a button: the Navigraph notice), each owned so the walk reads only the controls.
+    var walk = function (n) {
+      for (var k = n.firstElementChild; k; k = k.nextElementSibling) {
+        if (k === h) continue;
+        if (A.holdsControl(k)) { walk(k); continue; }
+        if (k.matches && k.matches(A.CONTROL)) continue;
+        var t = A.text(k);
+        if (t) msg.push(t);
+        A.own(k);
+      }
+    };
+    walk(e);
+    var m = msg.join(' ');
+    return title && m ? title + ': ' + m : (title || m);
   };
 
   // A unit toggle: a heading directly above a button ("Weight Unit" over "x1000 LBS").
@@ -135,7 +235,9 @@
         var it = (inputs[i].type || 'text').toLowerCase();
         if (it !== 'radio' && it !== 'hidden' && A.visible(inputs[i])) A.claimRowCells(inputs[i]);
       }
-      var out = [], page = '', idx = 0;
+      var buttons = document.body.querySelectorAll('button');
+      for (i = 0; i < buttons.length; i++) if (A.visible(buttons[i])) A.buttonRowName(buttons[i]);
+      var out = [], page = '', idx = 0, seen = {};
       var push = function (el, item) {
         if (el) { idx++; el.setAttribute(A.ATTR, String(idx)); item.idx = idx; } else item.idx = 0;
         out.push(item);
@@ -146,6 +248,22 @@
         if (A.owned(e) || !A.visible(e)) continue;
         var tag = e.tagName;
         var own = A.ownText(e);
+
+        // Pop-ups answer a press and are spoken as they appear: the notie toast ("Please enter a
+        // departure airport") and a confirmation dialog, whose buttons are read after it.
+        if (A.hasCls(e, 'notie-container')) {
+          var inner = e.querySelector('.notie-textbox-inner') || e;
+          A.own(inner);
+          if (inner !== e) A.own(e);
+          var nt = A.text(inner);
+          if (nt) push(null, { kind: 'alert', live: 'assertive', text: nt });
+          continue;
+        }
+        var dlg = A.dialogText(e);
+        if (dlg !== null) {
+          if (dlg) push(null, { kind: 'alert', live: 'assertive', text: dlg });
+          continue;
+        }
 
         if (A.hasCls(e, 'page-title')) {
           page = own || A.norm(e.innerText);
@@ -196,21 +314,20 @@
             push(e, { kind: '', controlType: 'checkbox', text: A.rowLabel(e), value: e.checked ? 'true' : 'false' });
             continue;
           }
-          var rl = A.rowLabel(e);
-          var kept = e.getAttribute(A.LABEL);
-          if (rl && rl.charAt(0) !== '<') e.setAttribute(A.LABEL, rl);
-          else if (kept) rl = kept + (rl ? ' ' + rl : '');
+          var fk = page + '|' + type;
+          seen[fk] = (seen[fk] || 0) + 1;
+          var fl = A.fieldLabel(e, fk + '|' + seen[fk]);
+          var rl = fl.text;
           if (type === 'button' || type === 'submit') {
             var name = rl ? rl + ': ' + A.norm(e.value) : A.norm(e.value);
-            // A list's choices (the runways under RWY SELECT) sit together in one container: a press
-            // picks one, so they are plain buttons. A lone input button steps to its next value.
-            var siblings = 0;
-            for (var sb = e.parentElement.firstElementChild; sb; sb = sb.nextElementSibling)
-              if (sb.tagName === 'INPUT' && (sb.type === 'button' || sb.type === 'submit')) siblings++;
-            var choice = siblings > 1 || A.norm(e.value) === 'SELECT';
+            // A list's choices (the runways under RWY) sit together in one container, and the button
+            // showing the picked one holds that list: a press picks or opens, so they are plain
+            // buttons. A lone input button steps to its next value.
+            var choice = e.parentElement.querySelectorAll('input[type=button],input[type=submit]').length > 1
+              || A.norm(e.value) === 'SELECT';
             push(e, choice
               ? { kind: 'button', text: name, clickable: true, disabled: e.disabled }
-              : { kind: 'button', text: name, clickable: true, disabled: e.disabled, key: 'cycler:' + (rl || A.norm(e.value)), announceChange: true });
+              : { kind: 'button', text: name, clickable: true, disabled: e.disabled, key: 'cycler:' + (fl.label || A.norm(e.value)), announceChange: true });
             continue;
           }
           if (type === 'range') {
@@ -240,6 +357,12 @@
               key: 'cycler:' + above, announceChange: true });
             continue;
           }
+          var rowName = A.buttonRowName(e);
+          if (rowName) {
+            // It opens the OIS's options pop-up, so it is a plain button named by its row.
+            push(e, { kind: 'button', text: rowName + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + rowName });
+            continue;
+          }
           var active = A.hasCls(e, 'active');
           push(e, { kind: 'button', text: bt + (active ? ' (selected)' : ''), clickable: true, disabled: e.disabled === true, key: 'button:' + bt });
           continue;
@@ -256,8 +379,27 @@
 
         if (!own || A.decor(own)) continue;
 
+        // The OIS's error line ("ERR: NO WIND INPUT", red, after COMPUTE): a validation error the
+        // window speaks as it appears.
+        if (/^ERR\b/.test(own)) {
+          A.own(e);
+          push(null, { kind: 'alert', live: 'assertive', text: A.norm(e.innerText) || own });
+          continue;
+        }
+
+        // A row of plain texts reads as one line ("DEPARTURE" "to" "ARRIVAL").
+        var pr = e.parentElement;
+        if (pr && A.hasCls(pr, 'row') && pr.children.length > 2 && !A.holdsControl(pr) && !pr.querySelector('.row')) {
+          A.own(pr);
+          var line = [];
+          for (var lc = pr.firstElementChild; lc; lc = lc.nextElementSibling) { var lt = A.text(lc); if (lt) line.push(lt); }
+          push(null, { kind: 'static', text: line.join(' ') });
+          continue;
+        }
+
         // A read-out: a right-aligned label cell, its value in the next cell ("V1" + "142 kt").
-        if (A.hasCls(e, 'text-end') && e.nextElementSibling && !e.nextElementSibling.querySelector('input,button')) {
+        if (A.hasCls(e, 'text-end') && e.parentElement.children.length === 2 && e.nextElementSibling
+          && !e.nextElementSibling.querySelector('input,button')) {
           var val = A.norm(e.nextElementSibling.innerText);
           A.own(e); A.own(e.nextElementSibling);
           push(null, { kind: 'static', text: own + ': ' + (val || '-'), key: 'readout:' + own });
