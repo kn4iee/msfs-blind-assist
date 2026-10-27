@@ -12,11 +12,12 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The BlueBird 757's ILS control panel display, read from a picture (plan 04, task 6b). The panel's
 /// frequency is in no variable: its display is a WASM gauge, laid by the app over the simulator's 2D UI
-/// page with a filter that leaves white segments on black, captured with the window and decoded here as
-/// a seven-segment display. The fixtures are round 5's crops (docs/b757/evidence/flight-04.md, "Round 5:
-/// reading the ILS display"), each named after what the panel showed: "ocr_110.50_000.png" is 110.50 with
-/// course 000, "ocr_PARK_000.png" the ILS parked. A picture that is not a valid ILS display decodes to
-/// nothing, never to a guess.
+/// page, captured with the window and decoded here as a seven-segment display. The "ocr_" fixtures are
+/// round 5's crops (docs/b757/evidence/flight-04.md, "Round 5: reading the ILS display"), taken through
+/// round 5's filter (white segments on black), each named after what the panel showed: "ocr_110.50_000.png"
+/// is 110.50 with course 000, "ocr_PARK_000.png" the ILS parked. The "_night" ones are round 6's, from the
+/// night that filter failed; the app has laid the picture unfiltered since. A picture that is not a valid
+/// ILS display decodes to nothing, never to a guess.
 /// </summary>
 public class Bbs757IlsOcrTests
 {
@@ -76,6 +77,20 @@ public class Bbs757IlsOcrTests
         return padded;
     }
 
+    /// <summary>The picture with every channel times <paramref name="gain"/>: the panel drawn dimmer or brighter.</summary>
+    private static Bitmap Brightness(Bitmap source, double gain)
+    {
+        var scaled = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+        for (int y = 0; y < source.Height; y++)
+            for (int x = 0; x < source.Width; x++)
+            {
+                var c = source.GetPixel(x, y);
+                int Scale(int v) => Math.Min(255, (int)Math.Round(v * gain));
+                scaled.SetPixel(x, y, Color.FromArgb(Scale(c.R), Scale(c.G), Scale(c.B)));
+            }
+        return scaled;
+    }
+
     private static Bitmap Filled(Color color)
     {
         var bitmap = new Bitmap(Bbs757IlsOcr.Width, Bbs757IlsOcr.Height, PixelFormat.Format32bppArgb);
@@ -120,12 +135,45 @@ public class Bbs757IlsOcrTests
     [Fact]
     public void Unfiltered_crop_decodes_or_is_null()
     {
-        // Without the overlay's filter the lit segments are grey on navy and the unlit ones faintly drawn
-        // (round 5: Otsu put the threshold at 45 and read it right). It still reads PARK and course 000:
-        // the filter makes the read sure, it is not what makes it possible.
+        // Unfiltered, as the app lays it since round 6: the lit segments are grey on navy and the unlit ones
+        // faintly drawn (round 5's daylight: Otsu put the threshold at 45, over the faint ones). It reads PARK
+        // and course 000.
         using var raw = Load("raw_PARK_000_nofilter.png");
 
         Assert.Equal(new Bbs757IlsReading(true, null, 0), Bbs757IlsOcr.Decode(raw));
+    }
+
+    [Fact]
+    public void Night_display_reads_unfiltered_only()
+    {
+        // Round 6 (2026-10-27, a 3840 x 2160 sim at dusk): the panel showed 108.10, course 223, dimmer than in
+        // round 5's daylight (lit segments up to grey 63, not 64-95). Unfiltered, the decoder's own threshold
+        // (Otsu: 29 here) reads it with every segment and the point fully on or off.
+        using var raw = Load("raw_108.10_223_night.png");
+        Assert.Equal(new Bbs757IlsReading(false, 108.10, 223), Bbs757IlsOcr.Decode(raw));
+        Assert.Equal(1.0, Bbs757IlsOcr.Analyze(raw).Clarity, 2);
+
+        // The same display through round 5's filter, as every read that night saw it: the filter's fixed cut
+        // (every pixel under about 48 black) shrank the decimal point inside its core (69 % lit), so the digits
+        // are all there and the read is still refused. The filter went; the clarity gate stays (never a guess).
+        using var filtered = Load("oldfilter_108.10_223_night.png");
+        var cells = Bbs757IlsOcr.Analyze(filtered);
+        Assert.Equal("10810223", cells.Characters);
+        Assert.True(cells.Clarity < Bbs757IlsOcr.MinClarity, $"clarity {cells.Clarity}");
+        Assert.Null(Bbs757IlsOcr.Decode(filtered));
+    }
+
+    [Theory]
+    [InlineData(0.5)]   // a panel dimmer than round 6's night
+    [InlineData(1.5)]   // round 5's daylight level: lit segments up to about 94
+    public void Unfiltered_read_follows_the_panels_brightness(double gain)
+    {
+        // What the unfiltered read rests on: the threshold is the picture's own, so the same display reads the
+        // same however bright the panel draws it.
+        using var raw = Load("raw_108.10_223_night.png");
+        using var lit = Brightness(raw, gain);
+
+        Assert.Equal(new Bbs757IlsReading(false, 108.10, 223), Bbs757IlsOcr.Decode(lit));
     }
 
     [Fact]
@@ -212,14 +260,15 @@ public class Bbs757IlsOcrTests
     }
 
     [Fact]
-    public void The_overlay_is_the_measured_box_and_filter()
+    public void The_overlay_is_the_measured_box_unfiltered()
     {
-        // Round 5's overlay (measurements G1.1-G1.2): a fixed black box at (16,16) holding the live view at its
-        // natural 668 x 93, on top of everything, never taking the mouse; white segments on black.
+        // Round 5's overlay (measurements G1.1): a fixed black box at (16,16) holding the live view at its natural
+        // 668 x 93, on top of everything, never taking the mouse. No CSS filter: round 5's fixed brightness and
+        // contrast cut refused every read of the dimmer night panel (round 6, Night_display_reads_unfiltered_only).
         string js = CoherentBbs757IlsDisplay.InjectScript("WasmGaugeLiveView_12");
 
         Assert.Contains("position:fixed;left:16px;top:16px;width:668px;height:93px;background:#000;z-index:2147483647;pointer-events:none", js);
-        Assert.Contains("filter:grayscale(1) brightness(2.6) contrast(40)", js);
+        Assert.DoesNotContain("filter", js);
         Assert.Contains("\"WasmGaugeLiveView_12\"", js);
         Assert.Contains("innerWidth", js);
         Assert.Contains("devicePixelRatio", js);
@@ -266,7 +315,7 @@ public class Bbs757IlsOcrTests
         });
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        using var display = new CoherentBbs757IlsDisplay(() => Task.FromResult<byte[]?>(null), () => null,
+        using var display = new CoherentBbs757IlsDisplay(() => Task.FromResult<Bitmap?>(null), () => null,
             $"127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}", lines.Enqueue);
         try
         {
