@@ -243,7 +243,11 @@ public class CoherentBbs757TabletClientTests
     [Fact]
     public async Task Changes_are_raised_and_an_empty_set_is_not()
     {
+        // The client posts to the context it was made on: made with none, it raises inline.
+        var saved = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
         using var client = new CoherentBbs757TabletClient(() => "");
+        SynchronizationContext.SetSynchronizationContext(saved);
         string answer = "{\"ok\":true,\"watching\":true,\"seq\":1,\"changes\":{}}";
         client.EvalForTests = expr => Task.FromResult(expr.Contains(".watch(", StringComparison.Ordinal) ? "ok" : answer);
         var raised = new List<IReadOnlyDictionary<string, double>>();
