@@ -184,6 +184,12 @@
   // "Y: 30.5L, 74%". -> the line, owning the row; '' when h is in neither.
   A.gaugeLine = function (h) {
     var cell = h.parentElement, row = cell && cell.parentElement;
+    // A title over its value in one box (THROTTLE CALIBRATION: AXIS 1 over 0%).
+    if (cell && cell.children.length === 2 && cell.firstElementChild === h && /^H[1-6]$/.test(cell.lastElementChild.tagName)
+      && /\d/.test(A.text(cell.lastElementChild))) {
+      A.own(cell);
+      return A.text(h) + ': ' + A.text(cell.lastElementChild);
+    }
     if (!row || !A.hasCls(row, 'row') || row.children.length !== 2 || A.holdsControl(row)) return '';
     var other = row.firstElementChild === cell ? row.lastElementChild : row.firstElementChild;
     var hs = row.querySelectorAll('h1,h2,h3,h4');
@@ -320,7 +326,7 @@
     var cell = input;
     while (cell.parentElement && cell.parentElement !== row) cell = cell.parentElement;
     // Only a grid cell of the row is labelled by it (GROUND's fixed GSX panel sits in the doors' row).
-    if (!/(^|\s)col(-|\s|$)/.test(A.cls(cell))) return [];
+    if (cell !== input && !/(^|\s)col(-|\s|$)/.test(A.cls(cell))) return [];
     var first = row.firstElementChild, stop = null;
     if (!A.hasCls(cell, 'col-sm-12')) {
       for (var b = cell.previousElementSibling; b; b = b.previousElementSibling)
@@ -439,6 +445,15 @@
     return title && m ? title + ': ' + m : (title || m);
   };
 
+  // A free-standing radio set (THROTTLE CALIBRATION: an .option-group-label cell, then a cell of
+  // YES / NO radios): its container and its label element.
+  A.radioSet = function (radio) {
+    if (radio.closest && radio.closest('.option-group')) return null;
+    var box = radio.parentElement, prev = box && box.previousElementSibling;
+    var lab = prev && (A.hasCls(prev, 'option-group-label') ? prev : prev.querySelector && prev.querySelector('.option-group-label'));
+    return box ? { box: box, labelEl: lab ? prev : null, label: lab ? A.text(lab) : '' } : null;
+  };
+
   // A unit toggle: a heading directly above a button ("Weight Unit" over "x1000 LBS").
   A.headingAbove = function (button) {
     var h = button.previousElementSibling;
@@ -457,6 +472,11 @@
       for (i = 0; i < inputs.length; i++) {
         var it = (inputs[i].type || 'text').toLowerCase();
         if (it !== 'radio' && it !== 'hidden' && A.visible(inputs[i])) A.claimRowCells(inputs[i]);
+      }
+      for (i = 0; i < inputs.length; i++) {
+        if ((inputs[i].type || '').toLowerCase() !== 'radio' || !A.visible(inputs[i])) continue;
+        var rs0 = A.radioSet(inputs[i]);
+        if (rs0 && rs0.labelEl) A.own(rs0.labelEl);
       }
       var buttons = document.body.querySelectorAll('button');
       for (i = 0; i < buttons.length; i++) if (A.visible(buttons[i])) A.buttonRowName(buttons[i]);
@@ -502,7 +522,7 @@
 
         if (A.hasCls(e, 'option-group')) {
           A.own(e);
-          var labelEl = e.querySelector('.option-group-label');
+          var labelEl = e.querySelector('.option-group-label, .option-group-label-vol');
           var label = labelEl ? A.norm(labelEl.innerText) : '';
           var radios = e.querySelectorAll('input[type=radio]');
           if (radios.length) {
@@ -515,6 +535,15 @@
               if (radios[r].checked) value = word;
             }
             push(e, { kind: '', controlType: 'select', text: label, value: value, options: opts, clickable: true });
+            continue;
+          }
+          var cbs = e.querySelectorAll('input[type=checkbox]');
+          if (cbs.length) {
+            // A group of switches (CALLOUTS' RA callouts): each its own checkbox.
+            for (var cb = 0; cb < cbs.length; cb++) {
+              var cl = cbs[cb].id ? e.querySelector('label[for="' + cbs[cb].id + '"]') : null;
+              push(cbs[cb], { kind: '', controlType: 'checkbox', text: label + (cl ? ': ' + A.text(cl) : ''), value: cbs[cb].checked ? 'true' : 'false' });
+            }
             continue;
           }
           var field = e.querySelector('input[type=number],input[type=text],input:not([type])');
@@ -531,13 +560,41 @@
             });
             continue;
           }
+          if (A.holdsControl(e)) {
+            // A group holding buttons (RESET VOLUME): its title, then the walk reads what it holds.
+            e.removeAttribute(A.OWN);
+            if (labelEl) A.own(labelEl);
+            if (label) push(null, { kind: 'heading', level: 3, text: label });
+            continue;
+          }
           push(null, { kind: 'static', text: A.norm(e.innerText) });
+          continue;
+        }
+
+        // A free-standing option label (THROTTLE CALIBRATION's RESET CALIBRATION) titles what follows.
+        if (A.hasCls(e, 'option-group-label') || A.hasCls(e, 'option-group-label-vol')) {
+          A.own(e);
+          if (own) push(null, { kind: 'heading', level: 3, text: own });
           continue;
         }
 
         if (tag === 'INPUT') {
           var type = (e.type || 'text').toLowerCase();
-          if (type === 'radio' || type === 'hidden') continue;
+          if (type === 'hidden') continue;
+          if (type === 'radio') {
+            var rs = A.radioSet(e);
+            if (!rs || A.owned(rs.box)) continue;
+            A.own(rs.box);
+            var ropts = [], rval = '', rads = rs.box.querySelectorAll('input[type=radio]');
+            for (var ri = 0; ri < rads.length; ri++) {
+              var rl2 = rads[ri].id ? document.querySelector('label[for="' + rads[ri].id + '"]') : null;
+              var rw = rl2 ? A.text(rl2) : '';
+              ropts.push(rw);
+              if (rads[ri].checked) rval = rw;
+            }
+            push(rs.box, { kind: '', controlType: 'select', text: rs.label, value: rval, options: ropts, clickable: true });
+            continue;
+          }
           if (type === 'checkbox') {
             push(e, { kind: '', controlType: 'checkbox', text: A.fieldLabel(e, page + '|checkbox|' + (seen.cb = (seen.cb || 0) + 1)).text, value: e.checked ? 'true' : 'false' });
             continue;
@@ -597,8 +654,9 @@
             continue;
           }
           // A button showing a list beside it (PANEL STATES' presets, SET FUEL's refuel kinds).
-          var lst = e.nextElementSibling;
-          if (A.isButtonList(lst)) {
+          var lst = e.nextElementSibling, expKey = 'exp:' + page + '|' + bt;
+          if (A.isButtonList(lst) && (A.hasCls(lst, 'd-none') || A.memo[expKey])) {
+            A.memo[expKey] = 1;   // its list is hidden by d-none: an expander, also once open
             push(e, { kind: 'button', text: bt + (A.visible(lst) ? ' (expanded)' : ' (collapsed)'), clickable: true,
               disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
             continue;
@@ -794,7 +852,7 @@
     try {
       var e = A.find(idx);
       if (!e) return 'missing';
-      if (A.hasCls(e, 'option-group')) {
+      if (A.hasCls(e, 'option-group') || e.querySelector('input[type=radio]')) {
         var labels = e.querySelectorAll('label');
         var want = A.norm(text).toUpperCase();
         for (var i = 0; i < labels.length; i++)

@@ -16,11 +16,15 @@ test('PANEL STATES and the EFB menu say collapsed', () => {
   assert.ok(!button(els, 'COLD AND DARK'), 'the presets are hidden');
 });
 
+// Opening removes the list's d-none: the button was seen as an expander while it was closed.
 test('an open PANEL STATES says expanded and lists its presets', () => {
-  const els = scrape('menu', { before: w => {
-    const list = [...w.document.querySelectorAll('button')].find(b => b.textContent === 'PANEL STATES').nextElementSibling;
-    for (const n of [list, ...list.querySelectorAll('*')]) n.removeAttribute('data-vis');
-  } });
+  const { load } = require('./run');
+  const { window, A } = load('menu');
+  A.scrape();
+  const list = [...window.document.querySelectorAll('button')].find(b => b.textContent === 'PANEL STATES').nextElementSibling;
+  list.classList.remove('d-none');
+  for (const n of [list, ...list.querySelectorAll('*')]) n.removeAttribute('data-vis');
+  const els = JSON.parse(A.scrape()).elements;
   assert.ok(button(els, 'PANEL STATES (expanded)'));
   for (const t of ['COLD AND DARK', 'ON GROUND POWER', 'ON APU', 'READY FOR TAKEOFF']) assert.ok(button(els, t), 'missing ' + t);
 });
