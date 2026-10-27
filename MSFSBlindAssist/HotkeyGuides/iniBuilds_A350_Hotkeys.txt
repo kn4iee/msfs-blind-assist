@@ -78,6 +78,17 @@ Displays:
              Escape closes.
   Ctrl+E     Toggle the E/WD auto call-outs (also in the Monitor Manager, Ctrl+M)
 
+  Shift+M    Open the MFD window (A380 parity): the MFD page as lines (menus, buttons,
+             tabs, fields with their values and colours, the scratchpad). Up/Down move;
+             Enter acts on the line: a field takes what you typed in the scratchpad box
+             (Tab to it, type, Enter), anything else is clicked. Backspace presses CLR,
+             PageUp/PageDown scroll, F5 refreshes, Escape closes. The Side box picks the
+             captain's or the first officer's MFD. A new scratchpad message is spoken.
+             Alt+letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF,
+             Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV,
+             Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU,
+             Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF, Alt+X ESC.
+
   The other displays have no hotkey window, as on the A380: open Displays in the Panels
   list (Ctrl+2): Captain and First Officer PFD (FMA, selected speed, altitude, selected
   altitude, QNH, radio altitude, heading, flags and messages), Captain and First Officer

@@ -27,6 +27,18 @@ public partial class IniBuildsA350Definition
                             simConnect.GetCachedVariableValue(SdPageKey))), announcer),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
+            // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
+            // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU.
+            case HotkeyAction.ShowFenixMCDU:
+            {
+                hotkeyManager.ExitOutputHotkeyMode();
+                var input = new A350.Display.A350MfdInput((name, value) => { simConnect.SetLVar(name, value); return true; });
+                ShowTrackedWindow(
+                    () => new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
+                        async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(), input, announcer),
+                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                return true;
+            }
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).
             case HotkeyAction.ToggleECAMMonitoring:
             {
