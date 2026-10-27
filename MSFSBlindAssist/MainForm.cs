@@ -155,6 +155,7 @@ public partial class MainForm : Form
     // The iniBuilds A350's display reader: copies the A350's memory read-only and runs its own draw code
     // (Wasmtime) on one worker thread. Runs whenever the A350 is active; the definition reads it.
     private Aircraft.A350.Display.A350DisplayService? a350DisplayService;
+    private Aircraft.A350.Display.A350EcamMonitor? a350EcamMonitor;
 
     private Forms.FBWA380.FBWA380OansForm? fbwA380OansForm;
 
@@ -1443,6 +1444,7 @@ public partial class MainForm : Form
         coherentEFBClient?.Dispose();
         coherentNDClient?.Dispose();
         coherentEWDClient?.Dispose();
+        a350EcamMonitor?.Dispose();
         a350DisplayService?.Dispose();
         coherentFwsFailureClient?.Dispose();
 

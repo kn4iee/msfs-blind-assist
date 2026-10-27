@@ -64,4 +64,19 @@ public class A350EwdTests
         Assert.False(ewd.Powered);
         Assert.Empty(ewd.Warning);
     }
+
+    // Live: "WXR ..............................SYS 2" and "APU MASTER SW ......................OFF" came out
+    // with their dot leaders, which a screen reader reads as "dot" thirty times. A leader reads as a colon.
+    [Theory]
+    [InlineData("WXR ..............................SYS 2", "WXR: SYS 2, cyan")]
+    [InlineData("APU MASTER SW ......................OFF", "APU MASTER SW: OFF, cyan")]
+    [InlineData("ECAM SD & OVHD PNL...............MONITOR", "ECAM SD & OVHD PNL: MONITOR, cyan")]
+    [InlineData("FUNCTIONS NOT AVAIL :", "FUNCTIONS NOT AVAIL :, cyan")]
+    [InlineData("STS ...", "STS, cyan")]
+    public void A_dot_leader_reads_as_a_colon(string drawn, string spoken)
+    {
+        var cap = new A350DrawCapture("CTR", new[] { new DrawnText(drawn, 905, 313, 69, 313, 1, new A350Rgba(0, 1, 1, 1)) },
+            Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1);
+        Assert.Equal(spoken, Assert.Single(A350Ewd.Parse(cap).Warning).Spoken);
+    }
 }

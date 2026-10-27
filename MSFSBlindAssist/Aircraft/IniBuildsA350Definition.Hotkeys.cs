@@ -17,6 +17,23 @@ public partial class IniBuildsA350Definition
                 hotkeyManager.ExitOutputHotkeyMode();
                 (parentForm as MainForm)?.ShowA350MonitorManagerDialog();
                 return true;
+            // Alt+E: the whole E/WD (engine block, warning display with its cursor and boxes, SD, permanent
+            // data) in the shared E/WD window, refreshed from the background monitor's latest capture.
+            case HotkeyAction.ReadDisplayUpperECAM:
+                hotkeyManager.ExitOutputHotkeyMode();
+                ShowTrackedWindow(
+                    () => new Forms.FbwEwdWindow("A350 E/WD — Engine / Warning Display",
+                        () => Task.FromResult(A350.Display.A350EwdText.Build(Ecam?.LatestCapture)), announcer),
+                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                return true;
+            // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).
+            case HotkeyAction.ToggleECAMMonitoring:
+            {
+                bool enabled = A350.Display.A350EcamMonitor.Toggle(Settings.SettingsManager.Current.A350DisabledMonitorVariables);
+                Settings.SettingsManager.Save();
+                announcer.AnnounceImmediate(A350.Display.A350EcamMonitor.ToggleSpoken(enabled));
+                return true;
+            }
             default:
                 return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
         }

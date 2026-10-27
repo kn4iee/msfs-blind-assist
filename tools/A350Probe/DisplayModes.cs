@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten";
 
     public static int Run(string mode, string[] args)
     {
@@ -25,6 +25,7 @@ internal static class DisplayModes
             case "trap": return TrapTest(args);
             case "traptiny": return TrapTiny();
             case "ecamwatch": return EcamWatch(args);
+            case "ecamlisten": return EcamListen(args);
             default: return 2;
         }
     }
@@ -227,6 +228,22 @@ internal static class DisplayModes
             if (dir != null) File.WriteAllText(Path.Combine(dir, $"ctr_{n:000}.json"), System.Text.Json.JsonSerializer.Serialize(c, opts));
         }
         Console.WriteLine($"traps {traps}");
+        return 0;
+    }
+
+    /// <summary>`ecamlisten seconds`: MSFSBA's own E/WD monitor over the service, printing each line it
+    /// would speak, with the time.</summary>
+    private static int EcamListen(string[] args)
+    {
+        int seconds = int.Parse(args[0]);
+        using var svc = new A350DisplayService();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
+        svc.Start();
+        using var mon = new A350EcamMonitor(async () => (await svc.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => false,
+            line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
+        mon.Start();
+        Thread.Sleep(seconds * 1000);
         return 0;
     }
 

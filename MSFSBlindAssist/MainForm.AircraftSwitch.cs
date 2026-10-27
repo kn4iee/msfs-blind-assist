@@ -683,13 +683,29 @@ public partial class MainForm
         if (a350DisplayService != null) return;
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
         a350DisplayService.Spoken += line => announcer.Announce(line);
-        if (currentAircraft is IniBuildsA350Definition a350) a350.Displays = a350DisplayService;
+        var service = a350DisplayService;
+        a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
+            async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
+            () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
+            line => announcer.Announce(line));
+        if (currentAircraft is IniBuildsA350Definition a350)
+        {
+            a350.Displays = a350DisplayService;
+            a350.Ecam = a350EcamMonitor;
+        }
         a350DisplayService.Start();
+        a350EcamMonitor.Start();
     }
 
     private void StopA350DisplayService(IAircraftDefinition? owner = null)
     {
-        if ((owner ?? currentAircraft) is IniBuildsA350Definition a350) a350.Displays = null;
+        if ((owner ?? currentAircraft) is IniBuildsA350Definition a350)
+        {
+            a350.Displays = null;
+            a350.Ecam = null;
+        }
+        a350EcamMonitor?.Dispose();
+        a350EcamMonitor = null;
         a350DisplayService?.Dispose();
         a350DisplayService = null;
     }

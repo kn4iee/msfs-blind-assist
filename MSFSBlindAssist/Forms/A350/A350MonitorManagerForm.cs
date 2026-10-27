@@ -17,7 +17,16 @@ namespace MSFSBlindAssist.Forms.A350;
 public sealed class A350MonitorManagerForm : MonitorManagerFormBase
 {
     public A350MonitorManagerForm(Dictionary<string, SimVarDefinition> variables)
-        : base("A350 Monitor Manager", MonitorRowBuilder.Build(variables)) { }
+        : base("A350 Monitor Manager", BuildRows(variables)) { }
+
+    /// <summary>The variable rows, then one row per display call-out the A350's display reader speaks
+    /// (appended after the sort, as the A380's E/WD fold is): the E/WD call-outs, which Ctrl+E flips.</summary>
+    internal static List<MonitorRow> BuildRows(IReadOnlyDictionary<string, SimVarDefinition> variables)
+    {
+        var rows = MonitorRowBuilder.Build(variables);
+        rows.Add(new MonitorRow(Aircraft.A350.Display.A350EcamMonitor.MuteKey, Aircraft.A350.Display.A350EcamMonitor.MuteLabel));
+        return rows;
+    }
 
     protected override ICollection<string> DisabledVariables
         => SettingsManager.Current.A350DisabledMonitorVariables;

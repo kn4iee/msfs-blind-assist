@@ -9,4 +9,7 @@ public partial class IniBuildsA350Definition
 {
     /// <summary>The display reader, or null while it is not running.</summary>
     public A350DisplayService? Displays { get; set; }
+
+    /// <summary>The background E/WD call-outs (and the Alt+E window's source), or null.</summary>
+    public A350EcamMonitor? Ecam { get; set; }
 }

@@ -28,6 +28,16 @@ public static class A350Ewd
     /// <summary>A row's glyphs sit above its baseline: about the ECAM font's height.</summary>
     private const float GlyphHeight = 22;
 
+    // A dot leader between an item and its action ("APU MASTER SW ......OFF") reads as a colon; a trailing
+    // one is dropped. A screen reader would otherwise say "dot" thirty times.
+    private static readonly System.Text.RegularExpressions.Regex Leader = new(@"\s*\.{3,}\s*", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    internal static string WithoutLeaders(string text)
+    {
+        var t = text.Trim();
+        return Leader.Replace(t, m => m.Index + m.Length == t.Length ? "" : ": ");
+    }
+
     private static bool IsDotRow(IReadOnlyList<DrawnCell> row) => row.All(c => c.Text.Trim('.', ' ').Length == 0);
 
     private static float Overlap(float a0, float a1, float b0, float b1) => Math.Max(0, Math.Min(a1, b1) - Math.Max(a0, b0));
@@ -62,7 +72,7 @@ public static class A350Ewd
                 boxes[row] = colour == "cyan" ? EcamBox.ToDo : EcamBox.Done;
         }
 
-        var lines = wdRows.Select((r, i) => new EcamLine(r, r[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None))).ToList();
+        var lines = wdRows.Select((r, i) => new EcamLine(r.Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList(), r[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None))).ToList();
         return new A350EwdView(
             A350DrawLayout.Rows(A350DrawLayout.Region(capture.Texts, A350DrawLayout.CtrEngineDisplay)),
             lines,
