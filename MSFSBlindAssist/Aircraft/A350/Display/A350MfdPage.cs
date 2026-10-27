@@ -42,7 +42,7 @@ public static class A350MfdPage
             var inside = cells.Where(c => !used.Contains(c) && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1)
                 .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
-            string value = string.Join(" ", inside.Select(c => c.Text));
+            string value = string.Join(" ", inside.Select(c => Word(c.Text)));
             string colour = inside.FirstOrDefault(c => c.Colour != "grey")?.Colour ?? inside.FirstOrDefault()?.Colour ?? "white";
             if (e.Class == "NotepadTextbox")
             {
@@ -78,6 +78,13 @@ public static class A350MfdPage
 
         return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
     }
+
+    /// <summary>A field's drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet,
+    /// "dC" degrees Celsius.</summary>
+    private static string Word(string token) =>
+        token.Length > 0 && token.All(ch => ch == 'o') ? "required"
+        : token.Length > 0 && token.All(ch => ch == '-') ? "none"
+        : token == "dC" ? "°C" : token;
 
     private static A350Rgba ColourOf(string name) => name switch
     {

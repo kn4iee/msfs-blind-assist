@@ -279,6 +279,31 @@ internal sealed class ProbeForm : Form
             return;
         }
 
+        if (_mode == "mfd")
+        {
+            // MFD operations through MSFSBA's A350MfdInput, ";"-separated: click:side:x:y, type:side:TEXT, key:side:KEY.
+            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput((name, v) =>
+            {
+                _m.ExecuteCalculatorCodeUnique($"{v.ToString(CultureInfo.InvariantCulture)} (>L:{name})");
+                return true;
+            });
+            foreach (var op in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var p = op.Split(':');
+                int side = int.Parse(p[1]);
+                string result = p[0] switch
+                {
+                    "click" => (await input.ClickAsync(side, float.Parse(p[2], CultureInfo.InvariantCulture), float.Parse(p[3], CultureInfo.InvariantCulture))).ToString(),
+                    "type" => (await input.TypeAsync(side, p[2])).ToString(),
+                    "key" => input.Press(side, p[2]).ToString(),
+                    _ => "unknown",
+                };
+                Line($"{op}	{result}");
+                await Task.Delay(700);
+            }
+            return;
+        }
+
         if (_mode == "rpn")
         {
             // Raw calculator strings through MSFSBA's own sender, each followed by its pause ("code#ms;code#ms"), then

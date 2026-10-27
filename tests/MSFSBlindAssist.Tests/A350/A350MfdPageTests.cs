@@ -32,6 +32,20 @@ public class A350MfdPageTests
         Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, black", lines[^1]);   // an FMS message shows in the scratchpad
     }
 
+    // The INIT page empty (live, KCCU INIT): amber boxes are a required entry, dashes nothing yet.
+    [Fact]
+    public void Boxes_dashes_and_units_read_as_words()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_init_empty.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("FLT NBR: required, amber", lines);
+        Assert.Contains("FROM: required, amber", lines);
+        Assert.Contains("ALTN: none, grey", lines);
+        Assert.Contains("CRZ TEMP: none °C, grey", lines);
+        Assert.Contains("TROPO: 36090 FT, cyan", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines";
 
     public static int Run(string mode, string[] args)
     {
@@ -30,6 +30,7 @@ internal static class DisplayModes
             case "sdtext": return SdText(args);
             case "sdsweep": return SdSweep(args);
             case "pfdlisten": return PfdListen(args);
+            case "mfdlines": return MfdLines(args);
             default: return 2;
         }
     }
@@ -265,6 +266,15 @@ internal static class DisplayModes
             if (mon.Latest(d.Gauge, d.Index) is { } cap) foreach (var line in d.Read(cap)) Console.WriteLine(line);
             else Console.WriteLine("(not drawn)");
         }
+        return 0;
+    }
+
+    /// <summary>`mfdlines mfd.json side`: a saved MFD draw read as the MFD window's lines, with each line's click point.</summary>
+    private static int MfdLines(string[] args)
+    {
+        var cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        foreach (var l in A350MfdPage.Read(cap, int.Parse(args[1])))
+            Console.WriteLine($"{l.Kind,-10} {l.ClickX,6:0},{l.ClickY,5:0}  {l.Spoken}");
         return 0;
     }
 
