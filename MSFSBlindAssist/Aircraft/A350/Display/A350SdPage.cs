@@ -151,6 +151,9 @@ public static class A350SdPage
             Eng("oil pressure", 212, 10, 596, 50, 627, "PSI"),
             Eng("vibration N1", 205, 4, 601, 30, 696, null), Eng("vibration N2", 205, 4, 601, 30, 730, null),
             Eng("vibration N3", 205, 4, 601, 30, 765, null),
+            // The start box (live, during a start): the igniter in use, and the start air pressure under the
+            // start valve, in PSI with no unit drawn.
+            Eng("igniter", 203, 20, 630, 20, 809, null), Eng("start air pressure", 192, 20, 618, 20, 911, "PSI"),
         }.SelectMany(p => p).ToArray(),
         [2] = Pair("Green system pressure", "Yellow system pressure", 226, 695, 354, "PSI"),
         [3] = Row(424, null, ("BAT 1 voltage", 132), ("BAT EMER 1 voltage", 302), ("BAT EMER 2 voltage", 534), ("BAT 2 voltage", 710))

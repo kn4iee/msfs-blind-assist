@@ -18,6 +18,18 @@ public class A350SdPageTests
     // Live, on external power with both emergency batteries off (2026-10-27): what the stand copy never drew.
     private static IReadOnlyList<string> Live(int page) => Page(page, "ctr_sd_live_");
 
+    // Live, engine 1 starting with engine 2 running (2026-10-27): inside engine 1's start box, its igniter in use
+    // (A or B) and, under each start valve, the start air pressure (PSI, the unit not drawn).
+    [Fact]
+    public void A_start_reads_the_igniter_and_the_start_air_pressure()
+    {
+        var lines = Page(1, "ctr_eng_start_");
+        Assert.Contains("Engine 1 igniter: B, green", lines);
+        Assert.Contains("Engine 1 start air pressure: 44 PSI, green", lines);
+        Assert.Contains("Engine 2 start air pressure: 44 PSI, green", lines);
+        Assert.Contains("Engine 2 N3: 64.6 %, green", lines);
+    }
+
     [Fact]
     public void The_permanent_data_line_names_each_value()
     {

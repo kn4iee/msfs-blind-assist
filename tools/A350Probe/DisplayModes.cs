@@ -158,6 +158,8 @@ internal static class DisplayModes
         {
             foreach (var row in A350DrawLayout.Rows(A350DrawLayout.Region(caps[0].Texts, A350DrawLayout.CtrWarningDisplay)))
                 Console.WriteLine("  WD: " + A350DrawLayout.Speak(row));
+            if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
+                File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(caps[0]));
             // `A350_SD=<page>`: also the engine display and that SD page as MSFSBA reads them.
             if (double.TryParse(Environment.GetEnvironmentVariable("A350_SD"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sd))
             {
