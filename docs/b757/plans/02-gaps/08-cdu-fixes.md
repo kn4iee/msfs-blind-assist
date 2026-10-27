@@ -105,7 +105,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   scratchpad read-back fix, a whole-plan review (one review subagent) and its fixes
 - **Started:** 2026-10-27, branched from the base commit `cf1dfce94` and rebased onto `B757` 744b4cce
 - **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** full suite passed 2026-10-27 after the rebase onto `B757` 744b4cce: 17,969 passed, 0 failed
+- **Tests at landing:** full suite passed 2026-10-27 after the rebase onto `B757` 744b4cce: 17,969 passed, 0 failed;
+  the owner's finishing commits (read-back, review fixes, VNAV) after the rebase onto `B757` 9f231a7f6: build clean,
+  17,992 passed, 0 failed; `git diff --name-only` lists only plan 08's files
 - **Tasks:** 0 done (claim pushed 2026-10-26). 1 done: `Bbs757CduRows` (kinds, lines, `Restore`, `PageStart`,
   `IsPageChange`), the window restores the cursor by row and speaks only a real page change;
   `Bbs757CduFrame.ToDisplayLines` now lists the rows' texts, unchanged. 2 done: the client's four-argument
