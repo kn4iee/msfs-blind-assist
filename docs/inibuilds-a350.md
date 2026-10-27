@@ -120,6 +120,14 @@ How the WD draws, measured on a power-up at VCBI (BAT 1, BAT 2, GPU from the OIS
 - The first draw of a gauge on a fresh Wasmtime instance draws only the WD titles; the engine throws that warm-up draw away.
 - The engine block's labels (N1, EGT, N2, FF) are textures: its numbers read unlabelled until they are mapped by position (a capture with engines running).
 
+## The SD in MSFSBA (live 2026-10-27)
+
+The ECAM Control Panel's "System display page" status display (and Alt+E's "System display" section) reads the page shown through `A350SdPage`. An SD page draws its values as text but its labels are part of a background texture, `Data/Textures/ECAM/<Page>Static.png` in the package (809 x 1024, at the draw's own coordinates). `A350SdPage.Pages` names each value by where it is drawn ("BAT 1 voltage: 28 V, green"); a unit drawn just right of a value reads with it, a unit drawn alone is a caption the field carries ("{weight}" and "{flow}" follow the page's own LBS/KG). Everything else reads as drawn, with its colour; the DOOR page's oxygen column reads after the doors.
+
+To map a new value: overlay the page's drawn texts on its texture (the X of a right-aligned number is its right edge), and `A350Probe sdmap copy.bin page` names the variable behind each value by setting it in the copy. Graphics (valves, pumps, the accumulator and outflow-valve needles, the door and slide shapes) are not text and are still to be read from their variables.
+
+What only shows powered was mapped live on external power: EXT 1/2 voltage and frequency on ELEC AC, a battery's OFF on ELEC DC, the doors drawn as their numbers (green when closed). STS with an alert still on the WD shows the alert's page (ELEC DC for BAT EMER OFF), not STATUS.
+
 ## ECAM control panel
 
 The ECP buttons are L:vars the aircraft resets itself after reading. Press with ONE native SimConnect write of 1; two calculator writes (1 then 0) land in the same frame and do nothing. Verified: `INI_ECAM_CHECKLIST_LEFT` (check-off), `PUSH_ECAM_STS`, `INI_ECAM_ABN`, `INI_ECAM_WHEEL_L_MINUS_COMMAND` (selection down; PLUS is up), `INI_MASTER_CAUTION_COMMAND`. The other ECP keys follow the same pattern in their input events' set code.

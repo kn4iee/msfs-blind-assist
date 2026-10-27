@@ -23,7 +23,8 @@ public partial class IniBuildsA350Definition
                 hotkeyManager.ExitOutputHotkeyMode();
                 ShowTrackedWindow(
                     () => new Forms.FbwEwdWindow("A350 E/WD — Engine / Warning Display",
-                        () => Task.FromResult(A350.Display.A350EwdText.Build(Ecam?.LatestCapture)), announcer),
+                        () => Task.FromResult(A350.Display.A350EwdText.Build(Ecam?.LatestCapture,
+                            simConnect.GetCachedVariableValue(SdPageKey))), announcer),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).

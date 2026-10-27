@@ -26,6 +26,14 @@ public class A350EwdTextTests
     }
 
     [Fact]
+    public void The_system_display_section_names_the_page_and_its_values()
+    {
+        var lines = A350EwdText.Build(Fixture("ctr_sd_page_8"), 8).Split('\n');
+        Assert.Contains("System display: Fuel page", lines);
+        Assert.Contains("Centre tank: 137360 LBS, green", lines);
+    }
+
+    [Fact]
     public void No_messages_and_no_power_are_said()
     {
         var safety = A350EwdText.Build(Fixture("ctr_powerup_safety_test")).Split('\n');

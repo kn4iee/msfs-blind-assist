@@ -4,7 +4,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// with its colours; the ECAM cursor and an action box said where they are.</summary>
 public static class A350EwdText
 {
-    public static string Build(A350DrawCapture? capture)
+    /// <param name="sdPage">INI_ECAM_ACTIVE_PAGE when known: the SD section then names the page and its values.</param>
+    public static string Build(A350DrawCapture? capture, double? sdPage = null)
     {
         if (capture == null) return "The A350 displays are not available yet.";
         var view = A350Ewd.Parse(capture);
@@ -22,8 +23,16 @@ public static class A350EwdText
             if (l.Box == EcamBox.Done) marks.Add("done");
             o.Add(l.Spoken + (marks.Count > 0 ? " (" + string.Join(", ", marks) + ")" : ""));
         }
-        o.Add("System display:");
-        o.AddRange(view.SystemDisplay.Select(A350DrawLayout.Speak));
+        if (sdPage is double page)
+        {
+            o.Add("System display: " + A350SdText.PageName(page) + " page");
+            o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
+        }
+        else
+        {
+            o.Add("System display:");
+            o.AddRange(view.SystemDisplay.Select(A350DrawLayout.Speak));
+        }
         o.Add("Permanent data:");
         o.AddRange(view.PermanentData.Select(A350DrawLayout.Speak));
         return string.Join("\n", o);

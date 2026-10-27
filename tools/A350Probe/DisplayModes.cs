@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext";
 
     public static int Run(string mode, string[] args)
     {
@@ -27,6 +27,7 @@ internal static class DisplayModes
             case "ecamwatch": return EcamWatch(args);
             case "ecamlisten": return EcamListen(args);
             case "sdmap": return SdMap(args);
+            case "sdtext": return SdText(args);
             default: return 2;
         }
     }
@@ -252,6 +253,14 @@ internal static class DisplayModes
             line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
         mon.Start();
         Thread.Sleep(seconds * 1000);
+        return 0;
+    }
+
+    /// <summary>`sdtext ctr.json page`: a saved CTR draw read as the ECAM Control Panel's status display reads it.</summary>
+    private static int SdText(string[] args)
+    {
+        var cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        Console.WriteLine(A350SdText.Build(cap, double.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture)));
         return 0;
     }
 

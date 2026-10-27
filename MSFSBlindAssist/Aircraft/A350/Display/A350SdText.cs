@@ -1,7 +1,8 @@
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>The SD page shown, as the ECAM Control Panel's status display reads it (pure; the A380's
-/// "System Display Page" box): the page's name, its rows with their colours, then the permanent data line.
+/// "System Display Page" box): the page's name, its values named with their colours (A350SdPage), then the
+/// permanent data line.
 /// The rows come from the CTR draw the E/WD monitor keeps.</summary>
 public static class A350SdText
 {
@@ -14,7 +15,7 @@ public static class A350SdText
         var view = A350Ewd.Parse(capture);
         if (!view.Powered) return head + "\r\nThe SD is off: no power.";
         var o = new List<string> { head };
-        o.AddRange(view.SystemDisplay.Select(A350DrawLayout.Speak));
+        o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
         o.Add("Permanent data:");
         o.AddRange(view.PermanentData.Select(A350DrawLayout.Speak));
         return string.Join("\r\n", o);

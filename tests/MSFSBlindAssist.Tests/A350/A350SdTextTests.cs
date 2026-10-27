@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 namespace MSFSBlindAssist.Tests.A350;
 
 // The ECAM Control Panel's status display reads the SD page shown, as the A380's does: the page's name,
-// then its rows with their colours, then the permanent data line. Fixtures: SD pages drawn from a copy
+// then its values named (A350SdPage), then the permanent data line. Fixtures: SD pages drawn from a copy
 // taken on the stand at VCBI (APU running, engines off), the page set in the copy.
 public class A350SdTextTests
 {
@@ -18,8 +18,8 @@ public class A350SdTextTests
     {
         var lines = A350SdText.Build(Fixture("ctr_sd_elec_dc_stand"), 3).Split("\r\n");
         Assert.Equal("Elec DC page", lines[0]);
-        Assert.Contains("BAT 1 BAT EMER 1 BAT EMER 2 BAT 2, white", lines);
-        Assert.Contains("28, green; V, cyan; 27, green; V, cyan; 28, green; V, cyan; 28, green; V, cyan", lines);
+        Assert.Contains("BAT EMER 1, white", lines);
+        Assert.Contains("BAT 1 voltage: 28 V, green", lines);
         Assert.Contains("Permanent data:", lines);
     }
 
@@ -28,7 +28,7 @@ public class A350SdTextTests
     {
         var text = A350SdText.Build(Fixture("ctr_sd_fuel_stand"), 8);
         Assert.StartsWith("Fuel page\r\n", text);
-        Assert.Contains("43100 137360 43260, green", text);
+        Assert.Contains("Left tank: 43100 LBS, green\r\nCentre tank: 137360 LBS, green\r\nRight tank: 43260 LBS, green", text);
     }
 
     [Fact]
