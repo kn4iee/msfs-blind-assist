@@ -13,6 +13,9 @@
 // none, clamped to MIN_HOLD_MS-MAX_HOLD_MS. The default is short on purpose: a CLR held about a
 // second clears the whole scratchpad, as on the aircraft, so the app holds CLR 1300 ms only to wipe it.
 //
+// Watch: watch(names) and changes() report the watched L:vars that changed since the last call
+// (plan 13, the cockpit-wide announcements); the app polls changes() twice a second.
+//
 // Version: every scrape answers VERSION; the app installs this agent again over an older one.
 //
 // Install: an agent that cannot listen is no agent. When the view's own scripts have not run yet
@@ -34,7 +37,8 @@
   try {
     // 3: the registration cap, and `ready` only after both handlers are on.
     // 4: press takes the hold; scrape answers the version.
-    var VERSION = 4;
+    // 5: watch(names) and changes(), the cockpit-wide watch list (plan 13).
+    var VERSION = 5;
     var MARK = 'MSFSBA_BBS757_TABLET_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_TABLET_NOT_READY:';
     var HOLD_MS = 250;
@@ -189,6 +193,41 @@
       if (a && typeof a.verification_uri_complete === 'string') uri = a.verification_uri_complete;
       else if (a && typeof a.verification_uri === 'string') uri = a.verification_uri;
       return { ok: true, signedIn: !!t.ngAccessToken, userCode: code, uri: uri };
+    };
+
+    // Watched L:vars (plan 13): watch(names) stores the names (without "L:") and resets the
+    // baseline; changes() reads each one and answers only those whose value differs from the
+    // last call. The first call after watch() is the baseline and answers no changes. An agent
+    // with no list answers watching: false, and the app sends its list again.
+    var watch = { names: [], last: {}, baseline: true, seq: 0 };
+    A._watch = watch;
+
+    A.watch = function (names) {
+      if (typeof names === 'string') {
+        try { names = JSON.parse(names); } catch (e) { return 'bad-names'; }
+      }
+      if (!names || typeof names.length !== 'number') return 'bad-names';
+      var kept = [];
+      for (var i = 0; i < names.length; i++) if (typeof names[i] === 'string' && names[i].length > 0) kept.push(names[i]);
+      watch.names = kept;
+      watch.last = {};
+      watch.baseline = true;
+      return 'ok';
+    };
+
+    A.changes = function () {
+      watch.seq++;
+      var out = {};
+      for (var i = 0; i < watch.names.length; i++) {
+        var n = watch.names[i];
+        var v;
+        try { v = SimVar.GetSimVarValue('L:' + n, 'number'); } catch (e) { continue; }
+        if (typeof v !== 'number' || !isFinite(v)) continue;
+        if (!watch.baseline && watch.last[n] !== v) out[n] = v;
+        watch.last[n] = v;
+      }
+      watch.baseline = false;
+      return { ok: true, watching: watch.names.length > 0, seq: watch.seq, changes: out };
     };
 
     A.ping = function () { return { ok: true, tablet: !!A.tablet(), listening: !!state.listener, ready: state.ready }; };

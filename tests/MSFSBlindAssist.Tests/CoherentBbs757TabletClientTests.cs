@@ -171,6 +171,108 @@ public class CoherentBbs757TabletClientTests
         Assert.Contains("version: A.version", code);
     }
 
+    [Fact]
+    public void Watch_expression_is_json()
+    {
+        string expr = CoherentBbs757TabletClient.WatchExpression(new[] { "B757_OVHD_BATTERY_BUTTON", "ODD'NAME\"X" });
+
+        // The names travel as one JSON array literal, so a quote in a name cannot end the string.
+        Assert.StartsWith("window.__MSFSBA_BBS757 && __MSFSBA_BBS757.watch ? __MSFSBA_BBS757.watch(", expr);
+        int open = expr.IndexOf("watch([", StringComparison.Ordinal) + "watch(".Length;
+        int close = expr.LastIndexOf("])", StringComparison.Ordinal) + 1;
+        var names = System.Text.Json.JsonSerializer.Deserialize<string[]>(expr.Substring(open, close - open));
+        Assert.Equal(new[] { "B757_OVHD_BATTERY_BUTTON", "ODD'NAME\"X" }, names);
+    }
+
+    [Fact]
+    public void Agent_has_watch_and_changes()
+    {
+        string code = AgentCode();
+
+        Assert.Contains("A.watch = function (names)", code);
+        Assert.Contains("A.changes = function ()", code);
+        Assert.Contains("SimVar.GetSimVarValue('L:' + ", code);
+        // The first call after watch is the baseline: it returns no changes.
+        Assert.Contains("watch.baseline", code);
+        Assert.Contains("watching: ", code);
+    }
+
+    [Fact]
+    public async Task Reinstall_resends_the_list()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");
+        var sent = new List<string>();
+        client.EvalForTests = expr =>
+        {
+            sent.Add(expr);
+            if (expr.Contains(".watch(", StringComparison.Ordinal)) return Task.FromResult("ok");
+            return Task.FromResult("{\"ok\":true,\"watching\":true,\"seq\":1,\"changes\":{}}");
+        };
+        client.SetWatchList(new[] { "A_LIGHT", "B_SWITCH" });
+
+        await client.PollWatchAsync(CancellationToken.None);
+        await client.PollWatchAsync(CancellationToken.None);
+        Assert.Equal(1, sent.Count(e => e.Contains(".watch(", StringComparison.Ordinal)));
+
+        // A new agent (an aircraft reload) holds no list: the next poll sends it again.
+        client.AgentInstalled();
+        await client.PollWatchAsync(CancellationToken.None);
+        Assert.Equal(2, sent.Count(e => e.Contains(".watch(", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task An_agent_that_lost_its_list_gets_it_again()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");
+        int watches = 0;
+        bool watching = true;
+        client.EvalForTests = expr =>
+        {
+            if (expr.Contains(".watch(", StringComparison.Ordinal)) { watches++; return Task.FromResult("ok"); }
+            return Task.FromResult("{\"ok\":true,\"watching\":" + (watching ? "true" : "false") + ",\"seq\":1,\"changes\":{}}");
+        };
+        client.SetWatchList(new[] { "A_LIGHT" });
+
+        await client.PollWatchAsync(CancellationToken.None);
+        watching = false;
+        await client.PollWatchAsync(CancellationToken.None);   // answers "not watching"
+        await client.PollWatchAsync(CancellationToken.None);
+        Assert.Equal(2, watches);
+    }
+
+    [Fact]
+    public async Task Changes_are_raised_and_an_empty_set_is_not()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");
+        string answer = "{\"ok\":true,\"watching\":true,\"seq\":1,\"changes\":{}}";
+        client.EvalForTests = expr => Task.FromResult(expr.Contains(".watch(", StringComparison.Ordinal) ? "ok" : answer);
+        var raised = new List<IReadOnlyDictionary<string, double>>();
+        client.LvarsChanged += c => raised.Add(c);
+        client.SetWatchList(new[] { "A_LIGHT", "B_SWITCH" });
+
+        await client.PollWatchAsync(CancellationToken.None);
+        Assert.Empty(raised);
+
+        answer = "{\"ok\":true,\"watching\":true,\"seq\":2,\"changes\":{\"A_LIGHT\":1,\"B_SWITCH\":2.5}}";
+        await client.PollWatchAsync(CancellationToken.None);
+        var only = Assert.Single(raised);
+        Assert.Equal(1.0, only["A_LIGHT"]);
+        Assert.Equal(2.5, only["B_SWITCH"]);
+    }
+
+    [Fact]
+    public async Task No_list_sends_nothing()
+    {
+        using var client = new CoherentBbs757TabletClient(() => "");
+        int evals = 0;
+        client.EvalForTests = _ => { evals++; return Task.FromResult(""); };
+
+        await client.PollWatchAsync(CancellationToken.None);
+        client.SetWatchList(Array.Empty<string>());
+        await client.PollWatchAsync(CancellationToken.None);
+        Assert.Equal(0, evals);
+    }
+
     /// <summary>The tablet agent's source with its line comments removed.</summary>
     private static string AgentCode()
     {
