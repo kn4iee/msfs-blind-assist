@@ -271,6 +271,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             case Bbs757EfbElements.ActionKind.Refuse:
                 Alert(act.Refusal ?? "That cannot be pressed from here.");
                 return;
+            case Bbs757EfbElements.ActionKind.ScrollDown:
+            case Bbs757EfbElements.ActionKind.ScrollUp:
+                await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y,
+                    act.Kind == Bbs757EfbElements.ActionKind.ScrollDown ? Bbs757EfbScreen.WheelStep : -Bbs757EfbScreen.WheelStep, ct);
+                await Task.Delay(400, ct);
+                await ReadIfChangedAsync(ct, force: true);
+                return;
         }
         var item = act.Item;
         if (act.Kind == Bbs757EfbElements.ActionKind.Tap && item != null)
@@ -316,6 +323,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     {
         if (_built == null || !_built.Actions.TryGetValue(aidx, out var act) || act.Item is not { } item) return;
         if (act.Kind == Bbs757EfbElements.ActionKind.Refuse) { Alert(act.Refusal ?? "That cannot be changed from here."); Push(); return; }
+        if (Bbs757EfbScreen.UpdateGuard.Contains(item.Hit))
+        {
+            var moved = await OutOfGuardAsync(item, ct);
+            if (moved == null) { Alert(Bbs757EfbElements.GuardRefusal); Push(); return; }
+            item = moved;
+        }
         if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
         {
             bool want = value == "true";
@@ -390,8 +403,31 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private static Bbs757EfbItem? Find(Bbs757EfbScreenModel? m, string key) =>
         m?.Items.FirstOrDefault(i => i.Key == key) ?? m?.Menu.FirstOrDefault(i => i.Key == key);
 
+    /// <summary>
+    /// A control in the update guard on a page that scrolls: scroll it out of the guard (one step down,
+    /// up to three), read the page again and return the control where it is now; null when it never
+    /// leaves the guard (then nothing is tapped). Measured: one step moves the Callouts list ~130 px.
+    /// </summary>
+    private async Task<Bbs757EfbItem?> OutOfGuardAsync(Bbs757EfbItem item, CancellationToken ct)
+    {
+        var now = item;
+        for (int i = 0; i < 3 && Bbs757EfbScreen.UpdateGuard.Contains(now.Hit); i++)
+        {
+            int dir = now.Hit.Y < Bbs757EfbScreen.UpdateGuard.Top + Bbs757EfbScreen.UpdateGuard.Height / 2 ? -1 : 1;
+            await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y, dir * Bbs757EfbScreen.WheelStep, ct);
+            await Task.Delay(400, ct);
+            await ReadIfChangedAsync(ct, force: true);
+            var found = Find(_model, item.Key);
+            if (found == null) return null;
+            now = found;
+        }
+        return Bbs757EfbScreen.UpdateGuard.Contains(now.Hit) ? null : now;
+    }
+
     private async Task TapAsync(Point p, CancellationToken ct)
     {
+        // Never into the update guard (the agent would refuse it too).
+        if (Bbs757EfbScreen.UpdateGuard.Contains(p)) { Alert(Bbs757EfbElements.GuardRefusal); return; }
         var run = await _client.RunAsync(new[] { (new EfbPoint(p.X, p.Y), 250) }, ct);
         if (run != Bbs757EfbRunResult.Done) Alert(RunProblemText(run));
     }

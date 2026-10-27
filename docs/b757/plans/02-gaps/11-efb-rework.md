@@ -1,10 +1,10 @@
-# BlueBird 757 EFB Rework Implementation Plan (plan 11, later: new features)
+﻿# BlueBird 757 EFB Rework Implementation Plan (plan 11, later: new features)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
 **Goal:** As much of BlueBird's tablet as can be operated and verified, in a reworked accessible EFB window at parity with the PMDG, MD-11 and flyPad EFB windows: flight setup, fuel and load, every ground service, doors, pushback, cockpit presets and quick starts, settings, maintenance resets, status.
 
-**Architecture:** BlueBird's tablet is drawn by its WASM: no text can be read from it. The app taps it at measured points through the existing EFB client and agent (`Coherent.call("WASM_CLICK" …)` on the tablet's own canvas handlers, proven) and judges each result from something it can read: a BlueBird L:var (`BBS757_vis_*`, `BBS_757_GPU_*`, doors, tanks and stations, APU and buses), BlueBird's settings file (`efb_settings.json`, which changes at once), or the CDU. Every toggle is read before it is tapped ([B757-2]'s pattern). The window shows the app's own model of that state, never BlueBird's screen (R73).
+**Architecture:** BlueBird's tablet is drawn by its WASM: no text can be read from it. The app taps it at measured points through the existing EFB client and agent (`Coherent.call("WASM_CLICK" â€¦)` on the tablet's own canvas handlers, proven) and judges each result from something it can read: a BlueBird L:var (`BBS757_vis_*`, `BBS_757_GPU_*`, doors, tanks and stations, APU and buses), BlueBird's settings file (`efb_settings.json`, which changes at once), or the CDU. Every toggle is read before it is tapped ([B757-2]'s pattern). The window shows the app's own model of that state, never BlueBird's screen (R73).
 
 **Tech Stack:** C# 13 / .NET 10 Windows Forms (WebView2 through the shared EFB window, or WinForms tabs as the fallback), xUnit, ES5 agent.
 
@@ -14,10 +14,10 @@
 
 - Owned files (from plan 07): `SimConnect/BBS757/Bbs757EfbLayout.cs`, `CoherentBbs757EfbClient.cs`, `Bbs757WorkFolder.cs`, `Bbs757Loadsheet.cs`, `Bbs757LoadWatch.cs`, `Bbs757GroundPower.cs`, `Forms/BBS757/BBS757EfbForm*.cs`, `Resources/coherent-bbs757-efb-agent.js`, `Aircraft/BBS757Definition.Efb.cs`, `Aircraft/BBS757Definition.LoadWatch.cs`, `MainForm.BBS757.cs`; new `SimConnect/BBS757/Bbs757GroundServices.cs`, `Bbs757EfbSettings.cs`, `Bbs757EfbBridge.cs`; additive changes only to `Forms/FBWA380/FbwEfbForm.cs` (the shared EFB window; the PMDG, MD-11 and flyPad EFB tests must stay green); tests `Bbs757EfbTests.cs`, `Bbs757LoadWatchTests.cs`, `Bbs757LoadsheetTests.cs`, `Bbs757GroundPowerTests.cs`, `Bbs757GroundServicesTests.cs`, `Bbs757EfbSettingsTests.cs`, `Bbs757EfbBridgeTests.cs` (new); `docs/b757/evidence/flight-11.md`.
 - Measured points (EFB-local): Home (19,62), Aircraft (320,190), Navigation (503,190), Settings (1073,190); Aircraft menu COCKPIT PRESETS (127,178), FUEL (67,237), W&B (124,307), GROUND SERVICES (128,368); tiles GPU (1005,231), CHOCKS (404,556); Settings > AIRCRAFT (98,244), NOSEWHEEL STEERING (1154,249). Estimated from session 8's mirror (each proven by a reversible tap in Task 1 before use): REMOVE ALL (818,159), JETWAY (638,231), FWD STAIR (612,294), GROUND A/C (404,393), CARGO SVC (1003,393), LEFT AIR START (612,456), RIGHT AIR START (1027,454), FUEL TRUCK (1218,616), AFT STAIRS (637,765), CATERING (996,763), GND SRVC mode (400,927), REQ PB TUG (716,932), REMOVE TUG (911,932), arrows (736,999), (811,999), (886,999); CABIN & DOORS menu item about (119,427).
-- State sources: GPU `BBS_757_GPU_AC_PWR_CONNECTED`; chocks `BBS757_vis_chocks`; services `BBS757_vis_stairsfwd`, `_stairsaft`, `_fueltruck`, `_catertruck`, `_aircon`, `_baggage1` (cargo), `_airstart` (one for both air-start tiles); doors `B757_DOORS_PAX_L1..L3/R1..R3` (0-100), `B757_DOORS_CARGO_FWD/AFT` (0-200); settings keys in `efb_settings.json` (`docs/b757/evidence/wasm-findings.md` §7). Never use `BBS757_vis_cabin`, `_type1_exit`, `_type2_exit` (cabin layout, not services).
+- State sources: GPU `BBS_757_GPU_AC_PWR_CONNECTED`; chocks `BBS757_vis_chocks`; services `BBS757_vis_stairsfwd`, `_stairsaft`, `_fueltruck`, `_catertruck`, `_aircon`, `_baggage1` (cargo), `_airstart` (one for both air-start tiles); doors `B757_DOORS_PAX_L1..L3/R1..R3` (0-100), `B757_DOORS_CARGO_FWD/AFT` (0-200); settings keys in `efb_settings.json` (`docs/b757/evidence/wasm-findings.md` Â§7). Never use `BBS757_vis_cabin`, `_type1_exit`, `_type2_exit` (cabin layout, not services).
 - Not operable (measured or by nature): the sliders (IRS ALIGNMENT TIME and BOARDING & LOAD RATE did not move), AUTOMATIC BOARDING (ignored taps), charts, maps, live diagrams, OFP and weather documents, performance outputs, notification text, failure catalogue paging. Where the CDU or the app's own SimBrief fetch gives the content, the window offers that.
 - Never tap inside the UPDATE/REMOVE guard box (x 1191-1391, y 297-377 on every page; the agent refuses); pick hit points left of x 1191. Never arm custom SAVE/LOAD (it stays armed invisibly for the next tile).
-- Speech: the screen reader reads the button; the window speaks once, from the value read back; "already …" taps nothing; unreadable taps nothing ("The … cannot be read, so nothing was tapped."). Background changes are announced from the variables.
+- Speech: the screen reader reads the button; the window speaks once, from the value read back; "already â€¦" taps nothing; unreadable taps nothing ("The â€¦ cannot be read, so nothing was tapped."). Background changes are announced from the variables.
 - Credentials (Hoppie, SayIntentions, Navigraph tokens, the SimBrief ID number) are never shown, spoken or logged.
 - Variables added: up to 9 (the proven services' rows).
 
@@ -25,7 +25,7 @@
 
 - A tile whose state cannot be read taps nothing (Task 2 test).
 - REMOVE ALL while external power is on line is refused before any tap (Task 2 test).
-- A BlueBird update that moves buttons without changing the canvas size: every run judges its result from a variable, so a moved button reads back "BlueBird did not …", never a false success (Task 2 test with an unchanged read-back).
+- A BlueBird update that moves buttons without changing the canvas size: every run judges its result from a variable, so a moved button reads back "BlueBird did not â€¦", never a false success (Task 2 test with an unchanged read-back).
 - The settings switches near the guard box (DISPLAYS BOOTUP y 310, SYNC BAROMETERS y 371) are tapped at x 1154, outside it (Task 3 test).
 - The doors are announced by plan 06; this plan only reads them for its Doors page (one owner per spoken row).
 
@@ -63,7 +63,7 @@
       public static string Result(Bbs757GroundService s, bool wantOn, double? before, double? after);
       public static string? ChangePhrase(Bbs757GroundService s, double v);   // "Fuel truck called" / "Fuel truck removed"
       public static string? RemoveAllRefusal(double? extPwrOn);
-      public static string DoorPhrase(string door, double position, double max);   // "Door L1 open" at ≥ 90 %, "closed" at ≤ 5 %, null between
+      public static string DoorPhrase(string door, double position, double max);   // "Door L1 open" at â‰¥ 90 %, "closed" at â‰¤ 5 %, null between
   }
   ```
   Words per service from Task 1 (e.g. "Forward stairs attached / removed", "Fuel truck called / removed", "Catering called / removed", "Ground air conditioning connected / disconnected", "Cargo service called / removed", "Air start cart connected / disconnected").
@@ -99,7 +99,7 @@
 
 **Files:** `Aircraft/BBS757Definition.Efb.cs`; test `Bbs757GroundServicesTests.cs`.
 
-- Rows for each proven service's state var (Continuous, `IsAnnounced`, Ctrl+M rows "Fuel Truck" …), spoken through `_changes.Observe` with `ChangePhrase`; a window run's echo silenced as plan 07's ground power is (its `LastWindowRunUtc` stamp). The doors are announced by plan 06: this plan reads them for the Doors page only (one owner per spoken row).
+- Rows for each proven service's state var (Continuous, `IsAnnounced`, Ctrl+M rows "Fuel Truck" â€¦), spoken through `_changes.Observe` with `ChangePhrase`; a window run's echo silenced as plan 07's ground power is (its `LastWindowRunUtc` stamp). The doors are announced by plan 06: this plan reads them for the Doors page only (one owner per spoken row).
 - [ ] **Steps 1-5**; commit `feat(b757): ground services announced`.
 
 ## In-sim checks (owner)
@@ -119,12 +119,33 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 
 - **Status:** claimed
 - **Claimed by:** Declan Webster, 2026-10-26 (with Robin Kipp's agreement)
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
+- **Worked by:** Declan Webster, with Claude (no subagents)
 - **Started:** 2026-10-26, from `B757` 14944413
 - **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Tests at landing:** full suite passed 2026-10-27 (17,752 tests; the one failure, a test written for the old page heading, was updated and the 1,865 BlueBird tests re-run green)
+- **Tasks:** 0 done. 1 done for what screen reading needs (flight-11.md sections 5-6: services, sliders, switches,
+  scrolling; presets, pushback arrows, REMOVE ALL and the Cabin & Doors door tiles were read, not tapped). 2 done
+  (`Bbs757GroundServices`). 3 replaced: settings are read from the tablet's own page, see "Changed". 4 done as the
+  screen-reading bridge (`Bbs757EfbBridge`, Shift+T opens the shared `FbwEfbForm`; the old window stays as "Classic
+  757 EFB window" inside it). 5 done for the four proven services (CHOCKS stays the map's Status row).
+- **Waiting on the owner:** the in-sim checks below at a gate with the APU on (this work ran on a runway, cold and
+  dark then tablet-only); FWD STAIR (its tile did not move on a runway); JETWAY (no jetway on a runway); GND SRVC
+  mode, tug and arrows; a door open/close from the Cabin & Doors page.
+- **In-sim results:** 2026-10-26/27, MSFS 2024, BlueBird 757-200 PW 0.1.0, through the app's own Shift+T window (test
+  build, UI Automation): pages read and navigated (Home, Aircraft, Settings General/Aircraft/Callouts, Checklist);
+  a settings switch (Radio altimeter 2500) on and off; EFB brightness mode Manual then Auto; a slider (Notifications
+  fade-out timer) 10 -> 6 -> 10 SEC from its choice list, each confirmed on the tablet. The probe proved every slider,
+  the four services and scrolling (flight-11.md). Not run yet: the plan's in-sim check 1 as written (at a gate).
+- **Changed from the plan:** R73 ("the window never shows BlueBird's screen") is replaced: the tablet IS read, from
+  the ND pop-out's pixels with Windows OCR (flight-11.md sections 1-4), and every tablet control is offered as the
+  tablet draws it, each result judged by reading the page again, or a variable where one is proven (services, GPU,
+  steering per B757-2). So Task 3's settings-file reader was not needed: a switch is judged on the page it was tapped
+  on. The sliders ARE operable (the plan listed them as not): tapped on their measured tracks, closed-loop. The
+  app's TFM became `net10.0-windows10.0.19041.0` (main and test projects) for `Windows.Media.Ocr`: a frozen-file
+  change, recorded here as a handoff. Not done: notification toasts as alerts; typing into the tablet's number
+  fields (read-only for now); Navigation's dense data pages read poorly (the app's own SimBrief fetch carries that).
+- **Rulings made while working:** "Read the tablet's pixels, overriding R73?" Yes: Declan Webster with Robin Kipp,
+  2026-10-26 ("claim plan 11 and do this in full"). "Must sliders work?" Yes, proven (Robin Kipp asked).
+- **Handoff to plan 16 (added):** [B757-10]'s wording should become "never tap BlueBird's EFB without reading the
+  result back (the page again, or a variable)"; chocks announcing stays the map's (plan 16); docs/b757.md's EFB
+  section should describe the pop-out (Shift+T parks the captain's ND pop-out off-screen while the window is open).

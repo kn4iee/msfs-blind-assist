@@ -178,6 +178,13 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
+    public void A_page_that_scrolls_is_known()
+    {
+        Assert.True(Load("bright", "53-settings-callouts").Scrollable);
+        Assert.False(Load("bright", "51-settings-aircraft").Scrollable);
+    }
+
+    [Fact]
     public void Nothing_in_the_update_guard_is_tappable()
     {
         foreach (var (set, name) in new[] { ("bright", "53-settings-callouts"), ("bright", "51-settings-aircraft"), ("bright", "13-aircraft-ground-services") })

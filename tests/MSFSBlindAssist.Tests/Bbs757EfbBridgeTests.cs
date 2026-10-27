@@ -62,11 +62,13 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
-    public void An_alert_is_the_second_element_and_assertive()
+    public void An_alert_is_the_first_element_and_assertive()
     {
+        // The page name is the window's own title line (the "page" key), never a list item.
         var b = Bbs757EfbElements.Build(null, "The tablet reader could not open.");
-        Assert.Equal("alert", b.Data["items.1.kind"]);
-        Assert.Equal("assertive", b.Data["items.1.live"]);
+        Assert.Equal("BlueBird tablet", b.Data["page"]);
+        Assert.Equal("alert", b.Data["items.0.kind"]);
+        Assert.Equal("assertive", b.Data["items.0.live"]);
     }
 
     [Theory]

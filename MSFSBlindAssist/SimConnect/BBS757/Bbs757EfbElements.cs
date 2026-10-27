@@ -12,7 +12,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 public static class Bbs757EfbElements
 {
     /// <summary>What pressing an element does.</summary>
-    public enum ActionKind { Tap, Classic, Refresh, Refuse }
+    public enum ActionKind { Tap, Classic, Refresh, Refuse, ScrollDown, ScrollUp }
 
     /// <summary>One element's action: the tablet item it taps (Tap, and the item a set changes), or the
     /// refusal said instead.</summary>
@@ -66,7 +66,8 @@ public static class Bbs757EfbElements
             if (action != null) actions[aidx] = action;
         }
 
-        Add(model?.PageName ?? "BlueBird tablet", level: 1, key: "page");
+        // The page name is the window's own title line and page announcement ("page" above), so it is
+        // not repeated as a list item.
         if (alert != null) Add(alert, kind: "alert", live: "assertive", key: "alert");
 
         if (model != null)
@@ -82,6 +83,11 @@ public static class Bbs757EfbElements
                 AddItem(it);
         }
 
+        if (model?.Scrollable == true)
+        {
+            Add("Scroll down", kind: "button", clickable: true, key: "btn:scroll-down", action: new Action(ActionKind.ScrollDown));
+            Add("Scroll up", kind: "button", clickable: true, key: "btn:scroll-up", action: new Action(ActionKind.ScrollUp));
+        }
         Add("More", level: 2, key: "h:more");
         Add(ClassicWindowText, kind: "button", clickable: true, key: "btn:classic", action: new Action(ActionKind.Classic));
         Add(ReadAgainText, kind: "button", clickable: true, key: "btn:refresh", action: new Action(ActionKind.Refresh));
@@ -89,6 +95,9 @@ public static class Bbs757EfbElements
 
         void AddItem(Bbs757EfbItem it)
         {
+            // On a page that scrolls, a control in the update guard is scrolled out of it and then tapped.
+            if (!it.Clickable && model.Scrollable && Bbs757EfbScreen.UpdateGuard.Contains(it.Hit))
+                it = it with { Clickable = true };
             switch (it.Kind)
             {
                 case Bbs757EfbKind.Heading:

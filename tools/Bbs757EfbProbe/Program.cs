@@ -103,6 +103,33 @@ internal static class Program
             case "wheel":   // wheel <x> <y> <deltaY>
                 Console.WriteLine(await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.wheel({args[1]},{args[2]},{args[3]}))"));
                 return 0;
+            case "front":   // front <hwnd>   time bringing a window to the front
+            {
+                var sw = Stopwatch.StartNew();
+                bool ok = Popout.BringToFront(new IntPtr(long.Parse(args[1])));
+                Console.WriteLine($"front {(ok ? "ok" : "failed")} in {sw.ElapsedMilliseconds} ms");
+                return 0;
+            }
+            case "vars":    // vars NAME [NAME ...]   BlueBird L:vars read in the tablet's page
+                Console.WriteLine(await Agent("JSON.stringify(__MSFSBA_BBS757EFB.readVars(" + JsonSerializer.Serialize(args.Skip(1).ToArray()) + "))"));
+                return 0;
+            case "tap":     // tap x,y [x,y ...]   (1.2 s apart)
+                foreach (var t in args.Skip(1))
+                {
+                    var xy = t.Split(',');
+                    Console.WriteLine($"  tap {t}: {await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.click({int.Parse(xy[0])},{int.Parse(xy[1])}))")}");
+                    await Task.Delay(1200);
+                }
+                return 0;
+            case "look":    // look   capture the pop-out as it is (no debugger: the app may hold the view) and read it
+            {
+                if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out"); return 2; }
+                using var t = Popout.CaptureTablet();
+                if (t == null) { Console.WriteLine("capture failed"); return 3; }
+                var read = await Bbs757EfbPageReader.ReadAsync(t);
+                PrintModel("live", read.Model, $"{read.OcrMs} ms");
+                return 0;
+            }
             case "read":
                 return await Read(args[1], args[2], args.Skip(3).ToArray());
         }

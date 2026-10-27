@@ -315,8 +315,9 @@ public sealed class Bbs757EfbPopout
 
     // ---------------- focus and input (same chain as the A300/A330 CDU pop-out) ----------------
 
-    private bool BringToFront(IntPtr h)
+    internal bool BringToFront(IntPtr h)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         if (GetForegroundWindow() == h) return true;
         // 1: a synthetic Alt tap satisfies the foreground lock's "last input" rule.
         keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
@@ -324,7 +325,7 @@ public sealed class Bbs757EfbPopout
         if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
         BringWindowToTop(h);
         SetForegroundWindow(h);
-        if (WaitForeground(h, 10)) return true;
+        if (WaitForeground(h, 10)) { _log($"front: alt tap worked, {sw.ElapsedMilliseconds} ms"); return true; }
         // 2: attach to the foreground window's input queue.
         IntPtr fg = GetForegroundWindow();
         uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out _);
@@ -332,10 +333,10 @@ public sealed class Bbs757EfbPopout
         bool attached = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
         try { BringWindowToTop(h); SetForegroundWindow(h); }
         finally { if (attached) AttachThreadInput(me, fgThread, false); }
-        if (WaitForeground(h, 10)) return true;
+        if (WaitForeground(h, 10)) { _log($"front: attach worked, {sw.ElapsedMilliseconds} ms"); return true; }
         // 3: the shell's window switch.
         try { SwitchToThisWindow(h, true); } catch { }
-        if (WaitForeground(h, 10)) return true;
+        if (WaitForeground(h, 10)) { _log($"front: switch worked, {sw.ElapsedMilliseconds} ms"); return true; }
         // 4: Windows Script Host's AppActivate (the one that brought FS2024 forward from a
         // background process when the others were refused; measured on the A330, 2026-10-16, and on
         // the 757 probe, 2026-10-26, where a plain AppActivate alone failed once).
@@ -352,6 +353,7 @@ public sealed class Bbs757EfbPopout
         }
         catch (Exception ex) { _log($"AppActivate failed: {ex.Message}"); }
         bool ok = WaitForeground(h, 20);
+        _log($"front: AppActivate {(ok ? "worked" : "failed")}, {sw.ElapsedMilliseconds} ms");
         if (!ok) _log("could not bring the window to the front by any of four ways");
         return ok;
     }

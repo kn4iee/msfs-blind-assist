@@ -45,7 +45,7 @@ public static class Bbs757GroundServices
     /// state the tablet draws (its colour and words), tapped only on the pilot's press, and judged by
     /// reading the page again. CHOCKS was measured 2026-10-25 (Bbs757EfbLayout.ChocksVar).
     /// </summary>
-    public static readonly HashSet<string> Proven = new(StringComparer.Ordinal) { "CHOCKS" };
+    public static readonly HashSet<string> Proven = new(StringComparer.Ordinal) { "CHOCKS", "AFT STAIRS", "FUEL TRUCK", "CATERING", "CARGO SVC" };
 
     /// <summary>
     /// The services with an announced row of their own on the definition (Task 5): the proven ones but

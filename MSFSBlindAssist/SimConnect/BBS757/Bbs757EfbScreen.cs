@@ -147,6 +147,10 @@ public sealed record Bbs757EfbScreenModel(
     IReadOnlyList<Bbs757EfbItem> Menu,
     IReadOnlyList<Bbs757EfbItem> Items)
 {
+    /// <summary>Whether the page scrolls (a scroll bar at its right edge, as Settings, Callouts has):
+    /// the window then offers scroll buttons (the agent's wheel).</summary>
+    public bool Scrollable { get; init; }
+
     /// <summary>"Aircraft, Ground services" / "Home".</summary>
     public string PageName =>
         App.Length == 0 ? "Unknown page"
@@ -334,7 +338,7 @@ public static class Bbs757EfbScreen
         items.AddRange(app == "SETTINGS" ? ParseRows(body, px)
                      : app == "CHECKLIST" ? ParseChecklist(body, px)
                      : ParseContent(body, px));
-        return new Bbs757EfbScreenModel(app, section, menu, items);
+        return new Bbs757EfbScreenModel(app, section, menu, items) { Scrollable = IsScrollable(px) };
     }
 
     /// <summary>A page template applied to the page's lines: slots become items (added to
@@ -833,7 +837,11 @@ public static class Bbs757EfbScreen
                     Value: val, Slider: new Bbs757EfbSlider(tl, tr, k)));
                 continue;
             }
-            o.Add(new(Bbs757EfbKind.Row, pretty, label.Box, label.Centre, false, "row:" + name, Value: Bbs757EfbVocabulary.Pretty(val)));
+            // A label with no value, switch or slider beside it is a section's title ("PILOT CALLOUTS").
+            if (val.Length == 0)
+                o.Add(new(Bbs757EfbKind.Heading, pretty, label.Box, label.Centre, false, "h:" + name));
+            else
+                o.Add(new(Bbs757EfbKind.Row, pretty, label.Box, label.Centre, false, "row:" + name, Value: Bbs757EfbVocabulary.Pretty(val)));
         }
         var rest = lines.Where(l => !used.Contains(l)).ToList();
         o.AddRange(ParseContent(rest, px));
@@ -1160,6 +1168,24 @@ public static class Bbs757EfbScreen
     public static IReadOnlyList<Rectangle> EmptySlots(IReadOnlyList<Bbs757EfbTextLine> lines, Bbs757EfbPixels px) =>
         Parse(lines, px).Items.Where(i => i.Key.StartsWith("slot:", StringComparison.Ordinal) && i.Value == "not read")
             .Select(i => i.Box).ToList();
+
+    /// <summary>
+    /// A scroll bar down the page's right edge: column x 1386 lighter than 100 (normalised) for 300 rows
+    /// or more between y 90 and 1040. Measured: Settings, Callouts 944 rows (track and thumb), Settings,
+    /// Aircraft none (its page fits).
+    /// </summary>
+    internal static bool IsScrollable(Bbs757EfbPixels px)
+    {
+        int rows = 0;
+        for (int y = 90; y < Math.Min(1040, px.Height); y++)
+            if (px.Lum(1386, y) > 100) rows++;
+        return rows >= 300;
+    }
+
+    /// <summary>One wheel step: where the agent's wheel is given (the content's middle) and how far
+    /// (measured: 300 moves the Callouts list about 130 px).</summary>
+    public static readonly Point WheelPoint = new(800, 600);
+    public const int WheelStep = 300;
 
     // ------------------------------------------------------------------ helpers
 
