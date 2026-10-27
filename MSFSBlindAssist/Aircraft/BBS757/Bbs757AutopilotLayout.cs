@@ -2,10 +2,12 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
 /// The "757 Autopilot" window's buttons, in order: the three CMD buttons, the autothrottle arm and
-/// flight director switches, then the mode buttons in the MCP's own left-to-right order. Each names
-/// its map node; a light button's state is its MCP light (<see cref="Bbs757McpLights"/>), A/T Arm's
-/// is BlueBird's armed flag (<see cref="AutothrottleArmedVar"/>), and a flight director's is its map
-/// position. Pure: the window takes the labels, the states and the presses from the definition
+/// flight director switches, the mode buttons in the MCP's own left-to-right order, then Speed
+/// Intervene, A/T Disconnect and the disengage bar. Each names its map node and its fixed access key;
+/// a light button's state is its MCP light (<see cref="Bbs757McpLights"/>), A/T Arm's is BlueBird's
+/// armed flag (<see cref="AutothrottleArmedVar"/>), Speed Intervene's the speed window's blank flag,
+/// a switch's its map position, and A/T Disconnect has none. Pure: the window takes the labels, the
+/// states and the presses from the definition
 /// (BBS757Definition.Autopilot.cs).
 /// </summary>
 public static class Bbs757AutopilotLayout
@@ -23,7 +25,16 @@ public static class Bbs757AutopilotLayout
     /// </summary>
     public const string AutothrottleArmedVar = "BBS_AUTO_THROTTLE";
 
-    /// <summary>The window's buttons by node, in order.</summary>
+    /// <summary>The IAS/MACH knob's push: BlueBird's speed intervention, captioned from the speed window's blank flag.</summary>
+    public const string SpeedInterveneNode = Bbs757McpWindowLayout.SpeedInterveneNode;
+
+    /// <summary>The thrust levers' A/T disconnect button: a momentary press with no state to show.</summary>
+    public const string AutothrottleDisconnectNode = "B757_AT_DISC_1";
+
+    /// <summary>The MCP's autopilot disengage bar: a toggle, Up (0) or Down (1).</summary>
+    public const string DisengageBarNode = "B757_MCP_btn_autopilot_disengage";
+
+    /// <summary>The window's buttons by node, in order: the sixteen engage and mode controls, then Speed Intervene, A/T Disconnect and the disengage bar.</summary>
     public static IReadOnlyList<string> Nodes { get; } = new[]
     {
         "B757_MCP_CMD_1_BUTTON", "B757_MCP_CMD_2_BUTTON", "B757_MCP_CMD_3_BUTTON",
@@ -32,10 +43,33 @@ public static class Bbs757AutopilotLayout
         "B757_MCP_LNAV_BUTTON", "B757_MCP_VNAV_BUTTON", "B757_MCP_FLCH_BUTTON",
         "B757_MCP_HOLD_1_BUTTON", "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VS_BUTTON",
         "B757_MCP_LOC_BUTTON", "B757_MCP_APP_BUTTON",
+        SpeedInterveneNode, AutothrottleDisconnectNode, DisengageBarNode,
     };
 
-    /// <summary>The switches among them: their state is not a light, so the window asks the sim for it while shown.</summary>
-    public static IReadOnlyList<string> SwitchNodes { get; } = new[] { AutothrottleArmNode, CaptainFdNode, FirstOfficerFdNode };
+    /// <summary>
+    /// Each button's fixed access key by node (Alt and the letter presses it). Fixed rather than taken from
+    /// the label, so a relabelled control keeps its key; several labels (ALT HOLD, V/S, LOC) hold no free
+    /// letter of their own, so the window handles the keys itself and names each to the screen reader.
+    /// </summary>
+    private static readonly Dictionary<string, char> Keys = new(StringComparer.Ordinal)
+    {
+        ["B757_MCP_CMD_1_BUTTON"] = 'L', ["B757_MCP_CMD_2_BUTTON"] = 'C', ["B757_MCP_CMD_3_BUTTON"] = 'R',
+        [AutothrottleArmNode] = 'A', [CaptainFdNode] = 'F', [FirstOfficerFdNode] = 'O',
+        ["B757_MCP_THR_BUTTON"] = 'T', ["B757_MCP_SPD_BUTTON"] = 'S',
+        ["B757_MCP_LNAV_BUTTON"] = 'N', ["B757_MCP_VNAV_BUTTON"] = 'V', ["B757_MCP_FLCH_BUTTON"] = 'H',
+        ["B757_MCP_HOLD_1_BUTTON"] = 'D', ["B757_MCP_HOLD_2_BUTTON"] = 'E', ["B757_MCP_VS_BUTTON"] = 'Y',
+        ["B757_MCP_LOC_BUTTON"] = 'G', ["B757_MCP_APP_BUTTON"] = 'P',
+        [SpeedInterveneNode] = 'I', [AutothrottleDisconnectNode] = 'X', [DisengageBarNode] = 'B',
+    };
+
+    /// <summary>The button's fixed access key (Alt and this letter), or null for a node the window does not carry.</summary>
+    public static char? AccessKeyFor(string node) => Keys.TryGetValue(node, out char key) ? key : null;
+
+    /// <summary>
+    /// The switches among them: their state is not a light, so the window asks the sim for it while shown,
+    /// and a press moves them to their other position.
+    /// </summary>
+    public static IReadOnlyList<string> SwitchNodes { get; } = new[] { AutothrottleArmNode, CaptainFdNode, FirstOfficerFdNode, DisengageBarNode };
 
     /// <summary>
     /// What the window reads on request while shown: the three switches (a press flips a switch from

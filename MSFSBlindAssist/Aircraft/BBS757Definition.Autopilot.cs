@@ -8,15 +8,17 @@ namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
 /// The Ctrl+P "757 Autopilot" window: one button per MCP engage control (<see cref="Bbs757AutopilotLayout"/>),
-/// each captioned with its live state. A mode or CMD button shows its MCP light (from the 1 Hz
-/// batch); the two F/D switches show their map position and A/T ARM BlueBird's armed flag
+/// each captioned with its live state and pressed by its fixed Alt key. A mode or CMD button shows its
+/// MCP light (from the 1 Hz batch), Speed Intervene the speed window's blank flag, A/T Disconnect
+/// nothing; the two F/D switches and the disengage bar show their map position and A/T ARM BlueBird's armed flag
 /// (<c>L:BBS_AUTO_THROTTLE</c>, the A/T's real state, ruling R40), each read on request about once a
 /// second while the window is shown (they are OnRequest variables, and a status row of their own
 /// would cost a data definition and a Ctrl+M row nobody asked for).
 ///
 /// A press goes through the same writer as the panel: a button replays its click code
 /// (<see cref="PressAsync"/>) without speaking when its light changes (the caption's change is the
-/// feedback, as in the iFly, HS787 and MD-11 windows), its light change being that press's echo; when
+/// feedback, as in the iFly, HS787 and MD-11 windows), its light change being that press's echo (a
+/// button with no light says "Speed Intervene pressed", as the panel does); when
 /// the light reads back as it was, the caption cannot change, so the press says "CMD L did not
 /// engage" or "… did not disengage" (the iFly window's words). A switch is moved to its other
 /// position (<see cref="SetPositionAsync"/>); A/T Arm then reads its flag back and, when it did not
@@ -54,14 +56,21 @@ public partial class BBS757Definition
             }
             Func<string> state = Bbs757McpLights.ForNode(node) is { } light
                 ? () => Bbs757McpLights.State(cached(light.Key))
-                : node == Bbs757AutopilotLayout.AutothrottleArmNode
-                    ? () => Bbs757AutopilotLayout.AutothrottleState(cached(Bbs757AutopilotLayout.AutothrottleArmedVar))
-                    : () => Bbs757AutopilotLayout.SwitchState(control, cached(node));
-            buttons.Add(new Bbs757AutopilotButton(control.Label, state, () =>
+                : node switch
+                {
+                    Bbs757AutopilotLayout.AutothrottleArmNode
+                        => () => Bbs757AutopilotLayout.AutothrottleState(cached(Bbs757AutopilotLayout.AutothrottleArmedVar)),
+                    Bbs757AutopilotLayout.SpeedInterveneNode => () => SpeedInterveneState(cached(Bbs757Mcp.IasBlankedVar)),
+                    _ when Bbs757AutopilotLayout.SwitchNodes.Contains(node)
+                        => () => Bbs757AutopilotLayout.SwitchState(control, cached(node)),
+                    _ => () => "",   // A/T Disconnect: a press with nothing to show
+                };
+            string label = Bbs757McpWindowLayout.CaptionOverride(node) ?? control.Label;
+            buttons.Add(new Bbs757AutopilotButton(label, state, () =>
             {
                 if (_autopilotSim is { } sim && _autopilotAnnouncer is { } announcer)
                     _ = PressFromWindowAsync(control.Node, sim, announcer);   // never throws: it catches and logs
-            }));
+            }, Bbs757AutopilotLayout.AccessKeyFor(node)));
         }
         return buttons;
     }
@@ -110,7 +119,9 @@ public partial class BBS757Definition
                 SayUnavailable(control, announcer);
                 return;
             }
-            await PressAsync(control, press, io, announcer, speak: false);
+            // A lit button's caption is its feedback; Speed Intervene and A/T Disconnect have no light, so
+            // they say "… pressed" once, as the panel does (CORE-7).
+            await PressAsync(control, press, io, announcer, speak: Bbs757McpLights.ForNode(node) == null);
             return;
         }
         await FlipFromWindowAsync(control, io, announcer);

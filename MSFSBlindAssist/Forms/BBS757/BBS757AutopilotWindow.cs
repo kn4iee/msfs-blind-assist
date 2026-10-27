@@ -2,14 +2,18 @@ using System.Runtime.InteropServices;
 
 namespace MSFSBlindAssist.Forms.BBS757;
 
-/// <summary>One button of the 757 autopilot window: its label, its live state and what a press does.</summary>
-public sealed record Bbs757AutopilotButton(string Label, Func<string> State, Action Press);
+/// <summary>One button of the 757 autopilot window: its label, its live state (empty for none), what a press does and its Alt key.</summary>
+public sealed record Bbs757AutopilotButton(string Label, Func<string> State, Action Press, char? Key = null);
 
 /// <summary>
 /// The "757 Autopilot" window (Ctrl+P in input mode), the iFly, HS787 and MD-11 windows' shape:
 /// one button per MCP engage control (CMD L, C and R, A/T Arm, the two F/D switches, THR, SPD,
-/// LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP), each captioned with its live state
-/// ("CMD L: On"), refreshed twice a second and rewritten only on change. A press goes through the
+/// LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP, Speed Intervene, A/T Disconnect, the
+/// disengage bar), each captioned with its live state ("CMD L: On"; a button with no state shows its
+/// label alone), refreshed twice a second and rewritten only on change. Alt and a button's fixed
+/// letter presses it: the window handles the keys itself rather than through an underlined caption
+/// letter, since several labels hold no free letter of their own (ALT HOLD is Alt+E), and each
+/// button names its key to the screen reader ("Alt+E"). A press goes through the
 /// definition, which replays the cockpit's own click; it says nothing on success (CORE-7: the
 /// caption's change is read by the screen reader), only "… unavailable" when nothing could be sent.
 /// What each button shows and does is the definition's (BBS757Definition.Autopilot.cs); this
@@ -61,11 +65,12 @@ public sealed class BBS757AutopilotWindow : Form
         for (int i = 0; i < _items.Count; i++)
         {
             var item = _items[i];
-            var button = new Button
+            var button = new KeyedButton(item.Key)
             {
                 Location = new Point(i % 2 == 0 ? left : col2, y),
                 Size = new Size(width, height),
                 TabIndex = tab++,
+                UseMnemonic = false,   // the window's own keys, never a letter in a label or state
             };
             button.Click += (_, _) =>
             {
@@ -98,6 +103,25 @@ public sealed class BBS757AutopilotWindow : Form
             HideWindow();
         };
         RefreshCaptions(force: true);
+    }
+
+    /// <summary>Alt and a button's letter presses it, as a click would.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if ((keyData & Keys.Modifiers) == Keys.Alt)
+        {
+            Keys key = keyData & Keys.KeyCode;
+            foreach (var (button, item) in _buttons)
+            {
+                if (item.Key is char k && key == (Keys)char.ToUpperInvariant(k))
+                {
+                    button.Focus();
+                    button.PerformClick();
+                    return true;
+                }
+            }
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     public void ShowForm()
@@ -137,7 +161,7 @@ public sealed class BBS757AutopilotWindow : Form
         foreach (var (button, item) in _buttons)
         {
             string text;
-            try { text = $"{item.Label}: {item.State()}"; }
+            try { text = item.State() is { Length: > 0 } state ? $"{item.Label}: {state}" : item.Label; }
             catch (Exception) { text = $"{item.Label}: unavailable"; }
             if (!force && button.Text == text) continue;
             button.Text = text;
@@ -160,5 +184,25 @@ public sealed class BBS757AutopilotWindow : Form
             _refresh?.Dispose();
         }
         base.Dispose(disposing);
+    }
+}
+
+/// <summary>A button that names its window-handled Alt key to the screen reader (its accessible keyboard shortcut).</summary>
+internal sealed class KeyedButton : Button
+{
+    private readonly char? _key;
+
+    public KeyedButton(char? key) => _key = key;
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new KeyedAccessibleObject(this);
+
+    private sealed class KeyedAccessibleObject : ButtonBaseAccessibleObject
+    {
+        private readonly KeyedButton _owner;
+
+        public KeyedAccessibleObject(KeyedButton owner) : base(owner) => _owner = owner;
+
+        public override string? KeyboardShortcut =>
+            _owner._key is char k ? $"Alt+{char.ToUpperInvariant(k)}" : base.KeyboardShortcut;
     }
 }
