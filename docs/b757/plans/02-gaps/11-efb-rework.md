@@ -108,9 +108,11 @@
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "The 757 EFB window is rebuilt like the other aircraft's EFB windows: flight setup, fuel and load, every ground service with its state, doors, pushback (if proven), presets and quick starts with their result, BlueBird's settings, maintenance resets." Changelog `feature`.
-- **Rule change:** extend B757-2 with each proven service tile on its `BBS757_vis_*` and each settings switch on its file key, and add: `- [B757-10] Never tap BlueBird's EFB without a variable or settings key that judges the result: the tablet is drawn by its WASM, so a moved button can only be caught by reading back, and a tap with no read-back (JETWAY, custom SAVE/LOAD) is not offered. Full: docs/invariants/b757.md#b757-10`
-- **docs/b757.md:** the EFB section (the measured table, the bridge or the tabs, what is not operable and why).
+- **Pilot-facing:** "Input Shift+T still opens the 757 EFB window, which does everything that changes the aircraft, each press checked against a variable or BlueBird's settings file. A new **Read the tablet screen** button in it opens BlueBird's tablet as a page you can read with your screen reader, page by page: Home, the tablet's menus and Scroll move between pages, nothing else on it can be pressed, and it says so (*"This window only reads the tablet. Use the classic 757 EFB window to change it."*). F5 reads the tablet again, F6 says whether it is connected. When a page cannot be reached it says *"The tablet did not show <page>. Try again, or use Read the tablet again."*; when reads disagree, *"The tablet read differently each time, so this page may not be right. Use Read the tablet again."* The first time it opens, the simulator comes to the front for a moment while BA pops out the captain's ND (parked off-screen; the camera is put back)." Changelog `feature`. Check the quoted strings against `Bbs757EfbElements` and `Bbs757EfbBridge` when writing the guide; the window's title is "BlueBird 757 tablet screen" (`MainForm.BBS757.cs`).
+- **Rule change:** extend B757-2 with each proven service tile on its `BBS757_vis_*` and each settings switch on its file key, and add: `- [B757-10] Never tap BlueBird's EFB without a variable or settings key that judges the result: the tablet is drawn by its WASM, so a moved button can only be caught by reading back, and a tap with no read-back (JETWAY, custom SAVE/LOAD) is not offered. The tablet screen reader (`Bbs757EfbBridge.ReadOnly`) taps page navigation only (Home, menus, scroll), judged by the page name it lands on (`Bbs757EfbBridge.PageIs`): a tap placed where OCR found a control can hit a different one, and a before-and-after variable cannot see that. Full: docs/invariants/b757.md#b757-10` (full text: docs/b757/evidence/flight-11.md section 8, the team review of 2026-10-27).
+- **docs/b757.md:** the EFB section (the measured table, the classic window, the read-only tablet screen reader and why it is read-only, what is not operable and why). The reader's reliability rules, from flight-11.md section 8: a page is read only when its picture really changed (`Bbs757EfbFrameCompare`, a noise tolerance, never an exact hash), after the picture settles, from two agreeing reads when it never settles; a navigation tap is judged by the page name; reading order is `Bbs757EfbReadingOrder`, never fixed pixel bands.
+- **Build output folder (frozen csproj):** `MSFSBlindAssist.csproj` now sets `AppendTargetFrameworkToOutputPath=false` and `OutputPath` `bind\$(Configuration)
+et10.0-windows\`, because the OCR TFM had moved the app's output away from the folder the updater, `release.yml`, `preview.yml`, `scripts/build-release.ps1` and `tools/user-guide-publish.sh` use (a release would have zipped the updater without the app). Keep both lines while the TFM names a Windows SDK; verify with a clean Release build that the exe and `MSFSBlindAssistUpdater.exe` share that folder.
 
 ## Execution record
 
@@ -122,7 +124,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Worked by:** Declan Webster, with Claude (no subagents)
 - **Started:** 2026-10-26, from `B757` 14944413
 - **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** full suite passed 2026-10-27 (17,752 tests; the one failure, a test written for the old page heading, was updated and the 1,865 BlueBird tests re-run green)
+- **Tests at landing:** full suite passed 2026-10-27 (17,752 tests; the one failure, a test written for the old page heading, was updated and the 1,865 BlueBird tests re-run green); again 2026-10-27 after the read-only rework and the rebase onto `B757` 7e0a42ed: 17,954 passed, 0 failed
 - **Tasks:** 0 done. 1 done for what screen reading needs (flight-11.md sections 5-6: services, sliders, switches,
   scrolling; presets, pushback arrows, REMOVE ALL and the Cabin & Doors door tiles were read, not tapped). 2 done
   (`Bbs757GroundServices`). 3 replaced: settings are read from the tablet's own page, see "Changed". 4 done as the
@@ -130,12 +132,16 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   757 EFB window" inside it). 5 done for the four proven services (CHOCKS stays the map's Status row).
 - **Waiting on the owner:** the in-sim checks below at a gate with the APU on (this work ran on a runway, cold and
   dark then tablet-only); FWD STAIR (its tile did not move on a runway); JETWAY (no jetway on a runway); GND SRVC
-  mode, tug and arrows; a door open/close from the Cabin & Doors page.
+  mode, tug and arrows; a door open/close from the Cabin & Doors page. After 2026-10-27: Shift+T opening the classic
+  window, its Read the tablet screen button, and a few pages read and navigated in the read-only window in the app
+  itself (the reliability numbers below are the probe's, which runs the same reader files).
 - **In-sim results:** 2026-10-26/27, MSFS 2024, BlueBird 757-200 PW 0.1.0, through the app's own Shift+T window (test
   build, UI Automation): pages read and navigated (Home, Aircraft, Settings General/Aircraft/Callouts, Checklist);
   a settings switch (Radio altimeter 2500) on and off; EFB brightness mode Manual then Auto; a slider (Notifications
   fade-out timer) 10 -> 6 -> 10 SEC from its choice list, each confirmed on the tablet. The probe proved every slider,
   the four services and scrolling (flight-11.md). Not run yet: the plan's in-sim check 1 as written (at a gate).
+  2026-10-27, after the team review: the probe's `tour` read 22 tablet pages 3 times each with the reworked reader;
+  21 landed on the page tapped and 21 read the same every time (flight-11.md section 8, with the misreads that remain).
 - **Changed from the plan:** R73 ("the window never shows BlueBird's screen") is replaced: the tablet IS read, from
   the ND pop-out's pixels with Windows OCR (flight-11.md sections 1-4), and every tablet control is offered as the
   tablet draws it, each result judged by reading the page again, or a variable where one is proven (services, GPU,
@@ -144,8 +150,18 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   app's TFM became `net10.0-windows10.0.19041.0` (main and test projects) for `Windows.Media.Ocr`: a frozen-file
   change, recorded here as a handoff. Not done: notification toasts as alerts; typing into the tablet's number
   fields (read-only for now); Navigation's dense data pages read poorly (the app's own SimBrief fetch carries that).
+  **Changed again 2026-10-27 (team review):** the classic window is the 757 EFB window again (Input Shift+T), and the
+  screen-reading window is a read-only "Read the tablet screen" button in it: it taps only page navigation, shows every
+  other control as text with its state ("Chocks: Off"), and refuses a press out loud. The press code stays in
+  `Bbs757EfbBridge`/`Bbs757EfbElements` behind `ReadOnly` (default true) for a later decision. The reader was made
+  steadier from live measurements (flight-11.md section 8): no re-read of an unchanged picture, a settle before a read,
+  two agreeing reads when the picture never settles, navigation judged by the page name, stable reading order. The
+  build output folder was put back (Handoff, "Build output folder").
 - **Rulings made while working:** "Read the tablet's pixels, overriding R73?" Yes: Declan Webster with Robin Kipp,
   2026-10-26 ("claim plan 11 and do this in full"). "Must sliders work?" Yes, proven (Robin Kipp asked).
+  "Should the screen reader press things?" No, page navigation only: the team's review of the first in-app test
+  (2026-10-27: Gus's reads that needed repeating and pages that changed on refresh; the reviewer's case that OCR is
+  for what no variable gives us, never for deciding a press), agreed by Declan Webster.
 - **Handoff to plan 16 (added):** [B757-10]'s wording should become "never tap BlueBird's EFB without reading the
   result back (the page again, or a variable)"; chocks announcing stays the map's (plan 16); docs/b757.md's EFB
   section should describe the pop-out (Shift+T parks the captain's ND pop-out off-screen while the window is open).
