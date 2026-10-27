@@ -50,7 +50,7 @@ public static class A350MfdPage
             var inside = cells.Where(c => !used.Contains(c) && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1)
                 .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
-            string value = string.Join(" ", inside.Select(c => Word(c.Text)));
+            string value = Words(inside.Select(c => c.Text));
             string colour = inside.FirstOrDefault(c => c.Colour != "grey")?.Colour ?? inside.FirstOrDefault()?.Colour ?? "white";
             if (e.Class == "NotepadTextbox")
             {
@@ -113,6 +113,18 @@ public static class A350MfdPage
         token.Length > 0 && token.All(ch => ch == 'o') ? "required"
         : token.Length > 0 && token.All(ch => ch == '-') ? "none"
         : token == "dC" ? "°C" : Blank.Replace(token, "blank");
+
+    /// <summary>A field's tokens as said; a lone "d" is the degree sign of the number before it ("F040 d").</summary>
+    private static string Words(IEnumerable<string> tokens)
+    {
+        var words = new List<string>();
+        foreach (var t in tokens)
+        {
+            if (t == "d" && words.Count > 0) words[^1] += "°";
+            else words.Add(Word(t));
+        }
+        return string.Join(" ", words);
+    }
 
     private static readonly Regex Blank = new(@"_{3,}", RegexOptions.Compiled);
 

@@ -77,6 +77,19 @@ public class A350MfdPageTests
         Assert.Contains("C/L COMPLETE button", lines);
     }
 
+    // ILS 04 at VCBI tuned on RAD NAV (live): the font draws a degree sign as "d" ("dC" is °C), here after the
+    // front course, "F040" and "d".
+    [Fact]
+    public void A_course_reads_its_degree_sign()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_radnav_ls.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("CRS: F040°, cyan", lines);
+        Assert.Contains("FREQ/CHAN: 109.90, cyan", lines);
+        Assert.Contains("IDENT: IKW, cyan", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
