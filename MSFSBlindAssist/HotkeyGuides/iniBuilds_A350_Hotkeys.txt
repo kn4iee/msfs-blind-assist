@@ -12,8 +12,10 @@ Tip: Press the same bracket key again to cancel a mode you activated by accident
 READ THIS FIRST - WHAT THIS AIRCRAFT CAN DO TODAY
 
 The A350 is being built section by section. Its overhead panel, its glareshield (the FCU
-and both EFIS control panels) and its instrument panel (gear, autobrake, ISIS, source
-switching, display power, both side and individual panels) are in the Sections list
+and both EFIS control panels), its instrument panel (gear, autobrake, ISIS, source
+switching, display power, both side and individual panels) and its pedestal (engines,
+thrust levers, flaps and brakes, speed brake, trims, ECAM control panel, weather radar,
+transponder and cockpit) are in the Sections list
 (Ctrl+1): every switch, selector, guarded button and knob, with the panels named and
 ordered as on the A380. A switch the aircraft did not move is said once ("BAT 1 did not
 move"). Each panel's status display (Ctrl+3) reads its lights, the FCU's four windows,
@@ -36,7 +38,13 @@ and the value the cockpit then shows is said ("FCU speed 250, selected"). A valu
 cannot take is said instead (a Mach number while the speed window shows knots, a QNH while
 that side is on STD).
 
-The pedestal, the displays (PFD, ND, E/WD, SD, MFD), the OIS and the
+The thrust levers, flaps and speed brake are combos with the A380's positions ("Thrust
+lever 1: Climb", "Flaps: 2"), and they say where they went ("All thrust levers Climb",
+"Spoilers 40 percent"). The rudder and pitch trims are nudge buttons, with the trim read
+on their panel ("Pitch trim: 1.3 degrees up"). The System display page combo shows the SD
+page and picks one.
+
+The radio management panels, the displays (PFD, ND, E/WD, SD, MFD), the OIS and the
 aircraft's own hotkeys (FCU, autopilot, ECAM) follow, and this list grows with them. Until
 then the hotkeys below are the ones every aircraft shares.
 

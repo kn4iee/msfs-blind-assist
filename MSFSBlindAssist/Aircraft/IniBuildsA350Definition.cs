@@ -30,7 +30,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
     /// (the generated names elsewhere still collide, [VAR-1]).</summary>
-    internal static readonly string[] CuratedSections = { "Overhead", "Glareshield", "Instrument" };
+    internal static readonly string[] CuratedSections = { "Overhead", "Glareshield", "Instrument", "Pedestal" };
 
     private readonly A350Placement _placement;
 
