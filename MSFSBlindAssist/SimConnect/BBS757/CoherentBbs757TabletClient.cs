@@ -42,8 +42,10 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// Keys: one queue for both CDUs, so presses never overlap. Each key carries its hold, the caller's:
 /// <see cref="KeyHoldMs"/> by default, since a CLR held about a second clears the whole scratchpad;
 /// only <see cref="Bbs757CduPages.WipeScratchpadAsync"/> holds CLR 1300 ms, to do just that. Holds
-/// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. The next
-/// key goes out <see cref="KeyGapMs"/> ms after the release.
+/// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. Each key
+/// carries its gap too: the next key goes out <see cref="KeyGapMs"/> ms after the release unless the
+/// caller gives another (only the CDU window's typed entries do, <see cref="Bbs757CduTyping"/>; clamped
+/// to <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>).
 /// Restart is not supported: dispose and create a new instance.
 /// </summary>
 public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
@@ -97,7 +99,11 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// <summary>The pause after a key's release before the next key (docs/b757/evidence/cdu.md).</summary>
     public const int KeyGapMs = 400;
 
-    /// <summary>The shortest pause a key may have after its release (plan 08: typing measured 5/5 down to 50).</summary>
+    /// <summary>
+    /// The shortest pause a key may have after its release: a floor, not a safe gap. A quiet sim typed 5/5
+    /// down to 50, a busier one lost a repeated digit at 100 (4 in 10): typed entries use
+    /// <see cref="Bbs757CduTyping.GapMs"/> (plan 08, docs/b757/evidence/flight-08.md).
+    /// </summary>
     internal const int MinGapMs = 50;
 
     /// <summary>The longest pause a key may have after its release.</summary>

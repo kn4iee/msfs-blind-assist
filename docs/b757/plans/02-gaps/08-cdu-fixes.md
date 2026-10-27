@@ -15,7 +15,7 @@
 - Owned files (then passed to plan 09): `Forms/BBS757/BBS757CduForm.cs`, `Forms/BBS757/BBS757CduForm.Designer.cs`, `SimConnect/BBS757/Bbs757CduFrame.cs`, `SimConnect/BBS757/Bbs757CduKeys.cs`, `SimConnect/BBS757/Bbs757CduRows.cs` (new), `SimConnect/BBS757/Bbs757CduTyping.cs` (new); tests `Bbs757CduFrameTests.cs`, `Bbs757CduKeysTests.cs`, `Bbs757CduRowsTests.cs` (new), `Bbs757CduTypingTests.cs` (new); fixtures `tests/MSFSBlindAssist.Tests/Fixtures/bbs757-cdu-*.json`. Also (from plan 01, then passed to plan 13): `SimConnect/BBS757/CoherentBbs757TabletClient.cs` and its tests `CoherentBbs757TabletClientTests.cs`. And `docs/b757/evidence/flight-08.md` (Task 2's measurement).
 - `Bbs757CduScreen.Lines` and `Bbs757CduKeys.ForChar` stay exactly as they are (plans 01, 04, 06 use them).
 - The tablet client's `KeyHoldMs`, `KeyGapMs`, `KeyCycleMs` and its two- and three-argument `PressKey` keep their meaning: plan 01's `Bbs757CduPages` and its frozen tests use them. The agent (`Resources/coherent-bbs757-tablet-agent.js`, plan 13's next) is not changed: it already takes each key's hold, and the gap is the app's. Holds stay clamped 100-1500 ms (client and agent); a gap is clamped 50-1000 ms.
-- Speech per CORE-7: a page change speaks the page; a cursor restore speaks nothing; a typed entry that landed is read back once as the scratchpad shows it (as every CDU window does and the guide promises; owner, 2026-10-27), one the CDU missed a key of is said once as "Scratchpad shows …".
+- Speech per CORE-7: a page change speaks the page; a new title on the same page (ACT → MOD, 1/2 → 1/3) is spoken too, as on every other aircraft's CDU window, and the cursor stays (owner, 2026-10-27); a cursor restore speaks nothing; a typed entry that landed is read back once as the scratchpad shows it (as every CDU window does and the guide promises; owner, 2026-10-27), one the CDU missed a key of is said once as "Scratchpad shows …". Keys always go out at once, as on every other aircraft: a key pressed before a typed entry is read back ends its check, and the ordinary read-back speaks what the scratchpad settles to.
 
 ## Review Focus
 
@@ -81,16 +81,18 @@
 
 ## In-sim checks (owner)
 
-1. Shift+M on the LEGS page: enter a speed constraint on a line (ACT becomes MOD): the cursor stays on that line; NEXT PAGE: the page is spoken and the cursor is on line 1; delete a constraint above the cursor: the cursor stays on its line.
-2. Shift+M, the scratchpad box (Alt+S): type `KATL` and Enter: it is in the scratchpad in about 1.6 s (0.4 s a key, see "Changed from the plan"; 2.6 s before), and BA reads it back once: "KATL". Type a long entry while the sim is busy: if a key is missed, "Scratchpad shows …" is said.
+1. Shift+M on the LEGS page: enter a speed constraint on a line (ACT becomes MOD): "MOD RTE 1 LEGS …" is said and the cursor stays on that line; insert a waypoint until the page total changes (1/2 → 1/3): the title is said, the cursor stays; NEXT PAGE: the page is spoken and the cursor is on line 1; delete a constraint above the cursor: the cursor stays on its line.
+2. Shift+M, the scratchpad box (Alt+S): type `KATL` and Enter: it is in the scratchpad in about 1.6 s (0.4 s a key, see "Changed from the plan"; 2.6 s before), and BA reads it back once: "KATL". On RTE, type `KATL`, Enter and at once Ctrl+1: ORIGIN takes it, and nothing like "Scratchpad is empty" is said. Type a long entry while the sim is busy: if a key is missed, "Scratchpad shows …" is said.
 
 ## Handoff to plan 16
 
 - **Pilot-facing:** "757 CDU window: the cursor stays on your line when the page changes around it, including when an entry turns ACT into MOD; a new page still moves you to line 1." Changelog `fix`. "757 CDU window: what you type in the scratchpad box goes into the CDU faster (about 0.4 s a character instead of 0.65 s), and if the CDU missed a key the window says what the scratchpad shows." Changelog `improvement`.
 - **docs/b757.md:** the CDU section (row identity, page change rules, the typing timing and its measurement).
-- **For plan 09 (takes the window over):** the typed-entry check reads the scratchpad back once after every typed entry (as shown when it landed, "Scratchpad shows …" when it did not, `Bbs757CduTyping.ReadBack`); plan 09's CDU message speech (R72) should not say the same message twice.
+- **For plan 09 (takes the window over):** the typed-entry check (`Bbs757TypedEntryCheck`, pure, tested) reads the scratchpad back once after every typed entry (as shown when it landed, "Scratchpad shows …" when it did not, `Bbs757CduTyping.ReadBack`); any other key ends it, keys are never held; plan 09's CDU message speech (R72) should not say the same message twice. A changed title is spoken on the same page too (never make ACT → MOD silent again: the owner's ruling).
+- **Also seen on (its own issue, not this plan):** the HS787 FMC window, which the 757 window was cloned from, still restores the cursor by index and jumps to line 1 on any title change.
+- **Rule candidates (plan 09 or 16):** "restore the CDU cursor by row identity, never by index" and "never shorten `Bbs757CduTyping.GapMs` on one quiet measurement" (the review, 2026-10-27).
 - **For plan 13 (takes the client over):** `PressKey` now has a four-argument form with the gap (clamped 50-1000 ms, `CycleMs`); the key queue carries it. Every other caller keeps 250 / 400.
-- **Spoken text for the guide (plan 16):** a typed entry the CDU took is read back as the scratchpad shows it (*"KATL"*, the guide's "you hear what the CDU took", unchanged); one it did not says *"Scratchpad shows KAT"* (what the scratchpad shows, a CDU message included) or *"Scratchpad is empty"* (`Bbs757CduTyping.Mismatch`). A page change speaks the title with its spaces collapsed (`Bbs757CduTitle.Spoken`, e.g. *"ACT RTE 1 LEGS 1/2"*) and puts the cursor on line 1's data row; ACT turning into MOD says nothing.
+- **Spoken text for the guide (plan 16):** a typed entry the CDU took is read back as the scratchpad shows it (*"KATL"*, the guide's "you hear what the CDU took", unchanged); one it did not says *"Scratchpad shows KAT"* (what the scratchpad shows, a CDU message included) or *"Scratchpad is empty"* (`Bbs757CduTyping.Mismatch`). A page change speaks the title with its spaces collapsed (`Bbs757CduTitle.Spoken`, e.g. *"ACT RTE 1 LEGS 1/2"*) and puts the cursor on line 1's data row; a new title on the same page (ACT turning into MOD, *"MOD RTE 1 LEGS 1/2"*, or a new page total) is said and the cursor stays. A key pressed before a typed entry is read back goes out at once; the scratchpad is then read as it settles (nothing when a line select key took the entry).
 
 ## Execution record
 
@@ -99,7 +101,8 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 
 - **Status:** waiting on owner (in-sim checks 1 and 2 in the app's Shift+M window; the code has landed)
 - **Claimed by:** Declan Webster, 2026-10-26
-- **Worked by:** Declan Webster, with Claude (no subagents)
+- **Worked by:** Declan Webster, with Claude (no subagents); 2026-10-27 the owner (kn4iee), with Claude: the
+  scratchpad read-back fix, a whole-plan review (one review subagent) and its fixes
 - **Started:** 2026-10-27, branched from the base commit `cf1dfce94` and rebased onto `B757` 744b4cce
 - **Landed:** (date; the last commit of this plan on `B757`)
 - **Tests at landing:** full suite passed 2026-10-27 after the rebase onto `B757` 744b4cce: 17,969 passed, 0 failed
@@ -109,8 +112,12 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   `PressKey` and `CycleMs`, `Bbs757CduTyping`, the window's typed entries at the typing timing with the scratchpad
   check; step 1's measurement repeated on a busier sim (flight-08.md).
 - **Waiting on the owner:** what can only be heard, in the Shift+M window: a page change speaks its title once, an
-  ACT/MOD change and a typed entry that landed say nothing, a missed key says "Scratchpad shows …"; and check 1's
-  deleted constraint on LEGS (no route with constraints was loaded; the rule is pinned by `Bbs757CduRowsTests`).
+  ACT/MOD change speaks the new title, a typed entry is read back once ("KATL"), a missed key says "Scratchpad
+  shows …", a line select key right after Enter says no false "Scratchpad is empty"; check 1's deleted constraint
+  and page total change on LEGS (no route with constraints was loaded; the rules are pinned by
+  `Bbs757CduRowsTests`). Not measured: whether a speed entered on VNAV retitles the page ("ACT ECON CLB" → "MOD
+  250KT CLB", as on other Boeing FMCs); if it does, the window takes it for a new page (title said, cursor to
+  line 1) and `Bbs757CduTitle.Identity` needs a VNAV rule.
 - **In-sim results:** 2026-10-27, MSFS 2024, BlueBird 757-200 PW 0.1.0, on the ground: aircraft powered with the EFB's
   Before start preset (APU, external power); the first officer's CDU's NAV RADIO frame captured live as the fixture
   `bbs757-cdu-navradio.json` and passing the row tests; the typing timing re-measured through the tablet agent's own
@@ -134,7 +141,8 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   optional third argument, the scratchpad before the typing, because the CDU adds to an entry already there
   ("KA" + "TL" is a match, not "Scratchpad shows KATL"); `Expected` is new, the text the keys put there. A typed
   entry is checked INSTEAD of being read back by the window's `CduScratchpadAnnouncer` (which would otherwise say
-  the entry the pilot just typed); the read-back is re-seeded silently after the check. A second entry sent before
+  the entry the pilot just typed); the read-back is re-seeded silently after the check. (Reverted by the owner the
+  same day: the check now reads a landed entry back itself; see "Rulings".) A second entry sent before
   the first was checked is checked with it, as one. `Bbs757CduRowKind.Blank` is declared as the plan's interface
   says but not produced (plan 09's). The tests were written with the code, not run red first.
 - **Rulings made while working:** "Use the EFB's cockpit presets to power the aircraft for the checks?" Yes: Declan
@@ -143,4 +151,24 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   decision because we really need to hear what's going in scratchpad". Task 2 had made a landed entry silent (the
   check replaced the read-back), against the guide's "you hear what the CDU took" and every other CDU window (HS787,
   PMDG 777/737, iFly, MD-11 read the scratchpad back after typing). `Bbs757CduTyping.ReadBack`: the scratchpad as shown
-  when the entry landed, `Mismatch`'s "Scratchpad shows …" when it did not.
+  when the entry landed, `Mismatch`'s "Scratchpad shows …" when it did not. Then two questions from the review,
+  answered "However the other planes have it" (the owner, 2026-10-27): (1) a key pressed after Enter, before the
+  read-back: the other CDU windows (PMDG 777/737, HS787, iFly, MD-11) send every key at once, never hold one, and
+  have no missed-key check, so the 757 sends it at once and ends the check; the ordinary read-back speaks what the
+  scratchpad settles to (not holding the line key until the entry is confirmed, which plan 01's Ctrl+N fill does).
+  (2) A new page total (1/2 → 1/3): every other window speaks a changed title, ACT → MOD included, so the 757 now
+  does too; on the cursor they split (PMDG, HS787, iFly jump to line 1 on any title change, the jump this plan
+  fixes; the MD-11 moves it only for another page), so the 757 follows the MD-11: only another page or page number
+  moves it.
+- **Review (2026-10-27, one reviewer subagent over 744b4ccec..a6026ec9a; verdict "with fixes"):** strengths: the
+  row restore follows [MD11-17], the client's per-key gap keeps `PendingKeyCount` above 0 through hold and gap, the
+  standard 250/400 stays for every other caller, the 300 ms gap is justified by the busier-sim repeat. Fixed:
+  (critical) typing then a line select key at once said "Scratchpad is empty" for an entry that landed, and a real
+  miss followed by a line select read as success: any other key now ends the check (ruling 1 above); an entry typed
+  behind other queued keys is not checked (what the scratchpad held is unknown), the ordinary read-back speaks it;
+  (important) Ctrl+Tab during a check judged the other CDU's frozen screen (the client scrapes only the shown CDU)
+  and muted the shown CDU's read-back: the switch now ends the check; (important) a page total change counted as a
+  page change: `IsPageChange` compares the page number only (ruling 2); the check's state moved into the pure
+  `Bbs757TypedEntryCheck` with tests (the review's recommendation); the client's summary and `MinGapMs` comments
+  (a 50 ms floor is not a safe gap); a de-DE/sv-SE read-back test. Left: the VNAV retitle question (see "Waiting
+  on the owner"), the rule candidates and the HS787 note (handoff).

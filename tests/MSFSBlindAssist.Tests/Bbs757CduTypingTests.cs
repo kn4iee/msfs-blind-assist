@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.SimConnect.BBS757;
 using Xunit;
 
@@ -77,5 +78,119 @@ public class Bbs757CduTypingTests
     public void Nothing_to_read_back_when_nothing_typable_landed_on_an_empty_scratchpad()
     {
         Assert.Null(Bbs757CduTyping.ReadBack("#", WithScratchpad("")));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_read_back_is_the_same_in_any_culture(string culture)
+    {
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            Assert.Equal("1100.5", Bbs757CduTyping.ReadBack("1100.5", WithScratchpad("1100.5")));
+            Assert.Equal("Scratchpad shows 100.5", Bbs757CduTyping.ReadBack("1100.5", WithScratchpad("100.5")));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    // ---- The window's check of a typed entry (Bbs757TypedEntryCheck) ----------------------------------
+
+    private static readonly DateTime T0 = new(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc);
+    private static DateTime At(int ms) => T0.AddMilliseconds(ms);
+
+    [Fact]
+    public void A_landed_entry_is_read_back_once_its_keys_have_settled()
+    {
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(2, "KATL", scratchpadNow: "", otherKeysQueued: false);
+        Assert.True(check.IsPending);
+        Assert.Equal(2, check.Cdu);
+
+        Assert.Null(check.Poll(At(0), pendingKeys: 4, WithScratchpad("KA"), At(0)));
+        // The last key's cycle ended: the scratchpad settles first.
+        Assert.Null(check.Poll(At(1600), pendingKeys: 0, WithScratchpad("KATL"), At(1500)));
+        Assert.Null(check.Poll(At(1800), pendingKeys: 0, WithScratchpad("KATL"), At(1500)));
+
+        var verdict = check.Poll(At(1950), pendingKeys: 0, WithScratchpad("KATL"), At(1500));
+        Assert.Equal(new Bbs757TypedEntryVerdict("KATL", Missed: false), verdict);
+        Assert.False(check.IsPending);
+        Assert.Null(check.Poll(At(2300), pendingKeys: 0, WithScratchpad("KATL"), At(1500)));
+    }
+
+    [Fact]
+    public void A_missed_key_waits_for_a_screen_newer_than_the_last_key()
+    {
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KATL", scratchpadNow: "", otherKeysQueued: false);
+        Assert.Null(check.Poll(At(1600), pendingKeys: 0, WithScratchpad("KAT"), At(1400)));
+        // Settled, but the screen held is older than the last key: it may not show the last key yet.
+        Assert.Null(check.Poll(At(1950), pendingKeys: 0, WithScratchpad("KAT"), At(1400)));
+        // A newer screen still shows KAT: the CDU missed the L.
+        Assert.Equal(new Bbs757TypedEntryVerdict("Scratchpad shows KAT", Missed: true),
+            check.Poll(At(2300), pendingKeys: 0, WithScratchpad("KAT"), At(2100)));
+        Assert.False(check.IsPending);
+    }
+
+    [Fact]
+    public void A_missed_key_is_said_from_the_held_screen_after_the_longest_wait()
+    {
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KATL", scratchpadNow: "", otherKeysQueued: false);
+        Assert.Null(check.Poll(At(1600), pendingKeys: 0, WithScratchpad("KAT"), At(1400)));
+        Assert.Null(check.Poll(At(1600 + Bbs757TypedEntryCheck.MaxWaitMs - 1), pendingKeys: 0, WithScratchpad("KAT"), At(1400)));
+        Assert.Equal(new Bbs757TypedEntryVerdict("Scratchpad shows KAT", Missed: true),
+            check.Poll(At(1600 + Bbs757TypedEntryCheck.MaxWaitMs), pendingKeys: 0, WithScratchpad("KAT"), At(1400)));
+    }
+
+    [Fact]
+    public void A_key_queued_again_restarts_the_settle()
+    {
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KA", scratchpadNow: "", otherKeysQueued: false);
+        Assert.Null(check.Poll(At(800), pendingKeys: 0, WithScratchpad("KA"), At(700)));
+        check.Typed(1, "TL", scratchpadNow: "KA", otherKeysQueued: true);   // the second entry, before the check ended
+        Assert.Null(check.Poll(At(1150), pendingKeys: 2, WithScratchpad("KA"), At(700)));
+        Assert.Null(check.Poll(At(1700), pendingKeys: 0, WithScratchpad("KATL"), At(1650)));
+        // Checked as one entry: "KA" + "TL" landed on the empty scratchpad.
+        Assert.Equal(new Bbs757TypedEntryVerdict("KATL", Missed: false),
+            check.Poll(At(2000), pendingKeys: 0, WithScratchpad("KATL"), At(1650)));
+    }
+
+    [Fact]
+    public void Another_key_ends_the_check()
+    {
+        // KATL then a line select key at once: the line takes the entry and the scratchpad empties. The
+        // check ends instead of saying "Scratchpad is empty"; the ordinary read-back speaks what settles,
+        // as on every other aircraft (owner, 2026-10-27).
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KATL", scratchpadNow: "", otherKeysQueued: false);
+        check.Cancel();
+        Assert.False(check.IsPending);
+        Assert.Null(check.Cdu);
+        Assert.Null(check.Poll(At(3000), pendingKeys: 0, WithScratchpad(""), At(2900)));
+    }
+
+    [Fact]
+    public void An_entry_typed_behind_other_queued_keys_is_not_checked()
+    {
+        // A page key or a line key still queued may change the scratchpad before the typing: what it held is
+        // unknown, so the ordinary read-back speaks what settles.
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KATL", scratchpadNow: "", otherKeysQueued: true);
+        Assert.False(check.IsPending);
+    }
+
+    [Fact]
+    public void An_entry_typed_into_the_other_cdu_ends_the_check()
+    {
+        var check = new Bbs757TypedEntryCheck();
+        check.Typed(1, "KATL", scratchpadNow: "", otherKeysQueued: false);
+        check.Typed(2, "KJFK", scratchpadNow: "", otherKeysQueued: true);
+        Assert.False(check.IsPending);
     }
 }

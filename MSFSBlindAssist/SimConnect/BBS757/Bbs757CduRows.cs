@@ -71,10 +71,23 @@ public static class Bbs757CduRows
 
     /// <summary>
     /// Whether a new title row is another page: the page itself (<see cref="Bbs757CduTitle.Identity"/>,
-    /// ACT and MOD folded away) or its page counter differs. ACT RTE 1 LEGS 1/7 → MOD RTE 1 LEGS 1/7 is
-    /// the same page; 1/7 → 2/7 is not.
+    /// ACT and MOD folded away) or its page number differs. ACT RTE 1 LEGS 1/7 → MOD RTE 1 LEGS 1/7 is
+    /// the same page, and so is 1/2 → 1/3 (an inserted waypoint adding a page: the MD-11's rule, the
+    /// cursor stays); 1/7 → 2/7 is not.
     /// </summary>
     public static bool IsPageChange(string oldTitleRow, string newTitleRow) =>
         Bbs757CduTitle.Identity(oldTitleRow) != Bbs757CduTitle.Identity(newTitleRow)
-        || Bbs757CduTitle.Counter(oldTitleRow) != Bbs757CduTitle.Counter(newTitleRow);
+        || Bbs757CduTitle.Counter(oldTitleRow)?.Page != Bbs757CduTitle.Counter(newTitleRow)?.Page;
+
+    /// <summary>
+    /// Whether the title says something new (<see cref="Bbs757CduTitle.Spoken"/> differs; a blank title
+    /// never does): ACT → MOD and 1/2 → 1/3 included. The window speaks it, as every other aircraft's
+    /// CDU window speaks a changed title (owner, 2026-10-27); whether the cursor moves is
+    /// <see cref="IsPageChange"/>'s question.
+    /// </summary>
+    public static bool IsTitleChange(string oldTitleRow, string newTitleRow)
+    {
+        string spoken = Bbs757CduTitle.Spoken(newTitleRow);
+        return spoken.Length > 0 && spoken != Bbs757CduTitle.Spoken(oldTitleRow);
+    }
 }
