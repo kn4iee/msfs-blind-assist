@@ -158,8 +158,10 @@ internal static class DisplayModes
         {
             foreach (var row in A350DrawLayout.Rows(A350DrawLayout.Region(caps[0].Texts, A350DrawLayout.CtrWarningDisplay)))
                 Console.WriteLine("  WD: " + A350DrawLayout.Speak(row));
+            // `A350_SAVE=<prefix>`: each draw saved as <prefix>_<gauge><n>.json (CTR0, EFIS0, EFIS1, MFD0).
             if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
-                File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(caps[0]));
+                foreach (var (c, n) in caps.Zip(new[] { "CTR0", "EFIS0", "EFIS1", "MFD0" }))
+                    File.WriteAllText($"{save}_{n}.json", System.Text.Json.JsonSerializer.Serialize(c));
             // `A350_SD=<page>`: also the engine display and that SD page as MSFSBA reads them.
             if (double.TryParse(Environment.GetEnvironmentVariable("A350_SD"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sd))
             {
@@ -265,6 +267,8 @@ internal static class DisplayModes
         using var svc = new A350DisplayService();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
+        var asks = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>();
+        svc.AVarAnswer = ask => { if (asks.TryAdd(ask, true)) Console.WriteLine($"ASK: {ask}"); return null; };
         svc.Start();
         using var mon = new A350PfdMonitor(async (g, i) => (await svc.DrawAsync((g, i)))?.FirstOrDefault(), _ => false,
             line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));

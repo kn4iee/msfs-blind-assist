@@ -21,6 +21,7 @@ public static class A350MfdPage
     private static readonly HashSet<string> Containers = new(StringComparer.Ordinal)
     {
         "WidgetSwitcherUI", "PopupDialog", "EULADialog", "DropdownMenuContainer", "SurvControlsBox",
+        "UIFlightplanRevisionsMenu", "NextWaypointPopup", "NewDestPopup",
     };
 
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);

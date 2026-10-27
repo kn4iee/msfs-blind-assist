@@ -115,6 +115,21 @@ public class A350MfdPageTests
         Assert.Equal(lines.IndexOf("TERR SYS: ON, selected, green") + 1, lines.IndexOf("TERR SYS: OFF"));   // a box reads together
     }
 
+    // F-PLN with no flight plan (live, in flight): the hidden revisions menu's rectangle covers the list and the
+    // header; it is a container, so each F-PLN row and the POSITION key read on their own.
+    [Fact]
+    public void The_flight_plan_reads_row_by_row()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_fpln_empty.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("POSITION button", lines);
+        Assert.Contains("P.POS --:-- --- -----, green", lines);
+        Assert.Contains("- - - - - - DISCONTINUITY - - - - - -, white", lines);
+        Assert.Contains("- - - - - - END OF F-PLN - - - - - -, white", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("DISCONTINUITY") && l.Contains("END OF F-PLN"));
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
