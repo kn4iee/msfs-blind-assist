@@ -675,6 +675,25 @@ public partial class MainForm
         coherentFwsFailureClient.Start();
     }
 
+    // The A350 display reader (idempotent): prepares in the background (the first time per A350 version it
+    // patches and compiles the module, spoken "A350 displays getting ready" / "ready") and is handed to
+    // the definition, which draws through it.
+    private void StartA350DisplayService()
+    {
+        if (a350DisplayService != null) return;
+        a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
+        a350DisplayService.Spoken += line => announcer.Announce(line);
+        if (currentAircraft is IniBuildsA350Definition a350) a350.Displays = a350DisplayService;
+        a350DisplayService.Start();
+    }
+
+    private void StopA350DisplayService(IAircraftDefinition? owner = null)
+    {
+        if ((owner ?? currentAircraft) is IniBuildsA350Definition a350) a350.Displays = null;
+        a350DisplayService?.Dispose();
+        a350DisplayService = null;
+    }
+
     private void StopA380EWDMonitor(IAircraftDefinition? owner = null)
     {
         // `owner` lets the aircraft-swap cleanup clear the flag on the OUTGOING def —
@@ -1140,6 +1159,7 @@ public partial class MainForm
             hs787MonitorManagerForm = null;
         }
         StopA380EWDMonitor(oldAircraft);
+        StopA350DisplayService(oldAircraft);
 
         // Dispose HS 787 forms when switching aircraft
         if (hs787FMCForm != null && !hs787FMCForm.IsDisposed)
@@ -1193,6 +1213,9 @@ public partial class MainForm
             coherentClient.SetActive(false);   // connect + install agent now; scrape only while the MCDU window is open
             StartA380EWDMonitor();
         }
+
+        if (newAircraft.AircraftCode == IniBuildsA350Definition.Code)
+            StartA350DisplayService();
 
         // The HS787 CDU + EFB open their own Coherent debugger connections on demand (from
         // their forms) — no HTTP bridge to start. The IRS-alignment monitor runs continuously

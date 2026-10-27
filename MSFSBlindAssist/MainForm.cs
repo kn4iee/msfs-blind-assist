@@ -152,6 +152,10 @@ public partial class MainForm : Form
     // memos/PFD/status (coherentEWDClient.AnnounceWarnings set false to avoid double-speak).
     private CoherentFwsFailureClient? coherentFwsFailureClient;
 
+    // The iniBuilds A350's display reader: copies the A350's memory read-only and runs its own draw code
+    // (Wasmtime) on one worker thread. Runs whenever the A350 is active; the definition reads it.
+    private Aircraft.A350.Display.A350DisplayService? a350DisplayService;
+
     private Forms.FBWA380.FBWA380OansForm? fbwA380OansForm;
 
     private Forms.FBWA380.FBWA380RmpForm? fbwA380RmpForm;
@@ -538,6 +542,9 @@ public partial class MainForm : Form
             coherentClient.SetActive(false);   // connect + install agent now; scrape only while the MCDU window is open
             StartA380EWDMonitor();
         }
+
+        if (currentAircraft?.AircraftCode == IniBuildsA350Definition.Code)
+            StartA350DisplayService();
 
         // FBW flyPad: the EFB form owns its CDP client; nothing to pre-start here.
 
@@ -1436,6 +1443,7 @@ public partial class MainForm : Form
         coherentEFBClient?.Dispose();
         coherentNDClient?.Dispose();
         coherentEWDClient?.Dispose();
+        a350DisplayService?.Dispose();
         coherentFwsFailureClient?.Dispose();
 
         // FlyByWire A32NX / Headwind A330 MCDU: its Coherent socket and poll loop, and the
