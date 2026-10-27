@@ -78,6 +78,12 @@ Displays:
              Escape closes.
   Ctrl+E     Toggle the E/WD auto call-outs (also in the Monitor Manager, Ctrl+M)
 
+  The PFDs have no hotkey window, as on the A380: open Displays in the Panels list
+  (Ctrl+2), then Captain PFD or First Officer PFD; the status display reads that PFD
+  (FMA, selected speed, altitude, selected altitude, QNH, radio altitude, heading,
+  flags and messages) and refreshes every second. The FMA is spoken on every change
+  with its colours, one Monitor Manager (Ctrl+M) row per FMA column.
+
 Location:
   C          Read Nearest City
 

@@ -158,6 +158,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         // the page row's line carries the page's name and content.
         if (_rows.ContainsKey(SdPageKey))
             AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == SdPageKey)).Key, SdPageKey);
+        AddDisplay(PfdCaptainPanel, PfdCaptainKey);
+        AddDisplay(PfdFirstOfficerPanel, PfdFirstOfficerKey);
 
         _lampBoard = new A350LampBoard(_lamps.Values);
 
@@ -210,13 +212,23 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
-    public override Dictionary<string, List<string>> GetPanelStructure() =>
-        _sections.ToDictionary(s => s, s => new List<string>(_placement.Structure[s]));
+    public override Dictionary<string, List<string>> GetPanelStructure()
+    {
+        var structure = _sections.ToDictionary(s => s, s => new List<string>(_placement.Structure[s]));
+        structure[DisplaysSection] = new List<string> { PfdCaptainPanel, PfdFirstOfficerPanel };
+        return structure;
+    }
 
-    /// <summary>Every panel gets an entry, even an empty one: a panel with no controls entry is never built (HS-5).</summary>
-    protected override Dictionary<string, List<string>> BuildPanelControls() =>
-        _sections.SelectMany(s => _placement.Structure[s])
+    /// <summary>Every panel gets an entry, even an empty one: a panel with no controls entry is never built (HS-5).
+    /// The Displays panels hold only their status display.</summary>
+    protected override Dictionary<string, List<string>> BuildPanelControls()
+    {
+        var controls = _sections.SelectMany(s => _placement.Structure[s])
             .ToDictionary(p => p, p => _placement.RowsByPanel[p].Select(r => r.Key).ToList());
+        controls[PfdCaptainPanel] = new List<string>();
+        controls[PfdFirstOfficerPanel] = new List<string>();
+        return controls;
+    }
 
     /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => _panelDisplays;
@@ -249,6 +261,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// While an input is unread it is not composed, as on the iniBuilds A300.</summary>
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
+        if (varKey is PfdCaptainKey or PfdFirstOfficerKey)
+        {
+            displayText = PfdText(varKey == PfdCaptainKey ? 0 : 1);
+            return true;
+        }
         if (_lamps.TryGetValue(varKey, out var lamp) && _sim is { } sim && lamp.IsLit(key => Cached(sim, key)) is bool lit)
         {
             displayText = lit ? "On" : "Off";
@@ -349,6 +366,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         {
             Register(a.Key, a.Name, a.Name, null, a.Units);
             _lampInputKeys.Add(a.Key);
+        }
+
+        // The PFD lines: carried by the FD switch's variable (any streamed one would do); the text is the side's
+        // latest PFD read (PfdText), refreshed by the status display's tick. Consumed silently.
+        foreach (var (key, name) in new[] { (PfdCaptainKey, PfdCaptainPanel), (PfdFirstOfficerKey, PfdFirstOfficerPanel) })
+        {
+            Register(key, "INI_FD_ON", name, null);
+            _lampInputKeys.Add(key);
         }
 
         // What a typed value is planned from and read back in, where nothing above streams it yet.

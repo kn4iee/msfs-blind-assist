@@ -53,7 +53,7 @@ public class IniBuildsA350DefinitionTests
     [Fact]
     public void Only_the_curated_sections_are_offered()
     {
-        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" }, _def.GetPanelStructure().Keys);
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Displays" }, _def.GetPanelStructure().Keys);
         Assert.Contains("A350_EFIS_RANGE_LEFT", _def.GetVariables().Keys);
         Assert.Contains("A350_LDG_LEVER", _def.GetVariables().Keys);
         Assert.Contains("A350_PARK_BRK_PARKING_BRAKE", _def.GetVariables().Keys);
@@ -70,7 +70,7 @@ public class IniBuildsA350DefinitionTests
     public void A_harness_can_offer_a_section_still_being_curated()
     {
         var def = new WithSections("Overhead", "Glareshield");
-        Assert.Equal(new[] { "Overhead", "Glareshield" }, def.GetPanelStructure().Keys);
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Displays" }, def.GetPanelStructure().Keys);
         Assert.Contains("FCU", def.GetPanelControls().Keys);
     }
 

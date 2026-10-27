@@ -156,6 +156,7 @@ public partial class MainForm : Form
     // (Wasmtime) on one worker thread. Runs whenever the A350 is active; the definition reads it.
     private Aircraft.A350.Display.A350DisplayService? a350DisplayService;
     private Aircraft.A350.Display.A350EcamMonitor? a350EcamMonitor;
+    private Aircraft.A350.Display.A350PfdMonitor? a350PfdMonitor;
 
     private Forms.FBWA380.FBWA380OansForm? fbwA380OansForm;
 
@@ -1445,6 +1446,7 @@ public partial class MainForm : Form
         coherentNDClient?.Dispose();
         coherentEWDClient?.Dispose();
         a350EcamMonitor?.Dispose();
+        a350PfdMonitor?.Dispose();
         a350DisplayService?.Dispose();
         coherentFwsFailureClient?.Dispose();
 

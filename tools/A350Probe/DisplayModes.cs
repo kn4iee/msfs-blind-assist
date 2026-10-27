@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten";
 
     public static int Run(string mode, string[] args)
     {
@@ -29,6 +29,7 @@ internal static class DisplayModes
             case "sdmap": return SdMap(args);
             case "sdtext": return SdText(args);
             case "sdsweep": return SdSweep(args);
+            case "pfdlisten": return PfdListen(args);
             default: return 2;
         }
     }
@@ -245,6 +246,28 @@ internal static class DisplayModes
 
     /// <summary>`ecamlisten seconds`: MSFSBA's own E/WD monitor over the service, printing each line it
     /// would speak, with the time.</summary>
+    /// <summary>`pfdlisten seconds`: MSFSBA's PFD monitor on the live sim: the FMA call-outs it would speak, and
+    /// at the end each side's PFD as its status display reads it.</summary>
+    private static int PfdListen(string[] args)
+    {
+        int seconds = int.Parse(args[0]);
+        using var svc = new A350DisplayService();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
+        svc.Start();
+        using var mon = new A350PfdMonitor(async side => (await svc.DrawAsync(("EFIS", side)))?.FirstOrDefault(), _ => false,
+            line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
+        mon.Start();
+        Thread.Sleep(seconds * 1000);
+        for (int side = 0; side < 2; side++)
+            if (mon.Latest(side) is { } cap)
+            {
+                Console.WriteLine($"--- PFD side {side}");
+                foreach (var line in A350Pfd.Read(cap, side)) Console.WriteLine(line);
+            }
+        return 0;
+    }
+
     private static int EcamListen(string[] args)
     {
         int seconds = int.Parse(args[0]);

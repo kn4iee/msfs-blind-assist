@@ -25,6 +25,8 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
     {
         var rows = MonitorRowBuilder.Build(variables);
         rows.Add(new MonitorRow(Aircraft.A350.Display.A350EcamMonitor.MuteKey, Aircraft.A350.Display.A350EcamMonitor.MuteLabel));
+        foreach (var column in Aircraft.A350.Display.A350FmaAnnouncer.Columns)
+            rows.Add(new MonitorRow(Aircraft.A350.Display.A350FmaAnnouncer.KeyFor(column), Aircraft.A350.Display.A350FmaAnnouncer.LabelFor(column)));
         return rows;
     }
 
