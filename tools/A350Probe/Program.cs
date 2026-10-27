@@ -139,7 +139,8 @@ internal sealed class ProbeForm : Form
             int n = int.Parse(d["count"]);
             Line($"page={d["page"]} items={n}");
             for (int i = 0; i < n; i++)
-                Line($"{d[$"items.{i}.aidx"]}	{d[$"items.{i}.kind"]}{d[$"items.{i}.type"]}	{d[$"items.{i}.text"]}	{d[$"items.{i}.value"]}");
+                Line($"{d[$"items.{i}.aidx"]}	{d[$"items.{i}.kind"]}{d[$"items.{i}.type"]}	{d[$"items.{i}.text"]}	{d[$"items.{i}.value"]}"
+                    + (d.TryGetValue($"items.{i}.options", out var opts) && opts.Length > 0 ? $"	[{opts}]" : ""));
         }
         var first = await Next(15000);
         if (first == null) { Line("no push"); client.Dispose(); return; }

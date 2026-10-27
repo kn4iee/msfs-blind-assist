@@ -147,6 +147,38 @@ public class A350MfdPageTests
         Assert.Contains("- - - - - - DISCONTINUITY - - - - - -, white", lines);
     }
 
+    // ACTIVE/F-PLN with the uplinked VCBI-OMDB plan (live): one line per waypoint, labelled by the page's own column
+    // headers (FROM, TIME, the SPD ALT menu's words; TRK, DIST, FPA for the leg into it, drawn just above its row),
+    // dashes as none, the track's "d" a degree sign; only the rows above the destination bar (a sighted pilot sees
+    // no more); the destination bar as one line.
+    private static IReadOnlyList<string> FlightPlan() => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
+        File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350",
+            "Fixtures", "mfd_fpln_route.json")))!, 0).Select(l => l.Spoken).ToList();
+
+    [Fact]
+    public void A_flight_plan_reads_one_line_per_waypoint_with_its_leg()
+    {
+        var lines = FlightPlan();
+        Assert.Contains("FROM VCBI: TIME 00:00, SPD none, ALT none, green", lines);
+        Assert.Contains("BASUR: TIME none, SPD none, ALT none, green", lines);
+        Assert.Contains("TVM: via P570, TRK 295°, DIST 80; TIME none, SPD none, ALT none, green", lines);
+        Assert.Contains("NIVUD: via P570, TRK 306°, DIST 105; TIME none, SPD none, ALT none, green", lines);
+        Assert.Contains("DISCONTINUITY, white", lines);
+    }
+
+    [Fact]
+    public void A_flight_plan_reads_only_what_shows_above_the_destination_bar()
+    {
+        var lines = FlightPlan();
+        Assert.DoesNotContain(lines, l => l.Contains("OMAA") || l.Contains("ALTN F-PLN") || l.Contains("END OF F-PLN"));
+        Assert.Single(lines, l => l.Contains("DISCONTINUITY"));
+        Assert.Contains("Destination OMDB: time none, EFOB none T, distance none NM, green", lines);
+        Assert.Contains("DEST button", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("FROM TIME") || l.Contains("306d"));
+        Assert.Contains("CLEAR INFO button", lines);   // a hidden row's box reaches under the bottom keys
+        Assert.Contains("Scratchpad: NAV ACCURACY UPGRADED, black", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

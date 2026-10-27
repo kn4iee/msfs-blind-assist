@@ -53,8 +53,14 @@ public static class A350MfdPage
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
         }).ToHashSet();
 
+        bool flightPlan = cells.Any(c => c.Colour == "black" && c.Y < 150 && c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
+        if (flightPlan)
+            ReadFlightPlan(capture, shift, Mine, cells, used, lines);
+
         foreach (var e in capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0))
         {
+            // The F-PLN's row boxes are the F-PLN reader's (hidden rows' boxes reach under the bottom keys).
+            if (flightPlan && e.Class == "BaseFlightPlanButton") continue;
             float x0 = e.X - shift, y0 = e.Y, x1 = x0 + e.RectW, y1 = y0 + e.RectH + 4;
             // A control holds only what was drawn after it began: an open menu covers list rows drawn before it.
             // The scratchpad's message is drawn before its box (live).
@@ -145,6 +151,106 @@ public static class A350MfdPage
         return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
     }
 
+    private static readonly Regex DashRun = new(@"(\s*-){2,}\s*", RegexOptions.Compiled);
+    private static readonly Regex TrackDegrees = new(@"^(\d{1,3})d$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// An F-PLN page (live, ACTIVE/F-PLN): each waypoint row is four boxes (ident, time, speed, altitude;
+    /// <c>BaseFlightPlanButton</c>), the leg into it (airway, track, distance, FPA) drawn just above its row, and the
+    /// DISCONTINUITY and END rows full width. One line per waypoint, labelled with the page's own column headers
+    /// (FROM, TIME, the SPD ALT menu's words, TRK, DIST, FPA); only the rows above the destination bar, as a sighted
+    /// pilot sees them (the draw goes on below it, hidden); the destination bar as one line.
+    /// </summary>
+    private static void ReadFlightPlan(A350DrawCapture capture, float shift, Func<float, bool> mine, List<Cell> cells,
+        HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines)
+    {
+        var boxes = capture.Elements.Where(e => mine(e.X) && e.Class == "BaseFlightPlanButton")
+            .Select(e => (X: e.X - shift, e.Y, W: e.RectW, H: e.RectH)).ToList();
+        if (boxes.Count == 0) return;
+        // The destination bar's top: its DEST and destination keys (live: y 816 and 825).
+        float barTop = capture.Elements.Where(e => mine(e.X) && e.Y > 780 && e.Y < 900
+                && e.Class is "BaseUIButton" or "BaseTexturedButton").Select(e => e.Y).DefaultIfEmpty(816).Min();
+
+        // The column headers (live: FROM 25, TIME 262, TRK 605, DIST 722, FPA 741 at y 174; SPD ALT is a menu).
+        var header = cells.Where(c => c.Colour == "white" && c.Y is > 160 and < 190 && !c.Text.Contains("  ")).ToList();
+        string? Header(float x0, float x1) => header.FirstOrDefault(c => c.X >= x0 && c.X < x1)?.Text;
+        string from = Header(0, 100) ?? "FROM", time = Header(200, 334) ?? "TIME";
+        var spdAlt = (cells.FirstOrDefault(c => c.Y is > 160 and < 190 && c.Text.Contains("  "))?.Text ?? "SPD ALT")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string spd = spdAlt.ElementAtOrDefault(0) ?? "SPD", alt = spdAlt.ElementAtOrDefault(1) ?? "ALT";
+        var legHeaders = header.Where(c => c.X >= 560).OrderBy(c => c.X).ToList();
+        used.UnionWith(header);
+        int headerIndex = header.Select(c => c.Index).DefaultIfEmpty(int.MaxValue).Min();
+
+        // Hidden behind the destination bar: the list's texts (drawn after the scratchpad's message and before the
+        // header) at or below the bar's top.
+        int listStart = cells.Where(c => c.Index < headerIndex && boxes.Any(b => b.Y < barTop && c.X >= b.X && c.X <= b.X + b.W && c.Y >= b.Y && c.Y <= b.Y + b.H))
+            .Select(c => c.Index).DefaultIfEmpty(headerIndex).Min();
+        bool InList(Cell c) => c.Index >= listStart && c.Index < headerIndex;
+        used.UnionWith(cells.Where(c => InList(c) && c.Y >= barTop));
+
+        static string Value(Cell c) => TrackDegrees.Match(c.Text) is { Success: true } m ? m.Groups[1].Value + "°" : Word(c.Text);
+        string ValueOf(Cell? c, string identColour) =>
+            c == null ? "none" : Value(c) + (c.Colour != identColour && c.Colour != "grey" ? $" ({c.Colour})" : "");
+
+        float prevBottom = header.Select(c => c.Y).DefaultIfEmpty(174).Max() + 10;   // the first row's leg starts under the header
+        var rows = boxes.Where(b => b.Y + b.H <= barTop && b.X < 40 && (b.W < 200 || b.W > 600)).OrderBy(b => b.Y).ToList();
+        foreach (var b in rows)
+        {
+            var inBox = cells.Where(c => !used.Contains(c) && InList(c) && c.X >= b.X && c.X <= b.X + b.W && c.Y >= b.Y && c.Y <= b.Y + b.H).ToList();
+            if (b.W > 600)
+            {
+                // DISCONTINUITY, END OF F-PLN: the marker without its dashes.
+                used.UnionWith(inBox);
+                if (inBox.Count > 0)
+                    lines.Add((b.Y, 0, new MfdLine("text", $"{DashRun.Replace(inBox[0].Text, " ").Trim()}, {inBox[0].Colour}", b.X + b.W / 2, b.Y + b.H / 2)));
+                prevBottom = b.Y + b.H;
+                continue;
+            }
+            var ident = inBox.OrderBy(c => c.X).FirstOrDefault();
+            if (ident == null) { prevBottom = b.Y + b.H; continue; }
+            used.Add(ident);
+            var row = cells.Where(c => !used.Contains(c) && InList(c) && Math.Abs(c.Y - ident.Y) <= 6 && c.X >= 200 && c.X < 563).ToList();
+            Cell? At(float x0, float x1) => row.FirstOrDefault(c => c.X >= x0 && c.X < x1);
+            Cell? t = At(200, 334), sp = At(334, 422), al = At(422, 563);
+            used.UnionWith(row);
+            var leg = cells.Where(c => !used.Contains(c) && InList(c) && c.Y >= prevBottom && c.Y < b.Y && (c.X < 200 || c.X >= 560)).ToList();
+            used.UnionWith(leg);
+            var parts = new List<string>();
+            if (leg.FirstOrDefault(c => c.X < 200) is { } via) parts.Add("via " + via.Text);
+            foreach (var c in leg.Where(c => c.X >= 560).OrderBy(c => c.X))
+            {
+                var name = legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text;
+                parts.Add(name == null ? ValueOf(c, ident.Colour) : $"{name} {ValueOf(c, ident.Colour)}");
+            }
+            string label = b.Y < 230 ? $"{from} {ident.Text}" : ident.Text;
+            string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
+            lines.Add((b.Y, 0, new MfdLine("waypoint",
+                $"{label}: {legText}{time} {ValueOf(t, ident.Colour)}, {spd} {ValueOf(sp, ident.Colour)}, {alt} {ValueOf(al, ident.Colour)}, {ident.Colour}",
+                b.X + b.W / 2, b.Y + b.H / 2)));
+            prevBottom = b.Y + b.H;
+        }
+
+        // The destination bar: its key (the destination, which opens its arrival page), time, EFOB and distance.
+        if (capture.Elements.FirstOrDefault(e => mine(e.X) && e.Class == "BaseUIButton" && e.X - shift < 40 && e.Y >= barTop - 1 && e.Y < barTop + 40) is { } dest)
+        {
+            float dx = dest.X - shift;
+            var key = cells.FirstOrDefault(c => !used.Contains(c) && c.X >= dx && c.X <= dx + dest.RectW && c.Y >= dest.Y && c.Y <= dest.Y + dest.RectH + 4);
+            var data = cells.Where(c => !used.Contains(c) && c != key && c.Y >= barTop && c.Y < barTop + 60 && c.X >= 200 && c.X < 560)
+                .OrderBy(c => c.X).ToList();
+            if (key != null && data.Count > 0)
+            {
+                used.Add(key);
+                used.UnionWith(data);
+                var values = data.Where(c => c.Colour != "grey").ToList();
+                string Unit(Cell v) => data.FirstOrDefault(u => u.Colour == "grey" && u.X > v.X && u.X - v.X < 40) is { } u ? " " + u.Text : "";
+                var named = values.Select((v, i) => $"{(i switch { 0 => "time", 1 => "EFOB", 2 => "distance", _ => "value" })} {Word(v.Text)}{Unit(v)}");
+                lines.Add((dest.Y, 0, new MfdLine("button", $"Destination {key.Text}: {string.Join(", ", named)}, {values.First().Colour}",
+                    dx + dest.RectW / 2, dest.Y + dest.RectH / 2)));
+            }
+        }
+    }
+
     private static bool IsField(DrawnElement e) => e.Class != "NotepadTextbox" && e.RectW > 0 && e.RectH > 0
         && (e.Class.EndsWith("TextBox", StringComparison.Ordinal) || e.Class.EndsWith("Textbox", StringComparison.Ordinal));
 
@@ -152,7 +258,7 @@ public static class A350MfdPage
     /// Celsius, a checklist's line to fill ("____") blank. Dot leaders are colons already (<see cref="A350Ewd"/>).</summary>
     private static string Word(string token) =>
         token.Length > 0 && token.All(ch => ch == 'o') ? "required"
-        : token.Length > 0 && token.All(ch => ch == '-') ? "none"
+        : token.Length > 0 && token.Contains('-') && token.All(ch => ch is '-' or ':' or '.') ? "none"
         : token == "dC" ? "°C" : Blank.Replace(token, "blank");
 
     /// <summary>A field's tokens as said; a lone "d" is the degree sign of the number before it ("F040 d").</summary>

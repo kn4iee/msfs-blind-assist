@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "navdb";
 
     public static int Run(string mode, string[] args)
     {
@@ -31,6 +31,7 @@ internal static class DisplayModes
             case "sdsweep": return SdSweep(args);
             case "pfdlisten": return PfdListen(args);
             case "mfdlines": return MfdLines(args);
+            case "navdb": return NavDb(args);
             default: return 2;
         }
     }
@@ -282,6 +283,26 @@ internal static class DisplayModes
             Console.WriteLine($"--- {d.Panel}");
             if (mon.Latest(d.Gauge, d.Index) is { } cap) foreach (var line in d.Read(cap)) Console.WriteLine(line);
             else Console.WriteLine("(not drawn)");
+        }
+        return 0;
+    }
+
+    /// <summary>`navdb ICAO [ICAO ...]`: each airport's runways and ILS as MSFSBA's own navdata provider reads them
+    /// from its built database (fs2024.sqlite), the orphan-ILS fallback included.</summary>
+    private static int NavDb(string[] args)
+    {
+        var path = MSFSBlindAssist.Database.DatabasePathResolver.ResolveExistingDatabasePath("FS2024");
+        var db = new MSFSBlindAssist.Database.LittleNavMapProvider(path, "FS2024");
+        foreach (var icao in args)
+        {
+            Console.WriteLine($"== {icao} ({path})");
+            foreach (var r in db.GetRunways(icao))
+            {
+                var ils = db.GetILSForRunway(icao, r.RunwayID);
+                Console.WriteLine($"  RW{r.RunwayID,-4} hdg {r.Heading:000.0}T {r.HeadingMag:000.0}M len {r.Length:0} ft wid {r.Width:0}"
+                    + $" | runway ILS {r.ILSFreq:0.00} crs {r.ILSHeading:0.0} gs {r.GlideslopeAngleDeg:0.0}"
+                    + (ils == null ? " | GetILSForRunway: none" : $" | GetILSForRunway: {ils.Ident} {ils.Frequency:0.00}"));
+            }
         }
         return 0;
     }
