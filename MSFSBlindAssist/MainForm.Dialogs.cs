@@ -558,18 +558,25 @@ public partial class MainForm
     // PMDG 737/777 EFB tablet over the Coherent debugger — one client + window per
     // crew side, reusing the generic FbwEfbForm. Mirrors ShowFbwEfbDialog's lazy
     // client/form creation + non-modal ShowForm pattern.
+    // The iniBuilds A350's OIS (its EFB) rides the same pair of fields: one tablet per crew side, its own
+    // agent (coherent-a350-ois-agent.js). The aircraft swap disposes both, so the fields never mix aircraft.
     private void ShowPmdgCoherentEfbDialog(bool firstOfficer)
     {
         hotkeyManager.ExitInputHotkeyMode();
         string side = firstOfficer ? "FO" : "CA";
-        string title = (currentAircraft?.AircraftCode == "PMDG_737" ? "PMDG 737 EFB" : "PMDG 777 EFB") + (firstOfficer ? " (First Officer)" : "");
+        bool a350 = currentAircraft is IniBuildsA350Definition;
+        string title = (a350 ? "A350 OIS" : currentAircraft?.AircraftCode == "PMDG_737" ? "PMDG 737 EFB" : "PMDG 777 EFB")
+            + (firstOfficer ? " (First Officer)" : "");
+        string noun = a350 ? "OIS" : "EFB";
+        string label = a350 ? "OIS" : "Universal Flight Tablet";
+        CoherentPmdgEfbClient NewClient() => a350 ? CoherentPmdgEfbClient.ForA350Ois(firstOfficer) : CoherentPmdgEfbClient.ForPmdg(side);
 
         if (firstOfficer)
         {
-            if (coherentPmdgEfbFirstOfficer == null) { coherentPmdgEfbFirstOfficer = CoherentPmdgEfbClient.ForPmdg(side); coherentPmdgEfbFirstOfficer.Start(); }
+            if (coherentPmdgEfbFirstOfficer == null) { coherentPmdgEfbFirstOfficer = NewClient(); coherentPmdgEfbFirstOfficer.Start(); }
             if (pmdgCoherentEfbFirstOfficerForm == null || pmdgCoherentEfbFirstOfficerForm.IsDisposed)
             {
-                pmdgCoherentEfbFirstOfficerForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbFirstOfficer, announcer, title, "EFB", "Universal Flight Tablet");
+                pmdgCoherentEfbFirstOfficerForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbFirstOfficer, announcer, title, noun, label);
                 // Idle-gate the 600 ms tablet scrape to the window's visibility (same pattern as
                 // the flyPad form above); the inspector socket + installed agent stay warm. Without
                 // this the scrape runs forever after the first open until aircraft swap.
@@ -581,10 +588,10 @@ public partial class MainForm
         }
         else
         {
-            if (coherentPmdgEfbCaptain == null) { coherentPmdgEfbCaptain = CoherentPmdgEfbClient.ForPmdg(side); coherentPmdgEfbCaptain.Start(); }
+            if (coherentPmdgEfbCaptain == null) { coherentPmdgEfbCaptain = NewClient(); coherentPmdgEfbCaptain.Start(); }
             if (pmdgCoherentEfbCaptainForm == null || pmdgCoherentEfbCaptainForm.IsDisposed)
             {
-                pmdgCoherentEfbCaptainForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbCaptain, announcer, title, "EFB", "Universal Flight Tablet");
+                pmdgCoherentEfbCaptainForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbCaptain, announcer, title, noun, label);
                 var caForm = pmdgCoherentEfbCaptainForm;
                 caForm.VisibleChanged += (_, _) => coherentPmdgEfbCaptain?.SetActive(!caForm.IsDisposed && caForm.Visible);
             }

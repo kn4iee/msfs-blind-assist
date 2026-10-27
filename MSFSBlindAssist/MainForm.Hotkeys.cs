@@ -258,8 +258,9 @@ public partial class MainForm
                 }
                 break;
             case HotkeyAction.ShowPMDGEFB:
-                if (currentAircraft is IPMDGAircraft pmdgEFB && pmdgEFB.HasEFBSupport)
+                if ((currentAircraft is IPMDGAircraft pmdgEFB && pmdgEFB.HasEFBSupport) || currentAircraft is IniBuildsA350Definition)
                 {
+                    // The PMDG tablet, or the A350's OIS: one per crew side over the Coherent debugger.
                     ShowPmdgCoherentEfbDialog(firstOfficer: false);
                 }
                 else if (currentAircraft?.AircraftCode == "FBW_A380")
@@ -297,7 +298,7 @@ public partial class MainForm
                 }
                 break;
             case HotkeyAction.ShowPMDGEFBFirstOfficer:
-                if (currentAircraft is IPMDGAircraft pmdgEfbFo && pmdgEfbFo.HasEFBSupport)
+                if ((currentAircraft is IPMDGAircraft pmdgEfbFo && pmdgEfbFo.HasEFBSupport) || currentAircraft is IniBuildsA350Definition)
                     ShowPmdgCoherentEfbDialog(firstOfficer: true);
                 break;
             case HotkeyAction.ShowRMP:

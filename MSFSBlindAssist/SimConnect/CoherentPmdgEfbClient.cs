@@ -78,6 +78,14 @@ namespace MSFSBlindAssist.SimConnect
         /// </summary>
         private readonly string? _side;
 
+        /// <summary>
+        /// The expression a candidate view answers with its side, compared with <see cref="_side"/>: the PMDG
+        /// tablet's own getTabletSide(), the A350 OIS's loaded page (ini-efb-a350-cpt or -fo).
+        /// </summary>
+        private readonly string _sideProbe;
+
+        private const string PmdgSideProbe = "(typeof getTabletSide==='function')?getTabletSide():''";
+
         private readonly SynchronizationContext? _syncContext;
         private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
         private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -107,8 +115,10 @@ namespace MSFSBlindAssist.SimConnect
         public bool IsBridgeConnected =>
             _connected && (DateTime.UtcNow - _lastGoodScrapeUtc).TotalSeconds < 5;
 
-        private CoherentPmdgEfbClient(string titleNeedle, string agentFile, string agentGlobal, string? side)
+        private CoherentPmdgEfbClient(string titleNeedle, string agentFile, string agentGlobal, string? side,
+            string sideProbe = PmdgSideProbe)
         {
+            _sideProbe = sideProbe;
             _titleNeedle = titleNeedle;
             _agentFile = agentFile;
             _agentGlobal = agentGlobal;
@@ -131,6 +141,15 @@ namespace MSFSBlindAssist.SimConnect
         /// but it is still just a Coherent view — a React app mounted at #MSFS_REACT_MOUNT, with a
         /// real DOM. Verified live 2026-07-17: 112 elements, 8 buttons, zero canvases.
         /// </summary>
+        /// <summary>
+        /// The iniBuilds A350's OIS (its EFB). Both views are titled "VCockpitNN - iniEfbA350" and their
+        /// numbers follow load order, so the side is the page each loaded: the captain's
+        /// ini-efb-a350-cpt.html, the first officer's ini-efb-a350-fo.html (live 2026-10-27, 1.2.7).
+        /// </summary>
+        public static CoherentPmdgEfbClient ForA350Ois(bool firstOfficer)
+            => new("iniEfbA350", "coherent-a350-ois-agent.js", "__MSFSBA_A350_OIS", firstOfficer ? "FO" : "CPT",
+                "((document.documentElement.innerHTML.match(/ini-efb-a350-(cpt|fo)/)||['',''])[1]).toUpperCase()");
+
         public static CoherentPmdgEfbClient ForMd11()
             => new("TFDi_MD11_efb", "coherent-md11-efb-agent.js", "__MSFSBA_MD11_EFB", side: null);
 
@@ -369,7 +388,7 @@ namespace MSFSBlindAssist.SimConnect
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(ConnectTimeoutMs);
                 await ws.ConnectAsync(new Uri($"ws://127.0.0.1:19999/devtools/inspector/{pageId}"), cts.Token);
-                var msg = JsonSerializer.Serialize(new { id = 1, method = "Runtime.evaluate", @params = new { expression = "(typeof getTabletSide==='function')?getTabletSide():''", returnByValue = true } });
+                var msg = JsonSerializer.Serialize(new { id = 1, method = "Runtime.evaluate", @params = new { expression = _sideProbe, returnByValue = true } });
                 await ws.SendAsync(System.Text.Encoding.UTF8.GetBytes(msg), System.Net.WebSockets.WebSocketMessageType.Text, true, cts.Token);
                 var buf = new byte[8192];
                 using var ms = new System.IO.MemoryStream();

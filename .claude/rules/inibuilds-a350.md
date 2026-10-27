@@ -6,6 +6,7 @@ paths:
   - "MSFSBlindAssist/Aircraft/A350/**"
   - "MSFSBlindAssist/Aircraft/IniBuildsA350*.cs"
   - "tests/MSFSBlindAssist.Tests/A350/**"
+  - "MSFSBlindAssist/Resources/coherent-a350-ois-agent.js"
 ---
 # iniBuilds A350 rules
 

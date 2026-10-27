@@ -111,10 +111,61 @@ internal sealed class ProbeForm : Form
 
     private ProbeDefinition? _def;
 
+    /// <summary>`ois cpt|fo [text]`: the A350 OIS through MSFSBA's own client (side probe, agent, pushes),
+    /// printing what the window would get; with a text, presses that element and prints the next push.</summary>
+    private async Task RunOis()
+    {
+        var parts = (_arg ?? "cpt").Split(' ', 2);
+        bool fo = parts[0].Equals("fo", StringComparison.OrdinalIgnoreCase);
+        var client = MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient.ForA350Ois(fo);
+        var pushes = new System.Collections.Concurrent.ConcurrentQueue<Dictionary<string, string>>();
+        client.StateUpdated += (_, e) => { if (e.Type == "fbw_efb_elements") pushes.Enqueue(e.Data); };
+        client.Start();
+        Dictionary<string, string>? last = null;
+        async Task<Dictionary<string, string>?> Next(int ms)
+        {
+            var until = DateTime.UtcNow.AddMilliseconds(ms);
+            while (DateTime.UtcNow < until)
+            {
+                while (pushes.TryDequeue(out var d)) last = d;
+                if (last != null) return last;
+                await Task.Delay(100);
+            }
+            return last;
+        }
+        void Print(Dictionary<string, string> d)
+        {
+            int n = int.Parse(d["count"]);
+            Line($"page={d["page"]} items={n}");
+            for (int i = 0; i < n; i++)
+                Line($"{d[$"items.{i}.aidx"]}	{d[$"items.{i}.kind"]}{d[$"items.{i}.type"]}	{d[$"items.{i}.text"]}	{d[$"items.{i}.value"]}");
+        }
+        var first = await Next(15000);
+        if (first == null) { Line("no push"); client.Dispose(); return; }
+        if (parts.Length < 2) { Print(first); client.Dispose(); return; }
+        int count = int.Parse(first["count"]);
+        string? idx = null;
+        for (int i = 0; i < count; i++)
+            if (first[$"items.{i}.text"].Equals(parts[1], StringComparison.OrdinalIgnoreCase)) idx = first[$"items.{i}.aidx"];
+        if (idx == null) { Line($"no element {parts[1]}"); client.Dispose(); return; }
+        last = null;
+        client.EnqueueCommand("click_display_element", new Dictionary<string, string> { ["index"] = idx });
+        await Task.Delay(2500);
+        client.EnqueueCommand("get_display_elements");
+        var after = await Next(8000);
+        if (after != null) Print(after);
+        client.Dispose();
+    }
+
     private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("0.###") : "null";
 
     private async Task Run()
     {
+        if (_mode == "ois")
+        {
+            await RunOis();
+            return;
+        }
         var cap = new Cap(Handle);
         var def = new ProbeDefinition(_watch);
         _def = def;
