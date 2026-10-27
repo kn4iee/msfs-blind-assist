@@ -122,6 +122,13 @@
   // The sidebar's cargo buttons press the same doors.
   A.CARGO_DOORS = { 'FWD CARGO': 'door-fwd-cargo', 'AFT CARGO': 'door-aft-cargo', 'BULK CARGO': 'door-bulk-cargo' };
 
+  // A list a button shows beside it: a div of two or more buttons and nothing else.
+  A.isButtonList = function (d) {
+    if (!d || d.tagName !== 'DIV' || d.children.length < 2) return false;
+    for (var k = d.firstElementChild; k; k = k.nextElementSibling) if (k.tagName !== 'BUTTON') return false;
+    return true;
+  };
+
   // The title of the section a button sits in: the nearest earlier cell of its row holding a heading
   // (GROUND's sidebar: DOORS & EXITS, LIGHTS, EXTERIOR).
   A.headingBefore = function (b) {
@@ -589,6 +596,13 @@
             push(e, { kind: 'button', text: tg.name + ': ' + tg.state, clickable: true, disabled: e.disabled === true, key: 'button:' + tg.name, announceChange: true });
             continue;
           }
+          // A button showing a list beside it (PANEL STATES' presets, SET FUEL's refuel kinds).
+          var lst = e.nextElementSibling;
+          if (A.isButtonList(lst)) {
+            push(e, { kind: 'button', text: bt + (A.visible(lst) ? ' (expanded)' : ' (collapsed)'), clickable: true,
+              disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+            continue;
+          }
           var active = A.hasCls(e, 'active'), bs = A.buttonState(e, bt);
           if (bs) {
             push(e, { kind: 'button', text: bt + ': ' + bs, clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
@@ -612,6 +626,15 @@
           var ht = A.norm(e.innerText);
           A.own(e);
           if (ht) push(null, { kind: 'heading', level: parseInt(tag.charAt(1), 10), text: ht });
+          continue;
+        }
+
+        // The header's EFB dropdown: its chevron opens the page menu.
+        if (e.id === 'efb-dropdown-menu-button') {
+          A.own(e);
+          var dd = document.getElementById('efb-dropdown-menu-content');
+          push(e, { kind: 'button', text: 'EFB menu' + (dd && A.visible(dd) ? ' (expanded)' : ' (collapsed)'), clickable: true,
+            key: 'button:EFB menu', announceChange: true });
           continue;
         }
 

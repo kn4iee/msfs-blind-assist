@@ -42,3 +42,4 @@ first seen.
 | aoc | COMPANY COM: the tree, one new message |
 | aoc_message | COMPANY COM with that message open |
 | maintenance | MAINTENANCE: battery gauges, fluid bars, tyre and brake boxes |
+| menu | FLT OPS MENU with the header, PANEL STATES closed |

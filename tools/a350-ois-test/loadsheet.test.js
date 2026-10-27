@@ -35,7 +35,7 @@ test('the tank figures say which tank', () => {
 
 test('the buttons are there, SET ZFW disabled', () => {
   const els = scrape('loadsheet');
-  for (const b of ['SIMBRIEF IMPORT', 'REFRESH', 'SET ZFW', 'SET FUEL', 'RESEND LOADSHEET'])
+  for (const b of ['SIMBRIEF IMPORT', 'REFRESH', 'SET ZFW', 'SET FUEL (collapsed)', 'RESEND LOADSHEET'])
     assert.ok(els.some(e => e.kind === 'button' && e.text === b), 'missing ' + b);
   assert.ok(els.find(e => e.text === 'SET ZFW').disabled);
 });
