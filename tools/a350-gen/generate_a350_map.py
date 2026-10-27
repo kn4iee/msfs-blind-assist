@@ -56,6 +56,7 @@ CLICK_SWITCHES = {
     'INSTRUMENT_FCU_HUD_DECLUTTER_RIGHT_IE_ID': 'L:INI_FCU_HUD_DECLUTTER_RIGHT',
 }
 
+BOOL_LOC_RE = re.compile(r'\(B:[^,)]+,\s*Bool\)\s*if\{\s*\(R:1:([^)]+)\)\s*\}\s*els\{\s*\(R:1:([^)]+)\)\s*\}')
 RANGE_RE = re.compile(r'^\s*p0\s+(\d+)\s+min\s+0\s+max')
 SET_EVENT_RE = re.compile(r'\(>B:([A-Za-z0-9_]+?)_Set\)')
 TOGGLE_RE = re.compile(r'\(L:([^,)]+)(?:,\s*[A-Za-z]+)?\)\s*!\s*\(>L:([^,)]+)')
@@ -109,6 +110,12 @@ def two_words(tt_value, loc=None):
     """{'0': word, '1': word} from "(X) 0 == if{ 'OFF' } els{ 'ON' }" style tooltip values, or from the A350's
     "(X) 0 == if{ (R:1:KEY.OFF) } els{ (R:1:KEY.ON) }" when the tooltip file gives the two positions two different
     words (a push button's are both "PUSH", which names no position)."""
+    # The tooltip reads the event's own Bool: "(B:X, Bool) if{ (R:1:KEY.1) } els{ (R:1:KEY.0) }" (true first).
+    m = BOOL_LOC_RE.search(tt_value or '')
+    if m and loc is not None:
+        on, off = loc_text(loc, m.group(1)), loc_text(loc, m.group(2))
+        if off and on and off != on:
+            return OrderedDict([('0', off), ('1', on)])
     m = OFF_ON_LOC_RE.search(tt_value or '')
     if m and loc is not None:
         off, on = loc_text(loc, m.group(1)), loc_text(loc, m.group(2))

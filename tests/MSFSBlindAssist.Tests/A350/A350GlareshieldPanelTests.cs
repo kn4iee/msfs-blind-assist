@@ -77,7 +77,7 @@ public class A350GlareshieldPanelTests
         AssertRows("HUD", new[]
         {
             ("Captain HUD brightness", Set, ""), ("First officer HUD brightness", Set, ""),
-            ("Captain HUD crosswind mode", Set, OffOn), ("First officer HUD crosswind mode", Set, OffOn),
+            ("Captain HUD crosswind mode", Set, "0=Norm, 1=X-wind"), ("First officer HUD crosswind mode", Set, "0=Norm, 1=X-wind"),
             ("Captain HUD declutter", Set, OffOn), ("First officer HUD declutter", Set, OffOn),
         });
         AssertRows("Loudspeakers and Table Lights", new[]

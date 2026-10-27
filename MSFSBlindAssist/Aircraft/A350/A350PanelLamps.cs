@@ -119,6 +119,8 @@ public static class A350PanelLamps
         ["ELEC_IDG_1A_SEQ2_LIGHT"] = "DRIVE 1A off light", ["ELEC_IDG_1B_SEQ2_LIGHT"] = "DRIVE 1B off light",
         ["ELEC_IDG_2A_SEQ2_LIGHT"] = "DRIVE 2A off light", ["ELEC_IDG_2B_SEQ2_LIGHT"] = "DRIVE 2B off light",
         ["IRS_ADR_1_SEQ2_LIGHT"] = "ADR 1 off light", ["IRS_ADR_2_SEQ2_LIGHT"] = "ADR 2 off light", ["IRS_ADR_3_SEQ2_LIGHT"] = "ADR 3 off light",
+        // Pedestal: each engine master's upper legend is its FIRE light (INI_ENG_n_FIRE).
+        ["ENG_MASTER_1_SEQ1_LIGHT"] = "ENG 1 master fire light", ["ENG_MASTER_2_SEQ1_LIGHT"] = "ENG 2 master fire light",
     };
 
     /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after

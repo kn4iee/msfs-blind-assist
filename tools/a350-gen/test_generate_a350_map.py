@@ -10,6 +10,7 @@ from a350_fixture import FixtureBuilder
 
 # Tooltip words in the shapes en-US.locPak holds them (package 1.2.7).
 LOC = {
+    'INI.TOOLTIPS.GRAVITY_GEAR_COVER.0': 'OPEN', 'INI.TOOLTIPS.GRAVITY_GEAR_COVER.1': 'CLOSE',
     'INI.TOOLTIPS.ELEC_BAT_1.TITLE': 'BAT 1',
     'INI.TOOLTIPS.ELEC_BAT_1.OFF': 'PUSH',
     'INI.TOOLTIPS.ELEC_BAT_1.ON': 'PUSH',
@@ -109,6 +110,12 @@ def _fixture():
         init="(L:INI_GEAR_HANDLE_STATUS) 1 0 l0 ? (>O:AIRLINER_LDG_LEVER_Position)",
         tt_value=("(O:AIRLINER_LDG_LEVER_Position) 0 == if{ (R:1:INI.TOOLTIPS.LDG_LEVER.UP) } "
                   "els{ (R:1:INI.TOOLTIPS.LDG_LEVER.DOWN) } '%s' (F:Format)"))
+    # A tooltip that reads the event's own Bool: true is the .1 word (the gravity gear cover CLOSE), false the .0.
+    add(ecam, 'AIRLINER_GRAVITY_GEAR_COVER', 'INI.TOOLTIPS.GRAVITY_GEAR_COVER.TITLE', units='Boolean',
+        set_code='p0 1 min 0 max (>O:AIRLINER_GRAVITY_GEAR_COVER_Position) p0 (>L:INI_GRAVITY_GEAR_COVER)',
+        init='(L:INI_GRAVITY_GEAR_COVER) sp0 l0 (>O:AIRLINER_GRAVITY_GEAR_COVER_Position)',
+        tt_value=('(B:AIRLINER_GRAVITY_GEAR_COVER, Bool) if{ (R:1:INI.TOOLTIPS.GRAVITY_GEAR_COVER.1) } '
+                  'els{ (R:1:INI.TOOLTIPS.GRAVITY_GEAR_COVER.0) }'))
     # The HUD declutter key: its input event only animates the key; the click code flips INI_FCU_HUD_DECLUTTER_LEFT.
     add(ecam, 'INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID', 'INI.TOOLTIPS.FCU_HUD_DECLUTTER_LEFT.ACTION', units='Boolean',
         set_code=("p0 1 min 0 max (>O:INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID_Position) "
@@ -133,7 +140,7 @@ def _by_id():
 
 class GenerateA350MapTests(unittest.TestCase):
     def test_every_control_is_read(self):
-        self.assertEqual(10, len(_map()['controls']))
+        self.assertEqual(11, len(_map()['controls']))
 
     def test_area_and_panel_come_from_the_component_tree(self):
         c = _by_id()['AIRLINER_ELEC_BAT_1']
@@ -177,6 +184,10 @@ class GenerateA350MapTests(unittest.TestCase):
         c = _by_id()['INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID']
         self.assertEqual(('selector', 'L:INI_FCU_HUD_DECLUTTER_LEFT', {'0': 'OFF', '1': 'ON'}, None),
                          (c['kind'], c['state_var'], c['positions'], c['press']))
+
+    def test_a_tooltip_reading_its_own_bool_names_true_and_false(self):
+        c = _by_id()['AIRLINER_GRAVITY_GEAR_COVER']
+        self.assertEqual(('L:INI_GRAVITY_GEAR_COVER', {'0': 'OPEN', '1': 'CLOSE'}), (c['state_var'], c['positions']))
 
     def test_hold(self):
         self.assertEqual(('hold', 2), (_by_id()['AIRLINER_ECAM_ENG']['kind'], _by_id()['AIRLINER_ECAM_ENG']['press']))

@@ -55,7 +55,22 @@ public static partial class A350PanelLayout
         ["MIP_INDIVIDUAL_PANEL_LEFT"] = "Captain Individual Panel",
         ["MIP_INDIVIDUAL_PANEL_RIGHT"] = "First Officer Individual Panel",
         ["MIP_SIDE_PANEL_RIGHT"] = "First Officer Side Panel",
+        // Pedestal: the A380's panels (Engines, Thrust Levers, Flaps and Brakes, Speed Brake, ECAM Control Panel, Weather
+        // Radar, Transponder, Cockpit); the A350's emergency descent and trims have their own.
+        ["ENG_PANEL"] = "Engines",
+        ["THROTTLE"] = "Thrust Levers",
+        ["EMER_DESCENT"] = "Emergency Descent",
+        ["FCTL_FLAPS_LEVER"] = "Flaps and Brakes", ["PARK_BRK_PANEL"] = "Flaps and Brakes",
+        ["SPOILER_LEVER"] = "Speed Brake",
+        ["PITCH_TRIM"] = "Trim", ["RUDDER_TRIM"] = "Trim",
+        ["ECAM_BUTTONS"] = "ECAM Control Panel",
+        ["SURV_PANEL"] = "Transponder",
+        ["CKPT_DOOR"] = "Cockpit", ["CKPT_LT"] = "Cockpit", ["OIS_DISPLAY_TRANSFER"] = "Cockpit", ["PRINTER"] = "Cockpit",
     };
+
+    /// <summary>Panels with a plan of their own still to come, not placed until then: the RMPs (192 keys and a display)
+    /// and the KCCU wheels (the MFD's).</summary>
+    private static readonly HashSet<string> DeferredPanels = new(StringComparer.Ordinal) { "RMPS", "FMGS_1", "FMGS_2" };
 
     /// <summary>A control iniBuilds files under another group, sent to the panel the A380 puts it on.</summary>
     private static readonly Dictionary<string, string> ControlPanels = new(StringComparer.Ordinal)
@@ -87,6 +102,14 @@ public static partial class A350PanelLayout
         ["FCU_SLIDING_TABLE_BRT_RIGHT"] = "Loudspeakers and Table Lights",
         // Instrument: the gear lever, anti-skid and brake fans as the A380's Gear panel; the rest is Autobrake.
         ["LDG_LEVER"] = "Gear", ["LDG_ANTI_SKID"] = "Gear", ["LDG_BRK_HOT"] = "Gear",
+        // Pedestal: the surveillance panel splits as the A380's Weather Radar and Transponder.
+        ["WXR_ELEV_LEFT"] = "Weather Radar", ["WXR_ELEV_LEFT_PUSH"] = "Weather Radar", ["WXR_ELEV_LEFT_PULL"] = "Weather Radar",
+        ["WXR_ELEV_RIGHT"] = "Weather Radar", ["WXR_ELEV_RIGHT_PUSH"] = "Weather Radar", ["WXR_ELEV_RIGHT_PULL"] = "Weather Radar",
+        ["WXR_GAIN_LEFT"] = "Weather Radar", ["WXR_GAIN_LEFT_PUSH"] = "Weather Radar", ["WXR_GAIN_LEFT_PULL"] = "Weather Radar",
+        ["WXR_GAIN_RIGHT"] = "Weather Radar", ["WXR_GAIN_RIGHT_PUSH"] = "Weather Radar", ["WXR_GAIN_RIGHT_PULL"] = "Weather Radar",
+        ["WXR_VD_AZIM_LEFT"] = "Weather Radar", ["WXR_VD_AZIM_LEFT_PUSH"] = "Weather Radar", ["WXR_VD_AZIM_LEFT_PULL"] = "Weather Radar",
+        ["WXR_VD_AZIM_RIGHT"] = "Weather Radar", ["WXR_VD_AZIM_RIGHT_PUSH"] = "Weather Radar", ["WXR_VD_AZIM_RIGHT_PULL"] = "Weather Radar",
+        ["WXR_SYS_1"] = "Weather Radar", ["WXR_SYS_2"] = "Weather Radar",
     };
 
     /// <summary>The order of each section's panels, the A380's where the panels are shared; a panel listed here belongs to
@@ -107,6 +130,11 @@ public static partial class A350PanelLayout
             "Gear", "Autobrake", "ISIS", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
             "First Officer Individual Panel", "First Officer Side Panel",
         },
+        ["Pedestal"] = new()
+        {
+            "Engines", "Thrust Levers", "Emergency Descent", "Flaps and Brakes", "Speed Brake", "Trim", "ECAM Control Panel",
+            "Weather Radar", "Transponder", "Cockpit",
+        },
     };
 
     /// <summary>Names for controls whose tooltip title is wrong or shared: iniBuilds titles the engine bleeds
@@ -114,6 +142,90 @@ public static partial class A350PanelLayout
     /// wipers, both rain repellents and the four engine fire agents one title per pair.</summary>
     private static readonly Dictionary<string, string> NameOverrides = new(StringComparer.Ordinal)
     {
+        // Pedestal: the A380's ECAM and lever words; the cockpit's own legends elsewhere; each weather radar knob's push
+        // (AUTO MODE) and pull (MANUAL MODE) by what they select.
+        ["ENG_MASTER_MODE"] = "Engine mode selector",
+        ["ENG_MASTER_1"] = "ENG 1 master",
+        ["ENG_MASTER_2"] = "ENG 2 master",
+        ["ENG_THROTTLE_ATHR_DISC_LEFT"] = "Left A/THR disconnect",
+        ["ENG_THROTTLE_ATHR_DISC_RIGHT"] = "Right A/THR disconnect",
+        ["EMER_DESCENT"] = "Emergency descent",
+        ["PARK_BRK_ACCU_REINFLATE"] = "Brake accumulator reinflate",
+        ["GRAVITY_GEAR_COVER"] = "Gravity gear extension cover",
+        ["GRAVITY_GEAR_GUARD_1"] = "Gravity gear extension guard 1",
+        ["GRAVITY_GEAR_GUARD_2"] = "Gravity gear extension guard 2",
+        ["GRAVITY_GEAR_HANDLE"] = "Gravity gear extension",
+        ["PITCH_TRIM_LEFT"] = "Left pitch trim",
+        ["PITCH_TRIM_RIGHT"] = "Right pitch trim",
+        ["ECAM_ENG"] = "ECAM ENG",
+        ["ECAM_APU"] = "ECAM APU",
+        ["ECAM_BLEED"] = "ECAM BLEED",
+        ["ECAM_COND"] = "ECAM COND",
+        ["ECAM_PRESS"] = "ECAM PRESS",
+        ["ECAM_DOOR"] = "ECAM DOOR",
+        ["ECAM_ELAC"] = "ECAM EL/AC",
+        ["ECAM_ELDC"] = "ECAM EL/DC",
+        ["ECAM_FUEL"] = "ECAM FUEL",
+        ["ECAM_WHEEL"] = "ECAM WHEEL",
+        ["ECAM_HYD"] = "ECAM HYD",
+        ["ECAM_FCTL"] = "ECAM F/CTL",
+        ["ECAM_ALL"] = "ECAM all",
+        ["ECAM_STS"] = "ECAM status",
+        ["ECAM_VIDEO"] = "ECAM video",
+        ["ECAM_ABN"] = "ECAM abnormal proc",
+        ["ECAM_DEFRD"] = "ECAM deferred proc",
+        ["ECAM_DISPCH"] = "ECAM dispatch",
+        ["ECAM_MORE"] = "ECAM more",
+        ["ECAM_TO_CONFIG"] = "ECAM T.O config",
+        ["ECAM_EMER_CANCEL"] = "ECAM emergency cancel",
+        ["ECAM_EMER_CANCEL_GUARD"] = "ECAM emergency cancel guard",
+        ["ECAM_CLEAR_LEFT"] = "Captain ECAM clear",
+        ["ECAM_CLEAR_RIGHT"] = "First officer ECAM clear",
+        ["ECAM_CHECKLIST_LEFT"] = "Captain ECAM checklist",
+        ["ECAM_CHECKLIST_RIGHT"] = "First officer ECAM checklist",
+        ["ECAM_RCL_LAST"] = "ECAM recall last",
+        ["ECAM_RCL_ALL"] = "ECAM recall all",
+        ["ECAM_SCROLL_L"] = "Captain ECAM wheel",
+        ["ECAM_SCROLL_R"] = "First officer ECAM wheel",
+        ["ECAM_SD_KNOB"] = "SD knob",
+        ["ECAM_SD_KNOB_PUSH"] = "SD knob push",
+        ["WXR_SYS_1"] = "Weather radar system 1",
+        ["WXR_SYS_2"] = "Weather radar system 2",
+        ["XPDR_SYS_1"] = "Transponder system 1",
+        ["XPDR_SYS_2"] = "Transponder system 2",
+        ["TCAS_ABV"] = "TCAS above",
+        ["TCAS_BLW"] = "TCAS below",
+        ["TCAS_TA_ONLY"] = "TCAS TA only",
+        ["TAWS_GS_MODE_OFF"] = "G/S mode",
+        ["CKPT_DOOR"] = "Cockpit door",
+        ["CKPT_LT_DOME"] = "Dome light",
+        ["CKPT_LT_FLOOD"] = "Flood light",
+        ["CKPT_LT_INTEG"] = "Integral light",
+        ["CKPT_LT_DU_MASTER_BRT"] = "DU master brightness",
+        ["CKPT_LT_DU_MASTER_INHIBIT"] = "DU master",
+        ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_LEFT"] = "Captain OIS on center",
+        ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_RIGHT"] = "First officer OIS on center",
+        ["OIS_DISPLAY_TRANSFER_DISPLAY_CYCLE_LEFT"] = "Captain display cycle",
+        ["OIS_DISPLAY_TRANSFER_DISPLAY_CYCLE_RIGHT"] = "First officer display cycle",
+        ["PRINTER_PAPER_PED"] = "Printer",
+        ["WXR_ELEV_LEFT"] = "Captain weather radar elevation",
+        ["WXR_ELEV_LEFT_PUSH"] = "Captain weather radar elevation auto",
+        ["WXR_ELEV_LEFT_PULL"] = "Captain weather radar elevation manual",
+        ["WXR_ELEV_RIGHT"] = "First officer weather radar elevation",
+        ["WXR_ELEV_RIGHT_PUSH"] = "First officer weather radar elevation auto",
+        ["WXR_ELEV_RIGHT_PULL"] = "First officer weather radar elevation manual",
+        ["WXR_GAIN_LEFT"] = "Captain weather radar gain",
+        ["WXR_GAIN_LEFT_PUSH"] = "Captain weather radar gain auto",
+        ["WXR_GAIN_LEFT_PULL"] = "Captain weather radar gain manual",
+        ["WXR_GAIN_RIGHT"] = "First officer weather radar gain",
+        ["WXR_GAIN_RIGHT_PUSH"] = "First officer weather radar gain auto",
+        ["WXR_GAIN_RIGHT_PULL"] = "First officer weather radar gain manual",
+        ["WXR_VD_AZIM_LEFT"] = "Captain weather radar VD azimuth",
+        ["WXR_VD_AZIM_LEFT_PUSH"] = "Captain weather radar VD azimuth auto",
+        ["WXR_VD_AZIM_LEFT_PULL"] = "Captain weather radar VD azimuth manual",
+        ["WXR_VD_AZIM_RIGHT"] = "First officer weather radar VD azimuth",
+        ["WXR_VD_AZIM_RIGHT_PUSH"] = "First officer weather radar VD azimuth auto",
+        ["WXR_VD_AZIM_RIGHT_PULL"] = "First officer weather radar VD azimuth manual",
         ["AIR_ENG_BLEED_1"] = "ENG 1 bleed",
         ["AIR_ENG_BLEED_2"] = "ENG 2 bleed",
         ["MAINT_ENG_FADEC_GND_POWER_2"] = "ENG 2 FADEC GND PWR",
@@ -314,5 +426,14 @@ public static partial class A350PanelLayout
         ["LDG_RWY_COND_BRK_ACTION_MODE_SELECTOR"] = new() { [0] = "Runway condition", [1] = "Braking action" },
         ["ADIRS_FMS_AIR_DATA_SELECTOR"] = new() { [0] = "Captain on backup", [1] = "Auto", [2] = "First officer on backup" },
         ["OIS_AVNCS_EFB_LEFT"] = OisSwitch, ["OIS_AVNCS_EFB_RIGHT"] = OisSwitch,
+        // iniBuilds' master tooltips are swapped (the OFF key reads ON): both engines running read 1 (live 2026-10-27).
+        ["ENG_MASTER_1"] = new() { [0] = "Off", [1] = "On" }, ["ENG_MASTER_2"] = new() { [0] = "Off", [1] = "On" },
+        // The cover's tooltip words are the click's action; the handle takes DOWN only with the cover and both guards at 1.
+        ["GRAVITY_GEAR_COVER"] = new() { [0] = "Closed", [1] = "Open" },
+        ["GRAVITY_GEAR_GUARD_1"] = new() { [0] = "Closed", [1] = "Open" },
+        ["GRAVITY_GEAR_GUARD_2"] = new() { [0] = "Closed", [1] = "Open" },
+        ["GRAVITY_GEAR_HANDLE"] = new() { [0] = "Off", [1] = "Reset", [2] = "Down" },
+        // The left switch's tooltip reads Off/On, the right's NORM/X-WIND: both read the right's.
+        ["FCU_HUD_XWIND_LEFT"] = new() { [0] = "Norm", [1] = "X-wind" }, ["FCU_HUD_XWIND_RIGHT"] = new() { [0] = "Norm", [1] = "X-wind" },
     };
 }

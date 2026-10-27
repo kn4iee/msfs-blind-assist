@@ -2021,8 +2021,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "ONLY THE CAPTAIN CAN ORDER THE EVACUATION",
+    "1": "CAPTAIN OR PURSER CAN ORDER THE EVACUATION"
    },
    "values": null,
    "press": null,
@@ -2181,8 +2181,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -5562,8 +5562,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "NORM",
+    "1": "X-WIND"
    },
    "values": null,
    "press": null,
@@ -7544,8 +7544,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -7565,8 +7565,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "CLOSE",
+    "1": "OPEN"
    },
    "values": null,
    "press": null,
@@ -7586,8 +7586,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "CLOSE",
+    "1": "OPEN"
    },
    "values": null,
    "press": null,
@@ -7745,7 +7745,7 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
+    "0": "INHIBIT",
     "1": "ON"
    },
    "values": null,
@@ -12627,8 +12627,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "DEPLOY",
+    "1": "STOW"
    },
    "values": null,
    "press": null,
@@ -12648,8 +12648,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "DEPLOY",
+    "1": "STOW"
    },
    "values": null,
    "press": null,
@@ -12957,8 +12957,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "STOWED",
+    "1": "DEPLOYED"
    },
    "values": null,
    "press": null,
@@ -12978,8 +12978,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "STOWED",
+    "1": "DEPLOYED"
    },
    "values": null,
    "press": null,
@@ -13017,8 +13017,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "STOWED",
+    "1": "DEPLOYED"
    },
    "values": null,
    "press": null,
@@ -13038,8 +13038,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "STOWED",
+    "1": "DEPLOYED"
    },
    "values": null,
    "press": null,
@@ -13059,8 +13059,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "STOWED",
+    "1": "DEPLOYED"
    },
    "values": null,
    "press": null,
@@ -13080,8 +13080,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -13101,8 +13101,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "NORMAL",
+    "1": "1"
    },
    "values": null,
    "press": null,
@@ -13158,8 +13158,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -13179,8 +13179,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "NORMAL",
+    "1": "1"
    },
    "values": null,
    "press": null,
@@ -13236,8 +13236,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -13257,8 +13257,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "NORMAL",
+    "1": "1"
    },
    "values": null,
    "press": null,
@@ -13314,8 +13314,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "OPEN",
+    "1": "CLOSE"
    },
    "values": null,
    "press": null,
@@ -13335,8 +13335,8 @@
    "state_unit": null,
    "scale": null,
    "positions": {
-    "0": "OFF",
-    "1": "ON"
+    "0": "NORMAL",
+    "1": "1"
    },
    "values": null,
    "press": null,
