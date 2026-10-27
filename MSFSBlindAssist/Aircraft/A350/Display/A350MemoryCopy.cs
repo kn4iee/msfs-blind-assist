@@ -75,7 +75,7 @@ public sealed class A350MemoryCopy
         for (int i = 0; i < _regions.Count; i++)
         {
             var (lin, len) = _regions[i];
-            if (linear >= lin && linear + (uint)count <= lin + (uint)len)
+            if (linear >= lin && (ulong)linear + (ulong)count <= (ulong)lin + (ulong)len)
                 return Buffer.AsSpan(_offsets[i] + (int)(linear - lin), count);
         }
         return ReadOnlySpan<byte>.Empty;

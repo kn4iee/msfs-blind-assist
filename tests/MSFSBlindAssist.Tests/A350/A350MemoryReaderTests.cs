@@ -62,6 +62,18 @@ public class A350MemoryReaderTests
         finally { File.Delete(path); }
     }
 
+    // Live: the CustomVariable scan reads through any word that looks like a pointer; one near 4 GB
+    // wrapped the bounds check around and threw.
+    [Fact]
+    public void A_read_past_the_end_of_the_address_space_is_empty()
+    {
+        var copy = new A350MemoryCopy();
+        copy.Set(new[] { (0u, 16) }, new byte[16]);
+        Assert.True(copy.Read(0xFFFFFFF8u, 16).IsEmpty);   // wraps to 8, inside the region, in uint arithmetic
+        Assert.True(copy.Read(12, 8).IsEmpty);
+        Assert.Equal(8, copy.Read(8, 8).Length);
+    }
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr VirtualAlloc(IntPtr address, UIntPtr size, uint type, uint protect);
     [DllImport("kernel32.dll", SetLastError = true)]

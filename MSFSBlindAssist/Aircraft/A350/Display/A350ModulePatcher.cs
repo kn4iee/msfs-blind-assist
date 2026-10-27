@@ -80,8 +80,7 @@ public static class A350ModulePatcher
         };
 
         // Every UI element's draw: (element, ctx, class index), sorted by name as the prototype numbered them.
-        var ui = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && UiDraw.IsMatch(kv.Value))
-            .Select(kv => kv.Value).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        var ui = UiDrawFunctions(mod);
         for (int k = 0; k < ui.Count; k++)
             hooks[mod.FindFunction(ui[k])] = Call(hook, ElementMagic, Get(0), Get(1), Const(k), Zero, Zero);
 
@@ -89,6 +88,15 @@ public static class A350ModulePatcher
         var bytes = AddExports(PrependToBodies(original, mod, hooks), exports);
         return new A350PatchedModule(bytes, ui.Select(n => n.Split("::")[0]).ToList());
     }
+
+    private static List<string> UiDrawFunctions(A350WasmModule mod) =>
+        mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && UiDraw.IsMatch(kv.Value))
+            .Select(kv => kv.Value).OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+    /// <summary>The UI element classes in hook-index order, from the ORIGINAL module (a cached compiled
+    /// module is not re-patched).</summary>
+    public static IReadOnlyList<string> UiDrawClassesOf(A350WasmModule mod) =>
+        UiDrawFunctions(mod).Select(n => n.Split("::")[0]).ToList();
 
     /// <summary>Prepends code to the given functions' bodies, after their locals declaration.</summary>
     public static byte[] PrependToBodies(byte[] data, A350WasmModule mod, IReadOnlyDictionary<int, byte[]> hooks)
