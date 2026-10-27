@@ -20,7 +20,7 @@ public static class A350MfdPage
 
     private static readonly HashSet<string> Containers = new(StringComparer.Ordinal)
     {
-        "WidgetSwitcherUI", "PopupDialog", "EULADialog", "DropdownMenuContainer",
+        "WidgetSwitcherUI", "PopupDialog", "EULADialog", "DropdownMenuContainer", "SurvControlsBox",
     };
 
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
@@ -38,6 +38,13 @@ public static class A350MfdPage
         var lines = new List<(float Top, float Left, MfdLine Line)>();
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy)>();
         var leftLabels = new HashSet<Cell>();
+        var headers = new HashSet<Cell>();
+        // Texts inside a control are its own, never another control's label or header.
+        var inControls = capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0).SelectMany(e =>
+        {
+            float x0 = e.X - shift, x1 = x0 + e.RectW;
+            return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
+        }).ToHashSet();
         var inFields = capture.Elements.Where(e => Mine(e.X) && IsField(e)).SelectMany(e =>
         {
             float x0 = e.X - shift, x1 = x0 + e.RectW;
@@ -58,14 +65,42 @@ public static class A350MfdPage
                 lines.Add((y0, x0, new MfdLine("scratchpad", inside.Count == 0 ? "Scratchpad: empty" : $"Scratchpad: {value}, {colour}", cx, cy)));
                 continue;
             }
+            if (e.Class.EndsWith("BoxItem", StringComparison.Ordinal))
+            {
+                // One option of a selector box (SURV CONTROLS): an unselected option is grey.
+                if (inside.Count == 0) continue;
+                used.UnionWith(inside);
+                var box = capture.Elements.FirstOrDefault(b => b.Class == e.Class[..^4] && b.X <= e.X && b.X + b.RectW >= e.X + e.RectW
+                    && b.Y <= e.Y && b.Y + b.RectH >= e.Y + e.RectH);
+                var header = box == null ? new List<Cell>() : cells.Where(c => !inControls.Contains(c) && c.X >= box.X - shift
+                    && c.X <= box.X - shift + box.RectW && c.Y >= box.Y - 50 && c.Y < box.Y).OrderBy(c => c.Y).ToList();
+                headers.UnionWith(header);
+                string name = header.Count == 0 ? value : $"{string.Join(" ", header.Select(c => c.Text))}: {value}";
+                // A box's options read together, in order (top before left would interleave the boxes).
+                float top = box?.Y ?? y0, left = (box == null ? x0 : box.X - shift) + (y0 - top) / 1000f;
+                lines.Add((top, left, new MfdLine("option", inside.All(c => c.Colour == "grey") ? name : $"{name}, selected, {colour}", cx, cy)));
+                continue;
+            }
+            if (e.Class == "BaseUICheckbox")
+            {
+                if (inside.Count == 0) continue;
+                used.UnionWith(inside);
+                bool check = capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && sh.X0 - shift >= x0 && sh.X1 - shift <= x0 + e.RectW
+                    && sh.Y0 >= y0 && sh.Y1 <= y0 + e.RectH) == true;
+                string state = $"{value} check box, {(check ? "checked" : "not checked")}";
+                lines.Add((y0, x0, new MfdLine("checkbox", colour == "grey" ? $"{state}, unavailable" : colour == "white" ? state : $"{state}, {colour}", cx, cy)));
+                continue;
+            }
             if (IsField(e))
             {
                 float rowY = y0 + e.RectH * 0.75f;
-                bool OnRow(Cell c) => !inside.Contains(c) && !inFields.Contains(c) && Math.Abs(c.Y - rowY) <= 12;
+                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && Math.Abs(c.Y - rowY) <= 12;
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
                 var label = cells.Where(c => OnRow(c) && c.X < x0 && !leftLabels.Contains(c)).OrderByDescending(c => c.X).FirstOrDefault()
-                    ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault();
+                    ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault()
+                    // else a label just above it (SURV's SQWK)
+                    ?? cells.Where(c => !inControls.Contains(c) && c.X >= x0 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 20).OrderByDescending(c => c.Y).FirstOrDefault();
                 if (label == null && inside.Count == 0) continue;
                 used.UnionWith(inside);
                 if (label != null && label.X < x0) leftLabels.Add(label);
@@ -96,6 +131,7 @@ public static class A350MfdPage
             lines.Add((f.Top, f.X0, new MfdLine("field", f.Value == null ? $"{name}: empty" : $"{name}: {f.Value}", f.Cx, f.Cy)));
         }
         used.UnionWith(fields.Where(f => f.Label != null).Select(f => f.Label!));
+        used.UnionWith(headers);
 
         foreach (var row in A350DrawLayout.Rows(cells.Where(c => !used.Contains(c))
                      .Select(c => new DrawnText(c.Text, c.X, c.Y, c.X, c.Y, 0, ColourOf(c.Colour)))))

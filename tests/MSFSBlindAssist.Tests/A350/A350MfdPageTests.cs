@@ -90,6 +90,31 @@ public class A350MfdPageTests
         Assert.Contains("IDENT: IKW, cyan", lines);
     }
 
+    // SURV CONTROLS (live, transponder in standby): a selector box's options each read with the header above
+    // the box and whether selected (an unselected option is grey); a check box reads checked (a fill in its
+    // square) or not, grey while unavailable; the squawk field takes the label above it.
+    [Fact]
+    public void Surv_controls_read_their_options_and_check_boxes()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_surv_controls.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("TERR SYS: ON, selected, green", lines);
+        Assert.Contains("TERR SYS: OFF", lines);
+        Assert.Contains("G/S MODE: ON, selected, green", lines);
+        Assert.Contains("WXR/PWS: AUTO", lines);
+        Assert.Contains("WXR/PWS: OFF, selected, white", lines);
+        Assert.Contains("MODE: AUTO", lines);
+        Assert.Contains("MODE: STBY, selected, white", lines);
+        Assert.Contains("ALT RPTG: OFF, selected, white", lines);
+        Assert.Contains("SQWK: 2000, cyan", lines);
+        Assert.Contains("STBY check box, checked, unavailable", lines);
+        Assert.Contains("TA/RA check box, not checked, unavailable", lines);
+        Assert.Contains("NORM check box, checked, unavailable", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("ON OFF"));
+        Assert.Equal(lines.IndexOf("TERR SYS: ON, selected, green") + 1, lines.IndexOf("TERR SYS: OFF"));   // a box reads together
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
