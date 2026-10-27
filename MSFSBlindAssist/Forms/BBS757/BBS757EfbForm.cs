@@ -40,8 +40,12 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The SimBrief ID is never logged or spoken; the Navigraph code is spoken letter by letter, before
 /// the browser opens, and shown in the status box, never logged. The status box is a read-only
 /// TextBox (VAT-13).
+///
+/// Two pages (Ctrl+Tab): Flight, these actions, and Settings, every setting of BlueBird's tablet read
+/// from BlueBird's files and changed in them while no simulator runs, with Sign in to Navigraph and
+/// Update nav data (<c>BBS757EfbForm.Settings.cs</c>).
 /// </summary>
-public class BBS757EfbForm : Form
+public partial class BBS757EfbForm : Form
 {
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
@@ -130,6 +134,8 @@ public class BBS757EfbForm : Form
     private TextBox _statusBox = null!;
     private Button _readScreenButton = null!;
     private Button _closeButton = null!;
+    private TabControl _tabs = null!;
+    private TabPage _settingsPage = null!;
 
     /// <summary>
     /// Opens the read-only tablet reader (plan 11): BlueBird's tablet read from its pixels, for what no
@@ -180,7 +186,11 @@ public class BBS757EfbForm : Form
 
         BuildForm();
         _statusTimer = new System.Windows.Forms.Timer { Interval = StatusTickMs };
-        _statusTimer.Tick += (_, _) => UpdateStatus();
+        _statusTimer.Tick += (_, _) =>
+        {
+            UpdateStatus();
+            UpdateSettingsGuard();
+        };
     }
 
     // ------------------------------------------------------------------
@@ -273,6 +283,14 @@ public class BBS757EfbForm : Form
         KeyPreview = true;
         ClientSize = new Size(470, 470);
 
+        // The house tab control: the reader says the page's name on Ctrl+Tab, not "tab control".
+        _tabs = new MSFSBlindAssist.Controls.AccessibleTabControl { Dock = DockStyle.Fill, TabIndex = 0 };
+        var flight = new TabPage("Flight") { AutoScroll = true };
+        _settingsPage = new TabPage("Settings") { AutoScroll = true };
+        _tabs.TabPages.Add(flight);
+        _tabs.TabPages.Add(_settingsPage);
+        Controls.Add(_tabs);
+
         const int left = 15, fullW = 440, halfW = 215, h = 32, gap = 8;
         int y = 15, tab = 0;
 
@@ -280,14 +298,9 @@ public class BBS757EfbForm : Form
         {
             var b = new Button { Text = text, Location = new Point(x, y), Size = new Size(width, h), TabIndex = tab++ };
             b.Click += (_, _) => RunAction(action);
-            Controls.Add(b);
+            flight.Controls.Add(b);
             return b;
         }
-
-        _navigraphButton = MakeButton("Sign in to Navigraph", left, fullW, SignInToNavigraphAsync);
-        y += h + gap;
-        _updateButton = MakeButton("Update nav data", left, fullW, UpdateNavDataAsync);
-        y += h + gap + 4;
 
         var simBriefLabel = new Label { Text = "SimBrief ID", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ };
         _simBriefBox = new TextBox
@@ -307,8 +320,8 @@ public class BBS757EfbForm : Form
                 RunAction(SetSimBriefIdAsync);
             }
         };
-        Controls.Add(simBriefLabel);
-        Controls.Add(_simBriefBox);
+        flight.Controls.Add(simBriefLabel);
+        flight.Controls.Add(_simBriefBox);
         _setSimBriefButton = MakeButton("Set SimBrief ID", left + 245, 195, SetSimBriefIdAsync);
         y += h + gap;
 
@@ -331,8 +344,8 @@ public class BBS757EfbForm : Form
         };
         _presetCombo.Items.AddRange(Bbs757EfbLayout.PresetNames.Cast<object>().ToArray());
         _presetCombo.SelectedIndex = Bbs757EfbLayout.PresetNames.ToList().IndexOf("Before start");
-        Controls.Add(presetLabel);
-        Controls.Add(_presetCombo);
+        flight.Controls.Add(presetLabel);
+        flight.Controls.Add(_presetCombo);
         _loadPresetButton = MakeButton("Load preset", left + 285, 155, LoadPresetAsync);
         y += h + gap;
 
@@ -349,7 +362,7 @@ public class BBS757EfbForm : Form
         y += h + gap + 4;
 
         var statusLabel = new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ };
-        Controls.Add(statusLabel);
+        flight.Controls.Add(statusLabel);
         y += 20;
         _statusBox = new TextBox
         {
@@ -363,7 +376,7 @@ public class BBS757EfbForm : Form
             AccessibleName = "EFB status",
             TabIndex = tab++,
         };
-        Controls.Add(_statusBox);
+        flight.Controls.Add(_statusBox);
         y += 90 + gap;
 
         _readScreenButton = new Button { Text = "Read the tablet screen", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
@@ -372,13 +385,17 @@ public class BBS757EfbForm : Form
             if (OpenScreenReader == null) { _announcer.AnnounceImmediate("The tablet screen reader is not available."); return; }
             OpenScreenReader();
         };
-        Controls.Add(_readScreenButton);
+        flight.Controls.Add(_readScreenButton);
         y += h + gap;
 
         _closeButton = new Button { Text = "Close", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
         _closeButton.Click += (_, _) => HideAndRestore();
-        Controls.Add(_closeButton);
-        ClientSize = new Size(470, y + h + 15);
+        flight.Controls.Add(_closeButton);
+        // The Flight page's controls, or the Settings page's top and a few rows (its rows scroll), and the tab
+        // control's frame (the tab strip and borders); both pages scroll should a large font need more.
+        ClientSize = new Size(470 + 10, Math.Max(y + h + 15, 560) + 32);
+
+        BuildSettingsTab(_settingsPage);
 
         KeyDown += (_, e) =>
         {
@@ -1162,12 +1179,16 @@ public class BBS757EfbForm : Form
     public void ShowForm()
     {
         _previousWindow = GetForegroundWindow();
+        // BlueBird's settings read fresh and the simulator checked, silently, before the window shows: the Settings
+        // page's status and locks are right from the first moment.
+        OpenSettings();
         Show();
         BringToFront();
         Activate();
         TopMost = true;
         TopMost = false;
-        _navigraphButton.Focus();
+        // The first control of the page the window shows.
+        _tabs.SelectedTab?.SelectNextControl(null, forward: true, tabStopOnly: true, nested: true, wrap: false);
         UpdateStatus();
     }
 
