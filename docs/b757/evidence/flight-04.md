@@ -1069,3 +1069,47 @@ one (the VOR, radio tuning, ADF, transponder and RDMI panels, the clocks and the
 seven-segment decoder exists, and the other panels' fonts and layouts are unmeasured. Round 1 had already read `_4` (the
 transponder, `ATC L 1200`), `_5` and `_6` (the ADFs, `0190.0`) and `_17` (the fuel quantity panel) by what they showed
 (see C).
+
+## Round 6: the display read at night on a 3840 x 2160 sim
+
+Measured 2026-10-27, 18:45-19:15 local, in Robin's flight paused in cruise at dusk (FL270, MCP heading 005). His
+build (744b4ccec) said "ILS tuning unknown: the ILS display could not be read." at every set, and debug.log held
+"ILS display: timed out (capture/decode)." for every read from 17:29 on. Robin closed MSFSBA for the measurements, so
+`mainUi` was free; the overlay was laid there exactly as the app lays it.
+
+Setup (`UserCfg.opt`, MS Store FS2024): FullscreenBorderless 1, Resolution and FullScreenResolution 3840 2160, DLSS
+DLAA, DLSS frame generation on, PrimaryScaling 1. The window and its client area are 3840 x 2160 at (0,0); `mainUi`
+reported 3840 x 2160 CSS px, devicePixelRatio 1, `--uiScale` 1, so one CSS pixel is one pixel, as in round 5.
+
+H1. Capture cost (PrintWindow full content, as `ScreenshotService` takes it): PrintWindow 80-96 ms, the service's PNG
+encode 310-320 ms (8 MB), the reader's PNG decode 41 ms: about 0.48 s a capture. The read's cap (1000 ms, with
+150 ms of settle first) had room for one capture: debug.log's timestamps show the first capture starting about 190 ms
+into each read and the second about 720 ms in, which the cap ended. Cropped in memory, with no PNG, a capture took
+63-85 ms.
+
+H2. The box is drawn in time: in a capture that ran from 99 to 163 ms after the inject (round 5: ending 134-153 ms
+after it), and in every capture after that. Paused; in flight unmeasured.
+
+H3. The decode refused it. The panel showed 108.10, course 223 (one megahertz click out of PARK, from the 18:32
+set). Through round 5's filter the decoder found every cell right, `10810223` with the point, every segment
+0.99-1.00 on or 0.00 off, but the point's core (185-191, 81-87) was 69 % lit: clarity 0.39, under the 0.6 gate, so
+null. The filtered point is a round dot of x 185-191, y 80-86 (round 5's daylight: x 184-192, y 79-88).
+
+H4. Why: the panel is dimmer at night. Unfiltered, its lit segments peaked at grey 63 (round 5's daylight: 64-95),
+and 60 % of the box was black. The filter `grayscale(1) brightness(2.6) contrast(40)` turns every pixel under about
+48 black whatever the panel's brightness, so at night more of each glyph's anti-aliased edge goes and the dot
+shrinks inside the core. The decoder's own Otsu threshold follows the picture: 29 that night (45 for round 5's
+daylight PARK), and the same display unfiltered read `108.10 223` at clarity 1.00 in every capture.
+
+H5. The fix (plan 04's reader, `CoherentBbs757IlsDisplay`): the overlay is laid unfiltered, and each capture is a
+bitmap straight from PrintWindow, cropped in memory, with the screenshot service's own capture (and its screen-copy
+fallback) only when PrintWindow fails or comes back blank; the sim window is found once and kept. The fixed reader,
+run against the paused flight with MSFSBA closed: three reads, each `108.10 223`, in 525 ms (the first, with the gauge
+search and the connect), 289 ms and 255 ms; each capture with its decode 72-99 ms, the first capture deciding every
+read. No box was left in `mainUi` and no socket on :19999 afterwards.
+
+Fixtures from this round (668 x 93 crops): `raw_108.10_223_night.png` (unfiltered) and
+`oldfilter_108.10_223_night.png` (through round 5's filter), under `tests/MSFSBlindAssist.Tests/Fixtures/bbs757-ils/`.
+
+Not measured: the box's draw time in flight (H2 was paused), daylight unfiltered with a frequency tuned (round 5's
+unfiltered fixture is PARK), other resolutions and UI scales, HDR.
