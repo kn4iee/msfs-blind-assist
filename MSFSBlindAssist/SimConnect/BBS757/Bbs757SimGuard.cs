@@ -1,18 +1,22 @@
 using System.Diagnostics;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>Whether a Microsoft Flight Simulator process runs, as <see cref="Bbs757SimGuard.Check()"/> finds it.</summary>
 public enum Bbs757SimState
 {
+    /// <summary>
+    /// The process list could not be read, so nothing is known. Treated as running: nothing is written. First on purpose:
+    /// it is <c>default(Bbs757SimState)</c>, so a state that was never set is read-only, never writable.
+    /// </summary>
+    Unknown,
+
     /// <summary>No simulator process runs, so the 757 is not loaded and BlueBird's settings files may be written.</summary>
     NotRunning,
 
     /// <summary>A simulator process runs: the 757 may be loaded, and BlueBird may write its own copy over its files.</summary>
     Running,
-
-    /// <summary>The process list could not be read, so nothing is known. Treated as running: nothing is written.</summary>
-    Unknown,
 }
 
 /// <summary>
@@ -21,10 +25,12 @@ public enum Bbs757SimState
 /// ignored and overwritten (docs/b757/evidence/efb-settings.md, section 1). An aircraft can also stay loaded behind the
 /// simulator's main menu, so the screen cannot say whether the 757 is loaded; the one safe moment is with no simulator
 /// process at all, MSFS 2024's (<c>FlightSimulator2024</c>) or MSFS 2020's (<c>FlightSimulator</c>). A check that fails
-/// is <see cref="Bbs757SimState.Unknown"/>, never "not running": the settings stay read-only. The guard asks Windows
-/// itself and not <c>Utils/SimulatorDetector</c>, which answers "Unknown" both when no simulator runs and when its check
-/// fails, the two answers this guard must tell apart. A caller asks again immediately before each write, as the
-/// simulator may have started since it last asked. Pure but for <see cref="Check()"/>, which lists the machine's processes.
+/// is <see cref="Bbs757SimState.Unknown"/>, never "not running": the settings stay read-only, and debug.log says why,
+/// once however often the tab asks (a PC that blocks the process list would otherwise show "can't tell" and nothing
+/// more). The guard asks Windows itself and not <c>Utils/SimulatorDetector</c>, which answers "Unknown" both when no
+/// simulator runs and when its check fails, the two answers this guard must tell apart. A caller asks again immediately
+/// before each write, as the simulator may have started since it last asked. Pure but for the real counter, which lists
+/// the machine's processes and logs a failure.
 /// </summary>
 public static class Bbs757SimGuard
 {
@@ -53,11 +59,15 @@ public static class Bbs757SimGuard
     private const string NoSettingsText =
         "BlueBird hasn't created its settings yet. Load the 757 once, then close the simulator to change them.";
 
+    // The failure logged last, as "<type>: <message>" (LogFailure keeps it). The tab asks every second, and a failure
+    // that lasts is the same each time.
+    private static string? _lastLoggedFailure;
+
     /// <summary>
     /// Whether a simulator runs now: <see cref="Process.GetProcessesByName(string)"/> for each of
     /// <see cref="ProcessNames"/>, the processes it returns disposed. <see cref="Bbs757SimState.Running"/> when any
-    /// process is found, <see cref="Bbs757SimState.Unknown"/> when the list could not be read, else
-    /// <see cref="Bbs757SimState.NotRunning"/>. Never throws.
+    /// process is found, <see cref="Bbs757SimState.Unknown"/> when the list could not be read (the reason goes to
+    /// debug.log, once: <see cref="CountProcesses"/>), else <see cref="Bbs757SimState.NotRunning"/>. Never throws.
     /// </summary>
     public static Bbs757SimState Check() => Check(CountProcesses);
 
@@ -80,7 +90,8 @@ public static class Bbs757SimGuard
             catch (Exception)
             {
                 // Listing processes fails in several ways (Win32Exception, InvalidOperationException, ...): all of them
-                // leave it unknown whether a simulator runs, and the other name may still show one.
+                // leave it unknown whether a simulator runs, and the other name may still show one. The real counter
+                // has logged the reason already (CountProcesses).
                 failed = true;
             }
         }
@@ -115,17 +126,45 @@ public static class Bbs757SimGuard
         };
     }
 
-    // How many processes bear the name. Each Process object holds a handle, so every one that is returned is disposed.
-    private static int CountProcesses(string name)
+    /// <summary>
+    /// How many processes bear <paramref name="name"/>, asked of Windows: <see cref="Process.GetProcessesByName(string)"/>,
+    /// each <see cref="Process"/> it returns disposed, as every one holds a handle. A failure is logged
+    /// (<see cref="LogFailure"/>) and thrown on, for <see cref="Check(Func{string, int})"/> to turn into
+    /// <see cref="Bbs757SimState.Unknown"/>. Internal, so a test can see that the real counter finds a process that runs
+    /// and none that does not: one that always said 0 would let a write through while the simulator runs, and no test
+    /// with a counter of its own could tell.
+    /// </summary>
+    internal static int CountProcesses(string name)
     {
-        Process[] found = Process.GetProcessesByName(name);
         try
         {
-            return found.Length;
+            Process[] found = Process.GetProcessesByName(name);
+            try
+            {
+                return found.Length;
+            }
+            finally
+            {
+                foreach (Process process in found) process.Dispose();
+            }
         }
-        finally
+        catch (Exception ex)
         {
-            foreach (Process process in found) process.Dispose();
+            LogFailure(ex, static line => Log.Warn("BBS757", line));
+            throw;
         }
+    }
+
+    /// <summary>
+    /// Gives <paramref name="log"/> one line saying that the processes could not be listed and why (the exception's type
+    /// and message), unless this is the failure logged last: the tab asks every second, so a failure that lasts is
+    /// logged once, not on every check. A different failure is logged, and so is the first one again after it. Internal,
+    /// so the tests read what is logged without the app's process-wide logger. Safe to call from any thread.
+    /// </summary>
+    internal static void LogFailure(Exception failure, Action<string> log)
+    {
+        string reason = $"{failure.GetType().Name}: {failure.Message}";
+        if (Interlocked.Exchange(ref _lastLoggedFailure, reason) == reason) return;
+        log($"Could not list the simulator's processes, so BlueBird's settings stay read-only: {reason}");
     }
 }
