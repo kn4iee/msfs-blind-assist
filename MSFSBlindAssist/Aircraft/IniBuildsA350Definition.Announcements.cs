@@ -39,6 +39,13 @@ public partial class IniBuildsA350Definition
         "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT", "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT",
     };
 
+    /// <summary>A light that shows what another row speaks: the master lights' other legends, and the ECP page keys'
+    /// lights, which follow the SD page the "System display page" row speaks (the A380's), each change at once.</summary>
+    private static bool IsEcho(A350Lamp lamp) =>
+        MasterEchoes.Contains(lamp.Key) || lamp.Rule.Inputs.Contains(SdPageVar, StringComparer.Ordinal);
+
+    private const string SdPageVar = "INI_ECAM_ACTIVE_PAGE";
+
     /// <summary>Whether a light's Ctrl+M row is unticked; tests replace it.</summary>
     internal Func<string, bool> IsMuted { get; set; } =
         key => SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key);
@@ -97,7 +104,7 @@ public partial class IniBuildsA350Definition
         {
             var lamp = turn.Lamp;
             string name = MasterSpeakers.TryGetValue(lamp.Key, out var master) ? master : lamp.Name;
-            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || MasterEchoes.Contains(lamp.Key)
+            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp)
                 || (master != null && !turn.On)
                 || (lamp.ControlId != null && _ownLampsUntil.TryGetValue(lamp.ControlId, out var until) && Clock() <= until);
             if (quiet)

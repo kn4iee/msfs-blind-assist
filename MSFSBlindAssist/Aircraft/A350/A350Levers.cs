@@ -8,8 +8,10 @@ namespace MSFSBlindAssist.Aircraft.A350;
 /// <param name="Write">(position, state value) → the string the cockpit's own lever code would send.</param>
 /// <param name="Nudge">A press that holds a spring switch at <c>Side</c> for <see cref="A350Levers.NudgeMs"/>, then
 /// returns it to <c>Back</c>.</param>
+/// <param name="Steps">A pick that takes more than one string (a key held, then let go), instead of
+/// <paramref name="Write"/>.</param>
 internal sealed record A350Lever(A350Control Control, IReadOnlyDictionary<double, string> Words, Func<double, double, string>? Write,
-    (double Side, double Back)? Nudge = null);
+    (double Side, double Back)? Nudge = null, Func<double, IReadOnlyList<A350Step>>? Steps = null);
 
 /// <summary>
 /// The pedestal's levers, hand-written because they bypass their input events (the map lists them as "none"). Each is
@@ -28,7 +30,9 @@ internal sealed record A350Lever(A350Control Control, IReadOnlyDictionary<double
 /// Fenix it is two nudge buttons (left 2, right 0, rest 1), never a combo left trimming. Reset fires
 /// <c>'INI.RUDDER_TRIM_RESET'</c>, a button.</item>
 /// </list>
-/// "All thrust levers" and "Ground spoilers" have no input event of their own: they are the A380's rows. Pure.
+/// "All thrust levers", "Ground spoilers" and "System display page" have no input event of their own: they are the
+/// A380's rows. The page is <c>INI_ECAM_ACTIVE_PAGE</c>; a pick presses that page's ECP key through its input event
+/// (a hold, as the key row presses it), live 2026-10-27. Pure.
 /// </summary>
 internal static class A350Levers
 {
@@ -37,6 +41,15 @@ internal static class A350Levers
     /// <summary>How long a nudge holds the rudder trim switch: about 0.4 degrees.</summary>
     public const int NudgeMs = 300;
     public const int KeyEventFull = 16384;
+
+    /// <summary>The SD pages the ECP has a key for: the page value, the A380's word, the key's input event; declared before
+    /// <see cref="Extras"/>, which reads it as it is built.</summary>
+    private static readonly (double Page, string Word, string Key)[] SdPages =
+    {
+        (1, "Engine", "ENG"), (2, "Hyd", "HYD"), (3, "Elec DC", "ELDC"), (4, "Elec AC", "ELAC"), (5, "Bleed", "BLEED"),
+        (6, "Cond", "COND"), (7, "Press", "PRESS"), (8, "Fuel", "FUEL"), (9, "APU", "APU"), (10, "F/Ctl", "FCTL"),
+        (11, "Door", "DOOR"), (12, "Wheel", "WHEEL"), (14, "Status", "STS"), (16, "Video", "VIDEO"),
+    };
 
     private static readonly (double Tla, string Word)[] Detents =
     {
@@ -79,6 +92,7 @@ internal static class A350Levers
                 ? $"0 'INI.SPOILERS_SET' (>F:KeyEvent) 'INI.SPOILERS_ARM_ON' (>F:KeyEvent)"
                 : "'INI.SPOILERS_ARM_OFF' (>F:KeyEvent)",
             key: "A350_SPOILERS_ARM")),
+        ("AIRLINER_ECAM_SD_KNOB_PUSH", true, SystemDisplayPage()),
         ("AIRLINER_RUDDER_TRIM", false, Nudge("LEFT", "left", 2)),
         ("AIRLINER_RUDDER_TRIM", false, Nudge("RIGHT", "right", 0)),
     };
@@ -116,6 +130,10 @@ internal static class A350Levers
     public static IReadOnlyDictionary<double, string>? WordsFor(string controlId) =>
         ById.TryGetValue(controlId, out var lever) && lever.Words.Count > 0 ? lever.Words : null;
 
+    /// <summary>The steps a pick takes where one string does not do it, or null.</summary>
+    public static IReadOnlyList<A350Step>? StepsFor(A350Control control, double position) =>
+        ById.TryGetValue(control.Id, out var lever) && lever.Steps is { } steps ? steps(position) : null;
+
     /// <summary>The nudge a press makes, or null for any other control.</summary>
     public static (double Side, double Back)? NudgeFor(A350Control control) =>
         ById.TryGetValue(control.Id, out var lever) ? lever.Nudge : null;
@@ -134,6 +152,23 @@ internal static class A350Levers
     }
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static A350Lever SystemDisplayPage()
+    {
+        var lever = Lever("MSFSBA_SD_PAGE", "System display page", A350Kinds.Selector, "L:INI_ECAM_ACTIVE_PAGE",
+            SdPages.Select(p => (p.Page, p.Word)).ToList(), null, key: "A350_SD_PAGE");
+        return lever with
+        {
+            Steps = position =>
+            {
+                string key = $"AIRLINER_ECAM_{SdPages[(int)position].Key}_Set";
+                return new A350Step[]
+                {
+                    new A350CalcStep($"2 (>B:{key})"), new A350DelayStep(A350WritePlan.HoldMs), new A350CalcStep($"0 (>B:{key})"),
+                };
+            },
+        };
+    }
 
     private static A350Lever Nudge(string side, string word, double position)
     {

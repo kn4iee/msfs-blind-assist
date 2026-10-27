@@ -299,7 +299,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         {
             Register(lamp.Key, lamp.Rule.Inputs[0], MasterSpeakers.GetValueOrDefault(lamp.Key, lamp.Name), lamp.InputKeys);
             // Spoken by the definition as the cockpit lights it, one Ctrl+M row each; a master light's echoes are not.
-            vars[lamp.Key].ExcludeFromMonitorManager = MasterEchoes.Contains(lamp.Key);
+            vars[lamp.Key].ExcludeFromMonitorManager = IsEcho(lamp);
         }
         foreach (var lamp in _lamps.Values)
             foreach (var input in lamp.Rule.Inputs.Skip(1))

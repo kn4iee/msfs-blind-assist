@@ -112,6 +112,8 @@ public static class A350WritePlan
                     return A350Plan.AlreadyInPosition;
                 if (ClickWrites.TryGetValue(control.Id, out var click))
                     return Steps(new A350CalcStep(click(position)));
+                if (A350Levers.StepsFor(control, position) is { } steps)
+                    return new A350Plan(steps, null);   // a pick that presses a key (the SD page)
                 if (A350Levers.WriteFor(control, position) is { } lever)
                     return Steps(new A350CalcStep(lever));   // a lever, as its own lever code writes it
                 return Steps(Set(control, position));

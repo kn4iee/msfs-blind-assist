@@ -279,6 +279,15 @@ public class A350LeverAnnouncementTests
     }
 
     [Fact]
+    public void The_page_keys_lights_are_the_sd_page_rows_echoes()
+    {
+        var rows = MonitorRowBuilder.Build(_def.GetVariables()).Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("A350_SD_PAGE", rows);                                // the page speaks, as on the A380
+        Assert.DoesNotContain("A350_LT_ECAM_ENG_SEQ1_LIGHT", rows);           // its key's light shows the same page
+        Assert.Contains("A350_LT_ECAM_ABN_SEQ1_LIGHT", rows);                 // a light of its own still speaks
+    }
+
+    [Fact]
     public void A_flight_load_takes_a_fresh_baseline()
     {
         Baseline();

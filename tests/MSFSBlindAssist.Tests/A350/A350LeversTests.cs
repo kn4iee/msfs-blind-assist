@@ -107,6 +107,26 @@ public class A350LeversTests
         Assert.DoesNotContain(Placement.RowsByPanel.Values.SelectMany(r => r), r => r.Key == "A350_RUDDER_TRIM");
     }
 
+    /// <summary>The A380's "System display page" picker: the A350 has a key per page, so a pick presses that page's
+    /// key through its input event (a hold: 2, then 0); the page is INI_ECAM_ACTIVE_PAGE (live 2026-10-27).</summary>
+    [Fact]
+    public void The_system_display_page_is_picked_by_pressing_its_key()
+    {
+        var page = Row("A350_SD_PAGE");
+        Assert.Equal(("System display page", A350RowAction.Set), (page.Name, page.Action));
+        Assert.Equal("L:INI_ECAM_ACTIVE_PAGE", page.Control!.StateVar);
+        Assert.Equal("1=Engine, 2=Hyd, 3=Elec DC, 4=Elec AC, 5=Bleed, 6=Cond, 7=Press, 8=Fuel, 9=APU, 10=F/Ctl, 11=Door, 12=Wheel, "
+            + "14=Status, 16=Video", Positions(page));
+        Assert.Equal(new A350Step[]
+        {
+            new A350CalcStep("2 (>B:AIRLINER_ECAM_ENG_Set)"),
+            new A350DelayStep(A350WritePlan.HoldMs),
+            new A350CalcStep("0 (>B:AIRLINER_ECAM_ENG_Set)"),
+        }, A350WritePlan.ForSet(page.Control, 1, 12).Steps);
+        Assert.Equal("2 (>B:AIRLINER_ECAM_ELDC_Set)", Rpn(A350WritePlan.ForSet(page.Control, 3, 12))[0]);
+        Assert.True(A350WritePlan.ForSet(page.Control, 12, 12).IsEmpty);
+    }
+
     [Fact]
     public void Rudder_trim_reset_is_a_button()
     {
