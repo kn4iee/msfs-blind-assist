@@ -17,10 +17,12 @@ public static class A350Readouts
     };
 
     /// <summary>Encoders whose map state variable is not their value: the baro knobs' is the hPa/inHg flag, and their
-    /// value is the side's baro line (<see cref="A350FcuWindows"/>).</summary>
+    /// value is the side's baro line (<see cref="A350FcuWindows"/>); DU MASTER BRT's (<c>INI_CKPT_LT_DU_MASTER_BRT</c>, its
+    /// tooltip's) is kept by nothing, so it always reads 0 though its steps work.</summary>
     private static readonly HashSet<string> NoValueLine = new(StringComparer.Ordinal)
     {
         "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT", "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT",
+        "AIRLINER_CKPT_LT_DU_MASTER_BRT",
     };
 
     /// <summary>Whether an encoder gets a value line of its own.</summary>

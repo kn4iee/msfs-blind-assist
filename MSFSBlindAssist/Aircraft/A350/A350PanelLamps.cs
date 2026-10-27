@@ -121,6 +121,12 @@ public static class A350PanelLamps
         ["IRS_ADR_1_SEQ2_LIGHT"] = "ADR 1 off light", ["IRS_ADR_2_SEQ2_LIGHT"] = "ADR 2 off light", ["IRS_ADR_3_SEQ2_LIGHT"] = "ADR 3 off light",
         // Pedestal: each engine master's upper legend is its FIRE light (INI_ENG_n_FIRE).
         ["ENG_MASTER_1_SEQ1_LIGHT"] = "ENG 1 master fire light", ["ENG_MASTER_2_SEQ1_LIGHT"] = "ENG 2 master fire light",
+        // The OIS ON CENTER buttons' upper legend is INOP (INI_OIS_ON_CENTER_*_INOP); the cockpit door's OPEN and FAULT;
+        // EMER DESCENT's ARMED (INI_EMER_DES_ARMED_LIGHT).
+        ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_LEFT_SEQ1_LIGHT"] = "Captain OIS on center INOP light",
+        ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_RIGHT_SEQ1_LIGHT"] = "First officer OIS on center INOP light",
+        ["CKPT_DOOR_LT_SEQ1_LIGHT"] = "Cockpit door open light",
+        ["EMER_DESCENT_SEQ2_LIGHT"] = "Emergency descent armed light",
     };
 
     /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after

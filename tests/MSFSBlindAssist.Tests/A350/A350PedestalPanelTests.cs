@@ -107,6 +107,10 @@ public class A350PedestalPanelTests
         var cockpit = Rows("Cockpit").ToList();
         Assert.Contains(("Cockpit door", Set, "0=Lock, 1=Norm, 2=Unlock"), cockpit);
         Assert.Contains(("DU master", Set, "0=Inhibit, 1=On"), cockpit);
+        // DU MASTER BRT steps every display through the WASM (INI_CKPT_LT_DU_MASTER_BRT_INC/_DEC, consumed live), but
+        // nothing keeps INI_CKPT_LT_DU_MASTER_BRT, which its tooltip reads: no value line that would always read 0.
+        var brt = A350ControlMap.Load().Find("AIRLINER_CKPT_LT_DU_MASTER_BRT")!;
+        Assert.False(A350Readouts.HasValueLine(brt));
         Assert.Contains(("Captain OIS on center", Set, "0=Off, 1=On"), cockpit);
         Assert.Contains(("First officer OIS on center", Set, "0=Off, 1=On"), cockpit);
         Assert.Contains(("Captain display cycle", Set, "0=Off, 1=On"), cockpit);
@@ -129,5 +133,15 @@ public class A350PedestalLightTests
         Assert.Equal("ENG 1 master fire light", Name("ENG_MASTER_1_SEQ1_LIGHT"));
         Assert.Equal("ENG 2 master fire light", Name("ENG_MASTER_2_SEQ1_LIGHT"));
         Assert.Equal("ENG 1 master fault light", Name("ENG_MASTER_1_SEQ2_LIGHT"));
+    }
+
+    [Fact]
+    public void Each_light_reads_what_lights_it()
+    {
+        Assert.Equal("Captain OIS on center INOP light", Name("OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_LEFT_SEQ1_LIGHT"));
+        Assert.Equal("First officer OIS on center INOP light", Name("OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_RIGHT_SEQ1_LIGHT"));
+        Assert.Equal("Cockpit door open light", Name("CKPT_DOOR_LT_SEQ1_LIGHT"));       // INI_COCKPIT_DOOR above 0.01
+        Assert.Equal("Cockpit door fault light", Name("CKPT_DOOR_LT_SEQ2_LIGHT"));
+        Assert.Equal("Emergency descent armed light", Name("EMER_DESCENT_SEQ2_LIGHT"));   // INI_EMER_DES_ARMED_LIGHT
     }
 }
