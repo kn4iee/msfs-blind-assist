@@ -133,7 +133,7 @@ The IRS rows read the matching switch row's last delivered value (kept in a smal
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed on `B757` (2026-10-26); waiting on owner (the in-sim checks)
+- **Status:** landed on `B757` (2026-10-26); in-sim checks passed (2026-10-27) but for the autoland's "LAND 3"; waiting on owner (an autoland)
 - **Claimed by:** Daniel Wolak (danielw97), 2026-10-26
 - **Worked by:** Daniel Wolak with Claude (Opus 5.5), inline (superpowers:executing-plans), no per-task subagents; one whole-plan review by a fresh Opus 5.5 subagent and one fix pass
 - **Started:** 2026-10-26, from `cf1dfce94` (claim e8c904670, first flight's evidence d97d89f51); Tasks 1-4 worked on `B757` at a6743e9ed (plan 07 landed)
@@ -146,7 +146,12 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   - Task 4, the announcements: 43fb69cec.
   - Whole-plan review (no Critical; three Important): 697dcbde0 (an EXT PWR press arms its AVAIL light's echo; a flight load keeps the rows' raw values; the autoland status comment no longer says confirmed). The third Important's wider half (tracker baselines after a flight load) and seven minors are in the handoff.
 - **Waiting on the owner:** in-sim checks 1 and 2, and: whether AVAIL goes out when EXT PWR is ON (check 1); the autoland status values cold and dark, unpowered, armed and after the autoland (check 2's autoland, recorded in `flight-06.md`), since the rows' values are the plan's, unmeasured; the first start valve "open" after a flight load (the tracker baselines note in the handoff).
-- **In-sim results:** none run yet.
+- **In-sim results** (2026-10-27, Daniel; a flight to KLAX ended in cruise, then CYHM-KCVG, hand landing):
+  - Check 1 passed: EXT PWR on and off.
+  - Check 2 passed: Shift+3 and the other flap speeds; D and Shift+D; "IRS L aligned"; "Altitude alert" once on a level-off (the review's question: no repeat while it flashes). Not run: the autoland's "LAND 3" (hand landing), so the autoland status values are still unmeasured.
+  - The start valve FAILED, then passed fixed: the VALVE decal is not the valve. It lights for 2 s whenever the start switch moves, either way, so the app said "closed" at GND and "open" at AUTO. Measured on three starts: the switch holds GND while N2 climbs and BlueBird releases it to AUTO at cutout, about 46 % N2; `GENERAL ENG STARTER` only blips at fuel on. Fixed (`fix(b757): the start valve call-out follows the start switch`): the rows read the start switch, GND open (quiet), anywhere else closed; "Right start valve closed" heard at cutout on the next start.
+  - Shift+D on a long flight said "No top of climb or descent ahead": PROG's line said "TO STEP CLB 1740Z/ 1219NM" (a SimBrief step), and the DES page shows no T/D. Fixed (`fix(b757): Shift+D reads a planned step climb on the PROG page`): "Step climb in 1219 miles, 17:40 Zulu, top of descent after it". Not heard in flight (the next flight had no step); a skipped step's PROG line is unmeasured.
+- **Proposed rule line (found in flight):** `- [B757-n] Never read `B757_OVHD_L/R_ENG_START_VALVE_DECAL` as the start valve: it lights 2 s on any start switch move. The valve is open while `B757_OVHD_L/R_ENG_START_SWITCH` holds GND (1); BlueBird releases it to AUTO at cutout (`Bbs757Annunciators` start valve rows). Full: docs/invariants/b757.md#b757-n`
 - **Changed from the plan:**
   - The EXT PWR ON row says "EXT PWR on" / "EXT PWR off", the read-back's own words, not "External power on" / "off": the read-back rebaselines the row with `LinkedPhrase`, so different words would announce every press twice.
   - `Bbs757AnnunciatorRow` gains `States` (the status display's words), `RelatedKey` (an IRS's switch row) and `Silent` (the switch rows: no Ctrl+M row); `Bbs757Annunciators.ElectricalPanel`, `ExtPwrButtonNode`, `ExtPwrPhrase`, `Quiet` and `IsSpoken` added.
