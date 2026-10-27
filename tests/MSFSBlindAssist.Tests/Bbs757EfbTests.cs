@@ -649,52 +649,7 @@ public class Bbs757EfbTests
         }
     }
 
-    // ---- Nosewheel steering ----------------------------------------------------------------
-
-    [Theory]
-    [InlineData("{\"tiller_realistic\":true}", true)]
-    [InlineData("{\"tiller_realistic\":false}", false)]
-    [InlineData("{\"hoppie_logon_code\":\"NOT-A-REAL-CODE\",\"tiller_realistic\":true,\"simbrief_id\":123456}", true)]
-    public void ReadTillerRealistic_reads_only_the_steering_key(string json, bool expected)
-    {
-        using var tmp = new TempDir();
-        WriteSettings(tmp.Path, json);
-
-        Assert.Equal(expected, Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"tiller_realistic\":1}")]
-    [InlineData("{\"tiller_realistic\":\"true\"}")]
-    [InlineData("{\"tiller_realistic\":null}")]
-    [InlineData("[true]")]
-    [InlineData("not json")]
-    public void ReadTillerRealistic_is_null_for_anything_but_a_bool(string json)
-    {
-        using var tmp = new TempDir();
-        WriteSettings(tmp.Path, json);
-
-        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Fact]
-    public void ReadTillerRealistic_with_no_settings_file_is_null()
-    {
-        using var tmp = new TempDir();
-
-        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Fact]
-    public void The_fixture_settings_file_reads_tiller_realistic_too()
-    {
-        using var tmp = new TempDir();
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "bbs757-efb-settings.json"), Path.Combine(tmp.Path, "efb_settings.json"));
-
-        // The fixture is BlueBird's shape after the owner's switch to rudder (2026-10-25).
-        Assert.False(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
+    // ---- The other click sequences and positions -------------------------------------------
 
     [Fact]
     public void The_nav_data_update_opens_the_airac_page_then_waits_4_s_before_clicking()

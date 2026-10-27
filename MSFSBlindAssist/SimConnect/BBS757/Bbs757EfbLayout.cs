@@ -123,7 +123,10 @@ public static class Bbs757EfbLayout
     // Settings menu.
     public static readonly EfbPoint AiracData = new(95, 486);
 
-    /// <summary>The Settings menu's AIRCRAFT item (measured 2026-10-25, session 6).</summary>
+    /// <summary>
+    /// The Settings menu's AIRCRAFT item (measured 2026-10-25, session 6). Kept as a measured position;
+    /// no sequence uses it now.
+    /// </summary>
     public static readonly EfbPoint SettingsAircraft = new(98, 244);
 
     // AIRAC data page.

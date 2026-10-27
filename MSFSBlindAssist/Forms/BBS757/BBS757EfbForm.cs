@@ -12,8 +12,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// so this window operates it for the pilot, by scripted clicks through the tablet's own mouse
 /// handler (<see cref="CoherentBbs757EfbClient"/>, positions in <see cref="Bbs757EfbLayout"/>), and
 /// checks each result where it can be read: BlueBird's work folder (<see cref="Bbs757WorkFolder"/>)
-/// for the nav data cycle, the SimBrief ID and the units, and the hidden helper view
-/// (<see cref="CoherentBbs757TabletClient"/>) for the Navigraph sign-in.
+/// for the nav data cycle and the units (it reads the SimBrief ID before a fetch or a load), and the
+/// hidden helper view (<see cref="CoherentBbs757TabletClient"/>) for the Navigraph sign-in.
 ///
 /// Both clients are MainForm's: this window uses them and disposes neither.
 ///
