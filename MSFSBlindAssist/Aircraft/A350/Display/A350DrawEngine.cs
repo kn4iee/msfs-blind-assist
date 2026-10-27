@@ -23,6 +23,7 @@ public sealed class A350DrawEngine : IDisposable
     private Instance _instance = null!;
     private Memory _memory = null!;
     private bool _fresh;   // set after a trap: the next draw starts a new instance
+    private readonly HashSet<string> _warmed = new();   // gauges drawn once on this instance
     private readonly IReadOnlyList<string> _uiClasses;
     private readonly A350ModuleFacts _facts;
     private readonly A350DrawState _state = new();
@@ -57,6 +58,7 @@ public sealed class A350DrawEngine : IDisposable
     private void Instantiate()
     {
         _store?.Dispose();
+        _warmed.Clear();
         _store = new Store(_engine);
         using var linker = new Linker(_engine);
         foreach (var imp in _module.Imports)
@@ -359,9 +361,17 @@ public sealed class A350DrawEngine : IDisposable
         try
         {
             if (_fresh) { Instantiate(); _fresh = false; }
-            Restore();
             var f = _instance.GetFunction(A350ModulePatcher.ExportName(cls + "::Draw()"))
                 ?? throw new A350ModuleException("no export for " + cls);
+            // The first draw of a gauge on a new instance draws only part of it (live: the E/WD's title
+            // without its procedure lines): run it once as a warm-up and keep only the second.
+            if (_warmed.Add(cls + "#" + index))
+            {
+                Restore();
+                if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
+                _texts = new(); _frames = new(); _elements = new(); _state.Clear();
+            }
+            Restore();
             if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; _fresh = true; }

@@ -15,7 +15,7 @@ public class A350DrawEngineTests
     private static byte[] Float(float f) => BitConverter.GetBytes(f);
     private static byte[] U32(params uint[] v) => v.SelectMany(BitConverter.GetBytes).ToArray();
 
-    private static byte[] Module()
+    private static byte[] Module(bool firstDrawPartial = false)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -38,19 +38,37 @@ public class A350DrawEngineTests
             m.Func(n, t, Array.Empty<byte>());
         foreach (var g in new[] { "EFIS", "FCU", "HUD", "ISIS", "RMP", "BAT", "MFD", "FMGS", "Systems" })
             m.Func(g + "::Draw()", tCtx, Array.Empty<byte>());
-        var body = new List<byte>
+        var body = new List<byte>();
+        if (firstDrawPartial)
+        {
+            // Live: the first draw on a fresh instance drew part of the E/WD. This gauge draws "PART" on
+            // its first call (it initialises the guard global) and "HELLO" after.
+            body.AddRange(new byte[] { 0x23, (byte)guard, 0x45, 0x04, 0x40, 0x41, 0x01, 0x24, (byte)guard, 0x41, 0x01, 0x43 });
+            body.AddRange(Float(10)); body.Add(0x43); body.AddRange(Float(20));
+            body.Add(0x41); body.AddRange(S(Hello + 10)); body.Add(0x41); body.AddRange(S(Hello + 14));
+            body.Add(0x10); body.AddRange(U(text)); body.Add(0x1A);
+            body.AddRange(new byte[] { 0x0F, 0x0B });   // return; end
+            body.Add(0x41); body.Add(0x01);
+            body.Add(0x43); body.AddRange(Float(10)); body.Add(0x43); body.AddRange(Float(20));
+            body.Add(0x41); body.AddRange(S(Hello)); body.Add(0x41); body.AddRange(S(Hello + 5));
+            body.Add(0x10); body.AddRange(U(text)); body.Add(0x1A);
+        }
+        else body.AddRange(new byte[]
         {
             0x23, (byte)guard, 0x04, 0x40, 0x00, 0x0B,        // a guard left set by a trap: trap again
             0x41, 0x01, 0x24, (byte)guard,                    // guard = 1
             0x20, 0x00, 0x28, 0x02, 0x04, 0x04, 0x40, 0x00, 0x0B,   // the object's flag set: trap
             0x41, 0x01,                                       // ctx 1
-        };
-        body.Add(0x43); body.AddRange(Float(10));
-        body.Add(0x43); body.AddRange(Float(20));
-        body.Add(0x41); body.AddRange(S(Hello));
-        body.Add(0x41); body.AddRange(S(Hello + 5));
-        body.Add(0x10); body.AddRange(U(text)); body.Add(0x1A);
-        body.AddRange(new byte[] { 0x41, 0x00, 0x24, (byte)guard });   // guard = 0
+        });
+        if (!firstDrawPartial)
+        {
+            body.Add(0x43); body.AddRange(Float(10));
+            body.Add(0x43); body.AddRange(Float(20));
+            body.Add(0x41); body.AddRange(S(Hello));
+            body.Add(0x41); body.AddRange(S(Hello + 5));
+            body.Add(0x10); body.AddRange(U(text)); body.Add(0x1A);
+            body.AddRange(new byte[] { 0x41, 0x00, 0x24, (byte)guard });   // guard = 0
+        }
         m.Func("CTR::Draw()", tCtx, body.ToArray());
         m.Data(2000, U32(0, 3000, 11));
         m.Data(3000, U32(1, 3100));
@@ -67,14 +85,15 @@ public class A350DrawEngineTests
         "3CTR\0"u8.ToArray().CopyTo(mem, 3100);
         U32(VTable, trap ? 1u : 0u).CopyTo(mem, Object);
         "HELLO"u8.ToArray().CopyTo(mem, Hello);
+        "PART"u8.ToArray().CopyTo(mem, Hello + 10);
         var copy = new A350MemoryCopy();
         copy.Set(new[] { (0u, mem.Length) }, mem);
         return copy;
     }
 
-    private static A350DrawEngine Engine()
+    private static A350DrawEngine Engine(bool firstDrawPartial = false)
     {
-        var original = Module();
+        var original = Module(firstDrawPartial);
         var mod = A350WasmModule.Parse(original);
         var engine = A350ModuleCache.CreateEngine();
         var module = Wasmtime.Module.FromBytes(engine, "a350", A350ModulePatcher.Patch(original).Bytes);
@@ -143,5 +162,14 @@ public class A350DrawEngineTests
         e.Load(CopyWithVariable(9000, 3.5));
         Assert.Equal(("INI_TESTV", 9000u), e.CustomVariable(77));
         Assert.Equal(3.5, e.LVarValue(77));
+    }
+
+    [Fact]
+    public void The_first_draw_on_a_fresh_instance_is_a_warm_up_never_returned()
+    {
+        using var e = Engine(firstDrawPartial: true);
+        e.Load(Copy(trap: false));
+        Assert.Equal("HELLO", Assert.Single(e.Draw("CTR").Texts).Text);
+        Assert.Equal("HELLO", Assert.Single(e.Draw("CTR").Texts).Text);
     }
 }

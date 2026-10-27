@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch";
 
     public static int Run(string mode, string[] args)
     {
@@ -24,6 +24,7 @@ internal static class DisplayModes
             case "service": return Service(args);
             case "trap": return TrapTest(args);
             case "traptiny": return TrapTiny();
+            case "ecamwatch": return EcamWatch(args);
             default: return 2;
         }
     }
@@ -190,6 +191,42 @@ internal static class DisplayModes
         var inst = linker.Instantiate(store, module);
         try { inst.GetFunction("oob")!.Invoke(); Console.WriteLine("returned"); }
         catch (Exception ex) { Console.WriteLine("caught " + ex.GetType().Name + ": " + ex.Message.Split((char)10)[0]); }
+        return 0;
+    }
+
+    /// <summary>`ecamwatch seconds [fixtureDir]`: the CTR drawn at 2 Hz through the service; each change of the
+    /// E/WD (warning display, engine block) and SD, once two reads agree, printed with colours and (with a
+    /// fixture dir) its capture saved as ctr_NNN.json.</summary>
+    private static int EcamWatch(string[] args)
+    {
+        int seconds = int.Parse(args[0]);
+        string? dir = args.Length > 1 ? args[1] : null;
+        using var svc = new A350DisplayService();
+        svc.Start();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+        Console.WriteLine($"state {svc.State} {svc.Reason}");
+        var stable = new A350StableValue<string>();
+        int n = 0, traps = 0;
+        var opts = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        string nl = Environment.NewLine;
+        while (sw.Elapsed.TotalSeconds < seconds)
+        {
+            var caps = svc.DrawAsync(("CTR", 0)).GetAwaiter().GetResult();
+            Thread.Sleep(500);
+            if (caps == null) continue;
+            var c = caps[0];
+            if (!c.Ok) { traps++; continue; }
+            string Dump(A350Rect r) => string.Join(nl, A350DrawLayout.Rows(A350DrawLayout.Region(c.Texts, r)).Select(A350DrawLayout.Speak));
+            string state = "WD:" + nl + Dump(A350DrawLayout.CtrWarningDisplay) + nl + "ENG:" + nl + Dump(A350DrawLayout.CtrEngineDisplay)
+                + nl + "SD:" + nl + Dump(A350DrawLayout.CtrSystemDisplay) + nl + "PERM:" + nl + Dump(A350DrawLayout.CtrPermanentData);
+            if (!stable.Offer(state, out _)) continue;
+            n++;
+            Console.WriteLine($"===== state {n} at {sw.Elapsed.TotalSeconds:F1} s ({c.Frames.Count} frames: {string.Join(", ", c.Frames.Select(f => $"{f.X:0},{f.Y:0} {f.W:0}x{f.H:0} {A350Rgba.NameOf(f.Colour)}{(f.Wide ? " wide" : "")}"))})");
+            Console.WriteLine(state);
+            if (dir != null) File.WriteAllText(Path.Combine(dir, $"ctr_{n:000}.json"), System.Text.Json.JsonSerializer.Serialize(c, opts));
+        }
+        Console.WriteLine($"traps {traps}");
         return 0;
     }
 
