@@ -120,6 +120,10 @@ How the WD draws, measured on a power-up at VCBI (BAT 1, BAT 2, GPU from the OIS
 - The first draw of a gauge on a fresh Wasmtime instance draws only the WD titles; the engine throws that warm-up draw away.
 - The engine block's labels (N1, EGT, N2, FF) are textures: its numbers read unlabelled until they are mapped by position (a capture with engines running).
 
+## The draw code's own sim reads
+
+A few things the draw code asks the sim directly (`aircraft_varget` / `fsVarsAircraftVarGet`), not its memory: engine N2 on the CTR (`TURB ENG N2:1/2`, Percent) and the baro settings on the EFIS and ISIS (`KOHLSMAN SETTING HG:1/2/3`). The copy cannot hold them, so `A350AVars` lists each, the definition streams it as a stock variable (consumed silently, no Ctrl+M row) and `A350AVarAnswers` answers the engine from SimConnect's cache. Before 2026-10-27 they answered 0: a running engine's N1 dial lost its grey fill (live, N2 0 vs 64). An ask not listed is logged once ("draw code asked an A: var MSFSBA does not stream") so a flight shows what else to add.
+
 ## The SD in MSFSBA (live 2026-10-27)
 
 The ECAM Control Panel's "System display page" status display (and Alt+E's "System display" section) reads the page shown through `A350SdPage`, and the permanent data line under it (TAT, SAT, flight time, UTC, GW, GWCG, FOB) through `ReadPermanentData`; a value drawn as several texts on two rows (UTC's colons sit lower) reads as one. An SD page draws its values as text but its labels are part of a background texture, `Data/Textures/ECAM/<Page>Static.png` in the package (809 x 1024, at the draw's own coordinates). `A350SdPage.Pages` names each value by where it is drawn ("BAT 1 voltage: 28 V, green"); a unit drawn just right of a value reads with it, a unit drawn alone is a caption the field carries ("{weight}" and "{flow}" follow the page's own LBS/KG). Everything else reads as drawn, with its colour; the DOOR page's oxygen column reads after the doors.

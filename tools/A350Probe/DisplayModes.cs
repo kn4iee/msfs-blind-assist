@@ -94,7 +94,8 @@ internal static class DisplayModes
         draw.Load(copy);
         Console.Error.WriteLine($"loaded copy in {sw.ElapsedMilliseconds} ms, {draw.CustomVariableCount} custom vars");
         draw.HostError = (n, ex) => Console.Error.WriteLine($"HOST ERROR {n}: {ex.GetType().Name} {ex.Message.Split((char)10)[0]}");
-        draw.AVarAnswer = k => k.StartsWith("KOHLSMAN SETTING HG") ? 29.92 : k.StartsWith("TURB ENG N2") ? 0 : null;
+        var n2 = double.Parse(Environment.GetEnvironmentVariable("A350_N2") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
+        draw.AVarAnswer = k => k.StartsWith("KOHLSMAN SETTING HG") ? 29.92 : k.StartsWith("TURB ENG N2") ? n2 : null;
         static string F0(float v) => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
         foreach (var g in args.Skip(1))
         {

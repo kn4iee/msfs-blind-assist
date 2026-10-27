@@ -343,6 +343,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
 
+        // What the display draw code asks the sim for itself (engine N2, the baro settings): streamed, consumed
+        // silently, and answered to the draw engine from the cache (AnswerAVar).
+        foreach (var a in A350.Display.A350AVars.All)
+        {
+            Register(a.Key, a.Name, a.Name, null, a.Units);
+            _lampInputKeys.Add(a.Key);
+        }
+
         // What a typed value is planned from and read back in, where nothing above streams it yet.
         foreach (var field in _typed.Values)
             foreach (var input in A350TypedEntry.Inputs(field))
