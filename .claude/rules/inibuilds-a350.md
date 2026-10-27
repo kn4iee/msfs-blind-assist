@@ -5,6 +5,7 @@ paths:
   - "tools/A350Probe/**"
   - "MSFSBlindAssist/Aircraft/A350/**"
   - "MSFSBlindAssist/Aircraft/IniBuildsA350*.cs"
+  - "MSFSBlindAssist/Forms/A350/**"
   - "tests/MSFSBlindAssist.Tests/A350/**"
   - "MSFSBlindAssist/Resources/coherent-a350-ois-agent.js"
   - "tools/a350-ois-test/**"
