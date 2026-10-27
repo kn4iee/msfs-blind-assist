@@ -116,4 +116,32 @@ public class A350DrawEngineTests
         Assert.False(cap.Ok);
         Assert.Contains("no EFIS object", cap.Error);
     }
+
+    // A CustomVariable {u32 id, std::string name (short: inline, length in byte 11), f64 value at +16}
+    // answers the draw code's L:var reads from the copy. The engine keeps their addresses between copies
+    // and rescans only when one no longer checks out: a variable that moved is found again.
+    private static A350MemoryCopy CopyWithVariable(int at, double value)
+    {
+        var copy = Copy(trap: false);
+        var mem = copy.Buffer;
+        BitConverter.GetBytes(77u).CopyTo(mem, at);
+        "INI_TESTV"u8.ToArray().CopyTo(mem, at + 4);
+        mem[at + 4 + 11] = 9;
+        BitConverter.GetBytes(value).CopyTo(mem, at + 16);
+        return copy;
+    }
+
+    [Fact]
+    public void A_custom_variable_is_found_and_found_again_after_it_moves()
+    {
+        using var e = Engine();
+        e.Load(CopyWithVariable(8000, 1.5));
+        Assert.Equal(("INI_TESTV", 8000u), e.CustomVariable(77));
+        Assert.Equal(1.5, e.LVarValue(77));
+        e.Load(CopyWithVariable(8000, 2.5));
+        Assert.Equal(2.5, e.LVarValue(77));
+        e.Load(CopyWithVariable(9000, 3.5));
+        Assert.Equal(("INI_TESTV", 9000u), e.CustomVariable(77));
+        Assert.Equal(3.5, e.LVarValue(77));
+    }
 }

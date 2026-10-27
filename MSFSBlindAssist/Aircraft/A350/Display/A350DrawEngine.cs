@@ -266,8 +266,11 @@ public sealed class A350DrawEngine : IDisposable
     // holds up to 10 bytes inline with its length in byte 11; a long one has its high bit set there.
     private void ScanCustomVariables()
     {
-        _customVars.Clear();
         var copy = _copy!;
+        // The objects live on the A350's heap and stay put while it is loaded: keep their addresses while
+        // every one still holds its id and name (about 1,200 checks instead of a 38 MB scan).
+        if (_customVars.Count > 0 && _customVars.All(kv => NameAt(copy, kv.Value.Address, (uint)kv.Key) == kv.Value.Name)) return;
+        _customVars.Clear();
         for (int ri = 0; ri < copy.Regions.Count; ri++)
         {
             var (lin, len) = copy.Regions[ri];
@@ -304,6 +307,26 @@ public sealed class A350DrawEngine : IDisposable
     }
 
     public int CustomVariableCount => _customVars.Count;
+
+    internal (string Name, uint Address)? CustomVariable(int id) => _customVars.TryGetValue(id, out var cv) ? cv : null;
+
+    internal double? LVarValue(int id) => LVar(id);
+
+    /// <summary>The name of the CustomVariable at an address if it still holds this id, else null.</summary>
+    private static string? NameAt(A350MemoryCopy copy, uint address, uint id)
+    {
+        var head = copy.Read(address, 16);
+        if (head.Length < 16 || BitConverter.ToUInt32(head) != id) return null;
+        var s = head[4..];
+        if ((s[11] & 0x80) == 0)
+        {
+            int n = s[11];
+            return n <= 10 ? Encoding.ASCII.GetString(s[..n]) : null;
+        }
+        uint p = BitConverter.ToUInt32(s), len = BitConverter.ToUInt32(s[4..]);
+        var name = len <= 80 ? copy.Read(p, (int)len) : ReadOnlySpan<byte>.Empty;
+        return name.Length == 0 ? null : Encoding.ASCII.GetString(name);
+    }
 
     /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables).</summary>
     public IReadOnlyList<int> Objects(string cls)
