@@ -544,6 +544,41 @@
           continue;
         }
 
+        // COMPANY COM (AOC): its tree (a box is pressable, a folder header is a heading), its message
+        // table (a row per message: preview, time, the "**" new marker), and the open message.
+        if (e.closest && e.closest('.aoc-tree') && A.hasCls(e.parentElement, 'aoc-tree') && !A.holdsControl(e)) {
+          A.own(e);
+          var at = A.text(e);
+          if (!at) continue;
+          if (A.hasCls(e, 'selectable'))
+            push(e, { kind: 'button', text: at + (A.hasCls(e, 'selected') ? ' (selected)' : ''), clickable: true, key: 'aoc:' + at });
+          else push(null, { kind: 'heading', level: 3, text: at });
+          continue;
+        }
+        if (tag === 'THEAD') { A.own(e); continue; }
+        if (tag === 'TR' && A.hasCls(e, 'messagerow')) {
+          A.own(e);
+          var tds = e.querySelectorAll('td');
+          var preview = tds[0] ? A.text(tds[0]).replace(/-{3,}\.*|\.{3,}/g, '').replace(/\s+$/, '') : '';
+          var zulu = tds[1] ? A.text(tds[1]) : '', isNew = tds[2] ? A.text(tds[2]) !== '' : false;
+          push(e, { kind: 'button', text: preview + (zulu ? ', ' + zulu + 'Z' : '') + (isNew ? ', new' : ''), clickable: true, key: 'msg:' + (e.getAttribute('data-uid') || preview) });
+          continue;
+        }
+        if (tag === 'PRE') {
+          A.own(e);
+          var lines = [], cur = '';
+          for (var pc = e.firstChild; pc; pc = pc.nextSibling) {
+            if (pc.nodeType === 1 && pc.tagName === 'BR') { lines.push(cur); cur = ''; }
+            else cur += pc.nodeType === 3 ? pc.nodeValue : A.text(pc);
+          }
+          lines.push(cur);
+          for (var li = 0; li < lines.length; li++) {
+            var ln = A.norm(lines[li]);
+            if (ln && !/^[-.=_*\s]+$/.test(ln)) push(null, { kind: 'static', text: ln });
+          }
+          continue;
+        }
+
         if (A.hasCls(e, 'door-clickspot')) {
           A.own(e);
           var dn = A.doorName(e.id), ds = A.doorState(e);
