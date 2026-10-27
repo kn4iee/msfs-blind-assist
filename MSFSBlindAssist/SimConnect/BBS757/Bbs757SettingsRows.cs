@@ -1,0 +1,209 @@
+using System.Globalization;
+using System.Text.Json;
+
+namespace MSFSBlindAssist.SimConnect.BBS757;
+
+/// <summary>What one control of the Settings tab shows for the value or values BlueBird's files hold.</summary>
+public enum Bbs757RowState
+{
+    /// <summary>
+    /// A value of the right type that one of the tablet's words stores (a switch or a choice), or the value of a number
+    /// or text box.
+    /// </summary>
+    Value,
+
+    /// <summary>
+    /// A value of the right type that none of the tablet's words stores. Only a switch or a choice has this state: a
+    /// number or text box shows whatever is stored. The control can still be set to one of the words.
+    /// </summary>
+    Other,
+
+    /// <summary>
+    /// Nothing can be read: no settings file, a key that is missing or holds another type, or, for a registration
+    /// setting, no registration file that has it.
+    /// </summary>
+    Unreadable,
+
+    /// <summary>The registrations' files hold different values for the setting.</summary>
+    Differs,
+
+    /// <summary>
+    /// The tablet takes no value from the pilot now: the EFB brightness while its mode is automatic or not known to be
+    /// manual.
+    /// </summary>
+    Automatic,
+}
+
+/// <summary>One control of the Settings tab: what it shows and whether it may change.</summary>
+/// <param name="Setting">The catalog entry the control is for.</param>
+/// <param name="State">What the files hold for it.</param>
+/// <param name="ChoiceIndex">
+/// For a <see cref="Bbs757RowState.Value"/> row of a switch or a choice, the index into <see cref="Bbs757Setting.Choices"/>
+/// of the choice the stored value selects; else -1.
+/// </param>
+/// <param name="Text">
+/// What the control shows: the chosen choice's word for a switch or a choice, <see cref="Bbs757EfbSettings.NumberText"/>
+/// for a number or text box, and for every other state that state's own text (<see cref="Bbs757SettingsRows.OtherText"/>,
+/// <see cref="Bbs757SettingsRows.DiffersText"/>, <see cref="Bbs757SettingsRows.UnreadableText"/>,
+/// <see cref="Bbs757SettingsRows.AutomaticText"/>). For the pilot's identifiers (SimBrief ID, Hoppie logon code,
+/// SayIntentions ACARS key) it is the stored value itself, so a row never goes into a log.
+/// </param>
+/// <param name="Inactive">
+/// The setting waits for another one (<see cref="Bbs757Setting.EnabledBy"/>) that does not read On. An inactive row keeps
+/// its own value, shown as stored, and its focus and reading; it does not change.
+/// </param>
+public sealed record Bbs757SettingRow(Bbs757Setting Setting, Bbs757RowState State, int ChoiceIndex, string Text,
+    bool Inactive = false)
+{
+    /// <summary>
+    /// Whether the control accepts a change: the settings are writable (<paramref name="settingsWritable"/>: no simulator
+    /// runs and BlueBird has made its settings file), the row is not <see cref="Inactive"/>, and what it holds can be
+    /// replaced. That is <see cref="Bbs757RowState.Value"/>, <see cref="Bbs757RowState.Other"/> (the pilot picks a value
+    /// BlueBird stores) and <see cref="Bbs757RowState.Differs"/> (the pilot sets one value for every registration); a
+    /// row that is <see cref="Bbs757RowState.Unreadable"/> or <see cref="Bbs757RowState.Automatic"/> never changes.
+    /// </summary>
+    public bool CanEdit(bool settingsWritable) =>
+        settingsWritable && !Inactive
+        && (State is Bbs757RowState.Value or Bbs757RowState.Other or Bbs757RowState.Differs);
+}
+
+/// <summary>
+/// The rows of the Settings tab's sections: for each setting of a section, what its control shows, worked out from
+/// BlueBird's parsed files, and whether it may change. A setting of the settings file (<c>efb_settings.json</c>: General,
+/// Aircraft, AIRAC data and Failures) reads that file. A setting of the registrations (Livery options, Callouts and
+/// Cabin audio) reads every registration's file in which its key reads: they agree, and the row shows the value; they
+/// differ, and it says so; none reads, and it is unreadable. A registration whose file lacks the key, or holds another
+/// type there, is left out and does not change what the others show (the save that reaches it says so). A value of the
+/// right type that none of the tablet's words stores shows as "Other (stored value N)", and the control can still be set
+/// to a word. The EFB brightness is the stored brightness only while the file says the brightness mode is manual: when it
+/// says automatic, or says nothing that can be read, the row is <see cref="Bbs757RowState.Automatic"/> and cannot change,
+/// so brightness is written only while the mode is known to be manual (with no settings file at all, every row of that
+/// file, this one too, is unreadable). A setting that waits for another is inactive unless that one reads On. Pure: it
+/// reads the JSON it is given and nothing else, so the tab calls it again after every save and when the simulator
+/// closes. The rows never hold a <see cref="JsonElement"/>.
+/// </summary>
+public static class Bbs757SettingsRows
+{
+    /// <summary>What a row shows when its value cannot be read.</summary>
+    public const string UnreadableText = "Not readable in this BlueBird version";
+
+    /// <summary>What a registration setting shows when the registrations' files hold different values.</summary>
+    public const string DiffersText = "Differs between registrations";
+
+    /// <summary>What the EFB brightness shows while its mode is automatic.</summary>
+    public const string AutomaticText = "Automatic";
+
+    // The tablet's brightness slider is the stored brightness only in manual mode (the mode is stored false then).
+    private const string BrightnessPath = "display_brightness";
+    private const string BrightnessModePath = "auto_brightness";
+
+    // A switch's choices are Off, then On.
+    private const int OnChoiceIndex = 1;
+
+    /// <summary>
+    /// What a row shows for a value of the right type that none of the tablet's words stores:
+    /// <c>Other (stored value 7)</c>. <paramref name="storedJson"/> is the value as the file holds it
+    /// (<see cref="Bbs757Value.ToJson"/>), so text is quoted.
+    /// </summary>
+    public static string OtherText(string storedJson) => $"Other (stored value {storedJson})";
+
+    /// <summary>
+    /// What an inactive row tells the pilot, as the control's description: <c>Turn on Announcements to change this.</c>
+    /// <paramref name="enabledBy"/> is the setting the row's <see cref="Bbs757Setting.EnabledBy"/> names.
+    /// </summary>
+    public static string InactiveText(Bbs757Setting enabledBy) => $"Turn on {enabledBy.Label} to change this.";
+
+    /// <summary>
+    /// The rows of <paramref name="section"/>, one for each of <see cref="Bbs757EfbSettings.InSection"/>'s settings, in
+    /// that order. <paramref name="global"/> is the parsed settings file, or null when it could not be read: every
+    /// setting of that file is then <see cref="Bbs757RowState.Unreadable"/>. <paramref name="registrations"/> are the
+    /// parsed registration files, none when BlueBird has made none: a registration setting is then unreadable. The
+    /// elements must stay valid (their documents undisposed) while this runs. Never throws for what a file holds.
+    /// </summary>
+    public static IReadOnlyList<Bbs757SettingRow> For(Bbs757SettingSection section, JsonElement? global,
+        IReadOnlyList<JsonElement> registrations) =>
+        Bbs757EfbSettings.InSection(section).Select(setting => RowOf(setting, global, registrations)).ToArray();
+
+    /// <summary>
+    /// The line above a registration section's rows: how many registrations its rows apply to and which. None: where
+    /// BlueBird has no registration file yet, so there is nothing to change. <c>Applies to 1 registration: G-BBS75</c>,
+    /// <c>Applies to 3 registrations: A, B, C</c>.
+    /// </summary>
+    public static string RegistrationsLine(IReadOnlyList<string> registrations) => registrations.Count switch
+    {
+        0 => "BlueBird has no registration options yet. Fly a livery once to create them.",
+        1 => $"Applies to 1 registration: {registrations[0]}",
+        _ => string.Create(CultureInfo.InvariantCulture,
+            $"Applies to {registrations.Count} registrations: {string.Join(", ", registrations)}"),
+    };
+
+    // ---- one row ------------------------------------------------------------------------------------
+
+    // The setting's row, inactive when the setting that enables it does not read On.
+    private static Bbs757SettingRow RowOf(Bbs757Setting setting, JsonElement? global, IReadOnlyList<JsonElement> registrations)
+    {
+        Bbs757SettingRow row = ReadRow(setting, global, registrations);
+        return setting.EnabledBy is { } enabledBy && !ReadsOn(enabledBy, global, registrations)
+            ? row with { Inactive = true }
+            : row;
+    }
+
+    // Whether the setting at this path reads On, worked out from the same files as the row that asks. Found in the whole
+    // catalog, not in the section being built. A setting that reads Off, differs between registrations, cannot be read,
+    // is not a switch or is not in the catalog does not read On.
+    private static bool ReadsOn(string path, JsonElement? global, IReadOnlyList<JsonElement> registrations) =>
+        Bbs757EfbSettings.ByPath(path) is { Kind: Bbs757SettingKind.OnOff } setting
+        && ReadRow(setting, global, registrations) is { State: Bbs757RowState.Value, ChoiceIndex: OnChoiceIndex };
+
+    // What the files hold for one setting, before the rule about a setting that waits for another is applied.
+    private static Bbs757SettingRow ReadRow(Bbs757Setting setting, JsonElement? global, IReadOnlyList<JsonElement> registrations)
+    {
+        if (setting.File == Bbs757SettingFile.Global)
+        {
+            // No settings file read: nothing of it can be told, the brightness mode included.
+            if (global is not { } root) return Unreadable(setting);
+
+            if (setting.Path == BrightnessPath && !IsManualBrightness(root))
+                return new Bbs757SettingRow(setting, Bbs757RowState.Automatic, -1, AutomaticText);
+
+            return Bbs757SettingsFile.ValueAt(root, setting.Path, setting.Type) is { } inFile
+                ? Shown(setting, inFile)
+                : Unreadable(setting);
+        }
+
+        // Each registration in which the key reads. One that does not is left out: it makes the row neither differ nor
+        // unreadable by itself.
+        Bbs757Value? agreed = null;
+        foreach (JsonElement registration in registrations)
+        {
+            if (Bbs757SettingsFile.ValueAt(registration, setting.Path, setting.Type) is not { } held) continue;
+
+            if (agreed is not { } first) agreed = held;
+            else if (held != first) return new Bbs757SettingRow(setting, Bbs757RowState.Differs, -1, DiffersText);
+        }
+        return agreed is { } common ? Shown(setting, common) : Unreadable(setting);
+    }
+
+    // The row for a value that was read: the tablet's word, "Other" for a value of no word, or the box's text.
+    private static Bbs757SettingRow Shown(Bbs757Setting setting, Bbs757Value stored)
+    {
+        if (setting.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text)
+            return new Bbs757SettingRow(setting, Bbs757RowState.Value, -1, Bbs757EfbSettings.NumberText(setting, stored));
+
+        for (int index = 0; index < setting.Choices.Count; index++)
+        {
+            if (setting.Choices[index].Stored == stored)
+                return new Bbs757SettingRow(setting, Bbs757RowState.Value, index, setting.Choices[index].Word);
+        }
+
+        return new Bbs757SettingRow(setting, Bbs757RowState.Other, -1, OtherText(stored.ToJson()));
+    }
+
+    private static Bbs757SettingRow Unreadable(Bbs757Setting setting) =>
+        new(setting, Bbs757RowState.Unreadable, -1, UnreadableText);
+
+    // Whether the file says the brightness mode is manual. Automatic, a missing key and another type all are not known
+    // to be manual: the brightness is written only while it is.
+    private static bool IsManualBrightness(JsonElement root) =>
+        Bbs757SettingsFile.ValueAt(root, BrightnessModePath, Bbs757ValueType.Bool) == Bbs757Value.Of(false);
+}
