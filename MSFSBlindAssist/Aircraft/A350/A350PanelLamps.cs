@@ -125,7 +125,7 @@ public static class A350PanelLamps
         // EMER DESCENT's ARMED (INI_EMER_DES_ARMED_LIGHT).
         ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_LEFT_SEQ1_LIGHT"] = "Captain OIS on center INOP light",
         ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_RIGHT_SEQ1_LIGHT"] = "First officer OIS on center INOP light",
-        ["CKPT_DOOR_LT_SEQ1_LIGHT"] = "Cockpit door open light",
+        ["CKPT_DOOR_LT_SEQ1_LIGHT"] = "Cockpit door open light", ["CKPT_DOOR_LT_SEQ2_LIGHT"] = "Cockpit door fault light",
         ["EMER_DESCENT_SEQ2_LIGHT"] = "Emergency descent armed light",
     };
 

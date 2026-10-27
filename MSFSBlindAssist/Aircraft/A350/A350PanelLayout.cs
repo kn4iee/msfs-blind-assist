@@ -46,7 +46,8 @@ public static partial class A350PanelLayout
 
     /// <summary>Whether a map control is placed on a panel at all.</summary>
     public static bool IsPlaced(A350Control control) =>
-        control.Kind is not (A350Kinds.Cover or A350Kinds.None) && !DeferredPanels.Contains(control.Panel);
+        control.Kind is not (A350Kinds.Cover or A350Kinds.None) && !DeferredPanels.Contains(control.Panel)
+        && !HiddenControls.Contains(Short(control.Id));
 
     /// <summary>The section a panel's order lists it in, else iniBuilds' area's.</summary>
     public static string SectionFor(A350Control control)

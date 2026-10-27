@@ -105,7 +105,7 @@ public class A350PedestalPanelTests
     public void Cockpit_door_and_lighting()
     {
         var cockpit = Rows("Cockpit").ToList();
-        Assert.Contains(("Cockpit door", Set, "0=Lock, 1=Norm, 2=Unlock"), cockpit);
+        Assert.Contains(("Cockpit door switch", Set, "0=Lock, 1=Norm, 2=Unlock"), cockpit);   // the door itself is the Cockpit section's
         Assert.Contains(("DU master", Set, "0=Inhibit, 1=On"), cockpit);
         // DU MASTER BRT steps every display through the WASM (INI_CKPT_LT_DU_MASTER_BRT_INC/_DEC, consumed live), but
         // nothing keeps INI_CKPT_LT_DU_MASTER_BRT, which its tooltip reads: no value line that would always read 0.

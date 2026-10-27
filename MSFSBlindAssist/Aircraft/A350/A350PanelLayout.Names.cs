@@ -66,6 +66,24 @@ public static partial class A350PanelLayout
         ["ECAM_BUTTONS"] = "ECAM Control Panel",
         ["SURV_PANEL"] = "Transponder",
         ["CKPT_DOOR"] = "Cockpit", ["CKPT_LT"] = "Cockpit", ["OIS_DISPLAY_TRANSFER"] = "Cockpit", ["PRINTER"] = "Cockpit",
+        // Cockpit section (iniBuilds' MISC area)
+        ["COCKPIT_DOOR"] = "Doors and Hatches", ["JUMP_SEAT_HATCH_LOCK"] = "Doors and Hatches",
+        ["VISORS"] = "Sun Shades",
+        ["OXYGEN_TEST"] = "Oxygen Masks",
+        ["A350_INTERIOR_SWITCH"] = "HUD Units",
+        ["SIDE_STICK_DISCO_CPT"] = "Tillers and Sidesticks", ["SIDE_STICK_DISCO_FO"] = "Tillers and Sidesticks",
+        ["CPT_TILLER_DISCO"] = "Tillers and Sidesticks", ["FO_TILLER_DISCO"] = "Tillers and Sidesticks",
+        ["LIGHTS_DOME_OVERRIDE"] = "Misc", ["PRINTER_PAPER_SIDE_SWITCH"] = "Misc", ["SPECIAL_FEATURE"] = "Misc",
+    };
+
+    /// <summary>Clickspots that repeat another row exactly: the cockpit door's cabin-side handle (the same INI_COCKPIT_DOOR
+    /// as the cockpit-side one) and seven of the eight printer paper spots (each hides the same paper,
+    /// INI_PRINTER_SIDE_PAPER_VIS 0).</summary>
+    private static readonly HashSet<string> HiddenControls = new(StringComparer.Ordinal)
+    {
+        "COCKPIT_DOOR_HANDLE_OUTTER_CS",
+        "PRINTER_PAPER_SIDE_2_CS", "PRINTER_PAPER_SIDE_3_CS", "PRINTER_PAPER_SIDE_4_CS", "PRINTER_PAPER_SIDE_5_CS",
+        "PRINTER_PAPER_SIDE_6_CS", "PRINTER_PAPER_SIDE_7_CS", "PRINTER_PAPER_SIDE_8_CS",
     };
 
     /// <summary>Panels with a plan of their own still to come, not placed until then: the RMPs (192 keys and a display)
@@ -135,6 +153,7 @@ public static partial class A350PanelLayout
             "Engines", "Thrust Levers", "Emergency Descent", "Flaps and Brakes", "Speed Brake", "Trim", "ECAM Control Panel",
             "Weather Radar", "Transponder", "Cockpit",
         },
+        ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
     };
 
     /// <summary>Names for controls whose tooltip title is wrong or shared: iniBuilds titles the engine bleeds
@@ -142,6 +161,42 @@ public static partial class A350PanelLayout
     /// wipers, both rain repellents and the four engine fire agents one title per pair.</summary>
     private static readonly Dictionary<string, string> NameOverrides = new(StringComparer.Ordinal)
     {
+        // Cockpit section: each seat's oxygen mask by seat; the sun shades by place; the HUD units as covers and units.
+        ["COCKPIT_DOOR_LOCK"] = "Cockpit door lock",
+        ["COCKPIT_DOOR_HANDLE_BASE_CS"] = "Cockpit door",
+        ["AVBAY_HATCH_CS"] = "Avionics bay hatch",
+        ["CPT_VISOR_MAIN"] = "Captain sun shade",
+        ["CPT_VISOR_SIDE"] = "Captain side sun shade",
+        ["CPT_VISOR_BACK"] = "Captain rear sun shade",
+        ["FO_VISOR_MAIN"] = "First officer sun shade",
+        ["FO_VISOR_SIDE"] = "First officer side sun shade",
+        ["FO_VISOR_BACK"] = "First officer rear sun shade",
+        ["CTR_VISOR_MAIN_HANDLE"] = "Center sun shade",
+        ["HUD_LEFT"] = "Captain HUD cover",
+        ["HUD_RIGHT"] = "First officer HUD cover",
+        ["HUD_HANDLE_LEFT"] = "Captain HUD",
+        ["HUD_HANDLE_RIGHT"] = "First officer HUD",
+        ["CPT_TILLER_DISCO"] = "Captain tiller",
+        ["FO_TILLER_DISCO"] = "First officer tiller",
+        ["LIGHTS_DOME_OVERRIDE"] = "Dome light override",
+        ["PRINTER_PAPER_SIDE_1_CS"] = "Printer paper tear off",
+        ["A350_INT_INI_PEN"] = "Pen",
+        ["OXYTEST_CPT_HATCH"] = "Captain oxygen mask stowage",
+        ["OXYTEST_CPT_N"] = "Captain oxygen N/100%",
+        ["OXYTEST_CPT_PANEL"] = "Captain oxygen mask test",
+        ["OXYTEST_CPT_MASK"] = "Captain oxygen emergency pressure",
+        ["OXYTEST_FO_HATCH"] = "First officer oxygen mask stowage",
+        ["OXYTEST_FO_N"] = "First officer oxygen N/100%",
+        ["OXYTEST_FO_PANEL"] = "First officer oxygen mask test",
+        ["OXYTEST_FO_MASK"] = "First officer oxygen emergency pressure",
+        ["OXYTEST_TO_HATCH"] = "Third occupant oxygen mask stowage",
+        ["OXYTEST_TO_N"] = "Third occupant oxygen N/100%",
+        ["OXYTEST_TO_PANEL"] = "Third occupant oxygen mask test",
+        ["OXYTEST_TO_MASK"] = "Third occupant oxygen emergency pressure",
+        ["OXYTEST_4TH_HATCH"] = "Fourth occupant oxygen mask stowage",
+        ["OXYTEST_4TH_N"] = "Fourth occupant oxygen N/100%",
+        ["OXYTEST_4TH_PANEL"] = "Fourth occupant oxygen mask test",
+        ["OXYTEST_4TH_MASK"] = "Fourth occupant oxygen emergency pressure",
         // Pedestal: the A380's ECAM and lever words; the cockpit's own legends elsewhere; each weather radar knob's push
         // (AUTO MODE) and pull (MANUAL MODE) by what they select.
         ["ENG_MASTER_MODE"] = "Engine mode selector",
@@ -197,7 +252,7 @@ public static partial class A350PanelLayout
         ["TCAS_BLW"] = "TCAS below",
         ["TCAS_TA_ONLY"] = "TCAS TA only",
         ["TAWS_GS_MODE_OFF"] = "G/S mode",
-        ["CKPT_DOOR"] = "Cockpit door",
+        ["CKPT_DOOR"] = "Cockpit door switch",
         ["CKPT_LT_DOME"] = "Dome light",
         ["CKPT_LT_FLOOD"] = "Flood light",
         ["CKPT_LT_INTEG"] = "Integral light",
@@ -437,5 +492,22 @@ public static partial class A350PanelLayout
         ["GRAVITY_GEAR_HANDLE"] = new() { [0] = "Reset", [1] = "Off", [2] = "Down" },
         // The left switch's tooltip reads Off/On, the right's NORM/X-WIND: both read the right's.
         ["FCU_HUD_XWIND_LEFT"] = new() { [0] = "Norm", [1] = "X-wind" }, ["FCU_HUD_XWIND_RIGHT"] = new() { [0] = "Norm", [1] = "X-wind" },
+        // Cockpit section: the mask stowages' tooltips name the click (they rest closed at 0); the HUD handle's too (1 drew
+        // the HUD); both tiller disconnects flip one INI_TILLER_DISC; locking the door closes it (its set code).
+        ["COCKPIT_DOOR_LOCK"] = new() { [0] = "Unlocked", [1] = "Locked" },
+        ["COCKPIT_DOOR_HANDLE_BASE_CS"] = new() { [0] = "Closed", [1] = "Open" },
+        ["AVBAY_HATCH_CS"] = new() { [0] = "Closed", [1] = "Open" },
+        ["HUD_HANDLE_LEFT"] = new() { [0] = "Stowed", [1] = "Deployed" },
+        ["HUD_HANDLE_RIGHT"] = new() { [0] = "Stowed", [1] = "Deployed" },
+        ["CPT_TILLER_DISCO"] = new() { [0] = "Connected", [1] = "Disconnected" },
+        ["FO_TILLER_DISCO"] = new() { [0] = "Connected", [1] = "Disconnected" },
+        ["OXYTEST_CPT_HATCH"] = new() { [0] = "Closed", [1] = "Open" },
+        ["OXYTEST_CPT_N"] = new() { [0] = "Normal", [1] = "100%" },
+        ["OXYTEST_FO_HATCH"] = new() { [0] = "Closed", [1] = "Open" },
+        ["OXYTEST_FO_N"] = new() { [0] = "Normal", [1] = "100%" },
+        ["OXYTEST_TO_HATCH"] = new() { [0] = "Closed", [1] = "Open" },
+        ["OXYTEST_TO_N"] = new() { [0] = "Normal", [1] = "100%" },
+        ["OXYTEST_4TH_HATCH"] = new() { [0] = "Closed", [1] = "Open" },
+        ["OXYTEST_4TH_N"] = new() { [0] = "Normal", [1] = "100%" },
     };
 }

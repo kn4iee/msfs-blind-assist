@@ -86,6 +86,11 @@ internal static class A350Levers
             Array.Empty<(double, string)>(), null),
         ["AIRLINER_PITCH_TRIM_RIGHT"] = Lever("AIRLINER_PITCH_TRIM_RIGHT", "Right pitch trim", A350Kinds.None, null,
             Array.Empty<(double, string)>(), null),
+        // The sidestick takeover buttons' Set fires 'INI.AUTOPILOT_OFF' (>F:KeyEvent), which the map cannot read as a state.
+        ["AIRLINER_SIDE_STICK_DISCO_CPT"] = Lever("AIRLINER_SIDE_STICK_DISCO_CPT", "Captain sidestick takeover", A350Kinds.Button,
+            null, Array.Empty<(double, string)>(), null),
+        ["AIRLINER_SIDE_STICK_DISCO_FO"] = Lever("AIRLINER_SIDE_STICK_DISCO_FO", "First officer sidestick takeover", A350Kinds.Button,
+            null, Array.Empty<(double, string)>(), null),
         ["AIRLINER_RUDDER_TRIM_RESET"] = Lever("AIRLINER_RUDDER_TRIM_RESET", "Rudder trim reset", A350Kinds.Button, null,
             Array.Empty<(double, string)>(), null),
     };

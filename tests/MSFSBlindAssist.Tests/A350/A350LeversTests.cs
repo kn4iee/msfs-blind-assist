@@ -145,6 +145,17 @@ public class A350LeversTests
         Assert.DoesNotContain(Placement.RowsByPanel.Values.SelectMany(r => r), r => r.Key is "A350_PITCH_TRIM_LEFT" or "A350_PITCH_TRIM_RIGHT");
     }
 
+    /// <summary>The sidestick takeover button's Set fires the aircraft's own 'INI.AUTOPILOT_OFF' key event: a button.</summary>
+    [Theory]
+    [InlineData("A350_SIDE_STICK_DISCO_CPT", "Captain sidestick takeover", "AIRLINER_SIDE_STICK_DISCO_CPT_Set")]
+    [InlineData("A350_SIDE_STICK_DISCO_FO", "First officer sidestick takeover", "AIRLINER_SIDE_STICK_DISCO_FO_Set")]
+    public void A_sidestick_takeover_button_disconnects_the_autopilot(string key, string name, string evt)
+    {
+        var button = Row(key);
+        Assert.Equal((name, A350RowAction.Press), (button.Name, button.Action));
+        Assert.Equal(new[] { $"1 (>B:{evt})" }, Rpn(A350WritePlan.ForPress(button.Control!)));
+    }
+
     [Fact]
     public void Rudder_trim_reset_is_a_button()
     {

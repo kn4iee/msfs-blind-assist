@@ -15,7 +15,8 @@ The A350 is being built section by section. Its overhead panel, its glareshield 
 and both EFIS control panels), its instrument panel (gear, autobrake, ISIS, source
 switching, display power, both side and individual panels) and its pedestal (engines,
 thrust levers, flaps and brakes, speed brake, trims, ECAM control panel, weather radar,
-transponder and cockpit) are in the Sections list
+transponder and cockpit) and the cockpit around you (doors and hatches, sun shades, oxygen
+masks, HUD units, tillers and the sidestick takeover buttons) are in the Sections list
 (Ctrl+1): every switch, selector, guarded button and knob, with the panels named and
 ordered as on the A380. A switch the aircraft did not move is said once ("BAT 1 did not
 move"). Each panel's status display (Ctrl+3) reads its lights, the FCU's four windows,
