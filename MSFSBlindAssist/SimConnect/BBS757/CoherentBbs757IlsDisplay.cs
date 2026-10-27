@@ -216,26 +216,43 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
             LogPageSize(innerWidth, innerHeight, ratio, client);
 
             _phase = "capture/decode";
-            await Task.Delay(SettleMs, token).ConfigureAwait(false);
-            for (int i = 0; i < MaxCaptures; i++)
+            byte[]? lastPng = null;
+            var started = Stopwatch.StartNew();
+            try
             {
-                if (i > 0) await Task.Delay(CaptureGapMs, token).ConfigureAwait(false);
-                byte[]? png = await _capture().WaitAsync(token).ConfigureAwait(false);
-                if (png == null)
+                await Task.Delay(SettleMs, token).ConfigureAwait(false);
+                for (int i = 0; i < MaxCaptures; i++)
                 {
-                    _debug("ILS display: the simulator window could not be captured.");
-                    return null;
+                    if (i > 0) await Task.Delay(CaptureGapMs, token).ConfigureAwait(false);
+                    long before = started.ElapsedMilliseconds;
+                    byte[]? png = await _capture().WaitAsync(token).ConfigureAwait(false);
+                    if (png == null)
+                    {
+                        _debug("ILS display: the simulator window could not be captured.");
+                        return null;
+                    }
+                    lastPng = png;
+                    var (cropped, reading) = await Task.Run(() => DecodeCapture(png, client, innerWidth, innerHeight), token).ConfigureAwait(false);
+                    _debug(string.Create(CultureInfo.InvariantCulture,
+                        $"ILS display: capture {i + 1} at {before} ms took {started.ElapsedMilliseconds - before} ms with its decode: {(reading != null ? "read" : cropped ? "no reading" : "box off the capture")}."));
+                    if (!cropped)
+                    {
+                        _debug("ILS display: the overlay's box does not fit the capture at the page's scale.");
+                        SaveFailedCapture(lastPng, client, innerWidth, innerHeight);
+                        return null;
+                    }
+                    if (reading != null) return reading;
                 }
-                var (cropped, reading) = await Task.Run(() => DecodeCapture(png, client, innerWidth, innerHeight), token).ConfigureAwait(false);
-                if (!cropped)
-                {
-                    _debug("ILS display: the overlay's box does not fit the capture at the page's scale.");
-                    return null;
-                }
-                if (reading != null) return reading;
+                _debug($"ILS display: none of {MaxCaptures} captures decoded.");
+                SaveFailedCapture(lastPng, client, innerWidth, innerHeight);
+                return null;
             }
-            _debug($"ILS display: none of {MaxCaptures} captures decoded.");
-            return null;
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // The read's own cap ran out mid-capture: keep what the last capture saw. Said as a timeout above.
+                SaveFailedCapture(lastPng, client, innerWidth, innerHeight);
+                throw;
+            }
         }
         finally
         {
@@ -270,6 +287,40 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         }
         if (timeout.IsCancellationRequested) _debug("ILS display: timed out (removal).");
         Log.Warn("BBS757", "ILS display: the overlay could not be removed now; the next read removes it first.");
+    }
+
+    /// <summary>
+    /// A failed read's last capture, for working out why (2026-10-27: every read timed out on a 1024 × 576 CSS
+    /// mainUi in a 1920 × 1080 window): the whole capture as ils-display-fail.png and the overlay's box as
+    /// ils-display-fail-crop.png in the logs folder, each overwritten by the next failure. Never throws.
+    /// </summary>
+    private void SaveFailedCapture(byte[]? png, Rectangle? client, double innerWidth, double innerHeight)
+    {
+        if (png == null)
+        {
+            _debug("ILS display: no capture finished before the read gave up; nothing saved.");
+            return;
+        }
+        try
+        {
+            string whole = AppLogs.PathFor("ils-display-fail.png");
+            File.WriteAllBytes(whole, png);
+            using var stream = new MemoryStream(png);
+            using var frame = new Bitmap(stream);
+            string saved = whole;
+            if (Bbs757IlsOcr.OverlayCrop(frame.Size, client, innerWidth, innerHeight) is Rectangle box)
+            {
+                string crop = AppLogs.PathFor("ils-display-fail-crop.png");
+                using var cut = frame.Clone(box, PixelFormat.Format32bppArgb);
+                cut.Save(crop, ImageFormat.Png);
+                saved += $" and {crop} ({box.Width}x{box.Height} at {box.X},{box.Y})";
+            }
+            _debug($"ILS display: saved the last capture ({frame.Width}x{frame.Height}) to {saved}.");
+        }
+        catch (Exception ex)
+        {
+            _debug($"ILS display: the failed capture could not be saved: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>A capture's box decoded: whether the box fits the capture at the page's scale, and the reading (null: not a valid display).</summary>
