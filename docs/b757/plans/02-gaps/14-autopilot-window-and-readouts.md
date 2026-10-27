@@ -63,20 +63,28 @@
 
 - **Pilot-facing:** "757: Ctrl+P gains Speed Intervene, A/T Disconnect and the Disengage Bar, with Alt keys on every button; squawk, TCAS mode and altimeter changes are announced (each in Ctrl+M); Alt+I reads the standby instruments." Changelog `feature` / `improvement`.
 - **Hotkey guide:** Ctrl+P, the Spoken-on-change list, Alt+I.
+- **Ctrl+P keys for the guide:** CMD L Alt+L, CMD C Alt+C, CMD R Alt+R, A/T Arm Alt+A, Captain F/D Alt+F, F/O F/D Alt+O, THR Alt+T, SPD Alt+S, LNAV Alt+N, VNAV Alt+V, FLCH Alt+H, HDG HOLD Alt+D, ALT HOLD Alt+E, V/S Alt+Y, LOC Alt+G, APP Alt+P, Speed Intervene Alt+I, A/T Disconnect Alt+X, Disengage Bar Alt+B. No letter is underlined; the screen reader says each button's key ("Alt+E") on focus.
+- **Spoken words:** "Squawk 4743"; "TCAS STBY", "TCAS ALT RPTG OFF", "TCAS XPNDR", "TCAS TA ONLY", "TCAS TA/RA"; "Altimeter: 1020, 30.12" or "Altimeter standard" (the captain's, once the knob stops). Ctrl+M rows "Squawk", "TCAS Mode", "Altimeter". Ctrl+P's Speed Intervene and A/T Disconnect say "… pressed".
+- **For plan 13:** the TCAS mode knob is announced from any source here (`BBS757_TCAS_MODE_WATCH`); leave it out of the cockpit watcher, or it is said twice.
+- **Proposed rule line** (`.claude/rules/b757.md`): `- [B757-n] Never register a second Continuous row on TRANSPONDER CODE:1: the squawk watch is the squawk field's read-back row itself (Bbs757Annunciators.SquawkWatchKey == Bbs757Squawk.CodeKey); two continuous rows of one name shift every later batch slot ([VAR-7]).` (VarNameCollisionTests already fails on it; the line says why the keys are one.)
+- **Frozen files:** none needed.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed on `kn4iee/B757` (2026-10-26); waiting on owner (the in-sim checks)
 - **Claimed by:** Daniel Wolak (danielw97), 2026-10-26
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** 2026-10-26, from `69e2d8432` (claim only; the work starts 2026-10-27)
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Worked by:** Daniel Wolak with Claude, in the main checkout (no subagents: a small plan)
+- **Started:** 2026-10-26, from `69e2d8432` (the claim); the code from `64610de34`
+- **Landed:** 2026-10-26, the commit carrying this record (code `0ee6fa9c8` … the squawk fix)
+- **Tests at landing:** full suite passed, 17,942, after rebasing onto `kn4iee/B757` at `64610de34`
+- **Tasks:** 1, 2 and 3 done; none left
+- **Waiting on the owner:** in-sim checks 1 and 2
+- **In-sim results:** none run
+- **Changed from the plan:**
+  - Task 1: ALT HOLD (E), V/S (Y) and LOC (G) hold no free letter of their own, so an underlined caption letter (the PMDG windows' `&` mnemonic) cannot carry them. The window handles Alt+letter itself (`ProcessCmdKey`) and each button reports its key as its accessible keyboard shortcut, so NVDA says "Alt+E". Letters as the plan gave them. `AccessKeyFor` is on `Bbs757AutopilotLayout`, a copy beside plan 05's on `Bbs757McpWindowLayout`. Speed Intervene and A/T Disconnect have no light, so a Ctrl+P press says "… pressed" (CORE-7, the panel's words); the disengage bar is a switch, read on request with the F/D switches.
+  - Task 2: the squawk watch is NOT a new `BBS757_SQUAWK_WATCH` row. A second continuous `TRANSPONDER CODE:1` broke `VarNameCollisionTests` ([VAR-7]), so the transponder panel's read-back row `BBS757_SQUAWK` (`Bbs757Squawk.CodeKey`) now rides the batch and speaks. Variables added: 2, not 3 (`BBS757_TCAS_MODE_WATCH`, `BBS757_ALTIMETER_WATCH`). A TCAS pick on the panel is kept silent by linking the knob to its watch (`LinkedStatusKey`: echo armed, settled on the read-back). The altimeter's own-set check also uses plan 05's `_mcpSets` / `_ownSetEchoUntil` for `BBS757_ALTIMETER_SET`, so a long Ctrl+B set stays covered.
+  - `Bbs757FlightReadinessTests` (06 → 14): two asserts that the squawk row was silent now say it speaks and has its Ctrl+M row.
+- **Rulings made while working:** Ctrl+P keys not in the label are handled by the window and announced as shortcuts rather than reassigned (Daniel with Claude; the owner may prefer other letters)
