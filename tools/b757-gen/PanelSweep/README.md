@@ -1,0 +1,150 @@
+# PanelSweep
+
+A live check of the BlueBird 757's panel controls. For every switch and push-on/push-off button the
+app can set, it reads the control, writes each of its other positions the way the app does, checks that
+the control really went there, and puts it back. The result is a table (a `.tsv` file) that says which
+positions land and which do not.
+
+It exists for plan 12 (the remaining panels). A control whose position "does not land" is either a
+label or position name the panel shows wrongly (plan 16 lists those) or a fault in the app's writer (a
+follow-up).
+
+It is a standalone console tool, not part of the solution (CORE-4). It compiles the app's own planner
+(`Bbs757ControlMap.cs`, `Bbs757Write.cs`, `Bbs757Rpn.cs`, linked, never copied), so it tests the writer
+the app ships, and it reads the map the app embeds (`MSFSBlindAssist/Resources/bbs757_control_map.json`).
+
+## Build
+
+```
+dotnet build tools/b757-gen/PanelSweep -c Debug -p:Platform=x64
+```
+
+It builds on its own and needs nothing from the app's output. It ships both `SimConnect_msfs_2020.dll`
+and `SimConnect_msfs_2024.dll` (from the repository root) and, when it connects, copies the one for the
+running sim to `SimConnect.dll` next to its exe, the way the app does at start-up.
+
+The exe is in `tools/b757-gen/PanelSweep/bin/x64/Debug/net10.0-windows/`.
+
+## Run
+
+Look first, without the sim. A dry run never connects to it:
+
+```
+PanelSweep.exe --dry-run
+PanelSweep.exe --dry-run --panel "Fuel"
+```
+
+It prints, panel by panel, every control and what the sweep would do with it (the positions it would
+write, in order, and how many calls each takes; or `denied`, `skipped: button`, `skipped: guarded`), the
+counts, the rough running time, and two audits: no denied node is planned for a write, and no planned
+command is longer than MobiFlight's buffer. A denylist line that names a node the map no longer has is
+printed as a warning (a stale entry).
+
+The live sweep:
+
+```
+PanelSweep.exe
+PanelSweep.exe --panel "Fuel"
+PanelSweep.exe --out C:\some\folder
+```
+
+`--panel NAME` limits both modes to one panel (`Fuel`), one section (`Overhead`) or `"Overhead / Fuel"`,
+ignoring case; if nothing matches exactly it takes every panel whose name contains the text. `--denylist
+PATH` uses another denylist; `--out DIR` says where the results go (the current folder by default).
+
+### Conditions for the live run (the owner runs it once)
+
+- The owner is at the keyboard, watching or listening to the aircraft.
+- The BlueBird 757 is loaded, **on the ground, parked, engines off, APU running**.
+- MSFSBA is closed, so nothing else writes to the cockpit.
+
+The tool asks you to type `YES` before it connects. Then it checks, before writing anything to the
+cockpit, that the sim says the aircraft is on the ground with both engines off (it refuses if not), and
+that a one-shot calculator write of a test value into a variable of its own (`L:PANELSWEEP_PROBE`) comes
+back on a read (it refuses if not: the MobiFlight module is missing or the aircraft is not loaded).
+
+It takes about 15 minutes for the whole 757. **Ctrl+C** stops after the step in progress and puts that
+control back, then writes the results so far. A second Ctrl+C stops at once and names the control that
+may need putting back by hand.
+
+## What it does to a control
+
+1. Reads the control's state variable (`L:` var) with a SimConnect data definition, as the app reads it.
+2. For each of the control's other positions, in the order the map lists them: reads again, asks the
+   app's `Bbs757Write.ToPosition` for the calls, sends them one at a time **400 ms apart**, waits
+   **1.5 s** after the last, reads, and compares with `Bbs757Rpn.PositionIndex`.
+3. Puts the control back where it was read, through `ToPosition` again, and checks. If the first reading
+   was off every position, it writes that raw value back to the state variable instead. A restore is
+   tried up to three times; if it still fails, the control is named on screen and in the table.
+
+Writes go to the MobiFlight calculator as one-shot `MF.SimVars.Set.<rpn>` commands, on the same
+`MobiFlight.Command` channel the app uses, each made unique with a `{seq} 0 *` prefix so MobiFlight
+cannot drop it as a repeat of the command before ([SIM-17]). The tool never registers an expression with
+`MF.SimVars.Add`: MobiFlight re-runs a registered expression on every poll, so a write inside one runs
+again and again (measured on 2026-10-28, `docs/b757/evidence/flight-12.md`: it drove a trim to its
+stop).
+
+## What it leaves alone
+
+- **Buttons and held buttons** (a press has no position to read back): listed as `skipped: button`.
+- **Guards, and controls a guard covers** (the map's `guard` field): listed as `skipped: guarded`. Their
+  writes need the app's guard sequence (`SetGuardedAsync`), which the tool does not link. A few switches
+  that sit under a cover in the cockpit have no `guard` in the map, so they are swept with the cover
+  closed; a `no change` on one of those most likely means the cover is shut.
+- **The denylist** (`denylist.txt`, one node name per line, `#` for comments): controls that are
+  **never written**, whatever else happens: the fire handles, their unlock buttons and rotations; cargo
+  fire and its bottles; the stabilizer trim cutouts; the battery; the APU selector; the IRS selectors;
+  the fuel control switches; the engine start selectors and the ignition selector; the generator drive
+  disconnects; the RAT; passenger oxygen; the emergency lights; the gear lever; the flap lever; the
+  parking brake; and the guards of all of these. The list is checked before the first write to a
+  control and again before every write. On top of the list the tool denies the guard a denied control
+  names in the map, any control whose guard is denied, and any control that writes the same state
+  variable as a denied one. A missing or empty denylist stops the tool.
+
+## Reading the results
+
+The tool writes `sweep-<date>.tsv` (tab-separated, UTF-8), one row per position tried and one row for
+each control it did not sweep. The columns:
+
+| Column | Meaning |
+|---|---|
+| `node` | The map node, e.g. `B757_OVHD_ISOLATION_BUTTON`. |
+| `label` | The spoken name the panel shows. |
+| `position` | The position tried, as `label (value)`; `(restore) ...` for the put-back. Empty for a skipped control. |
+| `written` | The calculator code sent (several calls are separated by ` \| `). Empty if nothing was sent. |
+| `read back` | The value the state variable held 1.5 s after the last call. |
+| `verdict` | What happened. |
+
+Verdicts:
+
+| Verdict | Meaning |
+|---|---|
+| `landed` | The control read back at the position written. |
+| `no change` | It read back where it was before the write: the write did nothing, or the control sprang back. |
+| `wrong position: X` | It went to a different position, X. |
+| `read back off every position (v)` | It read back a value that is none of the control's positions. |
+| `not read after the write`, `not read before the write` | The sim delivered no value in 2 s. |
+| `refused: ...` | The app's planner declined to write from that reading. |
+| `not sent: ...` | The command would not fit (over 1023 characters) or SimConnect refused it. |
+| `already there` | The control already read the target. |
+| `restored`, `at start (nothing to restore)` | The put-back worked. |
+| `RESTORE FAILED: left at v` | The control was not put back: set it by hand. |
+| `skipped: not read` | The state variable gave no value, so nothing was written. |
+| `denied`, `skipped: button`, `skipped: guarded`, `skipped: no readable positions` | Not swept, and why. |
+| `interrupted (...)`, `not reached (...)` | Ctrl+C stopped the sweep here. |
+
+The screen shows each problem as it happens and a list at the end. The exit code is 0 when it finished,
+4 when the pre-flight refused (nothing was written), and 5 when some control was not put back.
+
+### What to do with a failure
+
+The owner runs the sweep once and attaches the TSV's failures to the plan 12 handoff. Failures are
+every row that is not `landed`, `already there`, `restored`, `at start (...)`, `denied`, `skipped: ...`:
+a label or position name that is wrong goes to plan 16's list; a write that does nothing, or lands
+elsewhere, is a writer fault and becomes a follow-up. A spring-loaded switch that returns by itself
+reads as `no change`; that is how it behaves, not a fault.
+
+## Not tested in the sim
+
+The planning half (which controls, which positions, the denylist) runs under `--dry-run` and was checked
+against the map. The live half has not run yet: its first run is its first test.
