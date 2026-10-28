@@ -294,7 +294,7 @@ internal sealed class ProbeForm : Form
             await Task.Delay(500);
         Line($"displays: {service.State} {service.Reason}");
         using var monitor = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
-            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(), _ => true, _ => { });
+            async gauges => await service.DrawAsync(gauges), _ => true, _ => { });
         monitor.Start();
         await Task.Delay(4000);   // a turn of the monitor's rotation, so the window opens on a latest draw
         var window = new MSFSBlindAssist.Forms.A350.A350RmpWindow(
@@ -357,7 +357,7 @@ internal sealed class ProbeForm : Form
         using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(
             async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => true, _ => { });
         using var pfd = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
-            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(), _ => true, _ => { });
+            async gauges => await service.DrawAsync(gauges), _ => true, _ => { });
         def.Displays = service;
         def.Ecam = ecam;
         def.Pfd = pfd;
