@@ -3,29 +3,36 @@ using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
-/// One of the 757's spring-loaded cockpit switches the panels hold for a second (<see cref="Bbs757SpringControls"/>):
-/// its L:var, the value it rests on and the values it is held at to either side, where its buttons go, the
-/// name the pilot hears for it and the registered key of the readout said after a press.
+/// One of the 757's spring-loaded cockpit switches the panels hold (<see cref="Bbs757SpringControls"/>): its L:var,
+/// the value it rests on and the values it is held at to either side, where its buttons go, the name the pilot
+/// hears for it, the registered key of the readout said after a press, and how long it is held and how often the
+/// hold is written again.
 /// </summary>
 /// <param name="Key">The control's own key (the switch itself is registered under <paramref name="LVar"/>).</param>
 /// <param name="LVar">The switch's L:var, written to hold and release it and read fresh to verify the release.</param>
 /// <param name="Rest">The value the cockpit's own mouse release writes.</param>
-/// <param name="Negative">Held to the left, nose down, or descend.</param>
-/// <param name="Positive">Held to the right, nose up, or climb.</param>
+/// <param name="Negative">Held to the left, nose down, or descend; a P61 test switch's position 0.</param>
+/// <param name="Positive">Held to the right, nose up, or climb; a P61 test switch's position 2.</param>
 /// <param name="Section">The section of <paramref name="Panel"/>, used when the map lacks the panel.</param>
 /// <param name="Panel">The panel its buttons are on.</param>
 /// <param name="Name">The switch as spoken: "Rudder trim" in "Rudder trim switch returned".</param>
-/// <param name="ReadoutKey">The registered variable read fresh after the release and spoken.</param>
+/// <param name="ReadoutKey">
+/// The registered variable read fresh after the release and spoken; null for a P61 test switch, whose press says
+/// "{test} done" instead (<see cref="Bbs757SpringControls.DonePhrase"/>).
+/// </param>
 /// <param name="NeedsManualMode">True for the manual cabin altitude switch, which works only with Mode Select at MAN.</param>
+/// <param name="HoldMs">How long a press holds it off rest, in milliseconds (the trims and the cabin switch: one second).</param>
+/// <param name="RewriteMs">How often the hold is written again within <paramref name="HoldMs"/> (more than 0, at most <paramref name="HoldMs"/>).</param>
 public sealed record Bbs757SpringControl(
     string Key, string LVar, double Rest, double Negative, double Positive,
-    string Section, string Panel, string Name, string ReadoutKey, bool NeedsManualMode);
+    string Section, string Panel, string Name, string? ReadoutKey, bool NeedsManualMode,
+    int HoldMs = Bbs757SpringControls.HoldMs, int RewriteMs = Bbs757SpringControls.HoldRewriteMs);
 
-/// <summary>One panel button holding <paramref name="Control"/> to one side for a second.</summary>
+/// <summary>One panel button holding <paramref name="Control"/> to one side for its hold.</summary>
 /// <param name="Key">The button's variable key (an Event registration MainForm renders as a button; never "_SET").</param>
 /// <param name="Control">The switch it holds.</param>
-/// <param name="Positive">True for the right, nose up or climb side.</param>
-/// <param name="Label">The button as the screen reader says it, the side first ([VAR-1]): "Left Rudder Trim 1 s".</param>
+/// <param name="Positive">True for the right, nose up or climb side; for a P61 test, its position 2.</param>
+/// <param name="Label">The button as the screen reader says it, the side first ([VAR-1]), then its hold: "Left Rudder Trim 1 s".</param>
 public sealed record Bbs757SpringButton(string Key, Bbs757SpringControl Control, bool Positive, string Label)
 {
     /// <summary>
@@ -60,6 +67,10 @@ public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringCont
 /// <item>The cabin switch rests on 4; its code uses only the side of 4, and the cockpit's click writes 0 (descend)
 /// or 7 (climb). Its XML writes 4 back within about a second of an outside write, so the hold is written again
 /// at <see cref="HoldRewriteMs"/>. It works only with Mode Select at MAN.</item>
+/// <item>The eight P61 test switches (<see cref="TestSwitches"/>, plan 12 task 5) rest on neutral, 1, and return to it
+/// at once by themselves, so a test runs only while its position is written again: each of their sixteen buttons
+/// holds one test for <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, with the same
+/// verified release, then says "{test} done".</item>
 /// </list>
 /// Every write is <see cref="Bbs757Rpn.SetLVar"/>'s, invariant whatever the PC's culture; every phrase is
 /// invariant too. Pure.
@@ -191,10 +202,7 @@ public static class Bbs757SpringControls
         new Bbs757SpringRead(CabinValveVar, "Outflow Valve", ShownWith: CabinAltManual),
     };
 
-    private static readonly Dictionary<string, Bbs757SpringButton> ByButtonKey =
-        Buttons.ToDictionary(b => b.Key, StringComparer.Ordinal);
-
-    /// <summary>The button registered under <paramref name="key"/>, or null for any other key.</summary>
+    /// <summary>The button registered under <paramref name="key"/> (a trim, cabin or P61 test button), or null for any other key.</summary>
     public static Bbs757SpringButton? ForButtonKey(string key) => ByButtonKey.TryGetValue(key, out var b) ? b : null;
 
     /// <summary>
@@ -225,11 +233,15 @@ public static class Bbs757SpringControls
     /// <summary>
     /// Said when the switch still reads off rest after the press's last release, while the release goes on in the
     /// background: "Rudder trim switch did not return; the trim may keep running" (a trim runs while its switch is
-    /// off rest), "Cabin altitude switch did not return; check the outflow valve" (the valve keeps moving).
+    /// off rest), "Cabin altitude switch did not return; check the outflow valve" (the valve keeps moving),
+    /// "Takeoff and landing config test switch did not return; the test may keep running" (a P61 test switch).
     /// </summary>
-    public static string DidNotReturnPhrase(Bbs757SpringControl c) => ReferenceEquals(c, CabinAltManual)
-        ? $"{c.Name} switch did not return; check the outflow valve"
-        : $"{c.Name} switch did not return; the trim may keep running";
+    public static string DidNotReturnPhrase(Bbs757SpringControl c)
+    {
+        if (ReferenceEquals(c, CabinAltManual)) return $"{c.Name} switch did not return; check the outflow valve";
+        if (c.ReadoutKey == null) return $"{c.Name} switch did not return; the test may keep running";
+        return $"{c.Name} switch did not return; the trim may keep running";
+    }
 
     /// <summary>Said once when a switch that did not return reads its rest value in the background: "Rudder trim switch returned".</summary>
     public static string ReturnedPhrase(Bbs757SpringControl c) => $"{c.Name} switch returned";
@@ -336,4 +348,140 @@ public static class Bbs757SpringControls
 
     /// <summary>"Outflow valve 87 percent open", "Outflow valve unavailable": the name, then <see cref="OutflowValveText"/>.</summary>
     public static string OutflowValvePhrase(double? open) => $"{OutflowValveName} {OutflowValveText(open)}";
+
+    // =================================================================================
+    // The P61 test switches (plan 12 task 5)
+    // =================================================================================
+
+    /// <summary>How long a P61 test button holds its test position, in milliseconds.</summary>
+    public const int TestHoldMs = 3000;
+
+    /// <summary>
+    /// How often a P61 test position is written again during the hold: the switch returns to neutral at once by
+    /// itself (its template's <c>STATE0_TIMER 0.01</c>), so a test runs only while its position is written again.
+    /// Measured in flight: every 30 ms (about 40 ms in practice) it held steadily; every 100 ms (about 130 ms) it
+    /// dropped out for about 40 ms between writes.
+    /// </summary>
+    public const int TestRewriteMs = 30;
+
+    /// <summary>The map node the sixteen test buttons follow on the P61 panel: where the switches stood in its daily-use order.</summary>
+    public const string TestButtonsAfterNode = "B757_P6_SQUIBS_BUTTON2";
+
+    private const string Other = "Other";
+    private const string P61Panel = "P61 panel";
+
+    private static Bbs757SpringControl TestSwitch(string key, string lvar, string name) => new(
+        key, lvar, Rest: 1, Negative: 0, Positive: 2, Other, P61Panel, name, ReadoutKey: null, NeedsManualMode: false,
+        HoldMs: TestHoldMs, RewriteMs: TestRewriteMs);
+
+    public static readonly Bbs757SpringControl GroundProxHydGenTest = TestSwitch(
+        "BBS757_P61_GROUND_PROX_HYD_GEN_TEST", "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", "Ground proximity and hydraulic generator test");
+
+    public static readonly Bbs757SpringControl LeftAirDataStallTest = TestSwitch(
+        "BBS757_P61_LEFT_AIR_DATA_STALL_TEST", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", "Left air data and stall warning test");
+
+    public static readonly Bbs757SpringControl RightAirDataStallTest = TestSwitch(
+        "BBS757_P61_RIGHT_AIR_DATA_STALL_TEST", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW", "Right air data and stall warning test");
+
+    public static readonly Bbs757SpringControl ConfigTest = TestSwitch(
+        "BBS757_P61_CONFIG_TEST", "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", "Takeoff and landing config test");
+
+    public static readonly Bbs757SpringControl EquipCoolingTest = TestSwitch(
+        "BBS757_P61_EQUIP_COOLING_TEST", "BBS757_EQUIP_COOLING_P61_TEST_SW", "Equipment cooling test");
+
+    public static readonly Bbs757SpringControl YawDamperTest = TestSwitch(
+        "BBS757_P61_YAW_DAMPER_TEST", "BBS757_YAW_DAMP_P61_TEST_SW", "Yaw damper test");
+
+    public static readonly Bbs757SpringControl DuctLeakFuelQtyTest = TestSwitch(
+        "BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "Duct leak and fuel quantity test");
+
+    public static readonly Bbs757SpringControl WingAntiIceProbeHeatTest = TestSwitch(
+        "BBS757_P61_WING_AI_PROBE_HEAT_TEST", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", "Wing anti-ice and probe heat test");
+
+    /// <summary>
+    /// The eight P61 test switches (the map's <c>B757_VC_P61_SWITCH_3</c> to <c>_10</c>, which left it in task 5a), in the
+    /// order they stood on the P61 panel. Each rests on neutral (1); 0 and 2 are its two tests. Held
+    /// <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, released with the trims' verified
+    /// release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<Bbs757SpringControl> TestSwitches = new[]
+    {
+        GroundProxHydGenTest, LeftAirDataStallTest, RightAirDataStallTest, ConfigTest,
+        EquipCoolingTest, YawDamperTest, DuctLeakFuelQtyTest, WingAntiIceProbeHeatTest,
+    };
+
+    /// <summary>
+    /// The sixteen test buttons, one per test position, in the order the P61 panel lists them (after
+    /// <see cref="TestButtonsAfterNode"/>): each switch's two, the discriminator first ([VAR-1]), and the hold the label
+    /// says. <c>Positive</c> holds position 2, otherwise 0. BlueBird names neither position of the duct leak / fuel
+    /// quantity switch: Upper is 0 and Lower 2, as on the equipment cooling and yaw damper switches.
+    /// </summary>
+    public static readonly IReadOnlyList<Bbs757SpringButton> TestButtons = new[]
+    {
+        new Bbs757SpringButton("BBS757_P61_GROUND_PROX_TEST", GroundProxHydGenTest, false, "Ground Proximity Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_HYD_GEN_TEST", GroundProxHydGenTest, true, "Hydraulic Generator Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LEFT_STALL_TEST", LeftAirDataStallTest, true, "Left Stall Warning Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LEFT_AIR_DATA_TEST", LeftAirDataStallTest, false, "Left Air Data Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_RIGHT_STALL_TEST", RightAirDataStallTest, true, "Right Stall Warning Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_RIGHT_AIR_DATA_TEST", RightAirDataStallTest, false, "Right Air Data Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_TAKEOFF_CONFIG_TEST", ConfigTest, false, "Takeoff Config Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LANDING_CONFIG_TEST", ConfigTest, true, "Landing Config Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_UPPER_EQUIP_COOLING_TEST", EquipCoolingTest, false, "Upper Equipment Cooling Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LOWER_EQUIP_COOLING_TEST", EquipCoolingTest, true, "Lower Equipment Cooling Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_UPPER_YAW_DAMPER_TEST", YawDamperTest, false, "Upper Yaw Damper Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LOWER_YAW_DAMPER_TEST", YawDamperTest, true, "Lower Yaw Damper Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, false, "Upper Duct Leak Fuel Qty Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, true, "Lower Duct Leak Fuel Qty Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_WING_AI_TEST", WingAntiIceProbeHeatTest, false, "Wing Anti-ice Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_PROBE_HEAT_TEST", WingAntiIceProbeHeatTest, true, "Probe Heat Test 3 s"),
+    };
+
+    /// <summary>The eight test switches' L:vars, read fresh by the release's read-back, each registered under its own name and on no panel.</summary>
+    public static readonly IReadOnlyList<Bbs757SpringRead> TestReads =
+        TestSwitches.Select(c => new Bbs757SpringRead(c.LVar, $"{c.Name} switch")).ToArray();
+
+    // Declared after Buttons and TestButtons: static fields are initialized in the order they are written.
+    private static readonly Dictionary<string, Bbs757SpringButton> ByButtonKey =
+        Buttons.Concat(TestButtons).ToDictionary(b => b.Key, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Said once a test's switch reads neutral after its release: the button's label without its hold, in sentence case,
+    /// and "done" ("Takeoff Config Test 3 s" says "Takeoff config test done"). The lights and warnings the test raised are
+    /// the cockpit watcher's to say (plan 13). Invariant.
+    /// </summary>
+    public static string DonePhrase(Bbs757SpringButton b)
+    {
+        string hold = $" {(b.Control.HoldMs / 1000).ToString(CultureInfo.InvariantCulture)} s";
+        string test = b.Label.EndsWith(hold, StringComparison.Ordinal) ? b.Label[..^hold.Length] : b.Label;
+        if (test.Length == 0) return "done";
+        return $"{char.ToUpperInvariant(test[0])}{test[1..].ToLowerInvariant()} done";
+    }
+}
+
+/// <summary>
+/// The lamp test: the map's Warning Test (<see cref="Node"/>, a plain button). Its press toggles
+/// <c>L:OVHD_TEST_LTS</c> when circuit 27 is on (and clears it otherwise), and the lights stay as they are after the
+/// release: it latches, a second press turns it off (measured in flight, flight-12.md). So the press, made as any
+/// button's, reads <see cref="LitVar"/> back and says which. Pure.
+/// </summary>
+public static class Bbs757LampTest
+{
+    /// <summary>The map's Warning Test button.</summary>
+    public const string Node = "B757_OVHD_WARNING_TEST_BUTTON";
+
+    /// <summary>The lamp test's latch: 1 while the lights are tested, 0 otherwise.</summary>
+    public const string LitVar = "OVHD_TEST_LTS";
+
+    /// <summary>How long after the release the latch is read.</summary>
+    public const int ReadDelayMs = 500;
+
+    /// <summary>
+    /// "Lamp test on" (the latch read 1), "Lamp test off" (0); "{label} pressed" when nothing finite was read, the
+    /// app's confirmation for a button with no readable state.
+    /// </summary>
+    public static string Phrase(double? lit, string label)
+    {
+        if (lit is not double v || !double.IsFinite(v)) return $"{label} pressed";
+        return v >= 0.5 ? "Lamp test on" : "Lamp test off";
+    }
 }

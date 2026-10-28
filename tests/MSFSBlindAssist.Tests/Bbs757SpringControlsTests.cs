@@ -569,9 +569,10 @@ public class Bbs757SpringControlsTests
         /// <summary>The Ctrl+M rows the pilot muted.</summary>
         public readonly HashSet<string> Muted = new(StringComparer.Ordinal);
 
-        public Rig()
+        /// <param name="more">Map controls besides Mode Select and the stab trim cutout (the lamp test's Warning Test).</param>
+        public Rig(params Bbs757Control[] more)
         {
-            Def = new BBS757Definition(MapOf(ModeSelect(), StabCutout()))
+            Def = new BBS757Definition(MapOf(new[] { ModeSelect(), StabCutout() }.Concat(more).ToArray()))
             {
                 NestRunning = () => true, WriteIo = _ => Sim.Io, IsMonitorMuted = key => Muted.Contains(key),
             };
@@ -1140,5 +1141,710 @@ public class Bbs757SpringControlsTests
 
         Assert.Empty(sim.Writes);
         Assert.Equal(new[] { "Climb Cabin 1 s unavailable" }, speech.All);
+    }
+
+    // =====================================================================================================
+    // Plan 12 task 5b: the P61 test switches, held for 3 s from a button per test, and the lamp test
+    // =====================================================================================================
+    //
+    // Measured in flight (flight-12.md, "The fire test, the P61 test switches and the master lights"): a P61 test switch
+    // written once is back on neutral (1) at once (the Asobo 3-state template's STATE0_TIMER 0.01), so a test runs only
+    // while its position is written again: every 30 ms it held and the test ran steadily, every ~130 ms it dropped out.
+
+    private static Bbs757SpringControl TestSwitch(string key) => S.TestSwitches.Single(c => c.Key == key);
+
+    private static Bbs757SpringButton TestButton(string key) => S.TestButtons.Single(b => b.Key == key);
+
+    [Theory]
+    [InlineData("BBS757_P61_GROUND_PROX_HYD_GEN_TEST", "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", "Ground proximity and hydraulic generator test")]
+    [InlineData("BBS757_P61_LEFT_AIR_DATA_STALL_TEST", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", "Left air data and stall warning test")]
+    [InlineData("BBS757_P61_RIGHT_AIR_DATA_STALL_TEST", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW", "Right air data and stall warning test")]
+    [InlineData("BBS757_P61_CONFIG_TEST", "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", "Takeoff and landing config test")]
+    [InlineData("BBS757_P61_EQUIP_COOLING_TEST", "BBS757_EQUIP_COOLING_P61_TEST_SW", "Equipment cooling test")]
+    [InlineData("BBS757_P61_YAW_DAMPER_TEST", "BBS757_YAW_DAMP_P61_TEST_SW", "Yaw damper test")]
+    [InlineData("BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "Duct leak and fuel quantity test")]
+    [InlineData("BBS757_P61_WING_AI_PROBE_HEAT_TEST", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", "Wing anti-ice and probe heat test")]
+    public void The_eight_test_switches_are_the_measured_ones(string key, string lvar, string name)
+    {
+        var c = TestSwitch(key);
+
+        // Rests on neutral (1); 0 and 2 are its two tests.
+        Assert.Equal((lvar, 1.0, 0.0, 2.0, "Other", "P61 panel", name), (c.LVar, c.Rest, c.Negative, c.Positive, c.Section, c.Panel, c.Name));
+        Assert.Equal((3000, 30), (c.HoldMs, c.RewriteMs));   // held 3 s, written again every 30 ms
+        Assert.Null(c.ReadoutKey);                           // a test reads nothing back: its press says "{test} done"
+        Assert.False(c.NeedsManualMode);
+    }
+
+    [Fact]
+    public void The_test_switches_are_listed_in_the_panels_order_and_apart_from_the_trims()
+    {
+        Assert.Equal(new[]
+        {
+            "BBS757_P61_GROUND_PROX_HYD_GEN_TEST", "BBS757_P61_LEFT_AIR_DATA_STALL_TEST", "BBS757_P61_RIGHT_AIR_DATA_STALL_TEST",
+            "BBS757_P61_CONFIG_TEST", "BBS757_P61_EQUIP_COOLING_TEST", "BBS757_P61_YAW_DAMPER_TEST",
+            "BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_P61_WING_AI_PROBE_HEAT_TEST",
+        }, S.TestSwitches.Select(c => c.Key));
+        Assert.Empty(S.TestSwitches.Intersect(S.All));
+        Assert.Equal(12, S.All.Concat(S.TestSwitches).Select(c => c.Key).Distinct().Count());
+        Assert.Equal(12, S.All.Concat(S.TestSwitches).Select(c => c.LVar).Distinct().Count());
+    }
+
+    [Fact]
+    public void The_trims_and_the_cabin_switch_keep_their_one_second_hold()
+    {
+        Assert.All(S.All, c => Assert.Equal((1000, 500), (c.HoldMs, c.RewriteMs)));
+        Assert.Equal(3000, S.TestHoldMs);
+        Assert.Equal(30, S.TestRewriteMs);
+    }
+
+    [Fact]
+    public void Every_hold_is_written_again_within_its_length()
+    {
+        foreach (var c in S.All.Concat(S.TestSwitches))
+            Assert.True(c.RewriteMs > 0 && c.RewriteMs <= c.HoldMs, $"{c.Key}: {c.RewriteMs} ms within {c.HoldMs} ms");
+    }
+
+    private static readonly (string Key, string Label, string LVar, double Value, string Done)[] TestButtonRows =
+    {
+        ("BBS757_P61_GROUND_PROX_TEST", "Ground Proximity Test 3 s", "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", 0, "Ground proximity test done"),
+        ("BBS757_P61_HYD_GEN_TEST", "Hydraulic Generator Test 3 s", "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", 2, "Hydraulic generator test done"),
+        ("BBS757_P61_LEFT_STALL_TEST", "Left Stall Warning Test 3 s", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", 2, "Left stall warning test done"),
+        ("BBS757_P61_LEFT_AIR_DATA_TEST", "Left Air Data Test 3 s", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", 0, "Left air data test done"),
+        ("BBS757_P61_RIGHT_STALL_TEST", "Right Stall Warning Test 3 s", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW", 2, "Right stall warning test done"),
+        ("BBS757_P61_RIGHT_AIR_DATA_TEST", "Right Air Data Test 3 s", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW", 0, "Right air data test done"),
+        ("BBS757_P61_TAKEOFF_CONFIG_TEST", "Takeoff Config Test 3 s", "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", 0, "Takeoff config test done"),
+        ("BBS757_P61_LANDING_CONFIG_TEST", "Landing Config Test 3 s", "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", 2, "Landing config test done"),
+        ("BBS757_P61_UPPER_EQUIP_COOLING_TEST", "Upper Equipment Cooling Test 3 s", "BBS757_EQUIP_COOLING_P61_TEST_SW", 0, "Upper equipment cooling test done"),
+        ("BBS757_P61_LOWER_EQUIP_COOLING_TEST", "Lower Equipment Cooling Test 3 s", "BBS757_EQUIP_COOLING_P61_TEST_SW", 2, "Lower equipment cooling test done"),
+        ("BBS757_P61_UPPER_YAW_DAMPER_TEST", "Upper Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 0, "Upper yaw damper test done"),
+        ("BBS757_P61_LOWER_YAW_DAMPER_TEST", "Lower Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 2, "Lower yaw damper test done"),
+        ("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", "Upper Duct Leak Fuel Qty Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 0, "Upper duct leak fuel qty test done"),
+        ("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", "Lower Duct Leak Fuel Qty Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 2, "Lower duct leak fuel qty test done"),
+        ("BBS757_P61_WING_AI_TEST", "Wing Anti-ice Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 0, "Wing anti-ice test done"),
+        ("BBS757_P61_PROBE_HEAT_TEST", "Probe Heat Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 2, "Probe heat test done"),
+    };
+
+    private static readonly string[] TestButtonKeys = TestButtonRows.Select(r => r.Key).ToArray();
+
+    [Fact]
+    public void The_sixteen_test_buttons_are_named_and_ordered_as_the_panel_lists_them()
+    {
+        // One button per test position, the discriminator first ([VAR-1]), in the order the switches stood on the panel.
+        Assert.Equal(TestButtonRows.Select(r => (r.Key, r.Label, r.LVar, r.Value)),
+            S.TestButtons.Select(b => (b.Key, b.Label, b.Control.LVar, b.Positive ? b.Control.Positive : b.Control.Negative)));
+
+        foreach (var b in S.TestButtons) Assert.Same(b, S.ForButtonKey(b.Key));
+        Assert.Equal(16, S.TestButtons.Select(b => b.Label).Distinct().Count());   // no two rows of the panel share a name
+        Assert.All(S.TestButtons, b => Assert.DoesNotContain("_SET", b.Key, StringComparison.Ordinal));   // never a typed field
+        Assert.Empty(S.TestButtons.Select(b => b.Key).Intersect(S.Buttons.Select(b => b.Key)));
+        // The trims' and the cabin's eight stay as they were.
+        Assert.Equal(8, S.Buttons.Count);
+    }
+
+    [Fact]
+    public void Each_test_switch_has_one_button_per_test_position()
+    {
+        foreach (var c in S.TestSwitches)
+        {
+            var mine = S.TestButtons.Where(b => ReferenceEquals(b.Control, c)).ToList();
+            Assert.Equal(2, mine.Count);
+            Assert.Single(mine, b => b.Positive);
+        }
+        Assert.All(S.TestButtons, b => Assert.Contains(b.Control, S.TestSwitches));
+    }
+
+    [Fact]
+    public void Each_test_label_says_its_hold()
+    {
+        Assert.All(S.TestButtons, b => Assert.EndsWith(" 3 s", b.Label, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Each_test_says_it_is_done()
+    {
+        // The button's label without its hold, in sentence case: "Takeoff Config Test 3 s" says "Takeoff config test done".
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE", "tr-TR" })
+            InCulture(culture, () => Assert.Equal(TestButtonRows.Select(r => r.Done), S.TestButtons.Select(S.DonePhrase)));
+    }
+
+    [Theory]
+    [InlineData("BBS757_P61_TAKEOFF_CONFIG_TEST", "0 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)", "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)")]
+    [InlineData("BBS757_P61_LANDING_CONFIG_TEST", "2 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)", "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)")]
+    [InlineData("BBS757_P61_LEFT_STALL_TEST", "2 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW)", "1 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW)")]
+    [InlineData("BBS757_P61_WING_AI_TEST", "0 (>L:BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW)", "1 (>L:BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW)")]
+    public void Test_codes_hold_the_test_position_and_release_to_neutral(string key, string hold, string release)
+    {
+        var b = TestButton(key);
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+            InCulture(culture, () => Assert.Equal((hold, release), S.Codes(b.Control, b.Positive)));
+    }
+
+    [Fact]
+    public void A_test_switch_that_stays_off_neutral_is_said()
+    {
+        var config = TestSwitch("BBS757_P61_CONFIG_TEST");
+
+        Assert.Equal("Takeoff and landing config test switch did not return; the test may keep running", S.DidNotReturnPhrase(config));
+        Assert.Equal("Takeoff and landing config test switch returned", S.ReturnedPhrase(config));
+        Assert.True(S.AtRest(config, 1));
+        Assert.False(S.AtRest(config, 0));
+        Assert.False(S.AtRest(config, 2));
+        Assert.False(S.AtRest(config, null));
+    }
+
+    // ---- The test buttons on the panels -----------------------------------------------------------------
+
+    private const string TestPanel = "P61 panel";
+    private const string SquibTestNode = "B757_P6_SQUIBS_BUTTON2";
+
+    private static Bbs757Control P61Control(string node, string label, string kind) => new()
+    {
+        Node = node, Section = "Other", Panel = TestPanel, Label = label, Kind = kind, StateVar = node,
+        Press = $"1 (>L:{node})", Release = kind == Bbs757Kinds.Held ? $"0 (>L:{node})" : null,
+        Positions = kind == Bbs757Kinds.Toggle ? new List<Bbs757Position> { new(0, "Off"), new(1, "On") } : new List<Bbs757Position>(),
+    };
+
+    private static Bbs757Control ServiceInterphone() => P61Control("B757_VC_P61_SWITCH_1", "Service Interphone", Bbs757Kinds.Toggle);
+    private static Bbs757Control SquibTest() => P61Control(SquibTestNode, "P6 Squibs Button2", Bbs757Kinds.Held);
+    private static Bbs757Control GlassGuard() => P61Control("BBS_B757_P61_GLASS_GAURD_1", "P61 Glass Guard 1", Bbs757Kinds.Toggle);
+
+    [Fact]
+    public void The_shipped_P61_panel_has_the_sixteen_test_buttons_right_after_the_squib_test()
+    {
+        var def = new BBS757Definition();
+        var panel = def.GetPanelControls()[TestPanel];
+        var vars = def.GetVariables();
+        int squib = panel.IndexOf(SquibTestNode);
+
+        Assert.True(squib >= 0, "the squib test is on the P61 panel");
+        Assert.Equal(TestButtonKeys, panel.Skip(squib + 1).Take(16));
+        Assert.Equal(TestButtonRows.Select(r => r.Label), panel.Skip(squib + 1).Take(16).Select(k => vars[k].DisplayName));
+        Assert.Equal(16, panel.Count(k => TestButtonKeys.Contains(k)));   // each once
+        Assert.Single(def.GetPanelStructure()["Other"], TestPanel);
+    }
+
+    [Fact]
+    public void An_in_memory_P61_panel_gets_them_after_the_squib_test()
+    {
+        var def = new BBS757Definition(MapOf(ServiceInterphone(), SquibTest(), GlassGuard())) { NestRunning = () => true };
+
+        Assert.Equal(new[] { "B757_VC_P61_SWITCH_1", SquibTestNode }.Concat(TestButtonKeys).Append("BBS_B757_P61_GLASS_GAURD_1"),
+            def.GetPanelControls()[TestPanel]);
+        Assert.Equal(new[] { TestPanel }, def.GetPanelStructure()["Other"]);
+    }
+
+    [Fact]
+    public void Without_the_squib_test_they_go_at_the_panels_end()
+    {
+        var def = new BBS757Definition(MapOf(ServiceInterphone(), GlassGuard())) { NestRunning = () => true };
+
+        Assert.Equal(new[] { "B757_VC_P61_SWITCH_1", "BBS_B757_P61_GLASS_GAURD_1" }.Concat(TestButtonKeys), def.GetPanelControls()[TestPanel]);
+    }
+
+    [Fact]
+    public void A_map_without_the_P61_panel_still_gets_the_test_buttons()
+    {
+        // No Other section at all: it is created with the panel.
+        var empty = new BBS757Definition(new Bbs757ControlMap()) { NestRunning = () => true };
+        Assert.Equal(TestButtonKeys, empty.GetPanelControls()[TestPanel]);
+        Assert.Equal(new[] { TestPanel }, empty.GetPanelStructure()["Other"]);
+
+        // An Other section with other panels: the panel is appended to them.
+        var other = new Bbs757Control
+        {
+            Node = "B757_SOMETHING_ELSE", Section = "Other", Panel = "Something", Label = "Something Else",
+            Kind = Bbs757Kinds.Toggle, StateVar = "B757_SOMETHING_ELSE", Positions = { new(0, "Off"), new(1, "On") },
+        };
+        var withOther = new BBS757Definition(MapOf(other)) { NestRunning = () => true };
+        Assert.Equal(new[] { "Something", TestPanel }, withOther.GetPanelStructure()["Other"]);
+        Assert.Equal(new[] { "B757_SOMETHING_ELSE" }, withOther.GetPanelControls()["Something"]);   // untouched
+        Assert.Equal(TestButtonKeys, withOther.GetPanelControls()[TestPanel]);
+    }
+
+    [Fact]
+    public void The_test_buttons_add_no_status_row()
+    {
+        var displays = new BBS757Definition(new Bbs757ControlMap()) { NestRunning = () => true }.GetPanelDisplayVariables();
+
+        Assert.False(displays.ContainsKey(TestPanel));
+    }
+
+    // ---- The test buttons' variables ---------------------------------------------------------------------
+
+    private static readonly string[] TestReadKeys =
+    {
+        "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW",
+        "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", "BBS757_EQUIP_COOLING_P61_TEST_SW", "BBS757_YAW_DAMP_P61_TEST_SW",
+        "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW",
+    };
+
+    private const string LampTestVar = "OVHD_TEST_LTS";
+
+    [Fact]
+    public void Registers_sixteen_test_buttons_that_send_nothing_generic()
+    {
+        var vars = new BBS757Definition().GetVariables();
+
+        foreach (var b in S.TestButtons)
+        {
+            var def = vars[b.Key];
+            Assert.Equal(b.Label, def.DisplayName);
+            Assert.True(def.RenderAsButton);
+            Assert.True(def.SuppressRestingButtonState);
+            Assert.Equal(SimVarType.Event, def.Type);
+            Assert.StartsWith("BBS757.", def.Name, StringComparison.Ordinal);
+            Assert.Equal(UpdateFrequency.OnRequest, def.UpdateFrequency);
+            Assert.False(def.IsAnnounced);
+        }
+        Assert.Equal(24, S.Buttons.Concat(S.TestButtons).Select(b => vars[b.Key].Name).Distinct().Count());
+    }
+
+    [Fact]
+    public void Registers_the_test_switches_and_the_lamp_test_as_quiet_reads_on_no_panel()
+    {
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+        var controls = def.GetPanelControls().SelectMany(p => p.Value).ToHashSet(StringComparer.Ordinal);
+        var displays = def.GetPanelDisplayVariables().SelectMany(p => p.Value).ToHashSet(StringComparer.Ordinal);
+        var monitorRows = def.MonitorRows().Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(TestReadKeys, S.TestSwitches.Select(c => c.LVar));
+        foreach (string key in TestReadKeys.Append(LampTestVar))
+        {
+            var read = vars[key];
+            Assert.Equal(key, read.Name);
+            Assert.Equal(SimVarType.LVar, read.Type);
+            Assert.Equal(UpdateFrequency.OnRequest, read.UpdateFrequency);
+            Assert.False(read.IsAnnounced);
+            Assert.True(read.ExcludeFromMonitorManager);   // no Ctrl+M row that mutes nothing ([VAR-9])
+            Assert.DoesNotContain(key, monitorRows);
+            Assert.False(read.RenderAsButton);
+            Assert.False(read.RenderAsReadOnlyStatus);
+            Assert.DoesNotContain(key, controls);
+            Assert.DoesNotContain(key, displays);
+        }
+    }
+
+    [Fact]
+    public void The_tests_add_twenty_five_variables_and_the_profile_stays_under_the_ceiling()
+    {
+        var vars = new BBS757Definition().GetVariables();
+        var mine = S.TestButtons.Select(b => b.Key).Concat(TestReadKeys).Append(LampTestVar).ToList();
+
+        Assert.Equal(25, mine.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(mine, k => Assert.True(vars.ContainsKey(k), k));
+        Assert.True(vars.Count < 900, $"{vars.Count} variables");
+    }
+
+    [Fact]
+    public void A_test_switch_or_lamp_key_already_present_is_never_shadowed()
+    {
+        var config = new Bbs757Control
+        {
+            Node = "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", Section = "Other", Panel = TestPanel, Label = "Config Switch",
+            Kind = Bbs757Kinds.Switch, StateVar = "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", Positions = { new(0, "T"), new(1, "N"), new(2, "L") },
+        };
+        var lamps = new Bbs757Control
+        {
+            Node = LampTestVar, Section = "Overhead", Panel = "Warning lights test", Label = "Lamps",
+            Kind = Bbs757Kinds.Toggle, StateVar = LampTestVar, Positions = { new(0, "Off"), new(1, "On") },
+        };
+        var vars = new BBS757Definition(MapOf(config, lamps)).GetVariables();
+
+        Assert.Equal("Config Switch", vars["BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW"].DisplayName);
+        Assert.Equal("Lamps", vars[LampTestVar].DisplayName);
+    }
+
+    // ---- The test press ----------------------------------------------------------------------------------
+
+    private const string ConfigVar = "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW";
+    private const string TakeoffConfigHold = "0 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)";
+    private const string LandingConfigHold = "2 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)";
+    private const string ConfigRelease = "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)";
+    private const string ConfigDidNotReturn = "Takeoff and landing config test switch did not return; the test may keep running";
+
+    /// <summary>The hold writes of a 3 s test: at 0 ms and every 30 ms after, the last at 2,970 ms.</summary>
+    private const int TestHoldWrites = 100;
+
+    /// <summary>A 3 s test's hold as the fake records it: the position at 0 ms, then a 30 ms wait and the position again, up to 3,000 ms.</summary>
+    private static List<string> HeldFor3s(string hold)
+    {
+        var events = new List<string> { Bbs757FakeIo.WriteEvent(hold) };
+        for (int i = 1; i < TestHoldWrites; i++)
+        {
+            events.Add(Bbs757FakeIo.DelayEvent(30));
+            events.Add(Bbs757FakeIo.WriteEvent(hold));
+        }
+        events.Add(Bbs757FakeIo.DelayEvent(30));   // the last gap: the release goes at 3,000 ms
+        return events;
+    }
+
+    [Fact]
+    public async Task A_test_press_holds_its_position_every_30_ms_for_3_s_releases_then_says_done()
+    {
+        // As measured: the switch reads neutral again whatever was written last (the template's own return).
+        var rig = new Rig();
+        rig.Sim.Fresh[ConfigVar] = 1;
+
+        await rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST").WaitAsync(Ceiling);
+
+        Assert.Equal(HeldFor3s(TakeoffConfigHold).Concat(new[]
+        {
+            Bbs757FakeIo.WriteEvent(ConfigRelease), Bbs757FakeIo.DelayEvent(250),   // released at 3,000 ms, read back at neutral
+        }), rig.Sim.Events);
+        Assert.Equal(TestHoldWrites, rig.Sim.Writes.Count(w => w == TakeoffConfigHold));
+        Assert.Equal(3000, rig.Sim.Delays.Take(TestHoldWrites).Sum());
+        // The lights and warnings it raised are the cockpit watcher's to say (plan 13): the press says only that it ended.
+        Assert.Equal(new[] { "Takeoff config test done" }, rig.Speech.All);
+        Assert.Empty(rig.Sim.Resyncs);
+        Assert.Equal(0, rig.Sim.CanceledDelays);
+    }
+
+    [Fact]
+    public async Task Nothing_is_said_during_the_test()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.Sim.Hold = ordinal => ordinal == 50;   // half way through the hold
+
+        var press = rig.Press("BBS757_P61_LANDING_CONFIG_TEST");
+        Assert.Equal(Enumerable.Repeat(LandingConfigHold, 51), rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+
+        rig.Sim.Release(50);
+        await press.WaitAsync(Ceiling);
+
+        Assert.Equal(Enumerable.Repeat(LandingConfigHold, TestHoldWrites).Append(ConfigRelease), rig.Sim.Writes);
+        Assert.Equal(new[] { "Landing config test done" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task Each_test_button_holds_its_own_position_and_says_its_test_done()
+    {
+        foreach (var row in TestButtonRows)
+        {
+            var rig = new Rig().FollowingWrites();
+            string hold = Bbs757Rpn.SetLVar(row.LVar, row.Value), release = Bbs757Rpn.SetLVar(row.LVar, 1);
+
+            await rig.Press(row.Key).WaitAsync(Ceiling);
+
+            Assert.Equal(Enumerable.Repeat(hold, TestHoldWrites).Append(release), rig.Sim.Writes);
+            Assert.Equal(Enumerable.Repeat(30, TestHoldWrites).Append(250), rig.Sim.Delays);
+            Assert.Equal(new[] { row.Done }, rig.Speech.All);
+        }
+    }
+
+    [Fact]
+    public async Task A_test_release_that_lands_on_the_second_write_says_done()
+    {
+        var rig = new Rig();
+        rig.Sim.Fresh[ConfigVar] = 0;   // still on the test position after the first release
+        int releases = 0;
+        rig.Sim.OnWrite = rpn =>
+        {
+            if (rpn == ConfigRelease && ++releases == 2) rig.Sim.Fresh[ConfigVar] = 1;
+        };
+
+        await rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST").WaitAsync(Ceiling);
+
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Concat(new[] { ConfigRelease, ConfigRelease }), rig.Sim.Writes);
+        Assert.Equal(Enumerable.Repeat(30, TestHoldWrites).Concat(new[] { 250, 250 }), rig.Sim.Delays);
+        Assert.Equal(new[] { "Takeoff config test done" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_test_release_is_verified_and_kept_up_in_the_background_as_the_trims()
+    {
+        // The switch keeps reading its test position: three releases, the pilot is told (interrupting), the release goes on
+        // in the background (its first wait held here), and "done" is never said.
+        var rig = new Rig();
+        rig.Sim.Fresh[ConfigVar] = 0;
+        int firstBackgroundWait = TestHoldWrites + 3;   // the hold's hundred gaps, then the three read-backs
+        rig.Sim.Hold = ordinal => ordinal == firstBackgroundWait;
+
+        var press = rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST");
+
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Concat(Enumerable.Repeat(ConfigRelease, 3)), rig.Sim.Writes);
+        Assert.Equal(Enumerable.Repeat(30, TestHoldWrites).Concat(new[] { 250, 250, 250, 2000 }), rig.Sim.Delays);
+        Assert.Equal(new[] { ConfigDidNotReturn }, rig.Speech.All);
+        Assert.Contains(ConfigDidNotReturn, rig.Speech.Interrupts);
+        Assert.False(press.IsCompleted);   // still releasing
+
+        // Meanwhile neither button of the switch starts a hold.
+        await rig.Press("BBS757_P61_LANDING_CONFIG_TEST").WaitAsync(Ceiling);
+        Assert.Equal(TestHoldWrites + 3, rig.Sim.Writes.Count);
+
+        rig.Sim.Fresh[ConfigVar] = 1;
+        rig.Sim.Release(firstBackgroundWait);
+        await press.WaitAsync(Ceiling);
+
+        Assert.Equal(TestHoldWrites + 3, rig.Sim.Writes.Count);
+        Assert.Equal(new[] { ConfigDidNotReturn, "Takeoff and landing config test switch returned" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_switch_away_mid_test_still_releases_and_says_nothing()
+    {
+        const string leftStall = "2 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW)";
+        const string leftRelease = "1 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW)";
+        var rig = new Rig().FollowingWrites();
+        rig.Sim.Hold = ordinal => ordinal == 9;   // the tenth gap, after ten writes of the position
+
+        var press = rig.Press("BBS757_P61_LEFT_STALL_TEST");
+        Assert.Equal(Enumerable.Repeat(leftStall, 10), rig.Sim.Writes);
+
+        rig.Def.OnSwitchedAway();
+        rig.Sim.Release(9);
+        await press.WaitAsync(Ceiling);
+
+        // The position is not written again into another aircraft's session, but the release goes and is read back.
+        Assert.Equal(Enumerable.Repeat(leftStall, 10).Append(leftRelease), rig.Sim.Writes);
+        Assert.Equal(Enumerable.Repeat(30, TestHoldWrites).Append(250), rig.Sim.Delays);   // the hold's waits are never canceled
+        Assert.Equal(0, rig.Sim.CanceledDelays);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task One_test_holds_per_switch_and_both_its_buttons_share_it()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.Sim.Hold = ordinal => ordinal == 0;   // the takeoff config test's first gap
+
+        var first = rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST");
+        await rig.Press("BBS757_P61_LANDING_CONFIG_TEST").WaitAsync(Ceiling);   // the same switch: ignored, silently
+        await rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST").WaitAsync(Ceiling);
+        Assert.Equal(new[] { TakeoffConfigHold }, rig.Sim.Writes);
+        Assert.Empty(rig.Speech.All);
+
+        // Another switch holds on its own.
+        await rig.Press("BBS757_P61_GROUND_PROX_TEST").WaitAsync(Ceiling);
+        Assert.Equal(new[] { "Ground proximity test done" }, rig.Speech.All);
+
+        rig.Sim.Release(0);
+        await first.WaitAsync(Ceiling);
+        Assert.Equal(TestHoldWrites, rig.Sim.Writes.Count(w => w == TakeoffConfigHold));
+        Assert.Equal(new[] { "Ground proximity test done", "Takeoff config test done" }, rig.Speech.All);
+
+        // Once released, either of its buttons holds again.
+        await rig.Press("BBS757_P61_LANDING_CONFIG_TEST").WaitAsync(Ceiling);
+        Assert.Equal(Enumerable.Repeat(LandingConfigHold, TestHoldWrites).Append(ConfigRelease), rig.Sim.Writes.TakeLast(TestHoldWrites + 1));
+    }
+
+    [Fact]
+    public async Task A_test_and_a_trim_hold_at_the_same_time()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.Sim.Hold = ordinal => ordinal == 0;
+        rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 0.85;
+
+        var test = rig.Press("BBS757_P61_WING_AI_TEST");
+        await rig.Press("BBS757_RUDDER_TRIM_RIGHT").WaitAsync(Ceiling);
+        Assert.Equal(new[] { "Rudder trim 0.9 units right" }, rig.Speech.All);
+
+        rig.Sim.Release(0);
+        await test.WaitAsync(Ceiling);
+        Assert.Equal(new[] { "Rudder trim 0.9 units right", "Wing anti-ice test done" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_test_press_that_cannot_land_is_refused_aloud_and_sends_nothing()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.Sim.CanWrite = false;
+
+        foreach (var b in S.TestButtons) await rig.Press(b.Key).WaitAsync(Ceiling);
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Equal(TestButtonRows.Select(r => $"{r.Label} unavailable"), rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_test_press_after_a_switch_away_sends_and_says_nothing()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.Def.OnSwitchedAway();
+
+        await rig.Press("BBS757_P61_PROBE_HEAT_TEST").WaitAsync(Ceiling);
+        Assert.True(rig.Click("BBS757_P61_HYD_GEN_TEST"));
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void Every_test_button_click_is_claimed_and_runs_the_3_s_hold()
+    {
+        var rig = new Rig().FollowingWrites();
+
+        foreach (var b in S.TestButtons)
+        {
+            int before = rig.Sim.Writes.Count;
+            Assert.True(rig.Click(b.Key));   // the definition claims it: the generic path sends nothing
+            var (hold, release) = S.Codes(b.Control, b.Positive);
+            Assert.Equal(Enumerable.Repeat(hold, TestHoldWrites).Append(release), rig.Sim.Writes.Skip(before));
+        }
+        Assert.Equal(TestButtonRows.Select(r => r.Done), rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_test_read_that_throws_never_escapes_and_the_release_still_goes()
+    {
+        var sim = new Bbs757FakeIo();
+        var io = sim.Io;
+        var failing = new Bbs757SimIo
+        {
+            CanWrite = io.CanWrite, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
+            ReadFresh = (_, _) => throw new InvalidOperationException("no link"),
+        };
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing };
+        var speech = new SpeechCapture();
+
+        await def.PressSpringAsync("BBS757_P61_TAKEOFF_CONFIG_TEST", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
+
+        // Never read at neutral: three releases, then one every 2 s for 60 s; never "done".
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Concat(Enumerable.Repeat(ConfigRelease, 3 + 30)), sim.Writes);
+        Assert.Equal(new[] { ConfigDidNotReturn }, speech.All);
+    }
+
+    // ---- The lamp test (the Warning Test button): it latches, so the press reads it back -------------------
+
+    private const string WarningTestNode = "B757_OVHD_WARNING_TEST_BUTTON";
+    private const string LampTestPress =
+        "1 (>L:OVHD_TEST_LTS_PRESS, bool) (A:CIRCUIT ON:27, bool) 1 == if{ (L:OVHD_TEST_LTS, bool) ! (>L:OVHD_TEST_LTS, bool) } els{ 0 (>L:OVHD_TEST_LTS, bool) }";
+    private const string LampTestRelease = "0 (>L:OVHD_TEST_LTS_PRESS, bool)";
+
+    /// <summary>The map's Warning Test, as the shipped map has it (a plain button).</summary>
+    private static Bbs757Control WarningTest() => new()
+    {
+        Node = WarningTestNode, Section = "Overhead", Panel = "Warning lights test", Label = "Warning Test",
+        Kind = Bbs757Kinds.Button, StateVar = "OVHD_TEST_LTS_PRESS", Press = LampTestPress, Release = LampTestRelease,
+    };
+
+    [Fact]
+    public void The_lamp_test_is_the_maps_warning_test()
+    {
+        Assert.Equal(WarningTestNode, Bbs757LampTest.Node);
+        Assert.Equal(LampTestVar, Bbs757LampTest.LitVar);
+        Assert.Equal(500, Bbs757LampTest.ReadDelayMs);
+
+        var shipped = new BBS757Definition();
+        Assert.Equal("Warning Test", shipped.GetVariables()[WarningTestNode].DisplayName);
+        Assert.Contains(WarningTestNode, shipped.GetPanelControls()["Warning lights test"]);
+    }
+
+    [Theory]
+    [InlineData(1.0, "Lamp test on")]
+    [InlineData(0.0, "Lamp test off")]
+    [InlineData(null, "Warning Test pressed")]                     // unread: the generic confirmation
+    [InlineData(double.NaN, "Warning Test pressed")]
+    [InlineData(double.PositiveInfinity, "Warning Test pressed")]
+    public void Lamp_test_phrase(double? lit, string said)
+    {
+        Assert.Equal(said, Bbs757LampTest.Phrase(lit, "Warning Test"));
+    }
+
+    [Theory]
+    [InlineData(1.0, "Lamp test on")]
+    [InlineData(0.0, "Lamp test off")]
+    [InlineData(null, "Warning Test pressed")]
+    public void The_lamp_test_press_says_whether_the_lamps_are_on(double? lit, string said)
+    {
+        var rig = new Rig(WarningTest());
+        if (lit is double v) rig.Sim.Fresh[LampTestVar] = v;
+
+        Assert.True(rig.Click(WarningTestNode));   // claimed before the generic map path
+
+        // Pressed as the generic path would (its press, the button's 200 ms hold, its release), read back 500 ms later.
+        Assert.Equal(new[]
+        {
+            Bbs757FakeIo.WriteEvent(LampTestPress), Bbs757FakeIo.DelayEvent(Bbs757Write.ButtonHoldMs),
+            Bbs757FakeIo.WriteEvent(LampTestRelease), Bbs757FakeIo.DelayEvent(500),
+        }, rig.Sim.Events);
+        // Said once: the generic "Warning Test pressed" is not also said.
+        Assert.Equal(new[] { said }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_second_lamp_test_press_turns_it_off()
+    {
+        // It latches: the press toggles L:OVHD_TEST_LTS (with circuit 27 on), the release leaves it.
+        var rig = new Rig(WarningTest());
+        rig.Sim.Fresh[LampTestVar] = 0;
+        rig.Sim.OnWrite = rpn => { if (rpn == LampTestPress) rig.Sim.Fresh[LampTestVar] = rig.Sim.Fresh[LampTestVar] == 1 ? 0 : 1; };
+
+        Assert.True(rig.Click(WarningTestNode));
+        Assert.True(rig.Click(WarningTestNode));
+
+        Assert.Equal(new[] { "Lamp test on", "Lamp test off" }, rig.Speech.All);
+        Assert.Equal(new[] { LampTestPress, LampTestRelease, LampTestPress, LampTestRelease }, rig.Sim.Writes);
+    }
+
+    [Fact]
+    public void A_lamp_test_that_cannot_land_is_refused_aloud_and_sends_nothing()
+    {
+        var rig = new Rig(WarningTest());
+        rig.Sim.CanWrite = false;
+
+        Assert.True(rig.Click(WarningTestNode));
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Equal(new[] { "Warning Test unavailable" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_switch_away_during_the_lamp_test_press_still_releases_and_says_nothing()
+    {
+        var rig = new Rig(WarningTest());
+        rig.Sim.Fresh[LampTestVar] = 1;
+        rig.Sim.Hold = ordinal => ordinal == 0;   // the button's hold
+
+        Assert.True(rig.Click(WarningTestNode));
+        Assert.Equal(new[] { LampTestPress }, rig.Sim.Writes);
+
+        rig.Def.OnSwitchedAway();
+        rig.Sim.Release(0);
+        await rig.Sim.WritesReached(2);
+
+        Assert.Equal(new[] { LampTestPress, LampTestRelease }, rig.Sim.Writes);   // a press is always let go
+        Assert.Equal(new[] { Bbs757Write.ButtonHoldMs }, rig.Sim.Delays);          // no read-back wait after the switch
+        Assert.Equal(0, rig.Sim.CanceledDelays);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_lamp_test_read_that_throws_never_escapes_and_says_pressed()
+    {
+        var sim = new Bbs757FakeIo();
+        var io = sim.Io;
+        var failing = new Bbs757SimIo
+        {
+            CanWrite = io.CanWrite, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
+            ReadFresh = (_, _) => throw new InvalidOperationException("no link"),
+        };
+        var def = new BBS757Definition(MapOf(WarningTest())) { NestRunning = () => true, WriteIo = _ => failing };
+        var speech = new SpeechCapture();
+
+        Assert.True(def.HandleUIVariableSet(WarningTestNode, 1, def.GetVariables()[WarningTestNode], new SimConnectManager(IntPtr.Zero), speech));
+
+        Assert.Equal(new[] { LampTestPress, LampTestRelease }, sim.Writes);
+        Assert.Equal(new[] { "Warning Test pressed" }, speech.All);
+    }
+
+    [Fact]
+    public void Another_button_is_still_pressed_by_the_generic_path()
+    {
+        var other = new Bbs757Control
+        {
+            Node = "B757_OVHD_OTHER_TEST_BUTTON", Section = "Overhead", Panel = "Warning lights test", Label = "Other Test",
+            Kind = Bbs757Kinds.Button, StateVar = "B757_OVHD_OTHER_TEST", Press = "1 (>L:B757_OVHD_OTHER_TEST)", Release = "0 (>L:B757_OVHD_OTHER_TEST)",
+        };
+        var rig = new Rig(WarningTest(), other);
+
+        Assert.True(rig.Click(other.Node));
+
+        Assert.Equal(new[] { other.Press!, other.Release! }, rig.Sim.Writes);
+        Assert.Equal(new[] { "Other Test pressed" }, rig.Speech.All);   // read nothing back
     }
 }

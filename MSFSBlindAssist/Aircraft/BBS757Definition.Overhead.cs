@@ -194,6 +194,7 @@ public partial class BBS757Definition
     {
         AddLandingAltitudeVariables(vars);
         AddSpringControlVariables(vars);
+        AddLampTestVariables(vars);
     }
 
     partial void AddOverheadPanels(Dictionary<string, List<string>> structure,
@@ -216,6 +217,8 @@ public partial class BBS757Definition
     {
         HandleLandingAltitudeSet(varKey, ref handled);
         if (!handled) HandleSpringSet(varKey, simConnect, announcer, ref handled);
+        // A map node: HandleUIVariableSet asks this seam before its generic map path, which would press it unread.
+        if (!handled) HandleLampTestSet(varKey, simConnect, announcer, ref handled);
     }
 
     private static void HandleLandingAltitudeSet(string varKey, ref bool handled)
@@ -340,19 +343,20 @@ public partial class BBS757Definition
     }
 
     // =================================================================================
-    // Plan 12: the spring-loaded switches (the trims, the manual cabin altitude)
+    // Plan 12: the spring-loaded switches (the trims, the manual cabin altitude, the P61 tests)
     // =================================================================================
 
     /// <summary>
-    /// The eight buttons and the seven reads their presses make (<see cref="Bbs757SpringControls"/>), after the
-    /// map's controls, never shadowing a key already present. A button is an Event registration, as the landing
-    /// altitude field is: it takes no data definition, the definition claims its key
-    /// (<see cref="HandleOverheadSet"/>) so the generic path never sends it, and its dotted private name changes
-    /// nothing in the sim even if it were ever sent (ruling R16). A read is an OnRequest L:var with no Ctrl+M row
-    /// ([VAR-9]), never announced: a fresh read delivers only a registered key. The three readouts are also
-    /// read-only status rows (Rudder Trim, Aileron Trim, Outflow Valve), read when their panel's status display
-    /// is shown, as the landing altitude's row is; the four switches are on no panel. The stab trim's readout
-    /// (the trim call-out's <c>MON_ElevatorTrim</c>) and Mode Select (the map's control) are registered already.
+    /// The eight trim and cabin buttons and the seven reads their presses make, then the sixteen P61 test buttons
+    /// and their eight switches' reads (<see cref="Bbs757SpringControls"/>), after the map's controls, never
+    /// shadowing a key already present. A button is an Event registration, as the landing altitude field is: it
+    /// takes no data definition, the definition claims its key (<see cref="HandleOverheadSet"/>) so the generic path
+    /// never sends it, and its dotted private name changes nothing in the sim even if it were ever sent (ruling
+    /// R16). A read is an OnRequest L:var with no Ctrl+M row ([VAR-9]), never announced: a fresh read delivers only
+    /// a registered key. The three readouts are also read-only status rows (Rudder Trim, Aileron Trim, Outflow
+    /// Valve), read when their panel's status display is shown, as the landing altitude's row is; the twelve
+    /// switches are on no panel. The stab trim's readout (the trim call-out's <c>MON_ElevatorTrim</c>) and Mode
+    /// Select (the map's control) are registered already.
     /// </summary>
     private static void AddSpringControlVariables(Dictionary<string, SimVarDefinition> vars)
     {
@@ -361,7 +365,7 @@ public partial class BBS757Definition
             if (!vars.ContainsKey(key)) vars[key] = def;
         }
 
-        foreach (var button in Bbs757SpringControls.Buttons)
+        foreach (var button in Bbs757SpringControls.Buttons.Concat(Bbs757SpringControls.TestButtons))
         {
             Add(button.Key, new SimVarDefinition
             {
@@ -372,7 +376,7 @@ public partial class BBS757Definition
             });
         }
 
-        foreach (var read in Bbs757SpringControls.Reads)
+        foreach (var read in Bbs757SpringControls.Reads.Concat(Bbs757SpringControls.TestReads))
         {
             Add(read.Key, new SimVarDefinition
             {
@@ -386,10 +390,12 @@ public partial class BBS757Definition
 
     /// <summary>
     /// The six trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and their guards),
-    /// the two cabin buttons last on Pressurization (the landing altitude field stays first). A panel the map
-    /// lacks is created under its section, so the buttons are never lost. The readout rows join their panel's
-    /// status display after the rows it has (on Pressurization, after the landing altitude's): Rudder Trim and
-    /// Aileron Trim on Stabilizer trim, Outflow Valve on Pressurization.
+    /// the two cabin buttons last on Pressurization (the landing altitude field stays first), and the sixteen P61
+    /// test buttons on the P61 panel right after the squib test (<see cref="Bbs757SpringControls.TestButtonsAfterNode"/>,
+    /// where the test switches stood in its daily-use order), or at its end when the map lacks that node. A panel
+    /// the map lacks is created under its section, so the buttons are never lost. The readout rows join their
+    /// panel's status display after the rows it has (on Pressurization, after the landing altitude's): Rudder Trim
+    /// and Aileron Trim on Stabilizer trim, Outflow Valve on Pressurization; the tests add no row.
     /// </summary>
     private static void AddSpringControlPanels(Dictionary<string, List<string>> structure,
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
@@ -408,6 +414,14 @@ public partial class BBS757Definition
 
         var cabin = Bbs757SpringControls.Buttons.Where(b => b.Control.NeedsManualMode).ToList();
         if (cabin.Count > 0) PanelOf(cabin[0].Control).AddRange(cabin.Select(b => b.Key));
+
+        var tests = Bbs757SpringControls.TestButtons;
+        if (tests.Count > 0)
+        {
+            var panel = PanelOf(tests[0].Control);   // all sixteen share the P61 panel
+            int after = panel.IndexOf(Bbs757SpringControls.TestButtonsAfterNode);
+            panel.InsertRange(after >= 0 ? after + 1 : panel.Count, tests.Select(b => b.Key));
+        }
 
         foreach (var read in Bbs757SpringControls.Reads)
         {
@@ -430,18 +444,20 @@ public partial class BBS757Definition
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _springHolds = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// A spring button: hold its switch to one side for <see cref="Bbs757SpringControls.HoldMs"/>, release it, make
-    /// sure it rests, then say the readout once.
+    /// A spring button: hold its switch to one side for the switch's <see cref="Bbs757SpringControl.HoldMs"/> (a trim
+    /// or the cabin switch one second, a P61 test three), release it, make sure it rests, then say the readout once,
+    /// or for a P61 test "{test} done".
     /// <list type="number">
     /// <item>A press while the same switch is holding, or still being released in the background, is ignored (its
     /// two buttons share the switch).</item>
     /// <item>Nothing can land (<c>CanWrite</c>): "{label} unavailable", nothing sent. A cabin button then reads Mode
     /// Select fresh: not MAN says "Set the pressurization mode to MAN first", unread "{label} unavailable", and
     /// nothing is sent.</item>
-    /// <item>The hold is written, written again at <see cref="Bbs757SpringControls.HoldRewriteMs"/> (the cabin
-    /// switch's XML puts it back to 4 within about a second; skipped once the pilot has switched profiles) and
-    /// released at <see cref="Bbs757SpringControls.HoldMs"/>. These waits are on <see cref="CancellationToken.None"/>,
-    /// as <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
+    /// <item>The hold is written, written again every <see cref="Bbs757SpringControl.RewriteMs"/> (the cabin switch's
+    /// XML puts it back to 4 within about a second, a P61 test switch returns to neutral at once; skipped once the
+    /// pilot has switched profiles) and released at <see cref="Bbs757SpringControl.HoldMs"/>
+    /// (<see cref="HoldSpringAsync"/>). These waits are on <see cref="CancellationToken.None"/>, as
+    /// <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
     /// release runs the trim to its stop (flight-12.md, measured twice).</item>
     /// <item>The release is verified (<see cref="ReleaseSpringAsync"/>), even after a profile switch: it is the safety.
     /// A switch still off rest says "{name} switch did not return; the trim may keep running" (the cabin switch:
@@ -453,7 +469,10 @@ public partial class BBS757Definition
     /// trim's is the exception: the trim call-out already speaks while the stabilizer moves, so the trim is also read
     /// fresh before the hold and <see cref="Bbs757SpringControls.StabTrimSpeech"/> decides: "Stab trim did not move"
     /// when it did not, nothing when it moved and the call-out speaks it, "Trim 5.3" when it moved and the call-out
-    /// is silent (<see cref="StabTrimCalloutSilent"/>).</item>
+    /// is silent (<see cref="StabTrimCalloutSilent"/>). A P61 test reads nothing back: once its switch rests it says
+    /// "{test} done" (<see cref="Bbs757SpringControls.DonePhrase"/>), and nothing during the hold; the lights and
+    /// warnings the test raised are the cockpit watcher's to say (plan 13). One that did not return says only
+    /// that.</item>
     /// </list>
     /// Nothing is said once the pilot has switched to another profile. The awaits keep the UI context (no
     /// ConfigureAwait(false)), like every write here. Never throws: fire and forget from the panel.
@@ -497,7 +516,7 @@ public partial class BBS757Definition
             double? trimBefore = null;
             if (stabTrim)
             {
-                trimBefore = await io.ReadFresh(control.ReadoutKey, ct);   // to tell whether the press moved it
+                trimBefore = await io.ReadFresh(Bbs757SpringControls.StabTrimReadoutKey, ct);   // its readout, to tell whether the press moved it
                 ct.ThrowIfCancellationRequested();
             }
 
@@ -521,8 +540,15 @@ public partial class BBS757Definition
 
             if (_lifetime.IsCancellationRequested) return;   // switched away: released (or still releasing), nothing is said
 
+            if (control.ReadoutKey is not { } readoutKey)
+            {
+                // A P61 test: nothing to read back. Done once its switch rests; one still off rest has said so.
+                if (rested) announcer.Announce(Bbs757SpringControls.DonePhrase(button));
+                return;
+            }
+
             await io.Delay(Bbs757SpringControls.ReadoutDelayMs, ct);
-            double? value = await io.ReadFresh(control.ReadoutKey, ct);
+            double? value = await io.ReadFresh(readoutKey, ct);
             ct.ThrowIfCancellationRequested();
             string? said = stabTrim
                 ? Bbs757SpringControls.StabTrimSpeech(trimBefore, value, StabTrimCalloutSilent())
@@ -534,7 +560,7 @@ public partial class BBS757Definition
         {
             Log.Error("BBS757", $"{button.Label}: press failed: {ex.Message}");
             if (!_lifetime.IsCancellationRequested)
-                announcer.Announce(wrote ? Bbs757SpringControls.ReadoutPhrase(control, null)
+                announcer.Announce(wrote && control.ReadoutKey != null ? Bbs757SpringControls.ReadoutPhrase(control, null)
                     : Bbs757SpringControls.UnavailablePhrase(button.Label));
         }
         finally
@@ -596,19 +622,26 @@ public partial class BBS757Definition
         => !_trimAnnouncementsEnabled || IsMonitorMuted(Bbs757SpringControls.StabTrimReadoutKey);
 
     /// <summary>
-    /// Holds the switch: <paramref name="hold"/> now and again at <see cref="Bbs757SpringControls.HoldRewriteMs"/>
-    /// (not once switched away), then the verified release at <see cref="Bbs757SpringControls.HoldMs"/>. The waits
-    /// are never canceled, and a hold that fails part-way is released at once. True when the switch reads its rest
-    /// value afterwards. Never throws.
+    /// Holds the switch: <paramref name="hold"/> now and again every <see cref="Bbs757SpringControl.RewriteMs"/> (not
+    /// once switched away), then the verified release at <see cref="Bbs757SpringControl.HoldMs"/>: a trim or the cabin
+    /// switch at 0 and 500 ms, released at 1,000 ms; a P61 test at 0, 30, ... 2,970 ms, released at 3,000 ms. The time
+    /// is the sum of the waits asked (each is a little longer in practice: the 30 ms ones measured about 40 ms). The
+    /// waits are never canceled, so a switch away still waits out the hold before the release, and a hold that fails
+    /// part-way is released at once. True when the switch reads its rest value afterwards. Never throws.
     /// </summary>
     private async Task<bool> HoldSpringAsync(Bbs757SpringControl control, string hold, string release, Bbs757SimIo io)
     {
         try
         {
             io.Write(hold);
-            await io.Delay(Bbs757SpringControls.HoldRewriteMs, CancellationToken.None);
-            if (!_lifetime.IsCancellationRequested) io.Write(hold);
-            await io.Delay(Bbs757SpringControls.HoldMs - Bbs757SpringControls.HoldRewriteMs, CancellationToken.None);
+            for (int held = 0; held < control.HoldMs;)
+            {
+                // At least 1 ms: a table error (a gap of 0) must not spin.
+                int gap = Math.Max(1, Math.Min(control.RewriteMs, control.HoldMs - held));
+                await io.Delay(gap, CancellationToken.None);
+                held += gap;
+                if (held < control.HoldMs && !_lifetime.IsCancellationRequested) io.Write(hold);
+            }
         }
         catch (Exception ex)
         {
@@ -643,5 +676,85 @@ public partial class BBS757Definition
             if (Bbs757SpringControls.AtRest(control, reading)) return true;
         }
         return false;
+    }
+
+    // =================================================================================
+    // Plan 12: the lamp test (the map's Warning Test), read back after its press
+    // =================================================================================
+
+    /// <summary>
+    /// The lamp test's latch (<see cref="Bbs757LampTest.LitVar"/>), read fresh after a Warning Test press: an OnRequest
+    /// L:var with no Ctrl+M row ([VAR-9]), never announced, on no panel, never shadowing a key already present.
+    /// </summary>
+    private static void AddLampTestVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        if (vars.ContainsKey(Bbs757LampTest.LitVar)) return;
+        vars[Bbs757LampTest.LitVar] = new SimVarDefinition
+        {
+            Name = Bbs757LampTest.LitVar, DisplayName = "Lamp Test",
+            Type = SimVarType.LVar, Units = "number", UpdateFrequency = UpdateFrequency.OnRequest,
+            ExcludeFromMonitorManager = true,
+        };
+    }
+
+    /// <summary>
+    /// A panel press of the map's Warning Test (<see cref="Bbs757LampTest.Node"/>): claimed here, ahead of the generic
+    /// map path, so its press reads the lamp test back (<see cref="PressLampTestAsync"/>) instead of saying "Warning
+    /// Test pressed". A map without the node, or with it as anything but a button, leaves it to the generic path.
+    /// </summary>
+    private void HandleLampTestSet(string varKey, SimConnectManager sim, ScreenReaderAnnouncer announcer, ref bool handled)
+    {
+        if (varKey != Bbs757LampTest.Node) return;
+        if (!_byNode.TryGetValue(varKey, out var control) || !Bbs757Write.IsMomentary(control)) return;
+        handled = true;
+        _ = PressLampTestAsync(control, WriteIoFor(sim), announcer);   // never throws: it catches and logs
+    }
+
+    /// <summary>
+    /// The Warning Test pressed as <see cref="PressFromPanelAsync"/> presses any button (its own press, the button's
+    /// hold, its release, <see cref="Bbs757Write.PressFor"/>; the release waits on <see cref="CancellationToken.None"/>,
+    /// so a press is always let go), then, <see cref="Bbs757LampTest.ReadDelayMs"/> after the release, the latch read
+    /// fresh and said once (CORE-7: the screen reader said the button; the app says only the read-back): "Lamp test
+    /// on", "Lamp test off", or "Warning Test pressed" when it could not be read. Nothing can land, or the button has
+    /// no press: "Warning Test unavailable", nothing sent. Nothing is pressed or said once the pilot has switched to
+    /// another profile; a switch during the press still sends the release. The awaits keep the UI context, like every
+    /// write here. Never throws.
+    /// </summary>
+    private async Task PressLampTestAsync(Bbs757Control control, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
+    {
+        bool pressed = false;
+        try
+        {
+            if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed or said
+            var press = Bbs757Write.PressFor(control);
+            if (press == null || !io.CanWrite())
+            {
+                SayUnavailable(control, announcer);
+                return;
+            }
+
+            OnOwnWrite(control.Node);   // plan 13
+            io.Write(press.Down);
+            pressed = true;
+            if (press.Up != null)
+            {
+                await io.Delay(press.HoldMs, CancellationToken.None);
+                io.Write(press.Up);
+            }
+            if (_lifetime.IsCancellationRequested) return;
+
+            var ct = _lifetime.Token;   // taken after the check: safe on a disposed source
+            await io.Delay(Bbs757LampTest.ReadDelayMs, ct);
+            double? lit = await io.ReadFresh(Bbs757LampTest.LitVar, ct);
+            ct.ThrowIfCancellationRequested();
+            announcer.Announce(Bbs757LampTest.Phrase(lit, control.Label));
+        }
+        catch (OperationCanceledException) { /* switched away: nothing left to say */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{control.Node}: lamp test press failed: {ex.Message}");
+            // Pressed but not read back: the button's own confirmation.
+            if (pressed && !_lifetime.IsCancellationRequested) announcer.Announce(Bbs757LampTest.Phrase(null, control.Label));
+        }
     }
 }
