@@ -45,3 +45,16 @@ test('a free-standing radio set takes a pick', () => {
   assert.equal(A.setValue(roa.idx, 'YES'), 'ok');
   assert.ok(window.document.getElementById('opt_tc_roa1').checked);
 });
+
+// SIMULATION: PAUSE AT T.O.D / DIST (nm) is a YES / NO choice with the distance box beside it in the same group
+// (live 2026-10-28: 30). The choice read, the box was skipped, so the distance could be neither read nor changed.
+test('the pause at T.O.D distance reads beside its choice and takes a value', () => {
+  const els = scrape('opt_simulation');
+  const pause = find(els, e => e.controlType === 'select' && e.text === 'PAUSE AT T.O.D / DIST (nm)');
+  assert.ok(pause, 'the choice');
+  assert.equal(pause.value, 'YES');
+  const dist = find(els, e => e.controlType === 'text' && e.text === 'PAUSE AT T.O.D DIST (nm)');
+  assert.ok(dist, 'the distance box');
+  assert.equal(dist.value, '30');
+  assert.ok(els.indexOf(dist) === els.indexOf(pause) + 1, 'right after its choice');
+});

@@ -551,6 +551,14 @@
               if (radios[r].checked) value = word;
             }
             push(e, { kind: '', controlType: 'select', text: label, value: value, options: opts, clickable: true });
+            // A box beside the choice (SIMULATION's PAUSE AT T.O.D / DIST (nm): YES or NO, then the distance): its
+            // own field, named by the label's part after the slash.
+            var beside = e.querySelector('input[type=number],input[type=text],input:not([type])');
+            if (beside) {
+              var slash = label.indexOf(' / ');
+              var name = slash > 0 ? label.substring(0, slash) + ' ' + label.substring(slash + 3) : label + ', value';
+              push(beside, { kind: '', controlType: 'text', text: name, value: beside.value, disabled: beside.disabled });
+            }
             continue;
           }
           var cbs = e.querySelectorAll('input[type=checkbox]');

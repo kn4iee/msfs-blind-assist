@@ -52,3 +52,4 @@ first seen.
 | card_neighbour | Hand-made: a situation card beside a bottom-bar button |
 | opt_sound_cabin_options | OPTIONS, SOUND/CABIN OPTIONS (CABIN LIGHTING with nothing picked) |
 | opt_navigraph_login | OPTIONS, 3RD PARTY, LOGIN WITH NAVIGRAPH: the user-code pop-up over the QR code |
+| opt_simulation | OPTIONS, SIMULATION: PAUSE AT T.O.D YES with its 30 NM box, time compression AUTO up to 4X |
