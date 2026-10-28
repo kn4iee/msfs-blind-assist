@@ -137,6 +137,20 @@ warning and caution buttons work (one press clears both sides and silences the b
 - [x] 5a: tests first, then the curation and generator, regenerate, full suite, commit `feat(b757): the cockpit test buttons hold as the cockpit's`.
 - [x] 5b: tests first (the P61 hold re-written at 30 ms for 3 s, released to 1; "{test} done"; the lamp test's two phrases), full suite, commit `feat(b757): the P61 tests and the lamp test from their buttons`.
 
+### Task 6: The tests say what they test (added 2026-10-28, the owner's instruction)
+
+The owner: "The tests are not clearly labeled." The labels, by curation `labels`, from BlueBird's procedures where they
+name the test (User Procedures: "FIRE/OVHT - ENG", "FIRE/OVHT - ENG/APU/CARGO", "FIRE/OVHT - WHL WELL", "SQUIB TEST",
+"ASA TEST 1 … TEST 2", "Press the CONFIG (T/O CHK) button near RECALL") and from the measured effect (flight-12.md):
+- `B757_PED_FIRE_ENG_BUTTON` Engine Fire Test; `B757_PED_FIRE_CARGO_BUTTON` Engine, APU and Cargo Fire Test;
+  `B757_PED_FIRE_WHLWELL_BUTTON` Wheel Well Fire Test; `B757_P6_SQUIBS_BUTTON2` Squib Test;
+  `B757_OVHD_WARNING_TEST_BUTTON` Lamp Test; `B757_PED_TCAS_MODE_KNOB_TEST_CLICK` TCAS Test;
+  `B757_PED_WX_L_TEST_BUTTON` Weather Radar Test; `B757_PED_NAV_1/2/3_TEST_BUTTON` Radio Test (one per radio tuning panel);
+  `B757_MAIN_L/R_AUTOLAND_1_BUTTON` Autoland Status Test 1, `_2_` Autoland Status Test 2, `_3_` Autoland Status Reset;
+  `OXY_OBSV_TEST_SWITCH` First Observer Oxygen Test, `OXY_P61_TEST_SWITCH` Second Observer Oxygen Test;
+  `B757_MAIN_TOCHK_BUTTON` Takeoff Config Check, and it leaves `hold_ms` (BlueBird: "press and release"), a plain button again.
+- [ ] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Forward panel > Display brightness, Captain PFD to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Tab through Electrical, Exterior lights and MCP: the every-day controls come first (Electrical: Battery, EXT PWR, …).
