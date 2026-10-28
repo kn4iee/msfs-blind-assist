@@ -114,11 +114,31 @@ public class Bbs757CduMarkersTests
     }
 
     /// <summary>
-    /// A row never grows past its 24 cells and one marker, so Build's prefix keeps it inside a 40-cell
-    /// braille line: a marker that no gap can pay for, and would pass that, is left off, the rightmost first.
+    /// A selection keeps its marker whenever the row still fits a 40-cell braille line after Build's
+    /// three-cell prefix ("n: " or the label's indent), even when no gap can pay and it grows past 26
+    /// cells: a pilot who cannot see the highlight must not lose the "X" for a row the line has room for.
     /// </summary>
     [Fact]
-    public void Markers_that_would_widen_the_row_past_26_cells_are_left_off()
+    public void Marker_is_kept_while_the_row_fits_the_braille_line()
+    {
+        // '>' touching the text before it, in the last column: "X " and the separator blank make 27 cells.
+        const string full = "ABCDEFGHIJKLMNOPQRSTUVW>";
+        string marked = Bbs757CduMarkers.Mark(Row(full, 23..24));
+        Assert.Equal("ABCDEFGHIJKLMNOPQRSTUVW X >", marked);
+        Assert.Equal(27, marked.Length);
+
+        // The same through Build: the row and its prefix are 30 cells.
+        var screen = With(Fixture("bbs757-cdu-menu.json"), 2, full, 23..24);
+        var value = Bbs757CduRows.Build(screen, 1).Single(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 1);
+        Assert.Equal("1: ABCDEFGHIJKLMNOPQRSTUVW X >", value.Text);
+    }
+
+    /// <summary>
+    /// Only past the braille line are markers left off, the rightmost first: a marker that no gap can pay
+    /// for widens the row, and the row plus Build's three-cell prefix stays within 40 cells.
+    /// </summary>
+    [Fact]
+    public void Markers_that_would_pass_the_braille_line_are_left_off()
     {
         // Twelve one-letter options, each its own inverse run in a single-blank gap: 12 markers would make 47 cells.
         const string letters = "A B C D E F G H I J K L";
@@ -126,8 +146,13 @@ public class Bbs757CduMarkersTests
 
         string marked = Bbs757CduMarkers.Mark(Row(letters, inverse));
 
-        Assert.Equal("X A B C D E F G H I J K L", marked.TrimEnd());
-        Assert.True(marked.TrimEnd().Length <= Bbs757CduFrame.Columns + 2);
+        // Seven markers make 37 cells; an eighth would make 39, and a value row's "n: " would pass 40.
+        Assert.Equal("X A X B X C X D X E X F X G H I J K L", marked.TrimEnd());
+        Assert.Equal(37, marked.TrimEnd().Length);
+
+        var screen = With(Fixture("bbs757-cdu-menu.json"), 2, letters, inverse);
+        var value = Bbs757CduRows.Build(screen, 1).Single(r => r.Kind == Bbs757CduRowKind.Value && r.Line == 1);
+        Assert.Equal(40, value.Text.Length);
     }
 
     /// <summary>

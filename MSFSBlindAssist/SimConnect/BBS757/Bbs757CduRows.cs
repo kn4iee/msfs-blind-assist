@@ -35,11 +35,13 @@ public static class Bbs757CduRows
     /// noise); one with other text among the dashes stays, and so does any data row. The scratchpad ends
     /// the list: "Scratchpad: " and what it holds, "Scratchpad:" when empty. Trailing spaces are
     /// dropped, interior ones kept, so a right-hand field stays in its column in braille; no row is
-    /// longer than 36 cells (24 columns and the longest prefix), inside a 40-cell braille line.
-    /// The label and data rows are read from the cells, not the lines, so a selected (inverse) option
-    /// reads with "X " in front of it and the columns after it unchanged
-    /// (<see cref="Bbs757CduMarkers.Mark"/>, at most 26 cells before the prefix); the title and the
-    /// scratchpad are text, and the separator test looks at the text without a marker.
+    /// longer than 36 cells (24 columns and the longest prefix), inside a 40-cell braille line, except
+    /// for a selection marker below. The label and data rows are read from the cells, not the lines, so
+    /// a selected (inverse) option reads with "X " in front of it and the columns after it unchanged;
+    /// only when no gap can pay for the marker is its row wider, by two or three cells each, and never
+    /// past the 40 cells of the braille line (<see cref="Bbs757CduMarkers.Mark"/>: 37 before the
+    /// prefix). The title and the scratchpad are text, and the separator test looks at the text
+    /// without a marker.
     /// <para>
     /// A screen with nothing on any of its 14 lines is one <see cref="Bbs757CduRowKind.Blank"/> row that
     /// says which CDU it is (<paramref name="cdu"/> 1 the captain's, 2 the first officer's): a window that

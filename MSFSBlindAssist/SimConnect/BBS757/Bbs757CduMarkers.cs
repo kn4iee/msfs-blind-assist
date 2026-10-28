@@ -15,9 +15,12 @@ public static class Bbs757CduMarkers
 {
     private const string Marker = "X ";
 
-    // A marked row holds its 24 cells and one marker. Build's longest row prefix is three cells, so the
-    // result always fits a 40-cell braille line, however many runs a frame inverts.
-    private const int MaxCells = Bbs757CduFrame.Columns + 2;
+    // A braille line holds 40 cells and Build puts three in front of a label row (its indent) or a data
+    // row ("n: "), so a marked row may be 37 cells and no more. Only a row past that loses markers; one
+    // marker a gap cannot pay for (27 cells at most) and several together up to that keep theirs.
+    private const int BrailleCells = 40;
+    private const int RowPrefixCells = 3;
+    private const int MaxCells = BrailleCells - RowPrefixCells;
 
     /// <summary>
     /// The row's text with "X " written in front of each inverse run, without moving anything after it.
@@ -30,8 +33,8 @@ public static class Bbs757CduMarkers
     /// selections (<c>FbwMcduFormat.PositionLine</c>); a gap always keeps one blank, so words never merge.
     /// Everything after a paying gap is back in its column, which a braille display depends on, and the
     /// text is longer only when no gap after the run can pay. Several runs go left to right, each paying
-    /// its own debt, and a marker that would make the row longer than 24 cells and one marker is left
-    /// off, the rightmost first.
+    /// its own debt. Markers are left off, the rightmost first, only when the row would pass 37 cells,
+    /// which with Build's three-cell prefix is the 40 cells of a braille line.
     /// <para>
     /// A row with no inverse cell is exactly its characters, the line of the screen. The text is not
     /// trimmed: <see cref="Bbs757CduRows.Build"/> does that.
