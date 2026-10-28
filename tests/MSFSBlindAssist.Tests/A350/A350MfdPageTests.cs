@@ -244,6 +244,35 @@ public class A350MfdPageTests
         Assert.Contains("CANCEL button", lines);
     }
 
+    // INSERT NEXT WPT's and NEW DEST's pop-ups read woven between the F-PLN rows by height (title, coordinates, entry
+    // field, CANCEL down the column; live 2026-10-28): they read together after the page title.
+    [Theory]
+    [InlineData("mfd_insert_next_wpt", "INSERT NEXT WPT FROM: BASUR, green", "INSERT NEXT WPT FROM BASUR: none, cyan", "CANCEL button")]
+    [InlineData("mfd_new_dest_popup", "NEW DEST FROM: VCBI22, green", "NEW DEST FROM VCBI22: none, cyan", "CANCEL button")]
+    public void A_revision_pop_up_reads_together_after_the_page_title(string fixture, string title, string field, string cancel)
+    {
+        var lines = Page(fixture).ToList();
+        int at = lines.IndexOf("ACTIVE/F-PLN, black");
+        var popup = lines.Skip(at + 1).TakeWhile(l => !l.StartsWith("FROM ", StringComparison.Ordinal) && !l.Contains("(overfly)")
+            && !l.StartsWith("DER22", StringComparison.Ordinal)).ToList();
+        Assert.Equal(title, popup[0]);
+        Assert.Contains(field, popup);
+        Assert.Equal(cancel, popup[^1]);
+    }
+
+    // As a menu's first item when it opens, the pop-up's entry field when one opens (from the waypoint's revision menu,
+    // where the pilot chose it): where the pilot types.
+    [Fact]
+    public void The_window_moves_to_a_pop_ups_field_as_it_opens()
+    {
+        var menu = PageLines("mfd_fpln_revision_basur");
+        var open = PageLines("mfd_insert_next_wpt");
+        int field = open.ToList().FindIndex(l => l.Kind == "field" && l.Spoken.StartsWith("INSERT NEXT WPT", StringComparison.Ordinal));
+        Assert.True(field >= 0);
+        Assert.Equal(field, A350MfdPage.MenuJustOpened(menu, open));
+        Assert.Null(A350MfdPage.MenuJustOpened(open, open));   // already open: the pilot's place is kept
+    }
+
     // Live 2026-10-28, AIRWAYS after VIA P570 TO ITURA: the page's VIA/TO list keeps text boxes for rows off the screen,
     // one under the INSERT key, which read "Field: INSERT". The key is drawn after (over) the box: the text is its.
     [Fact]

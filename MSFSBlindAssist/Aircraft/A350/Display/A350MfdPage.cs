@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>One line of the MFD as a pilot moves through it: what kind it is (menu, button, tab, field,
 /// scratchpad, text), how it is spoken, and where on the side's own MFD a click lands on it.</summary>
-public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY);
+public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false);
 
 /// <summary>
 /// One side's MFD page as lines (pure), from the draw's UI elements and texts by geometry: a button's, tab's or
@@ -341,9 +341,29 @@ public static class A350MfdPage
         if (revisionItems.Count > 0)
             ordered = WithRevisionMenuAfterTitle(ordered, revisionItems, shift);
         if (revisionPopup != null)
+        {
             ordered = ordered.Select(l => l.Kind == "field" && revisionPopup.Fields.Any(e => AtCentre(l, e, shift))
                 ? l with { Spoken = revisionPopup.Title + ": " + ValueOf(l.Spoken) } : l).ToList();
+            ordered = WithPopUpAfterTitle(ordered, revisionPopup, cells, shift);
+        }
         return ordered;
+    }
+
+    /// <summary>A revision pop-up (INSERT NEXT WPT, NEW DEST) reads together after the page title (it read woven between
+    /// the F-PLN rows by height, its CANCEL key down the column, live 2026-10-28), its lines flagged so the window moves
+    /// to its field as it opens: its own controls and the texts it drew (the F-PLN's DISCONTINUITY under its column is
+    /// the plan's).</summary>
+    private static List<MfdLine> WithPopUpAfterTitle(List<MfdLine> lines, RevisionPopup popup, List<Cell> cells, float shift)
+    {
+        // Below the title band, as RevisionPopupOf takes them: the page frame (flight number, title) draws in its range.
+        var texts = cells.Where(c => c.Index >= popup.Start && c.Index < popup.End && c.Y >= 150).ToList();
+        bool Its(MfdLine l) => popup.Own.Any(e => AtCentre(l, e, shift))
+            || l.Kind == "text" && texts.Any(c => Math.Abs(c.X - l.ClickX) < 1 && Math.Abs(c.Y - 7 - l.ClickY) < 1);
+        var own = lines.Where(Its).Select(l => l with { Popup = true }).ToList();
+        var result = lines.Where(l => !Its(l)).ToList();
+        int title = result.FindIndex(l => l.Kind == "text" && l.Spoken.EndsWith(TitleColour, StringComparison.Ordinal));
+        result.InsertRange(title + 1, own);
+        return result;
     }
 
     /// <summary>A field line's value: what follows its name ("C220°: none, cyan" → "none, cyan").</summary>
@@ -353,7 +373,7 @@ public static class A350MfdPage
     /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR"), its entry fields, and its top and bottom
     /// edges (its title's line, its CANCEL key's: NEW DEST's stands in mid-page, INSERT NEXT WPT's below the column).</summary>
     private sealed record RevisionPopup(DrawnElement Column, int Start, int End, string Title, IReadOnlyList<DrawnElement> Fields,
-        float Top, float Bottom);
+        float Top, float Bottom, IReadOnlyList<DrawnElement> Own);
 
     /// <summary>A text's height above the point it is drawn at (the MFD's texts sit on their line's lower part).</summary>
     private const float TextHeight = 22;
@@ -412,7 +432,7 @@ public static class A350MfdPage
             var own = all.Skip(i + 1).TakeWhile(e => e.TextStart < end).Where(e => mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
             var fields = own.Where(e => e.Class is "BaseUITextBox" or "DropdownTextBox").ToList();
             float bottom = own.Select(e => e.Y + e.RectH).Concat(mineTexts.Select(c => c.Y)).Max();
-            return new RevisionPopup(column, start, end, title, fields, top - TextHeight, bottom);
+            return new RevisionPopup(column, start, end, title, fields, top - TextHeight, bottom, own);
         }
         return null;
     }
@@ -437,6 +457,12 @@ public static class A350MfdPage
     /// it; null while none opened since the last read (an open menu keeps the pilot's own place).</summary>
     public static int? MenuJustOpened(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
     {
+        // A revision pop-up opening (chosen from the waypoint's menu): its entry field, where the pilot types.
+        if (!before.Any(l => l.Popup) && now.Any(l => l.Popup))
+        {
+            int field = now.ToList().FindIndex(l => l.Popup && l.Kind == "field");
+            return field >= 0 ? field : now.ToList().FindIndex(l => l.Popup);
+        }
         if (before.Any(l => l.Kind == "menuitem"))
             return null;
         for (int i = 0; i < now.Count; i++)
