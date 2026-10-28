@@ -84,6 +84,7 @@ public static class A350PanelLamps
     private static readonly Dictionary<string, string> NameOverrides = new(StringComparer.Ordinal)
     {
         ["EVAC_COMMAND_SEQ1_LIGHT"] = "EVAC light",
+        ["CALLS_EMER_SEQ1_LIGHT"] = "EMER call light",   // its row is "EMER call", its legend CALL
         // Instrument panel: the BRAKES HOT legend on the fan button; OIS VIEW OFFSIDE's INOP (the other side views this
         // side's OIS) and its own ON.
         ["LDG_BRK_HOT_SEQ1_LIGHT"] = "Brakes hot light",
@@ -94,7 +95,7 @@ public static class A350PanelLamps
         ["OIS_VIEW_OFFSIDE_RIGHT_SEQ2_LIGHT"] = "First officer OIS view offside on light",
         // ADIRS: each IR and ADR button's OFF legend, lit while it is off and its ADIRS runs.
         ["IRS_IR_1_SEQ2_LIGHT"] = "IR 1 off light", ["IRS_IR_2_SEQ2_LIGHT"] = "IR 2 off light", ["IRS_IR_3_SEQ2_LIGHT"] = "IR 3 off light",
-        ["APU_START_SEQ2_LIGHT"] = "Start on light",   // ON while starting, until AVAIL
+        ["APU_START_SEQ2_LIGHT"] = "APU start on light",   // ON while starting, until AVAIL
         // FCU: the mode buttons' lit bar; the master lights' two halves; one light per test button.
         ["FCU_AP_1_SEQ1_LIGHT"] = "AP 1 light", ["FCU_AP_2_SEQ1_LIGHT"] = "AP 2 light", ["FCU_ATHR_SEQ1_LIGHT"] = "A/THR light",
         ["FCU_LOC_SEQ1_LIGHT"] = "LOC light", ["FCU_APPR_SEQ1_LIGHT"] = "APPR light", ["FCU_ALT_SEQ1_LIGHT"] = "ALT light",

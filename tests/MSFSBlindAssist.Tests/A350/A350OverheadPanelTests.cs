@@ -61,16 +61,16 @@ public class A350OverheadPanelTests
     {
         AssertRows("Calls", new[]
         {
-            ("Aft", A350RowAction.Press, ""),
-            ("All", A350RowAction.Press, ""),
+            ("Aft call", A350RowAction.Press, ""),
+            ("All call", A350RowAction.Press, ""),
             ("Cabin crew rest", A350RowAction.Press, ""),
-            ("Exit", A350RowAction.Press, ""),
+            ("Exit call", A350RowAction.Press, ""),
             ("Flight crew rest", A350RowAction.Press, ""),
-            ("Fwd", A350RowAction.Press, ""),
+            ("Fwd call", A350RowAction.Press, ""),
             ("Mech call", A350RowAction.Press, ""),
-            ("Mid", A350RowAction.Press, ""),
-            ("Purser", A350RowAction.Press, ""),
-            ("EMER", A350RowAction.Set, "0=Off, 1=On"),
+            ("Mid call", A350RowAction.Press, ""),
+            ("Purser call", A350RowAction.Press, ""),
+            ("EMER call", A350RowAction.Set, "0=Off, 1=On"),
         });
         AssertLights("Calls", new[] { "EMER call light" });
         AssertRows("Evacuation", new[]
@@ -89,7 +89,7 @@ public class A350OverheadPanelTests
     {
         AssertRows("Oxygen", new[]
         {
-            ("Crew supply", A350RowAction.Set, "0=Off, 1=On"),
+            ("Crew oxygen supply", A350RowAction.Set, "0=Off, 1=On"),
             ("Mask man on", A350RowAction.Set, "0=Off, 1=On"),
         });
         Assert.Empty(Lights("Oxygen"));   // CREW SUPPLY's OFF legend only mirrors the button
@@ -203,13 +203,13 @@ public class A350OverheadPanelTests
     {
         AssertRows("Exterior Lighting", new[]
         {
-            ("Beacon", A350RowAction.Set, "0=Off, 1=On"),
-            ("Landing", A350RowAction.Set, "0=Off, 1=On"),
-            ("Logo", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
-            ("Nav", A350RowAction.Set, "0=1, 1=2, 2=Off"),
-            ("Nose", A350RowAction.Set, "0=T.O, 1=Taxi, 2=Off"),
-            ("Strobe", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
-            ("Wing", A350RowAction.Set, "0=Off, 1=On"),
+            ("Beacon light", A350RowAction.Set, "0=Off, 1=On"),
+            ("Landing lights", A350RowAction.Set, "0=Off, 1=On"),
+            ("Logo lights", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Nav lights", A350RowAction.Set, "0=1, 1=2, 2=Off"),
+            ("Nose light", A350RowAction.Set, "0=T.O, 1=Taxi, 2=Off"),
+            ("Strobe lights", A350RowAction.Set, "0=On, 1=Auto, 2=Off"),
+            ("Wing lights", A350RowAction.Set, "0=Off, 1=On"),
         });
     }
 
@@ -219,10 +219,10 @@ public class A350OverheadPanelTests
     {
         AssertRows("APU", new[]
         {
-            ("Master switch", A350RowAction.Set, "0=Off, 1=On"),
-            ("Start", A350RowAction.Press, ""),
+            ("APU master switch", A350RowAction.Set, "0=Off, 1=On"),
+            ("APU start", A350RowAction.Press, ""),
         });
-        AssertLights("APU", new[] { "Master switch fault light", "Start available light", "Start on light" });
+        AssertLights("APU", new[] { "APU master switch fault light", "APU start available light", "APU start on light" });
     }
 
     /// <summary>Live 2026-10-26: every position of every selector; NO SMKG and SEAT BELTS reach their signs
@@ -354,13 +354,13 @@ public class A350OverheadPanelTests
             ("Right main pump", A350RowAction.Set, OffOn), ("Right standby pump", A350RowAction.Set, OffOn),
             ("Center left pump", A350RowAction.Set, OffOn), ("Center right pump", A350RowAction.Set, OffOn),
             ("Crossfeed A", A350RowAction.Set, OffOn), ("Crossfeed B", A350RowAction.Set, OffOn),
-            ("Left transfer", A350RowAction.Set, OffOn), ("Right transfer", A350RowAction.Set, OffOn),
+            ("Left fuel transfer", A350RowAction.Set, OffOn), ("Right fuel transfer", A350RowAction.Set, OffOn),
             ("Center tank feed", A350RowAction.Set, OffOn),
         });
         AssertLights("Fuel", new[] {
             "Left main pump fault light", "Left standby pump fault light", "Right main pump fault light",
             "Right standby pump fault light", "Center left pump fault light", "Center right pump fault light",
-            "Crossfeed A open light", "Crossfeed B open light", "Left transfer fault light", "Right transfer fault light",
+            "Crossfeed A open light", "Crossfeed B open light", "Left fuel transfer fault light", "Right fuel transfer fault light",
             "Center tank feed fault light",
         });
     }
@@ -415,9 +415,9 @@ public class A350OverheadPanelTests
         {
             ("Avionics extract", A350RowAction.Set, "0=Off, 1=On"),
             ("Cabin fans", A350RowAction.Set, "0=Off, 1=On"),
-            ("Cooling", A350RowAction.Set, "0=Off, 1=On"),
+            ("Avionics cooling", A350RowAction.Set, "0=Off, 1=On"),
         });
-        AssertLights("Ventilation", new[] { "Avionics extract fault light", "Cooling fault light", "Avionics smoke light" });
+        AssertLights("Ventilation", new[] { "Avionics extract fault light", "Avionics cooling fault light", "Avionics smoke light" });
     }
 
     private const string OffOn = "0=Off, 1=On";
@@ -432,10 +432,10 @@ public class A350OverheadPanelTests
             ("Aft isolation valves", A350RowAction.Set, OffOn), ("Forward isolation valves", A350RowAction.Set, OffOn),
             ("Bulk isolation valves", A350RowAction.Set, OffOn),
             ("Bulk temperature", A350RowAction.Set, ""), ("Forward temperature", A350RowAction.Set, ""),
-            ("Heater", A350RowAction.Set, OffOn),
+            ("Cargo heater", A350RowAction.Set, OffOn),
         });
         AssertLights("Cargo Air", new[] { "Aft isolation valves fault light", "Forward isolation valves fault light",
-            "Bulk isolation valves fault light", "Heater fault light" });
+            "Bulk isolation valves fault light", "Cargo heater fault light" });
     }
 
     /// <summary>The two agent buttons discharge a bottle (the aircraft sets DISCH): never pressed in a test pass.</summary>

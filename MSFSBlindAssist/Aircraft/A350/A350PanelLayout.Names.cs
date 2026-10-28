@@ -251,7 +251,7 @@ public static partial class A350PanelLayout
         ["TCAS_ABV"] = "TCAS above",
         ["TCAS_BLW"] = "TCAS below",
         ["TCAS_TA_ONLY"] = "TCAS TA only",
-        ["TAWS_GS_MODE_OFF"] = "G/S mode",
+        ["TAWS_GS_MODE_OFF"] = "TAWS G/S mode",
         ["CKPT_DOOR"] = "Cockpit door switch",
         ["CKPT_LT_DOME"] = "Dome light",
         ["CKPT_LT_FLOOD"] = "Flood light",
@@ -300,7 +300,9 @@ public static partial class A350PanelLayout
         // Calls and Evacuation: the rest-area calls named for whom they call (CCRC, FCRC), the EVAC rows by their panel.
         ["CALLS_CAB_REST"] = "Cabin crew rest",
         ["CALLS_FLT_REST"] = "Flight crew rest",
-        ["CALLS_PURS"] = "Purser",
+        // Ctrl+M and the announcements are one flat list: a row's name says its system without its panel (the A380's).
+        ["CALLS_PURS"] = "Purser call", ["CALLS_AFT"] = "Aft call", ["CALLS_ALL"] = "All call", ["CALLS_EXIT"] = "Exit call",
+        ["CALLS_FWD"] = "Fwd call", ["CALLS_MID"] = "Mid call", ["CALLS_EMER"] = "EMER call",
         ["EVAC_COMMAND"] = "EVAC command",
         ["EVAC_HORN_OFF"] = "EVAC horn off",
         ["EVAC_CAPT_PURS"] = "EVAC CAPT and PURS",
@@ -319,8 +321,12 @@ public static partial class A350PanelLayout
         // ADIRS: iniBuilds titles the three mode selectors "ADR n MODE SELECTOR".
         ["IRS_MODE_1"] = "ADIRS 1", ["IRS_MODE_2"] = "ADIRS 2", ["IRS_MODE_3"] = "ADIRS 3",
         // Lights and signs: placard abbreviations spoken whole.
-        ["LIGHTS_EXT_LANDING"] = "Landing",
-        ["APU_MASTER_SWITCH"] = "Master switch",
+        ["LIGHTS_EXT_LANDING"] = "Landing lights", ["LIGHTS_EXT_BEACON"] = "Beacon light", ["LIGHTS_EXT_LOGO"] = "Logo lights",
+        ["LIGHTS_EXT_NAV"] = "Nav lights", ["LIGHTS_EXT_NOSE"] = "Nose light", ["LIGHTS_EXT_STROBE"] = "Strobe lights",
+        ["LIGHTS_EXT_WING"] = "Wing lights",
+        ["APU_MASTER_SWITCH"] = "APU master switch", ["APU_START"] = "APU start",
+        ["OXYGEN_CREW_SUPPLY"] = "Crew oxygen supply",
+        ["CARGO_AIR_COND_HEATER"] = "Cargo heater",
         ["LIGHTS_INT_ANN_LT"] = "Annunciator light",
         ["LIGHTS_INT_STBY_COMPASS"] = "Standby compass light",
         ["SIGNS_EMER_EXIT"] = "EMER exit light",
@@ -346,9 +352,9 @@ public static partial class A350PanelLayout
         ["FUEL_PUMP_LEFT_TANK_MAIN"] = "Left main pump", ["FUEL_PUMP_LEFT_TANK_STBY"] = "Left standby pump",
         ["FUEL_PUMP_RIGHT_TANK_MAIN"] = "Right main pump", ["FUEL_PUMP_RIGHT_TANK_STBY"] = "Right standby pump",
         ["FUEL_PUMP_CTR_TANK_LEFT"] = "Center left pump", ["FUEL_PUMP_CTR_TANK_RIGHT"] = "Center right pump",
-        ["FUEL_TANK_TRANSFER_LEFT"] = "Left transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right transfer",
+        ["FUEL_TANK_TRANSFER_LEFT"] = "Left fuel transfer", ["FUEL_TANK_TRANSFER_RIGHT"] = "Right fuel transfer",
         ["FUEL_CTR_TANK_FEED"] = "Center tank feed",
-        ["VENT_AVNCS_EXTRACT"] = "Avionics extract", ["VENT_CABIN_FANS"] = "Cabin fans", ["VENT_COOLING"] = "Cooling",
+        ["VENT_AVNCS_EXTRACT"] = "Avionics extract", ["VENT_CABIN_FANS"] = "Cabin fans", ["VENT_COOLING"] = "Avionics cooling",
         // FCU: placards as printed; each knob by what it sets, its push and pull apart; the two sides' twins by side.
         ["FCU_AP_1"] = "AP 1", ["FCU_AP_2"] = "AP 2", ["FCU_ATHR"] = "A/THR", ["FCU_FD"] = "FD", ["FCU_LOC"] = "LOC",
         ["FCU_APPR"] = "APPR", ["FCU_ALT"] = "ALT", ["FCU_SPD_MACH"] = "SPD/MACH", ["FCU_TRK_FPA"] = "HDG-V/S / TRK-FPA",

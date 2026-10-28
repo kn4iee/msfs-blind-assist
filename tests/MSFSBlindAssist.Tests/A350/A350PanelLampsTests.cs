@@ -37,7 +37,7 @@ public class A350PanelLampsTests
     [Fact]
     public void A_button_with_no_position_shows_every_legend()
     {
-        Assert.Equal("Start available light", Lamp("APU_START_SEQ1_LIGHT").Name);
+        Assert.Equal("APU start available light", Lamp("APU_START_SEQ1_LIGHT").Name);
         Assert.Contains(Lamps, l => l.Node == "APU_START_SEQ2_LIGHT");
     }
 

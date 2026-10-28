@@ -128,7 +128,7 @@ public class A350PedestalPanelTests
         Assert.Contains("First officer weather radar elevation increase", radar);
         Assert.Equal(radar.Distinct().Count(), radar.Count);
         var xpdr = Rows("Transponder").Select(r => r.Name).ToList();
-        Assert.Equal(new[] { "G/S mode", "TCAS above", "TCAS below", "TCAS TA only", "Transponder system 1", "Transponder system 2" },
+        Assert.Equal(new[] { "TAWS G/S mode", "TCAS above", "TCAS below", "TCAS TA only", "Transponder system 1", "Transponder system 2" },
             xpdr);   // the cockpit file's order
     }
 
