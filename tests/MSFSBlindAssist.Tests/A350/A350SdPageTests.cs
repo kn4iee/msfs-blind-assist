@@ -250,6 +250,24 @@ public class A350SdPageTests
         Assert.Equal(new[] { "STATUS, white", "INOP SYS, white", "ALL PHASES: APU, amber" }, Page(14));
     }
 
+    // Review 2026-10-28: the columns ran on to the next centred white heading, so a line below them read as an item of
+    // one ("APPR & LDG: PRESS STS FOR NEXT STATUS PAGE", the multi-page STATUS's footer). Only a line aligned with a
+    // column's items is one of its items; anything else ends the columns and reads as drawn.
+    [Theory]
+    [InlineData(150f, "cyan", "PRESS STS FOR NEXT STATUS PAGE, cyan")]
+    [InlineData(250f, "white", "PRESS STS FOR NEXT STATUS PAGE, white")]
+    public void A_line_not_aligned_with_the_columns_ends_them(float x, string colour, string reads)
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sd_status_inop_14.json")))!;
+        var rgba = colour == "cyan" ? new A350Rgba(0, 1, 1, 1) : new A350Rgba(1, 1, 1, 1);
+        var texts = cap.Texts.ToList();
+        texts.Add(new DrawnText("PRESS STS FOR NEXT STATUS PAGE", x, 760, x, 760, 1, rgba));
+        var lines = A350SdPage.Read(A350Ewd.Parse(cap with { Texts = texts }).SystemDisplay, 14);
+        Assert.Contains(reads, lines);
+        Assert.Contains("ALL PHASES: R TK MAIN PMP, amber", lines);
+    }
+
     // Live 2026-10-28 in the hold at IMPED with AC 2A 115V BUS, FLAPS SYS 1, R TK MAIN PMP and ENG 1 A-ICE
     // VALVE failed: INFO's lines, then INOP SYS's two columns.
     [Fact]

@@ -43,11 +43,21 @@ public static class A350SdPage
             var right = rows[r].FirstOrDefault(c => c.Text == "APPR & LDG");
             if (left == null || right == null) { result.Add(rows[r]); continue; }
             float split = (left.X + right.X) / 2;
+            // A column's items start at one x (live: 20 and 404); a line anywhere else (a centred heading, the multi-page
+            // STATUS's "PRESS STS FOR NEXT STATUS PAGE", review 2026-10-28) ends the columns and reads as drawn.
+            float? leftX = null, rightX = null;
             bool Heading(IReadOnlyList<DrawnCell> row) => row.Count == 1 && row[0].Colour == "white" && Math.Abs(row[0].X - split) <= 60;
+            bool Aligned(IReadOnlyList<DrawnCell> row)
+            {
+                var l = row.Where(c => c.X < split).MinBy(c => c.X);
+                var rr = row.Where(c => c.X >= split).MinBy(c => c.X);
+                return (l != null || rr != null) && (l == null || Math.Abs(l.X - (leftX ??= l.X)) <= 30)
+                    && (rr == null || Math.Abs(rr.X - (rightX ??= rr.X)) <= 30);
+            }
             var lefts = new List<IReadOnlyList<DrawnCell>>();
             var rights = new List<IReadOnlyList<DrawnCell>>();
             int k = r + 1;
-            for (; k < rows.Count && !Heading(rows[k]); k++)
+            for (; k < rows.Count && !Heading(rows[k]) && Aligned(rows[k]); k++)
             {
                 lefts.Add(Under(left.Text, rows[k].Where(c => c.X < split)));
                 rights.Add(Under(right.Text, rows[k].Where(c => c.X >= split)));
