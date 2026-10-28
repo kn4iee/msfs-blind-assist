@@ -151,6 +151,52 @@ name the test (User Procedures: "FIRE/OVHT - ENG", "FIRE/OVHT - ENG/APU/CARGO", 
   `B757_MAIN_TOCHK_BUTTON` Takeoff Config Check, and it leaves `hold_ms` (BlueBird: "press and release"), a plain button again.
 - [x] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
 
+### Task 7: The panels follow the cockpit (added 2026-10-28, the owner's decision)
+
+The owner asked whether the panels put each control where it is in the cockpit or are made up, "other than places
+where it makes sense such as engine fuel and start levers being together"; the audit (`docs/b757/evidence/panel-audit-12.md`:
+every map node placed by its 3D position in BlueBird's interior models and named from the Flight Guide's cockpit
+pictures) found 34 of 55 panels real, 7 sensible groupings and the rest code buckets or misplaced. The owner chose
+"Follow the cockpit", the brightness knobs on their real panels and the fire tests kept with the fire handles.
+
+**Files:** `curation.json` (`panels`, `node_panels`, `panel_order`, `control_order`, `labels` where a panel move needs
+a clearer label), the map, `test_generate_b757_map.py`, `Bbs757ControlMapTests.cs`; `Bbs757SpringControls.cs`,
+`BBS757Definition.Overhead.cs`, `Bbs757SpringControlsTests.cs` (the trim buttons' panel only).
+- The structure is the audit's "Proposed structure" (every map node placed once; sections and panel names as there),
+  with the owner's answers: the fire and overheat tests stay in Fire protection after the handles (not a panel of
+  their own); the eight brightness knobs go to their real panels (Captain EFIS: PFD Brightness and ND Brightness;
+  First officer EFIS the same; EICAS control: Upper EICAS Brightness, Lower EICAS Brightness; a "CDU brightness" pair
+  under Pedestal: Captain CDU, First Officer CDU), so the Display brightness panel goes. The audit's other open
+  questions take its proposals (Equipment cooling its own panel, G/S inhibit with caution cancel and recall, each glareshield
+  clock switch with its pilot's chronometer, the flight deck door alone, IRS one panel, the panels of a section in
+  cockpit order, the section name Other kept).
+- Inside each panel the controls keep Task 4's every-day-first order: a panel's controls are ordered by their place in
+  Task 4's order (its tiers), each guard just before the switch it covers (the emergency lights guard after its switch,
+  as before); a control whose panel is new takes its place by its Task 4 tier.
+- The app's rudder and aileron trim buttons and their readout rows move to a new "Rudder and aileron trim" panel
+  (Pedestal, at the aft aisle stand); the alternate stab trim buttons stay in Stabilizer trim.
+- Code that names panels by string keeps working: no panel it names is renamed (`TransponderPanel`, `McpPanel`,
+  `EnginesPanel`, `GroundPowerPanel` "Electrical", `ElectricalPanel`, `PressurizationPanel`, P61 panel).
+- [ ] Tests first, then curation, regenerate, full suite, commit `feat(b757): the panels follow the cockpit`.
+
+### Task 8: Only the loaded engine type's controls (added 2026-10-28, the owner's decision)
+
+The owner: the Engines panel "seems to show both and looks very cluttered". The sim's title names the variant
+("BlueBird 757-200 RR", read 2026-10-28). The owner approved changing the 757 profile's core file
+(`BBS757Definition.cs`, frozen by plan 01) for it.
+
+**Files:** the generator (each control gets `variant`: "pw", "rr" or null, from the cockpit presence the run already
+reads), the map, `test_generate_b757_map.py`, `Bbs757ControlMap.cs` (the field), `BBS757Definition.cs` (the filter),
+tests `Bbs757ControlMapTests.cs` and a new `Bbs757VariantTests.cs`.
+- The variant comes from the aircraft's title: " PW" or " RR" in it, case-insensitive; anything else, or no title yet,
+  is unknown, and an unknown variant shows every control (as today).
+- The panels leave out the other variant's controls (today: the PW and RR fuel control switches, the RR electronic
+  engine control switches and their guards). When the variant becomes known or changes (a flight or aircraft load,
+  a reconnect), the panel lists are rebuilt in place, so the next panel shown is right; nothing else (variables,
+  writes) changes.
+- [ ] Tests first (the title parsing, the filter, an unknown variant showing all, a change of variant), full suite,
+  commit `feat(b757): the panels show the loaded engine type's controls only`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Forward panel > Display brightness, Captain PFD to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Tab through Electrical, Exterior lights and MCP: the every-day controls come first (Electrical: Battery, EXT PWR, …).
