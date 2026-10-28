@@ -129,8 +129,8 @@ warning and caution buttons work (one press clears both sides and silences the b
   Right Air Data Test 3 s, Right Stall Warning Test 3 s (`…_RIGHT_…`); Ground Proximity Test 3 s
   (`BBS757_GRNDPROX_HYDGEN_P61_TEST_SW` 0), Hydraulic Generator Test 3 s (2); Upper Equipment Cooling Test 3 s
   (`BBS757_EQUIP_COOLING_P61_TEST_SW` 0), Lower Equipment Cooling Test 3 s (2); Upper Yaw Damper Test 3 s
-  (`BBS757_YAW_DAMP_P61_TEST_SW` 0), Lower Yaw Damper Test 3 s (2); Upper Duct Leak Fuel Qty Test 3 s
-  (`BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW` 0), Lower Duct Leak Fuel Qty Test 3 s (2; BlueBird names neither position);
+  (`BBS757_YAW_DAMP_P61_TEST_SW` 0), Lower Yaw Damper Test 3 s (2); Upper Duct Leak Fuel Quantity Test 3 s
+  (`BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW` 0), Lower Duct Leak Fuel Quantity Test 3 s (2; BlueBird names neither position);
   Wing Anti-ice Test 3 s (`BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW` 0), Probe Heat Test 3 s (2).
 - The lamp test (the map's Warning Test, `B757_OVHD_WARNING_TEST_BUTTON`) is pressed as today, then read back:
   `L:OVHD_TEST_LTS` 1 says "Lamp test on", 0 "Lamp test off" (it latches: a second press turns it off).
