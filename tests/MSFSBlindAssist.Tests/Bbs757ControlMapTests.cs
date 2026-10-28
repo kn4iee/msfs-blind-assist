@@ -253,25 +253,29 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    [InlineData("Electrical", "Battery|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|EXT PWR|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
-    [InlineData("Hydraulics", "L ENG HYD Pumps|R ENG HYD Pumps|R ELEC Pump|C1 ELEC Pump|C2 ELEC Pump|L ELEC Pump")]
-    [InlineData("Overhead miscellaneous", "Emergency Lights|Emergency Lights Guard")]
+    // Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first in
+    // tab order"): a panel it moved is listed in full, in the order docs/b757/evidence/panel-order-12.md gives with each
+    // control's tier and source. The Emergency Lights guard stays right after its switch (the app opens it itself).
+    [InlineData("Electrical", "Battery|EXT PWR|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
+    [InlineData("Hydraulics", "R ELEC Pump|C1 ELEC Pump|C2 ELEC Pump|L ELEC Pump|L ENG HYD Pumps|R ENG HYD Pumps")]
+    [InlineData("Overhead miscellaneous", "Emergency Lights|Emergency Lights Guard|Lt Ovrd|L ENG Limiter|R ENG Limiter|Passenger Oxygen|RAT")]
     [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Crossfeed FWD|Crossfeed Aft")]
-    [InlineData("Exterior lights", "Anti-col Red Lights|Position Lights|Anti-col White Lights|Taxi Light|L Landing Light|R Landing Light|L Runway Turnoff|R Runway Turnoff|Wing Lights|Logo Lights")]
-    [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|APU Bleed|R ENG Bleed|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
+    [InlineData("Exterior lights", "Anti-col Red Lights|Wing Lights|L Runway Turnoff|R Runway Turnoff|Taxi Light|Anti-col White Lights|L Landing Light|R Landing Light|Position Lights|Logo Lights")]
+    [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|R ENG Bleed|APU Bleed|Flight Deck Temperature|Forward Cabin Temperature|Aft Cabin Temperature|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
     [InlineData("Passenger signs", "Seatbelts|No Smoking")]
     [InlineData("IRS", "IRS L|IRS C|IRS R")]
     // The two ELEC ENG Cont switches are on the RR cockpit only (no node in the PW one), so their labels say so.
     [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont (RR)|R ELEC ENG Cont (RR)")]
-    [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|THR|SPD|LNAV|VNAV|FLCH|HDG SEL|HDG HOLD|V/S|ALT HOLD|LOC|APP|CMD L|CMD C|CMD R|Autopilot Disengage Bar|IAS/MACH|ALT SEL Push|Speed Intervene|Bank Limit|BCRS 1")]
-    [InlineData("Main panel switches", "Autobrake|Takeoff Check|TOGA|CLB|CON|CRZ|TMSP 1|TMSP 2|HDG Ref|Cancel|Recall")]
-    // Plan 02 task 7: the flap lever right after Speedbrake Up, and the gear lever first on the Landing gear panel.
-    [InlineData("Control stand", "Parking Brake|Speedbrake Armed|Speedbrake Down|Speedbrake Up|Flap Lever|TO/GA|A/T Disconnect")]
+    [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|LNAV|THR|HDG SEL|VNAV|CMD L|CMD C|CMD R|FLCH|V/S|SPD|ALT HOLD|Speed Intervene|LOC|APP|ALT SEL Push|IAS/MACH|HDG HOLD|Bank Limit|Autopilot Disengage Bar|BCRS 1")]
+    [InlineData("Main panel switches", "Autobrake|Recall|Cancel|Takeoff Check|L Foot Heaters|R Foot Heaters|L Shoulder Heaters|R Shoulder Heaters|L Flt Dir|R Flt Dir|L Flt Nav|R Flt Nav|Stdby EICAS|HDG Ref|TOGA|TMSP 1|TMSP 2|CLB|CRZ|G/S Inhibit|L EFI|R EFI|L IRS|R IRS|L Airdata|R Airdata|Altn Gear Guard|Altn Gear|Alternate Flaps Selector|L Leading Edge|L Trailing Edge|Flap Override Guard|L Flap Ovrd|Gear Override Guard|L Gear Ovrd|Terrain Override Guard|L Terr Ovrd|L Brake Reserve|CON")]
+    // Plan 12 task 4: the flaps are moved on every flight, so the flap lever is second, right after the parking brake.
+    // Plan 02 task 7: the gear lever is first on the Landing gear panel.
+    [InlineData("Control stand", "Parking Brake|Flap Lever|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
     [InlineData("Landing gear", "Gear Lever")]
     [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
     [InlineData("TCAS and transponder", "TCAS Mode")]
-    [InlineData("Captain EFIS", "ND Mode|ND Range")]
-    [InlineData("First officer EFIS", "ND Mode|ND Range")]
+    [InlineData("Captain EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|INOP")]
+    [InlineData("First officer EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|INOP")]
     public void The_most_used_controls_lead_their_panel(string panel, string leading)
     {
         // The owner's lists (ruling R37), by the names the pilot hears.
@@ -284,13 +288,11 @@ public class Bbs757ControlMapTests
     [Theory]
     [InlineData("IRS", 3, "IRS Center Knob|IRS Large Knob")]
     [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Mode Knob Test")]
-    [InlineData("Captain EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
-    [InlineData("First officer EFIS", 2, "TFC|CTR|DH Reset|TERR|WXR|INOP|NAV AID|APRT|DATA|WPT")]
     [InlineData("Landing gear", 1, "Gear Lock Override")]
-    [InlineData("Main panel switches", 11, "L Flt Dir|L Flt Nav|L Foot Heaters|L Shoulder Heaters|L EFI|L IRS|L Airdata|L Brake Reserve|L Leading Edge|L Trailing Edge|L Flap Ovrd|G/S Inhibit|L Gear Ovrd|L Terr Ovrd|Altn Gear Guard|Altn Gear|Stdby EICAS|Alternate Flaps Selector|Flap Override Guard|Gear Override Guard|Terrain Override Guard|R Flt Dir|R Flt Nav|R Foot Heaters|R Shoulder Heaters|R EFI|R IRS|R Airdata")]
     public void The_controls_an_order_does_not_list_follow_in_cockpit_order(string panel, int listed, string rest)
     {
-        // Cockpit order is the order of the vendor's cockpit file: the controls the order leaves out keep it.
+        // Cockpit order is the order of the vendor's cockpit file: the controls the order leaves out keep it. (Plan 12 task 4
+        // lists every control of the panels it moved, so the EFIS panels and Main panel switches leave none out any more.)
         var after = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Label).Skip(listed);
 
         Assert.Equal(rest.Split('|'), after);
@@ -591,16 +593,18 @@ public class Bbs757ControlMapTests
     {
         var pumps = Map.Controls.Where(c => c.Panel == "Hydraulics").ToList();
 
-        // A label never moves a control: the order is the owner's (ruling R37), by node.
+        // A label never moves a control: the order is the owner's (ruling R37), by node. Plan 12 task 4 puts the electric pumps
+        // first, in the order they are switched on before start (docs/b757/evidence/panel-order-12.md: UP 46, 80, 139); the
+        // shutdown turns only the electric pumps off, so the two engine pumps, which stay on, come last.
         Assert.Equal(
             new[]
             {
-                "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
-                "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
+                "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON", "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
+                "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
             },
             pumps.Select(c => c.Node));
         Assert.Equal(
-            new[] { "L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump", "L ELEC Pump" },
+            new[] { "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump", "L ELEC Pump", "L ENG HYD Pumps", "R ENG HYD Pumps" },
             pumps.Select(c => c.Label));
         Assert.Equal(pumps.Count, pumps.Select(c => c.Label).Distinct().Count());
     }
@@ -861,11 +865,12 @@ public class Bbs757ControlMapTests
         });
 
         // Their places: the gear lever is the first control of the Landing gear panel (the gear lock override follows it, as it
-        // came first before), and the flap lever is the one right after Speedbrake Up on the Pedestal's Control stand.
+        // came first before), and the flap lever is the one right after the Parking Brake on the Pedestal's Control stand
+        // (plan 12 task 4: the flaps are moved on every flight, ahead of the speedbrake levers).
         Assert.Equal(new[] { "Gear Lever", "Gear Lock Override" },
             Map.Controls.Where(c => c.Panel == "Landing gear").Select(c => c.Label));
         var stand = Map.Controls.Where(c => c.Panel == "Control stand").Select(c => c.Label).ToList();
-        Assert.Equal("Flap Lever", stand[stand.IndexOf("Speedbrake Up") + 1]);
+        Assert.Equal("Flap Lever", stand[stand.IndexOf("Parking Brake") + 1]);
 
         IReadOnlyList<string> Writes(Bbs757Control c, double? current, double target)
         {

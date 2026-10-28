@@ -927,14 +927,17 @@ class Guarded(unittest.TestCase):
         return rows
 
     def shipped(self, **changes):
-        """The shipped curation, cut down to the nodes of rows(): a table entry for a node the package lacks is an error."""
+        """The shipped curation, cut down to the nodes of rows(): a table entry for a node the package lacks is an error. An
+        order is cut to the nodes the rows have (plan 12 task 4 lists every control of a panel, and the rows have only some of
+        the panel's), so the shipped lead stays what it is: the emergency lights switch, then its guard."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(self.rows())
         for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
-        cur["control_order"] = {p: ns for p, ns in cur["control_order"].items() if set(ns) <= here}
+        cur["control_order"] = {p: [n for n in ns if n in here] for p, ns in cur["control_order"].items()
+                                if any(n in here for n in ns)}
         cur.update(changes)
         return cur
 
@@ -1595,14 +1598,15 @@ class Levers(unittest.TestCase):
         self.assertEqual([c["label"] for c in plain["controls"] if c["panel"] == "Landing gear"],
                          ["Gear Lock Override", "Gear Lever"])
 
-    def test_the_flap_lever_follows_speedbrake_up_on_the_control_stand(self):
+    def test_the_flap_lever_follows_the_parking_brake_on_the_control_stand(self):
+        # plan 12 task 4: the flaps are moved on every flight, after the parking brake and before the speedbrake levers
         rows = {**self.stand_rows(), self.FLAP: self.flap_row()}
 
         m, _ = self.build(rows)
 
         stand = [(c["label"], c["section"], c["panel"]) for c in m["controls"] if c["panel"] == "Control stand"]
         self.assertEqual([label for label, _, _ in stand],
-                         ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "Flap Lever", "TO/GA",
+                         ["Parking Brake", "Flap Lever", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "TO/GA",
                           "A/T Disconnect"])
         self.assertEqual({(section, panel) for _, section, panel in stand}, {("Pedestal", "Control stand")})
 
@@ -1724,7 +1728,7 @@ class Levers(unittest.TestCase):
                 self.assertNotIn("guard", x)
         self.assertEqual([c["label"] for c in controls if c["panel"] == "Landing gear"][:1], ["Gear Lever"])
         stand = [c["label"] for c in controls if c["panel"] == "Control stand"]
-        self.assertEqual(stand[stand.index("Speedbrake Up") + 1], "Flap Lever")
+        self.assertEqual(stand[stand.index("Parking Brake") + 1], "Flap Lever")
 
 
 class DirectPositions(unittest.TestCase):
@@ -3342,11 +3346,12 @@ class Curation(unittest.TestCase):
                 self.assertEqual((control["label"], control["kind"], [(p["value"], p["label"]) for p in control["positions"]]),
                                  expected)
                 self.assertEqual(control["press"], rows[node]["_clicks"]["left"][0][1], "the click code is the vendor's")
-        # a label never moves a control: the electric pumps keep the order the preflight flow wants, right, center, left
+        # a label never moves a control: the electric pumps keep the order the preflight flow wants, right, center, left,
+        # and (plan 12 task 4) lead the panel: the shutdown turns only the electric pumps off, so the engine pumps stay on
         self.assertEqual(c["control_order"]["Hydraulics"],
-                         ["B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
-                          "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
-                          "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON"])
+                         ["B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON", "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
+                          "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON", "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
+                          "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON", "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON"])
         # each mic select is a button on its own state var: pressing selects it and clears the others
         mics = self.mic_select_rows()
         self.assertEqual(len(mics), 14)
@@ -3513,7 +3518,9 @@ class Curation(unittest.TestCase):
         # leads its panel with its guard right after it
         self.assertEqual([c["labels"][entry["guard"]] for entry in c["guarded"].values()],
                          ["Emergency Lights Guard", "Stab Trim C Guard", "Stab Trim R Guard"])
-        self.assertEqual(c["control_order"]["Overhead miscellaneous"],
+        # (plan 12 task 4 lists the rest of the panel after them; the guard stays after its switch because the app opens and
+        # closes it when the switch is set)
+        self.assertEqual(c["control_order"]["Overhead miscellaneous"][:2],
                          ["B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"])
 
     # Plan 02, task 7: BlueBird's published detents (support.bluebirdsim.com/docs/simvars, read 2026-10-26: the gear handle's
@@ -3551,10 +3558,11 @@ class Curation(unittest.TestCase):
         self.assertIn("RIGHT WINDOW RAIN EFFECTS", c["exclude_banners"])
         self.assertEqual(g.panel_of(row(node=gear, panel="LANDING GEAR"), c), ("Landing gear", "Forward panel"))
         self.assertEqual(g.panel_of(row(node=flap, panel="RIGHT WINDOW RAIN EFFECTS"), c), ("Control stand", "Pedestal"))
-        # the gear lever is first on its panel, the flap lever is right after Speedbrake Up
+        # the gear lever is first on its panel, the flap lever is right after the parking brake (plan 12 task 4: the flaps
+        # are set after start, retracted after takeoff, extended for landing, so they come before the speedbrake levers)
         self.assertEqual(c["control_order"]["Landing gear"], [gear])
         stand = c["control_order"]["Control stand"]
-        self.assertEqual(stand[stand.index("BBS757_SPOILERUP_CLICK") + 1], flap)
+        self.assertEqual(stand[stand.index("BBS757_PEDESTAL_Park_Brake_Lever") + 1], flap)
         self.assertEqual(len(stand), len(set(stand)))
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
@@ -3577,36 +3585,109 @@ class Curation(unittest.TestCase):
                      "Pedestal radio panels"],
         "Other": ["P61 panel"],
     }
-    # The first controls of each panel that has an order, by the label the pilot hears (the rest keep cockpit order).
+    # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).
+    # Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first
+    # in tab order") lists EVERY control of the panels it moved, in the order docs/b757/evidence/panel-order-12.md gives each
+    # with its tier and source: what the normal procedures move on every flight first, in the flow's order; then what is set
+    # once, the tests and the display options; then the non-normal, emergency and maintenance controls, a guard just before the
+    # switch it covers. The panels it left alone (IRS, Engine control and yaw damper, Fuel, Passenger signs, Landing gear,
+    # Engines, TCAS and transponder) lead with the controls ruling R37 approved and the rest keep cockpit order.
     CONTROL_ORDER_LABELS = {
-        "Electrical": ["Battery", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont", "R Gen Cont", "APU Gen",
-                       "EXT PWR", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
-        "Hydraulics": ["L ENG HYD Pumps", "R ENG HYD Pumps", "R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump",
-                       "L ELEC Pump"],
-        "Overhead miscellaneous": ["Emergency Lights", "Emergency Lights Guard"],   # plan 02 task 3: the guarded switch
+        "Electrical": ["Battery", "EXT PWR", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont", "R Gen Cont",
+                       "APU Gen", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
+        "Hydraulics": ["R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump", "L ELEC Pump", "L ENG HYD Pumps",
+                       "R ENG HYD Pumps"],
+        "Overhead miscellaneous": ["Emergency Lights", "Emergency Lights Guard", "Lt Ovrd", "L ENG Limiter",
+                                   "R ENG Limiter", "Passenger Oxygen", "RAT"],   # plan 02 task 3: the guard follows its switch
         "Fuel": ["L Pumps FWD", "L Pumps Aft", "R Pumps FWD", "R Pumps Aft", "C Pumps L", "C Pumps R",
                  "Crossfeed FWD", "Crossfeed Aft"],
-        "Exterior lights": ["Anti-col Red Lights", "Position Lights", "Anti-col White Lights", "Taxi Light",
-                            "L Landing Light", "R Landing Light", "L Runway Turnoff", "R Runway Turnoff", "Wing Lights",
-                            "Logo Lights"],
-        "Air conditioning and bleed": ["L Pack Selector", "R Pack Selector", "Isolation", "L ENG Bleed", "APU Bleed",
-                                       "R ENG Bleed", "Trim Air", "L Recirc", "R Recirc", "L Pack", "R Pack"],
+        "Exterior lights": ["Anti-col Red Lights", "Wing Lights", "L Runway Turnoff", "R Runway Turnoff",
+                            "Taxi Light", "Anti-col White Lights", "L Landing Light", "R Landing Light",
+                            "Position Lights", "Logo Lights"],
+        "Air conditioning and bleed": ["L Pack Selector", "R Pack Selector", "Isolation", "L ENG Bleed",
+                                       "R ENG Bleed", "APU Bleed", "Flight Deck Temperature",
+                                       "Forward Cabin Temperature", "Aft Cabin Temperature", "Trim Air", "L Recirc",
+                                       "R Recirc", "L Pack", "R Pack"],
         "Passenger signs": ["Seatbelts", "No Smoking"],
         "IRS": ["IRS L", "IRS C", "IRS R"],
-        "Engine control and yaw damper": ["L Yaw Damper", "R Yaw Damper", "L ELEC ENG Cont", "R ELEC ENG Cont"],
-        "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "THR", "SPD", "LNAV", "VNAV", "FLCH", "HDG SEL", "HDG HOLD", "V/S",
-                "ALT HOLD", "LOC", "APP", "CMD L", "CMD C", "CMD R", "Autopilot Disengage Bar", "IAS/MACH",
-                "ALT SEL Push", "Speed Intervene", "Bank Limit", "BCRS 1"],
-        "Main panel switches": ["Autobrake", "Takeoff Check", "TOGA", "CLB", "CON", "CRZ", "TMSP 1", "TMSP 2",
-                                "HDG Ref", "Cancel", "Recall"],
-        "Control stand": ["Parking Brake", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up", "Flap Lever", "TO/GA",
-                          "A/T Disconnect"],   # plan 02 task 7: the flap lever right after Speedbrake Up
+        "Engine control and yaw damper": ["L Yaw Damper", "R Yaw Damper", "L ELEC ENG Cont (RR)",
+                                          "R ELEC ENG Cont (RR)"],
+        "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "LNAV", "THR", "HDG SEL", "VNAV", "CMD L", "CMD C", "CMD R",
+                "FLCH", "V/S", "SPD", "ALT HOLD", "Speed Intervene", "LOC", "APP", "ALT SEL Push", "IAS/MACH",
+                "HDG HOLD", "Bank Limit", "Autopilot Disengage Bar", "BCRS 1"],
+        "Main panel switches": ["Autobrake", "Recall", "Cancel", "Takeoff Check", "L Foot Heaters", "R Foot Heaters",
+                                "L Shoulder Heaters", "R Shoulder Heaters", "L Flt Dir", "R Flt Dir", "L Flt Nav",
+                                "R Flt Nav", "Stdby EICAS", "HDG Ref", "TOGA", "TMSP 1", "TMSP 2", "CLB", "CRZ",
+                                "G/S Inhibit", "L EFI", "R EFI", "L IRS", "R IRS", "L Airdata", "R Airdata",
+                                "Altn Gear Guard", "Altn Gear", "Alternate Flaps Selector", "L Leading Edge",
+                                "L Trailing Edge", "Flap Override Guard", "L Flap Ovrd", "Gear Override Guard",
+                                "L Gear Ovrd", "Terrain Override Guard", "L Terr Ovrd", "L Brake Reserve", "CON"],
+        "Control stand": ["Parking Brake", "Flap Lever", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up",
+                          "TO/GA", "A/T Disconnect"],   # plan 12 task 4: the flap lever is second
         "Landing gear": ["Gear Lever"],        # plan 02 task 7: first on its panel, the lock override follows in cockpit order
         "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
                     "L Fuel Control (RR)", "R Fuel Control (RR)"],
         "TCAS and transponder": ["TCAS Mode"],   # the app's Squawk Code field follows it (BBS757Definition.Readouts.cs)
-        "Captain EFIS": ["ND Mode", "ND Range"],
-        "First officer EFIS": ["ND Mode", "ND Range"],
+        "Captain EFIS": ["ND Mode", "ND Range", "WXR", "TERR", "TFC", "CTR", "NAV AID", "APRT", "DATA", "WPT",
+                         "DH Reset", "INOP"],
+        "First officer EFIS": ["ND Mode", "ND Range", "WXR", "TERR", "TFC", "CTR", "NAV AID", "APRT", "DATA", "WPT",
+                               "DH Reset", "INOP"],
+        "Anti-ice": ["Anti Ice L ENG", "Anti Ice R ENG", "Anti Ice Wing"],
+        "Pressurization": ["Mode Select", "Auto Rate", "Equip"],
+        "Switch guards": ["Battery Guard", "Elec Eng Cont 1 Guard (RR)", "Elec Eng Cont 2 Guard (RR)",
+                          "Passenger Oxygen Guard", "Ram Air Turbine Guard", "Left Generator Drive Disconnect Guard",
+                          "Right Generator Drive Disconnect Guard"],
+        "SELCAL and cabin call": ["FWD Cabin Call", "Mid Cabin Call", "Aft Cabin Call", "GND Call", "L VHF", "R VHF",
+                                  "C VHF", "L HF", "R HF", "Flt Int", "Alert Cabin Call"],
+        "Master warning and caution": ["Captain Master Warning and Caution",
+                                       "First Officer Master Warning and Caution"],
+        "Captain chronometer": ["757 Capt Clock", "757 FO Clock", "Clock Button", "Chrono ET", "Chrono Set",
+                                "Date Button"],
+        "Oxygen": ["Captain Oxygen Test", "O2 Redbutton CPT", "First Officer Oxygen Test", "O2 Redbutton FO",
+                   "Observer Oxygen Test", "O2 Redbutton Jumpseat", "P61 Oxygen Test", "O2 Redbutton P61",
+                   "O2 Ears CPT", "O2 Ears FO", "O2 Ears Jumpseat", "O2 Ears Observer"],
+        "First officer chronometer": ["Clock Button", "Chrono ET", "Chrono Set", "Date Button"],
+        "Display brightness": ["Captain PFD", "First Officer PFD", "Captain ND", "First Officer ND", "Upper EICAS",
+                               "Lower EICAS", "Captain CDU", "First Officer CDU"],
+        "EICAS control": ["EICAS R Status", "EICAS L Status", "EICAS Computer Switch", "EICAS Lwr Thrust Ref",
+                          "Thrust Ref Pull", "EICAS Max Ind", "EICAS Event"],
+        "Radio tuning panel 1": ["Comhead 1 Swap", "Nav 1 VHF L", "Nav 1 VHF C", "Nav 1 VHF R", "Nav 1 HF L",
+                                 "Nav 1 HF R", "Nav 1 AM", "Nav 1 Test", "Nav 1 Off"],
+        "Audio panel 1": ["Audio 1 Mic L Light", "Audio 1 Mic L Light Knob", "Audio 1 Mic R Light",
+                          "Audio 1 Mic R Light Knob", "Audio 1 Mic C Light", "Audio 1 Mic C Light Knob",
+                          "Audio 1 Mic PA Light", "Audio 1 Mic PA Light Knob", "Audio 1 Mic Int Light",
+                          "Audio 1 Mic Int Light Knob", "Audio 1 Mic Lils Light", "Audio 1 Mic Clils Light",
+                          "Audio 1 Mic Rlils Light", "Audio 1 Mic Lvor Light", "Audio 1 Mic Rvor Light",
+                          "Audio 1 Mic Ladf Light", "Audio 1 Mic Radf Light", "Audio 1 Mic Mkr Light",
+                          "Audio 1 Voice Range", "Audio 1 Mic Lm Light", "Audio 1 Mic Lm Light Knob",
+                          "Audio 1 Mic RR Light", "Audio 1 Mic RR Light Knob", "Audio 1 Boom Oxy", "Audio 1 PTT"],
+        "Fire protection": ["Wheel Well Fire", "Fire ENG", "Fire Cargo", "Engine 1 Fire Handle Unlock",
+                            "Engine 1 Fire Handle", "Engine 1 Fire Handle Rotation", "Engine 2 Fire Handle Unlock",
+                            "Engine 2 Fire Handle", "Engine 2 Fire Handle Rotation", "APU Fire Handle Unlock",
+                            "APU Fire Handle", "APU Fire Handle Rotation", "FWD Cargo Fire", "AFT Cargo Fire",
+                            "1 BTL Cargo Fire Guard", "1 BTL Cargo Fire", "2 BTL Cargo Fire Guard",
+                            "2 BTL Cargo Fire", "Sys Fail"],
+        "Stabilizer trim": ["Stab Trim C Guard", "Stab Trim C Cutout", "Stab Trim R Guard", "Stab Trim R Cutout"],
+        "Weather radar left": ["WX L WX", "WX L Wxt", "WX L Map", "WX L Gcs", "WX L Test", "WX L Tfr"],
+        "Radio tuning panel 2": ["Comhead 2 Swap", "Nav 2 VHF L", "Nav 2 VHF C", "Nav 2 VHF R", "Nav 2 HF L",
+                                 "Nav 2 HF R", "Nav 2 AM", "Nav 2 Test", "Nav 2 Off"],
+        "Radio tuning panel 3": ["Comhead 3 Swap", "Nav 3 VHF L", "Nav 3 VHF C", "Nav 3 VHF R", "Nav 3 HF L",
+                                 "Nav 3 HF R", "Nav 3 AM", "Nav 3 Test", "Nav 3 Off"],
+        "Audio panel 2": ["Audio 2 Mic L Light", "Audio 2 Mic L Light Knob", "Audio 2 Mic R Light",
+                          "Audio 2 Mic R Light Knob", "Audio 2 Mic C Light", "Audio 2 Mic C Light Knob",
+                          "Audio 2 Mic PA Light", "Audio 2 Mic PA Light Knob", "Audio 2 Mic Int Light",
+                          "Audio 2 Mic Int Light Knob", "Audio 2 Mic Lils Light", "Audio 2 Mic Clils Light",
+                          "Audio 2 Mic Rlils Light", "Audio 2 Mic Lvor Light", "Audio 2 Mic Rvor Light",
+                          "Audio 2 Mic Ladf Light", "Audio 2 Mic Radf Light", "Audio 2 Mic Mkr Light",
+                          "Audio 2 Voice Range", "Audio 2 Mic Lm Light", "Audio 2 Mic Lm Light Knob",
+                          "Audio 2 Mic RR Light", "Audio 2 Mic RR Light Knob", "Audio 2 Boom Oxy", "Audio 2 PTT"],
+        "Weather radar right": ["WX R WX", "WX R Wxt", "WX R Map", "WX R Gcs", "WX R Tfr"],
+        "P61 panel": ["Flight Recorder", "Service Interphone", "P6 Squibs Button2", "Ground Prox Hyd Gen Test",
+                      "Air Data Stall Left Test", "Air Data Stall Right Test", "TO and Land Config Test",
+                      "Equip Cooling Test", "Yaw Damp Test", "Duct Leak Fuel Qty Test", "Wing AI Window Heat Test",
+                      "P61 Glass Guard 1", "P61 Press Main Button L", "P61 Glass Guard 2", "P61 Press Main Button C",
+                      "P61 Glass Guard 3", "P61 Press Main Button R", "P61 Press Button 1", "P61 Press Button 2",
+                      "P61 Press Button 3", "P61 Press Button 4", "P61 Press Button 5", "P61 Press Button 6"],
     }
 
     def test_the_shipped_curation_orders_the_panels_in_the_preflight_flow(self):
@@ -3619,15 +3700,23 @@ class Curation(unittest.TestCase):
                 self.assertEqual(len(names), len(set(names)), "a panel listed twice")
 
     def test_the_shipped_curation_puts_the_most_used_controls_first(self):
-        # A node's label is its curated one, else the one made from its name: the pilot hears the label.
+        # The pilot hears the label the embedded map gives a control (a guard is named by what it covers, a variant says
+        # which model has it), so that is the label the table is written in; and the map is in the order curation gives.
         c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = json.load(fh)["controls"]
+        label_of = {x["node"]: x["label"] for x in controls}
+        in_map = collections.defaultdict(list)
+        for x in controls:
+            in_map[x["panel"]].append(x["node"])
 
         self.assertEqual(set(c["control_order"]), set(self.CONTROL_ORDER_LABELS))
         for panel, labels in self.CONTROL_ORDER_LABELS.items():
             with self.subTest(panel=panel):
                 nodes = c["control_order"][panel]
                 self.assertEqual(len(nodes), len(set(nodes)), "a node listed twice")
-                self.assertEqual([c["labels"].get(n) or g.humanize(n, c["spelling"]) for n in nodes], labels)
+                self.assertEqual([label_of[n] for n in nodes], labels)
+                self.assertEqual(in_map[panel][:len(nodes)], nodes, "the embedded map is in curation's order")
 
     ENGINE_CONTROLS = {
         "B757_OVHD_ENG_START_SWITCH": "LIGHT OVERRIDE", "B757_OVHD_L_ENG_START_SWITCH": "LIGHT OVERRIDE",

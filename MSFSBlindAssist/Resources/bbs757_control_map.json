@@ -26,6 +26,20 @@
    "ccw": null
   },
   {
+   "node": "B757_OVHD_EXT_PWR_BUTTON",
+   "section": "Overhead",
+   "panel": "Electrical",
+   "label": "EXT PWR",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_OVHD_EXT_PWR_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_EXT_PWR_BUTTON, bool) (L:B757_OVHD_EXT_PWR_BUTTON_ON, bool) ! (>L:B757_OVHD_EXT_PWR_BUTTON_ON, bool)",
+   "release": "0 (>O:B757_OVHD_EXT_PWR_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_EXT_PWR_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_OVHD_STBY_POWER_SWITCH",
    "section": "Overhead",
    "panel": "Electrical",
@@ -163,20 +177,6 @@
    ],
    "press": "(L:B757_OVHD_APU_GEN_BUTTON,bool) ! (>L:B757_OVHD_APU_GEN_BUTTON,bool) ! (L:B757_OVHD_APU_GEN_BUTTON_ON,bool) ! (>L:B757_OVHD_APU_GEN_BUTTON_ON,bool)",
    "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_EXT_PWR_BUTTON",
-   "section": "Overhead",
-   "panel": "Electrical",
-   "label": "EXT PWR",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_OVHD_EXT_PWR_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_EXT_PWR_BUTTON, bool) (L:B757_OVHD_EXT_PWR_BUTTON_ON, bool) ! (>L:B757_OVHD_EXT_PWR_BUTTON_ON, bool)",
-   "release": "0 (>O:B757_OVHD_EXT_PWR_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_EXT_PWR_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -526,52 +526,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
-   "section": "Overhead",
-   "panel": "Hydraulics",
-   "label": "L ENG HYD Pumps",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON,bool) ! (>L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON,bool) (L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON_ON,bool) ! (>L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
-   "section": "Overhead",
-   "panel": "Hydraulics",
-   "label": "R ENG HYD Pumps",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON,bool) ! (>L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON,bool) ! (L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON_ON,bool) ! (>L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
    "section": "Overhead",
    "panel": "Hydraulics",
@@ -664,6 +618,52 @@
    "ccw": null
   },
   {
+   "node": "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
+   "section": "Overhead",
+   "panel": "Hydraulics",
+   "label": "L ENG HYD Pumps",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON,bool) ! (>L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON,bool) (L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON_ON,bool) ! (>L:B757_OVHD_L_ENG_HYD_PUMPS_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
+   "section": "Overhead",
+   "panel": "Hydraulics",
+   "label": "R ENG HYD Pumps",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON,bool) ! (>L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON,bool) ! (L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON_ON,bool) ! (>L:B757_OVHD_R_ENG_HYD_PUMPS_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
    "section": "Overhead",
    "panel": "Overhead miscellaneous",
@@ -740,34 +740,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_PASS_OXY_BUTTON",
-   "section": "Overhead",
-   "panel": "Overhead miscellaneous",
-   "label": "Passenger Oxygen",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_OVHD_PASS_OXY_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_PASS_OXY_BUTTON, bool)",
-   "release": "0 (>O:B757_OVHD_PASS_OXY_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_PASS_OXY_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_RAT_BUTTON",
-   "section": "Overhead",
-   "panel": "Overhead miscellaneous",
-   "label": "RAT",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_OVHD_RAT_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_RAT_BUTTON, bool)",
-   "release": "0 (>O:B757_OVHD_RAT_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_RAT_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_L_ENG_LIMITER_BUTTON",
    "section": "Overhead",
    "panel": "Overhead miscellaneous",
@@ -809,6 +781,34 @@
    ],
    "press": "(L:B757_OVHD_R_ENG_LIMITER_BUTTON,bool) ! (>L:B757_OVHD_R_ENG_LIMITER_BUTTON,bool) ! (L:B757_OVHD_R_ENG_LIMITER_BUTTON_ON,bool) ! (>L:B757_OVHD_R_ENG_LIMITER_BUTTON_ON,bool)",
    "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_PASS_OXY_BUTTON",
+   "section": "Overhead",
+   "panel": "Overhead miscellaneous",
+   "label": "Passenger Oxygen",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_OVHD_PASS_OXY_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_PASS_OXY_BUTTON, bool)",
+   "release": "0 (>O:B757_OVHD_PASS_OXY_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_PASS_OXY_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_RAT_BUTTON",
+   "section": "Overhead",
+   "panel": "Overhead miscellaneous",
+   "label": "RAT",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_OVHD_RAT_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_RAT_BUTTON, bool)",
+   "release": "0 (>O:B757_OVHD_RAT_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_RAT_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -998,29 +998,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_ANTI_ICE_WING_BUTTON",
-   "section": "Overhead",
-   "panel": "Anti-ice",
-   "label": "Anti Ice Wing",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_ANTI_ICE_WING_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_ANTI_ICE_WING_BUTTON,bool) ! (>L:B757_OVHD_ANTI_ICE_WING_BUTTON,bool) ! (L:B757_OVHD_ANTI_ICE_WING_BUTTON_ON,bool) ! (>L:B757_OVHD_ANTI_ICE_WING_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_ANTI_ICE_L_ENG_BUTTON",
    "section": "Overhead",
    "panel": "Anti-ice",
@@ -1061,6 +1038,29 @@
     }
    ],
    "press": "(L:B757_OVHD_ANTI_ICE_R_ENG_BUTTON,bool) ! (>L:B757_OVHD_ANTI_ICE_R_ENG_BUTTON,bool) ! (L:B757_OVHD_ANTI_ICE_R_ENG_BUTTON_ON,bool) ! (>L:B757_OVHD_ANTI_ICE_R_ENG_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_ANTI_ICE_WING_BUTTON",
+   "section": "Overhead",
+   "panel": "Anti-ice",
+   "label": "Anti Ice Wing",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_ANTI_ICE_WING_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_ANTI_ICE_WING_BUTTON,bool) ! (>L:B757_OVHD_ANTI_ICE_WING_BUTTON,bool) ! (L:B757_OVHD_ANTI_ICE_WING_BUTTON_ON,bool) ! (>L:B757_OVHD_ANTI_ICE_WING_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1117,12 +1117,12 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_BEACON",
+   "node": "B757_OVHD_HI_INT",
    "section": "Overhead",
    "panel": "Exterior lights",
-   "label": "Position Lights",
+   "label": "Wing Lights",
    "kind": "toggle",
-   "state_var": "B757_OVHD_NAV_LIGHTS",
+   "state_var": "B757_OVHD_WING_LIGHTS",
    "positions": [
     {
      "value": 0,
@@ -1133,99 +1133,7 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_NAV_LIGHTS,bool) ! (>L:B757_OVHD_NAV_LIGHTS,bool) (L:B757_OVHD_NAV_LIGHTS_ON,bool) ! (>L:B757_OVHD_NAV_LIGHTS_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_NAV",
-   "section": "Overhead",
-   "panel": "Exterior lights",
-   "label": "Anti-col White Lights",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_STROBE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_STROBE,bool) ! (>L:B757_OVHD_STROBE,bool) (L:B757_OVHD_STROBE_ON,bool) ! (>L:B757_OVHD_STROBE_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_btn_lights_taxi",
-   "section": "Overhead",
-   "panel": "Exterior lights",
-   "label": "Taxi Light",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_NOSE_LANDING_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_NOSE_LANDING_LIGHT) ! (>L:B757_OVHD_NOSE_LANDING_LIGHT)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_SW_landing_L",
-   "section": "Overhead",
-   "panel": "Exterior lights",
-   "label": "L Landing Light",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_LEFT_LANDING_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_LEFT_LANDING_LIGHT) ! (>L:B757_OVHD_LEFT_LANDING_LIGHT)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_SW_landing_R",
-   "section": "Overhead",
-   "panel": "Exterior lights",
-   "label": "R Landing Light",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_RIGHT_LANDING_LIGHT",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_RIGHT_LANDING_LIGHT) ! (>L:B757_OVHD_RIGHT_LANDING_LIGHT)",
+   "press": "(L:B757_OVHD_WING_LIGHTS,bool) ! (>L:B757_OVHD_WING_LIGHTS,bool) (L:B757_OVHD_WING_LIGHTS_ON,bool) ! (>L:B757_OVHD_WING_LIGHTS_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1278,12 +1186,12 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_HI_INT",
+   "node": "B757_OVHD_btn_lights_taxi",
    "section": "Overhead",
    "panel": "Exterior lights",
-   "label": "Wing Lights",
+   "label": "Taxi Light",
    "kind": "toggle",
-   "state_var": "B757_OVHD_WING_LIGHTS",
+   "state_var": "B757_OVHD_NOSE_LANDING_LIGHT",
    "positions": [
     {
      "value": 0,
@@ -1294,7 +1202,99 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_WING_LIGHTS,bool) ! (>L:B757_OVHD_WING_LIGHTS,bool) (L:B757_OVHD_WING_LIGHTS_ON,bool) ! (>L:B757_OVHD_WING_LIGHTS_ON,bool)",
+   "press": "(L:B757_OVHD_NOSE_LANDING_LIGHT) ! (>L:B757_OVHD_NOSE_LANDING_LIGHT)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_NAV",
+   "section": "Overhead",
+   "panel": "Exterior lights",
+   "label": "Anti-col White Lights",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_STROBE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_STROBE,bool) ! (>L:B757_OVHD_STROBE,bool) (L:B757_OVHD_STROBE_ON,bool) ! (>L:B757_OVHD_STROBE_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_SW_landing_L",
+   "section": "Overhead",
+   "panel": "Exterior lights",
+   "label": "L Landing Light",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_LEFT_LANDING_LIGHT",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_LEFT_LANDING_LIGHT) ! (>L:B757_OVHD_LEFT_LANDING_LIGHT)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_SW_landing_R",
+   "section": "Overhead",
+   "panel": "Exterior lights",
+   "label": "R Landing Light",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_RIGHT_LANDING_LIGHT",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_RIGHT_LANDING_LIGHT) ! (>L:B757_OVHD_RIGHT_LANDING_LIGHT)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_BEACON",
+   "section": "Overhead",
+   "panel": "Exterior lights",
+   "label": "Position Lights",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_NAV_LIGHTS",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_NAV_LIGHTS,bool) ! (>L:B757_OVHD_NAV_LIGHTS,bool) (L:B757_OVHD_NAV_LIGHTS_ON,bool) ! (>L:B757_OVHD_NAV_LIGHTS_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -1470,33 +1470,6 @@
    "ccw": "(L:B757_OVHD_NO_SMOKING_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_NO_SMOKING_SWITCH)"
   },
   {
-   "node": "B757_OVHD_AUTORATE_SWITCH",
-   "section": "Overhead",
-   "panel": "Pressurization",
-   "label": "Auto Rate",
-   "kind": "switch",
-   "state_var": "B757_OVHD_AUTORATE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "MIN"
-    },
-    {
-     "value": 3.5,
-     "label": "INDEX"
-    },
-    {
-     "value": 13,
-     "label": "MAX"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_MODE_SELECT_SWITCH",
    "section": "Overhead",
    "panel": "Pressurization",
@@ -1522,6 +1495,33 @@
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_MODE_SELECT_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_MODE_SELECT_SWITCH)",
    "ccw": "(L:B757_OVHD_MODE_SELECT_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_MODE_SELECT_SWITCH)"
+  },
+  {
+   "node": "B757_OVHD_AUTORATE_SWITCH",
+   "section": "Overhead",
+   "panel": "Pressurization",
+   "label": "Auto Rate",
+   "kind": "switch",
+   "state_var": "B757_OVHD_AUTORATE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "MIN"
+    },
+    {
+     "value": 3.5,
+     "label": "INDEX"
+    },
+    {
+     "value": 13,
+     "label": "MAX"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_OVHD_EQUIP_BUTTON",
@@ -1663,29 +1663,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_APU_BUTTON",
-   "section": "Overhead",
-   "panel": "Air conditioning and bleed",
-   "label": "APU Bleed",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_APU_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_APU_BUTTON,bool) ! (>L:B757_OVHD_APU_BUTTON,bool) ! (L:B757_OVHD_APU_BUTTON_ON,bool) ! (>L:B757_OVHD_APU_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_RENG_BUTTON",
    "section": "Overhead",
    "panel": "Air conditioning and bleed",
@@ -1709,12 +1686,12 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_TRIM_AIR_BUTTON",
+   "node": "B757_OVHD_APU_BUTTON",
    "section": "Overhead",
    "panel": "Air conditioning and bleed",
-   "label": "Trim Air",
+   "label": "APU Bleed",
    "kind": "toggle",
-   "state_var": "B757_OVHD_TRIM_AIR_BUTTON",
+   "state_var": "B757_OVHD_APU_BUTTON",
    "positions": [
     {
      "value": 0,
@@ -1725,83 +1702,9 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_OVHD_TRIM_AIR_BUTTON,bool) ! (>L:B757_OVHD_TRIM_AIR_BUTTON,bool) (L:B757_OVHD_TRIM_AIR_BUTTON_ON,bool) ! (>L:B757_OVHD_TRIM_AIR_BUTTON_ON,bool)",
+   "press": "(L:B757_OVHD_APU_BUTTON,bool) ! (>L:B757_OVHD_APU_BUTTON,bool) ! (L:B757_OVHD_APU_BUTTON_ON,bool) ! (>L:B757_OVHD_APU_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_L_RECIRC_BUTTON",
-   "section": "Overhead",
-   "panel": "Air conditioning and bleed",
-   "label": "L Recirc",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_L_RECIRC_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_L_RECIRC_BUTTON,bool) ! (>L:B757_OVHD_L_RECIRC_BUTTON,bool) (L:B757_OVHD_L_RECIRC_BUTTON_ON,bool) ! (>L:B757_OVHD_L_RECIRC_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_R_RECIRC_BUTTON",
-   "section": "Overhead",
-   "panel": "Air conditioning and bleed",
-   "label": "R Recirc",
-   "kind": "toggle",
-   "state_var": "B757_OVHD_R_RECIRC_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OVHD_R_RECIRC_BUTTON,bool) ! (>L:B757_OVHD_R_RECIRC_BUTTON,bool) (L:B757_OVHD_R_RECIRC_BUTTON_ON,bool) ! (>L:B757_OVHD_R_RECIRC_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_L_PACK_BUTTON",
-   "section": "Overhead",
-   "panel": "Air conditioning and bleed",
-   "label": "L Pack",
-   "kind": "held",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_OVHD_L_PACK_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_L_PACK_BUTTON, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON_HELD, bool) (E:SIMULATION TIME, second) (>O:B757_OVHD_L_PACK_BUTTON_PressTime, second)",
-   "release": "0 (>O:B757_OVHD_L_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON_HELD, bool)",
-   "hold_ms": 1500,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_R_PACK_BUTTON",
-   "section": "Overhead",
-   "panel": "Air conditioning and bleed",
-   "label": "R Pack",
-   "kind": "held",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool) (E:SIMULATION TIME, second) (>O:B757_OVHD_R_PACK_BUTTON_PressTime, second)",
-   "release": "0 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool)",
-   "hold_ms": 1500,
    "cw": null,
    "ccw": null
   },
@@ -2015,6 +1918,103 @@
    "press": null,
    "release": null,
    "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_TRIM_AIR_BUTTON",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "Trim Air",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_TRIM_AIR_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_TRIM_AIR_BUTTON,bool) ! (>L:B757_OVHD_TRIM_AIR_BUTTON,bool) (L:B757_OVHD_TRIM_AIR_BUTTON_ON,bool) ! (>L:B757_OVHD_TRIM_AIR_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_L_RECIRC_BUTTON",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "L Recirc",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_L_RECIRC_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_L_RECIRC_BUTTON,bool) ! (>L:B757_OVHD_L_RECIRC_BUTTON,bool) (L:B757_OVHD_L_RECIRC_BUTTON_ON,bool) ! (>L:B757_OVHD_L_RECIRC_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_R_RECIRC_BUTTON",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "R Recirc",
+   "kind": "toggle",
+   "state_var": "B757_OVHD_R_RECIRC_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OVHD_R_RECIRC_BUTTON,bool) ! (>L:B757_OVHD_R_RECIRC_BUTTON,bool) (L:B757_OVHD_R_RECIRC_BUTTON_ON,bool) ! (>L:B757_OVHD_R_RECIRC_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_L_PACK_BUTTON",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "L Pack",
+   "kind": "held",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_OVHD_L_PACK_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_L_PACK_BUTTON, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON_HELD, bool) (E:SIMULATION TIME, second) (>O:B757_OVHD_L_PACK_BUTTON_PressTime, second)",
+   "release": "0 (>O:B757_OVHD_L_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON_HELD, bool)",
+   "hold_ms": 1500,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_R_PACK_BUTTON",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "R Pack",
+   "kind": "held",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool) (E:SIMULATION TIME, second) (>O:B757_OVHD_R_PACK_BUTTON_PressTime, second)",
+   "release": "0 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool)",
+   "hold_ms": 1500,
    "cw": null,
    "ccw": null
   },
@@ -2295,6 +2295,29 @@
    "ccw": null
   },
   {
+   "node": "B757_GAURD_3_SWITCH",
+   "section": "Overhead",
+   "panel": "Switch guards",
+   "label": "Battery Guard",
+   "kind": "guard",
+   "state_var": "GAURD_3_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:GAURD_3_SWITCH,bool) ! (>L:GAURD_3_SWITCH,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_GAURD_1_SWITCH",
    "section": "Overhead",
    "panel": "Switch guards",
@@ -2341,12 +2364,12 @@
    "ccw": null
   },
   {
-   "node": "B757_GAURD_3_SWITCH",
+   "node": "B757_GAURD_6_SWITCH",
    "section": "Overhead",
    "panel": "Switch guards",
-   "label": "Battery Guard",
+   "label": "Passenger Oxygen Guard",
    "kind": "guard",
-   "state_var": "GAURD_3_SWITCH",
+   "state_var": "GAURD_6_SWITCH",
    "positions": [
     {
      "value": 0,
@@ -2357,7 +2380,30 @@
      "label": "Open"
     }
    ],
-   "press": "(L:GAURD_3_SWITCH,bool) ! (>L:GAURD_3_SWITCH,bool)",
+   "press": "(L:GAURD_6_SWITCH,bool) ! (>L:GAURD_6_SWITCH,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_GAURD_7_SWITCH",
+   "section": "Overhead",
+   "panel": "Switch guards",
+   "label": "Ram Air Turbine Guard",
+   "kind": "guard",
+   "state_var": "GAURD_7_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:GAURD_7_SWITCH,bool) ! (>L:GAURD_7_SWITCH,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -2404,52 +2450,6 @@
     }
    ],
    "press": "(L:GAURD_5_SWITCH,bool) ! (>L:GAURD_5_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_GAURD_6_SWITCH",
-   "section": "Overhead",
-   "panel": "Switch guards",
-   "label": "Passenger Oxygen Guard",
-   "kind": "guard",
-   "state_var": "GAURD_6_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:GAURD_6_SWITCH,bool) ! (>L:GAURD_6_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_GAURD_7_SWITCH",
-   "section": "Overhead",
-   "panel": "Switch guards",
-   "label": "Ram Air Turbine Guard",
-   "kind": "guard",
-   "state_var": "GAURD_7_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:GAURD_7_SWITCH,bool) ! (>L:GAURD_7_SWITCH,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -2511,76 +2511,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_L_VHF_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "L VHF",
-   "kind": "button",
-   "state_var": "B757_OVHD_L_VHF_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_L_VHF_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_L_VHF_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_C_VHF_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "C VHF",
-   "kind": "button",
-   "state_var": "B757_OVHD_C_VHF_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_C_VHF_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_C_VHF_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_R_VHF_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "R VHF",
-   "kind": "button",
-   "state_var": "B757_OVHD_R_VHF_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_R_VHF_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_R_VHF_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_L_HF_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "L HF",
-   "kind": "button",
-   "state_var": "B757_OVHD_L_HF_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_L_HF_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_L_HF_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_OVHD_R_HF_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "R HF",
-   "kind": "button",
-   "state_var": "B757_OVHD_R_HF_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_R_HF_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_R_HF_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_FWD_CABIN_CALL_BUTTON",
    "section": "Overhead",
    "panel": "SELCAL and cabin call",
@@ -2623,20 +2553,6 @@
    "ccw": null
   },
   {
-   "node": "B757_OVHD_ALERT_CABIN_CALL_BUTTON",
-   "section": "Overhead",
-   "panel": "SELCAL and cabin call",
-   "label": "Alert Cabin Call",
-   "kind": "button",
-   "state_var": "B757_OVHD_ALERT_CABIN_CALL_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_OVHD_ALERT_CABIN_CALL_BUTTON, bool)",
-   "release": "0 (>L:B757_OVHD_ALERT_CABIN_CALL_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_OVHD_GND_CALL_BUTTON",
    "section": "Overhead",
    "panel": "SELCAL and cabin call",
@@ -2651,6 +2567,76 @@
    "ccw": null
   },
   {
+   "node": "B757_OVHD_L_VHF_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "L VHF",
+   "kind": "button",
+   "state_var": "B757_OVHD_L_VHF_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_L_VHF_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_L_VHF_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_R_VHF_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "R VHF",
+   "kind": "button",
+   "state_var": "B757_OVHD_R_VHF_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_R_VHF_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_R_VHF_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_C_VHF_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "C VHF",
+   "kind": "button",
+   "state_var": "B757_OVHD_C_VHF_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_C_VHF_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_C_VHF_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_L_HF_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "L HF",
+   "kind": "button",
+   "state_var": "B757_OVHD_L_HF_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_L_HF_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_L_HF_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_R_HF_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "R HF",
+   "kind": "button",
+   "state_var": "B757_OVHD_R_HF_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_R_HF_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_R_HF_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_OVHD_FLT_INT_BUTTON",
    "section": "Overhead",
    "panel": "SELCAL and cabin call",
@@ -2660,6 +2646,20 @@
    "positions": [],
    "press": "1 (>L:B757_OVHD_FLT_INT_BUTTON, bool)",
    "release": "0 (>L:B757_OVHD_FLT_INT_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_ALERT_CABIN_CALL_BUTTON",
+   "section": "Overhead",
+   "panel": "SELCAL and cabin call",
+   "label": "Alert Cabin Call",
+   "kind": "button",
+   "state_var": "B757_OVHD_ALERT_CABIN_CALL_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_OVHD_ALERT_CABIN_CALL_BUTTON, bool)",
+   "release": "0 (>L:B757_OVHD_ALERT_CABIN_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -2785,34 +2785,6 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_THR_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "THR",
-   "kind": "button",
-   "state_var": "B757_MCP_THR_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_THR_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_THR_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_SPD_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "SPD",
-   "kind": "button",
-   "state_var": "B757_MCP_SPD_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_SPD_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_SPD_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_MCP_LNAV_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
@@ -2827,29 +2799,15 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_VNAV_BUTTON",
+   "node": "B757_MCP_THR_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "VNAV",
+   "label": "THR",
    "kind": "button",
-   "state_var": "B757_MCP_VNAV_BUTTON_PRESS",
+   "state_var": "B757_MCP_THR_BUTTON_PRESS",
    "positions": [],
-   "press": "1 (>L:B757_MCP_VNAV_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_VNAV_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_FLCH_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "FLCH",
-   "kind": "button",
-   "state_var": "B757_MCP_FLCH_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_FLCH_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_FLCH_BUTTON_PRESS, bool)",
+   "press": "1 (>L:B757_MCP_THR_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_THR_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -2869,71 +2827,15 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_HOLD_1_BUTTON",
+   "node": "B757_MCP_VNAV_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "HDG HOLD",
+   "label": "VNAV",
    "kind": "button",
-   "state_var": "B757_MCP_HOLD_1_BUTTON_PRESS",
+   "state_var": "B757_MCP_VNAV_BUTTON_PRESS",
    "positions": [],
-   "press": "1 (>L:B757_MCP_HOLD_1_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_HOLD_1_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_VS_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "V/S",
-   "kind": "button",
-   "state_var": "B757_MCP_VS_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_VS_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_VS_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_HOLD_2_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "ALT HOLD",
-   "kind": "button",
-   "state_var": "B757_MCP_HOLD_2_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_HOLD_2_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_HOLD_2_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_LOC_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "LOC",
-   "kind": "button",
-   "state_var": "B757_MCP_LOC_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_LOC_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_LOC_BUTTON_PRESS, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MCP_APP_BUTTON",
-   "section": "Glareshield",
-   "panel": "MCP",
-   "label": "APP",
-   "kind": "button",
-   "state_var": "B757_MCP_APP_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_MCP_APP_BUTTON_PRESS, bool)",
-   "release": "0 (>L:B757_MCP_APP_BUTTON_PRESS, bool)",
+   "press": "1 (>L:B757_MCP_VNAV_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_VNAV_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -2981,38 +2883,99 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_btn_autopilot_disengage",
+   "node": "B757_MCP_FLCH_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "Autopilot Disengage Bar",
-   "kind": "toggle",
-   "state_var": "B757_MCP_btn_autopilot_disengage",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Up"
-    },
-    {
-     "value": 1,
-     "label": "Down"
-    }
-   ],
-   "press": "(L:B757_MCP_btn_autopilot_disengage, bool) ! (>L:B757_MCP_btn_autopilot_disengage) (L:B757_MCP_btn_autopilot_disengage, bool) if{ 1 (>K:AUTOPILOT_DISENGAGE_SET) } els{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }",
-   "release": null,
+   "label": "FLCH",
+   "kind": "button",
+   "state_var": "B757_MCP_FLCH_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_FLCH_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_FLCH_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_MCP_AP_SPD_MACH_SW",
+   "node": "B757_MCP_VS_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "IAS/MACH",
+   "label": "V/S",
    "kind": "button",
-   "state_var": "B757_MCP_AP_SPD_MACH_SW",
+   "state_var": "B757_MCP_VS_BUTTON_PRESS",
    "positions": [],
-   "press": "1 (>L:B757_MCP_AP_SPD_MACH_SW, bool)",
-   "release": "0 (>L:B757_MCP_AP_SPD_MACH_SW, bool)",
+   "press": "1 (>L:B757_MCP_VS_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_VS_BUTTON_PRESS, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_SPD_BUTTON",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "SPD",
+   "kind": "button",
+   "state_var": "B757_MCP_SPD_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_SPD_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_SPD_BUTTON_PRESS, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_HOLD_2_BUTTON",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "ALT HOLD",
+   "kind": "button",
+   "state_var": "B757_MCP_HOLD_2_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_HOLD_2_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_HOLD_2_BUTTON_PRESS, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_AP_SPD_HOLD_SW",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "Speed Intervene",
+   "kind": "button",
+   "state_var": "B757_MCP_IAS_MACH_KNOB_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
+   "release": "0 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_LOC_BUTTON",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "LOC",
+   "kind": "button",
+   "state_var": "B757_MCP_LOC_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_LOC_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_LOC_BUTTON_PRESS, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_APP_BUTTON",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "APP",
+   "kind": "button",
+   "state_var": "B757_MCP_APP_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_APP_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_APP_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3032,15 +2995,29 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_AP_SPD_HOLD_SW",
+   "node": "B757_MCP_AP_SPD_MACH_SW",
    "section": "Glareshield",
    "panel": "MCP",
-   "label": "Speed Intervene",
+   "label": "IAS/MACH",
    "kind": "button",
-   "state_var": "B757_MCP_IAS_MACH_KNOB_BUTTON",
+   "state_var": "B757_MCP_AP_SPD_MACH_SW",
    "positions": [],
-   "press": "1 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
-   "release": "0 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
+   "press": "1 (>L:B757_MCP_AP_SPD_MACH_SW, bool)",
+   "release": "0 (>L:B757_MCP_AP_SPD_MACH_SW, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_HOLD_1_BUTTON",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "HDG HOLD",
+   "kind": "button",
+   "state_var": "B757_MCP_HOLD_1_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_MCP_HOLD_1_BUTTON_PRESS, bool)",
+   "release": "0 (>L:B757_MCP_HOLD_1_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3085,6 +3062,29 @@
    "ccw": "(L:BBS757_BANK_LIMITER, enum) 1 - 0 max (>L:BBS757_BANK_LIMITER)"
   },
   {
+   "node": "B757_MCP_btn_autopilot_disengage",
+   "section": "Glareshield",
+   "panel": "MCP",
+   "label": "Autopilot Disengage Bar",
+   "kind": "toggle",
+   "state_var": "B757_MCP_btn_autopilot_disengage",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_MCP_btn_autopilot_disengage, bool) ! (>L:B757_MCP_btn_autopilot_disengage) (L:B757_MCP_btn_autopilot_disengage, bool) if{ 1 (>K:AUTOPILOT_DISENGAGE_SET) } els{ 0 (>K:AUTOPILOT_DISENGAGE_SET) }",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MCP_BCRS_1_BUTTON",
    "section": "Glareshield",
    "panel": "MCP",
@@ -3127,20 +3127,6 @@
    "ccw": null
   },
   {
-   "node": "B757_MCP_btn_master_copilot",
-   "section": "Glareshield",
-   "panel": "Master warning and caution",
-   "label": "First Officer Master Warning and Caution",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_MCP_btn_master_copilot_ButtonLocked, bool) 1 (>L:B757_MCP_btn_master_copilot, bool) (L:B757_MCP_btn_master_copilot_ON, bool) ! (>L:B757_MCP_btn_master_copilot_ON, bool)",
-   "release": "0 (>O:B757_MCP_btn_master_copilot_ButtonLocked, bool) 0 (>L:B757_MCP_btn_master_copilot, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_MCP_btn_master_pilot",
    "section": "Glareshield",
    "panel": "Master warning and caution",
@@ -3150,6 +3136,20 @@
    "positions": [],
    "press": "1 (>O:B757_MCP_btn_master_pilot_ButtonLocked, bool) 1 (>L:B757_MCP_btn_master_pilot, bool) (L:B757_MCP_btn_master_pilot_ON, bool) ! (>L:B757_MCP_btn_master_pilot_ON, bool)",
    "release": "0 (>O:B757_MCP_btn_master_pilot_ButtonLocked, bool) 0 (>L:B757_MCP_btn_master_pilot, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MCP_btn_master_copilot",
+   "section": "Glareshield",
+   "panel": "Master warning and caution",
+   "label": "First Officer Master Warning and Caution",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_MCP_btn_master_copilot_ButtonLocked, bool) 1 (>L:B757_MCP_btn_master_copilot, bool) (L:B757_MCP_btn_master_copilot_ON, bool) ! (>L:B757_MCP_btn_master_copilot_ON, bool)",
+   "release": "0 (>O:B757_MCP_btn_master_copilot_ButtonLocked, bool) 0 (>L:B757_MCP_btn_master_copilot, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3202,122 +3202,15 @@
    "ccw": "(L:BBS_AUTOBRAKE_KNOB, enum) 1 - 0 max (>L:BBS_AUTOBRAKE_KNOB)"
   },
   {
-   "node": "B757_MAIN_TOCHK_BUTTON",
+   "node": "B757_MAIN_RECALL_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "Takeoff Check",
+   "label": "Recall",
    "kind": "button",
-   "state_var": "B757_MAIN_TOCHK_BUTTON",
+   "state_var": "B757_MAIN_RECALL_BUTTON",
    "positions": [],
-   "press": "1 (>L:B757_MAIN_TOCHK_BUTTON)",
-   "release": "0 (>L:B757_MAIN_TOCHK_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_TOGA_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "TOGA",
-   "kind": "button",
-   "state_var": "B757_MAIN_TOGA_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_TOGA_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_TOGA_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_CLB_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "CLB",
-   "kind": "button",
-   "state_var": "B757_MAIN_CLB_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_CLB_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_CLB_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_CON_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "CON",
-   "kind": "button",
-   "state_var": "B757_MAIN_CON_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_CON_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_CON_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_CRZ_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "CRZ",
-   "kind": "button",
-   "state_var": "B757_MAIN_CRZ_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_CRZ_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_CRZ_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_1_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "TMSP 1",
-   "kind": "button",
-   "state_var": "B757_MAIN_1_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_1_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_1_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_2_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "TMSP 2",
-   "kind": "button",
-   "state_var": "B757_MAIN_2_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_MAIN_2_BUTTON, bool)",
-   "release": "0 (>L:B757_MAIN_2_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_HDG_REF_SWITCH",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "HDG Ref",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_HDG_REF_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_HDG_REF_SWITCH) ! (>L:B757_MAIN_HDG_REF_SWITCH)",
-   "release": null,
+   "press": "1 (>L:B757_MAIN_RECALL_BUTTON)",
+   "release": "0 (>L:B757_MAIN_RECALL_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3337,72 +3230,18 @@
    "ccw": null
   },
   {
-   "node": "B757_MAIN_RECALL_BUTTON",
+   "node": "B757_MAIN_TOCHK_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "Recall",
+   "label": "Takeoff Check",
    "kind": "button",
-   "state_var": "B757_MAIN_RECALL_BUTTON",
+   "state_var": "B757_MAIN_TOCHK_BUTTON",
    "positions": [],
-   "press": "1 (>L:B757_MAIN_RECALL_BUTTON)",
-   "release": "0 (>L:B757_MAIN_RECALL_BUTTON)",
+   "press": "1 (>L:B757_MAIN_TOCHK_BUTTON)",
+   "release": "0 (>L:B757_MAIN_TOCHK_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_FLT_DIR_SWITCH",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Flt Dir",
-   "kind": "switch",
-   "state_var": "B757_MAIN_L_FLT_DIR_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Left"
-    },
-    {
-     "value": 1,
-     "label": "Center"
-    },
-    {
-     "value": 2,
-     "label": "Right"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_DIR_SWITCH)",
-   "ccw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_DIR_SWITCH)"
-  },
-  {
-   "node": "B757_MAIN_L_FLT_NAV_SWITCH",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Flt Nav",
-   "kind": "switch",
-   "state_var": "B757_MAIN_L_FLT_NAV_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Left CDU"
-    },
-    {
-     "value": 1,
-     "label": "Left FMC"
-    },
-    {
-     "value": 2,
-     "label": "Right FMC"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_NAV_SWITCH)",
-   "ccw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_NAV_SWITCH)"
   },
   {
    "node": "B757_MAIN_L_FOOT_HEATERS_SWITCH",
@@ -3411,6 +3250,33 @@
    "label": "L Foot Heaters",
    "kind": "switch",
    "state_var": "B757_MAIN_L_FOOT_HEATERS_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Hi"
+    },
+    {
+     "value": 1,
+     "label": "Low"
+    },
+    {
+     "value": 2,
+     "label": "Off"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_R_FOOT_HEATERS_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R Foot Heaters",
+   "kind": "switch",
+   "state_var": "B757_MAIN_R_FOOT_HEATERS_SWITCH",
    "positions": [
     {
      "value": 0,
@@ -3459,6 +3325,271 @@
    "ccw": null
   },
   {
+   "node": "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R Shoulder Heaters",
+   "kind": "switch",
+   "state_var": "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Hi"
+    },
+    {
+     "value": 1,
+     "label": "Low"
+    },
+    {
+     "value": 2,
+     "label": "Off"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_L_FLT_DIR_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Flt Dir",
+   "kind": "switch",
+   "state_var": "B757_MAIN_L_FLT_DIR_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Left"
+    },
+    {
+     "value": 1,
+     "label": "Center"
+    },
+    {
+     "value": 2,
+     "label": "Right"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_DIR_SWITCH)",
+   "ccw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_DIR_SWITCH)"
+  },
+  {
+   "node": "B757_MAIN_R_FLT_DIR_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R Flt Dir",
+   "kind": "switch",
+   "state_var": "B757_MAIN_R_FLT_DIR_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Left"
+    },
+    {
+     "value": 1,
+     "label": "Center"
+    },
+    {
+     "value": 2,
+     "label": "Right"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_DIR_SWITCH)",
+   "ccw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_DIR_SWITCH)"
+  },
+  {
+   "node": "B757_MAIN_L_FLT_NAV_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Flt Nav",
+   "kind": "switch",
+   "state_var": "B757_MAIN_L_FLT_NAV_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Left CDU"
+    },
+    {
+     "value": 1,
+     "label": "Left FMC"
+    },
+    {
+     "value": 2,
+     "label": "Right FMC"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_NAV_SWITCH)",
+   "ccw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_NAV_SWITCH)"
+  },
+  {
+   "node": "B757_MAIN_R_FLT_NAV_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R Flt Nav",
+   "kind": "switch",
+   "state_var": "B757_MAIN_R_FLT_NAV_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Left FMC"
+    },
+    {
+     "value": 1,
+     "label": "Right FMC"
+    },
+    {
+     "value": 2,
+     "label": "Right CDU"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_NAV_SWITCH)",
+   "ccw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_NAV_SWITCH)"
+  },
+  {
+   "node": "B757_MAIN_STDBY_EICAS_KNOB",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "Stdby EICAS",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_STDBY_EICAS_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_STDBY_EICAS_KNOB, bool) ! (>L:B757_MAIN_STDBY_EICAS_KNOB, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_HDG_REF_SWITCH",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "HDG Ref",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_HDG_REF_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_HDG_REF_SWITCH) ! (>L:B757_MAIN_HDG_REF_SWITCH)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_TOGA_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "TOGA",
+   "kind": "button",
+   "state_var": "B757_MAIN_TOGA_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_TOGA_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_TOGA_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_1_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "TMSP 1",
+   "kind": "button",
+   "state_var": "B757_MAIN_1_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_1_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_1_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_2_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "TMSP 2",
+   "kind": "button",
+   "state_var": "B757_MAIN_2_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_2_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_2_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_CLB_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "CLB",
+   "kind": "button",
+   "state_var": "B757_MAIN_CLB_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_CLB_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_CLB_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_CRZ_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "CRZ",
+   "kind": "button",
+   "state_var": "B757_MAIN_CRZ_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_CRZ_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_CRZ_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_GS_INHIBIT",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "G/S Inhibit",
+   "kind": "button",
+   "state_var": "BBS757_GS_INHIBIT",
+   "positions": [],
+   "press": "1 (>L:BBS757_GS_INHIBIT, bool)",
+   "release": "0 (>L:BBS757_GS_INHIBIT, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_L_EFI_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
@@ -3476,6 +3607,29 @@
     }
    ],
    "press": "(L:B757_MAIN_L_EFI_BUTTON,bool) ! (>L:B757_MAIN_L_EFI_BUTTON,bool) ! (L:B757_MAIN_L_EFI_BUTTON_ON,bool) ! (>L:B757_MAIN_L_EFI_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_R_EFI_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R EFI",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_R_EFI_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_R_EFI_BUTTON,bool) ! (>L:B757_MAIN_R_EFI_BUTTON,bool) (L:B757_MAIN_R_EFI_BUTTON_ON,bool) ! (>L:B757_MAIN_R_EFI_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -3505,6 +3659,29 @@
    "ccw": null
   },
   {
+   "node": "B757_MAIN_R_IRS_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "R IRS",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_R_IRS_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_R_IRS_BUTTON,bool) ! (>L:B757_MAIN_R_IRS_BUTTON,bool) ! (L:B757_MAIN_R_IRS_BUTTON_ON,bool) ! (>L:B757_MAIN_R_IRS_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_L_AIRDATA_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
@@ -3528,12 +3705,12 @@
    "ccw": null
   },
   {
-   "node": "B757_MAIN_L_BRAKERESERVE_BUTTON",
+   "node": "B757_MAIN_R_AIRDATA_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "L Brake Reserve",
+   "label": "R Airdata",
    "kind": "toggle",
-   "state_var": "B757_MAIN_L_BRAKERESERVE_BUTTON",
+   "state_var": "B757_MAIN_R_AIRDATA_BUTTON",
    "positions": [
     {
      "value": 0,
@@ -3544,128 +3721,8 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_MAIN_L_BRAKERESERVE_BUTTON,bool) ! (>L:B757_MAIN_L_BRAKERESERVE_BUTTON,bool) ! (L:B757_MAIN_L_BRAKERESERVE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_BRAKERESERVE_BUTTON_ON,bool)",
+   "press": "(L:B757_MAIN_R_AIRDATA_BUTTON,bool) ! (>L:B757_MAIN_R_AIRDATA_BUTTON,bool) ! (L:B757_MAIN_R_AIRDATA_BUTTON_ON,bool) ! (>L:B757_MAIN_R_AIRDATA_BUTTON_ON,bool)",
    "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_LEADINGEDGE_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Leading Edge",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_L_LEADINGEDGE_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_L_LEADINGEDGE_BUTTON,bool) ! (>L:B757_MAIN_L_LEADINGEDGE_BUTTON,bool) ! (L:B757_MAIN_L_LEADINGEDGE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_LEADINGEDGE_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_TRAILINGEDGE_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Trailing Edge",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_L_TRAILINGEDGE_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_L_TRAILINGEDGE_BUTTON,bool) ! (>L:B757_MAIN_L_TRAILINGEDGE_BUTTON,bool) ! (L:B757_MAIN_L_TRAILINGEDGE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_TRAILINGEDGE_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_FLAPOVRD_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Flap Ovrd",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_L_FLAPOVRD_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_L_FLAPOVRD_BUTTON,bool) ! (>L:B757_MAIN_L_FLAPOVRD_BUTTON,bool) ! (L:B757_MAIN_L_FLAPOVRD_BUTTON_ON,bool) ! (>L:B757_MAIN_L_FLAPOVRD_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "BBS757_GS_INHIBIT",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "G/S Inhibit",
-   "kind": "button",
-   "state_var": "BBS757_GS_INHIBIT",
-   "positions": [],
-   "press": "1 (>L:BBS757_GS_INHIBIT, bool)",
-   "release": "0 (>L:BBS757_GS_INHIBIT, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_GEAROVRD_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Gear Ovrd",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_L_GEAROVRD_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_L_GEAROVRD_BUTTON,bool) ! (>L:B757_MAIN_L_GEAROVRD_BUTTON,bool) ! (L:B757_MAIN_L_GEAROVRD_BUTTON_ON,bool) ! (>L:B757_MAIN_L_GEAROVRD_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_L_TERROVRD_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "L Terr Ovrd",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_MAIN_L_TERROVRD_BUTTON_ButtonLocked, bool) 1 (>L:B757_MAIN_L_TERROVRD_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_MAIN_L_TERROVRD_BUTTON_PressTime, second)",
-   "release": "0 (>O:B757_MAIN_L_TERROVRD_BUTTON_ButtonLocked, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3703,29 +3760,6 @@
    "positions": [],
    "press": "1 (>L:B757_MAIN_ALTN_GEAR_SWITCH, bool)",
    "release": "0 (>L:B757_MAIN_ALTN_GEAR_SWITCH, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_STDBY_EICAS_KNOB",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "Stdby EICAS",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_STDBY_EICAS_KNOB",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_STDBY_EICAS_KNOB, bool) ! (>L:B757_MAIN_STDBY_EICAS_KNOB, bool)",
-   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -3778,6 +3812,52 @@
    "ccw": "(L:B757_MAIN_knob_gears_altn_flaps, enum) 1 - 0 max (>L:B757_MAIN_knob_gears_altn_flaps)"
   },
   {
+   "node": "B757_MAIN_L_LEADINGEDGE_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Leading Edge",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_L_LEADINGEDGE_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_L_LEADINGEDGE_BUTTON,bool) ! (>L:B757_MAIN_L_LEADINGEDGE_BUTTON,bool) ! (L:B757_MAIN_L_LEADINGEDGE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_LEADINGEDGE_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_L_TRAILINGEDGE_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Trailing Edge",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_L_TRAILINGEDGE_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_L_TRAILINGEDGE_BUTTON,bool) ! (>L:B757_MAIN_L_TRAILINGEDGE_BUTTON,bool) ! (L:B757_MAIN_L_TRAILINGEDGE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_TRAILINGEDGE_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_GAURD_8_SWITCH",
    "section": "Forward panel",
    "panel": "Main panel switches",
@@ -3795,6 +3875,29 @@
     }
    ],
    "press": "(L:GAURD_8_SWITCH,bool) ! (>L:GAURD_8_SWITCH,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_MAIN_L_FLAPOVRD_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Flap Ovrd",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_L_FLAPOVRD_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_L_FLAPOVRD_BUTTON,bool) ! (>L:B757_MAIN_L_FLAPOVRD_BUTTON,bool) ! (L:B757_MAIN_L_FLAPOVRD_BUTTON_ON,bool) ! (>L:B757_MAIN_L_FLAPOVRD_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -3824,6 +3927,29 @@
    "ccw": null
   },
   {
+   "node": "B757_MAIN_L_GEAROVRD_BUTTON",
+   "section": "Forward panel",
+   "panel": "Main panel switches",
+   "label": "L Gear Ovrd",
+   "kind": "toggle",
+   "state_var": "B757_MAIN_L_GEAROVRD_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_MAIN_L_GEAROVRD_BUTTON,bool) ! (>L:B757_MAIN_L_GEAROVRD_BUTTON,bool) ! (L:B757_MAIN_L_GEAROVRD_BUTTON_ON,bool) ! (>L:B757_MAIN_L_GEAROVRD_BUTTON_ON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_GAURD_10_SWITCH",
    "section": "Forward panel",
    "panel": "Main panel switches",
@@ -3847,120 +3973,26 @@
    "ccw": null
   },
   {
-   "node": "B757_MAIN_R_FLT_DIR_SWITCH",
+   "node": "B757_MAIN_L_TERROVRD_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "R Flt Dir",
-   "kind": "switch",
-   "state_var": "B757_MAIN_R_FLT_DIR_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Left"
-    },
-    {
-     "value": 1,
-     "label": "Center"
-    },
-    {
-     "value": 2,
-     "label": "Right"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_DIR_SWITCH)",
-   "ccw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_DIR_SWITCH)"
-  },
-  {
-   "node": "B757_MAIN_R_FLT_NAV_SWITCH",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "R Flt Nav",
-   "kind": "switch",
-   "state_var": "B757_MAIN_R_FLT_NAV_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Left FMC"
-    },
-    {
-     "value": 1,
-     "label": "Right FMC"
-    },
-    {
-     "value": 2,
-     "label": "Right CDU"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_NAV_SWITCH)",
-   "ccw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_NAV_SWITCH)"
-  },
-  {
-   "node": "B757_MAIN_R_FOOT_HEATERS_SWITCH",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "R Foot Heaters",
-   "kind": "switch",
-   "state_var": "B757_MAIN_R_FOOT_HEATERS_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Hi"
-    },
-    {
-     "value": 1,
-     "label": "Low"
-    },
-    {
-     "value": 2,
-     "label": "Off"
-    }
-   ],
-   "press": null,
-   "release": null,
+   "label": "L Terr Ovrd",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_MAIN_L_TERROVRD_BUTTON_ButtonLocked, bool) 1 (>L:B757_MAIN_L_TERROVRD_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_MAIN_L_TERROVRD_BUTTON_PressTime, second)",
+   "release": "0 (>O:B757_MAIN_L_TERROVRD_BUTTON_ButtonLocked, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
+   "node": "B757_MAIN_L_BRAKERESERVE_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "R Shoulder Heaters",
-   "kind": "switch",
-   "state_var": "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Hi"
-    },
-    {
-     "value": 1,
-     "label": "Low"
-    },
-    {
-     "value": 2,
-     "label": "Off"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_R_EFI_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "R EFI",
+   "label": "L Brake Reserve",
    "kind": "toggle",
-   "state_var": "B757_MAIN_R_EFI_BUTTON",
+   "state_var": "B757_MAIN_L_BRAKERESERVE_BUTTON",
    "positions": [
     {
      "value": 0,
@@ -3971,54 +4003,22 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_MAIN_R_EFI_BUTTON,bool) ! (>L:B757_MAIN_R_EFI_BUTTON,bool) (L:B757_MAIN_R_EFI_BUTTON_ON,bool) ! (>L:B757_MAIN_R_EFI_BUTTON_ON,bool)",
+   "press": "(L:B757_MAIN_L_BRAKERESERVE_BUTTON,bool) ! (>L:B757_MAIN_L_BRAKERESERVE_BUTTON,bool) ! (L:B757_MAIN_L_BRAKERESERVE_BUTTON_ON,bool) ! (>L:B757_MAIN_L_BRAKERESERVE_BUTTON_ON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_MAIN_R_IRS_BUTTON",
+   "node": "B757_MAIN_CON_BUTTON",
    "section": "Forward panel",
    "panel": "Main panel switches",
-   "label": "R IRS",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_R_IRS_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_R_IRS_BUTTON,bool) ! (>L:B757_MAIN_R_IRS_BUTTON,bool) ! (L:B757_MAIN_R_IRS_BUTTON_ON,bool) ! (>L:B757_MAIN_R_IRS_BUTTON_ON,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_MAIN_R_AIRDATA_BUTTON",
-   "section": "Forward panel",
-   "panel": "Main panel switches",
-   "label": "R Airdata",
-   "kind": "toggle",
-   "state_var": "B757_MAIN_R_AIRDATA_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_MAIN_R_AIRDATA_BUTTON,bool) ! (>L:B757_MAIN_R_AIRDATA_BUTTON,bool) ! (L:B757_MAIN_R_AIRDATA_BUTTON_ON,bool) ! (>L:B757_MAIN_R_AIRDATA_BUTTON_ON,bool)",
-   "release": null,
+   "label": "CON",
+   "kind": "button",
+   "state_var": "B757_MAIN_CON_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_MAIN_CON_BUTTON, bool)",
+   "release": "0 (>L:B757_MAIN_CON_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4144,43 +4144,24 @@
    "ccw": "(L:BBS_ND1_Range_Index, enum) 1 - 0 max (>L:BBS_ND1_Range_Index)"
   },
   {
-   "node": "B757_ADI_1_TFC_BUTTON",
+   "node": "B757_ADI_1_WXR_BUTTON",
    "section": "Forward panel",
    "panel": "Captain EFIS",
-   "label": "TFC",
-   "kind": "button",
-   "state_var": "B757_ADI_1_TFC_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_ADI_1_TFC_BUTTON)",
-   "release": "0 (>L:B757_ADI_1_TFC_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_ADI_1_CTR_BUTTON",
-   "section": "Forward panel",
-   "panel": "Captain EFIS",
-   "label": "CTR",
-   "kind": "button",
-   "state_var": "B757_ADI_1_CTR_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_ADI_1_CTR_BUTTON)",
-   "release": "0 (>L:B757_ADI_1_CTR_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_DH_RESET_CPT",
-   "section": "Forward panel",
-   "panel": "Captain EFIS",
-   "label": "DH Reset",
-   "kind": "button",
-   "state_var": "B757_DH_RESET_CPT",
-   "positions": [],
-   "press": "1 (>L:B757_DH_RESET_CPT, bool)",
-   "release": "0 (>L:B757_DH_RESET_CPT, bool)",
+   "label": "WXR",
+   "kind": "toggle",
+   "state_var": "B757_ADI_1_WXR_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_ADI_1_WXR_BUTTON,bool) ! (>L:B757_ADI_1_WXR_BUTTON,bool)",
+   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4209,47 +4190,29 @@
    "ccw": null
   },
   {
-   "node": "B757_ADI_1_WXR_BUTTON",
+   "node": "B757_ADI_1_TFC_BUTTON",
    "section": "Forward panel",
    "panel": "Captain EFIS",
-   "label": "WXR",
-   "kind": "toggle",
-   "state_var": "B757_ADI_1_WXR_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_ADI_1_WXR_BUTTON,bool) ! (>L:B757_ADI_1_WXR_BUTTON,bool)",
-   "release": null,
+   "label": "TFC",
+   "kind": "button",
+   "state_var": "B757_ADI_1_TFC_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_ADI_1_TFC_BUTTON)",
+   "release": "0 (>L:B757_ADI_1_TFC_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_ADI_1_INOP_BUTTON",
+   "node": "B757_ADI_1_CTR_BUTTON",
    "section": "Forward panel",
    "panel": "Captain EFIS",
-   "label": "INOP",
-   "kind": "toggle",
-   "state_var": "B757_ADI_1_INOP_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_ADI_1_INOP_BUTTON,bool) ! (>L:B757_ADI_1_INOP_BUTTON,bool)",
-   "release": null,
+   "label": "CTR",
+   "kind": "button",
+   "state_var": "B757_ADI_1_CTR_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_ADI_1_CTR_BUTTON)",
+   "release": "0 (>L:B757_ADI_1_CTR_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4341,6 +4304,43 @@
     }
    ],
    "press": "(L:B757_ADI_1_WPT_BUTTON,bool) ! (>L:B757_ADI_1_WPT_BUTTON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_DH_RESET_CPT",
+   "section": "Forward panel",
+   "panel": "Captain EFIS",
+   "label": "DH Reset",
+   "kind": "button",
+   "state_var": "B757_DH_RESET_CPT",
+   "positions": [],
+   "press": "1 (>L:B757_DH_RESET_CPT, bool)",
+   "release": "0 (>L:B757_DH_RESET_CPT, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_ADI_1_INOP_BUTTON",
+   "section": "Forward panel",
+   "panel": "Captain EFIS",
+   "label": "INOP",
+   "kind": "toggle",
+   "state_var": "B757_ADI_1_INOP_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_ADI_1_INOP_BUTTON,bool) ! (>L:B757_ADI_1_INOP_BUTTON,bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -4504,6 +4504,48 @@
    "ccw": null
   },
   {
+   "node": "BBS_757_CAPT_CLOCK_BUTTON",
+   "section": "Forward panel",
+   "panel": "Captain chronometer",
+   "label": "757 Capt Clock",
+   "kind": "button",
+   "state_var": "BBS_757_CAPT_CLOCK_BUTTON",
+   "positions": [],
+   "press": "1 (>L:BBS_757_CAPT_CLOCK_BUTTON,bool)",
+   "release": "0 (>L:BBS_757_CAPT_CLOCK_BUTTON)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS_757_FO_CLOCK_BUTTON",
+   "section": "Forward panel",
+   "panel": "Captain chronometer",
+   "label": "757 FO Clock",
+   "kind": "button",
+   "state_var": "BBS_757_FO_CLOCK_BUTTON",
+   "positions": [],
+   "press": "1 (>L:BBS_757_FO_CLOCK_BUTTON,bool)",
+   "release": "0 (>L:BBS_757_FO_CLOCK_BUTTON)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "INSTRUMENT_Knob_Clock",
+   "section": "Forward panel",
+   "panel": "Captain chronometer",
+   "label": "Clock Button",
+   "kind": "button",
+   "state_var": "B757_CHRONO_BUTTON_PRESS",
+   "positions": [],
+   "press": "1 (>L:B757_CHRONO_BUTTON_PRESS)",
+   "release": "0 (>L:B757_CHRONO_BUTTON_PRESS)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_CHRONO_ET_SWITCH",
    "section": "Forward panel",
    "panel": "Captain chronometer",
@@ -4562,20 +4604,6 @@
    "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH, enum)"
   },
   {
-   "node": "INSTRUMENT_Knob_Clock",
-   "section": "Forward panel",
-   "panel": "Captain chronometer",
-   "label": "Clock Button",
-   "kind": "button",
-   "state_var": "B757_CHRONO_BUTTON_PRESS",
-   "positions": [],
-   "press": "1 (>L:B757_CHRONO_BUTTON_PRESS)",
-   "release": "0 (>L:B757_CHRONO_BUTTON_PRESS)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "INSTRUMENT_Knob_Date",
    "section": "Forward panel",
    "panel": "Captain chronometer",
@@ -4585,34 +4613,6 @@
    "positions": [],
    "press": "1 (>L:B757_CHRONO_DATE_BUTTON_PRESS)",
    "release": "0 (>L:B757_CHRONO_DATE_BUTTON_PRESS)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "BBS_757_CAPT_CLOCK_BUTTON",
-   "section": "Forward panel",
-   "panel": "Captain chronometer",
-   "label": "757 Capt Clock",
-   "kind": "button",
-   "state_var": "BBS_757_CAPT_CLOCK_BUTTON",
-   "positions": [],
-   "press": "1 (>L:BBS_757_CAPT_CLOCK_BUTTON,bool)",
-   "release": "0 (>L:BBS_757_CAPT_CLOCK_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "BBS_757_FO_CLOCK_BUTTON",
-   "section": "Forward panel",
-   "panel": "Captain chronometer",
-   "label": "757 FO Clock",
-   "kind": "button",
-   "state_var": "BBS_757_FO_CLOCK_BUTTON",
-   "positions": [],
-   "press": "1 (>L:BBS_757_FO_CLOCK_BUTTON,bool)",
-   "release": "0 (>L:BBS_757_FO_CLOCK_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4646,29 +4646,6 @@
    "ccw": null
   },
   {
-   "node": "O2_EARS_CPT",
-   "section": "Forward panel",
-   "panel": "Oxygen",
-   "label": "O2 Ears CPT",
-   "kind": "toggle",
-   "state_var": "B757_CAPT_O2_ACTIVATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_CAPT_O2_ACTIVATE, bool) ! (>L:B757_CAPT_O2_ACTIVATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "OXY_FO_TEST_SWITCH1",
    "section": "Forward panel",
    "panel": "Oxygen",
@@ -4692,29 +4669,6 @@
    "positions": [],
    "press": "1 (>L:B757_FO_O2_EMERGENCY_TEST_BTN, bool)",
    "release": "0 (>L:B757_FO_O2_EMERGENCY_TEST_BTN, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "O2_EARS_FO",
-   "section": "Forward panel",
-   "panel": "Oxygen",
-   "label": "O2 Ears FO",
-   "kind": "toggle",
-   "state_var": "B757_FO_O2_ACTIVATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_FO_O2_ACTIVATE, bool) ! (>L:B757_FO_O2_ACTIVATE, bool)",
-   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4748,29 +4702,6 @@
    "ccw": null
   },
   {
-   "node": "O2_EARS_JUMPSEAT",
-   "section": "Forward panel",
-   "panel": "Oxygen",
-   "label": "O2 Ears Jumpseat",
-   "kind": "toggle",
-   "state_var": "B757_OBS1_O2_ACTIVATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_OBS1_O2_ACTIVATE, bool) ! (>L:B757_OBS1_O2_ACTIVATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "OXY_P61_TEST_SWITCH",
    "section": "Forward panel",
    "panel": "Oxygen",
@@ -4794,6 +4725,75 @@
    "positions": [],
    "press": "1 (>L:B757_OBS2_O2_EMERGENCY_TEST_BTN, bool)",
    "release": "0 (>L:B757_OBS2_O2_EMERGENCY_TEST_BTN, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "O2_EARS_CPT",
+   "section": "Forward panel",
+   "panel": "Oxygen",
+   "label": "O2 Ears CPT",
+   "kind": "toggle",
+   "state_var": "B757_CAPT_O2_ACTIVATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_CAPT_O2_ACTIVATE, bool) ! (>L:B757_CAPT_O2_ACTIVATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "O2_EARS_FO",
+   "section": "Forward panel",
+   "panel": "Oxygen",
+   "label": "O2 Ears FO",
+   "kind": "toggle",
+   "state_var": "B757_FO_O2_ACTIVATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_FO_O2_ACTIVATE, bool) ! (>L:B757_FO_O2_ACTIVATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "O2_EARS_JUMPSEAT",
+   "section": "Forward panel",
+   "panel": "Oxygen",
+   "label": "O2 Ears Jumpseat",
+   "kind": "toggle",
+   "state_var": "B757_OBS1_O2_ACTIVATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_OBS1_O2_ACTIVATE, bool) ! (>L:B757_OBS1_O2_ACTIVATE, bool)",
+   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4915,43 +4915,24 @@
    "ccw": "(L:BBS_ND2_Range_Index, enum) 1 - 0 max (>L:BBS_ND2_Range_Index)"
   },
   {
-   "node": "B757_ADI_2_TFC_BUTTON",
+   "node": "B757_ADI_2_WXR_BUTTON",
    "section": "Forward panel",
    "panel": "First officer EFIS",
-   "label": "TFC",
-   "kind": "button",
-   "state_var": "B757_ADI_2_TFC_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_ADI_2_TFC_BUTTON)",
-   "release": "0 (>L:B757_ADI_2_TFC_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_ADI_2_CTR_BUTTON",
-   "section": "Forward panel",
-   "panel": "First officer EFIS",
-   "label": "CTR",
-   "kind": "button",
-   "state_var": "B757_ADI_2_CTR_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_ADI_2_CTR_BUTTON)",
-   "release": "0 (>L:B757_ADI_2_CTR_BUTTON)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_DH_RESET_FO",
-   "section": "Forward panel",
-   "panel": "First officer EFIS",
-   "label": "DH Reset",
-   "kind": "button",
-   "state_var": "B757_DH_RESET_FO",
-   "positions": [],
-   "press": "1 (>L:B757_DH_RESET_FO, bool)",
-   "release": "0 (>L:B757_DH_RESET_FO, bool)",
+   "label": "WXR",
+   "kind": "toggle",
+   "state_var": "B757_ADI_2_WXR_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_ADI_2_WXR_BUTTON,bool) ! (>L:B757_ADI_2_WXR_BUTTON,bool)",
+   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -4980,47 +4961,29 @@
    "ccw": null
   },
   {
-   "node": "B757_ADI_2_WXR_BUTTON",
+   "node": "B757_ADI_2_TFC_BUTTON",
    "section": "Forward panel",
    "panel": "First officer EFIS",
-   "label": "WXR",
-   "kind": "toggle",
-   "state_var": "B757_ADI_2_WXR_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_ADI_2_WXR_BUTTON,bool) ! (>L:B757_ADI_2_WXR_BUTTON,bool)",
-   "release": null,
+   "label": "TFC",
+   "kind": "button",
+   "state_var": "B757_ADI_2_TFC_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_ADI_2_TFC_BUTTON)",
+   "release": "0 (>L:B757_ADI_2_TFC_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_ADI_2_INOP_BUTTON",
+   "node": "B757_ADI_2_CTR_BUTTON",
    "section": "Forward panel",
    "panel": "First officer EFIS",
-   "label": "INOP",
-   "kind": "toggle",
-   "state_var": "B757_ADI_2_INOP_BUTTON",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_ADI_2_INOP_BUTTON,bool) ! (>L:B757_ADI_2_INOP_BUTTON,bool)",
-   "release": null,
+   "label": "CTR",
+   "kind": "button",
+   "state_var": "B757_ADI_2_CTR_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_ADI_2_CTR_BUTTON)",
+   "release": "0 (>L:B757_ADI_2_CTR_BUTTON)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -5118,6 +5081,43 @@
    "ccw": null
   },
   {
+   "node": "B757_DH_RESET_FO",
+   "section": "Forward panel",
+   "panel": "First officer EFIS",
+   "label": "DH Reset",
+   "kind": "button",
+   "state_var": "B757_DH_RESET_FO",
+   "positions": [],
+   "press": "1 (>L:B757_DH_RESET_FO, bool)",
+   "release": "0 (>L:B757_DH_RESET_FO, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_ADI_2_INOP_BUTTON",
+   "section": "Forward panel",
+   "panel": "First officer EFIS",
+   "label": "INOP",
+   "kind": "toggle",
+   "state_var": "B757_ADI_2_INOP_BUTTON",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_ADI_2_INOP_BUTTON,bool) ! (>L:B757_ADI_2_INOP_BUTTON,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_R_AUTOLAND_1_BUTTON",
    "section": "Forward panel",
    "panel": "First officer autoland status",
@@ -5206,6 +5206,20 @@
    "ccw": null
   },
   {
+   "node": "INSTRUMENT_Knob_Clock_FO",
+   "section": "Forward panel",
+   "panel": "First officer chronometer",
+   "label": "Clock Button",
+   "kind": "button",
+   "state_var": "B757_CHRONO_BUTTON_PRESS_FO",
+   "positions": [],
+   "press": "1 (>L:B757_CHRONO_BUTTON_PRESS_FO)",
+   "release": "0 (>L:B757_CHRONO_BUTTON_PRESS_FO)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_MAIN_CHRONO_ET_SWITCH_FO",
    "section": "Forward panel",
    "panel": "First officer chronometer",
@@ -5264,20 +5278,6 @@
    "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH_FO, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH_FO, enum)"
   },
   {
-   "node": "INSTRUMENT_Knob_Clock_FO",
-   "section": "Forward panel",
-   "panel": "First officer chronometer",
-   "label": "Clock Button",
-   "kind": "button",
-   "state_var": "B757_CHRONO_BUTTON_PRESS_FO",
-   "positions": [],
-   "press": "1 (>L:B757_CHRONO_BUTTON_PRESS_FO)",
-   "release": "0 (>L:B757_CHRONO_BUTTON_PRESS_FO)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "INSTRUMENT_Knob_Date_FO",
    "section": "Forward panel",
    "panel": "First officer chronometer",
@@ -5292,12 +5292,12 @@
    "ccw": null
   },
   {
-   "node": "B757_EICAS_1_SCREEN_KNOB",
+   "node": "B757_ADI_1_LCD_KNOB",
    "section": "Forward panel",
    "panel": "Display brightness",
-   "label": "Upper EICAS",
+   "label": "Captain PFD",
    "kind": "switch",
-   "state_var": "B757_EICAS_1_SCREEN_KNOB",
+   "state_var": "B757_PFD_1_SCREEN_KNOB",
    "positions": [
     {
      "value": 0,
@@ -5319,66 +5319,12 @@
    "ccw": null
   },
   {
-   "node": "B757_EICAS_2_SCREEN_KNOB",
+   "node": "B757_ADI_2_LCD_KNOB",
    "section": "Forward panel",
    "panel": "Display brightness",
-   "label": "Lower EICAS",
+   "label": "First Officer PFD",
    "kind": "switch",
-   "state_var": "B757_EICAS_2_SCREEN_KNOB",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Minimum"
-    },
-    {
-     "value": 20,
-     "label": "Half"
-    },
-    {
-     "value": 40,
-     "label": "Full"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_FMC_2_SCREEN_KNOB",
-   "section": "Forward panel",
-   "panel": "Display brightness",
-   "label": "First Officer CDU",
-   "kind": "switch",
-   "state_var": "B757_FMC_2_SCREEN_KNOB",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Minimum"
-    },
-    {
-     "value": 20,
-     "label": "Half"
-    },
-    {
-     "value": 40,
-     "label": "Full"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_FMC_1_SCREEN_KNOB",
-   "section": "Forward panel",
-   "panel": "Display brightness",
-   "label": "Captain CDU",
-   "kind": "switch",
-   "state_var": "B757_FMC_1_SCREEN_KNOB",
+   "state_var": "B757_PFD_2_SCREEN_KNOB",
    "positions": [
     {
      "value": 0,
@@ -5454,12 +5400,12 @@
    "ccw": null
   },
   {
-   "node": "B757_ADI_1_LCD_KNOB",
+   "node": "B757_EICAS_1_SCREEN_KNOB",
    "section": "Forward panel",
    "panel": "Display brightness",
-   "label": "Captain PFD",
+   "label": "Upper EICAS",
    "kind": "switch",
-   "state_var": "B757_PFD_1_SCREEN_KNOB",
+   "state_var": "B757_EICAS_1_SCREEN_KNOB",
    "positions": [
     {
      "value": 0,
@@ -5481,12 +5427,66 @@
    "ccw": null
   },
   {
-   "node": "B757_ADI_2_LCD_KNOB",
+   "node": "B757_EICAS_2_SCREEN_KNOB",
    "section": "Forward panel",
    "panel": "Display brightness",
-   "label": "First Officer PFD",
+   "label": "Lower EICAS",
    "kind": "switch",
-   "state_var": "B757_PFD_2_SCREEN_KNOB",
+   "state_var": "B757_EICAS_2_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_FMC_1_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Captain CDU",
+   "kind": "switch",
+   "state_var": "B757_FMC_1_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_FMC_2_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "First Officer CDU",
+   "kind": "switch",
+   "state_var": "B757_FMC_2_SCREEN_KNOB",
    "positions": [
     {
      "value": 0,
@@ -5531,48 +5531,6 @@
    "ccw": null
   },
   {
-   "node": "BBS757_SPOILERARMED_CLICK",
-   "section": "Pedestal",
-   "panel": "Control stand",
-   "label": "Speedbrake Armed",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "10 (>L:B757_FC_SPOILER_LEVER, number)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "BBS757_SPOILERDOWN_CLICK",
-   "section": "Pedestal",
-   "panel": "Control stand",
-   "label": "Speedbrake Down",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "0 (>L:B757_FC_SPOILER_LEVER, number)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "BBS757_SPOILERUP_CLICK",
-   "section": "Pedestal",
-   "panel": "Control stand",
-   "label": "Speedbrake Up",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "100 (>L:B757_FC_SPOILER_LEVER, number)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "BBS757_lever_flaps",
    "section": "Pedestal",
    "panel": "Control stand",
@@ -5610,6 +5568,48 @@
     }
    ],
    "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERARMED_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Armed",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "10 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERDOWN_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Down",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "0 (>L:B757_FC_SPOILER_LEVER, number)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "BBS757_SPOILERUP_CLICK",
+   "section": "Pedestal",
+   "panel": "Control stand",
+   "label": "Speedbrake Up",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "100 (>L:B757_FC_SPOILER_LEVER, number)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -5927,20 +5927,6 @@
    "ccw": null
   },
   {
-   "node": "B757_EICAS_L_STATUS_BUTTON",
-   "section": "Pedestal",
-   "panel": "EICAS control",
-   "label": "EICAS L Status",
-   "kind": "button",
-   "state_var": "B757_EICAS_L_STATUS_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_EICAS_L_STATUS_BUTTON, bool) 1 (>L:BBS_EICAS_ENGINE_PAGE_REQUEST, bool)",
-   "release": "0 (>L:B757_EICAS_L_STATUS_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_EICAS_R_STATUS_BUTTON",
    "section": "Pedestal",
    "panel": "EICAS control",
@@ -5955,18 +5941,45 @@
    "ccw": null
   },
   {
-   "node": "B757_EICAS_EVENT_BUTTON",
+   "node": "B757_EICAS_L_STATUS_BUTTON",
    "section": "Pedestal",
    "panel": "EICAS control",
-   "label": "EICAS Event",
+   "label": "EICAS L Status",
    "kind": "button",
-   "state_var": "B757_EICAS_EVENT_BUTTON",
+   "state_var": "B757_EICAS_L_STATUS_BUTTON",
    "positions": [],
-   "press": "(>H:BBS_757_EICAS_DEBUG) 1 (>L:B757_EICAS_EVENT_BUTTON, bool)",
-   "release": "0 (>L:B757_EICAS_EVENT_BUTTON, bool)",
+   "press": "1 (>L:B757_EICAS_L_STATUS_BUTTON, bool) 1 (>L:BBS_EICAS_ENGINE_PAGE_REQUEST, bool)",
+   "release": "0 (>L:B757_EICAS_L_STATUS_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
+  },
+  {
+   "node": "B757_ECAM_LRAUTO_KNOB",
+   "section": "Pedestal",
+   "panel": "EICAS control",
+   "label": "EICAS Computer Switch",
+   "kind": "switch",
+   "state_var": "B757_ECAM_LRAUTO_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "L"
+    },
+    {
+     "value": 1,
+     "label": "AUTO"
+    },
+    {
+     "value": 2,
+     "label": "R"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 + 2 min (>L:B757_ECAM_LRAUTO_KNOB)",
+   "ccw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 - 0 max (>L:B757_ECAM_LRAUTO_KNOB)"
   },
   {
    "node": "B757_EICAS_LWR_THRUST-REF_KNOB",
@@ -6033,31 +6046,18 @@
    "ccw": null
   },
   {
-   "node": "B757_ECAM_LRAUTO_KNOB",
+   "node": "B757_EICAS_EVENT_BUTTON",
    "section": "Pedestal",
    "panel": "EICAS control",
-   "label": "EICAS Computer Switch",
-   "kind": "switch",
-   "state_var": "B757_ECAM_LRAUTO_KNOB",
-   "positions": [
-    {
-     "value": 0,
-     "label": "L"
-    },
-    {
-     "value": 1,
-     "label": "AUTO"
-    },
-    {
-     "value": 2,
-     "label": "R"
-    }
-   ],
-   "press": null,
-   "release": null,
+   "label": "EICAS Event",
+   "kind": "button",
+   "state_var": "B757_EICAS_EVENT_BUTTON",
+   "positions": [],
+   "press": "(>H:BBS_757_EICAS_DEBUG) 1 (>L:B757_EICAS_EVENT_BUTTON, bool)",
+   "release": "0 (>L:B757_EICAS_EVENT_BUTTON, bool)",
    "hold_ms": 0,
-   "cw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 + 2 min (>L:B757_ECAM_LRAUTO_KNOB)",
-   "ccw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 - 0 max (>L:B757_ECAM_LRAUTO_KNOB)"
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_PED_COMHEAD_1_SWAP_BUTTON",
@@ -6069,20 +6069,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
    "release": "0 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_NAV_1_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_1_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_1_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -6144,20 +6130,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_NAV_1_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_NAV_1_HFR_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 1",
@@ -6167,6 +6139,20 @@
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_HFR_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_NAV_1_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -6186,6 +6172,20 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_NAV_1_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_1_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_1_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_AUDIO_1_MIC_L_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 1",
@@ -6194,90 +6194,6 @@
    "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT",
    "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic C Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic R Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lm Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic RR Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic PA Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Int Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6307,23 +6223,14 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 1",
-   "label": "Audio 1 Mic C Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "label": "Audio 1 Mic R Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6353,35 +6260,26 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lm Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "label": "Audio 1 Mic C Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 1",
-   "label": "Audio 1 Mic RR Light Knob",
+   "label": "Audio 1 Mic C Light Knob",
    "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE",
+   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE",
    "positions": [
     {
      "value": 0,
@@ -6392,7 +6290,21 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "press": "(L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic PA Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6416,6 +6328,20 @@
     }
    ],
    "press": "(L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Int Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6468,29 +6394,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 1",
@@ -6508,29 +6411,6 @@
     }
    ],
    "press": "(L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Rvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6560,12 +6440,12 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Mkr Light",
+   "label": "Audio 1 Mic Lvor Light",
    "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE",
+   "state_var": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE",
    "positions": [
     {
      "value": 0,
@@ -6576,7 +6456,30 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "press": "(L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Rvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -6629,6 +6532,130 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Mkr Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Voice Range",
+   "kind": "switch",
+   "state_var": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Voice"
+    },
+    {
+     "value": 1,
+     "label": "Both"
+    },
+    {
+     "value": 2,
+     "label": "Range"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lm Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lm Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic RR Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic RR Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
    "section": "Pedestal",
    "panel": "Audio panel 1",
@@ -6666,28 +6693,43 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
+   "node": "B757_PED_FIRE_WHLWELL_BUTTON",
    "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Voice Range",
-   "kind": "switch",
-   "state_var": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Voice"
-    },
-    {
-     "value": 1,
-     "label": "Both"
-    },
-    {
-     "value": 2,
-     "label": "Range"
-    }
-   ],
-   "press": null,
-   "release": null,
+   "panel": "Fire protection",
+   "label": "Wheel Well Fire",
+   "kind": "button",
+   "state_var": "B757_PED_FIRE_WHLWELL_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
+   "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_FIRE_ENG_BUTTON",
+   "section": "Pedestal",
+   "panel": "Fire protection",
+   "label": "Fire ENG",
+   "kind": "button",
+   "state_var": "B757_PED_FIRE_ENG_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
+   "release": "0 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_FIRE_CARGO_BUTTON",
+   "section": "Pedestal",
+   "panel": "Fire protection",
+   "label": "Fire Cargo",
+   "kind": "button",
+   "state_var": "B757_PED_FIRE_CARGO_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
+   "release": "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7005,48 +7047,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_FIRE_WHLWELL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Fire protection",
-   "label": "Wheel Well Fire",
-   "kind": "button",
-   "state_var": "B757_PED_FIRE_WHLWELL_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
-   "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_FIRE_ENG_BUTTON",
-   "section": "Pedestal",
-   "panel": "Fire protection",
-   "label": "Fire ENG",
-   "kind": "button",
-   "state_var": "B757_PED_FIRE_ENG_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
-   "release": "0 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_FIRE_CARGO_BUTTON",
-   "section": "Pedestal",
-   "panel": "Fire protection",
-   "label": "Fire Cargo",
-   "kind": "button",
-   "state_var": "B757_PED_FIRE_CARGO_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
-   "release": "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_SYS_FAIL_BUTTON",
    "section": "Pedestal",
    "panel": "Fire protection",
@@ -7084,29 +7084,6 @@
    "ccw": null
   },
   {
-   "node": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
-   "section": "Pedestal",
-   "panel": "Stabilizer trim",
-   "label": "Stab Trim R Guard",
-   "kind": "guard",
-   "state_var": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Closed"
-    },
-    {
-     "value": 1,
-     "label": "Open"
-    }
-   ],
-   "press": "(L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) ! (>L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) (L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) 0 == if{ 0 (>L:B757_Stab_trim_R_toggle_switch_CLICK, number) }",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_Stab_trim_C_toggle_switch_CLICK",
    "section": "Pedestal",
    "panel": "Stabilizer trim",
@@ -7131,6 +7108,29 @@
    "guard": "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
    "guard_closed": 0,
    "close_sets": 0
+  },
+  {
+   "node": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
+   "section": "Pedestal",
+   "panel": "Stabilizer trim",
+   "label": "Stab Trim R Guard",
+   "kind": "guard",
+   "state_var": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) ! (>L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) (L:B757_AISLE_STAND_STAB_2_GAURD_SWITCH, bool) 0 == if{ 0 (>L:B757_Stab_trim_R_toggle_switch_CLICK, number) }",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
   },
   {
    "node": "B757_Stab_trim_R_toggle_switch_CLICK",
@@ -7159,15 +7159,15 @@
    "close_sets": 0
   },
   {
-   "node": "B757_PED_WX_L_TFR_BUTTON",
+   "node": "B757_PED_WX_L_WX_BUTTON",
    "section": "Pedestal",
    "panel": "Weather radar left",
-   "label": "WX L Tfr",
+   "label": "WX L WX",
    "kind": "button",
-   "state_var": "B757_PED_WX_L_TFR_BUTTON",
+   "state_var": "B757_PED_WX_L_WX_BUTTON",
    "positions": [],
-   "press": "1 (>L:B757_PED_WX_L_TFR_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_WX_L_TFR_BUTTON,bool)",
+   "press": "1 (>L:B757_PED_WX_L_WX_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_WX_L_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7182,20 +7182,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_WX_L_WXT_BUTTON,bool)",
    "release": "0 (>L:B757_PED_WX_L_WXT_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_WX_L_WX_BUTTON",
-   "section": "Pedestal",
-   "panel": "Weather radar left",
-   "label": "WX L WX",
-   "kind": "button",
-   "state_var": "B757_PED_WX_L_WX_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_WX_L_WX_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_WX_L_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7243,6 +7229,20 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_WX_L_TFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Weather radar left",
+   "label": "WX L Tfr",
+   "kind": "button",
+   "state_var": "B757_PED_WX_L_TFR_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_WX_L_TFR_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_WX_L_TFR_BUTTON,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_COMHEAD_2_SWAP_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 2",
@@ -7252,20 +7252,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
    "release": "0 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_NAV_2_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_2_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_2_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7327,20 +7313,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_NAV_2_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_NAV_2_HFR_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 2",
@@ -7350,6 +7322,20 @@
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_HFR_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_NAV_2_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7369,6 +7355,20 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_NAV_2_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_2_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_2_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_COMHEAD_3_SWAP_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 3",
@@ -7378,20 +7378,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
    "release": "0 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_NAV_3_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_3_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_3_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7453,20 +7439,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_NAV_3_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_NAV_3_HFR_BUTTON",
    "section": "Pedestal",
    "panel": "Radio tuning panel 3",
@@ -7476,6 +7448,20 @@
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_HFR_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_NAV_3_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -7495,6 +7481,20 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_NAV_3_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_3_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_3_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_AUDIO_2_MIC_L_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 2",
@@ -7503,90 +7503,6 @@
    "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT",
    "positions": [],
    "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic C Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic R Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lm Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic RR Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic PA Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Int Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7616,23 +7532,14 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 2",
-   "label": "Audio 2 Mic C Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "label": "Audio 2 Mic R Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7662,35 +7569,26 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT",
    "section": "Pedestal",
    "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lm Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "label": "Audio 2 Mic C Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 2",
-   "label": "Audio 2 Mic RR Light Knob",
+   "label": "Audio 2 Mic C Light Knob",
    "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE",
+   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE",
    "positions": [
     {
      "value": 0,
@@ -7701,7 +7599,21 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "press": "(L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic PA Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7725,6 +7637,20 @@
     }
    ],
    "press": "(L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Int Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7777,29 +7703,6 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
    "node": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 2",
@@ -7817,29 +7720,6 @@
     }
    ],
    "press": "(L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Rvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7869,12 +7749,12 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB",
+   "node": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB",
    "section": "Pedestal",
    "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Mkr Light",
+   "label": "Audio 2 Mic Lvor Light",
    "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE",
+   "state_var": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE",
    "positions": [
     {
      "value": 0,
@@ -7885,7 +7765,30 @@
      "label": "On"
     }
    ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "press": "(L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Rvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
    "release": null,
    "hold_ms": 0,
    "cw": null,
@@ -7938,6 +7841,130 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Mkr Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Voice Range",
+   "kind": "switch",
+   "state_var": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Voice"
+    },
+    {
+     "value": 1,
+     "label": "Both"
+    },
+    {
+     "value": 2,
+     "label": "Range"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lm Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lm Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic RR Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic RR Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
    "section": "Pedestal",
    "panel": "Audio panel 2",
@@ -7975,42 +8002,15 @@
    "ccw": null
   },
   {
-   "node": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Voice Range",
-   "kind": "switch",
-   "state_var": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Voice"
-    },
-    {
-     "value": 1,
-     "label": "Both"
-    },
-    {
-     "value": 2,
-     "label": "Range"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_WX_R_TFR_BUTTON",
+   "node": "B757_PED_WX_R_WX_BUTTON",
    "section": "Pedestal",
    "panel": "Weather radar right",
-   "label": "WX R Tfr",
+   "label": "WX R WX",
    "kind": "button",
-   "state_var": "B757_PED_WX_R_TFR_BUTTON",
+   "state_var": "B757_PED_WX_R_WX_BUTTON",
    "positions": [],
-   "press": "1 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
+   "press": "1 (>L:B757_PED_WX_R_WX_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_WX_R_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -8025,20 +8025,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_WX_R_WXT_BUTTON,bool)",
    "release": "0 (>L:B757_PED_WX_R_WXT_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_PED_WX_R_WX_BUTTON",
-   "section": "Pedestal",
-   "panel": "Weather radar right",
-   "label": "WX R WX",
-   "kind": "button",
-   "state_var": "B757_PED_WX_R_WX_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_WX_R_WX_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_WX_R_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -8072,6 +8058,20 @@
    "ccw": null
   },
   {
+   "node": "B757_PED_WX_R_TFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Weather radar right",
+   "label": "WX R Tfr",
+   "kind": "button",
+   "state_var": "B757_PED_WX_R_TFR_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_PED_ILS_TEST_BUTTON",
    "section": "Pedestal",
    "panel": "Pedestal radio panels",
@@ -8081,6 +8081,178 @@
    "positions": [],
    "press": "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
    "release": "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_2",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "Flight Recorder",
+   "kind": "switch",
+   "state_var": "BBS757_FLT_REC_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "ON"
+    },
+    {
+     "value": 1,
+     "label": "AUTO"
+    },
+    {
+     "value": 2,
+     "label": "TEST"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": "(L:BBS757_FLT_REC_SWITCH) 1 + 2 min (>L:BBS757_FLT_REC_SWITCH)",
+   "ccw": "(L:BBS757_FLT_REC_SWITCH) 1 - 0 max (>L:BBS757_FLT_REC_SWITCH)"
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_1",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "Service Interphone",
+   "kind": "toggle",
+   "state_var": "BBS757_SERV_INTPHN",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:BBS757_SERV_INTPHN,bool) ! (>L:BBS757_SERV_INTPHN,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_P6_SQUIBS_BUTTON2",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "P6 Squibs Button2",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 1 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_PressTime, second)",
+   "release": "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_7",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "Ground Prox Hyd Gen Test",
+   "kind": "switch",
+   "state_var": "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Ground proximity test"
+    },
+    {
+     "value": 1,
+     "label": "Neutral"
+    },
+    {
+     "value": 2,
+     "label": "Hydraulic generator test"
+    }
+   ],
+   "press": null,
+   "release": "1 (>L:BBS757_GRNDPROX_HYDGEN_P61_TEST_SW, number)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_10",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "Air Data Stall Left Test",
+   "kind": "switch",
+   "state_var": "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Air data test"
+    },
+    {
+     "value": 1,
+     "label": "Neutral"
+    },
+    {
+     "value": 2,
+     "label": "Stall warning test"
+    }
+   ],
+   "press": null,
+   "release": "1 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW, number)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_9",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "Air Data Stall Right Test",
+   "kind": "switch",
+   "state_var": "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Air data test"
+    },
+    {
+     "value": 1,
+     "label": "Neutral"
+    },
+    {
+     "value": 2,
+     "label": "Stall warning test"
+    }
+   ],
+   "press": null,
+   "release": "1 (>L:BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW, number)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_VC_P61_SWITCH_8",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "TO and Land Config Test",
+   "kind": "switch",
+   "state_var": "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Takeoff config test"
+    },
+    {
+     "value": 1,
+     "label": "Neutral"
+    },
+    {
+     "value": 2,
+     "label": "Landing config test"
+    }
+   ],
+   "press": null,
+   "release": "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW, number)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -8189,212 +8361,6 @@
    ],
    "press": null,
    "release": "1 (>L:BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_7",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Ground Prox Hyd Gen Test",
-   "kind": "switch",
-   "state_var": "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Ground proximity test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Hydraulic generator test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_GRNDPROX_HYDGEN_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_8",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "TO and Land Config Test",
-   "kind": "switch",
-   "state_var": "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Takeoff config test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Landing config test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_9",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Air Data Stall Right Test",
-   "kind": "switch",
-   "state_var": "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Air data test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Stall warning test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_10",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Air Data Stall Left Test",
-   "kind": "switch",
-   "state_var": "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Air data test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Stall warning test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_P6_SQUIBS_BUTTON2",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P6 Squibs Button2",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 1 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_PressTime, second)",
-   "release": "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_1",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 1",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_1_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_1, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_1_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_1_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_1, bool) 0 (>L:P61_PRESS_Button_1_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_2",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 2",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_2_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_2, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_2_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_2_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_2, bool) 0 (>L:P61_PRESS_Button_2_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_3",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 3",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_3_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_3, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_3_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_3_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_3, bool) 0 (>L:P61_PRESS_Button_3_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_4",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 4",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_4_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_4, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_4_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_4_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_4, bool) 0 (>L:P61_PRESS_Button_4_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_5",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 5",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_5_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_5, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_5_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_5_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_5, bool) 0 (>L:P61_PRESS_Button_5_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "P61_PRESS_Button_6",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "P61 Press Button 6",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:P61_PRESS_Button_6_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_6, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_6_PressTime, second)",
-   "release": "0 (>O:P61_PRESS_Button_6_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_6, bool) 0 (>L:P61_PRESS_Button_6_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
@@ -8538,54 +8504,88 @@
    "ccw": null
   },
   {
-   "node": "B757_VC_P61_SWITCH_1",
+   "node": "P61_PRESS_Button_1",
    "section": "Other",
    "panel": "P61 panel",
-   "label": "Service Interphone",
-   "kind": "toggle",
-   "state_var": "BBS757_SERV_INTPHN",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:BBS757_SERV_INTPHN,bool) ! (>L:BBS757_SERV_INTPHN,bool)",
-   "release": null,
+   "label": "P61 Press Button 1",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_1_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_1, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_1_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_1_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_1, bool) 0 (>L:P61_PRESS_Button_1_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
   {
-   "node": "B757_VC_P61_SWITCH_2",
+   "node": "P61_PRESS_Button_2",
    "section": "Other",
    "panel": "P61 panel",
-   "label": "Flight Recorder",
-   "kind": "switch",
-   "state_var": "BBS757_FLT_REC_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "ON"
-    },
-    {
-     "value": 1,
-     "label": "AUTO"
-    },
-    {
-     "value": 2,
-     "label": "TEST"
-    }
-   ],
-   "press": null,
-   "release": null,
+   "label": "P61 Press Button 2",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_2_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_2, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_2_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_2_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_2, bool) 0 (>L:P61_PRESS_Button_2_HELD, bool)",
    "hold_ms": 0,
-   "cw": "(L:BBS757_FLT_REC_SWITCH) 1 + 2 min (>L:BBS757_FLT_REC_SWITCH)",
-   "ccw": "(L:BBS757_FLT_REC_SWITCH) 1 - 0 max (>L:BBS757_FLT_REC_SWITCH)"
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "P61_PRESS_Button_3",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "P61 Press Button 3",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_3_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_3, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_3_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_3_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_3, bool) 0 (>L:P61_PRESS_Button_3_HELD, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "P61_PRESS_Button_4",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "P61 Press Button 4",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_4_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_4, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_4_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_4_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_4, bool) 0 (>L:P61_PRESS_Button_4_HELD, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "P61_PRESS_Button_5",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "P61 Press Button 5",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_5_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_5, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_5_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_5_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_5, bool) 0 (>L:P61_PRESS_Button_5_HELD, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "P61_PRESS_Button_6",
+   "section": "Other",
+   "panel": "P61 panel",
+   "label": "P61 Press Button 6",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:P61_PRESS_Button_6_ButtonLocked, bool) 1 (>L:P61_PRESS_Button_6, bool) (E:SIMULATION TIME, second) (>O:P61_PRESS_Button_6_PressTime, second)",
+   "release": "0 (>O:P61_PRESS_Button_6_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_6, bool) 0 (>L:P61_PRESS_Button_6_HELD, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
   }
  ],
  "status": [
