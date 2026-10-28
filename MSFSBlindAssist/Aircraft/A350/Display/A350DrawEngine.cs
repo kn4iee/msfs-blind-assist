@@ -423,11 +423,14 @@ public sealed class A350DrawEngine : IDisposable
             Restore();
             if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
         }
-        catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; _fresh = true; }
-        catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; }
+        catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }
+        catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; LastTrap = ex.Message; }
         return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds)
             { Shapes = RecordShapes ? _shapes : null };
     }
+
+    /// <summary>The last trap's whole message, its wasm backtrace included (diagnostics, A350Probe draw).</summary>
+    public string? LastTrap { get; private set; }
 
     public void Dispose() => _store.Dispose();
 }

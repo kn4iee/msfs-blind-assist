@@ -126,6 +126,19 @@ public class A350DrawEngineTests
         Assert.Equal("HELLO", Assert.Single(good.Texts).Text);
     }
 
+    // Live 2026-10-28 the capture's one-line error ("trap: error while executing at wasm backtrace:") hid where the
+    // draw died; the whole message showed the A350's own malloc faulting on a torn copy. The capture's error stays one
+    // line, and the engine keeps the last trap's whole message, its wasm backtrace included, for diagnostics.
+    [Fact]
+    public void The_last_trap_keeps_its_whole_backtrace()
+    {
+        using var e = Engine();
+        e.Load(Copy(trap: true));
+        var bad = e.Draw("CTR");
+        Assert.DoesNotContain('\n', bad.Error!);
+        Assert.Contains("CTR::Draw()", e.LastTrap);
+    }
+
     [Fact]
     public void A_missing_gauge_object_is_an_error_not_a_throw()
     {
