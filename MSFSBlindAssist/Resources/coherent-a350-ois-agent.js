@@ -659,6 +659,11 @@
           var bt = A.buttonText(e);
           A.own(e);
           if (!bt) continue;
+          // The open EFB dropdown's pages: five share a name with the bottom bar's (LOADSHEET, T.O PERF, ...).
+          if (e.closest && e.closest('#efb-dropdown-menu-content')) {
+            push(e, { kind: 'button', text: 'EFB menu: ' + bt, clickable: true, disabled: e.disabled === true, key: 'menu:' + bt });
+            continue;
+          }
           var above = A.headingAbove(e);
           if (above) {
             // A unit toggle: each press steps it, so its label carries the value and speaks again.

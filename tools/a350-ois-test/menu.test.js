@@ -32,3 +32,20 @@ test('an open PANEL STATES says expanded and lists its presets', () => {
 test('SET FUEL says its refuel list is collapsed', () => {
   assert.ok(button(scrape('loadsheet'), 'SET FUEL (collapsed)'));
 });
+
+// The EFB dropdown open (live 2026-10-28, the user: "duplicate buttons when the menu key is pressed"): its pages
+// (MENU, FLT OPS STS, LOADSHEET, ...) are read before the bottom bar's, five of them with the same names. Each says
+// it is the menu's, so the two LOADSHEETs, T.O PERFs and so on are told apart.
+test('an open EFB menu names its items apart from the bottom bar', () => {
+  const { load } = require('./run');
+  const { window, A } = load('menu');
+  const count = (list, t) => list.filter(e => e.kind === 'button' && e.text === t).length;
+  const closed = JSON.parse(A.scrape()).elements;
+  const dd = window.document.getElementById('efb-dropdown-menu-content');
+  for (const n of [dd, ...dd.querySelectorAll('*')]) n.removeAttribute('data-vis');
+  const els = JSON.parse(A.scrape()).elements;
+  assert.ok(button(els, 'EFB menu (expanded)'));
+  for (const t of ['MENU', 'FLT OPS STS', 'LOADSHEET', 'T.O PERF', 'GROUND EQUIP']) assert.ok(button(els, 'EFB menu: ' + t), 'missing EFB menu: ' + t);
+  // Opening the menu adds no second plain LOADSHEET, T.O PERF or ENROUTE (the bar's, and the page's own, stay as they were).
+  for (const t of ['LOADSHEET', 'T.O PERF', 'ENROUTE']) assert.equal(count(els, t), count(closed, t), 'no new plain ' + t);
+});
