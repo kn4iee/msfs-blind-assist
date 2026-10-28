@@ -1473,16 +1473,32 @@ class HoldMs(unittest.TestCase):
     it that long and lets go (Bbs757Write.PressFor), and the press and the release are exactly what they were."""
     FIRE, OTHER = "B757_PED_FIRE_ENG_BUTTON", "B757_PED_FIRE_CARGO_BUTTON"
     # Every test the shipped curation holds 3000 ms. The fire, CVR and squib tests were measured; the others hold the same
-    # for one rule: a test is held until it shows. Not the autoland resets (AUTOLAND_3), not the lamp test.
+    # for one rule: a test is held until it shows. Not the autoland resets (AUTOLAND_3), not the lamp test, and not the
+    # takeoff check (plan 12 task 6: BlueBird's "press and release").
     TESTS = (
         "B757_PED_FIRE_ENG_BUTTON", "B757_PED_FIRE_CARGO_BUTTON", "B757_PED_FIRE_WHLWELL_BUTTON", "B757_OVHD_SW_CVR_TEST",
-        "B757_P6_SQUIBS_BUTTON2", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", "B757_MAIN_TOCHK_BUTTON", "OXY_CAPT_TEST_SWITCH001",
+        "B757_P6_SQUIBS_BUTTON2", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", "OXY_CAPT_TEST_SWITCH001",
         "OXY_FO_TEST_SWITCH1", "OXY_OBSV_TEST_SWITCH", "OXY_P61_TEST_SWITCH", "B757_MAIN_L_AUTOLAND_1_BUTTON",
         "B757_MAIN_L_AUTOLAND_2_BUTTON", "B757_MAIN_R_AUTOLAND_1_BUTTON", "B757_MAIN_R_AUTOLAND_2_BUTTON",
         "B757_PED_WX_L_TEST_BUTTON", "B757_PED_ILS_TEST_BUTTON", "B757_PED_NAV_1_TEST_BUTTON", "B757_PED_NAV_2_TEST_BUTTON",
         "B757_PED_NAV_3_TEST_BUTTON",
     )
-    NOT_HELD = ("B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_MAIN_R_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON")
+    NOT_HELD = ("B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_MAIN_R_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON",
+                "B757_MAIN_TOCHK_BUTTON")
+    # Plan 12 task 6 (the owner: "The tests are not clearly labeled"): what each cockpit test is called, in BlueBird's words
+    # where its procedures name the test and by the measured effect otherwise. The three radio tests are on three panels.
+    TEST_LABELS = {
+        "B757_PED_FIRE_ENG_BUTTON": "Engine Fire Test", "B757_PED_FIRE_CARGO_BUTTON": "Engine, APU and Cargo Fire Test",
+        "B757_PED_FIRE_WHLWELL_BUTTON": "Wheel Well Fire Test", "B757_P6_SQUIBS_BUTTON2": "Squib Test",
+        "B757_OVHD_WARNING_TEST_BUTTON": "Lamp Test", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK": "TCAS Test",
+        "B757_PED_WX_L_TEST_BUTTON": "Weather Radar Test", "B757_PED_NAV_1_TEST_BUTTON": "Radio Test",
+        "B757_PED_NAV_2_TEST_BUTTON": "Radio Test", "B757_PED_NAV_3_TEST_BUTTON": "Radio Test",
+        "B757_MAIN_L_AUTOLAND_1_BUTTON": "Autoland Status Test 1", "B757_MAIN_L_AUTOLAND_2_BUTTON": "Autoland Status Test 2",
+        "B757_MAIN_L_AUTOLAND_3_BUTTON": "Autoland Status Reset", "B757_MAIN_R_AUTOLAND_1_BUTTON": "Autoland Status Test 1",
+        "B757_MAIN_R_AUTOLAND_2_BUTTON": "Autoland Status Test 2", "B757_MAIN_R_AUTOLAND_3_BUTTON": "Autoland Status Reset",
+        "OXY_OBSV_TEST_SWITCH": "First Observer Oxygen Test", "OXY_P61_TEST_SWITCH": "Second Observer Oxygen Test",
+        "B757_MAIN_TOCHK_BUTTON": "Takeoff Config Check",
+    }
     # The eight P61 test switches leave the map: they spring back to neutral at once, so a test runs only while its
     # position is written again every 30 ms, which the app does from buttons (plan 12 task 5b).
     P61_TEST_SWITCHES = tuple(f"B757_VC_P61_SWITCH_{n}" for n in range(3, 11))
@@ -1624,7 +1640,7 @@ class HoldMs(unittest.TestCase):
     def test_the_shipped_curation_holds_the_cockpit_tests_for_3_seconds(self):
         c = g.load_curation(g.DEFAULT_CURATION)
 
-        self.assertEqual(len(self.TESTS), 20)
+        self.assertEqual(len(self.TESTS), 19)
         self.assertEqual(c["hold_ms"], {node: 3000 for node in self.TESTS})
         for node in self.TESTS:   # no other table speaks for a held test, and none leaves it out
             with self.subTest(node=node):
@@ -1654,6 +1670,32 @@ class HoldMs(unittest.TestCase):
         self.assertEqual(len(vendor), 7)
         self.assertNotIn(3000, vendor.values())
 
+    def test_the_cockpit_tests_say_what_they_test(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = {x["node"]: x for x in json.load(fh)["controls"]}
+
+        for node, label in self.TEST_LABELS.items():
+            with self.subTest(node=node):
+                self.assertEqual(c["labels"][node], label, "curation names it")
+                self.assertEqual(controls[node]["label"], label, "the embedded map says it, with no number added")
+        # the three radio tests share one label and sit on three different radio tuning panels (VAR-1: one label per panel)
+        radio = [controls[n] for n in ("B757_PED_NAV_1_TEST_BUTTON", "B757_PED_NAV_2_TEST_BUTTON", "B757_PED_NAV_3_TEST_BUTTON")]
+        self.assertEqual([x["panel"] for x in radio],
+                         ["Radio tuning panel 1", "Radio tuning panel 2", "Radio tuning panel 3"])
+        # the tests the owner's list does not name keep the labels they had
+        self.assertEqual([controls[n]["label"] for n in ("OXY_CAPT_TEST_SWITCH001", "OXY_FO_TEST_SWITCH1",
+                                                         "B757_OVHD_SW_CVR_TEST", "B757_PED_ILS_TEST_BUTTON")],
+                         ["Captain Oxygen Test", "First Officer Oxygen Test", "CVR Test", "ILS Test"])
+        # nothing spoken in a panel repeats: the labels of every panel a test is on are all different
+        by_panel = collections.defaultdict(list)
+        for x in controls.values():
+            by_panel[(x["section"], x["panel"])].append(x["label"])
+        for node in self.TEST_LABELS:
+            key = (controls[node]["section"], controls[node]["panel"])
+            with self.subTest(node=node):
+                self.assertEqual(len(by_panel[key]), len(set(by_panel[key])), key)
+
     def test_the_eight_p61_test_switches_are_out_of_the_map(self):
         c = g.load_curation(g.DEFAULT_CURATION)
         with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
@@ -1669,7 +1711,7 @@ class HoldMs(unittest.TestCase):
                 self.assertNotIn(node, c["positions"])
         # the two other switches of the panel stay, and so does the rest of its order
         self.assertEqual([x["label"] for x in controls if x["panel"] == "P61 panel"][:3],
-                         ["Flight Recorder", "Service Interphone", "P6 Squibs Button2"])
+                         ["Flight Recorder", "Service Interphone", "Squib Test"])
 
     def test_the_notes_explain_the_key_and_the_changes(self):
         with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
@@ -1684,6 +1726,23 @@ class HoldMs(unittest.TestCase):
                        "B757_VC_P61_SWITCH_10", "every 30 ms", "B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, joined)
+        # the count the held-tests note gives is the count of the held tests (task 6 took the takeoff check out of it)
+        self.assertIn("nineteen test buttons are held 3000 ms", joined)
+        self.assertNotIn("twenty", joined)
+
+    def test_one_note_gives_the_labels_of_task_6_and_their_sources(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = json.load(fh)["_notes"]
+
+        task = [n for n in notes if n.startswith("PLAN 12 TASK 6 (2026-10-28)")]
+        self.assertEqual(len(task), 1)
+        for node in self.TEST_LABELS:
+            with self.subTest(node=node):
+                self.assertIn(node, task[0])
+        for needle in ("flight-12.md", "User Procedures", "FIRE/OVHT - ENG/APU/CARGO", "SQUIB TEST", "ASA TEST 1",
+                       "CONFIG (T/O CHK)", "press and release", "hold_ms"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, task[0])
 
 
 class Levers(unittest.TestCase):
@@ -3841,7 +3900,7 @@ class Curation(unittest.TestCase):
         "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "LNAV", "THR", "HDG SEL", "VNAV", "CMD L", "CMD C", "CMD R",
                 "FLCH", "V/S", "SPD", "ALT HOLD", "Speed Intervene", "LOC", "APP", "ALT SEL Push", "IAS/MACH",
                 "HDG HOLD", "Bank Limit", "Autopilot Disengage Bar", "BCRS 1"],
-        "Main panel switches": ["Autobrake", "Recall", "Cancel", "Takeoff Check", "L Foot Heaters", "R Foot Heaters",
+        "Main panel switches": ["Autobrake", "Recall", "Cancel", "Takeoff Config Check", "L Foot Heaters", "R Foot Heaters",
                                 "L Shoulder Heaters", "R Shoulder Heaters", "L Flt Dir", "R Flt Dir", "L Flt Nav",
                                 "R Flt Nav", "Stdby EICAS", "HDG Ref", "TOGA", "TMSP 1", "TMSP 2", "CLB", "CRZ",
                                 "G/S Inhibit", "L EFI", "R EFI", "L IRS", "R IRS", "L Airdata", "R Airdata",
@@ -3870,7 +3929,8 @@ class Curation(unittest.TestCase):
         "Captain chronometer": ["757 Capt Clock", "757 FO Clock", "Clock Button", "Chrono ET", "Chrono Set",
                                 "Date Button"],
         "Oxygen": ["Captain Oxygen Test", "O2 Redbutton CPT", "First Officer Oxygen Test", "O2 Redbutton FO",
-                   "Observer Oxygen Test", "O2 Redbutton Jumpseat", "P61 Oxygen Test", "O2 Redbutton P61",
+                   "First Observer Oxygen Test", "O2 Redbutton Jumpseat", "Second Observer Oxygen Test",
+                   "O2 Redbutton P61",
                    "O2 Ears CPT", "O2 Ears FO", "O2 Ears Jumpseat", "O2 Ears Observer"],
         "First officer chronometer": ["Clock Button", "Chrono ET", "Chrono Set", "Date Button"],
         "Display brightness": ["Captain PFD", "First Officer PFD", "Captain ND", "First Officer ND", "Upper EICAS",
@@ -3878,7 +3938,7 @@ class Curation(unittest.TestCase):
         "EICAS control": ["EICAS R Status", "EICAS L Status", "EICAS Computer Switch", "EICAS Lwr Thrust Ref",
                           "Thrust Ref Pull", "EICAS Max Ind", "EICAS Event"],
         "Radio tuning panel 1": ["Comhead 1 Swap", "Nav 1 VHF L", "Nav 1 VHF C", "Nav 1 VHF R", "Nav 1 HF L",
-                                 "Nav 1 HF R", "Nav 1 AM", "Nav 1 Test", "Nav 1 Off"],
+                                 "Nav 1 HF R", "Nav 1 AM", "Radio Test", "Nav 1 Off"],
         "Audio panel 1": ["Audio 1 Mic L Light", "Audio 1 Mic L Light Knob", "Audio 1 Mic R Light",
                           "Audio 1 Mic R Light Knob", "Audio 1 Mic C Light", "Audio 1 Mic C Light Knob",
                           "Audio 1 Mic PA Light", "Audio 1 Mic PA Light Knob", "Audio 1 Mic Int Light",
@@ -3887,18 +3947,19 @@ class Curation(unittest.TestCase):
                           "Audio 1 Mic Ladf Light", "Audio 1 Mic Radf Light", "Audio 1 Mic Mkr Light",
                           "Audio 1 Voice Range", "Audio 1 Mic Lm Light", "Audio 1 Mic Lm Light Knob",
                           "Audio 1 Mic RR Light", "Audio 1 Mic RR Light Knob", "Audio 1 Boom Oxy", "Audio 1 PTT"],
-        "Fire protection": ["Wheel Well Fire", "Fire ENG", "Fire Cargo", "Engine 1 Fire Handle Unlock",
+        "Fire protection": ["Wheel Well Fire Test", "Engine Fire Test", "Engine, APU and Cargo Fire Test",
+                            "Engine 1 Fire Handle Unlock",
                             "Engine 1 Fire Handle", "Engine 1 Fire Handle Rotation", "Engine 2 Fire Handle Unlock",
                             "Engine 2 Fire Handle", "Engine 2 Fire Handle Rotation", "APU Fire Handle Unlock",
                             "APU Fire Handle", "APU Fire Handle Rotation", "FWD Cargo Fire", "AFT Cargo Fire",
                             "1 BTL Cargo Fire Guard", "1 BTL Cargo Fire", "2 BTL Cargo Fire Guard",
                             "2 BTL Cargo Fire", "Sys Fail"],
         "Stabilizer trim": ["Stab Trim C Guard", "Stab Trim C Cutout", "Stab Trim R Guard", "Stab Trim R Cutout"],
-        "Weather radar left": ["WX L WX", "WX L Wxt", "WX L Map", "WX L Gcs", "WX L Test", "WX L Tfr"],
+        "Weather radar left": ["WX L WX", "WX L Wxt", "WX L Map", "WX L Gcs", "Weather Radar Test", "WX L Tfr"],
         "Radio tuning panel 2": ["Comhead 2 Swap", "Nav 2 VHF L", "Nav 2 VHF C", "Nav 2 VHF R", "Nav 2 HF L",
-                                 "Nav 2 HF R", "Nav 2 AM", "Nav 2 Test", "Nav 2 Off"],
+                                 "Nav 2 HF R", "Nav 2 AM", "Radio Test", "Nav 2 Off"],
         "Radio tuning panel 3": ["Comhead 3 Swap", "Nav 3 VHF L", "Nav 3 VHF C", "Nav 3 VHF R", "Nav 3 HF L",
-                                 "Nav 3 HF R", "Nav 3 AM", "Nav 3 Test", "Nav 3 Off"],
+                                 "Nav 3 HF R", "Nav 3 AM", "Radio Test", "Nav 3 Off"],
         "Audio panel 2": ["Audio 2 Mic L Light", "Audio 2 Mic L Light Knob", "Audio 2 Mic R Light",
                           "Audio 2 Mic R Light Knob", "Audio 2 Mic C Light", "Audio 2 Mic C Light Knob",
                           "Audio 2 Mic PA Light", "Audio 2 Mic PA Light Knob", "Audio 2 Mic Int Light",
@@ -3910,7 +3971,7 @@ class Curation(unittest.TestCase):
         "Weather radar right": ["WX R WX", "WX R Wxt", "WX R Map", "WX R Gcs", "WX R Tfr"],
         # plan 12 task 5: the eight P61 test switches (Ground Prox Hyd Gen, Air Data Stall Left and Right, TO and Land Config,
         # Equip Cooling, Yaw Damp, Duct Leak Fuel Qty, Wing AI Window Heat) left the map; the app places their buttons
-        "P61 panel": ["Flight Recorder", "Service Interphone", "P6 Squibs Button2",
+        "P61 panel": ["Flight Recorder", "Service Interphone", "Squib Test",
                       "P61 Glass Guard 1", "P61 Press Main Button L", "P61 Glass Guard 2", "P61 Press Main Button C",
                       "P61 Glass Guard 3", "P61 Press Main Button R", "P61 Press Button 1", "P61 Press Button 2",
                       "P61 Press Button 3", "P61 Press Button 4", "P61 Press Button 5", "P61 Press Button 6"],

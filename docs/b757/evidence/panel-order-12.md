@@ -264,7 +264,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
-| 1 | Warning Test | `B757_OVHD_WARNING_TEST_BUTTON` | 2 | annunciator lamp test, first flight (gp) |
+| 1 | Lamp Test | `B757_OVHD_WARNING_TEST_BUTTON` | 2 | annunciator lamp test, first flight (gp) |
 | 2 | Warning Ind | `B757_OVHD_WARNING_IND_SWITCH` | 2 | DIM/BRT for night (gp) |
 
 ## Glareshield
@@ -320,7 +320,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 1 | Autobrake | `B757_MAIN_knob_gears_altn_autobrake` | 1 | RTO in preflight and after start (UP 41, 48), landing setting (UP 55, 57), OFF after landing (UP 60) |
 | 2 | Recall | `B757_MAIN_RECALL_BUTTON` | 1 | RECALL on the Before Start, After Start and In Range checklists (NC 2; UP 46, 48, 54, 59) |
 | 3 | Cancel | `B757_MAIN_CANCEL_BUTTON` | 1 | CANCEL to page through messages before RECALL (UP 136) |
-| 4 | Takeoff Check | `B757_MAIN_TOCHK_BUTTON` | 1 | takeoff configuration check, Before Takeoff (UP 50, 157) |
+| 4 | Takeoff Config Check | `B757_MAIN_TOCHK_BUTTON` | 1 | takeoff configuration check, Before Takeoff (UP 50, 157) |
 | 5 | L Foot Heaters | `B757_MAIN_L_FOOT_HEATERS_SWITCH` | 2 | as required (UP 40), OFF for termination (UP 62; NC 2) |
 | 6 | R Foot Heaters | `B757_MAIN_R_FOOT_HEATERS_SWITCH` | 2 | as L; L/R pair adjacent |
 | 7 | L Shoulder Heaters | `B757_MAIN_L_SHOULDER_HEATERS_SWITCH` | 2 | as foot heaters |
@@ -392,9 +392,9 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
-| 1 | L Autoland 1 | `B757_MAIN_L_AUTOLAND_1_BUTTON` | 2 | ASA TEST 1 (UP 97-98) |
-| 2 | L Autoland 2 | `B757_MAIN_L_AUTOLAND_2_BUTTON` | 2 | ASA TEST 2 (UP 97-98) |
-| 3 | L Autoland Reset | `B757_MAIN_L_AUTOLAND_3_BUTTON` | 2 | ASA P/RST after the tests (UP 98-99) and after an autoland (gp) |
+| 1 | Autoland Status Test 1 | `B757_MAIN_L_AUTOLAND_1_BUTTON` | 2 | ASA TEST 1 (UP 97-98) |
+| 2 | Autoland Status Test 2 | `B757_MAIN_L_AUTOLAND_2_BUTTON` | 2 | ASA TEST 2 (UP 97-98) |
+| 3 | Autoland Status Reset | `B757_MAIN_L_AUTOLAND_3_BUTTON` | 2 | ASA P/RST after the tests (UP 98-99) and after an autoland (gp) |
 
 ### Standby attitude indicator (unchanged)
 
@@ -429,9 +429,9 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 2 | O2 Redbutton CPT | `BBS757_O2_redbutton_CPT` | 1 | the same test: hold the red emergency control 10 s (UP 94) |
 | 3 | First Officer Oxygen Test | `OXY_FO_TEST_SWITCH1` | 1 | as Captain (crew oxygen, UP 40) |
 | 4 | O2 Redbutton FO | `BBS757_O2_redbutton_FO` | 1 | as Captain |
-| 5 | Observer Oxygen Test | `OXY_OBSV_TEST_SWITCH` | 3 | observer 1 mask: only when the seat is occupied (gp) |
+| 5 | First Observer Oxygen Test | `OXY_OBSV_TEST_SWITCH` | 3 | observer 1 mask: only when the seat is occupied (gp) |
 | 6 | O2 Redbutton Jumpseat | `BBS757_O2_redbutton_JUMPSEAT` | 3 | observer 1 (gp) |
-| 7 | P61 Oxygen Test | `OXY_P61_TEST_SWITCH` | 3 | observer 2 mask (gp) |
+| 7 | Second Observer Oxygen Test | `OXY_P61_TEST_SWITCH` | 3 | observer 2 mask (gp) |
 | 8 | O2 Redbutton P61 | `BBS757_O2_redbutton_P61` | 3 | observer 2 (gp) |
 | 9 | O2 Ears CPT | `O2_EARS_CPT` | 3 | 'O2 mask grab and wear' (tooltip): smoke/depressurization only |
 | 10 | O2 Ears FO | `O2_EARS_FO` | 3 | as Captain |
@@ -465,9 +465,9 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
-| 1 | R Autoland 1 | `B757_MAIN_R_AUTOLAND_1_BUTTON` | 2 | ASA TEST 1 (UP 97-98) |
-| 2 | R Autoland 2 | `B757_MAIN_R_AUTOLAND_2_BUTTON` | 2 | ASA TEST 2 (UP 97-98) |
-| 3 | R Autoland Reset | `B757_MAIN_R_AUTOLAND_3_BUTTON` | 2 | ASA P/RST (UP 98-99) |
+| 1 | Autoland Status Test 1 | `B757_MAIN_R_AUTOLAND_1_BUTTON` | 2 | ASA TEST 1 (UP 97-98) |
+| 2 | Autoland Status Test 2 | `B757_MAIN_R_AUTOLAND_2_BUTTON` | 2 | ASA TEST 2 (UP 97-98) |
+| 3 | Autoland Status Reset | `B757_MAIN_R_AUTOLAND_3_BUTTON` | 2 | ASA P/RST (UP 98-99) |
 
 ### First officer DDRMI (unchanged)
 
@@ -531,7 +531,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 1 | TCAS Mode | `B757_PED_TCAS_MODE_KNOB` | 1 | TA/RA before start (UP 45, 133), OFF/as required at the gate (UP 62, 197); the app's Squawk Code field follows it |
 | 2 | TCAS Xpndr | `B757_PED_TCAS_XPNDR_SWITCH` | 1 | L or R for the pilot flying, or alternated between flights (UP 105) |
 | 3 | TCAS Ident | `B757_PED_TCAS_IDENT_SWITCH` | 2 | on ATC request (gp) |
-| 4 | TCAS Mode Knob Test | `B757_PED_TCAS_MODE_KNOB_TEST_CLICK` | 2 | TCAS test (UP 42, 106) |
+| 4 | TCAS Test | `B757_PED_TCAS_MODE_KNOB_TEST_CLICK` | 2 | TCAS test (UP 42, 106) |
 
 ### EICAS control (changed)
 
@@ -556,7 +556,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 5 | Nav 1 HF L | `B757_PED_NAV_1_HFL_BUTTON` | 3 | HF: oceanic/remote only (gp); HF L and HF R now adjacent (AM was between them) |
 | 6 | Nav 1 HF R | `B757_PED_NAV_1_HFR_BUTTON` | 3 | HF (gp) |
 | 7 | Nav 1 AM | `B757_PED_NAV_1_AM_BUTTON` | 3 | HF AM, works only with an HF mode selected (BlueBird simvar list) |
-| 8 | Nav 1 Test | `B757_PED_NAV_1_TEST_BUTTON` | 3 | radio test (gp) |
+| 8 | Radio Test | `B757_PED_NAV_1_TEST_BUTTON` | 3 | radio test (gp) |
 | 9 | Nav 1 Off | `B757_PED_NAV_1_OFF_BUTTON` | 3 | turns the tuning panel off (gp); moved from 2nd to last |
 
 ### Audio panel 1 (changed)
@@ -593,9 +593,9 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
-| 1 | Wheel Well Fire | `B757_PED_FIRE_WHLWELL_BUTTON` | 2 | FIRE/OVHT WHL WELL test, preflight (UP 42, 109) |
-| 2 | Fire ENG | `B757_PED_FIRE_ENG_BUTTON` | 2 | FIRE/OVHT ENG test (UP 42, 109) |
-| 3 | Fire Cargo | `B757_PED_FIRE_CARGO_BUTTON` | 2 | FIRE/OVHT ENG/APU/CARGO test (UP 42, 110) |
+| 1 | Wheel Well Fire Test | `B757_PED_FIRE_WHLWELL_BUTTON` | 2 | FIRE/OVHT WHL WELL test, preflight (UP 42, 109) |
+| 2 | Engine Fire Test | `B757_PED_FIRE_ENG_BUTTON` | 2 | FIRE/OVHT ENG test (UP 42, 109) |
+| 3 | Engine, APU and Cargo Fire Test | `B757_PED_FIRE_CARGO_BUTTON` | 2 | FIRE/OVHT ENG/APU/CARGO test (UP 42, 110) |
 | 4 | Engine 1 Fire Handle Unlock | `BBS757_FIREUNLOCK1` | 3 | handles checked IN, not rotated (UP 42, 104); unlock sits before its handle |
 | 5 | Engine 1 Fire Handle | `BBS757_FIREHANDLE1_CLICK` | 3 | engine fire: emergency |
 | 6 | Engine 1 Fire Handle Rotation | `B757_PED_Fire_DISCH_1` | 3 | bottle discharge: emergency |
@@ -636,7 +636,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 2 | WX L Wxt | `B757_PED_WX_L_WXT_BUTTON` | 2 | WX + turbulence mode (gp) |
 | 3 | WX L Map | `B757_PED_WX_L_MAP_BUTTON` | 2 | ground-mapping mode (gp) |
 | 4 | WX L Gcs | `B757_PED_WX_L_GCS_BUTTON` | 2 | ground-clutter suppression (gp) |
-| 5 | WX L Test | `B757_PED_WX_L_TEST_BUTTON` | 2 | radar test (gp) |
+| 5 | Weather Radar Test | `B757_PED_WX_L_TEST_BUTTON` | 2 | radar test (gp) |
 | 6 | WX L Tfr | `B757_PED_WX_L_TFR_BUTTON` | 3 | transfer of radar control between sides (gp) |
 
 ### Radio tuning panel 2 (changed)
@@ -650,7 +650,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 5 | Nav 2 HF L | `B757_PED_NAV_2_HFL_BUTTON` | 3 | HF: oceanic/remote only (gp); HF L and HF R now adjacent (AM was between them) |
 | 6 | Nav 2 HF R | `B757_PED_NAV_2_HFR_BUTTON` | 3 | HF (gp) |
 | 7 | Nav 2 AM | `B757_PED_NAV_2_AM_BUTTON` | 3 | HF AM, works only with an HF mode selected (BlueBird simvar list) |
-| 8 | Nav 2 Test | `B757_PED_NAV_2_TEST_BUTTON` | 3 | radio test (gp) |
+| 8 | Radio Test | `B757_PED_NAV_2_TEST_BUTTON` | 3 | radio test (gp) |
 | 9 | Nav 2 Off | `B757_PED_NAV_2_OFF_BUTTON` | 3 | turns the tuning panel off (gp); moved from 2nd to last |
 
 ### Radio tuning panel 3 (changed)
@@ -664,7 +664,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 5 | Nav 3 HF L | `B757_PED_NAV_3_HFL_BUTTON` | 3 | HF: oceanic/remote only (gp); HF L and HF R now adjacent (AM was between them) |
 | 6 | Nav 3 HF R | `B757_PED_NAV_3_HFR_BUTTON` | 3 | HF (gp) |
 | 7 | Nav 3 AM | `B757_PED_NAV_3_AM_BUTTON` | 3 | HF AM, works only with an HF mode selected (BlueBird simvar list) |
-| 8 | Nav 3 Test | `B757_PED_NAV_3_TEST_BUTTON` | 3 | radio test (gp) |
+| 8 | Radio Test | `B757_PED_NAV_3_TEST_BUTTON` | 3 | radio test (gp) |
 | 9 | Nav 3 Off | `B757_PED_NAV_3_OFF_BUTTON` | 3 | turns the tuning panel off (gp); moved from 2nd to last |
 
 ### Audio panel 2 (changed)
@@ -721,7 +721,7 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 |---|---|---|---|---|
 | 1 | Flight Recorder | `B757_VC_P61_SWITCH_2` | 2 | Flight Recorder: P61 check 'recorder NORM' (UP 36, 75) |
 | 2 | Service Interphone | `B757_VC_P61_SWITCH_1` | 2 | Service Interphone: P61 check 'OFF' (UP 36, 75) |
-| 3 | P6 Squibs Button2 | `B757_P6_SQUIBS_BUTTON2` | 2 | squib test: hold, nine green lamps (UP 36, 75) |
+| 3 | Squib Test | `B757_P6_SQUIBS_BUTTON2` | 2 | squib test: hold, nine green lamps (UP 36, 75) |
 | 4 | Ground Prox Hyd Gen Test | `B757_VC_P61_SWITCH_7` | 2 | Ground Prox: EGPWS test (UP 36, 75-76) |
 | 5 | Air Data Stall Left Test | `B757_VC_P61_SWITCH_10` | 2 | stall-warning test, left first (UP 36, 76) |
 | 6 | Air Data Stall Right Test | `B757_VC_P61_SWITCH_9` | 2 | stall-warning test, right (UP 36, 76) |

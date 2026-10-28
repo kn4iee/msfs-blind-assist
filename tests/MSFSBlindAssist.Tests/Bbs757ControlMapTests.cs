@@ -267,7 +267,7 @@ public class Bbs757ControlMapTests
     // The two ELEC ENG Cont switches are on the RR cockpit only (no node in the PW one), so their labels say so.
     [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont (RR)|R ELEC ENG Cont (RR)")]
     [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|LNAV|THR|HDG SEL|VNAV|CMD L|CMD C|CMD R|FLCH|V/S|SPD|ALT HOLD|Speed Intervene|LOC|APP|ALT SEL Push|IAS/MACH|HDG HOLD|Bank Limit|Autopilot Disengage Bar|BCRS 1")]
-    [InlineData("Main panel switches", "Autobrake|Recall|Cancel|Takeoff Check|L Foot Heaters|R Foot Heaters|L Shoulder Heaters|R Shoulder Heaters|L Flt Dir|R Flt Dir|L Flt Nav|R Flt Nav|Stdby EICAS|HDG Ref|TOGA|TMSP 1|TMSP 2|CLB|CRZ|G/S Inhibit|L EFI|R EFI|L IRS|R IRS|L Airdata|R Airdata|Altn Gear Guard|Altn Gear|Alternate Flaps Selector|L Leading Edge|L Trailing Edge|Flap Override Guard|L Flap Ovrd|Gear Override Guard|L Gear Ovrd|Terrain Override Guard|L Terr Ovrd|L Brake Reserve|CON")]
+    [InlineData("Main panel switches", "Autobrake|Recall|Cancel|Takeoff Config Check|L Foot Heaters|R Foot Heaters|L Shoulder Heaters|R Shoulder Heaters|L Flt Dir|R Flt Dir|L Flt Nav|R Flt Nav|Stdby EICAS|HDG Ref|TOGA|TMSP 1|TMSP 2|CLB|CRZ|G/S Inhibit|L EFI|R EFI|L IRS|R IRS|L Airdata|R Airdata|Altn Gear Guard|Altn Gear|Alternate Flaps Selector|L Leading Edge|L Trailing Edge|Flap Override Guard|L Flap Ovrd|Gear Override Guard|L Gear Ovrd|Terrain Override Guard|L Terr Ovrd|L Brake Reserve|CON")]
     // Plan 12 task 4: the flaps are moved on every flight, so the flap lever is second, right after the parking brake.
     // Plan 02 task 7: the gear lever is first on the Landing gear panel.
     [InlineData("Control stand", "Parking Brake|Flap Lever|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
@@ -287,7 +287,7 @@ public class Bbs757ControlMapTests
 
     [Theory]
     [InlineData("IRS", 3, "IRS Center Knob|IRS Large Knob")]
-    [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Mode Knob Test")]
+    [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Test")]
     [InlineData("Landing gear", 1, "Gear Lock Override")]
     public void The_controls_an_order_does_not_list_follow_in_cockpit_order(string panel, int listed, string rest)
     {
@@ -1046,23 +1046,24 @@ public class Bbs757ControlMapTests
     // ---- Plan 12, task 5: the cockpit's test buttons are held; the P61 test switches leave the map ----
 
     /// <summary>
-    /// The twenty test buttons curation's hold_ms makes held buttons of 3000 ms: the fire, CVR and squib tests (measured in
+    /// The nineteen test buttons curation's hold_ms makes held buttons of 3000 ms: the fire, CVR and squib tests (measured in
     /// flight, docs/b757/evidence/flight-12.md: they show only while the button is held, so the app's 200 ms press gave a blip
-    /// at most) and, by the same rule (a test is held until it shows), the TCAS test, the takeoff check, the four oxygen tests,
-    /// the four autoland status tests, the weather radar test, the ILS test and the three radio panel tests. Their labels are
-    /// what they were, and the press and release are the cockpit's own click code, verbatim.
+    /// at most) and, by the same rule (a test is held until it shows), the TCAS test, the four oxygen tests, the four autoland
+    /// status tests, the weather radar test, the ILS test and the three radio panel tests. Plan 12 task 6 (the owner: "The
+    /// tests are not clearly labeled"): each says what it tests, by BlueBird's own procedures where they name the test and by
+    /// the measured effect otherwise. The press and release are the cockpit's own click code, verbatim.
     /// </summary>
     [Theory]
     [InlineData("B757_PED_FIRE_ENG_BUTTON",
-        "Fire ENG", "Fire protection",
+        "Engine Fire Test", "Fire protection",
         "1 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
         "0 (>L:B757_PED_FIRE_ENG_BUTTON, bool)")]
     [InlineData("B757_PED_FIRE_CARGO_BUTTON",
-        "Fire Cargo", "Fire protection",
+        "Engine, APU and Cargo Fire Test", "Fire protection",
         "1 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
         "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)")]
     [InlineData("B757_PED_FIRE_WHLWELL_BUTTON",
-        "Wheel Well Fire", "Fire protection",
+        "Wheel Well Fire Test", "Fire protection",
         "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
         "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)")]
     [InlineData("B757_OVHD_SW_CVR_TEST",
@@ -1070,17 +1071,13 @@ public class Bbs757ControlMapTests
         "1 (>L:B757_OVHD_CVR_Test, number)",
         "0 (>L:B757_OVHD_CVR_Test, number)")]
     [InlineData("B757_P6_SQUIBS_BUTTON2",
-        "P6 Squibs Button2", "P61 panel",
+        "Squib Test", "P61 panel",
         "1 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 1 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_PressTime, second)",
         "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)")]
     [InlineData("B757_PED_TCAS_MODE_KNOB_TEST_CLICK",
-        "TCAS Mode Knob Test", "TCAS and transponder",
+        "TCAS Test", "TCAS and transponder",
         "1 (>L:B757_PED_TCAS_MODE_KNOB_TEST,bool)",
         "0 (>L:B757_PED_TCAS_MODE_KNOB_TEST,bool)")]
-    [InlineData("B757_MAIN_TOCHK_BUTTON",
-        "Takeoff Check", "Main panel switches",
-        "1 (>L:B757_MAIN_TOCHK_BUTTON)",
-        "0 (>L:B757_MAIN_TOCHK_BUTTON)")]
     [InlineData("OXY_CAPT_TEST_SWITCH001",
         "Captain Oxygen Test", "Oxygen",
         "1 (>L:B757_CAPT_O2_TEST_SLIDER)",
@@ -1090,31 +1087,31 @@ public class Bbs757ControlMapTests
         "1 (>L:B757_FO_O2_TEST_SLIDER, bool)",
         "0 (>L:B757_FO_O2_TEST_SLIDER, bool)")]
     [InlineData("OXY_OBSV_TEST_SWITCH",
-        "Observer Oxygen Test", "Oxygen",
+        "First Observer Oxygen Test", "Oxygen",
         "1 (>L:B757_OBS1_O2_TEST_SLIDER)",
         "0 (>L:B757_OBS1_O2_TEST_SLIDER, bool)")]
     [InlineData("OXY_P61_TEST_SWITCH",
-        "P61 Oxygen Test", "Oxygen",
+        "Second Observer Oxygen Test", "Oxygen",
         "1 (>L:B757_OBS2_O2_TEST_SLIDER)",
         "0 (>L:B757_OBS2_O2_TEST_SLIDER, bool)")]
     [InlineData("B757_MAIN_L_AUTOLAND_1_BUTTON",
-        "L Autoland 1", "Captain autoland status",
+        "Autoland Status Test 1", "Captain autoland status",
         "1 (>L:B757_MAIN_L_AUTOLAND_1_BUTTON)",
         "0 (>L:B757_MAIN_L_AUTOLAND_1_BUTTON)")]
     [InlineData("B757_MAIN_L_AUTOLAND_2_BUTTON",
-        "L Autoland 2", "Captain autoland status",
+        "Autoland Status Test 2", "Captain autoland status",
         "1 (>L:B757_MAIN_L_AUTOLAND_2_BUTTON,bool)",
         "0 (>L:B757_MAIN_L_AUTOLAND_2_BUTTON)")]
     [InlineData("B757_MAIN_R_AUTOLAND_1_BUTTON",
-        "R Autoland 1", "First officer autoland status",
+        "Autoland Status Test 1", "First officer autoland status",
         "1 (>L:B757_MAIN_R_AUTOLAND_1_BUTTON)",
         "0 (>L:B757_MAIN_R_AUTOLAND_1_BUTTON)")]
     [InlineData("B757_MAIN_R_AUTOLAND_2_BUTTON",
-        "R Autoland 2", "First officer autoland status",
+        "Autoland Status Test 2", "First officer autoland status",
         "1 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)",
         "0 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)")]
     [InlineData("B757_PED_WX_L_TEST_BUTTON",
-        "WX L Test", "Weather radar left",
+        "Weather Radar Test", "Weather radar left",
         "1 (>L:B757_PED_WX_L_TEST_BUTTON,bool)",
         "0 (>L:B757_PED_WX_L_TEST_BUTTON,bool)")]
     [InlineData("B757_PED_ILS_TEST_BUTTON",
@@ -1122,15 +1119,15 @@ public class Bbs757ControlMapTests
         "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
         "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)")]
     [InlineData("B757_PED_NAV_1_TEST_BUTTON",
-        "Nav 1 Test", "Radio tuning panel 1",
+        "Radio Test", "Radio tuning panel 1",
         "1 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_TEST_BUTTON,bool)",
         "0 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool)")]
     [InlineData("B757_PED_NAV_2_TEST_BUTTON",
-        "Nav 2 Test", "Radio tuning panel 2",
+        "Radio Test", "Radio tuning panel 2",
         "1 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_TEST_BUTTON,bool)",
         "0 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool)")]
     [InlineData("B757_PED_NAV_3_TEST_BUTTON",
-        "Nav 3 Test", "Radio tuning panel 3",
+        "Radio Test", "Radio tuning panel 3",
         "1 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_TEST_BUTTON,bool)",
         "0 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool)")]
     public void The_cockpit_tests_are_held_buttons_that_keep_their_press_and_release(
@@ -1153,13 +1150,13 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_cockpit_tests_are_twenty_and_the_vendors_own_held_buttons_keep_the_hold_they_were_given()
+    public void The_cockpit_tests_are_nineteen_and_the_vendors_own_held_buttons_keep_the_hold_they_were_given()
     {
-        // The twenty above are the only held buttons at 3000 ms: the others are the vendor's own held buttons, whose hold
+        // The nineteen above are the only held buttons at 3000 ms: the others are the vendor's own held buttons, whose hold
         // comes from the template's MIN_HELD_DURATION (or the default) and which curation does not touch.
         var tests = Map.Controls.Where(c => c.Kind == Bbs757Kinds.Held && c.HoldMs == 3000).ToList();
 
-        Assert.Equal(20, tests.Count);
+        Assert.Equal(19, tests.Count);
         var vendor = Map.Controls.Where(c => c.Kind == Bbs757Kinds.Held && c.HoldMs != 3000).ToList();
         Assert.NotEmpty(vendor);
         Assert.All(vendor, c =>
@@ -1170,13 +1167,14 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_autoland_resets_and_the_lamp_test_stay_buttons_pressed_for_200_ms()
+    public void The_autoland_resets_the_lamp_test_and_the_takeoff_check_stay_buttons_pressed_for_200_ms()
     {
-        // The autoland resets (AUTOLAND_3) are not status tests. The lamp test (the Warning Test) toggles L:OVHD_TEST_LTS on its
-        // press and stays on after the release, so it is not held (flight-12.md); the master warning and caution buttons work
-        // as they are.
+        // The autoland resets (AUTOLAND_3) are not status tests. The lamp test toggles L:OVHD_TEST_LTS on its press and stays on
+        // after the release, so it is not held (flight-12.md); the master warning and caution buttons work as they are. The
+        // takeoff configuration check is BlueBird's "press and release" (plan 12 task 6: task 5 held it 3 s by the rule, not by
+        // a measure, and a pilot presses it once), so it is a plain button again.
         foreach (string node in new[] { "B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_MAIN_R_AUTOLAND_3_BUTTON",
-                     "B757_OVHD_WARNING_TEST_BUTTON" })
+                     "B757_OVHD_WARNING_TEST_BUTTON", "B757_MAIN_TOCHK_BUTTON" })
         {
             Bbs757Control c = Find(node);
 
@@ -1184,6 +1182,40 @@ public class Bbs757ControlMapTests
             Assert.Equal(0, c.HoldMs);
             Assert.Equal(Bbs757Write.ButtonHoldMs, Bbs757Write.PressFor(c)!.HoldMs);
         }
+    }
+
+    /// <summary>
+    /// Plan 12 task 6: the test buttons the map does not hold say what they test as well. The lamp test lights the annunciator
+    /// lamps and stays on until it is pressed again (flight-12.md), the takeoff check is BlueBird's "CONFIG (T/O CHK)" button
+    /// and the two resets are the autoland status test's P/RST. All four are plain buttons (the app presses them for 200 ms).
+    /// </summary>
+    [Theory]
+    [InlineData("B757_OVHD_WARNING_TEST_BUTTON", "Lamp Test", "Warning lights test")]
+    [InlineData("B757_MAIN_TOCHK_BUTTON", "Takeoff Config Check", "Main panel switches")]
+    [InlineData("B757_MAIN_L_AUTOLAND_3_BUTTON", "Autoland Status Reset", "Captain autoland status")]
+    [InlineData("B757_MAIN_R_AUTOLAND_3_BUTTON", "Autoland Status Reset", "First officer autoland status")]
+    public void The_cockpit_tests_that_are_not_held_say_what_they_test(string node, string label, string panel)
+    {
+        Bbs757Control c = Find(node);
+
+        Assert.Equal((label, panel), (c.Label, c.Panel));
+        Assert.Equal(Bbs757Kinds.Button, c.Kind);
+        Assert.False(string.IsNullOrWhiteSpace(c.Press));
+    }
+
+    [Fact]
+    public void No_cockpit_test_keeps_the_label_it_had_before_plan_12_task_6()
+    {
+        // The labels the tests had, made from the node names and the vendor's wording. None is spoken any more (a regeneration
+        // that lost a labels entry would bring one back).
+        string[] old =
+        {
+            "Fire ENG", "Fire Cargo", "Wheel Well Fire", "P6 Squibs Button2", "Warning Test", "TCAS Mode Knob Test",
+            "WX L Test", "Nav 1 Test", "Nav 2 Test", "Nav 3 Test", "L Autoland 1", "L Autoland 2", "R Autoland 1",
+            "R Autoland 2", "L Autoland Reset", "R Autoland Reset", "Observer Oxygen Test", "P61 Oxygen Test", "Takeoff Check",
+        };
+
+        Assert.DoesNotContain(Map.Controls, c => old.Contains(c.Label));
     }
 
     [Fact]
@@ -1201,7 +1233,7 @@ public class Bbs757ControlMapTests
         Assert.Equal(
             new[]
             {
-                "Flight Recorder", "Service Interphone", "P6 Squibs Button2", "P61 Glass Guard 1", "P61 Press Main Button L",
+                "Flight Recorder", "Service Interphone", "Squib Test", "P61 Glass Guard 1", "P61 Press Main Button L",
                 "P61 Glass Guard 2", "P61 Press Main Button C", "P61 Glass Guard 3", "P61 Press Main Button R",
                 "P61 Press Button 1", "P61 Press Button 2", "P61 Press Button 3", "P61 Press Button 4", "P61 Press Button 5",
                 "P61 Press Button 6",

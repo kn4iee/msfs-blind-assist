@@ -576,7 +576,7 @@ public class Bbs757SpringControlsTests
         /// <summary>How far one wait asked for this many milliseconds moves <see cref="Now"/> (a real wait runs long); null: not at all.</summary>
         public Func<int, int>? DelayTakes;
 
-        /// <param name="more">Map controls besides Mode Select and the stab trim cutout (the lamp test's Warning Test).</param>
+        /// <param name="more">Map controls besides Mode Select and the stab trim cutout (the lamp test's Lamp Test).</param>
         public Rig(params Bbs757Control[] more)
         {
             Def = new BBS757Definition(MapOf(new[] { ModeSelect(), StabCutout() }.Concat(more).ToArray()))
@@ -1327,7 +1327,7 @@ public class Bbs757SpringControlsTests
     };
 
     private static Bbs757Control ServiceInterphone() => P61Control("B757_VC_P61_SWITCH_1", "Service Interphone", Bbs757Kinds.Toggle);
-    private static Bbs757Control SquibTest() => P61Control(SquibTestNode, "P6 Squibs Button2", Bbs757Kinds.Held);
+    private static Bbs757Control SquibTest() => P61Control(SquibTestNode, "Squib Test", Bbs757Kinds.Held);
     private static Bbs757Control GlassGuard() => P61Control("BBS_B757_P61_GLASS_GAURD_1", "P61 Glass Guard 1", Bbs757Kinds.Toggle);
 
     [Fact]
@@ -1852,47 +1852,47 @@ public class Bbs757SpringControlsTests
         Assert.Equal(new[] { "Takeoff Config Test 3 s unavailable" }, speech.All);
     }
 
-    // ---- The lamp test (the Warning Test button): it latches, so the press reads it back -------------------
+    // ---- The lamp test (the Lamp Test button, once Warning Test): it latches, so the press reads it back ----
 
     private const string WarningTestNode = "B757_OVHD_WARNING_TEST_BUTTON";
     private const string LampTestPress =
         "1 (>L:OVHD_TEST_LTS_PRESS, bool) (A:CIRCUIT ON:27, bool) 1 == if{ (L:OVHD_TEST_LTS, bool) ! (>L:OVHD_TEST_LTS, bool) } els{ 0 (>L:OVHD_TEST_LTS, bool) }";
     private const string LampTestRelease = "0 (>L:OVHD_TEST_LTS_PRESS, bool)";
 
-    /// <summary>The map's Warning Test, as the shipped map has it (a plain button).</summary>
+    /// <summary>The map's Lamp Test, as the shipped map has it (a plain button).</summary>
     private static Bbs757Control WarningTest() => new()
     {
-        Node = WarningTestNode, Section = "Overhead", Panel = "Warning lights test", Label = "Warning Test",
+        Node = WarningTestNode, Section = "Overhead", Panel = "Warning lights test", Label = "Lamp Test",
         Kind = Bbs757Kinds.Button, StateVar = "OVHD_TEST_LTS_PRESS", Press = LampTestPress, Release = LampTestRelease,
     };
 
     [Fact]
-    public void The_lamp_test_is_the_maps_warning_test()
+    public void The_lamp_test_is_the_maps_lamp_test()
     {
         Assert.Equal(WarningTestNode, Bbs757LampTest.Node);
         Assert.Equal(LampTestVar, Bbs757LampTest.LitVar);
         Assert.Equal(500, Bbs757LampTest.ReadDelayMs);
 
         var shipped = new BBS757Definition();
-        Assert.Equal("Warning Test", shipped.GetVariables()[WarningTestNode].DisplayName);
+        Assert.Equal("Lamp Test", shipped.GetVariables()[WarningTestNode].DisplayName);
         Assert.Contains(WarningTestNode, shipped.GetPanelControls()["Warning lights test"]);
     }
 
     [Theory]
     [InlineData(1.0, "Lamp test on")]
     [InlineData(0.0, "Lamp test off")]
-    [InlineData(null, "Warning Test pressed")]                     // unread: the generic confirmation
-    [InlineData(double.NaN, "Warning Test pressed")]
-    [InlineData(double.PositiveInfinity, "Warning Test pressed")]
+    [InlineData(null, "Lamp Test pressed")]                        // unread: the generic confirmation
+    [InlineData(double.NaN, "Lamp Test pressed")]
+    [InlineData(double.PositiveInfinity, "Lamp Test pressed")]
     public void Lamp_test_phrase(double? lit, string said)
     {
-        Assert.Equal(said, Bbs757LampTest.Phrase(lit, "Warning Test"));
+        Assert.Equal(said, Bbs757LampTest.Phrase(lit, "Lamp Test"));
     }
 
     [Theory]
     [InlineData(1.0, "Lamp test on")]
     [InlineData(0.0, "Lamp test off")]
-    [InlineData(null, "Warning Test pressed")]
+    [InlineData(null, "Lamp Test pressed")]
     public void The_lamp_test_press_says_whether_the_lamps_are_on(double? lit, string said)
     {
         var rig = new Rig(WarningTest());
@@ -1906,7 +1906,7 @@ public class Bbs757SpringControlsTests
             Bbs757FakeIo.WriteEvent(LampTestPress), Bbs757FakeIo.DelayEvent(Bbs757Write.ButtonHoldMs),
             Bbs757FakeIo.WriteEvent(LampTestRelease), Bbs757FakeIo.DelayEvent(500),
         }, rig.Sim.Events);
-        // Said once: the generic "Warning Test pressed" is not also said.
+        // Said once: the generic "Lamp Test pressed" is not also said.
         Assert.Equal(new[] { said }, rig.Speech.All);
     }
 
@@ -1935,7 +1935,7 @@ public class Bbs757SpringControlsTests
 
         Assert.Empty(rig.Sim.Writes);
         Assert.Empty(rig.Sim.Delays);
-        Assert.Equal(new[] { "Warning Test unavailable" }, rig.Speech.All);
+        Assert.Equal(new[] { "Lamp Test unavailable" }, rig.Speech.All);
     }
 
     [Fact]
@@ -1974,7 +1974,7 @@ public class Bbs757SpringControlsTests
         Assert.True(def.HandleUIVariableSet(WarningTestNode, 1, def.GetVariables()[WarningTestNode], new SimConnectManager(IntPtr.Zero), speech));
 
         Assert.Equal(new[] { LampTestPress, LampTestRelease }, sim.Writes);
-        Assert.Equal(new[] { "Warning Test pressed" }, speech.All);
+        Assert.Equal(new[] { "Lamp Test pressed" }, speech.All);
     }
 
     [Fact]
@@ -2024,7 +2024,7 @@ public class Bbs757SpringControlsTests
         Assert.True(rig.Click(WarningTestNode));
 
         Assert.Empty(rig.Sim.Writes);
-        Assert.Equal(new[] { "Warning Test unavailable" }, rig.Speech.All);
+        Assert.Equal(new[] { "Lamp Test unavailable" }, rig.Speech.All);
         Assert.Equal(new[] { WarningTestNode }, rig.Sim.Resyncs);
     }
 
