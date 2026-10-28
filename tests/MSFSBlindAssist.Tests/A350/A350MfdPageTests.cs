@@ -580,6 +580,17 @@ public class A350MfdPageTests
         Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
     }
 
+    // ACTIVE/WIND, CLB tab, empty (live 2026-10-28): under the ALT and WIND headings (y 330) each row is a grey FL, the
+    // altitude, the direction with its degree glyph, a grey "/" and the speed with its grey KT, 83 px under the headings
+    // and 78 px apart. The rows read "FL, grey; none none° / none KT, green", without their headings or the units' places.
+    [Fact]
+    public void A_wind_table_reads_each_row_under_its_headings_with_its_units()
+    {
+        var lines = Page("mfd_wind_empty");
+        Assert.Equal(4, lines.Count(l => l == "ALT FL none, WIND none° / none KT, green"));
+        Assert.DoesNotContain(lines, l => l.StartsWith("FL, grey", StringComparison.Ordinal));
+    }
+
     // Live 2026-10-28: C/L COMPLETE sent the MFD from the checklists back to INIT, and the window changed its list without
     // a word; a sighted pilot sees the new title bar at once (the A380's MFD window says the new title once).
     [Fact]

@@ -287,7 +287,8 @@ public static class A350MfdPage
         {
             if (paired.Contains(i) || rows[i].Any(c => c.Colour != "white")) continue;
             int last = i;
-            for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 60); j++)
+            // A table's rows follow its headings closely (WIND's: 83 px under them, 78 px apart, live 2026-10-28).
+            for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 90); j++)
             {
                 if (paired.Contains(j)) continue;
                 if (TableRow(rows[i], rows[j]) is not { } line)
@@ -660,12 +661,17 @@ public static class A350MfdPage
         float x0 = hs.Count == 1 ? hs[0].X - 150 : first, x1 = hs.Count == 1 ? hs[0].X + 150 : hs[^1].X + 160;
         if (vals.Any(v => v.X < x0 || v.X > x1)) return null;
         string colour = vals.GroupBy(v => v.Colour).OrderByDescending(g => g.Count()).First().Key;
-        string Value(DrawnCell v) => v.Text + (v.Colour != colour ? $" ({v.Colour})" : "");
+        string Value(DrawnCell v) => v.Text + (v.Colour != colour && v.Colour != "grey" ? $" ({v.Colour})" : "");
+        // Values not one per heading: each heading reads every token nearest it, its grey units too (WIND's "FL", the
+        // altitude, then "none° / none KT", live 2026-10-28).
+        DrawnCell Nearest(DrawnCell t) => hs.OrderBy(h => Math.Abs(h.X - t.X)).First();
         string body = hs.Count == 1
             ? $"{hs[0].Text}: {string.Join(", ", vals.Select(Value))}"
             : string.Join(", ", vals.Count == hs.Count
                 ? hs.Select((h, i) => $"{h.Text} {Value(vals[i])}")
-                : vals.Select(v => $"{hs.OrderBy(h => Math.Abs(h.X - v.X)).First().Text} {Value(v)}"));
+                : hs.Select(h => (h, Cells: tokens.Where(t => !label.Contains(t) && Nearest(t) == h).ToList()))
+                    .Where(p => p.Cells.Any(vals.Contains))
+                    .Select(p => $"{p.h.Text} {string.Join(" ", p.Cells.Select(Value))}"));
         return label.Count == 0 ? $"{body}, {colour}" : $"{string.Join(" ", label.Select(l => l.Text))}: {body}, {colour}";
     }
 
