@@ -58,7 +58,7 @@ public class IniBuildsA350DefinitionTests
         Assert.Contains("A350_LDG_LEVER", _def.GetVariables().Keys);
         Assert.Contains("A350_PARK_BRK_PARKING_BRAKE", _def.GetVariables().Keys);
         Assert.Contains("A350_CPT_VISOR_SIDE", _def.GetVariables().Keys);
-        Assert.DoesNotContain(_def.GetVariables().Keys, k => k.StartsWith("A350_RMP", StringComparison.Ordinal));   // with the displays
+        Assert.Contains("A350_RMP_LSK1_1", _def.GetVariables().Keys);   // the RMPs are pedestal panels
     }
 
     private sealed class WithSections : IniBuildsA350Definition

@@ -61,6 +61,8 @@ public static partial class A350PanelLayout
 
     public static string PanelFor(A350Control control)
     {
+        if (control.Panel == RmpGroup)
+            return RmpPanel(Short(control.Id));
         if (ControlPanels.TryGetValue(Short(control.Id), out var own))
             return own;
         return PanelNames.TryGetValue(control.Panel, out var panel) ? panel : SpokenWord(control.Panel.Replace('_', ' '));
@@ -74,6 +76,8 @@ public static partial class A350PanelLayout
     public static string NameFor(A350Control control)
     {
         string id = Short(control.Id);
+        if (control.Panel == RmpGroup)
+            return RmpName(id, control.Title);
         if (NameOverrides.TryGetValue(id, out var name))
             return name;
         return SpokenWord(string.IsNullOrWhiteSpace(control.Title) ? id.Replace('_', ' ') : control.Title);
@@ -85,7 +89,7 @@ public static partial class A350PanelLayout
     {
         // A lever's words are already spoken (the A380's and A320's, A350Levers).
         IReadOnlyDictionary<double, string>? overrides =
-            PositionOverrides.TryGetValue(Short(control.Id), out var own) ? own : A350Levers.WordsFor(control.Id);
+            PositionOverrides.TryGetValue(Short(control.Id), out var own) ? own : RmpPositions(Short(control.Id)) ?? A350Levers.WordsFor(control.Id);
         var words = new Dictionary<double, string>();
         foreach (var (position, label) in control.OrderedPositions())
         {

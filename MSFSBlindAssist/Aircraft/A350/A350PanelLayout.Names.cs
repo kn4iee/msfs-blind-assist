@@ -88,7 +88,7 @@ public static partial class A350PanelLayout
 
     /// <summary>Panels with a plan of their own still to come, not placed until then: the RMPs (192 keys and a display)
     /// and the KCCU wheels (the MFD's).</summary>
-    private static readonly HashSet<string> DeferredPanels = new(StringComparer.Ordinal) { "RMPS", "FMGS_1", "FMGS_2" };
+    private static readonly HashSet<string> DeferredPanels = new(StringComparer.Ordinal) { "FMGS_1", "FMGS_2" };
 
     /// <summary>A control iniBuilds files under another group, sent to the panel the A380 puts it on.</summary>
     private static readonly Dictionary<string, string> ControlPanels = new(StringComparer.Ordinal)
@@ -150,8 +150,8 @@ public static partial class A350PanelLayout
         },
         ["Pedestal"] = new()
         {
-            "Engines", "Thrust Levers", "Emergency Descent", "Flaps and Brakes", "Speed Brake", "Trim", "ECAM Control Panel",
-            "Weather Radar", "Transponder", "Cockpit",
+            "Engines", "Thrust Levers", "Captain RMP", "First Officer RMP", "Emergency Descent", "Flaps and Brakes", "Speed Brake",
+            "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
         },
         ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
     };
