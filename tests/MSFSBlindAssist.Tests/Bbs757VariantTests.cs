@@ -8,8 +8,10 @@ namespace MSFSBlindAssist.Tests;
 /// Plan 12 task 8: the 757's panels show only the loaded engine type's controls. The owner found the Engines panel
 /// "cluttered" with both engine types' fuel control switches. The aircraft title names the type ("BlueBird 757-200 RR",
 /// read 2026-10-28); the map says which controls one type alone has (<see cref="Bbs757Control.Variant"/>). What is pinned:
-/// the title parsing (<see cref="Bbs757Variant"/>), the filter, an unknown type showing every control as before, and a
-/// change of type rewriting the definition's panel lists in place while its variables and status rows stay as they are.
+/// the title parsing (<see cref="Bbs757Variant"/>), the filter, an unknown type showing every control as before, a panel
+/// built after a change of type holding the new type's controls with no section change (IsPanelControlVisible decides, from
+/// the live title; the control lists stay whole), and a change rewriting only the section lists, in place, while the
+/// variables and status rows stay as they are.
 /// </summary>
 public class Bbs757VariantTests
 {
@@ -49,15 +51,17 @@ public class Bbs757VariantTests
         /// <summary>The pilot opens a section: MainForm lists its panels from GetPanelStructure.</summary>
         public List<string> Panels(string section) => Def.GetPanelStructure()[section];
 
-        /// <summary>The pilot opens a section, then one of its panels, whose controls MainForm reads from GetPanelControls.</summary>
-        public List<string> Controls(string panel)
-        {
-            Def.GetPanelStructure();
-            return Def.GetPanelControls()[panel];
-        }
+        /// <summary>A panel's control list as the definition hands it out: whole, whatever the engine type.</summary>
+        public List<string> Controls(string panel) => Def.GetPanelControls()[panel];
 
         /// <summary>What MainForm asks of each control as it builds the panel.</summary>
         public bool Shown(string key) => Def.IsPanelControlVisible(key, null);
+
+        /// <summary>
+        /// The controls MainForm builds for a panel (MainForm.PanelBuilder's loop): its GetPanelControls list, each control
+        /// asked of IsPanelControlVisible. No GetPanelStructure: re-opening a panel of the section the pilot is in lists nothing.
+        /// </summary>
+        public List<string> Built(string panel) => Def.GetPanelControls()[panel].Where(Shown).ToList();
     }
 
     // ---- The title ----------------------------------------------------------------------------------
@@ -123,45 +127,46 @@ public class Bbs757VariantTests
     }
 
     [Fact]
-    public void The_rewrite_keeps_every_list_and_drops_only_a_panel_the_hiding_emptied()
+    public void The_section_rewrite_keeps_its_lists_drops_only_a_panel_the_hiding_empties_and_never_touches_a_control_list()
     {
         var allStructure = new Dictionary<string, List<string>>
         {
-            ["Overhead"] = new() { "Electrical", EecPanel, "Empty" },
+            ["Overhead"] = new() { "Electrical", EecPanel, "Empty", "With app field" },
             ["Pedestal"] = new() { Engines },
             ["Status"] = new() { "Status" },
         };
-        var allControls = new Dictionary<string, List<string>>
+        var controls = new Dictionary<string, List<string>>
         {
             ["Electrical"] = new() { Battery }, [EecPanel] = new() { EecGuard, Eec }, ["Empty"] = new(),
-            [Engines] = new() { Ignition, FuelPw, FuelRr }, ["Status"] = new(),
+            ["With app field"] = new() { Eec, "MSFSBA_APP_FIELD" }, [Engines] = new() { Ignition, FuelPw, FuelRr },
+            ["Status"] = new(),
         };
+        var allControls = controls.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         var structure = allStructure.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
-        var controls = allControls.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         var overhead = structure["Overhead"];
-        var engines = controls[Engines];
         var noDisplays = new Dictionary<string, List<string>>();
 
-        Bbs757Variant.Rewrite(allStructure, allControls, noDisplays, structure, controls, new HashSet<string> { EecGuard, Eec, FuelRr });
+        Bbs757Variant.RewriteSections(allStructure, controls, noDisplays, structure, new HashSet<string> { EecGuard, Eec, FuelRr });
 
         Assert.Same(overhead, structure["Overhead"]);
-        Assert.Same(engines, controls[Engines]);
-        // a panel with no control to begin with (a display-only panel) stays; one only hidden controls were on goes
-        Assert.Equal(new[] { "Electrical", "Empty" }, overhead);
-        Assert.Equal(new[] { Ignition, FuelPw }, engines);
-        Assert.Empty(controls[EecPanel]);
+        // one only hidden controls are on goes; one with no control to begin with, or with an app field, stays
+        Assert.Equal(new[] { "Electrical", "Empty", "With app field" }, overhead);
+        Assert.Equal(new[] { Engines }, structure["Pedestal"]);
         Assert.Equal(new[] { "Status" }, structure["Status"]);
+        // the control lists stay whole: the panel build decides which of them show
+        Assert.Equal(allControls, controls);
 
         // a panel that still has a status display stays though its controls are hidden
         var displays = new Dictionary<string, List<string>> { [EecPanel] = new() { "B757_X_STATE" } };
-        Bbs757Variant.Rewrite(allStructure, allControls, displays, structure, controls, new HashSet<string> { EecGuard, Eec });
-        Assert.Equal(new[] { "Electrical", EecPanel, "Empty" }, overhead);
+        Bbs757Variant.RewriteSections(allStructure, controls, displays, structure, new HashSet<string> { EecGuard, Eec });
+        Assert.Equal(new[] { "Electrical", EecPanel, "Empty", "With app field" }, overhead);
 
-        // hiding nothing brings back every list as it was built
-        Bbs757Variant.Rewrite(allStructure, allControls, noDisplays, structure, controls, new HashSet<string>());
+        // hiding nothing brings back every section as it was built
+        Bbs757Variant.RewriteSections(allStructure, controls, noDisplays, structure, new HashSet<string> { EecGuard, Eec });
+        Bbs757Variant.RewriteSections(allStructure, controls, noDisplays, structure, new HashSet<string>());
         Assert.Equal(allStructure["Overhead"], overhead);
-        Assert.Equal(allControls[Engines], engines);
-        Assert.Equal(allControls[EecPanel], controls[EecPanel]);
+        Assert.Same(overhead, structure["Overhead"]);
+        Assert.Equal(allControls, controls);
     }
 
     // ---- The definition ---------------------------------------------------------------------------
@@ -171,9 +176,10 @@ public class Bbs757VariantTests
     {
         var rig = new Rig(title: RrTitle);
 
-        Assert.Equal(new[] { Ignition, FuelRr }, rig.Controls(Engines));
+        Assert.Equal(new[] { Ignition, FuelRr }, rig.Built(Engines));
+        Assert.Equal(new[] { Ignition, FuelPw, FuelRr }, rig.Controls(Engines));   // the list stays whole
         Assert.Contains(EecPanel, rig.Panels("Overhead"));
-        Assert.Equal(new[] { EecGuard, Eec }, rig.Controls(EecPanel));
+        Assert.Equal(new[] { EecGuard, Eec }, rig.Built(EecPanel));
         Assert.False(rig.Shown(FuelPw));
         Assert.All(new[] { FuelRr, Eec, EecGuard, Battery, Ignition, "B757_APU_STATE" }, key => Assert.True(rig.Shown(key), key));
     }
@@ -183,10 +189,11 @@ public class Bbs757VariantTests
     {
         var rig = new Rig(title: PwTitle);
 
-        Assert.Equal(new[] { Ignition, FuelPw }, rig.Controls(Engines));
+        Assert.Equal(new[] { Ignition, FuelPw }, rig.Built(Engines));
         Assert.DoesNotContain(EecPanel, rig.Panels("Overhead"));
         Assert.Contains("Electrical", rig.Panels("Overhead"));
-        Assert.Empty(rig.Controls(EecPanel));
+        Assert.Empty(rig.Built(EecPanel));
+        Assert.Equal(new[] { EecGuard, Eec }, rig.Controls(EecPanel));   // the list stays whole
         Assert.All(new[] { FuelRr, Eec, EecGuard }, key => Assert.False(rig.Shown(key), key));
         Assert.All(new[] { FuelPw, Battery, Ignition }, key => Assert.True(rig.Shown(key), key));
     }
@@ -196,7 +203,7 @@ public class Bbs757VariantTests
     {
         var rig = new Rig(title: "BlueBird 757-200");
 
-        Assert.Equal(new[] { Ignition, FuelPw, FuelRr }, rig.Controls(Engines));
+        Assert.Equal(new[] { Ignition, FuelPw, FuelRr }, rig.Built(Engines));
         Assert.Contains(EecPanel, rig.Panels("Overhead"));
         Assert.All(new[] { FuelPw, FuelRr, Eec, EecGuard }, key => Assert.True(rig.Shown(key), key));
 
@@ -205,6 +212,38 @@ public class Bbs757VariantTests
         Assert.Equal(new[] { Ignition, FuelPw, FuelRr }, bare.GetPanelControls()[Engines]);
         Assert.True(bare.IsPanelControlVisible(FuelPw, null));
         Assert.True(bare.IsPanelControlVisible(FuelRr, new SimConnectManager(IntPtr.Zero)));   // never connected: no title
+    }
+
+    [Fact]
+    public void A_load_that_changes_the_engine_type_shows_the_new_pair_on_the_next_panel_built_without_a_section_change()
+    {
+        // Fix round 1 (the reviewer's case): the pilot listed the Pedestal on the RR, a flight load brings the PW, and the
+        // pilot opens Engines again from the same section (MainForm re-lists no section it is in, so GetPanelStructure is
+        // not called). The panel built must hold the PW pair.
+        var rig = new Rig(title: RrTitle);
+        rig.Panels("Pedestal");
+        Assert.Equal(new[] { Ignition, FuelRr }, rig.Built(Engines));
+
+        rig.Title = PwTitle;
+        Assert.Equal(new[] { Ignition, FuelPw }, rig.Built(Engines));
+
+        rig.Title = "BlueBird 757-200";   // a load onto a title naming neither type: both pairs
+        Assert.Equal(new[] { Ignition, FuelPw, FuelRr }, rig.Built(Engines));
+    }
+
+    [Fact]
+    public void On_the_shipped_map_a_load_from_RR_to_PW_brings_the_PW_pair_without_a_section_change()
+    {
+        var rig = new Rig(Bbs757ControlMap.Load(), RrTitle);
+        rig.Panels("Pedestal");
+        string[] pw = { "BBS_fuelcut_PW1", "BBS_fuelcut_PW2" }, rr = { "BBS_fuelcut_RR1", "BBS_fuelcut_RR2" };
+        Assert.Equal((false, true), (pw.Any(rig.Built(Engines).Contains), rr.All(rig.Built(Engines).Contains)));
+
+        rig.Title = PwTitle;
+        Assert.Equal((true, false), (pw.All(rig.Built(Engines).Contains), rr.Any(rig.Built(Engines).Contains)));
+
+        rig.Title = null;   // no title: both pairs
+        Assert.True(pw.Concat(rr).All(rig.Built(Engines).Contains));
     }
 
     [Fact]
@@ -221,7 +260,7 @@ public class Bbs757VariantTests
     }
 
     [Fact]
-    public void A_change_of_engine_type_rewrites_the_same_lists_in_place()
+    public void A_change_of_engine_type_rewrites_the_same_section_lists_in_place_and_leaves_the_control_lists_whole()
     {
         var rig = new Rig();   // no title yet: every control
         var structure = rig.Def.GetPanelStructure();
@@ -234,22 +273,24 @@ public class Bbs757VariantTests
 
         rig.Title = RrTitle;
         Assert.Same(structure, rig.Def.GetPanelStructure());
-        Assert.Equal(new[] { Ignition, FuelRr }, engines);
         Assert.Equal(allOverhead, overhead);
-        Assert.False(rig.Shown(FuelPw));
+        Assert.Equal(allEngines, engines);
+        Assert.Equal(new[] { Ignition, FuelRr }, rig.Built(Engines));
 
         rig.Title = PwTitle;   // another aircraft loaded
         Assert.Same(structure, rig.Def.GetPanelStructure());
-        Assert.Equal(new[] { Ignition, FuelPw }, engines);
         Assert.DoesNotContain(EecPanel, overhead);
-        Assert.Empty(eec);
-        Assert.False(rig.Shown(FuelRr));
+        Assert.Equal(allEngines, engines);
+        Assert.Equal(new[] { EecGuard, Eec }, eec);
+        Assert.Equal(new[] { Ignition, FuelPw }, rig.Built(Engines));
+        Assert.Empty(rig.Built(EecPanel));
 
         rig.Title = null;   // a title that names neither
         Assert.Same(structure, rig.Def.GetPanelStructure());
-        Assert.Equal(allEngines, engines);
         Assert.Equal(allOverhead, overhead);
-        Assert.Equal(new[] { EecGuard, Eec }, eec);
+        Assert.Equal(allEngines, engines);
+        Assert.Equal(allEngines, rig.Built(Engines));
+        Assert.Equal(new[] { EecGuard, Eec }, rig.Built(EecPanel));
 
         // the same instances throughout: the base class and MainForm keep these
         Assert.Same(controls, rig.Def.GetPanelControls());
@@ -266,12 +307,14 @@ public class Bbs757VariantTests
         var keys = vars.Keys.ToList();
         var displays = rig.Def.GetPanelDisplayVariables();
         var shown = displays.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+        var controls = rig.Def.GetPanelControls().ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
 
         foreach (string? title in new[] { RrTitle, PwTitle, null })
         {
             rig.Title = title;
             rig.Def.GetPanelStructure();
 
+            Assert.Equal(controls, rig.Def.GetPanelControls().ToDictionary(kv => kv.Key, kv => kv.Value.ToList()));
             Assert.Same(vars, rig.Def.GetVariables());
             Assert.Equal(keys, rig.Def.GetVariables().Keys);
             Assert.All(new[] { FuelPw, FuelRr, Eec, EecGuard }, key => Assert.Contains(key, vars.Keys));
@@ -291,16 +334,15 @@ public class Bbs757VariantTests
         var vars = rig.Def.GetVariables();
 
         rig.Title = RrTitle;
-        rig.Def.GetPanelStructure();
-        Assert.Equal(allEngines.Where(k => k is not ("BBS_fuelcut_PW1" or "BBS_fuelcut_PW2")), rig.Controls(Engines));
+        Assert.Equal(allOverhead, rig.Panels("Overhead"));
+        Assert.Equal(allEngines.Where(k => k is not ("BBS_fuelcut_PW1" or "BBS_fuelcut_PW2")), rig.Built(Engines));
         // what the pilot hears on the Engines panel of an RR (the map's switches; the app's own fields are untouched)
         Assert.Equal(new[] { "Ignition", "L ENG Start", "R ENG Start", "L Fuel Control (RR)", "R Fuel Control (RR)" },
-            rig.Controls(Engines).Where(mapNodes.Contains).Select(k => vars[k].DisplayName));
-        Assert.Equal(allOverhead, rig.Panels("Overhead"));
+            rig.Built(Engines).Where(mapNodes.Contains).Select(k => vars[k].DisplayName));
 
         rig.Title = PwTitle;
-        rig.Def.GetPanelStructure();
-        Assert.Equal(allEngines.Where(k => k is not ("BBS_fuelcut_RR1" or "BBS_fuelcut_RR2")), rig.Controls(Engines));
         Assert.Equal(allOverhead.Where(p => p != EecPanel), rig.Panels("Overhead"));
+        Assert.Equal(allEngines.Where(k => k is not ("BBS_fuelcut_RR1" or "BBS_fuelcut_RR2")), rig.Built(Engines));
+        Assert.Equal(allEngines, rig.Controls(Engines));   // the list stays whole
     }
 }

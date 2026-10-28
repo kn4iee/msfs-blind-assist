@@ -26,7 +26,8 @@ public enum Bbs757EngineType
 /// in any case. A title naming neither or both, or no title yet, is <see cref="Bbs757EngineType.Unknown"/>, and an unknown
 /// type shows every control, as the panels did before the map said which type has a control.
 ///
-/// Pure: <c>BBS757Definition</c> reads the title and rewrites its panel lists with <see cref="Rewrite"/>.
+/// Pure: <c>BBS757Definition</c> reads the title, answers each control of a panel it builds with <see cref="IsFitted"/>
+/// and leaves a panel the type empties out of its sections with <see cref="RewriteSections"/>.
 /// </summary>
 public static class Bbs757Variant
 {
@@ -58,24 +59,19 @@ public static class Bbs757Variant
         controls.Where(c => !IsFitted(c.Variant, engines)).Select(c => c.Node).ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
-    /// Rewrites the panel lists a definition hands out IN PLACE, from the full lists it built: each panel's controls less the
-    /// hidden ones, and each section's panels less a panel that only hidden controls were on and that has no status display
-    /// (a panel that had no control to begin with stays). The same dictionaries and lists are kept, because the base class
-    /// caches the controls dictionary and MainForm re-reads both each time it lists a section or builds a panel. Hiding
-    /// nothing brings back every list as it was built.
+    /// Rewrites a definition's SECTION lists in place, from the full ones it built: each section's panels less a panel
+    /// that only hidden controls are on and that has no status display. A panel with an app field (a key that is no hidden
+    /// control), a status display, or no control to begin with stays. The panels' control lists are never touched: they
+    /// stay full, and <see cref="IsFitted"/>, asked of each control as a panel is built
+    /// (<c>BBS757Definition.IsPanelControlVisible</c>, from the live title), alone decides which of a panel's controls
+    /// show. The section lists are the same instances, which MainForm re-reads each time it lists a section. Hiding
+    /// nothing brings back every section as it was built.
     /// </summary>
-    public static void Rewrite(
-        IReadOnlyDictionary<string, List<string>> allStructure, IReadOnlyDictionary<string, List<string>> allControls,
-        IReadOnlyDictionary<string, List<string>> displays,
-        Dictionary<string, List<string>> structure, Dictionary<string, List<string>> controls, IReadOnlySet<string> hidden)
+    public static void RewriteSections(
+        IReadOnlyDictionary<string, List<string>> allStructure, IReadOnlyDictionary<string, List<string>> controls,
+        IReadOnlyDictionary<string, List<string>> displays, Dictionary<string, List<string>> structure,
+        IReadOnlySet<string> hidden)
     {
-        foreach (var (panel, all) in allControls)
-        {
-            if (!controls.TryGetValue(panel, out var shown)) continue;
-            shown.Clear();
-            shown.AddRange(all.Where(key => !hidden.Contains(key)));
-        }
-
         foreach (var (section, all) in allStructure)
         {
             if (!structure.TryGetValue(section, out var shown)) continue;
@@ -84,7 +80,7 @@ public static class Bbs757Variant
         }
 
         bool EmptiedByHiding(string panel) =>
-            allControls.TryGetValue(panel, out var all) && all.Count > 0 && all.All(hidden.Contains)
+            controls.TryGetValue(panel, out var keys) && keys.Count > 0 && keys.All(hidden.Contains)
             && !(displays.TryGetValue(panel, out var rows) && rows.Count > 0);
     }
 }

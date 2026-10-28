@@ -255,7 +255,7 @@ public partial class BBS757Definition : BaseAircraftDefinition
     public override Dictionary<string, List<string>> GetPanelStructure()
     {
         BuildPanelsOnce();
-        FollowEngineType();   // plan 12 task 8: MainForm lists a section's panels from here
+        FollowEngineType();   // plan 12 task 8: a panel the engine type empties is not listed
         return _panelStructure!;
     }
 
@@ -326,9 +326,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddEfbPanels(structure, controls, displays);        // plan 07, then 11
         AddThrustPanels(structure, controls, displays);     // plan 15
 
-        // Plan 12 task 8: every engine type's lists, kept; the ones handed out lose the other type's controls (FollowEngineType).
+        // Plan 12 task 8: every section's panels, kept; the lists handed out lose a panel the engine type empties
+        // (FollowEngineType). The control lists stay whole: IsPanelControlVisible decides a panel's controls.
         _allPanelStructure = structure.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
-        _allPanelControls = controls.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         _panelControls = controls;
         _panelDisplays = displays;
         _panelStructure = structure;
@@ -338,11 +338,10 @@ public partial class BBS757Definition : BaseAircraftDefinition
     // The engine type (plan 12 task 8; the owner approved this change to the core file)
     // =================================================================================
 
-    // The panel lists as BuildPanelsOnce built them, both engine types' controls in them.
+    // The section lists as BuildPanelsOnce built them, every panel in them.
     private Dictionary<string, List<string>>? _allPanelStructure;
-    private Dictionary<string, List<string>>? _allPanelControls;
 
-    /// <summary>The engine type the panel lists show now: Unknown, every control, until a title names one.</summary>
+    /// <summary>The engine type the section lists follow now: Unknown, every panel, until a title names one.</summary>
     internal Bbs757EngineType ShownEngineType { get; private set; }
 
     /// <summary>The loaded aircraft's title; replaced by tests. Null: the real one, <see cref="Sim"/>'s TITLE.</summary>
@@ -352,35 +351,38 @@ public partial class BBS757Definition : BaseAircraftDefinition
         Bbs757Variant.FromTitle(AircraftTitle != null ? AircraftTitle() : Sim?.CurrentAircraftTitle);
 
     /// <summary>
-    /// When the loaded engine type has changed, rewrites the panel lists in place (<see cref="Bbs757Variant.Rewrite"/>:
-    /// the same dictionaries and lists, which the base class caches and MainForm re-reads): an RR leaves out the PW fuel
-    /// control switches, a PW the RR ones and the RR's Electronic engine control panel, an unknown type brings every
-    /// control back. MainForm calls GetPanelStructure, and so this, each time the pilot opens a section, before it lists
-    /// the section's panels; SimConnectManager asks for the title again on every aircraft load and connection, so the next
-    /// section opened after one is right. Variables, writes and status rows do not change.
-    /// </summary>
-    private void FollowEngineType()
-    {
-        var engines = LoadedEngineType();
-        if (engines == ShownEngineType || _allPanelStructure == null || _allPanelControls == null) return;
-        Bbs757Variant.Rewrite(_allPanelStructure, _allPanelControls, _panelDisplays!, _panelStructure!, _panelControls!,
-            Bbs757Variant.HiddenNodes(_byNode.Values, engines));
-        ShownEngineType = engines;
-        Log.Info("BBS757", $"Engine type {engines}: the panels show " +
-            (engines == Bbs757EngineType.Unknown ? "every engine type's controls." : "its controls only."));
-    }
-
-    /// <summary>
-    /// MainForm asks this of every control of a panel it builds, handing in its SimConnectManager: a map control of the
-    /// other engine type's cockpit is left out, anything else shown. It reads the title itself, because right after a
-    /// connection the definition holds no SimConnectManager until a panel build hands it one here (it keeps it in
-    /// <see cref="Sim"/> for the next GetPanelStructure), so the first panel built is right too. It never rewrites a
-    /// list: MainForm is walking one while it asks.
+    /// THE mechanism that decides a panel's controls (the Fenix's and the PMDG 777's way): MainForm asks this of every
+    /// control of a panel as it builds it, handing in its SimConnectManager. A map control of the other engine type's
+    /// cockpit is left out (on an RR the PW fuel control switches, on a PW the RR ones and the RR's engine control
+    /// switches and guards); anything else, and everything while the type is unknown, is shown. It reads the live title
+    /// on every build, so a flight or aircraft load is followed by the next panel built, with no section change; the
+    /// panels' control lists stay whole. Right after a connection the definition holds no SimConnectManager until a
+    /// panel build hands it one here; it keeps it in <see cref="Sim"/> for <see cref="FollowEngineType"/>. It never
+    /// rewrites a list: MainForm is walking one while it asks.
     /// </summary>
     public override bool IsPanelControlVisible(string varKey, SimConnectManager? simConnect)
     {
         if (simConnect != null) Sim = simConnect;
         return !_byNode.TryGetValue(varKey, out var control) || Bbs757Variant.IsFitted(control.Variant, LoadedEngineType());
+    }
+
+    /// <summary>
+    /// The section lists only: when the loaded engine type has changed, leaves out of them, in place, a panel the type
+    /// empties (<see cref="Bbs757Variant.RewriteSections"/>: on a PW the RR's Electronic engine control panel), and an
+    /// unknown type brings every panel back. A panel with an app field or a status display stays. MainForm calls
+    /// GetPanelStructure, and so this, each time the pilot opens a section, before it lists the section's panels, so a
+    /// section listed while the title named another type is right from the next section opened. Which controls a panel
+    /// shows is <see cref="IsPanelControlVisible"/>'s alone. Variables, writes and status rows do not change.
+    /// </summary>
+    private void FollowEngineType()
+    {
+        var engines = LoadedEngineType();
+        if (engines == ShownEngineType || _allPanelStructure == null) return;
+        Bbs757Variant.RewriteSections(_allPanelStructure, _panelControls!, _panelDisplays!, _panelStructure!,
+            Bbs757Variant.HiddenNodes(_byNode.Values, engines));
+        ShownEngineType = engines;
+        Log.Info("BBS757", $"Engine type {engines}: the sections list " +
+            (engines == Bbs757EngineType.Unknown ? "every panel." : "its panels only."));
     }
 
     // =================================================================================
