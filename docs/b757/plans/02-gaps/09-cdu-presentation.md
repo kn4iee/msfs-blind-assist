@@ -101,18 +101,19 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** done on the branch `B757-p09-cdu-presentation` (2026-10-28), not pushed yet; then waiting on the owner:
-  in-sim checks 1 and 2
+- **Status:** done (2026-10-28): landed on `kn4iee/B757`; the owner's in-sim checks passed (2026-10-28)
 - **Claimed by:** kn4iee (the owner), 2026-10-28
 - **Worked by:** kn4iee (the owner) with Claude, with subagents (superpowers:subagent-driven-development: a fresh
   implementer and a reviewer per task, a whole-branch review at the end)
 - **Started:** 2026-10-28; `B757` at 29091df7c
-- **Landed:** (date; the last commit of this plan on `B757`)
+- **Landed:** 2026-10-28; the last commit is this record's, `docs(b757): plan 09 done, the owner's in-sim checks passed`
 - **Tests at landing:** full suite passed, 18,887 / 0 failed, after the rebase onto `B757` c108941d4 (the final fix
   wave's run)
 - **Tasks:** 0-5 done. Task 4 step 1 (owner-in-sim) was measured live by Claude at the owner's request, in cruise, over
   the simconnect MCP and the Coherent debugger (`docs/b757/evidence/flight-09.md`).
-- **Waiting on the owner:** in-sim checks 1 and 2, with these notes: open and close the window once before testing
+- **Waiting on the owner:** nothing for plan 09 (its requests to plan 16 are in the handoff). Not run, left for plan
+  16's in-sim pass: Alt+C with two FMC messages queued, D or Shift+D while a captain message arrives, and closing right
+  after a failed line select key. The notes the checks were run with: open and close the window once before testing
   messages while closed (see the request for `MainForm.BBS757.cs`); "a selected option reads with X" cannot be seen,
   as BlueBird sent no inverse cell on any page read; add Alt+C pressed twice in a row (ends "Cleared", never
   "DELETE"), Alt+C with two FMC messages queued (does the second long CLR dismiss the second message unheard? CLR on
@@ -121,7 +122,12 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   and reopening, D or Shift+D while a message arrives on the captain's CDU (it is spoken), and closing the window
   right after a line select key whose entry fails (the reply is not spoken: it falls inside the 2-second settle
   window and the typed-entry check stops on close; wait for the read-back before closing).
-- **In-sim results:** none run (Task 4 step 1's measurement, 2026-10-28, is in flight-09.md).
+- **In-sim results:** all passed, 2026-10-28 (owner, in cruise, the branch's build): the CDU's rows on speech and
+  braille (Title:, n:, Scratchpad:, dash rows gone on LEGS and VNAV CRZ, the PROGRESS GPS row kept); Alt+C (Cleared,
+  DELETE on an empty scratchpad, a quick double Alt+C ends Cleared); Ctrl+Shift+L and R and the window title; the
+  buttons' names and the check box; a CDU message spoken once with the window closed; muted from Ctrl+M and the
+  check box. "A selected option reads with X" cannot be seen (no inverse cell, flight-09.md). Task 4 step 1's
+  measurement and the full page tour are in flight-09.md.
 - **Changed from the plan:**
   - Task 1: `Bbs757CduRows.Build(screen, cdu)` as planned; `Bbs757CduFrame.ToDisplayLines(screen, cdu = 1)` passes it
     through for the tests, and the window passes its CDU. A blank screen is one row of kind `Blank`, line 0 (so after a blank frame the
