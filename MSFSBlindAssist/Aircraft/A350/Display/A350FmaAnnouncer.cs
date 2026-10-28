@@ -2,9 +2,10 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
 /// What the FMA call-outs say (pure): from each PFD read (A350Pfd lines), the FMA columns; a column is
-/// spoken when its text changes and two reads in a row agree, with its colours ("FMA vertical: SRS, green");
-/// a column that empties says so once ("FMA vertical clear"). The first agreed read is a silent baseline.
-/// Each line carries its column's Ctrl+M key.
+/// spoken when its text changes and two reads in a row agree on it, with its colours ("FMA vertical: SRS, green");
+/// a column that empties says so once ("FMA vertical clear"). Each column's first agreed read is its silent
+/// baseline. Columns agree each on its own: one that flickers never holds back another's change (live 2026-10-28,
+/// NAV engaging went unsaid while the engagement column flickered). Each line carries its column's Ctrl+M key.
 /// </summary>
 public sealed class A350FmaAnnouncer
 {
@@ -19,25 +20,26 @@ public sealed class A350FmaAnnouncer
         "approach" => "FMA approach capability", _ => "FMA engagement (AP, FD, A/THR)",
     };
 
-    private Dictionary<string, string>? _spoken;     // what each column last said (the baseline once agreed)
+    private readonly Dictionary<string, string> _spoken = new();   // what each column last said (its baseline once agreed)
     private Dictionary<string, string>? _pending;    // the last read, waiting for a second agreeing read
 
     public IReadOnlyList<(string Key, string Line)> Observe(IReadOnlyList<string> pfdLines)
     {
         var read = Columns.ToDictionary(c => c, c => pfdLines.FirstOrDefault(l => l.StartsWith($"FMA {c}: ", StringComparison.Ordinal)) ?? "");
         var said = new List<(string, string)>();
-        bool agreed = _pending != null && Columns.All(c => _pending[c] == read[c]);
+        var previous = _pending;
         _pending = read;
-        if (!agreed) return said;
-        if (_spoken == null) { _spoken = new Dictionary<string, string>(read); return said; }
+        if (previous == null) return said;
         foreach (var c in Columns)
         {
-            if (read[c] == _spoken[c]) continue;
+            if (previous[c] != read[c]) continue;   // not agreed yet
+            if (!_spoken.TryGetValue(c, out var last)) { _spoken[c] = read[c]; continue; }   // the silent baseline
+            if (read[c] == last) continue;
             said.Add((KeyFor(c), read[c].Length > 0 ? read[c] : $"FMA {c} clear"));
             _spoken[c] = read[c];
         }
         return said;
     }
 
-    public void Reset() { _spoken = null; _pending = null; }
+    public void Reset() { _spoken.Clear(); _pending = null; }
 }

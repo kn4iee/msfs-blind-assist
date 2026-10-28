@@ -41,6 +41,21 @@ public class A350FmaTests
         Assert.Empty(a.Observe(Pfd("FMA lateral: RWY, green")));
     }
 
+    // Live 2026-10-28, the climb out of VCBI: NAV went from armed (cyan) to engaged (green) after a DIR TO, and CLB
+    // engaged after the ALT knob push, and neither was said: the selected altitude drawn at the tape's top flickered in
+    // and out of the engagement column, and a call-out waited for every column to agree at once. Each column agrees on
+    // its own.
+    [Fact]
+    public void A_flickering_column_does_not_silence_another_columns_change()
+    {
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd("FMA lateral: NAV, cyan", "FMA engagement: AP1, white"));
+        a.Observe(Pfd("FMA lateral: NAV, cyan", "FMA engagement: AP1, white"));
+        Assert.Empty(a.Observe(Pfd("FMA lateral: NAV, green", "FMA engagement: 150, cyan; AP1, white")));
+        var said = a.Observe(Pfd("FMA lateral: NAV, green", "FMA engagement: AP1, white"));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("lateral"), "FMA lateral: NAV, green") }, said);
+    }
+
     [Fact]
     public void Each_column_has_a_ctrl_m_row()
     {
