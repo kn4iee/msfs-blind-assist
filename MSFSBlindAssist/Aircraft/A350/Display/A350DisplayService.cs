@@ -115,6 +115,7 @@ public sealed class A350DisplayService : IDisposable
         if (_disposed || State != A350DisplayState.Ready && State != A350DisplayState.Preparing) { tcs.SetResult(null); return tcs.Task; }
         _work.Add(() =>
         {
+            var started = DateTime.UtcNow;
             try
             {
                 if (State != A350DisplayState.Ready || _draw == null || !EnsureLocated()) { tcs.SetResult(null); return; }
@@ -132,7 +133,7 @@ public sealed class A350DisplayService : IDisposable
                     }
                     caps.Add(cap);
                 }
-                if (caps.Count > 0 && _health.Report(caps.Any(c => c.Ok), DateTime.UtcNow) is { } said) Spoken?.Invoke(said);
+                if (caps.Count > 0 && _health.Report(caps.Any(c => c.Ok), started, DateTime.UtcNow) is { } said) Spoken?.Invoke(said);
                 tcs.SetResult(caps);
             }
             catch (Exception ex)
