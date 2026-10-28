@@ -399,6 +399,19 @@ public static class A350MfdPage
     /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>
     private const string RevisionItem = "FlightplanButtonActionButton";
 
+    private const string TitleColour = ", black";
+
+    /// <summary>The page's title, its black title bar ("ACTIVE/F-PLN", y 130), or null.</summary>
+    public static string? PageTitle(IReadOnlyList<MfdLine> lines) =>
+        lines.FirstOrDefault(l => l.Kind == "text" && l.ClickY < 150 && l.Spoken.EndsWith(TitleColour, StringComparison.Ordinal))
+            ?.Spoken[..^TitleColour.Length];
+
+    /// <summary>The new page's title when the page changed since the last read (a page key, a menu pick, C/L COMPLETE
+    /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
+    /// first read.</summary>
+    public static string? PageJustChanged(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now) =>
+        before.Count == 0 || PageTitle(now) is not { } title || title == PageTitle(before) ? null : title;
+
     /// <summary>Where the MFD window moves when a menu has just opened: its first item, as a sighted pilot's eyes go to
     /// it; null while none opened since the last read (an open menu keeps the pilot's own place).</summary>
     public static int? MenuJustOpened(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)

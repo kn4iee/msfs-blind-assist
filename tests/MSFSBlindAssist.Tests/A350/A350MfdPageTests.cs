@@ -580,6 +580,20 @@ public class A350MfdPageTests
         Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
     }
 
+    // Live 2026-10-28: C/L COMPLETE sent the MFD from the checklists back to INIT, and the window changed its list without
+    // a word; a sighted pilot sees the new title bar at once (the A380's MFD window says the new title once).
+    [Fact]
+    public void A_page_change_names_the_new_page_once()
+    {
+        var checklists = PageLines("mfd_cl_menu");
+        var init = PageLines("mfd_init_empty");
+        Assert.Equal("CHECKLISTS", A350MfdPage.PageTitle(checklists));
+        Assert.Equal("ACTIVE/INIT", A350MfdPage.PageJustChanged(checklists, init));
+        Assert.Null(A350MfdPage.PageJustChanged(init, init));                       // the same page: nothing
+        Assert.Null(A350MfdPage.PageJustChanged(Array.Empty<MfdLine>(), init));    // the window's first read: nothing
+        Assert.Equal("ACTIVE/F-PLN TMPY", A350MfdPage.PageJustChanged(init, PageLines("mfd_fpln_tmpy_basu1d")));
+    }
+
     // DEPARTURE's RWY key opened (live 2026-10-28): its list starts 6 px under the key and reads right after it.
     [Fact]
     public void The_runway_list_hangs_from_the_rwy_key()

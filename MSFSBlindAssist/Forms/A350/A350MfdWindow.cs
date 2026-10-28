@@ -116,6 +116,13 @@ public sealed class A350MfdWindow : Form
             var before = _lines;
             (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
             _list.SetLines(shown);
+            // A new page says its title once and takes the selection to it, as the A380's MFD window does.
+            if (A350MfdPage.PageJustChanged(before, _lines) is { } title)
+            {
+                _announcer.Announce(title);
+                int at = _lines.ToList().FindIndex(l => l.Spoken.StartsWith(title, StringComparison.Ordinal));
+                if (at >= 0 && at < _list.Items.Count) _list.SelectedIndex = at;
+            }
             // A menu that has just opened takes the selection to its first item, where a sighted pilot looks.
             if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
                 _list.SelectedIndex = first;
