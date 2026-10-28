@@ -13,6 +13,13 @@ public sealed class McpIo
     public required Func<string, CancellationToken, Task<double?>> Read { get; init; }
     public required Action<string> Write { get; init; }
     public required Func<int, CancellationToken, Task> Delay { get; init; }
+
+    /// <summary>
+    /// A batched variable's last delivered value, at most one batch period (1 s) old; null when none
+    /// has arrived, or when there is no cache (then the readout reads fresh). A fresh read of a batched
+    /// variable waits for the next batch, up to a second.
+    /// </summary>
+    public Func<string, double?>? Cached { get; init; }
 }
 
 /// <summary>
@@ -426,14 +433,16 @@ public static class Bbs757Mcp
         => VsPhrase(await io.Read(VsVar, ct));
 
     /// <summary>
-    /// Shift+S: what the speed window shows. Read fresh in order, stopping at the first that decides:
-    /// the blank flag, then the Mach flag, then the Mach wheels or the IAS target. Never the IAS target
+    /// Shift+S: what the speed window shows. Read in order, stopping at the first that decides: the
+    /// blank flag, then the Mach flag, then the Mach wheels or the IAS target. Never the IAS target
     /// while the window is blank or in Mach: VNAV holds a stale one behind the blank window (250 while
-    /// flying 262, measured), and in Mach it is the Mach's IAS equivalent.
+    /// flying 262, measured), and in Mach it is the Mach's IAS equivalent. The blank flag is batched,
+    /// so it comes from the cache when there is one: a fresh read of it waited up to a second for the
+    /// next batch, the lag Shift+S had over Shift+H and Shift+A (2026-10-27). The rest are read fresh.
     /// </summary>
     public static async Task<string> ReadSpeedAsync(McpIo io, CancellationToken ct)
     {
-        double? blanked = await io.Read(IasBlankedVar, ct);
+        double? blanked = io.Cached?.Invoke(IasBlankedVar) ?? await io.Read(IasBlankedVar, ct);
         if (blanked is >= 0.5) return SpeedReadout(blanked, null, null, null);
         double? machFlag = await io.Read(MachModeVar, ct);
         if (machFlag is >= 0.5)

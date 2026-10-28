@@ -146,15 +146,16 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** waiting on owner: Task 5 (Altitude Intervene) and in-sim checks 2 and 3. Tasks 1-4 landed; plan 14 may take its files.
+- **Status:** waiting on owner: Task 5 (Altitude Intervene, after plan 02's Task 8). Tasks 1-4 landed and in-sim checks 1-3 passed (2026-10-27); plan 14 may take its files.
 - **Claimed by:** Daniel Wolak (danielw97), 2026-10-26
 - **Worked by:** Daniel Wolak with Claude (inline, superpowers:executing-plans; one whole-plan review by a fresh reviewer)
 - **Started:** 2026-10-26, from `cf1dfce94`
 - **Landed:** 2026-10-26 (Tasks 1-4; the last code commit is the review fix, "fix(b757): Mach sets wait for the wheels; speed rows judged once the batch is in")
 - **Tests at landing:** full suite passed, 17,240, after the last rebase
 - **Tasks:** 0-4 done. 5 waits: the first flight's ALT SEL push was inconclusive (no constraint to delete; `flight-05.md` M3).
-- **Waiting on the owner:** Task 5 (a cruise early-descent or a climb under an "at or below" constraint); in-sim check 2 (Mach entry at cruise; time the wheels' roll after a burst and after IAS/MACH) and check 3 (autopilot disconnect; note whether the light flashes, which would repeat the call-out).
-- **In-sim results:** check 1 passed in part 2026-10-26 (Alt+I "Speed Intervene pressed", caption "Window open"; the ground Mach refusal not yet heard). In the VNAV climb and descent, Speed Intervene opened the window on the current speed and kept VNAV (`flight-05.md` M2). Checks 2 and 3: none run.
+- **Waiting on the owner:** Task 5, after plan 02's Task 8 (a VNAV climb or descent with a constraint ahead). Daniel pressed ALT SEL on the 2026-10-26 and 2026-10-27 flights and noticed no change either time, conditions not checked; Robin was asked to run Task 8 properly.
+- **In-sim results:** check 1 passed in part 2026-10-26 (Alt+I "Speed Intervene pressed", caption "Window open"; the ground Mach refusal not yet heard). In the VNAV climb and descent, Speed Intervene opened the window on the current speed and kept VNAV (`flight-05.md` M2). 2026-10-27 (a flight to KLAX, ended in cruise, then CYHM-KCVG): check 2 passed (the speed box closed in the VNAV climb, Alt+I opened it and took a speed; Mach entry at cruise; the MCP altitude call-out once from the panel), check 3 passed ("Autopilot disconnect" from the yoke button, spoken once). The open question answered: with VNAV off (ALT HOLD or V/S), SPD lights.
+- **After landing:** Shift+S lagged Shift+H and A by up to a second (Gus, 2026-10-26; Daniel confirmed): `BBS_IAS_BLANKED` is batched, so its fresh read waited for the next 1 Hz batch. Fixed 2026-10-27 (`fix(b757): Shift+S reads the speed window's blank flag from the cache`): Shift+S takes the flag from the cache; the fix passed in flight the same day.
 - **Changed from the plan:**
   - Mach is read from the speed window's wheels (`Bbs757Mcp.MachFromDrums`); `L:BBS_TARGET_MACH` reads 0 in Mach mode (M1), so it is neither registered nor watched. The Mach row watches the hundredths wheel, with a silent tenths-wheel row.
   - Task 3's step 1 was flown 2026-10-26 (M1): one event 0.01 Mach, the knot tiers, floor .40, no ceiling before .95. The app keeps to .40-.86 itself; no burst past the 25th event; a Mach with three decimals is refused.

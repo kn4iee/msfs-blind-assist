@@ -7,14 +7,17 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <summary>The PROG page's destination line: "KMIA", 568 miles to go, ETA "0332" (Zulu); null when not shown.</summary>
 public sealed record Bbs757ProgDest(string Ident, int Miles, string? EtaZulu);
 
-/// <summary>The PROG page's top of climb ("T/C") or descent ("T/D"): miles to it and its time (Zulu); null when not shown.</summary>
+/// <summary>The PROG page's top of climb ("T/C"), step climb ("STEP CLB") or top of descent ("T/D"): miles to it and its time (Zulu); null when not shown.</summary>
 public sealed record Bbs757ProgTop(string Kind, int Miles, string? EtaZulu);
 
 /// <summary>
 /// D and Shift+D (plan 06): the distance and ETA to the destination, and to the top of climb or descent, read
 /// off PROG page 1 on the first officer's CDU. Measured layout (session 8, flight 356): a label row " DEST" then
 /// "KMIA    568  0332Z   6.1"; a label row " ECON SPD         TO T/C" (or "TO T/D") then
-/// "299/.785     0218Z/ 56NM". The parse finds the label rows rather than counting them, and never throws.
+/// "299/.785     0218Z/ 56NM". With a planned step climb ahead the same row says "TO STEP CLB" instead
+/// (".801       1740Z/ 1219NM", 2026-10-27, a SimBrief step on a long flight), and the T/D shows there only
+/// once no step is left: the DES page shows no T/D. The parse finds the label rows rather than counting them,
+/// and never throws.
 /// <c>L:BBS_VNAV_TOD</c> is not used: it does not count down (flight-06.md).
 /// </summary>
 public static class Bbs757Prog
@@ -25,7 +28,7 @@ public static class Bbs757Prog
     private const int MaxPrevPresses = 2;
 
     private static readonly Regex DestData = new(@"^\s*([A-Z0-9]{3,5})\s+(\d+)(?:\.\d+)?(?:\s+(\d{4})Z)?", RegexOptions.CultureInvariant);
-    private static readonly Regex TopLabel = new(@"TO (T/C|T/D)", RegexOptions.CultureInvariant);
+    private static readonly Regex TopLabel = new(@"TO (T/C|T/D|STEP CLB)", RegexOptions.CultureInvariant);
     private static readonly Regex TopData = new(@"(?:(\d{4})Z)?\s*/\s*(\d+)(?:\.\d+)?\s*NM", RegexOptions.CultureInvariant);
 
     /// <summary>Any PROG page: its title's name ends with "PROGRESS".</summary>
@@ -62,10 +65,18 @@ public static class Bbs757Prog
         => d == null ? "No destination on the progress page"
             : $"{Miles(d.Miles)} to destination {d.Ident}" + (d.EtaZulu is { } eta ? $", ETA {Clock(eta)} Zulu" : "");
 
-    /// <summary>"Top of climb in 56 miles, 02:18 Zulu", "Top of descent in …", or "No top of climb or descent ahead".</summary>
+    /// <summary>
+    /// "Top of climb in 56 miles, 02:18 Zulu", "Top of descent in …", "Step climb in …, top of descent after it",
+    /// or "No top of climb or descent ahead".
+    /// </summary>
     public static string TopPhrase(Bbs757ProgTop? t)
-        => t == null ? "No top of climb or descent ahead"
-            : $"Top of {(t.Kind == "T/C" ? "climb" : "descent")} in {Miles(t.Miles)}" + (t.EtaZulu is { } eta ? $", {Clock(eta)} Zulu" : "");
+    {
+        if (t == null) return "No top of climb or descent ahead";
+        string at = t.EtaZulu is { } eta ? $", {Clock(eta)} Zulu" : "";
+        return t.Kind == "STEP CLB"
+            ? $"Step climb in {Miles(t.Miles)}{at}, top of descent after it"
+            : $"Top of {(t.Kind == "T/C" ? "climb" : "descent")} in {Miles(t.Miles)}{at}";
+    }
 
     /// <summary>
     /// PROG page 1 on the first officer's CDU: PROG (unless a PROG page is already up), then PREV until the

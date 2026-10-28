@@ -35,15 +35,21 @@ public interface IBbs757IlsDisplay : IDisposable
 /// <c>&lt;img src="WasmGaugeLiveView_N"&gt;</c> (N changes with the load). A live view resolves in any Coherent
 /// view, so a read lays a copy of it over the simulator's 2D UI page (<c>mainUi</c>, drawn over the whole window
 /// whatever the camera does): a fixed black box at CSS (16,16), 668 × 93, on top of everything, never taking the
-/// mouse, the image filtered to white segments on black. Then it captures the window
-/// (<see cref="ScreenshotService"/>: <c>canvas.toDataURL</c> of a live view is empty and Coherent has no
-/// screenshot call, so the window capture is the only way to the pixels), crops the box
-/// (<see cref="Bbs757IlsOcr.OverlayCrop"/>, from the page's size against the capture's) and decodes it
-/// (<see cref="Bbs757IlsOcr.Decode"/>), then removes the box.
+/// mouse, the image as the gauge draws it. Then it captures the window (<see cref="CaptureFrameAsync"/>:
+/// <c>canvas.toDataURL</c> of a live view is empty and Coherent has no screenshot call, so the window capture is
+/// the only way to the pixels), crops the box (<see cref="Bbs757IlsOcr.OverlayCrop"/>, from the page's size
+/// against the capture's) and decodes it (<see cref="Bbs757IlsOcr.Decode"/>), then removes the box.
 ///
-/// A sighted viewer sees that black box with white digits in the top-left corner for about a tenth of a
-/// second per read (round 5's raw captures: about 0.13 s; the app's capture also encodes a PNG, which may hold
-/// it a little longer, unmeasured). It never shows on a cockpit display.
+/// No CSS filter, because the panel dims at night (flight-04.md, "Round 6", 2026-10-27, a 3840 × 2160 sim at
+/// dusk): its lit segments peaked at grey 63, round 5's daylight at 64-95. Round 5's filter
+/// (<c>grayscale(1) brightness(2.6) contrast(40)</c>) turned every pixel under about 48 black, which shrank the
+/// decimal point inside the decoder's core: every read that night was refused (clarity 0.39). The decoder's
+/// own Otsu threshold follows the panel's brightness (45 in round 5's daylight, 29 that night) and read the
+/// same display unfiltered at clarity 1.00.
+///
+/// A sighted viewer sees that box, the panel's grey digits on its dark ground, in the top-left corner for
+/// about a tenth of a second per read (round 5's raw captures: about 0.13 s). It never shows on a cockpit
+/// display.
 ///
 /// The read: the box goes up, ~150 ms (round 5: it was in a capture ending 134-153 ms after the inject), then
 /// up to <see cref="MaxCaptures"/> captures about 50 ms apart until one decodes; at most
@@ -61,8 +67,8 @@ public interface IBbs757IlsDisplay : IDisposable
 /// <c>/pagelist.json</c> (never hardcoded; <see cref="CoherentEvalClient"/> resolves by a title substring, and
 /// "VCockpit1" is a substring of "VCockpit13 - BBSTablet"), never on a page the 757's persistent clients hold
 /// (the tablet's BBSTablet page and the EFB's BBSNavigraphMap page: <see cref="IsProbeable"/>), each entered as a
-/// one-shot (<see cref="CoherentViewOwnership.TryEnterOneShot"/>). Every Coherent call is async; the capture runs
-/// on its own thread (<see cref="ScreenshotService.CaptureAsync"/>) and the decode on the pool.
+/// one-shot (<see cref="CoherentViewOwnership.TryEnterOneShot"/>). Every Coherent call is async; each capture runs
+/// on its own thread (<see cref="CaptureFrameAsync"/>) and the decode on the pool.
 /// </summary>
 public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
 {
@@ -76,9 +82,6 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     /// <summary>The overlay element's id in <c>mainUi</c>.</summary>
     internal const string OverlayId = "msfsba_ils_ocr";
 
-    /// <summary>White segments on black, the unlit ghosts gone (round 5: 99.4 % of the box pure black or white).</summary>
-    internal const string Filter = "grayscale(1) brightness(2.6) contrast(40)";
-
     private const int SettleMs = 150;
     private const int CaptureGapMs = 50;
     internal const int MaxCaptures = 4;
@@ -90,7 +93,7 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(2) };
     private static readonly Regex LiveViewName = new(@"^WasmGaugeLiveView_\d+$", RegexOptions.CultureInvariant);
 
-    private readonly Func<Task<byte[]?>> _capture;
+    private readonly Func<Task<Bitmap?>> _capture;
     private readonly Func<Rectangle?> _clientRegion;
     private readonly string _debugger;
     private readonly Action<string> _debug;
@@ -106,15 +109,15 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     /// <summary>Where the read is, for the log line of a read that times out ("gauge search", "inject", "capture/decode").</summary>
     private string _phase = "";
 
-    public CoherentBbs757IlsDisplay() : this(new ScreenshotService().CaptureAsync, SimClientRegion)
+    public CoherentBbs757IlsDisplay() : this(CaptureFrameAsync, SimClientRegion)
     {
     }
 
-    /// <param name="capture">The window capture as PNG bytes (the whole window rectangle).</param>
+    /// <param name="capture">The window capture (the whole window rectangle); the reader disposes each frame.</param>
     /// <param name="clientRegion">Where the client area lies in that capture; null: the whole capture.</param>
     /// <param name="debugger">The Coherent debugger's host and port (tests: a local listener, never the sim's).</param>
     /// <param name="debug">Where this reader's own debug lines go (tests); null: debug.log.</param>
-    internal CoherentBbs757IlsDisplay(Func<Task<byte[]?>> capture, Func<Rectangle?> clientRegion,
+    internal CoherentBbs757IlsDisplay(Func<Task<Bitmap?>> capture, Func<Rectangle?> clientRegion,
         string debugger = Debugger, Action<string>? debug = null)
     {
         _capture = capture;
@@ -183,7 +186,8 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
 
     /// <summary>
     /// One read of the gauge through the overlay, within <see cref="ReadCapMs"/>: the box up, the captures,
-    /// the box removed in the <c>finally</c> on its own token.
+    /// the box removed in the <c>finally</c> on its own token, then a failed read's last capture saved
+    /// (<see cref="SaveFailedCapture"/>).
     /// </summary>
     private async Task<Bbs757IlsReading?> ReadGaugeAsync(string liveView, CancellationToken ct)
     {
@@ -196,6 +200,8 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         Rectangle? client = await Task.Run(_clientRegion, token).ConfigureAwait(false);
 
         bool injected = false;
+        Bitmap? failed = null;   // a failed read's last capture, saved once the box is down
+        double pageWidth = 0, pageHeight = 0;
         try
         {
             string inject = InjectScript(liveView);
@@ -214,32 +220,72 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
                 return null;
             }
             LogPageSize(innerWidth, innerHeight, ratio, client);
+            (pageWidth, pageHeight) = (innerWidth, innerHeight);
 
             _phase = "capture/decode";
-            await Task.Delay(SettleMs, token).ConfigureAwait(false);
-            for (int i = 0; i < MaxCaptures; i++)
+            Bitmap? last = null;   // the latest capture, disposed when the next one comes or the read ends
+            var started = Stopwatch.StartNew();
+            try
             {
-                if (i > 0) await Task.Delay(CaptureGapMs, token).ConfigureAwait(false);
-                byte[]? png = await _capture().WaitAsync(token).ConfigureAwait(false);
-                if (png == null)
+                await Task.Delay(SettleMs, token).ConfigureAwait(false);
+                for (int i = 0; i < MaxCaptures; i++)
                 {
-                    _debug("ILS display: the simulator window could not be captured.");
-                    return null;
+                    if (i > 0) await Task.Delay(CaptureGapMs, token).ConfigureAwait(false);
+                    long before = started.ElapsedMilliseconds;
+                    if (await CaptureWithinAsync(token).ConfigureAwait(false) is not Bitmap frame)
+                    {
+                        _debug("ILS display: the simulator window could not be captured.");
+                        return null;
+                    }
+                    last?.Dispose();
+                    last = frame;
+                    var (cropped, reading) = await Task.Run(() => DecodeCapture(frame, client, innerWidth, innerHeight), token).ConfigureAwait(false);
+                    _debug(string.Create(CultureInfo.InvariantCulture,
+                        $"ILS display: capture {i + 1} at {before} ms took {started.ElapsedMilliseconds - before} ms with its decode: {(reading != null ? "read" : cropped ? "no reading" : "box off the capture")}."));
+                    if (!cropped)
+                    {
+                        _debug("ILS display: the overlay's box does not fit the capture at the page's scale.");
+                        (failed, last) = (last, null);
+                        return null;
+                    }
+                    if (reading != null) return reading;
                 }
-                var (cropped, reading) = await Task.Run(() => DecodeCapture(png, client, innerWidth, innerHeight), token).ConfigureAwait(false);
-                if (!cropped)
-                {
-                    _debug("ILS display: the overlay's box does not fit the capture at the page's scale.");
-                    return null;
-                }
-                if (reading != null) return reading;
+                _debug($"ILS display: none of {MaxCaptures} captures decoded.");
+                (failed, last) = (last, null);
+                return null;
             }
-            _debug($"ILS display: none of {MaxCaptures} captures decoded.");
-            return null;
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // The read's own cap ran out mid-capture: keep what the last capture saw. Said as a timeout above.
+                if (last == null) _debug("ILS display: no capture finished before the read gave up; nothing saved.");
+                (failed, last) = (last, null);
+                throw;
+            }
+            finally
+            {
+                last?.Dispose();
+            }
         }
         finally
         {
             if (injected) await RemoveAsync().ConfigureAwait(false);
+            if (failed != null) SaveFailedCapture(failed, client, pageWidth, pageHeight);
+        }
+    }
+
+    /// <summary>One capture, waited for within the read's cap; a frame that comes after the cap is disposed, not leaked.</summary>
+    private async Task<Bitmap?> CaptureWithinAsync(CancellationToken token)
+    {
+        var pending = _capture();
+        try
+        {
+            return await pending.WaitAsync(token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _ = pending.ContinueWith(t => t.Result?.Dispose(), CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+            throw;
         }
     }
 
@@ -272,11 +318,45 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         Log.Warn("BBS757", "ILS display: the overlay could not be removed now; the next read removes it first.");
     }
 
-    /// <summary>A capture's box decoded: whether the box fits the capture at the page's scale, and the reading (null: not a valid display).</summary>
-    private static (bool Cropped, Bbs757IlsReading? Reading) DecodeCapture(byte[] png, Rectangle? client, double innerWidth, double innerHeight)
+    /// <summary>
+    /// A failed read's last capture, for working out why (2026-10-27: every read timed out on a 1024 × 576 CSS
+    /// mainUi in a 1920 × 1080 window): the whole capture as ils-display-fail.png and the overlay's box as
+    /// ils-display-fail-crop.png in the logs folder, each overwritten by the next failure. Saved on the pool, after
+    /// the box is down (a 3840 × 2160 PNG takes about 0.3 s to encode); takes <paramref name="frame"/> and disposes
+    /// it. Never throws.
+    /// </summary>
+    private void SaveFailedCapture(Bitmap frame, Rectangle? client, double innerWidth, double innerHeight)
     {
-        using var stream = new MemoryStream(png);
-        using var frame = new Bitmap(stream);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                string whole = AppLogs.PathFor("ils-display-fail.png");
+                frame.Save(whole, ImageFormat.Png);
+                string saved = whole;
+                if (Bbs757IlsOcr.OverlayCrop(frame.Size, client, innerWidth, innerHeight) is Rectangle box)
+                {
+                    string crop = AppLogs.PathFor("ils-display-fail-crop.png");
+                    using var cut = frame.Clone(box, PixelFormat.Format32bppArgb);
+                    cut.Save(crop, ImageFormat.Png);
+                    saved += $" and {crop} ({box.Width}x{box.Height} at {box.X},{box.Y})";
+                }
+                _debug($"ILS display: saved the last capture ({frame.Width}x{frame.Height}) to {saved}.");
+            }
+            catch (Exception ex)
+            {
+                _debug($"ILS display: the failed capture could not be saved: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                frame.Dispose();
+            }
+        });
+    }
+
+    /// <summary>A capture's box decoded: whether the box fits the capture at the page's scale, and the reading (null: not a valid display).</summary>
+    private static (bool Cropped, Bbs757IlsReading? Reading) DecodeCapture(Bitmap frame, Rectangle? client, double innerWidth, double innerHeight)
+    {
         if (Bbs757IlsOcr.OverlayCrop(frame.Size, client, innerWidth, innerHeight) is not Rectangle box) return (false, null);
         using var crop = frame.Clone(box, PixelFormat.Format32bppArgb);
         return (true, Bbs757IlsOcr.Decode(crop));
@@ -440,7 +520,7 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
             + "background:#000;z-index:2147483647;pointer-events:none;margin:0;padding:0;border:0;display:block;visibility:visible;opacity:1;transform:none;';"
             + "var im=document.createElement('img');im.src=" + JsonSerializer.Serialize(liveView) + ";"
             + "im.style.cssText='position:absolute;left:0px;top:0px;width:" + width + "px;height:" + height + "px;"
-            + "pointer-events:none;margin:0;padding:0;border:0;filter:" + Filter + ";';"
+            + "pointer-events:none;margin:0;padding:0;border:0;';"
             + "host.appendChild(im);(document.body||document.documentElement).appendChild(host);"
             + "return JSON.stringify({iw:window.innerWidth,ih:window.innerHeight,dpr:window.devicePixelRatio});})()";
     }
@@ -478,6 +558,18 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
 
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    /// <summary>Ask the compositor for the window's full content, as <see cref="ScreenshotService"/> does.</summary>
+    private const uint PwRenderFullContent = 0x00000002;
+
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
     {
@@ -491,7 +583,13 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     }
 
     /// <summary>
-    /// Where the simulator's client area lies in a <see cref="ScreenshotService"/> capture, whose picture is the
+    /// The simulator's main window, kept while Windows still has it shown: finding it takes two process scans
+    /// (<see cref="FindSimWindow"/>), and a read captures up to <see cref="MaxCaptures"/> times.
+    /// </summary>
+    private static volatile IntPtr _simWindow;
+
+    /// <summary>
+    /// Where the simulator's client area lies in a capture (<see cref="CaptureFrameAsync"/>), whose picture is the
     /// whole window rectangle (its frame too, on a windowed simulator); null when Windows will not say, and the
     /// capture is then taken as the client area (<see cref="Bbs757IlsOcr.OverlayCrop"/> checks that it can be).
     /// Per-monitor DPI aware (V2) as the capture is, on the calling thread only and put back before it returns:
@@ -499,24 +597,11 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     /// </summary>
     internal static Rectangle? SimClientRegion()
     {
-        IntPtr previous = IntPtr.Zero;
+        IntPtr previous = EnterPerMonitorDpiAwareness();
         try
         {
-            previous = SetThreadDpiAwarenessContext((IntPtr)(-4));   // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
-        }
-        catch (EntryPointNotFoundException)
-        {
-            // Before Windows 10 1607: the capture is not per-monitor aware either.
-        }
-
-        try
-        {
-            IntPtr hwnd = FindSimWindow();
-            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out RECT window) || !GetClientRect(hwnd, out RECT client)) return null;
-            var origin = new POINT();
-            if (!ClientToScreen(hwnd, ref origin)) return null;
-            int width = client.Right - client.Left, height = client.Bottom - client.Top;
-            return width > 0 && height > 0 ? new Rectangle(origin.X - window.Left, origin.Y - window.Top, width, height) : null;
+            IntPtr hwnd = SimWindow();
+            return hwnd != IntPtr.Zero && GetWindowRect(hwnd, out RECT window) ? ClientRegionIn(hwnd, window) : null;
         }
         catch (Exception ex)
         {
@@ -527,6 +612,117 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         {
             if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous);
         }
+    }
+
+    /// <summary>
+    /// The simulator window as a bitmap: the whole window rectangle, as <see cref="ScreenshotService"/> captures it,
+    /// without the PNG encoding only the AI's upload needs. Round 6 (flight-04.md, a 3840 × 2160 sim): PrintWindow
+    /// took 80-96 ms, the service's encode 310-320 ms more and this reader's decode back 41 ms, so a read had room
+    /// for one capture in its <see cref="ReadCapMs"/>; cropped in memory, a capture took 63-85 ms. PrintWindow runs
+    /// on a thread of its own (into a simulator that has stopped pumping messages it never returns; the read's cap
+    /// abandons the wait), and a frame it fails or hands back blank (<see cref="ScreenshotFrame.LooksBlank"/>) takes
+    /// the service's own capture instead, with its screen-copy fallback. `Services/**` is frozen on the 757's
+    /// branch: plan 04's handoff asks plan 16 for this capture in the service. Null when neither captures.
+    /// </summary>
+    internal static async Task<Bitmap?> CaptureFrameAsync()
+    {
+        if (await OnOwnThread(PrintSimWindow).ConfigureAwait(false) is Bitmap printed) return printed;
+        byte[]? png = await new ScreenshotService().CaptureAsync().ConfigureAwait(false);
+        if (png == null) return null;
+        using var stream = new MemoryStream(png);
+        using var decoded = new Bitmap(stream);
+        return new Bitmap(decoded);   // a copy: a bitmap read from a stream needs the stream for its whole life
+    }
+
+    /// <summary>The window by PrintWindow, per-monitor DPI aware on this thread only; null when it fails or looks blank.</summary>
+    private static Bitmap? PrintSimWindow()
+    {
+        IntPtr previous = EnterPerMonitorDpiAwareness();
+        Bitmap? frame = null;
+        try
+        {
+            IntPtr hwnd = SimWindow();
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out RECT window)) return null;
+            int width = window.Right - window.Left, height = window.Bottom - window.Top;
+            if (width <= 0 || height <= 0) return null;
+
+            frame = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+            bool rendered;
+            using (var graphics = Graphics.FromImage(frame))
+            {
+                IntPtr hdc = graphics.GetHdc();
+                try
+                {
+                    rendered = PrintWindow(hwnd, hdc, PwRenderFullContent);
+                }
+                finally
+                {
+                    graphics.ReleaseHdc(hdc);
+                }
+            }
+            if (!rendered || ScreenshotFrame.LooksBlank(frame, ClientRegionIn(hwnd, window))) return null;
+
+            var printed = frame;
+            frame = null;
+            return printed;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("BBS757", $"ILS display: PrintWindow failed, the screenshot service captures instead: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            frame?.Dispose();
+            if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous);
+        }
+    }
+
+    /// <summary>Runs <paramref name="work"/> on a background thread of its own, never the pool: a hung PrintWindow parks only it.</summary>
+    private static Task<T?> OnOwnThread<T>(Func<T?> work) where T : class
+    {
+        var done = new TaskCompletionSource<T?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() =>
+        {
+            try { done.TrySetResult(work()); }
+            catch (Exception ex) { done.TrySetException(ex); }
+        })
+        {
+            IsBackground = true,
+            Name = "MSFSBA ILS display capture",
+        }.Start();
+        return done.Task;
+    }
+
+    /// <summary>The client area inside a picture of <paramref name="window"/>'s rectangle; null when Windows will not say.</summary>
+    private static Rectangle? ClientRegionIn(IntPtr hwnd, RECT window)
+    {
+        if (!GetClientRect(hwnd, out RECT client)) return null;
+        var origin = new POINT();
+        if (!ClientToScreen(hwnd, ref origin)) return null;
+        int width = client.Right - client.Left, height = client.Bottom - client.Top;
+        return width > 0 && height > 0 ? new Rectangle(origin.X - window.Left, origin.Y - window.Top, width, height) : null;
+    }
+
+    /// <summary>Makes the calling thread per-monitor DPI aware (V2); the context to put back, or zero when nothing changed.</summary>
+    private static IntPtr EnterPerMonitorDpiAwareness()
+    {
+        try
+        {
+            return SetThreadDpiAwarenessContext((IntPtr)(-4));   // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return IntPtr.Zero;   // before Windows 10 1607: the capture is not per-monitor aware either
+        }
+    }
+
+    /// <summary>The simulator's main window: the one kept while Windows still has it shown, else found anew.</summary>
+    private static IntPtr SimWindow()
+    {
+        IntPtr known = _simWindow;
+        if (known != IntPtr.Zero && IsWindow(known) && IsWindowVisible(known)) return known;
+        return _simWindow = FindSimWindow();
     }
 
     /// <summary>The simulator's main window, found as <see cref="ScreenshotService"/> finds it.</summary>

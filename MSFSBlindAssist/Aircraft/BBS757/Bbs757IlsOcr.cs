@@ -13,9 +13,10 @@ public sealed record Bbs757IlsReading(bool Parked, double? Mhz, int? Course);
 
 /// <summary>
 /// Reads the 757's ILS control panel display from a picture. The panel is a WASM gauge (<c>wasm_gauge=ils_control_lcd</c>,
-/// 668 × 93) no variable mirrors; the app lays its live view over the simulator's 2D UI page with a filter that
-/// leaves white segments on black (<c>SimConnect/BBS757/CoherentBbs757IlsDisplay.cs</c>), captures the window, crops the
-/// box (<see cref="OverlayCrop"/>) and decodes it here as a seven-segment display. Pure.
+/// 668 × 93) no variable mirrors; the app lays its live view, unfiltered, over the simulator's 2D UI page
+/// (<c>SimConnect/BBS757/CoherentBbs757IlsDisplay.cs</c>), captures the window, crops the box (<see cref="OverlayCrop"/>)
+/// and decodes it here as a seven-segment display. The threshold is the picture's own (Otsu), because the panel's
+/// brightness is not fixed: it dims at night (round 6). Pure.
 ///
 /// Measured (docs/b757/evidence/flight-04.md, "Round 5: reading the ILS display"; round 5's decoder read all
 /// 19 captures right, every segment fully on or off):
@@ -42,7 +43,8 @@ public static class Bbs757IlsOcr
     /// doubled, the worst of them (1 is every one fully on or off). Round 5's filtered reads were all 1.00 over
     /// the segments and the bare scene under the box 0.21-0.33. Measured here: the fixtures 0.96 plain (the
     /// point's core is a pixel short of fully lit), 0.80 to 1.00 shifted, rescaled or unfiltered; crops with a
-    /// margin round the box (not the overlay's rectangle) 0.30 at most.
+    /// margin round the box (not the overlay's rectangle) 0.30 at most. Round 6's night display: 1.00 unfiltered,
+    /// and 0.39 through round 5's filter, whose fixed cut shrank the decimal point inside its core (69 % lit).
     /// </summary>
     internal const double MinClarity = 0.6;
 

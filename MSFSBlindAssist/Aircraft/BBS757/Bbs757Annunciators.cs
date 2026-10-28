@@ -141,12 +141,14 @@ public static class Bbs757Annunciators
             rows.Add(new(watch, $"B757_IRS_{irs}_SWITCH", $"IRS {irs} Switch", (_, _) => null, null, Silent: true));
         }
 
-        rows.Add(new("BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_VALVE_DECAL", "Left Start Valve",
-            (v, _) => OnOff(v, "Left start valve open", "Left start valve closed"), BBS757Definition.EnginesPanel,
-            States("Closed", "Open")));
-        rows.Add(new("BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_VALVE_DECAL", "Right Start Valve",
-            (v, _) => OnOff(v, "Right start valve open", "Right start valve closed"), BBS757Definition.EnginesPanel,
-            States("Closed", "Open")));
+        // Each start valve follows its start switch, not a light: the switch is held at GND while the valve is
+        // open and BlueBird releases it to AUTO at starter cutout, about 46 % N2. The VALVE decal only flashes
+        // for 2 s whenever the switch moves, either way (measured 2026-10-27, both engines, three starts).
+        // "Open" is tracked but quiet (the pilot just picked GND and heard it); "closed" is the cutout.
+        rows.Add(new("BBS757_L_START_VALVE", "B757_OVHD_L_ENG_START_SWITCH", "Left Start Valve",
+            (v, _) => StartValve(v, "Left"), BBS757Definition.EnginesPanel, StartValveStates));
+        rows.Add(new("BBS757_R_START_VALVE", "B757_OVHD_R_ENG_START_SWITCH", "Right Start Valve",
+            (v, _) => StartValve(v, "Right"), BBS757Definition.EnginesPanel, StartValveStates));
 
         // The doors animate 0-100 (passenger) or 0-200 (cargo): only the ends speak.
         foreach (string door in new[] { "L1", "L2", "L3", "R1", "R2", "R3" })
@@ -162,6 +164,21 @@ public static class Bbs757Annunciators
     /// <summary>A light's words: above 0.5 is lit; null when the value is not a number.</summary>
     private static string? OnOff(double value, string lit, string dark)
         => double.IsFinite(value) ? (value > 0.5 ? lit : dark) : null;
+
+    /// <summary>The start switch's GND position, the only one that holds the start valve open (AUTO 3, OFF 4, CONT 5, FLT 6).</summary>
+    private const double StartSwitchGnd = 1;
+
+    // A property, not a field: Rows is built before any field declared below it is initialized.
+    private static IReadOnlyDictionary<double, string> StartValveStates => new Dictionary<double, string>
+    {
+        [StartSwitchGnd] = "Open", [3] = "Closed", [4] = "Closed", [5] = "Closed", [6] = "Closed",
+    };
+
+    /// <summary>A start valve from its switch: open (quiet) at GND, closed anywhere else; null when not a number.</summary>
+    private static string? StartValve(double value, string side)
+        => !double.IsFinite(value) ? null
+            : Math.Abs(value - StartSwitchGnd) < 0.01 ? Quiet + $"{side} start valve open"
+            : $"{side} start valve closed";
 
     /// <summary>An autoland status line: 0 and 2 are its two messages, 1 blank (tracked, never spoken).</summary>
     private static string? Asa(double value, string at0, string at2, string blank)
