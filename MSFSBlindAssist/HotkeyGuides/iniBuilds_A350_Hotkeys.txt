@@ -23,7 +23,8 @@ move"). Each panel's status display (Ctrl+3) reads its lights, the FCU's four wi
 each side's baro and the ISIS QNH setting as the cockpit shows them. A button shows its
 state beside its name wherever the cockpit shows one: its light On or Off, its lit legends
 ("EXT 1: Available", "APU agent: Squib and discharged"), or what it switches ("SPD/MACH:
-Knots", "Captain baro unit: Hectopascals", "Speed knob push: Managed"). The runway
+Knots", "Captain baro unit: Hectopascals", "Speed knob push: Managed"). On the A350 a
+baro knob's push selects STD and its pull QNH (the A320's are the other way round). The runway
 condition (Autobrake panel) is one choice from 6 dry to 1 ice: the knob opens its menu on
 the SD, steps to it and closes it. The HUD is an option on the OIS options page: without it
 the HUD panel's controls say "HUD is not fitted"; each side's declutter is an Off/On switch.
