@@ -103,7 +103,7 @@ internal static class A350TypedEntry
         new("A350_FO_QNH_SET", "QNH (in F/O unit)", "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT", Side: 2);
     /// <summary>The captain's ISIS: its baro is the sim's third altimeter setting (live 2026-10-26: a knob click moved
     /// KOHLSMAN SETTING MB:3 1009.1 to 1010.1).</summary>
-    public static readonly A350TypedField IsisQnh = new("A350_ISIS_QNH_SET", "Captain QNH", "AIRLINER_ISIS_KNOB_1", Side: 3);
+    public static readonly A350TypedField IsisQnh = new("A350_ISIS_QNH_SET", "Captain standby QNH", "AIRLINER_ISIS_KNOB_1", Side: 3);
     public static readonly A350TypedField CabinAltitudeTarget =
         new("A350_CABIN_ALT_TARGET_SET", "Cabin altitude target (feet)", "AIRLINER_CABIN_PRESS_ALTITUDE_TARGET");
     public static readonly A350TypedField CabinVsTarget =

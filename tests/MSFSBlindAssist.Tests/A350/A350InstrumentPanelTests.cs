@@ -82,7 +82,8 @@ public class A350InstrumentPanelTests
             ("Captain STD/CHANGE", A350RowAction.Press, ""), ("Captain LS/DIR TO", A350RowAction.Press, ""),
             ("Captain menu", A350RowAction.Press, ""), ("Captain minus", A350RowAction.Press, ""),
             ("Captain mode", A350RowAction.Press, ""), ("Captain plus", A350RowAction.Press, ""),
-            ("Captain QNH", A350RowAction.Typed, ""),
+            // The standby's QNH by name: "Captain QNH" read like the EFIS's "QNH (in Capt unit)" in a flat list (gap 84).
+            ("Captain standby QNH", A350RowAction.Typed, ""),
             ("First officer STD/CHANGE", A350RowAction.Press, ""), ("First officer LS/DIR TO", A350RowAction.Press, ""),
             ("First officer menu", A350RowAction.Press, ""), ("First officer minus", A350RowAction.Press, ""),
             ("First officer mode", A350RowAction.Press, ""), ("First officer plus", A350RowAction.Press, ""),
