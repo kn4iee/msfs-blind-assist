@@ -72,6 +72,11 @@ public static class A350MfdPage
         var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
         var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class is "PopupDialog" or "EULADialog"
             && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
+        // An open drop-down menu's items (DropdownButtonUI with their own texts drawn after them) hide what they cover,
+        // as a pop-up does: ACTIVE's menu over DATA/STATUS's left column (live 2026-10-28).
+        var menuItems = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "DropdownButtonUI"
+            && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
+        popups.AddRange(menuItems);
         // The consent dialog is modal: the slivers of the page left and right of it (DATA/STATUS's NAV DATABASE label,
         // which ran into the dialog's line level with it) are behind it too.
         bool Covers(DrawnElement p, float x, float y) =>
@@ -258,7 +263,27 @@ public static class A350MfdPage
             lines.Add((row[0].Y - 14, row[0].X, new MfdLine("text", spoken, row[0].X, row[0].Y - 7)));
         }
 
-        return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
+        var ordered = lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
+        return menuItems.Count == 0 ? ordered : WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(), shift);
+    }
+
+    /// <summary>An open drop-down's items read right after the button or menu it hangs from (the one above its column),
+    /// which says the menu is open; a sighted pilot sees the list hanging off it.</summary>
+    private static List<MfdLine> WithMenuAfterItsButton(List<MfdLine> lines, List<DrawnElement> items, float shift)
+    {
+        float x0 = items.Min(e => e.X) - shift, x1 = items.Max(e => e.X + e.RectW) - shift, top = items.Min(e => e.Y);
+        bool IsItem(MfdLine l) => items.Any(e => Math.Abs(l.ClickX - (e.X - shift + e.RectW / 2)) < 1
+            && Math.Abs(l.ClickY - (e.Y + e.RectH / 2)) < 1);
+        var menu = lines.Where(IsItem).ToList();
+        var owner = lines.Where(l => !IsItem(l) && l.Kind is "button" or "menu" && l.ClickY < top && l.ClickX >= x0 && l.ClickX <= x1)
+            .OrderByDescending(l => l.ClickY).FirstOrDefault();
+        if (owner == null || menu.Count == 0)
+            return lines;
+        var result = lines.Where(l => !IsItem(l)).ToList();
+        int at = result.IndexOf(owner);
+        result[at] = owner with { Spoken = owner.Spoken + ", menu open" };
+        result.InsertRange(at + 1, menu);
+        return result;
     }
 
     private static readonly Regex TrackDegrees = new(@"^(\d{1,3})d$", RegexOptions.Compiled);

@@ -294,6 +294,21 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.Contains("NAV DATABASE", StringComparison.Ordinal) || l.Contains("IDLE:", StringComparison.Ordinal));
     }
 
+    // Live 2026-10-28: ACTIVE's menu read woven into DATA/STATUS ("F-PLN button, DATA/STATUS, PERF button, ACFT STATUS
+    // tab, FUEL&LOAD button..."). A sighted pilot sees the menu hanging off ACTIVE, over the page's left column: its
+    // items follow their button, and what it covers is gone; the tab beside it stays.
+    [Fact]
+    public void An_open_header_menu_reads_after_its_button_and_hides_what_it_covers()
+    {
+        var lines = Page("mfd_active_menu_open").ToList();
+        int active = lines.IndexOf("ACTIVE button, menu open");
+        Assert.True(active >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "F-PLN button", "PERF button", "FUEL&LOAD button", "WIND button", "INIT button" }, lines.Skip(active + 1).Take(5));
+        Assert.DoesNotContain(lines, l => l.StartsWith("DATA/STATUS", StringComparison.Ordinal));   // under the menu
+        Assert.Contains("ACFT STATUS tab", lines);                                                     // beside it
+        Assert.Contains("POSITION button", lines);
+    }
+
     // The ILS 12L final at OMDB (live 2026-10-28, IMPE3B via REREK): the final leg's flight path angle "-3.0" (white) is
     // drawn beside its distance, nearer the DIST header than the FPA one; it read "DIST -3.0 (white)", a second distance.
     [Fact]
