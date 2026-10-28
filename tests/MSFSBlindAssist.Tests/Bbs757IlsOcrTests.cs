@@ -241,7 +241,14 @@ public class Bbs757IlsOcrTests
         Assert.Equal(new Rectangle(24, 47, 668, 93),
             Bbs757IlsOcr.OverlayCrop(new Size(1936, 1119), new Rectangle(8, 31, 1920, 1080), 1920, 1080));
 
-        // A page that does not fill the picture at one scale, or no page size: no crop, rather than a guess.
+        // Round 7, a windowed 1278 x 1360 simulator: the 1278 x 719 CSS px page is drawn fitted and centred, 320 px
+        // down the client (measured with two marker boxes: the one laid at CSS (16,16) was at capture x 24-690,
+        // y 367-459). Before round 7 this was refused and every read fell back to the count.
+        Assert.Equal(new Rectangle(24, 367, 668, 93),
+            Bbs757IlsOcr.OverlayCrop(new Size(1294, 1399), new Rectangle(8, 31, 1278, 1360), 1278, 719));
+
+        // A page that does not fill the picture at one scale with no client area known (the frame cannot be told
+        // from the page), or no page size: no crop, rather than a guess.
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(1936, 1119), null, 1920, 1080));
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(1920, 1080), null, 0, 0));
         Assert.Null(Bbs757IlsOcr.OverlayCrop(new Size(600, 80), null, 600, 80));   // the box would not fit
@@ -293,6 +300,26 @@ public class Bbs757IlsOcrTests
 
         Assert.True(literal.Success, "the script tests the url with one regex literal");
         Assert.Equal(isTheIlsPanel, System.Text.RegularExpressions.Regex.IsMatch(url, literal.Groups[1].Value));
+    }
+
+    [Fact]
+    public void The_box_goes_on_mainUi_and_on_the_toolbar_page_only_in_FS2020_without_one()
+    {
+        // MSFS 2020 has no mainUi page; its toolbar page is drawn over the whole window (measured 2026-10-28).
+        var toolbar = (48, "", "coui://html_UI/Pages/ToolBar/ToolBar.html");
+        var mainUi = (7, "mainUi", "coui://html_UI/Global/mainUI.html");
+        var markers = (46, "", "coui://html_UI/Pages/InGameMarkers/InGameMarkers.html");
+        var fs2020Pages = new List<(int, string, string)> { markers, toolbar };
+        var fs2024Pages = new List<(int, string, string)> { toolbar, mainUi, markers };
+
+        // A 2024 reader: always mainUi, never the toolbar page, even with no mainUi listed.
+        Assert.Equal(7, CoherentBbs757IlsDisplay.OverlayPage(fs2024Pages, fs2020: false).Id);
+        Assert.Null(CoherentBbs757IlsDisplay.OverlayPage(fs2020Pages, fs2020: false).Title);
+
+        // A 2020 reader: the toolbar page when there is no mainUi; mainUi still wins where it exists.
+        Assert.Equal(48, CoherentBbs757IlsDisplay.OverlayPage(fs2020Pages, fs2020: true).Id);
+        Assert.Equal(7, CoherentBbs757IlsDisplay.OverlayPage(fs2024Pages, fs2020: true).Id);
+        Assert.Null(CoherentBbs757IlsDisplay.OverlayPage(new List<(int, string, string)> { markers }, fs2020: true).Title);
     }
 
     [Fact]

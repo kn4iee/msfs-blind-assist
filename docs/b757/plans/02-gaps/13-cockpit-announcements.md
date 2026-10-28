@@ -123,14 +123,21 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** (date; the `B757` commit you branched from)
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Status:** landed on `B757` (2026-10-27); waiting on owner: Task 1 [in flight], then Task 6, and in-sim checks 1-2
+- **Claimed by:** Daniel Wolak (danielw97), 2026-10-27
+- **Worked by:** Daniel Wolak, inline (superpowers:executing-plans), one whole-plan review by a fresh reviewer
+- **Started:** 2026-10-27; 924129a8d
+- **Landed:** 2026-10-27
+- **Tests at landing:** full suite passed, 18,007 (2026-10-27) before the rebase; the rebase took in plan 08's last six commits (CDU files only) and the suite was run again after it : 18,023 passed
+- **Tasks:** 0, 2, 3, 4, 5 done (4 and 5 in one commit: one class and one partial serve both). Left: Task 1 (owner's flight: FMA and capture snapshots), Task 6 (builds on it).
+- **Waiting on the owner:** Task 1 [in flight]; in-sim checks 1 (a preset, a mouse or hardware switch move, the app's own pick not repeated) and 2 (Ctrl+M group and panel mutes). Also worth timing: one watch read (about 356 L:vars every 500 ms) in debug.log, and whether BlueBird's panel set-up after a flight load lands after the 5 s settle quiet (it would say one "Panel state changed" line).
+- **In-sim results:** 2026-10-27, KCVG-CYHM (Daniel, plan 13's build): the owner reported the announcements working, flaps and gear said once, lights summed up ("1 light on, 9 off" as the engines came up; which light was the "1 on" is unknown, nothing names a summary's lights). Task 1 partly run (APP, LOC, G/S and LAND 3; FLARE, ROLLOUT and the disconnects not captured): no FMA mode variable, see `docs/b757/evidence/flight-13.md`. Checks 1 and 2 as written (the Shift+T preset, a Ctrl+M panel mute) not confirmed one by one.
+- **Changed from the plan:**
+  - Lights are summed up too: more than 5 within a second are one line ("9 lights on", "1 light on, 9 off"), muted with "All Annunciator Lights". The plan said lights are never summarized; a lights test or battery on would otherwise queue a hundred lines (review finding).
+  - "First sighting after Reset is silent" became "silent from a flight load until the Nest check settles, plus 5 s" (`Bbs757CockpitAnnouncements.SettleQuietMs`): the agent reports only changes, so a per-name first sighting would swallow each name's first real change. `OnConnectionBatch` sends the list again, so the agent's next read is a fresh silent baseline.
+  - The watch subtracts only rows that speak (`IsAnnounced` and not `ExcludeFromMonitorManager`: a silent row such as the IRS switch watch hid the IRS selectors) plus `BBS757Definition.SpokenByOtherRows`: the flap lever, gear lever, parking brake and A/T arm switch, spoken by other rows under other variables (review finding; the name check alone missed them).
+  - Curated 132 lights. Left out: valve-in-transit lights (flash on every normal switch move, as the start valve decal did), the first officer's master lights (repeat the captain's), CDU MSG/DSPY/OFST (plan 09), the gear position lights (the gear call-out), legends that follow their own switch (bleed, pack and trim air OFF, the bar legends), BAT OFF2 (meaning unknown), the cargo doors and altitude alert lights (announced already).
+  - `BBS757Definition.CockpitWatchEnabled`, off for the test assembly (`Bbs757TestHost`, as `FenixTestHost`): 15 test files settle the Nest check and would each start a real tablet client that, with the sim up, takes the tablet view's one socket from the pilot's app ([DBG-9]).
+  - Plan 01's `Bbs757SeamsTests.Monitor_rows_without_hooks_are_todays` became `Monitor_rows_begin_with_todays`: plan 13's rows follow today's.
+  - While the watch list is set, the client's loop waits at most 500 ms, so the hidden CDU is scraped every 500 ms instead of 1000 (one loop, one socket).
+- **Rulings made while working:** all of the above, Daniel's (as the plan's worker). Deferred minors from the review, for plan 16 or a follow-up: a guard close's `CloseSets` write is not stamped with `OnOwnWrite` (the covered switch's new position may be said after the pilot's own guard close); the lit threshold is > 0 where plan 06 uses > 0.5; "Passenger oxygen on light on" and "Standby power off light on" read oddly; "Watch list not taken" logs every 500 ms while the agent is missing.

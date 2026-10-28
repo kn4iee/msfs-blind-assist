@@ -139,6 +139,61 @@ public class Bbs757CduRowsTests
     }
 
     [Fact]
+    public void A_page_total_change_is_the_same_page()
+    {
+        // Inserting a waypoint can add a page while the pilot stays on page 1: the cursor stays on the line
+        // (the MD-11's rule, [MD11-17]); only another page, or another page number, moves it to line 1.
+        Assert.False(Bbs757CduRows.IsPageChange("  MOD RTE 1 LEGS     1/2", "  MOD RTE 1 LEGS     1/3"));
+        Assert.False(Bbs757CduRows.IsPageChange("  ACT RTE 1 LEGS     1/2", "  MOD RTE 1 LEGS     1/3"));
+        Assert.True(Bbs757CduRows.IsPageChange("  MOD RTE 1 LEGS     1/2", "  MOD RTE 1 LEGS     2/3"));
+        // A route made active keeps its page.
+        Assert.False(Bbs757CduRows.IsPageChange("     RTE 1           1/2", "   ACT RTE 1         1/2"));
+    }
+
+    // The first officer's VNAV pages in cruise, read live 2026-10-27 (FL380): the three pages and their counters.
+    private const string VnavClb = "               CLB  1/3 ";
+    private const string VnavCrz = "     ACT ECON CRZ    2/3";
+    private const string VnavDes = "              DES   3/3 ";
+
+    [Fact]
+    public void A_speed_entered_on_a_vnav_page_keeps_the_page()
+    {
+        // A VNAV page retitles when a speed is entered (the owner, 2026-10-27; e.g. ECON CLB -> 250KT CLB on
+        // Boeing FMCs, the BlueBird's exact words not captured): the same page, so the cursor stays and the
+        // new title is said.
+        Assert.False(Bbs757CduRows.IsPageChange("     ACT ECON CLB    1/3", "    MOD 250KT CLB    1/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavDes, "     MOD 300KT DES   3/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     MOD M.800 CRZ   2/3"));
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     ACT LRC CRZ     2/3"));
+        // A new cruise altitude on the CRZ page: still page 2.
+        Assert.False(Bbs757CduRows.IsPageChange(VnavCrz, "     MOD CRZ CLB     2/3"));
+        Assert.True(Bbs757CduRows.IsTitleChange("     ACT ECON CLB    1/3", "    MOD 250KT CLB    1/3"));
+    }
+
+    [Fact]
+    public void Another_vnav_page_is_a_page_change()
+    {
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, VnavClb));   // PREV PAGE
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, VnavDes));   // NEXT PAGE twice
+        Assert.True(Bbs757CduRows.IsPageChange("        NAV RADIO       ", VnavCrz));   // the VNAV key
+        Assert.True(Bbs757CduRows.IsPageChange(VnavCrz, "  ACT RTE 1 LEGS     1/2"));
+    }
+
+    [Fact]
+    public void Any_changed_title_is_a_title_change()
+    {
+        // Every other aircraft's CDU window speaks a changed title, ACT to MOD and a new page total included
+        // (owner, 2026-10-27: "however the other planes have it").
+        Assert.True(Bbs757CduRows.IsTitleChange("  ACT RTE 1 LEGS     1/2", "  MOD RTE 1 LEGS     1/2"));
+        Assert.True(Bbs757CduRows.IsTitleChange("  MOD RTE 1 LEGS     1/2", "  MOD RTE 1 LEGS     1/3"));
+        Assert.True(Bbs757CduRows.IsTitleChange("", "       NAV RADIO"));
+        // The same title, or the same words spaced differently, is not; nor is a blank one.
+        Assert.False(Bbs757CduRows.IsTitleChange("  ACT RTE 1 LEGS     1/2", "  ACT RTE 1 LEGS     1/2"));
+        Assert.False(Bbs757CduRows.IsTitleChange("  ACT RTE 1 LEGS     1/2", " ACT RTE 1 LEGS      1/2"));
+        Assert.False(Bbs757CduRows.IsTitleChange("  ACT RTE 1 LEGS     1/2", "   "));
+    }
+
+    [Fact]
     public void PageStart_is_line_one_value()
     {
         var rows = Bbs757CduRows.Build(Legs);

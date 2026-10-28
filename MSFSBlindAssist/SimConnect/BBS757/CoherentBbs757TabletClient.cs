@@ -42,8 +42,10 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// Keys: one queue for both CDUs, so presses never overlap. Each key carries its hold, the caller's:
 /// <see cref="KeyHoldMs"/> by default, since a CLR held about a second clears the whole scratchpad;
 /// only <see cref="Bbs757CduPages.WipeScratchpadAsync"/> holds CLR 1300 ms, to do just that. Holds
-/// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. The next
-/// key goes out <see cref="KeyGapMs"/> ms after the release.
+/// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. Each key
+/// carries its gap too: the next key goes out <see cref="KeyGapMs"/> ms after the release unless the
+/// caller gives another (only the CDU window's typed entries do, <see cref="Bbs757CduTyping"/>; clamped
+/// to <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>).
 /// Restart is not supported: dispose and create a new instance.
 /// </summary>
 public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
@@ -72,11 +74,14 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
 
     /// <summary>
     /// The agent version this client needs (the agent's VERSION, answered with every scrape): 4 is
-    /// the first whose press takes the hold. A scrape answered by an agent without a version or an
-    /// older one (an app update over a loaded flight) has the agent installed again
-    /// (<see cref="AgentIsCurrent"/>); the install replaces an agent of another version.
+    /// the first whose press takes the hold, 5 the first with the watch list. A scrape answered by
+    /// an agent without a version or an older one (an app update over a loaded flight) has the agent
+    /// installed again (<see cref="AgentIsCurrent"/>); the install replaces an agent of another version.
     /// </summary>
-    internal const int AgentVersion = 4;
+    internal const int AgentVersion = 5;
+
+    /// <summary>How often the watched L:vars are read while the watch list is not empty (plan 13).</summary>
+    internal const int WatchIntervalMs = 500;
 
     /// <summary>
     /// How long an installed agent's Comm Bus listener may stay not ready before it is installed
@@ -97,7 +102,11 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// <summary>The pause after a key's release before the next key (docs/b757/evidence/cdu.md).</summary>
     public const int KeyGapMs = 400;
 
-    /// <summary>The shortest pause a key may have after its release (plan 08: typing measured 5/5 down to 50).</summary>
+    /// <summary>
+    /// The shortest pause a key may have after its release: a floor, not a safe gap. A quiet sim typed 5/5
+    /// down to 50, a busier one lost a repeated digit at 100 (4 in 10): typed entries use
+    /// <see cref="Bbs757CduTyping.GapMs"/> (plan 08, docs/b757/evidence/flight-08.md).
+    /// </summary>
     internal const int MinGapMs = 50;
 
     /// <summary>The longest pause a key may have after its release.</summary>
@@ -127,6 +136,14 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// keys dropped; posted to the UI context.
     /// </summary>
     public event Action<int>? KeysDropped;
+
+    /// <summary>
+    /// Watched L:vars (<see cref="SetWatchList"/>) whose value changed since the last read, by name
+    /// without <c>L:</c>; posted to the UI context. The first read after the list reaches an agent
+    /// (a new list, or a new agent after an aircraft reload) is the agent's silent baseline, so a
+    /// reinstall never raises the whole cockpit as changes.
+    /// </summary>
+    public event Action<IReadOnlyDictionary<string, double>>? LvarsChanged;
 
     private readonly SynchronizationContext? _syncContext;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
@@ -165,6 +182,14 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     private readonly bool[] _delivered = new bool[3];
     private IDisposable? _viewClaim;
     private bool _disposed;
+    // The watch list (immutable once set; swapped whole) and the list the agent last took. A list
+    // that is not the one sent goes out before the next read; a new agent has none.
+    private volatile string[] _watchNames = Array.Empty<string>();
+    private volatile string[]? _watchSent;
+    private DateTime _lastWatchUtc = DateTime.MinValue;
+
+    /// <summary>Replaces <see cref="EvalAsync"/> in tests (the watch's calls, without a socket).</summary>
+    internal Func<string, Task<string>>? EvalForTests { get; set; }
 
     public CoherentBbs757TabletClient()
         : this(() => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", AgentFile)))
@@ -428,6 +453,66 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
         return false;
     }
 
+    // ---- watched L:vars (plan 13) ------------------------------------
+
+    /// <summary>
+    /// The L:vars to watch, by name without <c>L:</c> (empty stops the watch). The list goes to the
+    /// agent before its next read, every <see cref="WatchIntervalMs"/>, on the loop's socket; it is
+    /// sent again whenever the agent is installed afresh.
+    /// </summary>
+    public void SetWatchList(IReadOnlyCollection<string> names)
+    {
+        _watchNames = names.Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.Ordinal).ToArray();
+        _watchSent = null;
+        _wake.Wake();
+    }
+
+    /// <summary>The agent call that sets the watch list: the names as one JSON array literal. Pure.</summary>
+    internal static string WatchExpression(IReadOnlyCollection<string> names) =>
+        "window.__MSFSBA_BBS757 && __MSFSBA_BBS757.watch ? __MSFSBA_BBS757.watch("
+        + JsonSerializer.Serialize(names) + $") : '{NoAgent}'";
+
+    private const string ChangesExpression =
+        "window.__MSFSBA_BBS757 && __MSFSBA_BBS757.changes ? JSON.stringify(__MSFSBA_BBS757.changes()) : '" + NoAgent + "'";
+
+    /// <summary>
+    /// One read of the watched L:vars: sends the list first when the agent has not taken it, then
+    /// raises <see cref="LvarsChanged"/> with any changes. An agent that answers it watches nothing
+    /// (the page re-evaluated) has the list sent again next time. Nothing at all with no list.
+    /// </summary>
+    internal async Task PollWatchAsync(CancellationToken ct)
+    {
+        var names = _watchNames;
+        if (names.Length == 0) return;
+        if (!ReferenceEquals(_watchSent, names))
+        {
+            string set = await EvalOrTestAsync(WatchExpression(names), ct);
+            if (set != "ok")
+            {
+                if (set.Length > 0) Log.Debug("BBS757", $"Watch list not taken: {Shorten(set)}");
+                return;
+            }
+            _watchSent = names;
+        }
+        string raw = await EvalOrTestAsync(ChangesExpression, ct);
+        if (raw.Length == 0 || raw == NoAgent) return;
+        WatchResult? result;
+        try { result = JsonSerializer.Deserialize<WatchResult>(raw); }
+        catch (JsonException) { return; }
+        if (result == null || !result.ok) return;
+        if (!result.watching)
+        {
+            _watchSent = null;
+            return;
+        }
+        if (result.changes == null || result.changes.Count == 0) return;
+        var changes = result.changes;
+        PostToUI(() => LvarsChanged?.Invoke(changes));
+    }
+
+    private Task<string> EvalOrTestAsync(string expression, CancellationToken ct) =>
+        EvalForTests != null ? EvalForTests(expression) : EvalAsync(expression, ct);
+
     // ---- key queue --------------------------------------------------
 
     private async Task KeyPump(CancellationToken ct)
@@ -529,7 +614,15 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
                     DropSocket();
                     continue;
                 }
-                await _wake.WaitAsync(TimeSpan.FromMilliseconds(_active ? PollIntervalMs : IdleIntervalMs), ct);
+                bool watching = _watchNames.Length > 0;
+                if (watching && (DateTime.UtcNow - _lastWatchUtc).TotalMilliseconds >= WatchIntervalMs - 50)
+                {
+                    _lastWatchUtc = DateTime.UtcNow;
+                    await PollWatchAsync(ct);
+                }
+                int interval = _active ? PollIntervalMs : IdleIntervalMs;
+                if (watching) interval = Math.Min(interval, WatchIntervalMs);
+                await _wake.WaitAsync(TimeSpan.FromMilliseconds(interval), ct);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -569,10 +662,11 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
         DropQueuedKeys();
     }
 
-    /// <summary>The agent answered with its marker: the link is usable again.</summary>
-    private void AgentInstalled()
+    /// <summary>The agent answered with its marker: the link is usable again, and the watch list goes to it afresh.</summary>
+    internal void AgentInstalled()
     {
         _agentInstalled = true;
+        _watchSent = null;
         _installFailures = 0;
         _notReadySinceUtc = null;
         Interlocked.Exchange(ref _keysDroppedRaised, 0);
@@ -870,6 +964,14 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
         _pending.Clear();
         // _sendLock is deliberately not disposed: the loop is not joined and may be waiting on
         // it; Stop() canceled the token, which releases the waiter (as the sibling clients do).
+    }
+
+    private sealed class WatchResult
+    {
+        public bool ok { get; set; }
+        public bool watching { get; set; }
+        public int seq { get; set; }
+        public Dictionary<string, double>? changes { get; set; }
     }
 
     private sealed class ScrapeResult

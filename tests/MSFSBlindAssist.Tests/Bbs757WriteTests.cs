@@ -268,15 +268,75 @@ public class Bbs757WriteTests
         public readonly BBS757Definition Def;
         private readonly SimConnectManager _manager = new(IntPtr.Zero);
 
-        public Rig(Bbs757Control control)
+        public Rig(Bbs757Control control, bool? parkingBrakeRealistic = null)
         {
             var map = new Bbs757ControlMap();
             map.Controls.Add(control);
-            Def = new BBS757Definition(map) { NestRunning = () => true, WriteIo = _ => Sim.Io };
+            Def = new BBS757Definition(map)
+            {
+                NestRunning = () => true, WriteIo = _ => Sim.Io, ParkingBrakeRealistic = () => parkingBrakeRealistic,
+            };
         }
+
+        /// <summary>The panel handler setting <paramref name="node"/> to <paramref name="value"/>.</summary>
+        public bool Set(string node, double value) => Def.HandleUIVariableSet(node, value, Def.GetVariables()[node], _manager, Speech);
 
         /// <summary>The panel handler's answer to a press of <paramref name="node"/>.</summary>
         public bool Press(string node) => Def.HandleUIVariableSet(node, 1, Def.GetVariables()[node], _manager, Speech);
+    }
+
+    private const string ParkPress = "(L:B757_FC_PARK_BRAKE,bool) ! (>L:B757_FC_PARK_BRAKE,bool)";
+
+    private static Bbs757Control ParkBrake() => new()
+    {
+        Node = Bbs757ParkingBrake.Node, Label = "Parking Brake", Kind = Bbs757Kinds.Toggle, StateVar = "B757_FC_PARK_BRAKE",
+        Positions = Positions(0, 1), Press = ParkPress,
+    };
+
+    [Theory]
+    [InlineData(false)]   // EASY
+    [InlineData(null)]    // the setting unread
+    [InlineData(true)]    // REALISTIC, where the toggle happened to work
+    public async Task A_parking_brake_the_toggle_moves_gets_the_toggle_alone(bool? realistic)
+    {
+        var rig = new Rig(ParkBrake(), realistic);
+        rig.Sim.Fresh[Bbs757ParkingBrake.Node] = 0;
+        rig.Sim.OnWrite = rpn => { if (rpn == ParkPress) rig.Sim.Fresh[Bbs757ParkingBrake.Node] = 1; };
+
+        Assert.True(rig.Set(Bbs757ParkingBrake.Node, 1));
+        await rig.Sim.ResyncsReached(1);
+
+        Assert.Equal(new[] { ParkPress }, rig.Sim.Writes);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(0)]
+    public async Task In_realistic_mode_a_parking_brake_the_toggle_did_not_move_is_retried_with_full_braking(int target)
+    {
+        // REALISTIC (measured 2026-10-28): the toggle does nothing; full braking with the lever in one write
+        // sets and releases it.
+        bool set = target == 1;
+        var rig = new Rig(ParkBrake(), parkingBrakeRealistic: true);
+        rig.Sim.Fresh[Bbs757ParkingBrake.Node] = set ? 0 : 1;
+        rig.Sim.OnWrite = rpn => { if (rpn == Bbs757ParkingBrake.FullBrakingCode(set)) rig.Sim.Fresh[Bbs757ParkingBrake.Node] = target; };
+
+        Assert.True(rig.Set(Bbs757ParkingBrake.Node, target));
+        await rig.Sim.ResyncsReached(1);
+
+        Assert.Equal(new[] { ParkPress, Bbs757ParkingBrake.FullBrakingCode(set), Bbs757ParkingBrake.PedalsReleaseCode }, rig.Sim.Writes);
+    }
+
+    [Fact]
+    public async Task In_easy_mode_a_parking_brake_the_toggle_did_not_move_is_never_retried_with_braking()
+    {
+        var rig = new Rig(ParkBrake(), parkingBrakeRealistic: false);
+        rig.Sim.Fresh[Bbs757ParkingBrake.Node] = 0;
+
+        Assert.True(rig.Set(Bbs757ParkingBrake.Node, 1));
+        await rig.Sim.ResyncsReached(1);
+
+        Assert.Equal(new[] { ParkPress }, rig.Sim.Writes);
     }
 
     [Fact]

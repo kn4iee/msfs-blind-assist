@@ -15,15 +15,16 @@ public enum Bbs757WeightUnits
 /// BlueBird's 757 "work" folder, where the aircraft keeps its EFB settings and the nav data it
 /// downloaded: which install locations hold one (<see cref="Find"/>, <see cref="ExistingFolders"/>)
 /// and the simulator each belongs to (<see cref="SimulatorOf"/>), its registrations' settings files
-/// (<see cref="RegistrationFiles"/>), and the three values this class reads from it: the SimBrief ID
+/// (<see cref="RegistrationFiles"/>), and the four values this class reads from it: the SimBrief ID
 /// (the Fetch SimBrief flight and fuel and payload buttons refuse without one, and fetch the plan with
-/// it), the unit system (to say what the weight units answer did) and the installed AIRAC cycle (so the
-/// nav data update never clicks where BlueBird shows REMOVE). The app writes BlueBird's files only
+/// it), the unit system (to say what the weight units answer did), the parking brake mode (the parking
+/// brake's full-braking retry never runs in EASY mode, <c>Bbs757ParkingBrake</c>) and the installed
+/// AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). The app writes BlueBird's files only
 /// through <see cref="Bbs757SettingsFile"/>, under rule [B757-17].
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key.
-/// This class's own readers take only the keys they name (<c>simbrief_id</c>, <c>units</c> and the
-/// cycle file's <c>cycle</c>) and never log a file's content;
+/// This class's own readers take only the keys they name (<c>simbrief_id</c>, <c>units</c>,
+/// <c>parking_brake_realistic</c> and the cycle file's <c>cycle</c>) and never log a file's content;
 /// <see cref="Bbs757SettingsFile"/> logs a value (saved or refused) only for settings that may be logged
 /// (<see cref="Bbs757Setting.MayLog"/>), and never the SimBrief ID, the Hoppie logon code or the
 /// SayIntentions ACARS key. The SimBrief ID is the pilot's own identifier: callers never log it
@@ -220,6 +221,25 @@ public static class Bbs757WorkFolder
         {
             0 => Bbs757WeightUnits.Kilograms,
             1 => Bbs757WeightUnits.Pounds,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// BlueBird's PARKING BRAKE MODE (<c>parking_brake_realistic</c>, the EFB's Settings): true REALISTIC (the lever
+    /// sets and releases only with full braking), false EASY. Read 2026-10-28 as true on a sim where the lever
+    /// alone did nothing. Null when it is missing, not a JSON bool, or the file cannot be read. Nothing else in
+    /// the file is read.
+    /// </summary>
+    public static bool? ReadParkingBrakeRealistic(string folder)
+    {
+        using var doc = ReadJson(Path.Combine(folder, SettingsFile));
+        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+        if (!doc.RootElement.TryGetProperty("parking_brake_realistic", out var mode)) return null;
+        return mode.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
             _ => null,
         };
     }

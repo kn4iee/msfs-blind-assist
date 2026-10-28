@@ -70,11 +70,40 @@ public static class Bbs757CduRows
     }
 
     /// <summary>
-    /// Whether a new title row is another page: the page itself (<see cref="Bbs757CduTitle.Identity"/>,
-    /// ACT and MOD folded away) or its page counter differs. ACT RTE 1 LEGS 1/7 → MOD RTE 1 LEGS 1/7 is
-    /// the same page; 1/7 → 2/7 is not.
+    /// Whether a new title row is another page: the page itself (<see cref="PageIdentity"/>, ACT and MOD
+    /// folded away) or its page number differs. ACT RTE 1 LEGS 1/7 → MOD RTE 1 LEGS 1/7 is the same page,
+    /// and so is 1/2 → 1/3 (an inserted waypoint adding a page: the MD-11's rule, the cursor stays), and
+    /// ACT ECON CLB 1/3 → MOD 250KT CLB 1/3; 1/7 → 2/7 is not.
     /// </summary>
     public static bool IsPageChange(string oldTitleRow, string newTitleRow) =>
-        Bbs757CduTitle.Identity(oldTitleRow) != Bbs757CduTitle.Identity(newTitleRow)
-        || Bbs757CduTitle.Counter(oldTitleRow) != Bbs757CduTitle.Counter(newTitleRow);
+        PageIdentity(oldTitleRow) != PageIdentity(newTitleRow)
+        || Bbs757CduTitle.Counter(oldTitleRow)?.Page != Bbs757CduTitle.Counter(newTitleRow)?.Page;
+
+    // The phase word that ends every VNAV page's title.
+    private static readonly string[] VnavPhases = { "CLB", "CRZ", "DES" };
+
+    /// <summary>
+    /// <see cref="Bbs757CduTitle.Identity"/>, except that the three VNAV pages are one: their titles change
+    /// with the speed mode (ACT ECON CLB → MOD 250KT CLB when a speed is entered: the owner, 2026-10-27; LRC,
+    /// a new cruise altitude's CRZ CLB), so they are told apart by their page number alone (CLB 1/3, ECON CRZ
+    /// 2/3, DES 3/3, read live 2026-10-27).
+    /// </summary>
+    private static string PageIdentity(string titleRow)
+    {
+        string identity = Bbs757CduTitle.Identity(titleRow);
+        string last = identity[(identity.LastIndexOf(' ') + 1)..];
+        return VnavPhases.Contains(last) ? "VNAV" : identity;
+    }
+
+    /// <summary>
+    /// Whether the title says something new (<see cref="Bbs757CduTitle.Spoken"/> differs; a blank title
+    /// never does): ACT → MOD and 1/2 → 1/3 included. The window speaks it, as every other aircraft's
+    /// CDU window speaks a changed title (owner, 2026-10-27); whether the cursor moves is
+    /// <see cref="IsPageChange"/>'s question.
+    /// </summary>
+    public static bool IsTitleChange(string oldTitleRow, string newTitleRow)
+    {
+        string spoken = Bbs757CduTitle.Spoken(newTitleRow);
+        return spoken.Length > 0 && spoken != Bbs757CduTitle.Spoken(oldTitleRow);
+    }
 }

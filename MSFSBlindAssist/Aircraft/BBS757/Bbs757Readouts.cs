@@ -22,8 +22,9 @@ public sealed record Bbs757EngineRow(string Key, string SimVar, string Units, st
 ///   • The speedbrake is <c>L:B757_FC_SPOILER_LEVER</c> (0 down, 10 armed, 100 up) and the parking
 ///     brake <c>L:B757_FC_PARK_BRAKE</c>: the stock <c>BRAKE PARKING POSITION</c> read 0 with
 ///     BlueBird's brake set, so it is never read.
-///   • Gear: the stock legs, <c>GEAR CENTER/LEFT/RIGHT POSITION</c> (0 up, 1 down), and the stock
-///     <c>GEAR HANDLE POSITION</c>; unmeasured on this aircraft (no hydraulics on the ground).
+///   • Gear: the stock legs, <c>GEAR CENTER/LEFT/RIGHT POSITION</c> (0 up, 1 down), and BlueBird's
+///     lever <c>L:B757_GEAR_HANDLE_POS</c> (0 UP, 0.5 OFF, 1 DOWN): the stock <c>GEAR HANDLE
+///     POSITION</c> has no OFF and read up with the lever at OFF and the gear down (flight-13.md flight 2).
 /// </summary>
 public static class Bbs757Readouts
 {
@@ -161,24 +162,22 @@ public static class Bbs757Readouts
     };
 
     /// <summary>
-    /// Shift+G: the legs, with the lever where it adds something: "Gear in transit, lever up" while
-    /// they move, "Gear down, lever up" when the lever and the legs disagree. An unread lever says the
-    /// legs alone.
+    /// The lever's words from <c>L:B757_GEAR_HANDLE_POS</c> (0 UP, 0.5 OFF, 1 DOWN), at the nearest
+    /// detent: "up", "off", "down".
+    /// </summary>
+    public static string GearLeverWords(double handle) => handle < 0.25 ? "up" : handle <= 0.75 ? "off" : "down";
+
+    /// <summary>
+    /// Shift+G: the legs, then the lever, always, as the PMDG 737 does: "Gear up, lever off", "Gear
+    /// down, lever off" (flight-13.md flight 2: the sim's gear key stepped BlueBird's lever to OFF before
+    /// the gear moved, and the stock handle, with no OFF, read up). An unread lever says the legs alone.
     /// </summary>
     public static string GearReadout(double? handle, double? nose, double? left, double? right)
     {
         var legs = GearLegs(nose, left, right);
         string phrase = GearPhrase(legs);
         if (legs == null || handle is not double h || !double.IsFinite(h)) return phrase;
-        bool leverDown = h > 0.5;
-        string lever = leverDown ? "lever down" : "lever up";
-        return legs switch
-        {
-            Bbs757GearState.Transit => $"{phrase}, {lever}",
-            Bbs757GearState.Down when !leverDown => $"{phrase}, {lever}",
-            Bbs757GearState.Up when leverDown => $"{phrase}, {lever}",
-            _ => phrase,
-        };
+        return $"{phrase}, lever {GearLeverWords(h)}";
     }
 
     // ---- speedbrake and parking brake -----------------------------------------------------------

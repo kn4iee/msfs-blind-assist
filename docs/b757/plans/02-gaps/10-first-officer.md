@@ -91,7 +91,7 @@
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "The BlueBird 757 has a First Officer (Shift+C): BlueBird's Normal Checklist, ticking itself from the cockpit; the First Officer can carry out the power-up, preflight, before-start, after-landing, shutdown and secure actions and run their flows; transition and 10,000 ft reminders or automation as the First Officer settings say." Guide: the First Officer chapter (the 757 row and what it reads) and the 757 section. Changelog `feature`.
+- **Pilot-facing:** "The BlueBird 757 has a First Officer (Shift+C): BlueBird's Normal Checklist, ticking itself from the cockpit; the First Officer can carry out the power-up, preflight, before-start, engine start (PW and RR), after-start, before-takeoff, after-landing, shutdown and secure actions and run their flows; transition and 10,000 ft reminders or automation as the First Officer settings say." Guide: the First Officer chapter (the 757 row and what it reads) and the 757 section. Changelog `feature`.
 - **docs/first-officer.md:** the 757 in its aircraft list. **docs/b757.md:** "Not here yet" loses the First Officer.
 
 ## Execution record
@@ -99,14 +99,24 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed (waiting for plans 02 and 06 to land before starting)
+- **Status:** waiting on owner: the three air flows (After Takeoff, Descent, Before Landing) need a flight; every ground flow passed in the sim on both engine variants
 - **Claimed by:** Declan Webster, 2026-10-26
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** not yet (claimed 2026-10-26 on `B757` fe63572f; starts from `B757` once 02, 03 and 06 have landed)
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Worked by:** Declan Webster, with subagents
+- **Started:** 2026-10-26 (from `B757` fe63572f; rebased onto `B757` b82e0a46 on 2026-10-27)
+- **Landed:** 2026-10-28
+- **Tests at landing:** full suite passed (18,352 tests) after the last rebase, on `B757` 12e80040
+- **Tasks:** 1-6 done. The profile, evaluator, executor, phase monitor, the Normal Checklist read-backs, the action groups and 12 flows (Power Up, Preflight, Before Start, Engine Start, After Start, Before Takeoff, After Takeoff, Descent, Before Landing, After Landing, Shutdown, Final Securing), the registration and the cross-profile tests; the 757's own tests in `tests/.../FirstOfficer/BBS757/`.
+- **Waiting on the owner:** a flight for After Takeoff, Descent and Before Landing (the 10,000 ft and transition reminders/automation with them); a cold RR start (EGT at or below 0 °C, the RICH position) and a failed start (the light-off watch and abort) have not been provoked.
+- **In-sim results:** 2026-10-27 and 2026-10-28, MSFS 2020 (`docs/b757/evidence/flight-10.md`). PW, cold and dark: Power Up, Preflight, Before Start, Engine Start (both engines, 135 s), After Start, Before Takeoff, After Landing, Shutdown, Final Securing all complete; two false failures found and fixed (APU start, IRS check). RR, cold and dark, on the fixed build: the same nine flows complete (Engine Start 113 s, idle 50.6 % N2); the parking brake did not set (REALISTIC mode) and was fixed (plan 03's commit `fix(b757): the parking brake sets and releases in BlueBird's REALISTIC mode`), then set from the flow in both modes.
+- **Changed from the plan:**
+  - The fuel control line reads the variant from the aircraft TITLE first and `B757_ENG_VARIANT` only when the title names none (a PW reads 1, an RR 0, and an unwritten L:var reads 0 too, so 0 alone is unknown).
+  - The autothrottle is armed by BlueBird's flag (`L:BBS_AUTO_THROTTLE`, R40), not the MCP switch alone.
+  - The APU START is accepted when BlueBird springs the selector back to ON before the read-back (measured).
+  - The IRS ALIGNED check comes last in Before Start and waits up to 10 minutes (alignment takes about that long; a 5 s check failed every start from cold).
+  - The parking brake is set through its own write (plain toggle, then full braking only in REALISTIC mode).
+  - Added from a review against BlueBird's manual: Power Up starts the APU with no ground power; Before Start moves the power from the GPU to the APU and reminds the Captain to disconnect it; the isolation valve opened for the start; a light-off watch and an abort for a failed start (CUTOFF, motoring 30 s PW / to EGT 100 °C RR, then AUTO); wing lights in Before Takeoff and After Landing; the Shutdown cleanup (exterior lights, transponder STBY, wing anti-ice and wipers off, APU bleed for the packs, a stabilizer trim reminder before the hydraulics go off); the battery refused while the APU runs or external power is on; fuel RUN by hand only at the fuel point; Descent no longer completes the Approach checklist.
+- **Rulings made while working:**
+  - The First Officer runs the flows and the checklists; FMC programming, weights, fuel, boarding and ACARS stay the pilot's (Declan, 2026-10-23).
+  - LNAV/VNAV stay with the pilot; the 737s' optional after-takeoff push is not part of this plan (Declan, 2026-10-28).
+  - The air flows are left for a later flight (Declan, 2026-10-28).
+  - The parking brake's full-braking retry runs only in REALISTIC mode; EASY must keep the plain toggle alone (Declan, 2026-10-28).

@@ -41,6 +41,9 @@ public partial class BBS757Definition
     /// </summary>
     private const int ReadBackDelayMs = 1500;
 
+    /// <summary>BlueBird's PARKING BRAKE MODE: true REALISTIC, false EASY, null unknown (tests: a fixed answer).</summary>
+    internal Func<bool?> ParkingBrakeRealistic { get; init; } = Bbs757ParkingBrake.ReadRealisticMode;
+
     /// <summary>
     /// Canceled (and disposed) when the pilot switches to another profile: no pending pick or press
     /// may write after that. Every user checks <c>IsCancellationRequested</c> before it touches the
@@ -284,6 +287,10 @@ public partial class BBS757Definition
             await io.Delay(ReadBackDelayMs, ct);
             resync = true;
             wrote = true;
+            // REALISTIC parking-brake mode: the lever alone does nothing; only then, retry with full braking.
+            if (control.Node == Bbs757ParkingBrake.Node
+                && Bbs757ParkingBrake.ShouldRetry(await io.ReadFresh(control.Node, ct), target > 0.5, ParkingBrakeRealistic()))
+                await Bbs757ParkingBrake.RetryWithFullBrakingAsync(io, target > 0.5, ReadBackDelayMs, ct);
             if (linked != null)
             {
                 // Read the row and close the echo window, as a press does: a change after this (the

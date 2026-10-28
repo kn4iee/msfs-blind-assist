@@ -1069,3 +1069,118 @@ one (the VOR, radio tuning, ADF, transponder and RDMI panels, the clocks and the
 seven-segment decoder exists, and the other panels' fonts and layouts are unmeasured. Round 1 had already read `_4` (the
 transponder, `ATC L 1200`), `_5` and `_6` (the ADFs, `0190.0`) and `_17` (the fuel quantity panel) by what they showed
 (see C).
+
+## Round 6: the display read at night on a 3840 x 2160 sim
+
+Measured 2026-10-27, 18:45-19:15 local, in Robin's flight paused in cruise at dusk (FL270, MCP heading 005). His
+build (744b4ccec) said "ILS tuning unknown: the ILS display could not be read." at every set, and debug.log held
+"ILS display: timed out (capture/decode)." for every read from 17:29 on. Robin closed MSFSBA for the measurements, so
+`mainUi` was free; the overlay was laid there exactly as the app lays it.
+
+Setup (`UserCfg.opt`, MS Store FS2024): FullscreenBorderless 1, Resolution and FullScreenResolution 3840 2160, DLSS
+DLAA, DLSS frame generation on, PrimaryScaling 1. The window and its client area are 3840 x 2160 at (0,0); `mainUi`
+reported 3840 x 2160 CSS px, devicePixelRatio 1, `--uiScale` 1, so one CSS pixel is one pixel, as in round 5.
+
+H1. Capture cost (PrintWindow full content, as `ScreenshotService` takes it): PrintWindow 80-96 ms, the service's PNG
+encode 310-320 ms (8 MB), the reader's PNG decode 41 ms: about 0.48 s a capture. The read's cap (1000 ms, with
+150 ms of settle first) had room for one capture: debug.log's timestamps show the first capture starting about 190 ms
+into each read and the second about 720 ms in, which the cap ended. Cropped in memory, with no PNG, a capture took
+63-85 ms.
+
+H2. The box is drawn in time: in a capture that ran from 99 to 163 ms after the inject (round 5: ending 134-153 ms
+after it), and in every capture after that. Paused; in flight unmeasured.
+
+H3. The decode refused it. The panel showed 108.10, course 223 (one megahertz click out of PARK, from the 18:32
+set). Through round 5's filter the decoder found every cell right, `10810223` with the point, every segment
+0.99-1.00 on or 0.00 off, but the point's core (185-191, 81-87) was 69 % lit: clarity 0.39, under the 0.6 gate, so
+null. The filtered point is a round dot of x 185-191, y 80-86 (round 5's daylight: x 184-192, y 79-88).
+
+H4. Why: the panel is dimmer at night. Unfiltered, its lit segments peaked at grey 63 (round 5's daylight: 64-95),
+and 60 % of the box was black. The filter `grayscale(1) brightness(2.6) contrast(40)` turns every pixel under about
+48 black whatever the panel's brightness, so at night more of each glyph's anti-aliased edge goes and the dot
+shrinks inside the core. The decoder's own Otsu threshold follows the picture: 29 that night (45 for round 5's
+daylight PARK), and the same display unfiltered read `108.10 223` at clarity 1.00 in every capture.
+
+H5. The fix (plan 04's reader, `CoherentBbs757IlsDisplay`): the overlay is laid unfiltered, and each capture is a
+bitmap straight from PrintWindow, cropped in memory, with the screenshot service's own capture (and its screen-copy
+fallback) only when PrintWindow fails or comes back blank; the sim window is found once and kept. The fixed reader,
+run against the paused flight with MSFSBA closed: three reads, each `108.10 223`, in 525 ms (the first, with the gauge
+search and the connect), 289 ms and 255 ms; each capture with its decode 72-99 ms, the first capture deciding every
+read. No box was left in `mainUi` and no socket on :19999 afterwards.
+
+Fixtures from this round (668 x 93 crops): `raw_108.10_223_night.png` (unfiltered) and
+`oldfilter_108.10_223_night.png` (through round 5's filter), under `tests/MSFSBlindAssist.Tests/Fixtures/bbs757-ils/`.
+
+Not measured: the box's draw time in flight (H2 was paused), daylight unfiltered with a frequency tuned (round 5's
+unfiltered fixture is PARK), other resolutions and UI scales, HDR.
+
+## Round 7: the display read in a window that is not 16:9
+
+Measured 2026-10-27, 18:50-19:10 local, on Declan's MSFS 2024 (1.9.21.0) with the BlueBird 757-200 PW N/W parked cold
+and dark at night (`E:TIME OF DAY` 3), MSFSBA closed. Plan 04's own reader (`CoherentBbs757IlsDisplay` and
+`Bbs757IlsOcr`, `B757` at 924129a8) was run from a scratch xUnit test against the live simulator; writes were
+`SimVar.SetSimVarValue` in a VCockpit view.
+
+Setup (`UserCfg.opt`): Windowed 1, Resolution 1278 1360, DLSS ultra performance, no frame generation, VSync on, HDR off,
+PrimaryScaling 1. The window was 1294 x 1399 at (1273,0) on a 2560 x 1440 screen (snapped to its right half), its client
+1278 x 1360 at (8,31) in the capture.
+
+J1. Every read was refused. `mainUi` answered 1278 x 719 CSS px (`--viewportHeight` 719, devicePixelRatio 1, `--uiScale`
+1) in a 1278 x 1360 client, so `OverlayCrop` found no one scale and returned null: debug.log said "the overlay's box
+does not fit the capture at the page's scale" at every read, and every set went by the count.
+
+J2. Where the page is. Two 668 x 93 marker boxes were laid in `mainUi`, at CSS (16,16) and at (innerWidth - 684,
+innerHeight - 109), and captured by PrintWindow and by a screen copy. The first was at capture x 24-690, y 367-459, the
+second at x 602-1268, y 961-1053, the same in both captures. So the page is drawn at one scale (one CSS pixel is one
+pixel here) and centred: client y + 320, which is floor((1360 - 719) / 2). In a window taller than 16:9 the simulator
+draws its UI page 16:9, letterboxed. Wider than 16:9: not measured.
+
+J3. The fix (round 7's commit). When the page does not fill the client at one scale, `OverlayCrop` fits it in the client
+and centres it, but only with the client area known; a page that fills the client takes exactly the old path. Checked
+against a copy of the old function on 2,286 sizes the old one accepted (clients 1024-3840 px wide, UI scales 1 to 3,
+with and without a window frame, client known and not): every crop identical. With no client area every refused case
+is still refused.
+
+J4. Live, with the fix, at night, unfiltered. The battery on (the ILS panel is on standby power), then:
+
+| State (knob or write) | Read |
+|---|---|
+| PARK (the load state) | `----- 000` |
+| WHOLE +1 | `108.10 000` |
+| FRAC +1, `BBS_ILS_COURSE` 95 | `108.15 095` |
+| course 0, FRAC -1, WHOLE -1 | `----- 000` |
+
+With the panel unpowered every read was "no reading" (the dark display decodes as nothing, never a guess).
+
+J5. Timing on this machine (open, not changed by the fix). The box appeared 0.35-0.5 s after the inject on most reads
+(round 5: by 0.15 s), usually in capture 3, about 0.5 s in, close to the read's limit of four captures; back-to-back
+reads found it in capture 1. The first read of each test process failed three times out of three: it spends part of
+its 1 s cap on the page list, the socket and the gauge search, and ran out after two captures without the box. In the
+app the socket stays open, so this costs the first read of a session, which falls to the count. Candidates: a longer
+cap for a read that has to connect, or captures kept going to a longer cap instead of stopping at four.
+
+J6. The count's load state is not BlueBird's every preset. The factory panel states (`Data/panel_states/*.snap`, the
+EFB's presets) store the ILS as `[whole, fraction]` after the two VOR entries (`[true,117,40]`), whole -1 for PARK:
+`approachbaseleg` and `beforelandingflaps30` load 110.30, `quickturn` PARK with .30 hidden, the other six PARK with .10.
+The display read recovers from this (a set's second try plans from the read), but `Bbs757IlsDial.LoadState` (PARK, .10)
+is wrong after one of those presets, and so is a count used when the display cannot be read.
+
+Put back: the ILS PARK with .10 (proved by the reads), `BBS_ILS_COURSE` 0, the battery off. The `ils-display-fail*.png`
+files the test reads left in the logs folder were deleted. No element with an id starting `msfsba` was left in `mainUi`
+or the VCockpit pages, and no socket on :19999.
+
+## Round 8: the ILS display read in MSFS 2020 (2026-10-28, Declan's PC, the 757-200 PW and RR)
+
+- **Every frequency set failed in MSFS 2020** with "ILS tuning unknown: the ILS display could not be read". The log
+  said "the overlay was not laid (no answer from mainUi)" each time. The course (a direct write) worked.
+- **MSFS 2020 has no `mainUi` page.** Its `/pagelist.json` listed NOTIFICATION, TooltipAtlas, Flight Briefing,
+  Flight planning, Transition, ActivitiesBackground, the aircraft's VCockpit pages, VLogic, Pause, InGameMarkers (two),
+  ToolBar, VFR MAP and the HUD pages, and no `coui://html_UI/Global/mainUI.html`.
+- **The toolbar page takes the box instead.** A coloured test box laid at CSS (16,16) on each of InGameMarkers,
+  ToolBar and Pause: only the ToolBar one showed in a PrintWindow capture of the 2560 x 1440 window (its page
+  answered 2560 x 1440 at devicePixelRatio 1). The ILS gauge's live view laid there showed the panel display
+  (course 250).
+- **With the reader on the toolbar page (FS2020 only):** "ILS 110.50 set" by the pilot through Input Ctrl+N, every
+  capture decoded ("capture 1 at 154 ms took 132 ms with its decode: read"). A 2024 read is unchanged: the toolbar
+  page is used only by a reader made for FS2020 and only with no `mainUi` listed (pinned by
+  `The_box_goes_on_mainUi_and_on_the_toolbar_page_only_in_FS2020_without_one`).

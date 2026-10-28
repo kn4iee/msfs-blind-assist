@@ -103,8 +103,8 @@ Flaps:
              they stay there (no hydraulic pressure).
 
 Landing Gear:
-  Shift+G    Read the gear ("Gear down", "Gear up", "Gear in transit"),
-             with the lever when it disagrees ("Gear down, lever up")
+  Shift+G    Read the gear and the lever, UP, OFF or DOWN
+             ("Gear up, lever off", "Gear down, lever down")
 
 Altimeter:
   B          Read the three altimeters and the radio minimums ("Altimeter:

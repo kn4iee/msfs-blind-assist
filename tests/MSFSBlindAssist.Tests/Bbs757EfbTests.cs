@@ -649,6 +649,32 @@ public class Bbs757EfbTests
         }
     }
 
+    // ---- The parking brake mode ------------------------------------------------------------
+
+    [Theory]
+    [InlineData("{\"parking_brake_realistic\":true}", true)]
+    [InlineData("{\"parking_brake_realistic\":false}", false)]
+    [InlineData("{\"hoppie_logon_code\":\"NOT-A-REAL-CODE\",\"parking_brake_realistic\":true}", true)]
+    public void ReadParkingBrakeRealistic_reads_only_the_brake_key(string json, bool expected)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Equal(expected, Bbs757WorkFolder.ReadParkingBrakeRealistic(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"parking_brake_realistic\":1}")]
+    [InlineData("not json")]
+    public void ReadParkingBrakeRealistic_is_null_for_anything_but_a_bool(string json)
+    {
+        using var tmp = new TempDir();
+        WriteSettings(tmp.Path, json);
+
+        Assert.Null(Bbs757WorkFolder.ReadParkingBrakeRealistic(tmp.Path));
+    }
+
     // ---- The other click sequences and positions -------------------------------------------
 
     [Fact]

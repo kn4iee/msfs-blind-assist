@@ -52,9 +52,11 @@ public class Bbs757SeamsTests
     }
 
     [Fact]
-    public void Monitor_rows_without_hooks_are_todays()
+    public void Monitor_rows_begin_with_todays()
     {
-        Assert.Equal(MonitorRowBuilder.Build(Def.GetVariables()), Def.MonitorRows());
+        // The hooks' rows (plan 09's CDU messages, plan 13's lights and switches) only ever follow.
+        var today = MonitorRowBuilder.Build(Def.GetVariables());
+        Assert.Equal(today, Def.MonitorRows().Take(today.Count));
     }
 
     [Fact]

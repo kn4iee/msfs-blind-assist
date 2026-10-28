@@ -223,16 +223,37 @@ public class Bbs757ReadoutsTests
         Assert.Equal(phrase, Bbs757Readouts.GearPhrase(state));
     }
 
+    // The lever is BlueBird's L:B757_GEAR_HANDLE_POS: 0 UP, 0.5 OFF, 1 DOWN (flight-13.md flight 2).
     [Theory]
-    [InlineData(1.0, 1.0, "Gear down")]
-    [InlineData(0.0, 0.0, "Gear up")]
+    [InlineData(1.0, 1.0, "Gear down, lever down")]
+    [InlineData(0.0, 0.0, "Gear up, lever up")]
+    [InlineData(0.5, 0.0, "Gear up, lever off")]       // the 757's cruise setting
+    [InlineData(0.5, 1.0, "Gear down, lever off")]     // flight 2: the lever stepped to OFF before the gear moved
     [InlineData(1.0, 0.5, "Gear in transit, lever down")]
     [InlineData(0.0, 0.5, "Gear in transit, lever up")]
-    [InlineData(0.0, 1.0, "Gear down, lever up")]    // on the ground with no hydraulics, or a disagreement
+    [InlineData(0.0, 1.0, "Gear down, lever up")]      // on the ground with no hydraulics, or a disagreement
     [InlineData(1.0, 0.0, "Gear up, lever down")]
-    public void Shift_G_adds_the_lever_when_it_disagrees_or_the_gear_moves(double handle, double legs, string expected)
+    public void Shift_G_always_names_the_lever_off_included(double handle, double legs, string expected)
     {
         Assert.Equal(expected, Bbs757Readouts.GearReadout(handle, legs, legs, legs));
+    }
+
+    [Theory]
+    [InlineData(0.2, "lever up")]
+    [InlineData(0.3, "lever off")]
+    [InlineData(0.7, "lever off")]
+    [InlineData(0.8, "lever down")]
+    public void A_lever_between_detents_is_said_at_the_nearest(double handle, string lever)
+    {
+        Assert.EndsWith(lever, Bbs757Readouts.GearReadout(handle, 1, 1, 1));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Shift_G_reads_the_same_under_a_comma_culture(string culture)
+    {
+        Assert.Equal("Gear down, lever off", TestCulture.Run(culture, () => Bbs757Readouts.GearReadout(0.5, 1, 1, 1)));
     }
 
     [Fact]

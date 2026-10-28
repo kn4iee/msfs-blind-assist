@@ -79,6 +79,15 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     internal const string ViewNeedle = "mainUi";
     private const string ViewUrl = "html_UI/Global/mainUI.html";
 
+    /// <summary>
+    /// MSFS 2020 has no <c>mainUi</c> page; its toolbar page (<c>coui://html_UI/Pages/ToolBar/ToolBar.html</c>,
+    /// no title) is drawn over the whole window instead and takes the box the same way (measured 2026-10-28 on
+    /// a 2560 x 1440 FS2020 window: the box and the ILS gauge showed in a PrintWindow capture, the page answered
+    /// 2560 x 1440 at devicePixelRatio 1, while the InGameMarkers and Pause pages drew nothing). Used ONLY when the
+    /// reader was made for FS2020 (<see cref="_fs2020"/>): a 2024 read never looks at it.
+    /// </summary>
+    private const string Fs2020ViewUrl = "html_UI/Pages/ToolBar/ToolBar.html";
+
     /// <summary>The overlay element's id in <c>mainUi</c>.</summary>
     internal const string OverlayId = "msfsba_ils_ocr";
 
@@ -96,6 +105,9 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     private readonly Func<Task<Bitmap?>> _capture;
     private readonly Func<Rectangle?> _clientRegion;
     private readonly string _debugger;
+
+    /// <summary>Made for MSFS 2020: the box goes on the toolbar page, which 2020 draws over the whole window.</summary>
+    private readonly bool _fs2020;
     private readonly Action<string> _debug;
     private readonly SemaphoreSlim _reads = new(1, 1);
     private readonly object _gate = new();
@@ -113,13 +125,19 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
     {
     }
 
+    /// <param name="fs2020">True when the simulator is MSFS 2020: the box goes on its toolbar page (<see cref="Fs2020ViewUrl"/>).</param>
+    public CoherentBbs757IlsDisplay(bool fs2020) : this(CaptureFrameAsync, SimClientRegion, fs2020: fs2020)
+    {
+    }
+
     /// <param name="capture">The window capture (the whole window rectangle); the reader disposes each frame.</param>
     /// <param name="clientRegion">Where the client area lies in that capture; null: the whole capture.</param>
     /// <param name="debugger">The Coherent debugger's host and port (tests: a local listener, never the sim's).</param>
     /// <param name="debug">Where this reader's own debug lines go (tests); null: debug.log.</param>
     internal CoherentBbs757IlsDisplay(Func<Task<Bitmap?>> capture, Func<Rectangle?> clientRegion,
-        string debugger = Debugger, Action<string>? debug = null)
+        string debugger = Debugger, Action<string>? debug = null, bool fs2020 = false)
     {
+        _fs2020 = fs2020;
         _capture = capture;
         _clientRegion = clientRegion;
         _debugger = debugger;
@@ -390,7 +408,7 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         if (CoherentViewOwnership.OneShotInFlight(ViewNeedle)) return null;
 
         var pages = await PageListAsync(ct).ConfigureAwait(false);
-        var mainUi = pages.FirstOrDefault(IsMainUi);
+        var mainUi = OverlayPage(pages, _fs2020);
         if (mainUi.Title == null) return null;
 
         var page = await Inspector.ConnectAsync(_debugger, mainUi.Id, ct).ConfigureAwait(false);
@@ -398,6 +416,19 @@ public sealed class CoherentBbs757IlsDisplay : IBbs757IlsDisplay
         lock (_gate) _mainUi = page;
         return page;
     }
+
+    /// <summary>
+    /// The page the box goes on: <c>mainUi</c> wherever it exists; only for a reader made for FS2020, and only
+    /// with no <c>mainUi</c>, the toolbar page. A default tuple (null title) when neither is there.
+    /// </summary>
+    internal static (int Id, string Title, string Url) OverlayPage(IReadOnlyList<(int Id, string Title, string Url)> pages, bool fs2020)
+    {
+        var mainUi = pages.FirstOrDefault(IsMainUi);
+        return mainUi.Title == null && fs2020 ? pages.FirstOrDefault(IsFs2020Overlay) : mainUi;
+    }
+
+    private static bool IsFs2020Overlay((int Id, string Title, string Url) page)
+        => page.Title != null && page.Url != null && page.Url.Contains(Fs2020ViewUrl, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsMainUi((int Id, string Title, string Url) page)
         => page.Title != null

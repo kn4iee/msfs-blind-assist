@@ -56,6 +56,17 @@ public class Bbs757FlightReadinessTests
     }
 
     [Fact]
+    public void Shift_G_reads_blueBirds_gear_lever_never_the_stock_handle()
+    {
+        // Measured (flight-13.md flight 2): the stock GEAR HANDLE POSITION read up with BlueBird's lever at OFF
+        // and the gear still down.
+        var row = Def.GetVariables()[R.GearHandleKey];
+        Assert.Equal("B757_GEAR_HANDLE_POS", row.Name);
+        Assert.Equal(SimVarType.LVar, row.Type);
+        Assert.Equal(UpdateFrequency.OnRequest, row.UpdateFrequency);
+    }
+
+    [Fact]
     public void The_parking_brake_is_blueBirds_own_variable_never_the_stock_one()
     {
         // Measured: the stock BRAKE PARKING POSITION read 0 with BlueBird's brake set.
@@ -513,7 +524,8 @@ public class Bbs757FlightReadinessTests
         const string brake = "BBS757_PEDESTAL_Park_Brake_Lever";
         var sim = new FakeSim();
         long now = 0;
-        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io };
+        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io,
+            ParkingBrakeRealistic = () => false };   // EASY: the toggle is the whole write
         var speech = new SpeechCapture();
         def.ProcessSimVarUpdate(R.ParkingBrakeKey, 0, speech);   // released: the baseline
         sim.Fresh[brake] = 0;                                     // the pick reads the lever released
