@@ -41,6 +41,22 @@ public static class A350DisplayStatus
     public const string GettingReady = "A350 displays getting ready";
     public const string Ready = "A350 displays ready";
     public static string NotAvailable(string reason) => "A350 displays not available: " + reason;
-    public const string Unreadable = "A350 displays cannot be read at the moment";
-    public const string Readable = "A350 displays readable again";
+    public static string Unreadable(string gauge, int index) => $"A350 {NameOf(gauge, index)} cannot be read at the moment";
+    public static string Readable(string gauge, int index) => $"A350 {NameOf(gauge, index)} readable again";
+
+    /// <summary>A drawn display as the pilot knows it: an EFIS is one side's PFD and ND, the CTR the E/WD and SD,
+    /// MFD 0 both MFDs.</summary>
+    public static string NameOf(string gauge, int index) => (gauge, index) switch
+    {
+        ("CTR", _) => "E/WD and SD",
+        ("EFIS", 0) => "captain PFD and ND",
+        ("EFIS", 1) => "first officer PFD and ND",
+        ("MFD", _) => "MFDs",
+        ("FCU", _) => "FCU display",
+        ("RMP", _) => $"RMP {index + 1} display",
+        ("SFD", _) => "standby flight display",
+        ("SND", _) => "standby navigation display",
+        ("BAT", _) => "BAT display",
+        _ => gauge,
+    };
 }

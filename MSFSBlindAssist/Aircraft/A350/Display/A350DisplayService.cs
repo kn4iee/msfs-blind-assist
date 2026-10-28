@@ -133,7 +133,9 @@ public sealed class A350DisplayService : IDisposable
                     }
                     caps.Add(cap);
                 }
-                if (caps.Count > 0 && _health.Report(caps.Any(c => c.Ok), started, DateTime.UtcNow) is { } said) Spoken?.Invoke(said);
+                var ended = DateTime.UtcNow;
+                for (int n = 0; n < caps.Count; n++)
+                    if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Spoken?.Invoke(said);
                 tcs.SetResult(caps);
             }
             catch (Exception ex)
