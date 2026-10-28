@@ -21,11 +21,27 @@ public class A350PfdTests
         {
             "FMA engagement: 1 FD 2, white", "Selected speed: 100, cyan", "Altitude: 43 feet",
             "Selected altitude: 100, cyan", "QNH: 1013, cyan", "Radio altitude: 0, amber", "Heading: 219",
-            "Speed: 32 knots",   // on the stand the tape rests on its 30 kt floor
+            "Speed: 30 knots or less",   // on the stand the tape rests on its 30 kt floor (its offset reads 32)
         })
             Assert.Contains(l, lines);
         Assert.Contains(lines, l => l.StartsWith("T.O THS FOR, white; 28.5"));
         Assert.DoesNotContain(lines, l => l.Contains("010") || l.Contains("80, green"));   // tape and drum labels
+    }
+
+    // Ready for takeoff on the stand (live 2026-10-28, PERF T.O V1 142, VR 143, V2 148): above the speed tape, off its
+    // scale, the speed target (x 153, y 174: the managed V2 in magenta; a selected speed in cyan) and under it V1 in cyan
+    // (x 129, y 207). The message line under the heading scale reads as one line, its red two-line OUT OF / RANGE beside
+    // the white T.O THS (the trim not yet set to PERF's THS).
+    [Fact]
+    public void The_takeoff_speeds_and_the_trim_message_read_as_the_pfd_shows_them()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_takeoff_ready"), 0);
+        Assert.Contains("Speed target: 148, magenta", lines);
+        Assert.Contains("V1: 142, cyan", lines);
+        Assert.Contains("T.O THS, white; OUT OF RANGE, red", lines);
+        Assert.Contains("Speed: 30 knots or less", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Selected speed", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("OUT OF", StringComparison.Ordinal) || l.StartsWith("RANGE", StringComparison.Ordinal));
     }
 
     [Fact]

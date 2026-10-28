@@ -180,6 +180,33 @@ internal sealed class ProbeForm : Form
 
     private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("0.###") : "null";
 
+    /// <summary>`displays [name,name]`: every display on demand (the Displays section's panels) as its status display reads
+    /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
+    /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
+    /// holds one of the names.</summary>
+    private async Task RunDisplays()
+    {
+        using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+        service.AVarAnswer = new MSFSBlindAssist.Aircraft.A350.Display.A350AVarAnswers(
+            key => _m!.GetCachedVariableValue(key), ask => Line("unanswered ask: " + ask)).Answer;
+        service.Start();
+        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
+            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
+            await Task.Delay(500);
+        var filters = (_arg ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var d in IniBuildsA350Definition.DisplayPanels)
+        {
+            if (filters.Length > 0 && !filters.Any(f => d.Panel.Contains(f, StringComparison.OrdinalIgnoreCase))) continue;
+            MSFSBlindAssist.Aircraft.A350.Display.A350DrawCapture? capture = null;
+            for (int i = 0; i < 5 && capture is not { Ok: true }; i++)
+                capture = (await service.DrawAsync((d.Gauge, d.Index)))?.FirstOrDefault();
+            Line($"== {d.Panel}{(capture is { Ok: true } ? "" : ": no good draw")}");
+            if (capture is { Ok: true })
+                foreach (var line in d.Read(capture))
+                    Line("  " + line);
+        }
+    }
+
     /// <summary>`rmpwin "keys"`: MSFSBA's RMP window (Ctrl+Shift+R) with the delegates the hotkey passes (the background
     /// monitor's latest draw, a fresh draw, the unique calculator sender), fed keys as the pilot types them, space-separated:
     /// a digit or ".", enter, back, esc, f5, ctrl+N, alt+N, alt+LETTER, wait:MS, rmp:N (the RMP box). Prints what the window
@@ -384,6 +411,12 @@ internal sealed class ProbeForm : Form
         if (_mode == "rmpwin")
         {
             await RunRmpWindow(cap);
+            return;
+        }
+
+        if (_mode == "displays")
+        {
+            await RunDisplays();
             return;
         }
 

@@ -16,6 +16,13 @@ public static class A350Pfd
     private const float SpeedPxPerKnot = 4.875f, SpeedRefPattern = -885.2f, SpeedRefKnots = 240.2f;
     private const float PitchPxPerDegree = 8.61f, PitchZeroImageY = 620.5f;
 
+    /// <summary>The speed the tape's offset reads at its 30 kt floor and a knot over (32 on the stand, live).</summary>
+    private const double SpeedFloorReads = 33;
+
+    /// <summary>Where V1 is drawn above the speed tape while off its scale, under the speed target (live: 142 at x 129,
+    /// y 207; the target at x 153, y 174).</summary>
+    private const float V1X = 129, V1Y = 207;
+
     /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability, and the AP/FD/A/THR
     /// engagement column (live: "1 FD 2" at x 685-761).</summary>
     private static readonly (string Name, float X0, float X1)[] FmaColumns =
@@ -108,9 +115,13 @@ public static class A350Pfd
 
         foreach (var c in selectedAltitude) o.Add($"Selected altitude: {c.Text}, cyan");
 
-        // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre.
+        // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre. On the stand
+        // the tape rests on its 30 kt floor, which its offset reads as 32.
         if (PatternOf(capture, side, 75, 2285) is { } speedTape)
-            o.Add($"Speed: {Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero):0} knots");
+        {
+            double knots = Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero);
+            o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : $"Speed: {knots:0} knots");
+        }
         if (PatternOf(capture, side, 298, 1168) is { } horizon)
         {
             float dx = HeadingIndexX + (side == 0 ? PfdWidth : 0) - horizon.PatternX, dy = WindowY - horizon.PatternY;
@@ -124,11 +135,15 @@ public static class A350Pfd
             }
         }
 
-        // The speed tape: its target in cyan.
-        foreach (var c in cells.Where(c => c.X < 250 && c.Y >= FmaBottom && c.Y < BottomLine && c.Colour == "cyan"))
+        // The speed tape: its target while off the scale, magenta managed (the V2 before takeoff), cyan selected; V1 in
+        // cyan under it.
+        foreach (var c in cells.Where(c => c.X < 250 && c.Y >= FmaBottom && c.Y < BottomLine
+                     && (c.Colour == "cyan" || c.Colour == "magenta" && c.Text.Length > 0 && c.Text.All(char.IsDigit))))
         {
             used.Add(c);
-            o.Add($"Selected speed: {c.Text}, cyan");
+            o.Add(c.Colour == "magenta" ? $"Speed target: {c.Text}, magenta"
+                : Math.Abs(c.X - V1X) <= 8 && Math.Abs(c.Y - V1Y) <= 8 ? $"V1: {c.Text}, cyan"
+                : $"Selected speed: {c.Text}, cyan");
         }
 
         // The altitude: the tape's label nearest the window and the drum's tens label nearest it; the drum's big
@@ -217,8 +232,17 @@ public static class A350Pfd
             o.Add("Flaps: " + A350DrawLayout.Speak(config));
         }
 
-        // Everything else as drawn: flags, messages, the line under the heading scale.
-        foreach (var row in A350DrawLayout.Rows(cells.Where(c => !used.Contains(c)).Select(ToText)))
+        // Everything else as drawn: flags, messages, the line under the heading scale. A two-line message there is one
+        // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row.
+        var rest = cells.Where(c => !used.Contains(c)).ToList();
+        foreach (var upper in rest.Where(c => c.Y >= BottomLine).OrderBy(c => c.Y).ToList())
+            if (rest.Contains(upper) && rest.FirstOrDefault(c => c != upper && c.Colour == upper.Colour && Math.Abs(c.X - upper.X) <= 6
+                    && c.Y - upper.Y is >= 12 and <= 30) is { } lower)
+            {
+                rest.Remove(lower);
+                rest[rest.IndexOf(upper)] = upper with { Text = upper.Text + " " + lower.Text, Y = (upper.Y + lower.Y) / 2 };
+            }
+        foreach (var row in A350DrawLayout.Rows(rest.Select(ToText)))
             o.Add(A350DrawLayout.Speak(row));
         return o;
     }
