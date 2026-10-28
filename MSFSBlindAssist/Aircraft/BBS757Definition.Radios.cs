@@ -910,7 +910,7 @@ public partial class BBS757Definition
         lock (_ilsDisplayLock)
         {
             if (_ilsDisplayRetired) return null;
-            return _ilsDisplay ??= new CoherentBbs757IlsDisplay();
+            return _ilsDisplay ??= new CoherentBbs757IlsDisplay(fs2020: sim.DetectedSimulatorVersion == "FS2020");
         }
     }
 

@@ -1168,3 +1168,19 @@ is wrong after one of those presets, and so is a count used when the display can
 Put back: the ILS PARK with .10 (proved by the reads), `BBS_ILS_COURSE` 0, the battery off. The `ils-display-fail*.png`
 files the test reads left in the logs folder were deleted. No element with an id starting `msfsba` was left in `mainUi`
 or the VCockpit pages, and no socket on :19999.
+
+## Round 8: the ILS display read in MSFS 2020 (2026-10-28, Declan's PC, the 757-200 PW and RR)
+
+- **Every frequency set failed in MSFS 2020** with "ILS tuning unknown: the ILS display could not be read". The log
+  said "the overlay was not laid (no answer from mainUi)" each time. The course (a direct write) worked.
+- **MSFS 2020 has no `mainUi` page.** Its `/pagelist.json` listed NOTIFICATION, TooltipAtlas, Flight Briefing,
+  Flight planning, Transition, ActivitiesBackground, the aircraft's VCockpit pages, VLogic, Pause, InGameMarkers (two),
+  ToolBar, VFR MAP and the HUD pages, and no `coui://html_UI/Global/mainUI.html`.
+- **The toolbar page takes the box instead.** A coloured test box laid at CSS (16,16) on each of InGameMarkers,
+  ToolBar and Pause: only the ToolBar one showed in a PrintWindow capture of the 2560 x 1440 window (its page
+  answered 2560 x 1440 at devicePixelRatio 1). The ILS gauge's live view laid there showed the panel display
+  (course 250).
+- **With the reader on the toolbar page (FS2020 only):** "ILS 110.50 set" by the pilot through Input Ctrl+N, every
+  capture decoded ("capture 1 at 154 ms took 132 ms with its decode: read"). A 2024 read is unchanged: the toolbar
+  page is used only by a reader made for FS2020 and only with no `mainUi` listed (pinned by
+  `The_box_goes_on_mainUi_and_on_the_toolbar_page_only_in_FS2020_without_one`).

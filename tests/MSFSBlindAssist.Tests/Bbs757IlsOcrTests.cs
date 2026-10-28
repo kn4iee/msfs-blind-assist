@@ -303,6 +303,26 @@ public class Bbs757IlsOcrTests
     }
 
     [Fact]
+    public void The_box_goes_on_mainUi_and_on_the_toolbar_page_only_in_FS2020_without_one()
+    {
+        // MSFS 2020 has no mainUi page; its toolbar page is drawn over the whole window (measured 2026-10-28).
+        var toolbar = (48, "", "coui://html_UI/Pages/ToolBar/ToolBar.html");
+        var mainUi = (7, "mainUi", "coui://html_UI/Global/mainUI.html");
+        var markers = (46, "", "coui://html_UI/Pages/InGameMarkers/InGameMarkers.html");
+        var fs2020Pages = new List<(int, string, string)> { markers, toolbar };
+        var fs2024Pages = new List<(int, string, string)> { toolbar, mainUi, markers };
+
+        // A 2024 reader: always mainUi, never the toolbar page, even with no mainUi listed.
+        Assert.Equal(7, CoherentBbs757IlsDisplay.OverlayPage(fs2024Pages, fs2020: false).Id);
+        Assert.Null(CoherentBbs757IlsDisplay.OverlayPage(fs2020Pages, fs2020: false).Title);
+
+        // A 2020 reader: the toolbar page when there is no mainUi; mainUi still wins where it exists.
+        Assert.Equal(48, CoherentBbs757IlsDisplay.OverlayPage(fs2020Pages, fs2020: true).Id);
+        Assert.Equal(7, CoherentBbs757IlsDisplay.OverlayPage(fs2024Pages, fs2020: true).Id);
+        Assert.Null(CoherentBbs757IlsDisplay.OverlayPage(new List<(int, string, string)> { markers }, fs2020: true).Title);
+    }
+
+    [Fact]
     public async Task A_read_that_times_out_says_where_and_a_canceled_one_says_nothing()
     {
         // A Coherent debugger that takes the connection and never answers: a local listener, never the sim's port.
