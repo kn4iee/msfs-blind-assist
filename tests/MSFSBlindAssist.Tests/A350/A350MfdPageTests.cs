@@ -256,6 +256,24 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.StartsWith("Field:") || l.Contains(" CI:"));
     }
 
+    // PERF T.O after the OIS sent its speeds (live): TOGA and FLEX are check boxes labelled right of the box; the FLEX
+    // temperature field takes FLEX's label; the uplinked speeds (yellow) beside V1, VR and V2 are theirs; FLAPS,
+    // PACKS and ANTI-ICE label their menus from above; a label is shared only with a box right beside it.
+    [Fact]
+    public void Perf_takeoff_reads_its_check_boxes_and_the_uplinked_speeds()
+    {
+        var lines = Page("mfd_perf_to_uplinked");
+        foreach (var l in new[]
+        {
+            "TOGA check box, not checked", "FLEX check box, checked, cyan", "FLEX: +67 °C, cyan",
+            "V1: required KT, amber", "V1: 142 KT, yellow", "VR: 143 KT, yellow", "V2: 148 KT, yellow",
+            "CONFIRM * TO SPDs button, yellow", "FLAPS: 2 menu, cyan", "PACKS: ON menu, cyan", "ANTI-ICE: OFF menu, cyan",
+            "THS FOR: 30.1 %, cyan",
+        })
+            Assert.Contains(l, lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("TOGA:") || l.StartsWith("VR: +67"));
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

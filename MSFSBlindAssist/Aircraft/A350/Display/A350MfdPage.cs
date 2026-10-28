@@ -62,6 +62,7 @@ public static class A350MfdPage
         var lines = new List<(float Top, float Left, MfdLine Line)>();
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy, bool Inherited, bool Above)>();
         var leftLabels = new HashSet<Cell>();
+        var checkboxLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
         // Texts inside a control are its own, never another control's label or header.
         var inControls = capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0).SelectMany(e =>
@@ -115,6 +116,17 @@ public static class A350MfdPage
             }
             if (e.Class == "BaseUICheckbox")
             {
+                // A box with its label right of it, outside its rectangle (PERF T.O's TOGA and FLEX, any colour: FLEX
+                // is cyan while selected).
+                if (inside.Count == 0
+                    && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.X > x1 && c.X - x1 <= 60
+                        && Math.Abs(c.Y - (y0 + e.RectH * 0.75f)) <= 12).OrderBy(c => c.X).FirstOrDefault() is { } boxLabel)
+                {
+                    inside = new List<Cell> { boxLabel };
+                    value = boxLabel.Text;
+                    colour = boxLabel.Colour;
+                    checkboxLabels.Add(boxLabel);
+                }
                 if (inside.Count == 0) continue;
                 used.UnionWith(inside);
                 bool check = capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && sh.X0 - shift >= x0 && sh.X1 - shift <= x0 + e.RectW
@@ -126,7 +138,8 @@ public static class A350MfdPage
             if (IsField(e))
             {
                 float rowY = y0 + e.RectH * 0.75f;
-                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && Math.Abs(c.Y - rowY) <= 12;
+                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && (c.Colour == "white" || checkboxLabels.Contains(c))
+                    && Math.Abs(c.Y - rowY) <= 12;
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
                 // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
@@ -148,8 +161,10 @@ public static class A350MfdPage
             used.UnionWith(inside);
             string menuLabel = "";
             if (e.Class == "MainHeaderDropdownMenu" && y0 > 100
-                && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X < x0 && x0 - c.X <= 160
-                    && Math.Abs(c.Y - (y0 + e.RectH * 0.75f)) <= 12).OrderByDescending(c => c.X).FirstOrDefault() is { } ml)
+                && (cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X < x0 && x0 - c.X <= 160
+                        && Math.Abs(c.Y - (y0 + e.RectH * 0.75f)) <= 12).OrderByDescending(c => c.X).FirstOrDefault()
+                    ?? cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 40 && c.X <= x1
+                        && c.Y < y0 && y0 - c.Y <= 30).OrderByDescending(c => c.Y).FirstOrDefault()) is { } ml)
             {
                 used.Add(ml);
                 menuLabel = ml.Text.TrimEnd(':') + ": ";
@@ -169,7 +184,7 @@ public static class A350MfdPage
         {
             var f = fields[k];
             if (f.Label != null) continue;
-            var left = fields.Where(o => o.Label != null && !o.Inherited && Math.Abs(o.Top - f.Top) <= 12 && o.X1 <= f.X0 + 1)
+            var left = fields.Where(o => o.Label != null && !o.Inherited && Math.Abs(o.Top - f.Top) <= 12 && o.X1 <= f.X0 + 1 && f.X0 - o.X1 <= 60)
                 .OrderByDescending(o => o.X1).FirstOrDefault();
             if (left.Label != null) fields[k] = f with { Label = left.Label, Inherited = true };
         }
