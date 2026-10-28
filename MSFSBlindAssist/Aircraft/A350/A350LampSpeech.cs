@@ -12,6 +12,9 @@ public readonly record struct A350LampChange(string Name, bool On);
 /// </summary>
 public static class A350LampCallouts
 {
+    /// <summary>ANN LT TEST lights every annunciator at once: one sentence, never two hundred names.</summary>
+    public const string AnnunciatorTest = "Annunciator light test: all lights on";
+
     public static string Compose(IReadOnlyList<A350LampChange> changes)
     {
         var parts = new List<string>(2);
@@ -173,6 +176,11 @@ public sealed class A350LampBoard
     public bool PowerFlips(string key, double value) =>
         key is A350PanelLamps.AcPowerKey or A350PanelLamps.DcPowerKey
         && _values.TryGetValue(key, out var was) && was >= 0.5 != value >= 0.5;
+
+    /// <summary>Whether this delivery puts the annunciator test on (true, ANN LT to TEST) or off (false), else null (a first
+    /// value is a baseline). Ask before <see cref="Update"/>.</summary>
+    public bool? TestFlips(string key, double value) =>
+        key == A350PanelLamps.AnnLtKey && _values.TryGetValue(key, out var was) && was < 0.5 != value < 0.5 ? value < 0.5 : null;
 
     /// <summary>Takes one delivery and returns the lights it turned on or off.</summary>
     public IReadOnlyList<A350LampTurn> Update(string key, double value)

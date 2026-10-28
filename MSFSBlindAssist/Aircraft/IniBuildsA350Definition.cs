@@ -387,6 +387,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
+        Register(A350PanelLamps.AnnLtKey, A350PanelLamps.AnnLtVar, "Annunciator light test", null);
 
         // What the display draw code asks the sim for itself (engine N2, the baro settings): streamed, consumed
         // silently, and answered to the draw engine from the cache (AnswerAVar).

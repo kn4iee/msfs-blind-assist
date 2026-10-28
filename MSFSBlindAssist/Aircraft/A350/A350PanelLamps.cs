@@ -7,7 +7,8 @@ public sealed class A350Lamp
 {
     private readonly IReadOnlyDictionary<string, string> _keyOf;
 
-    internal A350Lamp(string node, string name, string panel, A350LampRule rule, A350LightPower power, string? controlId = null)
+    internal A350Lamp(string node, string name, string panel, A350LampRule rule, A350LightPower power, string? controlId = null,
+        bool annunciatorTest = true)
     {
         ControlId = controlId;
         Node = node;
@@ -15,13 +16,20 @@ public sealed class A350Lamp
         Panel = panel;
         Rule = rule;
         Power = power;
+        AnnunciatorTest = annunciatorTest;
         _keyOf = rule.Inputs.Select((input, i) => (input, key: i == 0 ? Key : A350PanelLamps.InputKey(input)))
             .ToDictionary(p => p.input, p => p.key, StringComparer.Ordinal);
         var keys = rule.Inputs.Select(KeyFor).ToList();
         if (A350PanelLamps.PowerKeyFor(power) is string powerKey)
             keys.Add(powerKey);
+        if (annunciatorTest)
+            keys.Add(A350PanelLamps.AnnLtKey);
         InputKeys = keys;
     }
+
+    /// <summary>Whether ANN LT TEST lights it: every lamp of the map (the cockpit's rule is state OR test, times its bus's
+    /// light power; the map keeps the state); not a mechanical indicator.</summary>
+    public bool AnnunciatorTest { get; }
 
     /// <summary>The lamp's node in the generated map, e.g. <c>ELEC_BAT_1_SEQ1_LIGHT</c>.</summary>
     public string Node { get; }
@@ -44,12 +52,14 @@ public sealed class A350Lamp
     /// <summary>Every key the lamp is made of: its rule's inputs, then its bus's light power.</summary>
     public IReadOnlyList<string> InputKeys { get; }
 
-    /// <summary>Whether the cockpit shows the lamp lit, its rule AND its bus's light power, from values read by key;
-    /// null while an input is unread.</summary>
+    /// <summary>Whether the cockpit shows the lamp lit, its rule (or ANN LT at TEST, position 0) AND its bus's light power,
+    /// from values read by key; null while an input of its rule or its power is unread.</summary>
     public bool? IsLit(Func<string, double?> read)
     {
         if (Rule.IsLit(input => read(KeyFor(input))) is not bool state)
             return null;
+        if (AnnunciatorTest && read(A350PanelLamps.AnnLtKey) is double annLt && annLt < 0.5)
+            state = true;
         if (A350PanelLamps.PowerKeyFor(Power) is not string powerKey)
             return state;
         return read(powerKey) is double powered ? state && powered >= 0.5 : null;
@@ -69,6 +79,8 @@ public static class A350PanelLamps
     public const string AcPowerVar = "INI_AC_LIGHTS_FAILURE";
     public const string DcPowerKey = "A350_LIGHTS_DC_POWER";
     public const string DcPowerVar = "INI_DC_LIGHTS_FAILURE";
+    public const string AnnLtVar = "INI_ANNLT_SWITCH";
+    public const string AnnLtKey = "A350_IN_" + AnnLtVar;
 
     private static readonly Regex NodeTail = new(@"(_SEQ\d+)?(_PANEL)?_LIGHT$", RegexOptions.CultureInvariant);
 
@@ -244,7 +256,7 @@ public static class A350PanelLamps
                         lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(indicator.State), indicator.Power));
                 foreach (var (node, onPanel, name, state) in OwnIndicators)
                     if (onPanel == panel)
-                        lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(state), A350LightPower.None));
+                        lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(state), A350LightPower.None, annunciatorTest: false));
             }
         return lamps;
     }

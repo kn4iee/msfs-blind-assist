@@ -24,6 +24,9 @@ public partial class IniBuildsA350Definition
 
     private int _seedCountdown = SeedAfterBatches;
 
+    /// <summary>The ANN LT selector's row: its Ctrl+M row mutes the annunciator test's sentence.</summary>
+    private const string AnnLtRow = "A350_LIGHTS_INT_ANN_LT";
+
     /// <summary>The two master lights that speak, and what they say.</summary>
     private static readonly Dictionary<string, string> MasterSpeakers = new(StringComparer.Ordinal)
     {
@@ -99,6 +102,16 @@ public partial class IniBuildsA350Definition
     /// flashes, and a delivery caught dark must neither drop the pending "on" nor let the next lit one say it again.</summary>
     private void HandleLampDelivery(string key, double value, ScreenReaderAnnouncer announcer)
     {
+        // ANN LT to TEST lights every light at once, and back to BRT or DIM returns them: the lights follow unspoken
+        // (the switch's position is the screen reader's), and the test is said once, as the ANN LT row's.
+        if (_lampBoard.TestFlips(key, value) is bool testing)
+        {
+            foreach (var turn in _lampBoard.Update(key, value))
+                _lampSpeech.Forget(MasterSpeakers.GetValueOrDefault(turn.Lamp.Key, turn.Lamp.Name));
+            if (testing && !announcer.Suppressed && !IsMuted(AnnLtRow))
+                announcer.Announce(A350LampCallouts.AnnunciatorTest);
+            return;
+        }
         if (_lampBoard.PowerFlips(key, value))
             _lampSpeech.NotePowerChange(Clock());
         foreach (var turn in _lampBoard.Update(key, value))

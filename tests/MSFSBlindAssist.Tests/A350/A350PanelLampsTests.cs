@@ -174,6 +174,24 @@ public class A350PanelLampsTests
         var off = Lamp("IRS_ADR_1_SEQ2_LIGHT");   // (L:INI_ADR1_BUTTON) ! (L:INI_IRS1_STATE) 0 > and
         Assert.Equal(off.Key, off.KeyFor("INI_ADR1_BUTTON"));
         Assert.Equal("A350_IN_INI_IRS1_STATE", off.KeyFor("INI_IRS1_STATE"));
-        Assert.Equal(new[] { off.Key, "A350_IN_INI_IRS1_STATE", A350PanelLamps.AcPowerKey }, off.InputKeys);
+        Assert.Equal(new[] { off.Key, "A350_IN_INI_IRS1_STATE", A350PanelLamps.AcPowerKey, A350PanelLamps.AnnLtKey }, off.InputKeys);
+    }
+
+    // ANN LT TEST lights every annunciator: the cockpit's rule is (state OR test) x its bus's light power (tools/a350-gen
+    // lamp_rule); the map keeps the state alone, so every light read off through the test. The oxygen flow blinkers are
+    // mechanical: no test.
+    [Fact]
+    public void The_annunciator_test_lights_every_lamp_on_a_powered_bus()
+    {
+        var fault = Lamp("ELEC_BAT_1_SEQ1_LIGHT");   // DC
+        Func<string, double?> read(double annLt, double power) => key =>
+            key == A350PanelLamps.AnnLtKey ? annLt : key == A350PanelLamps.DcPowerKey ? power : key == fault.Key ? 0 : null;
+        Assert.False(fault.IsLit(read(1, 1)));   // BRT, no fault
+        Assert.True(fault.IsLit(read(0, 1)));    // TEST
+        Assert.False(fault.IsLit(read(0, 0)));   // TEST, its bus dark
+        Assert.All(Lamps, l => Assert.Contains(A350PanelLamps.AnnLtKey, l.InputKeys));
+        var blinker = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Cockpit" }).First(l => l.Panel == "Oxygen Masks");
+        Assert.DoesNotContain(A350PanelLamps.AnnLtKey, blinker.InputKeys);
+        Assert.False(blinker.IsLit(key => key == A350PanelLamps.AnnLtKey ? 0 : key == blinker.Key ? 0 : null));
     }
 }

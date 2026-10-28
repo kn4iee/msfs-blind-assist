@@ -125,6 +125,24 @@ public class A350LampAnnouncementTests
         Assert.Equal(new[] { bat.Name + " on" }, _speech.All);
     }
 
+    // ANN LT TEST lights every annunciator at once: said once, never light by light; back to BRT the lights return to
+    // their states unspoken (the switch's new position is the screen reader's).
+    [Fact]
+    public void The_annunciator_test_is_said_once_not_light_by_light()
+    {
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        var gen = Lamp("A350_LT_ELEC_GEN_1A_SEQ1_LIGHT");
+        Baseline(bat, 0);
+        Baseline(gen, 0);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(A350PanelLamps.AnnLtKey, 0, _speech);   // TEST
+        BatchAfter(5000);
+        Assert.Equal(new[] { "Annunciator light test: all lights on" }, _speech.All);
+        _def.ProcessSimVarUpdate(A350PanelLamps.AnnLtKey, 1, _speech);   // BRT
+        BatchAfter(5000);
+        Assert.Single(_speech.All);
+    }
+
     [Fact]
     public void A_muted_light_says_nothing()
     {
