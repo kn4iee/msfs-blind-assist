@@ -10,7 +10,9 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// The BlueBird 757's two CDUs as text (Shift+M). A clone of the HS787 FMC window (same list
 /// layout, same keys), fed by the shared <see cref="CoherentBbs757TabletClient"/>, which reads the
 /// screens off the aircraft's Comm Bus and presses keys as held L:vars. Ctrl+Tab switches between
-/// the captain's and the first officer's CDU; the two are independent, as on the aircraft.
+/// the captain's and the first officer's CDU, Ctrl+Shift+L and Ctrl+Shift+R select one by side; the
+/// two are independent, as on the aircraft, and the window title names the side shown
+/// (<see cref="TitleFor"/>). Alt+C clears the scratchpad (<see cref="Bbs757CduKeys.ClearScratchpad"/>).
 ///
 /// The window never disposes the client: MainForm owns it (the EFB window shares it). The window
 /// only subscribes, and unsubscribes in Dispose.
@@ -20,10 +22,11 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// once every queued key has had its cycle, which is the state the screen reader cannot know. An entry typed
 /// in the scratchpad box is checked as it is read back (<see cref="Bbs757TypedEntryCheck"/>): the scratchpad
 /// is read when it holds the entry, and "Scratchpad shows …" is said when the CDU missed a key (plan 08); a
-/// key pressed before that goes out at once and leaves it to the ordinary read-back. A key the window cannot
-/// deliver is refused aloud. Ctrl+Tab
-/// says only which CDU is shown. While the window is hidden only one thing speaks: keys the pilot
-/// sent that were dropped because the link went ("CDU connection lost, keys not sent").
+/// key pressed before that goes out at once and leaves it to the ordinary read-back (Alt+C's clear is heard
+/// that way too: "Cleared", or "DELETE" when it pressed DEL). A key the window cannot deliver is refused
+/// aloud. Ctrl+Tab and the side keys say only which CDU is shown, the CDU already shown included.
+/// While the window is hidden only one thing speaks: keys the pilot sent that were dropped because
+/// the link went ("CDU connection lost, keys not sent").
 /// </summary>
 public partial class BBS757CduForm : Form
 {
@@ -129,7 +132,7 @@ public partial class BBS757CduForm : Form
         btnExec.Click     += (s, e) => SendKey(Bbs757CduKeys.Exec);
         btnClr.Click      += (s, e) => SendKey(Bbs757CduKeys.Clr);
         btnDel.Click      += (s, e) => SendKey(Bbs757CduKeys.Del);
-        btnSwitchCdu.Click += (s, e) => SwitchCdu();
+        btnSwitchCdu.Click += (s, e) => SelectCdu(OtherCdu);
     }
 
     // ------------------------------------------------------------------
@@ -224,6 +227,16 @@ public partial class BBS757CduForm : Form
 
     private static string CduName(int cdu) => cdu == 1 ? "Captain CDU" : "First officer CDU";
 
+    /// <summary>
+    /// The window title, naming the side of the CDU shown (1 captain, 2 first officer): a screen reader
+    /// reads a window's title as it comes forward, so the pilot knows whose CDU he has before he reads a line.
+    /// </summary>
+    public static string TitleFor(int cdu) =>
+        cdu == 1 ? "BlueBird 757 CDU (Captain)" : "BlueBird 757 CDU (First officer)";
+
+    // The CDU Ctrl+Tab and the Switch CDU button select.
+    private int OtherCdu => _cdu == 1 ? 2 : 1;
+
     private string WaitingTextFor(int cdu) => cdu == 1 ? WaitingText : WaitingFirstOfficerText;
 
     /// <summary>
@@ -295,16 +308,25 @@ public partial class BBS757CduForm : Form
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Ctrl+Tab: says only which CDU is now shown. Its page title is spoken by the fresh push the
-    /// client sends for it (setting ActiveCdu asks for one), never from the copy held here, which
-    /// can be older; until then the held copy is shown as it is. A CDU with no screen yet says so
-    /// in its list row and the status box. A typed entry still being checked is left unjudged: the
-    /// client reads only the shown CDU, so the other one's screen would be judged frozen.
+    /// Ctrl+Tab and the Switch CDU button (the other CDU), Ctrl+Shift+L and Ctrl+Shift+R (a side): shows
+    /// <paramref name="cdu"/> (1 captain, 2 first officer), renames the window after its side
+    /// (<see cref="TitleFor"/>) and says only which CDU that is. Selecting the CDU already shown says its
+    /// name again and changes nothing else. The page title is spoken by the fresh push the client sends for it (setting
+    /// ActiveCdu asks for one), never from the copy held here, which can be older; until then the
+    /// held copy is shown as it is. A CDU with no screen yet says so in its list row and the status
+    /// box. A typed entry still being checked is left unjudged: the client reads only the shown CDU,
+    /// so the other one's screen would be judged frozen.
     /// </summary>
-    private void SwitchCdu()
+    private void SelectCdu(int cdu)
     {
+        if (cdu == _cdu)
+        {
+            _announcer.AnnounceImmediate(CduName(_cdu));
+            return;
+        }
         _check.Cancel();
-        _cdu = _cdu == 1 ? 2 : 1;
+        _cdu = cdu;
+        Text = TitleFor(_cdu);
         _client.ActiveCdu = _cdu;
         _announcer.AnnounceImmediate(CduName(_cdu));
         _previousTitle = "";   // so the fresh push speaks its title
@@ -321,7 +343,21 @@ public partial class BBS757CduForm : Form
     /// already queued; a typed entry still being checked is then left to the ordinary scratchpad
     /// read-back (a line select key may take the entry out of the scratchpad), as on every other aircraft.
     /// </summary>
-    private void SendKey(string key)
+    private void SendKey(string key) => SendKeys(new[] { (key, CoherentBbs757TabletClient.KeyHoldMs) });
+
+    /// <summary>
+    /// Alt+C: clears the selected CDU's scratchpad with <see cref="Bbs757CduKeys.ClearScratchpad"/> (two long
+    /// CLRs, or one DEL when the last screen read shows it empty), refused aloud when the link is down like
+    /// every key. Nothing is said here: the scratchpad read-back says "Cleared" or "DELETE" once the keys
+    /// have had their cycle ([CORE-7]).
+    /// </summary>
+    private void ClearScratchpad() => SendKeys(Bbs757CduKeys.ClearScratchpad(_screens[_cdu]?.Scratchpad));
+
+    /// <summary>
+    /// Queues these keys, each with its hold, for the selected CDU in one go: the refusal is said once
+    /// whatever their number, and the typed-entry check ends once.
+    /// </summary>
+    private void SendKeys(IReadOnlyList<(string Key, int HoldMs)> keys)
     {
         if (!_client.IsReadable)
         {
@@ -329,7 +365,7 @@ public partial class BBS757CduForm : Form
             return;
         }
         _check.Cancel();
-        _client.PressKey(_cdu, key);
+        foreach (var (key, holdMs) in keys) _client.PressKey(_cdu, key, holdMs);
     }
 
     /// <summary>
@@ -371,7 +407,7 @@ public partial class BBS757CduForm : Form
         if ((keyData & Keys.KeyCode) == Keys.Tab && (keyData & Keys.Control) != 0 && (keyData & Keys.Alt) == 0)
         {
             bool repeat = ((long)msg.LParam & 0x40000000) != 0;
-            if (!repeat) SwitchCdu();
+            if (!repeat) SelectCdu(OtherCdu);
             return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
@@ -383,6 +419,22 @@ public partial class BBS757CduForm : Form
         if (key != null)
         {
             if (!_keyRepeat) SendKey(key);
+            e.Handled = true; e.SuppressKeyPress = true;
+            return;
+        }
+
+        // Ctrl+Shift+L / Ctrl+Shift+R: the captain's / the first officer's CDU
+        if (Bbs757CduKeys.SideFor(e.KeyData) is int side)
+        {
+            if (!_keyRepeat) SelectCdu(side);
+            e.Handled = true; e.SuppressKeyPress = true;
+            return;
+        }
+
+        // Alt+C: clear the scratchpad (ForAltLetter has no C: this is no page key)
+        if (e.Alt && !e.Shift && !e.Control && e.KeyCode == Keys.C)
+        {
+            if (!_keyRepeat) ClearScratchpad();
             e.Handled = true; e.SuppressKeyPress = true;
             return;
         }

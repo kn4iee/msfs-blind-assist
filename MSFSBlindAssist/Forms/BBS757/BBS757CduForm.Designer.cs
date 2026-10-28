@@ -34,7 +34,7 @@ public partial class BBS757CduForm
     {
         this.SuspendLayout();
 
-        this.Text = "BlueBird 757 CDU";
+        this.Text = TitleFor(1);   // the captain's CDU is shown first; SelectCdu renames the window
         this.Size = new Size(640, 560);
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox = false;

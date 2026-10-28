@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
 
 namespace MSFSBlindAssist.Tests;
@@ -73,7 +74,7 @@ public class Bbs757CduKeysTests
     [InlineData(Keys.E, "EXEC")]
     [InlineData(Keys.S, null)]      // Alt+S focuses the scratchpad box
     [InlineData(Keys.A, null)]      // the HS787's ALTN: the 757 has no such key
-    [InlineData(Keys.C, null)]      // the HS787's long CLR: never sent on the 757
+    [InlineData(Keys.C, null)]      // Alt+C is no page key: the window clears the scratchpad (ClearScratchpad)
     [InlineData(Keys.Home, null)]
     public void Alt_letters_press_the_hs787_windows_page_keys(Keys key, string? expected)
     {
@@ -107,8 +108,89 @@ public class Bbs757CduKeysTests
         for (int c = 0; c <= 0x2FF; c++) sendable.AddRange(Bbs757CduKeys.ForChar((char)c));
         foreach (Keys k in Enum.GetValues<Keys>())
             if (Bbs757CduKeys.ForAltLetter(k) is { } page) sendable.Add(page);
+        foreach (var scratchpad in new[] { null, "", "KATL" })
+            sendable.AddRange(Bbs757CduKeys.ClearScratchpad(scratchpad).Select(p => p.Key));
 
         Assert.Empty(sendable.Where(k => !agent.Contains(k)).Distinct());
         Assert.All(sendable, k => Assert.True(Bbs757CduKeys.IsKey(k), k));
+    }
+
+    // ---- Alt+C: clear the scratchpad (plan 09) ----------------------------------------------------
+
+    [Theory]
+    [InlineData("KATL")]
+    [InlineData("INVALID ENTRY")]
+    [InlineData("A")]
+    [InlineData(" KATL ")]
+    public void A_scratchpad_with_text_takes_two_long_CLRs(string scratchpad)
+    {
+        // One CLR held 1.3 s clears the whole scratchpad 45 times in 60 and removes one character
+        // otherwise (plan 08, 2026-10-26); a second long CLR always clears the rest.
+        Assert.Equal(
+            new[] { (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs), (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs) },
+            Bbs757CduKeys.ClearScratchpad(scratchpad));
+    }
+
+    [Fact]
+    public void A_scratchpad_not_known_yet_takes_two_long_CLRs()
+    {
+        // No screen read yet: it may hold anything, and a CLR on an empty scratchpad does nothing
+        // (2026-10-28), so the second long CLR is harmless.
+        Assert.Equal(
+            new[] { (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs), (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs) },
+            Bbs757CduKeys.ClearScratchpad(null));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("   \t ")]
+    public void An_empty_scratchpad_takes_one_DEL_at_the_ordinary_hold(string scratchpad)
+    {
+        // As the iFly's Alt+C: nothing to clear, so DEL (the CDU's delete mode).
+        Assert.Equal(
+            new[] { (Bbs757CduKeys.Del, CoherentBbs757TabletClient.KeyHoldMs) },
+            Bbs757CduKeys.ClearScratchpad(scratchpad));
+    }
+
+    [Fact]
+    public void The_long_CLR_hold_is_the_measured_1300_ms_and_within_what_the_client_allows()
+    {
+        Assert.Equal(1300, Bbs757CduKeys.ClearAllHoldMs);
+        Assert.InRange(Bbs757CduKeys.ClearAllHoldMs, CoherentBbs757TabletClient.MinHoldMs, CoherentBbs757TabletClient.MaxHoldMs);
+    }
+
+    // ---- Ctrl+Shift+L / Ctrl+Shift+R: select a side (plan 09) --------------------------------------
+
+    [Theory]
+    [InlineData(Keys.L | Keys.Control | Keys.Shift, 1)]
+    [InlineData(Keys.R | Keys.Control | Keys.Shift, 2)]
+    public void Ctrl_Shift_L_and_R_select_the_captains_and_first_officers_cdu(Keys keyData, int side)
+    {
+        Assert.Equal(side, Bbs757CduKeys.SideFor(keyData));
+    }
+
+    [Theory]
+    [InlineData(Keys.L)]
+    [InlineData(Keys.L | Keys.Control)]
+    [InlineData(Keys.L | Keys.Shift)]
+    [InlineData(Keys.L | Keys.Alt)]
+    [InlineData(Keys.L | Keys.Control | Keys.Shift | Keys.Alt)]
+    [InlineData(Keys.R | Keys.Control)]
+    [InlineData(Keys.R | Keys.Alt | Keys.Shift)]
+    [InlineData(Keys.R | Keys.Control | Keys.Alt)]
+    [InlineData(Keys.Tab | Keys.Control)]
+    [InlineData(Keys.T | Keys.Control | Keys.Shift)]
+    [InlineData(Keys.Control | Keys.Shift)]
+    public void Any_other_combination_selects_no_side(Keys keyData)
+    {
+        Assert.Null(Bbs757CduKeys.SideFor(keyData));
+    }
+
+    [Fact]
+    public void The_window_title_names_the_side()
+    {
+        Assert.Equal("BlueBird 757 CDU (Captain)", BBS757CduForm.TitleFor(1));
+        Assert.Equal("BlueBird 757 CDU (First officer)", BBS757CduForm.TitleFor(2));
     }
 }

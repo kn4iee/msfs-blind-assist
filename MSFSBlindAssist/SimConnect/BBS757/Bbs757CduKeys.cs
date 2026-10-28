@@ -83,6 +83,38 @@ public static class Bbs757CduKeys
         };
     }
 
+    /// <summary>
+    /// How long the long CLR of <see cref="ClearScratchpad"/> is held, in ms: the same 1300 the CDU page
+    /// service's wipe holds (<see cref="Bbs757CduPages.WipeScratchpadAsync"/>), within the client's 100-1500.
+    /// </summary>
+    public const int ClearAllHoldMs = 1300;
+
+    /// <summary>
+    /// What the window's Alt+C presses on a CDU whose scratchpad shows <paramref name="scratchpad"/> (null:
+    /// no screen read yet), as (key, hold ms) in order. With text, or unknown, two long CLRs
+    /// (<see cref="ClearAllHoldMs"/>): measured on 2026-10-26 (plan 08) one CLR held 1.3 s clears the whole
+    /// scratchpad 45 times in 60 and removes one character otherwise, while a second long CLR always clears
+    /// the rest; a CLR on an empty scratchpad does nothing (2026-10-28, flight 09), so the second is harmless.
+    /// With nothing in it, one DEL at the ordinary hold, as the iFly window's Alt+C. The window says nothing
+    /// itself: the scratchpad read-back says "Cleared" or "DELETE" ([CORE-7]). Pure.
+    /// </summary>
+    public static IReadOnlyList<(string Key, int HoldMs)> ClearScratchpad(string? scratchpad) =>
+        scratchpad != null && string.IsNullOrWhiteSpace(scratchpad)
+            ? new[] { (Del, CoherentBbs757TabletClient.KeyHoldMs) }
+            : new[] { (Clr, ClearAllHoldMs), (Clr, ClearAllHoldMs) };
+
+    /// <summary>
+    /// The CDU a side-select shortcut picks: 1 (the captain's) for Ctrl+Shift+L, 2 (the first officer's) for
+    /// Ctrl+Shift+R, null for any other key or modifier mix (Alt included). <paramref name="keyData"/> is the
+    /// key with its modifiers, as <c>KeyEventArgs.KeyData</c> gives it. Pure.
+    /// </summary>
+    public static int? SideFor(Keys keyData) => keyData switch
+    {
+        Keys.L | Keys.Control | Keys.Shift => 1,
+        Keys.R | Keys.Control | Keys.Shift => 2,
+        _ => null,
+    };
+
     /// <summary>The page key an Alt+letter presses (the HS787 window's letters, plus T ATC and M MENU), or null.</summary>
     public static string? ForAltLetter(Keys key) => key switch
     {
