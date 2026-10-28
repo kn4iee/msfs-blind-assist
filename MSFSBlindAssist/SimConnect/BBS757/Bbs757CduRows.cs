@@ -212,14 +212,20 @@ public sealed class Bbs757CduMessageWatch
 
     /// <summary>
     /// The captain's scratchpad as a push shows it: what to speak, or null. <paramref name="keysPending"/>
-    /// is whether the client still holds keys, which also extends the settle window to
-    /// <see cref="SettleMs"/> after this push. The text is remembered whether or not it is spoken, and a
-    /// message muted in Ctrl+M (<paramref name="muted"/>) is not spoken later either.
+    /// is whether the client still holds keys. It counts only while the window's own captain keys are in
+    /// their settle window (<see cref="KeysQueued"/>), and then it extends that window to
+    /// <see cref="SettleMs"/> after this push (the keys ran slower than the window estimated). The client has
+    /// one queue for both CDUs: the first officer's keys (the page service's reads, the window's keys on that
+    /// CDU) keep it above zero too, but they never touch the captain's scratchpad, so they must not hold a
+    /// message back (it would be recorded as the last text and never spoken) or add deafness. The text is
+    /// remembered whether or not it is spoken, and a message muted in Ctrl+M (<paramref name="muted"/>) is
+    /// not spoken later either.
     /// </summary>
     public string? OnScreen(string pad, bool keysPending, DateTime now, bool muted)
     {
-        if (keysPending) ExtendTo(now.AddMilliseconds(SettleMs));
-        string? say = Bbs757CduRows.NewMessage(_old, pad, keysPending || now < _busyUntil);
+        bool ownKeys = keysPending && now < _busyUntil;
+        if (ownKeys) ExtendTo(now.AddMilliseconds(SettleMs));
+        string? say = Bbs757CduRows.NewMessage(_old, pad, now < _busyUntil);
         _old = pad;
         return muted ? null : say;
     }

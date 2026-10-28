@@ -102,9 +102,9 @@ public partial class BBS757CduForm
         y += bh + sp + 6;
 
         btnExec      = MakeBtn("Exec",       "Execute (Alt+E)",       10,  y, 100, bh);
-        btnClr       = MakeBtn("CLR",        "CLR (Backspace)",       120, y, 100, bh);
+        btnClr       = MakeBtn("CLR",        "CLR (Backspace; Alt+C clears all)", 120, y, 100, bh);
         btnDel       = MakeBtn("DEL",        "DEL (Delete)",          230, y, 100, bh);
-        btnSwitchCdu = MakeBtn("Switch CDU", "Switch CDU (Ctrl+Tab)", 340, y, 120, bh);
+        btnSwitchCdu = MakeBtn("Switch CDU", "Switch CDU (Ctrl+Tab; Ctrl+Shift+L captain, Ctrl+Shift+R first officer)", 340, y, 120, bh);
         y += bh + sp + 6;
 
         // Its state is the Ctrl+M row's (checked = the row is ticked), refreshed each time the window is shown.

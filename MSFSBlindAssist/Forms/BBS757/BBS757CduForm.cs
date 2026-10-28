@@ -206,7 +206,10 @@ public partial class BBS757CduForm : Form
     /// <summary>
     /// Speaks what the hidden window's push of the captain's screen holds, if it is a CDU message
     /// (<see cref="Bbs757CduMessageWatch"/>): queued behind the screen reader's own speech, as any
-    /// background event is. A message muted in Ctrl+M is dropped, not kept for later.
+    /// background event is. A message muted in Ctrl+M is dropped, not kept for later. The client's pending
+    /// count is passed as it is: it covers both CDUs' keys (the page service's reads of the first officer's
+    /// CDU too), so the watch honours it only inside the settle window of this window's own captain keys
+    /// (<see cref="NoteKeysQueued"/>).
     /// </summary>
     private void SpeakCduMessage(Bbs757CduScreen screen)
     {
@@ -419,7 +422,7 @@ public partial class BBS757CduForm : Form
     /// already queued; a typed entry still being checked is then left to the ordinary scratchpad
     /// read-back (a line select key may take the entry out of the scratchpad), as on every other aircraft.
     /// </summary>
-    private void SendKey(string key) => SendKeys(new[] { (key, CoherentBbs757TabletClient.KeyHoldMs) });
+    private void SendKey(string key) => QueueKeys(new[] { (key, CoherentBbs757TabletClient.KeyHoldMs) });
 
     /// <summary>
     /// Alt+C: clears the selected CDU's scratchpad with <see cref="Bbs757CduKeys.ClearScratchpad"/> (two long
@@ -430,13 +433,13 @@ public partial class BBS757CduForm : Form
     /// "DELETE" once the keys have had their cycle ([CORE-7]).
     /// </summary>
     private void ClearScratchpad() =>
-        SendKeys(Bbs757CduKeys.ClearScratchpad(_screens[_cdu]?.Scratchpad, keysQueued: _client.PendingKeyCount > 0));
+        QueueKeys(Bbs757CduKeys.ClearScratchpad(_screens[_cdu]?.Scratchpad, keysQueued: _client.PendingKeyCount > 0));
 
     /// <summary>
     /// Queues these keys, each with its hold, for the selected CDU in one go: the refusal is said once
     /// whatever their number, and the typed-entry check ends once.
     /// </summary>
-    private void SendKeys(IReadOnlyList<(string Key, int HoldMs)> keys)
+    private void QueueKeys(IReadOnlyList<(string Key, int HoldMs)> keys)
     {
         if (!_client.IsReadable)
         {

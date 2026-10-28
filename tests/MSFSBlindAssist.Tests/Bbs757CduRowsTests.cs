@@ -452,8 +452,10 @@ public class Bbs757CduRowsTests
     [Fact]
     public void Typing_is_not_a_message()
     {
-        // Keys queued or in their cycle (the client still holds some): every push is mid-entry.
+        // The window queued "250" (it always tells the watch first) and the client still holds some of the
+        // keys: every push is mid-entry.
         var watch = Seeded("");
+        watch.KeysQueued(At(0), queuedMs: 3 * (Bbs757CduTyping.HoldMs + Bbs757CduTyping.GapMs));
         Assert.Null(watch.OnScreen("2", keysPending: true, At(1), muted: false));
         Assert.Null(watch.OnScreen("25", keysPending: true, At(2), muted: false));
         // The last key has gone out and the screen shows the whole entry: still the entry, not a message.
@@ -488,11 +490,28 @@ public class Bbs757CduRowsTests
     public void A_push_with_keys_pending_extends_the_settle_window()
     {
         var watch = Seeded("");
-        Assert.Null(watch.OnScreen("", keysPending: true, At(10), muted: false));   // keys queued, nothing landed yet
+        watch.KeysQueued(At(10), queuedMs: 0);   // the window's own keys: busy until 10 s + SettleMs
+        // The client still holds them 1.5 s on (slower than the window's estimate): busy until that push + SettleMs.
+        var lastPending = At(10) + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs - 500);
+        Assert.Null(watch.OnScreen("", keysPending: true, lastPending, muted: false));   // keys queued, nothing landed yet
 
         // The keys finished a moment later and the entry is all there; the push is inside SettleMs of the last pending one.
-        Assert.Null(watch.OnScreen("250", keysPending: false, At(10) + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs - 1), muted: false));
-        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", keysPending: false, At(10) + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs + 1), muted: false));
+        Assert.Null(watch.OnScreen("250", keysPending: false, lastPending + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs - 1), muted: false));
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", keysPending: false, lastPending + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs + 1), muted: false));
+    }
+
+    [Fact]
+    public void Keys_pending_for_the_first_officers_cdu_do_not_hold_back_a_captain_message()
+    {
+        // The client has one queue for both CDUs: the page service's reads (D, Shift+D, Ctrl+N) and the
+        // window's keys to the first officer's CDU keep PendingKeyCount above 0, but nothing the window
+        // queued for the captain's CDU is in flight (KeysQueued was never called). A message the FMC posts
+        // meanwhile is still a message, said once, and does not make the next one deaf.
+        var watch = Seeded("");
+        Assert.Equal("CDU: TAKEOFF DATA UPLINK", watch.OnScreen("TAKEOFF DATA UPLINK", keysPending: true, At(1), muted: false));
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", keysPending: true, At(2), muted: false));
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", keysPending: true, At(3), muted: false));
+        Assert.Equal("CDU: NOT IN DATABASE", watch.OnScreen("NOT IN DATABASE", keysPending: false, At(3.5), muted: false));
     }
 
     [Fact]
