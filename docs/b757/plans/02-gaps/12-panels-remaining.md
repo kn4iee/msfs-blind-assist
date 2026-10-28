@@ -149,6 +149,10 @@ name the test (User Procedures: "FIRE/OVHT - ENG", "FIRE/OVHT - ENG/APU/CARGO", 
   `B757_MAIN_L/R_AUTOLAND_1_BUTTON` Autoland Status Test 1, `_2_` Autoland Status Test 2, `_3_` Autoland Status Reset;
   `OXY_OBSV_TEST_SWITCH` First Observer Oxygen Test, `OXY_P61_TEST_SWITCH` Second Observer Oxygen Test;
   `B757_MAIN_TOCHK_BUTTON` Takeoff Config Check, and it leaves `hold_ms` (BlueBird: "press and release"), a plain button again.
+- Added later the same day (the owner): the Cockpit Door's positions (`B757_COCKPIT_DOOR`, Other > Flight deck door) read
+  Closed (0) and Open (1) instead of Off and On (BlueBird's XML: the door animation runs from 0 to 1, a disabled block names
+  0 closed and the full value open, and an open door on the ground lights the lock-fail light).
+- [ ] The door's positions: tests first, regenerate, commit `fix(b757): the cockpit door says closed or open`.
 - [x] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
 
 ### Task 7: The panels follow the cockpit (added 2026-10-28, the owner's decision)
