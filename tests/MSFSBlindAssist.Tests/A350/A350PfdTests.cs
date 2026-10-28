@@ -131,7 +131,32 @@ public class A350PfdTests
         Assert.Contains(loc, lines);
         Assert.Contains(gs, lines);
         Assert.Contains(ls, lines);
+        Assert.True(lines.ToList().IndexOf(ls) > lines.ToList().IndexOf(gs), "the LS block reads after the deviation");
         Assert.DoesNotContain(lines, l => l.StartsWith("IKW"));
+    }
+
+    // The ILS 12L at OMDB from the downwind (live 2026-10-28, LS on, LOC not armed, heading about 300): the LS
+    // block reads ident, frequency and DME as at VCBI ("The ILS identifier, frequency, and distance (DME) is
+    // indicated on the lower left of the PFD", manual p. 120), and the course pointer, off the heading scale,
+    // is a magenta number at the scale's left end. None of it is a speed: the speed tape's loop once took the
+    // frequency's "10", the course and the cyan "nm".
+    [Fact]
+    public void The_ls_block_and_an_off_scale_course_read_as_themselves()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_ls_downwind_omdb"), 0);
+        Assert.Contains("LS: IDBL 110.10, 3.0 NM, magenta", lines);
+        Assert.Contains("LS course: 119, magenta", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Speed target") || l.StartsWith("Selected speed"));
+    }
+
+    // Before its ident decodes the block shows the frequency and DME alone: still the LS block.
+    [Fact]
+    public void The_ls_block_reads_before_its_ident_is_drawn()
+    {
+        var cap = Fixture("efis0_ls_downwind_omdb");
+        var lines = A350Pfd.Read(cap with { Texts = cap.Texts.Where(t => t.Text != "IDBL").ToList() }, 0);
+        Assert.Contains("LS: 110.10, 3.0 NM, magenta", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("110."));
     }
 
     [Fact]

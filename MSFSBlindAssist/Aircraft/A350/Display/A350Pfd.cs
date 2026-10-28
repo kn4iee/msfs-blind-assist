@@ -141,9 +141,32 @@ public static class A350Pfd
             }
         }
 
+        // The LS block, lower left (LS on): ident (none until it decodes), frequency (drawn "109." and "90"), DME and
+        // its "nm", magenta; and the course pointer, a magenta number at the heading scale's end while off it. Taken
+        // before the speed tape, whose targets share the band; read after the deviation.
+        var ls = new List<string>();
+        var lsBlock = cells.Where(c => c.X < 140 && c.Y is >= 670 and < 760 && (c.Colour == "magenta" || c.Text.Trim() == "nm"))
+            .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();   // the heading scale's labels share the band, white
+        if (lsBlock.Any(c => c.Colour == "magenta"))
+        {
+            used.UnionWith(lsBlock);
+            var ident = lsBlock.FirstOrDefault(c => c.Colour == "magenta" && c.Text.Length > 0 && c.Text.All(char.IsLetter));
+            var rows = lsBlock.Where(c => c != ident && c.Text.Trim() != "nm").GroupBy(c => (int)MathF.Round(c.Y / 12)).OrderBy(g => g.Key)
+                .Select(g => string.Concat(g.OrderBy(c => c.X).Select(c => c.Text))).ToList();
+            string head = string.Join(" ", new[] { ident?.Text, rows.Count > 0 ? rows[0] : null }.Where(s => !string.IsNullOrEmpty(s)));
+            string dme = rows.Count > 1 ? $", {rows[1]} NM" : "";
+            ls.Add($"LS: {head}{dme}, magenta");
+        }
+        foreach (var c in cells.Where(c => !used.Contains(c) && c.Colour == "magenta" && c.Y is >= 725 and < 760 && c.X is >= 140 and < 600
+                     && c.Text.Length == 3 && c.Text.All(char.IsDigit)))
+        {
+            used.Add(c);
+            ls.Add($"LS course: {c.Text}, magenta");
+        }
+
         // The speed tape: its target while off the scale, magenta managed (the V2 before takeoff), cyan selected; V1 in
         // cyan under it.
-        foreach (var c in cells.Where(c => c.X < 250 && c.Y >= FmaBottom && c.Y < BottomLine
+        foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 250 && c.Y >= FmaBottom && c.Y < BottomLine
                      && (c.Colour == "cyan" || c.Colour == "magenta" && c.Text.Length > 0 && c.Text.All(char.IsDigit))))
         {
             used.Add(c);
@@ -184,18 +207,7 @@ public static class A350Pfd
         }
 
         o.AddRange(Deviation(capture, side));
-
-        // The LS block, lower left (LS on): ident, frequency (drawn "109." and "90"), DME and its "nm", magenta.
-        var lsBlock = cells.Where(c => c.X < 200 && c.Y is >= 670 and < 760 && (c.Colour == "magenta" || c.Text.Trim() == "nm"))
-            .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();   // the heading scale's labels share the band, white
-        if (lsBlock.FirstOrDefault(c => c.Colour == "magenta" && c.Text.All(char.IsLetter)) is { } ident)
-        {
-            used.UnionWith(lsBlock);
-            var rows = lsBlock.Where(c => c != ident && c.Text.Trim() != "nm").GroupBy(c => (int)MathF.Round(c.Y / 12)).OrderBy(g => g.Key)
-                .Select(g => string.Concat(g.OrderBy(c => c.X).Select(c => c.Text))).ToList();
-            string freq = rows.Count > 0 ? " " + rows[0] : "", dme = rows.Count > 1 ? $", {rows[1]} NM" : "";
-            o.Add($"LS: {ident.Text}{freq}{dme}, {ident.Colour}");
-        }
+        o.AddRange(ls);
 
         // The radio altitude, under the aircraft symbol.
         foreach (var c in cells.Where(c => Math.Abs(c.X - HeadingIndexX) <= 40 && c.Y is >= 540 and < 620 && c.Text.All(ch => char.IsDigit(ch) || ch == '-')))
