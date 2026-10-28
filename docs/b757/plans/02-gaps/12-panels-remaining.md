@@ -152,7 +152,7 @@ name the test (User Procedures: "FIRE/OVHT - ENG", "FIRE/OVHT - ENG/APU/CARGO", 
 - Added later the same day (the owner): the Cockpit Door's positions (`B757_COCKPIT_DOOR`, Other > Flight deck door) read
   Closed (0) and Open (1) instead of Off and On (BlueBird's XML: the door animation runs from 0 to 1, a disabled block names
   0 closed and the full value open, and an open door on the ground lights the lock-fail light).
-- [ ] The door's positions: tests first, regenerate, commit `fix(b757): the cockpit door says closed or open`.
+- [x] The door's positions: tests first, regenerate, commit `fix(b757): the cockpit door says closed or open`.
 - [x] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
 
 ### Task 7: The panels follow the cockpit (added 2026-10-28, the owner's decision)
@@ -181,7 +181,7 @@ a clearer label), the map, `test_generate_b757_map.py`, `Bbs757ControlMapTests.c
   (Pedestal, at the aft aisle stand); the alternate stab trim buttons stay in Stabilizer trim.
 - Code that names panels by string keeps working: no panel it names is renamed (`TransponderPanel`, `McpPanel`,
   `EnginesPanel`, `GroundPowerPanel` "Electrical", `ElectricalPanel`, `PressurizationPanel`, P61 panel).
-- [ ] Tests first, then curation, regenerate, full suite, commit `feat(b757): the panels follow the cockpit`.
+- [x] Tests first, then curation, regenerate, full suite, commit `feat(b757): the panels follow the cockpit`.
 
 ### Task 8: Only the loaded engine type's controls (added 2026-10-28, the owner's decision)
 
@@ -201,7 +201,7 @@ tests `Bbs757ControlMapTests.cs` and a new `Bbs757VariantTests.cs`.
   right; nothing else (variables, writes) changes. Right after a fresh connection the profile has no title until the
   first panel is built, so a PW's first section list can still name the RR-only panel: a MainForm call at connect and
   switch (as the MD-11's `Attach`) would close that, outside plan 12's files (handoff).
-- [ ] Tests first (the title parsing, the filter, an unknown variant showing all, a change of variant), full suite,
+- [x] Tests first (the title parsing, the filter, an unknown variant showing all, a change of variant), full suite,
   commit `feat(b757): the panels show the loaded engine type's controls only`.
 
 ### Task 9: The panel lists follow the preflight flow (added 2026-10-28, the owner's instruction)
@@ -216,15 +216,16 @@ preflight flow; Task 7's split panels took their source's place in cockpit order
 - The Pedestal keeps its start (Control stand, Engines, TCAS and transponder), which plan 01's frozen test pins.
 - The derivation (each panel's first mention, page and line, with the quoted words) is a script in this plan's
   workspace, and its table goes into `docs/b757/evidence/panel-order-12.md` as a short section.
-- [ ] Tests first, regenerate, full suite, commit `feat(b757): the panel lists follow the preflight flow`.
+- [x] Tests first, regenerate, full suite, commit `feat(b757): the panel lists follow the preflight flow`.
 
 ## In-sim checks (owner)
 
-1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Forward panel > Display brightness, Captain PFD to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Tab through Electrical, Exterior lights and MCP: the every-day controls come first (Electrical: Battery, EXT PWR, …).
-2. Pedestal > Stabilizer trim: the status display reads Rudder Trim "centered". Press "Right Rudder Trim 1 s": "Rudder trim 0.9 units right" (about); "Left Rudder Trim 1 s" brings it back. With no hydraulic pressure, "Nose Up Stab Trim 1 s" says "Stab trim did not move"; with C1 ELEC Pump on, it moves and the trim call-out says "Trim …".
+1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Pedestal > Captain EFIS, PFD Brightness to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Each section's panel list opens with its first panel of the day (Overhead: Electrical; Glareshield: MCP; Forward panel: Brakes; Pedestal: Control stand), and inside a panel the every-day controls come first (Electrical: Battery, EXT PWR, …). On the RR, Pedestal > Engines lists only the RR fuel control switches.
+2. Pedestal > Rudder and aileron trim: the status display reads Rudder Trim "centered". Press "Right Rudder Trim 1 s": "Rudder trim 0.9 units right" (about); "Left Rudder Trim 1 s" brings it back. Pedestal > Stabilizer trim: with no hydraulic pressure, "Nose Up Stab Trim 1 s" says "Stab trim did not move"; with C1 ELEC Pump on, it moves and the trim call-out says "Trim …".
 3. Overhead > Pressurization with Mode Select AUTO 1: "Climb Cabin 1 s" says "Set the pressurization mode to MAN first". Mode Select MAN: "Descend Cabin 1 s" says "Outflow valve 90 percent open" (about), "Climb Cabin 1 s" opens it again; Mode Select back to AUTO 1.
-4. In cruise (about 350 kt), with hydraulics: "Nose Up Stab Trim 1 s" is heard (the trim call-out's "Trim …"); if nothing at all is said, note it (the final review's open question: a small move the call-out keys past).
-5. The sweep: owner present, on the ground, engines off, APU running; run `tools/b757-gen/PanelSweep` (its README) once and attach the TSV's failures to the handoff below.
+4. The cockpit tests on the ground: Fire protection > Engine Fire Test (held 3 s: the bell and the engine fire lights; Glareshield > Master warning and caution clears the bell), Overhead > Indicator lights and door lock > Lamp Test ("Lamp test on", again "Lamp test off"), P61 panel > Takeoff Config Test 3 s, Ground Proximity Test 3 s and Left Stall Warning Test 3 s ("… done"; the warning, GPWS voice or stick shaker while it holds), the other P61 tests and the Radio Test, Oxygen, TCAS and Autoland Status tests once each (what each shows; whether the Radio Test lets go). Other > Flight deck door > Cockpit Door to Open, then Closed.
+5. In cruise (about 350 kt), with hydraulics: "Nose Up Stab Trim 1 s" is heard (the trim call-out's "Trim …"); if nothing at all is said, note it (the final review's open question: a small move the call-out keys past).
+6. The sweep: owner present, on the ground, engines off, APU running; run `tools/b757-gen/PanelSweep` (its README) once and attach the TSV's failures to the handoff below.
 
 ## Handoff to plan 16
 
@@ -241,13 +242,13 @@ preflight flow; Task 7's split panels took their source's place in cockpit order
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed on `B757` (2026-10-28, pushed at the owner's word before the ground tests); waiting on the owner: the ground tests of Task 5, in-sim checks 1-5, then a whole-branch review of Task 5 (held by the owner until the ground tests)
+- **Status:** Tasks 0-5 landed on `B757` (2026-10-28, pushed at the owner's word before the ground tests); Tasks 6-9 done on the branch, not yet pushed; waiting on the owner: the ground tests of Task 5, in-sim checks 1-5, then a whole-branch review of Task 5 (held by the owner until the ground tests)
 - **Claimed by:** kn4iee (the owner), 2026-10-28
 - **Worked by:** kn4iee (the owner) with Claude, with subagents (superpowers:subagent-driven-development: an implementer and a reviewer per task, a whole-branch review and one fix wave)
 - **Started:** 2026-10-28; branched from `B757` at f12d85afa (rebased onto 73a0ab42f, plan 10's First Officer, the same day)
 - **Landed:** 2026-10-28; the last code commit bd815b0a4, the record in the commit that carries this line
 - **Tests at landing:** full suite 18,600 passed, 0 failed; generator 267 OK (2026-10-28, on `B757` 73a0ab42f, nothing newer to rebase onto)
-- **Tasks:** 0-5 done (Tasks 4 and 5 added by the owner's instructions). Task 2's live run waits on the owner (in-sim check 5); its dry run covers all 409 controls. Tasks 1-4 had a whole-branch review and one fix wave; Task 5 had its task reviews (5a approved; 5b approved after one fix round), its whole-branch review waits for the ground tests.
+- **Tasks:** 0-9 done (Tasks 4-9 added by the owner's instructions; 6-9 after the first push). Task 2's live run waits on the owner (in-sim check 5); its dry run covers all 409 controls. Tasks 1-4 had a whole-branch review and one fix wave; Task 5 had its task reviews (5a approved; 5b approved after one fix round), its whole-branch review waits for the ground tests.
 - **Waiting on the owner:** on the ground: the tests that showed nothing in flight (takeoff config, ground proximity, air data, equipment cooling, yaw damper, duct leak and fuel quantity, wing anti-ice and probe heat, the autoland status, takeoff check, oxygen and TCAS tests), whether the radio panel tests release (their release writes only an `O:` var), the P61 buttons and the lamp test in the app; in-sim checks 1-5 (check 5 is the sweep's first live run).
 - **In-sim results:** Task 3 Step 1 measured 2026-10-28 on the ground through the simconnect MCP (`flight-12.md`), with the brightness, zone temperature, auto rate and DDRMI reads; the cockpit tests measured in flight the same day (fire, cargo and wheel well fire tests, the master warning and caution buttons, the P61 tests held by re-writing, the CVR, squib and lamp tests); the in-app checks: none run.
 - **Changed from the plan:**
@@ -256,6 +257,10 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   - Task 3: cabin climb writes 7 (the cockpit's click value; only the side of 4 counts) and the hold is re-written every 500 ms (the XML returns an outside write to 4 within a second); the release is read back 250 ms after each write and resent (3 writes), then retried in the background every 2 s for a minute; the readouts are the rudder trim indicator (units), the yoke (aileron trim, direction only: no units exist), the stab trim's existing call-out (the press says only "Stab trim did not move", or the trim when the call-out is muted or off) and the outflow valve (percent); the labels put the side first (VAR-1); 15 variables, not 8 (the press reads 7 vars fresh), and status rows for the rudder trim, aileron trim and outflow valve (added by the final review: a blind pilot could read them only by moving them); `Bbs757LandingAltitudeTests.cs` (plan 03's, done): its panel-control asserts loosened to their intent (the field first, Mode Select second), its display-list asserts kept exact with the Outflow Valve row added.
   - Task 4 (added): the owner asked for every-day items first in Tab order; `docs/b757/evidence/panel-order-12.md` (new) holds the research and its citations.
   - Task 5 (added): the owner asked for the cockpit tests to be tried in the sim and the panels revised; 20 test buttons are held 3 s (curation `hold_ms`, a new key; the plan's count of 19 was a miscount), the eight P61 test switches left the map for 16 buttons that re-write the test position every 30 ms for 3 s of real time (the P61 switches return to neutral at once, measured), and the lamp test says whether it is on; the master warning and caution buttons were measured working and left as they are. Known gap for the Task 5 review: if speaking the "did not return" warning throws, the background release retry does not start (`BBS757Definition.Overhead.cs`, from Task 3).
+  - Task 6 (added): the cockpit tests' labels from BlueBird's procedure names (Engine Fire Test, Engine, APU and Cargo Fire Test, Wheel Well Fire Test, Squib Test, Lamp Test, TCAS Test, Weather Radar Test, Radio Test, Autoland Status Test 1/2 and Reset, First/Second Observer Oxygen Test), the T/O CHK button a plain press again (Takeoff Config Check: BlueBird "press and release"), and the Cockpit Door's positions Closed/Open (BlueBird's XML).
+  - Task 7 (added): the panels follow the cockpit (`docs/b757/evidence/panel-audit-12.md`: every node placed by its 3D position; 55 panels became 63; the made-up panels Main panel switches, Overhead miscellaneous, Switch guards, Cockpit miscellaneous and Display brightness are gone, each guard with its switch, the brightness knobs on their real panels, the trims' buttons and readouts in a new Rudder and aileron trim panel); the fire tests stay with the fire handles (the owner).
+  - Task 8 (added): only the loaded engine type's controls show (the title's PW/RR; the owner approved changing plan 01's frozen `BBS757Definition.cs`); right after a fresh connection a PW's first section list can still name the RR-only panel until a panel is built (handoff: a MainForm call at connect, as the MD-11's `Attach`).
+  - Task 9 (added): each section's panel list follows the Simplified Procedures' first CHANGE of one of its controls (the owner: "Actions only"; checks, confirmations, optional and resting-position steps do not count, radio tuning does), the Forward panel pinned to open with Brakes (the owner) and the Pedestal's start pinned by plan 01's frozen test; the derivation table in `panel-order-12.md`.
 - **Rulings made while working (Claude, under the owner's go-ahead to run the plan; each the owner's to reverse):**
   - Measuring Task 3 Step 1 with the MCP was the owner's go-ahead ("use the simconnect mcp server … coherent debugger"), the controller ran it; everything touched was put back (residual trims under 0.2 units).
   - The tasks ran in the order 2, 1, 4, 3 (Task 1 waited on the package research).
