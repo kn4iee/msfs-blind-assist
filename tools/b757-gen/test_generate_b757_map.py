@@ -3933,30 +3933,32 @@ class Curation(unittest.TestCase):
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change. Plan 12
-    # task 9 (the owner: "reorder") orders each section's panels by where BlueBird's Simplified Procedures (User Procedures
-    # PDF pages 34-62, cold and dark to securing) first act on or check one of the panel's controls, page then line; a
-    # panel the flow never touches follows, in Task 7's order. The Pedestal keeps its start, Control stand, Engines, TCAS
-    # and transponder (plan 01's frozen Bbs757DefinitionTests). Each panel's first mention, page, line and words:
-    # docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
+    # task 9 (the owner: "reorder", then "Actions only") orders each section's panels by the first step of BlueBird's
+    # Simplified Procedures (User Procedures PDF pages 34-62, cold and dark to securing) that moves or presses one of the
+    # panel's controls, page then line; a step that only checks a position (the whole cockpit safety inspection, any CHECK,
+    # VERIFY, CONFIRM or CHECKED step) does not count, and a panel no step acts on follows, in Task 7's order. The Pedestal
+    # keeps its start, Control stand, Engines, TCAS and transponder (plan 01's frozen Bbs757DefinitionTests). Each panel's
+    # first action, page, line and words: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
     PANEL_ORDER = {
-        # 34:22 electric hydraulic switches OFF and 34:28 anti-collision light OFF (the safety inspection), then power-up
-        "Overhead": ["Hydraulics", "Exterior lights", "Electrical", "APU", "IRS", "Electronic engine control (RR)",
-                     "Yaw dampers", "CVR", "Panel lighting", "Emergency lights and passenger oxygen",
-                     "Ram air turbine and engine limiters", "Fuel", "Anti-ice", "Wipers", "Window heat", "Passenger signs",
-                     "Pressurization", "Equipment cooling", "Air conditioning and bleed", "Indicator lights and door lock",
-                     "SELCAL and cabin call"],
-        # 40:10 VOR / DME selection, 40:13 flight director switches; the master warning and caution: not in the flow
+        # 35:10 battery ON at power-up; the door lock panel is only checked (46:24), so it goes last
+        "Overhead": ["Electrical", "APU", "IRS", "Electronic engine control (RR)", "Yaw dampers", "Hydraulics", "CVR",
+                     "Panel lighting", "Emergency lights and passenger oxygen", "Ram air turbine and engine limiters",
+                     "Fuel", "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
+                     "Equipment cooling", "Air conditioning and bleed", "SELCAL and cabin call",
+                     "Indicator lights and door lock"],
+        # 40:10 VOR / DME selection as required, 40:13 flight director switches ON; the master warning and caution: never
         "Glareshield": ["VOR/DME", "MCP", "Master warning and caution"],
-        "Forward panel": ["Landing gear", "Alternate flaps", "Captain foot and shoulder heat",
-                          "First officer foot and shoulder heat", "Captain instrument source selectors",
-                          "First officer instrument source selectors", "Captain autoland status",
-                          "First officer autoland status", "Standby instruments", "Brakes", "Heading reference",
-                          "Thrust mode select", "Ground proximity overrides", "Caution, config and G/S inhibit", "Yokes",
-                          "Captain DDRMI", "Captain chronometer", "First officer DDRMI", "First officer chronometer"],
+        # 40:20 foot / shoulder heat as required, 40:21 instrument sources NORMAL, then the main panel (41:18 on)
+        "Forward panel": ["Captain foot and shoulder heat", "First officer foot and shoulder heat",
+                          "Captain instrument source selectors", "First officer instrument source selectors",
+                          "Standby instruments", "Brakes", "Heading reference", "Ground proximity overrides",
+                          "Caution, config and G/S inhibit", "Landing gear", "Thrust mode select", "Alternate flaps",
+                          "Yokes", "Captain autoland status", "Captain DDRMI", "Captain chronometer",
+                          "First officer autoland status", "First officer DDRMI", "First officer chronometer"],
         # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
-        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Stabilizer trim",
-                     "Captain EFIS", "First officer EFIS", "Weather radar", "Radio tuning panel 1", "Audio panel 1",
-                     "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "Fire protection", "ILS tuning",
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Captain EFIS",
+                     "First officer EFIS", "Weather radar", "Radio tuning panel 1", "Audio panel 1", "Radio tuning panel 2",
+                     "Radio tuning panel 3", "Audio panel 2", "ILS tuning", "Fire protection", "Stabilizer trim",
                      "CDU brightness"],
         "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
     }

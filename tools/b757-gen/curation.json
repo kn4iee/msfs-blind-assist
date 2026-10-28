@@ -71,7 +71,7 @@
     "PLAN 12 TASK 6 (2026-10-28): the owner's instruction, 'The tests are not clearly labeled': the test buttons say what they test. Under labels: B757_PED_FIRE_ENG_BUTTON Engine Fire Test, B757_PED_FIRE_CARGO_BUTTON Engine, APU and Cargo Fire Test, B757_PED_FIRE_WHLWELL_BUTTON Wheel Well Fire Test, B757_P6_SQUIBS_BUTTON2 Squib Test, B757_OVHD_WARNING_TEST_BUTTON Lamp Test, B757_PED_TCAS_MODE_KNOB_TEST_CLICK TCAS Test, B757_PED_WX_L_TEST_BUTTON Weather Radar Test, B757_PED_NAV_1_TEST_BUTTON, B757_PED_NAV_2_TEST_BUTTON and B757_PED_NAV_3_TEST_BUTTON Radio Test (one to each of the three radio tuning panels, so no panel has two), B757_MAIN_L_AUTOLAND_1_BUTTON and B757_MAIN_R_AUTOLAND_1_BUTTON Autoland Status Test 1, B757_MAIN_L_AUTOLAND_2_BUTTON and B757_MAIN_R_AUTOLAND_2_BUTTON Autoland Status Test 2, B757_MAIN_L_AUTOLAND_3_BUTTON and B757_MAIN_R_AUTOLAND_3_BUTTON Autoland Status Reset (each pair on its own side's panel), OXY_OBSV_TEST_SWITCH First Observer Oxygen Test, OXY_P61_TEST_SWITCH Second Observer Oxygen Test, B757_MAIN_TOCHK_BUTTON Takeoff Config Check. Sources: BlueBird's User Procedures name the fire tests ('FIRE/OVHT - ENG', 'FIRE/OVHT - ENG/APU/CARGO', 'FIRE/OVHT - WHL WELL'), the squib test ('SQUIB TEST'), the autoland status tests ('ASA TEST 1 ... TEST 2') and the takeoff configuration check ('Press the CONFIG (T/O CHK) button near RECALL'). The others are named by what they do: the lamp test lights the overhead fault lights, the IRS lights and the radio panels' lights until it is pressed again (measured in flight, docs/b757/evidence/flight-12.md), and docs/b757/evidence/panel-order-12.md calls the rest the TCAS test, the radar test and the radio test and names the two observer oxygen tests' masks 'observer 1' and 'observer 2'. The captain's and first officer's oxygen tests, the CVR test and the ILS test already said what they test and keep their labels. B757_MAIN_TOCHK_BUTTON also leaves hold_ms: BlueBird's procedure is a press and release, and in flight the button changed nothing but its own var (flight-12.md), so nothing shows that a hold gives more; it is a plain button again, as the rules built it, which the app presses for 200 ms. The app finds the lamp test by its node, so its speech now reads 'Lamp Test pressed' when the lamp state cannot be read.",
     "PLAN 12 TASK 7 (2026-10-28): the owner asked whether the panels put each control where it is in the cockpit or are made up, and chose 'follow the cockpit', with the brightness knobs on their real panels and the fire and overheat tests kept with the fire handles. Evidence: docs/b757/evidence/panel-audit-12.md places every map node by its 3D position in BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf and names the panels from BlueBird's Flight Guide pictures (p.33A-33E, 102-104); it found 34 of 55 panels real, 7 sensible groupings (kept: Engines, Electrical, Air conditioning and bleed, Exterior lights, VOR/DME, Master warning and caution, Yokes) and the rest code buckets of the vendor's file or misplaced. panels, node_panels, panel_order and control_order now give its Proposed structure, 63 panels: Main panel switches splits into the forward panel's own panels (foot and shoulder heat and instrument source selectors each side, Caution, config and G/S inhibit, Brakes, Heading reference, Thrust mode select, Alternate flaps, Ground proximity overrides; the alternate gear switch and its guard join Landing gear, Stdby EICAS joins the standby gyro in Standby instruments); Overhead miscellaneous splits into Panel lighting, Emergency lights and passenger oxygen, and Ram air turbine and engine limiters; Engine control and yaw damper into Electronic engine control (RR) and Yaw dampers; Switch guards goes, each guard on its switch's panel; Equip leaves Pressurization for Equipment cooling; IRS takes in IRS keypad, Weather radar the left and right panels, Indicator lights and door lock the Warning lights test and the door lock switch; the first officer's glareshield CLOCK switch moves to the First officer chronometer; Captain EFIS and First officer EFIS move to the Pedestal and take their PFD and ND Brightness knobs, EICAS control its Upper and Lower EICAS Brightness, and the two CDU knobs are the Pedestal's CDU brightness pair (Display brightness goes); Oxygen (the four mask boxes), Flight deck door (the door itself, was Cockpit miscellaneous) and Forward attendant panel (Cabin lights and Ground service, by door 1L) are under Other; Pedestal radio panels is ILS tuning. The fire and overheat tests stay in Fire protection (the owner's answer), in Task 4's order: the tests first, then the fire handles and the cargo fire controls. panel_order keeps the every-day order it had (ruling R37; the owner's instruction was about the order inside a panel): a panel that stays keeps its place, a renamed one (ILS tuning, Standby instruments) takes the old one's, the parts of a split panel take the place of the panel they came from, among themselves in the audit's cockpit order (Main panel switches, Overhead miscellaneous, Engine control and yaw damper), a merged one the place of the first of its sources (Weather radar, Indicator lights and door lock), Equipment cooling follows Pressurization; the panels that change section go where the controller placed them: both EFIS panels right after TCAS and transponder, CDU brightness right after EICAS control, Oxygen, Flight deck door and Forward attendant panel after P61 panel. Order inside a panel keeps plan 12 task 4's every-day-first rule: by Task 4's tier (1 every flight, 2 set once, tests and display options, 3 non-normal and maintenance); within a tier Task 4's order where the controls shared a panel and the audit's listing otherwise; each guard just before the switch it covers, the emergency lights guard just after. A panel whose controls did not change keeps its entry; every new or changed panel of two or more controls lists every control. The orders were derived by script from the audit and Task 4's research, not typed. No position, kind or click code changed; the only labels that changed are the six brightness knobs' (PFD Brightness, ND Brightness, Upper EICAS Brightness, Lower EICAS Brightness). The app's rudder and aileron trim buttons and readouts are not nodes: the app puts them on a Rudder and aileron trim panel of its own after Stabilizer trim (Bbs757SpringControls).",
     "PLAN 12 TASK 6, added later the same day (2026-10-28, the owner): B757_COCKPIT_DOOR (label Cockpit Door, Other > Flight deck door), the door itself, a toggle on L:B757_COCKPIT_DOOR, reads 0 Closed and 1 Open (positions), no longer Off and On. Read from BBS_752_BASE_INTERIOR.xml (component B757_COCKPIT_DOOR, XML:32000-32047), unmeasured in the sim: the door's animation is '(L:B757_COCKPIT_DOOR, bool) 100 *' (XML:32038), so 0 is the door shut and 1 the full swing; a disabled update block (XML:32006-32009) names the two ends, B757_COCKPIT_DOOR_CLOSED at 0 and B757_COCKPIT_DOOR_OPEN at 100 (the full value); and the live update lights B757_DECAL_LOCK_FAIL while the door reads above 0 on the ground with power (XML:32002-32004), which an open door does. The click flips the var (XML:32040-32045) and writes nothing else but O:vars, so the positions are its two values. Not to be confused with B757_OVHD_FLT-DK-DOOR_SWITCH, the overhead door lock switch (Unlocked, Auto, Deny), which keeps its positions.",
-    "PLAN 12 TASK 9 (2026-10-28, the owner: 'reorder'): panel_order follows the preflight flow, replacing the order plan 12 task 7 kept. Each section's panels are in the order BlueBird's Simplified Procedures (BlueBird_757_User_Procedures_v1.01.pdf, PDF pages 34-62, cold and dark to securing) first act on or check one of the panel's controls, by PDF page and then line; panels first named on the same line, and the panels the flow never names, keep task 7's order, the latter after the rest (Master warning and caution; Yokes, the two DDRMIs and the two chronometers; CDU brightness; Forward attendant panel). The Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen Bbs757DefinitionTests pins. The derivation (a script in the plan's workspace) and its table, each panel's first page, line and words: docs/b757/evidence/panel-order-12.md, 'Plan 12 Task 9'. Only panel_order changed: no control, label or position, and the order inside each panel stays as control_order gives it. The app's own panels keep their places by their code: Rudder and aileron trim right after Stabilizer trim, the COM radios right after TCAS and transponder."
+    "PLAN 12 TASK 9 (2026-10-28, the owner: 'reorder', then the owner's rule 'Actions only'): panel_order follows the preflight flow's actions, replacing the order plan 12 task 7 kept. Each section's panels are in the order of the first step of BlueBird's Simplified Procedures (BlueBird_757_User_Procedures_v1.01.pdf, PDF pages 34-62, cold and dark to securing) that MOVES or PRESSES one of the panel's controls (sets it to a position, turns it, presses a button or a test), by PDF page and then line. A step that only checks or verifies a position does not count: the whole cockpit safety inspection (PDF page 34) and any CHECK, VERIFY, CONFIRM or CHECKED step elsewhere (a test pressed inside such a step, 'Push and hold TEST', does count). Panels first acted on in the same line, and the panels no step acts on, keep task 7's order, the latter after the rest (Indicator lights and door lock; Master warning and caution; Thrust mode select, Alternate flaps, Yokes, both autoland status panels, both DDRMIs and both chronometers; CDU brightness; Forward attendant panel). The Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen Bbs757DefinitionTests pins. The derivation (a script in the plan's workspace) and its table, each panel's first action with its page, line and words and the checks before it that do not count: docs/b757/evidence/panel-order-12.md, 'Plan 12 Task 9'. Only panel_order changed: no control, label or position, and the order inside each panel stays as control_order gives it. The app's own panels keep their places by their code: Rudder and aileron trim right after Stabilizer trim, the COM radios right after TCAS and transponder."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -666,13 +666,12 @@
   ],
   "panel_order": {
     "Overhead": [
-      "Hydraulics",
-      "Exterior lights",
       "Electrical",
       "APU",
       "IRS",
       "Electronic engine control (RR)",
       "Yaw dampers",
+      "Hydraulics",
       "CVR",
       "Panel lighting",
       "Emergency lights and passenger oxygen",
@@ -680,13 +679,14 @@
       "Fuel",
       "Anti-ice",
       "Wipers",
+      "Exterior lights",
       "Window heat",
       "Passenger signs",
       "Pressurization",
       "Equipment cooling",
       "Air conditioning and bleed",
-      "Indicator lights and door lock",
-      "SELCAL and cabin call"
+      "SELCAL and cabin call",
+      "Indicator lights and door lock"
     ],
     "Glareshield": [
       "VOR/DME",
@@ -694,23 +694,23 @@
       "Master warning and caution"
     ],
     "Forward panel": [
-      "Landing gear",
-      "Alternate flaps",
       "Captain foot and shoulder heat",
       "First officer foot and shoulder heat",
       "Captain instrument source selectors",
       "First officer instrument source selectors",
-      "Captain autoland status",
-      "First officer autoland status",
       "Standby instruments",
       "Brakes",
       "Heading reference",
-      "Thrust mode select",
       "Ground proximity overrides",
       "Caution, config and G/S inhibit",
+      "Landing gear",
+      "Thrust mode select",
+      "Alternate flaps",
       "Yokes",
+      "Captain autoland status",
       "Captain DDRMI",
       "Captain chronometer",
+      "First officer autoland status",
       "First officer DDRMI",
       "First officer chronometer"
     ],
@@ -719,7 +719,6 @@
       "Engines",
       "TCAS and transponder",
       "EICAS control",
-      "Stabilizer trim",
       "Captain EFIS",
       "First officer EFIS",
       "Weather radar",
@@ -728,8 +727,9 @@
       "Radio tuning panel 2",
       "Radio tuning panel 3",
       "Audio panel 2",
-      "Fire protection",
       "ILS tuning",
+      "Fire protection",
+      "Stabilizer trim",
       "CDU brightness"
     ],
     "Other": [

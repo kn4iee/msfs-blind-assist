@@ -809,103 +809,116 @@ Two labels mislead although their meaning is established: EICAS L Status is the 
 the STATUS page button (from their click code); the vendor component names make "O2 Ears Observer" observer 2, not
 observer 1 (it belongs with the P61 test).
 
-## Plan 12 Task 9: the panel lists follow the preflight flow
+## Plan 12 Task 9: the panel lists follow the preflight flow's actions
 
-The owner (2026-10-28): "reorder". Each section's panels (`panel_order`) are now in the order BlueBird's Simplified Procedures (UP 34-62, cold and dark to final securing) first act on or check one of the panel's controls: by PDF page, then by line on that page. The line is the line of that page's `pdftotext -f n -l n -layout` text. A procedure line counts for a panel when its words name one of the panel's controls as the manual writes them ("BATTERY SWITCH", "AUTOBRAKE SELECTOR", "IRS SELECTORS"). Panels first named on the same line keep their Task 7 order, and so do the panels the flow never names, which follow the rest. The Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen `Bbs757DefinitionTests` pins; the rest of the Pedestal follows the flow. The app's own panels are not in `panel_order` and keep their places by their code: Rudder and aileron trim right after Stabilizer trim, the COM radios right after TCAS and transponder. Only the order of the panels moved: no control, label or position changed, and the order inside each panel is the one above.
+The owner (2026-10-28) said "reorder", then gave the rule: "Actions only". Each section's panels (`panel_order`) are now in the order of the first step of BlueBird's Simplified Procedures (UP 34-62, cold and dark to final securing) that moves or presses one of the panel's controls: it sets the control to a position, turns it, or presses a button or a test. The key is the PDF page, then the line on that page, as that page's `pdftotext -f n -l n -layout` text numbers it.
 
-The derivation is `flow_order.py` in the plan 12 workspace. It lists every pattern it tries per panel, and it checks that the shipped `panel_order` matches. Judgment calls in it:
+A step that only checks or verifies a position does not count. That covers the whole cockpit safety inspection (UP 34) and any CHECK, VERIFY, CONFIRM or CHECKED step elsewhere. A test the manual says to press inside such a step does count ("SQUIB TEST ... HOLD / CHECK", "Press and hold the WHL WELL test button").
 
-- Checks count, so the cockpit safety inspection (UP 34) puts Hydraulics ("ELECTRIC HYDRAULIC SWITCHES ... OFF") and Exterior lights ("ANTI-COLLISION LIGHT ... OFF") ahead of Electrical on the Overhead, and Landing gear and Alternate flaps first on the Forward panel.
-- EICAS control is first named at 36:21, "Use lower EICAS STATUS": that page is shown with the panel's STATUS button (EICAS R Status). Its own item, "EICAS CONTROL PANEL ... SET", comes later (41:33).
-- "VHF / AUDIO / ADF ... SET AS REQUIRED" (42:18) counts for all three radio tuning panels and both audio panels, which then keep their Task 7 order among themselves.
-- Thrust mode select counts at 41:21, "THRUST REFERENCE ... VERIFY GREEN "TO"": that is the mode its TO/GA button selects. Stabilizer trim counts at 41:25, the alternate stab trim switches, which the app puts on that panel (the cutouts follow at 41:26). ILS tuning counts at 42:27, "ILS ... SET OR PARKED AS REQUIRED": the ILS panel's tuning knobs, which the map leaves out (infinite knobs).
-- Indicator lights and door lock counts at 46:24, the flight deck door switch's LOCK light. The flow never names the lamp test or the DIM/BRT switch: "OVERHEAD LIGHTING ... AS REQUIRED" (38:32) is not counted for them, or the panel would move up to after CVR.
-- Not in the flow: Master warning and caution, Yokes, both DDRMIs, both chronometers, CDU brightness, Forward attendant panel. "CREW OXYGEN PRESSURE" (36:23) is read on the EICAS, so Oxygen counts at the masks' test (40:16).
+A step counts for a panel when its words name one of the panel's controls as the manual writes them ("BATTERY SWITCH", "AUTOBRAKE SELECTOR"). Panels first acted on in the same line keep their Task 7 order. The panels no step acts on follow the rest, also in their Task 7 order.
+
+The Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen `Bbs757DefinitionTests` pins. The rest of the Pedestal follows the flow. The app's own panels are not in `panel_order` and keep their places by their code: Rudder and aileron trim right after Stabilizer trim, and the COM radios right after TCAS and transponder. Only the order of the panels moved: no control, label or position changed, and the order inside each panel is the one above.
+
+The derivation is `flow_order.py` in the plan 12 workspace. For every line one of a panel's patterns matches, it decides whether the line is an action or a check:
+
+- **Item lines:** an item is an action when a part of its response, split at "/", sets or does something. It is a check when every part only checks, or names a state the step cannot set: "GUARDED AND DARK", "GUARDED CLOSED", "IN, NOT ROTATED", "NEUTRAL" (a spring-loaded switch).
+- **Description lines:** a description clause is an action when it starts with an action verb (Press, Push, Set ...) and a check when it starts with a check verb (Verify, Check ...). Otherwise it is what its step is.
+
+The script prints the checks before each counted action, which the last column below gives. It also checks that the shipped `panel_order` matches. Judgment calls in it:
+
+- A response that names a setting counts as setting it, also when the setting is the normal one or "AS REQUIRED". That is why the Forward panel opens with the foot and shoulder heat (40:20, "AS REQUIRED") and the instrument source selectors (40:21, "NORMAL"), then Standby instruments (41:18, "AUTO") and Brakes (41:19, "AUTOBRAKE SELECTOR ... RTO"). It is also why VOR/DME (40:10, "AS REQUIRED") comes before the MCP. Brakes would open the Forward panel only if those set-to-normal and as-required steps were read as checks too.
+- "VHF / AUDIO / ADF ... SET AS REQUIRED" (42:18) counts for all three radio tuning panels and both audio panels, which keep their Task 7 order among themselves.
+- EICAS control counts at its own step, "EICAS CONTROL PANEL ... SET" (41:33). The earlier "Use lower EICAS STATUS" lines sit in CHECK steps.
+- Stabilizer trim counts at 48:29, "stabilizer set from the applicable accepted performance data". In the app the stabilizer is set with this panel's alternate stab trim buttons. Its earlier steps only check the alternate trim switches NEUTRAL and the cutouts guarded.
+- ILS tuning counts at 42:27, "ILS ... SET OR PARKED AS REQUIRED": the ILS panel's tuning knobs, which the map leaves out (infinite knobs).
+- Landing gear counts at 51:30, "POSITIVE RATE ... GEAR UP". "DOORS ... CLOSED" (46:22, Before Start) counts as closing the flight deck door.
+- RECALL is only ever a check step. The Caution, config and G/S inhibit panel counts at the takeoff config press (50:33). The Before Start checklist's "RECALL" (46:42) has its response on another line of the layout, and such an item is never counted.
+- No step acts on these panels, so they follow in Task 7's order: Indicator lights and door lock (its LOCK light is only checked, 46:24), Master warning and caution, Thrust mode select ("VERIFY GREEN TO", 41:21), Alternate flaps, Yokes, both autoland status panels ("CHECKED", 41:15), both DDRMIs, both chronometers, CDU brightness and the Forward attendant panel.
 
 ### Overhead
 
-| # | Panel | First touched (UP page:line) | The manual's words |
-|---|---|---|---|
-| 1 | Hydraulics | 34:22 | "ELECTRIC HYDRAULIC SWITCHES ... OFF" |
-| 2 | Exterior lights | 34:28 | "ANTI-COLLISION LIGHT ... OFF" |
-| 3 | Electrical | 35:10 | "BATTERY SWITCH ... ON" |
-| 4 | APU | 35:29 | "APU SELECTOR ... START, THEN ON" |
-| 5 | IRS | 36:17 | "IRS SELECTORS ... OFF, THEN NAV" |
-| 6 | Electronic engine control (RR) | 38:12 | "EEC SWITCHES (RR ONLY) ... ON, GUARDED" |
-| 7 | Yaw dampers | 38:13 | "YAW DAMPER SWITCHES ... ON" |
-| 8 | CVR | 38:29 | "CVR ... TEST" |
-| 9 | Panel lighting | 38:33 | "Set panel lighting and LT OVRD as desired" |
-| 10 | Emergency lights and passenger oxygen | 38:35 | "EMERGENCY LIGHTS ... ARMED" |
-| 11 | Ram air turbine and engine limiters | 38:41 | "RAT BUTTON ... GUARDED AND DARK" |
-| 12 | Fuel | 39:9 | "FUEL CROSSFEED SWITCHES ... OFF" |
-| 13 | Anti-ice | 39:14 | "WING / ENGINE ANTI-ICE ... OFF" |
-| 14 | Wipers | 39:15 | "WIPERS ... OFF" |
-| 15 | Window heat | 39:20 | "WINDOW HEAT ... ON" |
-| 16 | Passenger signs | 39:23 | "PASSENGER SIGNS ... SET AS REQUIRED" |
-| 17 | Pressurization | 39:27 | "CABIN ALTITUDE CONTROLS ... SET" |
-| 18 | Equipment cooling | 39:30 | "ALTERNATE EQUIPMENT COOLING ... OFF" |
-| 19 | Air conditioning and bleed | 39:33 | "TEMPERATURE CONTROLS ... SET IN AUTO RANGE" |
-| 20 | Indicator lights and door lock | 46:24 | "Check EICAS, flight-deck-door LOCK and overhead door indications" |
-| 21 | SELCAL and cabin call | 55:32 | "Press one of the blue cabin-call buttons to sound the hi-lo chime for landing preparation" |
+| # | Panel | First action (UP page:line) | What it does: the manual's words | Checks before it, not counted |
+|---|---|---|---|---|
+| 1 | Electrical | 35:10 | sets: "BATTERY SWITCH ... ON" | |
+| 2 | APU | 35:29 | sets: "APU SELECTOR ... START, THEN ON" | |
+| 3 | IRS | 36:17 | sets: "IRS SELECTORS ... OFF, THEN NAV" | |
+| 4 | Electronic engine control (RR) | 38:12 | sets: "EEC SWITCHES (RR ONLY) ... ON, GUARDED" | |
+| 5 | Yaw dampers | 38:13 | sets: "YAW DAMPER SWITCHES ... ON" | |
+| 6 | Hydraulics | 38:16 | sets: "ENGINE HYDRAULIC PUMPS ... ON" | 34:22 |
+| 7 | CVR | 38:29 | tests: "CVR ... TEST" | |
+| 8 | Panel lighting | 38:33 | sets: "Set panel lighting and LT OVRD as desired" | |
+| 9 | Emergency lights and passenger oxygen | 38:35 | sets: "EMERGENCY LIGHTS ... ARMED" | |
+| 10 | Ram air turbine and engine limiters | 38:44 | sets: "ENGINE LIMITERS (RR ONLY) ... ON" | 38:41 |
+| 11 | Fuel | 39:9 | sets: "FUEL CROSSFEED SWITCHES ... OFF" | |
+| 12 | Anti-ice | 39:14 | sets: "WING / ENGINE ANTI-ICE ... OFF" | |
+| 13 | Wipers | 39:15 | sets: "WIPERS ... OFF" | |
+| 14 | Exterior lights | 39:16 | sets: "POSITION LIGHT ... ON" | 34:28, 38:33 |
+| 15 | Window heat | 39:20 | sets: "WINDOW HEAT ... ON" | |
+| 16 | Passenger signs | 39:23 | sets: "PASSENGER SIGNS ... SET AS REQUIRED" | |
+| 17 | Pressurization | 39:27 | sets: "CABIN ALTITUDE CONTROLS ... SET" | |
+| 18 | Equipment cooling | 39:30 | sets: "ALTERNATE EQUIPMENT COOLING ... OFF" | |
+| 19 | Air conditioning and bleed | 39:33 | sets: "TEMPERATURE CONTROLS ... SET IN AUTO RANGE" | |
+| 20 | SELCAL and cabin call | 55:32 | presses: "Press one of the blue cabin-call buttons to sound the hi-lo chime for landing preparation" | |
+| 21 | Indicator lights and door lock | not acted on in the flow | | 46:24 |
 
 ### Glareshield
 
-| # | Panel | First touched (UP page:line) | The manual's words |
-|---|---|---|---|
-| 1 | VOR/DME | 40:10 | "VOR / DME SELECTION ... AS REQUIRED" |
-| 2 | MCP | 40:13 | "FLIGHT DIRECTOR SWITCHES ... ON" |
-| 3 | Master warning and caution | not in the flow | |
+| # | Panel | First action (UP page:line) | What it does: the manual's words | Checks before it, not counted |
+|---|---|---|---|---|
+| 1 | VOR/DME | 40:10 | sets: "VOR / DME SELECTION ... AS REQUIRED" | |
+| 2 | MCP | 40:13 | sets: "FLIGHT DIRECTOR SWITCHES ... ON" | |
+| 3 | Master warning and caution | not acted on in the flow | | |
 
 ### Forward panel
 
-| # | Panel | First touched (UP page:line) | The manual's words |
-|---|---|---|---|
-| 1 | Landing gear | 34:14 | "LANDING GEAR LEVER ... DOWN" |
-| 2 | Alternate flaps | 34:20 | "ALTN FLAPS SELECTOR ... NORM" |
-| 3 | Captain foot and shoulder heat | 40:20 | "FOOT / SHOULDER HEAT ... AS REQUIRED" |
-| 4 | First officer foot and shoulder heat | 40:20 | "FOOT / SHOULDER HEAT ... AS REQUIRED" |
-| 5 | Captain instrument source selectors | 40:21 | "INSTRUMENT SOURCES ... NORMAL" |
-| 6 | First officer instrument source selectors | 40:21 | "INSTRUMENT SOURCES ... NORMAL" |
-| 7 | Captain autoland status | 41:15 | "AUTOLAND STATUS ANNUNCIATORS ... CHECKED" |
-| 8 | First officer autoland status | 41:15 | "AUTOLAND STATUS ANNUNCIATORS ... CHECKED" |
-| 9 | Standby instruments | 41:18 | "STANDBY ENGINE INDICATOR ... AUTO" |
-| 10 | Brakes | 41:19 | "AUTOBRAKE SELECTOR ... RTO" |
-| 11 | Heading reference | 41:20 | "HEADING REFERENCE ... NORM" |
-| 12 | Thrust mode select | 41:21 | "THRUST REFERENCE ... VERIFY GREEN "TO"" |
-| 13 | Ground proximity overrides | 41:29 | "GROUND PROXIMITY OVERRIDES ... OFF" |
-| 14 | Caution, config and G/S inhibit | 46:42 | "RECALL" (Before Start) |
-| 15 | Yokes | not in the flow | |
-| 16 | Captain DDRMI | not in the flow | |
-| 17 | Captain chronometer | not in the flow | |
-| 18 | First officer DDRMI | not in the flow | |
-| 19 | First officer chronometer | not in the flow | |
+| # | Panel | First action (UP page:line) | What it does: the manual's words | Checks before it, not counted |
+|---|---|---|---|---|
+| 1 | Captain foot and shoulder heat | 40:20 | sets: "FOOT / SHOULDER HEAT ... AS REQUIRED" | |
+| 2 | First officer foot and shoulder heat | 40:20 | sets: "FOOT / SHOULDER HEAT ... AS REQUIRED" | |
+| 3 | Captain instrument source selectors | 40:21 | sets: "INSTRUMENT SOURCES ... NORMAL" | |
+| 4 | First officer instrument source selectors | 40:21 | sets: "INSTRUMENT SOURCES ... NORMAL" | |
+| 5 | Standby instruments | 41:18 | sets: "STANDBY ENGINE INDICATOR ... AUTO" | |
+| 6 | Brakes | 41:19 | sets: "AUTOBRAKE SELECTOR ... RTO" | |
+| 7 | Heading reference | 41:20 | sets: "HEADING REFERENCE ... NORM" | |
+| 8 | Ground proximity overrides | 41:29 | sets: "GROUND PROXIMITY OVERRIDES ... OFF" | |
+| 9 | Caution, config and G/S inhibit | 50:33 | presses: "Press the CONFIG (T/O CHK) button near RECALL" | 46:42, 48:37 |
+| 10 | Landing gear | 51:30 | sets: "POSITIVE RATE ... GEAR UP" | 34:14, 41:22 |
+| 11 | Thrust mode select | not acted on in the flow | | 41:21 |
+| 12 | Alternate flaps | not acted on in the flow | | 34:20, 34:21, 41:24 |
+| 13 | Yokes | not acted on in the flow | | |
+| 14 | Captain autoland status | not acted on in the flow | | 41:15 |
+| 15 | Captain DDRMI | not acted on in the flow | | |
+| 16 | Captain chronometer | not acted on in the flow | | |
+| 17 | First officer autoland status | not acted on in the flow | | 41:15 |
+| 18 | First officer DDRMI | not acted on in the flow | | |
+| 19 | First officer chronometer | not acted on in the flow | | |
 
 ### Pedestal
 
-| # | Panel | First touched (UP page:line) | The manual's words |
-|---|---|---|---|
-| 1 | Control stand (kept first: frozen test) | 34:17 | "FLAP LEVER ... UP OR IN AGREEMENT WITH EXTERIOR / INDICATOR" |
-| 2 | Engines (kept first: frozen test) | 34:27 | "FUEL CONTROL SWITCHES ... CUTOFF" |
-| 3 | TCAS and transponder (kept first: frozen test) | 42:24 | "TRANSPONDER ... SET AS REQUIRED" |
-| 4 | EICAS control | 36:21 | "Use lower EICAS STATUS" |
-| 5 | Stabilizer trim | 41:25 | "ALTN STAB TRIM SWITCHES ... NEUTRAL" |
-| 6 | Captain EFIS | 41:36 | "EFIS CONTROLS ... SET AS REQUIRED" |
-| 7 | First officer EFIS | 41:36 | "EFIS CONTROLS ... SET AS REQUIRED" |
-| 8 | Weather radar | 42:17 | "WEATHER RADAR ... OFF" |
-| 9 | Radio tuning panel 1 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
-| 10 | Audio panel 1 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
-| 11 | Radio tuning panel 2 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
-| 12 | Radio tuning panel 3 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
-| 13 | Audio panel 2 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
-| 14 | Fire protection | 42:21 | "ENGINE / APU FIRE HANDLES ... IN, NOT ROTATED" |
-| 15 | ILS tuning | 42:27 | "ILS ... SET OR PARKED AS REQUIRED" |
-| 16 | CDU brightness | not in the flow | |
+| # | Panel | First action (UP page:line) | What it does: the manual's words | Checks before it, not counted |
+|---|---|---|---|---|
+| 1 | Control stand (kept first: frozen test) | 37:10 | sets: "PARKING BRAKE ... SET" | 34:17 |
+| 2 | Engines (kept first: frozen test) | 38:47 | sets: "IGNITION SELECTOR ... 1 OR 2" | 34:27 |
+| 3 | TCAS and transponder (kept first: frozen test) | 42:24 | sets: "TRANSPONDER ... SET AS REQUIRED" | |
+| 4 | EICAS control | 41:33 | sets: "EICAS CONTROL PANEL ... SET" | 36:21, 36:24, 36:27 |
+| 5 | Captain EFIS | 41:36 | sets: "EFIS CONTROLS ... SET AS REQUIRED" | |
+| 6 | First officer EFIS | 41:36 | sets: "EFIS CONTROLS ... SET AS REQUIRED" | |
+| 7 | Weather radar | 42:17 | sets: "WEATHER RADAR ... OFF" | |
+| 8 | Radio tuning panel 1 | 42:18 | sets: "VHF / AUDIO / ADF ... SET AS REQUIRED" | |
+| 9 | Audio panel 1 | 42:18 | sets: "VHF / AUDIO / ADF ... SET AS REQUIRED" | |
+| 10 | Radio tuning panel 2 | 42:18 | sets: "VHF / AUDIO / ADF ... SET AS REQUIRED" | |
+| 11 | Radio tuning panel 3 | 42:18 | sets: "VHF / AUDIO / ADF ... SET AS REQUIRED" | |
+| 12 | Audio panel 2 | 42:18 | sets: "VHF / AUDIO / ADF ... SET AS REQUIRED" | |
+| 13 | ILS tuning | 42:27 | sets: "ILS ... SET OR PARKED AS REQUIRED" | |
+| 14 | Fire protection | 42:43 | presses and holds: "Press and hold the WHL WELL test button" | 42:21, 42:33, 42:42 |
+| 15 | Stabilizer trim | 48:29 | sets: "stabilizer set from the applicable accepted performance data" | 41:25, 41:26 |
+| 16 | CDU brightness | not acted on in the flow | | |
 
 ### Other
 
-| # | Panel | First touched (UP page:line) | The manual's words |
-|---|---|---|---|
-| 1 | P61 panel | 36:32 | "P61 CONTROLS ... CHECK" |
-| 2 | Oxygen | 40:16 | "CREW OXYGEN EQUIPMENT ... TEST" |
-| 3 | Flight deck door | 46:22 | "DOORS ... CLOSED" |
-| 4 | Forward attendant panel | not in the flow | |
+| # | Panel | First action (UP page:line) | What it does: the manual's words | Checks before it, not counted |
+|---|---|---|---|---|
+| 1 | P61 panel | 36:38 | presses and holds: "SQUIB TEST ... HOLD / CHECK" | 36:32 |
+| 2 | Oxygen | 40:16 | tests: "CREW OXYGEN EQUIPMENT ... TEST" | 36:23 |
+| 3 | Flight deck door | 46:22 | sets: "DOORS ... CLOSED" | |
+| 4 | Forward attendant panel | not acted on in the flow | | |
