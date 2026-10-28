@@ -121,7 +121,7 @@ public partial class BBS757Definition
         foreach (var row in R.EngineRows) Add(row.Key, DisplayedRow(row.SimVar, row.Label, row.Units));
 
         // Read on request only: the readouts and the windows' read-backs.
-        Add(R.GearHandleKey, RequestedRead("GEAR HANDLE POSITION", "Gear Lever", "bool"));
+        Add(R.GearHandleKey, RequestedRead("B757_GEAR_HANDLE_POS", "Gear Lever", "number", SimVarType.LVar));
         Add(R.TotalWeightKey, RequestedRead("TOTAL WEIGHT", "Gross Weight", "pounds"));
         for (int i = 0; i < Bbs757Altimeters.KohlsmanKeys.Count; i++)
             Add(Bbs757Altimeters.KohlsmanKeys[i], RequestedRead($"KOHLSMAN SETTING MB:{i + 1}", $"Altimeter {i + 1}", "millibars"));
@@ -160,9 +160,10 @@ public partial class BBS757Definition
         RenderAsReadOnlyStatus = true, ExcludeFromMonitorManager = true,
     };
 
-    private static SimVarDefinition RequestedRead(string name, string label, string units) => new()
+    private static SimVarDefinition RequestedRead(string name, string label, string units,
+        SimVarType type = SimVarType.SimVar) => new()
     {
-        Name = name, DisplayName = label, Type = SimVarType.SimVar, Units = units,
+        Name = name, DisplayName = label, Type = type, Units = units,
         UpdateFrequency = UpdateFrequency.OnRequest, ExcludeFromMonitorManager = true,
     };
 

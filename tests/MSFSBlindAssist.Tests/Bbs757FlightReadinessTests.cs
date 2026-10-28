@@ -56,6 +56,17 @@ public class Bbs757FlightReadinessTests
     }
 
     [Fact]
+    public void Shift_G_reads_blueBirds_gear_lever_never_the_stock_handle()
+    {
+        // Measured (flight-13.md flight 2): the stock GEAR HANDLE POSITION read up with BlueBird's lever at OFF
+        // and the gear still down.
+        var row = Def.GetVariables()[R.GearHandleKey];
+        Assert.Equal("B757_GEAR_HANDLE_POS", row.Name);
+        Assert.Equal(SimVarType.LVar, row.Type);
+        Assert.Equal(UpdateFrequency.OnRequest, row.UpdateFrequency);
+    }
+
+    [Fact]
     public void The_parking_brake_is_blueBirds_own_variable_never_the_stock_one()
     {
         // Measured: the stock BRAKE PARKING POSITION read 0 with BlueBird's brake set.
