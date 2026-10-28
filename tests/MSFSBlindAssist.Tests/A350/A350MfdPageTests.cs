@@ -16,7 +16,7 @@ public class A350MfdPageTests
     {
         var lines = A350MfdPage.Read(Fixture(), 0).Select(l => l.Spoken).ToList();
         Assert.Equal("FMS 1 menu, cyan", lines[0]);
-        Assert.Equal("-----------, white", lines[1]);   // the header: no flight number yet
+        Assert.Equal("none, white", lines[1]);   // the header: no flight number yet
         Assert.Equal(new[] { "ACTIVE button", "POSITION button", "SEC INDEX button", "DATA button" }, lines.Skip(2).Take(4));
         Assert.Contains("ACFT STATUS tab", lines);
         Assert.Contains("FMS P/N tab", lines);
@@ -28,7 +28,7 @@ public class A350MfdPageTests
         Assert.Contains("DELETE ALL * button, grey", lines);
         Assert.Contains("CLEAR INFO button", lines);
         Assert.Contains("A350-900P / TRENT XWB-84, green", lines);
-        Assert.Contains("NAV DATABASE, white; SJ6192002, green", lines);
+        Assert.Contains("NAV DATABASE: SJ6192002, green", lines);
         Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, black", lines[^1]);   // an FMS message shows in the scratchpad
     }
 
@@ -124,7 +124,7 @@ public class A350MfdPageTests
             ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_fpln_empty.json")))!;
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("POSITION button", lines);
-        Assert.Contains("P.POS --:-- --- -----, green", lines);
+        Assert.Contains("P.POS none none none, green", lines);
         Assert.Contains("DISCONTINUITY, white", lines);
         Assert.Contains("END OF F-PLN, white", lines);
         Assert.DoesNotContain(lines, l => l.Contains("DISCONTINUITY") && l.Contains("END OF F-PLN"));
@@ -187,8 +187,8 @@ public class A350MfdPageTests
         var lines = A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
             ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_irs.json")))!, 0)
             .Select(l => l.Spoken).ToList();
-        Assert.Contains("IRS 3, white; NAV 0.1, green; NM, grey", lines);
-        Assert.Contains("IRS ALIGNED ON GNSS POS:, white; 07°10.5N/079°53.1E, green", lines);
+        Assert.Contains("IRS 3: NAV, 0.1 NM, green", lines);
+        Assert.Contains("IRS ALIGNED ON GNSS POS: 07°10.5N/079°53.1E, green", lines);
     }
 
     // A row of white headings over a row of values (live: DEPARTURE's RWY LENGTH CRS, its EOSID FREQ/CHAN SID TRANS,
@@ -204,7 +204,7 @@ public class A350MfdPageTests
         var departure = Page("mfd_departure_empty");
         Assert.Contains("RWY none, LENGTH none M, CRS none°, green", departure);
         Assert.Contains("EOSID NONE, FREQ/CHAN none, SID none, TRANS none, green", departure);
-        Assert.Contains("FROM, white; VCBI, green", departure);
+        Assert.Contains("FROM: VCBI, green", departure);
         var status = Page("mfd_data_status_db");
         Assert.Contains("ACTIVE 01OCT-28OCT, SECOND 01OCT-28OCT, green", status);
         Assert.DoesNotContain(status, l => l.StartsWith("ACTIVE SECOND"));
@@ -217,7 +217,7 @@ public class A350MfdPageTests
     {
         var lines = Page("mfd_departure_tmpy_sids");
         Assert.Contains("RWY 22, LENGTH 3340 M, CRS 215°, yellow", lines);
-        Assert.Contains("FROM, white; VCBI, yellow", lines);
+        Assert.Contains("FROM: VCBI, yellow", lines);
         Assert.Contains("BASU1D button", lines);
         Assert.Contains("TMPY F-PLN button, yellow", lines);
     }
@@ -234,6 +234,26 @@ public class A350MfdPageTests
         Assert.Contains("BI611 →: via BASU1D, TRK 279°, DIST 5; TIME none, SPD none, ALT none, yellow", lines);
         Assert.Contains("END OF TMPY F-PLN, yellow", lines);
         Assert.Contains("INSERT * TMPY button, amber", lines);
+    }
+
+    // FUEL&LOAD before entry (live): a value then its unit (the unit sits 4 px higher); "ooo.o" boxes are a required
+    // entry; a second box on a row shares the row's label (RTE RSV weight and percent, FINAL fuel and time); a label
+    // beside a field is close to it (the row label DEST is the table's; MIN FUEL AT DEST's field takes the heading
+    // above it); a menu takes its label; times drawn in parts read as one; a table's rows carry their row labels.
+    [Fact]
+    public void Fuel_and_load_reads_every_value_with_its_label()
+    {
+        var lines = Page("mfd_fuel_load_empty");
+        foreach (var l in new[]
+        {
+            "GW: none; CG: none; FOB: none, green", "ZFW: required T, amber", "ZFWCG: required %, amber", "BLOCK: required T, amber",
+            "TAXI: 0.6 T, cyan", "PAX NBR: required, amber", "MODE: ECON menu, cyan", "TRIP: none T, none, green", "CI: 52, cyan",
+            "RTE RSV: none T, cyan", "RTE RSV: 5.0 %, cyan", "ALTN: none T, cyan", "ALTN: none, green", "TOW: none, green",
+            "FINAL: none T, cyan", "FINAL: 00:30, cyan", "LW: none, green", "MIN FUEL AT DEST: none T, cyan",
+            "DEST OMDB: TIME none, EFOB none, green", "ALTN OMAA: TIME none, EFOB none, green", "EXTRA: none T, none, green",
+        })
+            Assert.Contains(l, lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Field:") || l.Contains(" CI:"));
     }
 
     [Fact]

@@ -57,9 +57,10 @@ public static class A350MfdPage
         var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
             .Select(p => new Cell(Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
+        cells = JoinTimes(cells);
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
-        var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy)>();
+        var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy, bool Inherited, bool Above)>();
         var leftLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
         // Texts inside a control are its own, never another control's label or header.
@@ -86,8 +87,7 @@ public static class A350MfdPage
             // A control holds only what was drawn after it began: an open menu covers list rows drawn before it.
             // The scratchpad's message is drawn before its box (live).
             int from = e.Class == "NotepadTextbox" ? 0 : e.TextStart;
-            var inside = cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1)
-                .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
+            var inside = InReadingOrder(cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1));
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
             string value = Words(inside.Select(c => c.Text));
             string colour = inside.FirstOrDefault(c => c.Colour != "grey")?.Colour ?? inside.FirstOrDefault()?.Colour ?? "white";
@@ -126,35 +126,59 @@ public static class A350MfdPage
             if (IsField(e))
             {
                 float rowY = y0 + e.RectH * 0.75f;
-                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && Math.Abs(c.Y - rowY) <= 12;
+                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && Math.Abs(c.Y - rowY) <= 12;
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
-                var label = cells.Where(c => OnRow(c) && c.X < x0 && !leftLabels.Contains(c)).OrderByDescending(c => c.X).FirstOrDefault()
-                    ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault()
-                    // else a label just above it (SURV's SQWK)
-                    ?? cells.Where(c => !inControls.Contains(c) && c.X >= x0 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 20).OrderByDescending(c => c.Y).FirstOrDefault();
-                if (label == null && inside.Count == 0) continue;
+                // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
+                // FUEL AT DEST field, is the table row's, the field's the heading above it.)
+                var beside = cells.Where(c => OnRow(c) && c.X < x0 && x0 - c.X <= 200 && !leftLabels.Contains(c)).OrderByDescending(c => c.X).FirstOrDefault()
+                    ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault();
+                var label = beside
+                    // else a label just above it (SURV's SQWK; FUEL&LOAD's MIN FUEL AT DEST heading, 26 px up)
+                    ?? cells.Where(c => !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 40 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 30)
+                        .OrderByDescending(c => c.Y).FirstOrDefault();
+                // An empty box labelled only by a text above it is no entry the page shows (FUEL&LOAD, under CI).
+                if (inside.Count == 0 && (label == null || beside == null)) continue;
                 used.UnionWith(inside);
                 if (label != null && label.X < x0) leftLabels.Add(label);
-                fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy));
+                fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy, false, beside == null));
                 continue;
             }
             if (inside.Count == 0) continue;
             used.UnionWith(inside);
+            string menuLabel = "";
+            if (e.Class == "MainHeaderDropdownMenu" && y0 > 100
+                && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X < x0 && x0 - c.X <= 160
+                    && Math.Abs(c.Y - (y0 + e.RectH * 0.75f)) <= 12).OrderByDescending(c => c.X).FirstOrDefault() is { } ml)
+            {
+                used.Add(ml);
+                menuLabel = ml.Text.TrimEnd(':') + ": ";
+            }
             var (kind, spoken) = e.Class switch
             {
-                "MainHeaderDropdownMenu" => ("menu", $"{value} menu, {colour}"),
+                "MainHeaderDropdownMenu" => ("menu", $"{menuLabel}{value} menu, {colour}"),
                 "WidgetSwitcherTab" => ("tab", $"{value} tab"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
             };
             lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
         }
 
+        // A field with no label of its own shares the label of the field left of it on its row (FUEL&LOAD's RTE RSV
+        // weight and percentage, FINAL fuel and time).
+        for (int k = 0; k < fields.Count; k++)
+        {
+            var f = fields[k];
+            if (f.Label != null) continue;
+            var left = fields.Where(o => o.Label != null && !o.Inherited && Math.Abs(o.Top - f.Top) <= 12 && o.X1 <= f.X0 + 1)
+                .OrderByDescending(o => o.X1).FirstOrDefault();
+            if (left.Label != null) fields[k] = f with { Label = left.Label, Inherited = true };
+        }
+
         // A label two fields share takes each field's column header: the nearest text above it in its column.
         foreach (var f in fields)
         {
             string name = f.Label?.Text ?? "Field";
-            if (f.Label != null && fields.Count(o => o.Label == f.Label) > 1)
+            if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)
                     .OrderByDescending(c => c.Y).FirstOrDefault();
@@ -170,16 +194,33 @@ public static class A350MfdPage
         var paired = new HashSet<int>();
         for (int i = 0; i < rows.Count; i++)
         {
-            if (paired.Contains(i) || rows[i].Count < 2 || rows[i].Any(c => c.Colour != "white")) continue;
-            int j = ValuesUnder(rows, i, paired);
-            if (j < 0) continue;
-            paired.Add(i);
-            paired.Add(j);
-            lines.Add((rows[i][0].Y - 14, rows[i][0].X, new MfdLine("text", Table(rows[i], rows[j]), rows[j][0].X, rows[j][0].Y - 7)));
+            if (paired.Contains(i) || rows[i].Any(c => c.Colour != "white")) continue;
+            int last = i;
+            for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 60); j++)
+            {
+                if (paired.Contains(j)) continue;
+                if (TableRow(rows[i], rows[j]) is not { } line)
+                {
+                    if (last != i) break;   // the rows of a table follow each other; before the first, a row may sit between
+                    continue;
+                }
+                paired.Add(j);
+                lines.Add((rows[j][0].Y - 14, rows[j][0].X, new MfdLine("text", line, rows[j][0].X, rows[j][0].Y - 7)));
+                last = j;
+            }
+            if (last != i) paired.Add(i);
         }
         for (int i = 0; i < rows.Count; i++)
-            if (!paired.Contains(i))
-                lines.Add((rows[i][0].Y - 14, rows[i][0].X, new MfdLine("text", A350DrawLayout.Speak(rows[i]), rows[i][0].X, rows[i][0].Y - 7)));
+        {
+            if (paired.Contains(i)) continue;
+            var row = rows[i];
+            string spoken = Row(row);
+            if (row.All(c => c.Colour != "white")
+                && fields.Where(f => f.Label != null && f.X1 <= row[0].X + 1 && Math.Abs(f.Top + 30 - row[0].Y) <= 12)
+                    .OrderByDescending(f => f.X1).FirstOrDefault() is { Label: { } owner })
+                spoken = $"{owner.Text}: {spoken}";
+            lines.Add((row[0].Y - 14, row[0].X, new MfdLine("text", spoken, row[0].X, row[0].Y - 7)));
+        }
 
         return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
     }
@@ -197,8 +238,7 @@ public static class A350MfdPage
         HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines)
     {
         var boxes = capture.Elements.Where(e => mine(e.X) && e.Class == "BaseFlightPlanButton")
-            .Select(e => (X: e.X - shift, e.Y, W: e.RectW, H: e.RectH)).ToList();
-        if (boxes.Count == 0) return;
+            .Select(e => (X: e.X - shift, e.Y, W: e.RectW, H: e.RectH)).ToList();   // none while the plan is empty
         // The destination bar's top: its DEST and destination keys (live: y 816 and 825).
         float barTop = capture.Elements.Where(e => mine(e.X) && e.Y > 780 && e.Y < 900
                 && e.Class is "BaseUIButton" or "BaseTexturedButton").Select(e => e.Y).DefaultIfEmpty(816).Min();
@@ -286,37 +326,111 @@ public static class A350MfdPage
         }
     }
 
-    /// <summary>The row of values under a row of white headings: the first row within 60 px below it, all of it not white,
-    /// under the headings' span (DEPARTURE's FROM VCBI row sits between its headings and their values); -1 if none.</summary>
-    private static int ValuesUnder(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, int header, HashSet<int> paired)
+    /// <summary>A row's texts as tokens: each read as a word, a time drawn in parts joined ("--", grey ":", "--"), a
+    /// grey unit kept with the value left of it (its "d" a degree sign).</summary>
+    private static List<DrawnCell> Tokens(IReadOnlyList<DrawnCell> row)
     {
-        var h = rows[header];
-        float x0 = h.Min(c => c.X) - 40, x1 = h.Max(c => c.X) + 80;
-        for (int j = header + 1; j < rows.Count && rows[j][0].Y - h[0].Y <= 60; j++)
+        var tokens = new List<DrawnCell>();
+        foreach (var c in row.OrderBy(c => c.X))
         {
-            var v = rows[j];
-            if (paired.Contains(j) || v.Any(c => c.Colour == "white") || v.All(c => c.Colour == "grey")) continue;
-            if (v.All(c => c.X >= x0 && c.X <= x1)) return j;
+            var prev = tokens.LastOrDefault();
+            if (c.Colour == "grey" && prev != null && prev.Colour is not ("grey" or "white") && c.X - prev.X <= 60)
+                tokens[^1] = prev with { Text = prev.Text + (c.Text == "d" ? "°" : " " + c.Text) };
+            else
+                tokens.Add(c with { Text = Word(c.Text) });
         }
-        return -1;
+        return tokens;
     }
 
-    /// <summary>Headings and their values as one line: "RWY none, LENGTH none M, CRS none°, green". A grey unit belongs
-    /// to the value left of it (its "d" a degree sign); values pair with headings in order when the counts match,
-    /// else with the nearest heading.</summary>
-    private static string Table(IReadOnlyList<DrawnCell> headers, IReadOnlyList<DrawnCell> values)
+    /// <summary>A text row as spoken: a row of white labels and values reads "LABEL: value, value; LABEL: value, colour"
+    /// (a label with values both sides, RAD NAV's CLASS, takes both); any other row by its colour runs.</summary>
+    private static string Row(IReadOnlyList<DrawnCell> row)
     {
-        var vals = values.Where(c => c.Colour != "grey").OrderBy(c => c.X).ToList();
-        string With(DrawnCell v)
+        var tokens = Tokens(row);
+        var values = tokens.Where(t => t.Colour is not ("white" or "grey" or "black")).ToList();
+        if (values.Count == 0 || !tokens.Any(t => t.Colour == "white"))
+            return A350DrawLayout.Speak(tokens);
+        string colour = values.GroupBy(v => v.Colour).OrderByDescending(g => g.Count()).First().Key;
+        string Value(DrawnCell v) => v.Text + (v.Colour != colour ? $" ({v.Colour})" : "");
+        var segments = new List<(string? Label, List<string> Values)>();
+        foreach (var t in tokens)
         {
-            var unit = values.Where(u => u.Colour == "grey" && u.X > v.X && vals.LastOrDefault(o => o.X < u.X) == v).Select(u => u.Text).FirstOrDefault();
-            return Word(v.Text) + (unit == null ? "" : unit == "d" ? "°" : " " + unit);
+            if (t.Colour == "white") segments.Add((t.Text, new List<string>()));
+            else if (t.Colour != "grey" && t.Colour != "black")
+            {
+                if (segments.Count == 0) segments.Add((null, new List<string>()));
+                segments[^1].Values.Add(Value(t));
+            }
         }
+        if (segments.Count > 1 && segments[0].Label == null)
+        {
+            segments[1].Values.InsertRange(0, segments[0].Values);   // values left of a centre label are its too
+            segments.RemoveAt(0);
+        }
+        string Segment((string? Label, List<string> Values) g) => g.Label == null ? string.Join(", ", g.Values)
+            : g.Values.Count == 0 ? g.Label
+            : $"{(g.Label.EndsWith(':') ? g.Label : g.Label + ":")} {string.Join(", ", g.Values)}";
+        return $"{string.Join("; ", segments.Select(Segment))}, {colour}";
+    }
+
+    /// <summary>A row of a table under white headings, or null: its values pair with the headings (in order when the
+    /// counts match, else with the nearest heading; LENGTH's value ends nearer CRS than LENGTH); a white row label and
+    /// any values left of the first heading name the row (FUEL&amp;LOAD's "DEST OMDB"); a single heading takes all.</summary>
+    private static string? TableRow(IReadOnlyList<DrawnCell> headers, IReadOnlyList<DrawnCell> row)
+    {
         var hs = headers.OrderBy(c => c.X).ToList();
-        var parts = vals.Count == hs.Count
-            ? hs.Select((h, i) => $"{h.Text} {With(vals[i])}")
-            : vals.Select(v => $"{hs.OrderBy(h => Math.Abs(h.X - v.X)).First().Text} {With(v)}");
-        return $"{string.Join(", ", parts)}, {vals.First().Colour}";
+        var tokens = Tokens(row);
+        int start = tokens.Count > 0 && tokens[0].Colour == "white" && hs.Count > 1 ? 1 : 0;
+        if (tokens.Skip(start).Any(t => t.Colour == "white")) return null;
+        float first = hs[0].X - 40;
+        var label = tokens.Take(start).Concat(tokens.Skip(start).Where(t => t.X < first && hs.Count > 1)).ToList();
+        var vals = tokens.Where(t => !label.Contains(t) && t.Colour is not ("grey" or "black")).ToList();
+        if (vals.Count == 0) return null;
+        float x0 = hs.Count == 1 ? hs[0].X - 150 : first, x1 = hs.Count == 1 ? hs[0].X + 150 : hs[^1].X + 160;
+        if (vals.Any(v => v.X < x0 || v.X > x1)) return null;
+        string colour = vals.GroupBy(v => v.Colour).OrderByDescending(g => g.Count()).First().Key;
+        string Value(DrawnCell v) => v.Text + (v.Colour != colour ? $" ({v.Colour})" : "");
+        string body = hs.Count == 1
+            ? $"{hs[0].Text}: {string.Join(", ", vals.Select(Value))}"
+            : string.Join(", ", vals.Count == hs.Count
+                ? hs.Select((h, i) => $"{h.Text} {Value(vals[i])}")
+                : vals.Select(v => $"{hs.OrderBy(h => Math.Abs(h.X - v.X)).First().Text} {Value(v)}"));
+        return label.Count == 0 ? $"{body}, {colour}" : $"{string.Join(" ", label.Select(l => l.Text))}: {body}, {colour}";
+    }
+
+    /// <summary>Texts in reading order: by line (within 8 px of a line's top text: a value sits a few px below its unit),
+    /// then left to right.</summary>
+    private static List<Cell> InReadingOrder(IEnumerable<Cell> cells)
+    {
+        var result = new List<Cell>();
+        foreach (var line in cells.OrderBy(c => c.Y).Aggregate(new List<List<Cell>>(), (ls, c) =>
+                 {
+                     if (ls.Count == 0 || c.Y - ls[^1][0].Y > 8) ls.Add(new List<Cell>());
+                     ls[^1].Add(c);
+                     return ls;
+                 }))
+            result.AddRange(line.OrderBy(c => c.X));
+        return result;
+    }
+
+    private static readonly Regex TimePart = new(@"^[0-9-]{1,2}$", RegexOptions.Compiled);
+
+    /// <summary>A time drawn as "--", a grey ":" and "--" (FUEL&amp;LOAD, live) as one text.</summary>
+    private static List<Cell> JoinTimes(List<Cell> cells)
+    {
+        var colons = cells.Where(c => c.Text == ":" && c.Colour == "grey").ToList();
+        foreach (var colon in colons)
+        {
+            var a = cells.Where(c => TimePart.IsMatch(c.Text) && Math.Abs(c.Y - colon.Y) <= 4 && c.X < colon.X && colon.X - c.X <= 14)
+                .OrderByDescending(c => c.X).FirstOrDefault();
+            var b = cells.Where(c => TimePart.IsMatch(c.Text) && Math.Abs(c.Y - colon.Y) <= 4 && c.X > colon.X && c.X - colon.X <= 14)
+                .OrderBy(c => c.X).FirstOrDefault();
+            if (a == null || b == null) continue;
+            cells.Remove(colon);
+            cells.Remove(b);
+            cells[cells.IndexOf(a)] = a with { Text = a.Text + ":" + b.Text };
+        }
+        return cells;
     }
 
     private static bool IsField(DrawnElement e) => e.Class != "NotepadTextbox" && e.RectW > 0 && e.RectH > 0
@@ -325,7 +439,7 @@ public static class A350MfdPage
     /// <summary>A drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet, "dC" degrees
     /// Celsius, a checklist's line to fill ("____") blank. Dot leaders are colons already (<see cref="A350Ewd"/>).</summary>
     private static string Word(string token) =>
-        token.Length > 0 && token.All(ch => ch == 'o') ? "required"
+        token.Length > 0 && token.Contains('o') && token.All(ch => ch is 'o' or '.') ? "required"
         : token.Length > 0 && token.Contains('-') && token.All(ch => ch is '-' or ':' or '.') ? "none"
         : token == "dC" ? "°C" : Blank.Replace(token, "blank");
 
