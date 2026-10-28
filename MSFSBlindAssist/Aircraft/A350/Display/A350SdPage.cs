@@ -6,8 +6,10 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// page's background texture, not drawn text), where its text is drawn (Width covers a value drawn as several
 /// texts, "26 TO 27"), and the unit the texture prints for it. "{weight}" and "{flow}" stand for the unit the
 /// page draws itself (LBS or KG, LBS/H or KG/H), which follows the aircraft's unit setting. Caption is a text the
-/// page draws there as a name, not a value (a door's number in its symbol): drawn alone, it reads nothing.</summary>
-public sealed record SdField(string Label, float X, float Y, string? Unit = null, float Width = 0, string? Caption = null);
+/// page draws there as a name, not a value (a door's number in its symbol): drawn alone, it reads nothing. Join is the
+/// word the background prints between a field's texts (CRUISE's cabin "20 TO 21"), said between them.</summary>
+public sealed record SdField(string Label, float X, float Y, string? Unit = null, float Width = 0, string? Caption = null,
+    string? Join = null);
 
 /// <summary>
 /// One SD page read the way a sighted pilot reads it: each drawn value named by the label printed beside it
@@ -86,6 +88,8 @@ public static class A350SdPage
             if (f.Label.Length == 0) continue;
             var ordered = cells.OrderBy(c => c.X).ToList();
             if (f.Caption != null && string.Concat(ordered.Select(c => c.Text)) == f.Caption) continue;
+            if (f.Join != null && ordered.Count > 1)
+                ordered = new List<DrawnCell> { ordered[0] with { Text = string.Join(f.Join, ordered.Select(c => c.Text)) } };
             var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
             var value = TimeColon.Replace(SpeakWithUnit(ordered, string.IsNullOrEmpty(unit) ? null : unit), ":");
             items.Add((row, ordered[0].X, f.Label + ": " + value));
@@ -255,6 +259,23 @@ public static class A350SdPage
                 new SdField("Captain oxygen pressure", 737, 374, "PSI"), new SdField("First officer oxygen pressure", 737, 523, "PSI"),
                 new SdField("Rain repellent level", 709, 888),
             }).ToArray(),
+        // CRUISE (EcamCruiseStatic.png; live at FL400): FF and FU under their labels, (FOB + FU) - BLOCK, the landing
+        // elevation, the cabin modes drawn over CAB ALT and CAB V/S, the values under DELTA P, CAB ALT and CAB V/S (units
+        // in the texture), and COND's temperatures in the fuselage (the cabin's "20 TO 21", the cockpit, the cargo holds).
+        [13] = new[]
+        {
+            Eng("fuel flow", 309, 10, 592, 10, 366, "{flow}"), Eng("fuel used", 309, 10, 592, 10, 435, "{weight}"),
+            new[]
+            {
+                new SdField("FOB plus fuel used minus block", 625, 491, "{weight}"), new SdField("Landing elevation", 736, 547, "FT"),
+                new SdField("Cabin altitude mode", 317, 588), new SdField("Cabin vertical speed mode", 592, 588),
+                new SdField("Delta P", 115, 660, "PSI"), new SdField("Cabin altitude", 378, 661, "FT"),
+                new SdField("Cabin vertical speed", 657, 661, "FT/MIN"),
+                new SdField("Cabin temperature", 448, 847, "°C", Width: 60, Join: " to "),
+                new SdField("Cockpit temperature", 260, 879, "°C"),
+                new SdField("Forward cargo temperature", 365, 891, "°C"), new SdField("Aft cargo temperature", 585, 891, "°C"),
+            },
+        }.SelectMany(p => p).ToArray(),
         [12] = Row(666, "°C", ("Brake 1 temperature", 82), ("Brake 2 temperature", 181), ("Brake 3 temperature", 357), ("Brake 4 temperature", 456))
             .Concat(Row(809, "°C", ("Brake 5 temperature", 82), ("Brake 6 temperature", 181), ("Brake 7 temperature", 357), ("Brake 8 temperature", 456)))
             .ToArray(),

@@ -43,6 +43,28 @@ public class A350SdPageTests
         }, A350SdPage.ReadPermanentData(A350Ewd.Parse(cap).PermanentData));
     }
 
+    // Live at FL400 (2026-10-28): the SD's CRUISE page, INI_ECAM_ACTIVE_PAGE 13 (it has no ECP key; STS with nothing
+    // to show brings it up). Its labels are EcamCruiseStatic.png's: FF and FU per engine, (FOB + FU) - BLOCK, the
+    // landing elevation, the cabin modes over CAB ALT and CAB V/S, delta P, cabin altitude and V/S, and COND's
+    // temperatures (the cabin's "20 TO 21", the TO in the texture; the cockpit; the forward and aft cargo).
+    [Fact]
+    public void The_cruise_page_names_every_value()
+    {
+        Assert.Equal("Cruise", A350SdText.PageName(13));
+        var p = Page(13, "ctr_sd_cruise_");
+        foreach (var line in new[]
+        {
+            "Engine 1 fuel flow: 2880 KG/H, green", "Engine 2 fuel flow: 2880 KG/H, green",
+            "Engine 1 fuel used: 7080 KG, green", "Engine 2 fuel used: 7100 KG, green",
+            "FOB plus fuel used minus block: 0 KG, green", "Landing elevation: 50 FT, green",
+            "Cabin altitude mode: AUTO, green", "Cabin vertical speed mode: AUTO, green",
+            "Delta P: 9.0 PSI, green", "Cabin altitude: 5910 FT, green", "Cabin vertical speed: 0 FT/MIN, green",
+            "Cabin temperature: 20 to 21 °C, green", "Cockpit temperature: 20 °C, green",
+            "Forward cargo temperature: 12 °C, green", "Aft cargo temperature: 11 °C, green",
+        })
+            Assert.Contains(line, p);
+    }
+
     // Live, refuelling on the stand once the ADIRS had aligned (2026-10-28): the ISA deviation drawn under SAT,
     // its "ISA" caption drawn as text at the left edge, was read as two lines ("ISA, white" then "+13, green").
     [Fact]

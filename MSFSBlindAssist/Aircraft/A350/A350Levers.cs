@@ -145,9 +145,10 @@ internal static class A350Levers
         }
     }
 
-    /// <summary>The SD page's name by its page number (`INI_ECAM_ACTIVE_PAGE`: 8 is "Fuel"), or null.</summary>
+    /// <summary>The SD page's name by its page number (`INI_ECAM_ACTIVE_PAGE`: 8 is "Fuel"), or null. CRUISE (13) has no
+    /// ECP key: the SD shows it in cruise, and STS with nothing to show brings it up (live 2026-10-28).</summary>
     public static string? SdPageWord(double page) =>
-        SdPages.Where(p => p.Page == page).Select(p => p.Word).FirstOrDefault();
+        SdPages.Where(p => p.Page == page).Select(p => p.Word).FirstOrDefault() ?? (page == 13 ? "Cruise" : null);
 
     /// <summary>A lever's position words, or null for any other control.</summary>
     public static IReadOnlyDictionary<double, string>? WordsFor(string controlId) =>
