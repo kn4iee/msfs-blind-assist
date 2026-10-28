@@ -109,7 +109,14 @@ public class A350PanelLampsTests
 
     [Theory]
     // Lamps the map has but no placed control owns (found 2026-10-28 by scanning every emissive material's variables
-    // against what MSFSBA reads): each is shown on the panel a pilot finds it on.
+    // against what MSFSBA reads): each is shown on the panel a pilot finds it on. Every one of them (review, 2026-10-28).
+    [InlineData("Overhead", "CARGO_SMOKE_BOTTLE_1_DISCH_LIGHT", "Cargo Smoke", "Bottle 1 discharged light")]
+    [InlineData("Overhead", "CARGO_SMOKE_BOTTLE_2_DISCH_LIGHT", "Cargo Smoke", "Bottle 2 discharged light")]
+    [InlineData("Overhead", "CARGO_SMOKE_BOTTLE_3_DISCH_LIGHT", "Cargo Smoke", "Bottle 3 discharged light")]
+    [InlineData("Overhead", "VENT_AVNCS_SMOKE_SEQ1_LIGHT", "Ventilation", "Avionics smoke light")]
+    [InlineData("Overhead", "MLG_BAY_LIGHT_SEQ1_LIGHT", "Fire", "MLG bay fire light")]
+    [InlineData("Overhead", "IRS_ON_BAT_LIGHT", "ADIRS", "IRS on battery light")]
+    [InlineData("Overhead", "CABIN_LAVATORY_SEQ1_LIGHT", "Cabin", "Lavatory occupied light")]
     [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Warnings", "Captain priority light")]
     [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Warnings", "Captain priority arrow light")]
     [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light")]
@@ -119,6 +126,8 @@ public class A350PanelLampsTests
     [InlineData("Pedestal", "RMP_1_OFF_LIGHT_SEQ1_LIGHT", "Captain RMP", "Captain RMP off light")]
     [InlineData("Pedestal", "RMP_1_OFF_LIGHT_SEQ2_LIGHT", "Captain RMP", "Captain RMP off lower legend light")]
     [InlineData("Pedestal", "RMP_2_OFF_LIGHT_SEQ1_LIGHT", "First Officer RMP", "First officer RMP off light")]
+    [InlineData("Pedestal", "RMP_2_OFF_LIGHT_SEQ2_LIGHT", "First Officer RMP", "First officer RMP off lower legend light")]
+    [InlineData("Pedestal", "RMP_3_OFF_LIGHT_SEQ1_LIGHT", "RMP 3", "RMP 3 off light")]
     [InlineData("Pedestal", "RMP_3_OFF_LIGHT_SEQ2_LIGHT", "RMP 3", "RMP 3 off lower legend light")]
     public void A_lamp_no_control_owns_is_shown_where_the_pilot_sees_it(string section, string node, string panel, string name)
     {
