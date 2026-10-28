@@ -3933,33 +3933,37 @@ class Curation(unittest.TestCase):
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change. Plan 12
-    # task 9 (the owner: "reorder", then "Actions only") orders each section's panels by the first step of BlueBird's
-    # Simplified Procedures (User Procedures PDF pages 34-62, cold and dark to securing) that moves or presses one of the
-    # panel's controls, page then line; a step that only checks a position (the whole cockpit safety inspection, any CHECK,
-    # VERIFY, CONFIRM or CHECKED step) does not count, and a panel no step acts on follows, in Task 7's order. The Pedestal
-    # keeps its start, Control stand, Engines, TCAS and transponder (plan 01's frozen Bbs757DefinitionTests). Each panel's
-    # first action, page, line and words: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
+    # task 9 (the owner: "reorder", then "Actions only"; round 3, the controller's ruling in its spirit) orders each
+    # section's panels by the first step of BlueBird's Simplified Procedures (User Procedures PDF pages 34-62, cold and
+    # dark to securing) that changes one of the panel's controls on a normal flight, page then line. Not counted: a step
+    # that only checks (the whole cockpit safety inspection, any CHECK, VERIFY, CONFIRM or CHECKED step), an AS REQUIRED
+    # or AS DESIRED step, and a step that sets a control to where it rests cold and dark (BlueBird's cold and dark panel
+    # state). A panel no step changes follows, in Task 7's order. Pinned: the Pedestal keeps Control stand, Engines, TCAS
+    # and transponder first (plan 01's frozen Bbs757DefinitionTests), and the Forward panel opens with Brakes, the
+    # autobrake's panel (the owner). Each panel's first change: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
     PANEL_ORDER = {
-        # 35:10 battery ON at power-up; the door lock panel is only checked (46:24), so it goes last
-        "Overhead": ["Electrical", "APU", "IRS", "Electronic engine control (RR)", "Yaw dampers", "Hydraulics", "CVR",
-                     "Panel lighting", "Emergency lights and passenger oxygen", "Ram air turbine and engine limiters",
-                     "Fuel", "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
-                     "Equipment cooling", "Air conditioning and bleed", "SELCAL and cabin call",
-                     "Indicator lights and door lock"],
-        # 40:10 VOR / DME selection as required, 40:13 flight director switches ON; the master warning and caution: never
-        "Glareshield": ["VOR/DME", "MCP", "Master warning and caution"],
-        # 40:20 foot / shoulder heat as required, 40:21 instrument sources NORMAL, then the main panel (41:18 on)
-        "Forward panel": ["Captain foot and shoulder heat", "First officer foot and shoulder heat",
-                          "Captain instrument source selectors", "First officer instrument source selectors",
-                          "Standby instruments", "Brakes", "Heading reference", "Ground proximity overrides",
-                          "Caution, config and G/S inhibit", "Landing gear", "Thrust mode select", "Alternate flaps",
-                          "Yokes", "Captain autoland status", "Captain DDRMI", "Captain chronometer",
-                          "First officer autoland status", "First officer DDRMI", "First officer chronometer"],
+        # 35:10 battery ON; 46:29 the electric hydraulic pumps ON (the engine pumps rest ON); 48:13 packs AUTO; then the
+        # panels whose steps only confirm a resting position (EEC, yaw dampers, limiters ON; anti-ice, wipers OFF ...)
+        "Overhead": ["Electrical", "APU", "IRS", "CVR", "Emergency lights and passenger oxygen", "Window heat",
+                     "Pressurization", "Hydraulics", "Fuel", "Passenger signs", "Exterior lights",
+                     "Air conditioning and bleed", "SELCAL and cabin call", "Electronic engine control (RR)",
+                     "Yaw dampers", "Panel lighting", "Ram air turbine and engine limiters", "Anti-ice", "Wipers",
+                     "Equipment cooling", "Indicator lights and door lock"],
+        # 40:13 flight director switches ON; VOR / DME selection is AS REQUIRED (40:10)
+        "Glareshield": ["MCP", "VOR/DME", "Master warning and caution"],
+        # Brakes pinned first by the owner (and 41:19 autobrake RTO, the section's first change); 50:33 the takeoff config
+        # press; 51:30 gear UP; the rest only optional or resting-position steps, in Task 7's order
+        "Forward panel": ["Brakes", "Caution, config and G/S inhibit", "Landing gear", "Captain foot and shoulder heat",
+                          "Captain instrument source selectors", "Heading reference", "Thrust mode select",
+                          "Alternate flaps", "Ground proximity overrides", "First officer instrument source selectors",
+                          "First officer foot and shoulder heat", "Yokes", "Captain autoland status",
+                          "Standby instruments", "Captain DDRMI", "Captain chronometer", "First officer autoland status",
+                          "First officer DDRMI", "First officer chronometer"],
         # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
-        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Captain EFIS",
-                     "First officer EFIS", "Weather radar", "Radio tuning panel 1", "Audio panel 1", "Radio tuning panel 2",
-                     "Radio tuning panel 3", "Audio panel 2", "ILS tuning", "Fire protection", "Stabilizer trim",
-                     "CDU brightness"],
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "Fire protection", "Stabilizer trim",
+                     "EICAS control", "Captain EFIS", "First officer EFIS", "CDU brightness", "Radio tuning panel 1",
+                     "Audio panel 1", "Weather radar", "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2",
+                     "ILS tuning"],
         "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).
@@ -4095,6 +4099,18 @@ class Curation(unittest.TestCase):
             with self.subTest(section=section):
                 self.assertIn(section, g.SECTIONS)
                 self.assertEqual(len(names), len(set(names)), "a panel listed twice")
+
+    def test_the_forward_panel_opens_with_the_autobrake_panel_the_owner_pinned(self):
+        # Plan 12 task 9 (the owner: "I really want forward to open to the panel with autobrakes first because that's what
+        # will be used most"): Brakes is first in the curation and in the embedded map, and its first control is the
+        # autobrake selector.
+        c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            forward = [x for x in json.load(fh)["controls"] if x["section"] == "Forward panel"]
+
+        self.assertEqual(c["panel_order"]["Forward panel"][0], "Brakes")
+        self.assertEqual((forward[0]["panel"], forward[0]["node"], forward[0]["label"]),
+                         ("Brakes", "B757_MAIN_knob_gears_altn_autobrake", "Autobrake"))
 
     # Plan 12 task 7: the panels the audit found made up (code buckets of the vendor's file, or the app's own) and the ones
     # it merged or renamed. None may come back, in curation or in the map.
