@@ -100,7 +100,7 @@ internal static class DisplayModes
             var copy = reader.Snapshot();
             var ms = sw.Elapsed.TotalMilliseconds;
             copy.Save(path);
-            Console.WriteLine($"{path}: {copy.Regions.Count} regions, {copy.Regions.Sum(r => (long)r.Length) / 1e6:F1} MB in {ms:F1} ms");
+            Console.WriteLine($"{path}: {copy.Regions.Count} regions, {copy.Regions.Sum(r => (long)r.Length) / 1e6:F1} MB in {ms:F1} ms, {reader.LastReread / 1e3:F0} KB read again");
         }
         Console.WriteLine("still valid: " + reader.IsStillValid());
         return 0;
