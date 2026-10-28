@@ -12,7 +12,21 @@ Only the order of the controls inside a panel moves. The panels of a section kee
 
 Every panel is listed tier 1 first, then tier 2, then tier 3 (a pair or a guard stays together inside its tier, as the reason says). The rows below are in the order the pilot tabs through.
 
-Sources, cited by PDF page: **UP n** is page n of `BlueBird_757_User_Procedures_v1.01.pdf`, **NC n** is page n of `BlueBird_757_Normal_Checklist_v1.01.pdf`. **(gp)** marks general 757 practice where BlueBird's manuals say nothing. "BlueBird list" and "BlueBird simvar list" are BlueBird's published simvar list (support.bluebirdsim.com/docs/simvars). A few reasons end "see method 1.5", "see method 1.6" or "(section 3)": those point into the researcher's working notes, which are not kept in the repository, and are reproduced as the research wrote them.
+Sources, cited by PDF page: **UP n** is page n of `BlueBird_757_User_Procedures_v1.01.pdf`, **NC n** is page n of `BlueBird_757_Normal_Checklist_v1.01.pdf`. **(gp)** marks general 757 practice where BlueBird's manuals say nothing. "BlueBird list" and "BlueBird simvar list" are BlueBird's published simvar list (support.bluebirdsim.com/docs/simvars). 18 reasons cite the researcher's own notes ("see method 1.5", "see method 1.6", "(section 3)"); the notes close this file, verbatim, under "Daily-use order research: the notes order_data.py refers to". Every reason is kept as the research wrote it, and the key below says which note each citation means.
+
+Key to the citations of the research notes:
+
+- "method 1.5" in the reason of Overhead miscellaneous / Emergency Lights Guard: judgment call 1 of the notes (the emergency lights guard stays just after its switch, because the app opens and closes it itself).
+- "method 1.6" in the reason of Stabilizer trim / Stab Trim Nose Down 1 s (button): judgment call 4 of the notes (the alternate stab trim buttons are tier 2, as the flow only checks those switches NEUTRAL and normal trim is the yoke switches).
+- "method 1.6" in the reason of Engines / R Fuel Control (RR): judgment call 5 of the notes (Engines is unchanged, ruling R37, and the notes name an alternative order for the RR switches).
+- "(section 3)" in the reasons of 8 rows (Audio panel 1 / Audio 1 Mic Lm Light; Audio panel 1 / Audio 1 Mic Lm Light Knob; Audio panel 1 / Audio 1 Mic RR Light; Audio panel 1 / Audio 1 Mic RR Light Knob; Audio panel 2 / Audio 2 Mic Lm Light; Audio panel 2 / Audio 2 Mic Lm Light Knob; Audio panel 2 / Audio 2 Mic RR Light; Audio panel 2 / Audio 2 Mic RR Light Knob): item 1 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 1 row (SELCAL and cabin call / Flt Int): item 2 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 2 rows (Captain EFIS / INOP; First officer EFIS / INOP): item 3 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 1 row (Cabin lights / Cabin Work Light): item 4 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 1 row (Captain chronometer / 757 Capt Clock): item 5 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 1 row (MCP / ALT SEL Push): item 6 of the notes' "Section 3" list, a control whose meaning could not be established.
+- "(section 3)" in the reasons of 1 row (EICAS control / EICAS Event): item 8 of the notes' "Section 3" list, a control whose meaning could not be established.
+- Items 7, 9 and 10 of the "Section 3" list (weather radar, Sys Fail, Stdby EICAS) are not cited by any reason's "(section 3)" mark; they stay in the notes below.
 
 App rows are not map nodes: the landing altitude field, the cabin climb and descend buttons and the six trim buttons are placed by the app's own code (Pressurization: the landing altitude field first, the cabin buttons last; Stabilizer trim: the trim buttons first, rudder, aileron, then the alternate stab trim). They are listed where the research places them and marked "(app row, placed by its own code)"; `control_order` leaves them out.
 
@@ -728,3 +742,65 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 21 | P61 Press Button 4 | `P61_PRESS_Button_4` | 3 | maintenance page CONF/MCDP |
 | 22 | P61 Press Button 5 | `P61_PRESS_Button_5` | 3 | maintenance page ENG/EXCD |
 | 23 | P61 Press Button 6 | `P61_PRESS_Button_6` | 3 | maintenance page EPCS |
+
+## Daily-use order research: the notes order_data.py refers to
+
+Verbatim from the researcher's report (2026-10-28), the parts its reasons cite as "method 1.x" and "section 3".
+
+### Sources
+
+PDF pages: "UP n" is BlueBird_757_User_Procedures_v1.01.pdf, PDF page n (PDF pages 34-199 are printed page n + 1; the
+Complete Flight Guide holds the same pages 6 PDF pages later). "NC 2" is BlueBird_757_Normal_Checklist_v1.01.pdf, PDF
+page 2 (printed 201). "(gp)" is general 757 practice, used for tier 2 and 3 placements only (one exception: the yoke A/P
+disconnect, where it backs a UP citation). Node meanings come from curation.json, BlueBird's simvar list and the vendor
+click code (docs/b757/evidence/controls/control-map.tsv). The flow is the Simplified Procedures (UP 34-62), cold and
+dark to final securing, with the Expanded Procedures for detail; abnormal and maneuver pages (UP 205 on) are cited only
+to show a control is non-normal.
+
+### Tiers
+
+- Tier 1: moved by the flow during the flight cycle, or named as an action line after the one-time preflight setup;
+  per-flight conventions count (AUTO 1/2, ignition 1/2 and transponder L/R alternated between flights, UP 61, 105); a
+  test on the checklist counts ("Oxygen CHECKED").
+- Tier 2: set or checked once in preflight and not moved later; preflight tests not on the checklist (CVR, squib, EGPWS,
+  stall, config, fire, TCAS, ASA); display options, comfort items, "as required" items.
+- Tier 3: non-normal or emergency controls, maintenance, tests outside the crew flow (UP 76), guarded switches only
+  checked in position, and guards of tier 3 switches.
+
+Inside a tier: tier 1 in the order the flow first uses each control, L/R pairs adjacent; tiers 2 and 3 in the order the
+flow first names them, anything unnamed in its current order. A tier 3 guard sits just before its switch (guards on the
+Switch guards panel cover switches on other panels, so they are ordered among themselves).
+
+### Judgment calls (method 1.1-1.7)
+
+1. Emergency lights guard: it stays just after its tier 1 switch, because the app opens and closes it itself (curation
+   PLAN 02 TASK 3, Bbs757Guarded). Swap the two rows for guard-first here too.
+2. Electrical: assumes cold and dark leaves the bus ties and generator controls in AUTO/ON; Dirty Panel States can
+   change that (UP 64).
+3. Exterior lights: the order follows UP 158 literally. Option: L/R Landing up to 2nd and 3rd, as they have the most
+   uses per flight.
+4. Alternate stab trim: the buttons are tier 2, as the flow only checks those switches NEUTRAL (UP 41) and normal trim is
+   the yoke switches. Raise them to tier 1 if they become the pilot's normal way to set trim in the app.
+5. Engines: unchanged (ruling R37). An RR alternative: L Start, L Fuel PW, L Fuel RR, R Start, R Fuel PW, R Fuel RR.
+6. Weather radar: future tilt and gain knobs would go right after WX (gp). (Plan 12 leaves them out: nothing reads them.)
+7. App rows: the app's Squawk Code field stays right after TCAS Mode.
+
+### Section 3: controls whose meaning could not be established
+
+1. B757_PED_AUDIO_1/2_MIC_LM_LIGHT and _RR_LIGHT, with their knobs: probably HF L and HF R, by elimination. Tier 3.
+2. B757_OVHD_FLT_INT_BUTTON: BlueBird calls it only "Flight INT button"; function unknown.
+3. B757_ADI_1/2_INOP_BUTTON: a toggle on the EFIS panel with no function found.
+4. B757_CABIN_WORK_LT002: labelled Cabin Work Light, but BlueBird's list calls it the flight-attendant emergency-light
+   override; the label may be wrong.
+5. BBS_757_CAPT_CLOCK_BUTTON: assumed to be the manual's "glareshield CLOCK button" (UP 145); the other candidate is
+   INSTRUMENT_Knob_Clock.
+6. BBS757_ALTSEL_CLICK: probably altitude intervention; the manuals don't describe it.
+7. Weather radar: the map has no OFF control although the flows say "radar OFF"; TFR, GCS, WXT and MAP rest on general
+   practice.
+8. B757_EICAS_EVENT_BUTTON: its click also fires H:BBS_757_EICAS_DEBUG, which does something unknown.
+9. B757_PED_SYS_FAIL_BUTTON: assumed to be the fire panel's FAIL/P-RESET (UP 109).
+10. B757_MAIN_STDBY_EICAS_KNOB: assumed to be the "secondary engine indications" selector of UP 48.
+
+Two labels mislead although their meaning is established: EICAS L Status is the ENGINE page button and EICAS R Status
+the STATUS page button (from their click code); the vendor component names make "O2 Ears Observer" observer 2, not
+observer 1 (it belongs with the P61 test).
