@@ -34,11 +34,12 @@ What is derived and what is curated (curation.json):
             out (direct_write: a lever whose code cannot take a pick where it aims), the levers the rules leave out
             and the pilot needs (levers: the gear lever and the flap lever, drag handles BlueBird publishes the
             detents of), the knobs the rules leave out and a combo can drive (direct_positions: Auto Rate, the zone
-            temperature selectors, the display brightness knobs), the nodes kept although no cockpit model has them
-            (keep_without_node), the status rows, and the ORDER the pilot tabs through: the panels of a section
+            temperature selectors, the display brightness knobs), the buttons that must be held (hold_ms: the fire,
+            CVR and squib tests, which show only while their button is down), the nodes kept although no cockpit model
+            has them (keep_without_node), the status rows, and the ORDER the pilot tabs through: the panels of a section
             (panel_order) and the controls of a panel (control_order). A curated label, position list, kind, guarded,
-            levers, direct_positions, direct_write or keep_without_node entry, exclusion or inclusion for a node the
-            package does not have is an error (a stale entry never hides); so is a kind or an inclusion that does
+            levers, direct_positions, direct_write, hold_ms or keep_without_node entry, exclusion or inclusion for a node
+            the package does not have is an error (a stale entry never hides); so is a kind or an inclusion that does
             nothing, and so is an order that names a panel or a node that is not there. A kind only re-reads a control
             the rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
@@ -130,6 +131,19 @@ What is derived and what is curated (curation.json):
             ..._ANIM_FRAME var while its click writes the ..._KNOB_FRAME var the systems read; the ADI knobs' click
             writes B757_PFD_1_SCREEN_KNOB, the var BlueBird's brightness code reads for the PFD). A node also under
             levers, guarded, direct_write, kinds or positions is an error: the entry holds all the knob has.
+  hold_ms   a button the cockpit shows a result for only while it is held: the fire tests, the CVR and squib tests and the
+            other test buttons (docs/b757/evidence/flight-12.md, "The fire test, the P61 test switches and the master
+            lights": the engine fire test raised the bell, the fire lights and both sides' master warning for as long as
+            the button was down and cleared when it was let go, so the app's 200 ms press gives a blip at most). BlueBird's
+            template for them is the plain momentary button, which the extractor reads as a button, so curation names the
+            node and its hold in milliseconds, and the control is built as a held button (kind "held") with that hold_ms.
+            Nothing else changes: press, release, label, panel and state var are the rules' own, so the app presses the
+            control, holds it that long and lets go (Bbs757Write.PressFor). A hold under MIN_CURATED_HOLD_MS (500) is the
+            app's own press and one over MAX_CURATED_HOLD_MS (10,000) is a button left down: both are errors when the
+            file loads. The entry is checked against the control the map holds, so that a change of BlueBird's stops the
+            run: the map must keep the node, and it must be a button (kind "button") with both a press and a release
+            (a toggle, a switch, a guard or select, and a button the extractor already reads as held, which has the hold
+            the vendor's template gives it, are errors), and not also under kinds. The run names each, and the hold.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
 cockpit runs, so a slip the cockpit has stays a slip in the replay (a guarded, direct_write or levers control has none).
@@ -169,6 +183,10 @@ DEFAULT_CURATION = HERE / "curation.json"
 
 MAX_POSITIONS = 12
 DEFAULT_HOLD_MS = 1500
+# The holds curation's 'hold_ms' may give (milliseconds): under the first is the app's own 200 ms press, over the second is a
+# button left down.
+MIN_CURATED_HOLD_MS = 500
+MAX_CURATED_HOLD_MS = 10000
 
 # Section order in the map, and the node prefix that picks one (first match wins).
 SECTIONS = ("Overhead", "Glareshield", "Forward panel", "Pedestal", "Other")
@@ -259,7 +277,7 @@ Cockpit = collections.namedtuple("Cockpit", "pw rr")  # the node names of the PW
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
                  "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
                  "kinds": dict, "guarded": dict, "levers": dict, "direct_positions": dict, "direct_write": list,
-                 "keep_without_node": list, "spelling": dict, "status": list}
+                 "hold_ms": dict, "keep_without_node": list, "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -968,6 +986,35 @@ def check_direct_write(controls, kept_row, dropped_why, cur):
                                 "the entry, so that the app replays the click code")
 
 
+def apply_hold_ms(controls, dropped_why, cur) -> None:
+    """Curation's 'hold_ms': each named button becomes a held button with that hold, in place, and nothing else of it changes.
+
+    The control is checked first, so that a change of BlueBird's stops the run instead of reaching the app: the map must keep
+    the node (a stale entry never hides), it must not also be under kinds (which re-reads a control's kind and keeps the
+    click code verbatim: a node under both would be built twice over), and it must be a button, with a press to hold and a
+    release to let go with. A toggle, switch, guard or select is not pressed and let go, and a button the extractor already
+    reads as held keeps the hold the vendor's template gave it. Run after the labels are made and the controls are kept,
+    before the order: the hold changes neither."""
+    by_node = {c["node"]: c for c in controls}
+    for node in cur["hold_ms"]:
+        control = by_node.get(node)
+        if control is None:
+            raise CurationError(f"curation hold_ms names {node}, which the map does not keep (the rules leave it out: "
+                                f"{dropped_why.get(node, '?')}): remove the entry")
+        if node in cur["kinds"]:
+            raise CurationError(f"curation hold_ms and kinds both name: {node} (kinds re-reads a control's kind, hold_ms "
+                                "builds a button as a held one)")
+        if control["kind"] != "button":
+            raise CurationError(f"curation hold_ms names {node}, which is a {control['kind']}, not a button: only a button "
+                                "is pressed, held and let go (a held button the vendor's template times has its own hold)")
+        for field in ("press", "release"):
+            if not control[field]:
+                raise CurationError(f"curation hold_ms names {node}, which has no {field} code: a held button is pressed "
+                                    "and let go with the cockpit's own click code")
+    for node, ms in cur["hold_ms"].items():
+        by_node[node]["kind"], by_node[node]["hold_ms"] = "held", ms
+
+
 def reject_gate_notes(controls, cur):
     """No control the map replays carries the extractor's gate note (GATE_NOTE) in its press, release, cw or ccw: its click
     only runs while a guard is open, and what the app replays would never run. Such a control belongs under 'guarded'."""
@@ -1008,6 +1055,12 @@ def direct_write_how(row):
     """What curation's 'direct_write' left out of this row's click code, in words, for the run's report (check_direct_write
     has already stopped the run for a row with none)."""
     return f"{', '.join(name for name, _ in click_codes(row))} left out"
+
+
+def hold_ms_how(ms) -> str:
+    """What curation's 'hold_ms' did to this control, in words, for the run's report (apply_hold_ms has already stopped the
+    run for a control that is not a button)."""
+    return f"held {ms} ms (the rules alone keep it as a button)"
 
 
 def check_keep_without_node(kept, dropped_why, cur, cockpit):
@@ -1153,7 +1206,7 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
     for r in rows:
         first_row.setdefault(r["node"], r)
     for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "levers", "direct_positions",
-                  "direct_write", "keep_without_node"):
+                  "direct_write", "hold_ms", "keep_without_node"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
@@ -1198,6 +1251,7 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
     check_guarded(controls, first_row, cur)
     check_levers(first_row, cur)
     check_direct_positions(first_row, cur)
+    apply_hold_ms(controls, dropped_why, cur)
     reject_gate_notes(controls, cur)
     # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).
     controls, unordered = flow_order(controls, cur)
@@ -1213,6 +1267,7 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
         "levers": {n: lever_how(first_row[n], cur) for n in cur["levers"]},
         "direct_positions": {n: direct_positions_how(first_row[n], cur) for n in cur["direct_positions"]},
         "direct_write": {n: direct_write_how(kept_row[n]) for n in cur["direct_write"]},
+        "hold_ms": {n: hold_ms_how(ms) for n, ms in cur["hold_ms"].items()},
         "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions", "kinds") for n in cur[t] if n not in kept}),
         "unused_banners": sorted((set(cur["exclude_banners"]) | set(cur["panels"])) - banners),
@@ -1306,6 +1361,11 @@ def load_curation(path) -> dict:
     for key in ("direct_write", "keep_without_node"):
         if not all(isinstance(node, str) and node for node in cur[key]):
             raise CurationError(f"{path}: {key} is a list of node names")
+    for node, ms in cur["hold_ms"].items():
+        if not (node and isinstance(ms, int) and not isinstance(ms, bool)
+                and MIN_CURATED_HOLD_MS <= ms <= MAX_CURATED_HOLD_MS):
+            raise CurationError(f"{path}: hold_ms[{node!r}] is a node name and a hold in whole milliseconds from "
+                                f"{MIN_CURATED_HOLD_MS} to {MAX_CURATED_HOLD_MS}")
     for rule in cur["node_panels"]:
         if "panel" not in rule or not ({"banner", "prefix"} & set(rule)):
             raise CurationError(f"{path}: node_panels rule {rule!r} needs a panel and a banner or prefix")
@@ -1403,6 +1463,10 @@ def main(argv=None) -> None:
     print(f"  direct-write     : {len(report['direct_write'])} (the vendor's click code is left out: the app writes the "
           "state var to the picked position)")
     for node, how in report["direct_write"].items():
+        print(f"    {node}: {how}")
+    print(f"  curated holds    : {len(report['hold_ms'])} (a button the rules keep as a button, held by curation: the app "
+          "presses it, holds it that long and lets go)")
+    for node, how in report["hold_ms"].items():
         print(f"    {node}: {how}")
     print(f"  cockpit models   : {INTERIOR_MODELS['pw']} ({len(cockpit.pw)} nodes), {INTERIOR_MODELS['rr']} "
           f"({len(cockpit.rr)} nodes)")

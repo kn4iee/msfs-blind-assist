@@ -2487,12 +2487,12 @@
    "section": "Overhead",
    "panel": "CVR",
    "label": "CVR Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_OVHD_CVR_Test",
    "positions": [],
    "press": "1 (>L:B757_OVHD_CVR_Test, number)",
    "release": "0 (>L:B757_OVHD_CVR_Test, number)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -3234,12 +3234,12 @@
    "section": "Forward panel",
    "panel": "Main panel switches",
    "label": "Takeoff Check",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_MAIN_TOCHK_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_MAIN_TOCHK_BUTTON)",
    "release": "0 (>L:B757_MAIN_TOCHK_BUTTON)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4379,12 +4379,12 @@
    "section": "Forward panel",
    "panel": "Captain autoland status",
    "label": "L Autoland 1",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_MAIN_L_AUTOLAND_1_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_MAIN_L_AUTOLAND_1_BUTTON)",
    "release": "0 (>L:B757_MAIN_L_AUTOLAND_1_BUTTON)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4393,12 +4393,12 @@
    "section": "Forward panel",
    "panel": "Captain autoland status",
    "label": "L Autoland 2",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_MAIN_L_AUTOLAND_2_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_MAIN_L_AUTOLAND_2_BUTTON,bool)",
    "release": "0 (>L:B757_MAIN_L_AUTOLAND_2_BUTTON)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4622,12 +4622,12 @@
    "section": "Forward panel",
    "panel": "Oxygen",
    "label": "Captain Oxygen Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_CAPT_O2_TEST_SLIDER",
    "positions": [],
    "press": "1 (>L:B757_CAPT_O2_TEST_SLIDER)",
    "release": "0 (>L:B757_CAPT_O2_TEST_SLIDER, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4650,12 +4650,12 @@
    "section": "Forward panel",
    "panel": "Oxygen",
    "label": "First Officer Oxygen Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_FO_O2_TEST_SLIDER",
    "positions": [],
    "press": "1 (>L:B757_FO_O2_TEST_SLIDER, bool)",
    "release": "0 (>L:B757_FO_O2_TEST_SLIDER, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4678,12 +4678,12 @@
    "section": "Forward panel",
    "panel": "Oxygen",
    "label": "Observer Oxygen Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_OBS1_O2_TEST_SLIDER",
    "positions": [],
    "press": "1 (>L:B757_OBS1_O2_TEST_SLIDER)",
    "release": "0 (>L:B757_OBS1_O2_TEST_SLIDER, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -4706,12 +4706,12 @@
    "section": "Forward panel",
    "panel": "Oxygen",
    "label": "P61 Oxygen Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_OBS2_O2_TEST_SLIDER",
    "positions": [],
    "press": "1 (>L:B757_OBS2_O2_TEST_SLIDER)",
    "release": "0 (>L:B757_OBS2_O2_TEST_SLIDER, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -5122,12 +5122,12 @@
    "section": "Forward panel",
    "panel": "First officer autoland status",
    "label": "R Autoland 1",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_MAIN_R_AUTOLAND_1_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_MAIN_R_AUTOLAND_1_BUTTON)",
    "release": "0 (>L:B757_MAIN_R_AUTOLAND_1_BUTTON)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -5136,12 +5136,12 @@
    "section": "Forward panel",
    "panel": "First officer autoland status",
    "label": "R Autoland 2",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_MAIN_R_AUTOLAND_2_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)",
    "release": "0 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -5917,12 +5917,12 @@
    "section": "Pedestal",
    "panel": "TCAS and transponder",
    "label": "TCAS Mode Knob Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_TCAS_MODE_KNOB_TEST",
    "positions": [],
    "press": "1 (>L:B757_PED_TCAS_MODE_KNOB_TEST,bool)",
    "release": "0 (>L:B757_PED_TCAS_MODE_KNOB_TEST,bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -6162,12 +6162,12 @@
    "section": "Pedestal",
    "panel": "Radio tuning panel 1",
    "label": "Nav 1 Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": null,
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_TEST_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -6697,12 +6697,12 @@
    "section": "Pedestal",
    "panel": "Fire protection",
    "label": "Wheel Well Fire",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_FIRE_WHLWELL_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
    "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -6711,12 +6711,12 @@
    "section": "Pedestal",
    "panel": "Fire protection",
    "label": "Fire ENG",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_FIRE_ENG_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
    "release": "0 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -6725,12 +6725,12 @@
    "section": "Pedestal",
    "panel": "Fire protection",
    "label": "Fire Cargo",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_FIRE_CARGO_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
    "release": "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -7219,12 +7219,12 @@
    "section": "Pedestal",
    "panel": "Weather radar left",
    "label": "WX L Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_WX_L_TEST_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_PED_WX_L_TEST_BUTTON,bool)",
    "release": "0 (>L:B757_PED_WX_L_TEST_BUTTON,bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -7345,12 +7345,12 @@
    "section": "Pedestal",
    "panel": "Radio tuning panel 2",
    "label": "Nav 2 Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": null,
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_TEST_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -7471,12 +7471,12 @@
    "section": "Pedestal",
    "panel": "Radio tuning panel 3",
    "label": "Nav 3 Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": null,
    "positions": [],
    "press": "1 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_TEST_BUTTON,bool)",
    "release": "0 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -8076,12 +8076,12 @@
    "section": "Pedestal",
    "panel": "Pedestal radio panels",
    "label": "ILS Test",
-   "kind": "button",
+   "kind": "held",
    "state_var": "B757_PED_ILS_TEST_BUTTON",
    "positions": [],
    "press": "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
    "release": "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },
@@ -8140,228 +8140,12 @@
    "section": "Other",
    "panel": "P61 panel",
    "label": "P6 Squibs Button2",
-   "kind": "button",
+   "kind": "held",
    "state_var": null,
    "positions": [],
    "press": "1 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 1 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) (E:SIMULATION TIME, second) (>O:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_PressTime, second)",
    "release": "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_7",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Ground Prox Hyd Gen Test",
-   "kind": "switch",
-   "state_var": "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Ground proximity test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Hydraulic generator test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_GRNDPROX_HYDGEN_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_10",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Air Data Stall Left Test",
-   "kind": "switch",
-   "state_var": "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Air data test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Stall warning test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_9",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Air Data Stall Right Test",
-   "kind": "switch",
-   "state_var": "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Air data test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Stall warning test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_8",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "TO and Land Config Test",
-   "kind": "switch",
-   "state_var": "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Takeoff config test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Landing config test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_3",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Equip Cooling Test",
-   "kind": "switch",
-   "state_var": "BBS757_EQUIP_COOLING_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Upper test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Lower test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_EQUIP_COOLING_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_4",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Yaw Damp Test",
-   "kind": "switch",
-   "state_var": "BBS757_YAW_DAMP_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Upper test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Lower test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_YAW_DAMP_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_5",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Duct Leak Fuel Qty Test",
-   "kind": "switch",
-   "state_var": "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Position 0"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Position 2"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW, number)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null
-  },
-  {
-   "node": "B757_VC_P61_SWITCH_6",
-   "section": "Other",
-   "panel": "P61 panel",
-   "label": "Wing AI Window Heat Test",
-   "kind": "switch",
-   "state_var": "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Wing anti-ice test"
-    },
-    {
-     "value": 1,
-     "label": "Neutral"
-    },
-    {
-     "value": 2,
-     "label": "Probe heat test"
-    }
-   ],
-   "press": null,
-   "release": "1 (>L:BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW, number)",
-   "hold_ms": 0,
+   "hold_ms": 3000,
    "cw": null,
    "ccw": null
   },

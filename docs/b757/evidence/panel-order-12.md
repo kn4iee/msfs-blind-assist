@@ -743,6 +743,8 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 22 | P61 Press Button 5 | `P61_PRESS_Button_5` | 3 | maintenance page ENG/EXCD |
 | 23 | P61 Press Button 6 | `P61_PRESS_Button_6` | 3 | maintenance page EPCS |
 
+Plan 12 task 5 (2026-10-28): rows 4 to 11, the eight `B757_VC_P61_SWITCH_3` to `_10` test switches, became buttons placed by the app (task 5b) and are no longer map nodes; the tiers and sources above stand as they were.
+
 ## Daily-use order research: the notes order_data.py refers to
 
 Verbatim from the researcher's report (2026-10-28), the parts its reasons cite as "method 1.x" and "section 3".

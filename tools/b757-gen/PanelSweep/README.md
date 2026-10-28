@@ -65,8 +65,8 @@ cockpit, that the sim says the aircraft is on the ground with both engines off (
 that a one-shot calculator write of a test value into a variable of its own (`L:PANELSWEEP_PROBE`) comes
 back on a read (it refuses if not: the MobiFlight module is missing or the aircraft is not loaded).
 
-It takes about 15 minutes for the whole 757 (the dry run's estimate on 2026-10-28: 176 controls to sweep,
-292 position writes, each control put back afterwards). **Ctrl+C** stops after the step in progress and
+It takes about 14 minutes for the whole 757 (the dry run's estimate on 2026-10-28: 168 controls to sweep,
+276 position writes, each control put back afterwards). **Ctrl+C** stops after the step in progress and
 puts that control back, then writes the results so far. A second Ctrl+C stops at once and names the
 control that may need putting back by hand.
 
@@ -117,9 +117,9 @@ these change, panel by panel, as the dry run lists them on 2026-10-28:
 - **Pedestal, EICAS control:** the EICAS computer switch and the thrust reference controls (EICAS Lwr
   Thrust Ref: L, BOTH, R; Thrust Ref Pull).
 - **Pedestal, Audio panels 1 and 2:** every microphone and receiver selector, voice/range and boom/oxygen.
-- **Other, P61 panel:** the flight recorder, service interphone and the test switches (ground proximity,
-  stall left and right, takeoff and landing configuration, equipment cooling, yaw damper, duct leak and fuel
-  quantity, wing anti-ice and window heat): a test may sound its aural warning while it is on.
+- **Other, P61 panel:** the flight recorder and the service interphone. (The P61 test switches are no longer
+  in the map: they spring back to neutral at once, so the app tests from buttons instead, and the sweep never
+  moves them.)
 
 Nothing on the denylist moves (below), nor any button, guard or guarded switch.
 

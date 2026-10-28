@@ -67,6 +67,7 @@ CURATION = {
     "levers": {},
     "direct_positions": {},
     "direct_write": [],
+    "hold_ms": {},
     "keep_without_node": [],
     "spelling": {"CENTRE": "Center"},
     "status": [],
@@ -84,7 +85,7 @@ def shipped_for(nodes, **changes):
     only what the rows have (an order only when every node it lists is there too)."""
     cur = g.load_curation(g.DEFAULT_CURATION)
     here = set(nodes)
-    for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
+    for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions", "hold_ms"):
         cur[table] = {n: v for n, v in cur[table].items() if n in here}
     for table in ("direct_write", "exclude_nodes", "include_nodes", "keep_without_node"):
         cur[table] = [n for n in cur[table] if n in here]
@@ -932,7 +933,7 @@ class Guarded(unittest.TestCase):
         the panel's), so the shipped lead stays what it is: the emergency lights switch, then its guard."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(self.rows())
-        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions", "hold_ms"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1193,7 +1194,7 @@ class DirectWrite(unittest.TestCase):
         """The shipped curation, cut down to the nodes of `rows`: a table entry for a node the package lacks is an error."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(rows)
-        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions", "hold_ms"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1462,6 +1463,227 @@ class DirectWrite(unittest.TestCase):
             with self.assertRaisesRegex(g.CurationError,
                                         rf"direct_write names {stab[1]['node']}, which is a toggle, not a switch"):
                 self.build(stab, guarded={}, direct_write=[self.ET, stab[1]["node"]])
+
+
+class HoldMs(unittest.TestCase):
+    """Plan 12, task 5 (the owner: "Test in sim and revise accordingly"): curation's 'hold_ms'. The fire, CVR and squib tests
+    show only while their button is held, and BlueBird's template for them is the plain momentary button, so the rules keep
+    each as a button and the app presses it for 200 ms (measured: docs/b757/evidence/flight-12.md, "The fire test, the P61
+    test switches and the master lights"). An entry makes the control a held button with that hold: the app presses it, holds
+    it that long and lets go (Bbs757Write.PressFor), and the press and the release are exactly what they were."""
+    FIRE, OTHER = "B757_PED_FIRE_ENG_BUTTON", "B757_PED_FIRE_CARGO_BUTTON"
+    # Every test the shipped curation holds 3000 ms. The fire, CVR and squib tests were measured; the others hold the same
+    # for one rule: a test is held until it shows. Not the autoland resets (AUTOLAND_3), not the lamp test.
+    TESTS = (
+        "B757_PED_FIRE_ENG_BUTTON", "B757_PED_FIRE_CARGO_BUTTON", "B757_PED_FIRE_WHLWELL_BUTTON", "B757_OVHD_SW_CVR_TEST",
+        "B757_P6_SQUIBS_BUTTON2", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", "B757_MAIN_TOCHK_BUTTON", "OXY_CAPT_TEST_SWITCH001",
+        "OXY_FO_TEST_SWITCH1", "OXY_OBSV_TEST_SWITCH", "OXY_P61_TEST_SWITCH", "B757_MAIN_L_AUTOLAND_1_BUTTON",
+        "B757_MAIN_L_AUTOLAND_2_BUTTON", "B757_MAIN_R_AUTOLAND_1_BUTTON", "B757_MAIN_R_AUTOLAND_2_BUTTON",
+        "B757_PED_WX_L_TEST_BUTTON", "B757_PED_ILS_TEST_BUTTON", "B757_PED_NAV_1_TEST_BUTTON", "B757_PED_NAV_2_TEST_BUTTON",
+        "B757_PED_NAV_3_TEST_BUTTON",
+    )
+    NOT_HELD = ("B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_MAIN_R_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON")
+    # The eight P61 test switches leave the map: they spring back to neutral at once, so a test runs only while its
+    # position is written again every 30 ms, which the app does from buttons (plan 12 task 5b).
+    P61_TEST_SWITCHES = tuple(f"B757_VC_P61_SWITCH_{n}" for n in range(3, 11))
+
+    @staticmethod
+    def button(node, **changes):
+        """A momentary button as the extractor reads the fire tests: a press that writes 1 and a release that writes 0."""
+        fields = dict(node=node, kind="momentary button", positions="-", panel="ELECTRICAL PANEL", state=["L:" + node],
+                      left=f"1 (>L:{node}, bool)", release=f"0 (>L:{node}, bool)")
+        fields.update(changes)
+        return row(**fields)
+
+    def build(self, rows=None, **changes):
+        return g.build_map(rows or [self.button(self.FIRE), self.button(self.OTHER)], curation(**changes), "pkg", "1")
+
+    def by_node(self, m):
+        return {c["node"]: c for c in m["controls"]}
+
+    def test_hold_ms_makes_a_held_button_with_that_hold_and_changes_nothing_else(self):
+        plain, plain_report = self.build()
+        held, report = self.build(hold_ms={self.FIRE: 3000})
+        before, after = self.by_node(plain)[self.FIRE], self.by_node(held)[self.FIRE]
+
+        self.assertEqual((before["kind"], before["hold_ms"]), ("button", 0))
+        self.assertEqual((after["kind"], after["hold_ms"]), ("held", 3000))
+        # the press and the release are the vendor's, verbatim, and so is every other field
+        self.assertEqual((after["press"], after["release"]), (f"1 (>L:{self.FIRE}, bool)", f"0 (>L:{self.FIRE}, bool)"))
+        self.assertEqual({k: v for k, v in after.items() if k not in ("kind", "hold_ms")},
+                         {k: v for k, v in before.items() if k not in ("kind", "hold_ms")})
+        self.assertEqual(list(after), list(before), "the keys keep the JSON order")
+        self.assertEqual((after["positions"], after["state_var"]), ([], self.FIRE))
+        # the control beside it is a button still
+        self.assertEqual(self.by_node(held)[self.OTHER], self.by_node(plain)[self.OTHER])
+        self.assertEqual(self.by_node(held)[self.OTHER]["kind"], "button")
+        self.assertEqual([c["node"] for c in held["controls"]], [c["node"] for c in plain["controls"]], "the order is the same")
+        # the run names each hold, and none when there is none
+        self.assertEqual(report["hold_ms"], {self.FIRE: "held 3000 ms (the rules alone keep it as a button)"})
+        self.assertEqual(plain_report["hold_ms"], {})
+
+    def test_each_node_has_its_own_hold(self):
+        m, report = self.build(hold_ms={self.FIRE: 3000, self.OTHER: 500})
+        by_node = self.by_node(m)
+
+        self.assertEqual([(by_node[n]["kind"], by_node[n]["hold_ms"]) for n in (self.FIRE, self.OTHER)],
+                         [("held", 3000), ("held", 500)])
+        self.assertEqual(list(report["hold_ms"]), [self.FIRE, self.OTHER], "in curation's order")
+
+    def test_the_limits_of_a_hold_are_500_and_10000_ms(self):
+        self.assertEqual((g.MIN_CURATED_HOLD_MS, g.MAX_CURATED_HOLD_MS), (500, 10000))
+        for ms in (500, 10000):
+            with self.subTest(ms=ms):
+                self.assertEqual(self.by_node(self.build(hold_ms={self.FIRE: ms})[0])[self.FIRE]["hold_ms"], ms)
+
+    def test_hold_ms_errors(self):
+        # Each case changes one thing, so the one check it is meant for is the one that stops the run.
+        ghost, lever = "B757_NO_SUCH_NODE", row(node="B757_PED_X_LEVER", kind="lever", positions="", left="1 (>L:X)")
+        toggle = row(node="B757_PED_T_BUTTON", kind="toggle", left="(L:B757_PED_T_BUTTON, bool) ! (>L:B757_PED_T_BUTTON, bool)")
+        switch = row(node="B757_PED_S_SWITCH", kind="multi-position switch", positions="3", state=["L:B757_PED_S_SWITCH"])
+        guard = row(node="B757_PED_G_GUARD", kind="guard", left="(L:B757_PED_G_GUARD, bool) ! (>L:B757_PED_G_GUARD, bool)")
+        vendor_held = row(node="B757_PED_H_BUTTON", kind="held button", positions="-", state=["L:B757_PED_H_BUTTON"],
+                          left="1 (>L:B757_PED_H_BUTTON, bool)", release="0 (>L:B757_PED_H_BUTTON, bool)",
+                          scope={"MIN_HELD_DURATION": "2.5"})
+        no_release = row(node="B757_PED_P_BUTTON", kind="momentary button", positions="-", state=["L:B757_PED_P_BUTTON"],
+                         left="1 (>L:B757_PED_P_BUTTON, bool)")
+        select = row(node="B757_PED_AUDIO_1_MIC_L_LIGHT", kind="select button", positions="-", left="1 (>L:A)")
+        cases = [
+            ("a node the package does not have", (), dict(hold_ms={self.FIRE: 3000, ghost: 3000}),
+             rf"hold_ms name nodes the package does not have: {ghost}"),
+            ("a node the rules drop", (lever,), dict(hold_ms={lever["node"]: 3000}),
+             rf"hold_ms names {lever['node']}, which the map does not keep \(the rules leave it out: lever\)"),
+            ("a node curation leaves out", (), dict(hold_ms={self.FIRE: 3000}, exclude_nodes=[self.FIRE]),
+             rf"hold_ms names {self.FIRE}, which the map does not keep \(the rules leave it out: excluded node\)"),
+            ("a toggle", (toggle,), dict(hold_ms={toggle["node"]: 3000}),
+             rf"hold_ms names {toggle['node']}, which is a toggle, not a button"),
+            ("a guard", (guard,), dict(hold_ms={guard["node"]: 3000}),
+             rf"hold_ms names {guard['node']}, which is a guard, not a button"),
+            ("a switch", (switch,), dict(hold_ms={switch["node"]: 3000}),
+             rf"hold_ms names {switch['node']}, which is a switch, not a button"),
+            ("a button the extractor already reads as held", (vendor_held,), dict(hold_ms={vendor_held["node"]: 3000}),
+             rf"hold_ms names {vendor_held['node']}, which is a held, not a button"),
+            ("a button with no release", (no_release,), dict(hold_ms={no_release["node"]: 3000}),
+             rf"hold_ms names {no_release['node']}, which has no release code"),
+            ("a node also under kinds", (select,), dict(hold_ms={select["node"]: 3000}, kinds={select["node"]: "button"}),
+             rf"hold_ms and kinds both name: {select['node']}"),
+        ]
+        for what, extra, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build([self.button(self.FIRE), *extra], **changes)
+        # each of those rows builds when no entry names it: the case is the entry, not the row
+        for extra in (lever, toggle, guard, switch, vendor_held, no_release, select):
+            self.build([self.button(self.FIRE), extra], hold_ms={self.FIRE: 3000})
+
+    def test_a_button_from_the_package_is_held_and_the_run_names_it(self):
+        # The vendor's own shape through the extractor, the generator and its printed report: a push button whose click
+        # writes 1 and whose release writes 0 is a button, and with an entry it is a held button of that hold.
+        node = self.FIRE
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_package(d)
+            pathlib.Path(pkg, "SimObjects", "Airplanes", "a", "model", "interior.xml").write_text(f"""<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<!-- ======== ELECTRICAL PANEL ======== -->
+<Component ID="{node}_COMP" Node="{node}">
+  <UseTemplate Name="ASOBO_GT_Switch_Code">
+    <ANIM_NAME>{node}</ANIM_NAME>
+    <ANIM_CODE>(L:{node}, bool) 100 *</ANIM_CODE>
+    <LEFT_SINGLE_CODE>1 (&gt;L:{node}, bool)</LEFT_SINGLE_CODE>
+    <LEFT_RELEASE_CODE>0 (&gt;L:{node}, bool)</LEFT_RELEASE_CODE>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+""", encoding="utf-8")
+            write_cockpit_models(pkg, pw=[node], rr=[node])
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+
+            def run(**curation_):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump({"panels": {"ELECTRICAL PANEL": "Electrical"}, **curation_}, fh)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                with open(out, encoding="utf-8") as fh:
+                    return json.load(fh)["controls"], stdout.getvalue()
+
+            plain, printed_plain = run()
+            held, printed = run(hold_ms={node: 3000})
+
+        self.assertEqual([(c["kind"], c["hold_ms"]) for c in plain], [("button", 0)])
+        self.assertEqual([(c["kind"], c["hold_ms"]) for c in held], [("held", 3000)])
+        self.assertEqual({k: v for k, v in held[0].items() if k not in ("kind", "hold_ms")},
+                         {k: v for k, v in plain[0].items() if k not in ("kind", "hold_ms")})
+        self.assertRegex(printed_plain, r"curated holds\s*: 0 ")
+        self.assertNotIn("held 3000 ms", printed_plain)
+        self.assertRegex(printed, r"curated holds\s*: 1 ")
+        self.assertIn(f"{node}: held 3000 ms (the rules alone keep it as a button)", printed)
+        self.assertRegex(printed, r"held\s+1\n", "the counts of the run's report show it as a held control")
+
+    def test_the_shipped_curation_holds_the_cockpit_tests_for_3_seconds(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        self.assertEqual(len(self.TESTS), 20)
+        self.assertEqual(c["hold_ms"], {node: 3000 for node in self.TESTS})
+        for node in self.TESTS:   # no other table speaks for a held test, and none leaves it out
+            with self.subTest(node=node):
+                for table in ("kinds", "guarded", "levers", "direct_positions"):
+                    self.assertNotIn(node, c[table])
+                for table in ("direct_write", "exclude_nodes", "keep_without_node"):
+                    self.assertNotIn(node, c[table])
+        for node in self.NOT_HELD:
+            with self.subTest(node=node):
+                self.assertNotIn(node, c["hold_ms"])
+
+    def test_the_embedded_map_holds_the_cockpit_tests_as_held_buttons(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = {x["node"]: x for x in json.load(fh)["controls"]}
+
+        for node in self.TESTS:
+            with self.subTest(node=node):
+                c = controls[node]
+                self.assertEqual((c["kind"], c["hold_ms"], c["positions"]), ("held", 3000, []))
+                self.assertTrue(c["press"].startswith("1 (>") and c["release"].startswith("0 (>"), (c["press"], c["release"]))
+                self.assertEqual((c["cw"], c["ccw"]), (None, None))
+        for node in self.NOT_HELD:
+            with self.subTest(node=node):
+                self.assertEqual((controls[node]["kind"], controls[node]["hold_ms"]), ("button", 0))
+        # the held buttons the vendor's own template made keep the hold it gave them: nothing curation holds is among them
+        vendor = {n: c["hold_ms"] for n, c in controls.items() if c["kind"] == "held" and n not in self.TESTS}
+        self.assertEqual(len(vendor), 7)
+        self.assertNotIn(3000, vendor.values())
+
+    def test_the_eight_p61_test_switches_are_out_of_the_map(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = json.load(fh)["controls"]
+
+        for node in self.P61_TEST_SWITCHES:
+            with self.subTest(node=node):
+                self.assertIn(node, c["exclude_nodes"])
+                self.assertNotIn(node, [x["node"] for x in controls])
+                self.assertNotIn(node, c["control_order"]["P61 panel"])
+                # an entry for a control the map no longer holds would only be reported at every run
+                self.assertNotIn(node, c["labels"])
+                self.assertNotIn(node, c["positions"])
+        # the two other switches of the panel stay, and so does the rest of its order
+        self.assertEqual([x["label"] for x in controls if x["panel"] == "P61 panel"][:3],
+                         ["Flight Recorder", "Service Interphone", "P6 Squibs Button2"])
+
+    def test_the_notes_explain_the_key_and_the_changes(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = json.load(fh)["_notes"]
+        text = "\n".join(notes)
+
+        self.assertRegex(text, r"hold_ms: node -> milliseconds")
+        task = [n for n in notes if n.startswith("PLAN 12 TASK 5 (2026-10-28)")]
+        self.assertEqual(len(task), 3, "the key, the held tests and the P61 exclusion each have a note")
+        joined = "\n".join(task)
+        for needle in ("hold_ms", "flight-12.md", "B757_PED_FIRE_ENG_BUTTON", "B757_P6_SQUIBS_BUTTON2", "B757_VC_P61_SWITCH_3",
+                       "B757_VC_P61_SWITCH_10", "every 30 ms", "B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, joined)
 
 
 class Levers(unittest.TestCase):
@@ -2985,6 +3207,21 @@ class Curation(unittest.TestCase):
                 with self.assertRaisesRegex(g.CurationError, "direct_write (must be|is a list)"):   # not "unknown key(s)"
                     g.load_curation(self.write({"direct_write": data}))
 
+    def test_the_hold_ms_key_loads_as_a_dict_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["hold_ms"], {})
+        c = g.load_curation(self.write({"hold_ms": {"B757_X": 3000, "B757_Y": 500, "B757_Z": 10000}}))
+        self.assertEqual(c["hold_ms"], {"B757_X": 3000, "B757_Y": 500, "B757_Z": 10000})
+
+    def test_a_hold_ms_entry_that_is_not_a_hold_in_whole_milliseconds_from_500_to_10000_is_refused(self):
+        # A hold under 500 ms is the app's own 200 ms press, and one over 10 s is a button left down; a number that is not
+        # a whole count of milliseconds, a bool (True is an int to Python) and a node with no name are mistakes.
+        for data in (["B757_X"], "B757_X", {"B757_X": 499}, {"B757_X": 10001}, {"B757_X": 0}, {"B757_X": -3000},
+                     {"B757_X": 3000.5}, {"B757_X": 3000.0}, {"B757_X": "3000"}, {"B757_X": True}, {"B757_X": None},
+                     {"B757_X": [3000]}, {"": 3000}):
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, r"hold_ms(\[| must be)"):   # not "unknown key(s) hold_ms"
+                    g.load_curation(self.write({"hold_ms": data}))
+
     def test_the_keep_without_node_key_loads_as_a_list_and_defaults_to_empty(self):
         self.assertEqual(g.load_curation(self.write({}))["keep_without_node"], [])
         c = g.load_curation(self.write({"keep_without_node": ["B757_X", "B757_Y"]}))
@@ -3174,21 +3411,14 @@ class Curation(unittest.TestCase):
         "B757_EICAS_LWR_THRUST-REF_KNOB": [(0, "L"), (1, "BOTH"), (2, "R")],
         "B757_ECAM_LRAUTO_KNOB": [(0, "L"), (1, "AUTO"), (2, "R")],
         "B757_VC_P61_SWITCH_2": [(0, "ON"), (1, "AUTO"), (2, "TEST")],
-        # the P61 test switches: 1 is neutral on all, 0 and 2 are the two tests (BlueBird's list, by the switch's label)
-        "B757_VC_P61_SWITCH_3": [(0, "Upper test"), (1, "Neutral"), (2, "Lower test")],
-        "B757_VC_P61_SWITCH_4": [(0, "Upper test"), (1, "Neutral"), (2, "Lower test")],
-        "B757_VC_P61_SWITCH_5": [(0, "Position 0"), (1, "Neutral"), (2, "Position 2")],  # Duct Leak Fuel Qty: no names
-        "B757_VC_P61_SWITCH_6": [(0, "Wing anti-ice test"), (1, "Neutral"), (2, "Probe heat test")],
-        "B757_VC_P61_SWITCH_7": [(0, "Ground proximity test"), (1, "Neutral"), (2, "Hydraulic generator test")],
-        "B757_VC_P61_SWITCH_8": [(0, "Takeoff config test"), (1, "Neutral"), (2, "Landing config test")],
-        "B757_VC_P61_SWITCH_9": [(0, "Air data test"), (1, "Neutral"), (2, "Stall warning test")],
-        "B757_VC_P61_SWITCH_10": [(0, "Air data test"), (1, "Neutral"), (2, "Stall warning test")],
+        # The eight P61 test switches (B757_VC_P61_SWITCH_3 to _10) were named here until plan 12 task 5: they spring back to
+        # neutral at once, so they left the map and the app gives each test position a button of its own (task 5b).
     }
 
     def bluebird_rows(self):
         """One extractor-shaped row per node in BLUEBIRD_POSITIONS. A knob that counts up from 0 has as many positions
-        as it has names; the controls whose values are not simply 0 to n-1, and the P61 switches, carry the vendor's
-        own click code, as the generated map holds it."""
+        as it has names; the controls whose values are not simply 0 to n-1, and the flight recorder switch, carry the
+        vendor's own click code, as the generated map holds it."""
         rows = {node: self.knob(node, node, len(names)) for node, names in self.BLUEBIRD_POSITIONS.items()}
 
         node = "B757_OVHD_WARNING_IND_SWITCH"
@@ -3217,10 +3447,6 @@ class Curation(unittest.TestCase):
         rows[node] = row(node=node, kind="multi-position switch", positions="3", state=["L:" + var],
                          left=f"(L:{var}) 1 + 2 min (>L:{var})",
                          other=[("RightSingle", f"(L:{var}) 1 - 0 max (>L:{var})")])
-        for n in range(3, 11):  # no click of their own: the release puts the switch back to 1
-            node = f"B757_VC_P61_SWITCH_{n}"
-            rows[node] = row(node=node, kind="multi-position switch", positions="3", state=[f"L:{node}_TEST_SW"],
-                             release=f"1 (>L:{node}_TEST_SW, number)")
         return rows
 
     def test_bluebird_position_names(self):
@@ -3234,9 +3460,9 @@ class Curation(unittest.TestCase):
                 self.assertIsNone(why)
                 self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], expected)
 
-    def test_every_curated_position_list_but_the_unpublished_one_has_no_numbered_name(self):
-        # BlueBird names every position the curation lists; the Duct Leak Fuel Qty test switch is the one control whose 0
-        # and 2 no source names (its 1 is neutral, like the other test switches), so its list keeps "Position n".
+    def test_no_curated_position_list_has_a_numbered_name(self):
+        # BlueBird names every position the curation lists. The one list that kept "Position n" (the Duct Leak Fuel Qty test
+        # switch: no source names its 0 and 2) went with the eight P61 test switches, which left the map in plan 12 task 5.
         c = g.load_curation(g.DEFAULT_CURATION)
         numbered = {}
         for node, entry in c["positions"].items():
@@ -3244,7 +3470,7 @@ class Curation(unittest.TestCase):
             hits = [label for label in labels if re.fullmatch(r"Position \d+", label)]
             if hits:
                 numbered[node] = hits
-        self.assertEqual(numbered, {"B757_VC_P61_SWITCH_5": ["Position 0", "Position 2"]})
+        self.assertEqual(numbered, {})
 
     # Plan 02, task 2: the labels, kinds and positions that match the cockpit, by node. Each row has the shape the
     # extractor gives the vendor's own control (banner, tips, state var and click code as in BBS_752_BASE_INTERIOR.xml)
@@ -3420,7 +3646,7 @@ class Curation(unittest.TestCase):
                      "B757_MCP_AP_HDG_BNKLIM", "B757_EICAS_LWR_THRUST-REF_KNOB", "B757_OVHD_WIPER_SWITCH",
                      "BBS757_vis_chocks",
                      # plan 02 task 1: the choices that rest on more than BlueBird's list being read
-                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_SET_SWITCH", "B757_VC_P61_SWITCH_5"):
+                     "B757_MAIN_CHRONO_ET_SWITCH", "B757_MAIN_CHRONO_SET_SWITCH"):
             with self.subTest(node=node):
                 self.assertIn(node, notes)
         self.assertIn("unmeasured", notes)
@@ -3682,9 +3908,9 @@ class Curation(unittest.TestCase):
                           "Audio 2 Voice Range", "Audio 2 Mic Lm Light", "Audio 2 Mic Lm Light Knob",
                           "Audio 2 Mic RR Light", "Audio 2 Mic RR Light Knob", "Audio 2 Boom Oxy", "Audio 2 PTT"],
         "Weather radar right": ["WX R WX", "WX R Wxt", "WX R Map", "WX R Gcs", "WX R Tfr"],
-        "P61 panel": ["Flight Recorder", "Service Interphone", "P6 Squibs Button2", "Ground Prox Hyd Gen Test",
-                      "Air Data Stall Left Test", "Air Data Stall Right Test", "TO and Land Config Test",
-                      "Equip Cooling Test", "Yaw Damp Test", "Duct Leak Fuel Qty Test", "Wing AI Window Heat Test",
+        # plan 12 task 5: the eight P61 test switches (Ground Prox Hyd Gen, Air Data Stall Left and Right, TO and Land Config,
+        # Equip Cooling, Yaw Damp, Duct Leak Fuel Qty, Wing AI Window Heat) left the map; the app places their buttons
+        "P61 panel": ["Flight Recorder", "Service Interphone", "P6 Squibs Button2",
                       "P61 Glass Guard 1", "P61 Press Main Button L", "P61 Glass Guard 2", "P61 Press Main Button C",
                       "P61 Glass Guard 3", "P61 Press Main Button R", "P61 Press Button 1", "P61 Press Button 2",
                       "P61 Press Button 3", "P61 Press Button 4", "P61 Press Button 5", "P61 Press Button 6"],
