@@ -70,6 +70,15 @@ public static class A350Hotkeys
     /// <summary>The gear lever (the A350_LDG_LEVER row: 0 up, 1 down).</summary>
     public static string Gear(double lever) => lever >= 0.5 ? "Gear down" : "Gear up";
 
+    /// <summary>A status display's lines read aloud as sentences: each line (\r\n or \n) trimmed, joined by ". ", a
+    /// line's own full stop not doubled.</summary>
+    public static string Sentences(string text)
+    {
+        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        return string.Join(" ", lines.Select((l, i) => i == lines.Count - 1 || l.EndsWith('.') ? l : l + "."));
+    }
+
     /// <summary>A characteristic speed the A350 publishes (INI_VLS_SPEED and its kin), in whole knots; 0 means the aircraft
     /// computes none now (its alpha speeds are 0 in a clean climb, live 2026-10-28).</summary>
     public static string Speed(string name, double knots) =>

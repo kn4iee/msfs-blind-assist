@@ -376,6 +376,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             Register(d.Key, "INI_FD_ON", d.Panel, null);
             _lampInputKeys.Add(d.Key);
         }
+        // Each screen's power (IsDark), where no row streams it already (a knob's brightness does): consumed silently.
+        foreach (var power in DisplayPanels.Select(d => d.Power).OfType<string>().Distinct(StringComparer.Ordinal))
+            if (!_keyByName.ContainsKey(power))
+            {
+                Register(A350PanelLamps.InputKey(power), power, power, null);
+                _lampInputKeys.Add(A350PanelLamps.InputKey(power));
+            }
 
         // What a typed value is planned from and read back in, where nothing above streams it yet.
         foreach (var field in _typed.Values)

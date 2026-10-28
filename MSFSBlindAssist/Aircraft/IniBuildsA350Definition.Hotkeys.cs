@@ -133,7 +133,7 @@ public partial class IniBuildsA350Definition
             case HotkeyAction.ReadDisplayISIS: AnnounceDisplay("A350_DISP_SFD", announcer); return true;
             case HotkeyAction.ReadDisplayLowerECAM:
                 announcer.AnnounceImmediate(Ecam?.LatestCapture is { } sd && simConnect.GetCachedVariableValue(SdPageKey) is double sdPage
-                    ? string.Join(". ", A350.Display.A350SdText.Build(sd, sdPage).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    ? A350.A350Hotkeys.Sentences(A350.Display.A350SdText.Build(sd, sdPage))
                     : "The A350 displays are not available yet.");
                 return true;
             // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
@@ -183,12 +183,20 @@ public partial class IniBuildsA350Definition
     private void AnnounceSpeed(string name, string var, SimConnectManager simConnect, ScreenReaderAnnouncer announcer) =>
         announcer.AnnounceImmediate(CachedInput(simConnect, var) is double knots ? A350.A350Hotkeys.Speed(name, knots) : name + " not available");
 
-    /// <summary>A display's latest lines, as its status display reads them, or null while the displays are not running.</summary>
+    /// <summary>A display's latest lines, as its status display reads them (none while its screen is dark), or null while
+    /// the displays are not running.</summary>
     private IReadOnlyList<string>? DisplayLines(string displayKey) =>
-        DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is { } d && Pfd?.Latest(d.Gauge, d.Index) is { } capture ? d.Read(capture) : null;
+        DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is not { } d ? null
+            : IsDark(d) ? Array.Empty<string>()
+            : Pfd?.Latest(d.Gauge, d.Index) is { } capture ? d.Read(capture) : null;
 
     private void AnnounceDisplay(string displayKey, ScreenReaderAnnouncer announcer)
     {
+        if (DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is { } display && IsDark(display))
+        {
+            announcer.AnnounceImmediate(display.Panel + " " + char.ToLowerInvariant(DarkScreen[0]) + DarkScreen[1..]);
+            return;
+        }
         var lines = DisplayLines(displayKey);
         announcer.AnnounceImmediate(lines == null ? "The A350 displays are not available yet."
             : lines.Count == 0 ? "Off: no power, or nothing shown." : string.Join(". ", lines));

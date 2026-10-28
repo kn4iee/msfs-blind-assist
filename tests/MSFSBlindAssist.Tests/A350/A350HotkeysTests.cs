@@ -88,6 +88,15 @@ public class A350HotkeysTests
         Assert.Equal("Gear down", A350Hotkeys.Gear(1));
     }
 
+    [Fact]
+    public void A_display_read_aloud_joins_its_lines_as_sentences()
+    {
+        // Live 2026-10-28: the SD read "Door page\r. The SD is off: no power." (split on \n only); a line's own full
+        // stop is not doubled.
+        Assert.Equal("Door page. The SD is off: no power.", A350Hotkeys.Sentences("Door page\r\nThe SD is off: no power."));
+        Assert.Equal("Cruise page. Cabin altitude: 6000 FT, green", A350Hotkeys.Sentences("Cruise page\nCabin altitude: 6000 FT, green\r\n"));
+    }
+
     // W and Shift+W read the SD's own figures (the permanent data line, in the aircraft's unit): what the pilot sees.
     [Fact]
     public void Gross_weight_reads_the_sds_figures_in_either_unit_with_the_cg()
