@@ -157,6 +157,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
 | [gemini.md](docs/gemini.md) | AI providers (Gemini or Claude): display reads, scene and route description, route briefing | ai-display, route-briefing |
 | [location-data.md](docs/location-data.md) | Output C and Location Info (Shift+L): the offline GeoNames + Natural Earth download, its database and lookups | location-data |
+| [text-recognition.md](docs/text-recognition.md) | PaddleOCR text recognition: the on-demand model download, the Text recognition tab and offer, the engine the 757 tablet reader uses | text-recognition |
 | [user-guide.md](docs/user-guide.md) | The pilot's user guide in `guide/`: writing it, how the website and the Help menu publish it, the one-page build, the PR line (CORE-19) | user-guide |
 
 ## Adding or changing a rule
