@@ -224,9 +224,45 @@ public class A350MfdPageTests
     // A row of white headings over a row of values (live: DEPARTURE's RWY LENGTH CRS, its EOSID FREQ/CHAN SID TRANS,
     // DATA/STATUS's ACTIVE and SECOND database dates) reads each value with its heading, a grey unit after its value
     // (the font's "d" a degree sign); by order when the counts match (LENGTH's value ends nearer CRS than LENGTH).
-    private static IReadOnlyList<string> Page(string fixture) => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
+    private static IReadOnlyList<string> Page(string fixture) => PageLines(fixture).Select(l => l.Spoken).ToList();
+
+    private static IReadOnlyList<MfdLine> PageLines(string fixture) => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
         File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures",
-            fixture + ".json")))!, 0).Select(l => l.Spoken).ToList();
+            fixture + ".json")))!, 0);
+
+    [Fact]
+    public void The_window_moves_to_a_menu_as_it_opens_and_only_then()
+    {
+        var closed = Page("mfd_fpln_tmpy_basu1d").Select(s => new MfdLine("text", s, 0, 0)).ToList();
+        var open = PageLines("mfd_fpln_revision_basur");
+        int first = open.ToList().FindIndex(l => l.Kind == "menuitem");
+        Assert.Equal(first, A350MfdPage.MenuJustOpened(closed, open));
+        Assert.Null(A350MfdPage.MenuJustOpened(open, open));     // already open: the pilot's place is kept
+        Assert.Null(A350MfdPage.MenuJustOpened(open, closed));   // closed
+    }
+
+    // Live 2026-10-28: BASUR's revision menu read woven between the F-PLN rows, and its first item, FROM P.POS DIR TO,
+    // white in the column-header band, was taken for a header and lost. The menu (UIFlightplanRevisionsMenu) is drawn
+    // at a fixed place and names no waypoint: its items read together after the page title, as menu items (the window
+    // moves to the first when a menu opens), and the rows stay readable.
+    [Fact]
+    public void A_waypoints_revision_menu_reads_whole_and_together()
+    {
+        var all = PageLines("mfd_fpln_revision_basur");
+        var lines = all.Select(l => l.Spoken).ToList();
+        var items = new[]
+        {
+            "FROM P.POS DIR TO button", "INSERT NEXT WPT button", "DELETE * button", "DEPARTURE button, grey", "ARRIVAL button, grey",
+            "OFFSET button", "OVERFLY * button", "HOLD button", "AIRWAYS button", "ENABLE ALTN * button", "NEW DEST button",
+            "CONSTRAINTS button", "CMS button", "STEP ALTS button", "WIND button", "WHAT IF button, grey",
+        };
+        int first = lines.IndexOf(items[0]);
+        Assert.True(first > 0, string.Join(" | ", lines));
+        Assert.Equal(items, lines.Skip(first).Take(items.Length));
+        Assert.Equal("ACTIVE/F-PLN, black", lines[first - 1]);
+        Assert.All(all.Skip(first).Take(items.Length), l => Assert.Equal("menuitem", l.Kind));
+        Assert.Contains(lines, l => l.StartsWith("BASUR: via BASU1D", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void Headings_over_values_read_each_value_with_its_heading()
@@ -300,10 +336,12 @@ public class A350MfdPageTests
     [Fact]
     public void An_open_header_menu_reads_after_its_button_and_hides_what_it_covers()
     {
-        var lines = Page("mfd_active_menu_open").ToList();
+        var all = PageLines("mfd_active_menu_open");
+        var lines = all.Select(l => l.Spoken).ToList();
         int active = lines.IndexOf("ACTIVE button, menu open");
         Assert.True(active >= 0, string.Join(" | ", lines));
         Assert.Equal(new[] { "F-PLN button", "PERF button", "FUEL&LOAD button", "WIND button", "INIT button" }, lines.Skip(active + 1).Take(5));
+        Assert.All(all.Skip(active + 1).Take(5), l => Assert.Equal("menuitem", l.Kind));
         Assert.DoesNotContain(lines, l => l.StartsWith("DATA/STATUS", StringComparison.Ordinal));   // under the menu
         Assert.Contains("ACFT STATUS tab", lines);                                                     // beside it
         Assert.Contains("POSITION button", lines);

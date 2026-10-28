@@ -102,9 +102,15 @@ public static class A350MfdPage
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
         }).ToHashSet();
 
+        // A waypoint's open revision menu (its items with their own texts drawn after them): its items are its own, never
+        // the F-PLN's column headers (FROM P.POS DIR TO, white, sits in their band, live 2026-10-28).
+        var revisionItems = elements.Where(e => !hidden.Contains(e) && e.Class == RevisionItem
+            && cells.Any(c => c.Index >= e.TextStart && Covers(e, c.X, c.Y))).ToList();
+        var revisionCells = cells.Where(c => revisionItems.Any(e => c.Index >= e.TextStart && Covers(e, c.X, c.Y))).ToHashSet();
+
         bool flightPlan = cells.Any(c => c.Colour == "black" && c.Y < 150 && c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
         if (flightPlan)
-            ReadFlightPlan(capture, shift, Mine, cells, used, lines);
+            ReadFlightPlan(capture, shift, Mine, cells.Where(c => !revisionCells.Contains(c)).ToList(), used, lines);
 
         foreach (var e in elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)))
         {
@@ -199,6 +205,8 @@ public static class A350MfdPage
             {
                 "MainHeaderDropdownMenu" => ("menu", $"{menuLabel}{value} menu, {colour}"),
                 "WidgetSwitcherTab" => ("tab", $"{value} tab"),
+                // An open menu's item: a drop-down's, or a waypoint's revision menu's.
+                "DropdownButtonUI" or RevisionItem => ("menuitem", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
             };
             lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
@@ -264,7 +272,41 @@ public static class A350MfdPage
         }
 
         var ordered = lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
-        return menuItems.Count == 0 ? ordered : WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(), shift);
+        if (menuItems.Count > 0)
+            ordered = WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(), shift);
+        if (revisionItems.Count > 0)
+            ordered = WithRevisionMenuAfterTitle(ordered, revisionItems, shift);
+        return ordered;
+    }
+
+    /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>
+    private const string RevisionItem = "FlightplanButtonActionButton";
+
+    /// <summary>Where the MFD window moves when a menu has just opened: its first item, as a sighted pilot's eyes go to
+    /// it; null while none opened since the last read (an open menu keeps the pilot's own place).</summary>
+    public static int? MenuJustOpened(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
+    {
+        if (before.Any(l => l.Kind == "menuitem"))
+            return null;
+        for (int i = 0; i < now.Count; i++)
+            if (now[i].Kind == "menuitem")
+                return i;
+        return null;
+    }
+
+    private static bool AtCentre(MfdLine l, DrawnElement e, float shift) =>
+        Math.Abs(l.ClickX - (e.X - shift + e.RectW / 2)) < 1 && Math.Abs(l.ClickY - (e.Y + e.RectH / 2)) < 1;
+
+    /// <summary>A waypoint's revision menu is drawn at a fixed place and names no waypoint: its items read together
+    /// after the page title, top to bottom (the MFD window moves to the first when a menu opens).</summary>
+    private static List<MfdLine> WithRevisionMenuAfterTitle(List<MfdLine> lines, List<DrawnElement> items, float shift)
+    {
+        bool IsItem(MfdLine l) => items.Any(e => AtCentre(l, e, shift));
+        var menu = lines.Where(IsItem).OrderBy(l => l.ClickY).ToList();
+        var result = lines.Where(l => !IsItem(l)).ToList();
+        int title = result.FindIndex(l => l.Kind == "text" && l.Spoken.Contains("F-PLN", StringComparison.Ordinal));
+        result.InsertRange(title + 1, menu);
+        return result;
     }
 
     /// <summary>An open drop-down's items read right after the button or menu it hangs from (the one above its column),

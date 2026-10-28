@@ -109,8 +109,12 @@ public sealed class A350MfdWindow : Form
             }
             if (IsDisposed) return;
             if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
+            var before = _lines;
             _lines = A350MfdPage.Read(cap, Side);
             _list.SetLines(_lines.Count == 0 ? new[] { "The MFD is off: no power." } : _lines.Select(l => l.Spoken).ToList());
+            // A menu that has just opened takes the selection to its first item, where a sighted pilot looks.
+            if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
+                _list.SelectedIndex = first;
             var pad = _lines.FirstOrDefault(l => l.Kind == "scratchpad")?.Spoken;
             if (_lastScratchpad != null && pad != null && pad != _lastScratchpad && pad != "Scratchpad: empty")
                 _announcer.Announce(pad);
