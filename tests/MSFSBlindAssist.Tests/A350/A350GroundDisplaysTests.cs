@@ -26,6 +26,18 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(nd, l => l.Contains("MTL"));   // drawn off the screen
     }
 
+    // Live in the climb on BASU1D (2026-10-28): the ND's TO waypoint block, top right, is the name (white), the track
+    // to it (green, x 759), its distance a line under ("6." and a smaller "2", then a cyan NM) and the ETA under that.
+    // The distance read as a line of its own split at its point ("6., green; 2, green; NM, cyan"), the ETA as another.
+    [Fact]
+    public void The_nd_reads_its_to_waypoint_block_as_one_line()
+    {
+        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "efis0_climb_bi614.json")))!, 0);
+        Assert.Contains("To waypoint: BI614, white; track 296°, green; 6.2 NM, green; ETA 07:20, green", nd);
+        Assert.DoesNotContain(nd, l => l.StartsWith("6.", StringComparison.Ordinal) || l.StartsWith("07:20", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_fcu_reads_its_windows_and_both_baros()
     {

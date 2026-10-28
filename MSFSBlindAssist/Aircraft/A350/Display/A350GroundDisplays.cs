@@ -41,7 +41,34 @@ public static class A350GroundDisplays
         Field("Ground speed", c => Math.Abs(c.X - 122) <= 12 && Math.Abs(c.Y - 35) <= 8);
         Field("True airspeed", c => Math.Abs(c.X - 175) <= 12 && Math.Abs(c.Y - 35) <= 8);
         Field("Wind", c => c.X is >= 60 and < 130 && Math.Abs(c.Y - 63) <= 8);
-        Field("To waypoint", c => c.X >= 560 && Math.Abs(c.Y - 36) <= 8);
+        // The TO waypoint block, top right (live in the climb): the name (white) and the track to it (green, x 759), the
+        // distance a line under ("6." and a smaller "2", then a cyan NM), the ETA under that. One line, as a pilot reads it.
+        var toName = cells.Where(c => !used.Contains(c) && c.X is >= 560 and < 740 && Math.Abs(c.Y - 36) <= 8).ToList();
+        if (toName.Count > 0)
+        {
+            used.UnionWith(toName);
+            var parts = new List<string> { Speak(toName) };
+            var track = cells.Where(c => !used.Contains(c) && c.X >= 740 && Math.Abs(c.Y - 36) <= 8).OrderBy(c => c.X).ToList();
+            if (track.Count > 0)
+            {
+                used.UnionWith(track);
+                parts.Add($"track {string.Concat(track.Select(c => c.Text))}°, {track[0].Colour}");
+            }
+            var distance = cells.Where(c => !used.Contains(c) && c.X >= 680 && Math.Abs(c.Y - 69) <= 8).OrderBy(c => c.X).ToList();
+            var digits = distance.Where(c => c.Text != "NM").ToList();
+            if (digits.Count > 0)
+            {
+                used.UnionWith(distance);
+                parts.Add($"{string.Concat(digits.Select(c => c.Text))} NM, {digits[0].Colour}");
+            }
+            var eta = cells.Where(c => !used.Contains(c) && c.X >= 700 && Math.Abs(c.Y - 100) <= 8).OrderBy(c => c.X).ToList();
+            if (eta.Count > 0)
+            {
+                used.UnionWith(eta);
+                parts.Add($"ETA {string.Concat(eta.Select(c => c.Text))}, {eta[0].Colour}");
+            }
+            o.Add("To waypoint: " + string.Join("; ", parts));
+        }
         Field("Vertical display range", c => c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c));
         var altitudes = cells.Where(c => c.X is >= 90 and < 150 && c.Y >= 810 && Number(c)).OrderBy(c => c.Y).ToList();
         if (altitudes.Count > 0)
