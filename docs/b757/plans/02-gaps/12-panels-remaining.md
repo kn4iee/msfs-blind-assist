@@ -132,7 +132,7 @@ warning and caution buttons work (one press clears both sides and silences the b
   (`BBS757_YAW_DAMP_P61_TEST_SW` 0), Lower Yaw Damper Test 3 s (2); Upper Duct Leak Fuel Quantity Test 3 s
   (`BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW` 0), Lower Duct Leak Fuel Quantity Test 3 s (2; BlueBird names neither position);
   Wing Anti-ice Test 3 s (`BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW` 0), Probe Heat Test 3 s (2).
-- The lamp test (the map's Warning Test, `B757_OVHD_WARNING_TEST_BUTTON`) is pressed as today, then read back:
+- The lamp test (the map's Lamp Test, formerly Warning Test, `B757_OVHD_WARNING_TEST_BUTTON`) is pressed as today, then read back:
   `L:OVHD_TEST_LTS` 1 says "Lamp test on", 0 "Lamp test off" (it latches: a second press turns it off).
 - [x] 5a: tests first, then the curation and generator, regenerate, full suite, commit `feat(b757): the cockpit test buttons hold as the cockpit's`.
 - [x] 5b: tests first (the P61 hold re-written at 30 ms for 3 s, released to 1; "{test} done"; the lamp test's two phrases), full suite, commit `feat(b757): the P61 tests and the lamp test from their buttons`.
@@ -149,7 +149,7 @@ name the test (User Procedures: "FIRE/OVHT - ENG", "FIRE/OVHT - ENG/APU/CARGO", 
   `B757_MAIN_L/R_AUTOLAND_1_BUTTON` Autoland Status Test 1, `_2_` Autoland Status Test 2, `_3_` Autoland Status Reset;
   `OXY_OBSV_TEST_SWITCH` First Observer Oxygen Test, `OXY_P61_TEST_SWITCH` Second Observer Oxygen Test;
   `B757_MAIN_TOCHK_BUTTON` Takeoff Config Check, and it leaves `hold_ms` (BlueBird: "press and release"), a plain button again.
-- [ ] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
+- [x] Tests first, regenerate, full suite, commit `fix(b757): the cockpit tests say what they test`.
 
 ## In-sim checks (owner)
 
