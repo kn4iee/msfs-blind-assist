@@ -71,7 +71,9 @@ public class A350WritePlanTests : IDisposable
     {
         // Live 2026-10-26: the test lights every fire legend and the master warning only while held; a 250 ms tap
         // flickers them. The manual's step is "press and hold".
-        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "wait 3000", "0 (>B:AIRLINER_FIRE_TEST_Set)" },
+        // Live 2026-10-28: the legends light at once, but ENG 1 and ENG 2 FIRE, the master warning and its CRC come
+        // only after 2.5 s held (2 s: none; 3 s: one press in three missed them). 6 s gives about 3.5 s of chime.
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "wait 6000", "0 (>B:AIRLINER_FIRE_TEST_Set)" },
             Rpn(A350WritePlan.ForPress(C("AIRLINER_FIRE_TEST"))));
     }
 
