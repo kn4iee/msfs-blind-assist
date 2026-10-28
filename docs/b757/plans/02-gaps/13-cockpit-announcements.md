@@ -34,15 +34,15 @@
 
 **Who:** whoever runs the plan, before any other task; with subagents, the controller itself, never an implementer. A claim counts only once it is on the remote `B757`: one that exists only on your machine claims nothing, and if someone else's claim reaches `B757` first, the plan is theirs.
 
-- [ ] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/13-cockpit-announcements.md`. Anything but "not started" and "none" means the plan is taken: stop.
-- [ ] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 13`, with the `Plan: 13` trailer.
-- [ ] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
+- [x] **Step 1: Check the plan is free on the remote.** `git fetch <remote>`, then `git grep -e "^- \*\*Status:\*\*" -e "^- \*\*Claimed by:\*\*" <remote>/B757 -- docs/b757/plans/02-gaps/13-cockpit-announcements.md`. Anything but "not started" and "none" means the plan is taken: stop.
+- [x] **Step 2: Branch and claim.** Branch as in the index's workflow step 1. In this file's "Execution record", set **Status** to claimed, **Claimed by** to your name and **Started** to today's date and the commit you branched from. Commit only that change: `docs(b757): claim plan 13`, with the `Plan: 13` trailer.
+- [x] **Step 3: Push the claim.** `git fetch <remote>`, `git rebase <remote>/B757`, `git push <remote> HEAD:B757`. If the rebase stops on these lines, someone claimed the plan first: `git rebase --abort` and stop. If the push is rejected, repeat this step. Task 1 starts only once the push has gone through.
 
 ### Task 1 [in flight]: Look for flight modes and glideslope
 
 **Files:** `docs/b757/evidence/flight-13.md`.
 
-- [ ] On the owner's flight, with the snapshot tool (`docs/b757/tools/lvar-snapshot`), snapshot before and after each: THR REF at takeoff, VNAV SPD/PTH engaging, ALT capture at cruise, LOC armed and captured, G/S armed and captured, FLARE and ROLLOUT armed, an A/P disconnect, an A/T disconnect. Record Alt+P's FMA reading at each and the diff (minus the noise list). Also record the stock `NAV HAS GLIDE SLOPE:1`, `NAV GSI:1`, `NAV CDI:1` at G/S capture. Write which variables change with each mode, if any, in `flight-13.md`. Task 6 builds on it.
+- [x] On the owner's flight, with the snapshot tool (`docs/b757/tools/lvar-snapshot`), snapshot before and after each: THR REF at takeoff, VNAV SPD/PTH engaging, ALT capture at cruise, LOC armed and captured, G/S armed and captured, FLARE and ROLLOUT armed, an A/P disconnect, an A/T disconnect. Record Alt+P's FMA reading at each and the diff (minus the noise list). Also record the stock `NAV HAS GLIDE SLOPE:1`, `NAV GSI:1`, `NAV CDI:1` at G/S capture. Write which variables change with each mode, if any, in `flight-13.md`. Task 6 builds on it.
 
 ### Task 2: The agent's watch list and the client's event
 
@@ -52,8 +52,8 @@
 - Agent: `A.watch(namesJson)` stores the names (an array of L:var names, without `L:`) and resets the baseline; `A.changes()` reads each name with `SimVar.GetSimVarValue('L:'+n,'number')` and returns JSON `{"seq":n,"changes":{name:value,…}}` with only the names whose value differs from the last call (the first call after `watch` returns an empty map: the baseline). The agent version goes up by one.
 - Client: `public void SetWatchList(IReadOnlyCollection<string> names)`; `public event Action<IReadOnlyDictionary<string, double>>? LvarsChanged` (posted to the UI context); poll `changes()` every 500 ms while the list is non-empty, through the existing socket and send lock; after a reinstall, send the list again (its first answer is the silent baseline); `internal static string WatchExpression(IReadOnlyCollection<string> names)` for tests.
 
-- [ ] **Step 1: Write the failing tests:** `Watch_expression_is_json` (names with no quotes break nothing); `Agent_has_watch_and_changes` (source scan); `Reinstall_resends_the_list` (the client's reinstall path calls `watch` again, via a test seam on the eval function).
-- [ ] **Steps 2-5:** run (FAIL), implement, full suite (the CDU client tests unchanged), commit `feat(b757): the tablet agent watches L:vars and reports changes`.
+- [x] **Step 1: Write the failing tests:** `Watch_expression_is_json` (names with no quotes break nothing); `Agent_has_watch_and_changes` (source scan); `Reinstall_resends_the_list` (the client's reinstall path calls `watch` again, via a test seam on the eval function).
+- [x] **Steps 2-5:** run (FAIL), implement, full suite (the CDU client tests unchanged), commit `feat(b757): the tablet agent watches L:vars and reports changes`.
 
 ### Task 3: The light table and the watch set
 
@@ -71,7 +71,7 @@
 - `All`: curated from `docs/b757/evidence/controls/lights.tsv`: the caution and fault annunciators a pilot acts on (names containing FAULT, OFF, INOP, LOW, DISCH, FAIL, PRESS, OVHT, ON DC, VALVE where it is a fault light, and the gear, door and fire warnings not already announced elsewhere), with plain phrases ("L bus off light on", "APU fault light on", "Left pack off light on"; OffPhrase "… off" for faults, null for indications). Leave out backlights, legends that only follow a switch (the switch's own announcement says it), test lights and the 511 breakers. Keep the list in one readable table with a comment per group.
 - `WatchSet`: the lights' L:vars plus every map control's state var (not momentary buttons), minus `announcedElsewhere` (the `Name`s of the definition's `IsAnnounced` variables).
 
-- [ ] **Steps 1-5** (tests `Table_has_no_duplicates_and_every_lvar_is_in_the_lights_fixture`, `Watch_set_skips_names_announced_elsewhere`, `Momentary_buttons_are_not_watched`, `No_backlight_or_test_light`); commit `feat(b757): the cockpit light table`.
+- [x] **Steps 1-5** (tests `Table_has_no_duplicates_and_every_lvar_is_in_the_lights_fixture`, `Watch_set_skips_names_announced_elsewhere`, `Momentary_buttons_are_not_watched`, `No_backlight_or_test_light`); commit `feat(b757): the cockpit light table`.
 
 ### Task 4: Changes into speech
 
@@ -90,7 +90,7 @@
   `Changes` returns what to say: a light → its phrase; a switch → "{label} {position name}" from the map ("Seatbelts AUTO", "L Pack Selector OFF"); skipped when muted, inside the own-write window or pending; a first sighting of a name after `Reset` is a baseline. A burst (more than 5 switch changes in one call or within 1 s) → one summary "Panel state changed: 37 switches" plus every light phrase (lights are never summarized away).
 - `OnConnectionBatch`: build the watch set from the definition's variables, `EnsureTabletClient().SetWatchList`, subscribe `LvarsChanged` once; speak each returned line as a background announcement (CORE-7). `OnOwnWrite` → `OwnWrite`; `ResetAnnouncements` → `Reset`.
 
-- [ ] **Steps 1-5** (tests `Light_phrase`, `Switch_phrase_from_map_positions`, `Own_write_not_repeated`, `Pending_pick_not_repeated`, `Burst_is_summarized_but_lights_still_speak`, `First_sighting_is_silent`, `Muted_row_silent`); commit `feat(b757): annunciator lights and switch moves announced from any source`.
+- [x] **Steps 1-5** (tests `Light_phrase`, `Switch_phrase_from_map_positions`, `Own_write_not_repeated`, `Pending_pick_not_repeated`, `Burst_is_summarized_but_lights_still_speak`, `First_sighting_is_silent`, `Muted_row_silent`); commit `feat(b757): annunciator lights and switch moves announced from any source`.
 
 ### Task 5: Ctrl+M for hundreds of rows
 
@@ -100,12 +100,12 @@
 - `public static IReadOnlyList<MonitorRow> MonitorRows(IReadOnlyList<Bbs757Light> lights, IReadOnlyList<Bbs757Control> watchedSwitches)`, in this order: "All Annunciator Lights" (`BBS757W_ALL_LIGHTS`), "All Switches From Any Source" (`BBS757W_ALL_SWITCHES`, the burst summary included), one "Switches: {panel}" row per panel (`BBS757W_PANEL_{panel}`), then one "Light: {label}" row per light and one "Switch: {panel}, {label}" row per switch (`BBS757W_{L:var}`). The shared dialog's search finds "Light:", "Switch:" or a panel's name, so hundreds of rows stay workable (the PMDG list has about 400).
 - `public static bool IsMuted(string lvar, bool isLight, string? panel, Func<string, bool> inMuteSet)`: muted when the row's own key, its panel's key or its group's key is in the set. `Changes` (Task 4) asks it for every line.
 
-- [ ] **Steps 1-5** (tests `Rows_have_unique_keys_and_prefixed_labels`, `Group_rows_come_first`, `Panel_row_mutes_its_switches`, `All_lights_row_mutes_every_light_but_no_switch`, `All_switches_row_mutes_the_burst_summary`, `Rows_appended_after_todays_rows` through the definition's `MonitorRows()`); commit `feat(b757): Ctrl+M rows for the cockpit-wide announcements`.
+- [x] **Steps 1-5** (tests `Rows_have_unique_keys_and_prefixed_labels`, `Group_rows_come_first`, `Panel_row_mutes_its_switches`, `All_lights_row_mutes_every_light_but_no_switch`, `All_switches_row_mutes_the_burst_summary`, `Rows_appended_after_todays_rows` through the definition's `MonitorRows()`); commit `feat(b757): Ctrl+M rows for the cockpit-wide announcements`.
 
 ### Task 6 (only if Task 1 found sources): Flight modes and capture
 
 - If Task 1 found variables that follow the FMA modes or localizer and glideslope capture, add them to the light table with phrases ("LOC captured", "G/S captured", "VNAV PTH", "FLARE armed", …), each a Ctrl+M row, and in the handoff ask plan 16 to propose bringing back a 757 "glideslope alive" from that source. If nothing was found, the handoff says FMA and capture stay with Alt+P.
-- [ ] **Steps 1-5**; commit `feat(b757): flight mode and capture announcements`.
+- [ ] **Steps 1-5**; commit `feat(b757): flight mode and capture announcements`. Not done: Task 1 found no reliable source (see the execution record).
 
 ## In-sim checks (owner)
 
@@ -117,21 +117,22 @@
 - **Pilot-facing:** "757: every meaningful annunciator light, and any switch moved by something other than your own pick in the app (a preset, a quick start, BlueBird's automation, a hardware panel), is announced; a preset's many switches are summed up in one line; each light and switch can be muted in Ctrl+M (rows starting "Light:" and "Switch:", plus one row each to mute all lights, all switches or one panel's switches)." Changelog `feature`.
 - **Proposed rule line:** `- [B757-11] Cockpit-wide 757 announcements watch L:vars through the tablet agent's watch list (one Coherent call, no SimConnect slot), never as SimConnect rows, and skip any L:var a definition row already announces: `Bbs757LightTable.WatchSet` computes that from the registered `IsAnnounced` names. Full: docs/invariants/b757.md#b757-11`
 - **docs/b757.md:** "Cockpit-wide announcements" (the watcher, the table, the burst summary, the own-write window, the Ctrl+M rows and their group mutes).
+- **Flight modes and capture:** FMA and capture stay with Alt+P. Two flights found no FMA mode variable and nothing for FLARE or ROLLOUT armed (`docs/b757/evidence/flight-13.md`). The only capture stand-ins are indirect (LOC: the LNAV light going out with APP lit; G/S: the ALT HOLD light going out, only from ALT HOLD), so no 757 "glideslope alive" is proposed. The A/P and A/T disconnects have variables but stay as they are, the owner's call: plan 05's "Autopilot disconnect" already speaks.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed on `B757` (2026-10-27); waiting on owner: Task 1 [in flight], then Task 6, and in-sim checks 1-2
+- **Status:** done (2026-10-28): landed on `B757` (2026-10-27); Task 1 flown on two flights, Task 6 not needed (no reliable source), in-sim checks 1-2 passed
 - **Claimed by:** Daniel Wolak (danielw97), 2026-10-27
 - **Worked by:** Daniel Wolak, inline (superpowers:executing-plans), one whole-plan review by a fresh reviewer
 - **Started:** 2026-10-27; 924129a8d
 - **Landed:** 2026-10-27
 - **Tests at landing:** full suite passed, 18,007 (2026-10-27) before the rebase; the rebase took in plan 08's last six commits (CDU files only) and the suite was run again after it : 18,023 passed
-- **Tasks:** 0, 2, 3, 4, 5 done (4 and 5 in one commit: one class and one partial serve both). Left: Task 1 (owner's flight: FMA and capture snapshots), Task 6 (builds on it).
-- **Waiting on the owner:** Task 1 [in flight]; in-sim checks 1 (a preset, a mouse or hardware switch move, the app's own pick not repeated) and 2 (Ctrl+M group and panel mutes). Also worth timing: one watch read (about 356 L:vars every 500 ms) in debug.log, and whether BlueBird's panel set-up after a flight load lands after the 5 s settle quiet (it would say one "Panel state changed" line).
-- **In-sim results:** 2026-10-27, KCVG-CYHM (Daniel, plan 13's build): the owner reported the announcements working, flaps and gear said once, lights summed up ("1 light on, 9 off" as the engines came up; which light was the "1 on" is unknown, nothing names a summary's lights). Task 1 partly run (APP, LOC, G/S and LAND 3; FLARE, ROLLOUT and the disconnects not captured): no FMA mode variable, see `docs/b757/evidence/flight-13.md`. Checks 1 and 2 as written (the Shift+T preset, a Ctrl+M panel mute) not confirmed one by one.
+- **Tasks:** 0-5 done (4 and 5 in one commit: one class and one partial serve both). Task 6 not done: Task 1 found no variable that follows the FMA modes, FLARE or ROLLOUT; the capture stand-ins are indirect, and Daniel ruled (2026-10-28) that nothing is reliable enough to announce, the disconnects included (see the handoff).
+- **Waiting on the owner:** nothing. Still worth timing some day: one watch read (about 356 L:vars every 500 ms) in debug.log, and whether BlueBird's panel set-up after a flight load lands after the 5 s settle quiet.
+- **In-sim results:** 2026-10-27, KCVG-CYHM (Daniel, plan 13's build): the owner reported the announcements working, flaps and gear said once, lights summed up ("1 light on, 9 off" as the engines came up; which light was the "1 on" is unknown, nothing names a summary's lights). Task 1 partly run (APP, LOC, G/S and LAND 3; FLARE, ROLLOUT and the disconnects not captured): no FMA mode variable, see `docs/b757/evidence/flight-13.md`. Checks 1 and 2 as written (the Shift+T preset, a Ctrl+M panel mute) not confirmed one by one. 2026-10-28, CYHM-CYMX: Task 1's second round (LOC and G/S stand-ins, the A/P and A/T disconnect variables, the stock NAV and AUTOPILOT MASTER vars reading 0; FLARE and ROLLOUT one unconfirmed round each), `flight-13.md` flight 2. The owner confirmed checks 1 and 2 passed (2026-10-28).
 - **Changed from the plan:**
   - Lights are summed up too: more than 5 within a second are one line ("9 lights on", "1 light on, 9 off"), muted with "All Annunciator Lights". The plan said lights are never summarized; a lights test or battery on would otherwise queue a hundred lines (review finding).
   - "First sighting after Reset is silent" became "silent from a flight load until the Nest check settles, plus 5 s" (`Bbs757CockpitAnnouncements.SettleQuietMs`): the agent reports only changes, so a per-name first sighting would swallow each name's first real change. `OnConnectionBatch` sends the list again, so the agent's next read is a fresh silent baseline.
