@@ -53,6 +53,11 @@ public static class A350WritePlan
             ["AIRLINER_FIRE_TEST"] = 6000,
             // T.O CONFIG: a 250 ms press left the memo's TO CONFIG TEST undone; 1.5 s ran it (live 2026-10-28).
             ["AIRLINER_ECAM_TO_CONFIG"] = 1500,
+            // A mask's flow blinker shows only while PRESS TO TEST is held: a 250 ms tap flashed it (live 2026-10-28).
+            ["AIRLINER_OXYTEST_CPT_PANEL"] = 2000,
+            ["AIRLINER_OXYTEST_FO_PANEL"] = 2000,
+            ["AIRLINER_OXYTEST_TO_PANEL"] = 2000,
+            ["AIRLINER_OXYTEST_4TH_PANEL"] = 2000,
         };
 
     /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>

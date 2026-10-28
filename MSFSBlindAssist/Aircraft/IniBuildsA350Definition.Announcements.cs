@@ -95,7 +95,8 @@ public partial class IniBuildsA350Definition
     private void NoteOwnLamps(A350Control control) => _ownLampsUntil[control.Id] = Clock() + PressedLampMs;
 
     /// <summary>A light's input: feeds the board; each light it turns is kept for the batch end's sentence unless
-    /// muted, the pilot's own, or a master light going out.</summary>
+    /// muted or the pilot's own. A master light going out is never said, but held as any light's off: MASTER WARN
+    /// flashes, and a delivery caught dark must neither drop the pending "on" nor let the next lit one say it again.</summary>
     private void HandleLampDelivery(string key, double value, ScreenReaderAnnouncer announcer)
     {
         if (_lampBoard.PowerFlips(key, value))
@@ -105,14 +106,13 @@ public partial class IniBuildsA350Definition
             var lamp = turn.Lamp;
             string name = MasterSpeakers.TryGetValue(lamp.Key, out var master) ? master : lamp.Name;
             bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp)
-                || (master != null && !turn.On)
                 || (lamp.ControlId != null && _ownLampsUntil.TryGetValue(lamp.ControlId, out var until) && Clock() <= until);
             if (quiet)
             {
                 _lampSpeech.Forget(name);   // the light moved on from any earlier change still waiting
                 continue;
             }
-            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock());
+            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock(), silentOff: master != null);
             _lampAnnouncer = announcer;
         }
     }

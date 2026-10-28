@@ -129,6 +129,17 @@ public static class A350PanelLamps
         ["EMER_DESCENT_SEQ2_LIGHT"] = "Emergency descent armed light",
     };
 
+    /// <summary>Lamps read from a steadier variable than their emissive rule. MASTER WARN flashes, 0.5 s lit and 0.5 s
+    /// dark, and the 1 Hz delivery caught only its dark phase for a whole fire test, twice in three (live 2026-10-28);
+    /// INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning until the pilot's press puts it out.</summary>
+    private static readonly Dictionary<string, string> SteadyRules = new(StringComparer.Ordinal)
+    {
+        ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
+        ["FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
+        ["FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
+        ["FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
+    };
+
     /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after
     /// the panel's button lights.</summary>
     private static readonly (string Node, string Panel, string Name)[] Indicators =
@@ -140,6 +151,16 @@ public static class A350PanelLamps
         ("MLG_BAY_LIGHT_SEQ1_LIGHT", "Fire", "MLG bay fire light"),
         ("IRS_ON_BAT_LIGHT", "ADIRS", "IRS on battery light"),
         ("CABIN_LAVATORY_SEQ1_LIGHT", "Cabin", "Lavatory occupied light"),
+    };
+
+    /// <summary>Indicators the map has no lamp node for, read from their own variable, shown after the map's: each oxygen
+    /// mask's flow blinker, yellow while oxygen flows (its PRESS TO TEST held, live 2026-10-28), mechanical, so no bus.</summary>
+    private static readonly (string Node, string Panel, string Name, string State)[] OwnIndicators =
+    {
+        ("OXYTEST_BLINKER_CPT", "Oxygen Masks", "Captain oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_CPT) 0.5 >"),
+        ("OXYTEST_BLINKER_FO", "Oxygen Masks", "First officer oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_FO) 0.5 >"),
+        ("OXYTEST_BLINKER_TO", "Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_TO) 0.5 >"),
+        ("OXYTEST_BLINKER_4TH", "Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_4TH) 0.5 >"),
     };
 
     public static string? PowerKeyFor(A350LightPower power) => power switch
@@ -181,9 +202,10 @@ public static class A350PanelLamps
                     {
                         if (control.Kind == A350Kinds.Selector && mapLamp.Node.EndsWith("_PANEL_LIGHT", StringComparison.Ordinal))
                             continue;   // a selector position's marker: the row already says the position
-                        if (!rules.Add(mapLamp.State))
-                            continue;   // a second legend lit by the same rule (ATC MSG, AUTOLAND): one light
-                        var rule = A350LampRule.Parse(mapLamp.State);
+                        string state = SteadyRules.GetValueOrDefault(mapLamp.Node, mapLamp.State);
+                        if (!rules.Add(state))
+                            continue;   // a second legend lit by the same rule (ATC MSG, AUTOLAND, MASTER WARN): one light
+                        var rule = A350LampRule.Parse(state);
                         if (stateVar != null && rule.Inputs.All(i => i == stateVar))
                             continue;   // its switch's own position legend
                         rowLamps.Add((mapLamp, rule, LegendOf(mapLamp.Node, rule, stateVar)));
@@ -200,6 +222,9 @@ public static class A350PanelLamps
                 foreach (var (node, onPanel, name) in Indicators)
                     if (onPanel == panel && byNode.TryGetValue(node, out var indicator))
                         lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(indicator.State), indicator.Power));
+                foreach (var (node, onPanel, name, state) in OwnIndicators)
+                    if (onPanel == panel)
+                        lamps.Add(new A350Lamp(node, name, panel, A350LampRule.Parse(state), A350LightPower.None));
             }
         return lamps;
     }

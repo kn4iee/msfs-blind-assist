@@ -45,6 +45,20 @@ public class A350LampSpeechTests
     }
 
     [Fact]
+    public void A_silent_off_is_held_through_a_flash_then_dropped_even_in_a_power_settle()
+    {
+        // A master light: MASTER WARN flashes, and its going out is the pilot's own press.
+        var speech = new A350LampSpeech();
+        speech.Add(On("Master warning"), 0);
+        speech.Add(Off("Master warning"), 500, silentOff: true);   // caught dark before the gather ended
+        speech.Add(On("Master warning"), 1000);                    // a flash: no second "on"
+        Assert.Equal("Master warning on", speech.Flush(A350LampSpeech.GatherMs));
+        speech.NotePowerChange(2000);
+        speech.Add(Off("Master warning"), 2100, silentOff: true);  // an off in a power settle nets unheld otherwise
+        Assert.Null(speech.Flush(2100 + A350LampSpeech.SettleMs + A350LampSpeech.OffHoldMs));
+    }
+
+    [Fact]
     public void Several_changes_read_as_one_sentence_lights_on_first()
     {
         var speech = new A350LampSpeech();

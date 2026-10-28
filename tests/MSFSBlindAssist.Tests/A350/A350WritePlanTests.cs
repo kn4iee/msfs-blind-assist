@@ -86,6 +86,20 @@ public class A350WritePlanTests : IDisposable
             Rpn(A350WritePlan.ForPress(C("AIRLINER_ECAM_TO_CONFIG"))));
     }
 
+    [Theory]
+    [InlineData("CPT")]
+    [InlineData("FO")]
+    [InlineData("TO")]
+    [InlineData("4TH")]
+    public void Each_oxygen_mask_test_is_held_as_a_pilot_holds_it(string seat)
+    {
+        // Live 2026-10-28: the mask's flow blinker shows yellow only while PRESS TO TEST is held; a 250 ms tap flashed it
+        // for one read. Two seconds lets the pilot hear the flow and MSFSBA read the blinker on, then off.
+        string id = $"AIRLINER_OXYTEST_{seat}_PANEL";
+        string set = C(id).Event!;
+        Assert.Equal(new[] { $"2 (>B:{set})", "wait 2000", $"0 (>B:{set})" }, Rpn(A350WritePlan.ForPress(C(id))));
+    }
+
     [Fact]
     public void A_light_test_the_cockpit_returns_itself_is_pressed_once()
     {

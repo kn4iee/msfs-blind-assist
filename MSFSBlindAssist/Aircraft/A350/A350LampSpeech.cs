@@ -38,8 +38,10 @@ public static class A350LampCallouts
 /// <c>INI_DC_LIGHTS_FAILURE</c>) that reach MSFSBA on their own once-a-second subscriptions, out of the aircraft's order:
 /// a light's first change since the last sentence waits <see cref="GatherMs"/> from its own arrival, a light power
 /// change holds everything <see cref="SettleMs"/>, and a light going dark is spoken only once it has stayed dark
-/// <see cref="OffHoldMs"/> (a flashing light reads as one "on", then "off" once it stops). A change the definition does
-/// not keep tells this class to <see cref="Forget"/> the light, so an earlier opposite change is not spoken stale. Pure.
+/// <see cref="OffHoldMs"/> (a flashing light reads as one "on", then "off" once it stops). A light added with a silent
+/// off (a master light: its going out is the pilot's own press) has its off held the same way and then dropped, so a
+/// flash neither cancels its pending "on" nor says it again. A change the definition does not keep tells this class to
+/// <see cref="Forget"/> the light, so an earlier opposite change is not spoken stale. Pure.
 /// </summary>
 public sealed class A350LampSpeech
 {
@@ -49,18 +51,24 @@ public sealed class A350LampSpeech
 
     private readonly List<A350LampChange> _pending = new();
     private readonly Dictionary<string, long> _heldOff = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _silentOff = new(StringComparer.Ordinal);
     private long _holdUntil = long.MinValue;
 
     /// <summary>A power change's sentence is still to come: until it is spoken, an off nets in it unheld.</summary>
     private bool _powerSettling;
 
-    public void Add(A350LampChange change, long now)
+    public void Add(A350LampChange change, long now, bool silentOff = false)
     {
         if (change.On && _heldOff.Remove(change.Name))
+        {
+            _silentOff.Remove(change.Name);
             return;   // lit again while its off was held: a flash
-        if (!change.On && !_powerSettling)
+        }
+        if (!change.On && (silentOff || !_powerSettling))
         {
             _heldOff[change.Name] = now;
+            if (silentOff)
+                _silentOff.Add(change.Name);
             return;
         }
         Queue(change, now);
@@ -79,7 +87,8 @@ public sealed class A350LampSpeech
         foreach (var (name, _) in _heldOff.Where(h => now - h.Value >= OffHoldMs).OrderBy(h => h.Value).ToList())
         {
             _heldOff.Remove(name);
-            _pending.Add(new A350LampChange(name, false));
+            if (!_silentOff.Remove(name))
+                _pending.Add(new A350LampChange(name, false));
         }
         if (now < _holdUntil)
             return null;
@@ -96,6 +105,7 @@ public sealed class A350LampSpeech
     public void Forget(string name)
     {
         _heldOff.Remove(name);
+        _silentOff.Remove(name);
         _pending.RemoveAll(change => string.Equals(change.Name, name, StringComparison.Ordinal));
     }
 
@@ -103,6 +113,7 @@ public sealed class A350LampSpeech
     {
         _pending.Clear();
         _heldOff.Clear();
+        _silentOff.Clear();
         _holdUntil = long.MinValue;
         _powerSettling = false;
     }

@@ -476,6 +476,8 @@ internal sealed class ProbeForm : Form
             var started = DateTime.Now;
             void Say(string text) => Line($"{(DateTime.Now - started).TotalSeconds,6:0.0}s\t{text}");
             var said = new Cap(Handle);
+            // A350_TRACE="key,key" prints each delivery of those keys, timed, to see what the speech was made from.
+            var trace = new HashSet<string>((Environment.GetEnvironmentVariable("A350_TRACE") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries), StringComparer.Ordinal);
             _m.ContinuousBatchDelivered += (_, n) =>
             {
                 def.OnContinuousBatchDelivered(n);
@@ -483,6 +485,7 @@ internal sealed class ProbeForm : Form
             };
             _m.SimVarUpdated += (_, e) =>
             {
+                if (trace.Contains(e.VarName)) Say($"[trace] {e.VarName}={Fmt(e.Value)}");
                 if (!vars.TryGetValue(e.VarName, out var d)) return;
                 // The base variables (ground speed, altitude…) are MainForm's own readouts, never this generic path.
                 if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal)) return;
@@ -542,6 +545,34 @@ internal sealed class ProbeForm : Form
             }
             foreach (var name in _watch)
                 Line($"{name}\t{Fmt(await Read("W:" + name))}");
+            return;
+        }
+
+        if (_mode == "sample")
+        {
+            // "code#ms;code#ms" run in the background while the watched L:vars are read every 100 ms for _watch's
+            // first-listed duration: how a value moves inside a hold (a flashing light, a timed test).
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var run = Task.Run(async () =>
+            {
+                foreach (var item in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var hash = item.Split('#');
+                    _m.ExecuteCalculatorCodeUnique(hash[0]);
+                    await Task.Delay(hash.Length > 1 ? int.Parse(hash[1]) : 100);
+                }
+            });
+            string last = "";
+            while (!run.IsCompleted)
+            {
+                var values = new List<string>();
+                foreach (var name in _watch)
+                    values.Add($"{name}={Fmt(await Read("W:" + name))}");
+                string now = string.Join(" ", values);
+                if (now != last) Line($"{sw.Elapsed.TotalSeconds,6:0.00}s\t{now}");
+                last = now;
+                await Task.Delay(100);
+            }
             return;
         }
 

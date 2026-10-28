@@ -56,12 +56,40 @@ public class A350PanelLampsTests
     }
 
     [Fact]
+    public void The_master_warning_is_read_from_its_steady_state_not_its_flashing_legends()
+    {
+        // Live 2026-10-28: MASTER WARN flashes (0.5 s lit, 0.5 s dark) and the 1 Hz delivery caught only its dark phase
+        // for a whole fire test, twice in three; INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning, until the
+        // pilot's press. One light per button, as both its legends now read the same state.
+        var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
+        var warnings = glareshield.Where(l => l.Node.StartsWith("FCU_MASTER_WARNING_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[] { "FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT", "FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT" }, warnings.Select(l => l.Node));
+        Assert.All(warnings, l => Assert.Equal(new[] { "INI_MASTER_WARNING_ACTIVE" }, l.Rule.Inputs));
+    }
+
+    [Fact]
     public void A_selectors_position_markers_are_left_out()
     {
         // Each ND mode and range position has a marker light; the selector row already says the position.
         var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
         Assert.DoesNotContain(glareshield, l => l.Node.StartsWith("EFIS_MODE_", StringComparison.Ordinal));
         Assert.DoesNotContain(glareshield, l => l.Node.StartsWith("EFIS_RANGE_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Each_oxygen_masks_flow_blinker_is_shown_with_no_bus()
+    {
+        // Live 2026-10-28: holding a mask's PRESS TO TEST turns its flow blinker yellow (INI_OXYTEST_BLINKER_CPT 1, the
+        // oxy_test sound), 0 once released. A mechanical indicator with no lamp node and no bus.
+        var cockpit = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Cockpit" });
+        var blinkers = cockpit.Where(l => l.Panel == "Oxygen Masks").ToList();
+        Assert.Equal(new[] { "Captain", "First officer", "Third occupant", "Fourth occupant" }.Select(s => s + " oxygen flow blinker"),
+            blinkers.Select(l => l.Name));
+        var captain = blinkers[0];
+        Assert.Equal("A350_LT_OXYTEST_BLINKER_CPT", captain.Key);
+        Assert.Equal(A350LightPower.None, captain.Power);
+        Assert.True(captain.IsLit(key => key == captain.Key ? 1 : null));
+        Assert.False(captain.IsLit(key => key == captain.Key ? 0 : null));
     }
 
     [Fact]

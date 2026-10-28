@@ -69,8 +69,8 @@ public class A350GlareshieldPanelTests
         AssertLights("Warnings", new[] {
             "Captain master caution light", "Captain master caution lower light",
             "First officer master caution light", "First officer master caution lower light",
-            "Captain master warning light", "Captain master warning lower light",
-            "First officer master warning light", "First officer master warning lower light",
+            // Each MASTER WARN reads its steady warning state, both legends one light (A350PanelLamps.SteadyRules).
+            "Captain master warning light", "First officer master warning light",
             "Captain autoland light", "First officer autoland light",
             "Captain ATC message light", "First officer ATC message light",
         });
