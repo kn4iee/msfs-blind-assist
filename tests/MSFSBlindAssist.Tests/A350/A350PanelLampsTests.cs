@@ -64,7 +64,22 @@ public class A350PanelLampsTests
         var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
         var warnings = glareshield.Where(l => l.Node.StartsWith("FCU_MASTER_WARNING_", StringComparison.Ordinal)).ToList();
         Assert.Equal(new[] { "FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT", "FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT" }, warnings.Select(l => l.Node));
-        Assert.All(warnings, l => Assert.Equal(new[] { "INI_MASTER_WARNING_ACTIVE" }, l.Rule.Inputs));
+        Assert.All(warnings, l => Assert.Contains("INI_MASTER_WARNING_ACTIVE", l.Rule.Inputs));
+        var captain = warnings[0].Rule;
+        Assert.True(captain.IsLit(v => v == "INI_MASTER_WARNING_ACTIVE" ? 1 : 0));   // a warning, in a dark phase
+    }
+
+    [Theory]
+    [InlineData("INI_MASTER_WARNING_CAPT_TOP")]
+    [InlineData("INI_MASTER_WARNING_CAPT_BOTTOM")]
+    public void The_master_warning_still_reads_its_own_legends(string legend)
+    {
+        // Review 2026-10-28: the steady state replaced the legends' own rule, so anything that lights a legend without a
+        // warning (the annunciator test, another path) read Off and was never said. The steady state now adds to them.
+        var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
+        var captain = glareshield.Single(l => l.Node == "FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT").Rule;
+        Assert.True(captain.IsLit(v => v == legend ? 1 : 0));
+        Assert.False(captain.IsLit(_ => 0));
     }
 
     [Fact]

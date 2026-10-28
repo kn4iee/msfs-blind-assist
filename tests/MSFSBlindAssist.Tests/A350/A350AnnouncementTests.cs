@@ -172,23 +172,33 @@ public class A350LampAnnouncementTests
     {
         // Live 2026-10-28, the fire test: MASTER WARN flashes, about 0.5 s lit and 0.5 s dark, while the warning lasts,
         // and the 1 Hz light delivery catches either phase. A dark phase dropped the pending "on": nothing was said.
+        // INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning, until the pilot's press.
         var warning = Lamp("A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT");
-        Baseline(warning, 0);
-        _def.ProcessSimVarUpdate(warning.Key, 1, _speech);
+        string active = warning.KeyFor("INI_MASTER_WARNING_ACTIVE"), bottom = warning.KeyFor("INI_MASTER_WARNING_CAPT_BOTTOM");
+        void Legends(double lit)
+        {
+            _def.ProcessSimVarUpdate(warning.Key, lit, _speech);   // the top legend, the light's own key
+            _def.ProcessSimVarUpdate(bottom, lit, _speech);
+        }
+        foreach (var key in warning.InputKeys)
+            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active ? 0 : 1, _speech);
+        _def.ProcessSimVarUpdate(active, 1, _speech);
+        Legends(1);
         _now += 1000;
-        _def.ProcessSimVarUpdate(warning.Key, 0, _speech);   // caught dark before the gather ended
+        Legends(0);   // caught dark before the gather ended
         BatchAfter(A350LampSpeech.GatherMs);
         Assert.Equal(new[] { "Master warning on" }, _speech.All);
         for (int i = 0; i < 5; i++)
         {
-            _def.ProcessSimVarUpdate(warning.Key, i % 2 == 0 ? 1 : 0, _speech);
+            Legends(i % 2 == 0 ? 1 : 0);
             BatchAfter(1000);
         }
         Assert.Single(_speech.All);   // still flashing: said once
-        _def.ProcessSimVarUpdate(warning.Key, 0, _speech);
+        _def.ProcessSimVarUpdate(active, 0, _speech);   // the pilot's press
+        Legends(0);
         BatchAfter(A350LampSpeech.OffHoldMs + 100);
         Assert.Single(_speech.All);   // out: never said
-        _def.ProcessSimVarUpdate(warning.Key, 1, _speech);   // the next warning
+        _def.ProcessSimVarUpdate(active, 1, _speech);   // the next warning
         BatchAfter(A350LampSpeech.GatherMs + 100);
         Assert.Equal(new[] { "Master warning on", "Master warning on" }, _speech.All);
     }

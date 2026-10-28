@@ -130,16 +130,20 @@ public static class A350PanelLamps
         ["EMER_DESCENT_SEQ2_LIGHT"] = "Emergency descent armed light",
     };
 
-    /// <summary>Lamps read from a steadier variable than their emissive rule. MASTER WARN flashes, 0.5 s lit and 0.5 s
+    /// <summary>Lamps read with a steadier variable beside their emissive rule. MASTER WARN flashes, 0.5 s lit and 0.5 s
     /// dark, and the 1 Hz delivery caught only its dark phase for a whole fire test, twice in three (live 2026-10-28);
-    /// INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning until the pilot's press puts it out.</summary>
+    /// INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning until the pilot's press puts it out. Its legends still
+    /// count (anything lighting one without a warning), and both legends of a side read one rule: one light per side.</summary>
     private static readonly Dictionary<string, string> SteadyRules = new(StringComparer.Ordinal)
     {
-        ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
-        ["FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
-        ["FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
-        ["FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT"] = "(L:INI_MASTER_WARNING_ACTIVE)",
+        ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = MasterWarning("CAPT"),
+        ["FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT"] = MasterWarning("CAPT"),
+        ["FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT"] = MasterWarning("FO"),
+        ["FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT"] = MasterWarning("FO"),
     };
+
+    private static string MasterWarning(string side) =>
+        $"(L:INI_MASTER_WARNING_{side}_TOP) (L:INI_MASTER_WARNING_{side}_BOTTOM) or (L:INI_MASTER_WARNING_ACTIVE) or";
 
     /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after
     /// the panel's button lights.</summary>
