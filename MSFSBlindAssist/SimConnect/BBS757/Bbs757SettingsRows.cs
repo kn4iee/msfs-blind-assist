@@ -8,13 +8,13 @@ public enum Bbs757RowState
 {
     /// <summary>
     /// A value of the right type that one of the tablet's words stores (a switch or a choice), or the value of a number
-    /// or text box.
+    /// or text box or of a slider.
     /// </summary>
     Value,
 
     /// <summary>
     /// A value of the right type that none of the tablet's words stores. Only a switch or a choice has this state: a
-    /// number or text box shows whatever is stored. The control can still be set to one of the words.
+    /// number or text box and a slider show whatever is stored. The control can still be set to one of the words.
     /// </summary>
     Other,
 
@@ -42,11 +42,13 @@ public enum Bbs757RowState
 /// <param name="State">What the files hold for it.</param>
 /// <param name="ChoiceIndex">
 /// For a <see cref="Bbs757RowState.Value"/> row of a switch or a choice, the index into <see cref="Bbs757Setting.Choices"/>
-/// of the choice the stored value selects; else -1.
+/// of the choice the stored value selects; for one of a slider, the index into <see cref="Bbs757Setting.Steps"/> of the
+/// step nearest the stored value (<see cref="Bbs757EfbSettings.NearestStep"/>); else -1.
 /// </param>
 /// <param name="Text">
 /// What the control shows: the chosen choice's word for a switch or a choice, <see cref="Bbs757EfbSettings.NumberText"/>
-/// for a number or text box, and for every other state that state's own text (<see cref="Bbs757SettingsRows.OtherText"/>,
+/// for a number or text box, <see cref="Bbs757EfbSettings.SliderText"/> for a slider (the stored value itself, which can
+/// lie between steps), and for every other state that state's own text (<see cref="Bbs757SettingsRows.OtherText"/>,
 /// <see cref="Bbs757SettingsRows.DiffersText"/> or <see cref="Bbs757SettingsRows.LinkedDiffersText"/>,
 /// <see cref="Bbs757SettingsRows.UnreadableText"/>, <see cref="Bbs757SettingsRows.AutomaticText"/>). For the pilot's
 /// identifiers (SimBrief ID, Hoppie logon code, SayIntentions ACARS key) it is the stored value itself, so a row never
@@ -74,7 +76,7 @@ public sealed record Bbs757SettingRow(Bbs757Setting Setting, Bbs757RowState Stat
 /// <summary>
 /// The rows of the Settings tab's sections: for each setting of a section, what its control shows, worked out from
 /// BlueBird's parsed files, and whether it may change. A setting of the settings file (<c>efb_settings.json</c>: General,
-/// Aircraft, AIRAC data and Failures) reads that file. A setting of the registrations (Livery options, Callouts and
+/// Aircraft, AIRAC data, ACARS and Failures) reads that file. A setting of the registrations (Livery options, Callouts and
 /// Cabin audio) reads every registration's file in which its key reads: they agree, and the row shows the value; they
 /// differ, and it says so; none reads, and it is unreadable. A registration whose file lacks the key, or holds another
 /// type there, is left out and does not change what the others show (the save that reaches it says so). Units, whose
@@ -216,11 +218,15 @@ public static class Bbs757SettingsRows
         return Bbs757SettingsFile.ValueAt(root, also.Path, linked.Type) is { } held && held != linked;
     }
 
-    // The row for a value that was read: the tablet's word, "Other" for a value of no word, or the box's text.
+    // The row for a value that was read: the tablet's word, "Other" for a value of no word, the box's text, or the
+    // slider's reading at its nearest step.
     private static Bbs757SettingRow Shown(Bbs757Setting setting, Bbs757Value stored)
     {
         if (setting.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text)
             return new Bbs757SettingRow(setting, Bbs757RowState.Value, -1, Bbs757EfbSettings.NumberText(setting, stored));
+        if (setting.Kind == Bbs757SettingKind.Slider)
+            return new Bbs757SettingRow(setting, Bbs757RowState.Value, Bbs757EfbSettings.NearestStep(setting, stored.Float),
+                Bbs757EfbSettings.SliderText(setting, stored));
 
         for (int index = 0; index < setting.Choices.Count; index++)
         {

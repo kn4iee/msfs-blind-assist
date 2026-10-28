@@ -436,6 +436,26 @@ public class Bbs757SettingsSaveTests
     }
 
     [Fact]
+    public void A_slider_that_saved_says_nothing_and_one_refused_says_why_at_once()
+    {
+        var files = new FakeFiles();
+
+        var moved = files.Save(Setting("failures.random_multiplier"), Bbs757Value.OfFloat(2.5), Files(SettingsJson));
+
+        Assert.Equal(new[] { "global failures.random_multiplier = 2.5" }, files.Writes);
+        // A slider that saved: the screen reader has said its new value.
+        Assert.Null(moved.Spoken);
+        Assert.False(moved.Immediate);
+
+        files.Global["failures.random_multiplier"] = Refused(InUse);
+
+        var refused = files.Save(Setting("failures.random_multiplier"), Bbs757Value.OfFloat(4.0), Files(SettingsJson));
+
+        Assert.Equal("Couldn't save Random failure frequency: the file is in use", refused.Spoken);
+        Assert.True(refused.Immediate);
+    }
+
+    [Fact]
     public void The_words_and_a_logged_value_are_the_same_on_a_comma_decimal_pc()
     {
         string noBrightness = Replaced(SettingsJson, "\"display_brightness\":0.8,", "");

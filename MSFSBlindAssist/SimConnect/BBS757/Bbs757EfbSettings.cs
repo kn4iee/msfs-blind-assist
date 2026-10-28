@@ -99,10 +99,11 @@ public enum Bbs757SettingFile
 }
 
 /// <summary>
-/// The tablet pages the catalog groups its settings by, in the order it lists them (Failures is the AIRCRAFT app's
-/// Failures page, the others are Settings pages).
+/// The sections the catalog groups its settings by, in the order it lists them: the tablet's Settings pages, the
+/// AIRCRAFT app's Failures page, and ACARS, which is no tablet page: it gathers the ACARS rows of the Settings >
+/// Aircraft and AIRAC data pages.
 /// </summary>
-public enum Bbs757SettingSection { General, Aircraft, AiracData, Failures, LiveryOptions, Callouts, CabinAudio }
+public enum Bbs757SettingSection { General, Aircraft, AiracData, Acars, Failures, LiveryOptions, Callouts, CabinAudio }
 
 /// <summary>How the tablet lets a setting be changed.</summary>
 public enum Bbs757SettingKind
@@ -118,6 +119,12 @@ public enum Bbs757SettingKind
 
     /// <summary>Text the pilot types.</summary>
     Text,
+
+    /// <summary>
+    /// A number the tablet sets along a slider: the pilot moves it between the catalog's steps
+    /// (<see cref="Bbs757Setting.Steps"/>), and only a step is written.
+    /// </summary>
+    Slider,
 }
 
 /// <summary>What a Number box takes.</summary>
@@ -128,9 +135,6 @@ public enum Bbs757NumberEntry
 
     /// <summary>A whole number.</summary>
     Whole,
-
-    /// <summary>Any number, with a decimal part.</summary>
-    Decimal,
 
     /// <summary>A whole percent, stored as a fraction from 0 to 1.</summary>
     Percent,
@@ -154,21 +158,23 @@ public sealed record Bbs757SettingChoice(string Word, Bbs757Value Stored, Bbs757
 /// <param name="Path">The key, dotted through the file's objects: <c>loading_speed</c>, <c>failures.random_enabled</c>,
 /// <c>options.egpws_callouts.2500</c>.</param>
 /// <param name="File">The file that holds it.</param>
-/// <param name="Section">The tablet page it is on.</param>
+/// <param name="Section">The section it is in: the tablet page it is on, or ACARS.</param>
 /// <param name="Label">The tablet's label, in sentence case with its abbreviations as the tablet writes them.</param>
 /// <param name="Kind">How the tablet changes it.</param>
 /// <param name="Type">The JSON type BlueBird keeps it in.</param>
-/// <param name="Choices">For OnOff and Choice, the tablet's words in its order; none for Number and Text.</param>
+/// <param name="Choices">For OnOff and Choice, the tablet's words in its order; none for Number, Text and Slider.</param>
 /// <param name="EmptyStored">What a cleared Number or Text box stores; null when it cannot be cleared.</param>
 /// <param name="MayLog">False for the pilot's identifiers: their values never reach a log.</param>
 /// <param name="Range">For Number, what the box takes.</param>
 /// <param name="Also">A second key a choice writes with this one.</param>
 /// <param name="ExclusiveGroup">A callout in a group of which only one may be on: switching one on switches the rest off.</param>
 /// <param name="EnabledBy">The path of the setting that must be On for this one to change (the announcement categories).</param>
+/// <param name="Steps">For Slider, the values it moves between, lowest first: the only values it writes.</param>
 public sealed record Bbs757Setting(string Path, Bbs757SettingFile File, Bbs757SettingSection Section, string Label,
     Bbs757SettingKind Kind, Bbs757ValueType Type, IReadOnlyList<Bbs757SettingChoice> Choices,
     Bbs757Value? EmptyStored = null, bool MayLog = true, Bbs757NumberRange? Range = null,
-    Bbs757LinkedKey? Also = null, string? ExclusiveGroup = null, string? EnabledBy = null);
+    Bbs757LinkedKey? Also = null, string? ExclusiveGroup = null, string? EnabledBy = null,
+    IReadOnlyList<double>? Steps = null);
 
 /// <summary>
 /// One key to write in one file. <paramref name="Setting"/> is the setting the write is for: the one it changes,
@@ -180,9 +186,10 @@ public sealed record Bbs757SettingWrite(Bbs757Setting Setting, string Path, Bbs7
 /// The catalog of BlueBird's tablet settings: for each one its key, file, tablet label, the tablet's words and the
 /// value BlueBird stores for each. The words and stored values were measured on the tablet
 /// (docs/b757/evidence/efb-settings.md, sections 2 to 7), with three exceptions. Hoppie ACARS's On is taken by type: it
-/// was not tapped when measuring, as switching it on could log on to Hoppie. The AIRAC data "not set" values
-/// (<c>simbrief_id</c> -1, the two codes "") come from the spec and earlier notes, not from this measurement: section 8
-/// was not tapped. The TOD pause distance range of 1 to 999 is a ruling: the tablet's keypad limits were not measured.
+/// was not tapped when measuring, as switching it on could log on to Hoppie. The "not set" values of the SimBrief ID
+/// and the two ACARS codes (<c>simbrief_id</c> -1, the codes "") come from the spec and earlier notes, not from this
+/// measurement: section 8 was not tapped. The TOD pause distance range of 1 to 999 is a ruling: the tablet's keypad
+/// limits were not measured. The random failure frequency's slider steps are the app's, along the tablet's own scale.
 /// The app writes only values BlueBird itself writes. The keys the tablet does not show (<c>units</c> on its own,
 /// <c>options.model_visibility.*</c>, the charts and map state) are not here, so nothing can change them.
 /// Pure: no files, no simulator.
@@ -193,8 +200,8 @@ public static class Bbs757EfbSettings
     private const string Cabin = "options.cabin_audio.";
 
     /// <summary>
-    /// Every setting, the sections in the order General, Aircraft, AIRAC data, Failures, Livery options, Callouts and
-    /// Cabin audio, and each section's settings in the tablet's row order.
+    /// Every setting, the sections in the order General, Aircraft, AIRAC data, ACARS, Failures, Livery options, Callouts
+    /// and Cabin audio, and each section's settings in the tablet's row order.
     /// </summary>
     public static IReadOnlyList<Bbs757Setting> All { get; } = Build();
 
@@ -204,16 +211,17 @@ public static class Bbs757EfbSettings
     /// <summary>The setting with this key, or null when the tablet shows none (or this version does not know it).</summary>
     public static Bbs757Setting? ByPath(string path) => PathIndex.GetValueOrDefault(path);
 
-    /// <summary>The settings of one page, in the tablet's row order.</summary>
+    /// <summary>The settings of one section, in the tablet's row order.</summary>
     public static IReadOnlyList<Bbs757Setting> InSection(Bbs757SettingSection section) =>
         All.Where(s => s.Section == section).ToArray();
 
-    /// <summary>The page's name as the tablet gives it, in sentence case.</summary>
+    /// <summary>The page's name as the tablet gives it, in sentence case, and ACARS, which is no page.</summary>
     public static string SectionName(Bbs757SettingSection section) => section switch
     {
         Bbs757SettingSection.General => "General",
         Bbs757SettingSection.Aircraft => "Aircraft",
         Bbs757SettingSection.AiracData => "AIRAC data",
+        Bbs757SettingSection.Acars => "ACARS",
         Bbs757SettingSection.Failures => "Failures",
         Bbs757SettingSection.LiveryOptions => "Livery options",
         Bbs757SettingSection.Callouts => "Callouts",
@@ -231,14 +239,17 @@ public static class Bbs757EfbSettings
     /// <see cref="Bbs757Setting.Also"/> key and the choice storing the value has an
     /// <see cref="Bbs757SettingChoice.AlsoStored"/>, that key too (UNITS writes <c>units</c>), carrying the same setting.
     /// The app writes only values BlueBird itself stores, so a switch or a choice takes only the value one of its choices
-    /// stores: anything else throws <see cref="ArgumentException"/>, before anything is returned. A number or text box's
-    /// value comes from <see cref="TryParseEntry"/> and is written as given.
+    /// stores, and a slider only one of its steps: anything else throws <see cref="ArgumentException"/>, before anything
+    /// is returned. A number or text box's value comes from <see cref="TryParseEntry"/> and is written as given.
     /// </summary>
     public static IReadOnlyList<Bbs757SettingWrite> WritesFor(Bbs757Setting setting, Bbs757Value value)
     {
         var choice = setting.Choices.FirstOrDefault(c => c.Stored == value);
         if (choice is null && setting.Kind is Bbs757SettingKind.OnOff or Bbs757SettingKind.Choice)
             throw new ArgumentException($"BlueBird has no choice of '{setting.Label}' that stores {value}.", nameof(value));
+        if (setting.Kind == Bbs757SettingKind.Slider
+            && (value.Type != setting.Type || setting.Steps?.Contains(value.Float) != true))
+            throw new ArgumentException($"'{setting.Label}' has no step that stores {value}.", nameof(value));
 
         var writes = new List<Bbs757SettingWrite>();
 
@@ -270,8 +281,7 @@ public static class Bbs757EfbSettings
     /// What a Number or Text box shows for the stored value, as the tablet shows it. Digits and Whole: the integer, or
     /// an empty box for <see cref="Bbs757Setting.EmptyStored"/> (off for the TOD pause distance, "not set" for the
     /// SimBrief ID: <see cref="EmptyHint"/>). Percent: <c>floor(v * 100)</c> clamped to the range (the tablet shows
-    /// 0.99901 as 99%). Decimal: one decimal ("2.0" for 1.9952623149688795, as the tablet does). Text: the text. Always
-    /// invariant. Throws <see cref="ArgumentException"/> for any other kind.
+    /// 0.99901 as 99%). Text: the text. Always invariant. Throws <see cref="ArgumentException"/> for any other kind.
     /// </summary>
     public static string NumberText(Bbs757Setting setting, Bbs757Value stored)
     {
@@ -287,7 +297,6 @@ public static class Bbs757EfbSettings
                     : stored.Integer.ToString(CultureInfo.InvariantCulture),
             Bbs757NumberEntry.Percent =>
                 Math.Clamp(Math.Floor(stored.Float * 100), range.Min, range.Max).ToString("0", CultureInfo.InvariantCulture),
-            Bbs757NumberEntry.Decimal => Math.Round(stored.Float, 1).ToString("0.0", CultureInfo.InvariantCulture),
             _ => throw new ArgumentException($"Unknown number entry {range.Entry}.", nameof(setting)),
         };
     }
@@ -295,12 +304,12 @@ public static class Bbs757EfbSettings
     /// <summary>
     /// Reads what the pilot typed into a Number or Text box, after trimming it. Empty stores
     /// <see cref="Bbs757Setting.EmptyStored"/>, or is refused when the setting has none. Digits must pass
-    /// <see cref="Bbs757EfbLayout.IsSimBriefId"/>; Whole, Decimal and Percent are read by
-    /// <see cref="NumberParsing.TryParseTyped"/> ("2,5" and "2.5" are both 2.5 on any Windows culture), Whole and Percent
-    /// need a whole number, and all three must lie in the range. A percent p is stored as <c>(p + 0.4) / 100</c> (1.0
-    /// for 100), so the tablet shows p whether it floors or rounds. Text is stored trimmed. On a refusal
-    /// <paramref name="reason"/> says what to type: for the TOD pause distance also that an empty box switches it off,
-    /// and for the SimBrief ID that it is digits, not 0 ("0" is digits, and refused). Throws
+    /// <see cref="Bbs757EfbLayout.IsSimBriefId"/>; Whole and Percent are read by
+    /// <see cref="NumberParsing.TryParseTyped"/> (as typed on any Windows culture), need a whole number and must lie in
+    /// the range. A percent p is stored as
+    /// <c>(p + 0.4) / 100</c> (1.0 for 100), so the tablet shows p whether it floors or rounds. Text is stored trimmed.
+    /// On a refusal <paramref name="reason"/> says what to type: for the TOD pause distance also that an empty box
+    /// switches it off, and for the SimBrief ID that it is digits, not 0 ("0" is digits, and refused). Throws
     /// <see cref="ArgumentException"/> for any other kind.
     /// </summary>
     public static bool TryParseEntry(Bbs757Setting setting, string typed, out Bbs757Value value, out string? reason)
@@ -338,10 +347,6 @@ public static class Bbs757EfbSettings
                 return true;
             case Bbs757NumberEntry.Percent when TryWholeNumber(text, range, out long percent):
                 value = Bbs757Value.OfFloat(StoredPercent(percent));
-                return true;
-            case Bbs757NumberEntry.Decimal when NumberParsing.TryParseTyped(text, out double number)
-                && number >= range.Min && number <= range.Max:
-                value = Bbs757Value.OfFloat(number);
                 return true;
             default:
                 reason = RefusalReason(setting);
@@ -396,8 +401,6 @@ public static class Bbs757EfbSettings
             Bbs757NumberEntry.Whole or Bbs757NumberEntry.Percent =>
                 string.Create(CultureInfo.InvariantCulture, $"type a whole number from {range.Min:0} to {range.Max:0}")
                 + (EmptyMeansOff(setting) ? ", or leave the box empty to switch it off" : ""),
-            Bbs757NumberEntry.Decimal =>
-                string.Create(CultureInfo.InvariantCulture, $"type a number from {range.Min:0} to {range.Max:0}"),
             _ => throw new ArgumentException($"Unknown number entry {range.Entry}.", nameof(setting)),
         };
     }
@@ -411,12 +414,53 @@ public static class Bbs757EfbSettings
     private static Bbs757NumberRange RangeOf(Bbs757Setting setting) =>
         setting.Range ?? throw new ArgumentException($"'{setting.Label}' has no number range.", nameof(setting));
 
+    // ---- sliders ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What a Slider reads for the stored value, as the tablet shows the random failure frequency ("FREQUENCY: 2.0x
+    /// (1x-1000x)"): one decimal and an x, <c>2.5x</c>, <c>1000.0x</c>; 1.9952623149688795 reads <c>2.0x</c>. Always
+    /// invariant. Throws <see cref="ArgumentException"/> for a setting that is no slider.
+    /// </summary>
+    public static string SliderText(Bbs757Setting setting, Bbs757Value stored)
+    {
+        RequireSlider(setting);
+        return stored.Float.ToString("0.0", CultureInfo.InvariantCulture) + "x";
+    }
+
+    /// <summary>
+    /// The index of the step nearest <paramref name="value"/> on the tablet's scale, where each step is a factor apart
+    /// (the nearer by the logarithm): where a value set on the tablet between steps sits. A value at or below the first
+    /// step is the first, at or above the last the last; one that is no number is the first. Throws
+    /// <see cref="ArgumentException"/> for a setting that is no slider.
+    /// </summary>
+    public static int NearestStep(Bbs757Setting setting, double value)
+    {
+        IReadOnlyList<double> steps = RequireSlider(setting);
+        if (!double.IsFinite(value) || value <= steps[0]) return 0;
+        if (value >= steps[^1]) return steps.Count - 1;
+
+        double target = Math.Log10(value);
+        int nearest = 0;
+        for (int index = 1; index < steps.Count; index++)
+        {
+            if (Math.Abs(Math.Log10(steps[index]) - target) < Math.Abs(Math.Log10(steps[nearest]) - target))
+                nearest = index;
+        }
+        return nearest;
+    }
+
+    private static IReadOnlyList<double> RequireSlider(Bbs757Setting setting) =>
+        setting is { Kind: Bbs757SettingKind.Slider, Steps: { Count: > 0 } steps }
+            ? steps
+            : throw new ArgumentException($"'{setting.Label}' is not a slider.", nameof(setting));
+
     // ---- the catalog --------------------------------------------------------------------------------
 
     private static IReadOnlyList<Bbs757Setting> Build() =>
         GeneralSettings()
             .Concat(AircraftSettings())
             .Concat(AiracDataSettings())
+            .Concat(AcarsSettings())
             .Concat(FailureSettings())
             .Concat(LiveryOptionSettings())
             .Concat(CalloutSettings())
@@ -448,6 +492,11 @@ public static class Bbs757EfbSettings
     private static Bbs757Setting Pick(Bbs757SettingSection section, string path, string label, Bbs757ValueType type,
         params Bbs757SettingChoice[] choices) =>
         new(path, FileOf(section), section, label, Bbs757SettingKind.Choice, type, choices);
+
+    /// <summary>A number set along a slider, written only at <paramref name="steps"/>; it has no choices.</summary>
+    private static Bbs757Setting Slider(Bbs757SettingSection section, string path, string label, double[] steps) =>
+        new(path, FileOf(section), section, label, Bbs757SettingKind.Slider, Bbs757ValueType.Float,
+            Array.Empty<Bbs757SettingChoice>(), Steps: steps);
 
     /// <summary>A number or text box, which has no choices.</summary>
     private static Bbs757Setting Box(Bbs757SettingSection section, string path, string label, Bbs757SettingKind kind,
@@ -489,8 +538,8 @@ public static class Bbs757EfbSettings
         };
     }
 
-    // Aircraft (efb_settings.json), evidence sections 3 and 4: the Settings > Aircraft rows, then GND SRVC mode from the
-    // AIRCRAFT app's Ground services page.
+    // Aircraft (efb_settings.json), evidence sections 3 and 4: the Settings > Aircraft rows but the two ACARS ones (the
+    // ACARS section has them), then GND SRVC mode from the AIRCRAFT app's Ground services page.
     private static Bbs757Setting[] AircraftSettings()
     {
         const Bbs757SettingSection section = Bbs757SettingSection.Aircraft;
@@ -513,10 +562,6 @@ public static class Bbs757EfbSettings
                 Choice("Realistic", 0L), Choice("Standard", 1L), Choice("Quick", 2L), Choice("Instant", 3L)),
             Switch(section, "automatic_loading", "Automatic boarding"),
             Switch(section, "auto_connect_ground_services_on_init", "Automatic GPU/jetway"),
-            // On was not tapped when measuring: it could log on to Hoppie with the owner's code (evidence section 3).
-            Switch(section, "hoppie_user_enabled", "Hoppie ACARS"),
-            Pick(section, "cpdlc_network", "CPDLC network", Bbs757ValueType.Integer,
-                Choice("Hoppie", 0L), Choice("SayIntentions", 1L)),
             Switch(section, "auto_attach_chocks_on_init", "Initial chocks in place"),
             Switch(section, "dirty_panel_states_enabled", "Dirty panel states"),
             Pick(section, "ground_services_mode", "GND SRVC mode", Bbs757ValueType.Integer,
@@ -524,8 +569,9 @@ public static class Bbs757EfbSettings
         };
     }
 
-    // AIRAC data (efb_settings.json), evidence section 8, which lists these rows but was not tapped: the "not set"
-    // values (-1 and "") come from the spec and earlier notes. The pilot's own identifiers: never logged.
+    // AIRAC data (efb_settings.json), evidence section 8, which lists this row but was not tapped: the "not set" value
+    // (-1) comes from the spec and earlier notes. The pilot's own identifier: never logged. The tab adds the Navigraph
+    // sign-in and the nav data update to this section, as the tablet's AIRAC data page holds them.
     private static Bbs757Setting[] AiracDataSettings()
     {
         const Bbs757SettingSection section = Bbs757SettingSection.AiracData;
@@ -534,6 +580,21 @@ public static class Bbs757EfbSettings
             Box(section, "simbrief_id", "SimBrief ID number", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
                 emptyStored: Bbs757Value.Of(-1L), mayLog: false,
                 range: new Bbs757NumberRange(Bbs757NumberEntry.Digits, 1, int.MaxValue)),
+        };
+    }
+
+    // ACARS (efb_settings.json), no tablet page: the ACARS rows of Settings > Aircraft (evidence section 3), then those
+    // of AIRAC data (section 8, not tapped: the codes' "not set" value "" comes from the spec and earlier notes). The
+    // codes are the pilot's own identifiers: never logged.
+    private static Bbs757Setting[] AcarsSettings()
+    {
+        const Bbs757SettingSection section = Bbs757SettingSection.Acars;
+        return new[]
+        {
+            // On was not tapped when measuring: it could log on to Hoppie with the owner's code (evidence section 3).
+            Switch(section, "hoppie_user_enabled", "Hoppie ACARS"),
+            Pick(section, "cpdlc_network", "CPDLC network", Bbs757ValueType.Integer,
+                Choice("Hoppie", 0L), Choice("SayIntentions", 1L)),
             Box(section, "hoppie_logon_code", "Hoppie logon code", Bbs757SettingKind.Text, Bbs757ValueType.Text,
                 emptyStored: Bbs757Value.Of(""), mayLog: false),
             Box(section, "sayintentions_acars_key", "SayIntentions ACARS key", Bbs757SettingKind.Text, Bbs757ValueType.Text,
@@ -545,11 +606,19 @@ public static class Bbs757EfbSettings
     private static Bbs757Setting[] FailureSettings()
     {
         const Bbs757SettingSection section = Bbs757SettingSection.Failures;
+        // The tablet's slider is continuous, 1x to 1000x at 10^(3t) along its track. The app's steps are ten to each
+        // factor of ten along that scale, each at most one decimal so the tablet's "N.Nx" shows it exactly; ten steps
+        // (Page Up, Page Down) are a factor of ten.
+        double[] frequencySteps =
+        {
+            1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6.3, 8,
+            10, 13, 16, 20, 25, 32, 40, 50, 63, 80,
+            100, 130, 160, 200, 250, 320, 400, 500, 630, 800,
+            1000,
+        };
         return new[]
         {
-            // The tablet's slider is continuous (10^(3t) along its track), so this is a number, not a choice of steps.
-            Box(section, "failures.random_multiplier", "Random failure frequency", Bbs757SettingKind.Number,
-                Bbs757ValueType.Float, range: new Bbs757NumberRange(Bbs757NumberEntry.Decimal, 1, 1000)),
+            Slider(section, "failures.random_multiplier", "Random failure frequency", frequencySteps),
             Switch(section, "failures.random_enabled", "Random failures"),
             Switch(section, "failures.notifications_enabled", "Failure notifications"),
         };

@@ -7,8 +7,9 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The catalog of BlueBird's tablet settings (<see cref="Bbs757EfbSettings"/>): every setting's key, file, tablet
 /// label and words, the value BlueBird stores for each word (measured, docs/b757/evidence/efb-settings.md), the
-/// writes one change makes (the tablet's three rules, evidence section 9), and how a number or text box shows and
-/// reads what is typed, and what its empty box means. Pure: no files, no simulator.
+/// writes one change makes (the tablet's three rules, evidence section 9), how a number or text box shows and reads
+/// what is typed and what its empty box means, and the random failure frequency's slider: its steps, what it reads and
+/// where a stored value sits on it. Pure: no files, no simulator.
 /// </summary>
 public class Bbs757EfbSettingsTests
 {
@@ -86,8 +87,6 @@ public class Bbs757EfbSettingsTests
             ("Boarding & load rate", "loading_speed"),
             ("Automatic boarding", "automatic_loading"),
             ("Automatic GPU/jetway", "auto_connect_ground_services_on_init"),
-            ("Hoppie ACARS", "hoppie_user_enabled"),
-            ("CPDLC network", "cpdlc_network"),
             ("Initial chocks in place", "auto_attach_chocks_on_init"),
             ("Dirty panel states", "dirty_panel_states_enabled"),
             ("GND SRVC mode", "ground_services_mode"),
@@ -95,6 +94,13 @@ public class Bbs757EfbSettingsTests
         [Bbs757SettingSection.AiracData] = new[]
         {
             ("SimBrief ID number", "simbrief_id"),
+        },
+        // Not a tablet page: the ACARS rows of Settings > Aircraft (the switch and the network), then those of AIRAC data
+        // (the two codes), each in the tablet's order.
+        [Bbs757SettingSection.Acars] = new[]
+        {
+            ("Hoppie ACARS", "hoppie_user_enabled"),
+            ("CPDLC network", "cpdlc_network"),
             ("Hoppie logon code", "hoppie_logon_code"),
             ("SayIntentions ACARS key", "sayintentions_acars_key"),
         },
@@ -169,7 +175,8 @@ public class Bbs757EfbSettingsTests
     [Fact]
     public void Sections_are_named_as_the_tablet_names_its_pages()
     {
-        Assert.Equal(new[] { "General", "Aircraft", "AIRAC data", "Failures", "Livery options", "Callouts", "Cabin audio" },
+        Assert.Equal(
+            new[] { "General", "Aircraft", "AIRAC data", "ACARS", "Failures", "Livery options", "Callouts", "Cabin audio" },
             Enum.GetValues<Bbs757SettingSection>().Select(Bbs757EfbSettings.SectionName));
     }
 
@@ -319,9 +326,12 @@ public class Bbs757EfbSettingsTests
             }
             else
             {
-                Assert.True(s.Choices.Count == 0, $"{s.Path} is a box and has choices");
+                Assert.True(s.Choices.Count == 0, $"{s.Path} is a box or a slider and has choices");
                 if (s.Kind == Bbs757SettingKind.Number) Assert.NotNull(s.Range);
                 if (s.Kind == Bbs757SettingKind.Text) Assert.Equal(Bbs757ValueType.Text, s.Type);
+                // Only a slider has steps, and its steps are its values: it has no range of its own.
+                Assert.True((s.Kind == Bbs757SettingKind.Slider) == (s.Steps is not null), $"{s.Path}: steps");
+                if (s.Kind == Bbs757SettingKind.Slider) Assert.Null(s.Range);
                 if (s.EmptyStored is { } empty) Assert.True(empty.Type == s.Type, $"{s.Path}: the empty value is a {empty.Type}");
             }
         }
@@ -346,29 +356,115 @@ public class Bbs757EfbSettingsTests
     {
         Assert.Equal(
             new[] { "display_brightness", "tod_pause_distance", "simbrief_id", "hoppie_logon_code",
-                    "sayintentions_acars_key", "failures.random_multiplier" }.Order(),
+                    "sayintentions_acars_key" }.Order(),
             Bbs757EfbSettings.All.Where(s => s.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text)
                 .Select(s => s.Path).Order());
 
         Assert.Equal(new Bbs757NumberRange(Bbs757NumberEntry.Percent, 0, 100), Setting("display_brightness").Range);
         Assert.Equal(new Bbs757NumberRange(Bbs757NumberEntry.Whole, 1, 999), Setting("tod_pause_distance").Range);
-        Assert.Equal(new Bbs757NumberRange(Bbs757NumberEntry.Decimal, 1, 1000), Setting("failures.random_multiplier").Range);
         Assert.Equal(Bbs757NumberEntry.Digits, Setting("simbrief_id").Range!.Entry);
         Assert.Null(Setting("hoppie_logon_code").Range);
         Assert.Null(Setting("sayintentions_acars_key").Range);
 
         Assert.Equal(Bbs757ValueType.Float, Setting("display_brightness").Type);
-        Assert.Equal(Bbs757ValueType.Float, Setting("failures.random_multiplier").Type);
         Assert.Equal(Bbs757ValueType.Integer, Setting("tod_pause_distance").Type);
         Assert.Equal(Bbs757ValueType.Integer, Setting("simbrief_id").Type);
 
-        // A cleared box stores what BlueBird stores for "not set"; the percent and the frequency cannot be cleared.
+        // A cleared box stores what BlueBird stores for "not set"; the percent cannot be cleared.
         Assert.Equal(Bbs757Value.Of(-1L), Setting("simbrief_id").EmptyStored);
         Assert.Equal(Bbs757Value.Of(-1L), Setting("tod_pause_distance").EmptyStored);
         Assert.Equal(Bbs757Value.Of(""), Setting("hoppie_logon_code").EmptyStored);
         Assert.Equal(Bbs757Value.Of(""), Setting("sayintentions_acars_key").EmptyStored);
         Assert.Null(Setting("display_brightness").EmptyStored);
-        Assert.Null(Setting("failures.random_multiplier").EmptyStored);
+    }
+
+    // ---- the random failure frequency's slider -----------------------------------------------------
+
+    [Fact]
+    public void The_failure_frequency_is_a_slider_along_the_tablet_s_scale()
+    {
+        var frequency = Setting("failures.random_multiplier");
+
+        Assert.Equal(new[] { "failures.random_multiplier" },
+            Bbs757EfbSettings.All.Where(s => s.Kind == Bbs757SettingKind.Slider).Select(s => s.Path));
+        Assert.Equal(Bbs757ValueType.Float, frequency.Type);
+        Assert.Null(frequency.EmptyStored);
+        // Ten steps to each factor of ten, 1x to 1000x, as the tablet's 10^(3t) track runs, each at most one decimal
+        // so the tablet's "N.Nx" shows it exactly.
+        Assert.Equal(new double[]
+        {
+            1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6.3, 8,
+            10, 13, 16, 20, 25, 32, 40, 50, 63, 80,
+            100, 130, 160, 200, 250, 320, 400, 500, 630, 800,
+            1000,
+        }, frequency.Steps);
+        var steps = frequency.Steps!;
+        for (int i = 0; i < steps.Count; i++)
+        {
+            Assert.True(Math.Abs(Math.Log10(steps[i]) - i / 10.0) < 0.015, $"step {i} ({steps[i]}) is off the tablet's scale");
+            Assert.Equal(Math.Round(steps[i], 1), steps[i]);
+        }
+        // Ten steps is a factor of ten: Page Up and Page Down.
+        Assert.Equal(10.0, steps[10]);
+        Assert.Equal(100.0, steps[20]);
+    }
+
+    [Fact]
+    public void A_slider_reads_as_the_tablet_shows_it()
+    {
+        var frequency = Setting("failures.random_multiplier");
+
+        // One decimal and an x, as the tablet's "FREQUENCY: 2.0x (1x-1000x)": 1.9952... is the tablet's own 2.0x.
+        Assert.Equal("2.5x", Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(2.5)));
+        Assert.Equal("2.0x", Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(1.9952623149688795)));
+        Assert.Equal("1.0x", Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(1.0)));
+        Assert.Equal("8.5x", Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(8.54)));
+        Assert.Equal("1000.0x", Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(1000.0)));
+    }
+
+    [Fact]
+    public void A_stored_value_sits_at_the_nearest_step_on_the_tablet_s_scale()
+    {
+        var frequency = Setting("failures.random_multiplier");
+        int At(double value) => Bbs757EfbSettings.NearestStep(frequency, value);
+
+        Assert.Equal(0, At(1.0));
+        Assert.Equal(4, At(2.5));
+        Assert.Equal(30, At(1000.0));
+        // Between steps, the nearer on the tablet's scale: 8.54 is 8 (index 9), 36.57 is 40 (index 16).
+        Assert.Equal(9, At(8.54));
+        Assert.Equal(16, At(36.57));
+        Assert.Equal(3, At(1.9952623149688795));
+        // Off the scale, an end.
+        Assert.Equal(0, At(0.5));
+        Assert.Equal(0, At(-3));
+        Assert.Equal(30, At(5000));
+        Assert.Equal(0, At(double.NaN));
+    }
+
+    [Fact]
+    public void A_slider_takes_only_its_own_steps()
+    {
+        var frequency = Setting("failures.random_multiplier");
+
+        foreach (double step in frequency.Steps!)
+            Assert.Equal(new[] { ("failures.random_multiplier", Bbs757SettingFile.Global, Bbs757Value.OfFloat(step)) },
+                Bbs757EfbSettings.WritesFor(frequency, Bbs757Value.OfFloat(step)).Select(w => (w.Path, w.File, w.Value)));
+
+        // The app writes only the slider's own steps: 2.4 is no step, the whole number 2 is not the float 2.0.
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(frequency, Bbs757Value.OfFloat(2.4)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(frequency, Bbs757Value.OfFloat(1001)));
+        Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.WritesFor(frequency, Bbs757Value.Of(2L)));
+    }
+
+    [Fact]
+    public void Slider_helpers_refuse_a_setting_of_another_kind()
+    {
+        foreach (var other in new[] { Setting("baro_sync"), Setting("loading_speed"), Setting("tod_pause_distance") })
+        {
+            Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.SliderText(other, Bbs757Value.OfFloat(1.0)));
+            Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.NearestStep(other, 1.0));
+        }
     }
 
     // ---- the tablet's three rules -----------------------------------------------------------------
@@ -505,7 +601,6 @@ public class Bbs757EfbSettingsTests
     public void Numbers_show_as_the_tablet_does()
     {
         var brightness = Setting("display_brightness");
-        var frequency = Setting("failures.random_multiplier");
         var tod = Setting("tod_pause_distance");
         var simbrief = Setting("simbrief_id");
 
@@ -517,11 +612,6 @@ public class Bbs757EfbSettingsTests
         // A value outside the range is clamped, not shown as 140 or -5.
         Assert.Equal("100", Bbs757EfbSettings.NumberText(brightness, Bbs757Value.OfFloat(1.4)));
         Assert.Equal("0", Bbs757EfbSettings.NumberText(brightness, Bbs757Value.OfFloat(-0.05)));
-
-        // One decimal, as the tablet shows the frequency: 1.9952... reads 2.0x.
-        Assert.Equal("2.0", Bbs757EfbSettings.NumberText(frequency, Bbs757Value.OfFloat(1.9952623149688795)));
-        Assert.Equal("1000.0", Bbs757EfbSettings.NumberText(frequency, Bbs757Value.OfFloat(1000.0)));
-        Assert.Equal("8.5", Bbs757EfbSettings.NumberText(frequency, Bbs757Value.OfFloat(8.54)));
 
         // Not set shows an empty box.
         Assert.Equal("", Bbs757EfbSettings.NumberText(tod, Bbs757Value.Of(-1L)));
@@ -560,15 +650,6 @@ public class Bbs757EfbSettingsTests
         Assert.Equal("type a whole number from 0 to 100", Refused("display_brightness", "-1"));
         Assert.Equal("type a whole number from 0 to 100", Refused("display_brightness", ""));
 
-        // Random failure frequency: any number from 1 to 1000.
-        Assert.Equal(Bbs757Value.OfFloat(2.0), Accepted("failures.random_multiplier", "2"));
-        Assert.Equal(Bbs757Value.OfFloat(36.6), Accepted("failures.random_multiplier", "36.6"));
-        Assert.Equal(Bbs757Value.OfFloat(1000.0), Accepted("failures.random_multiplier", "1000"));
-        Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", "0.5"));
-        Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", "1001"));
-        Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", "abc"));
-        Assert.Equal("type a number from 1 to 1000", Refused("failures.random_multiplier", ""));
-
         // SimBrief ID: digits only, not 0, or empty for not set. "0" is digits, so the refusal says "not 0" too.
         Assert.Equal(Bbs757Value.Of(1234567L), Accepted("simbrief_id", " 1234567"));
         Assert.Equal(Bbs757Value.Of(-1L), Accepted("simbrief_id", ""));
@@ -599,7 +680,7 @@ public class Bbs757EfbSettingsTests
     [Fact]
     public void Number_and_text_helpers_refuse_a_setting_of_another_kind()
     {
-        foreach (var other in new[] { Setting("baro_sync"), Setting("loading_speed") })
+        foreach (var other in new[] { Setting("baro_sync"), Setting("loading_speed"), Setting("failures.random_multiplier") })
         {
             Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.NumberText(other, Bbs757Value.Of(1L)));
             Assert.Throws<ArgumentException>(() => Bbs757EfbSettings.TryParseEntry(other, "1", out _, out _));
@@ -611,21 +692,17 @@ public class Bbs757EfbSettingsTests
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
-    public void A_typed_decimal_comma_reads_as_a_decimal_and_shows_with_a_point(string culture)
+    public void A_slider_reads_and_is_written_with_a_decimal_point(string culture)
     {
         var frequency = Setting("failures.random_multiplier");
 
-        var (ok, value, reason, json, text) = TestCulture.Run(culture, () =>
-        {
-            bool parsed = Bbs757EfbSettings.TryParseEntry(frequency, "2,5", out var v, out var r);
-            return (parsed, v, r, v.ToJson(), Bbs757EfbSettings.NumberText(frequency, v));
-        });
+        var (text, json, step) = TestCulture.Run(culture, () =>
+            (Bbs757EfbSettings.SliderText(frequency, Bbs757Value.OfFloat(2.5)), Bbs757Value.OfFloat(2.5).ToJson(),
+                Bbs757EfbSettings.NearestStep(frequency, 8.54)));
 
-        Assert.True(ok);
-        Assert.Null(reason);
-        Assert.Equal(Bbs757Value.OfFloat(2.5), value);
+        Assert.Equal("2.5x", text);
         Assert.Equal("2.5", json);
-        Assert.Equal("2.5", text);
+        Assert.Equal(9, step);
     }
 
     [Theory]
@@ -658,7 +735,6 @@ public class Bbs757EfbSettingsTests
     {
         var reasons = TestCulture.Run(culture, () => new[]
         {
-            Refused("failures.random_multiplier", "0,5"),
             Refused("tod_pause_distance", "0"),
             Refused("display_brightness", "101"),
             Refused("simbrief_id", "0"),
@@ -666,7 +742,7 @@ public class Bbs757EfbSettingsTests
 
         Assert.Equal(new[]
         {
-            "type a number from 1 to 1000", "type a whole number from 1 to 999, or leave the box empty to switch it off",
+            "type a whole number from 1 to 999, or leave the box empty to switch it off",
             "type a whole number from 0 to 100", "type a SimBrief ID number (digits, not 0)",
         }, reasons);
     }

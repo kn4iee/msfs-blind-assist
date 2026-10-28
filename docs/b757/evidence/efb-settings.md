@@ -176,8 +176,10 @@ checks (last list) ran on 2026-10-28; their results follow the list, and after t
 
 - The 757 EFB window (Input Shift+T) has two tabs, Flight (today's controls) and Settings. Ctrl+Tab switches between
   them.
-- Settings shows every BlueBird tablet setting in seven sections (General, Aircraft, AIRAC data, Failures, Livery
-  options, Callouts, Cabin audio), read from BlueBird's own files. While no simulator runs, a change is saved to the
+- Settings shows every BlueBird tablet setting in eight sections (General, Aircraft, AIRAC data, ACARS, Failures,
+  Livery options, Callouts, Cabin audio), read from BlueBird's own files. ACARS is no tablet page: it holds the tablet's
+  Hoppie ACARS and CPDLC network (Settings > Aircraft) and the Hoppie logon code and SayIntentions ACARS key (Settings >
+  AIRAC data), which leaves AIRAC data the SimBrief ID. While no simulator runs, a change is saved to the
   files at once and BlueBird applies it when the 757 next loads. While any simulator process runs, everything is
   read-only and an attempt says "Close the simulator to change BlueBird's settings."; while the app cannot tell whether
   one does, everything is read-only too and an attempt says "The app can't tell whether the simulator is running, so
@@ -186,10 +188,17 @@ checks (last list) ran on 2026-10-28; their results follow the list, and after t
   simulator that starts or closes while the window is open is said once ("Simulator started: BlueBird's settings are
   read-only." and "Simulator closed: BlueBird's settings can be changed."), as is the app losing track of it (the
   can't-tell text).
-- A switch is a check box, the tablet's named values are a choice list, and a number or text is a box with a Set
-  button (Enter sets too; it says `<label> saved`, or "Couldn't save <label>: <reason>"). The SimBrief ID, Hoppie
-  logon code and SayIntentions ACARS key show in plain text. An empty box means off (TOD pause distance) or not set
-  (the SimBrief ID and the two codes), and each of those boxes says so in its description. A row can also read "Other
+- A switch is a check box, the tablet's named values are a choice list, and a number or text is a box that Enter saves
+  (it says `<label> saved`, or "Couldn't save <label>: <reason>"; there is no Set button). A box left with a change not
+  saved, or the window closed or opened again (Shift+T) with one, shows the stored value again and says "<label> not
+  saved". The random failure
+  frequency is a slider that reads as the tablet shows it ("2.5x"): Up and Right go one step higher, Down and Left one
+  lower, Page Up and Page Down ten steps (a factor of ten), Home and End to 1x and 1000x, in 30 steps from 1x to 1000x
+  along the tablet's scale (with Control, the arrows, Home and End do nothing; Ctrl+Page Up and Ctrl+Page Down switch
+  tabs, as anywhere in the window); each move saves, as a choice list does, and a value set on the tablet between steps
+  reads as it is ("8.5x") until moved, then moves from its nearest step. The SimBrief ID, Hoppie logon code and
+  SayIntentions ACARS key show in plain text. An empty box means off (TOD pause distance) or not set (the SimBrief ID
+  and the two codes), and each of those boxes says so in its description. A row can also read "Other
   (stored value N)", "Not readable in this BlueBird version", "Differs between registrations" (the Livery options,
   Callouts and Cabin audio sections change every registration's file), "Differs between BlueBird's files" (Units, when
   the registrations agree on a unit and `efb_settings.json`'s `units` holds another value) or, for EFB brightness while
@@ -200,8 +209,9 @@ checks (last list) ran on 2026-10-28; their results follow the list, and after t
   yet, "BlueBird has no registration options yet. Fly a livery once to create them.").
 - Escape closes an open list first (a choice list on the Settings tab, the Cockpit preset list on the Flight tab) and
   closes the window only when no list is open; it closed the window at once before.
-- Sign in to Navigraph and Update nav data moved to the Settings tab (they still need the 757 loaded). An "EFB status"
-  box there shows the same last message as the Flight tab's Status box, the Navigraph code included.
+- Sign in to Navigraph and Update nav data moved to the end of the Settings tab's AIRAC data section, as the tablet's
+  AIRAC data page holds them (they still need the 757 loaded). What they say stays in the Flight tab's Status box, the
+  Navigraph code included; the Settings tab has no copy of it.
 - Removed from the Flight tab: the SimBrief ID box with Set SimBrief ID (the ID is set once on the Settings tab with the
   simulator closed; without it the CDU's ACARS INIT does nothing) and Set steering to rudder (Nosewheel steering is a
   Settings > Aircraft row). Fetch SimBrief flight and Load fuel and payload from SimBrief now say, with no ID set,
@@ -251,11 +261,12 @@ files):
   gone and the reader read-only, the app taps no settings switch, so check that the extension still has something to
   guard.
 - Plan 16 removes `docs/b757/` before the merge. These comments cite this file by path: `Bbs757SimGuard.cs` line 25,
-  `Bbs757SettingsFile.cs` line 34, `Bbs757EfbSettings.cs` lines 152 and 182, `BBS757EfbForm.Settings.cs` line 11 and
-  `Bbs757EfbSettingsTests.cs` line 9. Ten more cite only "evidence section N", so `git grep "docs/b757/"` will not
-  find them: `Bbs757EfbSettings.cs` lines 228, 462, 490, 514, 525, 542, 556, 578 and 609, and
-  `Bbs757EfbSettingsTests.cs` line 10. Four cite "the spec", which is not committed (`docs/superpowers` is
-  git-ignored): `Bbs757EfbSettings.cs` lines 184 and 526, and `Bbs757SimGuardTests.cs` lines 10 and 21. B757-17's own
+  `Bbs757SettingsFile.cs` line 34, `Bbs757EfbSettings.cs` lines 156 and 188, `BBS757EfbForm.Settings.cs` line 11 and
+  `Bbs757EfbSettingsTests.cs` line 9. Eleven more cite only "evidence section N", so `git grep "docs/b757/"` will not
+  find them: `Bbs757EfbSettings.cs` lines 236, 513, 541, 572, 586 (with "section 8" on 587), 594, 605, 627, 649 and
+  680, and `Bbs757EfbSettingsTests.cs` line 10. Five cite "the spec", which is not committed (`docs/superpowers` is
+  git-ignored): `Bbs757EfbSettings.cs` lines 190, 573 and 587, and `Bbs757SimGuardTests.cs` lines 10 and 21. Line
+  numbers are as of the owner's changes after the in-sim run. B757-17's own
   full text (`docs/invariants/b757.md`) cites this file by path on line 30 and as "evidence section N" on lines 37 and
   38, and line 40 sends the reader to in-sim check 7 of this section. That full text restates sections 1 and 9 and
   stands alone, so point the comments about section 1 or 9 there. Sections 2 to 8 (each tablet label, key and stored
@@ -271,8 +282,9 @@ files):
   and plan 11's Task 3 (`11-efb-rework.md`, lines 73-75) reserve them for a settings-file reader that never writes, and
   plan 11's execution record says Task 3 was replaced, not built. This work built files of those names as the settings
   catalog, and it writes BlueBird's files. It also added files no row of the index names: `Bbs757SettingsFile.cs`,
-  `Bbs757SimGuard.cs`, `Bbs757SettingsRows.cs`, `Bbs757SettingsSave.cs` and `Forms/BBS757/Bbs757LockableComboBox.cs`,
-  with their tests; and `Forms/BBS757/BBS757EfbForm.Settings.cs`, which the index's `BBS757EfbForm*.cs` row (line 62)
+  `Bbs757SimGuard.cs`, `Bbs757SettingsRows.cs`, `Bbs757SettingsSave.cs`, `Forms/BBS757/Bbs757LockableComboBox.cs` and
+  `Forms/BBS757/Bbs757LockableSlider.cs`, with their tests (the page's own in `Bbs757SettingsTabTests.cs`); and
+  `Forms/BBS757/BBS757EfbForm.Settings.cs`, which the index's `BBS757EfbForm*.cs` row (line 62)
   already gives to plan 11. The existing files it changed all belong to plan 11's EFB work: `BBS757EfbForm.cs`,
   `Bbs757EfbLayout.cs` (the SimBrief ID keypad entry and the steering sequence are gone), `Bbs757EfbBridge.cs`,
   `Bbs757EfbElements.cs`, `Bbs757WorkFolder.cs` (`ReadTillerRealistic` is gone; `ExistingFolders`, `SimulatorOf` and
@@ -312,7 +324,8 @@ into the owner's pass):
 6. With the 757 loaded: the values set in 1 are in effect (both files read; Settings > Aircraft, Livery options,
    Callouts and AIRAC data captured). After the Units change and this load, read both `options.general.weight_unit`
    (each registration file) and `units` (`efb_settings.json`). Sign in to Navigraph and Update nav data work from the
-   Settings tab, and the Navigraph code is readable in the tab's EFB status box.
+   Settings tab, and the Navigraph code is readable in the tab's EFB status box. (Since the owner's changes after the
+   run, both buttons end the AIRAC data section and the code is in the Flight tab's Status box.)
 7. The premise of the group rule (`Bbs757SettingsSave`: a callout missing from a livery file counts as off): with the
    simulator closed, remove `options.egpws_callouts.minimum` from `G-BBS75-opt.json`, load the 757, read the file (is
    the key absent, added off or added on?), then restore the key.
@@ -368,11 +381,12 @@ afterwards.
     p / 100 can show one less (0.29 is 0.28999999 as a 32-bit float); the app's p + 0.4 avoids it. TOD was set to 1, not
     cleared (the cleared -1 is BlueBird's own value). The tablet's display was not captured.
 
-**Changes the owner asked for after the run** (to build, then check in the simulator with check 10's two loads: TOD 999
-and Hoppie ACARS on with a test logon code):
-
-- No Set button after a box: Enter saves.
-- Sign in to Navigraph and Update nav data move into the AIRAC data section; the EFB status box shows on the Flight tab
-  only.
-- The Hoppie logon code and the SayIntentions ACARS key move to an ACARS section of their own.
-- Random failure frequency needs its unit and range: the tablet shows "FREQUENCY: N.Nx (1x-1000x)" on a slider.
+**Changes the owner asked for after the run**, built in the commit after the run's record and described in the pilot's
+list above: no Set button (Enter saves; a box left unsaved says so and shows the stored value again); Sign in to
+Navigraph and Update nav data at the end of AIRAC data, and the EFB status box on the Flight tab only; an ACARS section
+(Hoppie ACARS, CPDLC network and the two codes); the random failure frequency as a slider reading the tablet's "N.Nx".
+Still to check in the simulator, by ear: the new sections and the slider's reading and keys (a slider's value is the
+app's own text, read through MSAA because the slider turns UI Automation away; measured on a hidden copy, not yet heard
+in NVDA), and whether "<label> not saved" comes after NVDA's reading of the new focus (it waits 400 ms, as NVDA cuts
+speech off when focus moves); then check 10's two loads, TOD pause distance 999 and Hoppie ACARS on with a test logon
+code.

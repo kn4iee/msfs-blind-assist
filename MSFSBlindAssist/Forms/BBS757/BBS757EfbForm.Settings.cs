@@ -8,42 +8,48 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // BlueBird's tablet, read from BlueBird's own files (efb_settings.json and each registration's
 // liveries\<registration>-opt.json) and changed in them while no simulator process runs. BlueBird reads the files once,
 // when the 757 loads, and writes its own copy back over them while it is loaded, so a change takes effect at the next
-// load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The page also holds
-// Sign in to Navigraph and Update nav data, its only live controls, with the window's own handlers.
+// load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The AIRAC data
+// section also holds Sign in to Navigraph and Update nav data, the page's only live controls, with the window's own
+// handlers; the EFB status they report to is the Flight page's.
 //
-// Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the two buttons, the EFB
-// status (the Flight page's, the same text, so the Navigraph code can be read here), the Section list (the tablet's
-// pages) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice list for the
-// tablet's words, a label, a box and Set for a number or text. A registration section starts with the registrations its
-// rows apply to. Picking a section rebuilds only the rows' panel; everything else (a save, the simulator closing, the
-// page opening) updates the rows in place, so no control is recreated and focus never moves.
+// Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the Section list (the tablet's
+// pages, and ACARS) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice
+// list for the tablet's words, a label and a slider for the random failure frequency, a label and a box for a number or
+// text. A registration section starts with the registrations its rows apply to. Picking a section rebuilds only the
+// rows' panel; everything else (a save, the simulator closing, the page opening) updates the rows in place, so no
+// control is recreated and focus never moves.
 //
 // The page is writable only while Bbs757SimGuard.SettingsWritable holds, checked when the page opens, on every 1 s
 // status tick while the window shows, and by every write. While it does not, every input stays focusable and readable
-// but does not change (a check box does not toggle, a choice list swallows what would change it, a box is read-only)
-// and an attempt says why, at once (ReadOnlyAttemptText). So does a row that waits for another (the announcement
-// categories) or that cannot change for its own state (unreadable, automatic). A box that can be cleared says in its
-// description what empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's: every key checked
-// first, the writes in order through Bbs757SettingsFile (which logs each save and refusal), the first not done
-// everywhere stopping the rest, and the wording; this page reads the files for it, says the outcome and reads the files
-// again.
+// but does not change (a check box does not toggle, a choice list and the slider swallow what would move them, a box is
+// read-only) and an attempt says why, at once (ReadOnlyAttemptText). So does a row that waits for another (the
+// announcement categories) or that cannot change for its own state (unreadable, automatic). A box is saved by Enter; one
+// left with a change not saved shows the stored value again. A box that can be cleared says in its description what
+// empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's: every key checked first, the writes in
+// order through Bbs757SettingsFile (which logs each save and refusal), the first not done everywhere stopping the rest,
+// and the wording; this page reads the files for it, says the outcome and reads the files again.
 //
-// Speech (CORE-7): a check box or a choice list that saved says nothing, as the reader has said its new state; a number
-// or text box says "<label> saved"; every failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a
-// save switched off that showed on is named ("<label> turned off"); the simulator starting or closing while the window
-// shows, or the app no longer able to tell whether it runs, is said once (SimChangeText). The pilot's SimBrief ID, Hoppie
-// logon code and SayIntentions ACARS key are shown in plain text and never logged: no value, write or row goes into a
-// log line or an exception message here.
+// Speech (CORE-7): a check box, a choice list or the slider that saved says nothing, as the reader has said its new
+// state; a number or text box says "<label> saved", and "<label> not saved" when left with a change not saved; every
+// failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a save switched off that showed on is named
+// ("<label> turned off"); the simulator starting or closing while the window shows, or the app no longer able to tell
+// whether it runs, is said once (SimChangeText). The pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key
+// are shown in plain text and never logged: no value, write or row goes into a log line or an exception message here.
 public partial class BBS757EfbForm
 {
-    // The rows inside the section panel: the label column, the input column, one row's height, the rows' width.
+    // The rows inside the section panel: the label column, the input column, one row's height, the rows' width, and a
+    // section's own buttons' height.
     private const int RowLeft = 4;
     private const int RowInputLeft = 205;
     private const int RowStep = 30;
     private const int RowWidth = 412;
+    private const int SectionButtonHeight = 30;
 
     // A switch's choices are Off, then On (Bbs757SettingKind.OnOff; On's index is Bbs757SettingsRows.OnChoiceIndex).
     private const int OffChoice = 0;
+
+    // How long "<label> not saved" waits after focus leaves a box, so it follows the reader's reading of the new focus.
+    private const int NotSavedDelayMs = 400;
 
     private static readonly Bbs757SettingSection[] Sections = Enum.GetValues<Bbs757SettingSection>();
 
@@ -59,9 +65,6 @@ public partial class BBS757EfbForm
     private readonly List<SettingControl> _settingControls = new();
 
     private TextBox _settingsStatusBox = null!;
-    // The Flight page's EFB status, shown here too (UpdateStatus sets both): the Navigraph code and the nav data update's
-    // outcome can be read where their buttons are.
-    private TextBox _settingsEfbStatusBox = null!;
     private ComboBox _sectionCombo = null!;
     private Panel _sectionPanel = null!;
     // The registrations line of a registration section; null in the others.
@@ -87,8 +90,8 @@ public partial class BBS757EfbForm
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Builds the Settings page, top to bottom in tab order: the status box, Sign in to Navigraph, Update nav data, the
-    /// EFB status, the Section list and the panel of the chosen section's rows (General first).
+    /// Builds the Settings page, top to bottom in tab order: the status box, the Section list and the panel of the chosen
+    /// section's rows (General first).
     /// </summary>
     private void BuildSettingsTab(TabPage page)
     {
@@ -110,35 +113,6 @@ public partial class BBS757EfbForm
             TabIndex = tab++,
         };
         page.Controls.Add(_settingsStatusBox);
-        y += statusH + gap;
-
-        // The window's own handlers, unchanged; both need the 757 loaded.
-        _navigraphButton = new Button { Text = "Sign in to Navigraph", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
-        _navigraphButton.Click += (_, _) => RunAction(SignInToNavigraphAsync);
-        page.Controls.Add(_navigraphButton);
-        y += h + gap;
-        _updateButton = new Button { Text = "Update nav data", Location = new Point(left, y), Size = new Size(fullW, h), TabIndex = tab++ };
-        _updateButton.Click += (_, _) => RunAction(UpdateNavDataAsync);
-        page.Controls.Add(_updateButton);
-        y += h + gap;
-
-        // What the two buttons say stays readable here, character by character (the Navigraph code): the Flight page's
-        // EFB status, the same text.
-        page.Controls.Add(new Label { Text = "EFB status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ });
-        y += 20;
-        _settingsEfbStatusBox = new TextBox
-        {
-            Location = new Point(left, y),
-            Size = new Size(fullW, statusH),
-            Multiline = true,
-            ReadOnly = true,
-            TabStop = true,
-            ScrollBars = ScrollBars.Vertical,
-            BorderStyle = BorderStyle.FixedSingle,
-            AccessibleName = "EFB status",
-            TabIndex = tab++,
-        };
-        page.Controls.Add(_settingsEfbStatusBox);
         y += statusH + gap + 4;
 
         page.Controls.Add(new Label { Text = "Section", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ });
@@ -189,7 +163,8 @@ public partial class BBS757EfbForm
 
     /// <summary>
     /// Replaces the panel's rows with <paramref name="section"/>'s, in the tablet's order, and fills them from the
-    /// files. The only place rows are made; called when the page is built and when the pilot picks a section.
+    /// files; AIRAC data ends with Sign in to Navigraph and Update nav data, as the tablet's page does. The only place
+    /// rows are made; called when the page is built and when the pilot picks a section.
     /// </summary>
     private void ShowSection(Bbs757SettingSection section)
     {
@@ -230,6 +205,12 @@ public partial class BBS757EfbForm
                 _settingControls.Add(AddRow(setting, y, ref tab));
                 y += RowStep;
             }
+            // The window's own handlers, unchanged; both need the 757 loaded.
+            if (section == Bbs757SettingSection.AiracData)
+            {
+                AddSectionButton("Sign in to Navigraph", SignInToNavigraphAsync, ref y, ref tab);
+                AddSectionButton("Update nav data", UpdateNavDataAsync, ref y, ref tab);
+            }
         }
         finally
         {
@@ -238,9 +219,25 @@ public partial class BBS757EfbForm
         RefreshSettingValues();
     }
 
-    // One setting's row: a check box for a switch; a label and a choice list for the tablet's words; a label, a box and
-    // Set for a number or text. Each input carries the tablet's label: a check box as its text, the others as their
-    // AccessibleName after a label (never a mnemonic: "Boarding & load rate" keeps its "&").
+    // A button of the window's own after a section's rows: its action runs as the Flight page's buttons' do.
+    private void AddSectionButton(string text, Func<Task> action, ref int y, ref int tab)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Location = new Point(RowLeft, y + 4),
+            Size = new Size(RowWidth, SectionButtonHeight),
+            TabIndex = tab++,
+        };
+        button.Click += (_, _) => RunAction(action);
+        _sectionPanel.Controls.Add(button);
+        y += SectionButtonHeight + 8;
+    }
+
+    // One setting's row: a check box for a switch; a label and a choice list for the tablet's words; a label and a slider
+    // for a number the tablet sets along a slider; a label and a box for a number or text. Each input carries the
+    // tablet's label: a check box as its text, the others as their AccessibleName after a label (never a mnemonic:
+    // "Boarding & load rate" keeps its "&").
     private SettingControl AddRow(Bbs757Setting setting, int y, ref int tab)
     {
         if (setting.Kind == Bbs757SettingKind.OnOff)
@@ -289,22 +286,35 @@ public partial class BBS757EfbForm
             return choiceRow;
         }
 
-        // A number or a text: saved by Enter in the box or by Set.
+        if (setting.Kind == Bbs757SettingKind.Slider)
+        {
+            IReadOnlyList<double> steps = setting.Steps is { Count: > 0 } held
+                ? held
+                : throw new InvalidOperationException($"The slider '{setting.Path}' has no steps.");
+            var slider = new Bbs757LockableSlider
+            {
+                Location = new Point(RowInputLeft, y - 2),
+                Size = new Size(RowWidth - (RowInputLeft - RowLeft), 28),
+                Minimum = 0,
+                Maximum = steps.Count - 1,
+                StepTexts = steps.Select(step => Bbs757EfbSettings.SliderText(setting, Bbs757Value.OfFloat(step))).ToArray(),
+                AccessibleName = setting.Label,
+                TabIndex = tab++,
+            };
+            var sliderRow = new SettingControl(setting, slider) { Slider = slider };
+            slider.StepChosen += (_, _) => OnStepChosen(sliderRow);
+            slider.LockedAttempt += (_, _) => SayCannotChange(sliderRow);
+            _sectionPanel.Controls.Add(slider);
+            return sliderRow;
+        }
+
+        // A number or a text: saved by Enter in the box; left with a change not saved, the stored value comes back.
         var box = new TextBox
         {
             Location = new Point(RowInputLeft, y),
-            Size = new Size(140, 25),
+            Size = new Size(RowWidth - (RowInputLeft - RowLeft), 25),
             MaxLength = setting.Kind == Bbs757SettingKind.Number ? 10 : 64,
             AccessibleName = setting.Label,
-            TabIndex = tab++,
-        };
-        // Which box a Set saves, in its description: an AccessibleName would shadow its text.
-        var set = new Button
-        {
-            Text = "Set",
-            AccessibleDescription = $"Saves {setting.Label}",
-            Location = new Point(RowInputLeft + 150, y - 1),
-            Size = new Size(60, 27),
             TabIndex = tab++,
         };
         var boxRow = new SettingControl(setting, box) { Box = box };
@@ -317,9 +327,8 @@ public partial class BBS757EfbForm
                 SaveBox(boxRow);
             }
         };
-        set.Click += (_, _) => SaveBox(boxRow);
+        box.Leave += (_, _) => OnBoxLeft(boxRow);
         _sectionPanel.Controls.Add(box);
-        _sectionPanel.Controls.Add(set);
         return boxRow;
     }
 
@@ -328,9 +337,10 @@ public partial class BBS757EfbForm
     // ------------------------------------------------------------------
 
     // The window shows (ShowForm): the page is read as when it opens, and no simulator change is news until the
-    // window's next check.
+    // window's next check. A box change not saved, in a window that was still open, is dropped and said first.
     private void OpenSettings()
     {
+        DropUnsavedEntry();
         _lastSimState = null;
         ReadSettingsAfresh();
     }
@@ -406,6 +416,11 @@ public partial class BBS757EfbForm
             // Out of the Value state the box shows that state's text, read-only, and it is never parsed.
             if (box.Text != row.Text) box.Text = row.Text;
         }
+        else if (control.Slider is { } slider)
+        {
+            // Out of the Value state the slider stays where it is and reads that state's text.
+            slider.ShowStep(row.State == Bbs757RowState.Value ? row.ChoiceIndex : slider.Value, row.Text);
+        }
         if (row.Inactive && EnabledBy(row.Setting) is { } enabledBy)
             description = JoinDescription(description, Bbs757SettingsRows.InactiveText(enabledBy));
         // What an empty box means, after any other description: off (TOD pause distance) or not set (the identifiers).
@@ -442,13 +457,14 @@ public partial class BBS757EfbForm
 
     // Whether the control takes a change now: the settings writable, the row not waiting for another and holding what can
     // be replaced (Bbs757SettingRow.CanEdit), and a box only with its own value in it. A control that does not stays
-    // focusable: a check box does not toggle, a choice list is locked, a box is read-only.
+    // focusable: a check box does not toggle, a choice list and the slider are locked, a box is read-only.
     private void ApplyLock(SettingControl control)
     {
         bool editable = control.Row is { } row && row.CanEdit(_settingsWritable)
             && (control.Box == null || row.State == Bbs757RowState.Value);
         if (control.Check is { } check) check.AutoCheck = editable;
         else if (control.Combo is { } combo) combo.Locked = !editable;
+        else if (control.Slider is { } slider) slider.Locked = !editable;
         else if (control.Box is { } box) box.ReadOnly = !editable;
     }
 
@@ -581,7 +597,61 @@ public partial class BBS757EfbForm
         SaveSetting(control.Setting, control.Setting.Choices[index].Stored);
     }
 
-    // Enter in a number or text box, or its Set: the box's text read as the tablet takes it, then saved.
+    // The slider moved by the pilot: its step saved. A move that got past the lock all the same (a backstop: the slider
+    // refuses keys, the wheel and clicks while locked, and lets a drag go when the lock comes on): the stored value back,
+    // and why.
+    private void OnStepChosen(SettingControl control)
+    {
+        if (_disposed || control.Slider is not { } slider || control.Setting.Steps is not { } steps) return;
+        if (slider.Locked)
+        {
+            ShowRow(control);
+            SayCannotChange(control);
+            return;
+        }
+        if (slider.Value < 0 || slider.Value >= steps.Count) return;
+        SaveSetting(control.Setting, Bbs757Value.OfFloat(steps[slider.Value]));
+    }
+
+    // Focus left a box, or the window closes or opens again with its focus in one: a change not saved with Enter is
+    // dropped, the stored value shown again, and that is said. Said a moment later, queued: the screen reader cuts speech
+    // off when it reads where focus went, and that reading comes after the box's Leave.
+    private async void OnBoxLeft(SettingControl control)
+    {
+        if (_disposed || control.Box is not { } box) return;
+        if (UnsavedEditText(control.Row, box.Text) is not { } said) return;
+        ShowRow(control);
+        try
+        {
+            await Task.Delay(NotSavedDelayMs, Lifetime);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (!_disposed) _announcer.Announce(said);
+    }
+
+    // The window closes (Escape, Alt+F4, its close box) or opens again over itself (Shift+T, which reads BlueBird's files
+    // afresh): the box the window's focus is in raises no Leave, so a change not saved in it is dropped, and said, here.
+    // The window's ActiveControl, not Focused: a window in the background has no focus but keeps its control.
+    private void DropUnsavedEntry()
+    {
+        if (_disposed) return;
+        if (_settingControls.FirstOrDefault(control => control.Box != null && ActiveControl == control.Box) is { } active)
+            OnBoxLeft(active);
+    }
+
+    /// <summary>
+    /// What leaving a number or text box says when its text is not the stored value's: "&lt;label&gt; not saved" (the
+    /// box then shows the stored value again). Null when there is nothing to drop: the text is the stored value's, give
+    /// or take spaces at its ends, or the row is in another state than <see cref="Bbs757RowState.Value"/> (its box is
+    /// read-only and shows that state's text), or nothing has been read yet. Pure; internal for the tests.
+    /// </summary>
+    internal static string? UnsavedEditText(Bbs757SettingRow? row, string text) =>
+        row is { State: Bbs757RowState.Value } && text.Trim() != row.Text.Trim() ? $"{row.Setting.Label} not saved" : null;
+
+    // Enter in a number or text box: the box's text read as the tablet takes it, then saved.
     private void SaveBox(SettingControl control)
     {
         if (_disposed || control.Box is not { } box) return;
@@ -603,8 +673,8 @@ public partial class BBS757EfbForm
     /// Saves <paramref name="setting"/> as <paramref name="value"/> through <see cref="Bbs757SettingsSave.Run"/>, which
     /// checks every key first, makes the writes in order and words the outcome; each write asks the simulator guard again
     /// (<see cref="MayWriteSettings"/>) and makes the safety copy first. Then the rows are read again, in place, and the
-    /// outcome is said: a failure at once, anything else queued behind the reader; a check box or a choice list that
-    /// saved says nothing more (CORE-7).
+    /// outcome is said: a failure at once, anything else queued behind the reader; a check box, a choice list or the
+    /// slider that saved says nothing more (CORE-7).
     /// </summary>
     private void SaveSetting(Bbs757Setting setting, Bbs757Value value)
     {
@@ -672,11 +742,12 @@ public partial class BBS757EfbForm
 
         public Bbs757Setting Setting { get; }
 
-        // The control the screen reader reads for the setting: the check box, the choice list or the box.
+        // The control the screen reader reads for the setting: the check box, the choice list, the slider or the box.
         public Control Input { get; }
 
         public CheckBox? Check { get; init; }
         public Bbs757LockableComboBox? Combo { get; init; }
+        public Bbs757LockableSlider? Slider { get; init; }
         public TextBox? Box { get; init; }
 
         // What the files held at the last read; null before the first.

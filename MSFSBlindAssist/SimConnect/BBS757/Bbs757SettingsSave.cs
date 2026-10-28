@@ -15,8 +15,8 @@ public sealed record Bbs757SettingsSnapshot(JsonElement? Global, bool GlobalExis
 
 /// <summary>What a save did and what the Settings tab says of it (<see cref="Bbs757SettingsSave.Run"/>).</summary>
 /// <param name="Spoken">
-/// The sentence to say, or null when there is nothing to add to what the screen reader said: a check box or a choice list
-/// that saved (CORE-7).
+/// The sentence to say, or null when there is nothing to add to what the screen reader said: a check box, a choice list or
+/// a slider that saved (CORE-7).
 /// </param>
 /// <param name="Immediate">A failure, said at once (AnnounceImmediate); otherwise it is queued behind the reader.</param>
 /// <param name="TurnedOff">The labels of the group's other callouts the save switched off that showed on.</param>
@@ -41,7 +41,8 @@ public sealed record Bbs757SettingSaveOutcome(string? Spoken, bool Immediate, IR
 /// pressed, which then was saved nowhere ("Couldn't save &lt;pressed&gt;: &lt;callout&gt; could not be turned off:
 /// &lt;reason&gt;", or "Couldn't save &lt;pressed&gt;: &lt;callout&gt; turned off for N of M registrations; &lt;reg&gt;:
 /// &lt;reason&gt;."); each callout of the group switched off whose row showed on or different values ("&lt;label&gt;
-/// turned off"); a number or text box's "&lt;label&gt; saved". A check box or a choice list that saved says nothing more.
+/// turned off"); a number or text box's "&lt;label&gt; saved". A check box, a choice list or a slider that saved says
+/// nothing more.
 /// A refusal before any write is logged in the file layer's words but naming no file (it is about the files as read),
 /// its value only when the setting may be logged; the writes log themselves, each naming its file. Pure: the caller reads
 /// the files and writes them through the two delegates, which ask the simulator guard themselves.
@@ -50,9 +51,10 @@ public static class Bbs757SettingsSave
 {
     /// <summary>
     /// Saves <paramref name="setting"/> as <paramref name="value"/> (for a switch or a choice, one of its choices'
-    /// <see cref="Bbs757SettingChoice.Stored"/>: <see cref="Bbs757EfbSettings.WritesFor"/> throws
-    /// <see cref="ArgumentException"/> for anything else). <paramref name="files"/> is the files as read just before;
-    /// <paramref name="shown"/> the rows the tab showed (for "turned off"). <paramref name="saveGlobal"/> writes a key of
+    /// <see cref="Bbs757SettingChoice.Stored"/>, and for a slider one of its <see cref="Bbs757Setting.Steps"/>:
+    /// <see cref="Bbs757EfbSettings.WritesFor"/> throws <see cref="ArgumentException"/> for anything else).
+    /// <paramref name="files"/> is the files as read just before; <paramref name="shown"/> the rows the tab showed (for
+    /// "turned off"). <paramref name="saveGlobal"/> writes a key of
     /// the settings file and <paramref name="saveRegistrations"/> a key of every registration's file
     /// (<c>Bbs757SettingsFile.Save</c>, <see cref="Bbs757SettingsFile.SaveToRegistrations"/>); <paramref name="log"/>
     /// takes the line of a refusal before any write.

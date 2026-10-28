@@ -119,17 +119,18 @@ public class Bbs757SettingsRowsTests
             ["loading_speed"] = "Quick",
             ["automatic_loading"] = "Off",
             ["auto_connect_ground_services_on_init"] = "On",
-            ["hoppie_user_enabled"] = "Off",
-            ["cpdlc_network"] = "Hoppie",
             ["auto_attach_chocks_on_init"] = "On",
             ["dirty_panel_states_enabled"] = "Off",
             ["ground_services_mode"] = "BBS",
             // AIRAC data
             ["simbrief_id"] = "123456",
+            // ACARS
+            ["hoppie_user_enabled"] = "Off",
+            ["cpdlc_network"] = "Hoppie",
             ["hoppie_logon_code"] = "NOT-A-REAL-CODE",
             ["sayintentions_acars_key"] = "NOT-A-REAL-KEY",
-            // Failures
-            ["failures.random_multiplier"] = "1.0",
+            // Failures: the slider reads as the tablet's "FREQUENCY: 1.0x".
+            ["failures.random_multiplier"] = "1.0x",
             ["failures.random_enabled"] = "Off",
             ["failures.notifications_enabled"] = "On",
         };
@@ -137,7 +138,7 @@ public class Bbs757SettingsRowsTests
         var rows = new[]
             {
                 Bbs757SettingSection.General, Bbs757SettingSection.Aircraft, Bbs757SettingSection.AiracData,
-                Bbs757SettingSection.Failures,
+                Bbs757SettingSection.Acars, Bbs757SettingSection.Failures,
             }
             .SelectMany(section => RowsOf(section, SettingsJson))
             .ToArray();
@@ -241,19 +242,41 @@ public class Bbs757SettingsRowsTests
             "\"hoppie_logon_code\":\"NOT-A-REAL-CODE\"", "\"hoppie_logon_code\":\"\"");
 
         var aircraft = RowsOf(Bbs757SettingSection.Aircraft, json);
-        var airac = RowsOf(Bbs757SettingSection.AiracData, json);
+        var boxes = RowsOf(Bbs757SettingSection.AiracData, json)
+            .Concat(RowsOf(Bbs757SettingSection.Acars, json).Where(row => row.Setting.Kind == Bbs757SettingKind.Text))
+            .ToArray();
 
         var distance = RowFor(aircraft, "tod_pause_distance");
         Assert.Equal((Bbs757RowState.Value, -1, "5000"), (distance.State, distance.ChoiceIndex, distance.Text));
         // "Not set" is the tablet's empty box.
-        Assert.Equal("", RowFor(airac, "simbrief_id").Text);
-        Assert.Equal("", RowFor(airac, "hoppie_logon_code").Text);
-        Assert.All(airac, row =>
+        Assert.Equal("", RowFor(boxes, "simbrief_id").Text);
+        Assert.Equal("", RowFor(boxes, "hoppie_logon_code").Text);
+        Assert.Equal(3, boxes.Length);
+        Assert.All(boxes, row =>
         {
             Assert.Equal(Bbs757RowState.Value, row.State);
             Assert.Equal(-1, row.ChoiceIndex);
             Assert.True(row.CanEdit(true));
         });
+    }
+
+    [Fact]
+    public void The_slider_reads_the_stored_value_at_its_nearest_step()
+    {
+        static Bbs757SettingRow Frequency(string stored) => RowFor(RowsOf(Bbs757SettingSection.Failures,
+            Replaced(SettingsJson, "\"random_multiplier\":1.0", $"\"random_multiplier\":{stored}")), "failures.random_multiplier");
+
+        // A step reads as the tablet shows it, at its own place.
+        var step = Frequency("2.5");
+        Assert.Equal((Bbs757RowState.Value, 4, "2.5x"), (step.State, step.ChoiceIndex, step.Text));
+        Assert.True(step.CanEdit(true));
+        // A value set on the tablet between steps reads as it is, at the nearest step: 8.54 is 8x (step 9).
+        var between = Frequency("8.54");
+        Assert.Equal((Bbs757RowState.Value, 9, "8.5x"), (between.State, between.ChoiceIndex, between.Text));
+        // A whole number in the file is still a number BlueBird can hold.
+        Assert.Equal("1000.0x", Frequency("1000").Text);
+        // Text where the number belongs cannot be read.
+        Assert.Equal(Bbs757RowState.Unreadable, Frequency("\"2.5\"").State);
     }
 
     // ---- what cannot be read ------------------------------------------------------------------------
@@ -271,7 +294,7 @@ public class Bbs757SettingsRowsTests
             "\"ground_services_mode\":0", "\"ground_services_mode\":[0]");
         json = Replaced(json, "\"automatic_loading\":false,", "");
 
-        var rows = RowsOf(Bbs757SettingSection.Aircraft, json);
+        var rows = RowsOf(Bbs757SettingSection.Aircraft, json).Concat(RowsOf(Bbs757SettingSection.Acars, json)).ToArray();
 
         string[] unreadable =
         [
@@ -761,7 +784,7 @@ public class Bbs757SettingsRowsTests
         Assert.Equal(expected, underCulture);
         Assert.Contains("51", underCulture);                                   // the brightness, floored from 0.51
         Assert.Contains("Other (stored value -4)", underCulture);              // an ASCII minus
-        Assert.Contains("2.0", underCulture);                                  // a decimal point
+        Assert.Contains("2.0x", underCulture);                                 // the slider's reading, a decimal point
         Assert.Contains("Applies to 3 registrations: A, B, C", underCulture);
     }
 }

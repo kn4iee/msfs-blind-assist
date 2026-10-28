@@ -108,8 +108,6 @@ public partial class BBS757EfbForm : Form
     // click or speak after that.
     private readonly CancellationTokenSource _lifetime = new();
 
-    private Button _navigraphButton = null!;
-    private Button _updateButton = null!;
     private Button _fetchButton = null!;
     private Button _acceptUnitsButton = null!;
     private Button _keepUnitsButton = null!;
@@ -397,8 +395,6 @@ public partial class BBS757EfbForm : Form
             : "EFB not reachable. Is the aircraft loaded?";
         string text = _lastResult.Length > 0 ? link + Environment.NewLine + _lastResult : link;
         if (_statusBox.Text != text) _statusBox.Text = text;
-        // The Settings page shows the same text, below its Navigraph and nav data buttons.
-        if (_settingsEfbStatusBox.Text != text) _settingsEfbStatusBox.Text = text;
     }
 
     private void SetResult(string text)
@@ -1069,6 +1065,8 @@ public partial class BBS757EfbForm : Form
 
     private void HideAndRestore()
     {
+        // A Settings box left with a change not saved: dropped, and said, as leaving it would.
+        DropUnsavedEntry();
         Hide();
         if (_previousWindow != IntPtr.Zero)
             SetForegroundWindow(_previousWindow);
