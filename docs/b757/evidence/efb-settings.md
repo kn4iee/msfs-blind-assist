@@ -37,7 +37,7 @@ knob to the tapped point.
 | LOCK KEYBOARD TO EFB | `force_keyboard_capture` | ON: true, OFF: false |
 | EFB POWERED ON DURING INITIALIZATION | `efb_power_on_during_init` | ON: true, OFF: false |
 | EFB BRIGHTNESS MODE | `auto_brightness` | AUTO: true. Switched off: false, and the word becomes the brightness percent (no MANUAL word) |
-| (the percent, when not AUTO) | `display_brightness` | float 0-1 shown as `floor(v * 100)` %: 0.99901 shows 99%, 0.51053 shows 51%. Switching AUTO off or on leaves it unchanged |
+| (the percent, when not AUTO) | `display_brightness` | float 0-1 shown as `floor(v * 100)` %: 0.99901 shows 99%, 0.51053 shows 51%. Switching AUTO off or on leaves it unchanged. BlueBird keeps it as a 32-bit float: 0.294 written with the 757 not loaded came back as 0.2939999997615814 (2026-10-28) |
 | EFB BACKGROUND | `background_num` | DEFAULT: 0; then the digit itself, 1 to 9 (x 804: 0, 826: 1, 875: 2, 900: 3, 925: 4, 950: 5, 975: 6, 1000: 7, 1025: 8, 1050 and right: 9) |
 | LIVE AUTOBRAKE INFO | `autobrake_notifications` | ON: true, OFF: false |
 | NOTIFICATIONS FADE-OUT TIMER | `notification_popback_seconds` | "N SEC": N, for every whole second from 3 (left end, x 898) to 30 (x 1176), about 10 px a second; NEVER: 0 (right end, x 1190) |
@@ -170,7 +170,7 @@ what was measured), then the fixes from the whole-branch review. This work is no
 edited none of the files plan 16 owns for the docs: `docs/b757.md`, `guide/**`,
 `MSFSBlindAssist/HotkeyGuides/BBS757_Hotkeys.txt` and `changelog.d/**`. This section says what each needs. Line numbers
 are as of the review's fixes (the commit after `016c42d4b`): check them against the file before editing. The in-sim
-checks (last list) have not been run.
+checks (last list) ran on 2026-10-28; their results follow the list, and after them the changes the owner asked for.
 
 **What changed for a pilot** (the text for `docs/b757.md`'s EFB section, the hotkey guide and the guide):
 
@@ -335,3 +335,44 @@ into the owner's pass):
     pause distance on the tab. Load the 757 and read the tablet through the probe (Settings > General's percent, the
     Failures page's FREQUENCY, Settings > Aircraft's TOD pause distance) and the files (`display_brightness` 0.294,
     `failures.random_multiplier` 2.5 and `tod_pause_distance` -1 expected).
+
+**Run on 2026-10-28** with the owner (MSFS 2024 1.9.21.0, BBS Nest running, registration G-BBS75; the app at
+`9a8b48d64`, and from the simulator's close in check 5 at `f8f61e89c`, which merged the shared branch's 23 newer
+commits). Every file change was read in full and compared with a copy taken before the run; both files were put back
+afterwards.
+
+1. Passed: the status box, the section list, the tab order and every row's reading; each change kept focus and said
+   only what the reader could not (a box's "<label> saved", "2500 turned off" after the reader's "checked", "Turn on
+   Announcements to change this."). Hoppie ACARS was not switched on.
+2. Passed for every key listed, a held key, Alt+letter and Escape. The wheel and a click were not tried (no mouse).
+3. Passed, with the settings file held open for writing by another program: an arrow commit and an open-list commit
+   both said "Couldn't save Displays bootup speed: the file is in use" and showed the stored value again. An open list,
+   an arrow, then Tab: nothing saved, nothing said, and the list shows the stored value again.
+4. Passed.
+5. Passed: "Simulator started" and "Simulator closed" about a second after the process started and ended.
+6. Passed: BlueBird wrote `efb_settings.json` itself when the 757 loaded, and `G-BBS75-opt.json` when Settings > Livery
+   options opened, each holding every value the tab had set (`units` 0 with `weight_unit` "kg" included). BlueBird also
+   turned `charts_night_mode` off on its own at the load. Sign in to Navigraph said "Already signed in to Navigraph" and
+   Update nav data "Nav data is current, cycle 2610", from the Settings tab.
+7. Passed: with `options.egpws_callouts.minimum` removed, BlueBird wrote it back as `false`, in its usual place. A
+   callout missing from a registration file is off to BlueBird too.
+8. Passed: 21 ms from the first write of a five-member group's save to the last.
+9. The rows scroll with focus, and the Flight tab has no scroll bar. At the owner's 300 % scaling, though, both pages
+   overlap and clip their text: the app is SystemAware and only the forms made in the designer set `AutoScaleMode`, so
+   every window built in code shares it. Speech is unaffected; it is its own follow-up.
+10. Partly: `tod_pause_distance` 1 was kept at the load. Not run: 999, the identifiers cleared through a load, the
+    tablet's own entry of the identifiers and Hoppie ACARS with whole-file diffs. The "not set" values the tab writes,
+    -1 and "", are BlueBird's own: the owner's file held "" for both codes before the run.
+11. Passed for the stored values: `failures.random_multiplier` 2.5, and `display_brightness`, which BlueBird keeps as a
+    32-bit float: the app's 0.294 came back as 0.2939999997615814, which floors to 29. A percent written as exactly
+    p / 100 can show one less (0.29 is 0.28999999 as a 32-bit float); the app's p + 0.4 avoids it. TOD was set to 1, not
+    cleared (the cleared -1 is BlueBird's own value). The tablet's display was not captured.
+
+**Changes the owner asked for after the run** (to build, then check in the simulator with check 10's two loads: TOD 999
+and Hoppie ACARS on with a test logon code):
+
+- No Set button after a box: Enter saves.
+- Sign in to Navigraph and Update nav data move into the AIRAC data section; the EFB status box shows on the Flight tab
+  only.
+- The Hoppie logon code and the SayIntentions ACARS key move to an ACARS section of their own.
+- Random failure frequency needs its unit and range: the tablet shows "FREQUENCY: N.Nx (1x-1000x)" on a slider.

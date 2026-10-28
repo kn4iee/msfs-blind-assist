@@ -376,8 +376,10 @@ public static class Bbs757EfbSettings
         return true;
     }
 
-    // The tablet shows floor(v * 100); a typed percent is stored 0.4 above its own so it also shows right under a
-    // tablet that rounds. 100 is 1.0: the tablet's brightness goes no higher.
+    // The tablet shows floor(v * 100), and BlueBird keeps the value as a 32-bit float, which can land just under p / 100
+    // (0.29 becomes 0.28999999 and shows 28; 0.294 came back 0.29399999, measured 2026-10-28). A typed percent is
+    // stored 0.4 above its own, so it shows p after that loss, and under a tablet that rounds too. 100 is 1.0: the
+    // tablet's brightness goes no higher.
     private static double StoredPercent(long percent) => percent >= 100 ? 1.0 : (percent + 0.4) / 100;
 
     // What the pilot is told to type when an entry is refused, and for the TOD pause distance how to switch it off. The
