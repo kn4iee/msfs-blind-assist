@@ -279,15 +279,16 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    // The owner's order (ruling R37). Plan 12 task 7 regrouped the panels by the cockpit (docs/b757/evidence/panel-audit-12.md)
-    // and kept this order: a panel that stays keeps its place, a renamed one takes the old one's, the parts of a split panel
-    // take its place (among themselves in cockpit order), a merged one the place of the first of its sources; the EFIS
-    // panels follow TCAS and transponder, CDU brightness follows EICAS control, and the oxygen masks, the door and the
-    // forward attendant panel follow the P61 panel. Every panel is listed, so none falls back to the alphabet.
-    [InlineData("Overhead", "Electrical|APU|IRS|Electronic engine control (RR)|Yaw dampers|Hydraulics|Panel lighting|Emergency lights and passenger oxygen|Ram air turbine and engine limiters|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Equipment cooling|Air conditioning and bleed|Indicator lights and door lock|CVR|SELCAL and cabin call")]
-    [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
-    [InlineData("Forward panel", "Captain foot and shoulder heat|Captain instrument source selectors|Caution, config and G/S inhibit|Brakes|Heading reference|Thrust mode select|Alternate flaps|Ground proximity overrides|First officer instrument source selectors|First officer foot and shoulder heat|Landing gear|Yokes|Captain autoland status|Standby instruments|Captain DDRMI|Captain chronometer|First officer autoland status|First officer DDRMI|First officer chronometer")]
-    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|Captain EFIS|First officer EFIS|EICAS control|CDU brightness|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|ILS tuning")]
+    // Plan 12 task 9 (the owner: "reorder"): each section's panels in the order BlueBird's Simplified Procedures (User
+    // Procedures PDF pages 34-62, cold and dark to securing) first act on or check one of the panel's controls, page then
+    // line; a panel the flow never touches follows, in plan 12 task 7's order (the Glareshield's master warning and caution,
+    // the yokes, DDRMIs and chronometers, CDU brightness, the forward attendant panel). The Pedestal keeps its start,
+    // Control stand, Engines, TCAS and transponder (plan 01's frozen Bbs757DefinitionTests). Each panel's first mention:
+    // docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9". Every panel is listed, so none falls back to the alphabet.
+    [InlineData("Overhead", "Hydraulics|Exterior lights|Electrical|APU|IRS|Electronic engine control (RR)|Yaw dampers|CVR|Panel lighting|Emergency lights and passenger oxygen|Ram air turbine and engine limiters|Fuel|Anti-ice|Wipers|Window heat|Passenger signs|Pressurization|Equipment cooling|Air conditioning and bleed|Indicator lights and door lock|SELCAL and cabin call")]
+    [InlineData("Glareshield", "VOR/DME|MCP|Master warning and caution")]
+    [InlineData("Forward panel", "Landing gear|Alternate flaps|Captain foot and shoulder heat|First officer foot and shoulder heat|Captain instrument source selectors|First officer instrument source selectors|Captain autoland status|First officer autoland status|Standby instruments|Brakes|Heading reference|Thrust mode select|Ground proximity overrides|Caution, config and G/S inhibit|Yokes|Captain DDRMI|Captain chronometer|First officer DDRMI|First officer chronometer")]
+    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Stabilizer trim|Captain EFIS|First officer EFIS|Weather radar|Radio tuning panel 1|Audio panel 1|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Fire protection|ILS tuning|CDU brightness")]
     [InlineData("Other", "P61 panel|Oxygen|Flight deck door|Forward attendant panel")]
     public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
     {

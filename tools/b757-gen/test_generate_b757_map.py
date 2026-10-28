@@ -3933,29 +3933,31 @@ class Curation(unittest.TestCase):
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
     # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change. Plan 12
-    # task 7 regrouped the panels by the cockpit (docs/b757/evidence/panel-audit-12.md) and kept this order: a panel that
-    # stays keeps its place, a renamed one takes the old one's, the parts of a split panel take its place (in cockpit order
-    # among themselves), a merged one the place of the first of its sources; the EFIS panels follow TCAS and transponder,
-    # CDU brightness follows EICAS control, and the oxygen masks, the door and the forward attendant panel follow P61.
+    # task 9 (the owner: "reorder") orders each section's panels by where BlueBird's Simplified Procedures (User Procedures
+    # PDF pages 34-62, cold and dark to securing) first act on or check one of the panel's controls, page then line; a
+    # panel the flow never touches follows, in Task 7's order. The Pedestal keeps its start, Control stand, Engines, TCAS
+    # and transponder (plan 01's frozen Bbs757DefinitionTests). Each panel's first mention, page, line and words:
+    # docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
     PANEL_ORDER = {
-        "Overhead": ["Electrical", "APU", "IRS", "Electronic engine control (RR)", "Yaw dampers", "Hydraulics",
-                     "Panel lighting", "Emergency lights and passenger oxygen", "Ram air turbine and engine limiters", "Fuel",
-                     "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
-                     "Equipment cooling", "Air conditioning and bleed", "Indicator lights and door lock", "CVR",
+        # 34:22 electric hydraulic switches OFF and 34:28 anti-collision light OFF (the safety inspection), then power-up
+        "Overhead": ["Hydraulics", "Exterior lights", "Electrical", "APU", "IRS", "Electronic engine control (RR)",
+                     "Yaw dampers", "CVR", "Panel lighting", "Emergency lights and passenger oxygen",
+                     "Ram air turbine and engine limiters", "Fuel", "Anti-ice", "Wipers", "Window heat", "Passenger signs",
+                     "Pressurization", "Equipment cooling", "Air conditioning and bleed", "Indicator lights and door lock",
                      "SELCAL and cabin call"],
-        "Glareshield": ["MCP", "VOR/DME", "Master warning and caution"],
-        # the ten parts of Main panel switches first, where it was, in cockpit order
-        "Forward panel": ["Captain foot and shoulder heat", "Captain instrument source selectors",
-                          "Caution, config and G/S inhibit", "Brakes", "Heading reference", "Thrust mode select",
-                          "Alternate flaps", "Ground proximity overrides", "First officer instrument source selectors",
-                          "First officer foot and shoulder heat", "Landing gear", "Yokes", "Captain autoland status",
-                          "Standby instruments", "Captain DDRMI", "Captain chronometer", "First officer autoland status",
-                          "First officer DDRMI", "First officer chronometer"],
+        # 40:10 VOR / DME selection, 40:13 flight director switches; the master warning and caution: not in the flow
+        "Glareshield": ["VOR/DME", "MCP", "Master warning and caution"],
+        "Forward panel": ["Landing gear", "Alternate flaps", "Captain foot and shoulder heat",
+                          "First officer foot and shoulder heat", "Captain instrument source selectors",
+                          "First officer instrument source selectors", "Captain autoland status",
+                          "First officer autoland status", "Standby instruments", "Brakes", "Heading reference",
+                          "Thrust mode select", "Ground proximity overrides", "Caution, config and G/S inhibit", "Yokes",
+                          "Captain DDRMI", "Captain chronometer", "First officer DDRMI", "First officer chronometer"],
         # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
-        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "Captain EFIS", "First officer EFIS",
-                     "EICAS control", "CDU brightness", "Radio tuning panel 1", "Audio panel 1", "Fire protection",
-                     "Stabilizer trim", "Weather radar", "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2",
-                     "ILS tuning"],
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Stabilizer trim",
+                     "Captain EFIS", "First officer EFIS", "Weather radar", "Radio tuning panel 1", "Audio panel 1",
+                     "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "Fire protection", "ILS tuning",
+                     "CDU brightness"],
         "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).

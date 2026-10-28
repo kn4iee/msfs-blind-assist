@@ -808,3 +808,104 @@ Switch guards panel cover switches on other panels, so they are ordered among th
 Two labels mislead although their meaning is established: EICAS L Status is the ENGINE page button and EICAS R Status
 the STATUS page button (from their click code); the vendor component names make "O2 Ears Observer" observer 2, not
 observer 1 (it belongs with the P61 test).
+
+## Plan 12 Task 9: the panel lists follow the preflight flow
+
+The owner (2026-10-28): "reorder". Each section's panels (`panel_order`) are now in the order BlueBird's Simplified Procedures (UP 34-62, cold and dark to final securing) first act on or check one of the panel's controls: by PDF page, then by line on that page. The line is the line of that page's `pdftotext -f n -l n -layout` text. A procedure line counts for a panel when its words name one of the panel's controls as the manual writes them ("BATTERY SWITCH", "AUTOBRAKE SELECTOR", "IRS SELECTORS"). Panels first named on the same line keep their Task 7 order, and so do the panels the flow never names, which follow the rest. The Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen `Bbs757DefinitionTests` pins; the rest of the Pedestal follows the flow. The app's own panels are not in `panel_order` and keep their places by their code: Rudder and aileron trim right after Stabilizer trim, the COM radios right after TCAS and transponder. Only the order of the panels moved: no control, label or position changed, and the order inside each panel is the one above.
+
+The derivation is `flow_order.py` in the plan 12 workspace. It lists every pattern it tries per panel, and it checks that the shipped `panel_order` matches. Judgment calls in it:
+
+- Checks count, so the cockpit safety inspection (UP 34) puts Hydraulics ("ELECTRIC HYDRAULIC SWITCHES ... OFF") and Exterior lights ("ANTI-COLLISION LIGHT ... OFF") ahead of Electrical on the Overhead, and Landing gear and Alternate flaps first on the Forward panel.
+- EICAS control is first named at 36:21, "Use lower EICAS STATUS": that page is shown with the panel's STATUS button (EICAS R Status). Its own item, "EICAS CONTROL PANEL ... SET", comes later (41:33).
+- "VHF / AUDIO / ADF ... SET AS REQUIRED" (42:18) counts for all three radio tuning panels and both audio panels, which then keep their Task 7 order among themselves.
+- Thrust mode select counts at 41:21, "THRUST REFERENCE ... VERIFY GREEN "TO"": that is the mode its TO/GA button selects. Stabilizer trim counts at 41:25, the alternate stab trim switches, which the app puts on that panel (the cutouts follow at 41:26). ILS tuning counts at 42:27, "ILS ... SET OR PARKED AS REQUIRED": the ILS panel's tuning knobs, which the map leaves out (infinite knobs).
+- Indicator lights and door lock counts at 46:24, the flight deck door switch's LOCK light. The flow never names the lamp test or the DIM/BRT switch: "OVERHEAD LIGHTING ... AS REQUIRED" (38:32) is not counted for them, or the panel would move up to after CVR.
+- Not in the flow: Master warning and caution, Yokes, both DDRMIs, both chronometers, CDU brightness, Forward attendant panel. "CREW OXYGEN PRESSURE" (36:23) is read on the EICAS, so Oxygen counts at the masks' test (40:16).
+
+### Overhead
+
+| # | Panel | First touched (UP page:line) | The manual's words |
+|---|---|---|---|
+| 1 | Hydraulics | 34:22 | "ELECTRIC HYDRAULIC SWITCHES ... OFF" |
+| 2 | Exterior lights | 34:28 | "ANTI-COLLISION LIGHT ... OFF" |
+| 3 | Electrical | 35:10 | "BATTERY SWITCH ... ON" |
+| 4 | APU | 35:29 | "APU SELECTOR ... START, THEN ON" |
+| 5 | IRS | 36:17 | "IRS SELECTORS ... OFF, THEN NAV" |
+| 6 | Electronic engine control (RR) | 38:12 | "EEC SWITCHES (RR ONLY) ... ON, GUARDED" |
+| 7 | Yaw dampers | 38:13 | "YAW DAMPER SWITCHES ... ON" |
+| 8 | CVR | 38:29 | "CVR ... TEST" |
+| 9 | Panel lighting | 38:33 | "Set panel lighting and LT OVRD as desired" |
+| 10 | Emergency lights and passenger oxygen | 38:35 | "EMERGENCY LIGHTS ... ARMED" |
+| 11 | Ram air turbine and engine limiters | 38:41 | "RAT BUTTON ... GUARDED AND DARK" |
+| 12 | Fuel | 39:9 | "FUEL CROSSFEED SWITCHES ... OFF" |
+| 13 | Anti-ice | 39:14 | "WING / ENGINE ANTI-ICE ... OFF" |
+| 14 | Wipers | 39:15 | "WIPERS ... OFF" |
+| 15 | Window heat | 39:20 | "WINDOW HEAT ... ON" |
+| 16 | Passenger signs | 39:23 | "PASSENGER SIGNS ... SET AS REQUIRED" |
+| 17 | Pressurization | 39:27 | "CABIN ALTITUDE CONTROLS ... SET" |
+| 18 | Equipment cooling | 39:30 | "ALTERNATE EQUIPMENT COOLING ... OFF" |
+| 19 | Air conditioning and bleed | 39:33 | "TEMPERATURE CONTROLS ... SET IN AUTO RANGE" |
+| 20 | Indicator lights and door lock | 46:24 | "Check EICAS, flight-deck-door LOCK and overhead door indications" |
+| 21 | SELCAL and cabin call | 55:32 | "Press one of the blue cabin-call buttons to sound the hi-lo chime for landing preparation" |
+
+### Glareshield
+
+| # | Panel | First touched (UP page:line) | The manual's words |
+|---|---|---|---|
+| 1 | VOR/DME | 40:10 | "VOR / DME SELECTION ... AS REQUIRED" |
+| 2 | MCP | 40:13 | "FLIGHT DIRECTOR SWITCHES ... ON" |
+| 3 | Master warning and caution | not in the flow | |
+
+### Forward panel
+
+| # | Panel | First touched (UP page:line) | The manual's words |
+|---|---|---|---|
+| 1 | Landing gear | 34:14 | "LANDING GEAR LEVER ... DOWN" |
+| 2 | Alternate flaps | 34:20 | "ALTN FLAPS SELECTOR ... NORM" |
+| 3 | Captain foot and shoulder heat | 40:20 | "FOOT / SHOULDER HEAT ... AS REQUIRED" |
+| 4 | First officer foot and shoulder heat | 40:20 | "FOOT / SHOULDER HEAT ... AS REQUIRED" |
+| 5 | Captain instrument source selectors | 40:21 | "INSTRUMENT SOURCES ... NORMAL" |
+| 6 | First officer instrument source selectors | 40:21 | "INSTRUMENT SOURCES ... NORMAL" |
+| 7 | Captain autoland status | 41:15 | "AUTOLAND STATUS ANNUNCIATORS ... CHECKED" |
+| 8 | First officer autoland status | 41:15 | "AUTOLAND STATUS ANNUNCIATORS ... CHECKED" |
+| 9 | Standby instruments | 41:18 | "STANDBY ENGINE INDICATOR ... AUTO" |
+| 10 | Brakes | 41:19 | "AUTOBRAKE SELECTOR ... RTO" |
+| 11 | Heading reference | 41:20 | "HEADING REFERENCE ... NORM" |
+| 12 | Thrust mode select | 41:21 | "THRUST REFERENCE ... VERIFY GREEN "TO"" |
+| 13 | Ground proximity overrides | 41:29 | "GROUND PROXIMITY OVERRIDES ... OFF" |
+| 14 | Caution, config and G/S inhibit | 46:42 | "RECALL" (Before Start) |
+| 15 | Yokes | not in the flow | |
+| 16 | Captain DDRMI | not in the flow | |
+| 17 | Captain chronometer | not in the flow | |
+| 18 | First officer DDRMI | not in the flow | |
+| 19 | First officer chronometer | not in the flow | |
+
+### Pedestal
+
+| # | Panel | First touched (UP page:line) | The manual's words |
+|---|---|---|---|
+| 1 | Control stand (kept first: frozen test) | 34:17 | "FLAP LEVER ... UP OR IN AGREEMENT WITH EXTERIOR / INDICATOR" |
+| 2 | Engines (kept first: frozen test) | 34:27 | "FUEL CONTROL SWITCHES ... CUTOFF" |
+| 3 | TCAS and transponder (kept first: frozen test) | 42:24 | "TRANSPONDER ... SET AS REQUIRED" |
+| 4 | EICAS control | 36:21 | "Use lower EICAS STATUS" |
+| 5 | Stabilizer trim | 41:25 | "ALTN STAB TRIM SWITCHES ... NEUTRAL" |
+| 6 | Captain EFIS | 41:36 | "EFIS CONTROLS ... SET AS REQUIRED" |
+| 7 | First officer EFIS | 41:36 | "EFIS CONTROLS ... SET AS REQUIRED" |
+| 8 | Weather radar | 42:17 | "WEATHER RADAR ... OFF" |
+| 9 | Radio tuning panel 1 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
+| 10 | Audio panel 1 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
+| 11 | Radio tuning panel 2 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
+| 12 | Radio tuning panel 3 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
+| 13 | Audio panel 2 | 42:18 | "VHF / AUDIO / ADF ... SET AS REQUIRED" |
+| 14 | Fire protection | 42:21 | "ENGINE / APU FIRE HANDLES ... IN, NOT ROTATED" |
+| 15 | ILS tuning | 42:27 | "ILS ... SET OR PARKED AS REQUIRED" |
+| 16 | CDU brightness | not in the flow | |
+
+### Other
+
+| # | Panel | First touched (UP page:line) | The manual's words |
+|---|---|---|---|
+| 1 | P61 panel | 36:32 | "P61 CONTROLS ... CHECK" |
+| 2 | Oxygen | 40:16 | "CREW OXYGEN EQUIPMENT ... TEST" |
+| 3 | Flight deck door | 46:22 | "DOORS ... CLOSED" |
+| 4 | Forward attendant panel | not in the flow | |
