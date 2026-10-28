@@ -20,7 +20,7 @@ public enum Bbs757WeightUnits
 /// REMOVE). Read only: the app never writes BlueBird's files.
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key:
-/// it is parsed for <c>simbrief_id</c>, <c>units</c> and <c>tiller_realistic</c> alone, nothing else is taken from it, and
+/// it is parsed for <c>simbrief_id</c>, <c>units</c>, <c>tiller_realistic</c> and <c>parking_brake_realistic</c> alone, nothing else is taken from it, and
 /// neither file's content is ever logged. The SimBrief ID is the pilot's own identifier: callers
 /// never log it either. Pure, with the folder candidates passed in.
 /// </summary>
@@ -151,6 +151,25 @@ public static class Bbs757WorkFolder
         if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
         if (!doc.RootElement.TryGetProperty("tiller_realistic", out var tiller)) return null;
         return tiller.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// BlueBird's PARKING BRAKE MODE (<c>parking_brake_realistic</c>, the EFB's Settings): true REALISTIC (the lever
+    /// sets and releases only with full braking), false EASY. Read 2026-10-28 as true on a sim where the lever
+    /// alone did nothing. Null when it is missing, not a JSON bool, or the file cannot be read. Nothing else in
+    /// the file is read.
+    /// </summary>
+    public static bool? ReadParkingBrakeRealistic(string folder)
+    {
+        using var doc = ReadJson(Path.Combine(folder, SettingsFile));
+        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+        if (!doc.RootElement.TryGetProperty("parking_brake_realistic", out var mode)) return null;
+        return mode.ValueKind switch
         {
             JsonValueKind.True => true,
             JsonValueKind.False => false,

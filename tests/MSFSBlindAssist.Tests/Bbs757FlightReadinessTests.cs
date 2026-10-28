@@ -524,7 +524,8 @@ public class Bbs757FlightReadinessTests
         const string brake = "BBS757_PEDESTAL_Park_Brake_Lever";
         var sim = new FakeSim();
         long now = 0;
-        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io };
+        var def = new BBS757Definition { NestRunning = () => true, NowMs = () => now, WriteIo = _ => sim.Io,
+            ParkingBrakeRealistic = () => false };   // EASY: the toggle is the whole write
         var speech = new SpeechCapture();
         def.ProcessSimVarUpdate(R.ParkingBrakeKey, 0, speech);   // released: the baseline
         sim.Fresh[brake] = 0;                                     // the pick reads the lever released
