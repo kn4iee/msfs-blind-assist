@@ -461,6 +461,43 @@ public class A350MfdPageTests
     private static A350DrawCapture Load(string fixture) => JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
         ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!;
 
+    public static IEnumerable<object[]> MfdFixtures() => Directory.GetFiles(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests",
+            "MSFSBlindAssist.Tests", "A350", "Fixtures"), "*.json")
+        .Select(Path.GetFileNameWithoutExtension).Where(n => n!.StartsWith("mfd_", StringComparison.Ordinal) || n == "ground_MFD")
+        .OrderBy(n => n, StringComparer.Ordinal).Select(n => new object[] { n! });
+
+    /// <summary>The captain's MFD drawn on both halves: the captain's half as it is, then the same drawn again 836 to the
+    /// right as the first officer's (both MFDs draw one after the other in one frame).</summary>
+    private static A350DrawCapture CaptainOnBothSides(A350DrawCapture cap)
+    {
+        const float half = 836;
+        int k = cap.Texts.TakeWhile(t => t.X < half).Count();
+        Assert.All(cap.Texts.Skip(k), t => Assert.True(t.X >= half));   // the captain's texts come first
+        var texts = cap.Texts.Take(k).ToList();
+        var elements = cap.Elements.Where(e => e.X < half).ToList();
+        var shapes = (cap.Shapes ?? Array.Empty<DrawnShape>()).Where(s => s.X0 < half).ToList();
+        return cap with
+        {
+            Texts = texts.Concat(texts.Select(t => t with { X = t.X + half })).ToList(),
+            Elements = elements.Concat(elements.Select(e => e with { X = e.X + half, RectX = e.RectX + half, TextStart = e.TextStart + k })).ToList(),
+            Shapes = shapes.Concat(shapes.Select(s => s with { X0 = s.X0 + half, X1 = s.X1 + half })).ToList(),
+        };
+    }
+
+    // Review 2026-10-28: no test read the first officer's MFD through the menus and pop-ups. Every captured page, drawn
+    // on the first officer's half, reads as the captain's does, each line clicked at the same point of its own MFD.
+    [Theory]
+    [MemberData(nameof(MfdFixtures))]
+    public void The_first_officers_mfd_reads_as_the_captains(string fixture)
+    {
+        var cap = Load(fixture);
+        var captain = A350MfdPage.Read(cap, 0);
+        var firstOfficer = A350MfdPage.Read(CaptainOnBothSides(cap), 1);
+        Assert.Equal(captain.Select(l => (l.Kind, l.Spoken)), firstOfficer.Select(l => (l.Kind, l.Spoken)));
+        Assert.All(captain.Zip(firstOfficer), p =>   // a shape's point moved 836 and back rounds in its last digit
+            Assert.True(Math.Abs(p.First.ClickX - p.Second.ClickX) < 0.01 && Math.Abs(p.First.ClickY - p.Second.ClickY) < 0.01, p.First.Spoken));
+    }
+
     /// <summary>A drop-down opened on a capture, drawn where an open menu's is (ACTIVE's, live): its items
     /// (DropdownButtonUI) and their texts right after the element they hang from, <paramref name="after"/>, each item
     /// <paramref name="height"/> tall from <paramref name="top"/>; what is drawn later moves down the draw order.</summary>
@@ -541,6 +578,52 @@ public class A350MfdPageTests
         Assert.All(rows, row => Assert.DoesNotContain("SPD ", row));
         Assert.All(rows, row => Assert.DoesNotContain("ALT ", row));
         Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
+    }
+
+    // DEPARTURE's RWY key opened (live 2026-10-28): its list starts 6 px under the key and reads right after it.
+    [Fact]
+    public void The_runway_list_hangs_from_the_rwy_key()
+    {
+        var lines = Page("mfd_departure_rwy_list");
+        int rwy = lines.ToList().IndexOf("RWY button, menu open");
+        Assert.True(rwy >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "04 3400M ILS button", "22 3400M ILS button" }, lines.Skip(rwy + 1).Take(2));
+        Assert.Contains("SID button, grey", lines);
+        Assert.DoesNotContain(Page("mfd_departure_vcbi"), l => l.Contains("menu open", StringComparison.Ordinal));   // closed
+    }
+
+    // SEC INDEX after the company flight plan arrived in SEC 1 (live 2026-10-28): RECEIVED CPNY F-PLN's menu open.
+    [Fact]
+    public void The_received_company_plan_reads_its_menu()
+    {
+        var lines = Page("mfd_sec1_received_cpny");
+        int received = lines.ToList().IndexOf("RECEIVED CPNY F-PLN button, menu open");
+        Assert.True(received >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "INSERT * button", "CLEAR * button" }, lines.Skip(received + 1).Take(2));
+        Assert.Contains("SEC 1 tab", lines);
+        Assert.Contains("PERF button, grey", lines);
+    }
+
+    // AIRWAYS from POMAN, before an airway is typed (live 2026-10-28): the two entry fields by their labels.
+    [Fact]
+    public void The_airways_page_reads_its_entry_fields()
+    {
+        var lines = Page("mfd_airways_poman");
+        Assert.Contains("ACTIVE/F-PLN/AIRWAYS TMPY, black", lines);
+        Assert.Contains("VIA: none, cyan", lines);
+        Assert.Contains("TO: none, cyan", lines);
+    }
+
+    // NEW DEST's pop-up stands in mid-page (live 2026-10-28, y 444 to its CANCEL key at 599): the rows above and below
+    // it show their columns, the rows beside it do not.
+    [Fact]
+    public void A_pop_up_covers_only_the_rows_beside_it()
+    {
+        var rows = PageLines("mfd_new_dest_popup").Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
+        Assert.Contains(rows, row => row.StartsWith("500: ", StringComparison.Ordinal) && row.Contains("ALT 500", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.StartsWith("BI453: ", StringComparison.Ordinal) && !row.Contains("TIME ", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.StartsWith("BI614: ", StringComparison.Ordinal) && row.Contains("TIME ", StringComparison.Ordinal));
+        Assert.Contains("NEW DEST FROM VCBI22: none, cyan", PageLines("mfd_new_dest_popup").Select(l => l.Spoken));
     }
 
     [Fact]

@@ -79,13 +79,14 @@ public static class A350MfdPage
         var menuItems = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "DropdownButtonUI"
             && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
         popups.AddRange(menuItems);
-        // A waypoint revision's pop-up (INSERT NEXT WPT, NEW DEST) hides the F-PLN in the revision menu's column under it.
+        // A waypoint revision's pop-up (INSERT NEXT WPT, NEW DEST) or the revision menu covers the F-PLN in the menu's
+        // column, from its title or first item to its lowest key: the rows beside it read without the TIME, SPD and ALT
+        // it covers, as a sighted pilot sees them (ReadFlightPlan); the DISCONTINUITY marker shows either side of it. A
+        // pop-up's own texts are drawn after it; what is under it before it is gone.
         var revisionPopup = RevisionPopupOf(capture, cells, Mine);
-        if (revisionPopup != null)
-            cells.RemoveAll(c => c.Index < revisionPopup.Start && Covers(revisionPopup.Column, c.X, c.Y));
-        // It, or the revision menu, covers the F-PLN's TIME, SPD and ALT columns down to its lowest key: the rows read
-        // without them, as a sighted pilot sees them (ReadFlightPlan); the DISCONTINUITY marker shows either side of it.
         var overlay = RevisionOverlayOf(capture, cells, revisionPopup, Mine, shift);
+        if (revisionPopup != null && overlay != null)
+            cells.RemoveAll(c => c.Index < overlay.Start && overlay.Covers(c.X, c.Y));
         // The consent dialog is modal: the slivers of the page left and right of it (DATA/STATUS's NAV DATABASE label,
         // which ran into the dialog's line level with it) are behind it too.
         bool Covers(DrawnElement p, float x, float y) =>
@@ -320,10 +321,13 @@ public static class A350MfdPage
     private static string ValueOf(string spoken) => spoken.IndexOf(": ", StringComparison.Ordinal) is int at and >= 0 ? spoken[(at + 2)..] : spoken;
 
     /// <summary>An open waypoint revision pop-up: the revision menu's column it draws in, the draw indices of its texts
-    /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR"), its entry fields and its lowest edge (its
-    /// CANCEL key's, below the column's own rectangle).</summary>
+    /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR"), its entry fields, and its top and bottom
+    /// edges (its title's line, its CANCEL key's: NEW DEST's stands in mid-page, INSERT NEXT WPT's below the column).</summary>
     private sealed record RevisionPopup(DrawnElement Column, int Start, int End, string Title, IReadOnlyList<DrawnElement> Fields,
-        float Bottom);
+        float Top, float Bottom);
+
+    /// <summary>A text's height above the point it is drawn at (the MFD's texts sit on their line's lower part).</summary>
+    private const float TextHeight = 22;
 
     /// <summary>What an open revision menu or pop-up covers, in the side's own coordinates, and the draw index it starts
     /// at (what was drawn before it under it is hidden).</summary>
@@ -332,8 +336,8 @@ public static class A350MfdPage
         public bool Covers(float x, float y) => x >= X0 && x <= X1 && y >= Y0 && y <= Y1;
     }
 
-    /// <summary>The revision menu's column while its menu (its items with their texts drawn after them) or one of its
-    /// pop-ups is open, down to the lowest item or pop-up key (the column's rectangle stops above WHAT IF and CANCEL).</summary>
+    /// <summary>What covers the revision menu's column: an open pop-up, from its title to its lowest key, or the open
+    /// menu, from its first item to its last (the column's own rectangle stops above WHAT IF).</summary>
     private static RevisionOverlay? RevisionOverlayOf(A350DrawCapture capture, List<Cell> cells, RevisionPopup? popup,
         Func<float, bool> mine, float shift)
     {
@@ -342,13 +346,13 @@ public static class A350MfdPage
         if (column == null)
             return null;
         float x0 = column.X - shift, x1 = x0 + column.RectW;
+        if (popup != null)
+            return new RevisionOverlay(x0, x1, popup.Top, popup.Bottom, popup.Start);
         var items = capture.Elements.Where(e => e.Class == RevisionItem && mine(e.X) && e.RectW > 0 && e.RectH > 0
             && cells.Any(c => c.Index >= e.TextStart && c.X >= e.X - shift && c.X <= e.X - shift + e.RectW
                 && c.Y >= e.Y && c.Y <= e.Y + e.RectH)).ToList();
-        if (popup == null && items.Count == 0)
-            return null;
-        float bottom = Math.Max(column.Y + column.RectH, popup?.Bottom ?? items.Max(e => e.Y + e.RectH));
-        return new RevisionOverlay(x0, x1, column.Y, bottom, popup?.Start ?? column.TextStart);
+        return items.Count == 0 ? null
+            : new RevisionOverlay(x0, x1, items.Min(e => e.Y), items.Max(e => e.Y + e.RectH), column.TextStart);
     }
 
     /// <summary>
@@ -379,7 +383,7 @@ public static class A350MfdPage
             var own = all.Skip(i + 1).TakeWhile(e => e.TextStart < end).Where(e => mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
             var fields = own.Where(e => e.Class is "BaseUITextBox" or "DropdownTextBox").ToList();
             float bottom = own.Select(e => e.Y + e.RectH).Concat(mineTexts.Select(c => c.Y)).Max();
-            return new RevisionPopup(column, start, end, title, fields, bottom);
+            return new RevisionPopup(column, start, end, title, fields, top - TextHeight, bottom);
         }
         return null;
     }
