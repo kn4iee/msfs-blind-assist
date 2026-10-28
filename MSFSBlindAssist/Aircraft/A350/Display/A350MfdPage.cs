@@ -230,7 +230,10 @@ public static class A350MfdPage
             var (kind, spoken) = e.Class switch
             {
                 "MainHeaderDropdownMenu" => ("menu", $"{menuLabel}{value} menu, {colour}"),
-                "WidgetSwitcherTab" => ("tab", $"{value} tab"),
+                // The tab the page is on is filled black, the others dark grey (every tabbed page, 2026-10-27/28).
+                "WidgetSwitcherTab" => ("tab", capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0
+                    && sh.Colour is { R: < 0.05f, G: < 0.05f, B: < 0.05f } && sh.X0 - shift >= x0 - 1 && sh.X1 - shift <= x1 + 1
+                    && sh.Y0 >= y0 - 1 && sh.Y1 <= y0 + e.RectH + 1) == true ? $"{value} tab, selected" : $"{value} tab"),
                 // An open menu's item: a drop-down's, or a waypoint's revision menu's.
                 "DropdownButtonUI" or RevisionItem => ("menuitem", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),

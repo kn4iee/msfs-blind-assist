@@ -18,7 +18,7 @@ public class A350MfdPageTests
         Assert.Equal("FMS 1 menu, cyan", lines[0]);
         Assert.Equal("none, white", lines[1]);   // the header: no flight number yet
         Assert.Equal(new[] { "ACTIVE button", "POSITION button", "SEC INDEX button", "DATA button" }, lines.Skip(2).Take(4));
-        Assert.Contains("ACFT STATUS tab", lines);
+        Assert.Contains("ACFT STATUS tab, selected", lines);
         Assert.Contains("FMS P/N tab", lines);
         Assert.Contains("IDLE: +0.0, green", lines);
         Assert.Contains("PERF: +0.0, green", lines);
@@ -384,7 +384,7 @@ public class A350MfdPageTests
         Assert.Equal(new[] { "F-PLN button", "PERF button", "FUEL&LOAD button", "WIND button", "INIT button" }, lines.Skip(active + 1).Take(5));
         Assert.All(all.Skip(active + 1).Take(5), l => Assert.Equal("menuitem", l.Kind));
         Assert.DoesNotContain(lines, l => l.StartsWith("DATA/STATUS", StringComparison.Ordinal));   // under the menu
-        Assert.Contains("ACFT STATUS tab", lines);                                                     // beside it
+        Assert.Contains("ACFT STATUS tab, selected", lines);                                                     // beside it
         Assert.Contains("POSITION button", lines);
     }
 
@@ -627,6 +627,24 @@ public class A350MfdPageTests
         Assert.DoesNotContain(Page("mfd_departure_vcbi"), l => l.Contains("menu open", StringComparison.Ordinal));   // closed
     }
 
+    // The tab a page is on is drawn black, the others dark grey (every tabbed page captured, 2026-10-27/28): a
+    // sighted pilot sees which, and the read said none (PERF's T.O or APPR, VERT REV's ALT or SPD).
+    [Theory]
+    [InlineData("mfd_perf_to_empty", "T.O tab, selected")]
+    [InlineData("mfd_perf_appr_omdb", "APPR tab, selected")]
+    [InlineData("mfd_wind_empty", "HISTORY tab, selected")]
+    [InlineData("mfd_wind_crz_empty", "CRZ tab, selected")]
+    [InlineData("mfd_radnav_ls", "TUNED FOR DISPLAY tab, selected")]
+    [InlineData("mfd_data_status_db", "ACFT STATUS tab, selected")]
+    [InlineData("mfd_sec1_received_cpny", "SEC 1 tab, selected")]
+    [InlineData("mfd_vertrev_alt_imped", "ALT tab, selected")]
+    [InlineData("mfd_vertrev_spd_imped", "SPD tab, selected")]
+    public void The_tab_a_page_is_on_says_so(string fixture, string selected)
+    {
+        var lines = Page(fixture);
+        Assert.Equal(selected, Assert.Single(lines, l => l.EndsWith(" tab, selected", StringComparison.Ordinal)));
+    }
+
     // SEC INDEX after the company flight plan arrived in SEC 1 (live 2026-10-28): RECEIVED CPNY F-PLN's menu open.
     [Fact]
     public void The_received_company_plan_reads_its_menu()
@@ -635,7 +653,7 @@ public class A350MfdPageTests
         int received = lines.ToList().IndexOf("RECEIVED CPNY F-PLN button, menu open");
         Assert.True(received >= 0, string.Join(" | ", lines));
         Assert.Equal(new[] { "INSERT * button", "CLEAR * button" }, lines.Skip(received + 1).Take(2));
-        Assert.Contains("SEC 1 tab", lines);
+        Assert.Contains("SEC 1 tab, selected", lines);
         Assert.Contains("PERF button, grey", lines);
     }
 
