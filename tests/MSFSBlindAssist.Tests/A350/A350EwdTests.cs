@@ -79,6 +79,34 @@ public class A350EwdTests
         Assert.Empty(ewd.Warning);
     }
 
+    // Live 2026-10-28, F/CTL PRIM 1 FAULT in cruise: the question "? PRIM RESET SUCCESSFUL ?" then YES and NO on one row,
+    // NO at x 1253 (inside the memo column's range), each beside a small white marker. NO read after every other line, and
+    // YES as "done". A choice reads as one line after its question, and its markers are no action boxes.
+    [Fact]
+    public void A_procedure_choice_reads_as_one_line_after_its_question()
+    {
+        var white = new A350Rgba(1, 1, 1, 1);
+        var cyan = new A350Rgba(0, 1, 1, 1);
+        var amber = new A350Rgba(1, 0.6f, 0, 1);
+        var texts = new[]
+        {
+            new DrawnText("F/CTL PRIM 1 FAULT", 856, 100, 34, 100, 1, amber),
+            new DrawnText("PRIM 1 .........OFF THEN ON", 886, 130, 64, 130, 1, cyan),
+            new DrawnText("? PRIM RESET SUCCESSFUL ?", 886, 160, 64, 160, 1, white),
+            new DrawnText("YES", 905, 190, 83, 190, 1, white),
+            new DrawnText("NO", 1253, 190, 431, 190, 1, white),
+            new DrawnText("FUEL L TK MAIN PMP FAULT", 856, 220, 34, 220, 1, amber),
+        };
+        var frames = new[] { new DrawnFrame(885, 172, 15, 20, false, white), new DrawnFrame(1233, 172, 15, 20, false, white) };
+        var lines = A350Ewd.Parse(new A350DrawCapture("CTR", texts, frames, Array.Empty<DrawnElement>(), null, 1)).Warning;
+        Assert.Equal(new[]
+        {
+            "F/CTL PRIM 1 FAULT, amber", "PRIM 1: OFF THEN ON, cyan", "? PRIM RESET SUCCESSFUL ?, white", "YES or NO, white",
+            "FUEL L TK MAIN PMP FAULT, amber",
+        }, lines.Select(l => l.Spoken));
+        Assert.Equal(EcamBox.None, lines[3].Box);
+    }
+
     // Live: "WXR ..............................SYS 2" and "APU MASTER SW ......................OFF" came out
     // with their dot leaders, which a screen reader reads as "dot" thirty times. A leader reads as a colon.
     [Theory]

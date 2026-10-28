@@ -80,7 +80,8 @@ public static class A350Ewd
                 boxes[row] = colour == "cyan" ? EcamBox.ToDo : EcamBox.Done;
         }
 
-        // Each column reads on its own, the main one first: a row drawn across both is two lines.
+        // Each column reads on its own, the main one first: a row drawn across both is two lines. A procedure's choice
+        // (YES and NO on one row, NO where the memo column is) is one line, and its markers are no action boxes.
         var main = new List<EcamLine>();
         var memos = new List<EcamLine>();
         for (int i = 0; i < wdRows.Count; i++)
@@ -88,6 +89,11 @@ public static class A350Ewd
             var cells = wdRows[i].Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList();
             var left = cells.Where(c => !InMemoColumn(c)).ToList();
             var right = cells.Where(InMemoColumn).ToList();
+            if (left.Count == 1 && right.Count == 1 && left[0].Text == "YES" && right[0].Text == "NO")
+            {
+                main.Add(new EcamLine(new[] { left[0], left[0] with { Text = "or" }, right[0] }, left[0].Y, selected.Contains(i), EcamBox.None));
+                continue;
+            }
             if (left.Count > 0) main.Add(new EcamLine(left, left[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None)));
             if (right.Count > 0) memos.Add(new EcamLine(right, right[0].Y, false, EcamBox.None));
         }
