@@ -385,8 +385,12 @@ afterwards.
 list above: no Set button (Enter saves; a box left unsaved says so and shows the stored value again); Sign in to
 Navigraph and Update nav data at the end of AIRAC data, and the EFB status box on the Flight tab only; an ACARS section
 (Hoppie ACARS, CPDLC network and the two codes); the random failure frequency as a slider reading the tablet's "N.Nx".
-Still to check in the simulator, by ear: the new sections and the slider's reading and keys (a slider's value is the
-app's own text, read through MSAA because the slider turns UI Automation away; measured on a hidden copy, not yet heard
-in NVDA), and whether "<label> not saved" comes after NVDA's reading of the new focus (it waits 400 ms, as NVDA cuts
-speech off when focus moves); then check 10's two loads, TOD pause distance 999 and Hoppie ACARS on with a test logon
-code.
+Re-tested on 2026-10-28 at `b2acf8fc7`, with the simulator closed. By ear, all passed: the page's top and its eight
+sections; AIRAC data with its two buttons (Update nav data said "Nav data is current, cycle 2610"); the slider ("Random
+failure frequency, slider, 1.0x" on focus, then 1.3x, 13.0x and back to 1.0x, one save per move in the log, so NVDA
+reads the MSAA value the slider gives it by turning UI Automation away); and "<label> not saved" after Tab and after
+Escape, heard after NVDA's reading of the new focus. Passed on the code, at the owner's word: the ACARS rows (catalog
+and rows tests; the same controls as heard in the run), Enter's save and a box's revert (`UnsavedEditText`), and the
+slider's keys, Ctrl keys, wheel, per-move save and lock (`Bbs757SettingsTabTests`, the slider's save test, and two
+reviews' measurements on a hidden copy of the real slider). Not measured: TOD pause distance 999 and Hoppie ACARS on
+through a load (low risk: BlueBird kept 1, and true is the switch's only other value).
