@@ -2557,9 +2557,12 @@ class Curation(unittest.TestCase):
                        "EMISSIVE GAUGES"):
             self.assertIn(banner, c["exclude_banners"])
         keys = [s["key"] for s in c["status"]]
+        # Plan 12 task 1: the Cabin Altitude row reads L:B757_TEST_CABIN_ALT, the feet BlueBird's WASM writes every tick;
+        # B757_DEBUG_PRESSURE_CABIN_ALT_FT is declared and never written (it reads 0).
         self.assertEqual(keys, ["B757_APU_STATE", "BBS_CA_MASTER_WARNING", "BBS_CA_MASTER_CAUTION",
                                 "B757_L_BUS_PWR_SRC", "B757_R_BUS_PWR_SRC", "B757_APU_RPM_PRC",
-                                "B757_DEBUG_PRESSURE_CABIN_ALT_FT", "BBS757_vis_chocks"])
+                                "B757_TEST_CABIN_ALT", "BBS757_vis_chocks"])
+        self.assertEqual({s["key"]: s["label"] for s in c["status"]}["B757_TEST_CABIN_ALT"], "Cabin Altitude")
         self.assertEqual([s["announce"] for s in c["status"]], [True, True, True, False, False, False, False, False])
         for banner, entry in c["panels"].items():  # the vendor's typos never reach a pilot
             name = entry if isinstance(entry, str) else entry["name"]

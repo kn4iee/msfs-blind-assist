@@ -8211,7 +8211,7 @@
    "announce": false
   },
   {
-   "key": "B757_DEBUG_PRESSURE_CABIN_ALT_FT",
+   "key": "B757_TEST_CABIN_ALT",
    "panel": "Status",
    "label": "Cabin Altitude",
    "positions": [],

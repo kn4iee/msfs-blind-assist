@@ -317,6 +317,19 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
+    public void The_cabin_altitude_status_row_reads_the_feet_BlueBirds_code_writes()
+    {
+        // Plan 12 task 1: L:B757_TEST_CABIN_ALT is the cabin altitude in feet BlueBird's WASM writes every tick (1,161 ft on
+        // the ground, measured: docs/b757/evidence/flight-12.md). B757_DEBUG_PRESSURE_CABIN_ALT_FT is declared and never written,
+        // so a row on it read 0 at every altitude.
+        var row = Assert.Single(Map.Status, s => s.Label == "Cabin Altitude");
+
+        Assert.Equal(("B757_TEST_CABIN_ALT", "Status", false), (row.Key, row.Panel, row.Announce));
+        Assert.Empty(row.Positions);
+        Assert.DoesNotContain(Map.Status, s => s.Key == "B757_DEBUG_PRESSURE_CABIN_ALT_FT");
+    }
+
+    [Fact]
     public void The_three_cmd_buttons_are_left_center_and_right()
     {
         Assert.Equal(new[] { "CMD L", "CMD C", "CMD R" },
