@@ -124,7 +124,9 @@ public class A350GlareshieldPanelTests
             ("Captain ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
             ("Captain ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
                 + "7=40 NM, 8=80 NM, 9=160 NM, 10=320 NM, 11=640 NM"),
-            ("Captain baro knob push", Press, ""), ("Captain baro knob pull", Press, ""),
+            // Each baro knob row says what it does, from iniBuilds' tooltips (PUSH "STD VALUE", PULL "SET QNH"): the A320
+            // habit (pull for STD) set nothing in flight, live 2026-10-28.
+            ("Captain baro STD (push)", Press, ""), ("Captain baro QNH (pull)", Press, ""),
             ("QNH (in Capt unit)", A350RowAction.Typed, ""),
             ("Captain baro unit", Press, ""),
             ("Captain CSTR", Press, ""), ("Captain WPT", Press, ""), ("Captain VORD", Press, ""), ("Captain NDB", Press, ""),
@@ -148,7 +150,7 @@ public class A350GlareshieldPanelTests
             ("First officer ND mode", Set, "0=Rose LS, 1=Rose VOR, 2=Rose NAV, 3=Arc, 4=Plan"),
             ("First officer ND range", Set, "0=Zoom 0.2 NM, 1=Zoom 0.5 NM, 2=Zoom 1 NM, 3=Zoom 2 NM, 4=Zoom 5 NM, 5=10 NM, 6=20 NM, "
                 + "7=40 NM, 8=80 NM, 9=160 NM, 10=320 NM, 11=640 NM"),
-            ("First officer baro knob push", Press, ""), ("First officer baro knob pull", Press, ""),
+            ("First officer baro STD (push)", Press, ""), ("First officer baro QNH (pull)", Press, ""),
             ("QNH (in F/O unit)", A350RowAction.Typed, ""),
             ("First officer baro unit", Press, ""),
             ("First officer CSTR", Press, ""), ("First officer WPT", Press, ""), ("First officer VORD", Press, ""),

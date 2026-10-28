@@ -378,7 +378,9 @@ public static partial class A350PanelLayout
         ["FCU_DISPLAY_BRT"] = "FCU display brightness", ["FCU_INTEG_BRT"] = "FCU integral lighting",
         // EFIS control panels: each side's twin by side; the filter buttons by their placard.
         ["EFIS_MODE_LEFT"] = "Captain ND mode", ["EFIS_RANGE_LEFT"] = "Captain ND range",
-        ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH"] = "Captain baro knob push", ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL"] = "Captain baro knob pull",
+        // The baro knob's push and pull by what they do, iniBuilds' tooltips (PUSH "STD VALUE", PULL "SET QNH"): the
+        // A320's opposite, so the name must say it (live 2026-10-28, a pull for STD set nothing).
+        ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH"] = "Captain baro STD (push)", ["EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL"] = "Captain baro QNH (pull)",
         ["EFIS_QNH_PRESSURE_SELECTOR_LEFT"] = "Captain baro knob", ["EFIS_QNH_UNIT_SELECTOR_LEFT"] = "Captain baro unit",
         ["EFIS_TSK_1_LEFT"] = "Captain CSTR", ["EFIS_TSK_2_LEFT"] = "Captain WPT", ["EFIS_TSK_3_LEFT"] = "Captain VORD",
         ["EFIS_TSK_4_LEFT"] = "Captain NDB", ["EFIS_TSK_5_LEFT"] = "Captain ARPT",
@@ -386,8 +388,8 @@ public static partial class A350PanelLayout
         ["EFIS_BSK_4_LEFT"] = "Captain TRAF", ["EFIS_BSK_5_LEFT"] = "Captain VOR 2",
         ["EFIS_LS_LEFT"] = "Captain LS", ["EFIS_TAXI_LEFT"] = "Captain taxi", ["EFIS_VV_LEFT"] = "Captain VV",
         ["EFIS_MODE_RIGHT"] = "First officer ND mode", ["EFIS_RANGE_RIGHT"] = "First officer ND range",
-        ["EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH"] = "First officer baro knob push",
-        ["EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL"] = "First officer baro knob pull",
+        ["EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH"] = "First officer baro STD (push)",
+        ["EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL"] = "First officer baro QNH (pull)",
         ["EFIS_QNH_PRESSURE_SELECTOR_RIGHT"] = "First officer baro knob", ["EFIS_QNH_UNIT_SELECTOR_RIGHT"] = "First officer baro unit",
         ["EFIS_TSK_1_RIGHT"] = "First officer CSTR", ["EFIS_TSK_2_RIGHT"] = "First officer WPT", ["EFIS_TSK_3_RIGHT"] = "First officer VORD",
         ["EFIS_TSK_4_RIGHT"] = "First officer NDB", ["EFIS_TSK_5_RIGHT"] = "First officer ARPT",
