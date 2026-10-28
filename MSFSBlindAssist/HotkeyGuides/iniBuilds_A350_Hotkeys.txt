@@ -14,8 +14,8 @@ READ THIS FIRST - WHAT THIS AIRCRAFT CAN DO TODAY
 The A350 is being built section by section. Its overhead panel, its glareshield (the FCU
 and both EFIS control panels), its instrument panel (gear, autobrake, ISIS, source
 switching, display power, both side and individual panels) and its pedestal (engines,
-thrust levers, flaps and brakes, speed brake, trims, ECAM control panel, weather radar,
-transponder and cockpit) and the cockpit around you (doors and hatches, sun shades, oxygen
+thrust levers, the three RMPs, flaps and brakes, speed brake, trims, ECAM control panel,
+weather radar, transponder and cockpit) and the cockpit around you (doors and hatches, sun shades, oxygen
 masks, HUD units, tillers and the sidestick takeover buttons) are in the Sections list
 (Ctrl+1): every switch, selector, guarded button and knob, with the panels named and
 ordered as on the A380. A switch the aircraft did not move is said once ("BAT 1 did not
@@ -220,6 +220,21 @@ SayIntentions:
 OIS (the A350's EFB, one on each side):
   Shift+T       Captain's OIS
   Ctrl+Shift+T  First Officer's OIS
+
+Radios (the A380's keys):
+  Ctrl+Shift+R  Open the RMP window: the chosen RMP's screen (each radio's active and
+                standby frequency, the squawk) as lines, kept up to date; after a key
+                the lines that changed are spoken. Type a frequency: the digits and the
+                point go to the cockpit RMP's keypad as you type (the leading 1 and the
+                point are optional: 2 1 9 is 121.900). Control+1, 2 or 3 picks the radio
+                line; Enter loads the typed frequency as its standby; Alt+1, 2 or 3 swaps
+                that line's standby in. Backspace is CLR. Alt+V, H, L, N, U press the VHF,
+                HF, TEL, NAV and MENU page keys. Alt+T, then four digits 0 to 7: the
+                squawk, set on the fourth digit (Escape cancels). The RMP box picks the
+                Captain's RMP, the First Officer's or RMP 3; F5 refreshes, Escape closes.
+                Every RMP key, microphone key, volume knob and reception (the knob pulled
+                out) is also on the Pedestal's Captain RMP, First Officer RMP and RMP 3
+                panels.
 
 General:
   Escape     Exit active hotkey mode

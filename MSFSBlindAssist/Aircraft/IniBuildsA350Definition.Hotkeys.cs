@@ -39,6 +39,16 @@ public partial class IniBuildsA350Definition
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             }
+            // Ctrl+Shift+R: the RMP window (A380 parity): the chosen RMP's screen, a frequency typed on its keypad, Enter
+            // loads it as standby, Alt+1/2/3 swaps it in; Alt+T a squawk.
+            case HotkeyAction.ShowRMP:
+                hotkeyManager.ExitOutputHotkeyMode();
+                ShowTrackedWindow(
+                    () => new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
+                        async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
+                        rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer),
+                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                return true;
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).
             case HotkeyAction.ToggleECAMMonitoring:
             {
