@@ -218,6 +218,14 @@ preflight flow; Task 7's split panels took their source's place in cockpit order
   workspace, and its table goes into `docs/b757/evidence/panel-order-12.md` as a short section.
 - [x] Tests first, regenerate, full suite, commit `feat(b757): the panel lists follow the preflight flow`.
 
+### Task 10: The Engines panel, engine by engine (added 2026-10-28, the owner's instruction)
+
+The owner: "I wanted engine 1 start then fuel, then engine 2's controls. Right now they have the start levers, then the
+fuel levers." `control_order["Engines"]`: Ignition (both engines), L ENG Start, L Fuel Control (PW), L Fuel Control (RR),
+R ENG Start, R Fuel Control (PW), R Fuel Control (RR) — the loaded type's pair shows (Task 8), so on an RR: Ignition,
+L ENG Start, L Fuel Control, R ENG Start, R Fuel Control. This replaces ruling R37's order for this panel.
+- [ ] Test first, regenerate, full suite, commit `fix(b757): the Engines panel lists engine 1's start and fuel, then engine 2's`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Pedestal > Captain EFIS, PFD Brightness to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Each section's panel list opens with its first panel of the day (Overhead: Electrical; Glareshield: MCP; Forward panel: Brakes; Pedestal: Control stand), and inside a panel the every-day controls come first (Electrical: Battery, EXT PWR, …). On the RR, Pedestal > Engines lists only the RR fuel control switches.
