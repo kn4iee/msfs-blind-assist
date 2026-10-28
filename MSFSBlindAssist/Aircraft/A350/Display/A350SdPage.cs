@@ -37,7 +37,7 @@ public static class A350SdPage
 
     private static readonly SdField[] EngineBlock =
     {
-        new("Thrust limit mode", 345, 41), new("Thrust limit", 438, 41, "%", 20),
+        new("Thrust limit mode", 345, 41), new("Thrust limit", 438, 41, "%", 20), new("Flex temperature", 495, 41),
         new("Engine 1 THR", 346, 174, "%"), new("Engine 2 THR", 594, 174, "%"),
         new("Engine 1 N1", 304, 232, "%"), new("Engine 2 N1", 554, 232, "%"),
         new("Engine 1 EGT", 153, 239, "°C"), new("Engine 2 EGT", 728, 239, "°C"),
@@ -58,7 +58,8 @@ public static class A350SdPage
         var items = new List<(int Row, float X, string Text)>();
         for (int r = 0; r < rows.Count; r++)
         {
-            var row = rows[r].Select(c => c with { Text = c.Text.TrimStart('.').Trim() }).Where(c => c.Text.Length > 0).ToList();
+            var row = rows[r].Select(c => c with { Text = DegreeGlyph.Replace(c.Text.TrimStart('.').Trim(), " °C") })
+                .Where(c => c.Text.Length > 0).ToList();
             var loose = new List<DrawnCell>();
             foreach (var c in row)
             {
@@ -91,6 +92,9 @@ public static class A350SdPage
         }
         return items.OrderBy(i => i.X >= split).ThenBy(i => i.Row).ThenBy(i => i.X).Select(i => i.Text).ToList();
     }
+
+    /// <summary>The E/WD font's degree sign is "!": the flex temperature is drawn "67!C" (live).</summary>
+    private static readonly Regex DegreeGlyph = new(@"(?<=\d)!C$", RegexOptions.Compiled);
 
     /// <summary>A time drawn as separate texts ("16 : 31 : 57") reads as one ("16:31:57").</summary>
     private static readonly Regex TimeColon = new(@"(?<=\d) : (?=\d)", RegexOptions.Compiled);

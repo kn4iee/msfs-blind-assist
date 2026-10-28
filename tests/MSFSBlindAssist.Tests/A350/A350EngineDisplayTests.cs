@@ -37,6 +37,18 @@ public class A350EngineDisplayTests
         Assert.Contains("Engine 1 EGT: 22 °C, green", block);
     }
 
+    // Live, engine 2 starting during the pushback with FLEX 67 sent from the OIS (2026-10-28): the flex temperature
+    // is drawn right of the thrust limit as "67!C", the E/WD font's "!" being its degree sign; it read bare.
+    [Fact]
+    public void The_flex_temperature_is_named_with_its_degree_sign()
+    {
+        var block = A350SdPage.ReadEngineBlock(A350Ewd.Parse(Fixture("ctr_flex_eng2_running")).Engine);
+        Assert.Contains("Thrust limit mode: FLEX, cyan", block);
+        Assert.Contains("Thrust limit: 82.8 %, green", block);
+        Assert.Contains("Flex temperature: 67 °C, cyan", block);
+        Assert.DoesNotContain(block, l => l.Contains('!'));
+    }
+
     [Fact]
     public void Alt_e_reads_the_engine_block_by_name()
     {
