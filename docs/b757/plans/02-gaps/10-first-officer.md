@@ -100,7 +100,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
 - **Status:** waiting on owner: the three air flows (After Takeoff, Descent, Before Landing) need a flight; every ground flow passed in the sim on both engine variants
-- **Claimed by:** Declan Webster, 2026-10-26
+- **Claimed by:** kn4iee (the owner), 2026-10-28, handed over by Declan Webster (claimed 2026-10-26) so the owner can work on it
 - **Worked by:** Declan Webster, with subagents
 - **Started:** 2026-10-26 (from `B757` fe63572f; rebased onto `B757` b82e0a46 on 2026-10-27)
 - **Landed:** 2026-10-28
