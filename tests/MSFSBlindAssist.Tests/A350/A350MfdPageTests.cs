@@ -280,6 +280,20 @@ public class A350MfdPageTests
         Assert.Contains(lines, l => l.StartsWith("BI611 (right turn): via BASU1D", StringComparison.Ordinal));
     }
 
+    // After the 1.2.7 hotfix (live 2026-10-28) both MFDs open on the CRASH REPORTING consent dialog (EULADialog) over
+    // DATA/STATUS: its sentences were read woven into the page's lines ("NAV DATABASE; AND SEEN ONLY BY THE DEVELOPMENT
+    // TEAM. THEY: SJ6192002"). It hides what it covers, as a pop-up does, and keeps its two buttons.
+    [Fact]
+    public void The_crash_reporting_dialog_hides_the_page_under_it()
+    {
+        var lines = Page("mfd_crash_reporting");
+        Assert.Contains("CRASH REPORTING, white", lines);
+        Assert.Contains("IF YOU DECLINE THEN NOTHING IS SENT., white", lines);
+        Assert.Contains("DECLINE button", lines);
+        Assert.Contains("ACCEPT button", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("NAV DATABASE", StringComparison.Ordinal) || l.Contains("IDLE:", StringComparison.Ordinal));
+    }
+
     // The ILS 12L final at OMDB (live 2026-10-28, IMPE3B via REREK): the final leg's flight path angle "-3.0" (white) is
     // drawn beside its distance, nearer the DIST header than the FPA one; it read "DIST -3.0 (white)", a second distance.
     [Fact]

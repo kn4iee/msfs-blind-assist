@@ -68,10 +68,14 @@ public static class A350MfdPage
         // An open pop-up hides what was drawn under it before it: those texts and controls are not on the screen (SURV's
         // DEFAULT SETTINGS confirmation over the ADS-B TRAFFIC box and the DEFAULT SETTINGS key, live). Open is a
         // PopupDialog with texts of its own drawn after it inside it; a dismissed one keeps its element and draws none.
+        // The CRASH REPORTING consent (EULADialog, over DATA/STATUS after an update) is one too.
         var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
-        var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "PopupDialog"
+        var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class is "PopupDialog" or "EULADialog"
             && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
-        bool Covers(DrawnElement p, float x, float y) => x >= p.X - shift && x <= p.X - shift + p.RectW && y >= p.Y && y <= p.Y + p.RectH;
+        // The consent dialog is modal: the slivers of the page left and right of it (DATA/STATUS's NAV DATABASE label,
+        // which ran into the dialog's line level with it) are behind it too.
+        bool Covers(DrawnElement p, float x, float y) =>
+            (p.Class == "EULADialog" || (x >= p.X - shift && x <= p.X - shift + p.RectW)) && y >= p.Y && y <= p.Y + p.RectH;
         cells.RemoveAll(c => popups.Any(p => c.Index >= 0 && c.Index < p.e.TextStart && Covers(p.e, c.X, c.Y)));
         var hidden = elements.Select((e, i) => (e, i)).Where(q => popups.Any(p => q.i < p.i
             && Covers(p.e, q.e.X - shift + q.e.RectW / 2, q.e.Y + q.e.RectH / 2))).Select(q => q.e).ToHashSet();
