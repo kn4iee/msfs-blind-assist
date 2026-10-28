@@ -280,6 +280,17 @@ public class A350MfdPageTests
         Assert.Contains(lines, l => l.StartsWith("BI611 (right turn): via BASU1D", StringComparison.Ordinal));
     }
 
+    // The ILS 12L final at OMDB (live 2026-10-28, IMPE3B via REREK): the final leg's flight path angle "-3.0" (white) is
+    // drawn beside its distance, nearer the DIST header than the FPA one; it read "DIST -3.0 (white)", a second distance.
+    [Fact]
+    public void A_final_legs_flight_path_angle_reads_as_its_fpa()
+    {
+        var lines = Page("mfd_fpln_ils12l_final");
+        var final = Assert.Single(lines, l => l.StartsWith("OMDB12L:", StringComparison.Ordinal));
+        Assert.Contains("DIST 5, FPA -3.0° (white)", final);
+        Assert.DoesNotContain(lines, l => l.Contains("DIST -3.0"));
+    }
+
     // FUEL&LOAD before entry (live): a value then its unit (the unit sits 4 px higher); "ooo.o" boxes are a required
     // entry; a second box on a row shares the row's label (RTE RSV weight and percent, FINAL fuel and time); a label
     // beside a field is close to it (the row label DEST is the table's; MIN FUEL AT DEST's field takes the heading

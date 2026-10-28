@@ -259,6 +259,9 @@ public static class A350MfdPage
 
     private static readonly Regex TrackDegrees = new(@"^(\d{1,3})d$", RegexOptions.Compiled);
 
+    /// <summary>A leg's flight path angle, signed with one decimal ("-3.0").</summary>
+    private static readonly Regex FlightPathAngle = new(@"^[+-]\d{1,2}\.\d$", RegexOptions.Compiled);
+
     /// <summary>
     /// An F-PLN page (live, ACTIVE/F-PLN): each waypoint row is four boxes (ident, time, speed, altitude;
     /// <c>BaseFlightPlanButton</c>), the leg into it (airway, track, distance, FPA) drawn just above its row, and the
@@ -342,6 +345,13 @@ public static class A350MfdPage
             if (leg.FirstOrDefault(c => c.X < 200) is { } via) parts.Add("via " + via.Text);
             foreach (var c in leg.Where(c => c.X >= 560).OrderBy(c => c.X))
             {
+                // A signed decimal is the leg's flight path angle (the ILS final's "-3.0", white), drawn beside its
+                // distance, nearer the DIST header than the FPA one (live, OMDB 12L).
+                if (FlightPathAngle.IsMatch(c.Text))
+                {
+                    parts.Add($"FPA {c.Text}°" + (c.Colour != colour && c.Colour != "grey" ? $" ({c.Colour})" : ""));
+                    continue;
+                }
                 var name = legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text;
                 parts.Add(name == null ? ValueOf(c, colour) : $"{name} {ValueOf(c, colour)}");
             }
