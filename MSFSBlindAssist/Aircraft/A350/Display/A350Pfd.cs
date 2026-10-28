@@ -107,7 +107,8 @@ public static class A350Pfd
             var col = cells.Where(c => !used.Contains(c) && c.Y < FmaBottom && c.X >= x0 && c.X < x1).ToList();
             if (col.Count == 0) continue;
             used.UnionWith(col);
-            var rows = A350DrawLayout.Rows(col.Select(ToText));
+            // The font's small capitals are lowercase letters ("ap1" for AP1, "man flx" for MAN FLX): read as capitals.
+            var rows = A350DrawLayout.Rows(col.Select(c => ToText(c with { Text = c.Text.ToUpperInvariant() })));
             o.Add($"FMA {name}: " + (rows.SelectMany(r => r).Select(c => c.Colour).Distinct().Count() == 1
                 ? string.Join("; ", rows.Select(r => string.Join(" ", r.Select(c => c.Text)))) + ", " + rows[0][0].Colour
                 : string.Join("; ", rows.Select(A350DrawLayout.Speak))));

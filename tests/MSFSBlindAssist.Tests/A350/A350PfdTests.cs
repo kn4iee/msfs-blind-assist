@@ -81,6 +81,16 @@ public class A350PfdTests
         Assert.Contains("FMA engagement: 1 FD 2; A/THR, white", lines);
     }
 
+    // The FMA's small capitals are lowercase letters in the PFD's font ("ap1" for AP1; live 2026-10-28 "man flx" for
+    // MAN FLX): they read as the capitals the pilot sees.
+    [Fact]
+    public void The_fmas_small_capitals_read_as_capitals()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_level6000"), 0);
+        Assert.Contains("FMA engagement: AP1; 1 FD 2; A/THR, white", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("FMA", StringComparison.Ordinal) && l.Contains("ap1"));
+    }
+
     // Speed, pitch and bank are textures: the speed tape's offset (4.875 px a knot) and the horizon under the
     // attitude centre (x 359, y 389; 8.61 px a degree), turned by the bank. Live pairs with the sim: 240.2 kt
     // at -885.2; 3.61 and 6.63 degrees nose up; a left turn read 24.98 degrees against the horizon's 24.72.
