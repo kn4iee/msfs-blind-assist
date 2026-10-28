@@ -156,6 +156,20 @@ public class A350SdSymbolsTests
         }, p.Where(l => l.Contains("aileron") || l.Contains("elevator") || l.Contains("spoiler") || l.StartsWith("Rudder")));
     }
 
+    // F/CTL's rudder (live 2026-10-28, its draw asks the sim's RUDDER POSITION, now answered): a bar growing from its
+    // 3 px neutral line (x 409 to 412) toward the deflection, 55 px at full travel, which the sim reads as 35 degrees;
+    // quarter and half travel grew 13.5 and 27 px.
+    [Theory]
+    [InlineData("ctr_fctl_rudder_left", "Rudder: 34 degrees right, green")]      // the bar to x 466
+    [InlineData("ctr_fctl_rudder_halfright", "Rudder: 17 degrees left, green")]  // the bar from x 383
+    [InlineData("ctr_fctl_rudder_neutral", "Rudder: centred, green")]
+    public void Fctl_reads_the_rudders_deflection(string fixture, string rudder)
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!;
+        Assert.Contains(rudder, A350SdSymbols.Read(cap.Shapes, 10));
+    }
+
     // WHEEL: gear and gear doors are sprites (a door's line lies flat when closed), the accumulators are
     // pointers on an arc marked 1.6 and 3.5 (x 1000 PSI), the BRAKES gauge two bars on a scale stretched
     // below 1. Live: parking brake set, no hydraulics, gear down.

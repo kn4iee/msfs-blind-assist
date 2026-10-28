@@ -16,6 +16,8 @@ public class A350AVarsTests
     [InlineData("KOHLSMAN SETTING HG:3|inches of mercury", "KOHLSMAN SETTING HG:3", "inches of mercury")]
     [InlineData("PLANE LATITUDE:0|Degrees", "PLANE LATITUDE", "Degrees")]     // asked in flight; index 0 is none
     [InlineData("PLANE LONGITUDE:0|Degrees", "PLANE LONGITUDE", "Degrees")]
+    // The SD's F/CTL rudder index (live 2026-10-28): unanswered, the rudder read "centred" at full deflection.
+    [InlineData("RUDDER POSITION:0|POSITION", "RUDDER POSITION", "POSITION")]
     public void A_draw_code_ask_maps_to_a_stock_variable(string ask, string name, string units)
     {
         var v = Assert.Single(A350AVars.All, a => a.Ask == ask);

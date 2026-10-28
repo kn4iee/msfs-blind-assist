@@ -151,18 +151,27 @@ public static class A350SdSymbols
             yield return $"{bar.Label}: {BarWord(bar, f.Y0, f.Y1)}, {A350Rgba.NameOf(f.Colour)}";
             if (bar.Label == "Right elevator" && page == 10)
             {
-                // The rudder: a thin bar under the rudder trim, centred at 410.5 when neutral.
-                var r = fills.FirstOrDefault(s => s.X1 - s.X0 <= 6 && s.X0 >= 395 && s.X1 <= 427 && s.Y0 >= 395 && s.Y1 <= 445);
+                // The rudder: a bar under the rudder trim growing from its 3 px neutral line (x 409 to 412) toward the
+                // deflection, 55 px at full travel, which the sim reads as 35 degrees (live 2026-10-28; quarter and half
+                // travel grew 13.5 and 27 px). Its draw asks the sim's RUDDER POSITION (A350AVars).
+                var r = fills.FirstOrDefault(s => s.Y0 >= 395 && s.Y1 <= 445 && s.X0 >= 340 && s.X1 <= 480
+                    && (Math.Abs(s.X0 - RudderLeftEdge) <= 2 || Math.Abs(s.X1 - RudderLeftEdge) <= 2));   // both ways it meets x 409
                 if (r != null)
                 {
-                    float d = (r.X0 + r.X1) / 2 - 410.5f;
-                    yield return $"Rudder: {(Math.Abs(d) < 1 ? "centred" : d < 0 ? "left" : "right")}, {A350Rgba.NameOf(r.Colour)}";
+                    float right = r.X1 - RudderRightEdge, left = RudderLeftEdge - r.X0;
+                    float px = Math.Max(right, left);
+                    string word = px < 1.5f ? "centred"
+                        : $"{Math.Round(px / RudderPxPerDegree, MidpointRounding.AwayFromZero):0} degrees {(right > left ? "right" : "left")}";
+                    yield return $"Rudder: {word}, {A350Rgba.NameOf(r.Colour)}";
                 }
             }
         }
     }
 
     private static SdBar Spoiler(string label, float x0, float x1, float baseY) => new(label, x0, x1, baseY, baseY, 1, Spoiler: true);
+
+    /// <summary>The rudder bar's neutral line (x 409 to 412) and its scale: 55 px at full travel, 35 degrees.</summary>
+    private const float RudderLeftEdge = 409, RudderRightEdge = 412, RudderPxPerDegree = 55f / 35f;
 
     // F/CTL (live 2026-10-27, A350Probe sdmap): a deflection of 1 grows an aileron or elevator bar 3 px, a spoiler 1 px.
     internal static readonly IReadOnlyDictionary<int, SdBar[]> Bars = new Dictionary<int, SdBar[]>

@@ -180,6 +180,56 @@ internal sealed class ProbeForm : Form
 
     private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("0.###") : "null";
 
+    /// <summary>`gsx "open;pick:TEXT;wait:MS;close"`: GSX through MSFSBA's own Remote API client, state and menu model (the
+    /// Access GSX window's path): open the menu, pick the entry holding TEXT, wait; each menu and GSX's message slot are
+    /// printed as they change.</summary>
+    private async Task RunGsx()
+    {
+        using var gsx = new MSFSBlindAssist.Services.Gsx.Remote.GsxRemoteConnection();
+        var state = new MSFSBlindAssist.Services.Gsx.Remote.GsxRemoteState();
+        var menu = MSFSBlindAssist.Services.Gsx.Remote.GsxMenuModel.Empty;
+        var started = DateTime.Now;
+        string Stamp() => $"{(DateTime.Now - started).TotalSeconds,6:0.0}s";
+        state.Changed += key =>
+        {
+            if (key == "menu")
+            {
+                menu = state.TryGet("menu", out var v) ? MSFSBlindAssist.Services.Gsx.Remote.GsxMenuModel.Parse(v)
+                    : MSFSBlindAssist.Services.Gsx.Remote.GsxMenuModel.Empty;
+                Line($"{Stamp()}\tmenu: {menu.Title}{(menu.Header.Length > 0 ? " / " + menu.Header : "")}");
+                for (int i = 0; i < menu.Entries.Count; i++)
+                    Line($"\t  {i}: {menu.Entries[i]}{(menu.Disabled.ElementAtOrDefault(i) ? " (disabled)" : "")}");
+            }
+            else if (key == "message" && state.TryGet("message", out var m))
+                Line($"{Stamp()}\tmessage: {m}");
+        };
+        gsx.FrameReceived += f => BeginInvoke(() => state.Apply(f));   // the socket loop's thread; the state is the form's
+        gsx.Start();
+        for (int i = 0; i < 40 && !gsx.IsConnected; i++) await Task.Delay(250);
+        Line($"gsx connected={gsx.IsConnected}");
+        await Task.Delay(1500);   // the snapshot
+        foreach (var step in (_arg ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (step.StartsWith("wait:")) { await Task.Delay(int.Parse(step[5..])); continue; }
+            MSFSBlindAssist.Services.Gsx.Remote.GsxResult result;
+            if (step.StartsWith("pick:"))
+            {
+                string text = step[5..];
+                int index = menu.Entries.ToList().FindIndex(e => e.Contains(text, StringComparison.OrdinalIgnoreCase));
+                if (index < 0) { Line($"{Stamp()}\tno entry holds \"{text}\""); continue; }
+                result = await gsx.SendAsync("menu.pick", new { index });
+                Line($"{Stamp()}\tpick {index} ({menu.Entries[index]}): ok={result.Ok} {result.ErrorMessage}");
+            }
+            else
+            {
+                result = await gsx.SendAsync("menu." + step);
+                Line($"{Stamp()}\t{step}: ok={result.Ok} {result.ErrorMessage}");
+            }
+            await Task.Delay(1500);
+        }
+        await Task.Delay(1000);
+    }
+
     /// <summary>`displays [name,name]`: every display on demand (the Displays section's panels) as its status display reads
     /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
     /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
@@ -203,6 +253,20 @@ internal sealed class ProbeForm : Form
             Line($"== {d.Panel}{(capture is { Ok: true } ? "" : ": no good draw")}");
             if (capture is { Ok: true })
                 foreach (var line in d.Read(capture))
+                    Line("  " + line);
+        }
+        // The E/WD (Alt+E's window, not a display panel), with the SD page the A350_SD_PAGE row streams.
+        if (filters.Length == 0 || filters.Any(f => "E/WD EWD".Contains(f, StringComparison.OrdinalIgnoreCase)))
+        {
+            MSFSBlindAssist.Aircraft.A350.Display.A350DrawCapture? ctr = null;
+            for (int i = 0; i < 5 && ctr is not { Ok: true }; i++)
+                ctr = (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault();
+            Line("== E/WD" + (ctr is { Ok: true } ? "" : ": no good draw"));
+            if (ctr is { Ok: true } && Environment.GetEnvironmentVariable("A350_DRAW_JSON") is { } jsonDir)   // a fixture, sim asks answered
+                File.WriteAllText(Path.Combine(jsonDir, "CTR_0.json"), System.Text.Json.JsonSerializer.Serialize(ctr));
+            if (ctr is { Ok: true })
+                foreach (var line in MSFSBlindAssist.Aircraft.A350.Display.A350EwdText.Build(ctr, _m!.GetCachedVariableValue("A350_SD_PAGE"))
+                             .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
                     Line("  " + line);
         }
     }
@@ -417,6 +481,12 @@ internal sealed class ProbeForm : Form
         if (_mode == "displays")
         {
             await RunDisplays();
+            return;
+        }
+
+        if (_mode == "gsx")
+        {
+            await RunGsx();
             return;
         }
 

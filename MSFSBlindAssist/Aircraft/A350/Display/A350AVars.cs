@@ -19,6 +19,8 @@ public static class A350AVars
         Var("KOHLSMAN SETTING HG", 3, "inches of mercury"),
         // Asked in flight by the EFIS (2026-10-27).
         Var("PLANE LATITUDE", 0, "Degrees"), Var("PLANE LONGITUDE", 0, "Degrees"),
+        // Asked by the SD's F/CTL page for its rudder index (2026-10-28): unanswered, full rudder read "centred".
+        Var("RUDDER POSITION", 0, "POSITION"),
     };
 
     /// <summary>Index 0 is a variable with no index ("PLANE LATITUDE:0" asks for PLANE LATITUDE).</summary>
