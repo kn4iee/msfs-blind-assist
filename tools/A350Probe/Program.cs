@@ -342,6 +342,69 @@ internal sealed class ProbeForm : Form
         Said();
     }
 
+    /// <summary>The A350's hotkeys through the definition's own HandleHotkeyAction, with the display service and its
+    /// monitors wired as MainForm wires them (their call-outs muted): ';'-separated HotkeyAction names, and for a window
+    /// a hotkey opens, type:VALUE (into its first box, then Enter), click:TEXT (the button whose label starts so), read
+    /// (every control's text), close; wait:MS between.</summary>
+    private async Task RunHotkeys(ProbeDefinition def, Cap cap)
+    {
+        using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+        service.Start();
+        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
+            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
+            await Task.Delay(500);
+        Line($"displays: {service.State} {service.Reason}");
+        using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(
+            async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => true, _ => { });
+        using var pfd = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
+            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(), _ => true, _ => { });
+        def.Displays = service;
+        def.Ecam = ecam;
+        def.Pfd = pfd;
+        ecam.Start();
+        pfd.Start();
+        await Task.Delay(6000);   // a turn of the rotations, so every display has a latest draw
+        var hotkeys = new MSFSBlindAssist.Hotkeys.HotkeyManager();
+        MSFSBlindAssist.Forms.A350.A350FcuWindowBase? Window() =>
+            Application.OpenForms.OfType<MSFSBlindAssist.Forms.A350.A350FcuWindowBase>().LastOrDefault();
+        foreach (var token in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.StartsWith("wait:")) { await Task.Delay(int.Parse(token[5..])); Line($"wait\tsaid: {cap.Drain()}"); continue; }
+            if (token.StartsWith("type:") && Window() is { } tw)
+            {
+                var box = tw.Controls.OfType<TextBox>().First(t => !t.ReadOnly);
+                box.Text = token[5..];
+                typeof(Control).GetMethod("OnKeyDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                    .Invoke(box, new object[] { new KeyEventArgs(Keys.Enter) });
+                await Task.Delay(2500);
+                Line($"{token}\tsaid: {cap.Drain()}");
+                continue;
+            }
+            if (token.StartsWith("click:") && Window() is { } cw)
+            {
+                var button = cw.Controls.OfType<Button>().FirstOrDefault(b => b.Text.StartsWith(token[6..], StringComparison.OrdinalIgnoreCase));
+                if (button == null) { Line($"{token}\tno such button"); continue; }
+                button.PerformClick();
+                await Task.Delay(2500);
+                Line($"{token}\tsaid: {cap.Drain()}");
+                continue;
+            }
+            if (token == "read" && Window() is { } rw)
+            {
+                await Task.Delay(700);   // a refresh tick
+                Line($"window\t{rw.Text}");
+                foreach (Control c in rw.Controls.Cast<Control>().OrderBy(c => c.TabIndex))
+                    if (c is not Label) Line($"  {c.GetType().Name}\t{c.Text}");
+                continue;
+            }
+            if (token == "close" && Window() is { } xw) { xw.Close(); await Task.Delay(300); Line("closed"); continue; }
+            if (!Enum.TryParse<MSFSBlindAssist.Hotkeys.HotkeyAction>(token, out var action)) { Line($"{token}\tunknown"); continue; }
+            bool handled = def.HandleHotkeyAction(action, _m!, cap, this, hotkeys);
+            await Task.Delay(1500);
+            Line($"{token}\thandled={handled}\tsaid: {cap.Drain()}");
+        }
+    }
+
     private async Task Run()
     {
         if (_mode == "ois")
@@ -485,6 +548,12 @@ internal sealed class ProbeForm : Form
         if (_mode == "rmpwin")
         {
             await RunRmpWindow(cap);
+            return;
+        }
+
+        if (_mode == "hotkey")
+        {
+            await RunHotkeys(def, cap);
             return;
         }
 

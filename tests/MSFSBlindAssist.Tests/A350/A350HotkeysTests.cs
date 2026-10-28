@@ -1,0 +1,122 @@
+using System.Globalization;
+using System.Text.Json;
+using MSFSBlindAssist.Aircraft.A350;
+using MSFSBlindAssist.Hotkeys;
+
+namespace MSFSBlindAssist.Tests.A350;
+
+// The A350's own hotkeys, the A380's set (FBW_A380_Hotkeys.txt): each press drives the FCU row the panel offers, each
+// read-out says what the cockpit shows in the words the A350's typed entries use ("FCU altitude 40000, managed").
+public class A350HotkeysTests
+{
+    private static readonly HashSet<string> MapKeys = LoadMapKeys();
+
+    private static HashSet<string> LoadMapKeys()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "MSFSBlindAssist", "Resources", "a350_control_map.json")));
+        return doc.RootElement.GetProperty("controls").EnumerateArray().Select(c => c.GetProperty("key").GetString()!).ToHashSet();
+    }
+
+    [Theory]
+    [InlineData(HotkeyAction.ToggleAutopilot1, "A350_FCU_AP_1")]
+    [InlineData(HotkeyAction.ToggleAutopilot2, "A350_FCU_AP_2")]
+    [InlineData(HotkeyAction.ToggleAutothrust, "A350_FCU_ATHR")]
+    [InlineData(HotkeyAction.ToggleLocalizer, "A350_FCU_LOC")]
+    [InlineData(HotkeyAction.ToggleApproachMode, "A350_FCU_APPR")]
+    [InlineData(HotkeyAction.FCUHeadingPush, "A350_FCU_HDG_KNOB_PUSH")]
+    [InlineData(HotkeyAction.FCUHeadingPull, "A350_FCU_HDG_KNOB_PULL")]
+    [InlineData(HotkeyAction.FCUAltitudePush, "A350_FCU_ALT_KNOB_PUSH")]
+    [InlineData(HotkeyAction.FCUAltitudePull, "A350_FCU_ALT_KNOB_PULL")]
+    [InlineData(HotkeyAction.FCUSpeedPush, "A350_FCU_SPD_KNOB_PUSH")]
+    [InlineData(HotkeyAction.FCUSpeedPull, "A350_FCU_SPD_KNOB_PULL")]
+    [InlineData(HotkeyAction.FCUVSPush, "A350_FCU_VS_KNOB_PUSH")]
+    [InlineData(HotkeyAction.FCUVSPull, "A350_FCU_VS_KNOB_PULL")]
+    public void A_press_hotkey_drives_the_fcu_panels_own_row(HotkeyAction action, string row)
+    {
+        Assert.Equal(row, A350Hotkeys.PressRows[action]);
+        Assert.Contains(row, MapKeys);
+    }
+
+    [Theory]
+    [InlineData("Speed window", "250 knots, managed", "FCU speed 250 knots, managed")]
+    [InlineData("Speed window", "Mach 0.85", "FCU speed mach 0.85")]
+    [InlineData("Speed window", "Dashes, managed", "FCU speed dashes, managed")]
+    [InlineData("Heading window", "Heading 293", "FCU heading 293")]
+    [InlineData("Heading window", "Track 120, preset", "FCU track 120, preset")]
+    [InlineData("Heading window", "Dashes, managed", "FCU heading dashes, managed")]
+    [InlineData("Altitude window", "40000 feet, managed", "FCU altitude 40000 feet, managed")]
+    [InlineData("V/S window", "V/S +1200 feet per minute", "FCU vertical speed +1200 feet per minute")]
+    [InlineData("V/S window", "FPA -3.0 degrees", "FCU flight path angle -3.0 degrees")]
+    [InlineData("V/S window", "Dashes", "FCU vertical speed dashes")]
+    public void An_fcu_window_reads_as_the_typed_entries_say_it(string window, string shown, string spoken) =>
+        Assert.Equal(spoken, A350Hotkeys.FcuReadout(window, shown));
+
+    [Fact]
+    public void The_altimeter_reads_standard_or_both_units()
+    {
+        Assert.Equal("Altimeter standard", A350Hotkeys.Altimeter(3, 1013.25));
+        // The cockpit floors its hectopascals (the baro knob's tooltip): 1011.8 shows 1011.
+        Assert.Equal("Altimeter: 1011, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
+    }
+
+    [Fact]
+    public void The_altimeter_is_invariant_under_a_comma_culture()
+    {
+        var old = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("Altimeter: 1011, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
+        }
+        finally { CultureInfo.CurrentCulture = old; }
+    }
+
+    [Theory]
+    [InlineData(0, "Flaps Up")]
+    [InlineData(1, "Flaps 1")]
+    [InlineData(2, "Flaps 2")]
+    [InlineData(3, "Flaps 3")]
+    [InlineData(4, "Flaps Full")]
+    public void Flaps_read_the_handle_as_the_a380_does(double handle, string spoken) =>
+        Assert.Equal(spoken, A350Hotkeys.Flaps(handle));
+
+    [Fact]
+    public void The_gear_reads_its_lever() // the A350 gear lever row: 0 up, 1 down
+    {
+        Assert.Equal("Gear up", A350Hotkeys.Gear(0));
+        Assert.Equal("Gear down", A350Hotkeys.Gear(1));
+    }
+
+    // W and Shift+W read the SD's own figures (the permanent data line, in the aircraft's unit): what the pilot sees.
+    [Fact]
+    public void Gross_weight_reads_the_sds_figures_in_either_unit_with_the_cg()
+    {
+        var kg = new[] { "TAT: +29 °C, green", "Gross weight: 199400 KG, green", "Gross weight CG: 30.1 %, green" };
+        Assert.Equal("Gross weight 199400 kilograms, center of gravity 30.1 percent MAC", A350Hotkeys.GrossWeight(kg, pounds: false));
+        Assert.Equal("Gross weight 439600 pounds, center of gravity 30.1 percent MAC", A350Hotkeys.GrossWeight(kg, pounds: true));
+        var lbs = new[] { "Gross weight: 439600 LBS, green", "Gross weight CG: -- %, cyan" };
+        Assert.Equal("Gross weight 199400 kilograms", A350Hotkeys.GrossWeight(lbs, pounds: false));
+        Assert.Equal("Gross weight not available", A350Hotkeys.GrossWeight(new[] { "Gross weight: -- KG, cyan" }, pounds: false));
+    }
+
+    [Fact]
+    public void Gross_weight_is_invariant_under_a_comma_culture()
+    {
+        var old = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("Gross weight 199400 kilograms, center of gravity 30.1 percent MAC",
+                A350Hotkeys.GrossWeight(new[] { "Gross weight: 199400 KG, green", "Gross weight CG: 30.1 %, green" }, pounds: false));
+        }
+        finally { CultureInfo.CurrentCulture = old; }
+    }
+
+    [Fact]
+    public void A_characteristic_speed_reads_in_knots_or_says_it_is_not_shown()
+    {
+        Assert.Equal("V L S 166 knots", A350Hotkeys.Speed("V L S", 165.911));
+        Assert.Equal("Alpha protection speed not shown", A350Hotkeys.Speed("Alpha protection speed", 0));
+    }
+}

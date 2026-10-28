@@ -386,6 +386,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     _lampInputKeys.Add(A350PanelLamps.InputKey(input));   // consumed silently
                 }
 
+        // What the read-out hotkeys say where nothing above streams it (the characteristic speeds, A350Hotkeys).
+        foreach (var name in A350Hotkeys.ReadoutVars.Where(v => !_keyByName.ContainsKey(v)))
+        {
+            Register(A350PanelLamps.InputKey(name), name, name, null);
+            _lampInputKeys.Add(A350PanelLamps.InputKey(name));   // consumed silently
+        }
+
         // What a button with no light reads on its label; the label repaints with it.
         foreach (var (rowKey, state) in _buttonStates)
         {
