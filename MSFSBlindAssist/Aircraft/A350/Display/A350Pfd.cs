@@ -23,11 +23,12 @@ public static class A350Pfd
     /// y 207; the target at x 153, y 174).</summary>
     private const float V1X = 129, V1Y = 207;
 
-    /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability, and the AP/FD/A/THR
-    /// engagement column (live: "1 FD 2" at x 685-761).</summary>
+    /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability (in climb its top row holds the
+    /// altitude the capture aims at, "400" at x 646), and the AP/FD/A/THR engagement column (live: "1 FD 2" at x
+    /// 685-761).</summary>
     private static readonly (string Name, float X0, float X1)[] FmaColumns =
     {
-        ("autothrust", 0, 170), ("vertical", 170, 340), ("lateral", 340, 510), ("approach", 510, 640), ("engagement", 640, PfdWidth),
+        ("autothrust", 0, 170), ("vertical", 170, 340), ("lateral", 340, 510), ("approach", 510, 670), ("engagement", 670, PfdWidth),
     };
 
     /// <summary>The altitude at the window (y 389): the tape's label gives it roughly (0.35 px a foot), the drum's
@@ -97,8 +98,11 @@ public static class A350Pfd
         used.UnionWith(cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)));
 
         // The selected altitude, at the top of the altitude tape, reaches up into the FMA strip too: taken out
-        // first, read after the FMA.
-        var selectedAltitude = cells.Where(c => c.X is >= 585 and < 620 && c.Y < 640 && c.Colour == "cyan").ToList();
+        // first, read after the FMA. Beyond the tape's range it is a box at the tape's top or bottom, "FL" at 587 and its
+        // number at 688 (live 2026-10-28: y 172 above, 615 below), read as one value.
+        var selectedAltitude = cells.Where(c => c.Colour == "cyan" && (c.X is >= 585 and < 620 && c.Y < 640
+                || c.X is >= 620 and < 720 && c.Y is >= FmaBottom and < 640))
+            .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
         used.UnionWith(selectedAltitude);
 
         // The FMA strip, one column at a time.
@@ -114,7 +118,8 @@ public static class A350Pfd
                 : string.Join("; ", rows.Select(A350DrawLayout.Speak))));
         }
 
-        foreach (var c in selectedAltitude) o.Add($"Selected altitude: {c.Text}, cyan");
+        if (selectedAltitude.Count > 0)
+            o.Add($"Selected altitude: {string.Join(" ", selectedAltitude.Select(c => c.Text))}, cyan");
 
         // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre. On the stand
         // the tape rests on its 30 kt floor, which its offset reads as 32.

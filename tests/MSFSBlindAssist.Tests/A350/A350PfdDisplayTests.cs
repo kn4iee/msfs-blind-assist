@@ -124,6 +124,19 @@ public class A350PfdDisplayTests
         Assert.Equal(litLines.Select(l => l.Spoken), litShown);
     }
 
+    // Climbing through FL235 in STD with FL400 selected (live 2026-10-28): the FMA's fourth column shows the altitude the
+    // armed capture aims at ("400" in cyan at x 646, as the SID's 5000 constraint showed magenta there on the ground), and
+    // the tape's top box shows the selected altitude ("FL" at 587, "400" at 688, y 172). The "400" at 646 was read into
+    // the engagement column ("400, cyan; AP1, white; ..."), whose first text is "1" at 685, and the box read "FL" alone.
+    [Fact]
+    public void The_fma_altitude_target_and_the_selected_altitude_box_read_where_they_are_drawn()
+    {
+        var lines = A350Pfd.Read(Fixture("pfd_climb_std_fl400"), 0);
+        Assert.Equal("FMA engagement: AP1; 1 FD 2; A/THR, white", lines.Single(l => l.StartsWith("FMA engagement", StringComparison.Ordinal)));
+        Assert.Contains("FMA approach: 400, cyan", lines);
+        Assert.Contains("Selected altitude: FL 400, cyan", lines);
+    }
+
     [Fact]
     public void The_rmp_window_shows_a_dark_screen_as_dark() =>
         Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, Forms.A350.A350RmpWindow.Lines(Fixture("ground_RMP_0"), dark: true));
