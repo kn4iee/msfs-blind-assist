@@ -1,5 +1,7 @@
 # Plan 12 Task 4: the order of the controls inside each panel
 
+Since Task 7 (2026-10-28) the panels are regrouped to follow the cockpit (see [panel-audit-12.md](panel-audit-12.md)); inside each regrouped panel this order rule is kept: by tier, Task 4's order within a tier, each guard just before its switch.
+
 The owner's instruction (2026-10-28): "The panel items should be ordered where most frequently every day items are listed first in tab order." This file is the evidence for every placement: the order of each panel, each control's tier, and the reason with its source, so that each move can be checked. It is generated from the research data (`order_data.py` of the plan 12 workspace); the order itself lives in `tools/b757-gen/curation.json` (`control_order`), and the map `MSFSBlindAssist/Resources/bbs757_control_map.json` is generated from it.
 
 ## Method

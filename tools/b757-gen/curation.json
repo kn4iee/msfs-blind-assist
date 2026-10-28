@@ -61,14 +61,15 @@
     "RULING R37 (2026-10-25, the owner's direction after the first flight): the panels follow the manual's preflight flow and the most used controls come first in a panel (panel_order, control_order). The lists are the owner's to adjust; a control_order lists the controls that lead, and the rest keep cockpit order (plan 12 task 4 lists every control of the panels it reorders). The three start selectors (Ignition, L ENG Start, R ENG Start: nodes B757_OVHD_ENG_START_SWITCH, B757_OVHD_L_ENG_START_SWITCH, B757_OVHD_R_ENG_START_SWITCH, banner LIGHT OVERRIDE) and the four fuel control switches (BBS_fuelcut_PW1, PW2, RR1, RR2) share one Pedestal panel, Engines, in start order: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then the RR pair. The three node_panels rules for the start selectors name the section Pedestal, because a B757_OVHD_ node otherwise lands in the Overhead by its prefix. TCAS and transponder lists TCAS Mode first; the app adds its Squawk Code field right after it (BBS757Definition.Readouts.cs). Each EFIS panel leads with ND Mode and ND Range.",
     "PLAN 12 TASK 1 (2026-10-28): the Status panel's Cabin Altitude row reads L:B757_TEST_CABIN_ALT, no longer L:B757_DEBUG_PRESSURE_CABIN_ALT_FT. BlueBird's WASM (BBS752.wasm, read 2026-10-28) writes B757_TEST_CABIN_ALT every tick from the pressurization model's cabin altitude in feet (the oxygen code copies it), and declares the three B757_DEBUG_PRESSURE_CABIN_* vars without ever writing or reading them. measured (docs/b757/evidence/flight-12.md, 2026-10-28): B757_TEST_CABIN_ALT read 1,161 ft on the ground; the earlier read of the DEBUG var was 0 (docs/b757/evidence/live-findings.md), which is all it can read.",
     "PLAN 12 TASK 1 (2026-10-28): B757_OVHD_AUTORATE_SWITCH (label Auto Rate, it was Cabin Rate; Pressurization) is under direct_positions: 0 MIN, 3.5 INDEX, 13 MAX. Read from BBS_752_BASE_INTERIOR.xml and BlueBird's WASM (BBS752.wasm, read 2026-10-28): the XML sets the knob to 3.5 once on load and its clicks step 0.1 between 0 and 13 (XML:10153-10172; all nine panel states hold 3.5), which is why the rules saw 131 positions and dropped it. The WASM reads the knob every tick and uses its whole number (3.5 reads as 3): a climb limit of 50 + 150 n ft/min and a descent limit of 30 + 90 n, a ceiling on the rate of the automatic controllers and not the rate itself (0: 50 and 30; 3: 500 and 300; 13: 2,000 and 1,200). So INDEX at 3.5 shows the load value as what it acts as. Nothing rewrites the knob after load, so a direct write stands. measured (docs/b757/evidence/flight-12.md): loaded at 3.5; 0 and 13, written by the calculator, both held, and no other variable of the L:var snapshot moved on the ground.",
-    "PLAN 12 TASK 1 (2026-10-28): the eight display brightness knobs are under direct_positions, in a new Forward panel panel, Display brightness (node_panels rules, last in panel_order; the order of its controls is control_order, plan 12 task 4): 0 Minimum, 20 Half, 40 Full each. BlueBird's brightness code (BBS752.wasm, setup_display_brightness and the per-tick sync, read 2026-10-28) reads one knob var per display and sets the display's emissive output to knob / 40 * 1.5 with a floor of 0.1, so 0 dims a display to its minimum and does not turn it off (no Off position), and 40 is full and every knob's value on load (all nine panel states hold 40). The cockpit mouse stops lower (the vendor's clicks clamp at 30, at 20 on the F/O ADI knob), but the code takes 0-40, so the positions are not held to that clamp. Node, state var, label: B757_ADI_1_LCD_KNOB writes B757_PFD_1_SCREEN_KNOB (Captain PFD; XML:18856-18867, clamp 30), B757_ADI_2_LCD_KNOB writes B757_PFD_2_SCREEN_KNOB (First Officer PFD; XML:18960-18971, clamp 20), B757_HSI_1_SCREEN_KNOB and B757_HSI_2_SCREEN_KNOB write their own names (Captain ND, First Officer ND; XML:11670, 11693), B757_EICAS_1_SCREEN_KNOB and B757_EICAS_2_SCREEN_KNOB (Upper EICAS, Lower EICAS; XML:11618, 11631) and B757_FMC_1_SCREEN_KNOB and B757_FMC_2_SCREEN_KNOB (Captain CDU, First Officer CDU; XML:11657, 11644), all clamped at 30 by the mouse. The nodes NAMED B757_PFD_1_SCREEN_KNOB and B757_PFD_2_SCREEN_KNOB (XML:11577, 11597) stay out: their clicks write BBS757_RASTER_BRIGHTNESS_CA and _FO, which nothing in the package reads, so the PFD is dimmed by the ADI knobs. measured (docs/b757/evidence/flight-12.md): each knob var written by the calculator moved its output at once (the captain PFD's B757_PFD_BRIGHTNESS_L read 1.5 at 40, 0.75 at 20 and 0.1 at 0; the captain ND and CDU and the upper EICAS read 1.125 at 30; the lower EICAS read 0.5625 at 15); the first officer's three follow by name (their output vars exist and read 1.5) and were not written. BlueBird's list says 0-30 for the EICAS, HSI and FMC knobs: 40 is their load value and gives full output. unmeasured: the WASM's automatic cockpit lighting (the EFB setting automatic_cockpit_lighting, off in the constructor) sets the PFD, ND and EICAS knobs to 20 at dusk and 40 at dawn on a time-of-day change; a write stands until the next one. A dark display also defeats the AI display reads.",
+    "PLAN 12 TASK 1 (2026-10-28): the eight display brightness knobs are under direct_positions, on the Pedestal panels they are on since plan 12 task 7 (node_panels rules: each EFIS control panel's PFD and ND knob, the EICAS control panel's two, the two CDU knobs as the CDU brightness pair; task 1 had put them in a Forward panel panel, Display brightness): 0 Minimum, 20 Half, 40 Full each. BlueBird's brightness code (BBS752.wasm, setup_display_brightness and the per-tick sync, read 2026-10-28) reads one knob var per display and sets the display's emissive output to knob / 40 * 1.5 with a floor of 0.1, so 0 dims a display to its minimum and does not turn it off (no Off position), and 40 is full and every knob's value on load (all nine panel states hold 40). The cockpit mouse stops lower (the vendor's clicks clamp at 30, at 20 on the F/O ADI knob), but the code takes 0-40, so the positions are not held to that clamp. Node, state var, label: B757_ADI_1_LCD_KNOB writes B757_PFD_1_SCREEN_KNOB (PFD Brightness on Captain EFIS; XML:18856-18867, clamp 30), B757_ADI_2_LCD_KNOB writes B757_PFD_2_SCREEN_KNOB (PFD Brightness on First officer EFIS; XML:18960-18971, clamp 20), B757_HSI_1_SCREEN_KNOB and B757_HSI_2_SCREEN_KNOB write their own names (ND Brightness on each EFIS panel; XML:11670, 11693), B757_EICAS_1_SCREEN_KNOB and B757_EICAS_2_SCREEN_KNOB (Upper EICAS Brightness, Lower EICAS Brightness; XML:11618, 11631) and B757_FMC_1_SCREEN_KNOB and B757_FMC_2_SCREEN_KNOB (Captain CDU, First Officer CDU; XML:11657, 11644), all clamped at 30 by the mouse. The nodes NAMED B757_PFD_1_SCREEN_KNOB and B757_PFD_2_SCREEN_KNOB (XML:11577, 11597) stay out: their clicks write BBS757_RASTER_BRIGHTNESS_CA and _FO, which nothing in the package reads, so the PFD is dimmed by the ADI knobs. measured (docs/b757/evidence/flight-12.md): each knob var written by the calculator moved its output at once (the captain PFD's B757_PFD_BRIGHTNESS_L read 1.5 at 40, 0.75 at 20 and 0.1 at 0; the captain ND and CDU and the upper EICAS read 1.125 at 30; the lower EICAS read 0.5625 at 15); the first officer's three follow by name (their output vars exist and read 1.5) and were not written. BlueBird's list says 0-30 for the EICAS, HSI and FMC knobs: 40 is their load value and gives full output. unmeasured: the WASM's automatic cockpit lighting (the EFB setting automatic_cockpit_lighting, off in the constructor) sets the PFD, ND and EICAS knobs to 20 at dusk and 40 at dawn on a time-of-day change; a write stands until the next one. A dark display also defeats the AI display reads.",
     "PLAN 12 TASK 1 (2026-10-28): the three zone temperature selectors, in Air conditioning and bleed, are under direct_positions: B757_OVHD_SEL_pack_Cockpt writes B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME (Flight Deck Temperature), B757_OVHD_SEL_pack_FWD_cab writes B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME (Forward Cabin Temperature) and B757_OVHD_SEL_pack_AFT_cab writes B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME (Aft Cabin Temperature). The extractor reads each as an infinite knob (the template BBS757_ZONE_TEMP_CONTROL_KNOB steps the frame by one and wraps at 35 and 0, XML:23-58, instances XML:10423, 10435 and 10447) and takes its state var from the knob's animation, B757_OVHD_FLT_DK_TEMP_SEL_KNOB_ANIM_FRAME and its two siblings. Those are derived from the KNOB_FRAME vars by BlueBird's code on every tick and written back over, so they must not be written; the entry names the KNOB_FRAME var, which the generator checks against what the component reads and writes. BlueBird's code turns the frame into the temperature it controls to: frames 0-2 and 34-35 are OFF, 3-6 read 18, 7-29 follow the frame, 30-33 read 30, and degrees C = 18 + (frame - 5) * 6 / 13 between frames 5 and 31 (a remap of 5..31 onto 18..30); there is no AUTO. measured (docs/b757/evidence/flight-12.md): on the zone's readback B757_OVHD_<zone>_ZONE_TEMP_SEL, about a second after the write, frames 0-2 and 34-35 read OFF, 3-5 read 18, 13 read 21.692, 18 read 24, 29 read 29.077 and 31-33 read 30. The positions are the frame nearest each whole degree: 0 OFF, then 5, 7, 9, 12, 14, 16, 18, 20, 22, 25, 27, 29 and 31 for 18 to 30 degrees C (21 and 27 fall half-way between two frames and take the higher; each frame is within 0.24 degrees of its degree). The mid cabin zone has a var but no node and no handler, so no row. The knobs loaded at frame 18 (24 degrees C) in the measurement; BlueBird's dirty-panel start randomises the three, so read before assuming.",
     "PLAN 12 TASK 1 (2026-10-28): left out, with the reason. The weather radar knobs (B757_PED_WX_L_LARGE_SEL_KNOB, B757_PED_WX_L_SMALL_SEL_KNOB and the two on the right): nothing in the package reads them (no gauge, no WASM code; the navigation display draws no weather radar), so no position has a meaning to name. The DDRMI VOR/ADF switches need no change: the map already holds all four as toggles on BBS_DDRMI_LEFT, _RIGHT, _LEFT_FO and _RIGHT_FO (0 VOR, 1 ADF; the code tests for non-zero), and their click code works through the calculator, the first officer's right one with the stray closing brace the generator reports under suspected slips included (measured, docs/b757/evidence/flight-12.md: its own click code toggled BBS_DDRMI_RIGHT_FO from 0 to 1). The manual cabin altitude switch stays excluded (see its note above).",
-    "PLAN 12 TASK 4 (2026-10-28): the owner's instruction: 'The panel items should be ordered where most frequently every day items are listed first in tab order.' control_order now lists EVERY control of the 30 panels whose order moved (29 older panels and the Display brightness panel task 1 added); the 25 panels the research found already in order are left as they were. Method, per panel: tier 1, what the normal procedures move on every flight, in the order the flow first uses it, a left and right pair together; tier 2, set once in preflight, tests and display options; tier 3, non-normal, emergency and maintenance controls, with a guard just before the switch it covers (the emergency lights guard stays AFTER its switch, because the app opens and closes it when the switch is set). Sources: BlueBird's User Procedures and Normal Checklist v1.01 (BlueBird_757_User_Procedures_v1.01.pdf, BlueBird_757_Normal_Checklist_v1.01.pdf), each placement cited by PDF page, or marked as general 757 practice where the manuals say nothing, in docs/b757/evidence/panel-order-12.md. Only the order changed: no label, position or control moved between panels, and panel_order is as it was. The app's own rows (the landing altitude field, the cabin buttons, the trim buttons) are not nodes and are placed by the app's code, so control_order leaves them out.",
+    "PLAN 12 TASK 4 (2026-10-28): the owner's instruction: 'The panel items should be ordered where most frequently every day items are listed first in tab order.' control_order then listed EVERY control of the 30 panels whose order moved (29 older panels and the Display brightness panel task 1 added); the 25 panels the research found already in order are left as they were. Method, per panel: tier 1, what the normal procedures move on every flight, in the order the flow first uses it, a left and right pair together; tier 2, set once in preflight, tests and display options; tier 3, non-normal, emergency and maintenance controls, with a guard just before the switch it covers (the emergency lights guard stays AFTER its switch, because the app opens and closes it when the switch is set). Sources: BlueBird's User Procedures and Normal Checklist v1.01 (BlueBird_757_User_Procedures_v1.01.pdf, BlueBird_757_Normal_Checklist_v1.01.pdf), each placement cited by PDF page, or marked as general 757 practice where the manuals say nothing, in docs/b757/evidence/panel-order-12.md. Only the order changed: no label, position or control moved between panels, and panel_order stayed as it was (until plan 12 task 7). The app's own rows (the landing altitude field, the cabin buttons, the trim buttons) are not nodes and are placed by the app's code, so control_order leaves them out.",
     "PLAN 12 TASK 5 (2026-10-28): the new key hold_ms (node -> milliseconds, 500 to 10000) makes a button the rules keep a held button with that hold: the press and the release stay the cockpit's own click code, verbatim, and the app holds the press that long (Bbs757Write.PressFor) before the release. Why: BlueBird's WASM reads a test button only while its L:var is at 1, and the template for these buttons is the plain momentary button, so the rules kept them as buttons and the app's 200 ms press gave a blip at most (measured in flight, docs/b757/evidence/flight-12.md, 'The fire test, the P61 test switches and the master lights': the engine fire test raised the bell, the fire lights and both sides' master warning and caution only while the button was held, and every one read 0 again about 2 s after the release). The key is checked against the map and the run names each hold under 'curated holds' (see its entry in the key notes above).",
     "PLAN 12 TASK 5 (2026-10-28): nineteen test buttons are held 3000 ms (task 5 held the takeoff check too; task 6 took it out, see its note). Measured held through the calculator in flight (flight-12.md): the engine fire test (B757_PED_FIRE_ENG_BUTTON) for about 3 s, and the cargo fire test (B757_PED_FIRE_CARGO_BUTTON, the whole ENG/APU/CARGO test) and the wheel well fire test (B757_PED_FIRE_WHLWELL_BUTTON, the bell, its decals and the master warning) while held; held about 2 s, the CVR test (B757_OVHD_SW_CVR_TEST) swung the monitor needle and the squib test (B757_P6_SQUIBS_BUTTON2) lit the nine bottle squib lights, both cleared on release. Held 3000 ms for the same reason, by one rule (a test is held until it shows; the fire tests' 3 s is the longest hold measured), NOT measured: the TCAS test (B757_PED_TCAS_MODE_KNOB_TEST_CLICK), the four oxygen tests (OXY_CAPT_TEST_SWITCH001, OXY_FO_TEST_SWITCH1, OXY_OBSV_TEST_SWITCH, OXY_P61_TEST_SWITCH), the four autoland status tests (B757_MAIN_L_AUTOLAND_1_BUTTON, B757_MAIN_L_AUTOLAND_2_BUTTON, B757_MAIN_R_AUTOLAND_1_BUTTON, B757_MAIN_R_AUTOLAND_2_BUTTON), the weather radar test (B757_PED_WX_L_TEST_BUTTON), the ILS test (B757_PED_ILS_TEST_BUTTON) and the three radio panel tests (B757_PED_NAV_1_TEST_BUTTON, B757_PED_NAV_2_TEST_BUTTON, B757_PED_NAV_3_TEST_BUTTON). In flight the TCAS test, the takeoff check, the captain's oxygen test and the ILS test changed nothing but their own var (ground tests, or sound only) and the autoland tests were not tried, so what a hold shows of those is for the sim on the ground to say (task 6 does not hold the takeoff check, see its note). Task 6 (its note) changed the labels of most of them. Not held, so still buttons: the autoland resets (B757_MAIN_L_AUTOLAND_3_BUTTON, B757_MAIN_R_AUTOLAND_3_BUTTON) and the lamp test (B757_OVHD_WARNING_TEST_BUTTON), whose press toggles L:OVHD_TEST_LTS and stays on after the release (flight-12.md: a second press turns it off). The master warning and caution buttons work as the cockpit's (one press cancels both sides and silences the bell) and stay as they are.",
     "PLAN 12 TASK 5 (2026-10-28): the eight P61 test switches, B757_VC_P61_SWITCH_3 to B757_VC_P61_SWITCH_10, are under exclude_nodes, and their labels, their position lists and their places in the P61 panel's control_order went with them (the evidence for the position names stays in the plan 02 task 1 notes above). They are spring-loaded with an instant return: measured in flight (flight-12.md), one write of a test position (0 or 2) is returned to 1 (neutral) almost at once, because the Asobo 3-state template's STATE0_TIMER 0.01 returns the switch while no mouse holds it, so a pick that writes once runs no test. A test ran only while its position was written again and again: every 30 ms (about 40 ms in practice) it held steadily, every 50 ms it dropped out now and then, every 100 ms it dropped out between writes. A combo of positions cannot do that, so the app gives each test position a button of its own that writes the position every 30 ms for 3 s and releases the switch to 1 (plan 12 task 5b; the rows of docs/b757/evidence/panel-order-12.md say so). Their state vars (BBS757_..._P61_TEST_SW) stay readable by the app. The Service Interphone and Flight Recorder switches (B757_VC_P61_SWITCH_1 and _2) and the squib test stay in the map.",
-    "PLAN 12 TASK 6 (2026-10-28): the owner's instruction, 'The tests are not clearly labeled': the test buttons say what they test. Under labels: B757_PED_FIRE_ENG_BUTTON Engine Fire Test, B757_PED_FIRE_CARGO_BUTTON Engine, APU and Cargo Fire Test, B757_PED_FIRE_WHLWELL_BUTTON Wheel Well Fire Test, B757_P6_SQUIBS_BUTTON2 Squib Test, B757_OVHD_WARNING_TEST_BUTTON Lamp Test, B757_PED_TCAS_MODE_KNOB_TEST_CLICK TCAS Test, B757_PED_WX_L_TEST_BUTTON Weather Radar Test, B757_PED_NAV_1_TEST_BUTTON, B757_PED_NAV_2_TEST_BUTTON and B757_PED_NAV_3_TEST_BUTTON Radio Test (one to each of the three radio tuning panels, so no panel has two), B757_MAIN_L_AUTOLAND_1_BUTTON and B757_MAIN_R_AUTOLAND_1_BUTTON Autoland Status Test 1, B757_MAIN_L_AUTOLAND_2_BUTTON and B757_MAIN_R_AUTOLAND_2_BUTTON Autoland Status Test 2, B757_MAIN_L_AUTOLAND_3_BUTTON and B757_MAIN_R_AUTOLAND_3_BUTTON Autoland Status Reset (each pair on its own side's panel), OXY_OBSV_TEST_SWITCH First Observer Oxygen Test, OXY_P61_TEST_SWITCH Second Observer Oxygen Test, B757_MAIN_TOCHK_BUTTON Takeoff Config Check. Sources: BlueBird's User Procedures name the fire tests ('FIRE/OVHT - ENG', 'FIRE/OVHT - ENG/APU/CARGO', 'FIRE/OVHT - WHL WELL'), the squib test ('SQUIB TEST'), the autoland status tests ('ASA TEST 1 ... TEST 2') and the takeoff configuration check ('Press the CONFIG (T/O CHK) button near RECALL'). The others are named by what they do: the lamp test lights the overhead fault lights, the IRS lights and the radio panels' lights until it is pressed again (measured in flight, docs/b757/evidence/flight-12.md), and docs/b757/evidence/panel-order-12.md calls the rest the TCAS test, the radar test and the radio test and names the two observer oxygen tests' masks 'observer 1' and 'observer 2'. The captain's and first officer's oxygen tests, the CVR test and the ILS test already said what they test and keep their labels. B757_MAIN_TOCHK_BUTTON also leaves hold_ms: BlueBird's procedure is a press and release, and in flight the button changed nothing but its own var (flight-12.md), so nothing shows that a hold gives more; it is a plain button again, as the rules built it, which the app presses for 200 ms. The app finds the lamp test by its node, so its speech now reads 'Lamp Test pressed' when the lamp state cannot be read."
+    "PLAN 12 TASK 6 (2026-10-28): the owner's instruction, 'The tests are not clearly labeled': the test buttons say what they test. Under labels: B757_PED_FIRE_ENG_BUTTON Engine Fire Test, B757_PED_FIRE_CARGO_BUTTON Engine, APU and Cargo Fire Test, B757_PED_FIRE_WHLWELL_BUTTON Wheel Well Fire Test, B757_P6_SQUIBS_BUTTON2 Squib Test, B757_OVHD_WARNING_TEST_BUTTON Lamp Test, B757_PED_TCAS_MODE_KNOB_TEST_CLICK TCAS Test, B757_PED_WX_L_TEST_BUTTON Weather Radar Test, B757_PED_NAV_1_TEST_BUTTON, B757_PED_NAV_2_TEST_BUTTON and B757_PED_NAV_3_TEST_BUTTON Radio Test (one to each of the three radio tuning panels, so no panel has two), B757_MAIN_L_AUTOLAND_1_BUTTON and B757_MAIN_R_AUTOLAND_1_BUTTON Autoland Status Test 1, B757_MAIN_L_AUTOLAND_2_BUTTON and B757_MAIN_R_AUTOLAND_2_BUTTON Autoland Status Test 2, B757_MAIN_L_AUTOLAND_3_BUTTON and B757_MAIN_R_AUTOLAND_3_BUTTON Autoland Status Reset (each pair on its own side's panel), OXY_OBSV_TEST_SWITCH First Observer Oxygen Test, OXY_P61_TEST_SWITCH Second Observer Oxygen Test, B757_MAIN_TOCHK_BUTTON Takeoff Config Check. Sources: BlueBird's User Procedures name the fire tests ('FIRE/OVHT - ENG', 'FIRE/OVHT - ENG/APU/CARGO', 'FIRE/OVHT - WHL WELL'), the squib test ('SQUIB TEST'), the autoland status tests ('ASA TEST 1 ... TEST 2') and the takeoff configuration check ('Press the CONFIG (T/O CHK) button near RECALL'). The others are named by what they do: the lamp test lights the overhead fault lights, the IRS lights and the radio panels' lights until it is pressed again (measured in flight, docs/b757/evidence/flight-12.md), and docs/b757/evidence/panel-order-12.md calls the rest the TCAS test, the radar test and the radio test and names the two observer oxygen tests' masks 'observer 1' and 'observer 2'. The captain's and first officer's oxygen tests, the CVR test and the ILS test already said what they test and keep their labels. B757_MAIN_TOCHK_BUTTON also leaves hold_ms: BlueBird's procedure is a press and release, and in flight the button changed nothing but its own var (flight-12.md), so nothing shows that a hold gives more; it is a plain button again, as the rules built it, which the app presses for 200 ms. The app finds the lamp test by its node, so its speech now reads 'Lamp Test pressed' when the lamp state cannot be read.",
+    "PLAN 12 TASK 7 (2026-10-28): the owner asked whether the panels put each control where it is in the cockpit or are made up, and chose 'follow the cockpit', with the brightness knobs on their real panels and the fire and overheat tests kept with the fire handles. Evidence: docs/b757/evidence/panel-audit-12.md places every map node by its 3D position in BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf and names the panels from BlueBird's Flight Guide pictures (p.33A-33E, 102-104); it found 34 of 55 panels real, 7 sensible groupings (kept: Engines, Electrical, Air conditioning and bleed, Exterior lights, VOR/DME, Master warning and caution, Yokes) and the rest code buckets of the vendor's file or misplaced. panels, node_panels, panel_order and control_order now give its Proposed structure, 63 panels: Main panel switches splits into the forward panel's own panels (foot and shoulder heat and instrument source selectors each side, Caution, config and G/S inhibit, Brakes, Heading reference, Thrust mode select, Alternate flaps, Ground proximity overrides; the alternate gear switch and its guard join Landing gear, Stdby EICAS joins the standby gyro in Standby instruments); Overhead miscellaneous splits into Panel lighting, Emergency lights and passenger oxygen, and Ram air turbine and engine limiters; Engine control and yaw damper into Electronic engine control (RR) and Yaw dampers; Switch guards goes, each guard on its switch's panel; Equip leaves Pressurization for Equipment cooling; IRS takes in IRS keypad, Weather radar the left and right panels, Indicator lights and door lock the Warning lights test and the door lock switch; the first officer's glareshield CLOCK switch moves to the First officer chronometer; Captain EFIS and First officer EFIS move to the Pedestal and take their PFD and ND Brightness knobs, EICAS control its Upper and Lower EICAS Brightness, and the two CDU knobs are the Pedestal's CDU brightness pair (Display brightness goes); Oxygen (the four mask boxes), Flight deck door (the door itself, was Cockpit miscellaneous) and Forward attendant panel (Cabin lights and Ground service, by door 1L) are under Other; Pedestal radio panels is ILS tuning. The fire and overheat tests stay in Fire protection (the owner's answer), in Task 4's order: the tests first, then the fire handles and the cargo fire controls. panel_order keeps the every-day order it had (ruling R37; the owner's instruction was about the order inside a panel): a panel that stays keeps its place, a renamed one (ILS tuning, Standby instruments) takes the old one's, the parts of a split panel take the place of the panel they came from, among themselves in the audit's cockpit order (Main panel switches, Overhead miscellaneous, Engine control and yaw damper), a merged one the place of the first of its sources (Weather radar, Indicator lights and door lock), Equipment cooling follows Pressurization; the panels that change section go where the controller placed them: both EFIS panels right after TCAS and transponder, CDU brightness right after EICAS control, Oxygen, Flight deck door and Forward attendant panel after P61 panel. Order inside a panel keeps plan 12 task 4's every-day-first rule: by Task 4's tier (1 every flight, 2 set once, tests and display options, 3 non-normal and maintenance); within a tier Task 4's order where the controls shared a panel and the audit's listing otherwise; each guard just before the switch it covers, the emergency lights guard just after. A panel whose controls did not change keeps its entry; every new or changed panel of two or more controls lists every control. The orders were derived by script from the audit and Task 4's research, not typed. No position, kind or click code changed; the only labels that changed are the six brightness knobs' (PFD Brightness, ND Brightness, Upper EICAS Brightness, Lower EICAS Brightness). The app's rudder and aileron trim buttons and readouts are not nodes: the app puts them on a Rudder and aileron trim panel of its own after Stabilizer trim (Bbs757SpringControls)."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -133,13 +134,13 @@
       "name": "Yokes",
       "section": "Forward panel"
     },
-    "TEST WARNING LIGHTS PANEL": "Warning lights test",
-    "BUTTONS AND SWITCHES MAIN": "Engine control and yaw damper",
+    "TEST WARNING LIGHTS PANEL": "Indicator lights and door lock",
+    "BUTTONS AND SWITCHES MAIN": "Yaw dampers",
     "HYDRAULIC PANEL": "Hydraulics",
     "ELECTRICAL PANEL": "Electrical",
     "APU CONTROL PANEL": "APU",
     "COCKPIT VOICE RECORDER - CVR": "CVR",
-    "LIGHT OVERRIDE": "Overhead miscellaneous",
+    "LIGHT OVERRIDE": "Emergency lights and passenger oxygen",
     "FUEL PANEL": "Fuel",
     "ANTI ICE PANEL BUTTONS": "Anti-ice",
     "WINDSHIELD RAIN REPELLENT AND WIPER CONTROL PANEL": "Wipers",
@@ -148,10 +149,10 @@
     "SELCAL AND CABIN CALL BUTTON PANEL": "SELCAL and cabin call",
     "PASSENGER SIGN CONTROL PANEL": "Passenger signs",
     "PRESSURIZATION CONTROL PANEL": "Pressurization",
-    "(after PRESSURIZATION CONTROL PANEL)": "Pressurization",
+    "(after PRESSURIZATION CONTROL PANEL)": "Equipment cooling",
     "OVERHEAD PNEUMATIC PANEL": "Air conditioning and bleed",
     "IRS SUB-CATEGORY - BUTTON_GLASS": {
-      "name": "IRS keypad",
+      "name": "IRS",
       "section": "Overhead"
     },
     "IRS KNOBS": {
@@ -159,7 +160,7 @@
       "section": "Overhead"
     },
     "PLASTIC BUTTON and SWITCH GUARDS": {
-      "name": "Switch guards",
+      "name": "Electrical",
       "section": "Overhead"
     },
     "MAIN BUTTONS AND CONTROL": "Lighting and MCP buttons",
@@ -191,14 +192,14 @@
     },
     "EHSI/ADI KEY FUNCTIONS - CAPTAIN's SIDE ONLY - B757_AISLE_STAND_LCDEXCLUDE CRT BRIGHTNESS": {
       "name": "EFIS control",
-      "section": "Forward panel"
+      "section": "Pedestal"
     },
     "PEDESTAL GAURD SWITCH GEAR": {
       "name": "Fire protection",
       "section": "Pedestal"
     },
     "INDIVIDUAL AUDIO/RADIO PANELS": {
-      "name": "Pedestal radio panels",
+      "name": "ILS tuning",
       "section": "Pedestal"
     },
     "LANDING GEAR": {
@@ -230,23 +231,242 @@
       "section": "Forward panel"
     },
     "STANDBY ATTITUDE-GYROMETER": {
-      "name": "Standby attitude indicator",
+      "name": "Standby instruments",
       "section": "Forward panel"
     },
     "MAIN PANEL SWITCH GEAR + BUTTONS": {
-      "name": "Main panel switches",
+      "name": "Thrust mode select",
       "section": "Forward panel"
     },
     "P61 PANEL SWITCH GEAR": "P61 panel",
     "CHANGE MAJOR CODE and UPDATES BELOW": {
-      "name": "Cockpit miscellaneous",
-      "section": "Forward panel"
+      "name": "Flight deck door",
+      "section": "Other"
     }
   },
   "node_panels": [
     {
       "prefix": "B757_OVHD_FLT-DK-DOOR",
-      "panel": "Flight deck door"
+      "panel": "Indicator lights and door lock"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_LT_OVRD",
+      "panel": "Panel lighting"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_L_ENG_LIMITER",
+      "panel": "Ram air turbine and engine limiters"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_R_ENG_LIMITER",
+      "panel": "Ram air turbine and engine limiters"
+    },
+    {
+      "banner": "LIGHT OVERRIDE",
+      "prefix": "B757_OVHD_RAT_",
+      "panel": "Ram air turbine and engine limiters"
+    },
+    {
+      "banner": "BUTTONS AND SWITCHES MAIN",
+      "prefix": "B757_OVHD_L_ELEC-ENG-CONT",
+      "panel": "Electronic engine control (RR)"
+    },
+    {
+      "banner": "BUTTONS AND SWITCHES MAIN",
+      "prefix": "B757_OVHD_R_ELEC-ENG-CONT",
+      "panel": "Electronic engine control (RR)"
+    },
+    {
+      "banner": "PLASTIC BUTTON and SWITCH GUARDS",
+      "prefix": "B757_GAURD_1_",
+      "panel": "Electronic engine control (RR)",
+      "section": "Overhead"
+    },
+    {
+      "banner": "PLASTIC BUTTON and SWITCH GUARDS",
+      "prefix": "B757_GAURD_2_",
+      "panel": "Electronic engine control (RR)",
+      "section": "Overhead"
+    },
+    {
+      "banner": "PLASTIC BUTTON and SWITCH GUARDS",
+      "prefix": "B757_GAURD_6_",
+      "panel": "Emergency lights and passenger oxygen",
+      "section": "Overhead"
+    },
+    {
+      "banner": "PLASTIC BUTTON and SWITCH GUARDS",
+      "prefix": "B757_GAURD_7_",
+      "panel": "Ram air turbine and engine limiters",
+      "section": "Overhead"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_FOOT_HEATERS",
+      "panel": "Captain foot and shoulder heat"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_SHOULDER_HEATERS",
+      "panel": "Captain foot and shoulder heat"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_FLT_",
+      "panel": "Captain instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_EFI_",
+      "panel": "Captain instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_IRS_",
+      "panel": "Captain instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_AIRDATA_",
+      "panel": "Captain instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_RECALL_",
+      "panel": "Caution, config and G/S inhibit"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_CANCEL_",
+      "panel": "Caution, config and G/S inhibit"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_TOCHK_",
+      "panel": "Caution, config and G/S inhibit"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "BBS757_GS_INHIBIT",
+      "panel": "Caution, config and G/S inhibit",
+      "section": "Forward panel"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_STDBY_EICAS",
+      "panel": "Standby instruments"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_knob_gears_altn_autobrake",
+      "panel": "Brakes"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_BRAKERESERVE",
+      "panel": "Brakes"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_HDG_REF",
+      "panel": "Heading reference"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_PANEL_ALTN_GEAR",
+      "panel": "Landing gear"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_ALTN_GEAR",
+      "panel": "Landing gear"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_knob_gears_altn_flaps",
+      "panel": "Alternate flaps"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_LEADINGEDGE",
+      "panel": "Alternate flaps"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_TRAILINGEDGE",
+      "panel": "Alternate flaps"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_GAURD_8_",
+      "panel": "Ground proximity overrides",
+      "section": "Forward panel"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_GAURD_9_",
+      "panel": "Ground proximity overrides",
+      "section": "Forward panel"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_GAURD_10_",
+      "panel": "Ground proximity overrides",
+      "section": "Forward panel"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_FLAPOVRD",
+      "panel": "Ground proximity overrides"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_GEAROVRD",
+      "panel": "Ground proximity overrides"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_L_TERROVRD",
+      "panel": "Ground proximity overrides"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_FLT_",
+      "panel": "First officer instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_EFI_",
+      "panel": "First officer instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_IRS_",
+      "panel": "First officer instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_AIRDATA_",
+      "panel": "First officer instrument source selectors"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_FOOT_HEATERS",
+      "panel": "First officer foot and shoulder heat"
+    },
+    {
+      "banner": "MAIN PANEL SWITCH GEAR + BUTTONS",
+      "prefix": "B757_MAIN_R_SHOULDER_HEATERS",
+      "panel": "First officer foot and shoulder heat"
+    },
+    {
+      "banner": "CAPT CHRONOMETER",
+      "prefix": "BBS_757_FO_CLOCK_BUTTON",
+      "panel": "First officer chronometer",
+      "section": "Forward panel"
     },
     {
       "banner": "LIGHT OVERRIDE",
@@ -269,14 +489,14 @@
     {
       "banner": "lights",
       "prefix": "B757_CABIN_",
-      "panel": "Cabin lights",
-      "section": "Overhead"
+      "panel": "Forward attendant panel",
+      "section": "Other"
     },
     {
       "banner": "lights",
       "prefix": "B757_GND_SVC",
-      "panel": "Ground service",
-      "section": "Overhead"
+      "panel": "Forward attendant panel",
+      "section": "Other"
     },
     {
       "prefix": "B757_OVHD_LOGO_BUTTON",
@@ -288,62 +508,54 @@
       "panel": "MCP"
     },
     {
-      "prefix": "B757_ADI_1_LCD_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
-    },
-    {
-      "prefix": "B757_ADI_2_LCD_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
-    },
-    {
       "prefix": "B757_HSI_1_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "Captain EFIS",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_HSI_2_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "First officer EFIS",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_EICAS_1_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "EICAS control",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_EICAS_2_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "EICAS control",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_FMC_1_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "CDU brightness",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_FMC_2_SCREEN_KNOB",
-      "panel": "Display brightness",
-      "section": "Forward panel"
+      "panel": "CDU brightness",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_ADI_1_",
-      "panel": "Captain EFIS"
+      "panel": "Captain EFIS",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_ADI_2_",
-      "panel": "First officer EFIS"
+      "panel": "First officer EFIS",
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_DH_RESET_CPT",
       "panel": "Captain EFIS",
-      "section": "Forward panel"
+      "section": "Pedestal"
     },
     {
       "prefix": "B757_DH_RESET_FO",
       "panel": "First officer EFIS",
-      "section": "Forward panel"
+      "section": "Pedestal"
     },
     {
       "prefix": "BBS_fuelcut_",
@@ -394,11 +606,11 @@
     },
     {
       "prefix": "B757_PED_WX_L_",
-      "panel": "Weather radar left"
+      "panel": "Weather radar"
     },
     {
       "prefix": "B757_PED_WX_R_",
-      "panel": "Weather radar right"
+      "panel": "Weather radar"
     },
     {
       "prefix": "B757_PED_TCAS_",
@@ -407,21 +619,21 @@
     {
       "prefix": "OXY_",
       "panel": "Oxygen",
-      "section": "Forward panel"
+      "section": "Other"
     },
     {
       "prefix": "BBS757_O2_",
       "panel": "Oxygen",
-      "section": "Forward panel"
+      "section": "Other"
     },
     {
       "prefix": "O2_EARS_",
       "panel": "Oxygen",
-      "section": "Forward panel"
+      "section": "Other"
     },
     {
       "prefix": "B757_MAIN_M_Gau_STBY_GYRO",
-      "panel": "Standby attitude indicator",
+      "panel": "Standby instruments",
       "section": "Forward panel"
     },
     {
@@ -455,9 +667,12 @@
       "Electrical",
       "APU",
       "IRS",
-      "Engine control and yaw damper",
+      "Electronic engine control (RR)",
+      "Yaw dampers",
       "Hydraulics",
-      "Overhead miscellaneous",
+      "Panel lighting",
+      "Emergency lights and passenger oxygen",
+      "Ram air turbine and engine limiters",
       "Fuel",
       "Anti-ice",
       "Wipers",
@@ -465,15 +680,11 @@
       "Window heat",
       "Passenger signs",
       "Pressurization",
+      "Equipment cooling",
       "Air conditioning and bleed",
-      "Cabin lights",
-      "IRS keypad",
-      "Switch guards",
-      "Flight deck door",
+      "Indicator lights and door lock",
       "CVR",
-      "SELCAL and cabin call",
-      "Ground service",
-      "Warning lights test"
+      "SELCAL and cabin call"
     ],
     "Glareshield": [
       "MCP",
@@ -481,44 +692,54 @@
       "Master warning and caution"
     ],
     "Forward panel": [
-      "Main panel switches",
+      "Captain foot and shoulder heat",
+      "Captain instrument source selectors",
+      "Caution, config and G/S inhibit",
+      "Brakes",
+      "Heading reference",
+      "Thrust mode select",
+      "Alternate flaps",
+      "Ground proximity overrides",
+      "First officer instrument source selectors",
+      "First officer foot and shoulder heat",
       "Landing gear",
-      "Captain EFIS",
       "Yokes",
       "Captain autoland status",
-      "Standby attitude indicator",
+      "Standby instruments",
       "Captain DDRMI",
       "Captain chronometer",
-      "Oxygen",
-      "Cockpit miscellaneous",
-      "First officer EFIS",
       "First officer autoland status",
       "First officer DDRMI",
-      "First officer chronometer",
-      "Display brightness"
+      "First officer chronometer"
     ],
     "Pedestal": [
       "Control stand",
       "Engines",
       "TCAS and transponder",
+      "Captain EFIS",
+      "First officer EFIS",
       "EICAS control",
+      "CDU brightness",
       "Radio tuning panel 1",
       "Audio panel 1",
       "Fire protection",
       "Stabilizer trim",
-      "Weather radar left",
+      "Weather radar",
       "Radio tuning panel 2",
       "Radio tuning panel 3",
       "Audio panel 2",
-      "Weather radar right",
-      "Pedestal radio panels"
+      "ILS tuning"
     ],
     "Other": [
-      "P61 panel"
+      "P61 panel",
+      "Oxygen",
+      "Flight deck door",
+      "Forward attendant panel"
     ]
   },
   "control_order": {
     "Electrical": [
+      "B757_GAURD_3_SWITCH",
       "B757_OVHD_BATTERY_BUTTON",
       "B757_OVHD_EXT_PWR_BUTTON",
       "B757_OVHD_STBY_POWER_SWITCH",
@@ -529,19 +750,39 @@
       "B757_OVHD_APU_GEN_BUTTON",
       "B757_OVHD_L_UTIL_BUS_BUTTON",
       "B757_OVHD_R_UTIL_BUS_BUTTON",
+      "B757_GAURD_4_SWITCH",
       "B757_OVHD_L_GEN_DRIVE_BUTTON",
+      "B757_GAURD_5_SWITCH",
       "B757_OVHD_R_GEN_DRIVE_BUTTON"
     ],
     "IRS": [
       "B757_IRS_L_SWITCH",
       "B757_IRS_C_SWITCH",
-      "B757_IRS_R_SWITCH"
+      "B757_IRS_R_SWITCH",
+      "B757_IRS_CENTRE_KNOB",
+      "B757_IRS_LARGE_KNOB",
+      "B757_IRS_NUMBER_1_BUTTON",
+      "B757_IRS_NUMBER_2_BUTTON",
+      "B757_IRS_NUMBER_3_BUTTON",
+      "B757_IRS_NUMBER_4_BUTTON",
+      "B757_IRS_NUMBER_5_BUTTON",
+      "B757_IRS_NUMBER_6_BUTTON",
+      "B757_IRS_NUMBER_7_BUTTON",
+      "B757_IRS_NUMBER_8_BUTTON",
+      "B757_IRS_NUMBER_9_BUTTON",
+      "B757_IRS_NUMBER_0_BUTTON",
+      "B757_IRS_NUMBER_ENT_BUTTON",
+      "B757_IRS_NUMBER_DEL_BUTTON"
     ],
-    "Engine control and yaw damper": [
-      "B757_OVHD_L_YAW_DAMPER_BUTTON",
-      "B757_OVHD_R_YAW_DAMPER_BUTTON",
+    "Electronic engine control (RR)": [
+      "B757_GAURD_1_SWITCH",
       "B757_OVHD_L_ELEC-ENG-CONT_BUTTON",
+      "B757_GAURD_2_SWITCH",
       "B757_OVHD_R_ELEC-ENG-CONT_BUTTON"
+    ],
+    "Yaw dampers": [
+      "B757_OVHD_L_YAW_DAMPER_BUTTON",
+      "B757_OVHD_R_YAW_DAMPER_BUTTON"
     ],
     "Hydraulics": [
       "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
@@ -551,13 +792,16 @@
       "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
       "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON"
     ],
-    "Overhead miscellaneous": [
+    "Emergency lights and passenger oxygen": [
       "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
       "B757_OVHD_SWITCH_GAURD",
-      "B757_OVHD_LT_OVRD_BUTTON",
+      "B757_GAURD_6_SWITCH",
+      "B757_OVHD_PASS_OXY_BUTTON"
+    ],
+    "Ram air turbine and engine limiters": [
       "B757_OVHD_L_ENG_LIMITER_BUTTON",
       "B757_OVHD_R_ENG_LIMITER_BUTTON",
-      "B757_OVHD_PASS_OXY_BUTTON",
+      "B757_GAURD_7_SWITCH",
       "B757_OVHD_RAT_BUTTON"
     ],
     "Fuel": [
@@ -569,6 +813,11 @@
       "B757_OVHD_C_PUMPS_R_BUTTON",
       "B757_OVHD_XFEED_PUMPS_FWD_BUTTON",
       "B757_OVHD_XFEED_PUMPS_AFT_BUTTON"
+    ],
+    "Anti-ice": [
+      "B757_OVHD_ANTI_ICE_L_ENG_BUTTON",
+      "B757_OVHD_ANTI_ICE_R_ENG_BUTTON",
+      "B757_OVHD_ANTI_ICE_WING_BUTTON"
     ],
     "Exterior lights": [
       "B757_OVHD_LOGO",
@@ -586,6 +835,10 @@
       "B757_OVHD_SEATBELTS_SWITCH",
       "B757_OVHD_NO_SMOKING_SWITCH"
     ],
+    "Pressurization": [
+      "B757_OVHD_MODE_SELECT_SWITCH",
+      "B757_OVHD_AUTORATE_SWITCH"
+    ],
     "Air conditioning and bleed": [
       "B757_OVHD_SEL_L_PACK_SWITCH",
       "B757_OVHD_SEL_R_PACK_SWITCH",
@@ -601,6 +854,24 @@
       "B757_OVHD_R_RECIRC_BUTTON",
       "B757_OVHD_L_PACK_BUTTON",
       "B757_OVHD_R_PACK_BUTTON"
+    ],
+    "Indicator lights and door lock": [
+      "B757_OVHD_FLT-DK-DOOR_SWITCH",
+      "B757_OVHD_WARNING_TEST_BUTTON",
+      "B757_OVHD_WARNING_IND_SWITCH"
+    ],
+    "SELCAL and cabin call": [
+      "B757_OVHD_FWD_CABIN_CALL_BUTTON",
+      "B757_OVHD_MID_CABIN_CALL_BUTTON",
+      "B757_OVHD_AFT_CABIN_CALL_BUTTON",
+      "B757_OVHD_GND_CALL_BUTTON",
+      "B757_OVHD_L_VHF_BUTTON",
+      "B757_OVHD_R_VHF_BUTTON",
+      "B757_OVHD_C_VHF_BUTTON",
+      "B757_OVHD_L_HF_BUTTON",
+      "B757_OVHD_R_HF_BUTTON",
+      "B757_OVHD_FLT_INT_BUTTON",
+      "B757_OVHD_ALERT_CABIN_CALL_BUTTON"
     ],
     "MCP": [
       "B757_MCP_SW_FD_Cap",
@@ -627,46 +898,108 @@
       "B757_MCP_btn_autopilot_disengage",
       "B757_MCP_BCRS_1_BUTTON"
     ],
-    "Main panel switches": [
-      "B757_MAIN_knob_gears_altn_autobrake",
+    "Master warning and caution": [
+      "B757_MCP_btn_master_pilot",
+      "B757_MCP_btn_master_copilot"
+    ],
+    "Captain foot and shoulder heat": [
+      "B757_MAIN_L_FOOT_HEATERS_SWITCH",
+      "B757_MAIN_L_SHOULDER_HEATERS_SWITCH"
+    ],
+    "Captain instrument source selectors": [
+      "B757_MAIN_L_FLT_DIR_SWITCH",
+      "B757_MAIN_L_FLT_NAV_SWITCH",
+      "B757_MAIN_L_EFI_BUTTON",
+      "B757_MAIN_L_IRS_BUTTON",
+      "B757_MAIN_L_AIRDATA_BUTTON"
+    ],
+    "Caution, config and G/S inhibit": [
       "B757_MAIN_RECALL_BUTTON",
       "B757_MAIN_CANCEL_BUTTON",
       "B757_MAIN_TOCHK_BUTTON",
-      "B757_MAIN_L_FOOT_HEATERS_SWITCH",
-      "B757_MAIN_R_FOOT_HEATERS_SWITCH",
-      "B757_MAIN_L_SHOULDER_HEATERS_SWITCH",
-      "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
-      "B757_MAIN_L_FLT_DIR_SWITCH",
-      "B757_MAIN_R_FLT_DIR_SWITCH",
-      "B757_MAIN_L_FLT_NAV_SWITCH",
-      "B757_MAIN_R_FLT_NAV_SWITCH",
-      "B757_MAIN_STDBY_EICAS_KNOB",
-      "B757_MAIN_HDG_REF_SWITCH",
+      "BBS757_GS_INHIBIT"
+    ],
+    "Brakes": [
+      "B757_MAIN_knob_gears_altn_autobrake",
+      "B757_MAIN_L_BRAKERESERVE_BUTTON"
+    ],
+    "Thrust mode select": [
       "B757_MAIN_TOGA_BUTTON",
       "B757_MAIN_1_BUTTON",
       "B757_MAIN_2_BUTTON",
       "B757_MAIN_CLB_BUTTON",
       "B757_MAIN_CRZ_BUTTON",
-      "BBS757_GS_INHIBIT",
-      "B757_MAIN_L_EFI_BUTTON",
-      "B757_MAIN_R_EFI_BUTTON",
-      "B757_MAIN_L_IRS_BUTTON",
-      "B757_MAIN_R_IRS_BUTTON",
-      "B757_MAIN_L_AIRDATA_BUTTON",
-      "B757_MAIN_R_AIRDATA_BUTTON",
-      "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD",
-      "B757_MAIN_ALTN_GEAR_SWITCH",
+      "B757_MAIN_CON_BUTTON"
+    ],
+    "Alternate flaps": [
       "B757_MAIN_knob_gears_altn_flaps",
       "B757_MAIN_L_LEADINGEDGE_BUTTON",
-      "B757_MAIN_L_TRAILINGEDGE_BUTTON",
+      "B757_MAIN_L_TRAILINGEDGE_BUTTON"
+    ],
+    "Ground proximity overrides": [
       "B757_GAURD_8_SWITCH",
       "B757_MAIN_L_FLAPOVRD_BUTTON",
       "B757_GAURD_9_SWITCH",
       "B757_MAIN_L_GEAROVRD_BUTTON",
       "B757_GAURD_10_SWITCH",
-      "B757_MAIN_L_TERROVRD_BUTTON",
-      "B757_MAIN_L_BRAKERESERVE_BUTTON",
-      "B757_MAIN_CON_BUTTON"
+      "B757_MAIN_L_TERROVRD_BUTTON"
+    ],
+    "First officer instrument source selectors": [
+      "B757_MAIN_R_FLT_DIR_SWITCH",
+      "B757_MAIN_R_FLT_NAV_SWITCH",
+      "B757_MAIN_R_EFI_BUTTON",
+      "B757_MAIN_R_IRS_BUTTON",
+      "B757_MAIN_R_AIRDATA_BUTTON"
+    ],
+    "First officer foot and shoulder heat": [
+      "B757_MAIN_R_FOOT_HEATERS_SWITCH",
+      "B757_MAIN_R_SHOULDER_HEATERS_SWITCH"
+    ],
+    "Landing gear": [
+      "B757_MAIN_Landing_Gear_Y",
+      "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD",
+      "B757_MAIN_ALTN_GEAR_SWITCH",
+      "B757_MAIN_LOCK_OVRD_SWITCH"
+    ],
+    "Standby instruments": [
+      "B757_MAIN_STDBY_EICAS_KNOB",
+      "BBS757_gyro_knob",
+      "B757_MAIN_M_Gau_STBY_GYRO_SELECTOR"
+    ],
+    "Captain chronometer": [
+      "BBS_757_CAPT_CLOCK_BUTTON",
+      "INSTRUMENT_Knob_Clock",
+      "B757_MAIN_CHRONO_ET_SWITCH",
+      "B757_MAIN_CHRONO_SET_SWITCH",
+      "INSTRUMENT_Knob_Date"
+    ],
+    "First officer chronometer": [
+      "BBS_757_FO_CLOCK_BUTTON",
+      "INSTRUMENT_Knob_Clock_FO",
+      "B757_MAIN_CHRONO_ET_SWITCH_FO",
+      "B757_MAIN_CHRONO_SET_SWITCH_FO",
+      "INSTRUMENT_Knob_Date_FO"
+    ],
+    "Control stand": [
+      "BBS757_PEDESTAL_Park_Brake_Lever",
+      "BBS757_lever_flaps",
+      "BBS757_SPOILERARMED_CLICK",
+      "BBS757_SPOILERDOWN_CLICK",
+      "BBS757_SPOILERUP_CLICK",
+      "ENGINE_Switch_ATDisc_1",
+      "B757_AT_DISC_1"
+    ],
+    "Engines": [
+      "B757_OVHD_ENG_START_SWITCH",
+      "B757_OVHD_L_ENG_START_SWITCH",
+      "BBS_fuelcut_PW1",
+      "B757_OVHD_R_ENG_START_SWITCH",
+      "BBS_fuelcut_PW2",
+      "BBS_fuelcut_RR1",
+      "BBS_fuelcut_RR2"
+    ],
+    "TCAS and transponder": [
+      "B757_PED_TCAS_MODE_KNOB"
     ],
     "Captain EFIS": [
       "B757_ADI_1_CTR_KNOB",
@@ -680,6 +1013,8 @@
       "B757_ADI_1_DATA_BUTTON",
       "B757_ADI_1_WPT_BUTTON",
       "B757_DH_RESET_CPT",
+      "B757_ADI_1_LCD_KNOB",
+      "B757_HSI_1_SCREEN_KNOB",
       "B757_ADI_1_INOP_BUTTON"
     ],
     "First officer EFIS": [
@@ -694,114 +1029,24 @@
       "B757_ADI_2_DATA_BUTTON",
       "B757_ADI_2_WPT_BUTTON",
       "B757_DH_RESET_FO",
-      "B757_ADI_2_INOP_BUTTON"
-    ],
-    "Control stand": [
-      "BBS757_PEDESTAL_Park_Brake_Lever",
-      "BBS757_lever_flaps",
-      "BBS757_SPOILERARMED_CLICK",
-      "BBS757_SPOILERDOWN_CLICK",
-      "BBS757_SPOILERUP_CLICK",
-      "ENGINE_Switch_ATDisc_1",
-      "B757_AT_DISC_1"
-    ],
-    "Landing gear": [
-      "B757_MAIN_Landing_Gear_Y"
-    ],
-    "Engines": [
-      "B757_OVHD_ENG_START_SWITCH",
-      "B757_OVHD_L_ENG_START_SWITCH",
-      "BBS_fuelcut_PW1",
-      "B757_OVHD_R_ENG_START_SWITCH",
-      "BBS_fuelcut_PW2",
-      "BBS_fuelcut_RR1",
-      "BBS_fuelcut_RR2"
-    ],
-    "TCAS and transponder": [
-      "B757_PED_TCAS_MODE_KNOB"
-    ],
-    "Anti-ice": [
-      "B757_OVHD_ANTI_ICE_L_ENG_BUTTON",
-      "B757_OVHD_ANTI_ICE_R_ENG_BUTTON",
-      "B757_OVHD_ANTI_ICE_WING_BUTTON"
-    ],
-    "Pressurization": [
-      "B757_OVHD_MODE_SELECT_SWITCH",
-      "B757_OVHD_AUTORATE_SWITCH",
-      "B757_OVHD_EQUIP_BUTTON"
-    ],
-    "Switch guards": [
-      "B757_GAURD_3_SWITCH",
-      "B757_GAURD_1_SWITCH",
-      "B757_GAURD_2_SWITCH",
-      "B757_GAURD_6_SWITCH",
-      "B757_GAURD_7_SWITCH",
-      "B757_GAURD_4_SWITCH",
-      "B757_GAURD_5_SWITCH"
-    ],
-    "SELCAL and cabin call": [
-      "B757_OVHD_FWD_CABIN_CALL_BUTTON",
-      "B757_OVHD_MID_CABIN_CALL_BUTTON",
-      "B757_OVHD_AFT_CABIN_CALL_BUTTON",
-      "B757_OVHD_GND_CALL_BUTTON",
-      "B757_OVHD_L_VHF_BUTTON",
-      "B757_OVHD_R_VHF_BUTTON",
-      "B757_OVHD_C_VHF_BUTTON",
-      "B757_OVHD_L_HF_BUTTON",
-      "B757_OVHD_R_HF_BUTTON",
-      "B757_OVHD_FLT_INT_BUTTON",
-      "B757_OVHD_ALERT_CABIN_CALL_BUTTON"
-    ],
-    "Master warning and caution": [
-      "B757_MCP_btn_master_pilot",
-      "B757_MCP_btn_master_copilot"
-    ],
-    "Captain chronometer": [
-      "BBS_757_CAPT_CLOCK_BUTTON",
-      "BBS_757_FO_CLOCK_BUTTON",
-      "INSTRUMENT_Knob_Clock",
-      "B757_MAIN_CHRONO_ET_SWITCH",
-      "B757_MAIN_CHRONO_SET_SWITCH",
-      "INSTRUMENT_Knob_Date"
-    ],
-    "Oxygen": [
-      "OXY_CAPT_TEST_SWITCH001",
-      "BBS757_O2_redbutton_CPT",
-      "OXY_FO_TEST_SWITCH1",
-      "BBS757_O2_redbutton_FO",
-      "OXY_OBSV_TEST_SWITCH",
-      "BBS757_O2_redbutton_JUMPSEAT",
-      "OXY_P61_TEST_SWITCH",
-      "BBS757_O2_redbutton_P61",
-      "O2_EARS_CPT",
-      "O2_EARS_FO",
-      "O2_EARS_JUMPSEAT",
-      "O2_EARS_OBSERVER"
-    ],
-    "First officer chronometer": [
-      "INSTRUMENT_Knob_Clock_FO",
-      "B757_MAIN_CHRONO_ET_SWITCH_FO",
-      "B757_MAIN_CHRONO_SET_SWITCH_FO",
-      "INSTRUMENT_Knob_Date_FO"
-    ],
-    "Display brightness": [
-      "B757_ADI_1_LCD_KNOB",
       "B757_ADI_2_LCD_KNOB",
-      "B757_HSI_1_SCREEN_KNOB",
       "B757_HSI_2_SCREEN_KNOB",
-      "B757_EICAS_1_SCREEN_KNOB",
-      "B757_EICAS_2_SCREEN_KNOB",
-      "B757_FMC_1_SCREEN_KNOB",
-      "B757_FMC_2_SCREEN_KNOB"
+      "B757_ADI_2_INOP_BUTTON"
     ],
     "EICAS control": [
       "B757_EICAS_R_STATUS_BUTTON",
       "B757_EICAS_L_STATUS_BUTTON",
+      "B757_EICAS_1_SCREEN_KNOB",
+      "B757_EICAS_2_SCREEN_KNOB",
       "B757_ECAM_LRAUTO_KNOB",
       "B757_EICAS_LWR_THRUST-REF_KNOB",
       "BBS757_THRREF_CLICK",
       "B757_EICAS_MAX-IND_BUTTON",
       "B757_EICAS_EVENT_BUTTON"
+    ],
+    "CDU brightness": [
+      "B757_FMC_1_SCREEN_KNOB",
+      "B757_FMC_2_SCREEN_KNOB"
     ],
     "Radio tuning panel 1": [
       "B757_PED_COMHEAD_1_SWAP_BUTTON",
@@ -868,13 +1113,18 @@
       "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
       "B757_Stab_trim_R_toggle_switch_CLICK"
     ],
-    "Weather radar left": [
+    "Weather radar": [
       "B757_PED_WX_L_WX_BUTTON",
+      "B757_PED_WX_R_WX_BUTTON",
       "B757_PED_WX_L_WXT_BUTTON",
       "B757_PED_WX_L_MAP_BUTTON",
       "B757_PED_WX_L_GCS_BUTTON",
       "B757_PED_WX_L_TEST_BUTTON",
-      "B757_PED_WX_L_TFR_BUTTON"
+      "B757_PED_WX_R_WXT_BUTTON",
+      "B757_PED_WX_R_MAP_BUTTON",
+      "B757_PED_WX_R_GCS_BUTTON",
+      "B757_PED_WX_L_TFR_BUTTON",
+      "B757_PED_WX_R_TFR_BUTTON"
     ],
     "Radio tuning panel 2": [
       "B757_PED_COMHEAD_2_SWAP_BUTTON",
@@ -925,13 +1175,6 @@
       "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
       "B757_PED_AUDIO_2_PTT_SWITCH"
     ],
-    "Weather radar right": [
-      "B757_PED_WX_R_WX_BUTTON",
-      "B757_PED_WX_R_WXT_BUTTON",
-      "B757_PED_WX_R_MAP_BUTTON",
-      "B757_PED_WX_R_GCS_BUTTON",
-      "B757_PED_WX_R_TFR_BUTTON"
-    ],
     "P61 panel": [
       "B757_VC_P61_SWITCH_2",
       "B757_VC_P61_SWITCH_1",
@@ -948,6 +1191,27 @@
       "P61_PRESS_Button_4",
       "P61_PRESS_Button_5",
       "P61_PRESS_Button_6"
+    ],
+    "Oxygen": [
+      "OXY_CAPT_TEST_SWITCH001",
+      "BBS757_O2_redbutton_CPT",
+      "OXY_FO_TEST_SWITCH1",
+      "BBS757_O2_redbutton_FO",
+      "OXY_OBSV_TEST_SWITCH",
+      "BBS757_O2_redbutton_JUMPSEAT",
+      "OXY_P61_TEST_SWITCH",
+      "BBS757_O2_redbutton_P61",
+      "O2_EARS_CPT",
+      "O2_EARS_FO",
+      "O2_EARS_JUMPSEAT",
+      "O2_EARS_OBSERVER"
+    ],
+    "Forward attendant panel": [
+      "B757_CABIN_CEILING",
+      "B757_CABIN_WINDOW",
+      "B757_CABIN_ENTRY",
+      "B757_CABIN_WORK_LT002",
+      "B757_GND_SVC_BUTTON"
     ]
   },
   "labels": {
@@ -980,12 +1244,12 @@
     "B757_OVHD_SEL_pack_Cockpt": "Flight Deck Temperature",
     "B757_OVHD_SEL_pack_FWD_cab": "Forward Cabin Temperature",
     "B757_OVHD_SEL_pack_AFT_cab": "Aft Cabin Temperature",
-    "B757_ADI_1_LCD_KNOB": "Captain PFD",
-    "B757_ADI_2_LCD_KNOB": "First Officer PFD",
-    "B757_HSI_1_SCREEN_KNOB": "Captain ND",
-    "B757_HSI_2_SCREEN_KNOB": "First Officer ND",
-    "B757_EICAS_1_SCREEN_KNOB": "Upper EICAS",
-    "B757_EICAS_2_SCREEN_KNOB": "Lower EICAS",
+    "B757_ADI_1_LCD_KNOB": "PFD Brightness",
+    "B757_ADI_2_LCD_KNOB": "PFD Brightness",
+    "B757_HSI_1_SCREEN_KNOB": "ND Brightness",
+    "B757_HSI_2_SCREEN_KNOB": "ND Brightness",
+    "B757_EICAS_1_SCREEN_KNOB": "Upper EICAS Brightness",
+    "B757_EICAS_2_SCREEN_KNOB": "Lower EICAS Brightness",
     "B757_FMC_1_SCREEN_KNOB": "Captain CDU",
     "B757_FMC_2_SCREEN_KNOB": "First Officer CDU",
     "B757_OVHD_SEL_L_PACK_SWITCH": "L Pack Selector",

@@ -963,7 +963,7 @@ class Guarded(unittest.TestCase):
                     "guard": guard, "guard_closed": 0, "close_sets": close_sets}
 
         expected = {
-            self.EMERGENCY: switch(self.EMERGENCY, "Overhead", "Overhead miscellaneous", "Emergency Lights",
+            self.EMERGENCY: switch(self.EMERGENCY, "Overhead", "Emergency lights and passenger oxygen", "Emergency Lights",
                                    ("OFF", "ARMED", "ON"), self.EMERGENCY_GUARD, 1),
             self.STAB_C: switch(self.STAB_C, "Pedestal", "Stabilizer trim", "Stab Trim C Cutout",
                                 ("NORMAL", "CUTOUT"), self.STAB_C_GUARD, 0),
@@ -989,10 +989,13 @@ class Guarded(unittest.TestCase):
 
         m, report = self.build()
 
-        # the emergency lights switch leads its panel and its guard follows; the rest keep cockpit order
-        self.assertEqual([(x["node"], x["label"]) for x in m["controls"] if x["panel"] == "Overhead miscellaneous"],
-                         [(self.EMERGENCY, "Emergency Lights"), (self.EMERGENCY_GUARD, "Emergency Lights Guard"),
-                          (self.LT_OVRD, "Lt Ovrd")])
+        # the emergency lights switch leads its panel and its guard follows (plan 12 task 7: on the emergency lights and
+        # passenger oxygen plate, its own panel); its neighbor in the vendor's banner, Lt Ovrd, is on the panel lighting plate
+        self.assertEqual([(x["node"], x["label"]) for x in m["controls"]
+                          if x["panel"] == "Emergency lights and passenger oxygen"],
+                         [(self.EMERGENCY, "Emergency Lights"), (self.EMERGENCY_GUARD, "Emergency Lights Guard")])
+        self.assertEqual([(x["section"], x["panel"]) for x in m["controls"] if x["node"] == self.LT_OVRD],
+                         [("Overhead", "Panel lighting")])
         self.assertEqual(sorted(x["label"] for x in m["controls"] if x["panel"] == "Stabilizer trim"),
                          ["Stab Trim C Cutout", "Stab Trim C Guard", "Stab Trim R Cutout", "Stab Trim R Guard"])
         # only a guarded control carries the guard fields
@@ -1248,7 +1251,7 @@ class DirectWrite(unittest.TestCase):
 
         self.assertIsNone(why)
         self.assertEqual(control, {
-            "node": self.DOOR, "section": "Overhead", "panel": "Flight deck door", "label": "Flight Deck Door",
+            "node": self.DOOR, "section": "Overhead", "panel": "Indicator lights and door lock", "label": "Flight Deck Door",
             "kind": "switch", "state_var": self.DOOR_VAR, "positions": self.UNLOCKED_AUTO_DENY,
             "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None})
         self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
@@ -1758,6 +1761,7 @@ class Levers(unittest.TestCase):
     GEAR, GEAR_VAR = "B757_MAIN_Landing_Gear_Y", "B757_GEAR_HANDLE_POS"
     FLAP, FLAP_VAR = "BBS757_lever_flaps", "B757_FC_FLAP_LEVER"
     LOCK_OVRD = "B757_MAIN_LOCK_OVRD_SWITCH"
+    ALTN_GEAR_GUARD, ALTN_GEAR = "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD", "B757_MAIN_ALTN_GEAR_SWITCH"
     GEAR_POSITIONS = [{"value": 0, "label": "UP"}, {"value": 0.5, "label": "OFF"}, {"value": 1, "label": "DOWN"}]
     FLAP_POSITIONS = [{"value": v, "label": l} for v, l in
                       ((0, "UP"), (17, "1"), (41, "5"), (67, "15"), (95, "20"), (125, "25"), (150, "30"))]
@@ -1792,11 +1796,23 @@ class Levers(unittest.TestCase):
                    component={"reads": [var], "writes": [var]})
 
     def lock_override_row(self):
-        """The gear lock override toggle, the one control the Landing gear panel has without the lever (cockpit order puts
-        it first: its line is before the lever's)."""
+        """The gear lock override toggle, the one control the vendor's LANDING GEAR banner has without the lever (cockpit
+        order puts it first: its line is before the lever's)."""
         var = "BBS757_GEAR_LOCK_OVRD_BUTTON"
         return row(node=self.LOCK_OVRD, kind="toggle", panel="LANDING GEAR", line=25026, state=["L:" + var],
                    left=f"(L:{var}, bool) ! (>L:{var}, bool)")
+
+    def altn_gear_rows(self):
+        """The alternate gear extension switch and its guard, under the vendor's main panel banner
+        (BBS_752_BASE_INTERIOR.xml:29515, 29520): plan 12 task 7 puts them on the Landing gear panel, where they sit in the
+        cockpit (6 cm from the gear lock override; docs/b757/evidence/panel-audit-12.md)."""
+        guard, switch = self.ALTN_GEAR_GUARD, self.ALTN_GEAR
+        return {
+            guard: row(node=guard, kind="guard", panel="MAIN PANEL SWITCH GEAR + BUTTONS", line=29515, state=["L:" + guard],
+                       left=f"(L:{guard}, bool) ! (>L:{guard}, bool) (L:{guard}, bool) 0 == if{{ 0 (>L:{switch}, number) }}"),
+            switch: row(node=switch, kind="momentary button", positions="-", panel="MAIN PANEL SWITCH GEAR + BUTTONS",
+                        line=29520, state=["L:" + switch], left=f"1 (>L:{switch}, bool)", release=f"0 (>L:{switch}, bool)"),
+        }
 
     def stand_rows(self):
         """The six controls of the Control stand as the extractor reads them (all under excluded banners), in cockpit order."""
@@ -1871,13 +1887,17 @@ class Levers(unittest.TestCase):
 
     def test_the_gear_lever_leads_its_panel(self):
         # Cockpit order puts the lock override first (its line is before the lever's); the shipped control_order does not.
-        m, _ = self.build()
+        # Plan 12 task 7: the alternate gear switch and its guard join the panel, the guard right before its switch, both
+        # after the lever (non-normal) and before the lock override (they came from another vendor banner).
+        rows = {**self.rows(), **self.altn_gear_rows()}
+        m, _ = self.build(rows)
 
         self.assertEqual([(c["label"], c["section"]) for c in m["controls"] if c["panel"] == "Landing gear"],
-                         [("Gear Lever", "Forward panel"), ("Gear Lock Override", "Forward panel")])
-        plain, _ = self.build(control_order={})
+                         [("Gear Lever", "Forward panel"), ("Altn Gear Guard", "Forward panel"),
+                          ("Altn Gear", "Forward panel"), ("Gear Lock Override", "Forward panel")])
+        plain, _ = self.build(rows, control_order={})
         self.assertEqual([c["label"] for c in plain["controls"] if c["panel"] == "Landing gear"],
-                         ["Gear Lock Override", "Gear Lever"])
+                         ["Gear Lock Override", "Gear Lever", "Altn Gear Guard", "Altn Gear"])
 
     def test_the_flap_lever_follows_the_parking_brake_on_the_control_stand(self):
         # plan 12 task 4: the flaps are moved on every flight, after the parking brake and before the speedbrake levers
@@ -1901,10 +1921,12 @@ class Levers(unittest.TestCase):
         self.assertEqual(report["taken_in"], [self.FLAP], "taken_in stays include_nodes' own")
         self.assertEqual({c["node"] for c in m["controls"]}, {self.LOCK_OVRD, self.GEAR, self.FLAP})
         # none named, none reported, and the rules' own count says what they do with a lever (the gear lever's place in its
-        # panel's order goes too: an order that names a node the map does not have is a stale one, and stops the run)
+        # panel's order goes too: an order that names a node the map does not have is a stale one, and stops the run; the
+        # shipped order of the Landing gear panel names the alternate gear rows too, plan 12 task 7)
+        with_altn = {**self.rows(), **self.altn_gear_rows()}
         with self.assertRaisesRegex(g.CurationError, rf"control_order lists nodes that are not in Landing gear: "
                                                      rf"{self.GEAR} \(not in the map\)"):
-            self.build(levers={}, include_nodes=[])
+            self.build(with_altn, levers={}, include_nodes=[])
         _, none = self.build(levers={}, include_nodes=[], control_order={})
         self.assertEqual(none["levers"], {})
         self.assertEqual(none["dropped"], collections.Counter({"lever": 1, "excluded banner": 1}))
@@ -2272,15 +2294,24 @@ class DirectPositions(unittest.TestCase):
     SCREEN_BANNER, ADI_BANNER = "MAIN BUTTONS AND CONTROL", "(after INDIVIDUAL AUDIO/RADIO PANELS)"
     # The eight display brightness knobs: node -> (the var BlueBird's brightness code reads, the label). The PFD knobs are the
     # ADI knobs (their click writes B757_PFD_1/2_SCREEN_KNOB); the nodes NAMED B757_PFD_x_SCREEN_KNOB write raster vars nothing reads.
+    # Plan 12 task 7 (the owner: the knobs go on the panels they are on): each EFIS control panel's PFD and ND knob, the EICAS
+    # control panel's two, and the two CDU knobs as a pair; the label says what it dims, the panel says whose.
     SCREENS = {
-        "B757_ADI_1_LCD_KNOB": ("B757_PFD_1_SCREEN_KNOB", "Captain PFD"),
-        "B757_ADI_2_LCD_KNOB": ("B757_PFD_2_SCREEN_KNOB", "First Officer PFD"),
-        "B757_HSI_1_SCREEN_KNOB": ("B757_HSI_1_SCREEN_KNOB", "Captain ND"),
-        "B757_HSI_2_SCREEN_KNOB": ("B757_HSI_2_SCREEN_KNOB", "First Officer ND"),
-        "B757_EICAS_1_SCREEN_KNOB": ("B757_EICAS_1_SCREEN_KNOB", "Upper EICAS"),
-        "B757_EICAS_2_SCREEN_KNOB": ("B757_EICAS_2_SCREEN_KNOB", "Lower EICAS"),
+        "B757_ADI_1_LCD_KNOB": ("B757_PFD_1_SCREEN_KNOB", "PFD Brightness"),
+        "B757_ADI_2_LCD_KNOB": ("B757_PFD_2_SCREEN_KNOB", "PFD Brightness"),
+        "B757_HSI_1_SCREEN_KNOB": ("B757_HSI_1_SCREEN_KNOB", "ND Brightness"),
+        "B757_HSI_2_SCREEN_KNOB": ("B757_HSI_2_SCREEN_KNOB", "ND Brightness"),
+        "B757_EICAS_1_SCREEN_KNOB": ("B757_EICAS_1_SCREEN_KNOB", "Upper EICAS Brightness"),
+        "B757_EICAS_2_SCREEN_KNOB": ("B757_EICAS_2_SCREEN_KNOB", "Lower EICAS Brightness"),
         "B757_FMC_1_SCREEN_KNOB": ("B757_FMC_1_SCREEN_KNOB", "Captain CDU"),
         "B757_FMC_2_SCREEN_KNOB": ("B757_FMC_2_SCREEN_KNOB", "First Officer CDU"),
+    }
+    # node -> its panel, all on the Pedestal (docs/b757/evidence/panel-audit-12.md: positions, manual p.102-103)
+    SCREEN_PANELS = {
+        "B757_ADI_1_LCD_KNOB": "Captain EFIS", "B757_HSI_1_SCREEN_KNOB": "Captain EFIS",
+        "B757_ADI_2_LCD_KNOB": "First officer EFIS", "B757_HSI_2_SCREEN_KNOB": "First officer EFIS",
+        "B757_EICAS_1_SCREEN_KNOB": "EICAS control", "B757_EICAS_2_SCREEN_KNOB": "EICAS control",
+        "B757_FMC_1_SCREEN_KNOB": "CDU brightness", "B757_FMC_2_SCREEN_KNOB": "CDU brightness",
     }
     # 0 dims a display to its minimum (output = knob / 40 * 1.5, never below 0.1), it does not turn it off: no "Off"
     BRIGHTNESS = [{"value": 0, "label": "Minimum"}, {"value": 20, "label": "Half"}, {"value": 40, "label": "Full"}]
@@ -2359,24 +2390,25 @@ class DirectPositions(unittest.TestCase):
         for node in self.SCREENS:
             banner = self.ADI_BANNER if node.startswith("B757_ADI_") else self.SCREEN_BANNER
             with self.subTest(node=node):
-                self.assertEqual(g.panel_of(row(node=node, panel=banner), c), ("Display brightness", "Forward panel"))
+                self.assertEqual(g.panel_of(row(node=node, panel=banner), c), (self.SCREEN_PANELS[node], "Pedestal"))
         self.assertEqual(g.panel_of(row(node=self.RATE, panel="PRESSURIZATION CONTROL PANEL"), c), ("Pressurization", "Overhead"))
         for node in self.ZONES:
             with self.subTest(node=node):
                 self.assertEqual(g.panel_of(row(node=node, panel="OVERHEAD PNEUMATIC PANEL"), c),
                                  ("Air conditioning and bleed", "Overhead"))
-        # the panel is last in the Forward panel (set once in preflight); the EFIS knobs of the same ADI prefix keep their panels
-        self.assertEqual(c["panel_order"]["Forward panel"][-1], "Display brightness")
-        self.assertEqual(g.panel_of(row(node="B757_ADI_1_CTR_KNOB", panel=self.ADI_BANNER), c), ("Captain EFIS", "Forward panel"))
+        # plan 12 task 7: no Display brightness panel any more; the EFIS knobs of the same ADI prefix share the brightness
+        # knob's panel, on the Pedestal
+        self.assertNotIn("Display brightness", [p for names in c["panel_order"].values() for p in names])
+        self.assertEqual(g.panel_of(row(node="B757_ADI_1_CTR_KNOB", panel=self.ADI_BANNER), c), ("Captain EFIS", "Pedestal"))
         self.assertEqual(g.panel_of(row(node="B757_ADI_2_TFC_KNOB", panel=self.ADI_BANNER), c),
-                         ("First officer EFIS", "Forward panel"))
+                         ("First officer EFIS", "Pedestal"))
 
     def test_the_embedded_map_holds_auto_rate_the_brightness_knobs_and_the_zone_selectors(self):
         with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
             m = json.load(fh)
         by_node = {c["node"]: c for c in m["controls"]}
         expected = {self.RATE: ("Overhead", "Pressurization", "Auto Rate", self.RATE, self.RATE_POSITIONS)}
-        expected.update({node: ("Forward panel", "Display brightness", label, var, self.BRIGHTNESS)
+        expected.update({node: ("Pedestal", self.SCREEN_PANELS[node], label, var, self.BRIGHTNESS)
                          for node, (var, label) in self.SCREENS.items()})
         expected.update({node: ("Overhead", "Air conditioning and bleed", label, var,
                                 [{"value": v, "label": l} for v, l in self.ZONE_FRAMES])
@@ -2396,8 +2428,7 @@ class DirectPositions(unittest.TestCase):
                      "B757_PED_WX_R_SMALL_SEL_KNOB", "B757_OVHD_CABINALT_SWITCH"):
             self.assertNotIn(node, by_node)
         self.assertFalse([x["node"] for x in m["controls"] if (x["state_var"] or "").endswith("_ANIM_FRAME")])
-        self.assertEqual([c["panel"] for c in m["controls"] if c["section"] == "Forward panel"][-1], "Display brightness",
-                         "the panel comes last in the Forward panel")
+        self.assertNotIn("Display brightness", {c["panel"] for c in m["controls"]}, "plan 12 task 7: the knobs are on their panels")
         # the Status panel's Cabin Altitude row reads the feet BlueBird's WASM writes
         self.assertEqual([s["key"] for s in m["status"] if s["label"] == "Cabin Altitude"], ["B757_TEST_CABIN_ALT"])
 
@@ -3804,8 +3835,8 @@ class Curation(unittest.TestCase):
         self.assertEqual([c["labels"][entry["guard"]] for entry in c["guarded"].values()],
                          ["Emergency Lights Guard", "Stab Trim C Guard", "Stab Trim R Guard"])
         # (plan 12 task 4 lists the rest of the panel after them; the guard stays after its switch because the app opens and
-        # closes it when the switch is set)
-        self.assertEqual(c["control_order"]["Overhead miscellaneous"][:2],
+        # closes it when the switch is set; plan 12 task 7: the panel is the emergency lights and passenger oxygen plate)
+        self.assertEqual(c["control_order"]["Emergency lights and passenger oxygen"][:2],
                          ["B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "B757_OVHD_SWITCH_GAURD"])
 
     # Plan 02, task 7: BlueBird's published detents (support.bluebirdsim.com/docs/simvars, read 2026-10-26: the gear handle's
@@ -3844,46 +3875,67 @@ class Curation(unittest.TestCase):
         self.assertEqual(g.panel_of(row(node=gear, panel="LANDING GEAR"), c), ("Landing gear", "Forward panel"))
         self.assertEqual(g.panel_of(row(node=flap, panel="RIGHT WINDOW RAIN EFFECTS"), c), ("Control stand", "Pedestal"))
         # the gear lever is first on its panel, the flap lever is right after the parking brake (plan 12 task 4: the flaps
-        # are set after start, retracted after takeoff, extended for landing, so they come before the speedbrake levers)
-        self.assertEqual(c["control_order"]["Landing gear"], [gear])
+        # are set after start, retracted after takeoff, extended for landing, so they come before the speedbrake levers);
+        # plan 12 task 7 lists the whole Landing gear panel, the alternate gear switch and its guard now on it
+        self.assertEqual(c["control_order"]["Landing gear"][0], gear)
         stand = c["control_order"]["Control stand"]
         self.assertEqual(stand[stand.index("BBS757_PEDESTAL_Park_Brake_Lever") + 1], flap)
         self.assertEqual(len(stand), len(set(stand)))
 
     # Ruling R37 (the owner's direction, 2026-10-25): the panels in the manual's preflight flow, the most used controls
-    # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change.
+    # first. Written out here as the owner approved them, so a change to the shipped curation is a visible change. Plan 12
+    # task 7 regrouped the panels by the cockpit (docs/b757/evidence/panel-audit-12.md) and kept this order: a panel that
+    # stays keeps its place, a renamed one takes the old one's, the parts of a split panel take its place (in cockpit order
+    # among themselves), a merged one the place of the first of its sources; the EFIS panels follow TCAS and transponder,
+    # CDU brightness follows EICAS control, and the oxygen masks, the door and the forward attendant panel follow P61.
     PANEL_ORDER = {
-        "Overhead": ["Electrical", "APU", "IRS", "Engine control and yaw damper", "Hydraulics", "Overhead miscellaneous",
-                     "Fuel", "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
-                     "Air conditioning and bleed", "Cabin lights", "IRS keypad", "Switch guards", "Flight deck door",
-                     "CVR", "SELCAL and cabin call", "Ground service", "Warning lights test"],
+        "Overhead": ["Electrical", "APU", "IRS", "Electronic engine control (RR)", "Yaw dampers", "Hydraulics",
+                     "Panel lighting", "Emergency lights and passenger oxygen", "Ram air turbine and engine limiters", "Fuel",
+                     "Anti-ice", "Wipers", "Exterior lights", "Window heat", "Passenger signs", "Pressurization",
+                     "Equipment cooling", "Air conditioning and bleed", "Indicator lights and door lock", "CVR",
+                     "SELCAL and cabin call"],
         "Glareshield": ["MCP", "VOR/DME", "Master warning and caution"],
-        # plan 12 task 1: the display brightness knobs are set once in preflight, so their panel is last
-        "Forward panel": ["Main panel switches", "Landing gear", "Captain EFIS", "Yokes", "Captain autoland status",
-                          "Standby attitude indicator", "Captain DDRMI", "Captain chronometer", "Oxygen",
-                          "Cockpit miscellaneous", "First officer EFIS", "First officer autoland status",
-                          "First officer DDRMI", "First officer chronometer", "Display brightness"],
+        # the ten parts of Main panel switches first, where it was, in cockpit order
+        "Forward panel": ["Captain foot and shoulder heat", "Captain instrument source selectors",
+                          "Caution, config and G/S inhibit", "Brakes", "Heading reference", "Thrust mode select",
+                          "Alternate flaps", "Ground proximity overrides", "First officer instrument source selectors",
+                          "First officer foot and shoulder heat", "Landing gear", "Yokes", "Captain autoland status",
+                          "Standby instruments", "Captain DDRMI", "Captain chronometer", "First officer autoland status",
+                          "First officer DDRMI", "First officer chronometer"],
         # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
-        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Radio tuning panel 1",
-                     "Audio panel 1", "Fire protection", "Stabilizer trim", "Weather radar left",
-                     "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "Weather radar right",
-                     "Pedestal radio panels"],
-        "Other": ["P61 panel"],
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "Captain EFIS", "First officer EFIS",
+                     "EICAS control", "CDU brightness", "Radio tuning panel 1", "Audio panel 1", "Fire protection",
+                     "Stabilizer trim", "Weather radar", "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2",
+                     "ILS tuning"],
+        "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).
     # Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first
     # in tab order") lists EVERY control of the panels it moved, in the order docs/b757/evidence/panel-order-12.md gives each
     # with its tier and source: what the normal procedures move on every flight first, in the flow's order; then what is set
     # once, the tests and the display options; then the non-normal, emergency and maintenance controls, a guard just before the
-    # switch it covers. The panels it left alone (IRS, Engine control and yaw damper, Fuel, Passenger signs, Landing gear,
-    # Engines, TCAS and transponder) lead with the controls ruling R37 approved and the rest keep cockpit order.
+    # switch it covers. The panels it left alone (Fuel, Passenger signs, Engines, TCAS and transponder) lead with the
+    # controls ruling R37 approved and the rest keep cockpit order. Plan 12 task 7 regrouped the panels by the cockpit and
+    # kept that order inside each: a panel's controls by Task 4's tier, within a tier Task 4's order where they shared a
+    # panel and the audit's otherwise, each guard just before its switch (the emergency lights guard just after); every
+    # control of a new or changed panel of two or more is listed. Derived by script from the audit and Task 4's research,
+    # not typed.
     CONTROL_ORDER_LABELS = {
-        "Electrical": ["Battery", "EXT PWR", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont", "R Gen Cont",
-                       "APU Gen", "L Util Bus", "R Util Bus", "L Gen Drive", "R Gen Drive"],
+        "IRS": ["IRS L", "IRS C", "IRS R", "IRS Center Knob", "IRS Large Knob", "IRS Number 1", "IRS Number 2",
+                "IRS Number 3", "IRS Number 4", "IRS Number 5", "IRS Number 6", "IRS Number 7", "IRS Number 8",
+                "IRS Number 9", "IRS Number 0", "IRS Number Ent", "IRS Number Del"],
+        "Electronic engine control (RR)": ["Elec Eng Cont 1 Guard (RR)", "L ELEC ENG Cont (RR)", "Elec Eng Cont 2 Guard (RR)",
+                                           "R ELEC ENG Cont (RR)"],
+        "Yaw dampers": ["L Yaw Damper", "R Yaw Damper"],
         "Hydraulics": ["R ELEC Pump", "C1 ELEC Pump", "C2 ELEC Pump", "L ELEC Pump", "L ENG HYD Pumps",
                        "R ENG HYD Pumps"],
-        "Overhead miscellaneous": ["Emergency Lights", "Emergency Lights Guard", "Lt Ovrd", "L ENG Limiter",
-                                   "R ENG Limiter", "Passenger Oxygen", "RAT"],   # plan 02 task 3: the guard follows its switch
+        "Electrical": ["Battery Guard", "Battery", "EXT PWR", "STBY Power", "L Bus Tie", "R Bus Tie", "L Gen Cont",
+                       "R Gen Cont", "APU Gen", "L Util Bus", "R Util Bus", "Left Generator Drive Disconnect Guard",
+                       "L Gen Drive", "Right Generator Drive Disconnect Guard", "R Gen Drive"],
+        # plan 02 task 3: the emergency lights guard follows its switch
+        "Emergency lights and passenger oxygen": ["Emergency Lights", "Emergency Lights Guard", "Passenger Oxygen Guard",
+                                                  "Passenger Oxygen"],
+        "Ram air turbine and engine limiters": ["L ENG Limiter", "R ENG Limiter", "Ram Air Turbine Guard", "RAT"],
         "Fuel": ["L Pumps FWD", "L Pumps Aft", "R Pumps FWD", "R Pumps Aft", "C Pumps L", "C Pumps R",
                  "Crossfeed FWD", "Crossfeed Aft"],
         "Exterior lights": ["Anti-col Red Lights", "Wing Lights", "L Runway Turnoff", "R Runway Turnoff",
@@ -3894,49 +3946,50 @@ class Curation(unittest.TestCase):
                                        "Forward Cabin Temperature", "Aft Cabin Temperature", "Trim Air", "L Recirc",
                                        "R Recirc", "L Pack", "R Pack"],
         "Passenger signs": ["Seatbelts", "No Smoking"],
-        "IRS": ["IRS L", "IRS C", "IRS R"],
-        "Engine control and yaw damper": ["L Yaw Damper", "R Yaw Damper", "L ELEC ENG Cont (RR)",
-                                          "R ELEC ENG Cont (RR)"],
+        "Indicator lights and door lock": ["Flight Deck Door", "Lamp Test", "Warning Ind"],
         "MCP": ["Captain F/D", "F/O F/D", "A/T Arm", "LNAV", "THR", "HDG SEL", "VNAV", "CMD L", "CMD C", "CMD R",
                 "FLCH", "V/S", "SPD", "ALT HOLD", "Speed Intervene", "LOC", "APP", "ALT SEL Push", "IAS/MACH",
                 "HDG HOLD", "Bank Limit", "Autopilot Disengage Bar", "BCRS 1"],
-        "Main panel switches": ["Autobrake", "Recall", "Cancel", "Takeoff Config Check", "L Foot Heaters", "R Foot Heaters",
-                                "L Shoulder Heaters", "R Shoulder Heaters", "L Flt Dir", "R Flt Dir", "L Flt Nav",
-                                "R Flt Nav", "Stdby EICAS", "HDG Ref", "TOGA", "TMSP 1", "TMSP 2", "CLB", "CRZ",
-                                "G/S Inhibit", "L EFI", "R EFI", "L IRS", "R IRS", "L Airdata", "R Airdata",
-                                "Altn Gear Guard", "Altn Gear", "Alternate Flaps Selector", "L Leading Edge",
-                                "L Trailing Edge", "Flap Override Guard", "L Flap Ovrd", "Gear Override Guard",
-                                "L Gear Ovrd", "Terrain Override Guard", "L Terr Ovrd", "L Brake Reserve", "CON"],
+        "Captain foot and shoulder heat": ["L Foot Heaters", "L Shoulder Heaters"],
+        "Captain instrument source selectors": ["L Flt Dir", "L Flt Nav", "L EFI", "L IRS", "L Airdata"],
+        "Caution, config and G/S inhibit": ["Recall", "Cancel", "Takeoff Config Check", "G/S Inhibit"],
+        "Standby instruments": ["Stdby EICAS", "Gyro Cage Knob", "Gyro Selector"],
+        "Brakes": ["Autobrake", "L Brake Reserve"],
+        "Thrust mode select": ["TOGA", "TMSP 1", "TMSP 2", "CLB", "CRZ", "CON"],
+        "Alternate flaps": ["Alternate Flaps Selector", "L Leading Edge", "L Trailing Edge"],
+        "Ground proximity overrides": ["Flap Override Guard", "L Flap Ovrd", "Gear Override Guard", "L Gear Ovrd",
+                                       "Terrain Override Guard", "L Terr Ovrd"],
+        "First officer instrument source selectors": ["R Flt Dir", "R Flt Nav", "R EFI", "R IRS", "R Airdata"],
+        "First officer foot and shoulder heat": ["R Foot Heaters", "R Shoulder Heaters"],
         "Control stand": ["Parking Brake", "Flap Lever", "Speedbrake Armed", "Speedbrake Down", "Speedbrake Up",
                           "TO/GA", "A/T Disconnect"],   # plan 12 task 4: the flap lever is second
-        "Landing gear": ["Gear Lever"],        # plan 02 task 7: first on its panel, the lock override follows in cockpit order
+        # plan 02 task 7: the gear lever first on its panel; plan 12 task 7: the alternate gear switch and its guard join it
+        "Landing gear": ["Gear Lever", "Altn Gear Guard", "Altn Gear", "Gear Lock Override"],
         "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
                     "L Fuel Control (RR)", "R Fuel Control (RR)"],
         "TCAS and transponder": ["TCAS Mode"],   # the app's Squawk Code field follows it (BBS757Definition.Readouts.cs)
+        # plan 12 task 7: on the pedestal, each with the two brightness knobs it has (after the map options, before INOP)
         "Captain EFIS": ["ND Mode", "ND Range", "WXR", "TERR", "TFC", "CTR", "NAV AID", "APRT", "DATA", "WPT",
-                         "DH Reset", "INOP"],
+                         "DH Reset", "PFD Brightness", "ND Brightness", "INOP"],
         "First officer EFIS": ["ND Mode", "ND Range", "WXR", "TERR", "TFC", "CTR", "NAV AID", "APRT", "DATA", "WPT",
-                               "DH Reset", "INOP"],
+                               "DH Reset", "PFD Brightness", "ND Brightness", "INOP"],
+        "CDU brightness": ["Captain CDU", "First Officer CDU"],
         "Anti-ice": ["Anti Ice L ENG", "Anti Ice R ENG", "Anti Ice Wing"],
-        "Pressurization": ["Mode Select", "Auto Rate", "Equip"],
-        "Switch guards": ["Battery Guard", "Elec Eng Cont 1 Guard (RR)", "Elec Eng Cont 2 Guard (RR)",
-                          "Passenger Oxygen Guard", "Ram Air Turbine Guard", "Left Generator Drive Disconnect Guard",
-                          "Right Generator Drive Disconnect Guard"],
+        "Pressurization": ["Mode Select", "Auto Rate"],
         "SELCAL and cabin call": ["FWD Cabin Call", "Mid Cabin Call", "Aft Cabin Call", "GND Call", "L VHF", "R VHF",
                                   "C VHF", "L HF", "R HF", "Flt Int", "Alert Cabin Call"],
         "Master warning and caution": ["Captain Master Warning and Caution",
                                        "First Officer Master Warning and Caution"],
-        "Captain chronometer": ["757 Capt Clock", "757 FO Clock", "Clock Button", "Chrono ET", "Chrono Set",
-                                "Date Button"],
+        # plan 12 task 7: each glareshield CLOCK switch with its own pilot's clock
+        "Captain chronometer": ["757 Capt Clock", "Clock Button", "Chrono ET", "Chrono Set", "Date Button"],
         "Oxygen": ["Captain Oxygen Test", "O2 Redbutton CPT", "First Officer Oxygen Test", "O2 Redbutton FO",
                    "First Observer Oxygen Test", "O2 Redbutton Jumpseat", "Second Observer Oxygen Test",
                    "O2 Redbutton P61",
                    "O2 Ears CPT", "O2 Ears FO", "O2 Ears Jumpseat", "O2 Ears Observer"],
-        "First officer chronometer": ["Clock Button", "Chrono ET", "Chrono Set", "Date Button"],
-        "Display brightness": ["Captain PFD", "First Officer PFD", "Captain ND", "First Officer ND", "Upper EICAS",
-                               "Lower EICAS", "Captain CDU", "First Officer CDU"],
-        "EICAS control": ["EICAS R Status", "EICAS L Status", "EICAS Computer Switch", "EICAS Lwr Thrust Ref",
-                          "Thrust Ref Pull", "EICAS Max Ind", "EICAS Event"],
+        "First officer chronometer": ["757 FO Clock", "Clock Button", "Chrono ET", "Chrono Set", "Date Button"],
+        "EICAS control": ["EICAS R Status", "EICAS L Status", "Upper EICAS Brightness", "Lower EICAS Brightness",
+                          "EICAS Computer Switch", "EICAS Lwr Thrust Ref", "Thrust Ref Pull", "EICAS Max Ind",
+                          "EICAS Event"],
         "Radio tuning panel 1": ["Comhead 1 Swap", "Nav 1 VHF L", "Nav 1 VHF C", "Nav 1 VHF R", "Nav 1 HF L",
                                  "Nav 1 HF R", "Nav 1 AM", "Radio Test", "Nav 1 Off"],
         "Audio panel 1": ["Audio 1 Mic L Light", "Audio 1 Mic L Light Knob", "Audio 1 Mic R Light",
@@ -3947,6 +4000,7 @@ class Curation(unittest.TestCase):
                           "Audio 1 Mic Ladf Light", "Audio 1 Mic Radf Light", "Audio 1 Mic Mkr Light",
                           "Audio 1 Voice Range", "Audio 1 Mic Lm Light", "Audio 1 Mic Lm Light Knob",
                           "Audio 1 Mic RR Light", "Audio 1 Mic RR Light Knob", "Audio 1 Boom Oxy", "Audio 1 PTT"],
+        # plan 12 task 7 (the owner's answer): the fire and overheat tests stay here with the handles, in Task 4's order
         "Fire protection": ["Wheel Well Fire Test", "Engine Fire Test", "Engine, APU and Cargo Fire Test",
                             "Engine 1 Fire Handle Unlock",
                             "Engine 1 Fire Handle", "Engine 1 Fire Handle Rotation", "Engine 2 Fire Handle Unlock",
@@ -3955,7 +4009,9 @@ class Curation(unittest.TestCase):
                             "1 BTL Cargo Fire Guard", "1 BTL Cargo Fire", "2 BTL Cargo Fire Guard",
                             "2 BTL Cargo Fire", "Sys Fail"],
         "Stabilizer trim": ["Stab Trim C Guard", "Stab Trim C Cutout", "Stab Trim R Guard", "Stab Trim R Cutout"],
-        "Weather radar left": ["WX L WX", "WX L Wxt", "WX L Map", "WX L Gcs", "Weather Radar Test", "WX L Tfr"],
+        # plan 12 task 7: one weather radar panel, its left and right mode rows; a tier at a time, left before right
+        "Weather radar": ["WX L WX", "WX R WX", "WX L Wxt", "WX L Map", "WX L Gcs", "Weather Radar Test", "WX R Wxt",
+                          "WX R Map", "WX R Gcs", "WX L Tfr", "WX R Tfr"],
         "Radio tuning panel 2": ["Comhead 2 Swap", "Nav 2 VHF L", "Nav 2 VHF C", "Nav 2 VHF R", "Nav 2 HF L",
                                  "Nav 2 HF R", "Nav 2 AM", "Radio Test", "Nav 2 Off"],
         "Radio tuning panel 3": ["Comhead 3 Swap", "Nav 3 VHF L", "Nav 3 VHF C", "Nav 3 VHF R", "Nav 3 HF L",
@@ -3968,7 +4024,8 @@ class Curation(unittest.TestCase):
                           "Audio 2 Mic Ladf Light", "Audio 2 Mic Radf Light", "Audio 2 Mic Mkr Light",
                           "Audio 2 Voice Range", "Audio 2 Mic Lm Light", "Audio 2 Mic Lm Light Knob",
                           "Audio 2 Mic RR Light", "Audio 2 Mic RR Light Knob", "Audio 2 Boom Oxy", "Audio 2 PTT"],
-        "Weather radar right": ["WX R WX", "WX R Wxt", "WX R Map", "WX R Gcs", "WX R Tfr"],
+        # plan 12 task 7: the cabin lights and the ground service switch, on the forward attendant panel by door 1L
+        "Forward attendant panel": ["Cabin Ceiling", "Cabin Window", "Cabin Entry", "Cabin Work Light", "GND Svc"],
         # plan 12 task 5: the eight P61 test switches (Ground Prox Hyd Gen, Air Data Stall Left and Right, TO and Land Config,
         # Equip Cooling, Yaw Damp, Duct Leak Fuel Qty, Wing AI Window Heat) left the map; the app places their buttons
         "P61 panel": ["Flight Recorder", "Service Interphone", "Squib Test",
@@ -3985,6 +4042,89 @@ class Curation(unittest.TestCase):
             with self.subTest(section=section):
                 self.assertIn(section, g.SECTIONS)
                 self.assertEqual(len(names), len(set(names)), "a panel listed twice")
+
+    # Plan 12 task 7: the panels the audit found made up (code buckets of the vendor's file, or the app's own) and the ones
+    # it merged or renamed. None may come back, in curation or in the map.
+    GONE_PANELS = ("Main panel switches", "Overhead miscellaneous", "Switch guards", "Cockpit miscellaneous",
+                   "Display brightness", "Engine control and yaw damper", "IRS keypad", "Cabin lights", "Ground service",
+                   "Warning lights test", "Standby attitude indicator", "Weather radar left", "Weather radar right",
+                   "Pedestal radio panels", "Fire and overheat test")
+    # guard -> the switch it covers (the audit's guard tables: 0.1-1.4 cm apart in the interior models)
+    GUARD_OF = {
+        "B757_OVHD_SWITCH_GAURD": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
+        "B757_GAURD_3_SWITCH": "B757_OVHD_BATTERY_BUTTON",
+        "B757_GAURD_1_SWITCH": "B757_OVHD_L_ELEC-ENG-CONT_BUTTON",
+        "B757_GAURD_2_SWITCH": "B757_OVHD_R_ELEC-ENG-CONT_BUTTON",
+        "B757_GAURD_6_SWITCH": "B757_OVHD_PASS_OXY_BUTTON",
+        "B757_GAURD_7_SWITCH": "B757_OVHD_RAT_BUTTON",
+        "B757_GAURD_4_SWITCH": "B757_OVHD_L_GEN_DRIVE_BUTTON",
+        "B757_GAURD_5_SWITCH": "B757_OVHD_R_GEN_DRIVE_BUTTON",
+        "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD": "B757_MAIN_ALTN_GEAR_SWITCH",
+        "B757_GAURD_8_SWITCH": "B757_MAIN_L_FLAPOVRD_BUTTON",
+        "B757_GAURD_9_SWITCH": "B757_MAIN_L_GEAROVRD_BUTTON",
+        "B757_GAURD_10_SWITCH": "B757_MAIN_L_TERROVRD_BUTTON",
+        "B757_GAURD_11_SWITCH": "B757_PED_1BTL_CARGOFIRE_BUTTON",
+        "B757_GAURD_12_SWITCH": "B757_PED_2BTL_CARGOFIRE_BUTTON",
+        "B757_AISLE_STAND_STAB_1_GAURD_SWITCH": "B757_Stab_trim_C_toggle_switch_CLICK",
+        "B757_AISLE_STAND_STAB_2_GAURD_SWITCH": "B757_Stab_trim_R_toggle_switch_CLICK",
+        "BBS_B757_P61_GLASS_GAURD_1": "B757_P61_PRESS_MAIN_BUTTON_L",
+        "BBS_B757_P61_GLASS_GAURD_2": "B757_P61_PRESS_MAIN_BUTTON_C",
+        "BBS_B757_P61_GLASS_GAURD_3": "B757_P61_PRESS_MAIN_BUTTON_R",
+    }
+
+    def test_the_made_up_panels_are_gone_and_every_guard_sits_with_its_switch(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            controls = json.load(fh)["controls"]
+
+        named = ({r["panel"] for r in c["node_panels"]} | {e if isinstance(e, str) else e["name"] for e in c["panels"].values()}
+                 | {p for names in c["panel_order"].values() for p in names} | set(c["control_order"]))
+        for panel in self.GONE_PANELS:
+            with self.subTest(panel=panel):
+                self.assertNotIn(panel, named)
+                self.assertNotIn(panel, {x["panel"] for x in controls})
+        # every panel of the map is listed in panel_order (none falls back to the alphabet), and one panel is in one section
+        self.assertEqual({(x["section"], x["panel"]) for x in controls},
+                         {(s, p) for s, names in c["panel_order"].items() for p in names})
+        # each guard on its switch's panel, right before it; the emergency lights guard right after (the app opens it itself)
+        self.assertEqual(sorted(x["node"] for x in controls if x["kind"] == "guard"), sorted(self.GUARD_OF))
+        at = {x["node"]: i for i, x in enumerate(controls)}
+        for guard, switch in self.GUARD_OF.items():
+            with self.subTest(guard=guard):
+                self.assertEqual(controls[at[guard]]["panel"], controls[at[switch]]["panel"])
+                want = at[switch] + 1 if guard == "B757_OVHD_SWITCH_GAURD" else at[switch] - 1
+                self.assertEqual(at[guard], want)
+
+    def test_the_embedded_map_puts_controls_on_the_panels_they_are_on(self):
+        # A few placements from the audit (docs/b757/evidence/panel-audit-12.md), one per kind of move: an EFIS panel to the
+        # pedestal, a brightness knob to its EFIS panel, the first officer's clock switch to the first officer's clock, the
+        # oxygen masks and the door to Other, the cabin lights to the forward attendant panel, the IRS keypad into IRS.
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            where = {x["node"]: (x["section"], x["panel"], x["label"]) for x in json.load(fh)["controls"]}
+
+        expected = {
+            "B757_ADI_1_CTR_KNOB": ("Pedestal", "Captain EFIS", "ND Mode"),
+            "B757_ADI_1_LCD_KNOB": ("Pedestal", "Captain EFIS", "PFD Brightness"),
+            "B757_HSI_2_SCREEN_KNOB": ("Pedestal", "First officer EFIS", "ND Brightness"),
+            "B757_EICAS_1_SCREEN_KNOB": ("Pedestal", "EICAS control", "Upper EICAS Brightness"),
+            "B757_FMC_2_SCREEN_KNOB": ("Pedestal", "CDU brightness", "First Officer CDU"),
+            "BBS_757_FO_CLOCK_BUTTON": ("Forward panel", "First officer chronometer", "757 FO Clock"),
+            "OXY_CAPT_TEST_SWITCH001": ("Other", "Oxygen", "Captain Oxygen Test"),
+            "B757_COCKPIT_DOOR": ("Other", "Flight deck door", "Cockpit Door"),
+            "B757_GND_SVC_BUTTON": ("Other", "Forward attendant panel", "GND Svc"),
+            "B757_CABIN_CEILING": ("Other", "Forward attendant panel", "Cabin Ceiling"),
+            "B757_IRS_NUMBER_ENT_BUTTON": ("Overhead", "IRS", "IRS Number Ent"),
+            "B757_OVHD_EQUIP_BUTTON": ("Overhead", "Equipment cooling", "Equip"),
+            "B757_OVHD_FLT-DK-DOOR_SWITCH": ("Overhead", "Indicator lights and door lock", "Flight Deck Door"),
+            "B757_MAIN_STDBY_EICAS_KNOB": ("Forward panel", "Standby instruments", "Stdby EICAS"),
+            "BBS757_GS_INHIBIT": ("Forward panel", "Caution, config and G/S inhibit", "G/S Inhibit"),
+            "B757_PED_FIRE_ENG_BUTTON": ("Pedestal", "Fire protection", "Engine Fire Test"),
+            "B757_PED_WX_R_WX_BUTTON": ("Pedestal", "Weather radar", "WX R WX"),
+            "B757_PED_ILS_TEST_BUTTON": ("Pedestal", "ILS tuning", "ILS Test"),
+        }
+        for node, want in expected.items():
+            with self.subTest(node=node):
+                self.assertEqual(where[node], want)
 
     def test_the_shipped_curation_puts_the_most_used_controls_first(self):
         # The pilot hears the label the embedded map gives a control (a guard is named by what it covers, a variant says

@@ -80,10 +80,11 @@ these change, panel by panel, as the dry run lists them on 2026-10-28:
   power, bus ties, generator controls, APU generator) and the battery are denied, so the buses stay powered.
 - **Overhead, IRS:** the IRS display knobs (IRS Center Knob: L, C, R; IRS Large Knob: TK/GS, PPOS, WIND,
   HDG/STS). The IRS mode selectors are denied.
-- **Overhead, Engine control and yaw damper:** the left and right yaw dampers.
+- **Overhead, Yaw dampers:** the left and right yaw dampers.
 - **Overhead, Hydraulics:** all four electric hydraulic pumps (L, C1, C2, R ELEC Pump), which start and stop
   (hydraulic pressure rises and falls), and both engine pump switches.
-- **Overhead, Overhead miscellaneous:** Lt Ovrd and the left and right engine limiters.
+- **Overhead, Panel lighting:** Lt Ovrd.
+- **Overhead, Ram air turbine and engine limiters:** the left and right engine limiters.
 - **Overhead, Fuel:** all six fuel pumps (left, right and center) and both crossfeed valves.
 - **Overhead, Anti-ice:** engine and wing anti-ice.
 - **Overhead, Wipers:** the wiper selector (OFF, LOW, HIGH): the wipers run.
@@ -91,35 +92,39 @@ these change, panel by panel, as the dry run lists them on 2026-10-28:
   taxi, landing, position, logo).
 - **Overhead, Window heat:** the four window heat switches.
 - **Overhead, Passenger signs:** the seatbelt and no smoking signs (the cabin chimes).
-- **Overhead, Pressurization:** Mode Select (AUTO 1, AUTO 2, MAN), Auto Rate and the equipment cooling switch.
+- **Overhead, Pressurization:** Mode Select (AUTO 1, AUTO 2, MAN) and Auto Rate.
+- **Overhead, Equipment cooling:** the equipment cooling switch.
 - **Overhead, Air conditioning and bleed:** both pack selectors, the isolation valve, both engine bleeds and
   the APU bleed (the packs lose their air while it is off), the three zone temperature selectors (Flight
   Deck, Forward Cabin, Aft Cabin), trim air and both recirculation fans.
-- **Overhead, Cabin lights:** the ceiling, window and entry lights and the work light.
-- **Overhead, Flight deck door:** the door lock switch (Unlocked, Auto, Deny).
-- **Overhead, Warning lights test:** the Warning Ind switch (DIM, BRT): the annunciators dim and brighten.
+- **Overhead, Indicator lights and door lock:** the door lock switch (Unlocked, Auto, Deny) and the Warning
+  Ind switch (DIM, BRT): the annunciators dim and brighten.
 - **Glareshield, MCP:** both flight director switches, the A/T arm switch, the bank limit selector and the
   autopilot disengage bar.
-- **Forward panel, Main panel switches:** the autobrake selector, the foot and shoulder heaters, and the
-  instrument source switches (flight director, nav, EFI, IRS and air data source buttons for each side,
-  standby EICAS, HDG Ref) and the left brake reserve.
-- **Forward panel, Captain and First officer EFIS:** ND mode and range and the map overlays (WXR, TERR, NAV
-  AID, APRT, DATA, WPT, INOP): both NDs change what they show.
-- **Forward panel, Standby attitude indicator:** the gyro selector (OFF, ILS, BCRS).
+- **Forward panel, Captain and First officer foot and shoulder heat:** the foot and shoulder heaters.
+- **Forward panel, Captain and First officer instrument source selectors:** the flight director, nav, EFI,
+  IRS and air data source switches of each side.
+- **Forward panel, Brakes:** the autobrake selector and the left brake reserve.
+- **Forward panel, Heading reference:** HDG Ref.
+- **Forward panel, Standby instruments:** the standby EICAS switch and the gyro selector (OFF, ILS, BCRS).
 - **Forward panel, Captain and First officer DDRMI:** both needles' VOR/ADF switches.
 - **Forward panel, Captain and First officer chronometer:** Chrono ET (RUN, HOLD, RESET) and Chrono Set
   (RUN, HOLD, slow and fast slew): the clocks' elapsed time and time change.
-- **Forward panel, Oxygen:** the four O2 Ears switches (captain, first officer, jumpseat, observer).
-- **Forward panel, Cockpit miscellaneous:** the cockpit door.
-- **Forward panel, Display brightness:** all eight display knobs (both PFDs, both NDs, upper and lower EICAS,
-  both CDUs): each display dims to its minimum and back to full.
 - **Pedestal, TCAS and transponder:** the TCAS mode and transponder selectors.
-- **Pedestal, EICAS control:** the EICAS computer switch and the thrust reference controls (EICAS Lwr
-  Thrust Ref: L, BOTH, R; Thrust Ref Pull).
+- **Pedestal, Captain and First officer EFIS:** ND mode and range, the map overlays (WXR, TERR, NAV AID,
+  APRT, DATA, WPT, INOP) and the PFD and ND brightness knobs: both NDs change what they show, and each PFD
+  and ND dims to its minimum and back to full.
+- **Pedestal, EICAS control:** the upper and lower EICAS brightness knobs (each display dims to its minimum
+  and back to full), the EICAS computer switch and the thrust reference controls (EICAS Lwr Thrust Ref: L,
+  BOTH, R; Thrust Ref Pull).
+- **Pedestal, CDU brightness:** both CDU brightness knobs.
 - **Pedestal, Audio panels 1 and 2:** every microphone and receiver selector, voice/range and boom/oxygen.
 - **Other, P61 panel:** the flight recorder and the service interphone. (The P61 test switches are no longer
   in the map: they spring back to neutral at once, so the app tests from buttons instead, and the sweep never
   moves them.)
+- **Other, Oxygen:** the four O2 Ears switches (captain, first officer, jumpseat, observer).
+- **Other, Flight deck door:** the cockpit door.
+- **Other, Forward attendant panel:** the ceiling, window and entry lights and the work light.
 
 Nothing on the denylist moves (below), nor any button, guard or guarded switch.
 

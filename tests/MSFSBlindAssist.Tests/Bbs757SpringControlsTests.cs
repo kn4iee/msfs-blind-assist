@@ -38,17 +38,20 @@ public class Bbs757SpringControlsTests
     // ---- The table (measured, flight-12.md) --------------------------------------------------------------
 
     [Theory]
-    [InlineData("BBS757_RUDDER_TRIM", "B757_PEDESTAL_RUDDER_TRIM_KNOB", 1, 0, 2, "Pedestal", "Stabilizer trim", "Rudder trim")]
-    [InlineData("BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, "Pedestal", "Stabilizer trim", "Aileron trim")]
-    [InlineData("BBS757_ALTN_STAB_TRIM", "BBS_ELEV_TRIM_ALTERNATE", 1, 0, 2, "Pedestal", "Stabilizer trim", "Stab trim")]
-    [InlineData("BBS757_CABIN_ALT_MANUAL", "B757_OVHD_CABINALT_SWITCH", 4, 0, 7, "Overhead", "Pressurization", "Cabin altitude")]
+    // Plan 12 task 7: the rudder and aileron trim switches sit on their own trim panel at the aft end of the aisle stand
+    // (docs/b757/evidence/panel-audit-12.md), so their buttons are on the app's own Rudder and aileron trim panel, listed
+    // right after Stabilizer trim; the alternate stab trim switch is on the control stand, with the cutouts.
+    [InlineData("BBS757_RUDDER_TRIM", "B757_PEDESTAL_RUDDER_TRIM_KNOB", 1, 0, 2, "Pedestal", "Rudder and aileron trim", "Rudder trim", "Stabilizer trim")]
+    [InlineData("BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, "Pedestal", "Rudder and aileron trim", "Aileron trim", "Stabilizer trim")]
+    [InlineData("BBS757_ALTN_STAB_TRIM", "BBS_ELEV_TRIM_ALTERNATE", 1, 0, 2, "Pedestal", "Stabilizer trim", "Stab trim", null)]
+    [InlineData("BBS757_CABIN_ALT_MANUAL", "B757_OVHD_CABINALT_SWITCH", 4, 0, 7, "Overhead", "Pressurization", "Cabin altitude", null)]
     public void The_four_switches_are_the_measured_ones(string key, string lvar, double rest, double negative, double positive,
-        string section, string panel, string name)
+        string section, string panel, string name, string? panelAfter)
     {
         var c = Control(key);
 
-        Assert.Equal((lvar, rest, negative, positive, section, panel, name),
-            (c.LVar, c.Rest, c.Negative, c.Positive, c.Section, c.Panel, c.Name));
+        Assert.Equal((lvar, rest, negative, positive, section, panel, name, panelAfter),
+            (c.LVar, c.Rest, c.Negative, c.Positive, c.Section, c.Panel, c.Name, c.PanelAfter));
         Assert.Equal(key == "BBS757_CABIN_ALT_MANUAL", c.NeedsManualMode);
     }
 
@@ -299,6 +302,7 @@ public class Bbs757SpringControlsTests
 
     private const string ModeSelectNode = "B757_OVHD_MODE_SELECT_SWITCH";
     private const string StabTrimPanel = "Stabilizer trim";
+    private const string RudderAileronPanel = "Rudder and aileron trim";
 
     private static Bbs757Control ModeSelect() => new()
     {
@@ -321,11 +325,12 @@ public class Bbs757SpringControlsTests
         return map;
     }
 
-    private static readonly string[] TrimButtons =
+    private static readonly string[] RudderAileronButtons =
     {
         "BBS757_RUDDER_TRIM_LEFT", "BBS757_RUDDER_TRIM_RIGHT", "BBS757_AILERON_TRIM_LEFT", "BBS757_AILERON_TRIM_RIGHT",
-        "BBS757_ALTN_STAB_TRIM_NOSE_DOWN", "BBS757_ALTN_STAB_TRIM_NOSE_UP",
     };
+
+    private static readonly string[] StabTrimButtons = { "BBS757_ALTN_STAB_TRIM_NOSE_DOWN", "BBS757_ALTN_STAB_TRIM_NOSE_UP" };
 
     private static readonly string[] CabinButtons = { "BBS757_CABIN_ALT_MANUAL_CLIMB", "BBS757_CABIN_ALT_MANUAL_DESCEND" };
 
@@ -336,19 +341,37 @@ public class Bbs757SpringControlsTests
     };
 
     [Fact]
-    public void The_shipped_stabilizer_trim_panel_starts_with_the_six_trim_buttons()
+    public void The_shipped_stabilizer_trim_panel_starts_with_the_two_stab_trim_buttons()
     {
         var def = new BBS757Definition();
         var panel = def.GetPanelControls()[StabTrimPanel];
         var vars = def.GetVariables();
 
-        Assert.Equal(TrimButtons, panel.Take(6));
+        Assert.Equal(StabTrimButtons, panel.Take(2));
+        Assert.Equal(new[] { "Nose Down Stab Trim 1 s", "Nose Up Stab Trim 1 s" }, panel.Take(2).Select(k => vars[k].DisplayName));
+        // the map's controls follow: the two cutouts, each with its guard just before it
         Assert.Equal(new[]
         {
-            "Left Rudder Trim 1 s", "Right Rudder Trim 1 s", "Left Aileron Trim 1 s", "Right Aileron Trim 1 s",
-            "Nose Down Stab Trim 1 s", "Nose Up Stab Trim 1 s",
-        }, panel.Take(6).Select(k => vars[k].DisplayName));
-        Assert.Contains("B757_Stab_trim_C_toggle_switch_CLICK", panel.Skip(6));   // the map's controls follow
+            "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", "B757_Stab_trim_C_toggle_switch_CLICK",
+            "B757_AISLE_STAND_STAB_2_GAURD_SWITCH", "B757_Stab_trim_R_toggle_switch_CLICK",
+        }, panel.Skip(2));
+    }
+
+    [Fact]
+    public void The_shipped_rudder_and_aileron_trim_panel_holds_the_four_trim_buttons_right_after_stabilizer_trim()
+    {
+        // Plan 12 task 7: the app's own panel (no map control is on it), where the cockpit's aileron / rudder trim panel is:
+        // at the aft end of the aisle stand, not on the control stand with the stab trim.
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+        var pedestal = def.GetPanelStructure()["Pedestal"];
+
+        Assert.Equal(RudderAileronButtons, def.GetPanelControls()[RudderAileronPanel]);
+        Assert.Equal(new[] { "Left Rudder Trim 1 s", "Right Rudder Trim 1 s", "Left Aileron Trim 1 s", "Right Aileron Trim 1 s" },
+            def.GetPanelControls()[RudderAileronPanel].Select(k => vars[k].DisplayName));
+        Assert.Equal(pedestal.IndexOf(StabTrimPanel) + 1, pedestal.IndexOf(RudderAileronPanel));
+        Assert.Single(def.GetPanelStructure().SelectMany(p => p.Value), RudderAileronPanel);
+        Assert.Equal(RudderAileronPanel, S.RudderAileronTrimPanel);
     }
 
     [Fact]
@@ -368,11 +391,14 @@ public class Bbs757SpringControlsTests
     {
         var def = new BBS757Definition(MapOf(ModeSelect(), StabCutout())) { NestRunning = () => true };
 
-        Assert.Equal(TrimButtons.Append("B757_Stab_trim_C_toggle_switch_CLICK"), def.GetPanelControls()[StabTrimPanel]);
+        Assert.Equal(StabTrimButtons.Append("B757_Stab_trim_C_toggle_switch_CLICK"), def.GetPanelControls()[StabTrimPanel]);
+        Assert.Equal(RudderAileronButtons, def.GetPanelControls()[RudderAileronPanel]);
         Assert.Equal(new[] { Bbs757LandingAltitude.SetKey, ModeSelectNode }.Concat(CabinButtons), def.GetPanelControls()["Pressurization"]);
-        // Listed once, first under its section (plan 04's COM radios panel follows it).
-        Assert.Equal(StabTrimPanel, def.GetPanelStructure()["Pedestal"][0]);
+        // Listed once each, Stabilizer trim first under its section and Rudder and aileron trim right after it (plan 04's
+        // COM radios panel follows them).
+        Assert.Equal(new[] { StabTrimPanel, RudderAileronPanel }, def.GetPanelStructure()["Pedestal"].Take(2));
         Assert.Single(def.GetPanelStructure().SelectMany(p => p.Value), StabTrimPanel);
+        Assert.Single(def.GetPanelStructure().SelectMany(p => p.Value), RudderAileronPanel);
         Assert.Equal(new[] { "Pressurization" }, def.GetPanelStructure()["Overhead"]);
     }
 
@@ -381,10 +407,26 @@ public class Bbs757SpringControlsTests
     {
         var def = new BBS757Definition(new Bbs757ControlMap()) { NestRunning = () => true };
 
-        Assert.Equal(TrimButtons, def.GetPanelControls()[StabTrimPanel]);
+        Assert.Equal(StabTrimButtons, def.GetPanelControls()[StabTrimPanel]);
+        Assert.Equal(RudderAileronButtons, def.GetPanelControls()[RudderAileronPanel]);
         Assert.Equal(new[] { Bbs757LandingAltitude.SetKey }.Concat(CabinButtons), def.GetPanelControls()["Pressurization"]);
-        Assert.Contains(StabTrimPanel, def.GetPanelStructure()["Pedestal"]);
+        // Stabilizer trim is made first, so the panel that follows it still does
+        var pedestal = def.GetPanelStructure()["Pedestal"];
+        Assert.Equal(pedestal.IndexOf(StabTrimPanel) + 1, pedestal.IndexOf(RudderAileronPanel));
         Assert.Equal(new[] { "Pressurization" }, def.GetPanelStructure()["Overhead"]);
+    }
+
+    [Fact]
+    public void A_map_with_other_pedestal_panels_lists_the_rudder_and_aileron_trim_right_after_stabilizer_trim()
+    {
+        var radio = new Bbs757Control
+        {
+            Node = "B757_PED_NAV_1_OFF_BUTTON", Section = "Pedestal", Panel = "Radio tuning panel 1", Label = "Nav 1 Off",
+            Kind = Bbs757Kinds.Button, Press = "1 (>L:B757_PED_NAV_1_OFF_BUTTON)",
+        };
+        var def = new BBS757Definition(MapOf(radio, StabCutout())) { NestRunning = () => true };
+
+        Assert.Equal(new[] { "Radio tuning panel 1", StabTrimPanel, RudderAileronPanel }, def.GetPanelStructure()["Pedestal"].Take(3));
     }
 
     [Fact]
@@ -469,7 +511,10 @@ public class Bbs757SpringControlsTests
     {
         var displays = new BBS757Definition().GetPanelDisplayVariables();
 
-        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, displays[StabTrimPanel]);
+        // plan 12 task 7: the rudder and aileron trim rows are on their buttons' panel; Stabilizer trim shows none of them
+        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, displays[RudderAileronPanel]);
+        Assert.DoesNotContain(RudderTrimRow, displays.GetValueOrDefault(StabTrimPanel) ?? new List<string>());
+        Assert.DoesNotContain(AileronTrimRow, displays.GetValueOrDefault(StabTrimPanel) ?? new List<string>());
         Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, displays["Pressurization"]);   // after the landing altitude's row
     }
 
@@ -481,7 +526,8 @@ public class Bbs757SpringControlsTests
         map.Status.Add(new Bbs757StatusRow { Key = "B757_PRESS_CABIN_ALT", Panel = "Pressurization", Label = "Cabin Altitude" });
         var displays = new BBS757Definition(map) { NestRunning = () => true }.GetPanelDisplayVariables();
 
-        Assert.Equal(new[] { "B757_STAB_SOMETHING", RudderTrimRow, AileronTrimRow }, displays[StabTrimPanel]);
+        Assert.Equal(new[] { "B757_STAB_SOMETHING" }, displays[StabTrimPanel]);   // the trim rows are on Rudder and aileron trim
+        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, displays[RudderAileronPanel]);
         Assert.Equal(new[] { "B757_PRESS_CABIN_ALT", Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, displays["Pressurization"]);
     }
 
@@ -490,9 +536,9 @@ public class Bbs757SpringControlsTests
     {
         var def = new BBS757Definition(new Bbs757ControlMap()) { NestRunning = () => true };
 
-        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, def.GetPanelDisplayVariables()[StabTrimPanel]);
+        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, def.GetPanelDisplayVariables()[RudderAileronPanel]);
         Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, def.GetPanelDisplayVariables()["Pressurization"]);
-        Assert.Contains(StabTrimPanel, def.GetPanelStructure()["Pedestal"]);
+        Assert.Contains(RudderAileronPanel, def.GetPanelStructure()["Pedestal"]);
     }
 
     [Theory]
@@ -1468,7 +1514,7 @@ public class Bbs757SpringControlsTests
         };
         var lamps = new Bbs757Control
         {
-            Node = LampTestVar, Section = "Overhead", Panel = "Warning lights test", Label = "Lamps",
+            Node = LampTestVar, Section = "Overhead", Panel = "Indicator lights and door lock", Label = "Lamps",
             Kind = Bbs757Kinds.Toggle, StateVar = LampTestVar, Positions = { new(0, "Off"), new(1, "On") },
         };
         var vars = new BBS757Definition(MapOf(config, lamps)).GetVariables();
@@ -1862,7 +1908,7 @@ public class Bbs757SpringControlsTests
     /// <summary>The map's Lamp Test, as the shipped map has it (a plain button).</summary>
     private static Bbs757Control WarningTest() => new()
     {
-        Node = WarningTestNode, Section = "Overhead", Panel = "Warning lights test", Label = "Lamp Test",
+        Node = WarningTestNode, Section = "Overhead", Panel = "Indicator lights and door lock", Label = "Lamp Test",
         Kind = Bbs757Kinds.Button, StateVar = "OVHD_TEST_LTS_PRESS", Press = LampTestPress, Release = LampTestRelease,
     };
 
@@ -1875,7 +1921,8 @@ public class Bbs757SpringControlsTests
 
         var shipped = new BBS757Definition();
         Assert.Equal("Lamp Test", shipped.GetVariables()[WarningTestNode].DisplayName);
-        Assert.Contains(WarningTestNode, shipped.GetPanelControls()["Warning lights test"]);
+        // plan 12 task 7: the lamp test sits with the door lock on the lighting / flight deck door plate
+        Assert.Contains(WarningTestNode, shipped.GetPanelControls()["Indicator lights and door lock"]);
     }
 
     [Theory]
@@ -1982,7 +2029,7 @@ public class Bbs757SpringControlsTests
     {
         var other = new Bbs757Control
         {
-            Node = "B757_OVHD_OTHER_TEST_BUTTON", Section = "Overhead", Panel = "Warning lights test", Label = "Other Test",
+            Node = "B757_OVHD_OTHER_TEST_BUTTON", Section = "Overhead", Panel = "Indicator lights and door lock", Label = "Other Test",
             Kind = Bbs757Kinds.Button, StateVar = "B757_OVHD_OTHER_TEST", Press = "1 (>L:B757_OVHD_OTHER_TEST)", Release = "0 (>L:B757_OVHD_OTHER_TEST)",
         };
         var rig = new Rig(WarningTest(), other);

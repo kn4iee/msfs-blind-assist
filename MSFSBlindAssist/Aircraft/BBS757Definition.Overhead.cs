@@ -181,7 +181,7 @@ public partial class BBS757Definition
     // The Pressurization panel's landing altitude
     // =================================================================================
 
-    /// <summary>The map's panel with the pressurization controls (Mode Select, Equip), which gains the landing altitude field.</summary>
+    /// <summary>The map's panel with the pressurization controls (Mode Select, Auto Rate), which gains the landing altitude field.</summary>
     internal const string PressurizationPanel = "Pressurization";
 
     /// <summary>The section a Pressurization panel the map lacks is created under.</summary>
@@ -389,13 +389,17 @@ public partial class BBS757Definition
     }
 
     /// <summary>
-    /// The six trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and their guards),
-    /// the two cabin buttons last on Pressurization (the landing altitude field stays first), and the sixteen P61
-    /// test buttons on the P61 panel right after the squib test (<see cref="Bbs757SpringControls.TestButtonsAfterNode"/>,
-    /// where the test switches stood in its daily-use order), or at its end when the map lacks that node. A panel
-    /// the map lacks is created under its section, so the buttons are never lost. The readout rows join their
-    /// panel's status display after the rows it has (on Pressurization, after the landing altitude's): Rudder Trim
-    /// and Aileron Trim on Stabilizer trim, Outflow Valve on Pressurization; the tests add no row.
+    /// The four rudder and aileron trim buttons make up the app's own Rudder and aileron trim panel, listed right after
+    /// Stabilizer trim in the Pedestal (plan 12 task 7: their switches sit on their own trim panel at the aft end of the
+    /// aisle stand); the two stab trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and
+    /// their guards), the two cabin buttons last on Pressurization (the landing altitude field stays first), and the
+    /// sixteen P61 test buttons on the P61 panel right after the squib test
+    /// (<see cref="Bbs757SpringControls.TestButtonsAfterNode"/>, where the test switches stood in its daily-use order),
+    /// or at its end when the map lacks that node. A panel the map lacks is created under its section, after the panel
+    /// its control names (<see cref="Bbs757SpringControl.PanelAfter"/>) or at the section's end, so the buttons are
+    /// never lost. The readout rows join their panel's status display after the rows it has (on Pressurization, after
+    /// the landing altitude's): Rudder Trim and Aileron Trim on Rudder and aileron trim, Outflow Valve on
+    /// Pressurization; the tests add no row.
     /// </summary>
     private static void AddSpringControlPanels(Dictionary<string, List<string>> structure,
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
@@ -405,12 +409,16 @@ public partial class BBS757Definition
             if (controls.TryGetValue(control.Panel, out var panel)) return panel;
             controls[control.Panel] = panel = new List<string>();
             if (!structure.TryGetValue(control.Section, out var panels)) structure[control.Section] = panels = new List<string>();
-            panels.Add(control.Panel);
+            int after = control.PanelAfter is { } previous ? panels.IndexOf(previous) : -1;
+            panels.Insert(after >= 0 ? after + 1 : panels.Count, control.Panel);
             return panel;
         }
 
-        var trims = Bbs757SpringControls.Buttons.Where(b => !b.Control.NeedsManualMode).ToList();
-        if (trims.Count > 0) PanelOf(trims[0].Control).InsertRange(0, trims.Select(b => b.Key));
+        // Each trim panel's buttons first on it, in the order Buttons lists them. A panel listed after another is made
+        // last, so that the one it follows is listed already when a map lacks both.
+        foreach (var trims in Bbs757SpringControls.Buttons.Where(b => !b.Control.NeedsManualMode)
+                     .GroupBy(b => b.Control.Panel).OrderBy(g => g.First().Control.PanelAfter != null))
+            PanelOf(trims.First().Control).InsertRange(0, trims.Select(b => b.Key));
 
         var cabin = Bbs757SpringControls.Buttons.Where(b => b.Control.NeedsManualMode).ToList();
         if (cabin.Count > 0) PanelOf(cabin[0].Control).AddRange(cabin.Select(b => b.Key));

@@ -231,7 +231,7 @@ public class Bbs757ControlMapTests
         Assert.DoesNotContain(Map.Controls, c => c.Panel is "Engine start" or "Fuel control");
     }
 
-    // ---- Task 11d: the panels in BlueBird's preflight-flow order, the most used controls first ----
+    // ---- Plan 12 task 7: the panels follow the cockpit; inside each, the most used controls first (plan 12 task 4) ----
 
     [Fact]
     public void The_sections_come_in_the_cockpit_order()
@@ -241,44 +241,66 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    [InlineData("Overhead", "Electrical|APU|IRS|Engine control and yaw damper|Hydraulics|Overhead miscellaneous|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Air conditioning and bleed|Cabin lights|IRS keypad|Switch guards|Flight deck door|CVR|SELCAL and cabin call|Ground service|Warning lights test")]
+    // The owner's order (ruling R37). Plan 12 task 7 regrouped the panels by the cockpit (docs/b757/evidence/panel-audit-12.md)
+    // and kept this order: a panel that stays keeps its place, a renamed one takes the old one's, the parts of a split panel
+    // take its place (among themselves in cockpit order), a merged one the place of the first of its sources; the EFIS
+    // panels follow TCAS and transponder, CDU brightness follows EICAS control, and the oxygen masks, the door and the
+    // forward attendant panel follow the P61 panel. Every panel is listed, so none falls back to the alphabet.
+    [InlineData("Overhead", "Electrical|APU|IRS|Electronic engine control (RR)|Yaw dampers|Hydraulics|Panel lighting|Emergency lights and passenger oxygen|Ram air turbine and engine limiters|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Equipment cooling|Air conditioning and bleed|Indicator lights and door lock|CVR|SELCAL and cabin call")]
     [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
-    [InlineData("Forward panel", "Main panel switches|Landing gear|Captain EFIS|Yokes|Captain autoland status|Standby attitude indicator|Captain DDRMI|Captain chronometer|Oxygen|Cockpit miscellaneous|First officer EFIS|First officer autoland status|First officer DDRMI|First officer chronometer|Display brightness")]
-    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar left|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Weather radar right|Pedestal radio panels")]
-    [InlineData("Other", "P61 panel")]
+    [InlineData("Forward panel", "Captain foot and shoulder heat|Captain instrument source selectors|Caution, config and G/S inhibit|Brakes|Heading reference|Thrust mode select|Alternate flaps|Ground proximity overrides|First officer instrument source selectors|First officer foot and shoulder heat|Landing gear|Yokes|Captain autoland status|Standby instruments|Captain DDRMI|Captain chronometer|First officer autoland status|First officer DDRMI|First officer chronometer")]
+    [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|Captain EFIS|First officer EFIS|EICAS control|CDU brightness|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|ILS tuning")]
+    [InlineData("Other", "P61 panel|Oxygen|Flight deck door|Forward attendant panel")]
     public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
     {
-        // The owner's order (ruling R37); every panel is listed, so none falls back to the alphabet.
         Assert.Equal(panels.Split('|'), Map.Controls.Where(c => c.Section == section).Select(c => c.Panel).Distinct());
     }
 
     [Theory]
     // Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first in
-    // tab order"): a panel it moved is listed in full, in the order docs/b757/evidence/panel-order-12.md gives with each
-    // control's tier and source. The Emergency Lights guard stays right after its switch (the app opens it itself).
-    [InlineData("Electrical", "Battery|EXT PWR|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|L Util Bus|R Util Bus|L Gen Drive|R Gen Drive")]
+    // tab order"), kept by plan 12 task 7 inside each regrouped panel: by tier (every flight, set once, non-normal), within a
+    // tier the order docs/b757/evidence/panel-order-12.md gives where the controls shared a panel, each guard right before
+    // its switch. The Emergency Lights guard stays right after its switch (the app opens it itself).
+    [InlineData("IRS", "IRS L|IRS C|IRS R|IRS Center Knob|IRS Large Knob|IRS Number 1|IRS Number 2|IRS Number 3|IRS Number 4|IRS Number 5|IRS Number 6|IRS Number 7|IRS Number 8|IRS Number 9|IRS Number 0|IRS Number Ent|IRS Number Del")]
+    // The two ELEC ENG Cont switches and their guards are on the RR cockpit only (no node in the PW one), so their labels say so.
+    [InlineData("Electronic engine control (RR)", "Elec Eng Cont 1 Guard (RR)|L ELEC ENG Cont (RR)|Elec Eng Cont 2 Guard (RR)|R ELEC ENG Cont (RR)")]
+    [InlineData("Yaw dampers", "L Yaw Damper|R Yaw Damper")]
     [InlineData("Hydraulics", "R ELEC Pump|C1 ELEC Pump|C2 ELEC Pump|L ELEC Pump|L ENG HYD Pumps|R ENG HYD Pumps")]
-    [InlineData("Overhead miscellaneous", "Emergency Lights|Emergency Lights Guard|Lt Ovrd|L ENG Limiter|R ENG Limiter|Passenger Oxygen|RAT")]
+    [InlineData("Electrical", "Battery Guard|Battery|EXT PWR|STBY Power|L Bus Tie|R Bus Tie|L Gen Cont|R Gen Cont|APU Gen|L Util Bus|R Util Bus|Left Generator Drive Disconnect Guard|L Gen Drive|Right Generator Drive Disconnect Guard|R Gen Drive")]
+    [InlineData("Emergency lights and passenger oxygen", "Emergency Lights|Emergency Lights Guard|Passenger Oxygen Guard|Passenger Oxygen")]
+    [InlineData("Ram air turbine and engine limiters", "L ENG Limiter|R ENG Limiter|Ram Air Turbine Guard|RAT")]
     [InlineData("Fuel", "L Pumps FWD|L Pumps Aft|R Pumps FWD|R Pumps Aft|C Pumps L|C Pumps R|Crossfeed FWD|Crossfeed Aft")]
     [InlineData("Exterior lights", "Anti-col Red Lights|Wing Lights|L Runway Turnoff|R Runway Turnoff|Taxi Light|Anti-col White Lights|L Landing Light|R Landing Light|Position Lights|Logo Lights")]
     [InlineData("Air conditioning and bleed", "L Pack Selector|R Pack Selector|Isolation|L ENG Bleed|R ENG Bleed|APU Bleed|Flight Deck Temperature|Forward Cabin Temperature|Aft Cabin Temperature|Trim Air|L Recirc|R Recirc|L Pack|R Pack")]
     [InlineData("Passenger signs", "Seatbelts|No Smoking")]
-    [InlineData("IRS", "IRS L|IRS C|IRS R")]
-    // The two ELEC ENG Cont switches are on the RR cockpit only (no node in the PW one), so their labels say so.
-    [InlineData("Engine control and yaw damper", "L Yaw Damper|R Yaw Damper|L ELEC ENG Cont (RR)|R ELEC ENG Cont (RR)")]
+    [InlineData("Pressurization", "Mode Select|Auto Rate")]
+    [InlineData("Indicator lights and door lock", "Flight Deck Door|Lamp Test|Warning Ind")]
     [InlineData("MCP", "Captain F/D|F/O F/D|A/T Arm|LNAV|THR|HDG SEL|VNAV|CMD L|CMD C|CMD R|FLCH|V/S|SPD|ALT HOLD|Speed Intervene|LOC|APP|ALT SEL Push|IAS/MACH|HDG HOLD|Bank Limit|Autopilot Disengage Bar|BCRS 1")]
-    [InlineData("Main panel switches", "Autobrake|Recall|Cancel|Takeoff Config Check|L Foot Heaters|R Foot Heaters|L Shoulder Heaters|R Shoulder Heaters|L Flt Dir|R Flt Dir|L Flt Nav|R Flt Nav|Stdby EICAS|HDG Ref|TOGA|TMSP 1|TMSP 2|CLB|CRZ|G/S Inhibit|L EFI|R EFI|L IRS|R IRS|L Airdata|R Airdata|Altn Gear Guard|Altn Gear|Alternate Flaps Selector|L Leading Edge|L Trailing Edge|Flap Override Guard|L Flap Ovrd|Gear Override Guard|L Gear Ovrd|Terrain Override Guard|L Terr Ovrd|L Brake Reserve|CON")]
+    [InlineData("Captain instrument source selectors", "L Flt Dir|L Flt Nav|L EFI|L IRS|L Airdata")]
+    [InlineData("Captain chronometer", "757 Capt Clock|Clock Button|Chrono ET|Chrono Set|Date Button")]
+    [InlineData("Caution, config and G/S inhibit", "Recall|Cancel|Takeoff Config Check|G/S Inhibit")]
+    [InlineData("Standby instruments", "Stdby EICAS|Gyro Cage Knob|Gyro Selector")]
+    [InlineData("Brakes", "Autobrake|L Brake Reserve")]
+    [InlineData("Thrust mode select", "TOGA|TMSP 1|TMSP 2|CLB|CRZ|CON")]
+    // Plan 02 task 7: the gear lever is first on the Landing gear panel; the alternate gear switch, its guard first, follows.
+    [InlineData("Landing gear", "Gear Lever|Altn Gear Guard|Altn Gear|Gear Lock Override")]
+    [InlineData("Ground proximity overrides", "Flap Override Guard|L Flap Ovrd|Gear Override Guard|L Gear Ovrd|Terrain Override Guard|L Terr Ovrd")]
+    [InlineData("First officer chronometer", "757 FO Clock|Clock Button|Chrono ET|Chrono Set|Date Button")]
     // Plan 12 task 4: the flaps are moved on every flight, so the flap lever is second, right after the parking brake.
-    // Plan 02 task 7: the gear lever is first on the Landing gear panel.
     [InlineData("Control stand", "Parking Brake|Flap Lever|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
-    [InlineData("Landing gear", "Gear Lever")]
     [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
     [InlineData("TCAS and transponder", "TCAS Mode")]
-    [InlineData("Captain EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|INOP")]
-    [InlineData("First officer EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|INOP")]
+    [InlineData("Captain EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|PFD Brightness|ND Brightness|INOP")]
+    [InlineData("First officer EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|PFD Brightness|ND Brightness|INOP")]
+    [InlineData("EICAS control", "EICAS R Status|EICAS L Status|Upper EICAS Brightness|Lower EICAS Brightness|EICAS Computer Switch|EICAS Lwr Thrust Ref|Thrust Ref Pull|EICAS Max Ind|EICAS Event")]
+    [InlineData("CDU brightness", "Captain CDU|First Officer CDU")]
+    // The owner's answer: the fire and overheat tests stay with the fire handles, in Task 4's order (the preflight tests first).
+    [InlineData("Fire protection", "Wheel Well Fire Test|Engine Fire Test|Engine, APU and Cargo Fire Test|Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail")]
+    [InlineData("Weather radar", "WX L WX|WX R WX|WX L Wxt|WX L Map|WX L Gcs|Weather Radar Test|WX R Wxt|WX R Map|WX R Gcs|WX L Tfr|WX R Tfr")]
+    [InlineData("Forward attendant panel", "Cabin Ceiling|Cabin Window|Cabin Entry|Cabin Work Light|GND Svc")]
     public void The_most_used_controls_lead_their_panel(string panel, string leading)
     {
-        // The owner's lists (ruling R37), by the names the pilot hears.
+        // By the names the pilot hears.
         string[] expected = leading.Split('|');
         var labels = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Label).ToList();
 
@@ -286,16 +308,126 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    [InlineData("IRS", 3, "IRS Center Knob|IRS Large Knob")]
     [InlineData("TCAS and transponder", 1, "TCAS Xpndr|TCAS Ident|TCAS Test")]
-    [InlineData("Landing gear", 1, "Gear Lock Override")]
+    [InlineData("Captain autoland status", 0, "Autoland Status Test 1|Autoland Status Test 2|Autoland Status Reset")]
+    [InlineData("Window heat", 0, "L Side Window Heat|L FWD Window Heat|R Side Window Heat|R FWD Window Heat")]
     public void The_controls_an_order_does_not_list_follow_in_cockpit_order(string panel, int listed, string rest)
     {
-        // Cockpit order is the order of the vendor's cockpit file: the controls the order leaves out keep it. (Plan 12 task 4
-        // lists every control of the panels it moved, so the EFIS panels and Main panel switches leave none out any more.)
+        // Cockpit order is the order of the vendor's cockpit file: the controls the order leaves out keep it. (Plan 12 tasks 4
+        // and 7 list every control of the panels they moved or regrouped, so those leave none out.)
         var after = Map.Controls.Where(c => c.Panel == panel).Select(c => c.Label).Skip(listed);
 
         Assert.Equal(rest.Split('|'), after);
+    }
+
+    [Theory]
+    // Plan 12 task 7: what the audit found made up (code buckets of the vendor's file, and the app's own Display brightness),
+    // and the panels it merged or renamed. None may come back.
+    [InlineData("Main panel switches")]
+    [InlineData("Overhead miscellaneous")]
+    [InlineData("Switch guards")]
+    [InlineData("Cockpit miscellaneous")]
+    [InlineData("Display brightness")]
+    [InlineData("Engine control and yaw damper")]
+    [InlineData("IRS keypad")]
+    [InlineData("Cabin lights")]
+    [InlineData("Ground service")]
+    [InlineData("Warning lights test")]
+    [InlineData("Standby attitude indicator")]
+    [InlineData("Weather radar left")]
+    [InlineData("Weather radar right")]
+    [InlineData("Pedestal radio panels")]
+    [InlineData("Fire and overheat test")]
+    public void The_made_up_panels_are_gone(string panel)
+    {
+        Assert.DoesNotContain(Map.Controls, c => c.Panel == panel);
+    }
+
+    /// <summary>Guard -> the switch it covers: the audit's guard tables (0.1 to 1.4 cm apart in BlueBird's interior models).</summary>
+    private static readonly (string Guard, string Switch)[] GuardsAndSwitches =
+    {
+        ("B757_OVHD_SWITCH_GAURD", "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK"),
+        ("B757_GAURD_3_SWITCH", "B757_OVHD_BATTERY_BUTTON"),
+        ("B757_GAURD_1_SWITCH", "B757_OVHD_L_ELEC-ENG-CONT_BUTTON"),
+        ("B757_GAURD_2_SWITCH", "B757_OVHD_R_ELEC-ENG-CONT_BUTTON"),
+        ("B757_GAURD_6_SWITCH", "B757_OVHD_PASS_OXY_BUTTON"),
+        ("B757_GAURD_7_SWITCH", "B757_OVHD_RAT_BUTTON"),
+        ("B757_GAURD_4_SWITCH", "B757_OVHD_L_GEN_DRIVE_BUTTON"),
+        ("B757_GAURD_5_SWITCH", "B757_OVHD_R_GEN_DRIVE_BUTTON"),
+        ("B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD", "B757_MAIN_ALTN_GEAR_SWITCH"),
+        ("B757_GAURD_8_SWITCH", "B757_MAIN_L_FLAPOVRD_BUTTON"),
+        ("B757_GAURD_9_SWITCH", "B757_MAIN_L_GEAROVRD_BUTTON"),
+        ("B757_GAURD_10_SWITCH", "B757_MAIN_L_TERROVRD_BUTTON"),
+        ("B757_GAURD_11_SWITCH", "B757_PED_1BTL_CARGOFIRE_BUTTON"),
+        ("B757_GAURD_12_SWITCH", "B757_PED_2BTL_CARGOFIRE_BUTTON"),
+        ("B757_AISLE_STAND_STAB_1_GAURD_SWITCH", "B757_Stab_trim_C_toggle_switch_CLICK"),
+        ("B757_AISLE_STAND_STAB_2_GAURD_SWITCH", "B757_Stab_trim_R_toggle_switch_CLICK"),
+        ("BBS_B757_P61_GLASS_GAURD_1", "B757_P61_PRESS_MAIN_BUTTON_L"),
+        ("BBS_B757_P61_GLASS_GAURD_2", "B757_P61_PRESS_MAIN_BUTTON_C"),
+        ("BBS_B757_P61_GLASS_GAURD_3", "B757_P61_PRESS_MAIN_BUTTON_R"),
+    };
+
+    [Fact]
+    public void Each_guard_sits_right_before_the_switch_it_covers_on_its_panel()
+    {
+        // The list covers every guard of the map. The emergency lights guard is the one after its switch: the app opens and
+        // closes it itself when the switch is set (plan 02 task 3), so the pilot meets the switch first.
+        Assert.Equal(
+            GuardsAndSwitches.Select(g => g.Guard).Order(StringComparer.Ordinal),
+            Map.Controls.Where(c => c.Kind == Bbs757Kinds.Guard).Select(c => c.Node).Order(StringComparer.Ordinal));
+
+        var at = Map.Controls.Select((c, i) => (c.Node, i)).ToDictionary(x => x.Node, x => x.i, StringComparer.Ordinal);
+        foreach (var (guard, sw) in GuardsAndSwitches)
+        {
+            Bbs757Control g = Find(guard), s = Find(sw);
+
+            Assert.Equal((s.Section, s.Panel), (g.Section, g.Panel));
+            int expected = guard == "B757_OVHD_SWITCH_GAURD" ? at[sw] + 1 : at[sw] - 1;
+            Assert.True(at[guard] == expected, $"{guard} is at {at[guard]}, {sw} at {at[sw]}");
+        }
+    }
+
+    [Fact]
+    public void The_EFIS_panels_are_on_the_pedestal_and_the_masks_door_and_cabin_panel_under_other()
+    {
+        // The EFIS control panels sit behind the CDUs and the EICAS control panel between them (positions; manual p.102-103);
+        // the four oxygen mask boxes are at the four seats, the door is in the aft bulkhead and the forward attendant panel by
+        // door 1L in the cabin.
+        foreach (string panel in new[] { "Captain EFIS", "First officer EFIS", "EICAS control", "CDU brightness" })
+            Assert.All(Map.Controls.Where(c => c.Panel == panel), c => Assert.Equal("Pedestal", c.Section));
+        foreach (string panel in new[] { "Oxygen", "Flight deck door", "Forward attendant panel" })
+            Assert.All(Map.Controls.Where(c => c.Panel == panel), c => Assert.Equal("Other", c.Section));
+        Assert.Equal(14, Map.Controls.Count(c => c.Panel == "Captain EFIS"));
+        Assert.Equal(14, Map.Controls.Count(c => c.Panel == "First officer EFIS"));
+    }
+
+    [Theory]
+    // A few placements from the audit's tables (docs/b757/evidence/panel-audit-12.md), one of each kind of move.
+    [InlineData("B757_ADI_1_LCD_KNOB", "Pedestal", "Captain EFIS")]
+    [InlineData("B757_HSI_2_SCREEN_KNOB", "Pedestal", "First officer EFIS")]
+    [InlineData("B757_EICAS_2_SCREEN_KNOB", "Pedestal", "EICAS control")]
+    [InlineData("B757_FMC_1_SCREEN_KNOB", "Pedestal", "CDU brightness")]
+    [InlineData("BBS_757_FO_CLOCK_BUTTON", "Forward panel", "First officer chronometer")]
+    [InlineData("B757_MAIN_STDBY_EICAS_KNOB", "Forward panel", "Standby instruments")]
+    [InlineData("BBS757_GS_INHIBIT", "Forward panel", "Caution, config and G/S inhibit")]
+    [InlineData("B757_MAIN_ALTN_GEAR_SWITCH", "Forward panel", "Landing gear")]
+    [InlineData("B757_GAURD_3_SWITCH", "Overhead", "Electrical")]
+    [InlineData("B757_OVHD_EQUIP_BUTTON", "Overhead", "Equipment cooling")]
+    [InlineData("B757_OVHD_LT_OVRD_BUTTON", "Overhead", "Panel lighting")]
+    [InlineData("B757_OVHD_RAT_BUTTON", "Overhead", "Ram air turbine and engine limiters")]
+    [InlineData("B757_IRS_NUMBER_ENT_BUTTON", "Overhead", "IRS")]
+    [InlineData("B757_OVHD_FLT-DK-DOOR_SWITCH", "Overhead", "Indicator lights and door lock")]
+    [InlineData("B757_PED_WX_R_WX_BUTTON", "Pedestal", "Weather radar")]
+    [InlineData("B757_PED_ILS_TEST_BUTTON", "Pedestal", "ILS tuning")]
+    [InlineData("B757_PED_SYS_FAIL_BUTTON", "Pedestal", "Fire protection")]
+    [InlineData("B757_COCKPIT_DOOR", "Other", "Flight deck door")]
+    [InlineData("B757_GND_SVC_BUTTON", "Other", "Forward attendant panel")]
+    [InlineData("O2_EARS_OBSERVER", "Other", "Oxygen")]
+    public void A_control_is_on_the_panel_it_is_on_in_the_cockpit(string node, string section, string panel)
+    {
+        Bbs757Control c = Find(node);
+
+        Assert.Equal((section, panel), (c.Section, c.Panel));
     }
 
     [Fact]
@@ -671,7 +803,7 @@ public class Bbs757ControlMapTests
         // keeps its own row, and the app opens it, writes the position and closes it.
         var expected = new (string Node, string Label, string Section, string Panel, string Positions, string Guard, double CloseSets)[]
         {
-            ("B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "Emergency Lights", "Overhead", "Overhead miscellaneous",
+            ("B757_OVHD_PASS_OXY_Toggle_Switch_CLICK", "Emergency Lights", "Overhead", "Emergency lights and passenger oxygen",
                 "0=OFF|1=ARMED|2=ON", "B757_OVHD_SWITCH_GAURD", 1),
             ("B757_Stab_trim_C_toggle_switch_CLICK", "Stab Trim C Cutout", "Pedestal", "Stabilizer trim",
                 "0=NORMAL|1=CUTOUT", "B757_AISLE_STAND_STAB_1_GAURD_SWITCH", 0),
@@ -778,10 +910,11 @@ public class Bbs757ControlMapTests
 
         Assert.True(present.Count == 0, "no node in either cockpit model, but in the map: " + string.Join(", ", present));
         // The ADF panel is gone with its switches; the panels that lost one control keep the rest, and the left weather
-        // radar test button and the real EICAS computer switch, which have nodes, stay.
+        // radar test button and the real EICAS computer switch, which have nodes, stay. (Plan 12 task 7 made the two weather
+        // radar halves one panel, its right mode row still without a test button.)
         Assert.DoesNotContain(Map.Controls, c => c.Panel == "ADF");
         Assert.DoesNotContain(Map.Controls, c => c.Label == "WX R Test");
-        Assert.Contains(Map.Controls, c => c.Panel == "Weather radar right");
+        Assert.Contains(Map.Controls, c => c.Panel == "Weather radar" && c.Node.StartsWith("B757_PED_WX_R_", StringComparison.Ordinal));
         Assert.Contains(Map.Controls, c => c.Node == "B757_PED_WX_L_TEST_BUTTON");
         Assert.Contains(Map.Controls, c => c.Node == "B757_ECAM_LRAUTO_KNOB");
         // The emergency lights and stab trim switches and their guards are in both models: they all stay.
@@ -849,10 +982,11 @@ public class Bbs757ControlMapTests
             Assert.True(Bbs757Write.HasReadableState(c));
         });
 
-        // Their places: the gear lever is the first control of the Landing gear panel (the gear lock override follows it, as it
-        // came first before), and the flap lever is the one right after the Parking Brake on the Pedestal's Control stand
-        // (plan 12 task 4: the flaps are moved on every flight, ahead of the speedbrake levers).
-        Assert.Equal(new[] { "Gear Lever", "Gear Lock Override" },
+        // Their places: the gear lever is the first control of the Landing gear panel (plan 12 task 7: the alternate gear
+        // switch, its guard first, and the gear lock override follow it), and the flap lever is the one right after the
+        // Parking Brake on the Pedestal's Control stand (plan 12 task 4: the flaps are moved on every flight, ahead of the
+        // speedbrake levers).
+        Assert.Equal(new[] { "Gear Lever", "Altn Gear Guard", "Altn Gear", "Gear Lock Override" },
             Map.Controls.Where(c => c.Panel == "Landing gear").Select(c => c.Label));
         var stand = Map.Controls.Where(c => c.Panel == "Control stand").Select(c => c.Label).ToList();
         Assert.Equal("Flap Lever", stand[stand.IndexOf("Parking Brake") + 1]);
@@ -939,15 +1073,18 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    [InlineData("B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB", "Captain PFD")]
-    [InlineData("B757_ADI_2_LCD_KNOB", "B757_PFD_2_SCREEN_KNOB", "First Officer PFD")]
-    [InlineData("B757_HSI_1_SCREEN_KNOB", "B757_HSI_1_SCREEN_KNOB", "Captain ND")]
-    [InlineData("B757_HSI_2_SCREEN_KNOB", "B757_HSI_2_SCREEN_KNOB", "First Officer ND")]
-    [InlineData("B757_EICAS_1_SCREEN_KNOB", "B757_EICAS_1_SCREEN_KNOB", "Upper EICAS")]
-    [InlineData("B757_EICAS_2_SCREEN_KNOB", "B757_EICAS_2_SCREEN_KNOB", "Lower EICAS")]
-    [InlineData("B757_FMC_1_SCREEN_KNOB", "B757_FMC_1_SCREEN_KNOB", "Captain CDU")]
-    [InlineData("B757_FMC_2_SCREEN_KNOB", "B757_FMC_2_SCREEN_KNOB", "First Officer CDU")]
-    public void Each_display_brightness_knob_writes_the_var_BlueBirds_brightness_code_reads(string node, string stateVar, string label)
+    // Plan 12 task 7: each knob on the panel it is on (the EFIS control panels' PFD and ND knobs, the EICAS control panel's
+    // concentric BRT knob, a knob on each CDU's face; docs/b757/evidence/panel-audit-12.md), its label saying what it dims.
+    [InlineData("B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB", "PFD Brightness", "Captain EFIS")]
+    [InlineData("B757_ADI_2_LCD_KNOB", "B757_PFD_2_SCREEN_KNOB", "PFD Brightness", "First officer EFIS")]
+    [InlineData("B757_HSI_1_SCREEN_KNOB", "B757_HSI_1_SCREEN_KNOB", "ND Brightness", "Captain EFIS")]
+    [InlineData("B757_HSI_2_SCREEN_KNOB", "B757_HSI_2_SCREEN_KNOB", "ND Brightness", "First officer EFIS")]
+    [InlineData("B757_EICAS_1_SCREEN_KNOB", "B757_EICAS_1_SCREEN_KNOB", "Upper EICAS Brightness", "EICAS control")]
+    [InlineData("B757_EICAS_2_SCREEN_KNOB", "B757_EICAS_2_SCREEN_KNOB", "Lower EICAS Brightness", "EICAS control")]
+    [InlineData("B757_FMC_1_SCREEN_KNOB", "B757_FMC_1_SCREEN_KNOB", "Captain CDU", "CDU brightness")]
+    [InlineData("B757_FMC_2_SCREEN_KNOB", "B757_FMC_2_SCREEN_KNOB", "First Officer CDU", "CDU brightness")]
+    public void Each_display_brightness_knob_writes_the_var_BlueBirds_brightness_code_reads(string node, string stateVar, string label,
+        string panel)
     {
         // BlueBird's code sets a display's output to knob / 40 * 1.5, never below 0.1 (measured, flight-12.md): 0 dims the
         // display to its minimum and does not turn it off, so there is no Off. 40 is every knob's load value. The cockpit's
@@ -955,7 +1092,7 @@ public class Bbs757ControlMapTests
         // NAMED B757_PFD_x_SCREEN_KNOB write raster vars nothing reads and have no row.
         Bbs757Control knob = Find(node);
 
-        Assert.Equal((label, "Forward panel", "Display brightness", Bbs757Kinds.Switch, stateVar),
+        Assert.Equal((label, "Pedestal", panel, Bbs757Kinds.Switch, stateVar),
             (knob.Label, knob.Section, knob.Panel, knob.Kind, knob.StateVar));
         Assert.Equal(new[] { (0d, "Minimum"), (20d, "Half"), (40d, "Full") }, Pairs(knob));
         Assert.DoesNotContain(knob.Positions, p => p.Label.Contains("Off", StringComparison.OrdinalIgnoreCase));
@@ -969,20 +1106,24 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_display_brightness_panel_holds_the_eight_knobs_and_comes_last_on_the_forward_panel()
+    public void The_eight_brightness_knobs_are_on_their_panels_and_no_display_brightness_panel_is_left()
     {
-        var knobs = Map.Controls.Where(c => c.Panel == "Display brightness").ToList();
+        // Plan 12 task 7 (the owner): none of the knobs sits next to its display, so a Display brightness panel was the app's
+        // own grouping; each panel the knobs are on now has its own, and the two CDU knobs make up the CDU brightness pair.
+        var knobs = Map.Controls.Where(c => c.StateVar != null && c.Positions.Select(p => p.Label).SequenceEqual(new[] { "Minimum", "Half", "Full" }))
+            .Select(c => (c.Panel, c.Label)).ToList();
 
-        Assert.All(knobs, c => Assert.Equal("Forward panel", c.Section));
-        // The set, not an order: the order of a panel's controls is plan 12 task 4's.
         Assert.Equal(
             new[]
             {
-                "Captain CDU", "Captain ND", "Captain PFD", "First Officer CDU", "First Officer ND", "First Officer PFD",
-                "Lower EICAS", "Upper EICAS",
+                ("CDU brightness", "Captain CDU"), ("CDU brightness", "First Officer CDU"),
+                ("Captain EFIS", "ND Brightness"), ("Captain EFIS", "PFD Brightness"),
+                ("EICAS control", "Lower EICAS Brightness"), ("EICAS control", "Upper EICAS Brightness"),
+                ("First officer EFIS", "ND Brightness"), ("First officer EFIS", "PFD Brightness"),
             },
-            knobs.Select(c => c.Label).OrderBy(l => l, StringComparer.Ordinal));
-        Assert.Equal("Display brightness", Map.Controls.Where(c => c.Section == "Forward panel").Select(c => c.Panel).Distinct().Last());
+            knobs.OrderBy(k => k.Panel, StringComparer.Ordinal).ThenBy(k => k.Label, StringComparer.Ordinal));
+        Assert.DoesNotContain(Map.Controls, c => c.Panel == "Display brightness");
+        Assert.Equal(new[] { "Captain CDU", "First Officer CDU" }, Map.Controls.Where(c => c.Panel == "CDU brightness").Select(c => c.Label));
     }
 
     [Theory]
@@ -1111,11 +1252,11 @@ public class Bbs757ControlMapTests
         "1 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)",
         "0 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)")]
     [InlineData("B757_PED_WX_L_TEST_BUTTON",
-        "Weather Radar Test", "Weather radar left",
+        "Weather Radar Test", "Weather radar",
         "1 (>L:B757_PED_WX_L_TEST_BUTTON,bool)",
         "0 (>L:B757_PED_WX_L_TEST_BUTTON,bool)")]
     [InlineData("B757_PED_ILS_TEST_BUTTON",
-        "ILS Test", "Pedestal radio panels",
+        "ILS Test", "ILS tuning",
         "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
         "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)")]
     [InlineData("B757_PED_NAV_1_TEST_BUTTON",
@@ -1190,8 +1331,8 @@ public class Bbs757ControlMapTests
     /// and the two resets are the autoland status test's P/RST. All four are plain buttons (the app presses them for 200 ms).
     /// </summary>
     [Theory]
-    [InlineData("B757_OVHD_WARNING_TEST_BUTTON", "Lamp Test", "Warning lights test")]
-    [InlineData("B757_MAIN_TOCHK_BUTTON", "Takeoff Config Check", "Main panel switches")]
+    [InlineData("B757_OVHD_WARNING_TEST_BUTTON", "Lamp Test", "Indicator lights and door lock")]
+    [InlineData("B757_MAIN_TOCHK_BUTTON", "Takeoff Config Check", "Caution, config and G/S inhibit")]
     [InlineData("B757_MAIN_L_AUTOLAND_3_BUTTON", "Autoland Status Reset", "Captain autoland status")]
     [InlineData("B757_MAIN_R_AUTOLAND_3_BUTTON", "Autoland Status Reset", "First officer autoland status")]
     public void The_cockpit_tests_that_are_not_held_say_what_they_test(string node, string label, string panel)

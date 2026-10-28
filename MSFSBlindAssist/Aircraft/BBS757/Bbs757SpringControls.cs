@@ -23,10 +23,15 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <param name="NeedsManualMode">True for the manual cabin altitude switch, which works only with Mode Select at MAN.</param>
 /// <param name="HoldMs">How long a press holds it off rest, in milliseconds (the trims and the cabin switch: one second).</param>
 /// <param name="RewriteMs">How often the hold is written again within <paramref name="HoldMs"/> (more than 0, at most <paramref name="HoldMs"/>).</param>
+/// <param name="PanelAfter">
+/// The panel of <paramref name="Section"/> that <paramref name="Panel"/> is listed right after when the map lacks it (the
+/// app's own Rudder and aileron trim panel follows Stabilizer trim); at the section's end when that panel is missing too,
+/// or when null.
+/// </param>
 public sealed record Bbs757SpringControl(
     string Key, string LVar, double Rest, double Negative, double Positive,
     string Section, string Panel, string Name, string? ReadoutKey, bool NeedsManualMode,
-    int HoldMs = Bbs757SpringControls.HoldMs, int RewriteMs = Bbs757SpringControls.HoldRewriteMs);
+    int HoldMs = Bbs757SpringControls.HoldMs, int RewriteMs = Bbs757SpringControls.HoldRewriteMs, string? PanelAfter = null);
 
 /// <summary>One panel button holding <paramref name="Control"/> to one side for its hold.</summary>
 /// <param name="Key">The button's variable key (an Event registration MainForm renders as a button; never "_SET").</param>
@@ -52,8 +57,9 @@ public sealed record Bbs757SpringButton(string Key, Bbs757SpringControl Control,
 public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringControl? ShownWith = null);
 
 /// <summary>
-/// The 757's spring-loaded switches the panels hold for one second: the rudder trim, the aileron trim and the
-/// alternate stab trim (Pedestal, Stabilizer trim) and the manual cabin altitude switch (Overhead,
+/// The 757's spring-loaded switches the panels hold for one second: the rudder trim and the aileron trim (Pedestal,
+/// Rudder and aileron trim, the app's own panel: the cockpit's aileron / rudder trim panel at the aft end of the aisle
+/// stand), the alternate stab trim (Pedestal, Stabilizer trim) and the manual cabin altitude switch (Overhead,
 /// Pressurization). Measured 2026-10-28 (docs/b757/evidence/flight-12.md) and read from BlueBird's code
 /// (research package sections 6 and 7):
 /// <list type="bullet">
@@ -148,13 +154,20 @@ public static class Bbs757SpringControls
     private const string StabilizerTrimPanel = "Stabilizer trim";
     private const string PressurizationPanel = "Pressurization";
 
+    /// <summary>
+    /// The app's own panel for the rudder and aileron trim buttons and their two readout rows (plan 12 task 7): the
+    /// cockpit has those switches on their own trim panel at the aft end of the aisle stand
+    /// (docs/b757/evidence/panel-audit-12.md), not with the stab trim on the control stand. No map control is on it.
+    /// </summary>
+    public const string RudderAileronTrimPanel = "Rudder and aileron trim";
+
     public static readonly Bbs757SpringControl RudderTrim = new(
-        "BBS757_RUDDER_TRIM", "B757_PEDESTAL_RUDDER_TRIM_KNOB", 1, 0, 2, Pedestal, StabilizerTrimPanel,
-        "Rudder trim", RudderTrimIndicatorVar, NeedsManualMode: false);
+        "BBS757_RUDDER_TRIM", "B757_PEDESTAL_RUDDER_TRIM_KNOB", 1, 0, 2, Pedestal, RudderAileronTrimPanel,
+        "Rudder trim", RudderTrimIndicatorVar, NeedsManualMode: false, PanelAfter: StabilizerTrimPanel);
 
     public static readonly Bbs757SpringControl AileronTrim = new(
-        "BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, Pedestal, StabilizerTrimPanel,
-        "Aileron trim", YokeVar, NeedsManualMode: false);
+        "BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, Pedestal, RudderAileronTrimPanel,
+        "Aileron trim", YokeVar, NeedsManualMode: false, PanelAfter: StabilizerTrimPanel);
 
     /// <summary>The alternate stab trim: it also needs hydraulic pressure and its cutouts NORMAL, or it moves nothing (the press then says "Stab trim did not move").</summary>
     public static readonly Bbs757SpringControl AltnStabTrim = new(
@@ -169,9 +182,10 @@ public static class Bbs757SpringControls
     public static readonly IReadOnlyList<Bbs757SpringControl> All = new[] { RudderTrim, AileronTrim, AltnStabTrim, CabinAltManual };
 
     /// <summary>
-    /// The eight buttons in the order their panels list them: the six trims go first on Stabilizer trim, left
-    /// before right and nose down before nose up; the two cabin buttons go last on Pressurization, climb first.
-    /// Each label says its side first ([VAR-1]: where rows share a phrase the discriminator comes first).
+    /// The eight buttons in the order their panels list them: the four rudder and aileron trims make up Rudder and
+    /// aileron trim and the two stab trims go first on Stabilizer trim, left before right and nose down before nose up;
+    /// the two cabin buttons go last on Pressurization, climb first. Each label says its side first ([VAR-1]: where
+    /// rows share a phrase the discriminator comes first).
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringButton> Buttons = new[]
     {
@@ -188,8 +202,8 @@ public static class Bbs757SpringControls
     /// <summary>
     /// The seven L:vars a press reads fresh, each registered under its own name: the four switches (the release's
     /// read-back, on no panel) and three readouts, which are also read-only status rows on their switch's panel, in
-    /// this order after any rows it has (<see cref="RowText"/>): Rudder Trim and Aileron Trim on Stabilizer trim,
-    /// Outflow Valve on Pressurization. The stab trim's readout and Mode Select are rows the profile registers already.
+    /// this order after any rows it has (<see cref="RowText"/>): Rudder Trim and Aileron Trim on Rudder and aileron
+    /// trim, Outflow Valve on Pressurization. The stab trim's readout and Mode Select are rows the profile registers already.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringRead> Reads = new[]
     {
@@ -274,7 +288,7 @@ public static class Bbs757SpringControls
     };
 
     /// <summary>
-    /// The rudder trim's words, shared by the press's read-back and the Stabilizer trim panel's row: "0.9 units
+    /// The rudder trim's words, shared by the press's read-back and the Rudder and aileron trim panel's row: "0.9 units
     /// right", "3.4 units left" (one decimal, a half away from zero, invariant), "centered" under
     /// <see cref="RudderCenteredUnder"/> units, "unavailable" when nothing finite was read.
     /// </summary>
@@ -290,7 +304,7 @@ public static class Bbs757SpringControls
     public static string RudderTrimPhrase(double? units) => $"{RudderTrim.Name} {RudderTrimText(units)}";
 
     /// <summary>
-    /// The aileron trim's words, shared by the press's read-back and the Stabilizer trim panel's row: the direction
+    /// The aileron trim's words, shared by the press's read-back and the Rudder and aileron trim panel's row: the direction
     /// only (BlueBird publishes no aileron trim units), "right", "left", "centered" within
     /// <see cref="YokeCenteredWithin"/> of the yoke's 1.5 neutral, "unavailable" when nothing finite was read.
     /// </summary>
