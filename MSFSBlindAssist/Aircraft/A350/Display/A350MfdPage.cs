@@ -215,8 +215,11 @@ public static class A350MfdPage
                     // INBOUND CRS, at the page's margin 79 px left of its box)
                     ?? cells.Where(c => !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 100 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 30)
                         .OrderByDescending(c => c.Y).FirstOrDefault();
-                // An empty box labelled only by a text above it is no entry the page shows (FUEL&LOAD, under CI).
-                if (inside.Count == 0 && (label == null || beside == null)) continue;
+                // An empty box labelled only by a text above it is no entry the page shows (FUEL&LOAD, under CI); nor is
+                // one whose frame is not drawn (VERT REV's AT and AT OR ABOVE boxes, HOLD's DIST box, until chosen).
+                bool Framed() => capture.Shapes is not { Count: > 0 } shapes || shapes.Any(sh => sh.Kind == "stroke" && sh.Image == 0
+                    && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
+                if (inside.Count == 0 && (label == null || beside == null || !Framed())) continue;
                 used.UnionWith(inside);
                 if (label != null && label.X < x0) leftLabels.Add(label);
                 fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy, false, beside == null));
@@ -301,7 +304,8 @@ public static class A350MfdPage
         var paired = new HashSet<int>();
         for (int i = 0; i < rows.Count; i++)
         {
-            if (paired.Contains(i) || rows[i].Any(c => c.Colour != "white")) continue;
+            // Headings are white words: a row holding an empty value (dashes, NONE) is labels and values instead.
+            if (paired.Contains(i) || rows[i].Any(c => c.Colour != "white" || Word(c.Text) is "none" || c.Text == "NONE")) continue;
             int last = i;
             // A table's rows follow its headings closely (WIND's: 83 px under them, 78 px apart, live 2026-10-28).
             for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 90); j++)
@@ -670,8 +674,11 @@ public static class A350MfdPage
     {
         var hs = headers.OrderBy(c => c.X).ToList();
         var tokens = Tokens(row);
-        int start = tokens.Count > 0 && tokens[0].Colour == "white" && hs.Count > 1 ? 1 : 0;
-        if (tokens.Skip(start).Any(t => t.Colour == "white")) return null;
+        // A white value is a placeholder: an empty one drawn as dashes, or NONE (SEC DEPARTURE's EOSID, live 2026-10-28);
+        // any other white text is a label or another row of headings.
+        static bool Placeholder(DrawnCell t) => t.Text is "none" or "NONE";
+        int start = tokens.Count > 0 && tokens[0].Colour == "white" && !Placeholder(tokens[0]) && hs.Count > 1 ? 1 : 0;
+        if (tokens.Skip(start).Any(t => t.Colour == "white" && !Placeholder(t))) return null;
         float first = hs[0].X - 40;
         var label = tokens.Take(start).Concat(tokens.Skip(start).Where(t => t.X < first && hs.Count > 1)).ToList();
         var vals = tokens.Where(t => !label.Contains(t) && t.Colour is not ("grey" or "black")).ToList();

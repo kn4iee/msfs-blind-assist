@@ -658,6 +658,8 @@ public class A350MfdPageTests
         Assert.Contains(field, lines);
         Assert.DoesNotContain(lines, l => l.StartsWith("Field:", StringComparison.Ordinal));
         Assert.DoesNotContain("ALT CSTR AT: FL 120, cyan", lines);
+        // The boxes of the choices not taken are not drawn (no frame) until one is chosen: no entry the page shows.
+        Assert.DoesNotContain(lines, l => l is "AT: empty" or "AT OR ABOVE: empty" or "DIST: empty");
     }
 
     // The HOLD page's INBOUND CRS heads its box from above and a little left of it (the page's left margin).
@@ -665,6 +667,27 @@ public class A350MfdPageTests
     public void A_heading_above_a_box_names_it()
     {
         Assert.Contains("INBOUND CRS: 297°, yellow", Page("mfd_hold_imped"));
+    }
+
+    // SEC 1's DEPARTURE with nothing selected yet (live 2026-10-28): its tables' empty values are white like their
+    // headings (dashes, EOSID's NONE), so no row paired and "RWY LENGTH CRS" read apart from "none none ... d".
+    [Fact]
+    public void A_table_of_empty_white_values_pairs_with_its_headings()
+    {
+        var lines = Page("mfd_sec1_departure_empty");
+        Assert.Contains("RWY none, LENGTH none, CRS none, white", lines);
+        Assert.Contains("EOSID NONE, FREQ/CHAN none, SID none, TRANS none, white", lines);
+        Assert.DoesNotContain("RWY LENGTH CRS, white", lines);
+    }
+
+    // A row of labels with empty values (PERF T.O's OPT and REC MAX dashes) is no row of headings: EO MAX under it is
+    // its own row, never a table row of it.
+    [Fact]
+    public void A_row_holding_empty_values_heads_no_table()
+    {
+        var lines = Page("mfd_perf_to_empty");
+        Assert.DoesNotContain(lines, l => l.StartsWith("EO MAX: ---", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("OPT", StringComparison.Ordinal));
     }
 
     // VERT REV's SPD tab: the speed box has no label of its own; the tab the page is on says what it holds.
