@@ -25,8 +25,14 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// key pressed before that goes out at once and leaves it to the ordinary read-back (Alt+C's clear is heard
 /// that way too: "Cleared", or "DELETE" when it pressed DEL). A key the window cannot deliver is refused
 /// aloud. Ctrl+Tab and the side keys say only which CDU is shown, the CDU already shown included.
-/// While the window is hidden only one thing speaks: keys the pilot sent that were dropped because
-/// the link went ("CDU connection lost, keys not sent").
+/// While the window is hidden two things speak. Keys the pilot sent that were dropped because the link
+/// went ("CDU connection lost, keys not sent"). And a message the FMC posts on the captain's scratchpad
+/// ("CDU: TAKEOFF DATA UPLINK", R72): the hidden client still scrapes the captain's CDU once a second
+/// (<see cref="OnVisibleChanged"/> points it there), <see cref="Bbs757CduMessageWatch"/> tells a message
+/// from an entry typed in the window (which its own keys explain) and the Ctrl+M row "CDU Messages While
+/// Closed" (<see cref="Bbs757CduRows.MessagesMonitorKey"/>, shown here as a check box) turns it off.
+/// While the window is shown the scratchpad read-back above speaks the scratchpad, messages included, so
+/// a message is never said twice.
 /// </summary>
 public partial class BBS757CduForm : Form
 {
@@ -41,6 +47,7 @@ public partial class BBS757CduForm : Form
         "Waiting for the first officer's CDU. It shows once its screen changes: press a page key, such as Alt+R for RTE.";
     public const string NotReachableText = "The 757's CDU is not reachable.";
     public const string KeysDroppedText = "CDU connection lost, keys not sent";
+    public const string SpeakMessagesText = "Speak CDU messages when closed";
 
     private const int PollTickMs = 350;
     // After the last queued key, how long the scratchpad waits before it is read back.
@@ -62,6 +69,11 @@ public partial class BBS757CduForm : Form
 
     // An entry typed in the scratchpad box, waiting to be read back (plan 08).
     private readonly Bbs757TypedEntryCheck _check = new();
+
+    // The captain's scratchpad while the window is hidden: which change is a CDU message (R72).
+    private readonly Bbs757CduMessageWatch _watch = new();
+    // True while the check box is being set from the settings, which must not write them back.
+    private bool _syncingSpeakMessages;
 
     // True while the key now being handled is an auto-repeat (held down): one physical press is
     // one CDU key, so a held Backspace never queues a run of CLRs.
@@ -133,6 +145,11 @@ public partial class BBS757CduForm : Form
         btnClr.Click      += (s, e) => SendKey(Bbs757CduKeys.Clr);
         btnDel.Click      += (s, e) => SendKey(Bbs757CduKeys.Del);
         btnSwitchCdu.Click += (s, e) => SelectCdu(OtherCdu);
+
+        // The check box is the Ctrl+M row's twin: shown from it when the window comes up (a tick in
+        // Ctrl+M while the window stays open is picked up when it is activated again), written to it on a tick.
+        chkSpeakMessages.CheckedChanged += (s, e) => OnSpeakMessagesChanged();
+        Activated += (s, e) => RefreshSpeakMessages();
     }
 
     // ------------------------------------------------------------------
@@ -145,6 +162,8 @@ public partial class BBS757CduForm : Form
         if (_disposed) return;
         _screens[cdu] = screen;
         _screenAt[cdu] = DateTime.UtcNow;
+        // Hidden, the client reads the captain's CDU only: a message on its scratchpad is spoken (R72).
+        if (!Visible && cdu == 1) SpeakCduMessage(screen);
         if (cdu == _cdu) Render();
     });
 
@@ -152,6 +171,7 @@ public partial class BBS757CduForm : Form
     {
         if (_disposed) return;
         _screens[cdu] = null;
+        if (!Visible && cdu == 1) _watch.Seed(null);   // the next screen seeds it silently
         if (cdu != _cdu) return;
         _scratchpad.Reset();   // the next screen seeds it silently
         Render();
@@ -172,6 +192,62 @@ public partial class BBS757CduForm : Form
     {
         try { if (IsHandleCreated) BeginInvoke(action); }
         catch (InvalidOperationException) { }
+    }
+
+    // ------------------------------------------------------------------
+    // CDU messages while the window is closed (R72)
+    // ------------------------------------------------------------------
+
+    // Whether Ctrl+M has "CDU Messages While Closed" unticked. This speech comes from the client's push,
+    // outside MainForm's mute wrap, so the window checks the key itself ([VAR-8]).
+    private static bool MessagesMuted =>
+        SettingsManager.Current.BBS757DisabledMonitorVariablesSet.Contains(Bbs757CduRows.MessagesMonitorKey);
+
+    /// <summary>
+    /// Speaks what the hidden window's push of the captain's screen holds, if it is a CDU message
+    /// (<see cref="Bbs757CduMessageWatch"/>): queued behind the screen reader's own speech, as any
+    /// background event is. A message muted in Ctrl+M is dropped, not kept for later.
+    /// </summary>
+    private void SpeakCduMessage(Bbs757CduScreen screen)
+    {
+        if (_watch.OnScreen(screen.Scratchpad, _client.PendingKeyCount > 0, DateTime.UtcNow, MessagesMuted) is not { } say) return;
+        Log.Debug("BBS757", $"CDU message: {say}");
+        _announcer.Announce(say);
+    }
+
+    /// <summary>
+    /// Tells the watch the window just queued keys for the selected CDU that take about
+    /// <paramref name="queuedMs"/> ms to go out, behind the <paramref name="pendingBefore"/> already in the
+    /// client's queue (one queue for both CDUs, each counted as a standard cycle: a long CLR is longer, but
+    /// a push that still sees keys pending extends the window itself). Their echo on the scratchpad is then
+    /// no message, even when the last key lands between two of the hidden client's scrapes. Keys for the
+    /// first officer's CDU change nothing on the captain's scratchpad, so they are left out.
+    /// </summary>
+    private void NoteKeysQueued(int pendingBefore, int queuedMs)
+    {
+        if (_cdu != 1) return;
+        _watch.KeysQueued(DateTime.UtcNow, pendingBefore * CoherentBbs757TabletClient.KeyCycleMs + queuedMs);
+    }
+
+    // Ticked = spoken = the Ctrl+M row is ticked. The set is rebuilt by every Save, Ctrl+M's included.
+    private void RefreshSpeakMessages()
+    {
+        _syncingSpeakMessages = true;
+        try { chkSpeakMessages.Checked = !MessagesMuted; }
+        finally { _syncingSpeakMessages = false; }
+    }
+
+    // The pilot ticked or unticked the check box: the same edit Ctrl+M's tick makes. The screen reader says
+    // the new state; nothing is said here ([CORE-7]).
+    private void OnSpeakMessagesChanged()
+    {
+        if (_syncingSpeakMessages) return;
+        var disabled = SettingsManager.Current.BBS757DisabledMonitorVariables;
+        if (chkSpeakMessages.Checked)
+            disabled.Remove(Bbs757CduRows.MessagesMonitorKey);
+        else if (!disabled.Contains(Bbs757CduRows.MessagesMonitorKey))
+            disabled.Add(Bbs757CduRows.MessagesMonitorKey);
+        SettingsManager.Save();
     }
 
     // ------------------------------------------------------------------
@@ -368,7 +444,9 @@ public partial class BBS757CduForm : Form
             return;
         }
         _check.Cancel();
+        int pendingBefore = _client.PendingKeyCount;
         foreach (var (key, holdMs) in keys) _client.PressKey(_cdu, key, holdMs);
+        NoteKeysQueued(pendingBefore, keys.Sum(k => CoherentBbs757TabletClient.CycleMs(k.HoldMs, CoherentBbs757TabletClient.KeyGapMs)));
     }
 
     /// <summary>
@@ -386,8 +464,10 @@ public partial class BBS757CduForm : Form
             _announcer.AnnounceImmediate(NotReachableText);
             return;
         }
-        _check.Typed(_cdu, text, _screens[_cdu]?.Scratchpad ?? "", otherKeysQueued: _client.PendingKeyCount > 0);
+        int pendingBefore = _client.PendingKeyCount;
+        _check.Typed(_cdu, text, _screens[_cdu]?.Scratchpad ?? "", otherKeysQueued: pendingBefore > 0);
         foreach (var key in keys) _client.PressKey(_cdu, key, Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs);
+        NoteKeysQueued(pendingBefore, keys.Count * CoherentBbs757TabletClient.CycleMs(Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs));
     }
 
     // ------------------------------------------------------------------
@@ -552,15 +632,30 @@ public partial class BBS757CduForm : Form
             SetForegroundWindow(_previousWindow);
     }
 
-    // The client scrapes at its visible rate only while the window is shown; the read-back
-    // timer runs only then too (nothing speaks from a hidden window).
+    // The client scrapes at its visible rate only while the window is shown; the read-back timer runs
+    // only then too. Hidden, the window speaks keys it lost and a CDU message on the captain's scratchpad
+    // (R72): the client reads the captain's CDU then, whichever one the window was left on, and the watch
+    // starts from what the pilot saw last, so a message already heard in the open window is not said again.
+    // Left on the first officer's CDU, the window has not seen the captain's scratchpad since it switched
+    // (the client read the other CDU), so the watch knows nothing and the first push only seeds it.
+    // ShowForm points the client back at the selected CDU.
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
         if (_disposed) return;
         _client.SetActive(Visible);
-        if (Visible) _pollTimer.Start();
-        else { _pollTimer.Stop(); _check.Cancel(); }
+        if (Visible)
+        {
+            RefreshSpeakMessages();
+            _pollTimer.Start();
+        }
+        else
+        {
+            _pollTimer.Stop();
+            _check.Cancel();
+            _watch.Seed(_cdu == 1 ? _screens[1]?.Scratchpad : null);
+            _client.ActiveCdu = 1;
+        }
     }
 
     protected override void Dispose(bool disposing)

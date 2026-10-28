@@ -378,4 +378,205 @@ public class Bbs757CduRowsTests
         Assert.Equal(2, start);
         Assert.Equal(0, Bbs757CduRows.PageStart(Array.Empty<Bbs757CduRow>()));
     }
+
+    // ---- Plan 09 Task 5: CDU messages spoken while the window is closed ------------------------------
+
+    private static readonly DateTime T0 = new(2026, 10, 28, 12, 0, 0, DateTimeKind.Utc);
+
+    private static DateTime At(double seconds) => T0.AddSeconds(seconds);
+
+    /// <summary>A watch that has read the scratchpad once, as the window leaves it when it is hidden.</summary>
+    private static Bbs757CduMessageWatch Seeded(string pad)
+    {
+        var watch = new Bbs757CduMessageWatch();
+        watch.Seed(pad);
+        return watch;
+    }
+
+    [Theory]
+    [InlineData("", "TAKEOFF DATA UPLINK", "CDU: TAKEOFF DATA UPLINK")]     // a message on an empty scratchpad
+    [InlineData("KSEA", "INVALID ENTRY", "CDU: INVALID ENTRY")]             // a message over typed text
+    [InlineData("INVALID ENTRY", "NOT IN DATABASE", "CDU: NOT IN DATABASE")]
+    [InlineData("", "  RESET MCP ALT  ", "CDU: RESET MCP ALT")]            // trimmed
+    public void NewMessage_speaks_a_message(string oldPad, string newPad, string said) =>
+        Assert.Equal(said, Bbs757CduRows.NewMessage(oldPad, newPad, keysPending: false));
+
+    [Theory]
+    [InlineData("", "TAKEOFF DATA UPLINK", true)]    // keys queued or in their cycle: the scratchpad is mid-entry
+    [InlineData(null, "TAKEOFF DATA UPLINK", false)] // a first reading is silent
+    [InlineData("TAKEOFF DATA UPLINK", "", false)]   // cleared
+    [InlineData("TAKEOFF DATA UPLINK", "   ", false)]
+    [InlineData("KSEA", "KSEA", false)]              // unchanged
+    [InlineData("KSEA", " KSEA ", false)]
+    [InlineData("25", "250", false)]                 // typing grew it
+    [InlineData("KSEA", "KSEA/PDX", false)]
+    [InlineData("250", "25", false)]                 // CLR / DEL took characters off
+    [InlineData("250", "2", false)]
+    public void NewMessage_is_silent_for_typing_clearing_and_a_first_reading(string? oldPad, string newPad, bool keysPending) =>
+        Assert.Null(Bbs757CduRows.NewMessage(oldPad, newPad, keysPending));
+
+    [Fact]
+    public void Message_spoken_once()
+    {
+        var watch = Seeded("");
+
+        Assert.Equal("CDU: TAKEOFF DATA UPLINK", watch.OnScreen("TAKEOFF DATA UPLINK", false, At(10), muted: false));
+        // The scratchpad keeps showing it push after push: said once.
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(11), muted: false));
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(12), muted: false));
+        // Another message is a new one.
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", false, At(20), muted: false));
+    }
+
+    [Fact]
+    public void A_message_already_on_the_scratchpad_when_nothing_was_known_is_not_said()
+    {
+        // The first push after the window is hidden, or after the link came back, only seeds.
+        var watch = new Bbs757CduMessageWatch();
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(1), muted: false));
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(2), muted: false));
+
+        watch.Seed(null);   // the screen was lost
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(3), muted: false));
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", false, At(4), muted: false));
+    }
+
+    [Fact]
+    public void A_message_the_pilot_already_heard_in_the_open_window_is_not_said_again()
+    {
+        // The window seeds the watch with what the scratchpad shows when it is hidden.
+        var watch = Seeded("TAKEOFF DATA UPLINK");
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(1), muted: false));
+    }
+
+    [Fact]
+    public void Typing_is_not_a_message()
+    {
+        // Keys queued or in their cycle (the client still holds some): every push is mid-entry.
+        var watch = Seeded("");
+        Assert.Null(watch.OnScreen("2", keysPending: true, At(1), muted: false));
+        Assert.Null(watch.OnScreen("25", keysPending: true, At(2), muted: false));
+        // The last key has gone out and the screen shows the whole entry: still the entry, not a message.
+        Assert.Null(watch.OnScreen("250", keysPending: false, At(2.4), muted: false));
+        Assert.Null(watch.OnScreen("250", keysPending: false, At(5), muted: false));
+
+        // Text that grew between two pushes with no key pending at either.
+        watch = Seeded("2");
+        Assert.Null(watch.OnScreen("250", keysPending: false, At(1), muted: false));
+        // ... and text the pilot took back.
+        Assert.Null(watch.OnScreen("25", keysPending: false, At(2), muted: false));
+    }
+
+    [Fact]
+    public void Typing_that_ends_between_two_scrapes_is_not_a_message()
+    {
+        // The window queued "250" (three typed keys, 400 ms each) and nothing was pending at the last push
+        // before them: a hidden scrape comes once a second, so the first push that sees the entry can come
+        // after the last key went out, with no push in between to show it growing.
+        var watch = Seeded("");
+        watch.KeysQueued(At(0), queuedMs: 3 * (Bbs757CduTyping.HoldMs + Bbs757CduTyping.GapMs));
+
+        Assert.Null(watch.OnScreen("250", keysPending: false, At(1.5), muted: false));
+        // Still inside the settle window after the keys (1.2 s + SettleMs): a change is the keys' echo.
+        Assert.Null(watch.OnScreen("2500", keysPending: false, At(3.0), muted: false));
+        // A real message after the settle window speaks.
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", keysPending: false, At(4.5), muted: false));
+        Assert.Null(watch.OnScreen("INVALID ENTRY", keysPending: false, At(5.5), muted: false));
+    }
+
+    [Fact]
+    public void A_push_with_keys_pending_extends_the_settle_window()
+    {
+        var watch = Seeded("");
+        Assert.Null(watch.OnScreen("", keysPending: true, At(10), muted: false));   // keys queued, nothing landed yet
+
+        // The keys finished a moment later and the entry is all there; the push is inside SettleMs of the last pending one.
+        Assert.Null(watch.OnScreen("250", keysPending: false, At(10) + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs - 1), muted: false));
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", keysPending: false, At(10) + TimeSpan.FromMilliseconds(Bbs757CduMessageWatch.SettleMs + 1), muted: false));
+    }
+
+    [Fact]
+    public void Queueing_keys_never_shortens_the_settle_window()
+    {
+        var watch = Seeded("");
+        watch.KeysQueued(At(0), queuedMs: 10_000);       // busy until 12 s
+        watch.KeysQueued(At(1), queuedMs: 100);          // would end at 3.1 s: the longer one stays
+
+        Assert.Null(watch.OnScreen("INVALID ENTRY", keysPending: false, At(11), muted: false));
+        Assert.Equal("CDU: NOT IN DATABASE", watch.OnScreen("NOT IN DATABASE", keysPending: false, At(12.5), muted: false));
+    }
+
+    [Fact]
+    public void Cleared_is_silent()
+    {
+        var watch = Seeded("TAKEOFF DATA UPLINK");
+
+        Assert.Null(watch.OnScreen("", false, At(1), muted: false));          // CLR on a message
+        Assert.Null(watch.OnScreen("   ", false, At(2), muted: false));
+        // The scratchpad was clear, so the same message arriving again is a new one.
+        Assert.Equal("CDU: TAKEOFF DATA UPLINK", watch.OnScreen("TAKEOFF DATA UPLINK", false, At(3), muted: false));
+
+        // A typed entry the pilot wiped is silent too, whole or a character at a time.
+        watch = Seeded("250");
+        Assert.Null(watch.OnScreen("25", false, At(1), muted: false));
+        Assert.Null(watch.OnScreen("", false, At(2), muted: false));
+    }
+
+    [Fact]
+    public void Muted_in_ctrl_m_is_silent()
+    {
+        // The Ctrl+M row's own key is the one the window checks: mute it as the monitor manager does.
+        string key = new MSFSBlindAssist.Aircraft.BBS757Definition().MonitorRows()
+            .Single(r => r.Label == "CDU Messages While Closed").Key;
+        var settings = new MSFSBlindAssist.Settings.UserSettings { BBS757DisabledMonitorVariables = new() { key } };
+        settings.RebuildDisabledMonitorVariableCaches();
+        bool muted = settings.BBS757DisabledMonitorVariablesSet.Contains(Bbs757CduRows.MessagesMonitorKey);
+        Assert.True(muted);
+
+        var watch = Seeded("");
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(1), muted));
+        // Ticked again in Ctrl+M: the message that came while it was off is not said late.
+        Assert.Null(watch.OnScreen("TAKEOFF DATA UPLINK", false, At(2), muted: false));
+        // A message after that is.
+        Assert.Equal("CDU: INVALID ENTRY", watch.OnScreen("INVALID ENTRY", false, At(3), muted: false));
+
+        // Default: not in the list, spoken.
+        var fresh = new MSFSBlindAssist.Settings.UserSettings();
+        fresh.RebuildDisabledMonitorVariableCaches();
+        Assert.DoesNotContain(Bbs757CduRows.MessagesMonitorKey, fresh.BBS757DisabledMonitorVariablesSet);
+    }
+
+    [Fact]
+    public void Cdu_monitor_row_added()
+    {
+        var def = new MSFSBlindAssist.Aircraft.BBS757Definition();
+        var rows = def.MonitorRows();
+
+        var row = Assert.Single(rows, r => r.Key == Bbs757CduRows.MessagesMonitorKey);
+        Assert.Equal("BBS757_CDU_MESSAGES", row.Key);
+        Assert.Equal("CDU Messages While Closed", row.Label);
+        // One row per key, and building the list again adds no second one.
+        Assert.Equal(rows.Count, rows.Select(r => r.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.Single(def.MonitorRows(), r => r.Key == Bbs757CduRows.MessagesMonitorKey);
+        // It is no variable's row: the key names speech that comes from the CDU window, not a SimVar.
+        Assert.DoesNotContain(def.GetVariables().Keys, k => k == Bbs757CduRows.MessagesMonitorKey);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_message_does_not_depend_on_the_culture(string culture)
+    {
+        // The scratchpad text is passed through as the CDU shows it: a comma-decimal PC changes nothing.
+        CultureInfo saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            Assert.Equal("CDU: SET 0.82 MACH 1,5", Bbs757CduRows.NewMessage("", "SET 0.82 MACH 1,5", keysPending: false));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
 }

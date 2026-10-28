@@ -30,6 +30,9 @@ public partial class BBS757CduForm
     private Button btnDel = null!;
     private Button btnSwitchCdu = null!;
 
+    // The Ctrl+M row "CDU Messages While Closed", shown here (plan 09)
+    private CheckBox chkSpeakMessages = null!;
+
     private void InitializeComponent()
     {
         this.SuspendLayout();
@@ -102,13 +105,24 @@ public partial class BBS757CduForm
         btnClr       = MakeBtn("CLR",        "CLR (Backspace)",       120, y, 100, bh);
         btnDel       = MakeBtn("DEL",        "DEL (Delete)",          230, y, 100, bh);
         btnSwitchCdu = MakeBtn("Switch CDU", "Switch CDU (Ctrl+Tab)", 340, y, 120, bh);
+        y += bh + sp + 6;
+
+        // Its state is the Ctrl+M row's (checked = the row is ticked), refreshed each time the window is shown.
+        chkSpeakMessages = new CheckBox
+        {
+            Text = SpeakMessagesText,
+            Location = new Point(10, y),
+            Size = new Size(605, 24),
+            AccessibleName = SpeakMessagesText,
+            Checked = true,
+        };
 
         this.Controls.AddRange(new Control[]
         {
             statusBox, cduDisplay, scratchpadInput,
             btnInitRef, btnRte, btnDepArr, btnAtc, btnVnav, btnFix, btnLegs,
             btnHold, btnFmcComm, btnProg, btnMenu, btnNavRad, btnPrevPage, btnNextPage,
-            btnExec, btnClr, btnDel, btnSwitchCdu
+            btnExec, btnClr, btnDel, btnSwitchCdu, chkSpeakMessages
         });
 
         // The display first, as in the HS787 window; the status box is reachable by Tab.
@@ -134,6 +148,7 @@ public partial class BBS757CduForm
         btnClr.TabIndex          = tab++;
         btnDel.TabIndex          = tab++;
         btnSwitchCdu.TabIndex    = tab++;
+        chkSpeakMessages.TabIndex = tab++;
 
         this.ResumeLayout(false);
     }

@@ -151,4 +151,88 @@ public static class Bbs757CduRows
         string spoken = Bbs757CduTitle.Spoken(newTitleRow);
         return spoken.Length > 0 && spoken != Bbs757CduTitle.Spoken(oldTitleRow);
     }
+
+    /// <summary>
+    /// The Ctrl+M key of "CDU Messages While Closed" (<c>BBS757Definition.AddCduMonitorRows</c>), and the
+    /// entry the window's "Speak CDU messages when closed" check box adds to and removes from
+    /// <c>BBS757DisabledMonitorVariables</c>. The speech comes from the tablet client's push, outside
+    /// MainForm's mute wrap, so the window checks the key itself ([VAR-8]).
+    /// </summary>
+    public const string MessagesMonitorKey = "BBS757_CDU_MESSAGES";
+
+    /// <summary>
+    /// What to say when the captain's scratchpad went from <paramref name="oldPad"/> to
+    /// <paramref name="newPad"/> while the CDU window is closed (R72): "CDU: " and the new text when the
+    /// FMC put a message there ("TAKEOFF DATA UPLINK", "INVALID ENTRY"), else null. Null while keys are
+    /// queued (<paramref name="keysPending"/>: the scratchpad is mid-entry), for a first reading
+    /// (<paramref name="oldPad"/> null: nothing was known), for a cleared scratchpad, for the same text,
+    /// and for typing: the new text grew from the old one (an entry being typed), or is the start of it
+    /// (CLR or DEL took characters off). A message over typed text ("KSEA" → "INVALID ENTRY") and one on
+    /// an empty scratchpad both speak. A message that happens to continue the text before it ("INVALID" →
+    /// "INVALID ENTRY") reads as typing and is not said: the price of not saying every typed character.
+    /// Pure.
+    /// </summary>
+    public static string? NewMessage(string? oldPad, string newPad, bool keysPending)
+    {
+        if (keysPending || oldPad == null) return null;
+        string was = oldPad.Trim();
+        string now = newPad.Trim();
+        if (now.Length == 0 || now == was) return null;
+        if (was.Length > 0 && now.StartsWith(was, StringComparison.Ordinal)) return null;
+        if (was.StartsWith(now, StringComparison.Ordinal)) return null;
+        return "CDU: " + now;
+    }
+}
+
+/// <summary>
+/// Remembers the captain's scratchpad between the hidden CDU window's pushes and decides which change
+/// is a message to speak (<see cref="Bbs757CduRows.NewMessage"/>), so the window itself only forwards
+/// what it sees and the typing-is-not-a-message rule can be tested with a clock (R72). Not thread-safe:
+/// the window drives it on the UI thread.
+/// </summary>
+public sealed class Bbs757CduMessageWatch
+{
+    /// <summary>
+    /// How long after the window's own keys a scratchpad change is still taken as their echo. The hidden
+    /// client scrapes once a second, so the last key of an entry can go out between two scrapes and the
+    /// first push that shows the entry then arrives with no key pending and no earlier push of the text
+    /// growing, which would read as a message; two scrapes of margin keep it from being one.
+    /// </summary>
+    public const int SettleMs = 2000;
+
+    private string? _old;
+    private DateTime _busyUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// The window just queued keys that take about <paramref name="queuedMs"/> ms to go out (those ahead
+    /// of them included): they count as pending until then and <see cref="SettleMs"/> after. An earlier,
+    /// longer window is never shortened.
+    /// </summary>
+    public void KeysQueued(DateTime now, int queuedMs) => ExtendTo(now.AddMilliseconds(Math.Max(0, queuedMs) + SettleMs));
+
+    /// <summary>
+    /// The captain's scratchpad as a push shows it: what to speak, or null. <paramref name="keysPending"/>
+    /// is whether the client still holds keys, which also extends the settle window to
+    /// <see cref="SettleMs"/> after this push. The text is remembered whether or not it is spoken, and a
+    /// message muted in Ctrl+M (<paramref name="muted"/>) is not spoken later either.
+    /// </summary>
+    public string? OnScreen(string pad, bool keysPending, DateTime now, bool muted)
+    {
+        if (keysPending) ExtendTo(now.AddMilliseconds(SettleMs));
+        string? say = Bbs757CduRows.NewMessage(_old, pad, keysPending || now < _busyUntil);
+        _old = pad;
+        return muted ? null : say;
+    }
+
+    /// <summary>
+    /// Remembers <paramref name="pad"/> without speaking it: what the pilot saw in the open window, or
+    /// null when nothing is known (the screen was lost), so the next push only seeds. Keys already queued
+    /// still count as pending.
+    /// </summary>
+    public void Seed(string? pad) => _old = pad;
+
+    private void ExtendTo(DateTime until)
+    {
+        if (until > _busyUntil) _busyUntil = until;
+    }
 }
