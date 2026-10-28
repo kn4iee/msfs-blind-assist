@@ -500,21 +500,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
         {
             bool want = value == "true";
-            if (item.Key == "tgl:NOSEWHEEL STEERING")
-            {
-                // [B757-2]: the steering switch TOGGLES; it is judged from BlueBird's own setting
-                // (tiller_realistic: true = REALISTIC = the switch on), never tapped unread or already there.
-                string? folder = Bbs757WorkFolder.Find();
-                bool? realistic = folder == null ? null : Bbs757WorkFolder.ReadTillerRealistic(folder);
-                if (realistic is not bool r) { Alert("BlueBird's steering setting cannot be read, so nothing was tapped."); Push(); return; }
-                if (r == want) { Push(); return; }
-                await TapAsync(item.Hit, ct);
-                await Task.Delay(800, ct);
-                bool? after = folder == null ? null : Bbs757WorkFolder.ReadTillerRealistic(folder);
-                if (after != want) Alert("BlueBird did not change the nosewheel steering setting.");
-                await ReadIfChangedAsync(ct, force: true);
-                return;
-            }
             if (item.On == want) return;
             await TapAsync(item.Hit, ct);
             if (!await ConfirmAsync(m => Find(m, item.Key)?.On == want, ct))

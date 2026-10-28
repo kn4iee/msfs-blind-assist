@@ -25,8 +25,15 @@ internal static class Program
 {
     private static readonly Bbs757EfbPopout Popout = new(s => Console.WriteLine("  [popout] " + s));
 
+    // The app is SystemAware (Program.cs): without the same here, a scaled display (measured: 4K at
+    // 300 %) sizes and captures the pop-out in logical pixels, and a capture holds only the tablet's
+    // top-left third, enlarged.
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware();
+
     private static async Task<int> Main(string[] args)
     {
+        SetProcessDPIAware();
         if (args.Length == 0) { Console.WriteLine("commands: popout | read <dir> <name> [x,y ...] | latency | mirror on|off | close"); return 1; }
         switch (args[0])
         {

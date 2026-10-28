@@ -13,21 +13,35 @@ public enum Bbs757WeightUnits
 
 /// <summary>
 /// BlueBird's 757 "work" folder, where the aircraft keeps its EFB settings and the nav data it
-/// downloaded, and the only four values the app reads from it: the SimBrief ID (to confirm an
-/// entry made on the EFB took), the unit system (to say what the weight units answer did), the
-/// nosewheel steering setting (so the steering button never clicks its toggle when it is already
-/// rudder) and the installed AIRAC cycle (so the nav data update never clicks where BlueBird shows
-/// REMOVE). Read only: the app never writes BlueBird's files.
+/// downloaded: which install locations hold one (<see cref="Find"/>, <see cref="ExistingFolders"/>)
+/// and the simulator each belongs to (<see cref="SimulatorOf"/>), its registrations' settings files
+/// (<see cref="RegistrationFiles"/>), and the four values this class reads from it: the SimBrief ID
+/// (the Fetch SimBrief flight and fuel and payload buttons refuse without one, and fetch the plan with
+/// it), the unit system (to say what the weight units answer did), the parking brake mode (the parking
+/// brake's full-braking retry never runs in EASY mode, <c>Bbs757ParkingBrake</c>) and the installed
+/// AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). The app writes BlueBird's files only
+/// through <see cref="Bbs757SettingsFile"/>, under rule [B757-17].
 ///
-/// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key:
-/// it is parsed for <c>simbrief_id</c>, <c>units</c>, <c>tiller_realistic</c> and <c>parking_brake_realistic</c> alone, nothing else is taken from it, and
-/// neither file's content is ever logged. The SimBrief ID is the pilot's own identifier: callers
-/// never log it either. Pure, with the folder candidates passed in.
+/// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key.
+/// This class's own readers take only the keys they name (<c>simbrief_id</c>, <c>units</c>,
+/// <c>parking_brake_realistic</c> and the cycle file's <c>cycle</c>) and never log a file's content;
+/// <see cref="Bbs757SettingsFile"/> logs a value (saved or refused) only for settings that may be logged
+/// (<see cref="Bbs757Setting.MayLog"/>), and never the SimBrief ID, the Hoppie logon code or the
+/// SayIntentions ACARS key. The SimBrief ID is the pilot's own identifier: callers never log it
+/// either. Pure, with the folder candidates passed in.
 /// </summary>
 public static class Bbs757WorkFolder
 {
     public const string PackageName = "bluebirdsim-aircraft-757-200";
     public const string SettingsFile = "efb_settings.json";
+
+    // MSFS 2024's folders: the Microsoft Store package, and the Steam version's data folder in Roaming.
+    private const string Msfs2024Package = "Microsoft.Limitless_8wekyb3d8bbwe";
+    private const string Msfs2024SteamFolder = "Microsoft Flight Simulator 2024";
+
+    // Each registration flown gets liveries\<registration>-opt.json in the work folder.
+    private const string LiveriesFolder = "liveries";
+    private const string RegistrationSuffix = "-opt.json";
 
     // Larger than any settings or cycle file BlueBird writes (about 1 KB and 300 bytes): a file
     // past this is not one of them and is not read.
@@ -50,9 +64,9 @@ public static class Bbs757WorkFolder
         string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         return new[]
         {
-            Path.Combine(local, "Packages", "Microsoft.Limitless_8wekyb3d8bbwe", "LocalState", "WASM", "MSFS2020", PackageName, "work"),
-            Path.Combine(local, "Packages", "Microsoft.Limitless_8wekyb3d8bbwe", "LocalState", "WASM", "MSFS2024", PackageName, "work"),
-            Path.Combine(roaming, "Microsoft Flight Simulator 2024", "WASM", "MSFS2020", PackageName, "work"),
+            Path.Combine(local, "Packages", Msfs2024Package, "LocalState", "WASM", "MSFS2020", PackageName, "work"),
+            Path.Combine(local, "Packages", Msfs2024Package, "LocalState", "WASM", "MSFS2024", PackageName, "work"),
+            Path.Combine(roaming, Msfs2024SteamFolder, "WASM", "MSFS2020", PackageName, "work"),
             Path.Combine(local, "Packages", "Microsoft.FlightSimulator_8wekyb3d8bbwe", "LocalState", "packages", PackageName, "work"),
             Path.Combine(roaming, "Microsoft Flight Simulator", "Packages", PackageName, "work"),
         };
@@ -90,6 +104,78 @@ public static class Bbs757WorkFolder
 
     /// <summary>The work folder at one of the <see cref="DefaultRoots"/>, or null.</summary>
     public static string? Find() => Find(DefaultRoots());
+
+    /// <summary>
+    /// Of <paramref name="roots"/>, the ones that exist and hold BlueBird's <see cref="SettingsFile"/>,
+    /// in their order: more than one means a pilot with both simulators, or an old install left behind.
+    /// Never throws: a root that cannot be looked at is left out. Only the file's presence is looked
+    /// at, never its content.
+    /// </summary>
+    public static IReadOnlyList<string> ExistingFolders(IReadOnlyList<string> roots)
+    {
+        var found = new List<string>();
+        foreach (string root in roots)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
+                if (new FileInfo(Path.Combine(root, SettingsFile)).Exists) found.Add(root);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                           or NotSupportedException or System.Security.SecurityException) { }
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// The simulator a work folder belongs to: "MSFS 2024" for one under MSFS 2024's Microsoft Store
+    /// package (<c>Microsoft.Limitless_8wekyb3d8bbwe</c>) or its Steam folder
+    /// (<c>Microsoft Flight Simulator 2024</c>), else "MSFS 2020". Only the path is looked at.
+    /// </summary>
+    public static string SimulatorOf(string folder)
+    {
+        foreach (string part in folder.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (part.Equals(Msfs2024Package, StringComparison.OrdinalIgnoreCase)
+                || part.Equals(Msfs2024SteamFolder, StringComparison.OrdinalIgnoreCase))
+                return "MSFS 2024";
+        }
+        return "MSFS 2020";
+    }
+
+    /// <summary>
+    /// BlueBird's registration files, <c>liveries\&lt;registration&gt;-opt.json</c> (one for each
+    /// registration flown, holding its Livery options, Callouts and Cabin audio), each with the
+    /// registration its name gives, ordered by registration (ordinal). Empty when there is no
+    /// <c>liveries</c> folder yet or it cannot be listed; never throws. Only the names are looked at.
+    /// </summary>
+    public static IReadOnlyList<(string Registration, string Path)> RegistrationFiles(string folder)
+    {
+        try
+        {
+            string liveries = Path.Combine(folder, LiveriesFolder);
+            if (!Directory.Exists(liveries)) return Array.Empty<(string, string)>();
+            return Directory.GetFiles(liveries, "*" + RegistrationSuffix)
+                .Select(file => (Registration: RegistrationOf(file), Path: file))
+                .Where(entry => entry.Registration.Length > 0)
+                .OrderBy(entry => entry.Registration, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                       or NotSupportedException or System.Security.SecurityException)
+        {
+            return Array.Empty<(string, string)>();
+        }
+    }
+
+    // "G-BBS75" for "...\G-BBS75-opt.json"; "" for a name that does not end so, or is nothing more.
+    private static string RegistrationOf(string file)
+    {
+        string name = Path.GetFileName(file);
+        return name.EndsWith(RegistrationSuffix, StringComparison.OrdinalIgnoreCase)
+            ? name[..^RegistrationSuffix.Length]
+            : "";
+    }
 
     private static string CyclePath(string folder) => Path.Combine(folder, "NavigationData", "cycle.json");
 
@@ -135,25 +221,6 @@ public static class Bbs757WorkFolder
         {
             0 => Bbs757WeightUnits.Kilograms,
             1 => Bbs757WeightUnits.Pounds,
-            _ => null,
-        };
-    }
-
-    /// <summary>
-    /// BlueBird's NOSEWHEEL STEERING setting (<c>tiller_realistic</c>, the EFB's Settings, AIRCRAFT):
-    /// true REALISTIC (the tiller), false RUDDER. Measured 2026-10-25: it read false right after the
-    /// switch was clicked from REALISTIC to RUDDER (a global setting, written at once). Null when it
-    /// is missing, not a JSON bool, or the file cannot be read. Nothing else in the file is read.
-    /// </summary>
-    public static bool? ReadTillerRealistic(string folder)
-    {
-        using var doc = ReadJson(Path.Combine(folder, SettingsFile));
-        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-        if (!doc.RootElement.TryGetProperty("tiller_realistic", out var tiller)) return null;
-        return tiller.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
             _ => null,
         };
     }

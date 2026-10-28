@@ -22,7 +22,7 @@ public static class Bbs757EfbElements
     public sealed record Built(Dictionary<string, string> Data, IReadOnlyDictionary<int, Action> Actions, int Count);
 
     public const string ClassicWindowText =
-        "Classic 757 EFB window: SimBrief load, Navigraph sign-in, nav data update, steering and ground power";
+        "Classic 757 EFB window: SimBrief load, Navigraph sign-in, nav data update and ground power";
     public const string ReadAgainText = "Read the tablet again";
     public const string ReadOnlyNote =
         "This window only reads the tablet. To change anything, use the classic 757 EFB window.";

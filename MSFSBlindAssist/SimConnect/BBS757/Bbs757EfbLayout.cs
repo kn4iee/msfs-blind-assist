@@ -27,10 +27,7 @@ public enum Bbs757UpdateGate
 }
 
 /// <summary>Which kind of click sequence ran last (the units answer may only follow a finished fetch).</summary>
-public enum Bbs757EfbRunKind { Update, SimBriefId, FetchOfp, Units, Preset, QuickStart, Steering, Chocks, Load, GroundPower }
-
-/// <summary>What became of a SimBrief ID entry, judged from the stored ID before and after.</summary>
-public enum Bbs757SimBriefEntry { Saved, NotSaved, Different }
+public enum Bbs757EfbRunKind { Update, FetchOfp, Units, Preset, QuickStart, Chocks, Load, GroundPower }
 
 /// <summary>
 /// Whether BlueBird's question "switch the aircraft's weight units to the plan's?" may still be on the
@@ -104,20 +101,8 @@ public static class Bbs757EfbLayout
     /// <summary>After a click that opens an app or a page.</summary>
     public const int NavigateDelayMs = 1500;
 
-    /// <summary>After the SimBrief ID field, while the on-screen keypad opens.</summary>
-    public const int KeypadOpenDelayMs = 1000;
-
-    /// <summary>Between keypad digits.</summary>
-    public const int DigitDelayMs = 500;
-
-    /// <summary>After the keypad's OK, while BlueBird stores the ID.</summary>
-    public const int KeypadOkDelayMs = 1000;
-
     /// <summary>How long the AIRAC page is left to show its state before UPDATE is clicked.</summary>
     public const int AiracPageSettleMs = 4000;
-
-    /// <summary>Keypad backspaces before the SimBrief ID's digits: more than any stored ID has.</summary>
-    public const int SimBriefBackspaces = 10;
 
     /// <summary>How old the tablet's page must be before UPDATE: BlueBird checks for a new cycle at load.</summary>
     public const int UpdateMinPageAgeMs = 60_000;
@@ -138,19 +123,13 @@ public static class Bbs757EfbLayout
     // Settings menu.
     public static readonly EfbPoint AiracData = new(95, 486);
 
-    /// <summary>The Settings menu's AIRCRAFT item (measured 2026-10-25, session 6).</summary>
+    /// <summary>
+    /// The Settings menu's AIRCRAFT item (measured 2026-10-25, session 6). Kept as a measured position;
+    /// no sequence uses it now.
+    /// </summary>
     public static readonly EfbPoint SettingsAircraft = new(98, 244);
 
-    /// <summary>
-    /// The NOSEWHEEL STEERING switch on Settings &gt; AIRCRAFT, third row (measured 2026-10-25, session 6:
-    /// one click switched REALISTIC, the tiller, to RUDDER). It TOGGLES: a click while it is RUDDER
-    /// switches it back to the tiller, so it is clicked only under <see cref="MayClickSteering"/>.
-    /// </summary>
-    public static readonly EfbPoint NosewheelSteeringSwitch = new(1154, 249);
-
     // AIRAC data page.
-    public static readonly EfbPoint SimBriefField = new(842, 126);
-
     /// <summary>
     /// UPDATE on the AIRAC data page while a newer cycle is available, and BlueBird's REMOVE (the
     /// installed nav data) once the installed cycle is current: the same spot.
@@ -166,21 +145,6 @@ public static class Bbs757EfbLayout
 
     /// <inheritdoc cref="UpdateSpotHalfWidth"/>
     public const int UpdateSpotHalfHeight = 40;
-
-    // The on-screen numeric keypad the SimBrief ID field opens.
-    public static readonly EfbPoint Key7 = new(823, 255);
-    public static readonly EfbPoint Key8 = new(936, 255);
-    public static readonly EfbPoint Key9 = new(1052, 255);
-    public static readonly EfbPoint Key4 = new(823, 334);
-    public static readonly EfbPoint Key5 = new(936, 334);
-    public static readonly EfbPoint Key6 = new(1052, 334);
-    public static readonly EfbPoint Key1 = new(823, 413);
-    public static readonly EfbPoint Key2 = new(936, 413);
-    public static readonly EfbPoint Key3 = new(1052, 413);
-    public static readonly EfbPoint Key0 = new(936, 489);
-    public static readonly EfbPoint KeyBackspace = new(823, 565);
-    public static readonly EfbPoint KeyDelete = new(936, 565);
-    public static readonly EfbPoint KeyOk = new(1052, 565);
 
     // Navigation app.
     public static readonly EfbPoint AcarsDashboard = new(135, 179);
@@ -389,23 +353,12 @@ public static class Bbs757EfbLayout
     public static bool MayAnswerUnits(Bbs757EfbRunKind? lastRun, bool lastRunDone) =>
         lastRun == Bbs757EfbRunKind.FetchOfp && lastRunDone;
 
-    /// <summary>
-    /// A SimBrief ID entry judged from BlueBird's stored ID before and after it: stored as typed;
-    /// unchanged (nothing taken); or changed to something else (an appended entry, a cleared one).
-    /// </summary>
-    public static Bbs757SimBriefEntry JudgeSimBriefEntry(long? before, long? after, long typed)
-    {
-        if (after == typed) return Bbs757SimBriefEntry.Saved;
-        if (after == before) return Bbs757SimBriefEntry.NotSaved;
-        return Bbs757SimBriefEntry.Different;
-    }
-
     // ---- SimBrief ID ---------------------------------------------------------
 
     /// <summary>
-    /// Whether <paramref name="text"/> is a SimBrief ID the keypad can type and BlueBird can store:
-    /// ASCII digits only (no sign, space or separator), 1 to int.MaxValue. Never parsed as a
-    /// number in the PC's culture; the digits are typed as they are.
+    /// Whether <paramref name="text"/> is a SimBrief ID BlueBird can store: ASCII digits only (no
+    /// sign, space or separator), 1 to int.MaxValue. Never parsed as a number in the PC's culture;
+    /// the digits are read as they are.
     /// </summary>
     public static bool IsSimBriefId(string? text)
     {
@@ -428,13 +381,6 @@ public static class Bbs757EfbLayout
         return value;
     }
 
-    private static EfbPoint KeyFor(char digit) => digit switch
-    {
-        '0' => Key0, '1' => Key1, '2' => Key2, '3' => Key3, '4' => Key4,
-        '5' => Key5, '6' => Key6, '7' => Key7, '8' => Key8, '9' => Key9,
-        _ => throw new ArgumentException("Not a keypad digit.", nameof(digit)),
-    };
-
     // ---- sequences -------------------------------------------------------------
 
     /// <summary>Home, Settings, AIRAC data.</summary>
@@ -456,22 +402,6 @@ public static class Bbs757EfbLayout
         var seq = OpenAiracPage().ToList();
         seq[^1] = (seq[^1].Point, seq[^1].DelayAfterMs + AiracPageSettleMs);
         seq.Add((UpdateButton, 0));
-        return seq;
-    }
-
-    /// <summary>
-    /// The AIRAC page, the SimBrief ID field, <see cref="SimBriefBackspaces"/> backspaces (the
-    /// keypad may open on the stored ID; whether it does is unmeasured), each digit, then OK: every
-    /// keypad key 500 ms after the one before. Never the keypad's DEL, whose effect is unmeasured.
-    /// </summary>
-    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> EnterSimBriefId(string digits)
-    {
-        if (!IsSimBriefId(digits)) throw new ArgumentException("A SimBrief ID is digits only.", nameof(digits));
-        var seq = OpenAiracPage().ToList();
-        seq.Add((SimBriefField, KeypadOpenDelayMs));
-        for (int i = 0; i < SimBriefBackspaces; i++) seq.Add((KeyBackspace, DigitDelayMs));
-        foreach (char c in digits) seq.Add((KeyFor(c), DigitDelayMs));
-        seq.Add((KeyOk, KeypadOkDelayMs));
         return seq;
     }
 
@@ -536,41 +466,6 @@ public static class Bbs757EfbLayout
         (AircraftIcon, NavigateDelayMs),
         (AircraftMenuCockpitPresets, NavigateDelayMs),
         (tile, NavigateDelayMs),
-    };
-
-    // ---- nosewheel steering ----------------------------------------------------------
-
-    public const string SteeringAlreadyRudderText = "Steering is already rudder";
-
-    /// <summary>
-    /// Home, Settings, AIRCRAFT, then the NOSEWHEEL STEERING switch once. Run it only when
-    /// <see cref="MayClickSteering"/> allows it: the switch toggles.
-    /// </summary>
-    public static IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> SetSteeringToRudder() => new[]
-    {
-        (Home, NavigateDelayMs),
-        (SettingsIcon, NavigateDelayMs),
-        (SettingsAircraft, NavigateDelayMs),
-        (NosewheelSteeringSwitch, NavigateDelayMs),
-    };
-
-    /// <summary>
-    /// Whether the steering switch may be clicked: only while BlueBird's <c>tiller_realistic</c> reads
-    /// true. Already false (rudder), a click would switch it BACK to the tiller; unreadable, nothing
-    /// says which way one click would go.
-    /// </summary>
-    public static bool MayClickSteering(bool? tillerRealistic) => tillerRealistic == true;
-
-    /// <summary>
-    /// What the steering click came to, from <c>tiller_realistic</c> read after it: false "Steering set
-    /// to rudder", still true "BlueBird did not change the steering. It is still the tiller.",
-    /// unreadable "The steering setting could not be read back.".
-    /// </summary>
-    public static string SteeringResultPhrase(bool? tillerRealisticAfter) => tillerRealisticAfter switch
-    {
-        false => "Steering set to rudder",
-        true => "BlueBird did not change the steering. It is still the tiller.",
-        null => "The steering setting could not be read back.",
     };
 
     // ---- chocks ------------------------------------------------------------------------

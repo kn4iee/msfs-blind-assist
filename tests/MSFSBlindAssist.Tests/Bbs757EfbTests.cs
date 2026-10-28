@@ -160,12 +160,9 @@ public class Bbs757EfbTests
     {
         yield return Bbs757EfbLayout.OpenAiracPage();
         yield return Bbs757EfbLayout.UpdateNavData();
-        yield return Bbs757EfbLayout.EnterSimBriefId("189");
-        yield return Bbs757EfbLayout.EnterSimBriefId("1234567890");
         yield return Bbs757EfbLayout.FetchOfp();
         foreach (string preset in Bbs757EfbLayout.PresetNames) yield return Bbs757EfbLayout.LoadPreset(preset);
         foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
-        yield return Bbs757EfbLayout.SetSteeringToRudder();
         yield return Bbs757EfbLayout.ToggleChocks();
         yield return Bbs757EfbLayout.ToggleGroundPower();
         yield return Bbs757EfbLayout.LoadThroughEfb();
@@ -201,62 +198,17 @@ public class Bbs757EfbTests
             Math.Abs(s.Point.Y - Bbs757EfbLayout.UpdateButton.Y) <= Bbs757EfbLayout.UpdateSpotHalfHeight, s.Point.ToString()));
     }
 
-    [Fact]
-    public void EnterSimBriefId_clicks_home_settings_airac_field_ten_backspaces_digits_ok_in_order()
-    {
-        var seq = Bbs757EfbLayout.EnterSimBriefId("189");
-
-        var expected = new List<EfbPoint>
-        {
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.SettingsIcon, Bbs757EfbLayout.AiracData, Bbs757EfbLayout.SimBriefField,
-        };
-        expected.AddRange(Enumerable.Repeat(Bbs757EfbLayout.KeyBackspace, 10));
-        expected.AddRange(new[] { Bbs757EfbLayout.Key1, Bbs757EfbLayout.Key8, Bbs757EfbLayout.Key9, Bbs757EfbLayout.KeyOk });
-        Assert.Equal(expected, seq.Select(s => s.Point));
-
-        Assert.Equal(new EfbPoint(823, 565), seq[4].Point);    // BKSP
-        Assert.Equal(new EfbPoint(823, 413), seq[14].Point);   // 1
-        Assert.Equal(new EfbPoint(936, 255), seq[15].Point);   // 8
-        Assert.Equal(new EfbPoint(1052, 255), seq[16].Point);  // 9
-        Assert.Equal(new EfbPoint(1052, 565), seq[17].Point);  // OK
-        // Every keypad key, backspaces and digits, goes in 500 ms after the one before.
-        Assert.All(seq.Skip(4).Take(13), s => Assert.Equal(500, s.DelayAfterMs));
-    }
-
-    [Fact]
-    public void The_simbrief_entry_never_presses_the_keypad_s_delete_key()
-    {
-        Assert.DoesNotContain(Bbs757EfbLayout.EnterSimBriefId("1234567890"), s => s.Point == Bbs757EfbLayout.KeyDelete);
-    }
-
-    [Fact]
-    public void Every_keypad_digit_has_its_measured_key()
-    {
-        var seq = Bbs757EfbLayout.EnterSimBriefId("1234567890");
-        var digits = seq.Skip(14).Take(10).Select(s => s.Point).ToList();
-
-        Assert.Equal(new[]
-        {
-            new EfbPoint(823, 413), new EfbPoint(936, 413), new EfbPoint(1052, 413),
-            new EfbPoint(823, 334), new EfbPoint(936, 334), new EfbPoint(1052, 334),
-            new EfbPoint(823, 255), new EfbPoint(936, 255), new EfbPoint(1052, 255),
-            new EfbPoint(936, 489)
-        }, digits);
-        Assert.Equal(Bbs757EfbLayout.KeyOk, seq[^1].Point);
-    }
-
     [Theory]
     [InlineData("")]
     [InlineData("12a")]
     [InlineData(" 189")]
     [InlineData("-1")]
     [InlineData("1.5")]
-    [InlineData("\u0661\u0662")]   // Arabic-Indic digits: char.IsDigit, but no key on the keypad
+    [InlineData("\u0661\u0662")]   // Arabic-Indic digits: char.IsDigit, but not ASCII digits
     [InlineData("12345678901")]    // longer than BlueBird's int can hold
-    public void A_simbrief_id_that_is_not_plain_digits_is_never_typed(string text)
+    public void A_simbrief_id_that_is_not_plain_digits_is_refused(string text)
     {
         Assert.False(Bbs757EfbLayout.IsSimBriefId(text));
-        Assert.Throws<ArgumentException>(() => Bbs757EfbLayout.EnterSimBriefId(text));
     }
 
     [Theory]
@@ -301,15 +253,12 @@ public class Bbs757EfbTests
         var others = new List<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>>
         {
             Bbs757EfbLayout.OpenAiracPage(),
-            Bbs757EfbLayout.EnterSimBriefId("189"),
-            Bbs757EfbLayout.EnterSimBriefId("1234567890"),
             Bbs757EfbLayout.FetchOfp(),
             Bbs757EfbLayout.AnswerUnits(accept: true),
             Bbs757EfbLayout.AnswerUnits(accept: false),
         };
         others.AddRange(Bbs757EfbLayout.PresetNames.Select(Bbs757EfbLayout.LoadPreset));
         others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
-        others.Add(Bbs757EfbLayout.SetSteeringToRudder());
         others.Add(Bbs757EfbLayout.ToggleChocks());
         others.Add(Bbs757EfbLayout.ToggleGroundPower());
         others.Add(Bbs757EfbLayout.LoadThroughEfb());
@@ -700,61 +649,7 @@ public class Bbs757EfbTests
         }
     }
 
-    // ---- Nosewheel steering ----------------------------------------------------------------
-
-    [Fact]
-    public void Steering_to_rudder_is_home_settings_aircraft_then_the_nosewheel_steering_switch()
-    {
-        // Measured 2026-10-25 (live-findings.md, session 6): one click at (1154,249) on Settings >
-        // AIRCRAFT switched NOSEWHEEL STEERING from REALISTIC (tiller) to RUDDER.
-        var seq = Bbs757EfbLayout.SetSteeringToRudder();
-
-        Assert.Equal(new[]
-        {
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.SettingsIcon, Bbs757EfbLayout.SettingsAircraft, Bbs757EfbLayout.NosewheelSteeringSwitch
-        }, seq.Select(s => s.Point));
-        Assert.Equal(new EfbPoint(98, 244), Bbs757EfbLayout.SettingsAircraft);
-        Assert.Equal(new EfbPoint(1154, 249), Bbs757EfbLayout.NosewheelSteeringSwitch);
-        Assert.Equal(new EfbPoint(1073, 190), Bbs757EfbLayout.SettingsIcon);
-        // The switch toggles: one click, never two.
-        Assert.Single(seq, s => s.Point == Bbs757EfbLayout.NosewheelSteeringSwitch);
-        Assert.All(seq.Take(3), s => Assert.True(s.DelayAfterMs >= Bbs757EfbLayout.NavigateDelayMs));
-    }
-
-    [Theory]
-    [InlineData("{\"tiller_realistic\":true}", true)]
-    [InlineData("{\"tiller_realistic\":false}", false)]
-    [InlineData("{\"hoppie_logon_code\":\"NOT-A-REAL-CODE\",\"tiller_realistic\":true,\"simbrief_id\":123456}", true)]
-    public void ReadTillerRealistic_reads_only_the_steering_key(string json, bool expected)
-    {
-        using var tmp = new TempDir();
-        WriteSettings(tmp.Path, json);
-
-        Assert.Equal(expected, Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"tiller_realistic\":1}")]
-    [InlineData("{\"tiller_realistic\":\"true\"}")]
-    [InlineData("{\"tiller_realistic\":null}")]
-    [InlineData("[true]")]
-    [InlineData("not json")]
-    public void ReadTillerRealistic_is_null_for_anything_but_a_bool(string json)
-    {
-        using var tmp = new TempDir();
-        WriteSettings(tmp.Path, json);
-
-        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Fact]
-    public void ReadTillerRealistic_with_no_settings_file_is_null()
-    {
-        using var tmp = new TempDir();
-
-        Assert.Null(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
+    // ---- The parking brake mode ------------------------------------------------------------
 
     [Theory]
     [InlineData("{\"parking_brake_realistic\":true}", true)]
@@ -780,39 +675,7 @@ public class Bbs757EfbTests
         Assert.Null(Bbs757WorkFolder.ReadParkingBrakeRealistic(tmp.Path));
     }
 
-    [Fact]
-    public void The_fixture_settings_file_reads_tiller_realistic_too()
-    {
-        using var tmp = new TempDir();
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "bbs757-efb-settings.json"), Path.Combine(tmp.Path, "efb_settings.json"));
-
-        // The fixture is BlueBird's shape after the owner's switch to rudder (2026-10-25).
-        Assert.False(Bbs757WorkFolder.ReadTillerRealistic(tmp.Path));
-    }
-
-    [Theory]
-    [InlineData(true, true)]     // realistic (tiller): the one case the switch is clicked
-    [InlineData(false, false)]   // already rudder: clicking would switch it BACK to the tiller
-    [InlineData(null, false)]    // unreadable: never guess on a toggle
-    public void The_steering_switch_is_clicked_only_while_it_reads_tiller(bool? tillerRealistic, bool click)
-    {
-        Assert.Equal(click, Bbs757EfbLayout.MayClickSteering(tillerRealistic));
-    }
-
-    [Theory]
-    [InlineData(false, "Steering set to rudder")]
-    [InlineData(true, "BlueBird did not change the steering. It is still the tiller.")]
-    [InlineData(null, "The steering setting could not be read back.")]
-    public void The_steering_result_is_said_from_the_setting_read_after(bool? after, string phrase)
-    {
-        Assert.Equal(phrase, Bbs757EfbLayout.SteeringResultPhrase(after));
-    }
-
-    [Fact]
-    public void A_steering_already_on_rudder_says_so()
-    {
-        Assert.Equal("Steering is already rudder", Bbs757EfbLayout.SteeringAlreadyRudderText);
-    }
+    // ---- The other click sequences and positions -------------------------------------------
 
     [Fact]
     public void The_nav_data_update_opens_the_airac_page_then_waits_4_s_before_clicking()
@@ -904,25 +767,10 @@ public class Bbs757EfbTests
     [InlineData(Bbs757EfbRunKind.FetchOfp, false, false)]   // the fetch did not finish: no dialog to answer
     [InlineData(Bbs757EfbRunKind.Units, true, false)]       // already answered
     [InlineData(Bbs757EfbRunKind.Preset, true, false)]      // another run since the fetch
-    [InlineData(Bbs757EfbRunKind.SimBriefId, true, false)]
     [InlineData(null, false, false)]                        // nothing run yet
     public void The_units_question_is_answered_only_right_after_a_finished_fetch(Bbs757EfbRunKind? last, bool done, bool expected)
     {
         Assert.Equal(expected, Bbs757EfbLayout.MayAnswerUnits(last, done));
-    }
-
-    [Theory]
-    [InlineData(null, 189L, Bbs757SimBriefEntry.Saved)]
-    [InlineData(555L, 189L, Bbs757SimBriefEntry.Saved)]
-    [InlineData(189L, 189L, Bbs757SimBriefEntry.Saved)]           // the same ID again
-    [InlineData(null, null, Bbs757SimBriefEntry.NotSaved)]
-    [InlineData(555L, 555L, Bbs757SimBriefEntry.NotSaved)]
-    [InlineData(555L, 555189L, Bbs757SimBriefEntry.Different)]    // the keypad appended
-    [InlineData(555L, null, Bbs757SimBriefEntry.Different)]       // cleared, not set
-    [InlineData(null, 42L, Bbs757SimBriefEntry.Different)]
-    public void The_simbrief_entry_is_judged_from_the_stored_id_before_and_after(long? before, long? after, Bbs757SimBriefEntry expected)
-    {
-        Assert.Equal(expected, Bbs757EfbLayout.JudgeSimBriefEntry(before, after, typed: 189));
     }
 
     [Fact]
@@ -932,7 +780,7 @@ public class Bbs757EfbTests
         Assert.Equal(new EfbPoint(320, 190), Bbs757EfbLayout.AircraftIcon);
         Assert.Equal(new EfbPoint(1073, 190), Bbs757EfbLayout.SettingsIcon);
         Assert.Equal(new EfbPoint(95, 486), Bbs757EfbLayout.AiracData);
-        Assert.Equal(new EfbPoint(842, 126), Bbs757EfbLayout.SimBriefField);
+        Assert.Equal(new EfbPoint(98, 244), Bbs757EfbLayout.SettingsAircraft);
     }
 
     [Fact]
