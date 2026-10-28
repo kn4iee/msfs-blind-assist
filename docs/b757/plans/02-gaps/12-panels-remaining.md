@@ -118,12 +118,12 @@ The owner: "The panel items should be ordered where most frequently every day it
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** done on its branch (`B757-p12-panels-remaining`), not yet pushed; then waiting on the owner: in-sim checks 1-5
 - **Claimed by:** kn4iee (the owner), 2026-10-28
 - **Worked by:** kn4iee (the owner) with Claude, with subagents (superpowers:subagent-driven-development: an implementer and a reviewer per task, a whole-branch review and one fix wave)
 - **Started:** 2026-10-28; branched from `B757` at f12d85afa (rebased onto 73a0ab42f, plan 10's First Officer, the same day)
 - **Landed:** (filled at the push)
-- **Tests at landing:** (filled at the push)
+- **Tests at landing:** full suite 18,522 passed, 0 failed; generator 256 OK (2026-10-28, on `B757` 73a0ab42f, nothing newer to rebase onto)
 - **Tasks:** 0-4 done (Task 4 added by the owner's instruction). Task 2's live run waits on the owner (in-sim check 5); its dry run covers all 417 controls.
 - **Waiting on the owner:** in-sim checks 1-5 (check 5 is the sweep's first live run).
 - **In-sim results:** Task 3 Step 1 measured 2026-10-28 on the ground through the simconnect MCP (`flight-12.md`), with the brightness, zone temperature, auto rate and DDRMI reads; the in-app checks: none run.
