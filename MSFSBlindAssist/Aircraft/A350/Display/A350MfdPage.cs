@@ -124,7 +124,13 @@ public static class A350MfdPage
             // A control holds only what was drawn after it began: an open menu covers list rows drawn before it.
             // The scratchpad's message is drawn before its box (live).
             int from = e.Class == "NotepadTextbox" ? 0 : e.TextStart;
-            var inside = InReadingOrder(cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1));
+            // A text a later control is drawn over is that control's, never a field's under it (the INSERT key over the
+            // AIRWAYS list's off-screen text boxes, live 2026-10-28).
+            int at = elements.IndexOf(e);
+            bool OverByLater(Cell c) => IsField(e) && elements.Skip(at + 1).Any(o => !Containers.Contains(o.Class) && !IsField(o)
+                && !hidden.Contains(o) && c.X >= o.X - shift && c.X <= o.X - shift + o.RectW && c.Y >= o.Y && c.Y <= o.Y + o.RectH + 4);
+            var inside = InReadingOrder(cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1
+                && !OverByLater(c)));
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
             string value = Words(inside.Select(c => c.Text));
             string colour = inside.FirstOrDefault(c => c.Colour != "grey")?.Colour ?? inside.FirstOrDefault()?.Colour ?? "white";

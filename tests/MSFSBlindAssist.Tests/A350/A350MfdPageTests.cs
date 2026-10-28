@@ -244,6 +244,18 @@ public class A350MfdPageTests
         Assert.Contains("CANCEL button", lines);
     }
 
+    // Live 2026-10-28, AIRWAYS after VIA P570 TO ITURA: the page's VIA/TO list keeps text boxes for rows off the screen,
+    // one under the INSERT key, which read "Field: INSERT". The key is drawn after (over) the box: the text is its.
+    [Fact]
+    public void A_key_drawn_over_a_hidden_list_box_keeps_its_text()
+    {
+        var lines = Page("mfd_airways_p570_itura");
+        Assert.Contains("INSERT button", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("Field: INSERT", StringComparison.Ordinal));
+        Assert.Contains("VIA: P570, yellow", lines);
+        Assert.Contains("TO: ITURA, yellow", lines);
+    }
+
     [Fact]
     public void The_window_moves_to_a_menu_as_it_opens_and_only_then()
     {
