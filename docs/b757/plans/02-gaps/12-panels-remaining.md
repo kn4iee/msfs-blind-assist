@@ -201,6 +201,20 @@ tests `Bbs757ControlMapTests.cs` and a new `Bbs757VariantTests.cs`.
 - [ ] Tests first (the title parsing, the filter, an unknown variant showing all, a change of variant), full suite,
   commit `feat(b757): the panels show the loaded engine type's controls only`.
 
+### Task 9: The panel lists follow the preflight flow (added 2026-10-28, the owner's instruction)
+
+The owner asked whether the panel lists follow the preflight and checklist flow (ruling R37 ordered them by the manual's
+preflight flow; Task 7's split panels took their source's place in cockpit order) and said "reorder".
+
+**Files:** `curation.json` (`panel_order` only), the map, `test_generate_b757_map.py`, `Bbs757ControlMapTests.cs`.
+- Each section's panels are ordered by where BlueBird's Simplified Procedures (BlueBird_757_User_Procedures_v1.01.pdf,
+  PDF pages 34-62, cold and dark to securing) first act on or check one of the panel's controls: the page, then the
+  line on that page. A panel the flow never touches follows the ones it does, in its present order.
+- The Pedestal keeps its start (Control stand, Engines, TCAS and transponder), which plan 01's frozen test pins.
+- The derivation (each panel's first mention, page and line, with the quoted words) is a script in this plan's
+  workspace, and its table goes into `docs/b757/evidence/panel-order-12.md` as a short section.
+- [ ] Tests first, regenerate, full suite, commit `feat(b757): the panel lists follow the preflight flow`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Forward panel > Display brightness, Captain PFD to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Tab through Electrical, Exterior lights and MCP: the every-day controls come first (Electrical: Battery, EXT PWR, …).
