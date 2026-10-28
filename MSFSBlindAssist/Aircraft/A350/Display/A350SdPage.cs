@@ -5,8 +5,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>A value the SD draws at a fixed place: its name (the static label beside it, which is part of the
 /// page's background texture, not drawn text), where its text is drawn (Width covers a value drawn as several
 /// texts, "26 TO 27"), and the unit the texture prints for it. "{weight}" and "{flow}" stand for the unit the
-/// page draws itself (LBS or KG, LBS/H or KG/H), which follows the aircraft's unit setting.</summary>
-public sealed record SdField(string Label, float X, float Y, string? Unit = null, float Width = 0);
+/// page draws itself (LBS or KG, LBS/H or KG/H), which follows the aircraft's unit setting. Caption is a text the
+/// page draws there as a name, not a value (a door's number in its symbol): drawn alone, it reads nothing.</summary>
+public sealed record SdField(string Label, float X, float Y, string? Unit = null, float Width = 0, string? Caption = null);
 
 /// <summary>
 /// One SD page read the way a sighted pilot reads it: each drawn value named by the label printed beside it
@@ -83,6 +84,7 @@ public static class A350SdPage
         {
             if (f.Label.Length == 0) continue;
             var ordered = cells.OrderBy(c => c.X).ToList();
+            if (f.Caption != null && string.Concat(ordered.Select(c => c.Text)) == f.Caption) continue;
             var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
             var value = TimeColon.Replace(SpeakWithUnit(ordered, string.IsNullOrEmpty(unit) ? null : unit), ":");
             items.Add((row, ordered[0].X, f.Label + ": " + value));
@@ -124,11 +126,20 @@ public static class A350SdPage
     private static IEnumerable<SdField> Row(float y, string? unit, params (string Label, float X)[] cells) =>
         cells.Select(c => new SdField(c.Label, c.X, y, unit));
 
-    /// <summary>The permanent data line (EcamCommon.png): its labels left of each value.</summary>
+    /// <summary>A pair of passenger doors on DOOR: each door's symbol, its number drawn inside it (a caption: the
+    /// symbol's colour is its state, read by A350SdSymbols; "X" there means no data), each slide beside it.</summary>
+    private static IEnumerable<SdField> DoorRow(int n, float y, float leftSlideX, float rightSlideX) => new[]
+    {
+        new SdField($"Door {n}L slide", leftSlideX, y), new SdField($"Door {n}L", 263, y, Caption: n.ToString()),
+        new SdField($"Door {n}R", 336, y, Caption: n.ToString()), new SdField($"Door {n}R slide", rightSlideX, y),
+    };
+
+    /// <summary>The permanent data line (EcamCommon.png): its labels left of each value. The flight time's "FLT" and
+    /// the ISA deviation's "ISA" (shown once SAT is valid, under it) are drawn as text: captions the fields name.</summary>
     private static readonly SdField[] PermanentData =
     {
-        new("TAT", 180, 956, "°C"), new("SAT", 180, 987, "°C"),
-        new("Flight time", 423, 958, Width: 9), new("UTC", 377, 998, Width: 70),
+        new("TAT", 180, 956, "°C"), new("SAT", 180, 987, "°C"), new("ISA", 180, 1015, "°C"), new("", 58, 1015, Width: 20),
+        new("Flight time", 423, 958, Width: 9), new("", 327, 958, Width: 20), new("UTC", 377, 998, Width: 70),
         new("Gross weight", 718, 956, "{weight}"), new("Gross weight CG", 718, 986, "%"),
         new("Fuel on board", 723, 1013, "{weight}"),
     };
@@ -231,10 +242,8 @@ public static class A350SdPage
             new SdField("Right spoiler 5", 620, 768), new SdField("Right spoiler 6", 649, 768),
             new SdField("Right spoiler 7", 678, 768),
         },
-        [11] = Row(431, null, ("Door 1L slide", 238), ("Door 1L", 263), ("Door 1R", 336), ("Door 1R slide", 367))
-            .Concat(Row(533, null, ("Door 2L slide", 238), ("Door 2L", 263), ("Door 2R", 336), ("Door 2R slide", 367)))
-            .Concat(Row(675, null, ("Door 3L slide", 242), ("Door 3L", 263), ("Door 3R", 336), ("Door 3R slide", 371)))
-            .Concat(Row(846, null, ("Door 4L slide", 242), ("Door 4L", 263), ("Door 4R", 336), ("Door 4R slide", 371)))
+        [11] = DoorRow(1, 431, 238, 367).Concat(DoorRow(2, 533, 238, 367)).Concat(DoorRow(3, 675, 242, 371))
+            .Concat(DoorRow(4, 846, 242, 371))
             .Concat(new[]
             {
                 new SdField("Forward cargo door", 330, 465), new SdField("Aft cargo door", 330, 765),

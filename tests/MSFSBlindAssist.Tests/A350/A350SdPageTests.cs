@@ -35,11 +35,26 @@ public class A350SdPageTests
     {
         var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
             ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sd_live_4.json")))!;
+        // "FLT" is drawn as text left of the flight time: the caption its field already names.
         Assert.Equal(new[]
         {
-            "TAT: XX °C, amber", "FLT, white", "Flight time: 00:00, green", "Gross weight: -- LBS, cyan",
+            "TAT: XX °C, amber", "Flight time: 00:00, green", "Gross weight: -- LBS, cyan",
             "SAT: XX °C, amber", "Gross weight CG: -- %, cyan", "UTC: 16:31:57, green", "Fuel on board: 243700 LBS, green",
         }, A350SdPage.ReadPermanentData(A350Ewd.Parse(cap).PermanentData));
+    }
+
+    // Live, refuelling on the stand once the ADIRS had aligned (2026-10-28): the ISA deviation drawn under SAT,
+    // its "ISA" caption drawn as text at the left edge, was read as two lines ("ISA, white" then "+13, green").
+    [Fact]
+    public void The_isa_deviation_reads_as_one_named_value()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_refuel_door_isa.json")))!;
+        var lines = A350SdPage.ReadPermanentData(A350Ewd.Parse(cap).PermanentData);
+        Assert.Contains("ISA: +13 °C, green", lines);
+        Assert.DoesNotContain("ISA, white", lines);
+        Assert.DoesNotContain("+13, green", lines);
+        Assert.True(lines.ToList().IndexOf("ISA: +13 °C, green") > lines.ToList().IndexOf("SAT: +27 °C, green"), "under SAT");
     }
 
     [Fact]
@@ -65,13 +80,12 @@ public class A350SdPageTests
     public void Live_door_page_reads_the_doors_then_the_oxygen_column()
     {
         var p = Live(11).ToList();
-        Assert.Contains("Door 1L: 1, green", p);
-        int lastDoor = p.IndexOf("Door 4R: 4, green");
-        Assert.True(lastDoor >= 0);
-        Assert.True(p.IndexOf("CAPT, amber") > lastDoor);
+        // Each door's number is drawn in its symbol, coloured as the door: its state is the symbol's line
+        // ("Door 1L: closed, green", A350SdSymbols), so the number alone is a caption, not a value.
+        Assert.DoesNotContain(p, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^Door \d[LR]: \d, "));
         Assert.Equal(new[] { "CAPT, amber", "Captain oxygen pressure: 1880 PSI, green", "REGUL PR LO, amber",
             "F/O, amber", "First officer oxygen pressure: 1870 PSI, green", "REGUL PR LO, amber", "Rain repellent level: NORM, green" },
-            p.Skip(lastDoor + 1));
+            p.SkipWhile(l => l != "CAPT, amber"));
     }
 
     [Fact]
