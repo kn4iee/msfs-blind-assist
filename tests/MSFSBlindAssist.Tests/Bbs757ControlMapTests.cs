@@ -205,22 +205,25 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
-    public void The_engines_panel_holds_the_start_selectors_and_the_four_fuel_control_switches_in_start_order()
+    public void The_engines_panel_holds_the_start_selectors_and_the_four_fuel_control_switches_engine_by_engine()
     {
+        // Plan 12 task 10 (the owner: "I wanted engine 1 start then fuel, then engine 2's controls"): Ignition, then the
+        // left engine's start selector and its fuel control switches (the PW and the RR one; a title keeps one), then
+        // the right engine's. Replaces ruling R37's order (the start selectors, then the fuel switches).
         var engines = Map.Controls.Where(c => c.Section == "Pedestal" && c.Panel == "Engines").ToList();
 
         Assert.Equal(
             new[]
             {
-                "B757_OVHD_ENG_START_SWITCH", "B757_OVHD_L_ENG_START_SWITCH", "BBS_fuelcut_PW1",
-                "B757_OVHD_R_ENG_START_SWITCH", "BBS_fuelcut_PW2", "BBS_fuelcut_RR1", "BBS_fuelcut_RR2",
+                "B757_OVHD_ENG_START_SWITCH", "B757_OVHD_L_ENG_START_SWITCH", "BBS_fuelcut_PW1", "BBS_fuelcut_RR1",
+                "B757_OVHD_R_ENG_START_SWITCH", "BBS_fuelcut_PW2", "BBS_fuelcut_RR2",
             },
             engines.Select(c => c.Node));
         Assert.Equal(
             new[]
             {
-                "Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
-                "L Fuel Control (RR)", "R Fuel Control (RR)",
+                "Ignition", "L ENG Start", "L Fuel Control (PW)", "L Fuel Control (RR)", "R ENG Start",
+                "R Fuel Control (PW)", "R Fuel Control (RR)",
             },
             engines.Select(c => c.Label));
     }
@@ -341,7 +344,8 @@ public class Bbs757ControlMapTests
     [InlineData("First officer chronometer", "757 FO Clock|Clock Button|Chrono ET|Chrono Set|Date Button")]
     // Plan 12 task 4: the flaps are moved on every flight, so the flap lever is second, right after the parking brake.
     [InlineData("Control stand", "Parking Brake|Flap Lever|Speedbrake Armed|Speedbrake Down|Speedbrake Up|TO/GA|A/T Disconnect")]
-    [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|R ENG Start|R Fuel Control (PW)|L Fuel Control (RR)|R Fuel Control (RR)")]
+    // Plan 12 task 10: engine by engine, Ignition first, then each engine's start selector and its fuel control switches.
+    [InlineData("Engines", "Ignition|L ENG Start|L Fuel Control (PW)|L Fuel Control (RR)|R ENG Start|R Fuel Control (PW)|R Fuel Control (RR)")]
     [InlineData("TCAS and transponder", "TCAS Mode")]
     [InlineData("Captain EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|PFD Brightness|ND Brightness|INOP")]
     [InlineData("First officer EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|PFD Brightness|ND Brightness|INOP")]

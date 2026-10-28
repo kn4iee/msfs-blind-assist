@@ -20,7 +20,7 @@ Key to the citations of the research notes:
 
 - "method 1.5" in the reason of Overhead miscellaneous / Emergency Lights Guard: judgment call 1 of the notes (the emergency lights guard stays just after its switch, because the app opens and closes it itself).
 - "method 1.6" in the reason of Stabilizer trim / Nose Down Stab Trim 1 s (button): judgment call 4 of the notes (the alternate stab trim buttons are tier 2, as the flow only checks those switches NEUTRAL and normal trim is the yoke switches).
-- "method 1.6" in the reason of Engines / R Fuel Control (RR): judgment call 5 of the notes (Engines is unchanged, ruling R37, and the notes name an alternative order for the RR switches).
+- "method 1.6" in the reason of Engines / R Fuel Control (RR): judgment call 5 of the notes (Engines was unchanged, ruling R37, and the notes name an alternative order for the RR switches; the owner's plan 12 Task 10 instruction made engine by engine the order, see the Engines section).
 - "(section 3)" in the reasons of 8 rows (Audio panel 1 / Audio 1 Mic Lm Light; Audio panel 1 / Audio 1 Mic Lm Light Knob; Audio panel 1 / Audio 1 Mic RR Light; Audio panel 1 / Audio 1 Mic RR Light Knob; Audio panel 2 / Audio 2 Mic Lm Light; Audio panel 2 / Audio 2 Mic Lm Light Knob; Audio panel 2 / Audio 2 Mic RR Light; Audio panel 2 / Audio 2 Mic RR Light Knob): item 1 of the notes' "Section 3" list, a control whose meaning could not be established.
 - "(section 3)" in the reasons of 1 row (SELCAL and cabin call / Flt Int): item 2 of the notes' "Section 3" list, a control whose meaning could not be established.
 - "(section 3)" in the reasons of 2 rows (Captain EFIS / INOP; First officer EFIS / INOP): item 3 of the notes' "Section 3" list, a control whose meaning could not be established.
@@ -514,17 +514,23 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 6 | TO/GA | `ENGINE_Switch_ATDisc_1` | 2 | TO/GA paddle: go-around only, never for takeoff (UP 59, 162) |
 | 7 | A/T Disconnect | `B757_AT_DISC_1` | 2 | A/T disconnect: RTO (UP 213), manual thrust (gp) |
 
-### Engines (unchanged)
+### Engines (changed, plan 12 Task 10)
+
+The owner's instruction (2026-10-28): "I wanted engine 1 start then fuel, then engine 2's controls. Right now they have
+the start levers, then the fuel levers." The order below replaces ruling R37's (the start selectors, then the fuel
+switches: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then the RR pair). The loaded
+type's pair shows (Task 8), so on an RR the pilot tabs Ignition, L ENG Start, L Fuel Control (RR), R ENG Start,
+R Fuel Control (RR).
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
 | 1 | Ignition | `B757_OVHD_ENG_START_SWITCH` | 1 | Ignition 1 or 2 (UP 38), alternated at shutdown (UP 61, 194) |
 | 2 | L ENG Start | `B757_OVHD_L_ENG_START_SWITCH` | 1 | AUTO (UP 38), GND to start (UP 47), AUTO at shutdown (UP 61) |
 | 3 | L Fuel Control (PW) | `BBS_fuelcut_PW1` | 1 | CUTOFF (UP 34, 42), RUN to start (UP 47), CUTOFF at shutdown (UP 61) |
-| 4 | R ENG Start | `B757_OVHD_R_ENG_START_SWITCH` | 1 | as L |
-| 5 | R Fuel Control (PW) | `BBS_fuelcut_PW2` | 1 | as L |
-| 6 | L Fuel Control (RR) | `BBS_fuelcut_RR1` | 1 | RR variant of the same; RICH for a cold start, then RUN (UP 47, 146, 149) |
-| 7 | R Fuel Control (RR) | `BBS_fuelcut_RR2` | 1 | as L; see method 1.6 for an RR alternative |
+| 4 | L Fuel Control (RR) | `BBS_fuelcut_RR1` | 1 | RR variant of the same; RICH for a cold start, then RUN (UP 47, 146, 149) |
+| 5 | R ENG Start | `B757_OVHD_R_ENG_START_SWITCH` | 1 | as L |
+| 6 | R Fuel Control (PW) | `BBS_fuelcut_PW2` | 1 | as L |
+| 7 | R Fuel Control (RR) | `BBS_fuelcut_RR2` | 1 | as L; the RR alternative method 1.6 named, now the order (the owner's Task 10 instruction) |
 
 ### TCAS and transponder (unchanged)
 

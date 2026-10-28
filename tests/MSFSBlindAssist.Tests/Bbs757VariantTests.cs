@@ -247,6 +247,40 @@ public class Bbs757VariantTests
     }
 
     [Fact]
+    public void On_the_shipped_map_the_Engines_panel_lists_each_engines_start_and_fuel_control_together_on_either_type()
+    {
+        // Plan 12 task 10 (the owner: "I wanted engine 1 start then fuel, then engine 2's controls"): the pair for the
+        // loaded type keeps the order engine by engine, the other type's switches simply absent.
+        var map = Bbs757ControlMap.Load();
+        var rig = new Rig(map, RrTitle);
+        var label = map.Controls.ToDictionary(c => c.Node, c => c.Label, StringComparer.Ordinal);
+
+        Assert.Equal(new[] { "Ignition", "L ENG Start", "L Fuel Control (RR)", "R ENG Start", "R Fuel Control (RR)" },
+            rig.Built(Engines).Where(label.ContainsKey).Select(k => label[k]));
+        Assert.Equal(
+            new[]
+            {
+                "B757_OVHD_ENG_START_SWITCH", "B757_OVHD_L_ENG_START_SWITCH", "BBS_fuelcut_RR1",
+                "B757_OVHD_R_ENG_START_SWITCH", "BBS_fuelcut_RR2",
+            },
+            rig.Built(Engines).Where(label.ContainsKey));
+
+        rig.Title = PwTitle;
+        Assert.Equal(new[] { "Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)" },
+            rig.Built(Engines).Where(label.ContainsKey).Select(k => label[k]));
+
+        // a title naming neither type: both pairs, still engine by engine
+        rig.Title = null;
+        Assert.Equal(
+            new[]
+            {
+                "Ignition", "L ENG Start", "L Fuel Control (PW)", "L Fuel Control (RR)", "R ENG Start",
+                "R Fuel Control (PW)", "R Fuel Control (RR)",
+            },
+            rig.Built(Engines).Where(label.ContainsKey).Select(k => label[k]));
+    }
+
+    [Fact]
     public void A_panel_build_hands_the_definition_its_SimConnectManager()
     {
         // MainForm asks IsPanelControlVisible of every control as it builds a panel: the first moment after a connection
@@ -337,7 +371,7 @@ public class Bbs757VariantTests
         Assert.Equal(allOverhead, rig.Panels("Overhead"));
         Assert.Equal(allEngines.Where(k => k is not ("BBS_fuelcut_PW1" or "BBS_fuelcut_PW2")), rig.Built(Engines));
         // what the pilot hears on the Engines panel of an RR (the map's switches; the app's own fields are untouched)
-        Assert.Equal(new[] { "Ignition", "L ENG Start", "R ENG Start", "L Fuel Control (RR)", "R Fuel Control (RR)" },
+        Assert.Equal(new[] { "Ignition", "L ENG Start", "L Fuel Control (RR)", "R ENG Start", "R Fuel Control (RR)" },
             rig.Built(Engines).Where(mapNodes.Contains).Select(k => vars[k].DisplayName));
 
         rig.Title = PwTitle;

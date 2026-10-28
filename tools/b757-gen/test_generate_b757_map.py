@@ -3974,8 +3974,8 @@ class Curation(unittest.TestCase):
     # in tab order") lists EVERY control of the panels it moved, in the order docs/b757/evidence/panel-order-12.md gives each
     # with its tier and source: what the normal procedures move on every flight first, in the flow's order; then what is set
     # once, the tests and the display options; then the non-normal, emergency and maintenance controls, a guard just before the
-    # switch it covers. The panels it left alone (Fuel, Passenger signs, Engines, TCAS and transponder) lead with the
-    # controls ruling R37 approved and the rest keep cockpit order. Plan 12 task 7 regrouped the panels by the cockpit and
+    # switch it covers. The panels it left alone (Fuel, Passenger signs, TCAS and transponder) lead with the
+    # controls ruling R37 approved and the rest keep cockpit order (Engines too until plan 12 task 10 ordered it engine by engine). Plan 12 task 7 regrouped the panels by the cockpit and
     # kept that order inside each: a panel's controls by Task 4's tier, within a tier Task 4's order where they shared a
     # panel and the audit's otherwise, each guard just before its switch (the emergency lights guard just after); every
     # control of a new or changed panel of two or more is listed. Derived by script from the audit and Task 4's research,
@@ -4025,8 +4025,11 @@ class Curation(unittest.TestCase):
                           "TO/GA", "A/T Disconnect"],   # plan 12 task 4: the flap lever is second
         # plan 02 task 7: the gear lever first on its panel; plan 12 task 7: the alternate gear switch and its guard join it
         "Landing gear": ["Gear Lever", "Altn Gear Guard", "Altn Gear", "Gear Lock Override"],
-        "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
-                    "L Fuel Control (RR)", "R Fuel Control (RR)"],
+        # plan 12 task 10 (the owner: "engine 1 start then fuel, then engine 2's controls"): Ignition, then each engine's
+        # start selector followed by its fuel control, the PW and RR switches of one engine side by side (Task 8 shows
+        # the loaded type's one)
+        "Engines": ["Ignition", "L ENG Start", "L Fuel Control (PW)", "L Fuel Control (RR)", "R ENG Start",
+                    "R Fuel Control (PW)", "R Fuel Control (RR)"],
         "TCAS and transponder": ["TCAS Mode"],   # the app's Squawk Code field follows it (BBS757Definition.Readouts.cs)
         # plan 12 task 7: on the pedestal, each with the two brightness knobs it has (after the map options, before INOP)
         "Captain EFIS": ["ND Mode", "ND Range", "WXR", "TERR", "TFC", "CTR", "NAV AID", "APRT", "DATA", "WPT",

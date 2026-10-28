@@ -4835,6 +4835,34 @@
    "variant": "pw"
   },
   {
+   "node": "BBS_fuelcut_RR1",
+   "section": "Pedestal",
+   "panel": "Engines",
+   "label": "L Fuel Control (RR)",
+   "kind": "switch",
+   "state_var": "BBS_fuel_RR",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Run"
+    },
+    {
+     "value": 1,
+     "label": "Rich"
+    },
+    {
+     "value": 2,
+     "label": "Cutoff"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": "rr"
+  },
+  {
    "node": "B757_OVHD_R_ENG_START_SWITCH",
    "section": "Pedestal",
    "panel": "Engines",
@@ -4893,34 +4921,6 @@
    "cw": "(L:BBS_fuelcut_PW2) 2 + 2 min (>L:BBS_fuelcut_PW2)",
    "ccw": "(L:BBS_fuelcut_PW2) 2 - 0 max (>L:BBS_fuelcut_PW2)",
    "variant": "pw"
-  },
-  {
-   "node": "BBS_fuelcut_RR1",
-   "section": "Pedestal",
-   "panel": "Engines",
-   "label": "L Fuel Control (RR)",
-   "kind": "switch",
-   "state_var": "BBS_fuel_RR",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Run"
-    },
-    {
-     "value": 1,
-     "label": "Rich"
-    },
-    {
-     "value": 2,
-     "label": "Cutoff"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": "rr"
   },
   {
    "node": "BBS_fuelcut_RR2",

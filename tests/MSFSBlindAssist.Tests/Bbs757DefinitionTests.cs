@@ -168,13 +168,15 @@ public class Bbs757DefinitionTests
     [Fact]
     public void The_engines_panel_holds_the_start_selectors_and_the_fuel_control_switches_in_start_order()
     {
+        // Plan 12 task 10 (the owner: "I wanted engine 1 start then fuel, then engine 2's controls") replaced ruling R37's
+        // order here: Ignition, then each engine's start selector followed by its fuel control switches.
         var vars = Def.GetVariables();
 
         Assert.Equal(
             new[]
             {
-                "Ignition", "L ENG Start", "L Fuel Control (PW)", "R ENG Start", "R Fuel Control (PW)",
-                "L Fuel Control (RR)", "R Fuel Control (RR)",
+                "Ignition", "L ENG Start", "L Fuel Control (PW)", "L Fuel Control (RR)", "R ENG Start",
+                "R Fuel Control (PW)", "R Fuel Control (RR)",
             },
             Def.GetPanelControls()["Engines"].Select(key => vars[key].DisplayName));
     }
