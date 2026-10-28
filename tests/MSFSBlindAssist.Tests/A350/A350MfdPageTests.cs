@@ -223,17 +223,31 @@ public class A350MfdPageTests
     }
 
     // The temporary F-PLN with BASU1D (live): the MFD font draws symbols as lowercase letters (A350MFD-Regular.ttf:
-    // a left arrow, b right arrow, d degree, f the overfly triangle; the other lowercase letters are small capitals). A
-    // row's colour is its values'; an ident of another colour (the white TO waypoint in a yellow plan) says so once.
+    // a left arrow, b right arrow, d degree, f the overfly triangle; the other lowercase letters are small capitals). An
+    // arrow after an ident is the procedure's turn, in words (BI611: BASU1D's right turn after 500 ft, track 221 to 279;
+    // a bare arrow is a symbol a screen reader may not say). A row's colour is its values'; an ident of another colour
+    // (the white TO waypoint in a yellow plan) says so once.
     [Fact]
     public void A_temporary_flight_plan_reads_its_symbols_and_colours()
     {
         var lines = Page("mfd_fpln_tmpy_sid");
         Assert.Contains("DER22 (overfly) (white): via BASU1D, TRK 218°, DIST 1; TIME none, SPD none, ALT none, yellow", lines);
         Assert.Contains("500: via C220°, TRK 221°, DIST 0; TIME none, SPD none, ALT 500 (magenta), yellow", lines);
-        Assert.Contains("BI611 →: via BASU1D, TRK 279°, DIST 5; TIME none, SPD none, ALT none, yellow", lines);
+        Assert.Contains("BI611 (right turn): via BASU1D, TRK 279°, DIST 5; TIME none, SPD none, ALT none, yellow", lines);
         Assert.Contains("END OF TMPY F-PLN, yellow", lines);
         Assert.Contains("INSERT * TMPY button, amber", lines);
+    }
+
+    // The active F-PLN with predictions (live, BASU1D): an altitude column can hold a constraint's star and the predicted
+    // altitude, both read (the reader once took the star alone and dropped the 5000); a magenta star is a constraint
+    // predicted to be met, an amber one missed (the Airbus FMS's). A ditto mark is the value above, said in words.
+    [Fact]
+    public void A_flight_plans_constraint_star_and_ditto_are_read_in_words()
+    {
+        var lines = Page("mfd_fpln_basu1d");
+        Assert.Contains("BI613: via BASU1D, TRK 295°, DIST 4; TIME 00:05, SPD same as above, ALT 5000 (constraint met), green", lines);
+        Assert.Contains("BI453: via BASU1D, TRK 309°, DIST 6; TIME 00:04, SPD 250, ALT 5000, green", lines);
+        Assert.Contains(lines, l => l.StartsWith("BI611 (right turn): via BASU1D", StringComparison.Ordinal));
     }
 
     // FUEL&LOAD before entry (live): a value then its unit (the unit sits 4 px higher); "ooo.o" boxes are a required

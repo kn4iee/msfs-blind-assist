@@ -30,7 +30,9 @@ public static class A350MfdPage
     private static readonly Regex PositionDegrees = new(@"(?<=\d)d(?![A-Za-z])", RegexOptions.Compiled);
 
     /// <summary>A symbol the MFD font draws as a lowercase letter after an ident (A350MFD-Regular.ttf's outlines: a a left
-    /// arrow, b a right arrow, f the overfly triangle; its other lowercase letters are small capitals).</summary>
+    /// arrow, b a right arrow, f the overfly triangle; its other lowercase letters are small capitals). An arrow is the
+    /// procedure's turn there, read in words (BASU1D's BI611, the right turn after 500 ft; a screen reader may not say
+    /// a bare arrow).</summary>
     private static readonly Regex IdentSymbol = new(@"^(?<id>[A-Z0-9][A-Z0-9/.-]*)(?<g>[abf])$", RegexOptions.Compiled);
 
     /// <summary>Decoration: a run of spaced dashes around a marker ("- - - - END OF TMPY F-PLN - - - -").</summary>
@@ -43,7 +45,7 @@ public static class A350MfdPage
         t = PositionDegrees.Replace(t, "°");
         var m = IdentSymbol.Match(t);
         return m.Success
-            ? m.Groups["id"].Value + (m.Groups["g"].Value switch { "a" => " ←", "b" => " →", _ => " (overfly)" })
+            ? m.Groups["id"].Value + (m.Groups["g"].Value switch { "a" => " (left turn)", "b" => " (right turn)", _ => " (overfly)" })
             : t;
     }
 
@@ -281,7 +283,9 @@ public static class A350MfdPage
         bool InList(Cell c) => c.Index >= listStart && c.Index < headerIndex;
         used.UnionWith(cells.Where(c => InList(c) && c.Y >= barTop));
 
-        static string Value(Cell c) => TrackDegrees.Match(c.Text) is { Success: true } m ? m.Groups[1].Value + "°" : Word(c.Text);
+        // A ditto mark is the value above (the speed a row keeps), in words.
+        static string Value(Cell c) => c.Text == "\"" ? "same as above"
+            : TrackDegrees.Match(c.Text) is { Success: true } m ? m.Groups[1].Value + "°" : Word(c.Text);
         string ValueOf(Cell? c, string rowColour) =>
             c == null ? "none" : Value(c) + (c.Colour != rowColour && c.Colour != "grey" ? $" ({c.Colour})" : "");
 
@@ -303,8 +307,21 @@ public static class A350MfdPage
             if (ident == null) { prevBottom = b.Y + b.H; continue; }
             used.Add(ident);
             var row = cells.Where(c => !used.Contains(c) && InList(c) && Math.Abs(c.Y - ident.Y) <= 6 && c.X >= 200 && c.X < 563).ToList();
-            Cell? At(float x0, float x1) => row.FirstOrDefault(c => c.X >= x0 && c.X < x1);
-            Cell? t = At(200, 334), sp = At(334, 422), al = At(422, 563);
+            // A column's cells left to right: its value, and a constraint's star read as its prediction (the Airbus FMS's
+            // magenta star met, amber missed; live, BI613's "*" and 5000).
+            string Column(float x0, float x1, string rowColour)
+            {
+                var inColumn = row.Where(c => c.X >= x0 && c.X < x1).OrderBy(c => c.X).ToList();
+                var star = inColumn.FirstOrDefault(c => c.Text == "*");
+                var values = inColumn.Where(c => c != star).Select(c => ValueOf(c, rowColour)).ToList();
+                string text = values.Count == 0 ? "none" : string.Join(" ", values);
+                return star == null ? text : text + star.Colour switch
+                {
+                    "magenta" => " (constraint met)",
+                    "amber" => " (constraint missed)",
+                    _ => $" (constraint, {star.Colour})",
+                };
+            }
             used.UnionWith(row);
             var leg = cells.Where(c => !used.Contains(c) && InList(c) && c.Y >= prevBottom && c.Y < b.Y && (c.X < 200 || c.X >= 560)).ToList();
             used.UnionWith(leg);
@@ -321,7 +338,7 @@ public static class A350MfdPage
             string label = (b.Y < 230 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
             string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
             lines.Add((b.Y, 0, new MfdLine("waypoint",
-                $"{label}: {legText}{time} {ValueOf(t, colour)}, {spd} {ValueOf(sp, colour)}, {alt} {ValueOf(al, colour)}, {colour}",
+                $"{label}: {legText}{time} {Column(200, 334, colour)}, {spd} {Column(334, 422, colour)}, {alt} {Column(422, 563, colour)}, {colour}",
                 b.X + b.W / 2, b.Y + b.H / 2)));
             prevBottom = b.Y + b.H;
         }
