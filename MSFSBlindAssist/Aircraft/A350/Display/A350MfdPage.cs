@@ -65,6 +65,16 @@ public static class A350MfdPage
                      && Mine((sh.X0 + sh.X1) / 2) && A350Rgba.NameOf(sh.Colour) == "green"
                      && sh.X1 - sh.X0 is >= 14 and <= 26 && Math.Abs(sh.X1 - sh.X0 - (sh.Y1 - sh.Y0)) <= 3))
             cells.Add(new Cell("Green dot", "white", sh.X0 - shift, sh.Y1, -1));
+        // An open pop-up hides what was drawn under it before it: those texts and controls are not on the screen (SURV's
+        // DEFAULT SETTINGS confirmation over the ADS-B TRAFFIC box and the DEFAULT SETTINGS key, live). Open is a
+        // PopupDialog with texts of its own drawn after it inside it; a dismissed one keeps its element and draws none.
+        var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
+        var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "PopupDialog"
+            && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
+        bool Covers(DrawnElement p, float x, float y) => x >= p.X - shift && x <= p.X - shift + p.RectW && y >= p.Y && y <= p.Y + p.RectH;
+        cells.RemoveAll(c => popups.Any(p => c.Index >= 0 && c.Index < p.e.TextStart && Covers(p.e, c.X, c.Y)));
+        var hidden = elements.Select((e, i) => (e, i)).Where(q => popups.Any(p => q.i < p.i
+            && Covers(p.e, q.e.X - shift + q.e.RectW / 2, q.e.Y + q.e.RectH / 2))).Select(q => q.e).ToHashSet();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy, bool Inherited, bool Above)>();
@@ -72,12 +82,12 @@ public static class A350MfdPage
         var checkboxLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
         // Texts inside a control are its own, never another control's label or header.
-        var inControls = capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0).SelectMany(e =>
+        var inControls = elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)).SelectMany(e =>
         {
             float x0 = e.X - shift, x1 = x0 + e.RectW;
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
         }).ToHashSet();
-        var inFields = capture.Elements.Where(e => Mine(e.X) && IsField(e)).SelectMany(e =>
+        var inFields = elements.Where(e => !hidden.Contains(e) && IsField(e)).SelectMany(e =>
         {
             float x0 = e.X - shift, x1 = x0 + e.RectW;
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
@@ -87,7 +97,7 @@ public static class A350MfdPage
         if (flightPlan)
             ReadFlightPlan(capture, shift, Mine, cells, used, lines);
 
-        foreach (var e in capture.Elements.Where(e => Mine(e.X) && !Containers.Contains(e.Class) && e.RectW > 0 && e.RectH > 0))
+        foreach (var e in elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)))
         {
             // The F-PLN's row boxes are the F-PLN reader's (hidden rows' boxes reach under the bottom keys).
             if (flightPlan && e.Class == "BaseFlightPlanButton") continue;

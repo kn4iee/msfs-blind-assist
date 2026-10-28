@@ -90,6 +90,22 @@ public class A350MfdPageTests
         Assert.Contains("IDENT: IKW, cyan", lines);
     }
 
+    // SURV's DEFAULT SETTINGS asks to confirm (live 2026-10-28): an open pop-up (a PopupDialog with its own texts) hides
+    // what was drawn under it, the ADS-B TRAFFIC box and the DEFAULT SETTINGS key, whose places its CANCEL and CONFIRM *
+    // keys took (they read "ADS-B TRAFFIC: CANCEL OFF" and "DEFAULT SETTINGS CONFIRM * button"); what is outside it reads.
+    [Fact]
+    public void An_open_pop_up_hides_what_it_covers()
+    {
+        var lines = Page("mfd_surv_default_confirm");
+        Assert.Contains("SELECT SURV DEFAULT SETTINGS?, white", lines);
+        Assert.Contains("CANCEL button", lines);
+        Assert.Contains("CONFIRM * button", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("ADS-B TRAFFIC") || l.Contains("DEFAULT SETTINGS CONFIRM"));
+        Assert.Contains("ADS-B RPTG: OFF, selected, white", lines);   // the transponder's, outside it
+        Assert.Contains("TA/RA check box, not checked, unavailable", lines);
+        Assert.Contains("SQWK: 2000, cyan", lines);
+    }
+
     // SURV CONTROLS (live, transponder in standby): a selector box's options each read with the header above
     // the box and whether selected (an unselected option is grey); a check box reads checked (a fill in its
     // square) or not, grey while unavailable; the squawk field takes the label above it.
