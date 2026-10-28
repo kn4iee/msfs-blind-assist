@@ -36,7 +36,13 @@ public sealed record Bbs757SpringButton(string Key, Bbs757SpringControl Control,
 }
 
 /// <summary>One read-only L:var a press reads fresh (a registered key is all a fresh read can deliver).</summary>
-public sealed record Bbs757SpringRead(string Key, string Label);
+/// <param name="Key">The L:var, registered under its own name.</param>
+/// <param name="Label">The variable's name; for a readout, the name of its status row ("Rudder Trim").</param>
+/// <param name="ShownWith">
+/// The switch whose panel shows this read as a read-only status row, so the pilot can read it without pressing
+/// (and moving) anything; null for a read no panel shows (the switches themselves).
+/// </param>
+public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringControl? ShownWith = null);
 
 /// <summary>
 /// The 757's spring-loaded switches the panels hold for one second: the rudder trim, the aileron trim and the
@@ -170,7 +176,9 @@ public static class Bbs757SpringControls
 
     /// <summary>
     /// The seven L:vars a press reads fresh, each registered under its own name: the four switches (the release's
-    /// read-back) and three readouts. The stab trim's readout and Mode Select are rows the profile registers already.
+    /// read-back, on no panel) and three readouts, which are also read-only status rows on their switch's panel, in
+    /// this order after any rows it has (<see cref="RowText"/>): Rudder Trim and Aileron Trim on Stabilizer trim,
+    /// Outflow Valve on Pressurization. The stab trim's readout and Mode Select are rows the profile registers already.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringRead> Reads = new[]
     {
@@ -178,9 +186,9 @@ public static class Bbs757SpringControls
         new Bbs757SpringRead(AileronTrim.LVar, "Aileron Trim Switch"),
         new Bbs757SpringRead(AltnStabTrim.LVar, "Alternate Stab Trim Switch"),
         new Bbs757SpringRead(CabinAltManual.LVar, "Manual Cabin Altitude Switch"),
-        new Bbs757SpringRead(RudderTrimIndicatorVar, "Rudder Trim Indicator"),
-        new Bbs757SpringRead(YokeVar, "Control Wheel"),
-        new Bbs757SpringRead(CabinValveVar, "Outflow Valve"),
+        new Bbs757SpringRead(RudderTrimIndicatorVar, "Rudder Trim", ShownWith: RudderTrim),
+        new Bbs757SpringRead(YokeVar, "Aileron Trim", ShownWith: AileronTrim),
+        new Bbs757SpringRead(CabinValveVar, "Outflow Valve", ShownWith: CabinAltManual),
     };
 
     private static readonly Dictionary<string, Bbs757SpringButton> ByButtonKey =
@@ -235,31 +243,55 @@ public static class Bbs757SpringControls
         return OutflowValvePhrase(value);
     }
 
-    /// <summary>
-    /// "Rudder trim 0.9 units right", "Rudder trim 3.4 units left" (one decimal, a half away from zero,
-    /// invariant), "Rudder trim centered" under <see cref="RudderCenteredUnder"/> units, "Rudder trim unavailable"
-    /// when nothing finite was read.
-    /// </summary>
-    public static string RudderTrimPhrase(double? units)
-    {
-        if (units is not double v || !double.IsFinite(v)) return $"{RudderTrim.Name} unavailable";
-        if (Math.Abs(v) < RudderCenteredUnder) return "Rudder trim centered";
-        double tenths = Math.Round(Math.Abs(v), 1, MidpointRounding.AwayFromZero);
-        return $"Rudder trim {tenths.ToString("0.0", CultureInfo.InvariantCulture)} units {(v > 0 ? "right" : "left")}";
-    }
+    /// <summary>What a readout says when nothing finite was read: the row's whole text, and the phrase after the name.</summary>
+    public const string UnavailableText = "unavailable";
+
+    /// <summary>The outflow valve as spoken: "Outflow valve" in "Outflow valve 87 percent open".</summary>
+    private const string OutflowValveName = "Outflow valve";
 
     /// <summary>
-    /// The direction only (BlueBird publishes no aileron trim units): "Aileron trim right", "Aileron trim left",
-    /// "Aileron trim centered" within <see cref="YokeCenteredWithin"/> of the yoke's 1.5 neutral, "Aileron trim
-    /// unavailable" when nothing finite was read.
+    /// The text of a readout's read-only status row (Rudder Trim, Aileron Trim, Outflow Valve), by its registered
+    /// key: the words its spoken phrase says after the name; null for any other key.
     /// </summary>
-    public static string AileronTrimPhrase(double? yoke)
+    public static string? RowText(string key, double value) => key switch
     {
-        if (yoke is not double v || !double.IsFinite(v)) return $"{AileronTrim.Name} unavailable";
-        double offset = v - 1.5;
-        if (Math.Abs(offset) <= YokeCenteredWithin) return "Aileron trim centered";
-        return offset > 0 ? "Aileron trim right" : "Aileron trim left";
+        RudderTrimIndicatorVar => RudderTrimText(value),
+        YokeVar => AileronTrimText(value),
+        CabinValveVar => OutflowValveText(value),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The rudder trim's words, shared by the press's read-back and the Stabilizer trim panel's row: "0.9 units
+    /// right", "3.4 units left" (one decimal, a half away from zero, invariant), "centered" under
+    /// <see cref="RudderCenteredUnder"/> units, "unavailable" when nothing finite was read.
+    /// </summary>
+    public static string RudderTrimText(double? units)
+    {
+        if (units is not double v || !double.IsFinite(v)) return UnavailableText;
+        if (Math.Abs(v) < RudderCenteredUnder) return "centered";
+        double tenths = Math.Round(Math.Abs(v), 1, MidpointRounding.AwayFromZero);
+        return $"{tenths.ToString("0.0", CultureInfo.InvariantCulture)} units {(v > 0 ? "right" : "left")}";
     }
+
+    /// <summary>"Rudder trim 0.9 units right", "Rudder trim centered", "Rudder trim unavailable": the name, then <see cref="RudderTrimText"/>.</summary>
+    public static string RudderTrimPhrase(double? units) => $"{RudderTrim.Name} {RudderTrimText(units)}";
+
+    /// <summary>
+    /// The aileron trim's words, shared by the press's read-back and the Stabilizer trim panel's row: the direction
+    /// only (BlueBird publishes no aileron trim units), "right", "left", "centered" within
+    /// <see cref="YokeCenteredWithin"/> of the yoke's 1.5 neutral, "unavailable" when nothing finite was read.
+    /// </summary>
+    public static string AileronTrimText(double? yoke)
+    {
+        if (yoke is not double v || !double.IsFinite(v)) return UnavailableText;
+        double offset = v - 1.5;
+        if (Math.Abs(offset) <= YokeCenteredWithin) return "centered";
+        return offset > 0 ? "right" : "left";
+    }
+
+    /// <summary>"Aileron trim right", "Aileron trim centered", "Aileron trim unavailable": the name, then <see cref="AileronTrimText"/>.</summary>
+    public static string AileronTrimPhrase(double? yoke) => $"{AileronTrim.Name} {AileronTrimText(yoke)}";
 
     /// <summary>
     /// The trim call-out's own words from the stock degrees: BlueBird's indicator units
@@ -291,13 +323,17 @@ public static class Bbs757SpringControls
     }
 
     /// <summary>
-    /// "Outflow valve 87 percent open" from the valve's 0 to 1, whole percent (a half away from zero, never past
-    /// 0 or 100), invariant; "Outflow valve unavailable" when nothing finite was read.
+    /// The outflow valve's words, shared by the press's read-back and the Pressurization panel's row: "87 percent
+    /// open" from the valve's 0 to 1, whole percent (a half away from zero, never past 0 or 100), invariant;
+    /// "unavailable" when nothing finite was read.
     /// </summary>
-    public static string OutflowValvePhrase(double? open)
+    public static string OutflowValveText(double? open)
     {
-        if (open is not double v || !double.IsFinite(v)) return "Outflow valve unavailable";
+        if (open is not double v || !double.IsFinite(v)) return UnavailableText;
         double percent = Math.Round(Math.Clamp(v, 0, 1) * 100, MidpointRounding.AwayFromZero);
-        return $"Outflow valve {percent.ToString("0", CultureInfo.InvariantCulture)} percent open";
+        return $"{percent.ToString("0", CultureInfo.InvariantCulture)} percent open";
     }
+
+    /// <summary>"Outflow valve 87 percent open", "Outflow valve unavailable": the name, then <see cref="OutflowValveText"/>.</summary>
+    public static string OutflowValvePhrase(double? open) => $"{OutflowValveName} {OutflowValveText(open)}";
 }

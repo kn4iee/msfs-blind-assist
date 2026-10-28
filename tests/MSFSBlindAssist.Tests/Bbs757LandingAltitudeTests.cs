@@ -319,7 +319,7 @@ public class Bbs757LandingAltitudeTests
 
         // The field, then the map's controls; plan 12's cabin buttons follow at the end (Bbs757SpringControlsTests).
         Assert.Equal(new[] { Bbs757LandingAltitude.SetKey, ModeSelectNode }, def.GetPanelControls()["Pressurization"].Take(2));
-        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, def.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, Bbs757SpringControls.CabinValveVar }, def.GetPanelDisplayVariables()["Pressurization"]);
         Assert.Equal(new[] { "Pressurization" }, def.GetPanelStructure()["Overhead"]);   // the panel is listed once
     }
 
@@ -330,7 +330,7 @@ public class Bbs757LandingAltitudeTests
         map.Status.Add(new Bbs757StatusRow { Key = "B757_PRESS_CABIN_ALT", Panel = "Pressurization", Label = "Cabin Altitude" });
         var def = new Rig(map).Def;
 
-        Assert.Equal(new[] { "B757_PRESS_CABIN_ALT", Bbs757LandingAltitude.DisplayKey }, def.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { "B757_PRESS_CABIN_ALT", Bbs757LandingAltitude.DisplayKey, Bbs757SpringControls.CabinValveVar }, def.GetPanelDisplayVariables()["Pressurization"]);
     }
 
     [Fact]
@@ -340,14 +340,14 @@ public class Bbs757LandingAltitudeTests
         var withOverhead = new Rig(MapOf(Electrical())).Def;
         Assert.Equal(new[] { "Electrical", "Pressurization" }, withOverhead.GetPanelStructure()["Overhead"]);
         Assert.Equal(Bbs757LandingAltitude.SetKey, withOverhead.GetPanelControls()["Pressurization"][0]);   // plan 12's cabin buttons follow it
-        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, withOverhead.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, Bbs757SpringControls.CabinValveVar }, withOverhead.GetPanelDisplayVariables()["Pressurization"]);
         Assert.Equal(new[] { "B757_OVHD_BATTERY_BUTTON" }, withOverhead.GetPanelControls()["Electrical"]);   // the others are untouched
 
         // No Overhead section at all: it is created.
         var noOverhead = new Rig(MapOf(FuelCrossfeed())).Def;
         Assert.Equal(new[] { "Pressurization" }, noOverhead.GetPanelStructure()["Overhead"]);
         Assert.Equal(Bbs757LandingAltitude.SetKey, noOverhead.GetPanelControls()["Pressurization"][0]);
-        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey }, noOverhead.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, Bbs757SpringControls.CabinValveVar }, noOverhead.GetPanelDisplayVariables()["Pressurization"]);
         Assert.Equal("Fuel control", noOverhead.GetPanelStructure()["Pedestal"][0]);   // untouched by this panel (other plans append their own, such as plan 04's COM radios)
 
         // No controls at all.

@@ -226,6 +226,50 @@ public class Bbs757SpringControlsTests
     }
 
     [Theory]
+    [InlineData(0.85)]
+    [InlineData(-12.34)]
+    [InlineData(0.049)]
+    [InlineData(null)]
+    [InlineData(double.NaN)]
+    public void The_rudder_trim_row_and_its_phrase_share_their_words(double? units)
+    {
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+            InCulture(culture, () => Assert.Equal($"Rudder trim {S.RudderTrimText(units)}", S.RudderTrimPhrase(units)));
+        Assert.Equal("0.9 units right", S.RudderTrimText(0.85));
+        Assert.Equal("centered", S.RudderTrimText(0.049));
+        Assert.Equal("unavailable", S.RudderTrimText(null));
+    }
+
+    [Theory]
+    [InlineData(1.52)]
+    [InlineData(1.489)]
+    [InlineData(1.5)]
+    [InlineData(null)]
+    [InlineData(double.PositiveInfinity)]
+    public void The_aileron_trim_row_and_its_phrase_share_their_words(double? yoke)
+    {
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+            InCulture(culture, () => Assert.Equal($"Aileron trim {S.AileronTrimText(yoke)}", S.AileronTrimPhrase(yoke)));
+        Assert.Equal("right", S.AileronTrimText(1.52));
+        Assert.Equal("left", S.AileronTrimText(1.489));
+        Assert.Equal("centered", S.AileronTrimText(1.5));
+        Assert.Equal("unavailable", S.AileronTrimText(null));
+    }
+
+    [Theory]
+    [InlineData(0.869)]
+    [InlineData(1.2)]
+    [InlineData(null)]
+    [InlineData(double.NaN)]
+    public void The_outflow_valve_row_and_its_phrase_share_their_words(double? open)
+    {
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+            InCulture(culture, () => Assert.Equal($"Outflow valve {S.OutflowValveText(open)}", S.OutflowValvePhrase(open)));
+        Assert.Equal("87 percent open", S.OutflowValveText(0.869));
+        Assert.Equal("unavailable", S.OutflowValveText(null));
+    }
+
+    [Theory]
     [InlineData(2.3, 2.3, false, "Stab trim did not move")]
     [InlineData(2.3, 2.33, false, "Stab trim did not move")]   // 0.024 units: under 0.05
     [InlineData(2.3, 2.33, true, "Stab trim did not move")]
@@ -362,13 +406,22 @@ public class Bbs757SpringControlsTests
         Assert.Equal(8, S.Buttons.Select(b => vars[b.Key].Name).Distinct().Count());
     }
 
+    private static readonly string[] SwitchReadKeys =
+        { "B757_PEDESTAL_RUDDER_TRIM_KNOB", "BBS_AILERON_TRIM_SWITCH", "BBS_ELEV_TRIM_ALTERNATE", "B757_OVHD_CABINALT_SWITCH" };
+
+    private const string RudderTrimRow = "B757_PED_RUDDER_TRIM_INDICATOR";
+    private const string AileronTrimRow = "B757_FC_YOKE";
+    private const string OutflowValveRow = "BBS_CABIN_VALVE";
+    private const string CabinAltitudeRow = "B757_TEST_CABIN_ALT";
+
     [Fact]
-    public void Registers_the_seven_reads_quiet_and_on_no_panel()
+    public void Registers_the_seven_reads_quiet_and_off_ctrl_m()
     {
         var def = new BBS757Definition();
         var vars = def.GetVariables();
-        var onPanels = def.GetPanelControls().SelectMany(p => p.Value).Concat(def.GetPanelDisplayVariables().SelectMany(p => p.Value))
-            .ToHashSet(StringComparer.Ordinal);
+        var controls = def.GetPanelControls().SelectMany(p => p.Value).ToHashSet(StringComparer.Ordinal);
+        var displays = def.GetPanelDisplayVariables().SelectMany(p => p.Value).ToHashSet(StringComparer.Ordinal);
+        var monitorRows = def.MonitorRows().Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
 
         foreach (string key in ReadKeys)
         {
@@ -378,12 +431,103 @@ public class Bbs757SpringControlsTests
             Assert.Equal(UpdateFrequency.OnRequest, read.UpdateFrequency);
             Assert.False(read.IsAnnounced);
             Assert.True(read.ExcludeFromMonitorManager);   // no Ctrl+M row that mutes nothing ([VAR-9])
+            Assert.DoesNotContain(key, monitorRows);
             Assert.False(read.RenderAsButton);
-            Assert.DoesNotContain(key, onPanels);
+            Assert.DoesNotContain(key, controls);
+        }
+        // The four switches are read only by a press: on no panel's status display either.
+        foreach (string key in SwitchReadKeys)
+        {
+            Assert.False(vars[key].RenderAsReadOnlyStatus);
+            Assert.DoesNotContain(key, displays);
         }
         // The stab trim and Mode Select readouts are rows the profile already registers.
         Assert.Equal("ELEVATOR TRIM POSITION", vars[S.AltnStabTrim.ReadoutKey].Name);
         Assert.Equal(UpdateFrequency.OnRequest, vars[ModeSelectNode].UpdateFrequency);
+    }
+
+    // ---- The definition: the readout rows (sighted parity: read without pressing a trim) --------------------
+
+    [Theory]
+    [InlineData(RudderTrimRow, "Rudder Trim")]
+    [InlineData(AileronTrimRow, "Aileron Trim")]
+    [InlineData(OutflowValveRow, "Outflow Valve")]
+    public void The_three_readouts_are_read_only_status_rows(string key, string label)
+    {
+        var read = new BBS757Definition().GetVariables()[key];
+
+        Assert.Equal(label, read.DisplayName);
+        Assert.True(read.RenderAsReadOnlyStatus);
+        Assert.Equal(UpdateFrequency.OnRequest, read.UpdateFrequency);   // read when the panel's status display is shown
+        Assert.True(read.ExcludeFromMonitorManager);
+        Assert.False(read.IsAnnounced);
+    }
+
+    [Fact]
+    public void The_shipped_panels_show_the_readout_rows()
+    {
+        var displays = new BBS757Definition().GetPanelDisplayVariables();
+
+        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, displays[StabTrimPanel]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, displays["Pressurization"]);   // after the landing altitude's row
+    }
+
+    [Fact]
+    public void The_readout_rows_follow_the_panels_existing_rows()
+    {
+        var map = MapOf(ModeSelect(), StabCutout());
+        map.Status.Add(new Bbs757StatusRow { Key = "B757_STAB_SOMETHING", Panel = StabTrimPanel, Label = "Something" });
+        map.Status.Add(new Bbs757StatusRow { Key = "B757_PRESS_CABIN_ALT", Panel = "Pressurization", Label = "Cabin Altitude" });
+        var displays = new BBS757Definition(map) { NestRunning = () => true }.GetPanelDisplayVariables();
+
+        Assert.Equal(new[] { "B757_STAB_SOMETHING", RudderTrimRow, AileronTrimRow }, displays[StabTrimPanel]);
+        Assert.Equal(new[] { "B757_PRESS_CABIN_ALT", Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, displays["Pressurization"]);
+    }
+
+    [Fact]
+    public void A_map_without_the_panels_still_gets_the_readout_rows()
+    {
+        var def = new BBS757Definition(new Bbs757ControlMap()) { NestRunning = () => true };
+
+        Assert.Equal(new[] { RudderTrimRow, AileronTrimRow }, def.GetPanelDisplayVariables()[StabTrimPanel]);
+        Assert.Equal(new[] { Bbs757LandingAltitude.DisplayKey, OutflowValveRow }, def.GetPanelDisplayVariables()["Pressurization"]);
+        Assert.Contains(StabTrimPanel, def.GetPanelStructure()["Pedestal"]);
+    }
+
+    [Theory]
+    [InlineData(RudderTrimRow, 0.85, "0.9 units right")]
+    [InlineData(RudderTrimRow, -3.44, "3.4 units left")]
+    [InlineData(RudderTrimRow, 0.04, "centered")]        // under 0.05 units
+    [InlineData(RudderTrimRow, double.NaN, "unavailable")]
+    [InlineData(AileronTrimRow, 1.56, "right")]
+    [InlineData(AileronTrimRow, 1.489, "left")]
+    [InlineData(AileronTrimRow, 1.505, "centered")]      // within 0.01 of the yoke's 1.5 neutral
+    [InlineData(AileronTrimRow, double.NaN, "unavailable")]
+    [InlineData(OutflowValveRow, 0.869, "87 percent open")]
+    [InlineData(OutflowValveRow, 1.0, "100 percent open")]
+    [InlineData(OutflowValveRow, double.NaN, "unavailable")]
+    [InlineData(CabinAltitudeRow, 1161.4, "1161 feet")]   // the map's Status row, BlueBird's cabin altitude in feet
+    [InlineData(CabinAltitudeRow, 14100.2, "14100 feet")]
+    [InlineData(CabinAltitudeRow, -60, "-60 feet")]
+    [InlineData(CabinAltitudeRow, double.NaN, "unavailable")]
+    public void Each_readout_row_says_its_value(string key, double value, string text)
+    {
+        var def = new BBS757Definition();
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+            InCulture(culture, () =>
+            {
+                Assert.True(def.TryGetDisplayOverride(key, value, out string shown));
+                Assert.Equal(text, shown);
+            });
+    }
+
+    [Fact]
+    public void The_cabin_altitude_row_is_the_maps_status_row()
+    {
+        var def = new BBS757Definition();
+
+        Assert.Equal("Cabin Altitude", def.GetVariables()[CabinAltitudeRow].DisplayName);
+        Assert.Contains(CabinAltitudeRow, def.GetPanelDisplayVariables()["Status"]);
     }
 
     [Fact]

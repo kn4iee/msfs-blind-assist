@@ -200,7 +200,7 @@ public partial class BBS757Definition
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
     {
         AddLandingAltitudePanels(structure, controls, displays);
-        AddSpringControlPanels(structure, controls);   // after the field, which stays first on Pressurization
+        AddSpringControlPanels(structure, controls, displays);   // after the field and its row, which stay first on Pressurization
     }
 
     partial void HandleOverheadTypedText(string varKey, string text, SimConnectManager simConnect,
@@ -227,9 +227,16 @@ public partial class BBS757Definition
         Log.Debug("BBS757", $"{varKey}: a panel set carries no landing altitude; nothing sent.");
     }
 
+    /// <summary>The map's Status row "Cabin Altitude": BlueBird's cabin altitude in feet (plan 12 task 1).</summary>
+    internal const string CabinAltitudeStatusKey = "B757_TEST_CABIN_ALT";
+
     partial void FormatOverheadDisplay(string varKey, double value, ref string? text)
     {
         if (varKey == Bbs757LandingAltitude.DisplayKey) text = Bbs757LandingAltitude.Display(value);
+        // The spring controls' readout rows say the words their press's read-back says after the name.
+        else if (Bbs757SpringControls.RowText(varKey, value) is { } row) text = row;
+        // Whole feet, invariant, as the landing altitude's row: "1161 feet".
+        else if (varKey == CabinAltitudeStatusKey) text = Bbs757LandingAltitude.Display(value);
     }
 
     /// <summary>
@@ -341,9 +348,11 @@ public partial class BBS757Definition
     /// map's controls, never shadowing a key already present. A button is an Event registration, as the landing
     /// altitude field is: it takes no data definition, the definition claims its key
     /// (<see cref="HandleOverheadSet"/>) so the generic path never sends it, and its dotted private name changes
-    /// nothing in the sim even if it were ever sent (ruling R16). A read is an OnRequest L:var on no panel, with
-    /// no Ctrl+M row ([VAR-9]): a fresh read delivers only a registered key. The stab trim's readout (the trim
-    /// call-out's <c>MON_ElevatorTrim</c>) and Mode Select (the map's control) are registered already.
+    /// nothing in the sim even if it were ever sent (ruling R16). A read is an OnRequest L:var with no Ctrl+M row
+    /// ([VAR-9]), never announced: a fresh read delivers only a registered key. The three readouts are also
+    /// read-only status rows (Rudder Trim, Aileron Trim, Outflow Valve), read when their panel's status display
+    /// is shown, as the landing altitude's row is; the four switches are on no panel. The stab trim's readout
+    /// (the trim call-out's <c>MON_ElevatorTrim</c>) and Mode Select (the map's control) are registered already.
     /// </summary>
     private static void AddSpringControlVariables(Dictionary<string, SimVarDefinition> vars)
     {
@@ -369,6 +378,7 @@ public partial class BBS757Definition
             {
                 Name = read.Key, DisplayName = read.Label,
                 Type = SimVarType.LVar, Units = "number", UpdateFrequency = UpdateFrequency.OnRequest,
+                RenderAsReadOnlyStatus = read.ShownWith != null,   // its text: FormatOverheadDisplay
                 ExcludeFromMonitorManager = true,
             });
         }
@@ -377,10 +387,12 @@ public partial class BBS757Definition
     /// <summary>
     /// The six trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and their guards),
     /// the two cabin buttons last on Pressurization (the landing altitude field stays first). A panel the map
-    /// lacks is created under its section, so the buttons are never lost.
+    /// lacks is created under its section, so the buttons are never lost. The readout rows join their panel's
+    /// status display after the rows it has (on Pressurization, after the landing altitude's): Rudder Trim and
+    /// Aileron Trim on Stabilizer trim, Outflow Valve on Pressurization.
     /// </summary>
     private static void AddSpringControlPanels(Dictionary<string, List<string>> structure,
-        Dictionary<string, List<string>> controls)
+        Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
     {
         List<string> PanelOf(Bbs757SpringControl control)
         {
@@ -396,6 +408,14 @@ public partial class BBS757Definition
 
         var cabin = Bbs757SpringControls.Buttons.Where(b => b.Control.NeedsManualMode).ToList();
         if (cabin.Count > 0) PanelOf(cabin[0].Control).AddRange(cabin.Select(b => b.Key));
+
+        foreach (var read in Bbs757SpringControls.Reads)
+        {
+            if (read.ShownWith is not { } owner) continue;
+            PanelOf(owner);   // the panel is listed (its buttons made sure of it): a row never sits on a panel no one reaches
+            if (!displays.TryGetValue(owner.Panel, out var rows)) displays[owner.Panel] = rows = new List<string>();
+            if (!rows.Contains(read.Key)) rows.Add(read.Key);
+        }
     }
 
     /// <summary>A press of a spring button: claimed at once so the generic path never sends it, then held on its own task (never throws).</summary>
