@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.SimConnect;
@@ -442,7 +443,7 @@ public class Bbs757SpringControlsTests
             Assert.DoesNotContain(key, displays);
         }
         // The stab trim and Mode Select readouts are rows the profile already registers.
-        Assert.Equal("ELEVATOR TRIM POSITION", vars[S.AltnStabTrim.ReadoutKey].Name);
+        Assert.Equal("ELEVATOR TRIM POSITION", vars[S.StabTrimReadoutKey].Name);
         Assert.Equal(UpdateFrequency.OnRequest, vars[ModeSelectNode].UpdateFrequency);
     }
 
@@ -569,12 +570,33 @@ public class Bbs757SpringControlsTests
         /// <summary>The Ctrl+M rows the pilot muted.</summary>
         public readonly HashSet<string> Muted = new(StringComparer.Ordinal);
 
+        /// <summary>The definition's clock (its <c>NowMs</c>), in milliseconds: still unless <see cref="DelayTakes"/> moves it, so no test depends on real time.</summary>
+        public long Now;
+
+        /// <summary>How far one wait asked for this many milliseconds moves <see cref="Now"/> (a real wait runs long); null: not at all.</summary>
+        public Func<int, int>? DelayTakes;
+
         /// <param name="more">Map controls besides Mode Select and the stab trim cutout (the lamp test's Warning Test).</param>
         public Rig(params Bbs757Control[] more)
         {
             Def = new BBS757Definition(MapOf(new[] { ModeSelect(), StabCutout() }.Concat(more).ToArray()))
             {
-                NestRunning = () => true, WriteIo = _ => Sim.Io, IsMonitorMuted = key => Muted.Contains(key),
+                NestRunning = () => true, WriteIo = _ => Io(), IsMonitorMuted = key => Muted.Contains(key), NowMs = () => Now,
+            };
+        }
+
+        /// <summary>The fake sim's io, its waits moving the clock by <see cref="DelayTakes"/> first.</summary>
+        private Bbs757SimIo Io()
+        {
+            var io = Sim.Io;
+            return new Bbs757SimIo
+            {
+                CanWrite = io.CanWrite, ReadFresh = io.ReadFresh, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead,
+                Delay = (ms, ct) =>
+                {
+                    Now += DelayTakes?.Invoke(ms) ?? 0;
+                    return io.Delay(ms, ct);
+                },
             };
         }
 
@@ -1115,7 +1137,7 @@ public class Bbs757SpringControlsTests
             CanWrite = io.CanWrite, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
             ReadFresh = (_, _) => throw new InvalidOperationException("no link"),
         };
-        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing };
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing, NowMs = () => 0 };
         var speech = new SpeechCapture();
 
         await def.PressSpringAsync("BBS757_RUDDER_TRIM_RIGHT", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
@@ -1218,8 +1240,8 @@ public class Bbs757SpringControlsTests
         ("BBS757_P61_LOWER_EQUIP_COOLING_TEST", "Lower Equipment Cooling Test 3 s", "BBS757_EQUIP_COOLING_P61_TEST_SW", 2, "Lower equipment cooling test done"),
         ("BBS757_P61_UPPER_YAW_DAMPER_TEST", "Upper Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 0, "Upper yaw damper test done"),
         ("BBS757_P61_LOWER_YAW_DAMPER_TEST", "Lower Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 2, "Lower yaw damper test done"),
-        ("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", "Upper Duct Leak Fuel Qty Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 0, "Upper duct leak fuel qty test done"),
-        ("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", "Lower Duct Leak Fuel Qty Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 2, "Lower duct leak fuel qty test done"),
+        ("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", "Upper Duct Leak Fuel Quantity Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 0, "Upper duct leak fuel quantity test done"),
+        ("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", "Lower Duct Leak Fuel Quantity Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 2, "Lower duct leak fuel quantity test done"),
         ("BBS757_P61_WING_AI_TEST", "Wing Anti-ice Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 0, "Wing anti-ice test done"),
         ("BBS757_P61_PROBE_HEAT_TEST", "Probe Heat Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 2, "Probe heat test done"),
     };
@@ -1697,7 +1719,7 @@ public class Bbs757SpringControlsTests
             CanWrite = io.CanWrite, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
             ReadFresh = (_, _) => throw new InvalidOperationException("no link"),
         };
-        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing };
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing, NowMs = () => 0 };
         var speech = new SpeechCapture();
 
         await def.PressSpringAsync("BBS757_P61_TAKEOFF_CONFIG_TEST", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
@@ -1705,6 +1727,129 @@ public class Bbs757SpringControlsTests
         // Never read at neutral: three releases, then one every 2 s for 60 s; never "done".
         Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Concat(Enumerable.Repeat(ConfigRelease, 3 + 30)), sim.Writes);
         Assert.Equal(new[] { ConfigDidNotReturn }, speech.All);
+    }
+
+    // ---- The hold ends by real time (fix round 1) ----------------------------------------------------------
+    //
+    // A real 30 ms wait runs about 40 ms (flight-12.md): counted by its waits alone a "3 s" test held about 4 s. The
+    // hold ends by whichever comes first of the waits asked and the definition's clock (NowMs); the fakes' waits take
+    // no time, so every sequence above is unchanged.
+
+    [Fact]
+    public async Task A_test_whose_waits_run_long_is_released_at_3_s_of_real_time()
+    {
+        var rig = new Rig().FollowingWrites();
+        rig.DelayTakes = ms => ms + 10;   // each 30 ms wait takes 40 ms
+        long releasedAt = -1;
+        var follow = rig.Sim.OnWrite;
+        rig.Sim.OnWrite = rpn =>
+        {
+            follow?.Invoke(rpn);
+            if (rpn == ConfigRelease && releasedAt < 0) releasedAt = rig.Now;
+        };
+
+        await rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST").WaitAsync(Ceiling);
+
+        // Written at 0, 40, ... 2,960 ms of real time: 75 writes; the 75th wait reaches 3,000 ms and the release goes.
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, 75).Append(ConfigRelease), rig.Sim.Writes);
+        Assert.Equal(Enumerable.Repeat(30, 75).Append(250), rig.Sim.Delays);
+        Assert.Equal(3000, releasedAt);
+        Assert.Equal(new[] { "Takeoff config test done" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_test_hold_never_outlasts_3_s_of_real_time_whatever_the_waits()
+    {
+        // A wait that runs far long (a busy UI thread): no write once 3 s have passed, and the gap is what is left.
+        var rig = new Rig().FollowingWrites();
+        rig.DelayTakes = ms => ms == 30 ? 1000 : 0;
+        long releasedAt = -1;
+        var follow = rig.Sim.OnWrite;
+        rig.Sim.OnWrite = rpn =>
+        {
+            follow?.Invoke(rpn);
+            if (rpn == ConfigRelease && releasedAt < 0) releasedAt = rig.Now;
+        };
+
+        await rig.Press("BBS757_P61_TAKEOFF_CONFIG_TEST").WaitAsync(Ceiling);
+
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, 3).Append(ConfigRelease), rig.Sim.Writes);   // at 0, 1,000 and 2,000 ms
+        Assert.Equal(new[] { 30, 30, 30, 250 }, rig.Sim.Delays);
+        Assert.Equal(3000, releasedAt);
+    }
+
+    [Fact]
+    public async Task A_trim_whose_waits_run_long_is_released_at_1_s_of_real_time()
+    {
+        // The trims follow the same rule: their second wait is what is left of the second, not another 500 ms.
+        var rig = new Rig().FollowingWrites();
+        rig.DelayTakes = ms => ms == 500 ? 530 : ms;   // the first wait runs 30 ms long
+        rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 0.85;
+        long releasedAt = -1;
+        var follow = rig.Sim.OnWrite;
+        rig.Sim.OnWrite = rpn =>
+        {
+            follow?.Invoke(rpn);
+            if (rpn == RudderRelease && releasedAt < 0) releasedAt = rig.Now;
+        };
+
+        await rig.Press("BBS757_RUDDER_TRIM_RIGHT").WaitAsync(Ceiling);
+
+        Assert.Equal(new[] { RudderRight, RudderRight, RudderRelease }, rig.Sim.Writes);
+        Assert.Equal(new[] { 500, 470, 250, 500 }, rig.Sim.Delays);   // 530 ms in, 470 ms are left
+        Assert.Equal(1000, releasedAt);
+        Assert.Equal(new[] { "Rudder trim 0.9 units right" }, rig.Speech.All);
+    }
+
+    // ---- A press that fails part-way (fix round 1) ----------------------------------------------------------
+
+    /// <summary>An announcer whose first <c>Announce</c> throws (a screen reader that failed), recording every phrase it was asked to say.</summary>
+    private sealed class FailingFirstSpeech : ScreenReaderAnnouncer
+    {
+        public FailingFirstSpeech() : base(IntPtr.Zero) { }
+
+        public List<string> Asked { get; } = new();
+
+        public override void Announce(string message)
+        {
+            Asked.Add(message);
+            if (Asked.Count == 1) throw new InvalidOperationException("speech failed");
+        }
+
+        public override void AnnounceImmediate(string message) => Asked.Add(message);
+    }
+
+    [Fact]
+    public async Task A_test_that_ran_says_nothing_more_when_its_press_fails_after_the_writes()
+    {
+        var sim = new Bbs757FakeIo();
+        sim.Fresh[ConfigVar] = 1;
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => sim.Io, NowMs = () => 0 };
+        var speech = new FailingFirstSpeech();
+
+        await def.PressSpringAsync("BBS757_P61_TAKEOFF_CONFIG_TEST", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
+
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Append(ConfigRelease), sim.Writes);   // it ran and was released
+        Assert.Equal(new[] { "Takeoff config test done" }, speech.Asked);   // never "… unavailable" after a test that ran
+    }
+
+    [Fact]
+    public async Task A_test_press_that_fails_before_any_write_is_refused_aloud()
+    {
+        var sim = new Bbs757FakeIo();
+        var io = sim.Io;
+        var failing = new Bbs757SimIo
+        {
+            CanWrite = () => throw new InvalidOperationException("no link"),
+            ReadFresh = io.ReadFresh, Cached = io.Cached, Write = io.Write, RequestRead = io.RequestRead, Delay = io.Delay,
+        };
+        var def = new BBS757Definition(MapOf(ModeSelect())) { NestRunning = () => true, WriteIo = _ => failing, NowMs = () => 0 };
+        var speech = new SpeechCapture();
+
+        await def.PressSpringAsync("BBS757_P61_TAKEOFF_CONFIG_TEST", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
+
+        Assert.Empty(sim.Writes);
+        Assert.Equal(new[] { "Takeoff Config Test 3 s unavailable" }, speech.All);
     }
 
     // ---- The lamp test (the Warning Test button): it latches, so the press reads it back -------------------
@@ -1846,5 +1991,53 @@ public class Bbs757SpringControlsTests
 
         Assert.Equal(new[] { other.Press!, other.Release! }, rig.Sim.Writes);
         Assert.Equal(new[] { "Other Test pressed" }, rig.Speech.All);   // read nothing back
+    }
+
+    [Fact]
+    public void A_warning_test_that_is_not_a_button_is_left_to_the_generic_path()
+    {
+        // A regenerated map that made it a toggle: picked as a position (settle, fresh read, one press, re-read), never read back as the lamp test.
+        var toggle = WarningTest();
+        toggle.Kind = Bbs757Kinds.Toggle;
+        toggle.Release = null;
+        toggle.Positions = new List<Bbs757Position> { new(0, "Off"), new(1, "On") };
+        var rig = new Rig(toggle);
+        rig.Sim.Fresh[WarningTestNode] = 0;
+        rig.Sim.Fresh[LampTestVar] = 1;
+
+        Assert.True(rig.Click(WarningTestNode));
+
+        Assert.Equal(new[] { LampTestPress }, rig.Sim.Writes);
+        Assert.Equal(new[] { 300, 1500 }, rig.Sim.Delays);   // the pick's settle and its read-back, not the lamp test's 200 and 500
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_guarded_warning_test_is_left_to_the_generic_path()
+    {
+        // A guard the map does not list: the generic path refuses aloud and sends nothing; the lamp test would have pressed.
+        var guarded = WarningTest();
+        guarded.Guard = "B757_OVHD_WARNING_TEST_GUARD";
+        var rig = new Rig(guarded);
+        rig.Sim.Fresh[LampTestVar] = 1;
+
+        Assert.True(rig.Click(WarningTestNode));
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Equal(new[] { "Warning Test unavailable" }, rig.Speech.All);
+        Assert.Equal(new[] { WarningTestNode }, rig.Sim.Resyncs);
+    }
+
+    [Fact]
+    public void A_map_without_the_warning_test_claims_nothing()
+    {
+        var rig = new Rig();
+        rig.Sim.Fresh[LampTestVar] = 1;
+
+        Assert.False(rig.Def.HandleUIVariableSet(WarningTestNode, 1, new SimVarDefinition(), rig.Manager, rig.Speech));
+
+        Assert.Empty(rig.Sim.Writes);
+        Assert.Empty(rig.Sim.Delays);
+        Assert.Empty(rig.Speech.All);
     }
 }

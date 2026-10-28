@@ -559,9 +559,13 @@ public partial class BBS757Definition
         catch (Exception ex)
         {
             Log.Error("BBS757", $"{button.Label}: press failed: {ex.Message}");
+            // Before any write: refused. After it: a trim's readout as unread; a P61 test ran and was released, so
+            // nothing more is said (logged only). Nothing once switched away.
             if (!_lifetime.IsCancellationRequested)
-                announcer.Announce(wrote && control.ReadoutKey != null ? Bbs757SpringControls.ReadoutPhrase(control, null)
-                    : Bbs757SpringControls.UnavailablePhrase(button.Label));
+            {
+                if (!wrote) announcer.Announce(Bbs757SpringControls.UnavailablePhrase(button.Label));
+                else if (control.ReadoutKey != null) announcer.Announce(Bbs757SpringControls.ReadoutPhrase(control, null));
+            }
         }
         finally
         {
@@ -623,24 +627,30 @@ public partial class BBS757Definition
 
     /// <summary>
     /// Holds the switch: <paramref name="hold"/> now and again every <see cref="Bbs757SpringControl.RewriteMs"/> (not
-    /// once switched away), then the verified release at <see cref="Bbs757SpringControl.HoldMs"/>: a trim or the cabin
-    /// switch at 0 and 500 ms, released at 1,000 ms; a P61 test at 0, 30, ... 2,970 ms, released at 3,000 ms. The time
-    /// is the sum of the waits asked (each is a little longer in practice: the 30 ms ones measured about 40 ms). The
-    /// waits are never canceled, so a switch away still waits out the hold before the release, and a hold that fails
-    /// part-way is released at once. True when the switch reads its rest value afterwards. Never throws.
+    /// once switched away), then the verified release once <see cref="Bbs757SpringControl.HoldMs"/> has passed: a trim
+    /// or the cabin switch at 0 and 500 ms, released at 1,000 ms; a P61 test at 0, 30, ... 2,970 ms, released at
+    /// 3,000 ms. The hold ends by whichever comes first of the waits asked and the real time on <see cref="NowMs"/>:
+    /// each real wait runs a little long (a 30 ms one measured about 40 ms), so a hold counted by its waits alone would
+    /// run about 4 s; with real 40 ms waits a test writes about 75 times and is released at 3,000 ms. Each gap is the
+    /// re-write gap or what is left of the hold, whichever is shorter, never under 1 ms. The waits are never canceled,
+    /// so a switch away still waits out the hold before the release, and a hold that fails part-way is released at
+    /// once. True when the switch reads its rest value afterwards. Never throws.
     /// </summary>
     private async Task<bool> HoldSpringAsync(Bbs757SpringControl control, string hold, string release, Bbs757SimIo io)
     {
         try
         {
+            long start = NowMs();
             io.Write(hold);
-            for (int held = 0; held < control.HoldMs;)
+            long asked = 0, elapsed = 0;   // the waits asked, and the real time since the first write
+            while (Math.Max(asked, elapsed) < control.HoldMs)
             {
                 // At least 1 ms: a table error (a gap of 0) must not spin.
-                int gap = Math.Max(1, Math.Min(control.RewriteMs, control.HoldMs - held));
-                await io.Delay(gap, CancellationToken.None);
-                held += gap;
-                if (held < control.HoldMs && !_lifetime.IsCancellationRequested) io.Write(hold);
+                long gap = Math.Max(1, Math.Min(control.RewriteMs, control.HoldMs - Math.Max(asked, elapsed)));
+                await io.Delay((int)gap, CancellationToken.None);
+                asked += gap;
+                elapsed = NowMs() - start;
+                if (asked < control.HoldMs && elapsed < control.HoldMs && !_lifetime.IsCancellationRequested) io.Write(hold);
             }
         }
         catch (Exception ex)
@@ -700,12 +710,14 @@ public partial class BBS757Definition
     /// <summary>
     /// A panel press of the map's Warning Test (<see cref="Bbs757LampTest.Node"/>): claimed here, ahead of the generic
     /// map path, so its press reads the lamp test back (<see cref="PressLampTestAsync"/>) instead of saying "Warning
-    /// Test pressed". A map without the node, or with it as anything but a button, leaves it to the generic path.
+    /// Test pressed". A map without the node, with it as anything but a button, or with a guard on it (the generic
+    /// path's <see cref="SetGuardedAsync"/>) leaves it to the generic path.
     /// </summary>
     private void HandleLampTestSet(string varKey, SimConnectManager sim, ScreenReaderAnnouncer announcer, ref bool handled)
     {
         if (varKey != Bbs757LampTest.Node) return;
-        if (!_byNode.TryGetValue(varKey, out var control) || !Bbs757Write.IsMomentary(control)) return;
+        if (!_byNode.TryGetValue(varKey, out var control) || !Bbs757Write.IsMomentary(control)
+            || !string.IsNullOrWhiteSpace(control.Guard)) return;
         handled = true;
         _ = PressLampTestAsync(control, WriteIoFor(sim), announcer);   // never throws: it catches and logs
     }

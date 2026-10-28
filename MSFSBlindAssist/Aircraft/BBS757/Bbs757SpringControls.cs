@@ -430,8 +430,8 @@ public static class Bbs757SpringControls
         new Bbs757SpringButton("BBS757_P61_LOWER_EQUIP_COOLING_TEST", EquipCoolingTest, true, "Lower Equipment Cooling Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_UPPER_YAW_DAMPER_TEST", YawDamperTest, false, "Upper Yaw Damper Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_LOWER_YAW_DAMPER_TEST", YawDamperTest, true, "Lower Yaw Damper Test 3 s"),
-        new Bbs757SpringButton("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, false, "Upper Duct Leak Fuel Qty Test 3 s"),
-        new Bbs757SpringButton("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, true, "Lower Duct Leak Fuel Qty Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, false, "Upper Duct Leak Fuel Quantity Test 3 s"),
+        new Bbs757SpringButton("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, true, "Lower Duct Leak Fuel Quantity Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_WING_AI_TEST", WingAntiIceProbeHeatTest, false, "Wing Anti-ice Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_PROBE_HEAT_TEST", WingAntiIceProbeHeatTest, true, "Probe Heat Test 3 s"),
     };
