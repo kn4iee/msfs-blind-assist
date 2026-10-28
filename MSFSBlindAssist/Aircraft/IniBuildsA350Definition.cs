@@ -248,9 +248,10 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     return true;
                 }
             }
-            else if (_buttonStates.TryGetValue(varKey, out var state) && Cached(sim, KeyForInput(state.Var)) is double value)
+            else if (_buttonStates.TryGetValue(varKey, out var state)
+                     && state.Vars.Select(v => Cached(sim, KeyForInput(v))).ToList() is var values && values.All(v => v.HasValue))
             {
-                stateText = state.Word(value);
+                stateText = state.Words(values.Select(v => v!.Value).ToList());
                 return true;
             }
         }
@@ -388,13 +389,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         // What a button with no light reads on its label; the label repaints with it.
         foreach (var (rowKey, state) in _buttonStates)
         {
-            if (!_keyByName.ContainsKey(state.Var))
+            foreach (var name in state.Vars.Where(v => !_keyByName.ContainsKey(v)))
             {
-                Register(A350PanelLamps.InputKey(state.Var), state.Var, state.Var, null);
-                _lampInputKeys.Add(A350PanelLamps.InputKey(state.Var));   // consumed silently
+                Register(A350PanelLamps.InputKey(name), name, name, null);
+                _lampInputKeys.Add(A350PanelLamps.InputKey(name));   // consumed silently
             }
             if (vars.TryGetValue(rowKey, out var rowDef))
-                rowDef.StateVariables = new[] { _keyByName[state.Var] };
+                rowDef.StateVariables = state.Vars.Select(v => _keyByName[v]).ToArray();
         }
 
         // A light streams its rule's first variable under its own key, which carries its status line; its rule's other

@@ -74,8 +74,6 @@ public class A350ButtonStateTests
     [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", "XMLVAR_Baro1_Mode", 0, "QNH")]
     [InlineData("A350_FCU_SPD_KNOB_PULL", "INI_MANAGED_SPEED", 1, "Managed")]
     [InlineData("A350_FCU_SPD_KNOB_PUSH", "INI_MANAGED_SPEED", 0, "Selected")]
-    [InlineData("A350_FCU_HDG_KNOB_PUSH", "INI_ROLL_MODE", 1, "Managed")]
-    [InlineData("A350_FCU_HDG_KNOB_PULL", "INI_ROLL_MODE", 2, "Selected")]
     [InlineData("A350_FCU_ALT_KNOB_PUSH", "INI_FCU_ALT_DOT", 1, "Managed")]
     [InlineData("A350_FCU_VS_KNOB_PULL", "INI_PITCH_MODE", 8, "Engaged")]
     [InlineData("A350_FCU_VS_KNOB_PUSH", "INI_PITCH_MODE", 12, "Not engaged")]
@@ -84,6 +82,27 @@ public class A350ButtonStateTests
         _cache[_def.KeyForInput(var)] = value;
         Assert.Equal(expected, State(row));
         Assert.Contains(_def.KeyForInput(var), _def.GetVariables()[row].StateVariables!);   // the label repaints with it
+    }
+
+    // The heading knob reads managed while NAV is engaged (INI_ROLL_MODE 1, even with a heading preset in the window
+    // during a NAV turn, dot 0) or armed (the window's managed dot, INI_FCU_HDG_DOT: on the ground before takeoff the
+    // FCU shows dashes and the dot while no lateral mode is engaged yet, roll mode 0). Live 2026-10-28: on the stand
+    // with NAV armed it read "Selected"; in flight a pull gave roll mode 2 and dot 0, a push roll mode 1 and dot 1.
+    [Theory]
+    [InlineData(1, 0, "Managed")]    // NAV engaged, a heading preset in the window
+    [InlineData(1, 1, "Managed")]    // NAV engaged
+    [InlineData(2, 0, "Selected")]   // HDG
+    [InlineData(0, 1, "Managed")]    // on the ground, NAV armed
+    [InlineData(0, 0, "Selected")]   // on the ground, a heading selected
+    public void The_heading_knob_reads_nav_engaged_or_armed_as_managed(double rollMode, double dot, string expected)
+    {
+        _cache[_def.KeyForInput("INI_ROLL_MODE")] = rollMode;
+        _cache[_def.KeyForInput("INI_FCU_HDG_DOT")] = dot;
+        Assert.Equal(expected, State("A350_FCU_HDG_KNOB_PUSH"));
+        Assert.Equal(expected, State("A350_FCU_HDG_KNOB_PULL"));
+        var repaint = _def.GetVariables()["A350_FCU_HDG_KNOB_PUSH"].StateVariables!;
+        Assert.Contains(_def.KeyForInput("INI_ROLL_MODE"), repaint);
+        Assert.Contains(_def.KeyForInput("INI_FCU_HDG_DOT"), repaint);
     }
 
     [Fact]

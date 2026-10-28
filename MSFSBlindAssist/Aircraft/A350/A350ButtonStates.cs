@@ -1,8 +1,11 @@
 namespace MSFSBlindAssist.Aircraft.A350;
 
-/// <summary>A button with no light of its own whose state the cockpit shows elsewhere: the variable it reads, and the
-/// word for each value.</summary>
-internal sealed record A350ButtonState(string Var, Func<double, string> Word);
+/// <summary>A button with no light of its own whose state the cockpit shows elsewhere: the variables it reads (all read
+/// before it says anything), and the word for their values.</summary>
+internal sealed record A350ButtonState(IReadOnlyList<string> Vars, Func<IReadOnlyList<double>, string> Words)
+{
+    public A350ButtonState(string var, Func<double, string> word) : this(new[] { var }, v => word(v[0])) { }
+}
 
 /// <summary>
 /// What a button row reads on its label (the owner's rule, 2026-10-27: a button shows its state where the cockpit shows
@@ -15,8 +18,10 @@ internal sealed record A350ButtonState(string Var, Func<double, string> Word);
 internal static class A350ButtonStates
 {
     private static readonly A350ButtonState Speed = new("INI_MANAGED_SPEED", v => v >= 0.5 ? "Managed" : "Selected");
-    private static readonly A350ButtonState Heading =
-        new("INI_ROLL_MODE", v => Math.Abs(v - A350TypedEntry.NavRollMode) < 0.5 ? "Managed" : "Selected");
+    // Managed while NAV is engaged (a heading preset in a NAV turn shows a number, dot 0) or armed: on the ground before
+    // takeoff the FCU shows dashes and the managed dot (INI_FCU_HDG_DOT) while no lateral mode is engaged (live 2026-10-28).
+    private static readonly A350ButtonState Heading = new(new[] { "INI_ROLL_MODE", "INI_FCU_HDG_DOT" },
+        v => Math.Abs(v[0] - A350TypedEntry.NavRollMode) < 0.5 || v[1] >= 0.5 ? "Managed" : "Selected");
     private static readonly A350ButtonState Altitude = new("INI_FCU_ALT_DOT", v => v >= 0.5 ? "Managed" : "Selected");
     private static readonly A350ButtonState Vertical = new("INI_PITCH_MODE",
         v => Math.Abs(v - A350TypedEntry.VsPitchMode) < 0.5 || Math.Abs(v - A350TypedEntry.FpaPitchMode) < 0.5 ? "Engaged" : "Not engaged");
