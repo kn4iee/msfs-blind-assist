@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "navdb";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "navdb" or "memfind" or "memread";
 
     public static int Run(string mode, string[] args)
     {
@@ -32,11 +32,57 @@ internal static class DisplayModes
             case "pfdlisten": return PfdListen(args);
             case "mfdlines": return MfdLines(args);
             case "navdb": return NavDb(args);
+            case "memfind": return MemFind(args);
+            case "memread": return MemRead(args);
             default: return 2;
         }
     }
 
     /// <summary>`snapshot out.bin [more.bin ...]`: locate the A350 in the sim and save copies (prototype format).</summary>
+    /// <summary>A live read-only copy of the A350's memory ([A350-1]), or null when the A350 is not running.</summary>
+    private static A350MemoryCopy? LiveCopy()
+    {
+        var src = A350ModuleCache.FindInstalledModule();
+        if (src == null) { Console.WriteLine("A350 module not found"); return null; }
+        var facts = A350ModuleFacts.From(A350WasmModule.Parse(File.ReadAllBytes(src)));
+        var reader = new A350MemoryReader(facts.Anchors);
+        if (!reader.TryLocate()) { Console.WriteLine("A350 not found in the sim"); reader.Dispose(); return null; }
+        var copy = reader.Snapshot();
+        reader.Dispose();
+        return copy;
+    }
+
+    /// <summary>`memfind TEXT...`: the linear addresses where each text sits in a live copy, as ASCII and as UTF-16
+    /// (to find a state a display does not draw, such as the RMP's keypad entry).</summary>
+    private static int MemFind(string[] args)
+    {
+        if (LiveCopy() is not { } copy) return 1;
+        foreach (var text in args)
+            foreach (var (name, bytes) in new[] { ("ascii", System.Text.Encoding.ASCII.GetBytes(text)), ("utf16", System.Text.Encoding.Unicode.GetBytes(text)) })
+                for (int r = 0; r < copy.Regions.Count; r++)
+                {
+                    var span = copy.RegionBytes(r);
+                    for (int at = span.IndexOf(bytes), from = 0; at >= 0; from += at + 1, at = span[from..].IndexOf(bytes))
+                        Console.WriteLine($"{text}	{name}	{copy.Regions[r].Linear + (uint)(from + at)}");
+                }
+        return 0;
+    }
+
+    /// <summary>`memread LINEAR[:COUNT]...`: bytes at linear addresses in a live copy, as hex and ASCII.</summary>
+    private static int MemRead(string[] args)
+    {
+        if (LiveCopy() is not { } copy) return 1;
+        foreach (var a in args)
+        {
+            var p = a.Split(':');
+            uint linear = uint.Parse(p[0]);
+            var bytes = copy.Read(linear, p.Length > 1 ? int.Parse(p[1]) : 32).ToArray();
+            string ascii = new(bytes.Select(b => b is >= 32 and < 127 ? (char)b : '.').ToArray());
+            Console.WriteLine($"{linear}	{Convert.ToHexString(bytes)}	{ascii}");
+        }
+        return 0;
+    }
+
     private static int Snapshot(string[] args)
     {
         var src = A350ModuleCache.FindInstalledModule();

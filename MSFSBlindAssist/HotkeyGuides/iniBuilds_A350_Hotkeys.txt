@@ -223,15 +223,21 @@ OIS (the A350's EFB, one on each side):
 
 Radios (the A380's keys):
   Ctrl+Shift+R  Open the RMP window: the chosen RMP's screen (each radio's active and
-                standby frequency, the squawk) as lines, kept up to date; after a key
-                the lines that changed are spoken. Type a frequency: the digits and the
-                point go to the cockpit RMP's keypad as you type (the leading 1 and the
-                point are optional: 2 1 9 is 121.900). Control+1, 2 or 3 picks the radio
-                line; Enter loads the typed frequency as its standby; Alt+1, 2 or 3 swaps
-                that line's standby in. Backspace is CLR. Alt+V, H, L, N, U press the VHF,
-                HF, TEL, NAV and MENU page keys. Alt+T, then four digits 0 to 7: the
-                squawk, set on the fourth digit (Escape cancels). The RMP box picks the
-                Captain's RMP, the First Officer's or RMP 3; F5 refreshes, Escape closes.
+                standby frequency, the squawk) as lines, kept up to date. Control+1, 2
+                or 3 picks the radio line. Type a frequency: the digits and the point go
+                to the cockpit RMP's keypad as you type (the leading 1 and the point are
+                optional: 2 1 9 is 121.900, 8 7 is 118.700); the first digit selects the
+                line on the RMP, as the manual does. The RMP never shows what is typed,
+                so Backspace deletes the last digit and says what is left. Enter loads
+                the frequency as the line's standby and reads the line back ("standby
+                unchanged" when the RMP refused it); Alt+1, 2 or 3 swaps that line's
+                standby in and reads it back. A frequency typed and not loaded is
+                deleted when you press another key ("272 cleared"). Alt+V, H, L, N, U
+                press the VHF, HF, TEL, NAV and MENU page keys (the A350 draws only the
+                VHF page: the others say "screen unchanged"). Alt+T, then four digits 0
+                to 7: the squawk, set on the fourth digit (Escape cancels). The RMP box
+                picks the Captain's RMP, the First Officer's or RMP 3; F5 refreshes,
+                Escape closes.
                 Every RMP key, microphone key, volume knob and reception (the knob pulled
                 out) is also on the Pedestal's Captain RMP, First Officer RMP and RMP 3
                 panels.

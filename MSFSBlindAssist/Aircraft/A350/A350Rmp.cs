@@ -35,6 +35,14 @@ public static class A350Rmp
         return code.Aggregate(0, (bcd, c) => (bcd << 4) | (c - '0'));
     }
 
+    /// <summary>What a page key's fresh draw says: up to three lines it changed, or that it changed nothing (iniBuilds
+    /// 1.2.7's RMP draws only its VHF page: HF, TEL, SQWK, MENU and NAV leave the screen as it was, live).</summary>
+    public static string PageReadBack(string page, IReadOnlyList<string> before, IReadOnlyList<string> after)
+    {
+        var changed = after.Where(l => !before.Contains(l)).Take(3).ToList();
+        return changed.Count > 0 ? string.Join(". ", changed) : $"{page} page: screen unchanged";
+    }
+
     /// <summary>The gauge an RMP's screen is drawn by (RMP#0 is RMP 1).</summary>
     public static (string Gauge, int Index) Gauge(int rmp) => ("RMP", rmp - 1);
 }

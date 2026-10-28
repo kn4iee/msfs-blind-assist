@@ -67,6 +67,30 @@ public class A350RmpTests
         Assert.DoesNotContain(System.Windows.Forms.Keys.T, MSFSBlindAssist.Forms.A350.A350RmpWindow.PageKeys.Keys);   // T is the squawk
     }
 
+    // A page key's result is what its fresh draw changed; iniBuilds 1.2.7's RMP draws only its VHF page, so the other
+    // page keys change nothing, which is said rather than left silent.
+    [Fact]
+    public void A_page_key_reads_the_lines_it_changed()
+    {
+        var before = new[] { "VHF1: active 121.900, white; standby 118.700, cyan", "SQUAWK : 2000 - STBY, white" };
+        var after = new[] { "VHF1: active 121.900, white; standby 122.800, cyan", "SQUAWK : 2000 - STBY, white" };
+        Assert.Equal("VHF1: active 121.900, white; standby 122.800, cyan", A350Rmp.PageReadBack("VHF", before, after));
+    }
+
+    [Fact]
+    public void A_page_key_that_changed_nothing_says_so()
+    {
+        var lines = new[] { "VHF1: active 121.900, white; standby 118.700, cyan" };
+        Assert.Equal("HF page: screen unchanged", A350Rmp.PageReadBack("HF", lines, lines));
+    }
+
+    [Fact]
+    public void A_page_key_reads_at_most_three_changed_lines()
+    {
+        var after = new[] { "a", "b", "c", "d" };
+        Assert.Equal("a. b. c", A350Rmp.PageReadBack("NAV", Array.Empty<string>(), after));
+    }
+
     [Fact]
     public void Each_rmp_draws_on_its_own_gauge()
     {

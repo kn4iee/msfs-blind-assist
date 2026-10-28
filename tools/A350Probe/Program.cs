@@ -180,6 +180,67 @@ internal sealed class ProbeForm : Form
 
     private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("0.###") : "null";
 
+    /// <summary>`rmpwin "keys"`: MSFSBA's RMP window (Ctrl+Shift+R) with the delegates the hotkey passes (the background
+    /// monitor's latest draw, a fresh draw, the unique calculator sender), fed keys as the pilot types them, space-separated:
+    /// a digit or ".", enter, back, esc, f5, ctrl+N, alt+N, alt+LETTER, wait:MS, rmp:N (the RMP box). Prints what the window
+    /// says, then its lines.</summary>
+    private async Task RunRmpWindow(Cap cap)
+    {
+        using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+        service.Start();
+        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
+            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
+            await Task.Delay(500);
+        Line($"displays: {service.State} {service.Reason}");
+        using var monitor = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
+            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(), _ => true, _ => { });
+        monitor.Start();
+        await Task.Delay(4000);   // a turn of the monitor's rotation, so the window opens on a latest draw
+        var window = new MSFSBlindAssist.Forms.A350.A350RmpWindow(
+            rmp => monitor.Latest(MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp).Gauge, MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp).Index),
+            async rmp => (await service.DrawAsync(MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
+            rpn => _m!.ExecuteCalculatorCodeUnique(rpn), cap);
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var list = (Control)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_list", flags)!.GetValue(window)!;
+        var side = (ComboBox)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_side", flags)!.GetValue(window)!;
+        var process = typeof(Control).GetMethod("ProcessCmdKey", flags)!;
+        window.Show();
+        await Task.Delay(1500);
+        window.ActiveControl = list;
+        var started = DateTime.Now;
+        void Said() { foreach (var s in cap.DrainList()) Line($"{(DateTime.Now - started).TotalSeconds,6:0.0}s\tsaid: {s}"); }
+        static Keys? KeyOf(string t) => t switch
+        {
+            "enter" => Keys.Enter, "back" => Keys.Back, "esc" => Keys.Escape, "f5" => Keys.F5, "." => Keys.OemPeriod,
+            _ when t.StartsWith("ctrl+") => Keys.Control | KeyOf(t[5..]),
+            _ when t.StartsWith("alt+") => Keys.Alt | KeyOf(t[4..]),
+            _ when t.Length == 1 && char.IsDigit(t[0]) => Keys.D0 + (t[0] - '0'),
+            _ when t.Length == 1 && char.IsLetter(t[0]) => Keys.A + (char.ToUpperInvariant(t[0]) - 'A'),
+            _ => null,
+        };
+        foreach (var token in _arg!.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.StartsWith("wait:")) { await Task.Delay(int.Parse(token[5..])); Said(); continue; }
+            if (token.StartsWith("rmp:")) { side.SelectedIndex = int.Parse(token[4..]) - 1; Line($"rmp {token[4..]}"); await Task.Delay(250); Said(); continue; }
+            if (KeyOf(token) is not Keys keys) { Line($"unknown key {token}"); continue; }
+            if (window.IsDisposed) { Line($"{token}: the window is closed"); continue; }
+            process.Invoke(window, new object[] { new Message(), keys });
+            Line($"{(DateTime.Now - started).TotalSeconds,6:0.0}s\tkey {token}");
+            await Task.Delay(250);   // a pilot's typing pace
+            Said();
+        }
+        await Task.Delay(3000);
+        Said();
+        if (!window.IsDisposed)
+        {
+            foreach (var line in (IReadOnlyList<string>)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_lines", flags)!.GetValue(window)!)
+                Line($"screen\t{line}");
+            window.Close();
+        }
+        await Task.Delay(2500);   // the entry's deletion on close is sent after the window goes
+        Said();
+    }
+
     private async Task Run()
     {
         if (_mode == "ois")
@@ -317,6 +378,12 @@ internal sealed class ProbeForm : Form
             }
             foreach (var name in _watch)
                 Line($"{name}\t{Fmt(await Read("W:" + name))}");
+            return;
+        }
+
+        if (_mode == "rmpwin")
+        {
+            await RunRmpWindow(cap);
             return;
         }
 

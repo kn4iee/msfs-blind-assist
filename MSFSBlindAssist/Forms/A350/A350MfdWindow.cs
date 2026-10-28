@@ -35,6 +35,7 @@ public sealed class A350MfdWindow : Form
     private readonly IntPtr _previousWindow;
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
     private string? _lastScratchpad;
+    private readonly A350ShownCapture _shown = new();
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
 
@@ -98,9 +99,14 @@ public sealed class A350MfdWindow : Form
         try
         {
             // A failed draw (a torn copy traps the draw code: no texts) is no page: keep to the last good one, never
-            // "off", which only a good, empty draw means.
+            // "off", which only a good, empty draw means; the monitor's latest from before a fresh draw is older than it.
             var cap = now ? await _drawNow() : null;
-            if (cap is not { Ok: true }) cap = _latest();
+            if (cap is { Ok: true }) _shown.Fresh(_latest());
+            else
+            {
+                cap = _latest();
+                if (_shown.Superseded(cap)) return;
+            }
             if (IsDisposed) return;
             if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
             _lines = A350MfdPage.Read(cap, Side);
