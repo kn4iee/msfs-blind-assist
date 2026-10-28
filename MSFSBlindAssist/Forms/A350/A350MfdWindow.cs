@@ -97,7 +97,10 @@ public sealed class A350MfdWindow : Form
         _busy = true;
         try
         {
-            var cap = now ? await _drawNow() ?? _latest() : _latest();
+            // A failed draw (a torn copy traps the draw code: no texts) is no page: keep to the last good one, never
+            // "off", which only a good, empty draw means.
+            var cap = now ? await _drawNow() : null;
+            if (cap is not { Ok: true }) cap = _latest();
             if (IsDisposed) return;
             if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
             _lines = A350MfdPage.Read(cap, Side);

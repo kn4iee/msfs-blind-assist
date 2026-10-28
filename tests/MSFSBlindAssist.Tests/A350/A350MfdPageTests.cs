@@ -274,6 +274,17 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.StartsWith("TOGA:") || l.StartsWith("VR: +67"));
     }
 
+    // PERF T.O after CONFIRM * TO SPDs (live): the speeds in their fields, and the F, S and green dot speeds; green dot's
+    // label is no text but a drawn green circle (a 20 px square stroke) left of its value.
+    [Fact]
+    public void The_green_dot_speed_takes_its_drawn_symbol_as_label()
+    {
+        var lines = Page("mfd_perf_to_confirmed");
+        foreach (var l in new[] { "V1: 142 KT, cyan", "VR: 143 KT, cyan", "V2: 148 KT, cyan", "F: 138 KT, green", "S: 174 KT, green", "Green dot: 195 KT, green" })
+            Assert.Contains(l, lines);
+        Assert.DoesNotContain("V2: 195 KT, green", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {

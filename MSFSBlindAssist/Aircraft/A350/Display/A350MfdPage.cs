@@ -58,6 +58,11 @@ public static class A350MfdPage
             .Select(p => new Cell(Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         cells = JoinTimes(cells);
+        // The green dot speed's label is no text but a drawn green circle, a small square stroke (PERF T.O, live).
+        foreach (var sh in (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "stroke" && sh.Image == 0
+                     && Mine((sh.X0 + sh.X1) / 2) && A350Rgba.NameOf(sh.Colour) == "green"
+                     && sh.X1 - sh.X0 is >= 14 and <= 26 && Math.Abs(sh.X1 - sh.X0 - (sh.Y1 - sh.Y0)) <= 3))
+            cells.Add(new Cell("Green dot", "white", sh.X0 - shift, sh.Y1, -1));
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy, bool Inherited, bool Above)>();

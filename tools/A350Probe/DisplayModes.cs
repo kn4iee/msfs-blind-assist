@@ -325,6 +325,8 @@ internal static class DisplayModes
                 File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(cap));
         }
         else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        if (!cap.Ok || cap.Texts.Count == 0)
+            Console.WriteLine($"draw: ok={cap.Ok} texts={cap.Texts.Count} elements={cap.Elements.Count} error={cap.Error}");
         foreach (var l in A350MfdPage.Read(cap, int.Parse(args[1])))
             Console.WriteLine($"{l.Kind,-10} {l.ClickX,6:0},{l.ClickY,5:0}  {l.Spoken}");
         return 0;
