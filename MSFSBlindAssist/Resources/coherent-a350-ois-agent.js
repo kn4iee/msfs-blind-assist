@@ -888,10 +888,46 @@
         }
         push(null, { kind: 'static', text: own });
       }
+      var arrived = A.computeAnswer(page, out);
+      if (arrived) out.push({ idx: 0, kind: 'alert', live: 'assertive', text: arrived });
       return JSON.stringify({ ok: true, page: page, elements: out });
     } catch (err) {
       return JSON.stringify({ ok: false, error: String(err && err.message || err) });
     }
+  };
+
+  // COMPUTE (T.O PERF, LDG PERF) answers a few seconds after the press, where a sighted pilot sees the
+  // RESULTS read-outs fill in: the window speaks them once as they arrive, the press's read-back. Only
+  // after a COMPUTE press, on its page, within COMPUTE_WAIT_MS; a COMPUTE ending in an error line says
+  // only the error (its own alert), and results emptied while computing wait for their values.
+  A.COMPUTE_WAIT_MS = 30000;
+  A.lastResults = null;
+  A.pendingCompute = null;
+
+  A.resultLines = function (out) {
+    var lines = [], inResults = false;
+    for (var i = 0; i < out.length; i++) {
+      var it = out[i];
+      if (it.kind === 'heading') { inResults = it.text === 'RESULTS'; continue; }
+      if (inResults && it.kind === 'static' && it.key && it.key.indexOf('readout:') === 0) lines.push(it.text);
+    }
+    return lines;
+  };
+
+  A.computeAnswer = function (page, out) {
+    var lines = A.resultLines(out), sig = lines.join('|');
+    A.lastResults = { page: page, sig: sig };
+    var p = A.pendingCompute;
+    if (!p) return null;
+    if (p.page !== page || Date.now() - p.at > A.COMPUTE_WAIT_MS) { A.pendingCompute = null; return null; }
+    if (sig === p.sig) return null;
+    for (var i = 0; i < out.length; i++)
+      if (out[i].kind === 'alert' && /^ERR\b/.test(out[i].text)) { A.pendingCompute = null; return null; }
+    var filled = false;
+    for (var j = 0; j < lines.length; j++) if (!/: -( |$)/.test(lines[j])) filled = true;
+    if (!filled) { p.sig = sig; return null; }   // emptied while it computes: the values come next
+    A.pendingCompute = null;
+    return 'Results: ' + lines.join(', ');
   };
 
   A.find = function (idx) { return document.body.querySelector('[' + A.ATTR + '="' + idx + '"]'); };
@@ -900,6 +936,8 @@
     try {
       var e = A.find(idx);
       if (!e) return 'missing';
+      if (A.norm(e.innerText) === 'COMPUTE' && A.lastResults)
+        A.pendingCompute = { page: A.lastResults.page, sig: A.lastResults.sig, at: Date.now() };
       A.press(e);
       return 'ok';
     } catch (err) { return 'error: ' + err.message; }
