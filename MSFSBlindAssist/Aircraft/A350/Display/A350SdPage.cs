@@ -26,7 +26,44 @@ public static class A350SdPage
     private static bool IsUnit(DrawnCell c) => c.Colour == "cyan" && Unit.IsMatch(c.Text);
 
     public static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, int page) =>
-        Read(rows, Pages.GetValueOrDefault(page, Array.Empty<SdField>()), ColumnSplit.GetValueOrDefault(page, float.MaxValue));
+        Read(page == StatusPage ? PhaseColumns(rows) : rows, Pages.GetValueOrDefault(page, Array.Empty<SdField>()),
+            ColumnSplit.GetValueOrDefault(page, float.MaxValue));
+
+    private const int StatusPage = 14;
+
+    /// <summary>STATUS: under the ALL PHASES and APPR &amp; LDG headings two columns, read column by column, each item
+    /// with its column's heading, down to the next centred heading (live 2026-10-28: INOP SYS read PART GALLEY, LS 2,
+    /// FWD CARGO VENT, FLAP SYS 1 interleaved by row, no column said).</summary>
+    private static IReadOnlyList<IReadOnlyList<DrawnCell>> PhaseColumns(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
+    {
+        var result = new List<IReadOnlyList<DrawnCell>>();
+        for (int r = 0; r < rows.Count; r++)
+        {
+            var left = rows[r].FirstOrDefault(c => c.Text == "ALL PHASES");
+            var right = rows[r].FirstOrDefault(c => c.Text == "APPR & LDG");
+            if (left == null || right == null) { result.Add(rows[r]); continue; }
+            float split = (left.X + right.X) / 2;
+            bool Heading(IReadOnlyList<DrawnCell> row) => row.Count == 1 && row[0].Colour == "white" && Math.Abs(row[0].X - split) <= 60;
+            var lefts = new List<IReadOnlyList<DrawnCell>>();
+            var rights = new List<IReadOnlyList<DrawnCell>>();
+            int k = r + 1;
+            for (; k < rows.Count && !Heading(rows[k]); k++)
+            {
+                lefts.Add(Under(left.Text, rows[k].Where(c => c.X < split)));
+                rights.Add(Under(right.Text, rows[k].Where(c => c.X >= split)));
+            }
+            result.AddRange(lefts.Concat(rights).Where(row => row.Count > 0));
+            r = k - 1;
+        }
+        return result;
+
+        static IReadOnlyList<DrawnCell> Under(string heading, IEnumerable<DrawnCell> cells)
+        {
+            var ordered = cells.OrderBy(c => c.X).ToList();
+            if (ordered.Count > 0) ordered[0] = ordered[0] with { Text = heading + ": " + ordered[0].Text };
+            return ordered;
+        }
+    }
 
     /// <summary>The SD's bottom line, under every page: TAT, SAT, flight time, UTC, GW, GWCG, FOB.</summary>
     public static IReadOnlyList<string> ReadPermanentData(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>

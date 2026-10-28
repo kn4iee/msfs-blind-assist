@@ -242,9 +242,25 @@ public class A350SdPageTests
         Assert.Contains("Y ACCU, white", p);
     }
 
+    // STATUS: under the ALL PHASES and APPR & LDG headings, two columns, read column by column, each item with its
+    // column's heading (a sighted pilot sees which column an item sits in; the read interleaved them by row).
     [Fact]
-    public void Status_page_reads_as_drawn()
+    public void Status_page_reads_each_item_with_its_column()
     {
-        Assert.Equal(new[] { "STATUS, white", "INOP SYS, white", "ALL PHASES, white", "APPR & LDG, white", "APU, amber" }, Page(14));
+        Assert.Equal(new[] { "STATUS, white", "INOP SYS, white", "ALL PHASES: APU, amber" }, Page(14));
+    }
+
+    // Live 2026-10-28 in the hold at IMPED with AC 2A 115V BUS, FLAPS SYS 1, R TK MAIN PMP and ENG 1 A-ICE
+    // VALVE failed: INFO's lines, then INOP SYS's two columns.
+    [Fact]
+    public void Status_page_reads_info_then_both_columns()
+    {
+        Assert.Equal(new[]
+        {
+            "STATUS, white", "LIMITATIONS, cyan", "INFO, white", "FOR RNP AR : MINIMUM LIMITED TO RNP 0.30, green",
+            "APPR 1 ONLY, green", "INOP SYS, white",
+            "ALL PHASES: PART GALLEY, amber", "ALL PHASES: FWD CARGO VENT, amber", "ALL PHASES: BULK CARGO VENT, amber",
+            "ALL PHASES: R TK MAIN PMP, amber", "APPR & LDG: LS 2, amber", "APPR & LDG: FLAP SYS 1, amber",
+        }, Page(14, "ctr_sd_status_inop_").Take(12));
     }
 }
