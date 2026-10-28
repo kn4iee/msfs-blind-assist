@@ -372,6 +372,7 @@ How the OIS is built, and how each part reads:
 | state drawn in colour | GROUND's door map by the page's key (green Closed, blue Armed, red Open, orange Transit; the OIS listens on the indicator, not the clickspot), the cargo buttons from their door, lights and covers On when green, the avionics bay door Open when red, CHOCKS from the chock pictures, the engine cowls Open when red, a failure Active when `bg-danger`, tyres and brakes as a colour summary; any other painted button says its colour |
 | pictures | the chart and the en-route map read "Chart picture (not readable)", "Map picture (not readable)"; the chart and map icon buttons are named (Zoom in, Pan left, Chart list, Recenter, Map types); the pushback chevrons "Push back, turn left" |
 | company messages | the AOC tree (boxes are buttons, folders headings), a message per row "FLIGHTREPORT, 1016Z, new", the open message line by line |
+| preformatted text | a line an item, broken at a BR or a newline in the text inside any element it holds: the SimBrief OFP (a PRE of bold runs, 3145 lines, no BR) read as one 130 KB item until 2026-10-28 |
 
 Learned on the way:
 

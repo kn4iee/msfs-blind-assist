@@ -154,6 +154,16 @@ internal sealed class ProbeForm : Form
         for (int s = 0; s < steps.Length; s++)
         {
             string step = steps[s].Trim(), find = step, val = "";
+            if (step.StartsWith("eval:"))
+            {
+                // A diagnostic expression in the OIS page, over the client's own inspector socket (one per page, [DBG-9]).
+                var eval = typeof(MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient).GetMethod("EvalAsync",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null,
+                    new[] { typeof(string), typeof(CancellationToken) }, null)!;
+                var result = await (Task<string>)eval.Invoke(client, new object[] { step[5..], CancellationToken.None })!;
+                Line($"--- eval\n{result}");
+                continue;
+            }
             int eq = step.IndexOf('=');
             if (eq > 0) { find = step[..eq]; val = step[(eq + 1)..]; }
             int count = int.Parse(cur["count"]);

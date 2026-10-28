@@ -38,6 +38,7 @@ first seen.
 | terml_chart | TERML CHART before a search (icon controls) |
 | terml_chart_list | TERML CHART after searching VCBI (the sim's charts) |
 | ground | GROUND: passenger doors armed, cargo doors closed, chocks off, pushback arrows |
+| ofp | OFP: the SimBrief OFP, a PRE of 3145 lines broken by newlines in its text (no BR) |
 | ground_light_on | GROUND with the cargo bay light on |
 | aoc | COMPANY COM: the tree, one new message |
 | aoc_message | COMPANY COM with that message open |

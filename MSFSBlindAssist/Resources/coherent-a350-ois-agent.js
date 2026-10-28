@@ -761,11 +761,21 @@
         }
         if (tag === 'PRE') {
           A.own(e);
+          // A line an item: a line breaks at a BR or at a newline in the text, inside any element the PRE holds (the
+          // OFP is a PRE of bold runs and text whose breaks are newlines, no BR: split at BR alone, it was one item).
           var lines = [], cur = '';
-          for (var pc = e.firstChild; pc; pc = pc.nextSibling) {
-            if (pc.nodeType === 1 && pc.tagName === 'BR') { lines.push(cur); cur = ''; }
-            else cur += pc.nodeType === 3 ? pc.nodeValue : A.text(pc);
-          }
+          var walkPre = function (n) {
+            for (var pc = n.firstChild; pc; pc = pc.nextSibling) {
+              if (pc.nodeType === 1 && pc.tagName === 'BR') { lines.push(cur); cur = ''; }
+              else if (pc.nodeType === 1) walkPre(pc);
+              else if (pc.nodeType === 3) {
+                var parts = pc.nodeValue.split('\n');
+                cur += parts[0];
+                for (var pk = 1; pk < parts.length; pk++) { lines.push(cur); cur = parts[pk]; }
+              }
+            }
+          };
+          walkPre(e);
           lines.push(cur);
           for (var li = 0; li < lines.length; li++) {
             var ln = A.norm(lines[li]);
