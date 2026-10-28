@@ -68,10 +68,12 @@ public static class A350MfdPage
         // An open pop-up hides what was drawn under it before it: those texts and controls are not on the screen (SURV's
         // DEFAULT SETTINGS confirmation over the ADS-B TRAFFIC box and the DEFAULT SETTINGS key, live). Open is a
         // PopupDialog with texts of its own drawn after it inside it; a dismissed one keeps its element and draws none.
-        // The CRASH REPORTING consent (EULADialog, over DATA/STATUS after an update) is one too.
+        // The CRASH REPORTING consent (EULADialog, over DATA/STATUS after an update) is one too. Its own texts come first
+        // after it begins, inside it: the dismissed consent dialog sits in every frame, and what is drawn after it (the
+        // FMS system menu beside it, a list over its place) is never its own (review, 2026-10-28).
         var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
         var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class is "PopupDialog" or "EULADialog"
-            && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
+            && cells.Where(c => c.Index >= p.e.TextStart).MinBy(c => c.Index) is { } first && Inside(p.e, first.X, first.Y)).ToList();
         // An open drop-down menu's items (DropdownButtonUI with their own texts drawn after them) hide what they cover,
         // as a pop-up does: ACTIVE's menu over DATA/STATUS's left column (live 2026-10-28).
         var menuItems = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "DropdownButtonUI"
@@ -81,10 +83,15 @@ public static class A350MfdPage
         var revisionPopup = RevisionPopupOf(capture, cells, Mine);
         if (revisionPopup != null)
             cells.RemoveAll(c => c.Index < revisionPopup.Start && Covers(revisionPopup.Column, c.X, c.Y));
+        // It, or the revision menu, covers the F-PLN's TIME, SPD and ALT columns down to its lowest key: the rows read
+        // without them, as a sighted pilot sees them (ReadFlightPlan); the DISCONTINUITY marker shows either side of it.
+        var overlay = RevisionOverlayOf(capture, cells, revisionPopup, Mine, shift);
         // The consent dialog is modal: the slivers of the page left and right of it (DATA/STATUS's NAV DATABASE label,
         // which ran into the dialog's line level with it) are behind it too.
         bool Covers(DrawnElement p, float x, float y) =>
             (p.Class == "EULADialog" || (x >= p.X - shift && x <= p.X - shift + p.RectW)) && y >= p.Y && y <= p.Y + p.RectH;
+        bool Inside(DrawnElement p, float x, float y) =>
+            x >= p.X - shift && x <= p.X - shift + p.RectW && y >= p.Y && y <= p.Y + p.RectH;
         cells.RemoveAll(c => popups.Any(p => c.Index >= 0 && c.Index < p.e.TextStart && Covers(p.e, c.X, c.Y)));
         var hidden = elements.Select((e, i) => (e, i)).Where(q => popups.Any(p => q.i < p.i
             && Covers(p.e, q.e.X - shift + q.e.RectW / 2, q.e.Y + q.e.RectH / 2))).Select(q => q.e).ToHashSet();
@@ -114,7 +121,7 @@ public static class A350MfdPage
 
         bool flightPlan = cells.Any(c => c.Colour == "black" && c.Y < 150 && c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
         if (flightPlan)
-            ReadFlightPlan(capture, shift, Mine, cells.Where(c => !revisionCells.Contains(c)).ToList(), used, lines);
+            ReadFlightPlan(capture, shift, Mine, cells.Where(c => !revisionCells.Contains(c)).ToList(), used, lines, overlay);
 
         foreach (var e in elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)))
         {
@@ -299,7 +306,8 @@ public static class A350MfdPage
 
         var ordered = lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
         if (menuItems.Count > 0)
-            ordered = WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(), shift);
+            ordered = WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(),
+                elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)), shift);
         if (revisionItems.Count > 0)
             ordered = WithRevisionMenuAfterTitle(ordered, revisionItems, shift);
         if (revisionPopup != null)
@@ -312,8 +320,36 @@ public static class A350MfdPage
     private static string ValueOf(string spoken) => spoken.IndexOf(": ", StringComparison.Ordinal) is int at and >= 0 ? spoken[(at + 2)..] : spoken;
 
     /// <summary>An open waypoint revision pop-up: the revision menu's column it draws in, the draw indices of its texts
-    /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR") and its entry fields.</summary>
-    private sealed record RevisionPopup(DrawnElement Column, int Start, int End, string Title, IReadOnlyList<DrawnElement> Fields);
+    /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR"), its entry fields and its lowest edge (its
+    /// CANCEL key's, below the column's own rectangle).</summary>
+    private sealed record RevisionPopup(DrawnElement Column, int Start, int End, string Title, IReadOnlyList<DrawnElement> Fields,
+        float Bottom);
+
+    /// <summary>What an open revision menu or pop-up covers, in the side's own coordinates, and the draw index it starts
+    /// at (what was drawn before it under it is hidden).</summary>
+    private sealed record RevisionOverlay(float X0, float X1, float Y0, float Y1, int Start)
+    {
+        public bool Covers(float x, float y) => x >= X0 && x <= X1 && y >= Y0 && y <= Y1;
+    }
+
+    /// <summary>The revision menu's column while its menu (its items with their texts drawn after them) or one of its
+    /// pop-ups is open, down to the lowest item or pop-up key (the column's rectangle stops above WHAT IF and CANCEL).</summary>
+    private static RevisionOverlay? RevisionOverlayOf(A350DrawCapture capture, List<Cell> cells, RevisionPopup? popup,
+        Func<float, bool> mine, float shift)
+    {
+        var column = popup?.Column
+            ?? capture.Elements.FirstOrDefault(e => e.Class == "UIFlightplanRevisionsMenu" && mine(e.X) && e.RectW > 0 && e.RectH > 0);
+        if (column == null)
+            return null;
+        float x0 = column.X - shift, x1 = x0 + column.RectW;
+        var items = capture.Elements.Where(e => e.Class == RevisionItem && mine(e.X) && e.RectW > 0 && e.RectH > 0
+            && cells.Any(c => c.Index >= e.TextStart && c.X >= e.X - shift && c.X <= e.X - shift + e.RectW
+                && c.Y >= e.Y && c.Y <= e.Y + e.RectH)).ToList();
+        if (popup == null && items.Count == 0)
+            return null;
+        float bottom = Math.Max(column.Y + column.RectH, popup?.Bottom ?? items.Max(e => e.Y + e.RectH));
+        return new RevisionOverlay(x0, x1, column.Y, bottom, popup?.Start ?? column.TextStart);
+    }
 
     /// <summary>
     /// INSERT NEXT WPT and NEW DEST (NextWaypointPopup, NewDestPopup) have no rectangle of their own: they draw in the
@@ -340,9 +376,10 @@ public static class A350MfdPage
                 continue;
             float top = mineTexts.Min(c => c.Y);
             string title = string.Join(" ", mineTexts.Where(c => c.Y - top <= 10).OrderBy(c => c.X).Select(c => c.Text));
-            var fields = all.Skip(i + 1).TakeWhile(e => e.TextStart < end)
-                .Where(e => e.Class is "BaseUITextBox" or "DropdownTextBox" && mine(e.X)).ToList();
-            return new RevisionPopup(column, start, end, title, fields);
+            var own = all.Skip(i + 1).TakeWhile(e => e.TextStart < end).Where(e => mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
+            var fields = own.Where(e => e.Class is "BaseUITextBox" or "DropdownTextBox").ToList();
+            float bottom = own.Select(e => e.Y + e.RectH).Concat(mineTexts.Select(c => c.Y)).Max();
+            return new RevisionPopup(column, start, end, title, fields, bottom);
         }
         return null;
     }
@@ -377,16 +414,26 @@ public static class A350MfdPage
         return result;
     }
 
-    /// <summary>An open drop-down's items read right after the button or menu it hangs from (the one above its column),
-    /// which says the menu is open; a sighted pilot sees the list hanging off it.</summary>
-    private static List<MfdLine> WithMenuAfterItsButton(List<MfdLine> lines, List<DrawnElement> items, float shift)
+    /// <summary>How far an open list may stand from the control it hangs from: RWY's list starts 6 px under its key,
+    /// ACTIVE's flush with it (live).</summary>
+    private const float TouchPx = 10;
+
+    /// <summary>An open drop-down's items read right after the control it hangs from, which says the menu is open; a
+    /// sighted pilot sees the list hanging off it. That control is the one whose edge the list touches (a field's list
+    /// too, and a list opening upward); a list touching none keeps its place and names no owner.</summary>
+    private static List<MfdLine> WithMenuAfterItsButton(List<MfdLine> lines, List<DrawnElement> items, IEnumerable<DrawnElement> controls,
+        float shift)
     {
-        float x0 = items.Min(e => e.X) - shift, x1 = items.Max(e => e.X + e.RectW) - shift, top = items.Min(e => e.Y);
-        bool IsItem(MfdLine l) => items.Any(e => Math.Abs(l.ClickX - (e.X - shift + e.RectW / 2)) < 1
-            && Math.Abs(l.ClickY - (e.Y + e.RectH / 2)) < 1);
+        float x0 = items.Min(e => e.X) - shift, x1 = items.Max(e => e.X + e.RectW) - shift;
+        float top = items.Min(e => e.Y), bottom = items.Max(e => e.Y + e.RectH);
+        bool IsItem(MfdLine l) => items.Any(e => AtCentre(l, e, shift));
+        bool In(MfdLine l, DrawnElement e) =>
+            l.ClickX >= e.X - shift && l.ClickX <= e.X - shift + e.RectW && l.ClickY >= e.Y && l.ClickY <= e.Y + e.RectH;
         var menu = lines.Where(IsItem).ToList();
-        var owner = lines.Where(l => !IsItem(l) && l.Kind is "button" or "menu" && l.ClickY < top && l.ClickX >= x0 && l.ClickX <= x1)
-            .OrderByDescending(l => l.ClickY).FirstOrDefault();
+        var owner = controls.Where(e => !items.Contains(e) && e.X - shift < x1 && e.X - shift + e.RectW > x0
+                && (Math.Abs(e.Y + e.RectH - top) <= TouchPx || Math.Abs(e.Y - bottom) <= TouchPx))
+            .Select(e => lines.FirstOrDefault(l => !IsItem(l) && l.Kind is "button" or "menu" or "field" && In(l, e)))
+            .FirstOrDefault(l => l != null);
         if (owner == null || menu.Count == 0)
             return lines;
         var result = lines.Where(l => !IsItem(l)).ToList();
@@ -409,7 +456,7 @@ public static class A350MfdPage
     /// pilot sees them (the draw goes on below it, hidden); the destination bar as one line.
     /// </summary>
     private static void ReadFlightPlan(A350DrawCapture capture, float shift, Func<float, bool> mine, List<Cell> cells,
-        HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines)
+        HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines, RevisionOverlay? overlay)
     {
         var boxes = capture.Elements.Where(e => mine(e.X) && e.Class == "BaseFlightPlanButton")
             .Select(e => (X: e.X - shift, e.Y, W: e.RectW, H: e.RectH)).ToList();   // none while the plan is empty
@@ -496,9 +543,11 @@ public static class A350MfdPage
             }
             string label = (b.Y < 230 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
             string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
-            lines.Add((b.Y, 0, new MfdLine("waypoint",
-                $"{label}: {legText}{time} {Column(200, 334, colour)}, {spd} {Column(334, 422, colour)}, {alt} {Column(422, 563, colour)}, {colour}",
-                b.X + b.W / 2, b.Y + b.H / 2)));
+            // A column an open revision menu or pop-up covers is left out: hidden, not absent.
+            var columns = new[] { (time, 200f, 334f), (spd, 334f, 422f), (alt, 422f, 563f) }
+                .Where(k => overlay == null || !overlay.Covers(k.Item2 + 1, ident.Y))
+                .Select(k => $"{k.Item1} {Column(k.Item2, k.Item3, colour)}").Append(colour);
+            lines.Add((b.Y, 0, new MfdLine("waypoint", $"{label}: {legText}{string.Join(", ", columns)}", b.X + b.W / 2, b.Y + b.H / 2)));
             prevBottom = b.Y + b.H;
         }
 

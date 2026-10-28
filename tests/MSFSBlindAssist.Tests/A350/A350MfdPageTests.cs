@@ -457,4 +457,96 @@ public class A350MfdPageTests
         Assert.Equal((583.5f, 442f), (fo.ClickX, fo.ClickY));   // in the first officer's own coordinates
         Assert.Equal("FMS 2 menu, cyan", A350MfdPage.Read(Fixture(), 1)[0].Spoken);
     }
+
+    private static A350DrawCapture Load(string fixture) => JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+        ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!;
+
+    /// <summary>A drop-down opened on a capture, drawn where an open menu's is (ACTIVE's, live): its items
+    /// (DropdownButtonUI) and their texts right after the element they hang from, <paramref name="after"/>, each item
+    /// <paramref name="height"/> tall from <paramref name="top"/>; what is drawn later moves down the draw order.</summary>
+    private static A350DrawCapture WithDropdown(A350DrawCapture cap, int after, float x, float top, float width, float height,
+        params string[] items)
+    {
+        int at = after + 1 < cap.Elements.Count ? cap.Elements[after + 1].TextStart : cap.Texts.Count;
+        var elements = cap.Elements.Select((e, i) => i > after ? e with { TextStart = e.TextStart + items.Length } : e).ToList();
+        var texts = cap.Texts.ToList();
+        var white = new A350Rgba(1, 1, 1, 1);
+        for (int i = 0; i < items.Length; i++)
+        {
+            float y = top + i * height;
+            elements.Insert(after + 1 + i, new DrawnElement(0, "DropdownButtonUI", x, y, width, height, x, y, at + i));
+            texts.Insert(at + i, new DrawnText(items[i], x + 6, y + height * 0.7f, x + 6, y + height * 0.7f, 0, white));
+        }
+        return cap with { Elements = elements, Texts = texts };
+    }
+
+    /// <summary>The draw-order index of a side's element of <paramref name="cls"/> at <paramref name="x"/>, <paramref name="y"/>.</summary>
+    private static int ElementAt(A350DrawCapture cap, string cls, float x, float y) =>
+        cap.Elements.Select((e, i) => (e, i)).Single(p => p.e.Class == cls && p.e.X == x && p.e.Y == y).i;
+
+    // Review 2026-10-28: the dismissed consent dialog (EULADialog, 600 x 600 from y 212) sits in every FMS frame, and
+    // only the FMS system menu is drawn after it. Its open test was its band at any x, so the menu's fifth item (y 244,
+    // left of the dialog) judged it open, and the whole page in its band was hidden. Open is its own text first, inside it.
+    [Fact]
+    public void The_fms_system_menu_beside_the_dismissed_consent_dialog_hides_nothing()
+    {
+        var page = Fixture();
+        var cap = WithDropdown(page, ElementAt(page, "MainHeaderDropdownMenu", 21, 6), 21, 46, 190, 42,
+            "ITEM 1", "ITEM 2", "ITEM 3", "ITEM 4", "ITEM 5");
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("IDLE: +0.0, green", lines);
+        Assert.Contains("NAV DATABASE: SJ6192002, green", lines);
+        int menu = lines.IndexOf("FMS 1 menu, cyan, menu open");
+        Assert.True(menu >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "ITEM 1 button", "ITEM 2 button", "ITEM 3 button", "ITEM 4 button", "ITEM 5 button" },
+            lines.Skip(menu + 1).Take(5));
+    }
+
+    // Review 2026-10-28: an open list took as its owner any key above it in its column, so a list hanging off the INSERT
+    // NEXT WPT pop-up's entry field (a DropdownTextBox) went to the POSITION key, 250 px up, which then read "menu open".
+    // The owner is the control whose edge the list touches.
+    [Fact]
+    public void A_list_hangs_from_the_control_it_touches()
+    {
+        var page = Load("mfd_insert_next_wpt");
+        var cap = WithDropdown(page, ElementAt(page, "BaseUITextBox", 288, 314), 285, 357, 178, 32, "BI614", "BASUR");
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("POSITION button", lines);
+        int field = lines.IndexOf("INSERT NEXT WPT FROM BASUR: none, cyan, menu open");
+        Assert.True(field >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "BI614 button", "BASUR button" }, lines.Skip(field + 1).Take(2));
+    }
+
+    [Fact]
+    public void A_list_touching_no_control_keeps_its_place_and_names_no_owner()
+    {
+        var page = Load("mfd_insert_next_wpt");
+        var cap = WithDropdown(page, ElementAt(page, "BaseUITextBox", 288, 314), 500, 600, 150, 32, "LOOSE 1", "LOOSE 2");
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.DoesNotContain(lines, l => l.EndsWith("menu open", StringComparison.Ordinal));
+        Assert.Contains("LOOSE 1 button", lines);
+    }
+
+    // Review 2026-10-28: the INSERT NEXT WPT pop-up removed the F-PLN cells under it, and the rows then read them as
+    // absent ("500: ... ALT none" for its 500 ft constraint); the open revision menu covers the same columns and left
+    // them readable. One rule for both: a column under the overlay is left out of its row, as a sighted pilot sees it.
+    [Theory]
+    [InlineData("mfd_insert_next_wpt")]
+    [InlineData("mfd_fpln_revision_basur")]
+    public void A_column_under_a_revision_overlay_is_left_out_of_its_row(string fixture)
+    {
+        var rows = PageLines(fixture).Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, row => Assert.DoesNotContain("TIME ", row));
+        Assert.All(rows, row => Assert.DoesNotContain("SPD ", row));
+        Assert.All(rows, row => Assert.DoesNotContain("ALT ", row));
+        Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Without_an_overlay_every_column_reads()
+    {
+        var rows = PageLines("mfd_fpln_tmpy_basu1d").Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
+        Assert.Contains(rows, row => row.StartsWith("500: ", StringComparison.Ordinal) && row.Contains("ALT 500", StringComparison.Ordinal));
+    }
 }

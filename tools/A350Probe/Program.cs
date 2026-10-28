@@ -300,7 +300,7 @@ internal sealed class ProbeForm : Form
         var window = new MSFSBlindAssist.Forms.A350.A350RmpWindow(
             rmp => monitor.Latest(MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp).Gauge, MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp).Index),
             async rmp => (await service.DrawAsync(MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
-            rpn => _m!.ExecuteCalculatorCodeUnique(rpn), cap);
+            _ => false, rpn => _m!.ExecuteCalculatorCodeUnique(rpn), cap);
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
         var list = (Control)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_list", flags)!.GetValue(window)!;
         var side = (ComboBox)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_side", flags)!.GetValue(window)!;
