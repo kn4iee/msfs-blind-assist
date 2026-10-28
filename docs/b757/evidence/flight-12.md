@@ -92,3 +92,21 @@ variable in the snapshot moved on the ground.
 The first officer's right switch's own click code, `(L:BBS_DDRMI_RIGHT_FO) ! (>L:BBS_DDRMI_RIGHT_FO) }`, stray brace
 included, toggled `BBS_DDRMI_RIGHT_FO` 0 → 1 through the calculator; written back to 0. The four DDRMI rows the map
 already holds therefore work as they are.
+
+## The fire test, the P61 test switches and the master lights (later the same day)
+
+The owner asked for the test controls to be tried in the sim. The aircraft was by then IN FLIGHT (about FL353, 272 kt,
+both engines running, ground power gone), which was found only after the first write; nothing else was written.
+
+- Engine fire test (`L:B757_PED_FIRE_ENG_BUTTON`, template `BBS757_BLACK_PTT_BUTTON`, read by BlueBird's WASM): held at
+  1 for about 3 s through the calculator, it raised `B757_FIRE_BELL` and `BBS_PLAY_FIRE_BELL`, `B757_L/R_ENG_FIRE_ACTIVE`,
+  `B757_MAIN_FIRE_1_DECAL`, `B757_PED_LENG/RENG_OVHT_DECAL`, `B757_PED_FAIL_BAR_DECAL`, `B757_L/R_ENG_HANDLE_AUTO_UNLOCK`,
+  `B757_L/R_ENG_FIRE_FUEL_CUTOFF_SWITCH` (indications) and both sides' master warning and caution (`BBS_CA_MASTER_*`,
+  `BBS_FO_MASTER_*`). Written back to 0, every one of them read 0 again about 2 s later, the master lights included (no
+  latch); the fuel control switches (`BBS_fuelcut_PW1/2`) never moved and the engines kept running (N1 about 90 %). So
+  the test shows only while the button is held: the app's 200 ms button press gives a blip at most.
+- P61 test switches (template `BBS_3POS_P61_TEST_SWITCH`, XML 490): `MOMENTARY_SWITCH` with `LEFT_UP_CODE` writing 1, so
+  only the cockpit mouse's release returns a switch to neutral; an outside write of a test position stays there (read
+  from the source, not tried: not in flight).
+- Master warning and caution buttons (`B757_MCP_btn_master_pilot` / `_copilot`): not measured; the fire test's lights
+  went out on release by themselves, so there was nothing to cancel. Needs a caution that stays on, on the ground.
