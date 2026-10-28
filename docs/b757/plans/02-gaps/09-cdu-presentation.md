@@ -85,9 +85,16 @@
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "757 CDU window: rows read 'Title:', the label rows, 'n:' lines and 'Scratchpad:' like the other Boeings, separator rows of dashes are gone, a blank screen says so, Alt+C clears the scratchpad, Ctrl+Shift+L and R pick the captain's or first officer's CDU, selected options read with X, and CDU messages are spoken while the window is closed (a check box turns this off)." Changelog `improvement` and `feature`.
-- **Hotkey guide:** the CDU section ("CDU (Shift+M)").
+- **Pilot-facing:** "757 CDU window: rows read 'Title:', the label rows, 'n:' lines and 'Scratchpad:' like the other Boeings, separator rows of dashes are gone, a blank screen says so, Alt+C clears the scratchpad, Ctrl+Shift+L and R pick the captain's or first officer's CDU, and the window's title names the side; CDU messages on the captain's CDU are spoken while the window is closed (a check box turns this off)." Selections: BlueBird showed them as the CDU's own text (`<ACT>`) on every page read (flight-09.md), which the window already reads; an inverse (highlighted) option would read with "X ", but none was seen, so the guide should not promise X. Changelog `improvement` and `feature`.
+- **Hotkey guide:** the CDU section ("CDU (Shift+M)"): Alt+C (two long CLRs, or DEL when the scratchpad is already empty), Ctrl+Shift+L / Ctrl+Shift+R. These two chords are also global hotkeys while output or input hotkey mode is on (surroundings, landing rate, the A380 RMP); with no mode on the CDU window gets them, as the MD-11 McDU window does with the same chord.
 - **Ctrl+M:** the new row "CDU Messages While Closed" (the window's check box changes the same entry); no settings key needed.
+- **Requests for files plan 09 does not own:**
+  - `MainForm.BBS757.cs`: the CDU window is created on the pilot's first Shift+M, so CDU messages are spoken only once the window has been opened at least once since the 757 loaded. Create the window hidden (or move its message watch) when the tablet client starts at aircraft load, so a message is heard before the first Shift+M.
+  - `SimConnect/BBS757/CoherentBbs757TabletClient.cs` (plan 13's): its class comment says only `Bbs757CduPages.WipeScratchpadAsync` holds CLR 1300 ms; Alt+C now does too. A pending-key count per CDU would let Alt+C press DEL on an empty scratchpad while the other CDU still has keys queued (today it then sends two long CLRs, which change nothing and say nothing).
+  - `SimConnect/BBS757/Bbs757CduPages.cs` (plan 01, frozen): its private `WipeHoldMs` and `Bbs757CduKeys.ClearAllHoldMs` are the same measured 1300 ms; one could use the other.
+- **Proposed rule lines** (`.claude/rules/b757.md`, full text in `docs/invariants/b757.md`):
+  - "While hidden, the CDU window points the tablet client at the captain's CDU (`ActiveCdu = 1`) and judges each new captain scratchpad with `Bbs757CduMessageWatch`: never stop that hidden scrape, and never speak a change inside the watch's settle window after the window's own keys, or the pilot's typing is read out as a CDU message (R72)."
+  - "A CDU row's selection marker (`Bbs757CduMarkers.Mark`) never moves a later column: it takes the blanks in front of the run or is paid back by the next gap, and a row stays within the 40-cell braille line."
 
 ## Execution record
 
@@ -96,12 +103,39 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 
 - **Status:** claimed
 - **Claimed by:** kn4iee (the owner), 2026-10-28
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
+- **Worked by:** kn4iee (the owner) with Claude, with subagents (superpowers:subagent-driven-development: a fresh
+  implementer and a reviewer per task, a whole-branch review at the end)
 - **Started:** 2026-10-28; `B757` at 29091df7c
 - **Landed:** (date; the last commit of this plan on `B757`)
 - **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Tasks:** 0-5 done. Task 4 step 1 (owner-in-sim) was measured live by Claude at the owner's request, in cruise, over
+  the simconnect MCP and the Coherent debugger (`docs/b757/evidence/flight-09.md`).
+- **Waiting on the owner:** in-sim checks 1 and 2, with these notes: open and close the window once before testing
+  messages while closed (see the request for `MainForm.BBS757.cs`); "a selected option reads with X" cannot be seen,
+  as BlueBird sent no inverse cell on any page read; add Alt+C pressed twice in a row (ends "Cleared", never
+  "DELETE"), Ctrl+Shift+L and R with no hotkey mode on, and closing on the first officer's CDU and reopening.
+- **In-sim results:** none run (Task 4 step 1's measurement, 2026-10-28, is in flight-09.md).
+- **Changed from the plan:**
+  - Task 1: `Bbs757CduRows.Build(screen, cdu)` as planned; `Bbs757CduFrame.ToDisplayLines(screen, cdu = 1)` passes it
+    through for the tests, and the window passes its CDU. A blank screen is one row of kind `Blank`, line 0.
+  - Task 2: the legs fixture's page counter "1/2" is small in all three cells; the large "/" is the one in the
+    constraint `---/------`. The test asserts the fixture as captured.
+  - Task 3: Alt+C sends two long CLRs (1300 ms each), not one: plan 08 measured one long CLR clearing the whole
+    scratchpad only 45 times in 60, and a CLR on an empty scratchpad does nothing (flight-09.md). DEL only when the
+    scratchpad is known empty and no keys are queued (a second Alt+C while the first's keys are out would else
+    leave DELETE). The decision is `Bbs757CduKeys.ClearScratchpad`, the side keys `Bbs757CduKeys.SideFor`.
+  - Task 4: inverse runs only; no colour or size marks (flight-09.md: none carried a selection). Markers are kept up
+    to the 40-cell braille line (37 cells before the 3-cell row prefix).
+  - Task 5: a pure `Bbs757CduMessageWatch` around `NewMessage` holds the last scratchpad, a 2-second settle window
+    after the window's own keys (a hidden scrape comes once a second, so a last key can land between two scrapes) and
+    the mute; while hidden, the window points the client at the captain's CDU and puts it back when shown; keys sent
+    to the first officer's CDU are not counted; the check box also refreshes when the window is activated.
+  - Plan 09 adds no variables.
+- **Rulings made while working** (Claude, as the controller, unless noted):
+  - Alt+C: two long CLRs, DEL only when known empty and no keys queued (above).
+  - The marker cap is the 40-cell line, not 26 (a reviewer's finding).
+  - R72's speech lives in the window, the plan's file; speech before the first Shift+M is handed to plan 16.
+  - `NewMessage`: silent for a first reading, a cleared scratchpad, typing that grows the text, CLR or DEL taking
+    characters off; a sighted pilot's first key on the aircraft's own CDU from an empty scratchpad can still be
+    spoken (accepted: the blind pilot types in the window).
+  - Ctrl+Shift+L or R on the CDU already shown says its name again and changes nothing else.
