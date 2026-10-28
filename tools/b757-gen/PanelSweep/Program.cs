@@ -15,7 +15,7 @@ namespace PanelSweep;
 /// </summary>
 internal static class Program
 {
-    private sealed record Options(bool DryRun, bool Help, string? Panel, string? DenylistPath, string? OutDir);
+    private sealed record Options(bool DryRun, bool Help, string? Panel, string? OutDir);
 
     private static int Main(string[] args)
     {
@@ -46,8 +46,9 @@ internal static class Program
             return 2;
         }
 
-        // A missing or empty denylist stops everything: never sweep without one.
-        string denylistPath = opts.DenylistPath ?? FindDenylist();
+        // The denylist is always the one shipped next to the exe. A missing or empty one stops everything:
+        // never sweep without one.
+        string denylistPath = Path.Combine(AppContext.BaseDirectory, "denylist.txt");
         HashSet<string> listed;
         try
         {
@@ -98,7 +99,18 @@ internal static class Program
     {
         Console.WriteLine("PanelSweep: live sweep of the 757's panel controls.");
         Console.WriteLine($"Denylist: {denylistPath}");
-        PlanReport.PrintStale(plan, Console.Out);
+
+        // A denylist line that names no node of the map means a node was renamed and lost its protection:
+        // a live run does not start on one (--dry-run only warns). This runs before the prompt.
+        if (plan.StaleDenylistEntries.Count > 0)
+        {
+            PlanReport.PrintStale(plan, Console.Error);
+            Console.Error.WriteLine($"Refused: {plan.StaleDenylistEntries.Count} stale denylist " +
+                (plan.StaleDenylistEntries.Count == 1 ? "entry" : "entries") +
+                $" ({string.Join(", ", plan.StaleDenylistEntries)}). Fix {denylistPath} (and rebuild) before a live sweep.");
+            return 2;
+        }
+
         PlanReport.PrintCounts(plan, Console.Out);
         Console.WriteLine();
         Console.WriteLine("Before you go on:");
@@ -162,18 +174,10 @@ internal static class Program
         }
     }
 
-    /// <summary>The denylist next to the exe (where the build copies it), else in the current folder.</summary>
-    private static string FindDenylist()
-    {
-        string beside = Path.Combine(AppContext.BaseDirectory, "denylist.txt");
-        if (File.Exists(beside)) return beside;
-        return Path.Combine(Directory.GetCurrentDirectory(), "denylist.txt");
-    }
-
     private static Options ParseArgs(string[] args)
     {
         bool dryRun = false, help = false;
-        string? panel = null, denylist = null, outDir = null;
+        string? panel = null, outDir = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -183,12 +187,11 @@ internal static class Program
                 case "--dry-run": dryRun = true; break;
                 case "-h": case "--help": case "/?": help = true; break;
                 case "--panel": panel = Value(args, ref i, a); break;
-                case "--denylist": denylist = Value(args, ref i, a); break;
                 case "--out": outDir = Value(args, ref i, a); break;
                 default: throw new ArgumentException($"Unknown argument '{a}'.");
             }
         }
-        return new Options(dryRun, help, panel, denylist, outDir);
+        return new Options(dryRun, help, panel, outDir);
     }
 
     private static string Value(string[] args, ref int i, string name)
@@ -206,7 +209,6 @@ internal static class Program
         w.WriteLine();
         w.WriteLine("  --panel NAME      only this panel: a panel name (Fuel), a section (Overhead) or 'Section / Panel',");
         w.WriteLine("                    ignoring case; failing an exact match, any panel whose name contains the text");
-        w.WriteLine("  --denylist PATH   the denylist (default: denylist.txt beside the exe)");
         w.WriteLine("  --out DIR         where sweep-<date>.tsv goes (default: the current folder)");
         w.WriteLine("  --help            this text");
         w.WriteLine();

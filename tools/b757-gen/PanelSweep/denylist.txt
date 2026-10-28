@@ -1,13 +1,15 @@
 # PanelSweep denylist: the 757 controls the sweep NEVER writes.
 #
-# One map node name per line (the node column of .superpowers/sdd/12-panels-remaining/map-order.txt, or
-# the "node" of MSFSBlindAssist/Resources/bbs757_control_map.json). Matching ignores case. '#' starts a
-# comment. A line naming a node the map does not have is stale: --dry-run warns about it.
+# One map node name per line: the "node" of a control in MSFSBlindAssist/Resources/bbs757_control_map.json
+# (plan 12, Task 2: docs/b757/plans/02-gaps/12-panels-remaining.md). Matching ignores case. '#' starts a
+# comment. A line naming a node the map does not have is stale (a renamed node has lost its protection):
+# --dry-run warns about it, and a live run refuses to start.
 #
 # This file is checked before ANY write to a control, and again by the writer itself. The sweep also
 # denies, on top of this list: the guard a denied control names in the map, any control whose map guard
 # is a denied node, and any control sharing a state var with a denied one. Add a line to keep a control
-# out of the sweep; remove one only on purpose.
+# out of the sweep; remove one only on purpose. The tool reads the copy next to its exe (the build copies
+# this file there).
 
 # Fire handles: unlock buttons, handles, and the rotation that discharges a bottle
 BBS757_FIREUNLOCK1                          # Engine 1 Fire Handle Unlock
@@ -79,3 +81,31 @@ B757_OVHD_SWITCH_GAURD                      # Emergency Lights Guard
 B757_MAIN_Landing_Gear_Y                    # Gear Lever
 BBS757_lever_flaps                          # Flap Lever
 BBS757_PEDESTAL_Park_Brake_Lever            # Parking Brake
+
+# Alternate flaps: the selector and its arm switches drive the flaps electrically, so they are the flap
+# lever by another route (added in fix round 1 of plan 12, Task 2)
+B757_MAIN_knob_gears_altn_flaps             # Alternate Flaps Selector
+B757_MAIN_L_LEADINGEDGE_BUTTON              # L Leading Edge (alternate flaps arm)
+B757_MAIN_L_TRAILINGEDGE_BUTTON             # L Trailing Edge (alternate flaps arm)
+
+# Gear lock override: it frees the gear lever, which is denied
+B757_MAIN_LOCK_OVRD_SWITCH                  # Gear Lock Override
+
+# Switches under a cover the map does not link to them (their map entry has no "guard"). Sweeping one
+# with the cover shut would only report a false "no change", so each is denied with its cover.
+B757_OVHD_L_ELEC-ENG-CONT_BUTTON            # L ELEC ENG Cont (RR)
+B757_OVHD_R_ELEC-ENG-CONT_BUTTON            # R ELEC ENG Cont (RR)
+B757_GAURD_1_SWITCH                         # Elec Eng Cont 1 Guard (RR)
+B757_GAURD_2_SWITCH                         # Elec Eng Cont 2 Guard (RR)
+B757_MAIN_L_FLAPOVRD_BUTTON                 # L Flap Ovrd
+B757_MAIN_L_GEAROVRD_BUTTON                 # L Gear Ovrd
+B757_MAIN_L_TERROVRD_BUTTON                 # L Terr Ovrd
+B757_GAURD_8_SWITCH                         # Flap Override Guard
+B757_GAURD_9_SWITCH                         # Gear Override Guard
+B757_GAURD_10_SWITCH                        # Terrain Override Guard
+B757_P61_PRESS_MAIN_BUTTON_L                # P61 Press Main Button L
+B757_P61_PRESS_MAIN_BUTTON_C                # P61 Press Main Button C
+B757_P61_PRESS_MAIN_BUTTON_R                # P61 Press Main Button R
+BBS_B757_P61_GLASS_GAURD_1                  # P61 Glass Guard 1
+BBS_B757_P61_GLASS_GAURD_2                  # P61 Glass Guard 2
+BBS_B757_P61_GLASS_GAURD_3                  # P61 Glass Guard 3

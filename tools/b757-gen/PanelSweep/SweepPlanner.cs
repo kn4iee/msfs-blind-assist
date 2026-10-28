@@ -142,18 +142,19 @@ internal static class SweepPlanner
 
     /// <summary>
     /// What the sweep does with a control. The denylist is asked FIRST, so a denied button or guard says
-    /// "denied" and not "skipped".
+    /// "denied" and not "skipped". A guard or a control that carries one is "skipped: guarded" even when
+    /// it is a momentary button: the guard is the reason it is not written, so it is asked before "button".
     /// </summary>
     public static ControlPlan Classify(Bbs757Control c, IReadOnlyDictionary<string, string> deniedReasons)
     {
         if (deniedReasons.TryGetValue(c.Node, out string? why))
             return new ControlPlan(c, Disposition.Denied, why);
 
-        if (Bbs757Write.IsMomentary(c))
-            return new ControlPlan(c, Disposition.SkippedButton, "a press has no position to read back");
-
         if (c.Kind == Bbs757Kinds.Guard || !string.IsNullOrWhiteSpace(c.Guard))
             return new ControlPlan(c, Disposition.SkippedGuarded, "its writes need the app's guard sequence, SetGuardedAsync, which this tool does not link");
+
+        if (Bbs757Write.IsMomentary(c))
+            return new ControlPlan(c, Disposition.SkippedButton, "a press has no position to read back");
 
         if (c.Kind is not (Bbs757Kinds.Toggle or Bbs757Kinds.Switch or Bbs757Kinds.Select))
             return new ControlPlan(c, Disposition.SkippedNoPositions, $"kind '{c.Kind}' is not positional");

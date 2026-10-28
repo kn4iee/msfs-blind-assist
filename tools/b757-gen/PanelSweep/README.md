@@ -37,8 +37,9 @@ PanelSweep.exe --dry-run --panel "Fuel"
 It prints, panel by panel, every control and what the sweep would do with it (the positions it would
 write, in order, and how many calls each takes; or `denied`, `skipped: button`, `skipped: guarded`), the
 counts, the rough running time, and two audits: no denied node is planned for a write, and no planned
-command is longer than MobiFlight's buffer. A denylist line that names a node the map no longer has is
-printed as a warning (a stale entry).
+command is longer than MobiFlight's buffer. A denylist line that names a node the map no longer has is a
+stale entry (a renamed node has lost its protection): the dry run prints it as a warning, and a live run
+refuses to start on one (exit code 2, before the `YES` prompt), naming it.
 
 The live sweep:
 
@@ -49,8 +50,9 @@ PanelSweep.exe --out C:\some\folder
 ```
 
 `--panel NAME` limits both modes to one panel (`Fuel`), one section (`Overhead`) or `"Overhead / Fuel"`,
-ignoring case; if nothing matches exactly it takes every panel whose name contains the text. `--denylist
-PATH` uses another denylist; `--out DIR` says where the results go (the current folder by default).
+ignoring case; if nothing matches exactly it takes every panel whose name contains the text. `--out DIR`
+says where the results go (the current folder by default). The tool always reads the `denylist.txt` next
+to its exe (the build copies it from this folder); there is no option to point it at another one.
 
 ### Conditions for the live run (the owner runs it once)
 
@@ -63,7 +65,7 @@ cockpit, that the sim says the aircraft is on the ground with both engines off (
 that a one-shot calculator write of a test value into a variable of its own (`L:PANELSWEEP_PROBE`) comes
 back on a read (it refuses if not: the MobiFlight module is missing or the aircraft is not loaded).
 
-It takes about 15 minutes for the whole 757. **Ctrl+C** stops after the step in progress and puts that
+It takes about 13 minutes for the whole 757. **Ctrl+C** stops after the step in progress and puts that
 control back, then writes the results so far. A second Ctrl+C stops at once and names the control that
 may need putting back by hand.
 
@@ -87,16 +89,20 @@ stop).
 ## What it leaves alone
 
 - **Buttons and held buttons** (a press has no position to read back): listed as `skipped: button`.
-- **Guards, and controls a guard covers** (the map's `guard` field): listed as `skipped: guarded`. Their
-  writes need the app's guard sequence (`SetGuardedAsync`), which the tool does not link. A few switches
-  that sit under a cover in the cockpit have no `guard` in the map, so they are swept with the cover
-  closed; a `no change` on one of those most likely means the cover is shut.
+- **Guards, and controls a guard covers** (the map's `guard` field): listed as `skipped: guarded`, even
+  for a momentary button that carries a guard. Their writes need the app's guard sequence
+  (`SetGuardedAsync`), which the tool does not link. Switches that sit under a cover the map does not
+  link to them would only report a false `no change` with the cover shut, so they are on the denylist
+  together with their covers (below).
 - **The denylist** (`denylist.txt`, one node name per line, `#` for comments): controls that are
   **never written**, whatever else happens: the fire handles, their unlock buttons and rotations; cargo
   fire and its bottles; the stabilizer trim cutouts; the battery; the APU selector; the IRS selectors;
   the fuel control switches; the engine start selectors and the ignition selector; the generator drive
   disconnects; the RAT; passenger oxygen; the emergency lights; the gear lever; the flap lever; the
-  parking brake; and the guards of all of these. The list is checked before the first write to a
+  parking brake; the alternate flaps selector and its arm switches (they drive the flaps electrically);
+  the gear lock override; the covered switches the map does not link to their covers (the Elec Eng Cont
+  switches, the flap, gear and terrain overrides, the P61 pressurization main buttons); and the guards
+  of all of these. The list is checked before the first write to a
   control and again before every write. On top of the list the tool denies the guard a denied control
   names in the map, any control whose guard is denied, and any control that writes the same state
   variable as a denied one. A missing or empty denylist stops the tool.
