@@ -125,8 +125,8 @@ public class A350MfdPageTests
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("POSITION button", lines);
         Assert.Contains("P.POS --:-- --- -----, green", lines);
-        Assert.Contains("- - - - - - DISCONTINUITY - - - - - -, white", lines);
-        Assert.Contains("- - - - - - END OF F-PLN - - - - - -, white", lines);
+        Assert.Contains("DISCONTINUITY, white", lines);
+        Assert.Contains("END OF F-PLN, white", lines);
         Assert.DoesNotContain(lines, l => l.Contains("DISCONTINUITY") && l.Contains("END OF F-PLN"));
     }
 
@@ -144,7 +144,7 @@ public class A350MfdPageTests
         Assert.Contains("DEPARTURE button, grey", lines);
         Assert.Contains("NEW DEST button, grey", lines);
         Assert.Contains("HOLD button", lines);
-        Assert.Contains("- - - - - - DISCONTINUITY - - - - - -, white", lines);
+        Assert.Contains("DISCONTINUITY, white", lines);
     }
 
     // ACTIVE/F-PLN with the uplinked VCBI-OMDB plan (live): one line per waypoint, labelled by the page's own column
@@ -220,6 +220,20 @@ public class A350MfdPageTests
         Assert.Contains("FROM, white; VCBI, yellow", lines);
         Assert.Contains("BASU1D button", lines);
         Assert.Contains("TMPY F-PLN button, yellow", lines);
+    }
+
+    // The temporary F-PLN with BASU1D (live): the MFD font draws symbols as lowercase letters (A350MFD-Regular.ttf:
+    // a left arrow, b right arrow, d degree, f the overfly triangle; the other lowercase letters are small capitals). A
+    // row's colour is its values'; an ident of another colour (the white TO waypoint in a yellow plan) says so once.
+    [Fact]
+    public void A_temporary_flight_plan_reads_its_symbols_and_colours()
+    {
+        var lines = Page("mfd_fpln_tmpy_sid");
+        Assert.Contains("DER22 (overfly) (white): via BASU1D, TRK 218°, DIST 1; TIME none, SPD none, ALT none, yellow", lines);
+        Assert.Contains("500: via C220°, TRK 221°, DIST 0; TIME none, SPD none, ALT 500 (magenta), yellow", lines);
+        Assert.Contains("BI611 →: via BASU1D, TRK 279°, DIST 5; TIME none, SPD none, ALT none, yellow", lines);
+        Assert.Contains("END OF TMPY F-PLN, yellow", lines);
+        Assert.Contains("INSERT * TMPY button, amber", lines);
     }
 
     [Fact]

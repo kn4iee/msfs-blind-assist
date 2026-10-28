@@ -26,8 +26,26 @@ public static class A350MfdPage
 
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
 
-    /// <summary>The font's degree sign inside a position: "07d10.5N/079d53.1E".</summary>
-    private static readonly Regex PositionDegrees = new(@"(?<=\d)d(?=\d)", RegexOptions.Compiled);
+    /// <summary>The font's degree sign after a number: a position's "07d10.5N/079d53.1E", a course's "C220d".</summary>
+    private static readonly Regex PositionDegrees = new(@"(?<=\d)d(?![A-Za-z])", RegexOptions.Compiled);
+
+    /// <summary>A symbol the MFD font draws as a lowercase letter after an ident (A350MFD-Regular.ttf's outlines: a a left
+    /// arrow, b a right arrow, f the overfly triangle; its other lowercase letters are small capitals).</summary>
+    private static readonly Regex IdentSymbol = new(@"^(?<id>[A-Z0-9][A-Z0-9/.-]*)(?<g>[abf])$", RegexOptions.Compiled);
+
+    /// <summary>Decoration: a run of spaced dashes around a marker ("- - - - END OF TMPY F-PLN - - - -").</summary>
+    private static readonly Regex MarkerDashes = new(@"\s*(?:-\s){2,}-\s*", RegexOptions.Compiled);
+
+    private static string Glyphs(string text)
+    {
+        var t = MarkerDashes.Replace(text, " ").Trim();
+        if (t.Length == 0) t = text.Trim();
+        t = PositionDegrees.Replace(t, "°");
+        var m = IdentSymbol.Match(t);
+        return m.Success
+            ? m.Groups["id"].Value + (m.Groups["g"].Value switch { "a" => " ←", "b" => " →", _ => " (overfly)" })
+            : t;
+    }
 
     /// <summary>A drawn text; <see cref="Index"/> is its place in the draw order.</summary>
     private sealed record Cell(string Text, string Colour, float X, float Y, int Index);
@@ -37,7 +55,7 @@ public static class A350MfdPage
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
         var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
-            .Select(p => new Cell(PositionDegrees.Replace(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " "), "°"), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
+            .Select(p => new Cell(Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
@@ -166,7 +184,6 @@ public static class A350MfdPage
         return lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
     }
 
-    private static readonly Regex DashRun = new(@"(\s*-){2,}\s*", RegexOptions.Compiled);
     private static readonly Regex TrackDegrees = new(@"^(\d{1,3})d$", RegexOptions.Compiled);
 
     /// <summary>
@@ -205,8 +222,8 @@ public static class A350MfdPage
         used.UnionWith(cells.Where(c => InList(c) && c.Y >= barTop));
 
         static string Value(Cell c) => TrackDegrees.Match(c.Text) is { Success: true } m ? m.Groups[1].Value + "°" : Word(c.Text);
-        string ValueOf(Cell? c, string identColour) =>
-            c == null ? "none" : Value(c) + (c.Colour != identColour && c.Colour != "grey" ? $" ({c.Colour})" : "");
+        string ValueOf(Cell? c, string rowColour) =>
+            c == null ? "none" : Value(c) + (c.Colour != rowColour && c.Colour != "grey" ? $" ({c.Colour})" : "");
 
         float prevBottom = header.Select(c => c.Y).DefaultIfEmpty(174).Max() + 10;   // the first row's leg starts under the header
         var rows = boxes.Where(b => b.Y + b.H <= barTop && b.X < 40 && (b.W < 200 || b.W > 600)).OrderBy(b => b.Y).ToList();
@@ -218,7 +235,7 @@ public static class A350MfdPage
                 // DISCONTINUITY, END OF F-PLN: the marker without its dashes.
                 used.UnionWith(inBox);
                 if (inBox.Count > 0)
-                    lines.Add((b.Y, 0, new MfdLine("text", $"{DashRun.Replace(inBox[0].Text, " ").Trim()}, {inBox[0].Colour}", b.X + b.W / 2, b.Y + b.H / 2)));
+                    lines.Add((b.Y, 0, new MfdLine("text", $"{inBox[0].Text}, {inBox[0].Colour}", b.X + b.W / 2, b.Y + b.H / 2)));
                 prevBottom = b.Y + b.H;
                 continue;
             }
@@ -231,17 +248,20 @@ public static class A350MfdPage
             used.UnionWith(row);
             var leg = cells.Where(c => !used.Contains(c) && InList(c) && c.Y >= prevBottom && c.Y < b.Y && (c.X < 200 || c.X >= 560)).ToList();
             used.UnionWith(leg);
+            // The row's colour: its values' most common (the TO waypoint's ident is white in a yellow plan).
+            string colour = row.Concat(leg.Where(c => c.X >= 560)).Where(c => c.Colour != "grey").GroupBy(c => c.Colour)
+                .OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault() ?? ident.Colour;
             var parts = new List<string>();
             if (leg.FirstOrDefault(c => c.X < 200) is { } via) parts.Add("via " + via.Text);
             foreach (var c in leg.Where(c => c.X >= 560).OrderBy(c => c.X))
             {
                 var name = legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text;
-                parts.Add(name == null ? ValueOf(c, ident.Colour) : $"{name} {ValueOf(c, ident.Colour)}");
+                parts.Add(name == null ? ValueOf(c, colour) : $"{name} {ValueOf(c, colour)}");
             }
-            string label = b.Y < 230 ? $"{from} {ident.Text}" : ident.Text;
+            string label = (b.Y < 230 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
             string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
             lines.Add((b.Y, 0, new MfdLine("waypoint",
-                $"{label}: {legText}{time} {ValueOf(t, ident.Colour)}, {spd} {ValueOf(sp, ident.Colour)}, {alt} {ValueOf(al, ident.Colour)}, {ident.Colour}",
+                $"{label}: {legText}{time} {ValueOf(t, colour)}, {spd} {ValueOf(sp, colour)}, {alt} {ValueOf(al, colour)}, {colour}",
                 b.X + b.W / 2, b.Y + b.H / 2)));
             prevBottom = b.Y + b.H;
         }
