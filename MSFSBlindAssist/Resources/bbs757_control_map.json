@@ -8639,11 +8639,11 @@
    "positions": [
     {
      "value": 0,
-     "label": "Off"
+     "label": "Closed"
     },
     {
      "value": 1,
-     "label": "On"
+     "label": "Open"
     }
    ],
    "press": "(L:B757_COCKPIT_DOOR, bool) ! (>L:B757_COCKPIT_DOOR, bool) 1 (>O:DOOR_DELAY_FDAS_TIMER_ACTIVE, bool) 0 (>O:FDAS_SoundFired, bool) (E:ABSOLUTE TIME, seconds) (>O:DOOR_FDAS_Timer)",

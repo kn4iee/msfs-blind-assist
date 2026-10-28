@@ -3503,6 +3503,22 @@ class Curation(unittest.TestCase):
         control, _, _ = g.convert_row(r, c)
         self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "L"), (1, "R")])
 
+    def test_the_shipped_curation_says_the_cockpit_door_is_closed_or_open(self):
+        # Plan 12 task 6 (the owner): BlueBird's door animation runs (L:B757_COCKPIT_DOOR, bool) 100 *, a disabled block names
+        # 0 closed and the full value open, and a door above 0 on the ground lights the lock-fail light
+        # (BBS_752_BASE_INTERIOR.xml:32000-32047). The vendor's row, as the extractor reads it: a toggle with no tip pair.
+        c = g.load_curation(g.DEFAULT_CURATION)
+        flip = "(L:B757_COCKPIT_DOOR, bool) ! (>L:B757_COCKPIT_DOOR, bool)"
+        r = row(node="B757_COCKPIT_DOOR", kind="toggle", positions="2", panel="COCKPIT MISC",
+                state=["L:B757_COCKPIT_DOOR"], tips=["Cockpit Door"], left=flip)
+        control, why, _ = g.convert_row(r, c)
+        self.assertIsNone(why)
+        self.assertEqual([(p["value"], p["label"]) for p in control["positions"]], [(0, "Closed"), (1, "Open")])
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            door = next(x for x in json.load(fh)["controls"] if x["node"] == "B757_COCKPIT_DOOR")
+        self.assertEqual((door["kind"], [(p["value"], p["label"]) for p in door["positions"]]),
+                         ("toggle", [(0, "Closed"), (1, "Open")]))
+
     # Plan 02, task 1: every position BlueBird's simvar list names, by node, as (value, label) in the control's own value
     # order. The values are the control's real ones, not 0, 1, 2 ...: the engine start selectors never write 2, the
     # warning indicator rests at 0 and 11, and the chronometer ET lever's code jumps from HOLD (1) straight to 3.

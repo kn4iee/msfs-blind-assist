@@ -560,6 +560,19 @@ public class Bbs757ControlMapTests
         Assert.Equal(new[] { (0d, "L"), (1d, "R") }, Pairs(Find("B757_PED_TCAS_XPNDR_SWITCH")));
     }
 
+    [Fact]
+    public void The_cockpit_door_reads_Closed_and_Open()
+    {
+        // Plan 12 task 6 (the owner): the door, not a switch. BlueBird's door animation runs (L:B757_COCKPIT_DOOR, bool) 100 *,
+        // its disabled block names 0 closed and the full value open, and a door above 0 on the ground lights the lock-fail
+        // light (BBS_752_BASE_INTERIOR.xml:32000-32047).
+        Bbs757Control door = Find("B757_COCKPIT_DOOR");
+
+        Assert.Equal(("Other", "Flight deck door", "Cockpit Door"), (door.Section, door.Panel, door.Label));
+        Assert.Equal(Bbs757Kinds.Toggle, door.Kind);
+        Assert.Equal(new[] { (0d, "Closed"), (1d, "Open") }, Pairs(door));
+    }
+
     // ---- Plan 02, task 1: every position BlueBird's simvar list names ----
 
     /// <summary>A control's positions as "value=label|value=label", the values in invariant culture.</summary>
