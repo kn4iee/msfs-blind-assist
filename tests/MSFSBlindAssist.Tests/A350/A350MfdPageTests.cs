@@ -645,6 +645,37 @@ public class A350MfdPageTests
         Assert.Equal(selected, Assert.Single(lines, l => l.EndsWith(" tab, selected", StringComparison.Ordinal)));
     }
 
+    // A box on a check box's row is that choice's value, whatever the label's colour (yellow or cyan while
+    // chosen) and inside the box's own rectangle: VERT REV's ALT tab (AT, AT OR ABOVE, AT OR BELOW, each with its
+    // box; live 2026-10-28 at IMPED) and the HOLD page's TIME and DIST legs. It read the waypoint field's name
+    // ("ALT CSTR AT: FL 120") or none ("Field: 1.0 MN").
+    [Theory]
+    [InlineData("mfd_vertrev_alt_imped", "AT OR BELOW: FL 120, cyan")]
+    [InlineData("mfd_hold_imped", "TIME: 1.0 MN, yellow")]
+    public void A_box_on_a_check_box_row_is_named_by_it(string fixture, string field)
+    {
+        var lines = Page(fixture);
+        Assert.Contains(field, lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Field:", StringComparison.Ordinal));
+        Assert.DoesNotContain("ALT CSTR AT: FL 120, cyan", lines);
+    }
+
+    // The HOLD page's INBOUND CRS heads its box from above and a little left of it (the page's left margin).
+    [Fact]
+    public void A_heading_above_a_box_names_it()
+    {
+        Assert.Contains("INBOUND CRS: 297°, yellow", Page("mfd_hold_imped"));
+    }
+
+    // VERT REV's SPD tab: the speed box has no label of its own; the tab the page is on says what it holds.
+    [Fact]
+    public void A_box_with_no_label_takes_the_tab_the_page_is_on()
+    {
+        var lines = Page("mfd_vertrev_spd_imped");
+        Assert.Contains("SPD: 230 KT, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Field:", StringComparison.Ordinal));
+    }
+
     // SEC INDEX after the company flight plan arrived in SEC 1 (live 2026-10-28): RECEIVED CPNY F-PLN's menu open.
     [Fact]
     public void The_received_company_plan_reads_its_menu()

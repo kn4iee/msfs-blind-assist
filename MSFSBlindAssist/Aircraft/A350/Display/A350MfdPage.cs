@@ -102,6 +102,7 @@ public static class A350MfdPage
         var leftLabels = new HashSet<Cell>();
         var checkboxLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
+        string? pageTab = null;   // the tab the page is on
         // Texts inside a control are its own, never another control's label or header.
         var inControls = elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)).SelectMany(e =>
         {
@@ -187,6 +188,7 @@ public static class A350MfdPage
                 }
                 if (inside.Count == 0) continue;
                 used.UnionWith(inside);
+                checkboxLabels.UnionWith(inside);   // a box on its row is this choice's value (VERT REV's AT OR BELOW, HOLD's TIME)
                 bool check = capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && sh.X0 - shift >= x0 && sh.X1 - shift <= x0 + e.RectW
                     && sh.Y0 >= y0 && sh.Y1 <= y0 + e.RectH) == true;
                 string state = $"{value} check box, {(check ? "checked" : "not checked")}";
@@ -196,17 +198,22 @@ public static class A350MfdPage
             if (IsField(e))
             {
                 float rowY = y0 + e.RectH * 0.75f;
-                bool OnRow(Cell c) => !inside.Contains(c) && !inControls.Contains(c) && (c.Colour == "white" || checkboxLabels.Contains(c))
+                // A check box's label on the row, whatever its colour (yellow or cyan while chosen) and though inside the
+                // check box, names the box beside it: that choice's value.
+                bool OnRow(Cell c) => !inside.Contains(c) && (checkboxLabels.Contains(c) || !inControls.Contains(c) && c.Colour == "white")
                     && Math.Abs(c.Y - rowY) <= 12;
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
                 // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
-                // FUEL AT DEST field, is the table row's, the field's the heading above it.)
-                var beside = cells.Where(c => OnRow(c) && c.X < x0 && x0 - c.X <= 200 && !leftLabels.Contains(c)).OrderByDescending(c => c.X).FirstOrDefault()
+                // FUEL AT DEST field, is the table row's, the field's the heading above it. A check box's label reaches
+                // further: VERT REV's AT OR BELOW stands 277 px left of its box.)
+                var beside = cells.Where(c => OnRow(c) && c.X < x0 && x0 - c.X <= (checkboxLabels.Contains(c) ? 320 : 200) && !leftLabels.Contains(c))
+                        .OrderByDescending(c => c.X).FirstOrDefault()
                     ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault();
                 var label = beside
-                    // else a label just above it (SURV's SQWK; FUEL&LOAD's MIN FUEL AT DEST heading, 26 px up)
-                    ?? cells.Where(c => !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 40 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 30)
+                    // else a label just above it (SURV's SQWK; FUEL&LOAD's MIN FUEL AT DEST heading, 26 px up; HOLD's
+                    // INBOUND CRS, at the page's margin 79 px left of its box)
+                    ?? cells.Where(c => !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 100 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 30)
                         .OrderByDescending(c => c.Y).FirstOrDefault();
                 // An empty box labelled only by a text above it is no entry the page shows (FUEL&LOAD, under CI).
                 if (inside.Count == 0 && (label == null || beside == null)) continue;
@@ -217,6 +224,14 @@ public static class A350MfdPage
             }
             if (inside.Count == 0) continue;
             used.UnionWith(inside);
+            // The tab the page is on is filled black, the others dark grey (every tabbed page, 2026-10-27/28).
+            bool OnTab()
+            {
+                bool on = capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && sh.Colour is { R: < 0.05f, G: < 0.05f, B: < 0.05f }
+                    && sh.X0 - shift >= x0 - 1 && sh.X1 - shift <= x1 + 1 && sh.Y0 >= y0 - 1 && sh.Y1 <= y0 + e.RectH + 1) == true;
+                if (on) pageTab = value;
+                return on;
+            }
             string menuLabel = "";
             if (e.Class == "MainHeaderDropdownMenu" && y0 > 100
                 && (cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X < x0 && x0 - c.X <= 160
@@ -230,10 +245,7 @@ public static class A350MfdPage
             var (kind, spoken) = e.Class switch
             {
                 "MainHeaderDropdownMenu" => ("menu", $"{menuLabel}{value} menu, {colour}"),
-                // The tab the page is on is filled black, the others dark grey (every tabbed page, 2026-10-27/28).
-                "WidgetSwitcherTab" => ("tab", capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0
-                    && sh.Colour is { R: < 0.05f, G: < 0.05f, B: < 0.05f } && sh.X0 - shift >= x0 - 1 && sh.X1 - shift <= x1 + 1
-                    && sh.Y0 >= y0 - 1 && sh.Y1 <= y0 + e.RectH + 1) == true ? $"{value} tab, selected" : $"{value} tab"),
+                "WidgetSwitcherTab" => ("tab", OnTab() ? $"{value} tab, selected" : $"{value} tab"),
                 // An open menu's item: a drop-down's, or a waypoint's revision menu's.
                 "DropdownButtonUI" or RevisionItem => ("menuitem", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
@@ -271,7 +283,8 @@ public static class A350MfdPage
         for (int k = 0; k < fields.Count; k++)
         {
             var f = fields[k];
-            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? "Field";
+            // With no label and no column, the tab the page is on says what the box holds (VERT REV's SPD).
+            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? pageTab ?? "Field";
             if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)
