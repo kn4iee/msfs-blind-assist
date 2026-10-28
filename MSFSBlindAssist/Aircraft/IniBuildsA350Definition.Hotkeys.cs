@@ -136,6 +136,11 @@ public partial class IniBuildsA350Definition
                     ? string.Join(". ", A350.Display.A350SdText.Build(sd, sdPage).Split('\n', StringSplitOptions.RemoveEmptyEntries))
                     : "The A350 displays are not available yet.");
                 return true;
+            // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
+            case HotkeyAction.ReadSquawkCode:
+                announcer.AnnounceImmediate(DisplayLines("A350_DISP_RMP_1") is { } rmp ? A350.A350Hotkeys.Squawk(rmp)
+                    : "The A350 displays are not available yet.");
+                return true;
             // Ctrl+W: the ND's TO waypoint; Ctrl+0: the FMA's approach capability column.
             case HotkeyAction.ReadNDWaypoint:
                 announcer.AnnounceImmediate(DisplayLines("A350_DISP_ND_CPT")?.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal))

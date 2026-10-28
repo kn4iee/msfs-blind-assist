@@ -103,5 +103,19 @@ public static class A350Hotkeys
             ? (v, parts.Length >= 2 ? parts[1] : "") : null;
     }
 
+    /// <summary>The squawk and transponder mode as an RMP shows them ("SQUAWK : 2000 - STBY, white"), read by the X key: the
+    /// A350 keeps its squawk to itself (the stock TRANSPONDER CODE reads 0).</summary>
+    public static string Squawk(IEnumerable<string> rmpLines)
+    {
+        var line = rmpLines.FirstOrDefault(l => l.StartsWith("SQUAWK", StringComparison.Ordinal));
+        if (line == null) return "Squawk not shown";
+        string shown = line[(line.IndexOf(':') + 1)..];
+        int colour = shown.LastIndexOf(", ", StringComparison.Ordinal);
+        if (colour > 0) shown = shown[..colour];
+        var parts = shown.Split('-', 2, StringSplitOptions.TrimEntries);
+        string mode = parts.Length > 1 ? parts[1] switch { "STBY" => "standby", var m => m.ToLowerInvariant() } : "";
+        return "Squawk " + parts[0] + (mode.Length > 0 ? ", " + mode : "");
+    }
+
     private static string LowerFirst(string s) => s.Length == 0 ? s : char.ToLowerInvariant(s[0]) + s[1..];
 }

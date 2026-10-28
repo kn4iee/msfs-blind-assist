@@ -113,6 +113,16 @@ public class A350HotkeysTests
         finally { CultureInfo.CurrentCulture = old; }
     }
 
+    // X: the A350 keeps its squawk to itself (the stock TRANSPONDER CODE reads 0, live 2026-10-28); its RMP shows it.
+    [Fact]
+    public void The_squawk_reads_the_rmps_line()
+    {
+        var rmp = new[] { "VHF1: active 121.900, white; standby 118.700, cyan", "SQUAWK : 2000 - STBY, white" };
+        Assert.Equal("Squawk 2000, standby", A350Hotkeys.Squawk(rmp));
+        Assert.Equal("Squawk 4512, auto", A350Hotkeys.Squawk(new[] { "SQUAWK : 4512 - AUTO, white" }));
+        Assert.Equal("Squawk not shown", A350Hotkeys.Squawk(new[] { "VHF1: active 121.900, white" }));
+    }
+
     [Fact]
     public void A_characteristic_speed_reads_in_knots_or_says_it_is_not_shown()
     {

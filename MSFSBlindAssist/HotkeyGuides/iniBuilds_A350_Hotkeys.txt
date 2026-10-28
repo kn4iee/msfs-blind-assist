@@ -62,9 +62,10 @@ block, the warning display with the ECAM cursor ("selected") and each action box
 "done"), the SD page and its permanent data line. The first start after an A350 update says "A350
 displays getting ready" while MSFSBA prepares them (about 15 seconds), then "ready".
 
-The radio management panels, the other displays (PFD, ND, SD pages in full, MFD) and the
-aircraft's own hotkeys (FCU, autopilot) follow, and this list grows with them. Until then the
-other hotkeys below are the ones every aircraft shares.
+The aircraft's own hotkeys are the A380's: the FCU read-outs and windows, the autopilot panel
+(Ctrl+P), the knob pushes and pulls, the characteristic speeds the A350 publishes, fuel, weight,
+flaps, gear, altimeter, squawk and each display read aloud. Each press drives the FCU panel's own
+row, so a hotkey does exactly what that row does; what changed is said by the FMA call-out.
 
 The A350 tunes its radios only through its radio management panels; the stock COM radio
 the other aircraft use does not exist in it.
@@ -72,7 +73,81 @@ the other aircraft use does not exist in it.
 
 OUTPUT MODE - Press ] to activate
 
+FCU Controls (each window as the FCU shows it, in the typed entries' words):
+  Shift+H    Read FCU Heading ("FCU heading 293", "FCU heading dashes, managed")
+  Shift+S    Read FCU Speed ("FCU speed 250 knots, managed", "FCU speed mach 0.85")
+  Shift+A    Read FCU Altitude ("FCU altitude 40000 feet, managed")
+  Shift+V    Read FCU V/S or FPA ("FCU vertical speed +1200 feet per minute")
+
+Altitude:
+  Q          Read Altitude AGL
+  A          Read Altitude MSL
+
+Airspeed:
+  S          Read IAS (Indicated Airspeed)
+  T          Read TAS (True Airspeed)
+  G          Read Ground Speed
+  M          Read Mach Number
+
+Heading:
+  H          Read Magnetic Heading
+  U          Read True Heading
+
+Navigation:
+  Ctrl+W     Read the ND's TO waypoint (the captain's ND)
+
+Characteristic Speeds (the values the A350 itself publishes):
+  Shift+4    Read VLS (minimum selectable speed)
+  Shift+5    Read the alpha protection and alpha max speeds (the A350's PFD shows no
+             stall speed; its low-speed band starts there; "not shown" while it shows none)
+  Shift+6    Read VFE Next (next flap limit)
+  Shift+1, Shift+2 and Shift+3 (green dot, S and F) say they are not readable yet: on the
+  A350 they are symbols on the PFD's speed tape with no value of their own.
+
+Fuel:
+  F          Read Fuel On Board (pounds)
+  Shift+F    Read Fuel On Board (kilograms)
+
+Weight (the SD's own gross weight and centre of gravity):
+  W          Read Gross Weight (pounds) + center of gravity
+  Shift+W    Read Gross Weight (kilograms) + center of gravity
+
+Flaps:
+  L          Read Flap Position
+
+Landing Gear:
+  Shift+G    Read Gear Position
+
+Altimeter:
+  B          Read Altimeter Setting (hPa and inHg, or Standard)
+
+Vertical:
+  V          Read Vertical Speed
+  Ctrl+Shift+R  Read last landing rate (touchdown vertical speed, feet per minute)
+  Ctrl+Shift+G  Read last landing peak g-force
+
+Approach:
+  Ctrl+0     Read Approach Capability (the FMA's capability column, as the PFD shows it)
+
+Weather:
+  I          Wind Info
+  O          Read Outside Temperature (Celsius)
+
+Time:
+  Z          Read Local Time at aircraft position
+  Shift+Z    Read Zulu / UTC Time
+
+Transponder:
+  X          Read Squawk Code and transponder mode, as the captain's RMP shows them
+
+Trim:
+  Shift+T    Toggle Trim Announcements On/Off (the THS in degrees, as the F/CTL page shows it)
+
 Displays:
+  Alt+P      Read the captain's PFD (the FMA first, then speeds, altitude, heading, messages)
+  Alt+N      Read the captain's ND
+  Alt+S      Read the SD page shown, with its values named
+  Alt+I      Read the standby flight display
   Alt+E      Open the E/WD (Engine/Warning Display) window: engine block, every warning
              display line with its colour, the ECAM cursor and action boxes, the SD and its
              permanent data. Read with the arrow keys; auto-refreshes, F5 refreshes now,
@@ -217,6 +292,34 @@ SayIntentions:
                apply. Review the fields and press Calculate Route to start
                guidance, or turn on auto-start in the SayIntentions section
                of Settings > Taxi Guidance.
+
+Autopilot (each the FCU panel's own pushbutton; the FMA call-out says what changed):
+  Shift+A    Toggle Autopilot 1
+  Ctrl+O     Toggle Autopilot 2
+  Shift+P    Toggle Approach Mode (APPR)
+  Ctrl+J     Toggle Autothrust (A/THR)
+  Ctrl+L     Toggle Localizer (LOC)
+
+FCU Push/Pull:
+  Shift+1    Push Heading Knob
+  Ctrl+1     Pull Heading Knob
+  Shift+2    Push Altitude Knob
+  Ctrl+2     Pull Altitude Knob
+  Shift+3    Push Speed Knob
+  Ctrl+3     Pull Speed Knob
+  Shift+4    Push VS Knob
+  Ctrl+4     Pull VS Knob
+
+FCU Set Values (each opens a window: the value typed, then Enter; the knob's Push and Pull;
+the pushbuttons beside it; the window's line kept current in a read-only box):
+  Ctrl+S     Speed window (knots, or a Mach number such as 0.85; SPD/MACH)
+  Ctrl+H     Heading window (HDG-V/S / TRK-FPA)
+  Ctrl+A     Altitude window (100/1000, metric altitude, ALT level off)
+  Ctrl+V     Vertical Speed / FPA window (HDG-V/S / TRK-FPA)
+  Ctrl+P     Autopilot panel (AP 1, AP 2, LOC, APPR, FD, A/THR, ALT level off and the A/THR
+             disconnect, each labelled with its light: "AP 1: On")
+  Ctrl+B     Altimeter window (a QNH typed once sets both sides and the ISIS; STD or QNH on
+             both sides; both baros and the ISIS setting kept current)
 
 OIS (the A350's EFB, one on each side):
   Shift+T       Captain's OIS
