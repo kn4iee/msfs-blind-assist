@@ -223,12 +223,6 @@ public static class A350Pfd
         return o;
     }
 
-    private static DrawnText ToText(DrawnCell c) => new(c.Text, c.X, c.Y, c.X, c.Y, 0, ColourOf(c.Colour));
+    private static DrawnText ToText(DrawnCell c) => new(c.Text, c.X, c.Y, c.X, c.Y, 0, A350Rgba.Of(c.Colour));
 
-    private static A350Rgba ColourOf(string name) => name switch
-    {
-        "green" => new A350Rgba(0.15f, 0.85f, 0.1f, 1), "amber" => new A350Rgba(1, 0.55f, 0, 1),
-        "cyan" => new A350Rgba(0.4f, 0.86f, 1, 1), "red" => new A350Rgba(1, 0.1f, 0.1f, 1),
-        "magenta" => new A350Rgba(1, 0.4f, 1, 1), _ => new A350Rgba(1, 1, 1, 1),
-    };
 }

@@ -9,6 +9,15 @@ public readonly record struct A350Rgba(float R, float G, float B, float A)
         ("white", 1, 1, 1), ("red", 1, 0, 0), ("yellow", 1, 1, 0), ("grey", 0.5f, 0.5f, 0.5f), ("black", 0, 0, 0),
     };
 
+    /// <summary>A named colour back as a colour (white for an unknown name), so a text re-built from a cell keeps
+    /// the colour it was read with: every name <see cref="NameOf"/> gives maps back to itself.</summary>
+    public static A350Rgba Of(string name)
+    {
+        foreach (var (n, r, g, b) in Named)
+            if (n == name) return new A350Rgba(r, g, b, 1);
+        return new A350Rgba(1, 1, 1, 1);
+    }
+
     /// <summary>The nearest ECAM colour by RGB distance ("?" for no colour), as the prototype named them.</summary>
     public static string NameOf(A350Rgba? c)
     {

@@ -210,6 +210,18 @@ public class A350MfdPageTests
         Assert.DoesNotContain(status, l => l.StartsWith("ACTIVE SECOND"));
     }
 
+    // DEPARTURE in a temporary revision (live, runway 22 picked): the A350 draws temporary data yellow; a text's
+    // colour survives the row reading (yellow read as white before), and the SID list reads one button per SID.
+    [Fact]
+    public void A_temporary_revision_reads_yellow()
+    {
+        var lines = Page("mfd_departure_tmpy_sids");
+        Assert.Contains("RWY 22, LENGTH 3340 M, CRS 215°, yellow", lines);
+        Assert.Contains("FROM, white; VCBI, yellow", lines);
+        Assert.Contains("BASU1D button", lines);
+        Assert.Contains("TMPY F-PLN button, yellow", lines);
+    }
+
     [Fact]
     public void A_line_knows_where_to_click()
     {
