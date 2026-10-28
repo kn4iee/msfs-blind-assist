@@ -27,7 +27,8 @@ public static class A350Kccu
             string? key = ch switch
             {
                 >= 'A' and <= 'Z' or >= '0' and <= '9' => ch.ToString(),
-                '/' => "SLASH", '.' => "DOT", ' ' => "SPACE", '-' => "MINUS", '+' => "PLUS",
+                // The point is DECIMAL: the module's DOT key types nothing (live, the MFD's ZFW field).
+                '/' => "SLASH", '.' => "DECIMAL", ' ' => "SPACE", '-' => "MINUS", '+' => "PLUS",
                 _ => null,
             };
             if (key == null) return null;

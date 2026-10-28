@@ -7,10 +7,12 @@ namespace MSFSBlindAssist.Tests.A350;
 // the view whose wasm-instrument names the MFD gauge (the view number and guid change per session).
 public class A350MfdInputTests
 {
+    // The point is DECIMAL: live 2026-10-28, in the MFD's ZFW field, INI_MCDU1_DECIMAL typed "167." and
+    // INI_MCDU1_DOT (also a name in the module) typed nothing, so no weight or CG with a point could be entered.
     [Fact]
     public void Typed_text_maps_to_kccu_keys()
     {
-        Assert.Equal(new[] { "V", "C", "B", "I", "SLASH", "1", "2", "DOT", "5", "SPACE", "MINUS", "PLUS" },
+        Assert.Equal(new[] { "V", "C", "B", "I", "SLASH", "1", "2", "DECIMAL", "5", "SPACE", "MINUS", "PLUS" },
             A350Kccu.KeysFor("vcbi/12.5 -+"));
         Assert.Null(A350Kccu.KeysFor("VC#BI"));   // no key for '#'
     }
