@@ -107,6 +107,20 @@ public class A350EwdTests
         Assert.Equal(EcamBox.None, lines[3].Box);
     }
 
+    // Live 2026-10-28 in the hold, failures cleared: the warning display's LIMITATIONS block (the heading, ALL PHASES
+    // left and APPR & LDG right, FLAPS SLOW in cyan under APPR & LDG), then the memos, then STS at the bottom. The
+    // headings straddle the memo column, so it read "ALL PHASES, STS, LIMITATIONS, APPR & LDG, FLAPS SLOW": no telling
+    // which phase a limitation is for. The block reads in place, each limitation with its column.
+    [Fact]
+    public void The_limitations_read_each_under_its_phase_then_the_memos()
+    {
+        var lines = A350Ewd.Parse(Fixture("ctr_sd_status_inop_14")).Warning.Select(l => l.Spoken);
+        Assert.Equal(new[]
+        {
+            "LIMITATIONS, white", "APPR & LDG: FLAPS SLOW, cyan", "WXR/PWS OFF, amber", "SEAT BELTS, green", "STS, white",
+        }, lines);
+    }
+
     // Live: "WXR ..............................SYS 2" and "APU MASTER SW ......................OFF" came out
     // with their dot leaders, which a screen reader reads as "dot" thirty times. A leader reads as a colon.
     [Theory]

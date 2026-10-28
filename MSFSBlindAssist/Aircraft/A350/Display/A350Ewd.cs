@@ -80,12 +80,48 @@ public static class A350Ewd
                 boxes[row] = colour == "cyan" ? EcamBox.ToDo : EcamBox.Done;
         }
 
+        // The LIMITATIONS block: its heading, ALL PHASES left and APPR & LDG right, the cyan limitations under them. The
+        // headings straddle the memo column, so it reads in place, each limitation with its phase (live 2026-10-28 it
+        // read "ALL PHASES, STS, LIMITATIONS, APPR & LDG, FLAPS SLOW").
+        var block = new List<EcamLine>();
+        var inBlock = new HashSet<int>();
+        int phases = wdRows.FindIndex(r => r.Any(c => c.Text == "ALL PHASES") && r.Any(c => c.Text == "APPR & LDG"));
+        float blockTop = float.MaxValue;
+        if (phases >= 0)
+        {
+            var allPhases = wdRows[phases].First(c => c.Text == "ALL PHASES");
+            var apprLdg = wdRows[phases].First(c => c.Text == "APPR & LDG");
+            float split = (allPhases.X + apprLdg.X) / 2;
+            inBlock.Add(phases);
+            blockTop = wdRows[phases][0].Y;
+            if (phases > 0 && wdRows[phases - 1] is [{ Text: "LIMITATIONS" } heading])
+            {
+                inBlock.Add(phases - 1);
+                blockTop = heading.Y;
+                block.Add(new EcamLine(new[] { heading }, heading.Y, false, EcamBox.None));
+            }
+            var items = new List<IReadOnlyList<DrawnCell>>();
+            for (int k = phases + 1; k < wdRows.Count && wdRows[k].All(c => c.Colour == "cyan")
+                     && wdRows[k][0].Y - wdRows[k - 1][0].Y <= 60; k++)
+            {
+                inBlock.Add(k);
+                items.Add(wdRows[k]);
+            }
+            foreach (var (phase, inPhase) in new (DrawnCell Phase, Func<DrawnCell, bool> In)[] { (allPhases, c => c.X < split), (apprLdg, c => c.X >= split) })
+                foreach (var row in items.Select(r => r.Where(inPhase).OrderBy(c => c.X).ToList()).Where(r => r.Count > 0))
+                {
+                    row[0] = row[0] with { Text = phase.Text + ": " + WithoutLeaders(row[0].Text) };
+                    block.Add(new EcamLine(row, row[0].Y, false, EcamBox.None));
+                }
+        }
+
         // Each column reads on its own, the main one first: a row drawn across both is two lines. A procedure's choice
         // (YES and NO on one row, NO where the memo column is) is one line, and its markers are no action boxes.
         var main = new List<EcamLine>();
         var memos = new List<EcamLine>();
         for (int i = 0; i < wdRows.Count; i++)
         {
+            if (inBlock.Contains(i)) continue;
             var cells = wdRows[i].Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList();
             var left = cells.Where(c => !InMemoColumn(c)).ToList();
             var right = cells.Where(InMemoColumn).ToList();
@@ -97,7 +133,10 @@ public static class A350Ewd
             if (left.Count > 0) main.Add(new EcamLine(left, left[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None)));
             if (right.Count > 0) memos.Add(new EcamLine(right, right[0].Y, false, EcamBox.None));
         }
-        var lines = main.Concat(memos).ToList();
+        // With a LIMITATIONS block: what the main column holds above it, the block, the memos, then the main column under
+        // the block (STS, at the bottom).
+        var lines = block.Count == 0 ? main.Concat(memos).ToList()
+            : main.Where(l => l.Y < blockTop).Concat(block).Concat(memos).Concat(main.Where(l => l.Y >= blockTop)).ToList();
         return new A350EwdView(
             A350DrawLayout.Rows(A350DrawLayout.Region(capture.Texts, A350DrawLayout.CtrEngineDisplay)),
             lines,
