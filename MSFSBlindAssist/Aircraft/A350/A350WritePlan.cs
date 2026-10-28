@@ -50,6 +50,8 @@ public static class A350WritePlan
         {
             // The fire test lights every fire legend and the master warning only while held ("press and hold").
             ["AIRLINER_FIRE_TEST"] = 3000,
+            // T.O CONFIG: a 250 ms press left the memo's TO CONFIG TEST undone; 1.5 s ran it (live 2026-10-28).
+            ["AIRLINER_ECAM_TO_CONFIG"] = 1500,
         };
 
     /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>

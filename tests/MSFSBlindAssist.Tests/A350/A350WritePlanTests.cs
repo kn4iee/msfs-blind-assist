@@ -76,6 +76,15 @@ public class A350WritePlanTests : IDisposable
     }
 
     [Fact]
+    public void The_to_config_test_is_held_long_enough_to_run()
+    {
+        // Live 2026-10-28, engines running, flaps 2, brake off: a 250 ms hold left the T.O memo's "TO CONFIG TEST" cyan;
+        // PUSH_ECAM_TOCONFIG held 1.5 s turned it "TO CONFIG NORMAL" green.
+        Assert.Equal(new[] { "2 (>B:AIRLINER_ECAM_TO_CONFIG_Set)", "wait 1500", "0 (>B:AIRLINER_ECAM_TO_CONFIG_Set)" },
+            Rpn(A350WritePlan.ForPress(C("AIRLINER_ECAM_TO_CONFIG"))));
+    }
+
+    [Fact]
     public void A_light_test_the_cockpit_returns_itself_is_pressed_once()
     {
         // Live 2026-10-26: AUTOLAND flips INI_AUTOLAND_LIGHT_TEST to 1 and the cockpit puts it back within a second.
