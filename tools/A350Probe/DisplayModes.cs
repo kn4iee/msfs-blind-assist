@@ -368,7 +368,13 @@ internal static class DisplayModes
             if (caps == null || caps.Count == 0) { Console.WriteLine($"no draw ({svc.State} {svc.Reason})"); return 1; }
             cap = caps[0];
             if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
-                File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(cap));
+            {
+                // Never over a fixture a test pins (a re-capture under its name broke one, 2026-10-28): a new name, or nothing.
+                if (File.Exists(save))
+                    Console.WriteLine($"not saved: {save} exists; give the capture a new name");
+                else
+                    File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(cap));
+            }
         }
         else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
         if (!cap.Ok || cap.Texts.Count == 0)

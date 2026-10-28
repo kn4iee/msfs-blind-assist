@@ -55,18 +55,31 @@ public static class A350WritePlan
     /// blinker shows only while PRESS TO TEST is held; ACCU REINFLATE refills only while held. CVR TEST (its tone), CVR
     /// ERASE (2 s on the ground), the RMP PA keys (push to talk) and MECH call (the nose horn while held) by their own
     /// procedures. The other holds the aircraft models (the ECP and ISIS keys, the chimes) are momentary taps.
+    /// Each one's Set writes its own held L:var while the press value is 2 (<c>p0 2 == if{ 1 (&gt;L:X) } els{ 0 (&gt;L:X) }</c>,
+    /// A350_Interior.behavior.xml, 1.2.7): the cockpit's record of the button held down, by button.
     /// </summary>
-    private static readonly HashSet<string> Latched = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly IReadOnlyDictionary<string, string> Latched = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        "AIRLINER_FIRE_TEST", "AIRLINER_ECAM_TO_CONFIG", "AIRLINER_PARK_BRK_ACCU_REINFLATE",
-        "AIRLINER_OXYTEST_CPT_PANEL", "AIRLINER_OXYTEST_FO_PANEL", "AIRLINER_OXYTEST_TO_PANEL", "AIRLINER_OXYTEST_4TH_PANEL",
-        "AIRLINER_OXYTEST_CPT_MASK", "AIRLINER_OXYTEST_FO_MASK", "AIRLINER_OXYTEST_TO_MASK", "AIRLINER_OXYTEST_4TH_MASK",
-        "AIRLINER_CVR_TEST", "AIRLINER_CVR_ERASE", "AIRLINER_CALLS_MECH",
-        "AIRLINER_RMP_PA_CALL_1", "AIRLINER_RMP_PA_CALL_2", "AIRLINER_RMP_PA_CALL_3",
+        ["AIRLINER_FIRE_TEST"] = "INI_FIRE_TEST",
+        ["AIRLINER_ECAM_TO_CONFIG"] = "PUSH_ECAM_TOCONFIG",
+        ["AIRLINER_PARK_BRK_ACCU_REINFLATE"] = "INI_ACCU_REINFLATE",
+        ["AIRLINER_OXYTEST_CPT_PANEL"] = "INI_OXYTEST_BLINKER_CPT", ["AIRLINER_OXYTEST_FO_PANEL"] = "INI_OXYTEST_BLINKER_FO",
+        ["AIRLINER_OXYTEST_TO_PANEL"] = "INI_OXYTEST_BLINKER_TO", ["AIRLINER_OXYTEST_4TH_PANEL"] = "INI_OXYTEST_BLINKER_4TH",
+        ["AIRLINER_OXYTEST_CPT_MASK"] = "INI_OXYTEST_EMER_CPT", ["AIRLINER_OXYTEST_FO_MASK"] = "INI_OXYTEST_EMER_FO",
+        ["AIRLINER_OXYTEST_TO_MASK"] = "INI_OXYTEST_EMER_TO", ["AIRLINER_OXYTEST_4TH_MASK"] = "INI_OXYTEST_EMER_4TH",
+        ["AIRLINER_CVR_TEST"] = "INI_CVR_TEST",
+        ["AIRLINER_CVR_ERASE"] = "INI_CVR_ERASE",
+        ["AIRLINER_CALLS_MECH"] = "INI_CALLS_MECH",
+        ["AIRLINER_RMP_PA_CALL_1"] = "INI_RMP1_PA_CHANNEL", ["AIRLINER_RMP_PA_CALL_2"] = "INI_RMP2_PA_CHANNEL",
+        ["AIRLINER_RMP_PA_CALL_3"] = "INI_RMP3_PA_CHANNEL",
     };
 
     /// <summary>Whether a hold button is held by the pilot until pressed again (<see cref="Latched"/>).</summary>
-    public static bool IsLatched(A350Control control) => control.Kind == A350Kinds.Hold && Latched.Contains(control.Id);
+    public static bool IsLatched(A350Control control) => control.Kind == A350Kinds.Hold && Latched.ContainsKey(control.Id);
+
+    /// <summary>The L:var a latched button's Set holds at 1 while it is held down (its label reads it, and a press lets
+    /// go when it reads held); null for any other control.</summary>
+    public static string? HeldVarFor(A350Control control) => IsLatched(control) ? Latched[control.Id] : null;
 
     /// <summary>A latched button pressed down, and kept down.</summary>
     public static A350Plan ForHoldDown(A350Control control) => Steps(Set(control, control.Press ?? 2));

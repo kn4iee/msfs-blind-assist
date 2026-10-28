@@ -137,10 +137,12 @@ public partial class IniBuildsA350Definition
             _lampAnnouncer?.Announce(sentence);
     }
 
-    /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent.</summary>
+    /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; and
+    /// what MSFSBA last commanded no longer stands for the cockpit (a held button's next press reads the cockpit).</summary>
     public override void OnSimContextReset()
     {
         base.OnSimContextReset();
+        _commanded.Clear();
         _lampBoard.Reset();
         _lampSpeech.Clear();
         _leverSpeech.Reset();

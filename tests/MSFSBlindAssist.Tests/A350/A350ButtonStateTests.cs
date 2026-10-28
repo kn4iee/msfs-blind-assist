@@ -115,4 +115,55 @@ public class A350ButtonStateTests
         Assert.Null(State("A350_CALLS_FWD"));
         Assert.Null(State("A350_FCU_CHRONO_LEFT"));
     }
+
+    // A button the pilot presses and holds reads the cockpit's own record of it held: the L:var its Set writes while the
+    // press value is 2 (A350WritePlan.HeldVarFor). Review 2026-10-28: a press row is never delivered (UpdateFrequency
+    // Never), so a label composed from MSFSBA's belief never repainted after Space; this variable streams, and its
+    // delivery repaints the label, after a flight reload too.
+    [Theory]
+    [InlineData("A350_FIRE_TEST", "INI_FIRE_TEST")]
+    [InlineData("A350_ECAM_TO_CONFIG", "PUSH_ECAM_TOCONFIG")]
+    [InlineData("A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_REINFLATE")]
+    [InlineData("A350_OXYTEST_CPT_PANEL", "INI_OXYTEST_BLINKER_CPT")]
+    [InlineData("A350_OXYTEST_FO_PANEL", "INI_OXYTEST_BLINKER_FO")]
+    [InlineData("A350_OXYTEST_TO_PANEL", "INI_OXYTEST_BLINKER_TO")]
+    [InlineData("A350_OXYTEST_4TH_PANEL", "INI_OXYTEST_BLINKER_4TH")]
+    [InlineData("A350_OXYTEST_CPT_MASK", "INI_OXYTEST_EMER_CPT")]
+    [InlineData("A350_OXYTEST_FO_MASK", "INI_OXYTEST_EMER_FO")]
+    [InlineData("A350_OXYTEST_TO_MASK", "INI_OXYTEST_EMER_TO")]
+    [InlineData("A350_OXYTEST_4TH_MASK", "INI_OXYTEST_EMER_4TH")]
+    [InlineData("A350_CVR_TEST", "INI_CVR_TEST")]
+    [InlineData("A350_CVR_ERASE", "INI_CVR_ERASE")]
+    [InlineData("A350_CALLS_MECH", "INI_CALLS_MECH")]
+    [InlineData("A350_RMP_PA_CALL_1", "INI_RMP1_PA_CHANNEL")]
+    [InlineData("A350_RMP_PA_CALL_2", "INI_RMP2_PA_CHANNEL")]
+    [InlineData("A350_RMP_PA_CALL_3", "INI_RMP3_PA_CHANNEL")]
+    public void A_held_button_reads_the_cockpit_s_record_of_it_held(string row, string heldVar)
+    {
+        string key = _def.KeyForInput(heldVar);
+        Assert.Equal(UpdateFrequency.Continuous, _def.GetVariables()[key].UpdateFrequency);   // delivered
+        Assert.Contains(key, _def.GetVariables()[row].StateVariables!);                      // and it repaints the label
+        Inputs((heldVar, 1));
+        Assert.StartsWith("Pressed", State(row));
+        Inputs((heldVar, 0));
+        Assert.StartsWith("Not pressed", State(row));
+    }
+
+    [Fact]
+    public void A_held_button_reads_nothing_while_the_cockpit_s_record_is_unread() =>
+        Assert.Null(State("A350_FIRE_TEST"));
+
+    [Fact]
+    public void A_held_PA_key_reads_its_microphone_light_too()
+    {
+        // Review 2026-10-28: the label said only Pressed, and the light's own change is quieted after the pilot's press
+        // (its label says it), so the PA microphone light was on neither.
+        var light = _def.GetVariables().Single(v => v.Value.DisplayName == "Captain PA microphone light");
+        var repaint = _def.GetVariables()["A350_RMP_PA_CALL_1"].StateVariables!;
+        Assert.All(light.Value.StateVariables!, input => Assert.Contains(input, repaint));   // the light repaints it too
+        Inputs(("INI_RMP1_PA_CHANNEL", 1));
+        Assert.Equal("Pressed, light on", State("A350_RMP_PA_CALL_1"));
+        Inputs(("INI_RMP1_PA_CHANNEL", 0));
+        Assert.Equal("Not pressed, light off", State("A350_RMP_PA_CALL_1"));
+    }
 }

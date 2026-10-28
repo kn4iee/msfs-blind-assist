@@ -222,27 +222,60 @@ public class IniBuildsA350DefinitionTests
         Assert.Equal(new[] { "1 (>B:AIRLINER_APU_START_Set)" }, _sent);
     }
 
+    /// <summary>The cockpit's record of FIRE TEST held (its Set writes it, <see cref="A350WritePlan.HeldVarFor"/>).</summary>
+    private string FireTestHeld => _def.KeyForInput("INI_FIRE_TEST");
+
     [Fact]
     public void A_press_and_hold_button_is_held_until_the_pilot_presses_it_again()
     {
         // The owner's rule (2026-10-28): MSFSBA never times a hold; the pilot holds it as long as they choose.
         var reread = new List<string>();
         _def.ReRead = (key, _) => reread.Add(key);
-        Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var before));
-        Assert.Equal("Not pressed", before);
+        _cache[FireTestHeld] = 0;
 
         Set("A350_FIRE_TEST", 1);
         Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);   // pressed, and kept pressed
+        Assert.Contains(FireTestHeld, reread);   // its record is asked for at once: its delivery repaints the label
+        _cache[FireTestHeld] = 1;                // the cockpit's record arrives
         Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var held));
         Assert.Equal("Pressed", held);
-        Assert.Contains("A350_FIRE_TEST", reread);   // the label repaints
 
         Set("A350_FIRE_TEST", 1);
         Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+        _cache[FireTestHeld] = 0;
         Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var after));
         Assert.Equal("Not pressed", after);
         _def.Dispose();
         Assert.Equal(2, _sent.Count);   // released already: nothing owed
+    }
+
+    [Fact]
+    public void A_press_lets_go_of_a_button_the_cockpit_shows_held()
+    {
+        // After a flight reload, or a hold made in the cockpit itself, the cockpit is the record: Space lets go.
+        _cache[FireTestHeld] = 1;
+        Set("A350_FIRE_TEST", 1);
+        Assert.Equal(new[] { "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+    }
+
+    [Fact]
+    public void A_second_press_inside_the_cache_lag_lets_go()
+    {
+        _cache[FireTestHeld] = 0;
+        Set("A350_FIRE_TEST", 1);
+        Set("A350_FIRE_TEST", 1);   // the cache still says released: without the commanded hold this would press again
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+    }
+
+    [Fact]
+    public void After_a_flight_reload_a_press_follows_the_cockpit_not_the_press_before_it()
+    {
+        // Review 2026-10-28: the held state was MSFSBA's own and outlived a reload, so the next Space only let go.
+        _cache[FireTestHeld] = 0;
+        Set("A350_FIRE_TEST", 1);
+        _def.OnSimContextReset();   // the reload released it: the cockpit's record reads 0
+        Set("A350_FIRE_TEST", 1);
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "2 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
     }
 
     [Fact]

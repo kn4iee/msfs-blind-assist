@@ -52,6 +52,10 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>A button row with no light whose state the cockpit shows elsewhere (<see cref="A350ButtonStates"/>).</summary>
     private readonly Dictionary<string, A350ButtonState> _buttonStates = new(StringComparer.Ordinal);
 
+    /// <summary>A button row the pilot presses and holds: the L:var the cockpit holds at 1 while it is held down
+    /// (<see cref="A350WritePlan.HeldVarFor"/>).</summary>
+    private readonly Dictionary<string, string> _held = new(StringComparer.Ordinal);
+
     /// <summary>The status lines beside offered rows (<see cref="A350StatusLines"/>), by key.</summary>
     private readonly Dictionary<string, A350StatusLine> _statusLines = new(StringComparer.Ordinal);
 
@@ -169,6 +173,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         foreach (var (rowKey, state) in A350ButtonStates.ByRow)
             if (_rows.ContainsKey(rowKey) && !_buttonLamps.ContainsKey(rowKey))
                 _buttonStates[rowKey] = state;
+        foreach (var row in _rows.Values)
+            if (row.Action == A350RowAction.Press && row.Control is { } held && A350WritePlan.HeldVarFor(held) is { } heldVar)
+                _held[row.Key] = heldVar;
 
         void AddDisplay(string panel, string key)
         {
@@ -237,21 +244,25 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// (<see cref="A350ButtonStates"/>). Nothing while an input is unread.</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
-        // A button the pilot presses and holds: whether it is held now, as the pilot's own finger is.
-        if (_rows.TryGetValue(varKey, out var held) && held.Action == A350RowAction.Press && held.Control is { } control
-            && A350WritePlan.IsLatched(control))
-        {
-            stateText = IsHeld(varKey) ? "Pressed" : "Not pressed";
-            return true;
-        }
         if (_sim is { } sim && _rows.TryGetValue(varKey, out var row))
         {
-            if (_buttonLamps.TryGetValue(varKey, out var lamps))
+            // A button the pilot presses and holds: the cockpit's own record of it held down, and its lights if it has
+            // any. It streams, so the label repaints when the press lands, or a flight load lets go of it.
+            if (_held.TryGetValue(varKey, out var heldVar))
             {
-                var lit = lamps.Select(l => (l.Name, Lit: l.IsLit(key => Cached(sim, key)))).ToList();
-                if (lit.All(l => l.Lit.HasValue))
+                bool lit = _buttonLamps.ContainsKey(varKey);
+                string? lights = lit ? Legends(row, sim) : null;
+                if (Cached(sim, KeyForInput(heldVar)) is double held && (!lit || lights != null))
                 {
-                    stateText = A350ButtonStates.LegendState(row.Name, lit.Select(l => (l.Name, l.Lit!.Value)).ToList());
+                    stateText = A350ButtonStates.HeldState(held >= 0.5, lights);
+                    return true;
+                }
+            }
+            else if (_buttonLamps.ContainsKey(varKey))
+            {
+                if (Legends(row, sim) is { } legends)
+                {
+                    stateText = legends;
                     return true;
                 }
             }
@@ -263,6 +274,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             }
         }
         return base.TryDescribeControlState(varKey, out stateText);
+    }
+
+    /// <summary>A button's lights as <see cref="A350ButtonStates.LegendState"/> reads them, or null while one is unread.</summary>
+    private string? Legends(A350PlacedRow row, SimConnectManager sim)
+    {
+        var lit = _buttonLamps[row.Key].Select(l => (l.Name, Lit: l.IsLit(key => Cached(sim, key)))).ToList();
+        return lit.All(l => l.Lit.HasValue)
+            ? A350ButtonStates.LegendState(row.Name, lit.Select(l => (l.Name, l.Lit!.Value)).ToList())
+            : null;
     }
 
     /// <summary>A light's status line as the cockpit shows it, its rule AND its bus's light power: "On" or "Off".
@@ -323,8 +343,6 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             var def = BuildRowVariable(row);
             if (_buttonLamps.TryGetValue(row.Key, out var buttonLamps))
                 def.StateVariables = buttonLamps.SelectMany(l => l.InputKeys).Distinct().ToList();   // the label repaints when a light changes
-            if (row.Action == A350RowAction.Press && row.Control is { } latched && A350WritePlan.IsLatched(latched))
-                def.StateVariables = new List<string> { row.Key };   // Pressed / Not pressed repaints on its own re-read
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;
@@ -419,6 +437,18 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             }
             if (vars.TryGetValue(rowKey, out var rowDef))
                 rowDef.StateVariables = state.Vars.Select(v => _keyByName[v]).ToArray();
+        }
+
+        // What a held button reads (the cockpit's record of it held down): its label repaints with it, and with its lights.
+        foreach (var (rowKey, heldVar) in _held)
+        {
+            if (!_keyByName.ContainsKey(heldVar))
+            {
+                Register(A350PanelLamps.InputKey(heldVar), heldVar, heldVar, null);
+                _lampInputKeys.Add(A350PanelLamps.InputKey(heldVar));   // consumed silently
+            }
+            if (vars.TryGetValue(rowKey, out var rowDef))
+                rowDef.StateVariables = (rowDef.StateVariables ?? Array.Empty<string>()).Append(_keyByName[heldVar]).Distinct().ToList();
         }
 
         // A light streams its rule's first variable under its own key, which carries its status line; its rule's other

@@ -76,15 +76,14 @@ public partial class IniBuildsA350Definition
         return true;
     }
 
-    /// <summary>Latched hold buttons the pilot is holding, by row, with the run their release is owed under (sent if the
+    /// <summary>Latched hold buttons MSFSBA pressed down, by row, with the run their release is owed under (sent if the
     /// aircraft is switched away or the app closes while one is held).</summary>
     private readonly Dictionary<string, int> _heldRows = new(StringComparer.Ordinal);
 
-    /// <summary>Whether the pilot is holding a latched button down (its label: Pressed).</summary>
-    internal bool IsHeld(string rowKey) => _heldRows.ContainsKey(rowKey);
-
-    /// <summary>A button the pilot presses and holds (<see cref="A350WritePlan.IsLatched"/>): the first press holds it
-    /// down, the next lets it go, never on a timer. Its label says which, re-read at once so the reader says it.</summary>
+    /// <summary>A button the pilot presses and holds (<see cref="A350WritePlan.IsLatched"/>): a press holds it down when
+    /// the cockpit shows it released, and lets it go when the cockpit shows it held (after a flight load, or a hold made
+    /// in the cockpit, the cockpit is the record), never on a timer. Its label says which once the cockpit's record
+    /// arrives, asked for at once so the reader says it.</summary>
     private bool HandleLatched(A350PlacedRow row, A350Control control, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         if (!CanLand(sim))
@@ -92,20 +91,22 @@ public partial class IniBuildsA350Definition
             announcer.Announce($"{row.Name} unavailable");
             return true;
         }
-        bool down = !_heldRows.ContainsKey(row.Key);
+        string heldKey = KeyForInput(A350WritePlan.HeldVarFor(control)!);
+        bool down = _commanded.Resolve(heldKey, Cached(sim, heldKey), Clock()) is not >= 0.5;
         foreach (var step in (down ? A350WritePlan.ForHoldDown(control) : A350WritePlan.ForHoldUp(control)).Steps)
             if (step is A350CalcStep calc)
                 Send(sim, calc.Rpn);
+        _commanded.Record(heldKey, down ? 1 : 0, Clock());   // a second press before the record arrives lets go
+        if (_heldRows.Remove(row.Key, out int earlier))
+            _owed.Remove(earlier);   // one release owed per button at most
         if (down)
         {
             int run = ++_nextRunId;
             _heldRows[row.Key] = run;
             _owed[run] = A350WritePlan.ForHoldUp(control).Steps;
         }
-        else if (_heldRows.Remove(row.Key, out int run))
-            _owed.Remove(run);
         NoteOwnLamps(control);
-        ReRead(row.Key, sim);
+        ReRead(heldKey, sim);
         return true;
     }
 

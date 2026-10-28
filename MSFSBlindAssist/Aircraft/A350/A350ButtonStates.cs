@@ -61,6 +61,19 @@ internal static class A350ButtonStates
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
+    /// <summary>A button the pilot presses and holds: whether the cockpit has it held down, then its lights as
+    /// <see cref="LegendState"/> reads them, if it has any ("Pressed, light on").</summary>
+    public static string HeldState(bool held, string? lights)
+    {
+        string state = held ? "Pressed" : "Not pressed";
+        return lights switch
+        {
+            null => state,
+            "On" or "Off" => $"{state}, light {lights.ToLowerInvariant()}",
+            _ => $"{state}, {lights}",
+        };
+    }
+
     private static string Legend(string rowName, string lampName)
     {
         string legend = lampName.StartsWith(rowName, StringComparison.OrdinalIgnoreCase) ? lampName[rowName.Length..] : lampName;

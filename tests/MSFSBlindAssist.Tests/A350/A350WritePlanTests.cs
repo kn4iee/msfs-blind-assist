@@ -72,24 +72,38 @@ public class A350WritePlanTests : IDisposable
     // TEST undone (1.5 s ran it); a mask's flow blinker shows only while PRESS TO TEST is held; ACCU REINFLATE refills
     // the accumulators only while held (89 to 100 % in under 2 s). CVR TEST (its tone), CVR ERASE (2 s on the ground),
     // the RMP PA keys (push to talk) and MECH call (the nose horn sounds while held) are held by their own procedures.
+    // Each one's Set writes its own held L:var (`p0 2 == if{ 1 (>L:X) } els{ 0 (>L:X) }`, A350_Interior.behavior.xml,
+    // 1.2.7): the cockpit's record of the button held down, which its label reads.
     [Theory]
-    [InlineData("AIRLINER_FIRE_TEST")]
-    [InlineData("AIRLINER_ECAM_TO_CONFIG")]
-    [InlineData("AIRLINER_OXYTEST_CPT_PANEL")]
-    [InlineData("AIRLINER_OXYTEST_FO_MASK")]
-    [InlineData("AIRLINER_OXYTEST_4TH_PANEL")]
-    [InlineData("AIRLINER_PARK_BRK_ACCU_REINFLATE")]
-    [InlineData("AIRLINER_CVR_TEST")]
-    [InlineData("AIRLINER_CVR_ERASE")]
-    [InlineData("AIRLINER_RMP_PA_CALL_2")]
-    [InlineData("AIRLINER_CALLS_MECH")]
-    public void A_press_and_hold_button_is_held_until_released(string id)
+    [InlineData("AIRLINER_FIRE_TEST", "INI_FIRE_TEST")]
+    [InlineData("AIRLINER_ECAM_TO_CONFIG", "PUSH_ECAM_TOCONFIG")]
+    [InlineData("AIRLINER_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_REINFLATE")]
+    [InlineData("AIRLINER_OXYTEST_CPT_PANEL", "INI_OXYTEST_BLINKER_CPT")]
+    [InlineData("AIRLINER_OXYTEST_FO_PANEL", "INI_OXYTEST_BLINKER_FO")]
+    [InlineData("AIRLINER_OXYTEST_TO_PANEL", "INI_OXYTEST_BLINKER_TO")]
+    [InlineData("AIRLINER_OXYTEST_4TH_PANEL", "INI_OXYTEST_BLINKER_4TH")]
+    [InlineData("AIRLINER_OXYTEST_CPT_MASK", "INI_OXYTEST_EMER_CPT")]
+    [InlineData("AIRLINER_OXYTEST_FO_MASK", "INI_OXYTEST_EMER_FO")]
+    [InlineData("AIRLINER_OXYTEST_TO_MASK", "INI_OXYTEST_EMER_TO")]
+    [InlineData("AIRLINER_OXYTEST_4TH_MASK", "INI_OXYTEST_EMER_4TH")]
+    [InlineData("AIRLINER_CVR_TEST", "INI_CVR_TEST")]
+    [InlineData("AIRLINER_CVR_ERASE", "INI_CVR_ERASE")]
+    [InlineData("AIRLINER_CALLS_MECH", "INI_CALLS_MECH")]
+    [InlineData("AIRLINER_RMP_PA_CALL_1", "INI_RMP1_PA_CHANNEL")]
+    [InlineData("AIRLINER_RMP_PA_CALL_2", "INI_RMP2_PA_CHANNEL")]
+    [InlineData("AIRLINER_RMP_PA_CALL_3", "INI_RMP3_PA_CHANNEL")]
+    public void A_press_and_hold_button_is_held_until_released(string id, string heldVar)
     {
         Assert.True(A350WritePlan.IsLatched(C(id)));
+        Assert.Equal(heldVar, A350WritePlan.HeldVarFor(C(id)));
         string set = C(id).Event!;
         Assert.Equal(new[] { $"2 (>B:{set})" }, Rpn(A350WritePlan.ForHoldDown(C(id))));
         Assert.Equal(new[] { $"0 (>B:{set})" }, Rpn(A350WritePlan.ForHoldUp(C(id))));
     }
+
+    [Fact]
+    public void The_theory_above_names_every_held_button() =>
+        Assert.Equal(17, A350ControlMap.Load().Controls.Count(A350WritePlan.IsLatched));
 
     [Theory]
     [InlineData("AIRLINER_ECAM_ENG")]
@@ -97,8 +111,11 @@ public class A350WritePlanTests : IDisposable
     [InlineData("AIRLINER_ISIS_PLUS_1")]
     [InlineData("AIRLINER_CALLS_FWD")]
     [InlineData("AIRLINER_FCU_CHRONO_LEFT")]
-    public void A_momentary_key_the_aircraft_models_as_a_hold_is_still_a_tap(string id) =>
+    public void A_momentary_key_the_aircraft_models_as_a_hold_is_still_a_tap(string id)
+    {
         Assert.False(A350WritePlan.IsLatched(C(id)));
+        Assert.Null(A350WritePlan.HeldVarFor(C(id)));
+    }
 
     [Fact]
     public void A_light_test_the_cockpit_returns_itself_is_pressed_once()
