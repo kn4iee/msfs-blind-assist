@@ -3937,8 +3937,9 @@ class Curation(unittest.TestCase):
     # section's panels by the first step of BlueBird's Simplified Procedures (User Procedures PDF pages 34-62, cold and
     # dark to securing) that changes one of the panel's controls on a normal flight, page then line. Not counted: a step
     # that only checks (the whole cockpit safety inspection, any CHECK, VERIFY, CONFIRM or CHECKED step), an AS REQUIRED
-    # or AS DESIRED step, and a step that sets a control to where it rests cold and dark (BlueBird's cold and dark panel
-    # state). A panel no step changes follows, in Task 7's order. Pinned: the Pedestal keeps Control stand, Engines, TCAS
+    # or AS DESIRED step (except, round 4, a step that sets or tunes the radio, audio or ILS panels), and a step that sets
+    # a control to where it rests cold and dark (BlueBird's cold and dark panel state). A panel no step changes follows,
+    # in Task 7's order. Pinned: the Pedestal keeps Control stand, Engines, TCAS
     # and transponder first (plan 01's frozen Bbs757DefinitionTests), and the Forward panel opens with Brakes, the
     # autobrake's panel (the owner). Each panel's first change: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
     PANEL_ORDER = {
@@ -3959,11 +3960,13 @@ class Curation(unittest.TestCase):
                           "First officer foot and shoulder heat", "Yokes", "Captain autoland status",
                           "Standby instruments", "Captain DDRMI", "Captain chronometer", "First officer autoland status",
                           "First officer DDRMI", "First officer chronometer"],
-        # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
-        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "Fire protection", "Stabilizer trim",
-                     "EICAS control", "Captain EFIS", "First officer EFIS", "CDU brightness", "Radio tuning panel 1",
-                     "Audio panel 1", "Weather radar", "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2",
-                     "ILS tuning"],
+        # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it.
+        # Round 4: setting the radios counts although the step says AS REQUIRED (42:18 VHF / AUDIO / ADF, 42:27 ILS), so
+        # the radio, audio and ILS panels follow the pinned start; a PARK step still does not count.
+        "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "Radio tuning panel 1", "Audio panel 1",
+                     "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "ILS tuning", "Fire protection",
+                     "Stabilizer trim", "EICAS control", "Captain EFIS", "First officer EFIS", "CDU brightness",
+                     "Weather radar"],
         "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).

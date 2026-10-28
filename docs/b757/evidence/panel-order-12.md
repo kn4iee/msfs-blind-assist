@@ -811,16 +811,17 @@ observer 1 (it belongs with the P61 test).
 
 ## Plan 12 Task 9: the panel lists follow the preflight flow's changes
 
-The owner (2026-10-28) said "reorder", then gave the rule "Actions only". The controller's round 3 ruling reads it in that spirit: a step counts only if it changes a control on a normal flight. Each section's panels (`panel_order`) are in the order of the first step of BlueBird's Simplified Procedures (UP 34-62, cold and dark to final securing) that changes one of the panel's controls. The key is the PDF page, then the line on that page, as that page's `pdftotext -f n -l n -layout` text numbers it.
+The owner (2026-10-28) said "reorder", then gave the rule "Actions only". The controller's round 3 and round 4 rulings read it in that spirit: a step counts only if it changes a control on a normal flight. Each section's panels (`panel_order`) are in the order of the first step of BlueBird's Simplified Procedures (UP 34-62, cold and dark to final securing) that changes one of the panel's controls. The key is the PDF page, then the line on that page, as that page's `pdftotext -f n -l n -layout` text numbers it.
 
 Steps that count:
 - a press of a test or a button;
 - setting a value: a landing altitude, a heading, a speed, a frequency, a flap or trim setting;
-- ON, ARM, START, SET, or a selector to a position the control does not rest in cold and dark.
+- ON, ARM, START, SET, or a selector to a position the control does not rest in cold and dark;
+- (round 4) a step that sets a radio, audio or ILS value: a frequency, a course, a receiver or transmitter selection, in words that say SET or TUNE. It counts even when it says AS REQUIRED, because the radios are tuned on every flight.
 
 Steps that do not count:
 - a step that only checks or verifies a position: the whole cockpit safety inspection (UP 34), and any CHECK, VERIFY, CONFIRM or CHECKED step elsewhere;
-- a step marked AS REQUIRED or AS DESIRED, which is optional (AS APPROPRIATE is read the same way);
+- any other step marked AS REQUIRED or AS DESIRED, which is optional (AS APPROPRIATE is read the same way). A PARK or PARK AS APPROPRIATE step of the radios does not count either;
 - a step that sets a control to the position it already rests in cold and dark ("NORMAL", "NORM", "AUTO", "OFF", or an ON or SET of a control already on or set). Such a step confirms a position rather than moves it. The resting positions are BlueBird's own: the named L:var values of its cold and dark panel state, `Data/panel_states/coldanddark_wpb.snap`.
 
 A step counts for a panel when its words name one of the panel's controls as the manual writes them ("BATTERY SWITCH", "AUTOBRAKE SELECTOR"). Panels first changed in the same line keep their Task 7 order. The panels no step changes follow the rest, also in their Task 7 order.
@@ -847,6 +848,7 @@ Judgment calls:
 - Both EFIS panels count at the radio minimums (55:26, a value set on the EFIS control panel's minimums knob, which the map leaves out). Their earlier steps are AS REQUIRED.
 - Stabilizer trim counts at 48:29, "stabilizer set from the applicable accepted performance data". In the app the stabilizer is set with this panel's alternate stab trim buttons.
 - The flight deck door rests Open cold and dark, so "DOORS ... CLOSED" (46:22) changes it.
+- "VHF / AUDIO / ADF ... SET AS REQUIRED" (42:18) counts for all three radio tuning panels and both audio panels, which keep their Task 7 order among themselves. "ILS ... SET OR PARKED AS REQUIRED" (42:27) counts for ILS tuning, because it sets the ILS. The after-landing "ILS CONTROLS ... PARK AS APPROPRIATE" (60:31) would not.
 - Steps that only confirm a resting position, or are AS REQUIRED, leave these panels not changed in the flow:
   - Electronic engine control and Yaw dampers (both ON);
   - Panel lighting (as desired);
@@ -856,7 +858,6 @@ Judgment calls:
   - the foot and shoulder heat (as required);
   - the instrument source selectors (NORMAL);
   - Heading reference (NORM), Ground proximity overrides (OFF) and Standby instruments (AUTO);
-  - the radio tuning and audio panels, and ILS tuning (SET AS REQUIRED);
   - Weather radar (OFF).
 
 ### Overhead
@@ -924,19 +925,19 @@ Judgment calls:
 | 1 | Control stand (kept first: frozen test) | 48:23 | sets a value: the takeoff flap setting (the flap lever rests at UP cold and dark): "FLAPS ... SET / VERIFY" | 34:17 check, 37:10 confirms, 42:10 confirms, 42:13 check, 46:9 confirms, 46:49 confirms |
 | 2 | Engines (kept first: frozen test) | 47:22 | moves an engine start selector from AUTO (cold and dark) to GND: "ENGINE START SELECTOR ... GND" | 34:27 check, 38:47 confirms, 38:50 confirms, 42:14 confirms |
 | 3 | TCAS and transponder (kept first: frozen test) | 42:30 | a press of a test or a button: "TCAS TEST ... INITIATE / VERIFY" | 42:24 optional |
-| 4 | Fire protection | 42:43 | a press of a test or a button: "Press and hold the WHL WELL test button" | 42:21 check, 42:33 check, 42:42 check |
-| 5 | Stabilizer trim | 48:29 | sets a value: the stabilizer trim from the takeoff data (with this panel's alternate stab trim buttons): "stabilizer set from the applicable accepted performance data" | 41:25 check, 41:26 check |
-| 6 | EICAS control | 50:12 | presses the STATUS display button (EICAS R Status) for the lower EICAS STATUS page: "LOWER EICAS ... STATUS DISPLAY" | 36:21 check, 36:24 check, 36:27 check, 41:33 confirms |
-| 7 | Captain EFIS | 55:26 | sets a value: the radio minimums (the EFIS control panel's minimums knob): "MINIMUMS ... ___ RADIO / ___ BARO" | 41:36 optional, 50:50 optional |
-| 8 | First officer EFIS | 55:26 | sets a value: the radio minimums (the EFIS control panel's minimums knob): "MINIMUMS ... ___ RADIO / ___ BARO" | 41:36 optional, 50:50 optional |
-| 9 | CDU brightness | not changed in the flow |  |  |
-| 10 | Radio tuning panel 1 | not changed in the flow |  | 42:18 optional, 45:21 optional |
-| 11 | Audio panel 1 | not changed in the flow |  | 42:18 optional |
-| 12 | Weather radar | not changed in the flow |  | 42:17 confirms, 60:32 confirms |
-| 13 | Radio tuning panel 2 | not changed in the flow |  | 42:18 optional, 45:21 optional |
-| 14 | Radio tuning panel 3 | not changed in the flow |  | 42:18 optional, 45:21 optional |
-| 15 | Audio panel 2 | not changed in the flow |  | 42:18 optional |
-| 16 | ILS tuning | not changed in the flow |  | 42:27 optional, 60:31 optional |
+| 4 | Radio tuning panel 1 | 42:18 | sets a radio value (frequencies, courses, transmit and receive), every flight: "VHF / AUDIO / ADF ... SET AS REQUIRED" |  |
+| 5 | Audio panel 1 | 42:18 | sets a radio value (frequencies, courses, transmit and receive), every flight: "VHF / AUDIO / ADF ... SET AS REQUIRED" |  |
+| 6 | Radio tuning panel 2 | 42:18 | sets a radio value (frequencies, courses, transmit and receive), every flight: "VHF / AUDIO / ADF ... SET AS REQUIRED" |  |
+| 7 | Radio tuning panel 3 | 42:18 | sets a radio value (frequencies, courses, transmit and receive), every flight: "VHF / AUDIO / ADF ... SET AS REQUIRED" |  |
+| 8 | Audio panel 2 | 42:18 | sets a radio value (frequencies, courses, transmit and receive), every flight: "VHF / AUDIO / ADF ... SET AS REQUIRED" |  |
+| 9 | ILS tuning | 42:27 | sets a radio value (frequencies, courses, transmit and receive), every flight: "ILS ... SET OR PARKED AS REQUIRED" |  |
+| 10 | Fire protection | 42:43 | a press of a test or a button: "Press and hold the WHL WELL test button" | 42:21 check, 42:33 check, 42:42 check |
+| 11 | Stabilizer trim | 48:29 | sets a value: the stabilizer trim from the takeoff data (with this panel's alternate stab trim buttons): "stabilizer set from the applicable accepted performance data" | 41:25 check, 41:26 check |
+| 12 | EICAS control | 50:12 | presses the STATUS display button (EICAS R Status) for the lower EICAS STATUS page: "LOWER EICAS ... STATUS DISPLAY" | 36:21 check, 36:24 check, 36:27 check, 41:33 confirms |
+| 13 | Captain EFIS | 55:26 | sets a value: the radio minimums (the EFIS control panel's minimums knob): "MINIMUMS ... ___ RADIO / ___ BARO" | 41:36 optional, 50:50 optional |
+| 14 | First officer EFIS | 55:26 | sets a value: the radio minimums (the EFIS control panel's minimums knob): "MINIMUMS ... ___ RADIO / ___ BARO" | 41:36 optional, 50:50 optional |
+| 15 | CDU brightness | not changed in the flow |  |  |
+| 16 | Weather radar | not changed in the flow |  | 42:17 confirms, 60:32 confirms |
 
 ### Other
 

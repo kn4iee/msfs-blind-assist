@@ -5041,6 +5041,1490 @@
    "variant": null
   },
   {
+   "node": "B757_PED_COMHEAD_1_SWAP_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Comhead 1 Swap",
+   "kind": "button",
+   "state_var": "B757_PED_COMHEAD_1_SWAP_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_VHFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 VHF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_VHFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_VHFC_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 VHF C",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFC_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_VHFC_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_VHFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 VHF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_VHFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_HFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 HF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_HFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_HFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_HFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 HF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_HFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_TEST_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Radio Test",
+   "kind": "held",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_TEST_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool)",
+   "hold_ms": 3000,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_1_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 1",
+   "label": "Nav 1 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_1_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_1_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_L_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic L Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic L Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic R Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic R Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic C Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic C Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic PA Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic PA Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Int Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Int Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Clils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Rlils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Rvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Ladf Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Radf Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Mkr Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Voice Range",
+   "kind": "switch",
+   "state_var": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Voice"
+    },
+    {
+     "value": 1,
+     "label": "Both"
+    },
+    {
+     "value": 2,
+     "label": "Range"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lm Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic Lm Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic RR Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Mic RR Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 Boom Oxy",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_1_BOOM_OXY_SWITCH,bool) ! (>L:B757_PED_AUDIO_1_BOOM_OXY_SWITCH,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_1_PTT_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 1",
+   "label": "Audio 1 PTT",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_1_PTT_SWITCH",
+   "positions": [],
+   "press": "1 (>L:B757_PED_AUDIO_1_PTT_SWITCH, bool)",
+   "release": "0 (>L:B757_PED_AUDIO_1_PTT_SWITCH, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_COMHEAD_2_SWAP_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Comhead 2 Swap",
+   "kind": "button",
+   "state_var": "B757_PED_COMHEAD_2_SWAP_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_VHFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 VHF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_VHFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_VHFC_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 VHF C",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFC_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_VHFC_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_VHFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 VHF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_VHFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_HFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 HF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_HFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_HFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_HFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 HF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_HFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_TEST_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Radio Test",
+   "kind": "held",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_TEST_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool)",
+   "hold_ms": 3000,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_2_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 2",
+   "label": "Nav 2 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_2_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_2_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_COMHEAD_3_SWAP_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Comhead 3 Swap",
+   "kind": "button",
+   "state_var": "B757_PED_COMHEAD_3_SWAP_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
+   "release": "0 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_VHFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 VHF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_VHFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_VHFC_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 VHF C",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFC_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_VHFC_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_VHFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 VHF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_VHFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_HFL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 HF L",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_HFL_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_HFL_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_HFR_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 HF R",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_HFR_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_AM_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 AM",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_AM_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_TEST_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Radio Test",
+   "kind": "held",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_TEST_BUTTON,bool)",
+   "release": "0 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool)",
+   "hold_ms": 3000,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_NAV_3_OFF_BUTTON",
+   "section": "Pedestal",
+   "panel": "Radio tuning panel 3",
+   "label": "Nav 3 Off",
+   "kind": "button",
+   "state_var": null,
+   "positions": [],
+   "press": "1 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_3_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_3_OFF_BUTTON, bool)",
+   "release": "0 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_L_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic L Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic L Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic R Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic R Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic C Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic C Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic PA Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic PA Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Int Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Int Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Clils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Rlils Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Rvor Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Ladf Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Radf Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Mkr Light",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Voice Range",
+   "kind": "switch",
+   "state_var": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Voice"
+    },
+    {
+     "value": 1,
+     "label": "Both"
+    },
+    {
+     "value": 2,
+     "label": "Range"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lm Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic Lm Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic RR Light",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
+   "positions": [],
+   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Mic RR Light Knob",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 Boom Oxy",
+   "kind": "toggle",
+   "state_var": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Off"
+    },
+    {
+     "value": 1,
+     "label": "On"
+    }
+   ],
+   "press": "(L:B757_PED_AUDIO_2_BOOM_OXY_SWITCH,bool) ! (>L:B757_PED_AUDIO_2_BOOM_OXY_SWITCH,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_AUDIO_2_PTT_SWITCH",
+   "section": "Pedestal",
+   "panel": "Audio panel 2",
+   "label": "Audio 2 PTT",
+   "kind": "button",
+   "state_var": "B757_PED_AUDIO_2_PTT_SWITCH",
+   "positions": [],
+   "press": "1 (>L:B757_PED_AUDIO_2_PTT_SWITCH, bool)",
+   "release": "0 (>L:B757_PED_AUDIO_2_PTT_SWITCH, bool)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_PED_ILS_TEST_BUTTON",
+   "section": "Pedestal",
+   "panel": "ILS tuning",
+   "label": "ILS Test",
+   "kind": "held",
+   "state_var": "B757_PED_ILS_TEST_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
+   "release": "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
+   "hold_ms": 3000,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
    "node": "B757_PED_FIRE_WHLWELL_BUTTON",
    "section": "Pedestal",
    "panel": "Fire protection",
@@ -6464,673 +7948,6 @@
    "variant": null
   },
   {
-   "node": "B757_PED_COMHEAD_1_SWAP_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Comhead 1 Swap",
-   "kind": "button",
-   "state_var": "B757_PED_COMHEAD_1_SWAP_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_VHFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 VHF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_VHFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_VHFC_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 VHF C",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFC_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_VHFC_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_VHFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 VHF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_VHFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_VHFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_HFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 HF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_HFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_HFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_HFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 HF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_HFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_TEST_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Radio Test",
-   "kind": "held",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_1_TEST_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 3000,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_1_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 1",
-   "label": "Nav 1 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_1_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_1_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_L_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic L Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic L Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic R Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic R Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic C Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic C Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic PA Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic PA Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Int Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Int Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Clils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Rlils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Rvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Ladf Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Radf Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Mkr Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Voice Range",
-   "kind": "switch",
-   "state_var": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Voice"
-    },
-    {
-     "value": 1,
-     "label": "Both"
-    },
-    {
-     "value": 2,
-     "label": "Range"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lm Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic Lm Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic RR Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_1_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_1_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Mic RR Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 Boom Oxy",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_1_BOOM_OXY_SWITCH,bool) ! (>L:B757_PED_AUDIO_1_BOOM_OXY_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_1_PTT_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 1",
-   "label": "Audio 1 PTT",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_1_PTT_SWITCH",
-   "positions": [],
-   "press": "1 (>L:B757_PED_AUDIO_1_PTT_SWITCH, bool)",
-   "release": "0 (>L:B757_PED_AUDIO_1_PTT_SWITCH, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
    "node": "B757_PED_WX_L_WX_BUTTON",
    "section": "Pedestal",
    "panel": "Weather radar",
@@ -7291,823 +8108,6 @@
    "press": "1 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
    "release": "0 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
    "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_COMHEAD_2_SWAP_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Comhead 2 Swap",
-   "kind": "button",
-   "state_var": "B757_PED_COMHEAD_2_SWAP_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_VHFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 VHF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_VHFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_VHFC_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 VHF C",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFC_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_VHFC_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_VHFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 VHF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_VHFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_VHFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_HFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 HF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_HFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_HFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_HFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 HF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_HFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_TEST_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Radio Test",
-   "kind": "held",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_2_TEST_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 3000,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_2_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 2",
-   "label": "Nav 2 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_2_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_2_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_COMHEAD_3_SWAP_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Comhead 3 Swap",
-   "kind": "button",
-   "state_var": "B757_PED_COMHEAD_3_SWAP_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
-   "release": "0 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_VHFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 VHF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_VHFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_VHFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_VHFC_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 VHF C",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_VHFC_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFC_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_VHFC_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_VHFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 VHF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_VHFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_VHFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_VHFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_HFL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 HF L",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_HFL_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_HFL_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_HFL_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_HFR_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 HF R",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_HFR_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_AM_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 AM",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_AM_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_TEST_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Radio Test",
-   "kind": "held",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool) 1 (>L:B757_PED_NAV_3_TEST_BUTTON,bool)",
-   "release": "0 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool)",
-   "hold_ms": 3000,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_NAV_3_OFF_BUTTON",
-   "section": "Pedestal",
-   "panel": "Radio tuning panel 3",
-   "label": "Nav 3 Off",
-   "kind": "button",
-   "state_var": null,
-   "positions": [],
-   "press": "1 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool) (L:B757_PED_NAV_3_OFF_BUTTON,bool) ! (>L:B757_PED_NAV_3_OFF_BUTTON, bool)",
-   "release": "0 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_L_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic L Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic L Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic R Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic R Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic C Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic C Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic PA Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic PA Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Int Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Int Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Clils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Rlils Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Rvor Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Ladf Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Radf Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Mkr Light",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Voice Range",
-   "kind": "switch",
-   "state_var": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Voice"
-    },
-    {
-     "value": 1,
-     "label": "Both"
-    },
-    {
-     "value": 2,
-     "label": "Range"
-    }
-   ],
-   "press": null,
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lm Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic Lm Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic RR Light",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
-   "positions": [],
-   "press": "0 (>L:B757_PED_AUDIO_2_MIC_L_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_C_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_R_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_LM_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_PA_LIGHT, bool) 0 (>L:B757_PED_AUDIO_2_MIC_INT_LIGHT, bool) 1 (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Mic RR Light Knob",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool) ! (>L:B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB_STATE, bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 Boom Oxy",
-   "kind": "toggle",
-   "state_var": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
-   "positions": [
-    {
-     "value": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "label": "On"
-    }
-   ],
-   "press": "(L:B757_PED_AUDIO_2_BOOM_OXY_SWITCH,bool) ! (>L:B757_PED_AUDIO_2_BOOM_OXY_SWITCH,bool)",
-   "release": null,
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_AUDIO_2_PTT_SWITCH",
-   "section": "Pedestal",
-   "panel": "Audio panel 2",
-   "label": "Audio 2 PTT",
-   "kind": "button",
-   "state_var": "B757_PED_AUDIO_2_PTT_SWITCH",
-   "positions": [],
-   "press": "1 (>L:B757_PED_AUDIO_2_PTT_SWITCH, bool)",
-   "release": "0 (>L:B757_PED_AUDIO_2_PTT_SWITCH, bool)",
-   "hold_ms": 0,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_ILS_TEST_BUTTON",
-   "section": "Pedestal",
-   "panel": "ILS tuning",
-   "label": "ILS Test",
-   "kind": "held",
-   "state_var": "B757_PED_ILS_TEST_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
-   "release": "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
-   "hold_ms": 3000,
    "cw": null,
    "ccw": null,
    "variant": null
