@@ -66,48 +66,39 @@ public class A350WritePlanTests : IDisposable
             Rpn(A350WritePlan.ForPress(C("AIRLINER_ECAM_ENG"))));
     }
 
-    [Fact]
-    public void The_fire_test_is_held_long_enough_to_run()
+    // The owner's rule (2026-10-28): a button a pilot presses and holds is held for as long as the pilot chooses, never
+    // timed by MSFSBA: the first press holds it, the next releases it. Measured live for the reasons each needs holding:
+    // FIRE TEST raises its fire warnings and CRC only after 2.5 s held; a 250 ms T.O CONFIG left the memo's TO CONFIG
+    // TEST undone (1.5 s ran it); a mask's flow blinker shows only while PRESS TO TEST is held; ACCU REINFLATE refills
+    // the accumulators only while held (89 to 100 % in under 2 s). CVR TEST (its tone), CVR ERASE (2 s on the ground),
+    // the RMP PA keys (push to talk) and MECH call (the nose horn sounds while held) are held by their own procedures.
+    [Theory]
+    [InlineData("AIRLINER_FIRE_TEST")]
+    [InlineData("AIRLINER_ECAM_TO_CONFIG")]
+    [InlineData("AIRLINER_OXYTEST_CPT_PANEL")]
+    [InlineData("AIRLINER_OXYTEST_FO_MASK")]
+    [InlineData("AIRLINER_OXYTEST_4TH_PANEL")]
+    [InlineData("AIRLINER_PARK_BRK_ACCU_REINFLATE")]
+    [InlineData("AIRLINER_CVR_TEST")]
+    [InlineData("AIRLINER_CVR_ERASE")]
+    [InlineData("AIRLINER_RMP_PA_CALL_2")]
+    [InlineData("AIRLINER_CALLS_MECH")]
+    public void A_press_and_hold_button_is_held_until_released(string id)
     {
-        // Live 2026-10-26: the test lights every fire legend and the master warning only while held; a 250 ms tap
-        // flickers them. The manual's step is "press and hold".
-        // Live 2026-10-28: the legends light at once, but ENG 1 and ENG 2 FIRE, the master warning and its CRC come
-        // only after 2.5 s held (2 s: none; 3 s: one press in three missed them). 6 s gives about 3.5 s of chime.
-        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "wait 6000", "0 (>B:AIRLINER_FIRE_TEST_Set)" },
-            Rpn(A350WritePlan.ForPress(C("AIRLINER_FIRE_TEST"))));
-    }
-
-    [Fact]
-    public void The_to_config_test_is_held_long_enough_to_run()
-    {
-        // Live 2026-10-28, engines running, flaps 2, brake off: a 250 ms hold left the T.O memo's "TO CONFIG TEST" cyan;
-        // PUSH_ECAM_TOCONFIG held 1.5 s turned it "TO CONFIG NORMAL" green.
-        Assert.Equal(new[] { "2 (>B:AIRLINER_ECAM_TO_CONFIG_Set)", "wait 1500", "0 (>B:AIRLINER_ECAM_TO_CONFIG_Set)" },
-            Rpn(A350WritePlan.ForPress(C("AIRLINER_ECAM_TO_CONFIG"))));
+        Assert.True(A350WritePlan.IsLatched(C(id)));
+        string set = C(id).Event!;
+        Assert.Equal(new[] { $"2 (>B:{set})" }, Rpn(A350WritePlan.ForHoldDown(C(id))));
+        Assert.Equal(new[] { $"0 (>B:{set})" }, Rpn(A350WritePlan.ForHoldUp(C(id))));
     }
 
     [Theory]
-    [InlineData("CPT")]
-    [InlineData("FO")]
-    [InlineData("TO")]
-    [InlineData("4TH")]
-    public void Each_oxygen_mask_test_is_held_as_a_pilot_holds_it(string seat)
-    {
-        // Live 2026-10-28: the mask's flow blinker shows yellow only while PRESS TO TEST is held; a 250 ms tap flashed it
-        // for one read. Two seconds lets the pilot hear the flow and MSFSBA read the blinker on, then off.
-        string id = $"AIRLINER_OXYTEST_{seat}_PANEL";
-        string set = C(id).Event!;
-        Assert.Equal(new[] { $"2 (>B:{set})", "wait 2000", $"0 (>B:{set})" }, Rpn(A350WritePlan.ForPress(C(id))));
-    }
-
-    [Fact]
-    public void Accu_reinflate_is_held_until_the_accumulators_are_full()
-    {
-        // Live 2026-10-28: each parking brake application takes about 8.6 % of both accumulators; a 250 ms press of
-        // ACCU REINFLATE gave back 6 %, holding it filled them from 89 % to 100 % in under 2 s.
-        Assert.Equal(new[] { "2 (>B:AIRLINER_PARK_BRK_ACCU_REINFLATE_Set)", "wait 2000", "0 (>B:AIRLINER_PARK_BRK_ACCU_REINFLATE_Set)" },
-            Rpn(A350WritePlan.ForPress(C("AIRLINER_PARK_BRK_ACCU_REINFLATE"))));
-    }
+    [InlineData("AIRLINER_ECAM_ENG")]
+    [InlineData("AIRLINER_ECAM_CLEAR_LEFT")]
+    [InlineData("AIRLINER_ISIS_PLUS_1")]
+    [InlineData("AIRLINER_CALLS_FWD")]
+    [InlineData("AIRLINER_FCU_CHRONO_LEFT")]
+    public void A_momentary_key_the_aircraft_models_as_a_hold_is_still_a_tap(string id) =>
+        Assert.False(A350WritePlan.IsLatched(C(id)));
 
     [Fact]
     public void A_light_test_the_cockpit_returns_itself_is_pressed_once()

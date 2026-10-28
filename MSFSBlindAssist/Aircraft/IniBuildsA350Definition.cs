@@ -237,6 +237,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// (<see cref="A350ButtonStates"/>). Nothing while an input is unread.</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
+        // A button the pilot presses and holds: whether it is held now, as the pilot's own finger is.
+        if (_rows.TryGetValue(varKey, out var held) && held.Action == A350RowAction.Press && held.Control is { } control
+            && A350WritePlan.IsLatched(control))
+        {
+            stateText = IsHeld(varKey) ? "Pressed" : "Not pressed";
+            return true;
+        }
         if (_sim is { } sim && _rows.TryGetValue(varKey, out var row))
         {
             if (_buttonLamps.TryGetValue(varKey, out var lamps))
@@ -316,6 +323,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             var def = BuildRowVariable(row);
             if (_buttonLamps.TryGetValue(row.Key, out var buttonLamps))
                 def.StateVariables = buttonLamps.SelectMany(l => l.InputKeys).Distinct().ToList();   // the label repaints when a light changes
+            if (row.Action == A350RowAction.Press && row.Control is { } latched && A350WritePlan.IsLatched(latched))
+                def.StateVariables = new List<string> { row.Key };   // Pressed / Not pressed repaints on its own re-read
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
                 def.ExcludeFromBatch = true;
             vars[row.Key] = def;

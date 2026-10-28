@@ -223,9 +223,32 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void A_press_and_hold_button_is_held_until_the_pilot_presses_it_again()
+    {
+        // The owner's rule (2026-10-28): MSFSBA never times a hold; the pilot holds it as long as they choose.
+        var reread = new List<string>();
+        _def.ReRead = (key, _) => reread.Add(key);
+        Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var before));
+        Assert.Equal("Not pressed", before);
+
+        Set("A350_FIRE_TEST", 1);
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);   // pressed, and kept pressed
+        Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var held));
+        Assert.Equal("Pressed", held);
+        Assert.Contains("A350_FIRE_TEST", reread);   // the label repaints
+
+        Set("A350_FIRE_TEST", 1);
+        Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
+        Assert.True(_def.TryDescribeControlState("A350_FIRE_TEST", out var after));
+        Assert.Equal("Not pressed", after);
+        _def.Dispose();
+        Assert.Equal(2, _sent.Count);   // released already: nothing owed
+    }
+
+    [Fact]
     public void Disposing_lets_go_of_a_button_still_held()
     {
-        Set("A350_FIRE_TEST", 1);   // its 6 s hold never ends inside a test
+        Set("A350_FIRE_TEST", 1);   // held until the pilot presses it again
         Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
         _def.Dispose();
         Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);

@@ -44,24 +44,35 @@ public static class A350WritePlan
     /// <summary>How long a spring switch is held off center.</summary>
     public const int SpringHoldMs = 1000;
 
-    /// <summary>Test buttons that need a longer press, measured per subpanel (empty until measured).</summary>
+    /// <summary>Hold buttons a tap is too short for, by a fixed time (none: one a pilot holds is <see cref="Latched"/>).</summary>
     public static readonly IReadOnlyDictionary<string, int> TestHoldMs =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            // The fire test lights every fire legend at once, but raises ENG 1 and ENG 2 FIRE, the master warning and
-            // its CRC only after 2.5 s held ("press and hold"): 3 s missed them one press in three (live 2026-10-28).
-            ["AIRLINER_FIRE_TEST"] = 6000,
-            // T.O CONFIG: a 250 ms press left the memo's TO CONFIG TEST undone; 1.5 s ran it (live 2026-10-28).
-            ["AIRLINER_ECAM_TO_CONFIG"] = 1500,
-            // A mask's flow blinker shows only while PRESS TO TEST is held: a 250 ms tap flashed it (live 2026-10-28).
-            ["AIRLINER_OXYTEST_CPT_PANEL"] = 2000,
-            ["AIRLINER_OXYTEST_FO_PANEL"] = 2000,
-            ["AIRLINER_OXYTEST_TO_PANEL"] = 2000,
-            ["AIRLINER_OXYTEST_4TH_PANEL"] = 2000,
-            // ACCU REINFLATE refills both brake accumulators only while held: 250 ms gave back 6 %, holding it filled
-            // them from 89 % to 100 % in under 2 s (live 2026-10-28).
-            ["AIRLINER_PARK_BRK_ACCU_REINFLATE"] = 2000,
-        };
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Buttons a pilot presses and holds, held for as long as the pilot chooses: the first press holds, the next
+    /// releases; MSFSBA never times them (the owner's rule, 2026-10-28). Measured live: FIRE TEST raises its fire
+    /// warnings and CRC only after 2.5 s held; a 250 ms T.O CONFIG left the memo's TO CONFIG TEST undone; a mask's flow
+    /// blinker shows only while PRESS TO TEST is held; ACCU REINFLATE refills only while held. CVR TEST (its tone), CVR
+    /// ERASE (2 s on the ground), the RMP PA keys (push to talk) and MECH call (the nose horn while held) by their own
+    /// procedures. The other holds the aircraft models (the ECP and ISIS keys, the chimes) are momentary taps.
+    /// </summary>
+    private static readonly HashSet<string> Latched = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AIRLINER_FIRE_TEST", "AIRLINER_ECAM_TO_CONFIG", "AIRLINER_PARK_BRK_ACCU_REINFLATE",
+        "AIRLINER_OXYTEST_CPT_PANEL", "AIRLINER_OXYTEST_FO_PANEL", "AIRLINER_OXYTEST_TO_PANEL", "AIRLINER_OXYTEST_4TH_PANEL",
+        "AIRLINER_OXYTEST_CPT_MASK", "AIRLINER_OXYTEST_FO_MASK", "AIRLINER_OXYTEST_TO_MASK", "AIRLINER_OXYTEST_4TH_MASK",
+        "AIRLINER_CVR_TEST", "AIRLINER_CVR_ERASE", "AIRLINER_CALLS_MECH",
+        "AIRLINER_RMP_PA_CALL_1", "AIRLINER_RMP_PA_CALL_2", "AIRLINER_RMP_PA_CALL_3",
+    };
+
+    /// <summary>Whether a hold button is held by the pilot until pressed again (<see cref="Latched"/>).</summary>
+    public static bool IsLatched(A350Control control) => control.Kind == A350Kinds.Hold && Latched.Contains(control.Id);
+
+    /// <summary>A latched button pressed down, and kept down.</summary>
+    public static A350Plan ForHoldDown(A350Control control) => Steps(Set(control, control.Press ?? 2));
+
+    /// <summary>A latched button let go.</summary>
+    public static A350Plan ForHoldUp(A350Control control) => Steps(Set(control, 0));
 
     /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>
     public static readonly IReadOnlyDictionary<string, int> SpringHolds =
