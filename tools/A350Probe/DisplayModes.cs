@@ -144,7 +144,12 @@ internal static class DisplayModes
         Console.Error.WriteLine($"loaded copy in {sw.ElapsedMilliseconds} ms, {draw.CustomVariableCount} custom vars");
         draw.HostError = (n, ex) => Console.Error.WriteLine($"HOST ERROR {n}: {ex.GetType().Name} {ex.Message.Split((char)10)[0]}");
         var n2 = double.Parse(Environment.GetEnvironmentVariable("A350_N2") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
-        draw.AVarAnswer = k => k.StartsWith("KOHLSMAN SETTING HG") ? 29.92 : k.StartsWith("TURB ENG N2") ? n2 : null;
+        // `A350_LAT` / `A350_LON`: the aircraft's position for the EFIS's own asks (the ANF is drawn around it).
+        static double? Env(string name) => double.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        double? lat = Env("A350_LAT"), lon = Env("A350_LON");
+        draw.AVarAnswer = k => k.StartsWith("KOHLSMAN SETTING HG") ? 29.92 : k.StartsWith("TURB ENG N2") ? n2
+            : k.StartsWith("PLANE LATITUDE") ? lat : k.StartsWith("PLANE LONGITUDE") ? lon : null;
         // Marker idents for the calculator string asks, to see where the draw shows them.
         draw.CalcStringAnswer = code => code.Contains("NAV IDENT:2") ? "XNV2" : code.Contains("ADF IDENT:1") ? "XAD1"
             : code.Contains("ADF IDENT:2") ? "XAD2" : code.Contains("NAV IDENT:1") ? "XNV1" : null;
@@ -173,6 +178,7 @@ internal static class DisplayModes
                 File.WriteAllText(Path.Combine(jsonDir, g.Replace('#', '_') + ".json"), System.Text.Json.JsonSerializer.Serialize(cap,
                     new System.Text.Json.JsonSerializerOptions { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             Console.Error.WriteLine($"== {g}: {cap.Texts.Count} texts, {cap.Frames.Count} frames, {cap.Elements.Count} elements in {cap.Milliseconds:F1} ms {cap.Error}");
+            if (!cap.Ok && Environment.GetEnvironmentVariable("A350_TRAP") == "1") Console.Error.WriteLine(draw.LastTrap);
             foreach (var t in cap.Texts)
                 Console.WriteLine($"{F0(t.X).PadLeft(5)} {F0(t.Y).PadLeft(5)} ( {F0(t.LocalX)} {F0(t.LocalY)} ) {t.ColourName.PadRight(7)} {System.Text.Json.JsonSerializer.Serialize(t.Text, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })}");
             foreach (var f in cap.Frames)

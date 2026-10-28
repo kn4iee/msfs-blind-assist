@@ -541,6 +541,63 @@ internal sealed class ProbeForm : Form
             return;
         }
 
+        if (_mode == "nd")
+        {
+            // ND operations, ";"-separated: click:side:x:y (the EFIS gauge's point as drawn: the ND is right of 836),
+            // key:side:KEY, type:side:TEXT, views (each WasmInstrument view's guid|url). The ND takes the mouse only with
+            // the side's KCCU cursor on it [A350-4], so a click presses the side's ND key first.
+            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput((name, v) =>
+            {
+                _m.ExecuteCalculatorCodeUnique($"{v.ToString(CultureInfo.InvariantCulture)} (>L:{name})");
+                return true;
+            });
+            const string Find = "(function(){var e=document.querySelector('wasm-instrument');return e?e.getAttribute('guid')+'|'+e.getAttribute('url'):''})()";
+            var views = new List<(string Title, string GuidUrl)>();
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) })
+            {
+                var list = await http.GetStringAsync("http://127.0.0.1:19999/pagelist.json");
+                using var doc = System.Text.Json.JsonDocument.Parse(list);
+                foreach (var page in doc.RootElement.EnumerateArray())
+                {
+                    var title = page.TryGetProperty("title", out var t) ? t.GetString() ?? "" : "";
+                    if (title.Contains("WasmInstrument", StringComparison.Ordinal))
+                        views.Add((title, await CoherentEvalClient.EvalAsync(title, Find, CancellationToken.None) ?? ""));
+                }
+            }
+            // The EFIS views in panel.cfg order: the captain's (parameter L) first, the first officer's (R) second.
+            var efis = views.Where(v => v.GuidUrl.Contains("wasm_gauge=EFIS", StringComparison.Ordinal)).OrderBy(v => v.Title, StringComparer.Ordinal).ToList();
+            foreach (var op in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var p = op.Split(':');
+                if (p[0] == "views") { foreach (var v in views) Line($"{v.Title}\t{v.GuidUrl}"); continue; }
+                int side = int.Parse(p[1]);
+                string result;
+                if (p[0] == "click")
+                {
+                    var view = efis.FirstOrDefault(v => v.GuidUrl.EndsWith(side == 0 ? ",L" : ",R", StringComparison.Ordinal)
+                        || v.GuidUrl.Contains(side == 0 ? "EFIS,L" : "EFIS,R", StringComparison.Ordinal));
+                    if (view.Title == null && efis.Count == 2) view = efis[side];
+                    if (view.Title == null) { Line($"{op}\tno EFIS view ({efis.Count} found)"); continue; }
+                    input.Press(side, "ND");
+                    await Task.Delay(250);
+                    int guid = int.Parse(view.GuidUrl.Split('|')[0], CultureInfo.InvariantCulture);
+                    string at = $"{guid},{p[2]},{p[3]},0";
+                    result = await CoherentEvalClient.EvalAsync(view.Title, $"(function(){{Coherent.call('WASM_MOUSE_MOVE',{at});Coherent.call('WASM_MOUSE_DOWN',{at});" +
+                        $"setTimeout(function(){{Coherent.call('WASM_MOUSE_UP',{at});Coherent.call('WASM_CLICK',{at});}},120);return 'ok'}})()", CancellationToken.None) ?? "null";
+                    result += " via " + view.GuidUrl;
+                }
+                else result = p[0] switch
+                {
+                    "type" => (await input.TypeAsync(side, p[2])).ToString(),
+                    "key" => input.Press(side, p[2]).ToString(),
+                    _ => "unknown",
+                };
+                Line($"{op}	{result}");
+                await Task.Delay(700);
+            }
+            return;
+        }
+
         if (_mode == "rpn")
         {
             // Raw calculator strings through MSFSBA's own sender, each followed by its pause ("code#ms;code#ms"), then
