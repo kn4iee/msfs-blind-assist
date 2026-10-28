@@ -95,6 +95,48 @@ The owner: "The panel items should be ordered where most frequently every day it
 - App rows are not map nodes and are placed by their own code: the landing altitude field stays first in Pressurization; Task 3 puts the trim buttons first in Stabilizer trim (rudder, aileron, then the alternate stab trim) and the cabin buttons last in Pressurization.
 - [x] Regenerate, check every panel of the map against the research's order (a script in the workspace), run the generator tests and the full suite, commit `feat(b757): every panel's every-day controls first`.
 
+### Task 5: The cockpit tests behave as the cockpit's (added 2026-10-28, the owner's instruction)
+
+The owner: "Test in sim and revise accordingly." Measured in flight the same day (`flight-12.md`, "The fire test, the P61
+test switches and the master lights"): the fire, CVR and squib tests show only while their button is held, the app's
+0.2 s press gives a blip at most; the P61 test switches return to neutral by themselves at once, so one write runs no
+test, and a test runs only while its position is written again about every 30 ms; the lamp test toggles; the master
+warning and caution buttons work (one press clears both sides and silences the bell) and stay as they are.
+
+**Task 5a (map).** Files: generator, `curation.json`, the map, `test_generate_b757_map.py`, `Bbs757ControlMapTests.cs`.
+- A new curation key `hold_ms` (node → milliseconds) makes a button the rules keep a held button (kind `held`) with that
+  hold, its press and release unchanged. Checked like the other keys (a node the package lacks, a control that is not a
+  button with both a press and a release, a node also under kinds, a hold under 500 or over 10,000 ms: errors).
+- Held 3,000 ms: the fire tests (`B757_PED_FIRE_ENG_BUTTON`, `B757_PED_FIRE_CARGO_BUTTON`, `B757_PED_FIRE_WHLWELL_BUTTON`),
+  the CVR test (`B757_OVHD_SW_CVR_TEST`) and the squib test (`B757_P6_SQUIBS_BUTTON2`), measured; and, the same for one
+  rule (a test is held until it shows), the TCAS test (`B757_PED_TCAS_MODE_KNOB_TEST_CLICK`), the takeoff check
+  (`B757_MAIN_TOCHK_BUTTON`), the four oxygen tests (`OXY_CAPT_TEST_SWITCH001`, `OXY_FO_TEST_SWITCH1`,
+  `OXY_OBSV_TEST_SWITCH`, `OXY_P61_TEST_SWITCH`), the autoland status tests (`B757_MAIN_L/R_AUTOLAND_1/2_BUTTON`, not the
+  resets), the weather radar test (`B757_PED_WX_L_TEST_BUTTON`), the ILS test (`B757_PED_ILS_TEST_BUTTON`) and the three
+  radio panel tests (`B757_PED_NAV_1/2/3_TEST_BUTTON`). Their labels stay as they are; the hold and the
+  release go through the app's existing held-button path (`Bbs757Write.PressFor`, `PressAsync`).
+- The eight P61 test switches (`B757_VC_P61_SWITCH_3` to `_10`) leave the map (`exclude_nodes`, with a note: they are
+  spring-loaded with an instant return, Task 5b gives them buttons). Their state vars stay readable by the app (5b).
+
+**Task 5b (app).** Files: `Bbs757SpringControls.cs`, `BBS757Definition.Overhead.cs`, `Bbs757SpringControlsTests.cs`
+(and `Bbs757LandingAltitudeTests.cs` only if a list it pins changes).
+- The spring controls gain a hold length and a re-write gap per control: the trims and the cabin switch as today
+  (1,000 ms, 500 ms); the P61 tests 3,000 ms, re-written every 30 ms (measured: 30 ms holds steadily, 100 ms drops out).
+  One button per test position, released to neutral (1) with the same verified release; after the release the press
+  says "{test} done" (the lights and warnings it raised are the cockpit watcher's to say, plan 13).
+- Buttons, in the P61 panel where each switch was, the discriminator first: Takeoff Config Test 3 s (`BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW` 0),
+  Landing Config Test 3 s (2); Left Air Data Test 3 s (`BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW` 0), Left Stall Warning Test 3 s (2);
+  Right Air Data Test 3 s, Right Stall Warning Test 3 s (`…_RIGHT_…`); Ground Proximity Test 3 s
+  (`BBS757_GRNDPROX_HYDGEN_P61_TEST_SW` 0), Hydraulic Generator Test 3 s (2); Upper Equipment Cooling Test 3 s
+  (`BBS757_EQUIP_COOLING_P61_TEST_SW` 0), Lower Equipment Cooling Test 3 s (2); Upper Yaw Damper Test 3 s
+  (`BBS757_YAW_DAMP_P61_TEST_SW` 0), Lower Yaw Damper Test 3 s (2); Upper Duct Leak Fuel Qty Test 3 s
+  (`BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW` 0), Lower Duct Leak Fuel Qty Test 3 s (2; BlueBird names neither position);
+  Wing Anti-ice Test 3 s (`BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW` 0), Probe Heat Test 3 s (2).
+- The lamp test (the map's Warning Test, `B757_OVHD_WARNING_TEST_BUTTON`) is pressed as today, then read back:
+  `L:OVHD_TEST_LTS` 1 says "Lamp test on", 0 "Lamp test off" (it latches: a second press turns it off).
+- [ ] 5a: tests first, then the curation and generator, regenerate, full suite, commit `feat(b757): the cockpit test buttons hold as the cockpit's`.
+- [ ] 5b: tests first (the P61 hold re-written at 30 ms for 3 s, released to 1; "{test} done"; the lamp test's two phrases), full suite, commit `feat(b757): the P61 tests and the lamp test from their buttons`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Forward panel > Display brightness, Captain PFD to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Tab through Electrical, Exterior lights and MCP: the every-day controls come first (Electrical: Battery, EXT PWR, …).

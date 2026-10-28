@@ -105,8 +105,44 @@ both engines running, ground power gone), which was found only after the first w
   `BBS_FO_MASTER_*`). Written back to 0, every one of them read 0 again about 2 s later, the master lights included (no
   latch); the fuel control switches (`BBS_fuelcut_PW1/2`) never moved and the engines kept running (N1 about 90 %). So
   the test shows only while the button is held: the app's 200 ms button press gives a blip at most.
-- P61 test switches (template `BBS_3POS_P61_TEST_SWITCH`, XML 490): `MOMENTARY_SWITCH` with `LEFT_UP_CODE` writing 1, so
-  only the cockpit mouse's release returns a switch to neutral; an outside write of a test position stays there (read
-  from the source, not tried: not in flight).
-- Master warning and caution buttons (`B757_MCP_btn_master_pilot` / `_copilot`): not measured; the fire test's lights
-  went out on release by themselves, so there was nothing to cancel. Needs a caution that stays on, on the ground.
+The owner then said to continue in flight ("they should not impact flight"). Each test below was held through the
+calculator (MCP, execute mode), read with a snapshot diff against an idle one (minus the 22 vars that drift on their
+own in flight), released, and read again. Everything read as before afterwards.
+
+- Cargo fire test (`L:B757_PED_FIRE_CARGO_BUTTON`): the whole ENG/APU/CARGO test while held: the engine indications above
+  plus `B757_APU_FIRE_ACTIVE`, `B757_APU_HANDLE_AUTO_UNLOCK`, `B757_FWD/AFT_CARGO_FIRE_ACTIVE`, `B757_PED_FIRE_FWD/AFT_DECAL`,
+  the bell and both sides' master warning and caution; all cleared on release.
+- Wheel well fire test (`L:B757_PED_FIRE_WHLWELL_BUTTON`): the bell, `B757_MAIN_WHEELWELL_1_DECAL`, `B757_MAIN_FIRE_1_DECAL`,
+  master warning (both sides, no caution) while held; cleared on release.
+- Master warning and caution buttons: during a held fire test, the captain's button (its map press code, then its
+  release code) turned the bell off (`B757_FIRE_BELL` 1 → 0) and cleared master warning AND caution on BOTH sides
+  (`BBS_CA_MASTER_*`, `BBS_FO_MASTER_*` 1 → 0), the fire lights staying on while the test was held; the first officer's
+  button did the same during the cargo test. So they work as the cockpit's (one press cancels both sides and silences
+  the bell).
+- P61 test switches: WRONG above, corrected by measurement. A single write of a test position is returned to 1 (neutral)
+  almost at once: the Asobo 3-state template's `STATE0_TIMER 0.01` returns the switch while no mouse holds it. Read
+  about 1 s after one write, the switch was 1 and nothing had happened, so the app's pick (one write) never runs the test.
+  Held by writing the position again and again: every 30 ms (about 40 ms in practice, 60 writes in 2.4 s) the switch
+  held and the test ran steadily (sampled every 20 ms: shaker on throughout); every 50 ms (about 67 ms in practice) it
+  held but the switch read 1 at 2 of 45 samples; every 100 ms (about 130 ms) it dropped out for about 40 ms between
+  writes (the stick shaker too). Held that way for 2.4 s each, in flight:
+  - stall warning test, left (`BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW` = 2): `BBS757_STICK_SHAKER_CA` 1, the pitch limit
+    indicator shown (`BBS757_PLI_VISIBLE` 1, `BBS757_PLI_PITCH_LIMIT_DEG` about 6); right (`…_RIGHT_…` = 2): the first
+    officer's shaker `BBS757_STICK_SHAKER_FO` 1 and the indicator; both stopped when the writes stopped;
+  - landing configuration test (`BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW` = 2): `B757_MAIN_CONFIG_1_DECAL` 1, master warning
+    both sides and its aural (`BBS_PLAY_MASTER_WARNING_A` 1); cleared after (no latch);
+  - nothing seen in flight: the takeoff configuration test (that switch = 0), the air data test (stall left = 0), the
+    ground proximity test (`BBS757_GRNDPROX_HYDGEN_P61_TEST_SW` = 0; BlueBird's list: implemented at 0) and its
+    hydraulic generator test (2), the duct leak / fuel quantity test (0, 2), the wing anti-ice and probe heat tests
+    (`BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW` 0, 2), the equipment cooling test (0, 2). The takeoff configuration and ground
+    proximity tests are ground tests in the 757 (inferred: they may be inhibited in flight); the others may not be
+    modelled. To check on the ground. The yaw damper test was not tried in flight.
+- Other test buttons, held about 2 s: the CVR test (`L:B757_OVHD_CVR_Test`) swings the monitor needle
+  (`B757_OVHD_CVR_DIAL` 0 → 1) while held, back to 0 on release; the squib test (`L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON`)
+  lights the nine bottle squib lights (`B757_ENG_BTL1/2_L/R_`, `B757_APU_BTL_`, `B757_CARGO_BTL1/2_A/F_SQUIB_LIGHT`) while
+  held, off on release; the TCAS test, the takeoff check button (`B757_MAIN_TOCHK_BUTTON`), the captain's oxygen test and
+  the ILS test changed nothing but their own var in flight (ground tests, or sound only). The autoland status tests were
+  not tried in flight.
+- The lamp test (Warning Test, `OVHD_TEST_LTS_PRESS`) is not held: its press toggles `L:OVHD_TEST_LTS` (when circuit 27
+  is on) and it stays on after the release (the overhead fault lights, the IRS lights, the radio panels' lights all
+  on); a second press turns it off. Turned off again.
