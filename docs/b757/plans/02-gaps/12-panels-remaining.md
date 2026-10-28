@@ -224,7 +224,7 @@ The owner: "I wanted engine 1 start then fuel, then engine 2's controls. Right n
 fuel levers." `control_order["Engines"]`: Ignition (both engines), L ENG Start, L Fuel Control (PW), L Fuel Control (RR),
 R ENG Start, R Fuel Control (PW), R Fuel Control (RR) — the loaded type's pair shows (Task 8), so on an RR: Ignition,
 L ENG Start, L Fuel Control, R ENG Start, R Fuel Control. This replaces ruling R37's order for this panel.
-- [ ] Test first, regenerate, full suite, commit `fix(b757): the Engines panel lists engine 1's start and fuel, then engine 2's`.
+- [x] Test first, regenerate, full suite, commit `fix(b757): the Engines panel lists engine 1's start and fuel, then engine 2's`. Plan 01's frozen `Bbs757DefinitionTests` Engines test was updated to the new order (its expected array only), as the owner's instruction replaces ruling R37's order it pinned.
 
 ## In-sim checks (owner)
 
