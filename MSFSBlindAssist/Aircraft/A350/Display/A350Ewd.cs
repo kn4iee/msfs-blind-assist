@@ -28,15 +28,23 @@ public static class A350Ewd
     /// <summary>A row's glyphs sit above its baseline: about the ECAM font's height.</summary>
     private const float GlyphHeight = 22;
 
-    // A dot leader between an item and its action ("APU MASTER SW ......OFF") reads as a colon; a trailing
-    // one is dropped. A screen reader would otherwise say "dot" thirty times.
-    private static readonly System.Text.RegularExpressions.Regex Leader = new(@"\s*\.{3,}\s*", System.Text.RegularExpressions.RegexOptions.Compiled);
+    // A dot leader between an item and its action ("APU MASTER SW ......OFF", the T.O memo's "TO CONFIG ..TEST")
+    // reads as a colon; a trailing one is dropped. A screen reader would otherwise say "dot" thirty times. A done
+    // memo item is drawn with a spaced colon ("FLAPS : TO"), read as the leader is; never between digits (a time).
+    private static readonly System.Text.RegularExpressions.Regex Leader = new(@"\s*\.{2,}\s*", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex SpacedColon = new(@"(?<!\d)\s+:\s+", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     internal static string WithoutLeaders(string text)
     {
         var t = text.Trim();
-        return Leader.Replace(t, m => m.Index + m.Length == t.Length ? "" : ": ");
+        return SpacedColon.Replace(Leader.Replace(t, m => m.Index + m.Length == t.Length ? "" : ": "), ": ");
     }
+
+    // The warning display's right column of memos (ADS-B TRAFFIC ON, COMPANY MSG, live x 1253), beside the main column
+    // (memos and procedures, x 856-886); the CLEAR prompt further right (x 1514) belongs to its procedure.
+    private const float MemoColumnX = 1240, MemoColumnEnd = 1480;
+
+    private static bool InMemoColumn(DrawnCell c) => c.X >= MemoColumnX && c.X < MemoColumnEnd;
 
     private static bool IsDotRow(IReadOnlyList<DrawnCell> row) => row.All(c => c.Text.Trim('.', ' ').Length == 0);
 
@@ -72,7 +80,18 @@ public static class A350Ewd
                 boxes[row] = colour == "cyan" ? EcamBox.ToDo : EcamBox.Done;
         }
 
-        var lines = wdRows.Select((r, i) => new EcamLine(r.Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList(), r[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None))).ToList();
+        // Each column reads on its own, the main one first: a row drawn across both is two lines.
+        var main = new List<EcamLine>();
+        var memos = new List<EcamLine>();
+        for (int i = 0; i < wdRows.Count; i++)
+        {
+            var cells = wdRows[i].Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList();
+            var left = cells.Where(c => !InMemoColumn(c)).ToList();
+            var right = cells.Where(InMemoColumn).ToList();
+            if (left.Count > 0) main.Add(new EcamLine(left, left[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None)));
+            if (right.Count > 0) memos.Add(new EcamLine(right, right[0].Y, false, EcamBox.None));
+        }
+        var lines = main.Concat(memos).ToList();
         return new A350EwdView(
             A350DrawLayout.Rows(A350DrawLayout.Region(capture.Texts, A350DrawLayout.CtrEngineDisplay)),
             lines,

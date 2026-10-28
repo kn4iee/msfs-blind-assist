@@ -23,6 +23,20 @@ public class A350EwdTests
         }, ewd.Warning.Select(l => l.Spoken));
     }
 
+    // Live after the second engine start, before the T.O CONFIG test (2026-10-28): the T.O memo in the main
+    // column (x 856-886) and two memos in the right column (x 1253) drawn level with its first lines. Each column
+    // reads on its own, the main one first; the memo's leaders (".....", "..") and a done item's " : " read as ": ".
+    [Fact]
+    public void The_to_memo_reads_before_the_memos_beside_it()
+    {
+        var ewd = A350Ewd.Parse(Fixture("ctr_to_memo"));
+        Assert.Equal(new[]
+        {
+            "T.O, white", "SIGNS: ON, cyan", "CABIN: READY, cyan", "GND SPLRs: ARM, cyan", "FLAPS: TO, green",
+            "AUTO BRK: RTO, cyan", "TO CONFIG: TEST, cyan", "ADS-B TRAFFIC ON, green", "COMPANY MSG, green",
+        }, ewd.Warning.Select(l => l.Spoken));
+    }
+
     [Fact]
     public void The_cursor_and_the_action_box_belong_to_their_line()
     {
