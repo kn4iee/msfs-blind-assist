@@ -41,4 +41,6 @@ public static class A350DisplayStatus
     public const string GettingReady = "A350 displays getting ready";
     public const string Ready = "A350 displays ready";
     public static string NotAvailable(string reason) => "A350 displays not available: " + reason;
+    public const string Unreadable = "A350 displays cannot be read at the moment";
+    public const string Readable = "A350 displays readable again";
 }

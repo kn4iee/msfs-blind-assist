@@ -13,6 +13,7 @@ public enum A350DisplayState { Idle, Preparing, Ready, Unavailable }
 /// compiled (spoken: "A350 displays getting ready", then "ready"). A draw request takes one fresh memory
 /// copy for all the gauges it names, so they agree with each other; a trapped draw is retried once on a
 /// new copy (a torn copy, [A350-2]); the A350 is re-located when its anchors no longer read (a reload).
+/// When every draw keeps failing the pilot is told, and told again when they read (<see cref="A350ReadHealth"/>).
 /// </summary>
 public sealed class A350DisplayService : IDisposable
 {
@@ -26,6 +27,7 @@ public sealed class A350DisplayService : IDisposable
     private A350ModuleFacts? _facts;
     private Func<string, double?> _aVar = _ => null;
     private Func<string, string?> _calcString = _ => null;
+    private readonly A350ReadHealth _health = new();
     private bool _disposed;
 
     /// <summary>A status sentence to speak (getting ready, ready, not available).</summary>
@@ -130,6 +132,7 @@ public sealed class A350DisplayService : IDisposable
                     }
                     caps.Add(cap);
                 }
+                if (_health.Report(caps.Any(c => c.Ok), DateTime.UtcNow) is { } said) Spoken?.Invoke(said);
                 tcs.SetResult(caps);
             }
             catch (Exception ex)
