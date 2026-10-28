@@ -23,9 +23,27 @@ public static partial class A350PanelLayout
     private static string WithoutButton(string shortId) =>
         shortId.EndsWith(ButtonSuffix, StringComparison.Ordinal) ? shortId[..^ButtonSuffix.Length] : shortId;
 
-    /// <summary>An RMP control's spoken name from its id without the RMP_ prefix and the _n suffix. A reception knob's
-    /// push-pull (its _BUTTON, INI_RMPn_m_RECEIVE_SEL) is its radio's reception: pulled out, the radio is heard.</summary>
+    /// <summary>An RMP control's spoken name, by its RMP first, as the EFIS panels' twins ("Captain LS"): Ctrl+M is one
+    /// flat list, where three "VHF1 reception" rows could not be told apart [VAR-1]. A word after the side is lowercased
+    /// ("Captain key 1"), a placard kept ("Captain VHF1 reception").</summary>
     private static string RmpName(string shortId, string title)
+    {
+        string name = RmpBaseName(shortId, title);
+        if (name.Length > 1 && char.IsUpper(name[0]) && char.IsLower(name[1]))
+            name = char.ToLowerInvariant(name[0]) + name[1..];
+        return RmpSide(shortId) + " " + name;
+    }
+
+    private static string RmpSide(string shortId) => WithoutButton(shortId)[^1] switch
+    {
+        '1' => "Captain",
+        '2' => "First officer",
+        _ => "RMP 3",
+    };
+
+    /// <summary>An RMP control's name from its id without the RMP_ prefix and the _n suffix. A reception knob's
+    /// push-pull (its _BUTTON, INI_RMPn_m_RECEIVE_SEL) is its radio's reception: pulled out, the radio is heard.</summary>
+    private static string RmpBaseName(string shortId, string title)
     {
         bool reception = shortId.EndsWith(ButtonSuffix, StringComparison.Ordinal);
         string id = WithoutButton(shortId);

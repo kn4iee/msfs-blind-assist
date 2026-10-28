@@ -35,33 +35,34 @@ public class A350PedestalPanelTests
     }
 
     // The three RMPs (manual pp. 23, 74): every key, page key, microphone key, volume knob and reception (the knob pulled
-    // out), in the cockpit file's
-    // order, named as the manual names them (line select keys load a standby, activation keys swap it in). iniBuilds
-    // names the VOICE key "VHF1" too: it is Voice.
+    // out), in the cockpit file's order, named as the manual names them (line select keys load a standby, activation keys
+    // swap it in), each RMP's twin rows by their RMP first, as the EFIS panels' ("Captain LS"): Ctrl+M is one flat list,
+    // where three "VHF1 reception" rows could not be told apart. iniBuilds names the VOICE key "VHF1" too: it is Voice.
     [Theory]
-    [InlineData("Captain RMP", 1)]
-    [InlineData("First Officer RMP", 2)]
-    [InlineData("RMP 3", 3)]
-    public void Each_rmp_is_a_panel_of_its_own_keys(string panel, int n)
+    [InlineData("Captain RMP", 1, "Captain")]
+    [InlineData("First Officer RMP", 2, "First officer")]
+    [InlineData("RMP 3", 3, "RMP 3")]
+    public void Each_rmp_is_a_panel_of_its_own_keys(string panel, int n, string side)
     {
         var rows = Placement.RowsByPanel[panel];
         Assert.Equal(64, rows.Count);   // 53 keys and knobs, and the 11 reception knobs' push-pull
         Assert.All(rows, r => Assert.Matches($"_{n}(_BUTTON)?$", r.Control!.Id));
         Assert.Equal(rows.Count, rows.Select(r => r.Name).Distinct().Count());
+        Assert.All(rows, r => Assert.StartsWith(side + " ", r.Name));
         var named = Rows(panel).ToList();
-        foreach (var row in new[]
+        foreach (var (name, action, positions) in new[]
         {
-            ("Key 1", Press, ""), ("Key 0", Press, ""), ("Up arrow", Press, ""), ("Down arrow", Press, ""), ("Clear", Press, ""),
-            ("Point", Press, ""), ("Load", Press, ""), ("Line select key 1", Press, ""), ("Line select key 3", Press, ""),
-            ("Message clear", Press, ""), ("Activation key 1", Press, ""), ("Activation key 3", Press, ""),
+            ("key 1", Press, ""), ("key 0", Press, ""), ("up arrow", Press, ""), ("down arrow", Press, ""), ("clear", Press, ""),
+            ("point", Press, ""), ("load", Press, ""), ("line select key 1", Press, ""), ("line select key 3", Press, ""),
+            ("message clear", Press, ""), ("activation key 1", Press, ""), ("activation key 3", Press, ""),
             ("VHF page", Press, ""), ("HF page", Press, ""), ("TEL page", Press, ""), ("SQWK page", Press, ""),
             ("MENU page", Press, ""), ("NAV page", Press, ""), ("VHF1 microphone", Press, ""), ("VHF1 volume", Set, ""),
             ("HF2 microphone", Press, ""), ("TEL2 volume", Set, ""), ("INT microphone", Press, ""), ("PA microphone", Press, ""),
-            ("Voice microphone", Press, ""), ("CAB volume", Set, ""), ("Brightness", Set, ""),
-            ("VHF1 reception", Set, "0=Off, 1=On"), ("Voice reception", Set, "0=Off, 1=On"),
+            ("voice microphone", Press, ""), ("CAB volume", Set, ""), ("brightness", Set, ""),
+            ("VHF1 reception", Set, "0=Off, 1=On"), ("voice reception", Set, "0=Off, 1=On"),
             ("RAD NAV", Set, "0=ADF 1, 1=ADF 2, 2=LS, 3=VOR 1, 4=VOR 2, 5=MKR"), ("INT/RAD", Set, "0=Radio, 1=Off, 2=Interphone"),
         })
-            Assert.Contains(row, named);
+            Assert.Contains((side + " " + name, action, positions), named);
     }
 
     [Fact]
