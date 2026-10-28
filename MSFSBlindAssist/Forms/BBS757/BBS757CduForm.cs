@@ -347,11 +347,14 @@ public partial class BBS757CduForm : Form
 
     /// <summary>
     /// Alt+C: clears the selected CDU's scratchpad with <see cref="Bbs757CduKeys.ClearScratchpad"/> (two long
-    /// CLRs, or one DEL when the last screen read shows it empty), refused aloud when the link is down like
-    /// every key. Nothing is said here: the scratchpad read-back says "Cleared" or "DELETE" once the keys
-    /// have had their cycle ([CORE-7]).
+    /// CLRs, or one DEL when the last screen read shows it empty and no key is queued: the screen is the state
+    /// before queued keys, so with any the scratchpad is not known empty; the client has one queue for both
+    /// CDUs, and a key queued for the other one counts too, which only ever chooses the CLRs). Refused aloud
+    /// when the link is down like every key. Nothing is said here: the scratchpad read-back says "Cleared" or
+    /// "DELETE" once the keys have had their cycle ([CORE-7]).
     /// </summary>
-    private void ClearScratchpad() => SendKeys(Bbs757CduKeys.ClearScratchpad(_screens[_cdu]?.Scratchpad));
+    private void ClearScratchpad() =>
+        SendKeys(Bbs757CduKeys.ClearScratchpad(_screens[_cdu]?.Scratchpad, keysQueued: _client.PendingKeyCount > 0));
 
     /// <summary>
     /// Queues these keys, each with its hold, for the selected CDU in one go: the refusal is said once

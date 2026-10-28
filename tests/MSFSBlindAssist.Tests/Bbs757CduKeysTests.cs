@@ -109,7 +109,8 @@ public class Bbs757CduKeysTests
         foreach (Keys k in Enum.GetValues<Keys>())
             if (Bbs757CduKeys.ForAltLetter(k) is { } page) sendable.Add(page);
         foreach (var scratchpad in new[] { null, "", "KATL" })
-            sendable.AddRange(Bbs757CduKeys.ClearScratchpad(scratchpad).Select(p => p.Key));
+            foreach (var keysQueued in new[] { false, true })
+                sendable.AddRange(Bbs757CduKeys.ClearScratchpad(scratchpad, keysQueued).Select(p => p.Key));
 
         Assert.Empty(sendable.Where(k => !agent.Contains(k)).Distinct());
         Assert.All(sendable, k => Assert.True(Bbs757CduKeys.IsKey(k), k));
@@ -117,40 +118,55 @@ public class Bbs757CduKeysTests
 
     // ---- Alt+C: clear the scratchpad (plan 09) ----------------------------------------------------
 
+    private static readonly (string Key, int HoldMs)[] TwoLongClrs =
+        { (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs), (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs) };
+
     [Theory]
-    [InlineData("KATL")]
-    [InlineData("INVALID ENTRY")]
-    [InlineData("A")]
-    [InlineData(" KATL ")]
-    public void A_scratchpad_with_text_takes_two_long_CLRs(string scratchpad)
+    [InlineData("KATL", false)]
+    [InlineData("INVALID ENTRY", false)]
+    [InlineData("A", false)]
+    [InlineData(" KATL ", false)]
+    [InlineData("KATL", true)]
+    public void A_scratchpad_with_text_takes_two_long_CLRs(string scratchpad, bool keysQueued)
     {
         // One CLR held 1.3 s clears the whole scratchpad 45 times in 60 and removes one character
         // otherwise (plan 08, 2026-10-26); a second long CLR always clears the rest.
-        Assert.Equal(
-            new[] { (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs), (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs) },
-            Bbs757CduKeys.ClearScratchpad(scratchpad));
+        Assert.Equal(TwoLongClrs, Bbs757CduKeys.ClearScratchpad(scratchpad, keysQueued));
     }
 
-    [Fact]
-    public void A_scratchpad_not_known_yet_takes_two_long_CLRs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_scratchpad_not_known_yet_takes_two_long_CLRs(bool keysQueued)
     {
         // No screen read yet: it may hold anything, and a CLR on an empty scratchpad does nothing
         // (2026-10-28), so the second long CLR is harmless.
-        Assert.Equal(
-            new[] { (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs), (Bbs757CduKeys.Clr, Bbs757CduKeys.ClearAllHoldMs) },
-            Bbs757CduKeys.ClearScratchpad(null));
+        Assert.Equal(TwoLongClrs, Bbs757CduKeys.ClearScratchpad(null, keysQueued));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
     [InlineData("   \t ")]
-    public void An_empty_scratchpad_takes_one_DEL_at_the_ordinary_hold(string scratchpad)
+    public void An_empty_scratchpad_with_no_keys_queued_takes_one_DEL_at_the_ordinary_hold(string scratchpad)
     {
         // As the iFly's Alt+C: nothing to clear, so DEL (the CDU's delete mode).
         Assert.Equal(
             new[] { (Bbs757CduKeys.Del, CoherentBbs757TabletClient.KeyHoldMs) },
-            Bbs757CduKeys.ClearScratchpad(scratchpad));
+            Bbs757CduKeys.ClearScratchpad(scratchpad, keysQueued: false));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("   \t ")]
+    public void An_empty_looking_scratchpad_with_keys_still_queued_is_not_known_empty_and_takes_two_long_CLRs(string scratchpad)
+    {
+        // The screen is the state before the queued keys: the first long CLR of an earlier Alt+C empties it
+        // about a second in, and an entry typed with Alt+S then Enter and cleared before its keys went out
+        // still reads empty. DEL behind either would leave "DELETE" on the scratchpad, so only a scratchpad
+        // that is empty with nothing queued gets DEL (review of plan 09 task 3).
+        Assert.Equal(TwoLongClrs, Bbs757CduKeys.ClearScratchpad(scratchpad, keysQueued: true));
     }
 
     [Fact]

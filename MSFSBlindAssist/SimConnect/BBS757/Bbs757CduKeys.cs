@@ -91,15 +91,20 @@ public static class Bbs757CduKeys
 
     /// <summary>
     /// What the window's Alt+C presses on a CDU whose scratchpad shows <paramref name="scratchpad"/> (null:
-    /// no screen read yet), as (key, hold ms) in order. With text, or unknown, two long CLRs
+    /// no screen read yet), as (key, hold ms) in order; <paramref name="keysQueued"/> is true while the
+    /// client still has keys queued or in their cycle. With text, or unknown, two long CLRs
     /// (<see cref="ClearAllHoldMs"/>): measured on 2026-10-26 (plan 08) one CLR held 1.3 s clears the whole
     /// scratchpad 45 times in 60 and removes one character otherwise, while a second long CLR always clears
     /// the rest; a CLR on an empty scratchpad does nothing (2026-10-28, flight 09), so the second is harmless.
-    /// With nothing in it, one DEL at the ordinary hold, as the iFly window's Alt+C. The window says nothing
-    /// itself: the scratchpad read-back says "Cleared" or "DELETE" ([CORE-7]). Pure.
+    /// One DEL at the ordinary hold, as the iFly window's Alt+C, only when the scratchpad is KNOWN empty: it
+    /// reads empty and no key is queued. With keys queued the screen is the state before them (an earlier
+    /// Alt+C's first CLR empties it a second in, and an entry typed in the scratchpad box and cleared before
+    /// its keys went out still reads empty), and a DEL behind them would leave "DELETE" on the scratchpad,
+    /// so it is not known empty. The window says nothing itself: the scratchpad read-back says "Cleared" or
+    /// "DELETE" ([CORE-7]). Pure.
     /// </summary>
-    public static IReadOnlyList<(string Key, int HoldMs)> ClearScratchpad(string? scratchpad) =>
-        scratchpad != null && string.IsNullOrWhiteSpace(scratchpad)
+    public static IReadOnlyList<(string Key, int HoldMs)> ClearScratchpad(string? scratchpad, bool keysQueued) =>
+        !keysQueued && scratchpad != null && string.IsNullOrWhiteSpace(scratchpad)
             ? new[] { (Del, CoherentBbs757TabletClient.KeyHoldMs) }
             : new[] { (Clr, ClearAllHoldMs), (Clr, ClearAllHoldMs) };
 
