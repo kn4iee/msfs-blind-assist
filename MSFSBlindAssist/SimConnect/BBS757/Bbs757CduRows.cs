@@ -36,6 +36,10 @@ public static class Bbs757CduRows
     /// the list: "Scratchpad: " and what it holds, "Scratchpad:" when empty. Trailing spaces are
     /// dropped, interior ones kept, so a right-hand field stays in its column in braille; no row is
     /// longer than 36 cells (24 columns and the longest prefix), inside a 40-cell braille line.
+    /// The label and data rows are read from the cells, not the lines, so a selected (inverse) option
+    /// reads with "X " in front of it and the columns after it unchanged
+    /// (<see cref="Bbs757CduMarkers.Mark"/>, at most 26 cells before the prefix); the title and the
+    /// scratchpad are text, and the separator test looks at the text without a marker.
     /// <para>
     /// A screen with nothing on any of its 14 lines is one <see cref="Bbs757CduRowKind.Blank"/> row that
     /// says which CDU it is (<paramref name="cdu"/> 1 the captain's, 2 the first officer's): a window that
@@ -51,9 +55,9 @@ public static class Bbs757CduRows
         var rows = new List<Bbs757CduRow> { new(Bbs757CduRowKind.Title, 0, TitleText(screen.Lines[0])) };
         for (int key = 1; key <= 6; key++)
         {
-            string label = screen.Lines[key * 2 - 1].TrimEnd();
-            string data = screen.Lines[key * 2].TrimEnd();
-            if (label.Trim().Length > 0 && !IsSeparator(label)) rows.Add(new(Bbs757CduRowKind.Label, key, "   " + label));
+            string label = Bbs757CduMarkers.Mark(screen.Cells[key * 2 - 1]).TrimEnd();
+            string data = Bbs757CduMarkers.Mark(screen.Cells[key * 2]).TrimEnd();
+            if (label.Trim().Length > 0 && !IsSeparator(screen.Lines[key * 2 - 1])) rows.Add(new(Bbs757CduRowKind.Label, key, "   " + label));
             string number = key.ToString(CultureInfo.InvariantCulture);
             rows.Add(new(Bbs757CduRowKind.Value, key, data.Trim().Length > 0 ? $"{number}: {data}" : $"{number}:"));
         }
