@@ -233,10 +233,26 @@ public static class A350MfdPage
             if (left.Label != null) fields[k] = f with { Label = left.Label, Inherited = true };
         }
 
-        // A label two fields share takes each field's column header: the nearest text above it in its column.
-        foreach (var f in fields)
+        // A box with no label of its own takes its column's header: the nearest white text above it over its column (WIND
+        // CRZ's ALT and T.WIND, live 2026-10-28), numbered by row where its column holds several.
+        Cell? ColumnHeader(float top, float x0, float x1) => cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c)
+                && c.Colour == "white" && c.Y < top && top - c.Y <= 300 && c.X >= x0 - 40 && c.X <= x1 + 40)
+            .OrderByDescending(c => c.Y).ThenBy(c => Math.Abs(c.X - (x0 + x1) / 2)).FirstOrDefault();
+        var columnNames = new Dictionary<int, string>();
+        foreach (var column in fields.Select((f, k) => (f, k)).Where(p => p.f.Label == null)
+                     .Select(p => (p.k, p.f, Header: ColumnHeader(p.f.Top, p.f.X0, p.f.X1))).Where(p => p.Header != null)
+                     .GroupBy(p => (p.Header!.Text, (int)Math.Round(p.f.X0))))
         {
-            string name = f.Label?.Text ?? "Field";
+            var rowsOf = column.OrderBy(p => p.f.Top).ToList();
+            for (int r = 0; r < rowsOf.Count; r++)
+                columnNames[rowsOf[r].k] = rowsOf.Count > 1 ? $"{column.Key.Text} {r + 1}" : column.Key.Text;
+        }
+
+        // A label two fields share takes each field's column header: the nearest text above it in its column.
+        for (int k = 0; k < fields.Count; k++)
+        {
+            var f = fields[k];
+            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? "Field";
             if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)

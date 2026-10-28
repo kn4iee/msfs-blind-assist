@@ -256,6 +256,21 @@ public class A350MfdPageTests
         Assert.Contains("TO: ITURA, yellow", lines);
     }
 
+    // Live 2026-10-28, WIND CRZ at TVM: four rows of altitude, direction and speed boxes under the headers ALT and T.WIND
+    // read "Field: none" twelve times. A box with no label of its own takes its column's header, numbered by row.
+    [Fact]
+    public void A_table_of_boxes_takes_its_column_headers_by_row()
+    {
+        var lines = Page("mfd_wind_crz_empty");
+        Assert.DoesNotContain(lines, l => l.StartsWith("Field:", StringComparison.Ordinal));
+        Assert.Contains("CRZ WIND AT: TVM, cyan", lines);
+        int first = lines.ToList().IndexOf("ALT 1: none, cyan");
+        Assert.True(first >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "ALT 1: none, cyan", "T.WIND 1: none°, cyan", "T.WIND 1: none KT, cyan", "ALT 2: none, cyan" },
+            lines.Skip(first).Take(4));
+        Assert.Contains("T.WIND 4: none KT, cyan", lines);
+    }
+
     [Fact]
     public void The_window_moves_to_a_menu_as_it_opens_and_only_then()
     {
