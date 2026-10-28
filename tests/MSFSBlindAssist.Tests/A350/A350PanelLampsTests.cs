@@ -100,6 +100,11 @@ public class A350PanelLampsTests
     [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light")]
     [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light")]
     [InlineData("Instrument", "LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light")]
+    // Live 2026-10-28: RMP 1's BRT/OFF knob at 0 lit RMP_1_OFF_LIGHT_SEQ1; the lower legend's meaning is not known yet.
+    [InlineData("Pedestal", "RMP_1_OFF_LIGHT_SEQ1_LIGHT", "Captain RMP", "Captain RMP off light")]
+    [InlineData("Pedestal", "RMP_1_OFF_LIGHT_SEQ2_LIGHT", "Captain RMP", "Captain RMP off lower legend light")]
+    [InlineData("Pedestal", "RMP_2_OFF_LIGHT_SEQ1_LIGHT", "First Officer RMP", "First officer RMP off light")]
+    [InlineData("Pedestal", "RMP_3_OFF_LIGHT_SEQ2_LIGHT", "RMP 3", "RMP 3 off lower legend light")]
     public void A_lamp_no_control_owns_is_shown_where_the_pilot_sees_it(string section, string node, string panel, string name)
     {
         var lamps = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { section });

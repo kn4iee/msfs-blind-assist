@@ -159,6 +159,13 @@ public static class A350PanelLamps
         ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light"),
         ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light"),
         ("LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light"),
+        // Each RMP's OFF light: the upper legend lit with its BRT/OFF knob at 0 (live 2026-10-28), the lower not seen lit.
+        ("RMP_1_OFF_LIGHT_SEQ1_LIGHT", "Captain RMP", "Captain RMP off light"),
+        ("RMP_1_OFF_LIGHT_SEQ2_LIGHT", "Captain RMP", "Captain RMP off lower legend light"),
+        ("RMP_2_OFF_LIGHT_SEQ1_LIGHT", "First Officer RMP", "First officer RMP off light"),
+        ("RMP_2_OFF_LIGHT_SEQ2_LIGHT", "First Officer RMP", "First officer RMP off lower legend light"),
+        ("RMP_3_OFF_LIGHT_SEQ1_LIGHT", "RMP 3", "RMP 3 off light"),
+        ("RMP_3_OFF_LIGHT_SEQ2_LIGHT", "RMP 3", "RMP 3 off lower legend light"),
     };
 
     /// <summary>Indicators the map has no lamp node for, read from their own variable, shown after the map's: each oxygen
