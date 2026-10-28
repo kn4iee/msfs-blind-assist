@@ -17,7 +17,7 @@ Sources, cited by PDF page: **UP n** is page n of `BlueBird_757_User_Procedures_
 Key to the citations of the research notes:
 
 - "method 1.5" in the reason of Overhead miscellaneous / Emergency Lights Guard: judgment call 1 of the notes (the emergency lights guard stays just after its switch, because the app opens and closes it itself).
-- "method 1.6" in the reason of Stabilizer trim / Stab Trim Nose Down 1 s (button): judgment call 4 of the notes (the alternate stab trim buttons are tier 2, as the flow only checks those switches NEUTRAL and normal trim is the yoke switches).
+- "method 1.6" in the reason of Stabilizer trim / Nose Down Stab Trim 1 s (button): judgment call 4 of the notes (the alternate stab trim buttons are tier 2, as the flow only checks those switches NEUTRAL and normal trim is the yoke switches).
 - "method 1.6" in the reason of Engines / R Fuel Control (RR): judgment call 5 of the notes (Engines is unchanged, ruling R37, and the notes name an alternative order for the RR switches).
 - "(section 3)" in the reasons of 8 rows (Audio panel 1 / Audio 1 Mic Lm Light; Audio panel 1 / Audio 1 Mic Lm Light Knob; Audio panel 1 / Audio 1 Mic RR Light; Audio panel 1 / Audio 1 Mic RR Light Knob; Audio panel 2 / Audio 2 Mic Lm Light; Audio panel 2 / Audio 2 Mic Lm Light Knob; Audio panel 2 / Audio 2 Mic RR Light; Audio panel 2 / Audio 2 Mic RR Light Knob): item 1 of the notes' "Section 3" list, a control whose meaning could not be established.
 - "(section 3)" in the reasons of 1 row (SELCAL and cabin call / Flt Int): item 2 of the notes' "Section 3" list, a control whose meaning could not be established.
@@ -165,8 +165,8 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 | 2 | Mode Select | `B757_OVHD_MODE_SELECT_SWITCH` | 1 | AUTO 1 or AUTO 2 (UP 39), alternated between flights by convention (UP 105) |
 | 3 | Auto Rate | `B757_OVHD_AUTORATE_SWITCH` | 2 | 'AUTO RATE at index' (UP 39); left there |
 | 4 | Equip | `B757_OVHD_EQUIP_BUTTON` | 3 | alternate equipment cooling: checked OFF (UP 39, 90); ALTN for smoke/overheat (gp) |
-| 5 | Cabin Climb 1 s (button) | (app row, placed by its own code) | 3 | manual (MAN) mode only: non-normal (gp) |
-| 6 | Cabin Descend 1 s (button) | (app row, placed by its own code) | 3 | as Cabin Climb |
+| 5 | Climb Cabin 1 s (button) | (app row, placed by its own code) | 3 | manual (MAN) mode only: non-normal (gp) |
+| 6 | Descend Cabin 1 s (button) | (app row, placed by its own code) | 3 | as Cabin Climb |
 
 ### Air conditioning and bleed (changed)
 
@@ -617,12 +617,12 @@ Totals: 55 panels (29 changed, 1 new panel, 25 unchanged), 426 rows (417 map con
 
 | # | Control | Node | Tier | Why, and the source |
 |---|---|---|---|---|
-| 1 | Rudder Trim Left 1 s (button) | (app row, placed by its own code) | 1 | rudder trim zero in preflight, after start, before takeoff and after landing (UP 42, 48, 50, 60, 106); engine-out trim (UP 217) |
-| 2 | Rudder Trim Right 1 s (button) | (app row, placed by its own code) | 1 | as Left |
-| 3 | Aileron Trim Left 1 s (button) | (app row, placed by its own code) | 1 | aileron trim zero in the same flows (UP 42, 48, 50, 60) |
-| 4 | Aileron Trim Right 1 s (button) | (app row, placed by its own code) | 1 | as Left |
-| 5 | Stab Trim Nose Down 1 s (button) | (app row, placed by its own code) | 2 | alternate electric stab trim: checked NEUTRAL (UP 41, 100); takeoff and 4.0 trim (UP 48, 60) are normally set with the yoke switches; see method 1.6 |
-| 6 | Stab Trim Nose Up 1 s (button) | (app row, placed by its own code) | 2 | as Nose Down |
+| 1 | Left Rudder Trim 1 s (button) | (app row, placed by its own code) | 1 | rudder trim zero in preflight, after start, before takeoff and after landing (UP 42, 48, 50, 60, 106); engine-out trim (UP 217) |
+| 2 | Right Rudder Trim 1 s (button) | (app row, placed by its own code) | 1 | as Left |
+| 3 | Left Aileron Trim 1 s (button) | (app row, placed by its own code) | 1 | aileron trim zero in the same flows (UP 42, 48, 50, 60) |
+| 4 | Right Aileron Trim 1 s (button) | (app row, placed by its own code) | 1 | as Left |
+| 5 | Nose Down Stab Trim 1 s (button) | (app row, placed by its own code) | 2 | alternate electric stab trim: checked NEUTRAL (UP 41, 100); takeoff and 4.0 trim (UP 48, 60) are normally set with the yoke switches; see method 1.6 |
+| 6 | Nose Up Stab Trim 1 s (button) | (app row, placed by its own code) | 2 | as Nose Down |
 | 7 | Stab Trim C Guard | `B757_AISLE_STAND_STAB_1_GAURD_SWITCH` | 3 | guard, now right before its cutout (was before both cutouts); 'GUARDED CLOSED' (UP 41, 100) |
 | 8 | Stab Trim C Cutout | `B757_Stab_trim_C_toggle_switch_CLICK` | 3 | stab trim cutout: non-normal |
 | 9 | Stab Trim R Guard | `B757_AISLE_STAND_STAB_2_GAURD_SWITCH` | 3 | guard, before its cutout |
