@@ -580,6 +580,16 @@ public class A350MfdPageTests
         Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
     }
 
+    // FROM is the F-PLN's first column heading: it names the first row only while that row is the FROM waypoint (the last
+    // sequenced, no leg into it). Scrolled down, the top row is any waypoint with its leg (DB416 at the ILS 12L final, live)
+    // and read "FROM DB416: TRK 298°, DIST 3; ...".
+    [Fact]
+    public void Only_the_from_waypoint_is_called_from()
+    {
+        Assert.StartsWith("DB416: TRK 298°, DIST 3;", Page("mfd_fpln_ils12l_final").First(l => l.Contains("DB416", StringComparison.Ordinal)));
+        Assert.StartsWith("FROM VCBI22: ", Page("mfd_fpln_basu1d").First(l => l.Contains("VCBI22", StringComparison.Ordinal)));
+    }
+
     // ACTIVE/WIND, CLB tab, empty (live 2026-10-28): under the ALT and WIND headings (y 330) each row is a grey FL, the
     // altitude, the direction with its degree glyph, a grey "/" and the speed with its grey KT, 83 px under the headings
     // and 78 px apart. The rows read "FL, grey; none none° / none KT, green", without their headings or the units' places.

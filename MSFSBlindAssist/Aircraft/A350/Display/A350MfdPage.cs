@@ -567,7 +567,9 @@ public static class A350MfdPage
                 var name = legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text;
                 parts.Add(name == null ? ValueOf(c, colour) : $"{name} {ValueOf(c, colour)}");
             }
-            string label = (b.Y < 230 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
+            // FROM (the first column's heading) names the top row only while it is the FROM waypoint, which has no leg into
+            // it; scrolled down, the top row is any waypoint with its leg.
+            string label = (b.Y < 230 && parts.Count == 0 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
             string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
             // A column whose value an open menu or pop-up covers is left out: hidden, not absent. Each column's values are
             // drawn at one x (live: TIME 262, SPD 357, ALT 443).
