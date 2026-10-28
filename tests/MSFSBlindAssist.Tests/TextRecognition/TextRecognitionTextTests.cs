@@ -95,6 +95,54 @@ public sealed class TextRecognitionTextTests
     });
 
     [Theory, MemberData(nameof(Cultures))]
+    public void A_size_is_told_as_one_phrase_with_three_cases(string culture) => Under(culture, () =>
+    {
+        // Nothing at all, or a size that rounds to a whole number of megabytes other than one: the plural.
+        Assert.Equal("0 megabytes", TextRecognitionText.MegabytePhrase(0));
+        Assert.Equal("2 megabytes", TextRecognitionText.MegabytePhrase(1_500_000));
+        Assert.Equal("21 megabytes", TextRecognitionText.MegabytePhrase(RecAndDictionary));
+        Assert.Equal("32 megabytes", TextRecognitionText.MegabytePhrase(TextRecognitionModels.TotalBytes));
+        Assert.Equal("100 megabytes", TextRecognitionText.MegabytePhrase(TextRecognitionModels.RequiredFreeBytes));
+
+        // A size that rounds to one: the singular.
+        Assert.Equal("1 megabyte", TextRecognitionText.MegabytePhrase(500_000));
+        Assert.Equal("1 megabyte", TextRecognitionText.MegabytePhrase(1_018_508)); // the classifier
+        Assert.Equal("1 megabyte", TextRecognitionText.MegabytePhrase(1_499_999));
+
+        // Something, but under half a megabyte: never "0 megabytes".
+        Assert.Equal("less than 1 megabyte", TextRecognitionText.MegabytePhrase(1));
+        Assert.Equal("less than 1 megabyte", TextRecognitionText.MegabytePhrase(74_947)); // the dictionary
+        Assert.Equal("less than 1 megabyte", TextRecognitionText.MegabytePhrase(499_999));
+    });
+
+    [Theory, MemberData(nameof(Cultures))]
+    public void Every_size_the_texts_tell_goes_through_that_phrase(string culture) => Under(culture, () =>
+    {
+        const long dictionary = 74_947;
+        const long classifier = 1_018_508;
+
+        Assert.Equal("Downloading text recognition, less than 1 megabyte.", TextRecognitionText.Started(dictionary));
+        Assert.Equal("Downloading text recognition, 1 megabyte.", TextRecognitionText.Started(classifier));
+
+        Assert.Equal("Download cancelled. 3 of 4 files are kept; the next download fetches the rest, less than 1 megabyte.",
+            TextRecognitionText.Cancelled(3, dictionary));
+        Assert.Equal("Download cancelled. 3 of 4 files are kept; the next download fetches the rest, 1 megabyte.",
+            TextRecognitionText.Cancelled(3, classifier));
+
+        Assert.Equal("Incomplete: 3 of 4 files are kept; the next download fetches the rest, less than 1 megabyte.",
+            TextRecognitionText.Idle(Install(TextRecognitionState.Incomplete, 3, dictionary)));
+        Assert.Equal("Incomplete: 3 of 4 files are kept; the next download fetches the rest, 1 megabyte.",
+            TextRecognitionText.Idle(Install(TextRecognitionState.Incomplete, 3, classifier)));
+
+        // The fixed figures of today's list keep their words: the whole download is 32 megabytes, the disk needs 100.
+        Assert.Equal("Downloading: 45 percent of 32 megabytes.", TextRecognitionText.Downloading(45));
+        Assert.Equal("Not downloaded. The download is 32 megabytes.",
+            TextRecognitionText.Idle(Install(TextRecognitionState.Missing, 0, TextRecognitionModels.TotalBytes)));
+        Assert.Equal("not enough disk space, 100 megabytes needed",
+            TextRecognitionText.FailureReason(new TextRecognitionDiskSpaceException(0)));
+    });
+
+    [Theory, MemberData(nameof(Cultures))]
     public void The_reader_and_the_offer_have_their_own_sentences(string culture) => Under(culture, () =>
     {
         Assert.Equal("Text recognition could not start, so the tablet cannot be read. Download it again from Settings, Text recognition.",

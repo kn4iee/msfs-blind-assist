@@ -13,8 +13,22 @@ namespace MSFSBlindAssist.Services.TextRecognition;
 /// </summary>
 internal static class TextRecognitionText
 {
-    /// <summary>The size of the whole download in the megabytes a pilot counts: 32 for the first list.</summary>
-    private static int ListMegabytes => TextRecognitionModels.Megabytes(TextRecognitionModels.TotalBytes);
+    /// <summary>The size of the whole download as the status lines tell it: "32 megabytes" for the first list.</summary>
+    private static string ListSize => MegabytePhrase(TextRecognitionModels.TotalBytes);
+
+    /// <summary>
+    /// A size as a pilot hears it, in decimal megabytes: "32 megabytes"; "1 megabyte" for a size that rounds to
+    /// one; "less than 1 megabyte" for something that does not round to one (a download of only the dictionary,
+    /// 74,947 bytes), never "0 megabytes" unless there is nothing at all. Every size the texts show or speak
+    /// goes through here, so no sentence says "1 megabytes".
+    /// </summary>
+    internal static string MegabytePhrase(long bytes)
+    {
+        int megabytes = TextRecognitionModels.Megabytes(bytes);
+        if (megabytes == 1) return "1 megabyte";
+        if (megabytes == 0 && bytes > 0) return "less than 1 megabyte";
+        return string.Create(CultureInfo.InvariantCulture, $"{megabytes} megabytes");
+    }
 
     // ---- the status line (the Settings tab, the offer window) ----
 
@@ -26,17 +40,17 @@ internal static class TextRecognitionText
     internal static string Idle(TextRecognitionInstall install) => install.State switch
     {
         TextRecognitionState.Ready => Ready,
-        TextRecognitionState.Outdated => string.Create(CultureInfo.InvariantCulture,
-            $"An update is needed: this version of the app uses new text recognition files. The download is {ListMegabytes} megabytes."),
+        TextRecognitionState.Outdated =>
+            $"An update is needed: this version of the app uses new text recognition files. The download is {ListSize}.",
         TextRecognitionState.Incomplete when install.BytesToFetch > 0 => string.Create(CultureInfo.InvariantCulture,
-            $"Incomplete: {install.FilesKept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {TextRecognitionModels.Megabytes(install.BytesToFetch)} megabytes."),
+            $"Incomplete: {install.FilesKept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {MegabytePhrase(install.BytesToFetch)}."),
         // Every file is at its size but there is no marker: nothing to fetch, only the files to check.
         TextRecognitionState.Incomplete => "Incomplete: the files are here but not checked. Download text recognition to check them.",
-        _ => string.Create(CultureInfo.InvariantCulture, $"Not downloaded. The download is {ListMegabytes} megabytes."),
+        _ => $"Not downloaded. The download is {ListSize}.",
     };
 
     internal static string Downloading(int percent)
-        => string.Create(CultureInfo.InvariantCulture, $"Downloading: {percent} percent of {ListMegabytes} megabytes.");
+        => string.Create(CultureInfo.InvariantCulture, $"Downloading: {percent} percent of {ListSize}.");
 
     internal static string Failed(string reason) => $"The last download failed: {reason}. Download again to retry.";
 
@@ -44,13 +58,13 @@ internal static class TextRecognitionText
     internal static string Cancelled(int kept, long bytesLeft) => kept <= 0
         ? "Download cancelled."
         : string.Create(CultureInfo.InvariantCulture,
-            $"Download cancelled. {kept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {TextRecognitionModels.Megabytes(bytesLeft)} megabytes.");
+            $"Download cancelled. {kept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {MegabytePhrase(bytesLeft)}.");
 
     // ---- spoken ----
 
-    /// <summary>The press confirmation: the megabytes this job still fetches (all 32 on a fresh download).</summary>
-    internal static string Started(long bytesToFetch)
-        => string.Create(CultureInfo.InvariantCulture, $"Downloading text recognition, {TextRecognitionModels.Megabytes(bytesToFetch)} megabytes.");
+    /// <summary>The press confirmation: the size this job still fetches (32 megabytes on a fresh download). A job
+    /// with nothing to fetch does not speak it.</summary>
+    internal static string Started(long bytesToFetch) => $"Downloading text recognition, {MegabytePhrase(bytesToFetch)}.";
 
     /// <summary>A milestone (25, 50, 75), queued so it never cuts the pilot off.</summary>
     internal static string Progress(int percent)
@@ -74,8 +88,7 @@ internal static class TextRecognitionText
     /// </summary>
     internal static string FailureReason(Exception ex) => ex switch
     {
-        TextRecognitionDiskSpaceException => string.Create(CultureInfo.InvariantCulture,
-            $"not enough disk space, {TextRecognitionModels.Megabytes(TextRecognitionModels.RequiredFreeBytes)} megabytes needed"),
+        TextRecognitionDiskSpaceException => $"not enough disk space, {MegabytePhrase(TextRecognitionModels.RequiredFreeBytes)} needed",
         HttpRequestException { StatusCode: HttpStatusCode.NotFound } => "the files were not found on GitHub",
         HttpRequestException => "could not reach GitHub",
         InvalidDataException => "a file did not match its checksum",
@@ -103,9 +116,10 @@ internal static class TextRecognitionText
 
     // ---- the offer window ----
 
-    /// <summary>The offer window's status box: why the reader asks, and where else the download lives.</summary>
+    /// <summary>The offer window's status box: why the reader asks, and where else the download lives. The size is an
+    /// adjective here ("a 32 megabyte download"), so it is the bare number and not <see cref="MegabytePhrase"/>.</summary>
     internal static string OfferStatus => string.Create(CultureInfo.InvariantCulture,
-        $"The 757 tablet reader needs text recognition: PaddleOCR, a {ListMegabytes} megabyte download. You can also download it later from Settings, Text recognition.");
+        $"The 757 tablet reader needs text recognition: PaddleOCR, a {TextRecognitionModels.Megabytes(TextRecognitionModels.TotalBytes)} megabyte download. You can also download it later from Settings, Text recognition.");
 
     /// <summary>
     /// The offer window's download button: its label, and whether a press starts a download. Running or installed

@@ -195,8 +195,12 @@ internal sealed class TextRecognitionDownloader : IDisposable
             long total = _files.Sum(file => file.Bytes);
             var progress = new JobProgress(total, done);
             Log.Info(LogCategory, $"Download started: {kept.Count} of {_files.Count} files kept, {total - done} bytes to fetch");
-            Say(TextRecognitionText.Started(total - done), immediate: true);
-            ReportProgress(progress);
+            // Every file here and checked: there is no download to announce, only the marker to write.
+            if (kept.Count < _files.Count)
+            {
+                Say(TextRecognitionText.Started(total - done), immediate: true);
+                ReportProgress(progress);
+            }
 
             var stall = new StallDetector(UtcNow());
             foreach (TextRecognitionFile file in _files)

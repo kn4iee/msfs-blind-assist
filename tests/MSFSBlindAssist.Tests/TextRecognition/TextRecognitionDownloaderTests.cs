@@ -518,7 +518,31 @@ public sealed class TextRecognitionDownloaderTests : IDisposable
         Assert.Equal(TextRecognitionPhase.Ready, d.Status.Phase);
         Assert.Equal(TextRecognitionModels.MarkerJson(Files, Version), File.ReadAllText(MarkerPath));
         Assert.Equal(new TextRecognitionInstall(TextRecognitionState.Ready, 4, 0), d.Installed());
-        Assert.Equal(new DownloadSpeech("Text recognition ready.", Immediate: true), Speech()[^1]);
+
+        // There is no download to announce: the one thing said is that it is ready, and the status line goes
+        // from the press straight to Ready, without a moment at 100 percent.
+        Assert.Equal(new[] { new DownloadSpeech("Text recognition ready.", Immediate: true) }, Speech());
+        Assert.Equal(new[]
+        {
+            new TextRecognitionStatus(TextRecognitionPhase.Downloading, TextRecognitionText.Downloading(0), 0),
+            new TextRecognitionStatus(TextRecognitionPhase.Ready, TextRecognitionText.Ready),
+        }, Statuses());
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task A_job_that_fetches_only_a_sliver_says_less_than_a_megabyte()
+    {
+        // Every file but "cls.onnx" (100,000 bytes) is here and checks out.
+        Put("det.onnx", DetBytes);
+        Put("rec.onnx", RecBytes);
+        Put("dict.txt", DictBytes);
+        using var d = Downloader();
+        d.Start();
+        await d.Job;
+
+        // Never "0 megabytes"; and the 98 percent already there leaves no milestone to speak.
+        Assert.Equal(new[] { "cls.onnx" }, _server.Requests);
+        Assert.Equal(new[] { "Downloading text recognition, less than 1 megabyte.", "Text recognition ready." }, Said());
     }
 
     [Fact(Timeout = 30_000)]
