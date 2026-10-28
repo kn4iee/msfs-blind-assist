@@ -193,12 +193,14 @@ public partial class BBS757Definition
     static partial void AddOverheadVariables(Dictionary<string, SimVarDefinition> vars)
     {
         AddLandingAltitudeVariables(vars);
+        AddSpringControlVariables(vars);
     }
 
     partial void AddOverheadPanels(Dictionary<string, List<string>> structure,
         Dictionary<string, List<string>> controls, Dictionary<string, List<string>> displays)
     {
         AddLandingAltitudePanels(structure, controls, displays);
+        AddSpringControlPanels(structure, controls);   // after the field, which stays first on Pressurization
     }
 
     partial void HandleOverheadTypedText(string varKey, string text, SimConnectManager simConnect,
@@ -211,6 +213,12 @@ public partial class BBS757Definition
 
     partial void HandleOverheadSet(string varKey, double value, SimConnectManager simConnect,
         ScreenReaderAnnouncer announcer, ref bool handled)
+    {
+        HandleLandingAltitudeSet(varKey, ref handled);
+        if (!handled) HandleSpringSet(varKey, simConnect, announcer, ref handled);
+    }
+
+    private static void HandleLandingAltitudeSet(string varKey, ref bool handled)
     {
         if (varKey != Bbs757LandingAltitude.SetKey) return;
         // The registration's event is never sent (ruling R13): claiming the key here keeps it from the
@@ -322,5 +330,243 @@ public partial class BBS757Definition
             Log.Error("BBS757", $"Landing altitude set failed: {ex.Message}");
             if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate(Bbs757LandingAltitude.Phrase(null));
         }
+    }
+
+    // =================================================================================
+    // Plan 12: the spring-loaded switches (the trims, the manual cabin altitude)
+    // =================================================================================
+
+    /// <summary>
+    /// The eight buttons and the seven reads their presses make (<see cref="Bbs757SpringControls"/>), after the
+    /// map's controls, never shadowing a key already present. A button is an Event registration, as the landing
+    /// altitude field is: it takes no data definition, the definition claims its key
+    /// (<see cref="HandleOverheadSet"/>) so the generic path never sends it, and its dotted private name changes
+    /// nothing in the sim even if it were ever sent (ruling R16). A read is an OnRequest L:var on no panel, with
+    /// no Ctrl+M row ([VAR-9]): a fresh read delivers only a registered key. The stab trim's readout (the trim
+    /// call-out's <c>MON_ElevatorTrim</c>) and Mode Select (the map's control) are registered already.
+    /// </summary>
+    private static void AddSpringControlVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        void Add(string key, SimVarDefinition def)
+        {
+            if (!vars.ContainsKey(key)) vars[key] = def;
+        }
+
+        foreach (var button in Bbs757SpringControls.Buttons)
+        {
+            Add(button.Key, new SimVarDefinition
+            {
+                Name = button.EventName, DisplayName = button.Label,
+                Type = SimVarType.Event, UpdateFrequency = UpdateFrequency.OnRequest,
+                RenderAsButton = true, IsMomentary = true,
+                SuppressRestingButtonState = true,   // a momentary push has no resting value to show (CORE-10's opt-in)
+            });
+        }
+
+        foreach (var read in Bbs757SpringControls.Reads)
+        {
+            Add(read.Key, new SimVarDefinition
+            {
+                Name = read.Key, DisplayName = read.Label,
+                Type = SimVarType.LVar, Units = "number", UpdateFrequency = UpdateFrequency.OnRequest,
+                ExcludeFromMonitorManager = true,
+            });
+        }
+    }
+
+    /// <summary>
+    /// The six trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and their guards),
+    /// the two cabin buttons last on Pressurization (the landing altitude field stays first). A panel the map
+    /// lacks is created under its section, so the buttons are never lost.
+    /// </summary>
+    private static void AddSpringControlPanels(Dictionary<string, List<string>> structure,
+        Dictionary<string, List<string>> controls)
+    {
+        List<string> PanelOf(Bbs757SpringControl control)
+        {
+            if (controls.TryGetValue(control.Panel, out var panel)) return panel;
+            controls[control.Panel] = panel = new List<string>();
+            if (!structure.TryGetValue(control.Section, out var panels)) structure[control.Section] = panels = new List<string>();
+            panels.Add(control.Panel);
+            return panel;
+        }
+
+        var trims = Bbs757SpringControls.Buttons.Where(b => !b.Control.NeedsManualMode).ToList();
+        if (trims.Count > 0) PanelOf(trims[0].Control).InsertRange(0, trims.Select(b => b.Key));
+
+        var cabin = Bbs757SpringControls.Buttons.Where(b => b.Control.NeedsManualMode).ToList();
+        if (cabin.Count > 0) PanelOf(cabin[0].Control).AddRange(cabin.Select(b => b.Key));
+    }
+
+    /// <summary>A press of a spring button: claimed at once so the generic path never sends it, then held on its own task (never throws).</summary>
+    private void HandleSpringSet(string varKey, SimConnectManager sim, ScreenReaderAnnouncer announcer, ref bool handled)
+    {
+        if (Bbs757SpringControls.ForButtonKey(varKey) == null) return;
+        handled = true;
+        _ = PressSpringAsync(varKey, sim, announcer);   // never throws: it catches and logs
+    }
+
+    /// <summary>The spring controls holding now, by <see cref="Bbs757SpringControl.Key"/>: one hold per switch at a time.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _springHolds = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A spring button: hold its switch to one side for <see cref="Bbs757SpringControls.HoldMs"/>, release it, make
+    /// sure it rests, then say the readout once.
+    /// <list type="number">
+    /// <item>A press while the same switch is holding is ignored (its two buttons share the switch).</item>
+    /// <item>Nothing can land (<c>CanWrite</c>): "{label} unavailable", nothing sent. A cabin button then reads Mode
+    /// Select fresh: not MAN says "Set the pressurization mode to MAN first", unread "{label} unavailable", and
+    /// nothing is sent.</item>
+    /// <item>The hold is written, written again at <see cref="Bbs757SpringControls.HoldRewriteMs"/> (the cabin
+    /// switch's XML puts it back to 4 within about a second; skipped once the pilot has switched profiles) and
+    /// released at <see cref="Bbs757SpringControls.HoldMs"/>. These waits are on <see cref="CancellationToken.None"/>,
+    /// as <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
+    /// release runs the trim to its stop (flight-12.md, measured twice).</item>
+    /// <item>The release is verified (<see cref="ReleaseSpringAsync"/>), even after a profile switch: it is the safety.
+    /// A switch still off rest says "{name} switch did not return, check it", interrupting.</item>
+    /// <item>Unless switched away, <see cref="Bbs757SpringControls.ReadoutDelayMs"/> later the readout is read
+    /// fresh and said once (CORE-7: the screen reader said the button; the app says only the read-back). The stab
+    /// trim's is the exception: the trim call-out already speaks while the stabilizer moves, so the trim is also read
+    /// fresh before the hold and <see cref="Bbs757SpringControls.StabTrimSpeech"/> decides: "Stab trim did not move"
+    /// when it did not, nothing when it moved and the call-out speaks it, "Trim 5.3" when it moved and the call-out
+    /// is silent (<see cref="StabTrimCalloutSilent"/>).</item>
+    /// </list>
+    /// Nothing is said once the pilot has switched to another profile. The awaits keep the UI context (no
+    /// ConfigureAwait(false)), like every write here. Never throws: fire and forget from the panel.
+    /// </summary>
+    internal async Task PressSpringAsync(string buttonKey, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var button = Bbs757SpringControls.ForButtonKey(buttonKey);
+        if (button == null) return;
+        var control = button.Control;
+        if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed or said
+        var ct = _lifetime.Token;                        // taken once, after the check: safe on a disposed source
+        if (!_springHolds.TryAdd(control.Key, 0))
+        {
+            Log.Debug("BBS757", $"{button.Label}: {control.LVar} is already holding; press ignored.");
+            return;
+        }
+
+        bool holding = true, wrote = false;
+        try
+        {
+            var io = WriteIoFor(sim);
+            if (!io.CanWrite())
+            {
+                Log.Debug("BBS757", $"{button.Label}: write refused, nothing sent.");
+                announcer.Announce(Bbs757SpringControls.UnavailablePhrase(button.Label));
+                return;
+            }
+            if (control.NeedsManualMode)
+            {
+                double? mode = await io.ReadFresh(Bbs757SpringControls.ModeSelectNode, ct);
+                ct.ThrowIfCancellationRequested();
+                if (Bbs757SpringControls.ManualModeRefusal(mode, button.Label) is { } refusal)
+                {
+                    Log.Debug("BBS757", $"{button.Label}: Mode Select read {GuardedLogValue(mode)}; nothing sent.");
+                    announcer.Announce(refusal);
+                    return;
+                }
+            }
+            bool stabTrim = ReferenceEquals(control, Bbs757SpringControls.AltnStabTrim);
+            double? trimBefore = null;
+            if (stabTrim)
+            {
+                trimBefore = await io.ReadFresh(control.ReadoutKey, ct);   // to tell whether the press moved it
+                ct.ThrowIfCancellationRequested();
+            }
+
+            var (hold, release) = Bbs757SpringControls.Codes(control, button.Positive);
+            OnOwnWrite(control.LVar);   // plan 13
+            wrote = true;
+            bool rested = await HoldSpringAsync(control, hold, release, io);
+            _springHolds.TryRemove(control.Key, out _);   // released: the switch may be held again
+            holding = false;
+
+            if (_lifetime.IsCancellationRequested) return;   // switched away: released, nothing is said
+            if (!rested)
+            {
+                Log.Warn("BBS757", $"{control.LVar} did not read its rest value after {Bbs757SpringControls.MaxReleaseWrites} releases.");
+                announcer.AnnounceImmediate(Bbs757SpringControls.DidNotReturnPhrase(control));
+            }
+
+            await io.Delay(Bbs757SpringControls.ReadoutDelayMs, ct);
+            double? value = await io.ReadFresh(control.ReadoutKey, ct);
+            ct.ThrowIfCancellationRequested();
+            string? said = stabTrim
+                ? Bbs757SpringControls.StabTrimSpeech(trimBefore, value, StabTrimCalloutSilent())
+                : Bbs757SpringControls.ReadoutPhrase(control, value);
+            if (said != null) announcer.Announce(said);
+        }
+        catch (OperationCanceledException) { /* switched away */ }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{button.Label}: press failed: {ex.Message}");
+            if (!_lifetime.IsCancellationRequested)
+                announcer.Announce(wrote ? Bbs757SpringControls.ReadoutPhrase(control, null)
+                    : Bbs757SpringControls.UnavailablePhrase(button.Label));
+        }
+        finally
+        {
+            if (holding) _springHolds.TryRemove(control.Key, out _);
+        }
+    }
+
+    /// <summary>
+    /// True when the trim call-out (the base class's <c>MON_ElevatorTrim</c> row) will not speak a move: the pilot
+    /// muted its Ctrl+M row, or turned trim announcements off (Shift+T). Speech outside ProcessSimVarUpdate checks
+    /// the mute itself ([VAR-8]), as the gear and altimeter call-outs do.
+    /// </summary>
+    private bool StabTrimCalloutSilent()
+        => !_trimAnnouncementsEnabled || IsMonitorMuted(Bbs757SpringControls.StabTrimReadoutKey);
+
+    /// <summary>
+    /// Holds the switch: <paramref name="hold"/> now and again at <see cref="Bbs757SpringControls.HoldRewriteMs"/>
+    /// (not once switched away), then the verified release at <see cref="Bbs757SpringControls.HoldMs"/>. The waits
+    /// are never canceled, and a hold that fails part-way is released at once. True when the switch reads its rest
+    /// value afterwards. Never throws.
+    /// </summary>
+    private async Task<bool> HoldSpringAsync(Bbs757SpringControl control, string hold, string release, Bbs757SimIo io)
+    {
+        try
+        {
+            io.Write(hold);
+            await io.Delay(Bbs757SpringControls.HoldRewriteMs, CancellationToken.None);
+            if (!_lifetime.IsCancellationRequested) io.Write(hold);
+            await io.Delay(Bbs757SpringControls.HoldMs - Bbs757SpringControls.HoldRewriteMs, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{control.LVar}: hold failed: {ex.Message}; releasing it now.");
+        }
+        return await ReleaseSpringAsync(control, release, io);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="release"/>, waits <see cref="Bbs757SpringControls.ReleaseReadBackMs"/> (so a read that
+    /// has not yet seen the write cannot count as a lost release), reads the switch fresh and, while it does not
+    /// read its rest value (<see cref="Bbs757SpringControls.AtRest"/>; unread counts as off rest), writes it again:
+    /// at most <see cref="Bbs757SpringControls.MaxReleaseWrites"/> writes in all. Runs after a profile switch too
+    /// (the waits and reads are on <see cref="CancellationToken.None"/>; a real read gives up after its own
+    /// timeout). True when the switch rests. Never throws: a failed write, wait or read counts as a release that
+    /// did not land.
+    /// </summary>
+    private static async Task<bool> ReleaseSpringAsync(Bbs757SpringControl control, string release, Bbs757SimIo io)
+    {
+        for (int written = 0; written < Bbs757SpringControls.MaxReleaseWrites; written++)
+        {
+            try { io.Write(release); }
+            catch (Exception ex) { Log.Error("BBS757", $"{control.LVar}: release write failed: {ex.Message}"); }
+
+            double? reading = null;
+            try
+            {
+                await io.Delay(Bbs757SpringControls.ReleaseReadBackMs, CancellationToken.None);
+                reading = await io.ReadFresh(control.LVar, CancellationToken.None);
+            }
+            catch (Exception ex) { Log.Error("BBS757", $"{control.LVar}: release read-back failed: {ex.Message}"); }
+            if (Bbs757SpringControls.AtRest(control, reading)) return true;
+        }
+        return false;
     }
 }
