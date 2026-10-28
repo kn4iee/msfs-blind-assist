@@ -196,8 +196,11 @@ tests `Bbs757ControlMapTests.cs` and a new `Bbs757VariantTests.cs`.
   is unknown, and an unknown variant shows every control (as today).
 - The panels leave out the other variant's controls (today: the PW and RR fuel control switches, the RR electronic
   engine control switches and their guards). When the variant becomes known or changes (a flight or aircraft load,
-  a reconnect), the panel lists are rebuilt in place, so the next panel shown is right; nothing else (variables,
-  writes) changes.
+  a reconnect), the section lists are rebuilt in place (a panel the variant empties drops out), and each panel's
+  controls are decided from the live title when the panel is built (`IsPanelControlVisible`), so the next panel shown is
+  right; nothing else (variables, writes) changes. Right after a fresh connection the profile has no title until the
+  first panel is built, so a PW's first section list can still name the RR-only panel: a MainForm call at connect and
+  switch (as the MD-11's `Attach`) would close that, outside plan 12's files (handoff).
 - [ ] Tests first (the title parsing, the filter, an unknown variant showing all, a change of variant), full suite,
   commit `feat(b757): the panels show the loaded engine type's controls only`.
 
