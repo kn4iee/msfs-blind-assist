@@ -77,6 +77,10 @@ public static class A350MfdPage
         var menuItems = elements.Select((e, i) => (e, i)).Where(p => p.e.Class == "DropdownButtonUI"
             && cells.Any(c => c.Index >= p.e.TextStart && Covers(p.e, c.X, c.Y))).ToList();
         popups.AddRange(menuItems);
+        // A waypoint revision's pop-up (INSERT NEXT WPT, NEW DEST) hides the F-PLN in the revision menu's column under it.
+        var revisionPopup = RevisionPopupOf(capture, cells, Mine);
+        if (revisionPopup != null)
+            cells.RemoveAll(c => c.Index < revisionPopup.Start && Covers(revisionPopup.Column, c.X, c.Y));
         // The consent dialog is modal: the slivers of the page left and right of it (DATA/STATUS's NAV DATABASE label,
         // which ran into the dialog's line level with it) are behind it too.
         bool Covers(DrawnElement p, float x, float y) =>
@@ -276,7 +280,49 @@ public static class A350MfdPage
             ordered = WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(), shift);
         if (revisionItems.Count > 0)
             ordered = WithRevisionMenuAfterTitle(ordered, revisionItems, shift);
+        if (revisionPopup != null)
+            ordered = ordered.Select(l => l.Kind == "field" && revisionPopup.Fields.Any(e => AtCentre(l, e, shift))
+                ? l with { Spoken = revisionPopup.Title + ": " + ValueOf(l.Spoken) } : l).ToList();
         return ordered;
+    }
+
+    /// <summary>A field line's value: what follows its name ("C220°: none, cyan" → "none, cyan").</summary>
+    private static string ValueOf(string spoken) => spoken.IndexOf(": ", StringComparison.Ordinal) is int at and >= 0 ? spoken[(at + 2)..] : spoken;
+
+    /// <summary>An open waypoint revision pop-up: the revision menu's column it draws in, the draw indices of its texts
+    /// ([Start, End)), its title (its top row: "INSERT NEXT WPT FROM BASUR") and its entry fields.</summary>
+    private sealed record RevisionPopup(DrawnElement Column, int Start, int End, string Title, IReadOnlyList<DrawnElement> Fields);
+
+    /// <summary>
+    /// INSERT NEXT WPT and NEW DEST (NextWaypointPopup, NewDestPopup) have no rectangle of their own: they draw in the
+    /// revision menu's column (UIFlightplanRevisionsMenu) after it, one after the other, before the page frame
+    /// (MessageListButton, the header). One is open while texts are drawn between its start and the next of those, below
+    /// the title band (1.2.7, live 2026-10-28); a closed one draws none there.
+    /// </summary>
+    private static RevisionPopup? RevisionPopupOf(A350DrawCapture capture, List<Cell> cells, Func<float, bool> mine)
+    {
+        var all = capture.Elements;
+        var column = all.FirstOrDefault(e => e.Class == "UIFlightplanRevisionsMenu" && mine(e.X) && e.RectW > 0 && e.RectH > 0);
+        if (column == null)
+            return null;
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (all[i].Class is not ("NextWaypointPopup" or "NewDestPopup"))
+                continue;
+            int start = all[i].TextStart;
+            int end = all.Skip(i + 1).Where(e => e.Class is "NewDestPopup" or "MessageListButton" or "DropdownMenuContainer" or "MainHeaderUIButton")
+                .Select(e => e.TextStart).DefaultIfEmpty(int.MaxValue).First();
+            // Below the page title's band: the page frame drawn next (the flight number, the title) is not the pop-up's.
+            var mineTexts = cells.Where(c => c.Index >= start && c.Index < end && c.Y >= 150).ToList();
+            if (mineTexts.Count == 0)
+                continue;
+            float top = mineTexts.Min(c => c.Y);
+            string title = string.Join(" ", mineTexts.Where(c => c.Y - top <= 10).OrderBy(c => c.X).Select(c => c.Text));
+            var fields = all.Skip(i + 1).TakeWhile(e => e.TextStart < end)
+                .Where(e => e.Class is "BaseUITextBox" or "DropdownTextBox" && mine(e.X)).ToList();
+            return new RevisionPopup(column, start, end, title, fields);
+        }
+        return null;
     }
 
     /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>

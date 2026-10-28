@@ -230,6 +230,20 @@ public class A350MfdPageTests
         File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures",
             fixture + ".json")))!, 0);
 
+    // Live 2026-10-28: INSERT NEXT WPT for BASUR opens a pop-up in the revision menu's column (NextWaypointPopup, no
+    // rectangle of its own): its entry field read "C220°: none", the label of the F-PLN row under it. The field takes
+    // the pop-up's title, and the row text it covers is gone.
+    [Fact]
+    public void An_insert_next_waypoint_popup_names_its_field_by_its_title()
+    {
+        var all = PageLines("mfd_insert_next_wpt");
+        var lines = all.Select(l => l.Spoken).ToList();
+        var field = Assert.Single(all, l => l.Kind == "field" && l.Spoken.StartsWith("INSERT NEXT WPT FROM BASUR", StringComparison.Ordinal));
+        Assert.Equal("INSERT NEXT WPT FROM BASUR: none, cyan", field.Spoken);
+        Assert.DoesNotContain(lines, l => l.StartsWith("C220°:", StringComparison.Ordinal));
+        Assert.Contains("CANCEL button", lines);
+    }
+
     [Fact]
     public void The_window_moves_to_a_menu_as_it_opens_and_only_then()
     {
