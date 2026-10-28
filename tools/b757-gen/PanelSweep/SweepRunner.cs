@@ -31,7 +31,9 @@ internal sealed class TsvWriter : IDisposable
 /// The live sweep over a <see cref="SweepPlan"/>. For each control to sweep: read it, write every other
 /// position through the app's own Bbs757Write.ToPosition (its calls 400 ms apart), read back 1.5 s after
 /// the last call, and put it back where it was read. The denylist is asked before the first write to a
-/// control, and again before every write.
+/// control, and again before every write. A SimConnect exception raised for one of a position's writes
+/// makes its verdict "write error: ..."; a fault on the link's pump thread (<see cref="SimLink.Fault"/>)
+/// stops the sweep as Ctrl+C does, once the control in progress has been put back.
 /// </summary>
 internal sealed class SweepRunner
 {
@@ -49,8 +51,13 @@ internal sealed class SweepRunner
     public int ControlsSwept { get; private set; }
     public int PositionsLanded { get; private set; }
     public int NotReached { get; private set; }
+    public int WriteErrors { get; private set; }
     public List<string> Failures { get; } = new();
     public List<string> RestoreFailures { get; } = new();
+
+    /// <summary>Why the sweep stops before the next step, or null to go on: a fault on the link, or Ctrl+C.</summary>
+    private string? StopReason =>
+        _link.Fault != null ? "stopped: SimConnect fault" : _cancel ? "stopped with Ctrl+C" : null;
 
     public SweepRunner(SimLink link, SweepPlan plan, TsvWriter tsv, TextWriter output)
     {
@@ -133,9 +140,9 @@ internal sealed class SweepRunner
                 }
 
                 number++;
-                if (_cancel)
+                if (StopReason is { } stop)
                 {
-                    _tsv.Row(c, "", "", "", "not reached (stopped with Ctrl+C)");
+                    _tsv.Row(c, "", "", "", $"not reached ({stop})");
                     NotReached++;
                     continue;
                 }
@@ -185,9 +192,9 @@ internal sealed class SweepRunner
         {
             foreach (var target in targets)
             {
-                if (_cancel)
+                if (StopReason is { } stop)
                 {
-                    _tsv.Row(c, "", "", "", "interrupted (stopped with Ctrl+C)");
+                    _tsv.Row(c, "", "", "", $"interrupted ({stop})");
                     NotReached++;
                     break;
                 }
@@ -205,7 +212,9 @@ internal sealed class SweepRunner
         }
         finally
         {
-            // The control is put back even after an error or a Ctrl+C. Nothing in here looks at _cancel.
+            // The control is put back even after an error, a Ctrl+C or a link fault. Nothing in here looks at
+            // _cancel or the fault: the restore always tries (a fault may leave its reads undelivered, and then
+            // it says RESTORE FAILED and names the control).
             bool restored = Restore(c, original, originalIndex, wrote);
             if (!restored) RestoreFailures.Add($"{panelName} / {c.Label} ({c.Node}): read {SweepPlanner.FormatValue(original)} at the start, not put back");
         }
@@ -237,10 +246,10 @@ internal sealed class SweepRunner
                 return false;
         }
 
-        double? after;
+        SendResult sent;
         try
         {
-            after = Send(c, plan.Calls);
+            sent = Send(c, plan.Calls);
             wrote = true;
         }
         catch (SimLinkException ex)
@@ -250,9 +259,19 @@ internal sealed class SweepRunner
             return false;
         }
 
-        string verdict = Judge(c, was, Bbs757Rpn.PositionIndex(c, target.Value), after);
+        double? after = sent.After;
         string readBack = after is double a ? SweepPlanner.FormatValue(a) : "";
         string written = string.Join(" | ", plan.Calls);
+        if (sent.WriteErrors.Count > 0)
+        {
+            // The sim refused a write of this position: whatever the read-back says, it is not the writer's
+            // verdict ("no change" would blame the control).
+            WriteErrors++;
+            Fail(panelName, c, position, written, readBack, "write error: SimConnect " + string.Join(", ", sent.WriteErrors));
+            return false;
+        }
+
+        string verdict = Judge(c, was, Bbs757Rpn.PositionIndex(c, target.Value), after);
         if (verdict == "landed")
         {
             _tsv.Row(c, position, written, readBack, verdict);
@@ -262,18 +281,26 @@ internal sealed class SweepRunner
         return false;
     }
 
-    /// <summary>Sends the calls, 400 ms apart, then waits 1.5 s after the last and reads the control again.</summary>
-    private double? Send(Bbs757Control c, IReadOnlyList<string> calls)
+    /// <summary>What a write's calls came to: the control read 1.5 s after the last, and any SimConnect exceptions raised for the calls.</summary>
+    private sealed record SendResult(double? After, IReadOnlyList<string> WriteErrors);
+
+    /// <summary>
+    /// Sends the calls, 400 ms apart, then waits 1.5 s after the last and reads the control again. By then the
+    /// sim has answered any of the calls' packets with an exception, so they are collected with the read.
+    /// </summary>
+    private SendResult Send(Bbs757Control c, IReadOnlyList<string> calls)
     {
         GuardNotDenied(c);
+        var sendIds = new List<uint>();
         for (int i = 0; i < calls.Count; i++)
         {
             if (i > 0) Thread.Sleep(SweepTiming.StepGapMs);
             GuardNotDenied(c);
-            _link.WriteCalc(calls[i]);
+            sendIds.Add(_link.WriteCalc(calls[i]));
         }
         Thread.Sleep(SweepTiming.ReadBackMs);
-        return _link.ReadLVar(c.StateVar!);
+        double? after = _link.ReadLVar(c.StateVar!);
+        return new SendResult(after, _link.WriteErrors(sendIds));
     }
 
     private static string Judge(Bbs757Control c, double before, int targetIndex, double? after)
@@ -336,13 +363,15 @@ internal sealed class SweepRunner
 
             try
             {
-                double? after = Send(c, calls);
-                if (after is double a && IsOriginal(a))
+                var sent = Send(c, calls);
+                if (sent.WriteErrors.Count > 0)
+                    _out.WriteLine($"  restore of {c.Label}: write error: SimConnect {string.Join(", ", sent.WriteErrors)}");
+                if (sent.After is double a && IsOriginal(a))
                 {
                     _tsv.Row(c, position, string.Join(" | ", calls), SweepPlanner.FormatValue(a), "restored");
                     return true;
                 }
-                lastRead = after is double r ? SweepPlanner.FormatValue(r) : "";
+                lastRead = sent.After is double r ? SweepPlanner.FormatValue(r) : "";
             }
             catch (SimLinkException ex)
             {
@@ -373,6 +402,9 @@ internal sealed class SweepRunner
     {
         w.WriteLine();
         w.WriteLine($"Done: {ControlsSwept} controls swept, {PositionsLanded} positions landed, {Failures.Count} problems, {NotReached} not reached.");
+        w.WriteLine($"SimConnect exceptions: {_link.Exceptions} in all; {WriteErrors} positions with a write error.");
+        if (_link.Fault is { } fault)
+            w.WriteLine($"STOPPED on a SimConnect fault: {fault}" + (_link.Faults > 1 ? $" ({_link.Faults - 1} more after it)." : "."));
         if (Failures.Count > 0)
         {
             w.WriteLine("Problems (these go into the plan 12 handoff):");

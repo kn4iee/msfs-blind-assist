@@ -22,6 +22,12 @@ internal sealed class SimLinkException : Exception
 /// re-evaluates on every poll (measured 2026-10-28, docs/b757/evidence/flight-12.md: a write registered that
 /// way re-ran every cycle and drove a trim to its stop). Every command carries a fresh "{seq} 0 * " prefix
 /// so two identical writes are never byte-identical (CalcCommand).
+///
+/// Each write returns the id of the packet it was sent in, so a SimConnect exception the sim raises for it
+/// (whose dwSendID names that packet) can be told apart from one raised for a read: <see cref="WriteErrors"/>.
+/// A message handler that throws, or a receive that fails with anything but SimConnect's own COMException,
+/// is never swallowed: it is printed and kept in <see cref="Fault"/>, and the sweep stops once the control
+/// in progress has been put back.
 /// </summary>
 internal sealed class SimLink : IDisposable
 {
@@ -66,6 +72,11 @@ internal sealed class SimLink : IDisposable
     private uint _nextReq = FirstReq;
     private long _seq;
     private int _exceptions;
+    private int _faults;
+    private volatile string? _fault;
+
+    /// <summary>The SimConnect exceptions the sim raised, by the id of the packet that caused each.</summary>
+    private readonly ConcurrentDictionary<uint, SIMCONNECT_EXCEPTION> _exceptionsBySendId = new();
 
     /// <summary>True once the sim has told us it is quitting.</summary>
     public volatile bool SimQuit;
@@ -73,19 +84,59 @@ internal sealed class SimLink : IDisposable
     /// <summary>How many SimConnect exception messages the sim has sent (a bad datum name, a dropped write, ...).</summary>
     public int Exceptions => Volatile.Read(ref _exceptions);
 
+    /// <summary>
+    /// The first fault on the pump thread (a message handler that threw, or a receive that failed with anything
+    /// but SimConnect's own COMException), or null. Once set, reads may no longer be delivered: the sweep puts
+    /// back the control in progress and stops.
+    /// </summary>
+    public string? Fault => _fault;
+
+    /// <summary>How many faults the pump thread has met (only the first is printed in full).</summary>
+    public int Faults => Volatile.Read(ref _faults);
+
     private SimLink(Microsoft.FlightSimulator.SimConnect.SimConnect sc, TextWriter output)
     {
         _sc = sc;
         _out = output;
-        _sc.OnRecvOpen += (s, e) => _opened.Set();
-        _sc.OnRecvQuit += (s, e) => { SimQuit = true; _out.WriteLine("The sim is quitting."); };
-        _sc.OnRecvException += (s, e) =>
+        _sc.OnRecvOpen += (s, e) => Handle("open", () => _opened.Set());
+        _sc.OnRecvQuit += (s, e) => Handle("quit", () => { SimQuit = true; _out.WriteLine("The sim is quitting."); });
+        _sc.OnRecvException += (s, e) => Handle("exception", () =>
         {
             Interlocked.Increment(ref _exceptions);
+            _exceptionsBySendId[e.dwSendID] = (SIMCONNECT_EXCEPTION)e.dwException;
             _out.WriteLine($"SimConnect exception: {(SIMCONNECT_EXCEPTION)e.dwException} (sendId={e.dwSendID}, index={e.dwIndex})");
-        };
-        _sc.OnRecvSimobjectData += OnData;
+        });
+        _sc.OnRecvSimobjectData += (s, e) => Handle("data", () => OnData(s, e));
     }
+
+    /// <summary>Runs a message handler's body; a throw is recorded as the link's <see cref="Fault"/>, never swallowed.</summary>
+    private void Handle(string handler, Action body)
+    {
+        try { body(); }
+        catch (Exception ex) { RecordFault($"the {handler} handler threw {ex.GetType().Name}: {ex.Message}"); }
+    }
+
+    private void RecordFault(string message)
+    {
+        if (Interlocked.Increment(ref _faults) > 1) return;   // the first is the one that matters; the summary counts the rest
+        _fault = message;
+        try
+        {
+            _out.WriteLine($"SimConnect FAULT: {message}. The sweep stops once the control in progress is put back.");
+        }
+        catch { /* the console is gone: Fault still stops the run */ }
+    }
+
+    /// <summary>
+    /// The SimConnect exceptions the sim raised for the packets <paramref name="sendIds"/> (the ids
+    /// <see cref="WriteCalc"/> returned), as their names, e.g. "DATA_ERROR"; empty when there were none. An
+    /// exception arrives a little after its packet, so ask after the read-back wait.
+    /// </summary>
+    public IReadOnlyList<string> WriteErrors(IEnumerable<uint> sendIds) =>
+        sendIds.Where(id => id != 0)
+            .Select(id => _exceptionsBySendId.TryGetValue(id, out var kind) ? kind.ToString().Replace("SIMCONNECT_EXCEPTION_", "") : null)
+            .OfType<string>()
+            .ToList();
 
     /// <summary>
     /// Opens SimConnect, maps the MobiFlight command area and pings the module. Throws
@@ -165,7 +216,10 @@ internal sealed class SimLink : IDisposable
 
     /// <summary>
     /// SimConnect is not thread-safe, so the pump and every call hold the same gate. A handler only
-    /// sets an event or a counter, so holding the gate in a dispatch is harmless.
+    /// sets an event or a counter, so holding the gate in a dispatch is harmless. A COMException is
+    /// SimConnect's own "nothing queued" (or the sim closing, which OnRecvQuit reports); anything else is
+    /// a fault (<see cref="RecordFault"/>), never swallowed. The handlers catch their own throws
+    /// (<see cref="Handle"/>), so one reaching here came from the receive itself.
     /// </summary>
     private void Pump()
     {
@@ -176,7 +230,12 @@ internal sealed class SimLink : IDisposable
                 for (int i = 0; i < 16; i++)
                 {
                     try { _sc.ReceiveMessage(); }
-                    catch { break; }   // nothing queued (or a message that failed to dispatch)
+                    catch (COMException) { break; }   // nothing queued, or the sim is closing
+                    catch (Exception ex)
+                    {
+                        RecordFault($"receiving a SimConnect message threw {ex.GetType().Name}: {ex.Message}");
+                        break;
+                    }
                 }
             }
             Thread.Sleep(10);
@@ -247,18 +306,19 @@ internal sealed class SimLink : IDisposable
     /// <summary>
     /// One calculator write, run ONCE ("MF.SimVars.Set", never "Add"), made unique so MobiFlight cannot
     /// drop it as a repeat of the command before. Throws when it is longer than the command buffer
-    /// rather than sending the cut-off half of a click.
+    /// rather than sending the cut-off half of a click. Returns the id of the packet it went in, for
+    /// <see cref="WriteErrors"/> (0 when SimConnect would not say).
     /// </summary>
-    public void WriteCalc(string rpn)
+    public uint WriteCalc(string rpn)
     {
         if (SimQuit) throw new SimLinkException("The sim has quit.");
         string command = CalcCommand.Build(rpn, Interlocked.Increment(ref _seq));
         if (command.Length > CalcCommand.MaxChars)
             throw new SimLinkException($"The command is {command.Length} characters; the buffer takes {CalcCommand.MaxChars}, so it was not sent.");
-        SendCommand(command);
+        return SendCommand(command);
     }
 
-    private void SendCommand(string command)
+    private uint SendCommand(string command)
     {
         try
         {
@@ -266,6 +326,13 @@ internal sealed class SimLink : IDisposable
             {
                 _sc.SetClientData(AREA.Command, CMD_DEF.Command, SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0,
                     new CommandData { command = command });
+                // Under the same gate, so no other packet can have gone in between.
+                try
+                {
+                    uint sendId = _sc.GetLastSentPacketID();
+                    return sendId;
+                }
+                catch (COMException) { return 0; }
             }
         }
         catch (Exception ex)

@@ -11,7 +11,8 @@ namespace PanelSweep;
 ///   PanelSweep [--panel NAME]               asks, then sweeps
 ///
 /// Exit codes: 0 done, 1 bad arguments, 2 map or denylist problem, 3 the sim cannot be reached,
-/// 4 the pre-flight refused (nothing was written), 5 some control was not put back.
+/// 4 the pre-flight refused (nothing was written), 5 some control was not put back, 6 stopped on a
+/// SimConnect fault (every control reached was put back).
 /// </summary>
 internal static class Program
 {
@@ -170,7 +171,8 @@ internal static class Program
 
             runner.RunAll();
             runner.PrintSummary(Console.Out, tsvPath);
-            return runner.RestoreFailures.Count > 0 ? 5 : 0;
+            if (runner.RestoreFailures.Count > 0) return 5;
+            return link.Fault != null ? 6 : 0;
         }
     }
 

@@ -65,9 +65,63 @@ cockpit, that the sim says the aircraft is on the ground with both engines off (
 that a one-shot calculator write of a test value into a variable of its own (`L:PANELSWEEP_PROBE`) comes
 back on a read (it refuses if not: the MobiFlight module is missing or the aircraft is not loaded).
 
-It takes about 13 minutes for the whole 757. **Ctrl+C** stops after the step in progress and puts that
-control back, then writes the results so far. A second Ctrl+C stops at once and names the control that
-may need putting back by hand.
+It takes about 15 minutes for the whole 757 (the dry run's estimate on 2026-10-28: 176 controls to sweep,
+292 position writes, each control put back afterwards). **Ctrl+C** stops after the step in progress and
+puts that control back, then writes the results so far. A second Ctrl+C stops at once and names the
+control that may need putting back by hand.
+
+## What moves during the sweep
+
+Every control below is moved through each of its positions and put back where it was, one control at a
+time, each position held for about 2 seconds. So during the run you will see (and some you will hear)
+these change, panel by panel, as the dry run lists them on 2026-10-28:
+
+- **Overhead, Electrical:** the left and right utility buses (L and R Util Bus). The power sources (standby
+  power, bus ties, generator controls, APU generator) and the battery are denied, so the buses stay powered.
+- **Overhead, IRS:** the IRS display knobs (IRS Center Knob: L, C, R; IRS Large Knob: TK/GS, PPOS, WIND,
+  HDG/STS). The IRS mode selectors are denied.
+- **Overhead, Engine control and yaw damper:** the left and right yaw dampers.
+- **Overhead, Hydraulics:** all four electric hydraulic pumps (L, C1, C2, R ELEC Pump), which start and stop
+  (hydraulic pressure rises and falls), and both engine pump switches.
+- **Overhead, Overhead miscellaneous:** Lt Ovrd and the left and right engine limiters.
+- **Overhead, Fuel:** all six fuel pumps (left, right and center) and both crossfeed valves.
+- **Overhead, Anti-ice:** engine and wing anti-ice.
+- **Overhead, Wipers:** the wiper selector (OFF, LOW, HIGH): the wipers run.
+- **Overhead, Exterior lights:** every exterior light (anti-collision red and white, wing, runway turnoff,
+  taxi, landing, position, logo).
+- **Overhead, Window heat:** the four window heat switches.
+- **Overhead, Passenger signs:** the seatbelt and no smoking signs (the cabin chimes).
+- **Overhead, Pressurization:** Mode Select (AUTO 1, AUTO 2, MAN), Auto Rate and the equipment cooling switch.
+- **Overhead, Air conditioning and bleed:** both pack selectors, the isolation valve, both engine bleeds and
+  the APU bleed (the packs lose their air while it is off), the three zone temperature selectors (Flight
+  Deck, Forward Cabin, Aft Cabin), trim air and both recirculation fans.
+- **Overhead, Cabin lights:** the ceiling, window and entry lights and the work light.
+- **Overhead, Flight deck door:** the door lock switch (Unlocked, Auto, Deny).
+- **Overhead, Warning lights test:** the Warning Ind switch (DIM, BRT): the annunciators dim and brighten.
+- **Glareshield, MCP:** both flight director switches, the A/T arm switch, the bank limit selector and the
+  autopilot disengage bar.
+- **Forward panel, Main panel switches:** the autobrake selector, the foot and shoulder heaters, and the
+  instrument source switches (flight director, nav, EFI, IRS and air data source buttons for each side,
+  standby EICAS, HDG Ref) and the left brake reserve.
+- **Forward panel, Captain and First officer EFIS:** ND mode and range and the map overlays (WXR, TERR, NAV
+  AID, APRT, DATA, WPT, INOP): both NDs change what they show.
+- **Forward panel, Standby attitude indicator:** the gyro selector (OFF, ILS, BCRS).
+- **Forward panel, Captain and First officer DDRMI:** both needles' VOR/ADF switches.
+- **Forward panel, Captain and First officer chronometer:** Chrono ET (RUN, HOLD, RESET) and Chrono Set
+  (RUN, HOLD, slow and fast slew): the clocks' elapsed time and time change.
+- **Forward panel, Oxygen:** the four O2 Ears switches (captain, first officer, jumpseat, observer).
+- **Forward panel, Cockpit miscellaneous:** the cockpit door.
+- **Forward panel, Display brightness:** all eight display knobs (both PFDs, both NDs, upper and lower EICAS,
+  both CDUs): each display dims to its minimum and back to full.
+- **Pedestal, TCAS and transponder:** the TCAS mode and transponder selectors.
+- **Pedestal, EICAS control:** the EICAS computer switch and the thrust reference controls (EICAS Lwr
+  Thrust Ref: L, BOTH, R; Thrust Ref Pull).
+- **Pedestal, Audio panels 1 and 2:** every microphone and receiver selector, voice/range and boom/oxygen.
+- **Other, P61 panel:** the flight recorder, service interphone and the test switches (ground proximity,
+  stall left and right, takeoff and landing configuration, equipment cooling, yaw damper, duct leak and fuel
+  quantity, wing anti-ice and window heat): a test may sound its aural warning while it is on.
+
+Nothing on the denylist moves (below), nor any button, guard or guarded switch.
 
 ## What it does to a control
 
@@ -96,7 +150,9 @@ stop).
   together with their covers (below).
 - **The denylist** (`denylist.txt`, one node name per line, `#` for comments): controls that are
   **never written**, whatever else happens: the fire handles, their unlock buttons and rotations; cargo
-  fire and its bottles; the stabilizer trim cutouts; the battery; the APU selector; the IRS selectors;
+  fire and its bottles; the stabilizer trim cutouts; the battery; the electrical sources (standby power,
+  both bus ties, both generator controls and the APU generator: switching a power source off on ground
+  power can drop the buses, as a bus-tie press broke ground power on the Fenix); the APU selector; the IRS selectors;
   the fuel control switches; the engine start selectors and the ignition selector; the generator drive
   disconnects; the RAT; passenger oxygen; the emergency lights; the gear lever; the flap lever; the
   parking brake; the alternate flaps selector and its arm switches (they drive the flaps electrically);
@@ -132,15 +188,21 @@ Verdicts:
 | `not read after the write`, `not read before the write` | The sim delivered no value in 2 s. |
 | `refused: ...` | The app's planner declined to write from that reading. |
 | `not sent: ...` | The command would not fit (over 1023 characters) or SimConnect refused it. |
+| `write error: SimConnect X` | The sim raised SimConnect exception X for one of the position's writes: the write did not run, so this is a transport fault, not the control's (where it would otherwise have read `no change`). |
 | `already there` | The control already read the target. |
 | `restored`, `at start (nothing to restore)` | The put-back worked. |
 | `RESTORE FAILED: left at v` | The control was not put back: set it by hand. |
 | `skipped: not read` | The state variable gave no value, so nothing was written. |
 | `denied`, `skipped: button`, `skipped: guarded`, `skipped: no readable positions` | Not swept, and why. |
-| `interrupted (...)`, `not reached (...)` | Ctrl+C stopped the sweep here. |
+| `interrupted (...)`, `not reached (...)` | The sweep stopped here: `stopped with Ctrl+C`, or `stopped: SimConnect fault` (below). |
 
-The screen shows each problem as it happens and a list at the end. The exit code is 0 when it finished,
-4 when the pre-flight refused (nothing was written), and 5 when some control was not put back.
+The screen shows each problem as it happens and a list at the end, with the count of SimConnect
+exceptions and of positions with a write error. If one of the tool's SimConnect message handlers throws,
+or receiving a message fails with anything but SimConnect's own error, the tool prints `SimConnect FAULT:
+...` at once, puts back the control in progress (its reads may fail then, and it says so if the restore
+does) and stops; every control after it reads `not reached (stopped: SimConnect fault)`. The exit code
+is 0 when it finished, 4 when the pre-flight refused (nothing was written), 5 when some control was not
+put back, and 6 when it stopped on a SimConnect fault.
 
 ### What to do with a failure
 
