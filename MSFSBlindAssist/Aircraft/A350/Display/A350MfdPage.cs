@@ -114,15 +114,23 @@ public static class A350MfdPage
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
         }).ToHashSet();
 
-        // A waypoint's open revision menu (its items with their own texts drawn after them): its items are its own, never
-        // the F-PLN's column headers (FROM P.POS DIR TO, white, sits in their band, live 2026-10-28).
+        // A waypoint's open revision menu or a drop-down (its items with their own texts drawn after them): its items are
+        // its own, never the F-PLN's column headers (FROM P.POS DIR TO, and POSITION's REPORT, white, sit in their band,
+        // live 2026-10-28); what either covers is left out of the rows under it.
         var revisionItems = elements.Where(e => !hidden.Contains(e) && e.Class == RevisionItem
             && cells.Any(c => c.Index >= e.TextStart && Covers(e, c.X, c.Y))).ToList();
-        var revisionCells = cells.Where(c => revisionItems.Any(e => c.Index >= e.TextStart && Covers(e, c.X, c.Y))).ToHashSet();
+        var itemCells = cells.Where(c => revisionItems.Concat(menuItems.Select(m => m.e))
+            .Any(e => c.Index >= e.TextStart && Covers(e, c.X, c.Y))).ToHashSet();
+        var overlays = new List<Overlay>();
+        if (overlay != null)
+            overlays.Add(overlay);
+        if (menuItems.Count > 0)
+            overlays.Add(new Overlay(menuItems.Min(m => m.e.X) - shift, menuItems.Max(m => m.e.X + m.e.RectW) - shift,
+                menuItems.Min(m => m.e.Y), menuItems.Max(m => m.e.Y + m.e.RectH), menuItems.Min(m => m.e.TextStart)));
 
         bool flightPlan = cells.Any(c => c.Colour == "black" && c.Y < 150 && c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
         if (flightPlan)
-            ReadFlightPlan(capture, shift, Mine, cells.Where(c => !revisionCells.Contains(c)).ToList(), used, lines, overlay);
+            ReadFlightPlan(capture, shift, Mine, cells.Where(c => !itemCells.Contains(c)).ToList(), used, lines, overlays);
 
         foreach (var e in elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)))
         {
@@ -331,14 +339,14 @@ public static class A350MfdPage
 
     /// <summary>What an open revision menu or pop-up covers, in the side's own coordinates, and the draw index it starts
     /// at (what was drawn before it under it is hidden).</summary>
-    private sealed record RevisionOverlay(float X0, float X1, float Y0, float Y1, int Start)
+    private sealed record Overlay(float X0, float X1, float Y0, float Y1, int Start)
     {
         public bool Covers(float x, float y) => x >= X0 && x <= X1 && y >= Y0 && y <= Y1;
     }
 
     /// <summary>What covers the revision menu's column: an open pop-up, from its title to its lowest key, or the open
     /// menu, from its first item to its last (the column's own rectangle stops above WHAT IF).</summary>
-    private static RevisionOverlay? RevisionOverlayOf(A350DrawCapture capture, List<Cell> cells, RevisionPopup? popup,
+    private static Overlay? RevisionOverlayOf(A350DrawCapture capture, List<Cell> cells, RevisionPopup? popup,
         Func<float, bool> mine, float shift)
     {
         var column = popup?.Column
@@ -347,12 +355,12 @@ public static class A350MfdPage
             return null;
         float x0 = column.X - shift, x1 = x0 + column.RectW;
         if (popup != null)
-            return new RevisionOverlay(x0, x1, popup.Top, popup.Bottom, popup.Start);
+            return new Overlay(x0, x1, popup.Top, popup.Bottom, popup.Start);
         var items = capture.Elements.Where(e => e.Class == RevisionItem && mine(e.X) && e.RectW > 0 && e.RectH > 0
             && cells.Any(c => c.Index >= e.TextStart && c.X >= e.X - shift && c.X <= e.X - shift + e.RectW
                 && c.Y >= e.Y && c.Y <= e.Y + e.RectH)).ToList();
         return items.Count == 0 ? null
-            : new RevisionOverlay(x0, x1, items.Min(e => e.Y), items.Max(e => e.Y + e.RectH), column.TextStart);
+            : new Overlay(x0, x1, items.Min(e => e.Y), items.Max(e => e.Y + e.RectH), column.TextStart);
     }
 
     /// <summary>
@@ -460,7 +468,7 @@ public static class A350MfdPage
     /// pilot sees them (the draw goes on below it, hidden); the destination bar as one line.
     /// </summary>
     private static void ReadFlightPlan(A350DrawCapture capture, float shift, Func<float, bool> mine, List<Cell> cells,
-        HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines, RevisionOverlay? overlay)
+        HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines, IReadOnlyList<Overlay> overlays)
     {
         var boxes = capture.Elements.Where(e => mine(e.X) && e.Class == "BaseFlightPlanButton")
             .Select(e => (X: e.X - shift, e.Y, W: e.RectW, H: e.RectH)).ToList();   // none while the plan is empty
@@ -547,9 +555,10 @@ public static class A350MfdPage
             }
             string label = (b.Y < 230 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
             string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
-            // A column an open revision menu or pop-up covers is left out: hidden, not absent.
-            var columns = new[] { (time, 200f, 334f), (spd, 334f, 422f), (alt, 422f, 563f) }
-                .Where(k => overlay == null || !overlay.Covers(k.Item2 + 1, ident.Y))
+            // A column whose value an open menu or pop-up covers is left out: hidden, not absent. Each column's values are
+            // drawn at one x (live: TIME 262, SPD 357, ALT 443).
+            var columns = new[] { (time, 200f, 334f, 262f), (spd, 334f, 422f, 357f), (alt, 422f, 563f, 443f) }
+                .Where(k => !overlays.Any(o => o.Covers(k.Item4, ident.Y)))
                 .Select(k => $"{k.Item1} {Column(k.Item2, k.Item3, colour)}").Append(colour);
             lines.Add((b.Y, 0, new MfdLine("waypoint", $"{label}: {legText}{string.Join(", ", columns)}", b.X + b.W / 2, b.Y + b.H / 2)));
             prevBottom = b.Y + b.H;

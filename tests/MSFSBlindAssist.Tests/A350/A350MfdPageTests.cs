@@ -614,6 +614,25 @@ public class A350MfdPageTests
         Assert.Contains("TO: none, cyan", lines);
     }
 
+    // The POSITION menu open over the F-PLN (live 2026-10-28): its REPORT item (text at y 176) sits in the F-PLN's column
+    // header band and was taken as the TIME header ("REPORT none") while the item itself read nothing. A menu's texts are
+    // its own, and the TIME and SPD values it covers are left out of the rows under it, as the revision menu's are.
+    [Fact]
+    public void A_drop_down_over_the_flight_plan_keeps_its_items_and_covers_its_columns()
+    {
+        var all = PageLines("mfd_fpln_position_menu");
+        var lines = all.Select(l => l.Spoken).ToList();
+        int position = lines.IndexOf("POSITION button, menu open");
+        Assert.True(position >= 0, string.Join(" | ", lines));
+        Assert.Equal(new[] { "MONITOR button", "REPORT button", "NAVAIDS button", "IRS button", "GNSS button", "TIME button" },
+            lines.Skip(position + 1).Take(6));
+        Assert.DoesNotContain(lines, l => l.Contains("REPORT none", StringComparison.Ordinal));
+        string from = all.Single(l => l.Kind == "waypoint" && l.Spoken.StartsWith("FROM VCBI22", StringComparison.Ordinal)).Spoken;
+        Assert.DoesNotContain("TIME ", from);   // under the menu
+        Assert.DoesNotContain("SPD ", from);
+        Assert.Contains("ALT ", from);          // beside it
+    }
+
     // NEW DEST's pop-up stands in mid-page (live 2026-10-28, y 444 to its CANCEL key at 599): the rows above and below
     // it show their columns, the rows beside it do not.
     [Fact]
