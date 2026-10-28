@@ -23,7 +23,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_BATTERY_BUTTON",
@@ -46,7 +47,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_EXT_PWR_BUTTON",
@@ -60,7 +62,8 @@
    "release": "0 (>O:B757_OVHD_EXT_PWR_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_EXT_PWR_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_STBY_POWER_SWITCH",
@@ -87,7 +90,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_STBY_POWER_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_STBY_POWER_SWITCH)",
-   "ccw": "(L:B757_OVHD_STBY_POWER_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_STBY_POWER_SWITCH)"
+   "ccw": "(L:B757_OVHD_STBY_POWER_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_STBY_POWER_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_BUS_TIE_BUTTON",
@@ -110,7 +114,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_BUS_TIE_BUTTON",
@@ -133,7 +138,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_GEN_CONT_BUTTON",
@@ -156,7 +162,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_GEN_CONT_BUTTON",
@@ -179,7 +186,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_APU_GEN_BUTTON",
@@ -202,7 +210,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_UTIL_BUS_BUTTON",
@@ -225,7 +234,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_UTIL_BUS_BUTTON",
@@ -248,7 +258,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_4_SWITCH",
@@ -271,7 +282,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_GEN_DRIVE_BUTTON",
@@ -285,7 +297,8 @@
    "release": "0 (>O:B757_OVHD_L_GEN_DRIVE_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_L_GEN_DRIVE_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_5_SWITCH",
@@ -308,7 +321,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_GEN_DRIVE_BUTTON",
@@ -322,7 +336,8 @@
    "release": "0 (>O:B757_OVHD_R_GEN_DRIVE_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_R_GEN_DRIVE_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_APU_SWITCH",
@@ -349,7 +364,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_APU_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_APU_SWITCH)",
-   "ccw": "(L:B757_OVHD_APU_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_APU_SWITCH)"
+   "ccw": "(L:B757_OVHD_APU_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_APU_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_IRS_L_SWITCH",
@@ -380,7 +396,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_IRS_L_SWITCH, enum) 1 + 3 min (>L:B757_IRS_L_SWITCH)",
-   "ccw": "(L:B757_IRS_L_SWITCH, enum) 1 - 0 max (>L:B757_IRS_L_SWITCH)"
+   "ccw": "(L:B757_IRS_L_SWITCH, enum) 1 - 0 max (>L:B757_IRS_L_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_IRS_C_SWITCH",
@@ -411,7 +428,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_IRS_C_SWITCH, enum) 1 + 3 min (>L:B757_IRS_C_SWITCH)",
-   "ccw": "(L:B757_IRS_C_SWITCH, enum) 1 - 0 max (>L:B757_IRS_C_SWITCH)"
+   "ccw": "(L:B757_IRS_C_SWITCH, enum) 1 - 0 max (>L:B757_IRS_C_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_IRS_R_SWITCH",
@@ -442,7 +460,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_IRS_R_SWITCH, enum) 1 + 3 min (>L:B757_IRS_R_SWITCH)",
-   "ccw": "(L:B757_IRS_R_SWITCH, enum) 1 - 0 max (>L:B757_IRS_R_SWITCH)"
+   "ccw": "(L:B757_IRS_R_SWITCH, enum) 1 - 0 max (>L:B757_IRS_R_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_IRS_CENTRE_KNOB",
@@ -469,7 +488,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_IRS_CENTRE_KNOB, enum) 1 + 2 min (>L:B757_IRS_CENTRE_KNOB)",
-   "ccw": "(L:B757_IRS_CENTRE_KNOB, enum) 1 - 0 max (>L:B757_IRS_CENTRE_KNOB)"
+   "ccw": "(L:B757_IRS_CENTRE_KNOB, enum) 1 - 0 max (>L:B757_IRS_CENTRE_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_IRS_LARGE_KNOB",
@@ -500,7 +520,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_IRS_LARGE_KNOB, enum) 1 + 3 min (>L:B757_IRS_LARGE_KNOB)",
-   "ccw": "(L:B757_IRS_LARGE_KNOB, enum) 1 - 0 max (>L:B757_IRS_LARGE_KNOB)"
+   "ccw": "(L:B757_IRS_LARGE_KNOB, enum) 1 - 0 max (>L:B757_IRS_LARGE_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_1_BUTTON",
@@ -514,7 +535,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_1_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_2_BUTTON",
@@ -528,7 +550,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_2_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_3_BUTTON",
@@ -542,7 +565,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_3_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_4_BUTTON",
@@ -556,7 +580,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_4_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_5_BUTTON",
@@ -570,7 +595,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_5_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_6_BUTTON",
@@ -584,7 +610,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_6_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_7_BUTTON",
@@ -598,7 +625,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_7_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_8_BUTTON",
@@ -612,7 +640,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_8_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_9_BUTTON",
@@ -626,7 +655,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_9_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_0_BUTTON",
@@ -640,7 +670,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_0_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_ENT_BUTTON",
@@ -654,7 +685,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_ENT_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_IRS_NUMBER_DEL_BUTTON",
@@ -668,7 +700,8 @@
    "release": "0 (>L:B757_IRS_NUMBER_DEL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_1_SWITCH",
@@ -691,7 +724,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "B757_OVHD_L_ELEC-ENG-CONT_BUTTON",
@@ -714,7 +748,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "B757_GAURD_2_SWITCH",
@@ -737,7 +772,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "B757_OVHD_R_ELEC-ENG-CONT_BUTTON",
@@ -760,7 +796,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "B757_OVHD_L_YAW_DAMPER_BUTTON",
@@ -783,7 +820,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_YAW_DAMPER_BUTTON",
@@ -806,7 +844,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_ENG_ELEC_PUMPS_BUTTON",
@@ -829,7 +868,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_C_ENG1_HYD_PUMPS_BUTTON",
@@ -852,7 +892,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_C_ENG2_HYD_PUMPS_BUTTON",
@@ -875,7 +916,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_ENG_ELEC_PUMPS_BUTTON",
@@ -898,7 +940,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_ENG_HYD_PUMPS_BUTTON",
@@ -921,7 +964,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_ENG_HYD_PUMPS_BUTTON",
@@ -944,7 +988,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_LT_OVRD_BUTTON",
@@ -967,7 +1012,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK",
@@ -997,7 +1043,8 @@
    "ccw": null,
    "guard": "B757_OVHD_SWITCH_GAURD",
    "guard_closed": 0,
-   "close_sets": 1
+   "close_sets": 1,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SWITCH_GAURD",
@@ -1020,7 +1067,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_6_SWITCH",
@@ -1043,7 +1091,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_PASS_OXY_BUTTON",
@@ -1057,7 +1106,8 @@
    "release": "0 (>O:B757_OVHD_PASS_OXY_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_PASS_OXY_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_ENG_LIMITER_BUTTON",
@@ -1080,7 +1130,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_ENG_LIMITER_BUTTON",
@@ -1103,7 +1154,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_7_SWITCH",
@@ -1126,7 +1178,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_RAT_BUTTON",
@@ -1140,7 +1193,8 @@
    "release": "0 (>O:B757_OVHD_RAT_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_RAT_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_PUMPS_FWD_BUTTON",
@@ -1163,7 +1217,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_PUMPS_AFT_BUTTON",
@@ -1186,7 +1241,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_PUMPS_FWD_BUTTON",
@@ -1209,7 +1265,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_PUMPS_AFT_BUTTON",
@@ -1232,7 +1289,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_C_PUMPS_L_BUTTON",
@@ -1255,7 +1313,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_C_PUMPS_R_BUTTON",
@@ -1278,7 +1337,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_XFEED_PUMPS_FWD_BUTTON",
@@ -1301,7 +1361,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_XFEED_PUMPS_AFT_BUTTON",
@@ -1324,7 +1385,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_ANTI_ICE_L_ENG_BUTTON",
@@ -1347,7 +1409,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_ANTI_ICE_R_ENG_BUTTON",
@@ -1370,7 +1433,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_ANTI_ICE_WING_BUTTON",
@@ -1393,7 +1457,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_WIPER_SWITCH",
@@ -1420,7 +1485,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_WIPER_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_WIPER_SWITCH)",
-   "ccw": "(L:B757_OVHD_WIPER_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_WIPER_SWITCH)"
+   "ccw": "(L:B757_OVHD_WIPER_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_WIPER_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_LOGO",
@@ -1443,7 +1509,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_HI_INT",
@@ -1466,7 +1533,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_RWY_TURN_L",
@@ -1489,7 +1557,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_RWY_TURN_R",
@@ -1512,7 +1581,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_btn_lights_taxi",
@@ -1535,7 +1605,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_NAV",
@@ -1558,7 +1629,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SW_landing_L",
@@ -1581,7 +1653,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SW_landing_R",
@@ -1604,7 +1677,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_BEACON",
@@ -1627,7 +1701,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_LOGO_BUTTON",
@@ -1650,7 +1725,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_SIDE_WINDOW_HEAT_BUTTON",
@@ -1673,7 +1749,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_FWD_WINDOW_HEAT_BUTTON",
@@ -1696,7 +1773,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_SIDE_WINDOW_HEAT_BUTTON",
@@ -1719,7 +1797,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_FWD_WINDOW_HEAT_BUTTON",
@@ -1742,7 +1821,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEATBELTS_SWITCH",
@@ -1769,7 +1849,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_SEATBELTS_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_SEATBELTS_SWITCH)",
-   "ccw": "(L:B757_OVHD_SEATBELTS_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEATBELTS_SWITCH)"
+   "ccw": "(L:B757_OVHD_SEATBELTS_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEATBELTS_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_NO_SMOKING_SWITCH",
@@ -1796,7 +1877,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_NO_SMOKING_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_NO_SMOKING_SWITCH)",
-   "ccw": "(L:B757_OVHD_NO_SMOKING_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_NO_SMOKING_SWITCH)"
+   "ccw": "(L:B757_OVHD_NO_SMOKING_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_NO_SMOKING_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_MODE_SELECT_SWITCH",
@@ -1823,7 +1905,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_MODE_SELECT_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_MODE_SELECT_SWITCH)",
-   "ccw": "(L:B757_OVHD_MODE_SELECT_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_MODE_SELECT_SWITCH)"
+   "ccw": "(L:B757_OVHD_MODE_SELECT_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_MODE_SELECT_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_AUTORATE_SWITCH",
@@ -1850,7 +1933,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_EQUIP_BUTTON",
@@ -1873,7 +1957,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEL_L_PACK_SWITCH",
@@ -1908,7 +1993,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_SEL_L_PACK_SWITCH, enum) 1 + 4 min (>L:B757_OVHD_SEL_L_PACK_SWITCH)",
-   "ccw": "(L:B757_OVHD_SEL_L_PACK_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEL_L_PACK_SWITCH)"
+   "ccw": "(L:B757_OVHD_SEL_L_PACK_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEL_L_PACK_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEL_R_PACK_SWITCH",
@@ -1943,7 +2029,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_SEL_R_PACK_SWITCH, enum) 1 + 4 min (>L:B757_OVHD_SEL_R_PACK_SWITCH)",
-   "ccw": "(L:B757_OVHD_SEL_R_PACK_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEL_R_PACK_SWITCH)"
+   "ccw": "(L:B757_OVHD_SEL_R_PACK_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_SEL_R_PACK_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_ISOLATION_BUTTON",
@@ -1966,7 +2053,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_LENG_BUTTON",
@@ -1989,7 +2077,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_RENG_BUTTON",
@@ -2012,7 +2101,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_APU_BUTTON",
@@ -2035,7 +2125,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEL_pack_Cockpt",
@@ -2106,7 +2197,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEL_pack_FWD_cab",
@@ -2177,7 +2269,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SEL_pack_AFT_cab",
@@ -2248,7 +2341,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_TRIM_AIR_BUTTON",
@@ -2271,7 +2365,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_RECIRC_BUTTON",
@@ -2294,7 +2389,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_RECIRC_BUTTON",
@@ -2317,7 +2413,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_PACK_BUTTON",
@@ -2331,7 +2428,8 @@
    "release": "0 (>O:B757_OVHD_L_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON, bool) 0 (>L:B757_OVHD_L_PACK_BUTTON_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_PACK_BUTTON",
@@ -2345,7 +2443,8 @@
    "release": "0 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_FLT-DK-DOOR_SWITCH",
@@ -2372,7 +2471,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_WARNING_TEST_BUTTON",
@@ -2386,7 +2486,8 @@
    "release": "0 (>L:OVHD_TEST_LTS_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_WARNING_IND_SWITCH",
@@ -2409,7 +2510,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "11 (>L:B757_OVHD_WARNING_IND_SWITCH)",
-   "ccw": "0 (>L:B757_OVHD_WARNING_IND_SWITCH)"
+   "ccw": "0 (>L:B757_OVHD_WARNING_IND_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_SW_CVR_TEST",
@@ -2423,7 +2525,8 @@
    "release": "0 (>L:B757_OVHD_CVR_Test, number)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_SW_CVR_ERASE",
@@ -2437,7 +2540,8 @@
    "release": "0 (>L:B757_OVHD_CVR_ERASE, number)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_FWD_CABIN_CALL_BUTTON",
@@ -2451,7 +2555,8 @@
    "release": "0 (>L:B757_OVHD_FWD_CABIN_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_MID_CABIN_CALL_BUTTON",
@@ -2465,7 +2570,8 @@
    "release": "0 (>L:B757_OVHD_MID_CABIN_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_AFT_CABIN_CALL_BUTTON",
@@ -2479,7 +2585,8 @@
    "release": "0 (>L:B757_OVHD_AFT_CABIN_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_GND_CALL_BUTTON",
@@ -2493,7 +2600,8 @@
    "release": "0 (>L:B757_OVHD_GND_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_VHF_BUTTON",
@@ -2507,7 +2615,8 @@
    "release": "0 (>L:B757_OVHD_L_VHF_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_VHF_BUTTON",
@@ -2521,7 +2630,8 @@
    "release": "0 (>L:B757_OVHD_R_VHF_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_C_VHF_BUTTON",
@@ -2535,7 +2645,8 @@
    "release": "0 (>L:B757_OVHD_C_VHF_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_HF_BUTTON",
@@ -2549,7 +2660,8 @@
    "release": "0 (>L:B757_OVHD_L_HF_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_R_HF_BUTTON",
@@ -2563,7 +2675,8 @@
    "release": "0 (>L:B757_OVHD_R_HF_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_FLT_INT_BUTTON",
@@ -2577,7 +2690,8 @@
    "release": "0 (>L:B757_OVHD_FLT_INT_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_ALERT_CABIN_CALL_BUTTON",
@@ -2591,7 +2705,8 @@
    "release": "0 (>L:B757_OVHD_ALERT_CABIN_CALL_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_SW_FD_Cap",
@@ -2614,7 +2729,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_SW_FD_FO",
@@ -2637,7 +2753,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_SW_AP_throttle",
@@ -2660,7 +2777,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_LNAV_BUTTON",
@@ -2674,7 +2792,8 @@
    "release": "0 (>L:B757_MCP_LNAV_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_THR_BUTTON",
@@ -2688,7 +2807,8 @@
    "release": "0 (>L:B757_MCP_THR_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_AP_HDG_SEL_SW",
@@ -2702,7 +2822,8 @@
    "release": "0 (>L:B757_MCP_HDG_SEL, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_VNAV_BUTTON",
@@ -2716,7 +2837,8 @@
    "release": "0 (>L:B757_MCP_VNAV_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_CMD_1_BUTTON",
@@ -2730,7 +2852,8 @@
    "release": "0 (>L:B757_MCP_CMD_1_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_CMD_2_BUTTON",
@@ -2744,7 +2867,8 @@
    "release": "0 (>L:B757_MCP_CMD_2_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_CMD_3_BUTTON",
@@ -2758,7 +2882,8 @@
    "release": "0 (>L:B757_MCP_CMD_3_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_FLCH_BUTTON",
@@ -2772,7 +2897,8 @@
    "release": "0 (>L:B757_MCP_FLCH_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_VS_BUTTON",
@@ -2786,7 +2912,8 @@
    "release": "0 (>L:B757_MCP_VS_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_SPD_BUTTON",
@@ -2800,7 +2927,8 @@
    "release": "0 (>L:B757_MCP_SPD_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_HOLD_2_BUTTON",
@@ -2814,7 +2942,8 @@
    "release": "0 (>L:B757_MCP_HOLD_2_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_AP_SPD_HOLD_SW",
@@ -2828,7 +2957,8 @@
    "release": "0 (>L:B757_MCP_IAS_MACH_KNOB_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_LOC_BUTTON",
@@ -2842,7 +2972,8 @@
    "release": "0 (>L:B757_MCP_LOC_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_APP_BUTTON",
@@ -2856,7 +2987,8 @@
    "release": "0 (>L:B757_MCP_APP_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_ALTSEL_CLICK",
@@ -2870,7 +3002,8 @@
    "release": "0 (>L:B757_MCP_ALT_SEL_PUSH,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_AP_SPD_MACH_SW",
@@ -2884,7 +3017,8 @@
    "release": "0 (>L:B757_MCP_AP_SPD_MACH_SW, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_HOLD_1_BUTTON",
@@ -2898,7 +3032,8 @@
    "release": "0 (>L:B757_MCP_HOLD_1_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_AP_HDG_BNKLIM",
@@ -2937,7 +3072,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS757_BANK_LIMITER, enum) 1 + 5 min (>L:BBS757_BANK_LIMITER)",
-   "ccw": "(L:BBS757_BANK_LIMITER, enum) 1 - 0 max (>L:BBS757_BANK_LIMITER)"
+   "ccw": "(L:BBS757_BANK_LIMITER, enum) 1 - 0 max (>L:BBS757_BANK_LIMITER)",
+   "variant": null
   },
   {
    "node": "B757_MCP_btn_autopilot_disengage",
@@ -2960,7 +3096,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_BCRS_1_BUTTON",
@@ -2974,7 +3111,8 @@
    "release": "0 (>L:B757_MCP_BCRS_1_BUTTON_PRESS, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_VORDME_1_BUTTON",
@@ -2988,7 +3126,8 @@
    "release": "0 (>L:B757_MCP_VORDME_1_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_VORDME_2_BUTTON",
@@ -3002,7 +3141,8 @@
    "release": "0 (>L:B757_MCP_VORDME_2_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_btn_master_pilot",
@@ -3016,7 +3156,8 @@
    "release": "0 (>O:B757_MCP_btn_master_pilot_ButtonLocked, bool) 0 (>L:B757_MCP_btn_master_pilot, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MCP_btn_master_copilot",
@@ -3030,7 +3171,8 @@
    "release": "0 (>O:B757_MCP_btn_master_copilot_ButtonLocked, bool) 0 (>L:B757_MCP_btn_master_copilot, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_FOOT_HEATERS_SWITCH",
@@ -3057,7 +3199,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_SHOULDER_HEATERS_SWITCH",
@@ -3084,7 +3227,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_FLT_DIR_SWITCH",
@@ -3111,7 +3255,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_DIR_SWITCH)",
-   "ccw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_DIR_SWITCH)"
+   "ccw": "(L:B757_MAIN_L_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_DIR_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_FLT_NAV_SWITCH",
@@ -3138,7 +3283,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_L_FLT_NAV_SWITCH)",
-   "ccw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_NAV_SWITCH)"
+   "ccw": "(L:B757_MAIN_L_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_L_FLT_NAV_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_EFI_BUTTON",
@@ -3161,7 +3307,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_IRS_BUTTON",
@@ -3184,7 +3331,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_AIRDATA_BUTTON",
@@ -3207,7 +3355,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_RECALL_BUTTON",
@@ -3221,7 +3370,8 @@
    "release": "0 (>L:B757_MAIN_RECALL_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CANCEL_BUTTON",
@@ -3235,7 +3385,8 @@
    "release": "0 (>L:B757_MAIN_CANCEL_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_TOCHK_BUTTON",
@@ -3249,7 +3400,8 @@
    "release": "0 (>L:B757_MAIN_TOCHK_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_GS_INHIBIT",
@@ -3263,7 +3415,8 @@
    "release": "0 (>L:BBS757_GS_INHIBIT, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_knob_gears_altn_autobrake",
@@ -3310,7 +3463,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_AUTOBRAKE_KNOB, enum) 1 + 7 min (>L:BBS_AUTOBRAKE_KNOB)",
-   "ccw": "(L:BBS_AUTOBRAKE_KNOB, enum) 1 - 0 max (>L:BBS_AUTOBRAKE_KNOB)"
+   "ccw": "(L:BBS_AUTOBRAKE_KNOB, enum) 1 - 0 max (>L:BBS_AUTOBRAKE_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_BRAKERESERVE_BUTTON",
@@ -3333,7 +3487,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_HDG_REF_SWITCH",
@@ -3356,7 +3511,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_TOGA_BUTTON",
@@ -3370,7 +3526,8 @@
    "release": "0 (>L:B757_MAIN_TOGA_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_1_BUTTON",
@@ -3384,7 +3541,8 @@
    "release": "0 (>L:B757_MAIN_1_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_2_BUTTON",
@@ -3398,7 +3556,8 @@
    "release": "0 (>L:B757_MAIN_2_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CLB_BUTTON",
@@ -3412,7 +3571,8 @@
    "release": "0 (>L:B757_MAIN_CLB_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CRZ_BUTTON",
@@ -3426,7 +3586,8 @@
    "release": "0 (>L:B757_MAIN_CRZ_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CON_BUTTON",
@@ -3440,7 +3601,8 @@
    "release": "0 (>L:B757_MAIN_CON_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_knob_gears_altn_flaps",
@@ -3487,7 +3649,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_knob_gears_altn_flaps, enum) 1 + 7 min (>L:B757_MAIN_knob_gears_altn_flaps)",
-   "ccw": "(L:B757_MAIN_knob_gears_altn_flaps, enum) 1 - 0 max (>L:B757_MAIN_knob_gears_altn_flaps)"
+   "ccw": "(L:B757_MAIN_knob_gears_altn_flaps, enum) 1 - 0 max (>L:B757_MAIN_knob_gears_altn_flaps)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_LEADINGEDGE_BUTTON",
@@ -3510,7 +3673,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_TRAILINGEDGE_BUTTON",
@@ -3533,7 +3697,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_8_SWITCH",
@@ -3556,7 +3721,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_FLAPOVRD_BUTTON",
@@ -3579,7 +3745,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_9_SWITCH",
@@ -3602,7 +3769,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_GEAROVRD_BUTTON",
@@ -3625,7 +3793,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_10_SWITCH",
@@ -3648,7 +3817,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_TERROVRD_BUTTON",
@@ -3662,7 +3832,8 @@
    "release": "0 (>O:B757_MAIN_L_TERROVRD_BUTTON_ButtonLocked, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON, bool) 0 (>L:B757_MAIN_L_TERROVRD_BUTTON_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_FLT_DIR_SWITCH",
@@ -3689,7 +3860,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_DIR_SWITCH)",
-   "ccw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_DIR_SWITCH)"
+   "ccw": "(L:B757_MAIN_R_FLT_DIR_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_DIR_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_FLT_NAV_SWITCH",
@@ -3716,7 +3888,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 + 2 min (>L:B757_MAIN_R_FLT_NAV_SWITCH)",
-   "ccw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_NAV_SWITCH)"
+   "ccw": "(L:B757_MAIN_R_FLT_NAV_SWITCH, enum) 1 - 0 max (>L:B757_MAIN_R_FLT_NAV_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_EFI_BUTTON",
@@ -3739,7 +3912,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_IRS_BUTTON",
@@ -3762,7 +3936,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_AIRDATA_BUTTON",
@@ -3785,7 +3960,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_FOOT_HEATERS_SWITCH",
@@ -3812,7 +3988,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_SHOULDER_HEATERS_SWITCH",
@@ -3839,7 +4016,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_Landing_Gear_Y",
@@ -3866,7 +4044,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_PANEL_ALTN_GEAR_SWITCH_GAURD",
@@ -3889,7 +4068,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_ALTN_GEAR_SWITCH",
@@ -3903,7 +4083,8 @@
    "release": "0 (>L:B757_MAIN_ALTN_GEAR_SWITCH, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_LOCK_OVRD_SWITCH",
@@ -3926,7 +4107,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "btn_yoke_autopilot_disengage_pilot",
@@ -3940,7 +4122,8 @@
    "release": "0 (>O:btn_yoke_autopilot_disengage_pilot_ButtonLocked, bool) 0 (>L:btn_yoke_autopilot_disengage_pilot, bool) 0 (>L:btn_yoke_autopilot_disengage_pilot_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "btn_yoke_autopilot_disengage_copilot",
@@ -3954,7 +4137,8 @@
    "release": "0 (>O:btn_yoke_autopilot_disengage_copilot_ButtonLocked, bool) 0 (>L:btn_yoke_autopilot_disengage_copilot, bool) 0 (>L:btn_yoke_autopilot_disengage_copilot_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_AUTOLAND_1_BUTTON",
@@ -3968,7 +4152,8 @@
    "release": "0 (>L:B757_MAIN_L_AUTOLAND_1_BUTTON)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_AUTOLAND_2_BUTTON",
@@ -3982,7 +4167,8 @@
    "release": "0 (>L:B757_MAIN_L_AUTOLAND_2_BUTTON)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_L_AUTOLAND_3_BUTTON",
@@ -3996,7 +4182,8 @@
    "release": "0 (>L:B757_MAIN_L_AUTOLAND_3_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_STDBY_EICAS_KNOB",
@@ -4019,7 +4206,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_gyro_knob",
@@ -4033,7 +4221,8 @@
    "release": "0 (>L:B757_STANDBY_ATT_IND_CAGE_KNOB, enum)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_M_Gau_STBY_GYRO_SELECTOR",
@@ -4060,7 +4249,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum) 1 + 2 min (>L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum)",
-   "ccw": "(L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum) 1 - 0 max (>L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum)"
+   "ccw": "(L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum) 1 - 0 max (>L:B757_MAIN_M_Gau_STBY_GYRO_SELECTOR, enum)",
+   "variant": null
   },
   {
    "node": "B757_MAIN_INSTRUMENT_ADF_Knob_LEFT",
@@ -4083,7 +4273,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT",
@@ -4106,7 +4297,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS_757_CAPT_CLOCK_BUTTON",
@@ -4120,7 +4312,8 @@
    "release": "0 (>L:BBS_757_CAPT_CLOCK_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "INSTRUMENT_Knob_Clock",
@@ -4134,7 +4327,8 @@
    "release": "0 (>L:B757_CHRONO_BUTTON_PRESS)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CHRONO_ET_SWITCH",
@@ -4161,7 +4355,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CHRONO_SET_SWITCH",
@@ -4192,7 +4387,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_CHRONO_RIGHT_SWITCH, enum) ++ d 3 > if{ 3 } (>L:BBS_CHRONO_RIGHT_SWITCH, enum)",
-   "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH, enum)"
+   "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH, enum)",
+   "variant": null
   },
   {
    "node": "INSTRUMENT_Knob_Date",
@@ -4206,7 +4402,8 @@
    "release": "0 (>L:B757_CHRONO_DATE_BUTTON_PRESS)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_AUTOLAND_1_BUTTON",
@@ -4220,7 +4417,8 @@
    "release": "0 (>L:B757_MAIN_R_AUTOLAND_1_BUTTON)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_AUTOLAND_2_BUTTON",
@@ -4234,7 +4432,8 @@
    "release": "0 (>L:B757_MAIN_R_AUTOLAND_2_BUTTON)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_R_AUTOLAND_3_BUTTON",
@@ -4248,7 +4447,8 @@
    "release": "0 (>L:B757_MAIN_R_AUTOLAND_3_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "FODMEKNOB1",
@@ -4271,7 +4471,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO",
@@ -4294,7 +4495,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS_757_FO_CLOCK_BUTTON",
@@ -4308,7 +4510,8 @@
    "release": "0 (>L:BBS_757_FO_CLOCK_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "INSTRUMENT_Knob_Clock_FO",
@@ -4322,7 +4525,8 @@
    "release": "0 (>L:B757_CHRONO_BUTTON_PRESS_FO)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CHRONO_ET_SWITCH_FO",
@@ -4349,7 +4553,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_MAIN_CHRONO_SET_SWITCH_FO",
@@ -4380,7 +4585,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_CHRONO_RIGHT_SWITCH_FO, enum) ++ d 3 > if{ 3 } (>L:BBS_CHRONO_RIGHT_SWITCH_FO, enum)",
-   "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH_FO, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH_FO, enum)"
+   "ccw": "(L:BBS_CHRONO_RIGHT_SWITCH_FO, enum) -- d 0 < if{ 0 } (>L:BBS_CHRONO_RIGHT_SWITCH_FO, enum)",
+   "variant": null
   },
   {
    "node": "INSTRUMENT_Knob_Date_FO",
@@ -4394,7 +4600,8 @@
    "release": "0 (>L:B757_CHRONO_DATE_BUTTON_PRESS_FO)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_PEDESTAL_Park_Brake_Lever",
@@ -4417,7 +4624,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_lever_flaps",
@@ -4460,7 +4668,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_SPOILERARMED_CLICK",
@@ -4474,7 +4683,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_SPOILERDOWN_CLICK",
@@ -4488,7 +4698,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_SPOILERUP_CLICK",
@@ -4502,7 +4713,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "ENGINE_Switch_ATDisc_1",
@@ -4516,7 +4728,8 @@
    "release": "0 (>L:GO_AROUND_PADDLE1, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_AT_DISC_1",
@@ -4530,7 +4743,8 @@
    "release": "0 (>L:B757_AT_DISC_1, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_OVHD_ENG_START_SWITCH",
@@ -4557,7 +4771,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_ENG_START_SWITCH, enum) 1 + 2 min (>L:B757_OVHD_ENG_START_SWITCH)",
-   "ccw": "(L:B757_OVHD_ENG_START_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_ENG_START_SWITCH)"
+   "ccw": "(L:B757_OVHD_ENG_START_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_ENG_START_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_OVHD_L_ENG_START_SWITCH",
@@ -4592,7 +4807,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_L_ENG_START_SWITCH, enum) 1 == if{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 2 + (>L:B757_OVHD_L_ENG_START_SWITCH) } els{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 1 + 6 min (>L:B757_OVHD_L_ENG_START_SWITCH) }",
-   "ccw": "(L:B757_OVHD_L_ENG_START_SWITCH, enum) 3 == if{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 2 - (>L:B757_OVHD_L_ENG_START_SWITCH) } els{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 1 - 1 max (>L:B757_OVHD_L_ENG_START_SWITCH) }"
+   "ccw": "(L:B757_OVHD_L_ENG_START_SWITCH, enum) 3 == if{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 2 - (>L:B757_OVHD_L_ENG_START_SWITCH) } els{ (L:B757_OVHD_L_ENG_START_SWITCH, enum) 1 - 1 max (>L:B757_OVHD_L_ENG_START_SWITCH) }",
+   "variant": null
   },
   {
    "node": "BBS_fuelcut_PW1",
@@ -4615,7 +4831,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_fuelcut_PW1) 2 + 2 min (>L:BBS_fuelcut_PW1)",
-   "ccw": "(L:BBS_fuelcut_PW1) 2 - 0 max (>L:BBS_fuelcut_PW1)"
+   "ccw": "(L:BBS_fuelcut_PW1) 2 - 0 max (>L:BBS_fuelcut_PW1)",
+   "variant": "pw"
   },
   {
    "node": "B757_OVHD_R_ENG_START_SWITCH",
@@ -4650,7 +4867,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_OVHD_R_ENG_START_SWITCH, enum) 1 == if{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 2 + (>L:B757_OVHD_R_ENG_START_SWITCH) } els{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 1 + 6 min (>L:B757_OVHD_R_ENG_START_SWITCH) }",
-   "ccw": "(L:B757_OVHD_R_ENG_START_SWITCH, enum) 3 == if{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 2 - (>L:B757_OVHD_R_ENG_START_SWITCH) } els{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 1 - 1 max (>L:B757_OVHD_R_ENG_START_SWITCH) }"
+   "ccw": "(L:B757_OVHD_R_ENG_START_SWITCH, enum) 3 == if{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 2 - (>L:B757_OVHD_R_ENG_START_SWITCH) } els{ (L:B757_OVHD_R_ENG_START_SWITCH, enum) 1 - 1 max (>L:B757_OVHD_R_ENG_START_SWITCH) }",
+   "variant": null
   },
   {
    "node": "BBS_fuelcut_PW2",
@@ -4673,7 +4891,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_fuelcut_PW2) 2 + 2 min (>L:BBS_fuelcut_PW2)",
-   "ccw": "(L:BBS_fuelcut_PW2) 2 - 0 max (>L:BBS_fuelcut_PW2)"
+   "ccw": "(L:BBS_fuelcut_PW2) 2 - 0 max (>L:BBS_fuelcut_PW2)",
+   "variant": "pw"
   },
   {
    "node": "BBS_fuelcut_RR1",
@@ -4700,7 +4919,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "BBS_fuelcut_RR2",
@@ -4727,7 +4947,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": "rr"
   },
   {
    "node": "B757_PED_TCAS_MODE_KNOB",
@@ -4762,7 +4983,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_PED_TCAS_MODE_KNOB, enum) 1 + 4 min (>L:B757_PED_TCAS_MODE_KNOB)",
-   "ccw": "(L:B757_PED_TCAS_MODE_KNOB, enum) 1 - 0 max (>L:B757_PED_TCAS_MODE_KNOB)"
+   "ccw": "(L:B757_PED_TCAS_MODE_KNOB, enum) 1 - 0 max (>L:B757_PED_TCAS_MODE_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_PED_TCAS_XPNDR_SWITCH",
@@ -4785,7 +5007,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_TCAS_IDENT_SWITCH",
@@ -4799,7 +5022,8 @@
    "release": "0 (>L:B757_PED_TCAS_IDENT_SWITCH,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_TCAS_MODE_KNOB_TEST_CLICK",
@@ -4813,7 +5037,8 @@
    "release": "0 (>L:B757_PED_TCAS_MODE_KNOB_TEST,bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_CTR_KNOB",
@@ -4844,7 +5069,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_ADI_1_CTR_KNOB, enum) 1 + 3 min (>L:B757_ADI_1_CTR_KNOB)",
-   "ccw": "(L:B757_ADI_1_CTR_KNOB, enum) 1 - 0 max (>L:B757_ADI_1_CTR_KNOB)"
+   "ccw": "(L:B757_ADI_1_CTR_KNOB, enum) 1 - 0 max (>L:B757_ADI_1_CTR_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_ADI_1_TFC_KNOB",
@@ -4883,7 +5109,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_ND1_Range_Index, enum) 1 + 5 min (>L:BBS_ND1_Range_Index)",
-   "ccw": "(L:BBS_ND1_Range_Index, enum) 1 - 0 max (>L:BBS_ND1_Range_Index)"
+   "ccw": "(L:BBS_ND1_Range_Index, enum) 1 - 0 max (>L:BBS_ND1_Range_Index)",
+   "variant": null
   },
   {
    "node": "B757_ADI_1_WXR_BUTTON",
@@ -4906,7 +5133,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_TERR_BUTTON",
@@ -4929,7 +5157,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_TFC_BUTTON",
@@ -4943,7 +5172,8 @@
    "release": "0 (>L:B757_ADI_1_TFC_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_CTR_BUTTON",
@@ -4957,7 +5187,8 @@
    "release": "0 (>L:B757_ADI_1_CTR_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_NAV-AID_BUTTON",
@@ -4980,7 +5211,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_APRT_BUTTON",
@@ -5003,7 +5235,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_DATA_BUTTON",
@@ -5026,7 +5259,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_WPT_BUTTON",
@@ -5049,7 +5283,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_DH_RESET_CPT",
@@ -5063,7 +5298,8 @@
    "release": "0 (>L:B757_DH_RESET_CPT, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_LCD_KNOB",
@@ -5090,7 +5326,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_HSI_1_SCREEN_KNOB",
@@ -5117,7 +5354,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_1_INOP_BUTTON",
@@ -5140,7 +5378,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_CTR_KNOB",
@@ -5171,7 +5410,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_ADI_2_CTR_KNOB, enum) 1 + 3 min (>L:B757_ADI_2_CTR_KNOB)",
-   "ccw": "(L:B757_ADI_2_CTR_KNOB, enum) 1 - 0 max (>L:B757_ADI_2_CTR_KNOB)"
+   "ccw": "(L:B757_ADI_2_CTR_KNOB, enum) 1 - 0 max (>L:B757_ADI_2_CTR_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_ADI_2_TFC_KNOB",
@@ -5210,7 +5450,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS_ND2_Range_Index, enum) 1 + 5 min (>L:BBS_ND2_Range_Index)",
-   "ccw": "(L:BBS_ND2_Range_Index, enum) 1 - 0 max (>L:BBS_ND2_Range_Index)"
+   "ccw": "(L:BBS_ND2_Range_Index, enum) 1 - 0 max (>L:BBS_ND2_Range_Index)",
+   "variant": null
   },
   {
    "node": "B757_ADI_2_WXR_BUTTON",
@@ -5233,7 +5474,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_TERR_BUTTON",
@@ -5256,7 +5498,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_TFC_BUTTON",
@@ -5270,7 +5513,8 @@
    "release": "0 (>L:B757_ADI_2_TFC_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_CTR_BUTTON",
@@ -5284,7 +5528,8 @@
    "release": "0 (>L:B757_ADI_2_CTR_BUTTON)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_NAV-AID_BUTTON",
@@ -5307,7 +5552,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_APRT_BUTTON",
@@ -5330,7 +5576,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_DATA_BUTTON",
@@ -5353,7 +5600,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_WPT_BUTTON",
@@ -5376,7 +5624,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_DH_RESET_FO",
@@ -5390,7 +5639,8 @@
    "release": "0 (>L:B757_DH_RESET_FO, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_LCD_KNOB",
@@ -5417,7 +5667,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_HSI_2_SCREEN_KNOB",
@@ -5444,7 +5695,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ADI_2_INOP_BUTTON",
@@ -5467,7 +5719,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_R_STATUS_BUTTON",
@@ -5481,7 +5734,8 @@
    "release": "0 (>L:B757_EICAS_R_STATUS_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_L_STATUS_BUTTON",
@@ -5495,7 +5749,8 @@
    "release": "0 (>L:B757_EICAS_L_STATUS_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_1_SCREEN_KNOB",
@@ -5522,7 +5777,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_2_SCREEN_KNOB",
@@ -5549,7 +5805,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_ECAM_LRAUTO_KNOB",
@@ -5576,7 +5833,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 + 2 min (>L:B757_ECAM_LRAUTO_KNOB)",
-   "ccw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 - 0 max (>L:B757_ECAM_LRAUTO_KNOB)"
+   "ccw": "(L:B757_ECAM_LRAUTO_KNOB, enum) 1 - 0 max (>L:B757_ECAM_LRAUTO_KNOB)",
+   "variant": null
   },
   {
    "node": "B757_EICAS_LWR_THRUST-REF_KNOB",
@@ -5603,7 +5861,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_EICAS_LWR_THRUST_REF_KNOB, enum) 1 + 2 min (>L:B757_EICAS_LWR_THRUST_REF_KNOB)",
-   "ccw": "(L:B757_EICAS_LWR_THRUST_REF_KNOB, enum) 1 - 0 max (>L:B757_EICAS_LWR_THRUST_REF_KNOB)"
+   "ccw": "(L:B757_EICAS_LWR_THRUST_REF_KNOB, enum) 1 - 0 max (>L:B757_EICAS_LWR_THRUST_REF_KNOB)",
+   "variant": null
   },
   {
    "node": "BBS757_THRREF_CLICK",
@@ -5626,7 +5885,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_MAX-IND_BUTTON",
@@ -5640,7 +5900,8 @@
    "release": "0 (>L:B757_EICAS_MAX_IND_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_EICAS_EVENT_BUTTON",
@@ -5654,7 +5915,8 @@
    "release": "0 (>L:B757_EICAS_EVENT_BUTTON, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_FMC_1_SCREEN_KNOB",
@@ -5681,7 +5943,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_FMC_2_SCREEN_KNOB",
@@ -5708,7 +5971,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_COMHEAD_1_SWAP_BUTTON",
@@ -5722,7 +5986,8 @@
    "release": "0 (>L:B757_PED_COMHEAD_1_SWAP_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_VHFL_BUTTON",
@@ -5736,7 +6001,8 @@
    "release": "0 (>O:B757_PED_NAV_1_VHFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_VHFC_BUTTON",
@@ -5750,7 +6016,8 @@
    "release": "0 (>O:B757_PED_NAV_1_VHFC_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_VHFR_BUTTON",
@@ -5764,7 +6031,8 @@
    "release": "0 (>O:B757_PED_NAV_1_VHFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_HFL_BUTTON",
@@ -5778,7 +6046,8 @@
    "release": "0 (>O:B757_PED_NAV_1_HFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_HFR_BUTTON",
@@ -5792,7 +6061,8 @@
    "release": "0 (>O:B757_PED_NAV_1_HFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_AM_BUTTON",
@@ -5806,7 +6076,8 @@
    "release": "0 (>O:B757_PED_NAV_1_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_TEST_BUTTON",
@@ -5820,7 +6091,8 @@
    "release": "0 (>O:B757_PED_NAV_1_TEST_BUTTON_POSSITION,bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_1_OFF_BUTTON",
@@ -5834,7 +6106,8 @@
    "release": "0 (>O:B757_PED_NAV_1_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_L_LIGHT",
@@ -5848,7 +6121,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_L_LIGHT_KNOB",
@@ -5871,7 +6145,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_R_LIGHT",
@@ -5885,7 +6160,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_R_LIGHT_KNOB",
@@ -5908,7 +6184,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_C_LIGHT",
@@ -5922,7 +6199,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_C_LIGHT_KNOB",
@@ -5945,7 +6223,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT",
@@ -5959,7 +6238,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_PA_LIGHT_KNOB",
@@ -5982,7 +6262,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT",
@@ -5996,7 +6277,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_INT_LIGHT_KNOB",
@@ -6019,7 +6301,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_LILS_LIGHT_KNOB",
@@ -6042,7 +6325,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_CLILS_LIGHT_KNOB",
@@ -6065,7 +6349,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_RLILS_LIGHT_KNOB",
@@ -6088,7 +6373,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_LVOR_LIGHT_KNOB",
@@ -6111,7 +6397,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_RVOR_LIGHT_KNOB",
@@ -6134,7 +6421,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_LADF_LIGHT_KNOB",
@@ -6157,7 +6445,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_RADF_LIGHT_KNOB",
@@ -6180,7 +6469,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_MKR_LIGHT_KNOB",
@@ -6203,7 +6493,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_VOICE_RANGE_SWITCH",
@@ -6230,7 +6521,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT",
@@ -6244,7 +6536,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_LM_LIGHT_KNOB",
@@ -6267,7 +6560,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT",
@@ -6281,7 +6575,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_MIC_RR_LIGHT_KNOB",
@@ -6304,7 +6599,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_BOOM_OXY_SWITCH",
@@ -6327,7 +6623,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_1_PTT_SWITCH",
@@ -6341,7 +6638,8 @@
    "release": "0 (>L:B757_PED_AUDIO_1_PTT_SWITCH, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_FIRE_WHLWELL_BUTTON",
@@ -6355,7 +6653,8 @@
    "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_FIRE_ENG_BUTTON",
@@ -6369,7 +6668,8 @@
    "release": "0 (>L:B757_PED_FIRE_ENG_BUTTON, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_FIRE_CARGO_BUTTON",
@@ -6383,7 +6683,8 @@
    "release": "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_FIREUNLOCK1",
@@ -6397,7 +6698,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_FIREHANDLE1_CLICK",
@@ -6420,7 +6722,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_Fire_DISCH_1",
@@ -6447,7 +6750,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_ENGFIRE_1_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) 1 + 2 min (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) }",
-   "ccw": "(L:B757_ENGFIRE_1_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) }"
+   "ccw": "(L:B757_ENGFIRE_1_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_ENG1_FIRE_HANDLE_ROTATION, enum) }",
+   "variant": null
   },
   {
    "node": "BBS757_FIREUNLOCK2",
@@ -6461,7 +6765,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_FIREHANDLE1_CLICK2",
@@ -6484,7 +6789,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_Fire_DISCH_2",
@@ -6511,7 +6817,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_ENGFIRE_2_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) 1 + 2 min (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) }",
-   "ccw": "(L:B757_ENGFIRE_2_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) }"
+   "ccw": "(L:B757_ENGFIRE_2_SWITCH,bool) 0 == if{ 1 (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_ENG2_FIRE_HANDLE_ROTATION, enum) }",
+   "variant": null
   },
   {
    "node": "B757_FIREUNLOCK3",
@@ -6525,7 +6832,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_FIREHANDLE1_CLICK3",
@@ -6548,7 +6856,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_Fire_DISCH_3",
@@ -6575,7 +6884,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_APUFIRE_SWITCH,bool) 0 == if{ 1 (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) 1 + 2 min (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) }",
-   "ccw": "(L:B757_APUFIRE_SWITCH,bool) 0 == if{ 1 (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) }"
+   "ccw": "(L:B757_APUFIRE_SWITCH,bool) 0 == if{ 1 (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) } els{ (L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) 1 - 0 max (>L:BBS757_APU_FIRE_HANDLE_ROTATION, enum) }",
+   "variant": null
   },
   {
    "node": "B757_PED_FWD_CARGOFIRE_BUTTON",
@@ -6598,7 +6908,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AFT_CARGOFIRE_BUTTON",
@@ -6621,7 +6932,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_11_SWITCH",
@@ -6644,7 +6956,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_1BTL_CARGOFIRE_BUTTON",
@@ -6658,7 +6971,8 @@
    "release": "0 (>O:B757_PED_1BTL_CARGOFIRE_BUTTON_ButtonLocked, bool) 0 (>L:B757_PED_1BTL_CARGOFIRE_BUTTON, bool) 0 (>L:B757_PED_1BTL_CARGOFIRE_BUTTON_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GAURD_12_SWITCH",
@@ -6681,7 +6995,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_2BTL_CARGOFIRE_BUTTON",
@@ -6695,7 +7010,8 @@
    "release": "0 (>O:B757_PED_2BTL_CARGOFIRE_BUTTON_ButtonLocked, bool) 0 (>L:B757_PED_2BTL_CARGOFIRE_BUTTON, bool) 0 (>L:B757_PED_2BTL_CARGOFIRE_BUTTON_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_SYS_FAIL_BUTTON",
@@ -6709,7 +7025,8 @@
    "release": "0 (>O:B757_PED_SYS_FAIL_BUTTON_ButtonLocked, bool) 0 (>L:B757_PED_SYS_FAIL_BUTTON, bool) 0 (>L:B757_PED_SYS_FAIL_BUTTON_HELD, bool)",
    "hold_ms": 1500,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
@@ -6732,7 +7049,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_Stab_trim_C_toggle_switch_CLICK",
@@ -6758,7 +7076,8 @@
    "ccw": null,
    "guard": "B757_AISLE_STAND_STAB_1_GAURD_SWITCH",
    "guard_closed": 0,
-   "close_sets": 0
+   "close_sets": 0,
+   "variant": null
   },
   {
    "node": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
@@ -6781,7 +7100,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_Stab_trim_R_toggle_switch_CLICK",
@@ -6807,7 +7127,8 @@
    "ccw": null,
    "guard": "B757_AISLE_STAND_STAB_2_GAURD_SWITCH",
    "guard_closed": 0,
-   "close_sets": 0
+   "close_sets": 0,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_WX_BUTTON",
@@ -6821,7 +7142,8 @@
    "release": "0 (>L:B757_PED_WX_L_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_R_WX_BUTTON",
@@ -6835,7 +7157,8 @@
    "release": "0 (>L:B757_PED_WX_R_WX_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_WXT_BUTTON",
@@ -6849,7 +7172,8 @@
    "release": "0 (>L:B757_PED_WX_L_WXT_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_MAP_BUTTON",
@@ -6863,7 +7187,8 @@
    "release": "0 (>L:B757_PED_WX_L_MAP_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_GCS_BUTTON",
@@ -6877,7 +7202,8 @@
    "release": "0 (>L:B757_PED_WX_L_GCS_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_TEST_BUTTON",
@@ -6891,7 +7217,8 @@
    "release": "0 (>L:B757_PED_WX_L_TEST_BUTTON,bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_R_WXT_BUTTON",
@@ -6905,7 +7232,8 @@
    "release": "0 (>L:B757_PED_WX_R_WXT_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_R_MAP_BUTTON",
@@ -6919,7 +7247,8 @@
    "release": "0 (>L:B757_PED_WX_R_MAP_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_R_GCS_BUTTON",
@@ -6933,7 +7262,8 @@
    "release": "0 (>L:B757_PED_WX_R_GCS_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_L_TFR_BUTTON",
@@ -6947,7 +7277,8 @@
    "release": "0 (>L:B757_PED_WX_L_TFR_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_WX_R_TFR_BUTTON",
@@ -6961,7 +7292,8 @@
    "release": "0 (>L:B757_PED_WX_R_TFR_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_COMHEAD_2_SWAP_BUTTON",
@@ -6975,7 +7307,8 @@
    "release": "0 (>L:B757_PED_COMHEAD_2_SWAP_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_VHFL_BUTTON",
@@ -6989,7 +7322,8 @@
    "release": "0 (>O:B757_PED_NAV_2_VHFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_VHFC_BUTTON",
@@ -7003,7 +7337,8 @@
    "release": "0 (>O:B757_PED_NAV_2_VHFC_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_VHFR_BUTTON",
@@ -7017,7 +7352,8 @@
    "release": "0 (>O:B757_PED_NAV_2_VHFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_HFL_BUTTON",
@@ -7031,7 +7367,8 @@
    "release": "0 (>O:B757_PED_NAV_2_HFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_HFR_BUTTON",
@@ -7045,7 +7382,8 @@
    "release": "0 (>O:B757_PED_NAV_2_HFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_AM_BUTTON",
@@ -7059,7 +7397,8 @@
    "release": "0 (>O:B757_PED_NAV_2_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_TEST_BUTTON",
@@ -7073,7 +7412,8 @@
    "release": "0 (>O:B757_PED_NAV_2_TEST_BUTTON_POSSITION,bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_2_OFF_BUTTON",
@@ -7087,7 +7427,8 @@
    "release": "0 (>O:B757_PED_NAV_2_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_COMHEAD_3_SWAP_BUTTON",
@@ -7101,7 +7442,8 @@
    "release": "0 (>L:B757_PED_COMHEAD_3_SWAP_BUTTON,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_VHFL_BUTTON",
@@ -7115,7 +7457,8 @@
    "release": "0 (>O:B757_PED_NAV_3_VHFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_VHFC_BUTTON",
@@ -7129,7 +7472,8 @@
    "release": "0 (>O:B757_PED_NAV_3_VHFC_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_VHFR_BUTTON",
@@ -7143,7 +7487,8 @@
    "release": "0 (>O:B757_PED_NAV_3_VHFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_HFL_BUTTON",
@@ -7157,7 +7502,8 @@
    "release": "0 (>O:B757_PED_NAV_3_HFL_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_HFR_BUTTON",
@@ -7171,7 +7517,8 @@
    "release": "0 (>O:B757_PED_NAV_3_HFR_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_AM_BUTTON",
@@ -7185,7 +7532,8 @@
    "release": "0 (>O:B757_PED_NAV_3_AM_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_TEST_BUTTON",
@@ -7199,7 +7547,8 @@
    "release": "0 (>O:B757_PED_NAV_3_TEST_BUTTON_POSSITION,bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_NAV_3_OFF_BUTTON",
@@ -7213,7 +7562,8 @@
    "release": "0 (>O:B757_PED_NAV_3_OFF_BUTTON_POSSITION,bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_L_LIGHT",
@@ -7227,7 +7577,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_L_LIGHT_KNOB",
@@ -7250,7 +7601,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_R_LIGHT",
@@ -7264,7 +7616,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_R_LIGHT_KNOB",
@@ -7287,7 +7640,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_C_LIGHT",
@@ -7301,7 +7655,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_C_LIGHT_KNOB",
@@ -7324,7 +7679,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT",
@@ -7338,7 +7694,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_PA_LIGHT_KNOB",
@@ -7361,7 +7718,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT",
@@ -7375,7 +7733,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_INT_LIGHT_KNOB",
@@ -7398,7 +7757,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_LILS_LIGHT_KNOB",
@@ -7421,7 +7781,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_CLILS_LIGHT_KNOB",
@@ -7444,7 +7805,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_RLILS_LIGHT_KNOB",
@@ -7467,7 +7829,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_LVOR_LIGHT_KNOB",
@@ -7490,7 +7853,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_RVOR_LIGHT_KNOB",
@@ -7513,7 +7877,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_LADF_LIGHT_KNOB",
@@ -7536,7 +7901,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_RADF_LIGHT_KNOB",
@@ -7559,7 +7925,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_MKR_LIGHT_KNOB",
@@ -7582,7 +7949,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_VOICE_RANGE_SWITCH",
@@ -7609,7 +7977,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT",
@@ -7623,7 +7992,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_LM_LIGHT_KNOB",
@@ -7646,7 +8016,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT",
@@ -7660,7 +8031,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_MIC_RR_LIGHT_KNOB",
@@ -7683,7 +8055,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_BOOM_OXY_SWITCH",
@@ -7706,7 +8079,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_AUDIO_2_PTT_SWITCH",
@@ -7720,7 +8094,8 @@
    "release": "0 (>L:B757_PED_AUDIO_2_PTT_SWITCH, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_PED_ILS_TEST_BUTTON",
@@ -7734,7 +8109,8 @@
    "release": "0 (>L:B757_PED_ILS_TEST_BUTTON, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_VC_P61_SWITCH_2",
@@ -7761,7 +8137,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:BBS757_FLT_REC_SWITCH) 1 + 2 min (>L:BBS757_FLT_REC_SWITCH)",
-   "ccw": "(L:BBS757_FLT_REC_SWITCH) 1 - 0 max (>L:BBS757_FLT_REC_SWITCH)"
+   "ccw": "(L:BBS757_FLT_REC_SWITCH) 1 - 0 max (>L:BBS757_FLT_REC_SWITCH)",
+   "variant": null
   },
   {
    "node": "B757_VC_P61_SWITCH_1",
@@ -7784,7 +8161,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_P6_SQUIBS_BUTTON2",
@@ -7798,7 +8176,8 @@
    "release": "0 (>O:B757_P6_SQUIBS_BUTTON2_ButtonLocked, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON, bool) 0 (>L:B757_P6_SQUIB_2_TEST_SWITCH_BUTTON_HELD, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS_B757_P61_GLASS_GAURD_1",
@@ -7821,7 +8200,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_P61_PRESS_MAIN_BUTTON_L",
@@ -7844,7 +8224,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS_B757_P61_GLASS_GAURD_2",
@@ -7867,7 +8248,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_P61_PRESS_MAIN_BUTTON_C",
@@ -7890,7 +8272,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS_B757_P61_GLASS_GAURD_3",
@@ -7913,7 +8296,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_P61_PRESS_MAIN_BUTTON_R",
@@ -7936,7 +8320,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_1",
@@ -7950,7 +8335,8 @@
    "release": "0 (>O:P61_PRESS_Button_1_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_1, bool) 0 (>L:P61_PRESS_Button_1_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_2",
@@ -7964,7 +8350,8 @@
    "release": "0 (>O:P61_PRESS_Button_2_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_2, bool) 0 (>L:P61_PRESS_Button_2_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_3",
@@ -7978,7 +8365,8 @@
    "release": "0 (>O:P61_PRESS_Button_3_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_3, bool) 0 (>L:P61_PRESS_Button_3_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_4",
@@ -7992,7 +8380,8 @@
    "release": "0 (>O:P61_PRESS_Button_4_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_4, bool) 0 (>L:P61_PRESS_Button_4_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_5",
@@ -8006,7 +8395,8 @@
    "release": "0 (>O:P61_PRESS_Button_5_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_5, bool) 0 (>L:P61_PRESS_Button_5_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "P61_PRESS_Button_6",
@@ -8020,7 +8410,8 @@
    "release": "0 (>O:P61_PRESS_Button_6_ButtonLocked, bool) 0 (>L:P61_PRESS_Button_6, bool) 0 (>L:P61_PRESS_Button_6_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "OXY_CAPT_TEST_SWITCH001",
@@ -8034,7 +8425,8 @@
    "release": "0 (>L:B757_CAPT_O2_TEST_SLIDER, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_O2_redbutton_CPT",
@@ -8048,7 +8440,8 @@
    "release": "0 (>L:B757_CAPT_O2_EMERGENCY_TEST_BTN, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "OXY_FO_TEST_SWITCH1",
@@ -8062,7 +8455,8 @@
    "release": "0 (>L:B757_FO_O2_TEST_SLIDER, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_O2_redbutton_FO",
@@ -8076,7 +8470,8 @@
    "release": "0 (>L:B757_FO_O2_EMERGENCY_TEST_BTN, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "OXY_OBSV_TEST_SWITCH",
@@ -8090,7 +8485,8 @@
    "release": "0 (>L:B757_OBS1_O2_TEST_SLIDER, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_O2_redbutton_JUMPSEAT",
@@ -8104,7 +8500,8 @@
    "release": "0 (>L:B757_OBS1_O2_EMERGENCY_TEST_BTN, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "OXY_P61_TEST_SWITCH",
@@ -8118,7 +8515,8 @@
    "release": "0 (>L:B757_OBS2_O2_TEST_SLIDER, bool)",
    "hold_ms": 3000,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "BBS757_O2_redbutton_P61",
@@ -8132,7 +8530,8 @@
    "release": "0 (>L:B757_OBS2_O2_EMERGENCY_TEST_BTN, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "O2_EARS_CPT",
@@ -8155,7 +8554,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "O2_EARS_FO",
@@ -8178,7 +8578,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "O2_EARS_JUMPSEAT",
@@ -8201,7 +8602,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "O2_EARS_OBSERVER",
@@ -8224,7 +8626,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_COCKPIT_DOOR",
@@ -8247,7 +8650,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_CABIN_CEILING",
@@ -8278,7 +8682,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_CABIN_CEILING, enum) 1 + 3 min (>L:B757_CABIN_CEILING)",
-   "ccw": "(L:B757_CABIN_CEILING, enum) 1 - 0 max (>L:B757_CABIN_CEILING)"
+   "ccw": "(L:B757_CABIN_CEILING, enum) 1 - 0 max (>L:B757_CABIN_CEILING)",
+   "variant": null
   },
   {
    "node": "B757_CABIN_WINDOW",
@@ -8305,7 +8710,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_CABIN_WINDOW, enum) 1 + 2 min (>L:B757_CABIN_WINDOW)",
-   "ccw": "(L:B757_CABIN_WINDOW, enum) 1 - 0 max (>L:B757_CABIN_WINDOW)"
+   "ccw": "(L:B757_CABIN_WINDOW, enum) 1 - 0 max (>L:B757_CABIN_WINDOW)",
+   "variant": null
   },
   {
    "node": "B757_CABIN_ENTRY",
@@ -8332,7 +8738,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": "(L:B757_CABIN_ENTRY, enum) 1 + 2 min (>L:B757_CABIN_ENTRY)",
-   "ccw": "(L:B757_CABIN_ENTRY, enum) 1 - 0 max (>L:B757_CABIN_ENTRY)"
+   "ccw": "(L:B757_CABIN_ENTRY, enum) 1 - 0 max (>L:B757_CABIN_ENTRY)",
+   "variant": null
   },
   {
    "node": "B757_CABIN_WORK_LT002",
@@ -8355,7 +8762,8 @@
    "release": null,
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   },
   {
    "node": "B757_GND_SVC_BUTTON",
@@ -8369,7 +8777,8 @@
    "release": "0 (>O:B757_GND_SVC_BUTTON_ButtonLocked, bool) 0 (>L:B757_GND_SVC_BUTTON, bool) 0 (>L:B757_GND_SVC_BUTTON_HELD, bool)",
    "hold_ms": 0,
    "cw": null,
-   "ccw": null
+   "ccw": null,
+   "variant": null
   }
  ],
  "status": [

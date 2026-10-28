@@ -57,6 +57,8 @@ namespace MSFSBlindAssist.Aircraft;
 ///     Ctrl+P is the autopilot window, the transponder panel takes a squawk right after its mode knob; the
 ///     Pedestal's Engines panel shows the stock engine values beside its switches (all in
 ///     BBS757Definition.Readouts.cs, .Altimeter.cs, .Autopilot.cs).
+///   • On the RR the Engines panel lists only the RR fuel control switches; on the PW only the PW ones, and the
+///     Overhead has no "Electronic engine control (RR)" panel (plan 12 task 8, from the aircraft title).
 /// </summary>
 public partial class BBS757Definition : BaseAircraftDefinition
 {
@@ -73,9 +75,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
     internal Bbs757ControlMap Map { get; }
 
     /// <summary>
-    /// The SimConnect manager, captured by the first panel write or hotkey that hands one in
-    /// (<see cref="HandleUIVariableSet"/>, <see cref="HandleHotkeyAction"/>); ProcessSimVarUpdate is
-    /// not handed one. Null until then.
+    /// The SimConnect manager, captured by the first panel build, panel write or hotkey that hands one in
+    /// (<see cref="IsPanelControlVisible"/>, <see cref="HandleUIVariableSet"/>, <see cref="HandleHotkeyAction"/>);
+    /// ProcessSimVarUpdate is not handed one. Null until then.
     /// </summary>
     internal SimConnectManager? Sim { get; private set; }
 
@@ -253,6 +255,7 @@ public partial class BBS757Definition : BaseAircraftDefinition
     public override Dictionary<string, List<string>> GetPanelStructure()
     {
         BuildPanelsOnce();
+        FollowEngineType();   // plan 12 task 8: MainForm lists a section's panels from here
         return _panelStructure!;
     }
 
@@ -271,8 +274,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
     /// <summary>
     /// Sections and panels from the map, in map order, then the status rows. The map's order is the
-    /// order the pilot tabs through them: BlueBird's preflight flow for the panels of a section and the
-    /// most used controls first in a panel (the generator's panel_order and control_order; whatever
+    /// order the pilot tabs through them: each panel is one panel of the cockpit (plan 12,
+    /// docs/b757/evidence/panel-audit-12.md), a section's panels come in the owner's every-day order and
+    /// a panel's controls every-day first (the generator's panel_order and control_order; whatever
     /// they leave out follows alphabetically, or in cockpit file order). A status row whose panel is a
     /// control panel joins that panel's Status display; any other panel is a display-only panel under
     /// the Status section, with an empty controls entry so the panel builds at all ([HS-5]). Panels are
@@ -322,9 +326,61 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddEfbPanels(structure, controls, displays);        // plan 07, then 11
         AddThrustPanels(structure, controls, displays);     // plan 15
 
+        // Plan 12 task 8: every engine type's lists, kept; the ones handed out lose the other type's controls (FollowEngineType).
+        _allPanelStructure = structure.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+        _allPanelControls = controls.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         _panelControls = controls;
         _panelDisplays = displays;
         _panelStructure = structure;
+    }
+
+    // =================================================================================
+    // The engine type (plan 12 task 8; the owner approved this change to the core file)
+    // =================================================================================
+
+    // The panel lists as BuildPanelsOnce built them, both engine types' controls in them.
+    private Dictionary<string, List<string>>? _allPanelStructure;
+    private Dictionary<string, List<string>>? _allPanelControls;
+
+    /// <summary>The engine type the panel lists show now: Unknown, every control, until a title names one.</summary>
+    internal Bbs757EngineType ShownEngineType { get; private set; }
+
+    /// <summary>The loaded aircraft's title; replaced by tests. Null: the real one, <see cref="Sim"/>'s TITLE.</summary>
+    internal Func<string?>? AircraftTitle { get; init; }
+
+    private Bbs757EngineType LoadedEngineType() =>
+        Bbs757Variant.FromTitle(AircraftTitle != null ? AircraftTitle() : Sim?.CurrentAircraftTitle);
+
+    /// <summary>
+    /// When the loaded engine type has changed, rewrites the panel lists in place (<see cref="Bbs757Variant.Rewrite"/>:
+    /// the same dictionaries and lists, which the base class caches and MainForm re-reads): an RR leaves out the PW fuel
+    /// control switches, a PW the RR ones and the RR's Electronic engine control panel, an unknown type brings every
+    /// control back. MainForm calls GetPanelStructure, and so this, each time the pilot opens a section, before it lists
+    /// the section's panels; SimConnectManager asks for the title again on every aircraft load and connection, so the next
+    /// section opened after one is right. Variables, writes and status rows do not change.
+    /// </summary>
+    private void FollowEngineType()
+    {
+        var engines = LoadedEngineType();
+        if (engines == ShownEngineType || _allPanelStructure == null || _allPanelControls == null) return;
+        Bbs757Variant.Rewrite(_allPanelStructure, _allPanelControls, _panelDisplays!, _panelStructure!, _panelControls!,
+            Bbs757Variant.HiddenNodes(_byNode.Values, engines));
+        ShownEngineType = engines;
+        Log.Info("BBS757", $"Engine type {engines}: the panels show " +
+            (engines == Bbs757EngineType.Unknown ? "every engine type's controls." : "its controls only."));
+    }
+
+    /// <summary>
+    /// MainForm asks this of every control of a panel it builds, handing in its SimConnectManager: a map control of the
+    /// other engine type's cockpit is left out, anything else shown. It reads the title itself, because right after a
+    /// connection the definition holds no SimConnectManager until a panel build hands it one here (it keeps it in
+    /// <see cref="Sim"/> for the next GetPanelStructure), so the first panel built is right too. It never rewrites a
+    /// list: MainForm is walking one while it asks.
+    /// </summary>
+    public override bool IsPanelControlVisible(string varKey, SimConnectManager? simConnect)
+    {
+        if (simConnect != null) Sim = simConnect;
+        return !_byNode.TryGetValue(varKey, out var control) || Bbs757Variant.IsFitted(control.Variant, LoadedEngineType());
     }
 
     // =================================================================================

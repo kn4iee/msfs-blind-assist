@@ -171,6 +171,26 @@ public sealed class Bbs757Control
     /// </summary>
     [JsonPropertyName("close_sets")]
     public double? CloseSets { get; set; }
+
+    /// <summary>
+    /// <see cref="Bbs757Variants.Pw"/> or <see cref="Bbs757Variants.Rr"/> for a control only that engine type's
+    /// cockpit has (the label ends " (PW)" or " (RR)": the four fuel control switches, the RR electronic engine
+    /// control switches and their guards), null for a control both have, and for every control of a map generated
+    /// before the field (plan 12 task 8). The panels show a variant's control only on that engine type's aircraft
+    /// (<c>Bbs757Variant</c>, which tools/b757-gen/PanelSweep does not link, hence no cref).
+    /// </summary>
+    [JsonPropertyName("variant")]
+    public string? Variant { get; set; }
+}
+
+/// <summary>The <c>variant</c> values used by the generator: which engine type's cockpit alone has a control.</summary>
+public static class Bbs757Variants
+{
+    /// <summary>Only the Pratt &amp; Whitney (PW2000) cockpit has the control.</summary>
+    public const string Pw = "pw";
+
+    /// <summary>Only the Rolls-Royce (RB211) cockpit has the control.</summary>
+    public const string Rr = "rr";
 }
 
 /// <summary>One named position of a control or status row.</summary>

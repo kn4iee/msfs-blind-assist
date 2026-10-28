@@ -599,7 +599,7 @@ class SuspectedSlips(unittest.TestCase):
         m, report = g.build_map(rows, curation(), "pkg", "1")
         self.assertEqual([c["press"] for c in m["controls"]], [slip, brace])
         self.assertTrue(all(list(c) == ["node", "section", "panel", "label", "kind", "state_var", "positions",
-                                        "press", "release", "hold_ms", "cw", "ccw"] for c in m["controls"]))
+                                        "press", "release", "hold_ms", "cw", "ccw", "variant"] for c in m["controls"]))
         self.assertEqual(report["suspected_slips"], {
             "B757_OVHD_L_PUMPS_FWD_BUTTON": ["press: set without a variable type"],
             "B757_MAIN_INSTRUMENT_ADF_Knob_RIGHT_FO": ["press: closing brace nothing opened"]})
@@ -657,7 +657,9 @@ class WholeMap(unittest.TestCase):
         self.assertEqual(list(m), ["aircraft", "package_version", "controls", "status"])
         self.assertEqual((m["aircraft"], m["package_version"], m["status"]), ("pkg", "9.9.9", []))
         self.assertEqual(list(m["controls"][0]), ["node", "section", "panel", "label", "kind", "state_var",
-                                                  "positions", "press", "release", "hold_ms", "cw", "ccw"])
+                                                  "positions", "press", "release", "hold_ms", "cw", "ccw", "variant"])
+        # given no cockpit models nothing is judged on them: no control belongs to one engine type
+        self.assertEqual({c["variant"] for c in m["controls"]}, {None})
         # section (Overhead, Glareshield), then panel, then file line
         sections = [c["section"] for c in m["controls"]]
         self.assertEqual(sections, sorted(sections, key=g.SECTIONS.index))
@@ -2734,6 +2736,26 @@ class CockpitPresence(unittest.TestCase):
                          ["L Fuel Control (PW)", "R Fuel Control (PW)", "L Fuel Control (RR)", "R Fuel Control (RR)"])
         self.assertEqual(found, fuel)
 
+    def test_each_control_says_which_engine_type_has_it(self):
+        # Plan 12 task 8: the app shows a control that one model alone has only on that engine type's aircraft, so every
+        # control carries "variant": "pw" or "rr" when one model alone has it, null when both do (or curation keeps it
+        # without a node). It is the last field, after a guarded control's guard fields too.
+        rows = self.toggles(self.BOTH, self.PW_ONLY, self.RR_ONLY, self.NEITHER)
+
+        m, report = self.build(rows, keep_without_node=[self.NEITHER])
+
+        self.assertEqual({c["node"]: c["variant"] for c in m["controls"]},
+                         {self.BOTH: None, self.PW_ONLY: "pw", self.RR_ONLY: "rr", self.NEITHER: None})
+        self.assertTrue(all(list(c)[-1] == "variant" for c in m["controls"]))
+        # the field and the label's suffix and the report say the same
+        self.assertEqual({n: what["variant"] for n, what in report["variant_only"].items()},
+                         {c["node"]: c["variant"] for c in m["controls"] if c["variant"]})
+        node, guard = self.EMERGENCY, self.EMERGENCY_GUARD
+        m, _ = self.build(self.emergency_rows(), self.cockpit(pw=[node, guard], rr=[guard]), guarded=self.EMERGENCY_ENTRY)
+        switch = {c["node"]: c for c in m["controls"]}[node]
+        self.assertEqual(list(switch)[-4:], ["guard", "guard_closed", "close_sets", "variant"])
+        self.assertEqual((switch["variant"], {c["node"]: c for c in m["controls"]}[guard]["variant"]), ("pw", None))
+
     def test_one_name_for_a_control_per_model_is_two_names_not_a_number(self):
         # The cockpits never have both, but the app lists both: the suffix tells them apart before any numbering does.
         rows = self.toggles(self.BOTH, self.PW_ONLY, self.RR_ONLY)
@@ -2768,6 +2790,7 @@ class CockpitPresence(unittest.TestCase):
         m, report = g.build_map(self.toggles(self.BOTH, self.PW_ONLY), curation(), "pkg", "1")
 
         self.assertEqual([c["label"] for c in m["controls"]], ["Alpha", "Bravo"])
+        self.assertEqual([c["variant"] for c in m["controls"]], [None, None])
         self.assertEqual((report["absent"], report["variant_only"], report["kept_without_node"]), ({}, {}, []))
 
     # Curation's keep_without_node: a control BlueBird's published list proves real although neither model has a node of its
@@ -2860,6 +2883,16 @@ class CockpitPresence(unittest.TestCase):
         tagged = {c["node"] for c in controls if re.search(r"\((PW|RR)\)$", c["label"])}
         self.assertEqual(tagged, set(self.VARIANT_ONLY))
         self.assertEqual([c["label"] for c in controls if re.search(r"\((PW|RR)\).*\((PW|RR)\)", c["label"])], [])
+
+    def test_the_embedded_map_says_which_engine_type_has_each_control(self):
+        # Plan 12 task 8: the PW and RR fuel control switches, the RR electronic engine control switches and their guards
+        # belong to one engine type; every other control is null (both cockpits have it).
+        controls = self.embedded()["controls"]
+
+        self.assertTrue(all("variant" in c for c in controls), "every control carries the field")
+        self.assertEqual({c["node"]: c["variant"] for c in controls if c["variant"] is not None},
+                         {n: label[-3:-1].lower() for n, label in self.VARIANT_ONLY.items()})
+        self.assertEqual({c["variant"] for c in controls}, {None, "pw", "rr"})
 
     def test_no_curation_entry_lingers_for_a_control_the_map_dropped(self):
         c = g.load_curation(g.DEFAULT_CURATION)

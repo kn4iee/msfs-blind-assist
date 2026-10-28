@@ -8,7 +8,7 @@ one entry per control the pilot can operate, with the L:var that holds its state
 own click code as RPN, to be replayed through the MobiFlight calculator path.
 
     controls[]  node, section, panel, label, kind, state_var, positions[{value,label}],
-                press, release, hold_ms, cw, ccw
+                press, release, hold_ms, cw, ccw, variant
                 kind: toggle | switch | button | held | select | guard
                 state_var: the L:var read back (null when the control keeps no L:var state: a button)
                 press / release / cw / ccw: RPN, null when the control has none; a switch with no click code
@@ -18,6 +18,11 @@ own click code as RPN, to be replayed through the MobiFlight calculator path.
                 guard, guard_closed, close_sets: on a guarded control only (curation's "guarded"): the node of the
                 guard that covers it, the value that guard reads while closed and the value closing it writes to the
                 control (null when closing leaves the control alone). A guarded control has no click code at all.
+                variant: "pw" or "rr" on a control only that engine type's cockpit model has (its label ends " (PW)" or
+                " (RR)", see cockpit below), null on every other; the last field of every control, after the guard
+                fields too. The app's panels show a "pw" or "rr" control only on an aircraft whose title names that
+                engine type (Bbs757Variant): today the four fuel control switches, the RR electronic engine control
+                switches and their guards.
     status[]    key, panel, label, positions[{value,label}], announce: read-only L:vars worth speaking
                 (APU state, master warning ...), listed in curation.json
 
@@ -51,10 +56,11 @@ What is derived and what is curated (curation.json):
             rules, counted as "no cockpit node" and named in the run's report with the label it would have had and its
             vendor banner (the rules before it keep their own counts). A control that one model alone has says which,
             with " (PW)" or " (RR)" at the end of its label unless the label already ends so ("L Fuel Control (PW)"
-            stays), and the run names each. A label that says (PW) or (RR) is true of exactly that model's cockpit: on a
-            control the other model has too, or only the other has, it stops the run. Curation's keep_without_node keeps
-            a control BlueBird's own list proves real although neither model has a node for it; it is empty unless that
-            list proves one, and the run names each. An entry for a node the package does not have, that a model has,
+            stays) and with its variant field ("pw" or "rr"; null on every other control), and the run names each. A
+            label that says (PW) or (RR) is true of exactly that model's cockpit: on a control the other model has too,
+            or only the other has, it stops the run. Curation's keep_without_node keeps a control BlueBird's own list
+            proves real although neither model has a node for it; it is empty unless that list proves one, and the run
+            names each. An entry for a node the package does not have, that a model has,
             that curation also excludes or that the rules leave out for another reason is an error. No curation entry
             brings back a control no cockpit has, whatever the other rules make of it (their reason comes before the
             cockpit's): a guarded, a levers, a direct_positions or an include_nodes entry for one stops the run, a kind,
@@ -1199,6 +1205,8 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
     tell_apart(keyed, {r["node"]: r for r in reversed(rows)}, cur)
     controls = [c for _, c in keyed]
     variant_only = mark_variants(controls, cockpit)  # before unique_labels: the suffix tells two same-named controls apart
+    for c in controls:  # the engine type whose cockpit alone has it, else null: the last field of every control
+        c["variant"] = variant_only.get(c["node"])
     unique_labels(controls)
 
     in_package = {r["node"] for r in rows}

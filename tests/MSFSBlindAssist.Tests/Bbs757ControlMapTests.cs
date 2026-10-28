@@ -231,6 +231,44 @@ public class Bbs757ControlMapTests
         Assert.DoesNotContain(Map.Controls, c => c.Panel is "Engine start" or "Fuel control");
     }
 
+    // ---- Plan 12 task 8: the controls one engine type alone has (the generator reads both interior models) ----
+
+    [Fact]
+    public void The_fuel_control_switches_and_the_RR_engine_control_switches_and_guards_say_their_engine_type()
+    {
+        var expected = new Dictionary<string, string>
+        {
+            ["BBS_fuelcut_PW1"] = "pw", ["BBS_fuelcut_PW2"] = "pw",
+            ["BBS_fuelcut_RR1"] = "rr", ["BBS_fuelcut_RR2"] = "rr",
+            ["B757_OVHD_L_ELEC-ENG-CONT_BUTTON"] = "rr", ["B757_OVHD_R_ELEC-ENG-CONT_BUTTON"] = "rr",
+            ["B757_GAURD_1_SWITCH"] = "rr", ["B757_GAURD_2_SWITCH"] = "rr",
+        };
+
+        // Every other control is in both cockpits: no variant.
+        Assert.Equal(expected.OrderBy(kv => kv.Key, StringComparer.Ordinal),
+            Map.Controls.Where(c => c.Variant != null).Select(c => KeyValuePair.Create(c.Node, c.Variant!))
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void A_label_ends_PW_or_RR_exactly_when_its_control_is_that_engine_types()
+    {
+        static string? Suffix(string label) =>
+            label.EndsWith(" (PW)", StringComparison.Ordinal) ? "pw" : label.EndsWith(" (RR)", StringComparison.Ordinal) ? "rr" : null;
+
+        Assert.All(Map.Controls, c => Assert.True(Suffix(c.Label) == c.Variant, $"{c.Node}: \"{c.Label}\", variant {c.Variant ?? "null"}"));
+    }
+
+    [Fact]
+    public void A_map_without_the_variant_field_still_loads_every_control_for_both_engine_types()
+    {
+        var map = Bbs757ControlMap.Parse("""
+            { "controls": [ { "node": "B757_X", "section": "Overhead", "panel": "P", "label": "X", "kind": "toggle" } ] }
+            """);
+
+        Assert.Null(Assert.Single(map.Controls).Variant);
+    }
+
     // ---- Plan 12 task 7: the panels follow the cockpit; inside each, the most used controls first (plan 12 task 4) ----
 
     [Fact]
