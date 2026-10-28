@@ -165,6 +165,9 @@
       var ch = document.getElementById('chocks_nose_front');
       if (ch) return parseFloat(ch.style.opacity || '0') > 0 ? 'Placed' : 'Removed';
     }
+    // GROUND EQUIP: a piece of equipment at the aircraft is painted darkorange, the rest unpainted.
+    else if (A.headingBefore(b) === 'GROUND EQUIP')
+      return A.colourWord(b.style.backgroundColor) === 'amber' ? 'Connected' : 'Not connected';
     return '';
   };
 
@@ -433,7 +436,9 @@
     var walk = function (n) {
       for (var k = n.firstElementChild; k; k = k.nextElementSibling) {
         if (k === h) continue;
-        if (A.holdsControl(k)) { walk(k); continue; }
+        // A box holding the title and the message (the Navigraph login's user code over its h2) is read
+        // child by child: its whole text would repeat the title and run it into the message.
+        if (A.holdsControl(k) || (h && k.contains(h))) { walk(k); continue; }
         if (k.matches && k.matches(A.CONTROL)) continue;
         var t = A.text(k);
         if (t) msg.push(t);

@@ -51,3 +51,4 @@ first seen.
 | failures | The captain's Situation Manager, FAILURES |
 | card_neighbour | Hand-made: a situation card beside a bottom-bar button |
 | opt_sound_cabin_options | OPTIONS, SOUND/CABIN OPTIONS (CABIN LIGHTING with nothing picked) |
+| opt_navigraph_login | OPTIONS, 3RD PARTY, LOGIN WITH NAVIGRAPH: the user-code pop-up over the QR code |

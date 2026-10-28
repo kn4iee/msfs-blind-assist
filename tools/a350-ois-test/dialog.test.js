@@ -39,3 +39,15 @@ test('an options pop-up reads its title, then its choices', () => {
   assert.ok(i >= 0);
   assert.deepEqual(els.slice(i + 1, i + 4).map(e => e.text), ['AUTO', '04', '22']);
 });
+
+// OPTIONS > 3RD PARTY > LOGIN WITH NAVIGRAPH: a fixed overlay whose title (the user code, an h1) sits in a
+// box beside the message (an h2), over the QR code and its buttons. Live, Coherent's innerText of that
+// box ran the two together ("User Code: 0AAA000AThis window ..."), after the title read once already.
+test('the Navigraph login reads its user code once, then its message, then its buttons', () => {
+  const els = scrape('opt_navigraph_login');
+  const a = els.filter(e => e.kind === 'alert');
+  assert.equal(a.length, 1);
+  assert.equal(a[0].text, 'User Code: 0AAA000A: This window will close automatically when sucessfully logged in.');
+  for (const t of ['OPEN BROWSER', 'REFRESH CODE', 'CLOSE'])
+    assert.ok(els.some(e => e.kind === 'button' && e.text === t), 'missing ' + t);
+});

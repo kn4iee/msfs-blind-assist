@@ -30,6 +30,22 @@ test('CHOCKS says whether the chocks are in place', () => {
   assert.equal(b.text, 'CHOCKS: Removed');
 });
 
+// GROUND EQUIP: a piece of equipment at the aircraft is painted darkorange (live: GPU and CHOCKS with
+// the GPU plugged in and the chocks placed), the rest unpainted.
+test('each ground equipment button says whether it is connected', () => {
+  const els = scrape('ground', { before: w => {
+    for (const b of w.document.querySelectorAll('button'))
+      if (b.textContent === 'GPU' || b.textContent === 'JETWAY') b.style.backgroundColor = 'darkorange';
+  } });
+  const b = t => els.some(e => e.kind === 'button' && e.text === t);
+  assert.ok(b('GPU: Connected'), 'GPU connected');
+  assert.ok(b('JETWAY: Connected'), 'jetway connected');
+  for (const t of ['ASU', 'ACU', 'RAMP TRUCK', 'LUGGAGE', 'CATERING'])
+    assert.ok(b(t + ': Not connected'), t + ' not connected');
+  const gpu = els.find(e => e.text === 'GPU: Connected');
+  assert.ok(gpu.announceChange, 'a press connects or removes it: its new state is spoken');
+});
+
 test('the pushback arrows are named', () => {
   const els = scrape('ground');
   for (const t of ['Push back, turn left', 'Push back, turn right', 'Push back straight', 'STOP'])
