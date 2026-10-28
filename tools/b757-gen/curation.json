@@ -13,10 +13,11 @@
     "guarded: node -> {state_var, positions, guard, guard_closed, close_sets}: a switch whose vendor click only runs while its guard is open. The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, so none of the click is kept: the control is emitted as a switch on state_var with the named positions (laid onto the control's own values, as under positions), the guard's node, the value the guard reads while closed (guard_closed) and the value closing it writes to the control (close_sets, null when closing leaves it alone), and press, release, cw and ccw are empty: the app opens the guard, writes the position and closes the guard. The guard keeps its own row. An entry takes in a control the rules leave out (the emergency lights switch) or re-reads one they keep (the stab trims), and the run names each; it never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped fact or a change of BlueBird's stops the run: the click writes state_var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. An entry for a node or a guard the package does not have, names that do not fit the vendor's count of positions, a positions or kinds entry for the same node, and any other control whose click code carries the gate note are errors.",
     "direct_write: list of nodes whose vendor click code the map leaves out: the control is emitted as the rules build it (state var, kind, label, panel and positions unchanged, the positions still checked against what the vendor's code writes) and press, release, cw and ccw are empty, so the app writes the state var to the picked position, as it does for any switch with no click code. For a switch whose code cannot take a pick where it aims and writes nothing but its own L:var, and at most O:vars (the chronometer ET levers; the flight deck door switch). It is checked against the vendor's code, so that a change of BlueBird's stops the run instead of reaching the app: the click code must exist (else the entry does nothing), carry no gate note (a gated click belongs under guarded, which opens the guard first) and write nothing but the state var (another L:var, a K: or an H: event would no longer run; an O:var write is let through, because O:vars are component-local and the sim's calculator cannot set them, so the app's replay never performed it). The run names each, and what it left out. An entry for a node the package does not have or the map does not keep, a node also under guarded or kinds, a control that is not a switch or has no state var or no positions, and a click code that fails those checks are errors.",
     "levers: node -> {state_var, positions}: a lever the rules leave out and the pilot needs (the gear lever and the flap lever: drag handles, which the extractor reads as a 'lever' with no click code a pick could replay). BlueBird publishes the state var of each with its detents ('Write a detent position'), so the entry gives the state var and the positions with their values, [{value, label}] in the order of the lever's travel (a lever's row names no values a list of names could be laid onto: the flap lever runs 0..150), and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each lever it takes in. The label comes from labels, the place from the banner table or a node_panels rule, and a lever under an excluded banner (the flap lever) needs include_nodes as well, which keeps the banner's other controls out: an entry never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the lever's whole component reads or writes (the extractor keeps that per row as _component_vars), and each position must lie in the range the lever's own code clamps to, where the extractor found one. An entry for a node the package does not have, for a node the rules keep or leave out for another reason than being a lever, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under guarded, direct_write, kinds or positions, for a state var the lever's component never touches and for a position outside the lever's range is an error.",
+    "direct_positions: node -> {state_var, positions}: a knob the rules leave out and a combo can drive (the pressurization Auto Rate knob, the three zone temperature selectors, the eight display brightness knobs). The rules drop a finite knob with more than 12 positions (Auto Rate has 131, a brightness knob 31 or 21) and every infinite knob (a zone selector wraps), and a pick by click steps would take dozens of clicks. The entry has the form of levers: state_var is the L:var the systems read and positions are [{value, label}] WITH their values, rising, and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each knob it takes in. The label comes from labels, the place from the banner table or a node_panels rule; an entry never overrides exclude_nodes or an excluded banner (a knob under one needs include_nodes as well). None of the vendor's click code is kept, so the positions are not checked against the range that code clamps to: the cockpit mouse stops the brightness knobs at 30 (20 on the F/O ADI knob) while the systems take 0-40 (docs/b757/evidence/flight-12.md). It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the knob's whole component reads or writes (the extractor keeps that per row as _component_vars). An entry for a node the package does not have, for a node the rules keep (positions and direct_write are the keys for those) or leave out for another reason than being a knob whose positions cannot be listed (a lever has its own key), for a node curation leaves out, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under levers, guarded, direct_write, kinds or positions, for a state var the knob's component never touches, and for fewer than two positions, a repeated value or an empty label is an error.",
     "keep_without_node: list of nodes kept although neither cockpit model has a node of that name. The generator reads the node names of the package's two interior models, BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf (it stops when either is missing), and leaves out every control the other rules keep whose node is in neither: a switch the cockpit does not have is noise to a pilot who cannot find it, and the run names each one. A control one model alone has says which, with (PW) or (RR) at the end of its label unless the label already does (L Fuel Control (PW)); a label that names the wrong variant stops the run. An entry here keeps a control BlueBird's published list proves real, and the run names each; it stays empty unless that list proves one. An entry for a node the package does not have, for a node a model has (it does nothing), for a node also in exclude_nodes or for one the rules leave out for another reason is an error, and so is a guarded, levers or include_nodes entry for a node no cockpit has that this list does not keep. A direct_write entry for one stops the run until it is removed, and a kinds, labels or positions entry for one changes nothing and is only reported.",
     "spelling: vendor words repaired wherever a label is made from them (US English, vendor typos).",
     "status: read-only L:vars the app can speak or show; positions are names for 0, 1, 2 ...",
-    "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): its turn code writes 0 and 7, every vendor panel-state snapshot rests it at 4, and the vendor's OFF/AUTO/ON tips are a copy-paste. Its positions are unknown; revisit in the sim.",
+    "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): it is spring-loaded and gets buttons in the app (plan 12 task 3), not a row of positions. Its click code writes only 0 (anticlockwise) or 7 (clockwise), every vendor panel-state snapshot rests it at 4, the XML writes 4 back within a second of any write (XML:10128-10151), and BlueBird's WASM uses only which side of 4 the value is on: above 4 climbs, below 4 descends, 4 holds, in MAN only (Mode Select B757_OVHD_MODE_SELECT_SWITCH at 2). The vendor's OFF/AUTO/ON tips are a copy-paste. measured (docs/b757/evidence/flight-12.md): with the outflow valve L:BBS_CABIN_VALVE at 1, a 0 held for 1.2 s closed it to 0.869 and an 8 held for 1.3 s opened it to 0.963; back at 4 the valve held.",
     "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 OFF, 5 CONT and 6 FLT are BlueBird's names (its simvar list, cited below); unmeasured in the sim.",
     "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule.",
     "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in); BBS757_lever_flaps (banner RIGHT WINDOW RAIN EFFECTS: the flap lever, which the rules still drop as a lever, so it is under levers as well). All sit in Pedestal / Control stand, in the order control_order gives.",
@@ -57,7 +58,11 @@
     "B757_OVHD_WIPER_SWITCH: 0 OFF, 1 LOW, 2 HIGH (BlueBird's simvar list). preset: 0 in all nine, dry weather in every state (no state runs the wipers). 1 and 2 unmeasured.",
     "status BBS757_vis_chocks (RULING R31): 0 Removed, 1 In place, shown on the Status display and never announced. measured 2026-10-25 (live-findings.md, EFB Ground Services): the EFB's CHOCKS tile toggles it 0 to 1 to 0. preset: 1 in cold and dark and turnaround, 0 in the other seven.",
     "RULING R37 (2026-10-25, the owner's direction after the first flight): the panels follow the manual's preflight flow and the most used controls come first in a panel (panel_order, control_order). The lists are the owner's to adjust; a control_order lists only the controls that lead, and the rest keep cockpit order. The three start selectors (Ignition, L ENG Start, R ENG Start: nodes B757_OVHD_ENG_START_SWITCH, B757_OVHD_L_ENG_START_SWITCH, B757_OVHD_R_ENG_START_SWITCH, banner LIGHT OVERRIDE) and the four fuel control switches (BBS_fuelcut_PW1, PW2, RR1, RR2) share one Pedestal panel, Engines, in start order: Ignition, L ENG Start, L Fuel Control (PW), R ENG Start, R Fuel Control (PW), then the RR pair. The three node_panels rules for the start selectors name the section Pedestal, because a B757_OVHD_ node otherwise lands in the Overhead by its prefix. TCAS and transponder lists TCAS Mode first; the app adds its Squawk Code field right after it (BBS757Definition.Readouts.cs). Each EFIS panel leads with ND Mode and ND Range.",
-    "PLAN 12 TASK 1 (2026-10-28): the Status panel's Cabin Altitude row reads L:B757_TEST_CABIN_ALT, no longer L:B757_DEBUG_PRESSURE_CABIN_ALT_FT. BlueBird's WASM (BBS752.wasm, read 2026-10-28) writes B757_TEST_CABIN_ALT every tick from the pressurization model's cabin altitude in feet (the oxygen code copies it), and declares the three B757_DEBUG_PRESSURE_CABIN_* vars without ever writing or reading them. measured (docs/b757/evidence/flight-12.md, 2026-10-28): B757_TEST_CABIN_ALT read 1,161 ft on the ground; the earlier read of the DEBUG var was 0 (docs/b757/evidence/live-findings.md), which is all it can read."
+    "PLAN 12 TASK 1 (2026-10-28): the Status panel's Cabin Altitude row reads L:B757_TEST_CABIN_ALT, no longer L:B757_DEBUG_PRESSURE_CABIN_ALT_FT. BlueBird's WASM (BBS752.wasm, read 2026-10-28) writes B757_TEST_CABIN_ALT every tick from the pressurization model's cabin altitude in feet (the oxygen code copies it), and declares the three B757_DEBUG_PRESSURE_CABIN_* vars without ever writing or reading them. measured (docs/b757/evidence/flight-12.md, 2026-10-28): B757_TEST_CABIN_ALT read 1,161 ft on the ground; the earlier read of the DEBUG var was 0 (docs/b757/evidence/live-findings.md), which is all it can read.",
+    "PLAN 12 TASK 1 (2026-10-28): B757_OVHD_AUTORATE_SWITCH (label Auto Rate, it was Cabin Rate; Pressurization) is under direct_positions: 0 MIN, 3.5 INDEX, 13 MAX. Read from BBS_752_BASE_INTERIOR.xml and BlueBird's WASM (BBS752.wasm, read 2026-10-28): the XML sets the knob to 3.5 once on load and its clicks step 0.1 between 0 and 13 (XML:10153-10172; all nine panel states hold 3.5), which is why the rules saw 131 positions and dropped it. The WASM reads the knob every tick and uses its whole number (3.5 reads as 3): a climb limit of 50 + 150 n ft/min and a descent limit of 30 + 90 n, a ceiling on the rate of the automatic controllers and not the rate itself (0: 50 and 30; 3: 500 and 300; 13: 2,000 and 1,200). So INDEX at 3.5 shows the load value as what it acts as. Nothing rewrites the knob after load, so a direct write stands. measured (docs/b757/evidence/flight-12.md): loaded at 3.5; 0 and 13, written by the calculator, both held, and no other variable of the L:var snapshot moved on the ground.",
+    "PLAN 12 TASK 1 (2026-10-28): the eight display brightness knobs are under direct_positions, in a new Forward panel panel, Display brightness (node_panels rules, last in panel_order; the order of its controls is cockpit order until plan 12 task 4): 0 Minimum, 20 Half, 40 Full each. BlueBird's brightness code (BBS752.wasm, setup_display_brightness and the per-tick sync, read 2026-10-28) reads one knob var per display and sets the display's emissive output to knob / 40 * 1.5 with a floor of 0.1, so 0 dims a display to its minimum and does not turn it off (no Off position), and 40 is full and every knob's value on load (all nine panel states hold 40). The cockpit mouse stops lower (the vendor's clicks clamp at 30, at 20 on the F/O ADI knob), but the code takes 0-40, so the positions are not held to that clamp. Node, state var, label: B757_ADI_1_LCD_KNOB writes B757_PFD_1_SCREEN_KNOB (Captain PFD; XML:18856-18867, clamp 30), B757_ADI_2_LCD_KNOB writes B757_PFD_2_SCREEN_KNOB (First Officer PFD; XML:18960-18971, clamp 20), B757_HSI_1_SCREEN_KNOB and B757_HSI_2_SCREEN_KNOB write their own names (Captain ND, First Officer ND; XML:11670, 11693), B757_EICAS_1_SCREEN_KNOB and B757_EICAS_2_SCREEN_KNOB (Upper EICAS, Lower EICAS; XML:11618, 11631) and B757_FMC_1_SCREEN_KNOB and B757_FMC_2_SCREEN_KNOB (Captain CDU, First Officer CDU; XML:11657, 11644), all clamped at 30 by the mouse. The nodes NAMED B757_PFD_1_SCREEN_KNOB and B757_PFD_2_SCREEN_KNOB (XML:11577, 11597) stay out: their clicks write BBS757_RASTER_BRIGHTNESS_CA and _FO, which nothing in the package reads, so the PFD is dimmed by the ADI knobs. measured (docs/b757/evidence/flight-12.md): each knob var written by the calculator moved its output at once (the captain PFD's B757_PFD_BRIGHTNESS_L read 1.5 at 40, 0.75 at 20 and 0.1 at 0; the captain ND and CDU and the upper EICAS read 1.125 at 30; the lower EICAS read 0.5625 at 15); the first officer's three follow by name (their output vars exist and read 1.5) and were not written. BlueBird's list says 0-30 for the EICAS, HSI and FMC knobs: 40 is their load value and gives full output. unmeasured: the WASM's automatic cockpit lighting (the EFB setting automatic_cockpit_lighting, off in the constructor) sets the PFD, ND and EICAS knobs to 20 at dusk and 40 at dawn on a time-of-day change; a write stands until the next one. A dark display also defeats the AI display reads.",
+    "PLAN 12 TASK 1 (2026-10-28): the three zone temperature selectors, in Air conditioning and bleed, are under direct_positions: B757_OVHD_SEL_pack_Cockpt writes B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME (Flight Deck Temperature), B757_OVHD_SEL_pack_FWD_cab writes B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME (Forward Cabin Temperature) and B757_OVHD_SEL_pack_AFT_cab writes B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME (Aft Cabin Temperature). The extractor reads each as an infinite knob (the template BBS757_ZONE_TEMP_CONTROL_KNOB steps the frame by one and wraps at 35 and 0, XML:23-58, instances XML:10423, 10435 and 10447) and takes its state var from the knob's animation, B757_OVHD_FLT_DK_TEMP_SEL_KNOB_ANIM_FRAME and its two siblings. Those are derived from the KNOB_FRAME vars by BlueBird's code on every tick and written back over, so they must not be written; the entry names the KNOB_FRAME var, which the generator checks against what the component reads and writes. BlueBird's code turns the frame into the temperature it controls to: frames 0-2 and 34-35 are OFF, 3-6 read 18, 7-29 follow the frame, 30-33 read 30, and degrees C = 18 + (frame - 5) * 6 / 13 between frames 5 and 31 (a remap of 5..31 onto 18..30); there is no AUTO. measured (docs/b757/evidence/flight-12.md): on the zone's readback B757_OVHD_<zone>_ZONE_TEMP_SEL, about a second after the write, frames 0-2 and 34-35 read OFF, 3-5 read 18, 13 read 21.692, 18 read 24, 29 read 29.077 and 31-33 read 30. The positions are the frame nearest each whole degree: 0 OFF, then 5, 7, 9, 12, 14, 16, 18, 20, 22, 25, 27, 29 and 31 for 18 to 30 degrees C (21 and 27 fall half-way between two frames and take the higher; each frame is within 0.24 degrees of its degree). The mid cabin zone has a var but no node and no handler, so no row. The knobs loaded at frame 18 (24 degrees C) in the measurement; BlueBird's dirty-panel start randomises the three, so read before assuming.",
+    "PLAN 12 TASK 1 (2026-10-28): left out, with the reason. The weather radar knobs (B757_PED_WX_L_LARGE_SEL_KNOB, B757_PED_WX_L_SMALL_SEL_KNOB and the two on the right): nothing in the package reads them (no gauge, no WASM code; the navigation display draws no weather radar), so no position has a meaning to name. The DDRMI VOR/ADF switches need no change: the map already holds all four as toggles on BBS_DDRMI_LEFT, _RIGHT, _LEFT_FO and _RIGHT_FO (0 VOR, 1 ADF; the code tests for non-zero), and their click code works through the calculator, the first officer's right one with the stray closing brace the generator reports under suspected slips included (measured, docs/b757/evidence/flight-12.md: its own click code toggled BBS_DDRMI_RIGHT_FO from 0 to 1). The manual cabin altitude switch stays excluded (see its note above)."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -269,6 +274,46 @@
       "panel": "MCP"
     },
     {
+      "prefix": "B757_ADI_1_LCD_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_ADI_2_LCD_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_HSI_1_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_HSI_2_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_EICAS_1_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_EICAS_2_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_FMC_1_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
+      "prefix": "B757_FMC_2_SCREEN_KNOB",
+      "panel": "Display brightness",
+      "section": "Forward panel"
+    },
+    {
       "prefix": "B757_ADI_1_",
       "panel": "Captain EFIS"
     },
@@ -435,7 +480,8 @@
       "First officer EFIS",
       "First officer autoland status",
       "First officer DDRMI",
-      "First officer chronometer"
+      "First officer chronometer",
+      "Display brightness"
     ],
     "Pedestal": [
       "Control stand",
@@ -631,7 +677,18 @@
     "B757_OVHD_XFEED_PUMPS_FWD_BUTTON": "Crossfeed FWD",
     "B757_OVHD_XFEED_PUMPS_AFT_BUTTON": "Crossfeed Aft",
     "B757_OVHD_CABINALT_SWITCH": "Cabin Altitude",
-    "B757_OVHD_AUTORATE_SWITCH": "Cabin Rate",
+    "B757_OVHD_AUTORATE_SWITCH": "Auto Rate",
+    "B757_OVHD_SEL_pack_Cockpt": "Flight Deck Temperature",
+    "B757_OVHD_SEL_pack_FWD_cab": "Forward Cabin Temperature",
+    "B757_OVHD_SEL_pack_AFT_cab": "Aft Cabin Temperature",
+    "B757_ADI_1_LCD_KNOB": "Captain PFD",
+    "B757_ADI_2_LCD_KNOB": "First Officer PFD",
+    "B757_HSI_1_SCREEN_KNOB": "Captain ND",
+    "B757_HSI_2_SCREEN_KNOB": "First Officer ND",
+    "B757_EICAS_1_SCREEN_KNOB": "Upper EICAS",
+    "B757_EICAS_2_SCREEN_KNOB": "Lower EICAS",
+    "B757_FMC_1_SCREEN_KNOB": "Captain CDU",
+    "B757_FMC_2_SCREEN_KNOB": "First Officer CDU",
     "B757_OVHD_SEL_L_PACK_SWITCH": "L Pack Selector",
     "B757_OVHD_SEL_R_PACK_SWITCH": "R Pack Selector",
     "B757_IRS_CENTRE_KNOB": "IRS Center Knob",
@@ -1243,6 +1300,137 @@
           "value": 150,
           "label": "30"
         }
+      ]
+    }
+  },
+  "direct_positions": {
+    "B757_OVHD_AUTORATE_SWITCH": {
+      "state_var": "B757_OVHD_AUTORATE_SWITCH",
+      "positions": [
+        { "value": 0, "label": "MIN" },
+        { "value": 3.5, "label": "INDEX" },
+        { "value": 13, "label": "MAX" }
+      ]
+    },
+    "B757_ADI_1_LCD_KNOB": {
+      "state_var": "B757_PFD_1_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_ADI_2_LCD_KNOB": {
+      "state_var": "B757_PFD_2_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_HSI_1_SCREEN_KNOB": {
+      "state_var": "B757_HSI_1_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_HSI_2_SCREEN_KNOB": {
+      "state_var": "B757_HSI_2_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_EICAS_1_SCREEN_KNOB": {
+      "state_var": "B757_EICAS_1_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_EICAS_2_SCREEN_KNOB": {
+      "state_var": "B757_EICAS_2_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_FMC_1_SCREEN_KNOB": {
+      "state_var": "B757_FMC_1_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_FMC_2_SCREEN_KNOB": {
+      "state_var": "B757_FMC_2_SCREEN_KNOB",
+      "positions": [
+        { "value": 0, "label": "Minimum" },
+        { "value": 20, "label": "Half" },
+        { "value": 40, "label": "Full" }
+      ]
+    },
+    "B757_OVHD_SEL_pack_Cockpt": {
+      "state_var": "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME",
+      "positions": [
+        { "value": 0, "label": "OFF" },
+        { "value": 5, "label": "18 °C" },
+        { "value": 7, "label": "19 °C" },
+        { "value": 9, "label": "20 °C" },
+        { "value": 12, "label": "21 °C" },
+        { "value": 14, "label": "22 °C" },
+        { "value": 16, "label": "23 °C" },
+        { "value": 18, "label": "24 °C" },
+        { "value": 20, "label": "25 °C" },
+        { "value": 22, "label": "26 °C" },
+        { "value": 25, "label": "27 °C" },
+        { "value": 27, "label": "28 °C" },
+        { "value": 29, "label": "29 °C" },
+        { "value": 31, "label": "30 °C" }
+      ]
+    },
+    "B757_OVHD_SEL_pack_FWD_cab": {
+      "state_var": "B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME",
+      "positions": [
+        { "value": 0, "label": "OFF" },
+        { "value": 5, "label": "18 °C" },
+        { "value": 7, "label": "19 °C" },
+        { "value": 9, "label": "20 °C" },
+        { "value": 12, "label": "21 °C" },
+        { "value": 14, "label": "22 °C" },
+        { "value": 16, "label": "23 °C" },
+        { "value": 18, "label": "24 °C" },
+        { "value": 20, "label": "25 °C" },
+        { "value": 22, "label": "26 °C" },
+        { "value": 25, "label": "27 °C" },
+        { "value": 27, "label": "28 °C" },
+        { "value": 29, "label": "29 °C" },
+        { "value": 31, "label": "30 °C" }
+      ]
+    },
+    "B757_OVHD_SEL_pack_AFT_cab": {
+      "state_var": "B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME",
+      "positions": [
+        { "value": 0, "label": "OFF" },
+        { "value": 5, "label": "18 °C" },
+        { "value": 7, "label": "19 °C" },
+        { "value": 9, "label": "20 °C" },
+        { "value": 12, "label": "21 °C" },
+        { "value": 14, "label": "22 °C" },
+        { "value": 16, "label": "23 °C" },
+        { "value": 18, "label": "24 °C" },
+        { "value": 20, "label": "25 °C" },
+        { "value": 22, "label": "26 °C" },
+        { "value": 25, "label": "27 °C" },
+        { "value": 27, "label": "28 °C" },
+        { "value": 29, "label": "29 °C" },
+        { "value": 31, "label": "30 °C" }
       ]
     }
   },

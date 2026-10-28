@@ -65,6 +65,7 @@ CURATION = {
     "kinds": {},
     "guarded": {},
     "levers": {},
+    "direct_positions": {},
     "direct_write": [],
     "keep_without_node": [],
     "spelling": {"CENTRE": "Center"},
@@ -83,7 +84,7 @@ def shipped_for(nodes, **changes):
     only what the rows have (an order only when every node it lists is there too)."""
     cur = g.load_curation(g.DEFAULT_CURATION)
     here = set(nodes)
-    for table in ("labels", "positions", "kinds", "guarded", "levers"):
+    for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
         cur[table] = {n: v for n, v in cur[table].items() if n in here}
     for table in ("direct_write", "exclude_nodes", "include_nodes", "keep_without_node"):
         cur[table] = [n for n in cur[table] if n in here]
@@ -929,7 +930,7 @@ class Guarded(unittest.TestCase):
         """The shipped curation, cut down to the nodes of rows(): a table entry for a node the package lacks is an error."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(self.rows())
-        for table in ("labels", "positions", "kinds", "guarded", "levers"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1189,7 +1190,7 @@ class DirectWrite(unittest.TestCase):
         """The shipped curation, cut down to the nodes of `rows`: a table entry for a node the package lacks is an error."""
         cur = g.load_curation(g.DEFAULT_CURATION)
         here = set(rows)
-        for table in ("labels", "positions", "kinds", "guarded", "levers"):
+        for table in ("labels", "positions", "kinds", "guarded", "levers", "direct_positions"):
             cur[table] = {n: v for n, v in cur[table].items() if n in here}
         cur["direct_write"] = [n for n in cur["direct_write"] if n in here]
         cur["exclude_nodes"], cur["include_nodes"], cur["panel_order"] = [], [], {}
@@ -1724,6 +1725,414 @@ class Levers(unittest.TestCase):
         self.assertEqual([c["label"] for c in controls if c["panel"] == "Landing gear"][:1], ["Gear Lever"])
         stand = [c["label"] for c in controls if c["panel"] == "Control stand"]
         self.assertEqual(stand[stand.index("Speedbrake Up") + 1], "Flap Lever")
+
+
+class DirectPositions(unittest.TestCase):
+    """Plan 12, task 1: curation's 'direct_positions'. Some knobs the rules leave out are ones the pilot needs and a combo can
+    drive: the pressurization Auto Rate knob (130 clicks of 0.1), the three zone temperature selectors (an infinite knob that
+    wraps at 35) and the display brightness knobs (30 or 20 clicks). The rules drop each, as a "rotary knob finite with more
+    than 12 positions" or a "rotary knob infinite", and a pick by click steps would take dozens of clicks. The entry gives the
+    state var the systems read and the positions to pick, with their values (the form of 'levers'), and the control is built as
+    a switch with no click code: the app writes the state var to the picked position, as for any switch with none
+    (Bbs757Write.ToPosition). Nothing of the vendor's click code is kept, so the cockpit mouse's clamp (30, or 20 on the F/O ADI
+    knob) does not limit the positions: the systems accept 0-40 (docs/b757/evidence/flight-12.md). The rows have the shape the
+    extractor gives the vendor's controls (BBS_752_BASE_INTERIOR.xml: Auto Rate at 10157, the flight deck zone knob at 10423,
+    the captain ADI knob at 18857) and are converted with a curation of the test's own; the SHIPPED entries are pinned in
+    the second half of the class."""
+    RATE = "B757_OVHD_AUTORATE_SWITCH"
+    ZONE, FRAME, ANIM_FRAME = ("B757_OVHD_SEL_pack_Cockpt", "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME",
+                               "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_ANIM_FRAME")
+    ADI, PFD = "B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB"
+    KEPT = "B757_OVHD_EQUIP_BUTTON"
+    CLICK_FIELDS = ("press", "release", "cw", "ccw")
+    RATE_POSITIONS = [{"value": 0, "label": "MIN"}, {"value": 3.5, "label": "INDEX"}, {"value": 13, "label": "MAX"}]
+    ZONE_POSITIONS = [{"value": 0, "label": "OFF"}, {"value": 5, "label": "18 °C"}, {"value": 31, "label": "30 °C"}]
+    # 40 is past the cockpit mouse's clamp for this knob (its click code stops at 30): the systems take 0-40
+    ADI_POSITIONS = [{"value": 0, "label": "Minimum"}, {"value": 20, "label": "Half"}, {"value": 40, "label": "Full"}]
+    ENTRIES = {
+        RATE: {"state_var": RATE, "positions": RATE_POSITIONS},
+        ZONE: {"state_var": FRAME, "positions": ZONE_POSITIONS},
+        ADI: {"state_var": PFD, "positions": ADI_POSITIONS},
+    }
+
+    def rate_row(self):
+        """Auto Rate: a finite knob of 0.1 clicks between 0 and 13, so 131 positions. Its state var is the node's own name."""
+        var = self.RATE
+        return row(node=var, kind="rotary knob finite", positions="range 0..13 step 0.1",
+                   panel="PRESSURIZATION CONTROL PANEL", line=10157, state=["L:" + var],
+                   cw=f"(L:{var}, enum) 0.1 + 13 min (>L:{var}, enum)", ccw=f"(L:{var}, enum) 0.1 - 0 max (>L:{var}, enum)",
+                   component={"reads": [var], "writes": [var]})
+
+    def zone_row(self):
+        """A zone temperature selector: an infinite knob whose animation shows the derived ANIM_FRAME var while its click
+        writes the KNOB_FRAME var, the one the systems read (so the row's own state var is not the one to write)."""
+        frame = self.FRAME
+        return row(node=self.ZONE, kind="rotary knob infinite", positions="inf", panel="OVERHEAD PNEUMATIC PANEL",
+                   line=10423, state=["L:" + self.ANIM_FRAME],
+                   cw=f"(L:{frame}, enum) ++ d 35 > if{{ 0 }} (>L:{frame}, enum)",
+                   ccw=f"(L:{frame}, enum) -- d 0 < if{{ 35 }} (>L:{frame}, enum)",
+                   component={"reads": [self.ANIM_FRAME, frame], "writes": [frame]})
+
+    def adi_row(self):
+        """The captain ADI knob: its click writes the var named B757_PFD_1_SCREEN_KNOB, the one BlueBird's brightness code reads
+        for the captain's PFD, and stops at 30."""
+        var = self.PFD
+        return row(node=self.ADI, kind="rotary knob finite", positions="range 0..30 step 1",
+                   panel="(after INDIVIDUAL AUDIO/RADIO PANELS)", line=18857, state=["L:" + var],
+                   cw=f"(L:{var}) ++ 30 min (>L:{var})", ccw=f"(L:{var}) -- 0 max (>L:{var})",
+                   component={"reads": [var], "writes": [var]})
+
+    def kept_row(self):
+        """A toggle on the Auto Rate's panel, the one control here the rules keep."""
+        var = self.KEPT
+        return row(node=var, kind="toggle", panel="PRESSURIZATION CONTROL PANEL", line=10100, state=["L:" + var],
+                   left=f"(L:{var}, bool) ! (>L:{var}, bool)")
+
+    def rows(self):
+        return {self.KEPT: self.kept_row(), self.RATE: self.rate_row(), self.ZONE: self.zone_row(), self.ADI: self.adi_row()}
+
+    def cur(self, **changes):
+        base = dict(
+            panels={"PRESSURIZATION CONTROL PANEL": "Pressurization", "OVERHEAD PNEUMATIC PANEL": "Air conditioning and bleed"},
+            node_panels=[{"prefix": self.ADI, "panel": "Display brightness", "section": "Forward panel"}],
+            labels={self.RATE: "Auto Rate", self.ZONE: "Flight Deck Temperature", self.ADI: "Captain PFD"},
+            direct_positions=copy.deepcopy(self.ENTRIES))
+        base.update(changes)
+        return curation(**base)
+
+    def build(self, rows=None, cockpit=None, **changes):
+        rows = rows or self.rows()
+        return g.build_map(list(rows.values()), self.cur(**changes), "pkg", "1", cockpit)
+
+    def entry(self, node, **changes):
+        """The 'direct_positions' table with some fields of one node's entry changed: whatever a test changes is the one thing
+        that is wrong with it."""
+        table = copy.deepcopy(self.ENTRIES)
+        table[node] = dict(table[node], **changes)
+        return table
+
+    def test_each_entry_takes_in_a_knob_the_rules_leave_out_as_a_switch_with_no_click_code(self):
+        rows, c = self.rows(), self.cur()
+
+        def switch(node, section, panel, label, state_var, positions):
+            return {"node": node, "section": section, "panel": panel, "label": label, "kind": "switch",
+                    "state_var": state_var, "positions": positions,
+                    "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None}
+
+        expected = {
+            self.RATE: switch(self.RATE, "Overhead", "Pressurization", "Auto Rate", self.RATE, self.RATE_POSITIONS),
+            self.ZONE: switch(self.ZONE, "Overhead", "Air conditioning and bleed", "Flight Deck Temperature", self.FRAME,
+                              self.ZONE_POSITIONS),
+            self.ADI: switch(self.ADI, "Forward panel", "Display brightness", "Captain PFD", self.PFD, self.ADI_POSITIONS),
+        }
+        for node, want in expected.items():
+            with self.subTest(node=node):
+                self.assertTrue(any(code for code in (rows[node]["_clicks"]["cw"], rows[node]["_clicks"]["ccw"])),
+                                "the vendor's row has click code: the control must carry none of it")
+                control, why, slips = g.convert_row(rows[node], c)
+
+                self.assertIsNone(why)
+                self.assertEqual(control, want)
+                self.assertEqual(list(control), list(want), "the keys keep the JSON order")
+                self.assertEqual([control[f] for f in self.CLICK_FIELDS], [None] * 4,
+                                 "a direct_positions row never carries click code: the app writes the state var")
+                self.assertEqual(slips, [], "no click code is replayed, so there is none to suspect")
+
+    def test_without_the_entry_the_rules_leave_each_knob_out_and_nothing_else_takes_it_in(self):
+        rows, bare = self.rows(), self.cur(direct_positions={})
+
+        self.assertEqual(g.convert_row(rows[self.RATE], bare),
+                         (None, "rotary knob finite with more than 12 positions", []))
+        self.assertEqual(g.convert_row(rows[self.ADI], bare),
+                         (None, "rotary knob finite with more than 12 positions", []))
+        self.assertEqual(g.convert_row(rows[self.ZONE], bare), (None, "rotary knob infinite", []))
+        m, report = self.build(direct_positions={})
+        self.assertEqual([c["node"] for c in m["controls"]], [self.KEPT])
+        self.assertEqual(report["dropped"], collections.Counter({"rotary knob finite with more than 12 positions": 2,
+                                                                  "rotary knob infinite": 1}))
+
+    def test_the_positions_are_not_checked_against_the_click_codes_clamp(self):
+        # The cockpit mouse stops the captain ADI knob at 30 and the first officer's at 20; BlueBird's brightness code takes
+        # 0-40 and writes 40 on load (docs/b757/evidence/flight-12.md, measured). The entry may name what the systems accept.
+        row_ = self.adi_row()
+        self.assertEqual(row_["positions"], "range 0..30 step 1")
+        self.assertIn("30 min", row_["_clicks"]["cw"][0][1])
+
+        m, _ = self.build()
+
+        adi = next(c for c in m["controls"] if c["node"] == self.ADI)
+        self.assertEqual([p["value"] for p in adi["positions"]], [0, 20, 40])
+        # nor against the 0..13 of Auto Rate's clamp
+        beyond = [{"value": 0, "label": "MIN"}, {"value": 13, "label": "MAX"}, {"value": 20, "label": "Beyond"}]
+        self.build(direct_positions=self.entry(self.RATE, positions=beyond))
+
+    def test_a_position_keeps_its_fraction(self):
+        m, _ = self.build()
+
+        rate = next(c for c in m["controls"] if c["node"] == self.RATE)
+        self.assertEqual([(p["value"], p["label"]) for p in rate["positions"]], [(0, "MIN"), (3.5, "INDEX"), (13, "MAX")])
+        self.assertEqual(json.loads(g.dumps({"x": rate["positions"]}))["x"][1], {"value": 3.5, "label": "INDEX"})
+
+    def test_the_run_names_each_control_it_takes_in_and_counts_none_as_dropped(self):
+        m, report = self.build()
+
+        self.assertEqual(report["direct_positions"], {
+            self.RATE: "taken in (the rules alone leave it out: rotary knob finite with more than 12 positions)",
+            self.ZONE: "taken in (the rules alone leave it out: rotary knob infinite)",
+            self.ADI: "taken in (the rules alone leave it out: rotary knob finite with more than 12 positions)",
+        })
+        self.assertEqual(report["dropped"], collections.Counter(), "a knob taken in is not counted as dropped")
+        self.assertEqual({c["node"] for c in m["controls"]}, set(self.rows()))
+        _, none = self.build(direct_positions={})
+        self.assertEqual(none["direct_positions"], {})
+
+    def test_a_node_under_a_banner_curation_leaves_out_is_taken_in_by_include_nodes_as_for_a_lever(self):
+        banner = "PRESSURIZATION CONTROL PANEL"   # the toggle the rules keep is under it too: it goes with the banner
+        changes = dict(exclude_banners=["CB OVERHEAD PANEL", banner], node_panels=[
+            {"prefix": self.ADI, "panel": "Display brightness", "section": "Forward panel"},
+            {"prefix": self.RATE, "panel": "Pressurization", "section": "Overhead"}])
+        with self.assertRaisesRegex(g.CurationError, rf"direct_positions names {self.RATE}, which curation also leaves out "
+                                                     r"\(excluded banner\)"):
+            self.build(**changes)
+
+        m, _ = self.build(include_nodes=[self.RATE], **changes)
+
+        placed = {c["node"]: c["panel"] for c in m["controls"]}
+        self.assertEqual(placed[self.RATE], "Pressurization")
+        self.assertNotIn(self.KEPT, placed, "include_nodes takes in the one node; the banner's other controls stay out")
+
+    def test_an_entry_that_does_not_fit_the_package_stops_the_run(self):
+        # Each case changes the curation, or adds one row, in one way and nothing else, so the one check it is meant for is the
+        # one that stops the run; the entries above pass all of them.
+        ghost = "B757_NO_SUCH_NODE"
+        breaker = row(node="B757_OVHD_X_CB", kind="circuit breaker", panel="ELECTRICAL PANEL", left="x")
+        lever = row(node="B757_OVHD_X_LEVER", kind="lever", positions="", panel="ELECTRICAL PANEL", left="1 (>L:X)")
+        extra = {breaker["node"]: breaker, lever["node"]: lever}
+        entry = self.ENTRIES[self.RATE]
+        guarded = {self.RATE: {"state_var": self.RATE, "positions": ["A", "B"], "guard": "B757_G", "guard_closed": 0,
+                               "close_sets": None}}
+        cases = [
+            ("a node the package does not have", {}, dict(direct_positions={**self.ENTRIES, ghost: entry}),
+             rf"direct_positions name nodes the package does not have: {ghost}"),
+            ("a node the rules keep", {}, dict(direct_positions={**self.ENTRIES, self.KEPT: entry}),
+             rf"direct_positions names {self.KEPT}, which the rules keep as a toggle"),
+            ("a node the rules leave out for another reason", extra,
+             dict(direct_positions={**self.ENTRIES, breaker["node"]: entry}),
+             rf"direct_positions names {breaker['node']}, which the rules leave out for another reason than being a knob "
+             r"whose positions cannot be listed \(circuit breaker\)"),
+            ("a lever, which belongs under levers", extra, dict(direct_positions={**self.ENTRIES, lever["node"]: entry}),
+             rf"direct_positions names {lever['node']}, which the rules leave out for another reason than being a knob "
+             r"whose positions cannot be listed \(lever\)"),
+            ("a node curation leaves out", {}, dict(exclude_nodes=[self.RATE]),
+             rf"direct_positions names {self.RATE}, which curation also leaves out \(excluded node\)"),
+            ("a node under a banner curation leaves out", {},
+             dict(exclude_banners=["CB OVERHEAD PANEL", "OVERHEAD PNEUMATIC PANEL"]),
+             rf"direct_positions names {self.ZONE}, which curation also leaves out \(excluded banner\)"),
+            ("a state var the knob's code never touches", {},
+             dict(direct_positions=self.entry(self.RATE, state_var=self.RATE + "_X")),
+             rf"{self.RATE}'s own vendor code never reads or writes {self.RATE}_X"),
+            ("another knob's state var", {}, dict(direct_positions=self.entry(self.RATE, state_var=self.FRAME)),
+             rf"{self.RATE}'s own vendor code never reads or writes {self.FRAME} "),
+            ("a levers entry too", {}, dict(levers={self.RATE: entry}), rf"direct_positions and levers both name: {self.RATE}"),
+            ("a guarded entry too", {}, dict(guarded=guarded), rf"direct_positions and guarded both name: {self.RATE}"),
+            ("a direct_write entry too", {}, dict(direct_write=[self.RATE]),
+             rf"direct_positions and direct_write both name: {self.RATE}"),
+            ("a kinds entry too", {}, dict(kinds={self.RATE: "toggle"}),
+             rf"direct_positions and kinds both name: {self.RATE}"),
+            ("a positions entry too", {}, dict(positions={self.RATE: ["MIN", "INDEX", "MAX"]}),
+             rf"direct_positions and positions both name: {self.RATE}"),
+        ]
+        for what, more, changes, message in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError, message):
+                    self.build({**self.rows(), **more}, **changes)
+        self.build()                                    # the entries pass each of them: alone,
+        self.build({**self.rows(), **extra})            # and with the extra rows
+
+    def test_the_state_var_is_checked_against_the_whole_component(self):
+        # The zone selector's row shows the derived ANIM_FRAME var; the var its click writes, the one to write, is KNOB_FRAME,
+        # which the extractor keeps with the component. A row without them (an extractor that kept none) cannot confirm any
+        # state var, and the entry is refused. A write is as good as a read, either confirms the var.
+        rows = self.rows()
+        rows[self.ZONE]["_component_vars"] = {"reads": [], "writes": [self.FRAME]}
+        self.build(rows)
+        rows[self.ZONE]["_component_vars"] = {"reads": [self.FRAME], "writes": []}
+        self.build(rows)
+
+        del rows[self.ZONE]["_component_vars"]
+        with self.assertRaisesRegex(g.CurationError, rf"{self.ZONE}'s own vendor code never reads or writes {self.FRAME} "
+                                                     r"\(its component reads no L:var and writes no L:var\)"):
+            self.build(rows)
+
+    def test_a_knob_no_cockpit_has_stops_the_run_unless_keep_without_node_names_it(self):
+        everything = set(self.rows())
+        both = g.Cockpit(pw=everything, rr=everything)
+        no_rate = g.Cockpit(pw=everything - {self.RATE}, rr=everything - {self.RATE})
+
+        m, _ = self.build(cockpit=both)
+        self.assertEqual({c["node"] for c in m["controls"]}, everything)
+        with self.assertRaisesRegex(g.CurationError, rf"direct_positions names {self.RATE}, which neither cockpit model has a "
+                                                     "node for"):
+            self.build(cockpit=no_rate)
+        m, report = self.build(cockpit=no_rate, keep_without_node=[self.RATE])
+        self.assertIn(self.RATE, {c["node"] for c in m["controls"]})
+        self.assertEqual(report["kept_without_node"], [self.RATE])
+        # one model's cockpit has it: it stays, and its label says whose
+        only_rr = g.Cockpit(pw=everything - {self.ADI}, rr=everything)
+        m, _ = self.build(cockpit=only_rr)
+        self.assertEqual({c["node"]: c["label"] for c in m["controls"]}[self.ADI], "Captain PFD (RR)")
+
+    # ---- the SHIPPED entries (plan 12 task 1): measured 2026-10-28 in docs/b757/evidence/flight-12.md and read from the
+    # package's code, written out here so that a change to them is a visible one ----
+    SCREEN_BANNER, ADI_BANNER = "MAIN BUTTONS AND CONTROL", "(after INDIVIDUAL AUDIO/RADIO PANELS)"
+    # The eight display brightness knobs: node -> (the var BlueBird's brightness code reads, the label). The PFD knobs are the
+    # ADI knobs (their click writes B757_PFD_1/2_SCREEN_KNOB); the nodes NAMED B757_PFD_x_SCREEN_KNOB write raster vars nothing reads.
+    SCREENS = {
+        "B757_ADI_1_LCD_KNOB": ("B757_PFD_1_SCREEN_KNOB", "Captain PFD"),
+        "B757_ADI_2_LCD_KNOB": ("B757_PFD_2_SCREEN_KNOB", "First Officer PFD"),
+        "B757_HSI_1_SCREEN_KNOB": ("B757_HSI_1_SCREEN_KNOB", "Captain ND"),
+        "B757_HSI_2_SCREEN_KNOB": ("B757_HSI_2_SCREEN_KNOB", "First Officer ND"),
+        "B757_EICAS_1_SCREEN_KNOB": ("B757_EICAS_1_SCREEN_KNOB", "Upper EICAS"),
+        "B757_EICAS_2_SCREEN_KNOB": ("B757_EICAS_2_SCREEN_KNOB", "Lower EICAS"),
+        "B757_FMC_1_SCREEN_KNOB": ("B757_FMC_1_SCREEN_KNOB", "Captain CDU"),
+        "B757_FMC_2_SCREEN_KNOB": ("B757_FMC_2_SCREEN_KNOB", "First Officer CDU"),
+    }
+    # 0 dims a display to its minimum (output = knob / 40 * 1.5, never below 0.1), it does not turn it off: no "Off"
+    BRIGHTNESS = [{"value": 0, "label": "Minimum"}, {"value": 20, "label": "Half"}, {"value": 40, "label": "Full"}]
+    # The zone selectors: node -> (the KNOB_FRAME var the systems read, never the derived ANIM_FRAME, the label)
+    ZONES = {
+        "B757_OVHD_SEL_pack_Cockpt": ("B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME", "Flight Deck Temperature"),
+        "B757_OVHD_SEL_pack_FWD_cab": ("B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME", "Forward Cabin Temperature"),
+        "B757_OVHD_SEL_pack_AFT_cab": ("B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME", "Aft Cabin Temperature"),
+    }
+    # The frame nearest each whole degree (the readback is 18 + (frame - 5) * 6 / 13 between frames 5 and 31; frames 0-2 and
+    # 34-35 read OFF; there is no AUTO)
+    ZONE_FRAMES = [(0, "OFF"), (5, "18 °C"), (7, "19 °C"), (9, "20 °C"), (12, "21 °C"),
+                   (14, "22 °C"), (16, "23 °C"), (18, "24 °C"), (20, "25 °C"), (22, "26 °C"),
+                   (25, "27 °C"), (27, "28 °C"), (29, "29 °C"), (31, "30 °C")]
+    # Auto Rate: 3.5 is the load value, and the systems use its whole number (3: a climb limit of 500 ft/min, a descent limit
+    # of 300; 0 is 50 and 30, 13 is 2,000 and 1,200)
+    RATE_POSITIONS = [{"value": 0, "label": "MIN"}, {"value": 3.5, "label": "INDEX"}, {"value": 13, "label": "MAX"}]
+
+    def shipped_entries(self):
+        entries = {self.RATE: {"state_var": self.RATE, "positions": self.RATE_POSITIONS}}
+        entries.update({node: {"state_var": var, "positions": self.BRIGHTNESS} for node, (var, _) in self.SCREENS.items()})
+        entries.update({node: {"state_var": var, "positions": [{"value": v, "label": l} for v, l in self.ZONE_FRAMES]}
+                        for node, (var, _) in self.ZONES.items()})
+        return entries
+
+    def test_the_shipped_curation_holds_the_twelve_entries_plan_12_fixed(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        self.assertEqual(c["direct_positions"], self.shipped_entries())
+        self.assertEqual([c["labels"][node] for node in self.SCREENS], [label for _, label in self.SCREENS.values()])
+        self.assertEqual([c["labels"][node] for node in self.ZONES], [label for _, label in self.ZONES.values()])
+        self.assertEqual(c["labels"][self.RATE], "Auto Rate", "it was Cabin Rate: BlueBird's own name for the knob")
+        # no other table speaks for a direct_positions control, and none leaves it out
+        for node in self.shipped_entries():
+            with self.subTest(node=node):
+                for table in ("positions", "kinds", "guarded", "levers"):
+                    self.assertNotIn(node, c[table])
+                for table in ("direct_write", "exclude_nodes", "include_nodes", "keep_without_node"):
+                    self.assertNotIn(node, c[table])
+        # the zone entries write the knob frame the systems read, never the animation frame they derive from it every tick
+        self.assertFalse([v["state_var"] for v in c["direct_positions"].values() if v["state_var"].endswith("_ANIM_FRAME")])
+
+    def test_the_shipped_curation_leaves_out_what_nothing_reads(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+        # The nodes NAMED B757_PFD_1/2_SCREEN_KNOB write BBS757_RASTER_BRIGHTNESS_CA/_FO, which nothing in the package reads;
+        # the weather radar knobs are read by no gauge and no code; the manual cabin altitude switch is spring-loaded and
+        # gets buttons (plan 12 task 3), so it stays excluded and has no row of its own.
+        left_out = ("B757_PFD_1_SCREEN_KNOB", "B757_PFD_2_SCREEN_KNOB", "B757_PED_WX_L_LARGE_SEL_KNOB",
+                    "B757_PED_WX_L_SMALL_SEL_KNOB", "B757_PED_WX_R_LARGE_SEL_KNOB", "B757_PED_WX_R_SMALL_SEL_KNOB",
+                    "B757_OVHD_CABINALT_SWITCH")
+        for node in left_out:
+            with self.subTest(node=node):
+                self.assertNotIn(node, c["direct_positions"])
+                self.assertNotIn(node, c["levers"])
+                self.assertNotIn(node, c["include_nodes"])
+        self.assertIn("B757_OVHD_CABINALT_SWITCH", c["exclude_nodes"])
+        self.assertNotIn("B757_OVHD_CABINALT_SWITCH", c["positions"])
+        self.assertNotIn("B757_OVHD_MID_CAB_TEMP_SEL_KNOB_FRAME", [v["state_var"] for v in c["direct_positions"].values()])
+
+    def test_the_zone_frames_are_the_nearest_to_each_whole_degree(self):
+        # 18 + (frame - 5) * 6 / 13 is the readback between frames 5 and 31 (measured: flight-12.md; BlueBird's WASM remaps
+        # 5..31 onto 18..30 degrees C). A half-way tie (21 and 27 degrees fall between two frames) takes the higher frame.
+        frames = dict(self.ZONE_FRAMES)
+        self.assertEqual(frames[0], "OFF")
+        for frame, label in self.ZONE_FRAMES[1:]:
+            with self.subTest(label=label):
+                degrees = int(label.split()[0])
+                self.assertEqual(frame, int(5 + (degrees - 18) * 13 / 6 + 0.5))
+                self.assertLess(abs(18 + (frame - 5) * 6 / 13 - degrees), 0.24)
+        self.assertEqual([int(label.split()[0]) for _, label in self.ZONE_FRAMES[1:]], list(range(18, 31)),
+                         "one position for each whole degree from 18 to 30")
+
+    def test_the_shipped_curation_places_the_knobs(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        for node in self.SCREENS:
+            banner = self.ADI_BANNER if node.startswith("B757_ADI_") else self.SCREEN_BANNER
+            with self.subTest(node=node):
+                self.assertEqual(g.panel_of(row(node=node, panel=banner), c), ("Display brightness", "Forward panel"))
+        self.assertEqual(g.panel_of(row(node=self.RATE, panel="PRESSURIZATION CONTROL PANEL"), c), ("Pressurization", "Overhead"))
+        for node in self.ZONES:
+            with self.subTest(node=node):
+                self.assertEqual(g.panel_of(row(node=node, panel="OVERHEAD PNEUMATIC PANEL"), c),
+                                 ("Air conditioning and bleed", "Overhead"))
+        # the panel is last in the Forward panel (set once in preflight); the EFIS knobs of the same ADI prefix keep their panels
+        self.assertEqual(c["panel_order"]["Forward panel"][-1], "Display brightness")
+        self.assertEqual(g.panel_of(row(node="B757_ADI_1_CTR_KNOB", panel=self.ADI_BANNER), c), ("Captain EFIS", "Forward panel"))
+        self.assertEqual(g.panel_of(row(node="B757_ADI_2_TFC_KNOB", panel=self.ADI_BANNER), c),
+                         ("First officer EFIS", "Forward panel"))
+
+    def test_the_embedded_map_holds_auto_rate_the_brightness_knobs_and_the_zone_selectors(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            m = json.load(fh)
+        by_node = {c["node"]: c for c in m["controls"]}
+        expected = {self.RATE: ("Overhead", "Pressurization", "Auto Rate", self.RATE, self.RATE_POSITIONS)}
+        expected.update({node: ("Forward panel", "Display brightness", label, var, self.BRIGHTNESS)
+                         for node, (var, label) in self.SCREENS.items()})
+        expected.update({node: ("Overhead", "Air conditioning and bleed", label, var,
+                                [{"value": v, "label": l} for v, l in self.ZONE_FRAMES])
+                         for node, (var, label) in self.ZONES.items()})
+
+        for node, (section, panel, label, var, positions) in expected.items():
+            with self.subTest(node=node):
+                x = by_node[node]
+                self.assertEqual((x["kind"], x["section"], x["panel"], x["label"], x["state_var"], x["positions"]),
+                                 ("switch", section, panel, label, var, positions))
+                self.assertEqual([x[f] for f in self.CLICK_FIELDS], [None] * 4,
+                                 "a direct_positions row never carries click code")
+                self.assertEqual(x["hold_ms"], 0)
+                self.assertNotIn("guard", x)
+        # nothing else of the three is in the map: the raster knobs, the weather radar and the spring-loaded switch have no row
+        for node in ("B757_PFD_1_SCREEN_KNOB", "B757_PFD_2_SCREEN_KNOB", "B757_PED_WX_L_LARGE_SEL_KNOB",
+                     "B757_PED_WX_R_SMALL_SEL_KNOB", "B757_OVHD_CABINALT_SWITCH"):
+            self.assertNotIn(node, by_node)
+        self.assertFalse([x["node"] for x in m["controls"] if (x["state_var"] or "").endswith("_ANIM_FRAME")])
+        self.assertEqual([c["panel"] for c in m["controls"] if c["section"] == "Forward panel"][-1], "Display brightness",
+                         "the panel comes last in the Forward panel")
+        # the Status panel's Cabin Altitude row reads the feet BlueBird's WASM writes
+        self.assertEqual([s["key"] for s in m["status"] if s["label"] == "Cabin Altitude"], ["B757_TEST_CABIN_ALT"])
+
+    def test_the_key_is_explained_and_its_evidence_is_in_the_notes(self):
+        with open(g.DEFAULT_CURATION, encoding="utf-8-sig") as fh:
+            notes = "\n".join(json.load(fh)["_notes"])
+
+        # the key is explained where the others are, and says what it does NOT check
+        self.assertRegex(notes, r"direct_positions: node -> \{state_var, positions\}")
+        self.assertRegex(notes, r"direct_positions: .*not checked against the (range|clamp)")
+        # the task's note: the evidence for each row, from the measurements and from the package's code
+        self.assertRegex(notes, r"PLAN 12 TASK 1 .*docs/b757/evidence/flight-12\.md")
+        for word in ("B757_OVHD_AUTORATE_SWITCH", "INDEX", "B757_ADI_1_LCD_KNOB", "BBS757_RASTER_BRIGHTNESS_CA",
+                     "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME", "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_ANIM_FRAME",
+                     "B757_PED_WX_L_LARGE_SEL_KNOB", "XML:10153", "XML:11577", "XML:18856", "XML:10423"):
+            with self.subTest(word=word):
+                self.assertRegex(notes, rf"PLAN 12 TASK 1 .*{re.escape(word)}")
+        # the manual cabin altitude switch stays excluded, and its note says why (spring-loaded) instead of "revisit"
+        self.assertRegex(notes, r"B757_OVHD_CABINALT_SWITCH is excluded.*spring-loaded")
+        self.assertNotIn("revisit in the sim", notes)
 
 
 class CockpitPresence(unittest.TestCase):
@@ -2528,6 +2937,39 @@ class Curation(unittest.TestCase):
                 with self.assertRaisesRegex(g.CurationError, r"levers(\[| must be)"):   # not "unknown key(s) levers"
                     g.load_curation(self.write({"levers": data}))
 
+    DIRECT_POSITIONS_ENTRY = {"state_var": "B757_X",
+                              "positions": [{"value": 0, "label": "Minimum"}, {"value": 40, "label": "Full"}]}
+
+    def test_the_direct_positions_key_loads_as_a_dict_and_defaults_to_empty(self):
+        self.assertEqual(g.load_curation(self.write({}))["direct_positions"], {})
+        entry = copy.deepcopy(self.DIRECT_POSITIONS_ENTRY)
+        self.assertEqual(g.load_curation(self.write({"direct_positions": {"B757_X": entry}}))["direct_positions"],
+                         {"B757_X": entry})
+        # a fractional value is a position like any other: Auto Rate's load value, its INDEX, is 3.5
+        index = dict(entry, positions=[{"value": 0, "label": "MIN"}, {"value": 3.5, "label": "INDEX"},
+                                       {"value": 13, "label": "MAX"}])
+        self.assertEqual(g.load_curation(self.write({"direct_positions": {"B757_X": index}}))["direct_positions"],
+                         {"B757_X": index})
+
+    def test_a_direct_positions_entry_that_is_not_whole_is_refused(self):
+        # A state var and at least two positions with their values (the same form as levers), the values rising and each
+        # label its own and not empty: the app writes the picked value, so a repeated value could not tell its two labels
+        # apart.
+        entry = self.DIRECT_POSITIONS_ENTRY
+        low, high = {"value": 0, "label": "Minimum"}, {"value": 40, "label": "Full"}
+        bad = [["B757_X"], {"B757_X": "knob"}, {"B757_X": {}}, {"B757_X": dict(entry, extra=1)}]
+        bad += [{"B757_X": {k: v for k, v in entry.items() if k != field}} for field in entry]
+        bad += [{"B757_X": dict(entry, positions=positions)} for positions in (
+            [], "Minimum", [low], ["Minimum", "Full"], [low, {"value": 40}], [low, {"label": "Full"}],
+            [low, dict(high, extra=1)], [low, {"value": "40", "label": "Full"}], [low, {"value": True, "label": "Full"}],
+            [low, dict(high, label="")], [low, dict(high, label=1)], [low, dict(high, value=0)], [high, low],
+            [low, dict(high, label="minimum")])]
+        bad += [{"B757_X": dict(entry, state_var=state_var)} for state_var in ("", None, 1)]
+        for data in bad:
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(g.CurationError, r"direct_positions(\[| must be)"):   # not "unknown key(s)"
+                    g.load_curation(self.write({"direct_positions": data}))
+
     def test_the_direct_write_key_loads_as_a_list_and_defaults_to_empty(self):
         self.assertEqual(g.load_curation(self.write({}))["direct_write"], [])
         c = g.load_curation(self.write({"direct_write": ["B757_X", "B757_Y"]}))
@@ -3123,10 +3565,11 @@ class Curation(unittest.TestCase):
                      "Air conditioning and bleed", "Cabin lights", "IRS keypad", "Switch guards", "Flight deck door",
                      "CVR", "SELCAL and cabin call", "Ground service", "Warning lights test"],
         "Glareshield": ["MCP", "VOR/DME", "Master warning and caution"],
+        # plan 12 task 1: the display brightness knobs are set once in preflight, so their panel is last
         "Forward panel": ["Main panel switches", "Landing gear", "Captain EFIS", "Yokes", "Captain autoland status",
                           "Standby attitude indicator", "Captain DDRMI", "Captain chronometer", "Oxygen",
                           "Cockpit miscellaneous", "First officer EFIS", "First officer autoland status",
-                          "First officer DDRMI", "First officer chronometer"],
+                          "First officer DDRMI", "First officer chronometer", "Display brightness"],
         # no ADF panel: its five switches have no node in either cockpit model (plan 02 task 5), so nothing is left on it
         "Pedestal": ["Control stand", "Engines", "TCAS and transponder", "EICAS control", "Radio tuning panel 1",
                      "Audio panel 1", "Fire protection", "Stabilizer trim", "Weather radar left",
@@ -3452,6 +3895,45 @@ def write_lever_package(root):
     return pkg
 
 
+# The vendor's Auto Rate knob and the captain's ADI brightness knob, trimmed (BBS_752_BASE_INTERIOR.xml:10153-10172 and
+# 18856-18867): finite knobs of 131 and 31 positions, which the rules leave out. The ADI knob's node is named for the
+# instrument, but the var its animation shows and its click writes is the one BlueBird's brightness code reads.
+DIRECT_INTERIOR = """<?xml version="1.0"?>
+<ModelInfo><Behaviors>
+<!-- ======== PRESSURIZATION CONTROL PANEL ======== -->
+<Component ID="B757_OVHD_AUTORATE_SWITCH" Node="B757_OVHD_AUTORATE_SWITCH">
+  <UseTemplate Name="ASOBO_GT_Knob_Finite_Code">
+    <ANIM_NAME>B757_OVHD_AUTORATE_SWITCH</ANIM_NAME>
+    <ANIM_CODE>(L:B757_OVHD_AUTORATE_SWITCH, enum) 1 *</ANIM_CODE>
+    <ANIM_LENGTH>13</ANIM_LENGTH>
+    <CLOCKWISE_CODE>(L:B757_OVHD_AUTORATE_SWITCH, enum) 0.1 + 13 min (&gt;L:B757_OVHD_AUTORATE_SWITCH, enum)</CLOCKWISE_CODE>
+    <ANTICLOCKWISE_CODE>(L:B757_OVHD_AUTORATE_SWITCH, enum) 0.1 - 0 max (&gt;L:B757_OVHD_AUTORATE_SWITCH, enum)</ANTICLOCKWISE_CODE>
+  </UseTemplate>
+</Component>
+<!-- ======== (after INDIVIDUAL AUDIO/RADIO PANELS) ======== -->
+<Component ID="B757_ADI_1_LCD_KNOB" Node="B757_ADI_1_LCD_KNOB">
+  <UseTemplate Name="ASOBO_GT_Knob_Finite_Code">
+    <ANIM_NAME>B757_ADI_1_LCD_KNOB</ANIM_NAME>
+    <ANIM_CODE>(L:B757_PFD_1_SCREEN_KNOB)</ANIM_CODE>
+    <ANIM_LENGTH>30</ANIM_LENGTH>
+    <CLOCKWISE_CODE>(L:B757_PFD_1_SCREEN_KNOB) ++ 30 min (&gt;L:B757_PFD_1_SCREEN_KNOB)</CLOCKWISE_CODE>
+    <ANTICLOCKWISE_CODE>(L:B757_PFD_1_SCREEN_KNOB) -- 0 max (&gt;L:B757_PFD_1_SCREEN_KNOB)</ANTICLOCKWISE_CODE>
+  </UseTemplate>
+</Component>
+</Behaviors></ModelInfo>
+"""
+
+DIRECT_NODES = ("B757_OVHD_AUTORATE_SWITCH", "B757_ADI_1_LCD_KNOB")
+
+
+def write_direct_package(root):
+    """write_package's package, its interior replaced by DIRECT_INTERIOR and both cockpit models holding the two knobs."""
+    pkg = write_package(root)
+    (pkg / "SimObjects" / "Airplanes" / "a" / "model" / "interior.xml").write_text(DIRECT_INTERIOR, encoding="utf-8")
+    write_cockpit_models(pkg, pw=DIRECT_NODES, rr=DIRECT_NODES)
+    return pkg
+
+
 def write_presence_package(root, nodes, pw, rr):
     """write_package's package, its interior replaced by one switch per node of `nodes` (each flips its own L:var), and its
     cockpit models by two that hold the node names `pw` and `rr`: a node in one list, in both or in neither."""
@@ -3701,6 +4183,57 @@ class Extractor(unittest.TestCase):
         self.assertNotRegex(printed, r"\d\s+lever\n", "a lever taken in is not counted as dropped")
         self.assertRegex(str(stopped.exception), rf"^curation: curation levers: {gear}'s own vendor code never reads or "
                                                  r"writes B757_GEAR_HANDLE_POSITION")
+
+    def test_direct_positions_from_the_package_are_emitted_without_click_code_and_the_run_names_them(self):
+        # The vendor's own XML for two of the knobs through the extractor, the generator and its printed report.
+        rate, adi, pfd = "B757_OVHD_AUTORATE_SWITCH", "B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB"
+        entries = {
+            rate: {"state_var": rate, "positions": [{"value": 0, "label": "MIN"}, {"value": 3.5, "label": "INDEX"},
+                                                    {"value": 13, "label": "MAX"}]},
+            adi: {"state_var": pfd, "positions": [{"value": 0, "label": "Minimum"}, {"value": 20, "label": "Half"},
+                                                  {"value": 40, "label": "Full"}]},
+        }
+        base = {"panels": {"PRESSURIZATION CONTROL PANEL": "Pressurization"},
+                "node_panels": [{"prefix": adi, "panel": "Display brightness", "section": "Forward panel"}],
+                "labels": {rate: "Auto Rate", adi: "Captain PFD"}}
+        wrong = {**entries, adi: dict(entries[adi], state_var=pfd + "S")}
+        why = "rotary knob finite with more than 12 positions"
+        with tempfile.TemporaryDirectory() as d:
+            pkg = write_direct_package(d)
+            out = os.path.join(d, "out", "map.json")
+            cur_path = os.path.join(d, "curation.json")
+
+            def run(data):
+                with open(cur_path, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                    g.main([str(pkg), "--out", out, "--curation", cur_path])
+                with open(out, encoding="utf-8") as fh:
+                    return json.load(fh)["controls"], stdout.getvalue()
+
+            bare, printed_bare = run(base)
+            controls, printed = run(dict(base, direct_positions=entries))
+            with self.assertRaises(SystemExit) as stopped:
+                run(dict(base, direct_positions=wrong))
+
+        self.assertEqual(bare, [], "without the entry the rules leave both knobs out")
+        self.assertRegex(printed_bare, r"direct positions\s+: 0 ")
+        self.assertRegex(printed_bare, rf"2\s+{why}\n")
+        by_node = {c["node"]: c for c in controls}
+        self.assertEqual(sorted(by_node), sorted((rate, adi)))
+        for node, (panel, section, label) in ((rate, ("Pressurization", "Overhead", "Auto Rate")),
+                                              (adi, ("Display brightness", "Forward panel", "Captain PFD"))):
+            c = by_node[node]
+            self.assertEqual((c["kind"], c["panel"], c["section"], c["label"], c["state_var"], c["positions"]),
+                             ("switch", panel, section, label, entries[node]["state_var"], entries[node]["positions"]))
+            self.assertEqual([c[f] for f in ("press", "release", "cw", "ccw")], [None] * 4)
+        self.assertRegex(printed, r"direct positions\s+: 2 ")
+        for node in (rate, adi):
+            self.assertIn(f"{node}: taken in (the rules alone leave it out: {why})", printed)
+        self.assertNotRegex(printed, rf"\d\s+{why}\n", "a knob taken in is not counted as dropped")
+        self.assertRegex(str(stopped.exception), rf"^curation: curation direct_positions: {adi}'s own vendor code never reads "
+                                                 rf"or writes {pfd}S")
 
 
 class RpnReplay(unittest.TestCase):

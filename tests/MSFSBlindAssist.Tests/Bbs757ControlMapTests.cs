@@ -243,7 +243,7 @@ public class Bbs757ControlMapTests
     [Theory]
     [InlineData("Overhead", "Electrical|APU|IRS|Engine control and yaw damper|Hydraulics|Overhead miscellaneous|Fuel|Anti-ice|Wipers|Exterior lights|Window heat|Passenger signs|Pressurization|Air conditioning and bleed|Cabin lights|IRS keypad|Switch guards|Flight deck door|CVR|SELCAL and cabin call|Ground service|Warning lights test")]
     [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
-    [InlineData("Forward panel", "Main panel switches|Landing gear|Captain EFIS|Yokes|Captain autoland status|Standby attitude indicator|Captain DDRMI|Captain chronometer|Oxygen|Cockpit miscellaneous|First officer EFIS|First officer autoland status|First officer DDRMI|First officer chronometer")]
+    [InlineData("Forward panel", "Main panel switches|Landing gear|Captain EFIS|Yokes|Captain autoland status|Standby attitude indicator|Captain DDRMI|Captain chronometer|Oxygen|Cockpit miscellaneous|First officer EFIS|First officer autoland status|First officer DDRMI|First officer chronometer|Display brightness")]
     [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|EICAS control|Radio tuning panel 1|Audio panel 1|Fire protection|Stabilizer trim|Weather radar left|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|Weather radar right|Pedestal radio panels")]
     [InlineData("Other", "P61 panel")]
     public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
@@ -894,6 +894,163 @@ public class Bbs757ControlMapTests
         Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(gear, 0, 0.75).Outcome);
         Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(flaps, 0, 20).Outcome);
         Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(gear, null, 0.5).Outcome);   // nothing delivered
+    }
+
+    // ---- Plan 12, task 1: the knobs the rules leave out and a combo can drive (the generator's direct_positions) ----
+
+    private static void AssertNoClickCode(Bbs757Control c)
+    {
+        // A direct_positions row never carries click code: the generic path writes the state var to the picked position.
+        Assert.Null(c.Press);
+        Assert.Null(c.Release);
+        Assert.Null(c.Cw);
+        Assert.Null(c.Ccw);
+        Assert.Equal(0, c.HoldMs);
+        Assert.Null(c.Guard);
+        Assert.False(Bbs757Write.IsMomentary(c));
+        Assert.True(Bbs757Write.HasReadableState(c));
+    }
+
+    private static IReadOnlyList<string> WritesFor(Bbs757Control c, double? current, double target)
+    {
+        Bbs757WritePlan plan = Bbs757Write.ToPosition(c, current, target);
+        Assert.Equal(Bbs757WriteOutcome.Writes, plan.Outcome);
+        return plan.Calls;
+    }
+
+    [Fact]
+    public void Auto_Rate_is_a_switch_on_its_own_var_named_MIN_INDEX_MAX_and_writes_3_5_whatever_the_culture()
+    {
+        // 3.5 is the knob's load value; BlueBird's code uses its whole number (3: a climb limit of 500 ft/min and a descent
+        // limit of 300; 0 is 50 and 30, 13 is 2,000 and 1,200), so INDEX at 3.5 shows the load value as what it acts as. The
+        // rules dropped the knob (131 positions of 0.1); curation's direct_positions takes it in (docs/b757/evidence/flight-12.md).
+        const string stateVar = "B757_OVHD_AUTORATE_SWITCH";
+        Bbs757Control rate = Find("B757_OVHD_AUTORATE_SWITCH");
+
+        Assert.Equal(("Auto Rate", "Overhead", "Pressurization", Bbs757Kinds.Switch, stateVar),
+            (rate.Label, rate.Section, rate.Panel, rate.Kind, rate.StateVar));
+        Assert.Equal(new[] { (0d, "MIN"), (3.5, "INDEX"), (13d, "MAX") }, Pairs(rate));
+        AssertNoClickCode(rate);
+
+        Assert.Equal(new[] { $"3.5 (>L:{stateVar})" }, WritesFor(rate, 0, 3.5));
+        Assert.Equal(new[] { $"13 (>L:{stateVar})" }, WritesFor(rate, 3.5, 13));
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, WritesFor(rate, 3.5, 0));
+        Assert.Equal(new[] { $"3.5 (>L:{stateVar})" }, WritesFor(rate, 3.7, 3.5));   // a cockpit click left it between: still written
+        // The INDEX write under a comma-decimal culture (CI runs under en-US): "3.5", never "3,5".
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+        {
+            Assert.Equal(new[] { $"3.5 (>L:{stateVar})" }, TestCulture.Run(culture, () => WritesFor(rate, 13, 3.5)));
+            Assert.Equal(new[] { $"3.5 (>L:{stateVar})" }, TestCulture.Run(culture, () => WritesFor(rate, 0, 3.5)));
+        }
+        // A knob already at its pick is left alone, and a value that is no position is never picked.
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(rate, 3.5, 3.5).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(rate, 0, 4).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(rate, null, 3.5).Outcome);   // nothing delivered
+    }
+
+    [Theory]
+    [InlineData("B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB", "Captain PFD")]
+    [InlineData("B757_ADI_2_LCD_KNOB", "B757_PFD_2_SCREEN_KNOB", "First Officer PFD")]
+    [InlineData("B757_HSI_1_SCREEN_KNOB", "B757_HSI_1_SCREEN_KNOB", "Captain ND")]
+    [InlineData("B757_HSI_2_SCREEN_KNOB", "B757_HSI_2_SCREEN_KNOB", "First Officer ND")]
+    [InlineData("B757_EICAS_1_SCREEN_KNOB", "B757_EICAS_1_SCREEN_KNOB", "Upper EICAS")]
+    [InlineData("B757_EICAS_2_SCREEN_KNOB", "B757_EICAS_2_SCREEN_KNOB", "Lower EICAS")]
+    [InlineData("B757_FMC_1_SCREEN_KNOB", "B757_FMC_1_SCREEN_KNOB", "Captain CDU")]
+    [InlineData("B757_FMC_2_SCREEN_KNOB", "B757_FMC_2_SCREEN_KNOB", "First Officer CDU")]
+    public void Each_display_brightness_knob_writes_the_var_BlueBirds_brightness_code_reads(string node, string stateVar, string label)
+    {
+        // BlueBird's code sets a display's output to knob / 40 * 1.5, never below 0.1 (measured, flight-12.md): 0 dims the
+        // display to its minimum and does not turn it off, so there is no Off. 40 is every knob's load value. The cockpit's
+        // mouse stops at 30 (20 on the F/O ADI knob), but the code takes 0-40. The PFD knobs are the ADI knobs: the nodes
+        // NAMED B757_PFD_x_SCREEN_KNOB write raster vars nothing reads and have no row.
+        Bbs757Control knob = Find(node);
+
+        Assert.Equal((label, "Forward panel", "Display brightness", Bbs757Kinds.Switch, stateVar),
+            (knob.Label, knob.Section, knob.Panel, knob.Kind, knob.StateVar));
+        Assert.Equal(new[] { (0d, "Minimum"), (20d, "Half"), (40d, "Full") }, Pairs(knob));
+        Assert.DoesNotContain(knob.Positions, p => p.Label.Contains("Off", StringComparison.OrdinalIgnoreCase));
+        AssertNoClickCode(knob);
+
+        Assert.Equal(new[] { $"40 (>L:{stateVar})" }, WritesFor(knob, 0, 40));
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, WritesFor(knob, 40, 0));
+        Assert.Equal(new[] { $"20 (>L:{stateVar})" }, WritesFor(knob, 30, 20));   // where the mouse stops: still written
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(knob, 40, 40).Outcome);
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(knob, 40, 30).Outcome);   // 30 is no position
+    }
+
+    [Fact]
+    public void The_display_brightness_panel_holds_the_eight_knobs_and_comes_last_on_the_forward_panel()
+    {
+        var knobs = Map.Controls.Where(c => c.Panel == "Display brightness").ToList();
+
+        Assert.All(knobs, c => Assert.Equal("Forward panel", c.Section));
+        // The set, not an order: the order of a panel's controls is plan 12 task 4's.
+        Assert.Equal(
+            new[]
+            {
+                "Captain CDU", "Captain ND", "Captain PFD", "First Officer CDU", "First Officer ND", "First Officer PFD",
+                "Lower EICAS", "Upper EICAS",
+            },
+            knobs.Select(c => c.Label).OrderBy(l => l, StringComparer.Ordinal));
+        Assert.Equal("Display brightness", Map.Controls.Where(c => c.Section == "Forward panel").Select(c => c.Panel).Distinct().Last());
+    }
+
+    [Theory]
+    [InlineData("B757_OVHD_SEL_pack_Cockpt", "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME", "Flight Deck Temperature")]
+    [InlineData("B757_OVHD_SEL_pack_FWD_cab", "B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME", "Forward Cabin Temperature")]
+    [InlineData("B757_OVHD_SEL_pack_AFT_cab", "B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME", "Aft Cabin Temperature")]
+    public void Each_zone_temperature_selector_writes_the_knob_frame_and_names_a_whole_degree(string node, string stateVar, string label)
+    {
+        // The readback is 18 + (frame - 5) * 6 / 13 degrees C between frames 5 and 31 (frames 0-2 and 34-35 read OFF; there is no
+        // AUTO). The knob's *_ANIM_FRAME var is derived from the *_KNOB_FRAME var every tick, so only the latter is written.
+        Bbs757Control zone = Find(node);
+
+        Assert.Equal((label, "Overhead", "Air conditioning and bleed", Bbs757Kinds.Switch, stateVar),
+            (zone.Label, zone.Section, zone.Panel, zone.Kind, zone.StateVar));
+        Assert.Equal(
+            "0=OFF|5=18 °C|7=19 °C|9=20 °C|12=21 °C|14=22 °C|16=23 °C|18=24 °C|20=25 °C|22=26 °C"
+            + "|25=27 °C|27=28 °C|29=29 °C|31=30 °C",
+            Spell(zone));
+        AssertNoClickCode(zone);
+        // each frame is the one nearest the whole degree it names
+        foreach (Bbs757Position p in zone.Positions.Skip(1))
+        {
+            double degrees = double.Parse(p.Label.Split(' ')[0], CultureInfo.InvariantCulture);
+            Assert.InRange(Math.Abs(18 + (p.Value - 5) * 6.0 / 13 - degrees), 0, 0.24);
+        }
+
+        Assert.Equal(new[] { $"18 (>L:{stateVar})" }, WritesFor(zone, 5, 18));      // 24 degrees C
+        Assert.Equal(new[] { $"0 (>L:{stateVar})" }, WritesFor(zone, 18, 0));       // OFF
+        Assert.Equal(new[] { $"31 (>L:{stateVar})" }, WritesFor(zone, 13, 31));      // a reading between positions: still written
+        Assert.Equal(Bbs757WriteOutcome.Refused, Bbs757Write.ToPosition(zone, 18, 3).Outcome);   // 3 reads 18 degrees but is not a pick
+    }
+
+    [Fact]
+    public void Nothing_writes_a_var_BlueBirds_code_derives_or_nothing_reads_and_the_dead_knobs_have_no_row()
+    {
+        // The zone knobs' *_ANIM_FRAME vars are overwritten from the *_KNOB_FRAME vars every tick; BBS757_RASTER_BRIGHTNESS_CA/_FO
+        // have no reader in the package.
+        Assert.DoesNotContain(Map.Controls, c => c.StateVar != null
+            && (c.StateVar.EndsWith("_ANIM_FRAME", StringComparison.Ordinal)
+                || c.StateVar.StartsWith("BBS757_RASTER_BRIGHTNESS", StringComparison.Ordinal)));
+        // The nodes named B757_PFD_1/2_SCREEN_KNOB write those raster vars; the weather radar knobs are read by no gauge and no
+        // code; the manual cabin altitude switch is spring-loaded and gets buttons (plan 12 task 3), not a row of positions.
+        Assert.DoesNotContain(Map.Controls, c => c.Node is "B757_PFD_1_SCREEN_KNOB" or "B757_PFD_2_SCREEN_KNOB"
+            or "B757_PED_WX_L_LARGE_SEL_KNOB" or "B757_PED_WX_L_SMALL_SEL_KNOB" or "B757_PED_WX_R_LARGE_SEL_KNOB"
+            or "B757_PED_WX_R_SMALL_SEL_KNOB" or "B757_OVHD_CABINALT_SWITCH");
+    }
+
+    [Fact]
+    public void The_four_DDRMI_switches_are_the_toggles_they_were()
+    {
+        // Plan 12 task 1 changes nothing here: the map already held all four (0 VOR, 1 ADF) and their click code works
+        // through the calculator, the first officer's right one's stray closing brace included (measured, flight-12.md).
+        foreach (string stateVar in new[] { "BBS_DDRMI_LEFT", "BBS_DDRMI_RIGHT", "BBS_DDRMI_LEFT_FO", "BBS_DDRMI_RIGHT_FO" })
+        {
+            Bbs757Control s = Assert.Single(Map.Controls, c => c.StateVar == stateVar);
+            Assert.Equal(Bbs757Kinds.Toggle, s.Kind);
+            Assert.False(string.IsNullOrWhiteSpace(s.Press));
+        }
     }
 
     [Fact]

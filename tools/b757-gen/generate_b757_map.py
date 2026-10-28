@@ -13,7 +13,8 @@ own click code as RPN, to be replayed through the MobiFlight calculator path.
                 state_var: the L:var read back (null when the control keeps no L:var state: a button)
                 press / release / cw / ccw: RPN, null when the control has none; a switch with no click code
                 (the sim's own 3-state template), whose click code curation leaves out ("direct_write") or that
-                curation builds from a "levers" entry, has all four null and is written through state_var
+                curation builds from a "levers" or a "direct_positions" entry, has all four null and is written
+                through state_var
                 guard, guard_closed, close_sets: on a guarded control only (curation's "guarded"): the node of the
                 guard that covers it, the value that guard reads while closed and the value closing it writes to the
                 control (null when closing leaves the control alone). A guarded control has no click code at all.
@@ -32,13 +33,14 @@ What is derived and what is curated (curation.json):
             (guarded: a switch whose click only runs while a guard is open), the switches whose click code is left
             out (direct_write: a lever whose code cannot take a pick where it aims), the levers the rules leave out
             and the pilot needs (levers: the gear lever and the flap lever, drag handles BlueBird publishes the
-            detents of), the nodes kept although no cockpit model has them (keep_without_node), the status rows, and
-            the ORDER the pilot tabs through: the panels of a section (panel_order) and the controls of a panel
-            (control_order). A curated label, position list, kind, guarded, levers, direct_write or keep_without_node
-            entry, exclusion or inclusion for a node the package does not have is an error (a stale entry never
-            hides); so is a kind or an inclusion that does nothing, and so is an order that names a panel or a node
-            that is not there. A kind only re-reads a control the rules keep: for one they drop it changes nothing and
-            is only reported.
+            detents of), the knobs the rules leave out and a combo can drive (direct_positions: Auto Rate, the zone
+            temperature selectors, the display brightness knobs), the nodes kept although no cockpit model has them
+            (keep_without_node), the status rows, and the ORDER the pilot tabs through: the panels of a section
+            (panel_order) and the controls of a panel (control_order). A curated label, position list, kind, guarded,
+            levers, direct_positions, direct_write or keep_without_node entry, exclusion or inclusion for a node the
+            package does not have is an error (a stale entry never hides); so is a kind or an inclusion that does
+            nothing, and so is an order that names a panel or a node that is not there. A kind only re-reads a control
+            the rules keep: for one they drop it changes nothing and is only reported.
             The vendor's tooltip titles and toggle tips are never labels: the vendor copied them between controls.
   cockpit   BlueBird ships six interior models: a PW and an RR cockpit, each with an AWE and a no-cab variant. They agree
             on every control node today, and a control can be clicked only where a node of its name is in the model. The
@@ -54,9 +56,10 @@ What is derived and what is curated (curation.json):
             list proves one, and the run names each. An entry for a node the package does not have, that a model has,
             that curation also excludes or that the rules leave out for another reason is an error. No curation entry
             brings back a control no cockpit has, whatever the other rules make of it (their reason comes before the
-            cockpit's): a guarded, a levers or an include_nodes entry for one stops the run, a kind, label or positions
-            entry for one changes nothing and is only reported, and an order or a direct_write entry that names it, or
-            an order that names a panel the drop emptied, is a stale one. Only keep_without_node keeps such a control.
+            cockpit's): a guarded, a levers, a direct_positions or an include_nodes entry for one stops the run, a kind,
+            label or positions entry for one changes nothing and is only reported, and an order or a direct_write entry
+            that names it, or an order that names a panel the drop emptied, is a stale one. Only keep_without_node keeps
+            such a control.
             A panel with no control left is not in the map (panels exist only through their controls).
   order     the map's order IS the order the app's panels, and their controls, come in. Sections keep SECTIONS'
             order. A panel in panel_order comes first, in the listed order; the panels not listed follow
@@ -107,6 +110,26 @@ What is derived and what is curated (curation.json):
             node the pilot grabs never mentions), and every position must lie in the range the lever's own code
             clamps to, where the extractor found one (the flap lever's 0..150). A node also under guarded,
             direct_write, kinds or positions is an error: the entry holds all the lever has.
+  direct_positions  a knob the rules leave out and a combo can drive: the pressurization Auto Rate knob (0.1 a click, 131
+            positions), the three zone temperature selectors (an infinite knob that wraps) and the eight display
+            brightness knobs (30 or 20 clicks). The rules drop a finite knob with more than 12 positions and every
+            infinite knob, and a pick by click steps would take dozens of clicks. The entry is the form of "levers": the
+            state var the systems read and the positions to pick WITH their values, [{value, label}], and the control is
+            built as a switch with no click code: press, release, cw and ccw are empty, and the app writes the state var
+            to the picked position, as it does for any switch with none. Nothing of the vendor's click code is kept, so
+            the positions are NOT held to the clamp in that code: the cockpit mouse stops the brightness knobs at 30 (20
+            on the F/O ADI knob) and Auto Rate at 13, but BlueBird's systems take 0-40 for the brightness (measured:
+            docs/b757/evidence/flight-12.md; 40 is every knob's load value). An entry takes in only a row the rules leave
+            out as a knob whose positions they cannot list ("rotary knob infinite", "rotary knob finite with more than 12
+            positions" or "rotary knob finite without positions"), and the run names each; it never overrides curation's
+            own exclusions (a knob under an excluded banner needs an include_nodes entry as well), and a node the rules
+            keep (use positions or direct_write for it), leave out for another reason (a lever: use levers) or no
+            cockpit has is an error. The entry is checked against the vendor's code, so that a mistyped var or a change
+            of BlueBird's stops the run instead of reaching the app: the state var must be one that the knob's whole
+            component reads or writes (the extractor's _component_vars: a zone selector's row shows the derived
+            ..._ANIM_FRAME var while its click writes the ..._KNOB_FRAME var the systems read; the ADI knobs' click
+            writes B757_PFD_1_SCREEN_KNOB, the var BlueBird's brightness code reads for the PFD). A node also under
+            levers, guarded, direct_write, kinds or positions is an error: the entry holds all the knob has.
 
 press / release / cw / ccw are the cockpit's own click code, VERBATIM: the app replays exactly what a click in the
 cockpit runs, so a slip the cockpit has stays a slip in the replay (a guarded, direct_write or levers control has none).
@@ -114,10 +137,10 @@ Code that looks like a slip (a set without its 'L:', a closing brace nothing ope
 suspected_slips; nothing is changed.
 
 Dropped, and counted in the printed report: circuit breakers, CDU keys, levers (but curation's levers takes some in),
-infinite knobs, finite knobs with more than 12 positions, anything in an excluded banner or node (but an include_nodes
-node under an excluded banner is kept), controls with no click code or whose state is not an L:var, controls the
-cockpit does not have (no node in either interior model: "no cockpit node", named in the report), and the second row of
-a node the interior files repeat (the PW and RR variants).
+infinite knobs, finite knobs with more than 12 positions (but curation's direct_positions takes some of both in),
+anything in an excluded banner or node (but an include_nodes node under an excluded banner is kept), controls with no
+click code or whose state is not an L:var, controls the cockpit does not have (no node in either interior model: "no
+cockpit node", named in the report), and the second row of a node the interior files repeat (the PW and RR variants).
 
 Usage:  python -I tools/b757-gen/generate_b757_map.py [<package folder>] [--out <json>] [--curation <json>]
         With no folder the package is looked for in Community and Community2024 under
@@ -203,10 +226,15 @@ RANGE_SPEC = re.compile(r"range\s+(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\s+step\
 
 # A 'guarded' entry holds all of these; close_sets is null when closing the guard leaves the control alone.
 GUARDED_FIELDS = ("state_var", "positions", "guard", "guard_closed", "close_sets")
-# A 'levers' entry holds both of these; its positions all carry their values.
-LEVER_FIELDS = ("state_var", "positions")
+# A 'levers' or a 'direct_positions' entry holds both of these; its positions all carry their values.
+LEVER_FIELDS = DIRECT_POSITIONS_FIELDS = ("state_var", "positions")
 # The drop reason of a drag handle (the extractor's kind): the only row a 'levers' entry takes in.
 LEVER = "lever"
+# The drop reasons of a knob whose positions the rules cannot list, as drop_reason words them: the only rows a
+# 'direct_positions' entry takes in (an infinite knob wraps, so it has none; a finite one has more than MAX_POSITIONS, or none
+# the extractor could count).
+UNLISTABLE_KNOBS = ("rotary knob infinite", "rotary knob finite with more than 12 positions",
+                    "rotary knob finite without positions")
 # The drop reasons that are curation's own word on a row: a guarded or levers entry never overrides them.
 EXCLUSIONS = ("excluded banner", "excluded node")
 # The extractor writes a click that only runs inside an enclosing if{} as '[if <test>] <code>'
@@ -230,8 +258,8 @@ Cockpit = collections.namedtuple("Cockpit", "pw rr")  # the node names of the PW
 
 CURATION_KEYS = {"exclude_banners": list, "exclude_nodes": list, "include_nodes": list, "panels": dict,
                  "node_panels": list, "panel_order": dict, "control_order": dict, "labels": dict, "positions": dict,
-                 "kinds": dict, "guarded": dict, "levers": dict, "direct_write": list, "keep_without_node": list,
-                 "spelling": dict, "status": list}
+                 "kinds": dict, "guarded": dict, "levers": dict, "direct_positions": dict, "direct_write": list,
+                 "keep_without_node": list, "spelling": dict, "status": list}
 
 
 class CurationError(Exception):
@@ -664,6 +692,14 @@ def lever_control(row, cur, cockpit=None):
                 else f"leave out for another reason than being a lever ({why})")
         raise CurationError(f"curation levers names {node}, which the rules {what}: an entry takes in a lever the rules "
                             "leave out (remove it)")
+    return entry_switch(row, cur, entry)
+
+
+def entry_switch(row, cur, entry):
+    """The switch with no click code that a 'levers' or a 'direct_positions' entry describes: the entry gives the state var and
+    the positions with their values, the row gives the control's place in the cockpit (its banner and node, for its panel and
+    section), and press, release, cw and ccw are empty, so that the app writes the state var to the picked position."""
+    node = row["node"]
     panel, section = panel_of(row, cur)
     return {
         "node": node, "section": section, "panel": panel,
@@ -672,6 +708,37 @@ def lever_control(row, cur, cockpit=None):
         "positions": [{"value": number(p["value"]), "label": p["label"]} for p in entry["positions"]],
         "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None,
     }
+
+
+def direct_positions_control(row, cur, cockpit=None):
+    """The control curation's 'direct_positions' entry describes: a knob the rules leave out because they cannot list its
+    positions, built as a switch with no click code.
+
+    The pressurization Auto Rate knob has 131 positions of 0.1, a zone temperature selector is an infinite knob that wraps, and
+    a display brightness knob has 21 to 31: the rules drop each ("rotary knob finite with more than 12 positions", "rotary knob
+    infinite"), and the pilot needs none of the clicks, only the pick. The entry gives the state var the systems read and the
+    positions with their values, and the app writes the state var to the picked position, as for any switch with no click code
+    (Bbs757Write.ToPosition). Nothing of the vendor's code is kept: press, release, cw and ccw are empty, which is also why the
+    positions are not held to the clamp in that code (the cockpit mouse stops a brightness knob at 30, or at 20; the systems take
+    0-40). The row gives the control's place in the cockpit and is what the entry is checked against (check_direct_positions).
+    The rules must leave the row out AS A KNOB WHOSE POSITIONS THEY CANNOT LIST (UNLISTABLE_KNOBS) and for no other reason:
+    curation's exclusions never give way to an entry (a knob under an excluded banner needs include_nodes too, which keeps the
+    banner's other controls out), nor does a cockpit without the node (lacks_cockpit_node, asked here because the rules' reason
+    for such a knob never is the cockpit's), and a row the rules keep (positions and direct_write are the keys for those), or
+    leave out for another reason (a lever has its own key), is no knob for an entry to take in."""
+    node, entry = row["node"], cur["direct_positions"][row["node"]]
+    why = drop_reason(row, cur, cockpit)
+    if why in EXCLUSIONS:
+        raise CurationError(f"curation direct_positions names {node}, which curation also leaves out ({why})")
+    if lacks_cockpit_node(node, cur, cockpit):
+        raise CurationError(f"curation direct_positions names {node}, which neither cockpit model has a node for: an entry "
+                            "never keeps a control no cockpit has (remove it, or list the node under keep_without_node)")
+    if why not in UNLISTABLE_KNOBS:
+        what = (f"keep as a {KIND_MAP[row['kind']]} (use positions or direct_write for it)" if why is None
+                else f"leave out for another reason than being a knob whose positions cannot be listed ({why})")
+        raise CurationError(f"curation direct_positions names {node}, which the rules {what}: an entry takes in a knob the "
+                            "rules leave out because they cannot list its positions (remove it)")
+    return entry_switch(row, cur, entry)
 
 
 def label_for(row, out_kind, cur):
@@ -687,6 +754,8 @@ def convert_row(row, cur, cockpit=None):
         return guarded_control(row, cur, cockpit), None, []
     if node in cur["levers"]:
         return lever_control(row, cur, cockpit), None, []
+    if node in cur["direct_positions"]:
+        return direct_positions_control(row, cur, cockpit), None, []
     why = drop_reason(row, cur, cockpit)
     if why:
         return None, why, []
@@ -801,6 +870,29 @@ def check_guarded(controls, first_row, cur):
                                 f"is {entry['close_sets']}")
 
 
+def check_component_var(table, what, node, row, state_var) -> None:
+    """The state var of a 'levers' or a 'direct_positions' entry must be one the control's whole vendor component reads or
+    writes (the extractor's _component_vars): the node the pilot grabs often never mentions it, and a mistyped var, or a
+    change of BlueBird's, must stop the run instead of reaching the app."""
+    own = row.get("_component_vars") or {}
+    reads, writes = own.get("reads", []), own.get("writes", [])
+    if state_var not in reads and state_var not in writes:
+        raise CurationError(f"curation {table}: {node}'s own vendor code never reads or writes {state_var} (its component "
+                            f"reads {', '.join(sorted(reads)) or 'no L:var'} and writes "
+                            f"{', '.join(sorted(writes)) or 'no L:var'}): the state var is the L:var the {what}'s "
+                            "component shows or sets")
+
+
+def check_direct_positions(first_row, cur):
+    """Each direct_positions entry against the vendor's own code: the state var must be one the knob's whole component reads
+    or writes (check_component_var). A zone selector's row shows the derived ..._ANIM_FRAME var, but its click writes the
+    ..._KNOB_FRAME var the systems read, which the extractor keeps with the component. The positions are NOT checked against
+    the range the click code clamps to, as a lever's are: none of that code is replayed, and the systems accept more than the
+    cockpit mouse reaches (the brightness knobs: 0-40, the mouse stops at 30 or 20; docs/b757/evidence/flight-12.md)."""
+    for node, entry in cur["direct_positions"].items():
+        check_component_var("direct_positions", "knob", node, first_row[node], entry["state_var"])
+
+
 def check_levers(first_row, cur):
     """Each levers entry against the vendor's own code, so a mistyped var, or a change of BlueBird's, stops the run instead of
     reaching the app: the state var must be one the lever's whole component reads or writes (the extractor's _component_vars:
@@ -810,13 +902,7 @@ def check_levers(first_row, cur):
     lever 'range 0..150 step 1')."""
     for node, entry in cur["levers"].items():
         row, state_var = first_row[node], entry["state_var"]
-        own = row.get("_component_vars") or {}
-        reads, writes = own.get("reads", []), own.get("writes", [])
-        if state_var not in reads and state_var not in writes:
-            raise CurationError(f"curation levers: {node}'s own vendor code never reads or writes {state_var} (its component "
-                                f"reads {', '.join(sorted(reads)) or 'no L:var'} and writes "
-                                f"{', '.join(sorted(writes)) or 'no L:var'}): the state var is the L:var the lever's "
-                                "component shows or sets")
+        check_component_var("levers", "lever", node, row, state_var)
         found = RANGE_SPEC.match(str(row.get("positions") or "").strip())
         if found:
             low, high = float(found.group(1)), float(found.group(2))
@@ -909,6 +995,12 @@ def guarded_how(row, cur):
 def lever_how(row, cur):
     """What curation's 'levers' did to this row, in words, for the run's report: it took in a lever the rules leave out
     (lever_control has already stopped the run for a row they do not leave out as a lever)."""
+    return f"taken in (the rules alone leave it out: {drop_reason(row, cur)})"
+
+
+def direct_positions_how(row, cur):
+    """What curation's 'direct_positions' did to this row, in words, for the run's report: it took in a knob the rules leave
+    out (direct_positions_control has already stopped the run for a row they do not leave out as one)."""
     return f"taken in (the rules alone leave it out: {drop_reason(row, cur)})"
 
 
@@ -1020,6 +1112,12 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
         if twice:
             raise CurationError(f"curation levers and {table} both name: {', '.join(twice)} (a lever is a switch with the "
                                 "state var and the positions of its levers entry, no click code to leave out and no guard)")
+    for table in ("levers", "guarded", "direct_write", "kinds", "positions"):  # likewise: the entry holds all the knob has
+        twice = sorted(set(cur["direct_positions"]) & set(cur[table]))
+        if twice:
+            raise CurationError(f"curation direct_positions and {table} both name: {', '.join(twice)} (a direct_positions "
+                                "knob is a switch with the state var and the positions of its entry, no click code to leave "
+                                "out, no lever to drag and no guard)")
     keyed, seen = [], set()
     dropped = collections.Counter()
     suspected = {}
@@ -1054,8 +1152,8 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
     first_row = {}
     for r in rows:
         first_row.setdefault(r["node"], r)
-    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "levers", "direct_write",
-                  "keep_without_node"):
+    for table in ("labels", "positions", "kinds", "exclude_nodes", "include_nodes", "guarded", "levers", "direct_positions",
+                  "direct_write", "keep_without_node"):
         stale = sorted(n for n in cur[table] if n not in in_package)
         if stale:
             raise CurationError(f"curation {table} name nodes the package does not have: {', '.join(stale)}")
@@ -1099,6 +1197,7 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
     check_direct_write(controls, kept_row, dropped_why, cur)
     check_guarded(controls, first_row, cur)
     check_levers(first_row, cur)
+    check_direct_positions(first_row, cur)
     reject_gate_notes(controls, cur)
     # Last, after every label is made: the order the pilot tabs through (panel_order, control_order).
     controls, unordered = flow_order(controls, cur)
@@ -1112,6 +1211,7 @@ def build_map(rows, cur, aircraft, version, cockpit=None):
         "taken_in": sorted(included),
         "guarded": {n: guarded_how(first_row[n], cur) for n in cur["guarded"]},
         "levers": {n: lever_how(first_row[n], cur) for n in cur["levers"]},
+        "direct_positions": {n: direct_positions_how(first_row[n], cur) for n in cur["direct_positions"]},
         "direct_write": {n: direct_write_how(kept_row[n]) for n in cur["direct_write"]},
         "suspected_slips": suspected,
         "overrides_on_dropped": sorted({n for t in ("labels", "positions", "kinds") for n in cur[t] if n not in kept}),
@@ -1149,9 +1249,10 @@ def valid_guarded(entry) -> bool:
             and is_number(entry["guard_closed"]) and (entry["close_sets"] is None or is_number(entry["close_sets"])))
 
 
-def valid_lever(entry) -> bool:
-    """An entry of curation's 'levers': a state var and at least two {value, label} positions (a lever's row names no values a
-    list of names could be laid onto), the values rising in the order of the lever's travel and every label different."""
+def valid_state_positions(entry) -> bool:
+    """An entry of curation's 'levers' or 'direct_positions': a state var and at least two {value, label} positions (a lever's
+    or a knob's row names no values a list of names could be laid onto: Auto Rate has 131), the values rising in the order of
+    the control's travel (so no value repeats) and every label different and not empty."""
     if not (isinstance(entry, dict) and set(entry) == set(LEVER_FIELDS)):
         return False
     state_var, positions = entry["state_var"], entry["positions"]
@@ -1193,10 +1294,15 @@ def load_curation(path) -> dict:
             raise CurationError(f"{path}: guarded[{node!r}] is {{{', '.join(GUARDED_FIELDS)}}}: names or {{value, label}} "
                                 "for positions, numbers for guard_closed and close_sets (which may be null)")
     for node, entry in cur["levers"].items():
-        if not valid_lever(entry):
+        if not valid_state_positions(entry):
             raise CurationError(f"{path}: levers[{node!r}] is {{{', '.join(LEVER_FIELDS)}}}: a state var and at least two "
                                 "{value, label} positions, the values rising in the order of the lever's travel and the "
                                 "labels all different")
+    for node, entry in cur["direct_positions"].items():
+        if not valid_state_positions(entry):
+            raise CurationError(f"{path}: direct_positions[{node!r}] is {{{', '.join(DIRECT_POSITIONS_FIELDS)}}}: a state var "
+                                "and at least two {value, label} positions, the values rising (none repeated) and the labels "
+                                "all different and not empty")
     for key in ("direct_write", "keep_without_node"):
         if not all(isinstance(node, str) and node for node in cur[key]):
             raise CurationError(f"{path}: {key} is a list of node names")
@@ -1289,6 +1395,10 @@ def main(argv=None) -> None:
     print(f"  levers           : {len(report['levers'])} (a lever the rules leave out, built as a switch with no click code: "
           "the app writes the state var to the picked position)")
     for node, how in report["levers"].items():
+        print(f"    {node}: {how}")
+    print(f"  direct positions : {len(report['direct_positions'])} (a knob the rules leave out, built as a switch with no click "
+          "code: the app writes the state var to the picked position)")
+    for node, how in report["direct_positions"].items():
         print(f"    {node}: {how}")
     print(f"  direct-write     : {len(report['direct_write'])} (the vendor's click code is left out: the app writes the "
           "state var to the picked position)")

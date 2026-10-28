@@ -1470,6 +1470,33 @@
    "ccw": "(L:B757_OVHD_NO_SMOKING_SWITCH, enum) 1 - 0 max (>L:B757_OVHD_NO_SMOKING_SWITCH)"
   },
   {
+   "node": "B757_OVHD_AUTORATE_SWITCH",
+   "section": "Overhead",
+   "panel": "Pressurization",
+   "label": "Auto Rate",
+   "kind": "switch",
+   "state_var": "B757_OVHD_AUTORATE_SWITCH",
+   "positions": [
+    {
+     "value": 0,
+     "label": "MIN"
+    },
+    {
+     "value": 3.5,
+     "label": "INDEX"
+    },
+    {
+     "value": 13,
+     "label": "MAX"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
    "node": "B757_OVHD_MODE_SELECT_SWITCH",
    "section": "Overhead",
    "panel": "Pressurization",
@@ -1775,6 +1802,219 @@
    "press": "1 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 1 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool) (E:SIMULATION TIME, second) (>O:B757_OVHD_R_PACK_BUTTON_PressTime, second)",
    "release": "0 (>O:B757_OVHD_R_PACK_BUTTON_ButtonLocked, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON, bool) 0 (>L:B757_OVHD_R_PACK_BUTTON_HELD, bool)",
    "hold_ms": 1500,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_SEL_pack_Cockpt",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "Flight Deck Temperature",
+   "kind": "switch",
+   "state_var": "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME",
+   "positions": [
+    {
+     "value": 0,
+     "label": "OFF"
+    },
+    {
+     "value": 5,
+     "label": "18 °C"
+    },
+    {
+     "value": 7,
+     "label": "19 °C"
+    },
+    {
+     "value": 9,
+     "label": "20 °C"
+    },
+    {
+     "value": 12,
+     "label": "21 °C"
+    },
+    {
+     "value": 14,
+     "label": "22 °C"
+    },
+    {
+     "value": 16,
+     "label": "23 °C"
+    },
+    {
+     "value": 18,
+     "label": "24 °C"
+    },
+    {
+     "value": 20,
+     "label": "25 °C"
+    },
+    {
+     "value": 22,
+     "label": "26 °C"
+    },
+    {
+     "value": 25,
+     "label": "27 °C"
+    },
+    {
+     "value": 27,
+     "label": "28 °C"
+    },
+    {
+     "value": 29,
+     "label": "29 °C"
+    },
+    {
+     "value": 31,
+     "label": "30 °C"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_SEL_pack_FWD_cab",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "Forward Cabin Temperature",
+   "kind": "switch",
+   "state_var": "B757_OVHD_FWD_CAB_TEMP_SEL_KNOB_FRAME",
+   "positions": [
+    {
+     "value": 0,
+     "label": "OFF"
+    },
+    {
+     "value": 5,
+     "label": "18 °C"
+    },
+    {
+     "value": 7,
+     "label": "19 °C"
+    },
+    {
+     "value": 9,
+     "label": "20 °C"
+    },
+    {
+     "value": 12,
+     "label": "21 °C"
+    },
+    {
+     "value": 14,
+     "label": "22 °C"
+    },
+    {
+     "value": 16,
+     "label": "23 °C"
+    },
+    {
+     "value": 18,
+     "label": "24 °C"
+    },
+    {
+     "value": 20,
+     "label": "25 °C"
+    },
+    {
+     "value": 22,
+     "label": "26 °C"
+    },
+    {
+     "value": 25,
+     "label": "27 °C"
+    },
+    {
+     "value": 27,
+     "label": "28 °C"
+    },
+    {
+     "value": 29,
+     "label": "29 °C"
+    },
+    {
+     "value": 31,
+     "label": "30 °C"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_OVHD_SEL_pack_AFT_cab",
+   "section": "Overhead",
+   "panel": "Air conditioning and bleed",
+   "label": "Aft Cabin Temperature",
+   "kind": "switch",
+   "state_var": "B757_OVHD_AFT_CAB_TEMP_SEL_KNOB_FRAME",
+   "positions": [
+    {
+     "value": 0,
+     "label": "OFF"
+    },
+    {
+     "value": 5,
+     "label": "18 °C"
+    },
+    {
+     "value": 7,
+     "label": "19 °C"
+    },
+    {
+     "value": 9,
+     "label": "20 °C"
+    },
+    {
+     "value": 12,
+     "label": "21 °C"
+    },
+    {
+     "value": 14,
+     "label": "22 °C"
+    },
+    {
+     "value": 16,
+     "label": "23 °C"
+    },
+    {
+     "value": 18,
+     "label": "24 °C"
+    },
+    {
+     "value": 20,
+     "label": "25 °C"
+    },
+    {
+     "value": 22,
+     "label": "26 °C"
+    },
+    {
+     "value": 25,
+     "label": "27 °C"
+    },
+    {
+     "value": 27,
+     "label": "28 °C"
+    },
+    {
+     "value": 29,
+     "label": "29 °C"
+    },
+    {
+     "value": 31,
+     "label": "30 °C"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
    "cw": null,
    "ccw": null
   },
@@ -5047,6 +5287,222 @@
    "positions": [],
    "press": "1 (>L:B757_CHRONO_DATE_BUTTON_PRESS_FO)",
    "release": "0 (>L:B757_CHRONO_DATE_BUTTON_PRESS_FO)",
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_EICAS_1_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Upper EICAS",
+   "kind": "switch",
+   "state_var": "B757_EICAS_1_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_EICAS_2_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Lower EICAS",
+   "kind": "switch",
+   "state_var": "B757_EICAS_2_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_FMC_2_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "First Officer CDU",
+   "kind": "switch",
+   "state_var": "B757_FMC_2_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_FMC_1_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Captain CDU",
+   "kind": "switch",
+   "state_var": "B757_FMC_1_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_HSI_1_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Captain ND",
+   "kind": "switch",
+   "state_var": "B757_HSI_1_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_HSI_2_SCREEN_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "First Officer ND",
+   "kind": "switch",
+   "state_var": "B757_HSI_2_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_ADI_1_LCD_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "Captain PFD",
+   "kind": "switch",
+   "state_var": "B757_PFD_1_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null
+  },
+  {
+   "node": "B757_ADI_2_LCD_KNOB",
+   "section": "Forward panel",
+   "panel": "Display brightness",
+   "label": "First Officer PFD",
+   "kind": "switch",
+   "state_var": "B757_PFD_2_SCREEN_KNOB",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Minimum"
+    },
+    {
+     "value": 20,
+     "label": "Half"
+    },
+    {
+     "value": 40,
+     "label": "Full"
+    }
+   ],
+   "press": null,
+   "release": null,
    "hold_ms": 0,
    "cw": null,
    "ccw": null
