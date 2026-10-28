@@ -35,7 +35,8 @@ public partial class IniBuildsA350Definition
                 var input = new A350.Display.A350MfdInput((name, value) => { simConnect.SetLVar(name, value); return true; });
                 ShowTrackedWindow(
                     () => new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
-                        async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(), input, announcer),
+                        async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
+                        side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             }
@@ -46,7 +47,7 @@ public partial class IniBuildsA350Definition
                 ShowTrackedWindow(
                     () => new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
                         async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
-                        rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer),
+                        rmp => IsScreenDark($"RMP {rmp} display"), rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).

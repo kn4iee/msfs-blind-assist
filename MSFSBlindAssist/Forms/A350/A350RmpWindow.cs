@@ -37,6 +37,7 @@ public sealed class A350RmpWindow : Form
 
     private readonly Func<int, A350DrawCapture?> _latest;
     private readonly Func<int, Task<A350DrawCapture?>> _drawNow;
+    private readonly Func<int, bool> _isDark;
     private readonly Action<string> _send;
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly DisplayListBox _list;
@@ -56,12 +57,14 @@ public sealed class A350RmpWindow : Form
     private int _line = 1;
     private string? _squawk;   // the squawk being typed, or null
 
-    public A350RmpWindow(Func<int, A350DrawCapture?> latest, Func<int, Task<A350DrawCapture?>> drawNow, Action<string> send,
-        ScreenReaderAnnouncer announcer)
+    /// <param name="isDark">Whether RMP n's screen is dark (1 to 3).</param>
+    public A350RmpWindow(Func<int, A350DrawCapture?> latest, Func<int, Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
+        Action<string> send, ScreenReaderAnnouncer announcer)
     {
         _previousWindow = GetForegroundWindow();
         _latest = latest;
         _drawNow = drawNow;
+        _isDark = isDark;
         _send = send;
         _announcer = announcer;
 
@@ -121,14 +124,18 @@ public sealed class A350RmpWindow : Form
             }
             if (IsDisposed) return;
             if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
-            Show(Lines(cap));
+            Show(Lines(cap, _isDark(Rmp)));
         }
         catch { /* best-effort; keep the last good screen */ }
         finally { _busy = false; }
     }
 
-    private static IReadOnlyList<string> Lines(A350DrawCapture cap)
+    /// <summary>What the list shows of an RMP's screen: dark while its BRT/OFF knob or its power has it dark, as the
+    /// status display reads it.</summary>
+    internal static IReadOnlyList<string> Lines(A350DrawCapture cap, bool dark)
     {
+        if (dark)
+            return new[] { Aircraft.IniBuildsA350Definition.DarkScreen };
         var lines = A350GroundDisplays.ReadRmp(cap);
         return lines.Count == 0 ? new[] { "The RMP screen is off." } : lines;
     }
@@ -182,7 +189,7 @@ public sealed class A350RmpWindow : Form
         await Task.Delay(ReadBackMs);
         if (IsDisposed || rmp != Rmp || await _drawNow(rmp) is not { Ok: true } cap || IsDisposed || rmp != Rmp) return;
         _shown.Fresh(_latest(rmp));
-        var lines = Lines(cap);
+        var lines = Lines(cap, _isDark(rmp));
         string said = A350Rmp.PageReadBack(page, _lines, lines);
         Show(lines);
         _announcer.Announce(said);
@@ -198,7 +205,7 @@ public sealed class A350RmpWindow : Form
             if (IsDisposed || rmp != Rmp) return;
             if (await _drawNow(rmp) is not { Ok: true } cap || IsDisposed || rmp != Rmp) continue;
             _shown.Fresh(_latest(rmp));
-            var lines = Lines(cap);
+            var lines = Lines(cap, _isDark(rmp));
             Show(lines);
             if (lines.ElementAtOrDefault(line - 1) is { } read) _announcer.Announce(say == null ? read : say(read));
             return;

@@ -92,4 +92,39 @@ public class A350PfdDisplayTests
         Assert.True(def.TryGetDisplayOverride(key, 1, out var lit));
         Assert.DoesNotContain("Dark", lit);
     }
+
+    // Review 2026-10-28: Shift+M and Ctrl+Shift+R read the latest draw directly, so a screen the status display called
+    // dark showed its whole content in its window, where the pilot could even click it.
+    [Theory]
+    [InlineData("Captain MFD", "INI_FMS_POWERED")]
+    [InlineData("First Officer MFD", "INI_FMS_POWERED")]
+    [InlineData("RMP 1 display", "INI_POTENTIOMETER_93")]
+    [InlineData("RMP 2 display", "INI_POTENTIOMETER_94")]
+    [InlineData("RMP 3 display", "INI_POTENTIOMETER_95")]
+    public void A_window_reads_its_screen_dark_as_the_status_display_does(string panel, string power)
+    {
+        var cache = new Dictionary<string, double>(StringComparer.Ordinal);
+        var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        def.Attach(new SimConnect.SimConnectManager(IntPtr.Zero));
+        Assert.False(def.IsScreenDark(panel));   // unread: taken as lit, as the status display takes it
+        cache[def.KeyForInput(power)] = 0;
+        Assert.True(def.IsScreenDark(panel));
+        cache[def.KeyForInput(power)] = 1;
+        Assert.False(def.IsScreenDark(panel));
+    }
+
+    [Fact]
+    public void The_mfd_window_shows_a_dark_screen_as_dark_with_no_line_to_click()
+    {
+        var (lines, shown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: true);
+        Assert.Empty(lines);
+        Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, shown);
+        var (litLines, litShown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: false);
+        Assert.NotEmpty(litLines);
+        Assert.Equal(litLines.Select(l => l.Spoken), litShown);
+    }
+
+    [Fact]
+    public void The_rmp_window_shows_a_dark_screen_as_dark() =>
+        Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, Forms.A350.A350RmpWindow.Lines(Fixture("ground_RMP_0"), dark: true));
 }

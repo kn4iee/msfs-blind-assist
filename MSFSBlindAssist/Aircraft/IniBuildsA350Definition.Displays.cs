@@ -50,6 +50,9 @@ public partial class IniBuildsA350Definition
     internal bool IsDark(A350DisplayPanel d) =>
         d.Power != null && _sim is { } sim && Cached(sim, KeyForInput(d.Power)) is double lit && lit < 0.5;
 
+    /// <summary>Whether a display panel's screen is dark (<see cref="IsDark"/>), for a window that shows it.</summary>
+    internal bool IsScreenDark(string panel) => DisplayPanels.FirstOrDefault(d => d.Panel == panel) is { } d && IsDark(d);
+
     /// <summary>The display reader, or null while it is not running.</summary>
     public A350DisplayService? Displays { get; set; }
 

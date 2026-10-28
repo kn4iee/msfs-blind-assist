@@ -27,6 +27,7 @@ public sealed class A350MfdWindow : Form
 
     private readonly Func<A350DrawCapture?> _latest;
     private readonly Func<Task<A350DrawCapture?>> _drawNow;
+    private readonly Func<int, bool> _isDark;
     private readonly A350MfdInput _input;
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly DisplayListBox _list;
@@ -39,11 +40,14 @@ public sealed class A350MfdWindow : Form
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
 
-    public A350MfdWindow(Func<A350DrawCapture?> latest, Func<Task<A350DrawCapture?>> drawNow, A350MfdInput input, ScreenReaderAnnouncer announcer)
+    /// <param name="isDark">Whether a side's screen is dark (0 the captain's, 1 the first officer's).</param>
+    public A350MfdWindow(Func<A350DrawCapture?> latest, Func<Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
+        A350MfdInput input, ScreenReaderAnnouncer announcer)
     {
         _previousWindow = GetForegroundWindow();
         _latest = latest;
         _drawNow = drawNow;
+        _isDark = isDark;
         _input = input;
         _announcer = announcer;
 
@@ -110,8 +114,8 @@ public sealed class A350MfdWindow : Form
             if (IsDisposed) return;
             if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
             var before = _lines;
-            _lines = A350MfdPage.Read(cap, Side);
-            _list.SetLines(_lines.Count == 0 ? new[] { "The MFD is off: no power." } : _lines.Select(l => l.Spoken).ToList());
+            (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
+            _list.SetLines(shown);
             // A menu that has just opened takes the selection to its first item, where a sighted pilot looks.
             if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
                 _list.SelectedIndex = first;
@@ -122,6 +126,16 @@ public sealed class A350MfdWindow : Form
         }
         catch { /* best-effort; keep the last good page */ }
         finally { _busy = false; }
+    }
+
+    /// <summary>The page's lines (what Enter acts on) and what the list shows: a dark screen shows dark, with nothing
+    /// to click, as the status display reads it.</summary>
+    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture cap, int side, bool dark)
+    {
+        if (dark)
+            return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
+        var lines = A350MfdPage.Read(cap, side);
+        return (lines, lines.Count == 0 ? new[] { "The MFD is off: no power." } : lines.Select(l => l.Spoken).ToList());
     }
 
     private async Task AfterActionAsync()
