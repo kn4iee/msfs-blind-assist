@@ -1059,6 +1059,32 @@ public class Bbs757ControlMapTests
     }
 
     [Fact]
+    public void Every_node_the_sweeps_denylist_names_is_in_the_map()
+    {
+        // tools/b757-gen/PanelSweep/denylist.txt keeps the live sweep (plan 12 task 2) away from the controls it must never
+        // write. A line naming a node the map no longer has protects nothing (a regeneration renamed it): the tool's live run
+        // refuses to start on one, and this catches it before anyone gets that far. The sweep's own rules: one node per line,
+        // '#' starts a comment, blank lines ignored.
+        string path = Path.Combine(Bbs757SeamsTests.RepoRoot(), "tools", "b757-gen", "PanelSweep", "denylist.txt");
+        var nodes = File.ReadAllLines(path)
+            .Select(line => (line.IndexOf('#') is int hash and >= 0 ? line[..hash] : line).Trim())
+            .Where(node => node.Length > 0)
+            .ToList();
+        var known = Map.Controls.Select(c => c.Node).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(nodes.Count > 50, $"only {nodes.Count} denylist entries read from {path}");
+        Assert.Equal(nodes.Count, nodes.Distinct(StringComparer.Ordinal).Count());
+        var stale = nodes.Where(n => !known.Contains(n)).ToList();
+        Assert.True(stale.Count == 0, "denylist entries that name no node of the map: " + string.Join(", ", stale));
+        // The electrical sources (plan 12's final review): switching one off on ground power can drop the buses.
+        Assert.Subset(nodes.ToHashSet(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal)
+        {
+            "B757_OVHD_STBY_POWER_SWITCH", "B757_OVHD_L_BUS_TIE_BUTTON", "B757_OVHD_R_BUS_TIE_BUTTON",
+            "B757_OVHD_L_GEN_CONT_BUTTON", "B757_OVHD_R_GEN_CONT_BUTTON", "B757_OVHD_APU_GEN_BUTTON",
+        });
+    }
+
+    [Fact]
     public void Every_caller_on_every_thread_gets_the_same_map()
     {
         var maps = new Bbs757ControlMap[16];

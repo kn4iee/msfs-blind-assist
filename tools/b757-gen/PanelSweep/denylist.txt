@@ -40,6 +40,15 @@ B757_AISLE_STAND_STAB_2_GAURD_SWITCH        # Stab Trim R Guard
 B757_OVHD_BATTERY_BUTTON                    # Battery
 B757_GAURD_3_SWITCH                         # Battery Guard
 
+# Electrical sources: switching a power source off on ground power can drop the buses (measured on the
+# Fenix, a bus-tie press broke ground power). Added in plan 12's final review.
+B757_OVHD_STBY_POWER_SWITCH                 # STBY Power
+B757_OVHD_L_BUS_TIE_BUTTON                  # L Bus Tie
+B757_OVHD_R_BUS_TIE_BUTTON                  # R Bus Tie
+B757_OVHD_L_GEN_CONT_BUTTON                 # L Gen Cont
+B757_OVHD_R_GEN_CONT_BUTTON                 # R Gen Cont
+B757_OVHD_APU_GEN_BUTTON                    # APU Gen
+
 # APU selector
 B757_OVHD_APU_SWITCH                        # APU Selector
 
