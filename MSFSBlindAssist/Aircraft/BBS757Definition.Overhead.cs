@@ -413,7 +413,8 @@ public partial class BBS757Definition
     /// A spring button: hold its switch to one side for <see cref="Bbs757SpringControls.HoldMs"/>, release it, make
     /// sure it rests, then say the readout once.
     /// <list type="number">
-    /// <item>A press while the same switch is holding is ignored (its two buttons share the switch).</item>
+    /// <item>A press while the same switch is holding, or still being released in the background, is ignored (its
+    /// two buttons share the switch).</item>
     /// <item>Nothing can land (<c>CanWrite</c>): "{label} unavailable", nothing sent. A cabin button then reads Mode
     /// Select fresh: not MAN says "Set the pressurization mode to MAN first", unread "{label} unavailable", and
     /// nothing is sent.</item>
@@ -423,7 +424,10 @@ public partial class BBS757Definition
     /// as <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
     /// release runs the trim to its stop (flight-12.md, measured twice).</item>
     /// <item>The release is verified (<see cref="ReleaseSpringAsync"/>), even after a profile switch: it is the safety.
-    /// A switch still off rest says "{name} switch did not return, check it", interrupting.</item>
+    /// A switch still off rest says "{name} switch did not return; the trim may keep running" (the cabin switch:
+    /// "Cabin altitude switch did not return; check the outflow valve"), interrupting, and is released again in the
+    /// background (<see cref="KeepReleasingAsync"/>, even after a profile switch); the press ends, and the switch may
+    /// be held again, once that ends.</item>
     /// <item>Unless switched away, <see cref="Bbs757SpringControls.ReadoutDelayMs"/> later the readout is read
     /// fresh and said once (CORE-7: the screen reader said the button; the app says only the read-back). The stab
     /// trim's is the exception: the trim call-out already speaks while the stabilizer moves, so the trim is also read
@@ -448,6 +452,7 @@ public partial class BBS757Definition
         }
 
         bool holding = true, wrote = false;
+        Task stillReleasing = Task.CompletedTask;   // the background release after a lost one; never throws
         try
         {
             var io = WriteIoFor(sim);
@@ -480,15 +485,21 @@ public partial class BBS757Definition
             OnOwnWrite(control.LVar);   // plan 13
             wrote = true;
             bool rested = await HoldSpringAsync(control, hold, release, io);
-            _springHolds.TryRemove(control.Key, out _);   // released: the switch may be held again
-            holding = false;
-
-            if (_lifetime.IsCancellationRequested) return;   // switched away: released, nothing is said
-            if (!rested)
+            if (rested)
             {
-                Log.Warn("BBS757", $"{control.LVar} did not read its rest value after {Bbs757SpringControls.MaxReleaseWrites} releases.");
-                announcer.AnnounceImmediate(Bbs757SpringControls.DidNotReturnPhrase(control));
+                _springHolds.TryRemove(control.Key, out _);   // released: the switch may be held again
+                holding = false;
             }
+            else
+            {
+                Log.Warn("BBS757", $"{control.LVar} did not read its rest value after {Bbs757SpringControls.MaxReleaseWrites} releases; " +
+                    $"releasing it again every {Bbs757SpringControls.ReleaseRetryIntervalMs} ms for up to {Bbs757SpringControls.ReleaseRetryForMs} ms.");
+                if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate(Bbs757SpringControls.DidNotReturnPhrase(control));
+                // The safety goes on even after a profile switch; the switch's gate stays taken until it ends (finally).
+                stillReleasing = KeepReleasingAsync(control, release, io, announcer);
+            }
+
+            if (_lifetime.IsCancellationRequested) return;   // switched away: released (or still releasing), nothing is said
 
             await io.Delay(Bbs757SpringControls.ReadoutDelayMs, ct);
             double? value = await io.ReadFresh(control.ReadoutKey, ct);
@@ -508,7 +519,51 @@ public partial class BBS757Definition
         }
         finally
         {
+            await stillReleasing;   // never throws: no new hold starts on this switch while it is still being released
             if (holding) _springHolds.TryRemove(control.Key, out _);
+        }
+    }
+
+    /// <summary>
+    /// The release after a lost one (<see cref="ReleaseSpringAsync"/> found the switch still off rest after
+    /// <see cref="Bbs757SpringControls.MaxReleaseWrites"/> writes, as a lost link would leave it): every
+    /// <see cref="Bbs757SpringControls.ReleaseRetryIntervalMs"/>, for up to <see cref="Bbs757SpringControls.ReleaseRetryForMs"/>,
+    /// reads the switch fresh and, while it does not read its rest value (unread counts as off rest), writes
+    /// <paramref name="release"/> again. Once it rests, "{name} switch returned" is said once, unless the pilot has
+    /// switched to another profile; a switch that never rests is left after the last write with nothing more said
+    /// (the press already warned). A profile switch does not stop it: it is the safety, so the waits and reads are
+    /// on <see cref="CancellationToken.None"/>. The writes are the press's own (<c>Write</c>, unique calculator
+    /// writes). The awaits keep the UI context. Never throws: a failed wait, read or write counts as off rest.
+    /// </summary>
+    private async Task KeepReleasingAsync(Bbs757SpringControl control, string release, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            for (int waited = 0; waited < Bbs757SpringControls.ReleaseRetryForMs; waited += Bbs757SpringControls.ReleaseRetryIntervalMs)
+            {
+                double? reading = null;
+                try
+                {
+                    await io.Delay(Bbs757SpringControls.ReleaseRetryIntervalMs, CancellationToken.None);
+                    reading = await io.ReadFresh(control.LVar, CancellationToken.None);
+                }
+                catch (Exception ex) { Log.Error("BBS757", $"{control.LVar}: background release read failed: {ex.Message}"); }
+
+                if (Bbs757SpringControls.AtRest(control, reading))
+                {
+                    Log.Info("BBS757", $"{control.LVar} read its rest value {waited + Bbs757SpringControls.ReleaseRetryIntervalMs} ms into the background release.");
+                    if (!_lifetime.IsCancellationRequested) announcer.Announce(Bbs757SpringControls.ReturnedPhrase(control));
+                    return;
+                }
+
+                try { io.Write(release); }
+                catch (Exception ex) { Log.Error("BBS757", $"{control.LVar}: background release write failed: {ex.Message}"); }
+            }
+            Log.Warn("BBS757", $"{control.LVar} still did not read its rest value after {Bbs757SpringControls.ReleaseRetryForMs} ms of background releases; stopped.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757", $"{control.LVar}: background release failed: {ex.Message}");
         }
     }
 

@@ -14,7 +14,7 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <param name="Positive">Held to the right, nose up, or climb.</param>
 /// <param name="Section">The section of <paramref name="Panel"/>, used when the map lacks the panel.</param>
 /// <param name="Panel">The panel its buttons are on.</param>
-/// <param name="Name">The switch as spoken: "Rudder trim" in "Rudder trim switch did not return, check it".</param>
+/// <param name="Name">The switch as spoken: "Rudder trim" in "Rudder trim switch returned".</param>
 /// <param name="ReadoutKey">The registered variable read fresh after the release and spoken.</param>
 /// <param name="NeedsManualMode">True for the manual cabin altitude switch, which works only with Mode Select at MAN.</param>
 public sealed record Bbs757SpringControl(
@@ -48,7 +48,9 @@ public sealed record Bbs757SpringRead(string Key, string Label);
 /// while one is off 1, and nothing in the aircraft returns it to 1 but the cockpit mouse's own release, so a
 /// release that is lost runs the trim to its stop (measured twice: the rudder to −17 and to +16.7 units). The
 /// press therefore always releases, reads the switch back <see cref="ReleaseReadBackMs"/> later and writes the
-/// release again while it is off rest (<see cref="MaxReleaseWrites"/> in all).</item>
+/// release again while it is off rest (<see cref="MaxReleaseWrites"/> in all); a switch still off rest then is
+/// read and released again in the background every <see cref="ReleaseRetryIntervalMs"/> for up to
+/// <see cref="ReleaseRetryForMs"/>.</item>
 /// <item>The cabin switch rests on 4; its code uses only the side of 4, and the cockpit's click writes 0 (descend)
 /// or 7 (climb). Its XML writes 4 back within about a second of an outside write, so the hold is written again
 /// at <see cref="HoldRewriteMs"/>. It works only with Mode Select at MAN.</item>
@@ -72,6 +74,15 @@ public static class Bbs757SpringControls
 
     /// <summary>How long after each release write the switch is read back, so a read that has not yet seen the write cannot count as a lost release.</summary>
     public const int ReleaseReadBackMs = 250;
+
+    /// <summary>
+    /// After <see cref="MaxReleaseWrites"/> releases that did not land (a lost link): how often the switch is read
+    /// again in the background, and released again while it is off rest.
+    /// </summary>
+    public const int ReleaseRetryIntervalMs = 2000;
+
+    /// <summary>How long the background release goes on, at most, before it gives up (<see cref="ReleaseRetryIntervalMs"/> apart).</summary>
+    public const int ReleaseRetryForMs = 60000;
 
     /// <summary>A stab trim press that moved the trim less than this many indicator units did not move it.</summary>
     public const double StabTrimMovedUnder = 0.05;
@@ -128,7 +139,7 @@ public static class Bbs757SpringControls
         "BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, Pedestal, StabilizerTrimPanel,
         "Aileron trim", YokeVar, NeedsManualMode: false);
 
-    /// <summary>The alternate stab trim: it also needs hydraulic pressure and its cutouts NORMAL, or it moves nothing (the readout then says the unchanged trim).</summary>
+    /// <summary>The alternate stab trim: it also needs hydraulic pressure and its cutouts NORMAL, or it moves nothing (the press then says "Stab trim did not move").</summary>
     public static readonly Bbs757SpringControl AltnStabTrim = new(
         "BBS757_ALTN_STAB_TRIM", "BBS_ELEV_TRIM_ALTERNATE", 1, 0, 2, Pedestal, StabilizerTrimPanel,
         "Stab trim", StabTrimReadoutKey, NeedsManualMode: false);
@@ -203,8 +214,17 @@ public static class Bbs757SpringControls
     /// <summary>A refusal with nothing sent: "Left Rudder Trim 1 s unavailable", as the app's other refusals.</summary>
     public static string UnavailablePhrase(string label) => $"{label} unavailable";
 
-    /// <summary>Said when the switch still reads off rest after the last release: "Rudder trim switch did not return, check it".</summary>
-    public static string DidNotReturnPhrase(Bbs757SpringControl c) => $"{c.Name} switch did not return, check it";
+    /// <summary>
+    /// Said when the switch still reads off rest after the press's last release, while the release goes on in the
+    /// background: "Rudder trim switch did not return; the trim may keep running" (a trim runs while its switch is
+    /// off rest), "Cabin altitude switch did not return; check the outflow valve" (the valve keeps moving).
+    /// </summary>
+    public static string DidNotReturnPhrase(Bbs757SpringControl c) => ReferenceEquals(c, CabinAltManual)
+        ? $"{c.Name} switch did not return; check the outflow valve"
+        : $"{c.Name} switch did not return; the trim may keep running";
+
+    /// <summary>Said once when a switch that did not return reads its rest value in the background: "Rudder trim switch returned".</summary>
+    public static string ReturnedPhrase(Bbs757SpringControl c) => $"{c.Name} switch returned";
 
     /// <summary>The readout said after a press of <paramref name="c"/>, from its readout read fresh.</summary>
     public static string ReadoutPhrase(Bbs757SpringControl c, double? value)

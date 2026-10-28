@@ -69,6 +69,8 @@ public class Bbs757SpringControlsTests
         Assert.Equal(500, S.ReadoutDelayMs);
         Assert.Equal(3, S.MaxReleaseWrites);
         Assert.Equal(250, S.ReleaseReadBackMs);
+        Assert.Equal(2000, S.ReleaseRetryIntervalMs);   // after a lost release: every 2 s ...
+        Assert.Equal(60000, S.ReleaseRetryForMs);       // ... for up to 60 s
     }
 
     [Fact]
@@ -146,13 +148,14 @@ public class Bbs757SpringControlsTests
     }
 
     [Theory]
-    [InlineData("BBS757_RUDDER_TRIM", "Rudder trim switch did not return, check it")]
-    [InlineData("BBS757_AILERON_TRIM", "Aileron trim switch did not return, check it")]
-    [InlineData("BBS757_ALTN_STAB_TRIM", "Stab trim switch did not return, check it")]
-    [InlineData("BBS757_CABIN_ALT_MANUAL", "Cabin altitude switch did not return, check it")]
-    public void A_switch_that_stays_off_rest_is_said(string key, string phrase)
+    [InlineData("BBS757_RUDDER_TRIM", "Rudder trim switch did not return; the trim may keep running", "Rudder trim switch returned")]
+    [InlineData("BBS757_AILERON_TRIM", "Aileron trim switch did not return; the trim may keep running", "Aileron trim switch returned")]
+    [InlineData("BBS757_ALTN_STAB_TRIM", "Stab trim switch did not return; the trim may keep running", "Stab trim switch returned")]
+    [InlineData("BBS757_CABIN_ALT_MANUAL", "Cabin altitude switch did not return; check the outflow valve", "Cabin altitude switch returned")]
+    public void A_switch_that_stays_off_rest_is_said(string key, string phrase, string returned)
     {
         Assert.Equal(phrase, S.DidNotReturnPhrase(Control(key)));
+        Assert.Equal(returned, S.ReturnedPhrase(Control(key)));
     }
 
     // ---- Readout phrases --------------------------------------------------------------------------------
@@ -553,8 +556,9 @@ public class Bbs757SpringControlsTests
         rig.Sim.Release(0);
         await press.WaitAsync(Ceiling);
 
-        Assert.Equal(new[] { RudderRight, RudderRelease, RudderRelease, RudderRelease }, rig.Sim.Writes);
-        Assert.Equal(new[] { 500, 500, 250, 250, 250 }, rig.Sim.Delays);
+        // The press's three releases, then the background's: one every 2 s for 60 s (a profile switch does not stop it).
+        Assert.Equal(new[] { RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 30)), rig.Sim.Writes);
+        Assert.Equal(new[] { 500, 500, 250, 250, 250 }.Concat(Enumerable.Repeat(2000, 30)), rig.Sim.Delays);
         Assert.Equal(0, rig.Sim.CanceledDelays);
         Assert.Empty(rig.Speech.All);
     }
@@ -573,15 +577,23 @@ public class Bbs757SpringControlsTests
         Assert.Empty(rig.Speech.All);
     }
 
+    private const string RudderDidNotReturn = "Rudder trim switch did not return; the trim may keep running";
+    private const string RudderReturned = "Rudder trim switch returned";
+
+    /// <summary>The 0-based ordinal of a rudder press's first background wait: the hold's two, then the three release read-backs.</summary>
+    private const int FirstBackgroundWait = 5;
+
     [Fact]
     public async Task Release_is_resent_until_the_switch_rests()
     {
-        // The knob still reads its hold value after every release: three releases in all, then the pilot is told.
+        // The knob still reads its hold value after every release: three releases in all, then the pilot is told,
+        // and the release goes on in the background (its first wait held here).
         var rig = new Rig();
         rig.Sim.Fresh[RudderKnob] = 2;
         rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 5.0;
+        rig.Sim.Hold = ordinal => ordinal == FirstBackgroundWait;
 
-        await rig.Press("BBS757_RUDDER_TRIM_RIGHT").WaitAsync(Ceiling);
+        var press = rig.Press("BBS757_RUDDER_TRIM_RIGHT");
 
         Assert.Equal(new[] { RudderRight, RudderRight, RudderRelease, RudderRelease, RudderRelease }, rig.Sim.Writes);
         // Each release is read back 250 ms after it is written, so a read that has not yet seen it cannot count as lost.
@@ -591,10 +603,106 @@ public class Bbs757SpringControlsTests
             Bbs757FakeIo.WriteEvent(RudderRelease), Bbs757FakeIo.DelayEvent(250),
             Bbs757FakeIo.WriteEvent(RudderRelease), Bbs757FakeIo.DelayEvent(250),
             Bbs757FakeIo.WriteEvent(RudderRelease), Bbs757FakeIo.DelayEvent(250),
-            Bbs757FakeIo.DelayEvent(500),
+            Bbs757FakeIo.DelayEvent(2000),   // the background release's first wait (held)
+            Bbs757FakeIo.DelayEvent(500),    // the readout, said meanwhile
         }, rig.Sim.Events);
-        Assert.Equal(new[] { "Rudder trim switch did not return, check it", "Rudder trim 5.0 units right" }, rig.Speech.All);
-        Assert.Contains("Rudder trim switch did not return, check it", rig.Speech.Interrupts);
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right" }, rig.Speech.All);
+        Assert.Contains(RudderDidNotReturn, rig.Speech.Interrupts);
+        Assert.False(press.IsCompleted);   // still releasing
+
+        // The switch is back by the first background check: nothing more is written, and that is said once.
+        rig.Sim.Fresh[RudderKnob] = 1;
+        rig.Sim.Release(FirstBackgroundWait);
+        await press.WaitAsync(Ceiling);
+
+        Assert.Equal(5, rig.Sim.Writes.Count);
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right", RudderReturned }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_lost_release_is_retried_every_2_s_until_the_switch_returns()
+    {
+        // The switch comes back on the third background release: 3 + 3 release writes, "returned" said once.
+        var rig = new Rig();
+        rig.Sim.Fresh[RudderKnob] = 2;
+        rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 5.0;
+        rig.Sim.Hold = ordinal => ordinal == FirstBackgroundWait;
+        int releases = 0;
+        rig.Sim.OnWrite = rpn =>
+        {
+            if (rpn == RudderRelease && ++releases == 6) rig.Sim.Fresh[RudderKnob] = 1;
+        };
+
+        var press = rig.Press("BBS757_RUDDER_TRIM_RIGHT");
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right" }, rig.Speech.All);
+
+        // While it retries, the switch's gate stays taken: neither of its buttons starts a hold.
+        await rig.Press("BBS757_RUDDER_TRIM_LEFT").WaitAsync(Ceiling);
+        await rig.Press("BBS757_RUDDER_TRIM_RIGHT").WaitAsync(Ceiling);
+        Assert.Equal(5, rig.Sim.Writes.Count);
+
+        rig.Sim.Release(FirstBackgroundWait);
+        await press.WaitAsync(Ceiling);
+
+        Assert.Equal(new[] { RudderRight, RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 3)), rig.Sim.Writes);
+        // Each background check waits 2 s, reads the switch and, while it is off rest, writes the release again.
+        Assert.Equal(new[] { 500, 500, 250, 250, 250, 2000, 500, 2000, 2000, 2000 }, rig.Sim.Delays);
+        Assert.Single(rig.Speech.All, RudderReturned);
+        Assert.Equal(RudderReturned, rig.Speech.All[^1]);
+        Assert.Equal(0, rig.Sim.CanceledDelays);
+
+        // The gate is free again.
+        rig.FollowingWrites();
+        await rig.Press("BBS757_RUDDER_TRIM_LEFT").WaitAsync(Ceiling);
+        Assert.Equal(new[] { RudderLeft, RudderLeft, RudderRelease }, rig.Sim.Writes.TakeLast(3));
+    }
+
+    [Fact]
+    public async Task A_switch_that_never_returns_is_released_for_60_s_then_left_quietly()
+    {
+        var rig = new Rig();   // the knob keeps reading its hold value
+        rig.Sim.Fresh[RudderKnob] = 2;
+        rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 5.0;
+
+        await rig.Press("BBS757_RUDDER_TRIM_RIGHT").WaitAsync(Ceiling);
+
+        Assert.Equal(new[] { RudderRight, RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 30)), rig.Sim.Writes);
+        var background = rig.Sim.Delays.Where(d => d == 2000).ToList();
+        Assert.Equal(30, background.Count);
+        Assert.Equal(60000, background.Sum());   // the loop ends at 60 s
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right" }, rig.Speech.All);   // nothing more is said
+
+        // The gate is freed: the next press holds the switch again.
+        rig.FollowingWrites();
+        int before = rig.Sim.Writes.Count;
+        await rig.Press("BBS757_RUDDER_TRIM_LEFT").WaitAsync(Ceiling);
+        Assert.Equal(new[] { RudderLeft, RudderLeft, RudderRelease }, rig.Sim.Writes.Skip(before));
+    }
+
+    [Fact]
+    public async Task A_switch_away_during_the_retries_keeps_releasing_and_says_nothing()
+    {
+        var rig = new Rig();
+        rig.Sim.Fresh[RudderKnob] = 2;
+        rig.Sim.Fresh["B757_PED_RUDDER_TRIM_INDICATOR"] = 5.0;
+        rig.Sim.Hold = ordinal => ordinal == FirstBackgroundWait;
+        int releases = 0;
+        rig.Sim.OnWrite = rpn =>
+        {
+            if (rpn == RudderRelease && ++releases == 6) rig.Sim.Fresh[RudderKnob] = 1;
+        };
+
+        var press = rig.Press("BBS757_RUDDER_TRIM_RIGHT");
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right" }, rig.Speech.All);
+
+        rig.Def.OnSwitchedAway();
+        rig.Sim.Release(FirstBackgroundWait);
+        await press.WaitAsync(Ceiling);
+
+        // The writes continue (the release is the safety); its return is not said into another aircraft's session.
+        Assert.Equal(new[] { RudderRight, RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 3)), rig.Sim.Writes);
+        Assert.Equal(0, rig.Sim.CanceledDelays);
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim 5.0 units right" }, rig.Speech.All);
     }
 
     [Fact]
@@ -639,7 +747,7 @@ public class Bbs757SpringControlsTests
     }
 
     [Fact]
-    public async Task An_unreadable_switch_gets_three_releases_and_is_said()
+    public async Task An_unreadable_switch_keeps_being_released_and_is_said()
     {
         var rig = new Rig();   // the knob is never read
         rig.Sim.Fresh["BBS_CABIN_VALVE"] = 0.5;
@@ -647,8 +755,9 @@ public class Bbs757SpringControlsTests
 
         await rig.Press("BBS757_CABIN_ALT_MANUAL_DESCEND").WaitAsync(Ceiling);
 
-        Assert.Equal(new[] { CabinDescend, CabinDescend, CabinRelease, CabinRelease, CabinRelease }, rig.Sim.Writes);
-        Assert.Equal(new[] { "Cabin altitude switch did not return, check it", "Outflow valve 50 percent open" }, rig.Speech.All);
+        // Three releases, then one every 2 s for 60 s: an unread switch is never known to rest.
+        Assert.Equal(new[] { CabinDescend, CabinDescend }.Concat(Enumerable.Repeat(CabinRelease, 3 + 30)), rig.Sim.Writes);
+        Assert.Equal(new[] { "Cabin altitude switch did not return; check the outflow valve", "Outflow valve 50 percent open" }, rig.Speech.All);
     }
 
     [Theory]
@@ -866,8 +975,8 @@ public class Bbs757SpringControlsTests
 
         await def.PressSpringAsync("BBS757_RUDDER_TRIM_RIGHT", new SimConnectManager(IntPtr.Zero), speech).WaitAsync(Ceiling);
 
-        Assert.Equal(new[] { RudderRight, RudderRight, RudderRelease, RudderRelease, RudderRelease }, sim.Writes);
-        Assert.Equal(new[] { "Rudder trim switch did not return, check it", "Rudder trim unavailable" }, speech.All);
+        Assert.Equal(new[] { RudderRight, RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 30)), sim.Writes);
+        Assert.Equal(new[] { RudderDidNotReturn, "Rudder trim unavailable" }, speech.All);
     }
 
     [Fact]
