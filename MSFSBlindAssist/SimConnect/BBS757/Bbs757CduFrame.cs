@@ -83,11 +83,11 @@ public static class Bbs757CduFrame
     }
 
     /// <summary>
-    /// The screen as the CDU window lists it, the HS787 FMC window's layout: the title; then for
-    /// each line select key its label row indented three spaces (left out when blank) and its data
-    /// row numbered "n:" (Ctrl+n or Alt+n presses that key); then the scratchpad. Trailing spaces
-    /// are dropped, leading ones kept, so a right-hand field stays on the right in braille.
+    /// The screen as the CDU window lists it, the texts of <see cref="Bbs757CduRows.Build"/> (the shape
+    /// the other aircraft's CDU windows share: "Title: ...", label rows, "n:" data rows, "Scratchpad: ...";
+    /// a blank screen is one row saying which CDU, <paramref name="cdu"/> 1 the captain's or 2 the
+    /// first officer's).
     /// </summary>
-    public static IReadOnlyList<string> ToDisplayLines(Bbs757CduScreen screen) =>
-        Bbs757CduRows.Build(screen).Select(r => r.Text).ToList();
+    public static IReadOnlyList<string> ToDisplayLines(Bbs757CduScreen screen, int cdu = 1) =>
+        Bbs757CduRows.Build(screen, cdu).Select(r => r.Text).ToList();
 }

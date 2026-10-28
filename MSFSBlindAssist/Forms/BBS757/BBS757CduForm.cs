@@ -251,7 +251,7 @@ public partial class BBS757CduForm : Form
 
         int savedIndex = cduDisplay.SelectedIndex;
         var before = _rows;
-        var rows = Bbs757CduRows.Build(screen);
+        var rows = Bbs757CduRows.Build(screen, _cdu);
         _rows = rows;
         Forms.DisplayList.UpdateInPlace(cduDisplay, rows.Select(r => r.Text).ToList());
 

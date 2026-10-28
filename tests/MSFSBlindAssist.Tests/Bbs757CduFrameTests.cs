@@ -162,7 +162,7 @@ public class Bbs757CduFrameTests
 
         Assert.Equal(new[]
         {
-            "          IDENT",
+            "Title: IDENT",
             "    MODEL           ENGINES",
             "1: 757-200           PW2037",
             "    NAV DATA         ACTIVE",
@@ -172,17 +172,18 @@ public class Bbs757CduFrameTests
             "4: 4618BBSR02C07     BB1001",
             "    OPC             DRAG/FF",
             "5: 8912RA422WL4   +0.0/+2.0",
-            "   ------------------------",
+            // the 24 dashes above line 6 are left out (R71)
             "6: <INDEX         POS INIT>",
-            "NAV DATA OUT OF DATE",
+            "Scratchpad: NAV DATA OUT OF DATE",
         }, lines);
     }
 
     [Fact]
-    public void A_blank_screen_still_shows_every_line_select_key()
+    public void A_blank_screen_says_which_cdu_it_is()
     {
-        var lines = Bbs757CduFrame.ToDisplayLines(Bbs757CduFrame.Parse(null));
+        var screen = Bbs757CduFrame.Parse(null);
 
-        Assert.Equal(new[] { "", "1:", "2:", "3:", "4:", "5:", "6:", "" }, lines);
+        Assert.Equal(new[] { "Captain CDU screen blank" }, Bbs757CduFrame.ToDisplayLines(screen));
+        Assert.Equal(new[] { "First officer CDU screen blank" }, Bbs757CduFrame.ToDisplayLines(screen, 2));
     }
 }

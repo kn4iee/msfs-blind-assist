@@ -1,6 +1,8 @@
+using System.Globalization;
+
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
-/// <summary>What a row of the CDU window is.</summary>
+/// <summary>What a row of the CDU window is. <c>Blank</c> is the one row of a screen with nothing on it.</summary>
 public enum Bbs757CduRowKind { Title, Label, Value, Scratchpad, Blank }
 
 /// <summary>
@@ -15,29 +17,66 @@ public sealed record Bbs757CduRow(Bbs757CduRowKind Kind, int Line, string Text);
 /// index ([MD11-17]'s rule, the MD-11's <c>Md11McduRows</c>). A label row is listed only when it has
 /// text, so a constraint deleted above the cursor removes a row and shifts every index below it; a
 /// title going ACT → MOD after an entry is the same page. Before this, both moved the cursor (plan 08).
-/// The texts are the window's today (<see cref="Bbs757CduFrame.ToDisplayLines"/> lists them); plan 09
-/// changes them. <see cref="Bbs757CduRowKind.Blank"/> is not produced yet: it is plan 09's, for rows it
-/// keeps on screen that carry nothing. Pure.
+/// The texts are the shape the other Boeing CDU windows list, for speech and for a 40-cell braille line
+/// (<see cref="Bbs757CduFrame.ToDisplayLines"/> lists them); see <see cref="Build"/>. Pure.
 /// </summary>
 public static class Bbs757CduRows
 {
+    // A label row of this many dashes and nothing else is the page's separator rule (R71).
+    private const int SeparatorDashes = 20;
+
     /// <summary>
-    /// The title; then for each line select key its label row indented three spaces (left out when
-    /// blank) and its data row numbered "n:"; then the scratchpad. Trailing spaces are dropped,
-    /// leading ones kept, so a right-hand field stays on the right in braille.
+    /// The window's rows, in the shape the other aircraft's CDU windows share. The title is "Title: "
+    /// and the page name, then three spaces and "page/pages" when the page has a counter, as the MD-11
+    /// window sets it ("Title: ACT RTE 1 LEGS   1/7", "Title: NAV RADIO"). Then for each line select key
+    /// its label row, indented three spaces and left out when blank, and its data row numbered "n:"
+    /// ("n:" alone when blank; Ctrl+n presses the key on the left, Alt+n on the right). A label row of
+    /// 20 or more dashes and nothing else is left out (R71: it is only the page's separator rule, braille
+    /// noise); one with other text among the dashes stays, and so does any data row. The scratchpad ends
+    /// the list: "Scratchpad: " and what it holds, "Scratchpad:" when empty. Trailing spaces are
+    /// dropped, interior ones kept, so a right-hand field stays in its column in braille; no row is
+    /// longer than 36 cells (24 columns and the longest prefix), inside a 40-cell braille line.
+    /// <para>
+    /// A screen with nothing on any of its 14 lines is one <see cref="Bbs757CduRowKind.Blank"/> row that
+    /// says which CDU it is (<paramref name="cdu"/> 1 the captain's, 2 the first officer's): a window that
+    /// listed only empty "n:" rows would say nothing about why. A screen with something on it always
+    /// lists the title row, "Title:" when the title is empty.
+    /// </para>
     /// </summary>
-    public static IReadOnlyList<Bbs757CduRow> Build(Bbs757CduScreen screen)
+    public static IReadOnlyList<Bbs757CduRow> Build(Bbs757CduScreen screen, int cdu)
     {
-        var rows = new List<Bbs757CduRow> { new(Bbs757CduRowKind.Title, 0, screen.Lines[0].TrimEnd()) };
+        if (screen.Lines.All(string.IsNullOrWhiteSpace))
+            return new[] { new Bbs757CduRow(Bbs757CduRowKind.Blank, 0, cdu == 1 ? "Captain CDU screen blank" : "First officer CDU screen blank") };
+
+        var rows = new List<Bbs757CduRow> { new(Bbs757CduRowKind.Title, 0, TitleText(screen.Lines[0])) };
         for (int key = 1; key <= 6; key++)
         {
             string label = screen.Lines[key * 2 - 1].TrimEnd();
             string data = screen.Lines[key * 2].TrimEnd();
-            if (label.Trim().Length > 0) rows.Add(new(Bbs757CduRowKind.Label, key, "   " + label));
-            rows.Add(new(Bbs757CduRowKind.Value, key, data.Trim().Length > 0 ? $"{key}: {data}" : $"{key}:"));
+            if (label.Trim().Length > 0 && !IsSeparator(label)) rows.Add(new(Bbs757CduRowKind.Label, key, "   " + label));
+            string number = key.ToString(CultureInfo.InvariantCulture);
+            rows.Add(new(Bbs757CduRowKind.Value, key, data.Trim().Length > 0 ? $"{number}: {data}" : $"{number}:"));
         }
-        rows.Add(new(Bbs757CduRowKind.Scratchpad, 0, screen.Lines[Bbs757CduFrame.ScratchpadRow].TrimEnd()));
+        string scratchpad = screen.Scratchpad;
+        rows.Add(new(Bbs757CduRowKind.Scratchpad, 0, scratchpad.Length > 0 ? "Scratchpad: " + scratchpad : "Scratchpad:"));
         return rows;
+    }
+
+    /// <summary>"Title: " and the page name, then three spaces and "page/pages" when there is a counter.</summary>
+    private static string TitleText(string titleRow)
+    {
+        string name = Bbs757CduTitle.PageName(titleRow);
+        string text = name.Length > 0 ? "Title: " + name : "Title:";
+        if (Bbs757CduTitle.Counter(titleRow) is { } counter)
+            text += string.Create(CultureInfo.InvariantCulture, $"   {counter.Page}/{counter.Pages}");
+        return text;
+    }
+
+    /// <summary>A label row that is only a rule: <see cref="SeparatorDashes"/> or more dashes, nothing else.</summary>
+    private static bool IsSeparator(string label)
+    {
+        string text = label.Trim();
+        return text.Length >= SeparatorDashes && text.All(c => c == '-');
     }
 
     /// <summary>
