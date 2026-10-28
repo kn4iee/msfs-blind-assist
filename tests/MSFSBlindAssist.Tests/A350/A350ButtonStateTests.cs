@@ -77,6 +77,10 @@ public class A350ButtonStateTests
     [InlineData("A350_FCU_ALT_KNOB_PUSH", "INI_FCU_ALT_DOT", 1, "Managed")]
     [InlineData("A350_FCU_VS_KNOB_PULL", "INI_PITCH_MODE", 8, "Engaged")]
     [InlineData("A350_FCU_VS_KNOB_PUSH", "INI_PITCH_MODE", 12, "Not engaged")]
+    // Live 2026-10-28: with INI_ALTITUDE_STATE 1 one knob click took 100 to 1000, with 0 it took 1000 to 1100. The
+    // selector's own position is a local object variable; its press only sends INI_FCU_ALTITUDE_MODE_COMMAND.
+    [InlineData("A350_FCU_ALT_SELECTOR", "INI_ALTITUDE_STATE", 1, "1000 feet")]
+    [InlineData("A350_FCU_ALT_SELECTOR", "INI_ALTITUDE_STATE", 0, "100 feet")]
     public void A_button_with_a_state_variable_reads_it(string row, string var, double value, string expected)
     {
         _cache[_def.KeyForInput(var)] = value;

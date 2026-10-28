@@ -58,6 +58,9 @@ public static class A350WritePlan
             ["AIRLINER_OXYTEST_FO_PANEL"] = 2000,
             ["AIRLINER_OXYTEST_TO_PANEL"] = 2000,
             ["AIRLINER_OXYTEST_4TH_PANEL"] = 2000,
+            // ACCU REINFLATE refills both brake accumulators only while held: 250 ms gave back 6 %, holding it filled
+            // them from 89 % to 100 % in under 2 s (live 2026-10-28).
+            ["AIRLINER_PARK_BRK_ACCU_REINFLATE"] = 2000,
         };
 
     /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>

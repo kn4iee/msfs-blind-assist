@@ -101,6 +101,15 @@ public class A350WritePlanTests : IDisposable
     }
 
     [Fact]
+    public void Accu_reinflate_is_held_until_the_accumulators_are_full()
+    {
+        // Live 2026-10-28: each parking brake application takes about 8.6 % of both accumulators; a 250 ms press of
+        // ACCU REINFLATE gave back 6 %, holding it filled them from 89 % to 100 % in under 2 s.
+        Assert.Equal(new[] { "2 (>B:AIRLINER_PARK_BRK_ACCU_REINFLATE_Set)", "wait 2000", "0 (>B:AIRLINER_PARK_BRK_ACCU_REINFLATE_Set)" },
+            Rpn(A350WritePlan.ForPress(C("AIRLINER_PARK_BRK_ACCU_REINFLATE"))));
+    }
+
+    [Fact]
     public void A_light_test_the_cockpit_returns_itself_is_pressed_once()
     {
         // Live 2026-10-26: AUTOLAND flips INI_AUTOLAND_LIGHT_TEST to 1 and the cockpit puts it back within a second.

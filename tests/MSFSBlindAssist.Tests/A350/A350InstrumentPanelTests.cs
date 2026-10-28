@@ -30,7 +30,7 @@ public class A350InstrumentPanelTests
             ("Anti-skid", A350RowAction.Set, OffOn),
             ("Brake fans", A350RowAction.Set, OffOn),
         }, Rows("Gear"));
-        Assert.Equal(new[] { "Brakes hot light" }, Lights("Gear"));
+        Assert.Equal(new[] { "Brakes hot light", "Gear lever red arrow light" }, Lights("Gear"));
     }
 
     /// <summary>A/BRK arms (INI_AUTOBRAKE_ARMED, level 4 = RTO on the ground) and disarms, its light following. The

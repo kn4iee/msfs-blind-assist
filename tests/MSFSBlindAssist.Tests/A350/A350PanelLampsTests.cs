@@ -92,6 +92,22 @@ public class A350PanelLampsTests
         Assert.False(captain.IsLit(key => key == captain.Key ? 0 : null));
     }
 
+    [Theory]
+    // Lamps the map has but no placed control owns (found 2026-10-28 by scanning every emissive material's variables
+    // against what MSFSBA reads): each is shown on the panel a pilot finds it on.
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Warnings", "Captain priority light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Warnings", "Captain priority arrow light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light")]
+    [InlineData("Instrument", "LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light")]
+    public void A_lamp_no_control_owns_is_shown_where_the_pilot_sees_it(string section, string node, string panel, string name)
+    {
+        var lamps = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { section });
+        var lamp = Assert.Single(lamps, l => l.Node == node);
+        Assert.Equal(panel, lamp.Panel);
+        Assert.Equal(name, lamp.Name);
+    }
+
     [Fact]
     public void A_lamp_knows_the_control_it_lights() =>
         Assert.Equal("AIRLINER_ELEC_BAT_1", Lamp("ELEC_BAT_1_SEQ1_LIGHT").ControlId);

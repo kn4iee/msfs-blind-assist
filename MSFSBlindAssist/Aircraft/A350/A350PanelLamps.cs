@@ -151,6 +151,14 @@ public static class A350PanelLamps
         ("MLG_BAY_LIGHT_SEQ1_LIGHT", "Fire", "MLG bay fire light"),
         ("IRS_ON_BAT_LIGHT", "ADIRS", "IRS on battery light"),
         ("CABIN_LAVATORY_SEQ1_LIGHT", "Cabin", "Lavatory occupied light"),
+        // Found 2026-10-28 by scanning every emissive material's variables against what MSFSBA reads. The glareshield's
+        // sidestick priority lights: the upper legend the green CAPT or F/O, the lower the red arrow toward the side with
+        // priority (the A320 family's layout); the gear lever's red arrow (gear not down in landing configuration).
+        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Warnings", "Captain priority light"),
+        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Warnings", "Captain priority arrow light"),
+        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light"),
+        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light"),
+        ("LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light"),
     };
 
     /// <summary>Indicators the map has no lamp node for, read from their own variable, shown after the map's: each oxygen

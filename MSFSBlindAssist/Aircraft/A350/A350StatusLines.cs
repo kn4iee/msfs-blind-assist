@@ -18,10 +18,19 @@ public static class A350StatusLines
     public static readonly IReadOnlyList<A350StatusLine> All = new[]
     {
         new A350StatusLine("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", "Rudder trim", RudderTrim),
-        new A350StatusLine("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", "Speed brake handle",
-            v => Math.Round(v * 100, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + " percent"),
+        new A350StatusLine("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", "Speed brake handle", Percent),
         new A350StatusLine("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", "Pitch trim", PitchTrim, "degrees"),
+        // The parking brake panel's accumulator gauges: each needle sweeps its INI_ACCU_*_PRESSURE_PERCENT, 0 to 1 of the
+        // dial (the model's animation reads it times 100).
+        new A350StatusLine("A350_STAT_ACCU_GREEN", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_GREEN_PRESSURE_PERCENT",
+            "Green brake accumulator pressure", Percent),
+        new A350StatusLine("A350_STAT_ACCU_YELLOW", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_YELLOW_PRESSURE_PERCENT",
+            "Yellow brake accumulator pressure", Percent),
     };
+
+    /// <summary>A 0 to 1 travel as a whole percent: "37 percent".</summary>
+    public static string Percent(double fraction) =>
+        Math.Round(fraction * 100, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + " percent";
 
     /// <summary>"5.5 degrees up" or "1.2 degrees down" (the A380's "Pitch trim (THS)" words).</summary>
     public static string PitchTrim(double degrees) =>

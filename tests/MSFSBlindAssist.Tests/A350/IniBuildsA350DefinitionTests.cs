@@ -83,6 +83,10 @@ public class IniBuildsA350DefinitionTests
     [InlineData("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", 0.366, "37 percent")]
     [InlineData("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", 5.48, "5.5 degrees up")]
     [InlineData("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", -1.24, "1.2 degrees down")]
+    // The parking brake panel's two accumulator gauges: their needles sweep INI_ACCU_*_PRESSURE_PERCENT, 0 to 1 of the
+    // dial (the model's animation reads it times 100), found 2026-10-28 by scanning the cockpit for unread indicators.
+    [InlineData("A350_STAT_ACCU_GREEN", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_GREEN_PRESSURE_PERCENT", 1, "100 percent")]
+    [InlineData("A350_STAT_ACCU_YELLOW", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_YELLOW_PRESSURE_PERCENT", 0.426, "43 percent")]
     public void A_pedestal_status_line_reads_what_the_lever_did(string key, string beside, string var, double value, string text)
     {
         var def = new WithSections("Pedestal");

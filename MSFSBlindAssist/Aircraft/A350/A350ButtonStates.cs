@@ -33,6 +33,9 @@ internal static class A350ButtonStates
     {
         ["A350_FCU_SPD_MACH"] = new("INI_AIRSPEED_IS_MACH", v => v >= 0.5 ? "Mach" : "Knots"),
         ["A350_FCU_TRK_FPA"] = new("INI_TRACK_FPA_STATE", v => v >= 0.5 ? "TRK-FPA" : "HDG-V/S"),
+        // The press only sends INI_FCU_ALTITUDE_MODE_COMMAND; the aircraft's state is INI_ALTITUDE_STATE (live 2026-10-28:
+        // with 1 one knob click took 100 to 1000, with 0 it took 1000 to 1100).
+        ["A350_FCU_ALT_SELECTOR"] = new("INI_ALTITUDE_STATE", v => v >= 0.5 ? "1000 feet" : "100 feet"),
         ["A350_FCU_SPD_KNOB_PUSH"] = Speed, ["A350_FCU_SPD_KNOB_PULL"] = Speed,
         ["A350_FCU_HDG_KNOB_PUSH"] = Heading, ["A350_FCU_HDG_KNOB_PULL"] = Heading,
         ["A350_FCU_ALT_KNOB_PUSH"] = Altitude, ["A350_FCU_ALT_KNOB_PULL"] = Altitude,

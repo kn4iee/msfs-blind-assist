@@ -419,6 +419,14 @@ internal sealed class ProbeForm : Form
         var panels = def.GetPanelControls();
         var displays = def.GetPanelDisplayVariables();
 
+        if (_mode == "vars")
+        {
+            // Every variable the definition registers (key, sim name), to find a cockpit indicator nothing reads.
+            foreach (var (key, d) in vars.OrderBy(v => v.Key, StringComparer.Ordinal))
+                Line($"{key}\t{d.Name}\t{d.DisplayName}");
+            return;
+        }
+
         if (_mode == "list")
         {
             foreach (var (panel, keys) in panels)
