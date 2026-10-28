@@ -546,6 +546,32 @@ public class A350MfdPageTests
         return cap with { Elements = elements, Texts = texts };
     }
 
+    /// <summary>Texts drawn inside the element at draw-order index <paramref name="element"/>, after its own: the later
+    /// elements' texts move down the draw order.</summary>
+    private static A350DrawCapture WithTexts(A350DrawCapture cap, int element, params DrawnText[] added)
+    {
+        int at = element + 1 < cap.Elements.Count ? cap.Elements[element + 1].TextStart : cap.Texts.Count;
+        var elements = cap.Elements.Select((e, i) => i > element ? e with { TextStart = e.TextStart + added.Length } : e).ToList();
+        var texts = cap.Texts.ToList();
+        texts.InsertRange(at, added);
+        return cap with { Elements = elements, Texts = texts };
+    }
+
+    // Review 2026-10-28: check box labels were taken in draw order, and VERT REV's AT OR ABOVE box is drawn before its
+    // check box: a value in it read under the waypoint field's name ("ALT CSTR AT: FL 100"), telling the pilot AT.
+    [Fact]
+    public void A_box_drawn_before_its_check_box_is_still_named_by_it()
+    {
+        var page = Load("mfd_vertrev_alt_imped");
+        var grey = new A350Rgba(0.5f, 0.5f, 0.5f, 1);
+        var cyan = new A350Rgba(0, 1, 1, 1);
+        var cap = WithTexts(page, ElementAt(page, "BaseUITextBox", 379, 422),
+            new DrawnText("FL", 386, 451, 386, 451, 0, grey), new DrawnText("100", 417, 453, 417, 453, 0, cyan));
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("AT OR ABOVE: FL 100, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("ALT CSTR AT: FL", StringComparison.Ordinal));
+    }
+
     /// <summary>The draw-order index of a side's element of <paramref name="cls"/> at <paramref name="x"/>, <paramref name="y"/>.</summary>
     private static int ElementAt(A350DrawCapture cap, string cls, float x, float y) =>
         cap.Elements.Select((e, i) => (e, i)).Single(p => p.e.Class == cls && p.e.X == x && p.e.Y == y).i;

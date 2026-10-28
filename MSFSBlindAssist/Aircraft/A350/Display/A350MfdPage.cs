@@ -114,6 +114,18 @@ public static class A350MfdPage
             float x0 = e.X - shift, x1 = x0 + e.RectW;
             return cells.Where(c => c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4);
         }).ToHashSet();
+        // Every check box's label (its own text, or the one just right of it), taken before any box is named: a box on a
+        // check box's row is that choice's value, and VERT REV's AT OR ABOVE box is drawn before its check box (review
+        // 2026-10-28).
+        foreach (var e in elements.Where(e => !hidden.Contains(e) && e.Class == "BaseUICheckbox"))
+        {
+            float x0 = e.X - shift, x1 = x0 + e.RectW;
+            var own = cells.Where(c => c.Index >= e.TextStart && c.X >= x0 && c.X <= x1 && c.Y >= e.Y && c.Y <= e.Y + e.RectH + 4).ToList();
+            if (own.Count == 0 && cells.Where(c => !inControls.Contains(c) && c.X > x1 && c.X - x1 <= 60
+                    && Math.Abs(c.Y - (e.Y + e.RectH * 0.75f)) <= 12).OrderBy(c => c.X).FirstOrDefault() is { } right)
+                own.Add(right);
+            checkboxLabels.UnionWith(own);
+        }
 
         // A waypoint's open revision menu or a drop-down (its items with their own texts drawn after them): its items are
         // its own, never the F-PLN's column headers (FROM P.POS DIR TO, and POSITION's REPORT, white, sit in their band,
