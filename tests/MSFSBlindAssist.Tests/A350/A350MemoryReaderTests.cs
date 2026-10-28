@@ -106,4 +106,29 @@ public class A350MemoryReaderTests
         }
         finally { VirtualFree(block, UIntPtr.Zero, 0x8000); }
     }
+
+    // A350HotPages: the pages that changed since the last copy are read a second time, right after the full
+    // copy, so what the A350 is changing comes from one frame even when the full copy spans several.
+    [Fact]
+    public void A_page_that_changed_since_the_last_copy_is_read_a_second_time()
+    {
+        const int size = 64 << 20;
+        IntPtr block = VirtualAlloc(IntPtr.Zero, (UIntPtr)size, Commit | Reserve, ReadWrite);
+        Assert.NotEqual(IntPtr.Zero, block);
+        try
+        {
+            var anchors = new List<(string, int)> { ("INI_TEST_ANCHOR_HOT", 4096) };
+            var b = Encoding.ASCII.GetBytes("INI_TEST_ANCHOR_HOT\0");
+            Marshal.Copy(b, 0, block + 4096, b.Length);
+            using var reader = new A350MemoryReader(anchors, Environment.ProcessId, minSpan: size);
+            Assert.True(reader.TryLocate());
+            reader.Snapshot();
+            Assert.Equal(0, reader.LastReread);
+            Marshal.WriteInt32(block + (32 << 20), 42);
+            var copy = reader.Snapshot();
+            Assert.Equal(A350HotPages.PageSize, reader.LastReread);
+            Assert.Equal(42, BitConverter.ToInt32(copy.Read(32 << 20, 4)));
+        }
+        finally { VirtualFree(block, UIntPtr.Zero, 0x8000); }
+    }
 }

@@ -45,9 +45,13 @@ public sealed class A350MemoryReader : IDisposable
     private readonly A350MemoryCopy _copy = new();
     private IntPtr _handle;
     private byte[] _buffer = Array.Empty<byte>();
+    private A350HotPages _hot = new();
 
     /// <summary>The A350 allocation's base in the sim, once located.</summary>
     public ulong Base { get; private set; }
+
+    /// <summary>Bytes the last snapshot read a second time (its pages that are changing).</summary>
+    public int LastReread { get; private set; }
 
     public A350MemoryReader(IReadOnlyList<(string Text, int Linear)> anchors, int? pid = null, ulong minSpan = WasmMemorySpan)
     {
@@ -99,6 +103,7 @@ public sealed class A350MemoryReader : IDisposable
     public bool TryLocate()
     {
         CloseProcess();
+        _hot = new A350HotPages();   // another A350 (or sim): nothing to compare with
         int? pid = _pid ?? FindSim();
         if (pid == null) return false;
         _handle = OpenProcess(ProcessQueryInformation | ProcessVmRead, false, pid.Value);
@@ -113,7 +118,9 @@ public sealed class A350MemoryReader : IDisposable
     public bool IsStillValid() => _handle != IntPtr.Zero && Base != 0 && AnchorsAt(Base);
 
     /// <summary>A fresh copy of the allocation's readable regions, in the reader's reused copy (valid until
-    /// the next snapshot). A region that fails to read is left out.</summary>
+    /// the next snapshot). A region that fails to read is left out. The pages that are changing are read a
+    /// second time right after the full copy (<see cref="A350HotPages"/>): a grown heap takes many frames to
+    /// copy, and only they can tear.</summary>
     public A350MemoryCopy Snapshot()
     {
         if (_handle == IntPtr.Zero || Base == 0) throw new InvalidOperationException("not located");
@@ -128,6 +135,12 @@ public sealed class A350MemoryReader : IDisposable
             kept.Add(((uint)(r.Base - Base), (int)r.Size));
             off += (int)r.Size;
         }
+        var runs = _hot.Track(kept, _buffer.AsSpan(0, off));
+        int reread = 0;
+        foreach (var (offset, linear, length) in runs)
+            if (ReadExact(Base + linear, _buffer, offset, length)) reread += length;
+        _hot.Reread(_buffer.AsSpan(0, off), runs);
+        LastReread = reread;
         _copy.Set(kept, _buffer);
         return _copy;
     }
