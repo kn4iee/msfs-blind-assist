@@ -41,7 +41,7 @@ public class A350PfdDisplayTests
             [("EFIS", 0)] = Fixture("ground_EFIS_0"), [("EFIS", 1)] = Fixture("efis1_fd_stand"),
             [("FCU", 0)] = Fixture("ground_FCU"), [("RMP", 0)] = Fixture("ground_RMP_0"), [("BAT", 0)] = Fixture("ground_BAT"),
         };
-        def.Pfd = new A350PfdMonitor((g, i) => Task.FromResult(draws.GetValueOrDefault((g, i))), _ => false, _ => { });
+        def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
         for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
 
         string Read(string panel)
@@ -80,7 +80,7 @@ public class A350PfdDisplayTests
             [("EFIS", 0)] = Fixture("ground_EFIS_0"), [("EFIS", 1)] = Fixture("efis1_fd_stand"),
             [("FCU", 0)] = Fixture("ground_FCU"), [("RMP", 0)] = Fixture("ground_RMP_0"),
         };
-        def.Pfd = new A350PfdMonitor((g, i) => Task.FromResult(draws.GetValueOrDefault((g, i))), _ => false, _ => { });
+        def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
         for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
         var key = IniBuildsA350Definition.DisplayPanels.Single(d => d.Panel == panel).Key;
 

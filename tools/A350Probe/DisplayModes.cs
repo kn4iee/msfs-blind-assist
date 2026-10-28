@@ -320,7 +320,7 @@ internal static class DisplayModes
         var asks = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>();
         svc.AVarAnswer = ask => { if (asks.TryAdd(ask, true)) Console.WriteLine($"ASK: {ask}"); return null; };
         svc.Start();
-        using var mon = new A350PfdMonitor(async (g, i) => (await svc.DrawAsync((g, i)))?.FirstOrDefault(), _ => false,
+        using var mon = new A350PfdMonitor(async gauges => await svc.DrawAsync(gauges), _ => false,
             line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
         mon.Start();
         Thread.Sleep(seconds * 1000);

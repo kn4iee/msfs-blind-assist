@@ -700,9 +700,10 @@ public partial class MainForm
             () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
             line => announcer.Announce(line));
         // The displays: the captain's EFIS drawn twice a second for the FMA call-outs (one Ctrl+M row per column),
-        // the first officer's once a second, the others in turn; each display's latest draw feeds its status display.
+        // the first officer's once a second, the others in turn, each tick's on one memory copy; each display's latest
+        // draw feeds its status display.
         a350PfdMonitor = new Aircraft.A350.Display.A350PfdMonitor(
-            async (gauge, index) => (await service.DrawAsync((gauge, index)))?.FirstOrDefault(),
+            async gauges => await service.DrawAsync(gauges),
             key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
             line => announcer.Announce(line));
         if (currentAircraft is IniBuildsA350Definition a350)

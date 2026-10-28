@@ -5,9 +5,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>
 /// The A350's displays in the background: the captain's EFIS drawn every tick and its FMA changes spoken with
 /// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the first officer's EFIS every other tick;
-/// and two of the other displays (MFD, FCU, RMPs, standby displays, BAT) each tick in turn. Each display's
-/// latest good draw is kept for its status display. Muted, it still follows the FMA, so unmuting never replays
-/// old modes.
+/// and two of the other displays (MFD, FCU, RMPs, standby displays, BAT) each tick in turn, a tick's displays all
+/// drawn on one memory copy. Each display's latest good draw is kept for its status display. Muted, it still
+/// follows the FMA, so unmuting never replays old modes.
 /// </summary>
 public sealed class A350PfdMonitor : IDisposable
 {
@@ -19,7 +19,7 @@ public sealed class A350PfdMonitor : IDisposable
         ("MFD", 0), ("FCU", 0), ("RMP", 0), ("RMP", 1), ("RMP", 2), ("SFD", 0), ("SND", 0), ("BAT", 0),
     };
 
-    private readonly Func<string, int, Task<A350DrawCapture?>> _draw;
+    private readonly Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> _draw;
     private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350FmaAnnouncer _fma = new();
@@ -27,7 +27,9 @@ public sealed class A350PfdMonitor : IDisposable
     private int _tick, _other;
     private CancellationTokenSource? _cts;
 
-    public A350PfdMonitor(Func<string, int, Task<A350DrawCapture?>> draw, Func<string, bool> muted, Action<string> speak)
+    /// <param name="draw">Draws the displays asked for on one memory copy, a capture (or null) for each in order; null
+    /// for all while the reader cannot draw.</param>
+    public A350PfdMonitor(Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> draw, Func<string, bool> muted, Action<string> speak)
     {
         _draw = draw;
         _muted = muted;
@@ -40,24 +42,21 @@ public sealed class A350PfdMonitor : IDisposable
     /// <summary>A display's latest draw that did not trap, or null.</summary>
     public A350DrawCapture? Latest(string gauge, int index) => _latest.GetValueOrDefault((gauge, index));
 
-    private async Task<A350DrawCapture?> Draw(string gauge, int index)
-    {
-        var cap = await _draw(gauge, index).ConfigureAwait(false);
-        if (cap is { Ok: true }) _latest[(gauge, index)] = cap;
-        return cap is { Ok: true } ? cap : null;
-    }
-
+    /// <summary>One tick: the captain's EFIS, every other tick the first officer's, and two of the others, asked for
+    /// at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
+    /// 650 ms, and a tick asking display by display made three or four).</summary>
     public async Task TickAsync()
     {
-        if (await Draw("EFIS", 0).ConfigureAwait(false) is { } cpt)
+        var gauges = new List<(string Gauge, int Index)> { ("EFIS", 0) };
+        if (_tick++ % 2 == 1) gauges.Add(("EFIS", 1));
+        for (int i = 0; i < 2; i++)
+            gauges.Add(Others[_other++ % Others.Count]);
+        if (await _draw(gauges.ToArray()).ConfigureAwait(false) is not { } caps) return;
+        for (int n = 0; n < gauges.Count && n < caps.Count; n++)
+            if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = cap;
+        if (caps.Count > 0 && caps[0] is { Ok: true } cpt)
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
                 if (!_muted(key)) _speak(line);
-        if (_tick++ % 2 == 1) await Draw("EFIS", 1).ConfigureAwait(false);
-        for (int i = 0; i < 2; i++)
-        {
-            var (gauge, index) = Others[_other++ % Others.Count];
-            await Draw(gauge, index).ConfigureAwait(false);
-        }
     }
 
     public void Start()
