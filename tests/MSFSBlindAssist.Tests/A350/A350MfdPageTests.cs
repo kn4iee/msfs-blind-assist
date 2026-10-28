@@ -77,6 +77,20 @@ public class A350MfdPageTests
         Assert.Contains("C/L COMPLETE button", lines);
     }
 
+    // AFTER START with every item ticked (live 2026-10-28): a ticked item is drawn "ANTI ICE : SET", its leader
+    // replaced by a spaced colon; it reads as the unticked one does, "ANTI ICE: SET".
+    [Fact]
+    public void A_ticked_checklist_item_reads_its_colon_unspaced()
+    {
+        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_cl_after_start_ticked.json")))!;
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("ANTI ICE: SET button, green", lines);
+        Assert.Contains("FLIGHT CONTROLS: CHECKED button, green", lines);
+        Assert.Contains("GROUND CLEARANCE: RECEIVED button, green", lines);
+        Assert.DoesNotContain(lines, l => l.Contains(" : "));
+    }
+
     // ILS 04 at VCBI tuned on RAD NAV (live): the font draws a degree sign as "d" ("dC" is °C), here after the
     // front course, "F040" and "d".
     [Fact]
