@@ -56,7 +56,7 @@ secret, as its length only, whatever STREAMER MODE is set to, and never echoes a
 | `A350Probe mfd "click:S:X:Y;type:S:TEXT;key:S:KEY"` | MFD clicks (the Coherent mouse route) and KCCU typing and keys through `A350MfdInput`, side S 0 or 1. The cursor keys (`ND`, `MFD`) are held and let go, as the aircraft never resets them [A350-3]. |
 | `A350Probe nd "views;click:S:X:Y;key:S:KEY;type:S:TEXT"` | `views` lists every WasmInstrument view with its gauge (`guid\|url`); a click on the side's EFIS gauge (the ND is right of 836) moves the side's KCCU cursor to the ND first [A350-4]. The EFIS view is found by its url's side, never by its title. |
 | `A350Probe rmpwin "keys"` | The RMP window (Ctrl+Shift+R) itself, with the delegates the hotkey passes, fed keys as typed: a digit or `.`, `enter`, `back`, `esc`, `f5`, `ctrl+N`, `alt+N`, `alt+LETTER`, `wait:MS`, `rmp:N` (the RMP box). Prints what it says, then its lines. |
-| `A350Probe hotkey "Action;wait:MS;type:TEXT;click:BUTTON;read;close"` | The definition's hotkeys (a `HotkeyAction` name) with the display service running; `type:`, `click:`, `read` and `close` act on the FCU window the last one opened. |
+| `A350Probe hotkey "Action;wait:MS;type:TEXT;click:BUTTON;read;close"` | The definition's hotkeys (a `HotkeyAction` name) with the display service running; `type:` and `click:` act on the FCU window the last one opened, `read` and `close` on any window it opened (the MFD window too). |
 | `A350Probe displays [name,name]` | Every display on demand as its status display reads it (the Displays panels, and the E/WD as Alt+E reads it), each from a good live draw, the draw code's sim asks answered from SimConnect's cache as MainForm answers them. `A350_DRAW_JSON=<dir>` saves the E/WD capture as a fixture. |
 | `A350Probe gsx "open;pick:TEXT;wait:MS;close"` | GSX through MSFSBA's own Remote API client, state and menu model (the Access GSX window's path): opens the menu, picks the entry holding TEXT; prints each menu and GSX's message slot as they change. |
 
@@ -95,6 +95,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | Variable | Modes | What it does |
 |---|---|---|
 | `A350_SECTIONS="Overhead,Glareshield"` | SimConnect modes | The sections offered. Default: MSFSBA's own five (Overhead, Glareshield, Instrument, Pedestal, Cockpit); an unknown name is refused with the list. |
+| `A350_HEAR=1` | `hotkey` | The background monitor's call-outs heard too, marked `[background]`, and told when the MFD window is open as MainForm tells it: an FMS message is said once, by the window while it is open, never again as it closes. |
 | `A350_MUTE="key,key"` | `listen` | Unticks those Ctrl+M rows, in memory only (the settings file is never written). |
 | `A350_TRACE="key,key"` | `listen` | Prints each delivery of those keys with its time, to see what the speech was made from. |
 | `A350_SPEEDS=0` | `listen` | Leaves the display reader out: no take-off speeds, no memory copies. |

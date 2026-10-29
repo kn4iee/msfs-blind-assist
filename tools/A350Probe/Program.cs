@@ -132,10 +132,17 @@ internal sealed class ProbeForm : Form
     /// next press without its rising edge); any other key is one press the aircraft resets.</summary>
     private static async Task<string> Pressed(MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput input, int side, string key)
     {
+        // A name the KCCU has no key for writes an L:var nothing reads (FPLN for FPLAN did nothing, 2026-10-30): refused.
+        if (!KccuKeys.Contains(key)) return "refused: no such KCCU key (" + string.Join(" ", KccuKeys.Order(StringComparer.Ordinal)) + ")";
         if (key is "ND" or "MFD") await input.MoveCursorAsync(side, key);
         else input.Press(side, key);
         return "sent";
     }
+
+    /// <summary>Every KCCU key: the page and function keys, and the one each typed character presses.</summary>
+    private static readonly HashSet<string> KccuKeys = new(MSFSBlindAssist.Aircraft.A350.Display.A350Kccu.FunctionKeys
+        .Concat(Enumerable.Range(32, 95).Select(c => MSFSBlindAssist.Aircraft.A350.Display.A350Kccu.KeysFor(((char)c).ToString()))
+            .Where(k => k is { Count: 1 }).Select(k => k![0])), StringComparer.Ordinal);
 
     private ProbeDefinition? _def;
 
@@ -397,16 +404,27 @@ internal sealed class ProbeForm : Form
         await WaitForDisplays(service);
         Line($"displays: {service.State} {service.Reason}");
         using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(() => true, _ => { });
+        // A350_HEAR=1: the background monitor's call-outs heard too, marked, and told when the MFD window is open as
+        // MainForm tells it (an FMS message said once, by the window while it is open).
+        bool hear = Environment.GetEnvironmentVariable("A350_HEAR") == "1";
         using var pfd = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
-            async gauges => await service.DrawAsync(gauges), _ => true, _ => { }) { CtrDrawn = ecam.Observe };
+            async gauges => await service.DrawAsync(gauges), _ => !hear,
+            line => BeginInvoke(() => cap.Announce("[background] " + line))) { CtrDrawn = ecam.Observe };
+        if (hear)
+        {
+            pfd.MfdWindowOpen = () => def.MfdWindowOpen;
+            pfd.MfdDark = () => def.IsScreenDark("Captain MFD");
+        }
         def.Displays = service;
         def.Ecam = ecam;
         def.Pfd = pfd;
         pfd.Start();
         await Task.Delay(6000);   // a turn of the rotations, so every display has a latest draw
+        Line($"start\tsaid: {cap.Drain()}");
         var hotkeys = new MSFSBlindAssist.Hotkeys.HotkeyManager();
         MSFSBlindAssist.Forms.A350.A350FcuWindowBase? Window() =>
             Application.OpenForms.OfType<MSFSBlindAssist.Forms.A350.A350FcuWindowBase>().LastOrDefault();
+        Form? AnyWindow() => Application.OpenForms.OfType<Form>().LastOrDefault(f => f is not ProbeForm);
         foreach (var token in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             if (token.StartsWith("wait:")) { await Task.Delay(int.Parse(token[5..])); Line($"wait\tsaid: {cap.Drain()}"); continue; }
@@ -429,7 +447,7 @@ internal sealed class ProbeForm : Form
                 Line($"{token}\tsaid: {cap.Drain()}");
                 continue;
             }
-            if (token == "read" && Window() is { } rw)
+            if (token == "read" && AnyWindow() is { } rw)
             {
                 await Task.Delay(700);   // a refresh tick
                 Line($"window\t{rw.Text}");
@@ -437,7 +455,7 @@ internal sealed class ProbeForm : Form
                     if (c is not Label) Line($"  {c.GetType().Name}\t{c.Text}");
                 continue;
             }
-            if (token == "close" && Window() is { } xw) { xw.Close(); await Task.Delay(300); Line("closed"); continue; }
+            if (token == "close" && AnyWindow() is { } xw) { xw.Close(); await Task.Delay(300); Line($"closed\tsaid: {cap.Drain()}"); continue; }
             if (!Enum.TryParse<MSFSBlindAssist.Hotkeys.HotkeyAction>(token, out var action)) { Line($"{token}\tunknown"); continue; }
             // A hotkey that saves the pilot's settings file (Ctrl+E's E/WD call-outs) is not run from a probe.
             if (action == MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleECAMMonitoring) { Line($"{token}\tnot run: it saves the pilot's settings file"); continue; }
