@@ -217,6 +217,13 @@ public static class A350SdSymbols
         y is > 480 and < 700 && x < 940 ? new SdSprite("gear door", y < 575 ? "green" : "amber",
             Word: ClosedGearDoors.Any(d => Math.Abs(d.X - x) <= 4 && Math.Abs(d.Y - y) <= 4) ? "closed" : "open") : null;
 
+    private const int WheelPage = 12;
+
+    /// <summary>The sprite at an atlas place on a page: a catalogued one, and on WHEEL alone a line of the gear doors' rows
+    /// (review 2026-10-29: matched on every page, any uncatalogued sprite there read as a gear door "open").</summary>
+    internal static SdSprite? SpriteFor(int page, float x, float y) =>
+        SpriteAt(x, y) ?? (page == WheelPage ? GearDoorAt(x, y) : null);
+
     public static IReadOnlyList<string> Read(IReadOnlyList<DrawnShape>? shapes, int page)
     {
         var o = new List<string>();
@@ -235,7 +242,7 @@ public static class A350SdSymbols
                 continue;
             }
             var (sx, sy) = A350ShapeReader.SpriteCentre(shape);
-            var sprite = SpriteAt(sx, sy) ?? GearDoorAt(sx, sy);
+            var sprite = SpriteFor(page, sx, sy);
             if (sprite == null) { MSFSBlindAssist.Utils.Logging.Log.Debug("A350Display", $"SD {page}: unknown sprite {sx:0},{sy:0} at {sym.Label}"); continue; }
             var tint = A350Rgba.NameOf(shape.Colour);
             var colour = tint == "white" ? sprite.Colour : tint;

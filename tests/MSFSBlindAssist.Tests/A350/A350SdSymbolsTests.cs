@@ -188,6 +188,18 @@ public class A350SdSymbolsTests
         Assert.Equal(14, p.Count(l => l.Contains("spoiler: retracted, amber") || l.Contains("spoiler") && l.EndsWith("retracted, amber")));
     }
 
+    // Review 2026-10-29 (readers minor 13): the gear doors' rows of the atlas were matched on every page, so any uncatalogued
+    // sprite there read as a gear door "open" wherever it was drawn. They are WHEEL's alone.
+    [Fact]
+    public void A_gear_door_is_read_on_the_wheel_page_alone()
+    {
+        Assert.Null(A350SdSymbols.SpriteAt(37, 522));   // a closed nose door's place: no catalogued sprite
+        Assert.Equal(new SdSprite("gear door", "green", Word: "closed"), A350SdSymbols.SpriteFor(12, 37, 522));
+        Assert.Equal(new SdSprite("gear door", "amber", Word: "open"), A350SdSymbols.SpriteFor(12, 200, 650));
+        foreach (int page in new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13 })
+            Assert.Null(A350SdSymbols.SpriteFor(page, 37, 522));
+    }
+
     // Review 2026-10-29: the accumulator and brake pressures followed the PC's culture ("3,4 thousand PSI" under de-DE and
     // sv-SE), the only lines across all 126 fixtures that did.
     [Theory]
