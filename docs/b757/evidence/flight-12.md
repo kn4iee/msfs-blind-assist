@@ -212,7 +212,7 @@ JIT loaded the managed SimConnect assembly when it compiled the connect method, 
 `SimConnect.dll` it needs (fixed: the half that names SimConnect's types is its own method, called after the copy). The
 second run swept the map as of `496dc91a3` (before Tasks 11 and 12): 168 controls, 276 position writes, 267 landed,
 9 did not, 0 not reached, 0 SimConnect exceptions, every control put back (no `RESTORE FAILED`). The table is kept in the
-plan's workspace (`sweep-2026-10-28-202530.tsv`). The nine:
+evidence folder (`sweep-12-2026-10-28.tsv`). The nine:
 
 - **Flight Deck Door** (`B757_OVHD_FLT-DK-DOOR_SWITCH`) → Unlocked (0) and → Deny (2): no change (read back Auto, 1).
   Expected: the component's 1 Hz update writes 1 once a second has passed since `O:UpdateTime`, which only its own click

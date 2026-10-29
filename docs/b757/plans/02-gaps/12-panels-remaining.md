@@ -258,7 +258,7 @@ ground 2026-10-28 (`flight-12.md`, "Windows and furniture"): every variable belo
 
 ### Task 12: The final review's fixes (2026-10-28)
 
-The whole-branch review of Tasks 5-10 (`final-review-5-10.md` in the workspace): "With fixes", no Critical.
+The whole-branch review of Tasks 5-10 (`docs/b757/evidence/review-12-tasks-5-10.md`): "With fixes", no Critical.
 - I1: the two Duct Leak Fuel Quantity Test buttons go (nothing in BlueBird reads `BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW`:
   not the WASM, no XML but its own switch, and nothing changed when it was held on the ground with BBS Nest running).
 - M1: Fire protection lists the fire handles first and the three fire tests after them, as the option the owner picked
