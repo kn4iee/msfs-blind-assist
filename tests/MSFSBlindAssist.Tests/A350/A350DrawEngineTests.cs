@@ -185,4 +185,23 @@ public class A350DrawEngineTests
         Assert.Equal("HELLO", Assert.Single(e.Draw("CTR").Texts).Text);
         Assert.Equal("HELLO", Assert.Single(e.Draw("CTR").Texts).Text);
     }
+    // Perf review 2026-10-30: each gauge class was looked for in its own pass over the copy, about 400 ms each at 339 MB
+    // (3.1 s for the classes a tick asks for after a load). One pass finds every class's objects, each list in address
+    // order across the copy's regions, and a word that is no class's vtable is no object.
+    [Fact]
+    public void One_pass_finds_every_classs_objects_in_address_order()
+    {
+        var mem = new byte[4096];
+        void Word(int at, uint v) => BitConverter.GetBytes(v).CopyTo(mem, at);
+        Word(16, 700); Word(64, 800); Word(128, 700); Word(200, 750);   // 750 lies between the vtables but is none
+        Word(2048 + 32, 900); Word(2048 + 96, 800);
+        var copy = new A350MemoryCopy();
+        copy.Set(new[] { (1000u, 2048), (9000u, 2048) }, mem);
+        var classOf = new Dictionary<uint, string> { [700] = "CTR", [800] = "MFD", [900] = "EFIS", [901] = "EFIS" };
+        var found = A350DrawEngine.FindObjects(copy, classOf);
+        Assert.Equal(new[] { 1016, 1128 }, found["CTR"]);
+        Assert.Equal(new[] { 1064, 9096 }, found["MFD"]);
+        Assert.Equal(new[] { 9032 }, found["EFIS"]);
+        Assert.Equal(3, found.Count);
+    }
 }

@@ -626,20 +626,45 @@ public sealed class A350DrawEngine : IDisposable
     {
         if (_objects.TryGetValue(cls, out var cached)) return cached;
         if (!Elapsed(_shortAt.TryGetValue(cls, out var shortAt) ? shortAt : null)) return Array.Empty<int>();
-        var vts = _facts.VTablesOf(cls).ToHashSet();
-        var list = new List<int>();
         var copy = _copy ?? throw new InvalidOperationException("no copy loaded");
-        if (vts.Count > 0)
-            for (int ri = 0; ri < copy.Regions.Count; ri++)
+        // One pass looks for every drawn class not yet found (perf review 2026-10-30: a pass per class took about 400 ms
+        // each at 339 MB, 3.1 s for the classes a tick asks for after a load); a class found keeps its list.
+        var classOf = new Dictionary<uint, string>();
+        foreach (var c in DrawnClasses.Append(cls).Distinct(StringComparer.Ordinal))
+            if (!_objects.ContainsKey(c))
+                foreach (var vt in _facts.VTablesOf(c)) classOf[vt] = c;
+        foreach (var (c, found) in FindObjects(copy, classOf)) _objects[c] = found;
+        if (_objects.TryGetValue(cls, out var list)) return list;
+        _shortAt[cls] = Environment.TickCount64;
+        return Array.Empty<int>();
+    }
+
+    /// <summary>The classes a draw can be asked for: those with a Draw in <see cref="A350ModulePatcher.DrawExports"/> (it
+    /// also exports two NanoVG functions).</summary>
+    private static readonly string[] DrawnClasses = A350ModulePatcher.DrawExports
+        .Where(n => n.Contains("::Draw(", StringComparison.Ordinal))
+        .Select(n => n[..n.IndexOf("::", StringComparison.Ordinal)]).Distinct(StringComparer.Ordinal).ToArray();
+
+    /// <summary>The objects of each class in one pass over the copy: a word that is one of a class's vtables (the first word
+    /// of an object), each class's list in address order. Only the classes with one are in the result.</summary>
+    internal static Dictionary<string, List<int>> FindObjects(A350MemoryCopy copy, IReadOnlyDictionary<uint, string> classOf)
+    {
+        var found = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        if (classOf.Count == 0) return found;
+        uint min = classOf.Keys.Min(), max = classOf.Keys.Max();   // the vtables sit together: most words fail this first
+        for (int ri = 0; ri < copy.Regions.Count; ri++)
+        {
+            var (lin, len) = copy.Regions[ri];
+            var b = copy.RegionBytes(ri);
+            for (int o = 0; o + 4 <= len; o += 4)
             {
-                var (lin, len) = copy.Regions[ri];
-                var b = copy.RegionBytes(ri);
-                for (int o = 0; o + 4 <= len; o += 4)
-                    if (vts.Contains(BitConverter.ToUInt32(b[o..]))) list.Add((int)lin + o);
+                uint w = BitConverter.ToUInt32(b[o..]);
+                if (w < min || w > max || !classOf.TryGetValue(w, out var c)) continue;
+                if (!found.TryGetValue(c, out var list)) found[c] = list = new List<int>();
+                list.Add((int)lin + o);
             }
-        if (list.Count > 0) _objects[cls] = list;
-        else _shortAt[cls] = Environment.TickCount64;
-        return list;
+        }
+        return found;
     }
 
     /// <summary>Draws one gauge on the loaded copy: "CTR", "EFIS" (0 captain, 1 first officer), "MFD",
