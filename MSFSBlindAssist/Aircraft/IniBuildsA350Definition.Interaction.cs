@@ -130,7 +130,7 @@ public partial class IniBuildsA350Definition
         if (plan.Refusal != null || plan.IsEmpty)
             return;
         _sim = simConnect;
-        _ = RunAsync(row.Key, plan.Steps, simConnect);
+        _ = RunAsync(RunKey(row), plan.Steps, simConnect);
         NoteOwnLamps(control);
     }
 
@@ -351,13 +351,17 @@ public partial class IniBuildsA350Definition
         if (commandedValue is double target)
             foreach (var key in CommandKeys(row.Key))
                 _commanded.Record(key, target, Clock());
-        _ = RunAsync(row.Key, plan.Steps, sim);
+        _ = RunAsync(RunKey(row), plan.Steps, sim);
         return true;
     }
 
+    /// <summary>What a run takes over: the switch its control writes, so both nudges of one trim switch are one switch (review
+    /// 2026-10-29: the first nudge's release cut a second nudge short); a row whose control names no event, itself.</summary>
+    private static string RunKey(A350PlacedRow row) => row.Control?.Event is { Length: > 0 } evt ? evt : row.Key;
+
     /// <summary>Runs a plan's steps on the UI thread (each await resumes there, so SimConnect is never used from a
-    /// pool thread, [SIM-20]). A later pick of the same row takes over: the earlier run's steps after its wait are
-    /// dropped.</summary>
+    /// pool thread, [SIM-20]). A later run of the same switch (<see cref="RunKey"/>) takes over: the earlier run's steps
+    /// after its wait are dropped.</summary>
     private async Task RunAsync(string rowKey, IReadOnlyList<A350Step> steps, SimConnectManager sim)
     {
         int run = ++_nextRunId;

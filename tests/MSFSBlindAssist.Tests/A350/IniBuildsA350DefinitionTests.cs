@@ -333,6 +333,25 @@ public class IniBuildsA350DefinitionTests
         Assert.False(def.RefreshControlWhenDefHandled!(between), $"{key} between detents at {between}");
     }
 
+    // Review 2026-10-29 (panels minor 6): the two rudder trim nudges are rows on one switch; a second nudge during the first's
+    // hold was put back to rest early by the first's release. A nudge takes the switch over: the earlier release is dropped.
+    [Theory]
+    [InlineData("A350_RUDDER_TRIM_LEFT", "A350_RUDDER_TRIM_RIGHT")]
+    [InlineData("A350_PITCH_TRIM_UP", "A350_PITCH_TRIM_DOWN")]
+    public void A_second_nudge_on_the_same_switch_takes_it_over(string first, string second)
+    {
+        var holds = new List<TaskCompletionSource>();
+        _def.Delay = _ => { var hold = new TaskCompletionSource(); holds.Add(hold); return hold.Task; };
+        Set(first, 1);
+        Set(second, 1);
+        Assert.Equal(2, _sent.Count);   // each pressed its side
+        holds[0].SetResult();            // the first nudge's hold ends while the second holds the switch
+        Assert.Equal(2, _sent.Count);
+        holds[1].SetResult();
+        Assert.Equal(3, _sent.Count);    // the second lets go, once
+        Assert.StartsWith("1 (>B:", _sent[^1], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_write_that_cannot_land_is_refused_aloud()
     {
