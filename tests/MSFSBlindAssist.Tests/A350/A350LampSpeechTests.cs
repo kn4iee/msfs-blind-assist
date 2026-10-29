@@ -1,4 +1,3 @@
-using System.Globalization;
 using MSFSBlindAssist.Aircraft.A350;
 
 namespace MSFSBlindAssist.Tests.A350;
@@ -58,15 +57,17 @@ public class A350LampSpeechTests
         Assert.Null(speech.Flush(2100 + A350LampSpeech.SettleMs + A350LampSpeech.OffHoldMs));
     }
 
+    // The owner (2026-10-27): several lights changing at once spoke "2 lights on: ..."; each light is spoken on its own,
+    // one at a time, as every other aircraft's lights are.
     [Fact]
-    public void Several_changes_read_as_one_sentence_lights_on_first()
+    public void Several_changes_read_one_light_at_a_time_lights_on_first()
     {
         var speech = new A350LampSpeech();
         speech.NotePowerChange(0);
         speech.Add(Off("Pack 1 fault light"), 10);
         speech.Add(On("GEN 1A fault light"), 20);
         speech.Add(On("GEN 1B fault light"), 30);
-        Assert.Equal("2 lights on: GEN 1A fault, GEN 1B fault. Pack 1 fault light off", speech.Flush(5000));
+        Assert.Equal("GEN 1A fault light on. GEN 1B fault light on. Pack 1 fault light off", speech.Flush(5000));
     }
 
     [Fact]
@@ -78,20 +79,6 @@ public class A350LampSpeechTests
         Assert.Null(speech.Flush(5000));
     }
 
-    [Fact]
-    public void Counts_are_invariant_under_a_comma_culture()
-    {
-        var saved = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = new CultureInfo("ar-SA");   // native digits would change "2"
-            Assert.StartsWith("2 lights on", A350LampCallouts.Compose(new[] { On("A light"), On("B light") }));
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = saved;
-        }
-    }
 }
 
 /// <summary>The A350's lights as the cockpit shows them, decided from the deliveries themselves: a lamp's first decided

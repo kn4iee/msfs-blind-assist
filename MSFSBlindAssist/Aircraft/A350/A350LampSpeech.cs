@@ -1,41 +1,24 @@
-using System.Globalization;
-
 namespace MSFSBlindAssist.Aircraft.A350;
 
 /// <summary>One light's change, for <see cref="A350LampCallouts"/>.</summary>
 public readonly record struct A350LampChange(string Name, bool On);
 
 /// <summary>
-/// The lights changed since the last sentence, as one sentence, so a power-up reads as a few sentences rather than a
-/// dozen queued lines: one change as its own phrase ("Pack 1 fault light on"), several the same way counted ("2 lights
-/// on: GEN 1A fault, GEN 1B fault"), lights coming on before lights going out. Pure.
+/// The lights changed since the last sentence, each light on its own, one at a time ("GEN 1A fault light on. GEN 1B
+/// fault light on"; the owner, 2026-10-27: never counted as "2 lights on: ..."), lights coming on before lights going
+/// out. Pure.
 /// </summary>
 public static class A350LampCallouts
 {
     /// <summary>ANN LT TEST lights every annunciator at once: one sentence, never two hundred names.</summary>
     public const string AnnunciatorTest = "Annunciator light test: all lights on";
 
-    public static string Compose(IReadOnlyList<A350LampChange> changes)
-    {
-        var parts = new List<string>(2);
-        Add(parts, changes.Where(c => c.On).Select(c => c.Name).ToList(), "on");
-        Add(parts, changes.Where(c => !c.On).Select(c => c.Name).ToList(), "off");
-        return string.Join(". ", parts);
-    }
-
-    private static void Add(List<string> parts, List<string> names, string word)
-    {
-        if (names.Count == 1)
-            parts.Add($"{names[0]} {word}");
-        else if (names.Count > 1)
-            parts.Add($"{names.Count.ToString(CultureInfo.InvariantCulture)} lights {word}: {string.Join(", ", names.Select(Short))}");
-    }
-
-    private static string Short(string name) => name.EndsWith(" light", StringComparison.Ordinal) ? name[..^6] : name;
+    public static string Compose(IReadOnlyList<A350LampChange> changes) =>
+        string.Join(". ", changes.Where(c => c.On).Select(c => $"{c.Name} on").Concat(changes.Where(c => !c.On).Select(c => $"{c.Name} off")));
 }
 
 /// <summary>
-/// When the A350's light changes are spoken: as one sentence (<see cref="A350LampCallouts"/>) at the first batch end
+/// When the A350's light changes are spoken: together, each light on its own (<see cref="A350LampCallouts"/>), at the first batch end
 /// once they are due, netted per light, so a light that went on and back off since the last sentence says nothing.
 /// The timings are the iniBuilds A300's, measured on the same light power variables (<c>INI_AC_LIGHTS_FAILURE</c>,
 /// <c>INI_DC_LIGHTS_FAILURE</c>) that reach MSFSBA on their own once-a-second subscriptions, out of the aircraft's order:
