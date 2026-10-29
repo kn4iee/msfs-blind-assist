@@ -607,6 +607,19 @@ public class A350MfdPageTests
         Assert.True(first > lines.ToList().FindIndex(l => l.Spoken == "DATA button"), string.Join(" | ", lines.Select(l => l.Spoken)));
     }
 
+    // Review 2026-10-28 (minor 11): the selected tab's name names a box with no label and no column only where it is the
+    // page's one such box (VERT REV's SPD, its speed); with two, a tab name would mislead ("CRZ: ..." on PERF CRZ).
+    [Fact]
+    public void The_tab_names_only_a_pages_one_unnamed_box()
+    {
+        Assert.Contains("SPD: 230 KT, cyan", Page("mfd_vertrev_spd_imped"));
+        var page = Load("mfd_vertrev_spd_imped");
+        var cap = WithTexts(page, ElementAt(page, "BaseUITextBox", 59, 573), new DrawnText("250", 139, 606, 139, 606, 0, new A350Rgba(0, 1, 1, 1)));
+        var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
+        Assert.DoesNotContain(lines, l => l.StartsWith("SPD: ", StringComparison.Ordinal));
+        Assert.Contains("Field: 250, cyan", lines);
+    }
+
     /// <summary>The draw-order index of a side's element of <paramref name="cls"/> at <paramref name="x"/>, <paramref name="y"/>.</summary>
     private static int ElementAt(A350DrawCapture cap, string cls, float x, float y) =>
         cap.Elements.Select((e, i) => (e, i)).Single(p => p.e.Class == cls && p.e.X == x && p.e.Y == y).i;

@@ -350,11 +350,13 @@ public static class A350MfdPage
         }
 
         // A label two fields share takes each field's column header: the nearest text above it in its column.
+        int unnamed = Enumerable.Range(0, fields.Count).Count(k => fields[k].Label == null && !columnNames.ContainsKey(k));
         for (int k = 0; k < fields.Count; k++)
         {
             var f = fields[k];
-            // With no label and no column, the tab the page is on says what the box holds (VERT REV's SPD).
-            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? pageTab ?? "Field";
+            // With no label and no column, the tab the page is on says what the page's one such box holds (VERT REV's SPD);
+            // with several, a tab name would mislead ("CRZ: ..." on PERF CRZ).
+            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? (unnamed == 1 ? pageTab : null) ?? "Field";
             if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)
