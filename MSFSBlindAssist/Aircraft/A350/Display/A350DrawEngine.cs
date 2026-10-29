@@ -161,8 +161,10 @@ public sealed class A350DrawEngine : IDisposable
                 },
                 "fsVarsNamedVarGet" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
+                    // An id the copy holds no CustomVariable for answers 0, as an unknown A: var does: writing nothing left
+                    // the draw reading a stale stack word as the value (review 2026-10-29).
                     int outPtr = a[2].AsInt32();
-                    if (outPtr != 0 && LVar(a[0].AsInt32()) is double v) _memory.WriteDouble(outPtr, v);
+                    if (outPtr != 0) _memory.WriteDouble(outPtr, LVar(a[0].AsInt32()) ?? 0);
                 },
                 "fsRenderFill" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
@@ -309,7 +311,14 @@ public sealed class A350DrawEngine : IDisposable
 
     private double? LVar(int id)
     {
-        if (_copy == null || !_customVars.TryGetValue(id, out var cv)) return null;
+        if (_copy == null) return null;
+        if (!_customVars.TryGetValue(id, out var cv))
+        {
+            // Not found when the copy was scanned: created since, so a later copy is scanned again (an id of 0 is the
+            // registration stubs' own answer, never a CustomVariable's).
+            if (id > 0) _customVarMissed = true;
+            return null;
+        }
         var b = _copy.Read(cv.Address + 16, 8);
         return b.Length == 8 ? BitConverter.ToDouble(b) : null;
     }
@@ -487,8 +496,12 @@ public sealed class A350DrawEngine : IDisposable
     {
         var copy = _copy!;
         // The objects live on the A350's heap and stay put while it is loaded: keep their addresses while
-        // every one still holds its id and name (about 1,200 checks instead of a 38 MB scan).
-        if (_customVars.Count > 0 && _customVars.All(kv => NameAt(copy, kv.Value.Address, (uint)kv.Key) == kv.Value.Name)) return;
+        // every one still holds its id and name (about 1,200 checks instead of a 38 MB scan), unless a draw asked
+        // for one they lack (one created since), at most every RescanMissingAfter.
+        bool missed = _customVarMissed && Elapsed(_customScanAt);
+        if (!missed && _customVars.Count > 0 && _customVars.All(kv => NameAt(copy, kv.Value.Address, (uint)kv.Key) == kv.Value.Name)) return;
+        _customVarMissed = false;
+        _customScanAt = Environment.TickCount64;
         _customVars.Clear();
         for (int ri = 0; ri < copy.Regions.Count; ri++)
         {
@@ -525,6 +538,30 @@ public sealed class A350DrawEngine : IDisposable
         }
     }
 
+    /// <summary>How long a scan that came up short (none of a gauge's objects, fewer than a draw asked for, or no
+    /// CustomVariable for an id a draw asked) stands before a later copy is scanned again. A flight load builds the gauges
+    /// and their variables after the copy's anchors appear, and a scan kept for good left a display unreadable for the
+    /// session (review 2026-10-29); a scan is a pass over the whole copy, so not on every draw.</summary>
+    public TimeSpan RescanMissingAfter { get; set; } = TimeSpan.FromSeconds(10);
+
+    private readonly Dictionary<string, long> _shortAt = new();
+    private bool _customVarMissed;
+    private long? _customScanAt;
+
+    private bool Elapsed(long? since) => since is not { } at || Environment.TickCount64 - at >= RescanMissingAfter.TotalMilliseconds;
+
+    /// <summary>Forgets the gauge objects and CustomVariables found, and starts a new instance with the next draw: the
+    /// reader found the A350 again (another one, or the same reloaded), which may hold more than the last one did.</summary>
+    public void Forget()
+    {
+        _objects.Clear();
+        _shortAt.Clear();
+        _customVars.Clear();
+        _customVarMissed = false;
+        _customScanAt = null;
+        _fresh = true;
+    }
+
     public int CustomVariableCount => _customVars.Count;
 
     internal (string Name, uint Address)? CustomVariable(int id) => _customVars.TryGetValue(id, out var cv) ? cv : null;
@@ -551,10 +588,12 @@ public sealed class A350DrawEngine : IDisposable
         return name.Length == 0 ? null : Encoding.ASCII.GetString(name);
     }
 
-    /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables).</summary>
+    /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables). A scan that finds
+    /// none is not kept, and is made again on a later copy once <see cref="RescanMissingAfter"/> has passed.</summary>
     public IReadOnlyList<int> Objects(string cls)
     {
         if (_objects.TryGetValue(cls, out var cached)) return cached;
+        if (!Elapsed(_shortAt.TryGetValue(cls, out var shortAt) ? shortAt : null)) return Array.Empty<int>();
         var vts = _facts.VTablesOf(cls).ToHashSet();
         var list = new List<int>();
         var copy = _copy ?? throw new InvalidOperationException("no copy loaded");
@@ -566,7 +605,8 @@ public sealed class A350DrawEngine : IDisposable
                 for (int o = 0; o + 4 <= len; o += 4)
                     if (vts.Contains(BitConverter.ToUInt32(b[o..]))) list.Add((int)lin + o);
             }
-        _objects[cls] = list;
+        if (list.Count > 0) _objects[cls] = list;
+        else _shortAt[cls] = Environment.TickCount64;
         return list;
     }
 
@@ -582,6 +622,14 @@ public sealed class A350DrawEngine : IDisposable
         }
         Clear();
         var objs = Objects(cls);
+        // Fewer objects than asked for (the first officer's EFIS built after the first scan): looked for again, at most
+        // every RescanMissingAfter.
+        if (index >= objs.Count && objs.Count > 0 && Elapsed(_shortAt.TryGetValue(cls, out var shortAt) ? shortAt : null))
+        {
+            _objects.Remove(cls);
+            objs = Objects(cls);
+            if (index >= objs.Count) _shortAt[cls] = Environment.TickCount64;
+        }
         if (index >= objs.Count) return new A350DrawCapture(cls, _texts, _frames, _elements, $"no {cls} object #{index}", 0);
         var sw = Stopwatch.StartNew();
         string? error = null;

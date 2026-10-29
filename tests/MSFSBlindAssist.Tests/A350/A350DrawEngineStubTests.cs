@@ -37,6 +37,7 @@ public class A350DrawEngineStubTests
         ("wasi_snapshot_preview1", "random_get", new[] { I32, I32 }, new[] { I32 }),
         ("env", "SimConnect_GetNextDispatch", new[] { I64, I32, I32 }, new[] { I32 }),
         ("env", "aircraft_varget", new[] { I32, I32, I32 }, new[] { F64 }),
+        ("env", "fsVarsNamedVarGet", new[] { I32, I32, I32 }, Array.Empty<byte>()),
     };
 
     /// <summary>An import's function index: the hook (path_readlink) is import 0, the table above follows it.</summary>
@@ -85,16 +86,25 @@ public class A350DrawEngineStubTests
         return m.Build();
     }
 
-    /// <summary>The copy: the CTR object (its flag at +4), "HELLO", and all ones at 8300 to 8307.</summary>
-    private static A350MemoryCopy Copy(uint flag = 0)
+    /// <summary>The copy: the CTR objects at <paramref name="objects"/> (each one's flag at +4; one at 5000 when none are
+    /// named), "HELLO", all ones at 8300 to 8307, 7.0 at 8400, and the CustomVariables named (id, address, value).</summary>
+    private static A350MemoryCopy Copy(uint flag = 0, int[]? objects = null, params (uint Id, string Name, int At, double Value)[] variables)
     {
         var mem = new byte[65536];
         U32(0, 3000, 11).CopyTo(mem, 2000);
         U32(1, 3100).CopyTo(mem, 3000);
         "3CTR\0"u8.ToArray().CopyTo(mem, 3100);
-        U32(VTable, flag).CopyTo(mem, Object);
+        foreach (int at in objects ?? new[] { Object }) U32(VTable, flag).CopyTo(mem, at);
         "HELLO"u8.ToArray().CopyTo(mem, Hello);
         U32(uint.MaxValue, uint.MaxValue).CopyTo(mem, 8300);
+        BitConverter.GetBytes(7.0).CopyTo(mem, 8400);
+        foreach (var (id, name, at, value) in variables)
+        {
+            BitConverter.GetBytes(id).CopyTo(mem, at);
+            System.Text.Encoding.ASCII.GetBytes(name).CopyTo(mem, at + 4);
+            mem[at + 4 + 11] = (byte)name.Length;
+            BitConverter.GetBytes(value).CopyTo(mem, at + 16);
+        }
         var copy = new A350MemoryCopy();
         copy.Set(new[] { (0u, mem.Length) }, mem);
         return copy;
@@ -220,6 +230,66 @@ public class A350DrawEngineStubTests
         e.Load(Copy());
         var cap = e.Draw("CTR");
         Assert.True(cap.Ok, cap.Error);
+    }
+
+    // Review 2026-10-29 (engine I1): a scan that found none of a gauge's objects was kept for good, and a flight load
+    // builds the gauges after the copy's anchors appear: one copy taken in between left "no CTR object #0" for the rest of
+    // the session. An empty scan is made again on a later copy, once RescanMissingAfter has passed.
+    [Fact]
+    public void A_scan_that_found_no_object_is_made_again_after_a_while()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.Load(Copy(objects: Array.Empty<int>()));
+        Assert.Contains("no CTR object", e.Draw("CTR").Error);
+        e.Load(Copy());
+        Assert.Contains("no CTR object", e.Draw("CTR").Error);   // within the wait: not scanned again
+        e.RescanMissingAfter = TimeSpan.Zero;
+        e.Load(Copy());
+        Assert.True(e.Draw("CTR").Ok);
+    }
+
+    // A gauge object beyond those found (the first officer's, built after the first scan) is looked for again too.
+    [Fact]
+    public void A_gauge_object_beyond_those_found_is_looked_for_again()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.RescanMissingAfter = TimeSpan.Zero;
+        e.Load(Copy());
+        Assert.Equal(new[] { Object }, e.Objects("CTR"));
+        e.Load(Copy(objects: new[] { Object, Object + 200 }));
+        Assert.True(e.Draw("CTR", 1).Ok);
+    }
+
+    // Re-located (another A350, or the same one reloaded), the engine forgets the objects and variables it knew, even where
+    // the old ones still check out at their addresses: the new A350 may hold more.
+    [Fact]
+    public void Forgetting_scans_the_next_copy_afresh()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.Load(Copy(variables: new[] { (77u, "INI_TESTV", 8000, 1.5) }));
+        Assert.Equal(new[] { Object }, e.Objects("CTR"));
+        e.Forget();
+        e.Load(Copy(objects: new[] { Object, Object + 200 }, variables: new[] { (77u, "INI_TESTV", 8000, 1.5), (79u, "INI_TESTX", 9000, 3.5) }));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+        Assert.Equal(3.5, e.LVarValue(79));
+    }
+
+    // Review 2026-10-29 (engine I1, M4): CustomVariables were scanned once and kept while each still checked out, so one
+    // created later was never found, and an ask for an id the cache lacked wrote nothing: the draw read a stale word as
+    // the value. Such an ask answers 0, and has a later copy scanned again.
+    [Fact]
+    public void An_unknown_variable_answers_zero_and_a_later_copy_finds_it()
+    {
+        // fsVarsNamedVarGet(78, 0, 8400); the f64 at 8400 (7.0 in the copy) must read 0.
+        byte[] Body(int _) => I32Const(78).Concat(I32Const(0)).Concat(I32Const(8400)).Concat(Call(Imp("fsVarsNamedVarGet")))
+            .Concat(I32Const(8400)).Concat(new byte[] { 0x2B, 0x03, 0x00, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0x62 }).Concat(TrapIfTrue).ToArray();
+        using var e = Engine(Body);
+        e.RescanMissingAfter = TimeSpan.Zero;
+        e.Load(Copy(variables: new[] { (77u, "INI_TESTV", 8000, 1.5) }));
+        var cap = e.Draw("CTR");
+        Assert.True(cap.Ok, cap.Error + "\n" + e.LastTrap);
+        e.Load(Copy(variables: new[] { (77u, "INI_TESTV", 8000, 1.5), (78u, "INI_TESTW", 9000, 2.5) }));
+        Assert.Equal(2.5, e.LVarValue(78));
     }
 
     [Fact]

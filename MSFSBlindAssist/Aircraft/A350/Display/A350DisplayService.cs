@@ -117,7 +117,11 @@ public sealed class A350DisplayService : IDisposable
         var now = DateTime.UtcNow;
         if (!_status.MayLocate(now)) return false;
         bool ok = _reader.TryLocate();
-        if (ok) Log.Info("A350Display", $"A350 memory at 0x{_reader.Base:x}");
+        if (ok)
+        {
+            Log.Info("A350Display", $"A350 memory at 0x{_reader.Base:x}");
+            _draw?.Forget();   // another A350, or this one reloaded: what the engine found in the last one is gone
+        }
         else
         {
             Log.Debug("A350Display", "A350 not located: " + _reader.LastFailure);
