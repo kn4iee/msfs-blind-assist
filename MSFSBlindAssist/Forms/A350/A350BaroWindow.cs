@@ -6,8 +6,9 @@ namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>
 /// The A380's Altimeter window on the A350 (input Ctrl+B): a QNH typed once sets both sides and the ISIS (each side's
-/// typed QNH row, in that side's unit), STD on both sides (the baro knob's push) or QNH (its pull); both sides' baro and
-/// the ISIS setting stay current in read-only boxes.
+/// typed QNH row, in that side's unit), STD on both sides (the baro knob's push) or QNH (its pull), and each side's unit
+/// (its EFIS panel's unit button, a toggle labelled with the unit it shows: the A380's unit, parity task 7); both sides'
+/// baro and the ISIS setting stay current in read-only boxes.
 /// </summary>
 public sealed class A350BaroWindow : A350FcuWindowBase
 {
@@ -17,7 +18,7 @@ public sealed class A350BaroWindow : A350FcuWindowBase
         : base(aircraft, simConnect, announcer)
     {
         Text = "A350 Altimeter";
-        Size = new Size(420, 330);
+        Size = new Size(420, 380);
         var label = new Label { Text = "QNH (both sides):", Location = new Point(20, 25), Size = new Size(130, 20) };
         _qnh = new TextBox { Location = new Point(160, 22), Size = new Size(110, 25), TabIndex = 0, AccessibleName = "QNH value",
             AccessibleDescription = "Hectopascals (1013) or inches (29.92), in each side's unit. Enter sets both sides and the ISIS." };
@@ -46,9 +47,12 @@ public sealed class A350BaroWindow : A350FcuWindowBase
             aircraft.PressRow("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", simConnect, announcer);
             aircraft.PressRow("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL", simConnect, announcer);
         };
-        var close = new Button { Text = "Close", Location = new Point(140, 220), Size = new Size(140, 35), TabIndex = 6, AccessibleName = "Close" };
+        // Each side's unit apart: one button for both would flip two sides that differ the wrong way round.
+        var captainUnit = RowButton("Captain baro unit", "A350_EFIS_QNH_UNIT_SELECTOR_LEFT", 20, 205, 175, 6);
+        var firstOfficerUnit = RowButton("First officer baro unit", "A350_EFIS_QNH_UNIT_SELECTOR_RIGHT", 205, 205, 175, 7);
+        var close = new Button { Text = "Close", Location = new Point(140, 270), Size = new Size(140, 35), TabIndex = 8, AccessibleName = "Close" };
         close.Click += (s, e) => Close();
-        Controls.AddRange(new Control[] { label, _qnh, _captain, _firstOfficer, _isis, std, qnh, close });
+        Controls.AddRange(new Control[] { label, _qnh, _captain, _firstOfficer, _isis, std, qnh, captainUnit, firstOfficerUnit, close });
         CancelButton = close;
     }
 

@@ -131,3 +131,18 @@ public sealed class A350FcuWindowsTests : IDisposable
     public void An_unread_input_composes_nothing() =>
         Assert.Null(Read(W("Altitude window"), ("INI_ALTITUDE_DIAL", 10000)));
 }
+
+/// <summary>Parity task 7 (2026-10-29): the A380's Altimeter window sets the baro unit; the A350's offers each side's unit
+/// button (the EFIS panel's own row, a toggle), labelled with the unit it shows, after STD and QNH.</summary>
+public class A350BaroWindowUnitTests
+{
+    [Fact]
+    public void Each_sides_unit_button_is_offered_after_std_and_qnh()
+    {
+        var def = new MSFSBlindAssist.Aircraft.IniBuildsA350Definition();
+        var sim = new MSFSBlindAssist.SimConnect.SimConnectManager(IntPtr.Zero);
+        using var window = new MSFSBlindAssist.Forms.A350.A350BaroWindow(def, sim, new SpeechCapture());
+        var buttons = window.Controls.OfType<System.Windows.Forms.Button>().OrderBy(b => b.TabIndex).Select(b => b.AccessibleName).ToList();
+        Assert.Equal(new[] { "STD, both sides", "QNH, both sides", "Captain baro unit", "First officer baro unit", "Close" }, buttons);
+    }
+}
