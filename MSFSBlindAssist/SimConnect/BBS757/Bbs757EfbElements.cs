@@ -21,9 +21,10 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// is the tablet's own: while it shows a question over its page, the page is dimmed and takes no tap, so its controls are text until the
 /// question is answered. The question's answers press, and so does the top bar, which stays lit above the dimming.
 ///
-/// The order the pilot meets: the alert; the tablet's question (its words, an alert, then its answers); the top bar; BlueBird's
+/// The order the pilot meets: the alert; the tablet's question (its words as text, then its answers); the top bar; BlueBird's
 /// notifications under a heading; Home and the side menu; the page; the app's extras; the scroll buttons; and "More" with Read the
-/// tablet again.
+/// tablet again. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
+/// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first.
 /// </summary>
 public static class Bbs757EfbElements
 {
@@ -45,10 +46,16 @@ public static class Bbs757EfbElements
     /// <param name="model">The page read, or null when none is shown (a status in its place).</param>
     /// <param name="alert">A word the window speaks at once and shows first (a status, or the outcome of a press); null for none.</param>
     /// <param name="extras">What the app adds to the page, in order (the bridge decides, by page).</param>
-    public static Built Build(Bbs757EfbScreenModel? model, string? alert, IReadOnlyList<Bbs757EfbExtraElement> extras)
+    /// <param name="numberFor">The number (aidx) of an element, from its identity on the page: its key, else its words, and which of
+    /// the page's elements with that identity it is ("btn:HOME#1"). The bridge keeps an element's number while the element stays and
+    /// never gives one number to two elements (<see cref="Bbs757EfbPushes"/>), so a press the window sends names the element it was
+    /// made on, even after a later push. Null numbers the elements 1, 2, 3 and so on.</param>
+    public static Built Build(Bbs757EfbScreenModel? model, string? alert, IReadOnlyList<Bbs757EfbExtraElement> extras,
+        Func<string, int>? numberFor = null)
     {
         var data = new Dictionary<string, string>(StringComparer.Ordinal) { ["page"] = model?.PageName ?? "BlueBird tablet" };
         var actions = new Dictionary<int, Action>();
+        var identities = new Dictionary<string, int>(StringComparer.Ordinal);
         int n = 0;
 
         void Add(string text, string kind = "", string controlType = "", bool clickable = false, int level = 0,
@@ -56,7 +63,9 @@ public static class Bbs757EfbElements
             string live = "", double? min = null, double? max = null, double? step = null, Action? action = null)
         {
             int i = n++;
-            int aidx = i + 1;
+            string identity = key.Length > 0 ? key : "text|" + text;
+            int occurrence = identities[identity] = identities.GetValueOrDefault(identity) + 1;
+            int aidx = numberFor?.Invoke(identity + "#" + occurrence.ToString(CultureInfo.InvariantCulture)) ?? i + 1;
             data[$"items.{i}.aidx"] = aidx.ToString(CultureInfo.InvariantCulture);
             data[$"items.{i}.text"] = text;
             data[$"items.{i}.tag"] = "";
@@ -87,7 +96,8 @@ public static class Bbs757EfbElements
             bool dimmed = model.Question != null;
             if (model.Question is { } question)
             {
-                Add(question.Text, kind: "alert", live: "assertive", key: "question");
+                // Text: an alert here would be said again whenever another alert went (see the class summary).
+                Add(question.Text, key: "question");
                 foreach (var answer in question.Buttons)
                     Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer));
             }

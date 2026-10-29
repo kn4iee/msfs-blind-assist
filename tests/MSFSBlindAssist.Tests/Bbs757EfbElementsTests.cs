@@ -206,14 +206,18 @@ public class Bbs757EfbElementsTests
     // ---- the order -----------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void A_question_comes_first_and_is_an_alert()
+    public void A_question_comes_first_as_text()
     {
+        // The window speaks only its first alert and remembers one text: a question kept as an alert would be said again whenever
+        // another alert went. The bridge says a new question through its own alert, once (plan 18, Task 8); here it is text.
         var page = Bbs757EfbScreenTests.Load("bright", "21-defuel-question");
         var b = Bbs757EfbElements.Build(page, null, NoExtras);
 
         Assert.Equal(page.Question!.Text, Field(b, 0, "text"));
-        Assert.Equal("alert", Field(b, 0, "kind"));
-        Assert.Equal("assertive", Field(b, 0, "live"));
+        Assert.Equal("question", Field(b, 0, "key"));
+        AssertText(b, page.Question.Text);
+        Assert.Equal("", Field(b, 0, "live"));
+        Assert.DoesNotContain(Enumerable.Range(0, b.Count), i => Field(b, i, "kind") == "alert");
         // Its answers follow at once, left to right, each pressing its own control on the tablet.
         Assert.Equal(new[] { "Yes", "No" }, Texts(b).Skip(1).Take(2));
         for (int answer = 0; answer < 2; answer++)
@@ -234,12 +238,12 @@ public class Bbs757EfbElementsTests
         var b = Bbs757EfbElements.Build(page, null, NoExtras);
 
         Assert.Equal("Fuel adjustment is complete!", Field(b, 0, "text"));
-        Assert.Equal("alert", Field(b, 0, "kind"));
+        AssertText(b, "Fuel adjustment is complete!");
         Assert.Same(Assert.Single(page.Question!.Buttons), AssertPressable(b, "OK").Item);
     }
 
     [Fact]
-    public void An_alert_is_ahead_of_the_question()
+    public void An_alert_is_ahead_of_the_question_and_is_the_only_alert()
     {
         var page = Bbs757EfbScreenTests.Load("bright", "21-defuel-question");
         var b = Bbs757EfbElements.Build(page, "The tablet did not show Fuel. Try again, or use Read the tablet again.", NoExtras);
@@ -248,8 +252,34 @@ public class Bbs757EfbElementsTests
         Assert.Equal("alert", Field(b, 0, "kind"));
         Assert.Equal("assertive", Field(b, 0, "live"));
         Assert.Equal(page.Question!.Text, Field(b, 1, "text"));
-        Assert.Equal("alert", Field(b, 1, "kind"));
+        Assert.Equal("", Field(b, 1, "kind"));
+        Assert.Single(Enumerable.Range(0, b.Count), i => Field(b, i, "kind") == "alert");
         Assert.Equal(new[] { "Yes", "No" }, Texts(b).Skip(2).Take(2));
+    }
+
+    [Fact]
+    public void Each_element_is_numbered_by_its_identity_on_the_page()
+    {
+        // The bridge numbers an element by what it is (its key, else its words, and which of the page's elements with that identity
+        // it is), so it can keep the number while the element stays and never give one number to two elements.
+        var page = Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services");
+        var identities = new List<string>();
+        var numbered = Bbs757EfbElements.Build(page, "Alert", NoExtras, identity =>
+        {
+            identities.Add(identity);
+            return 1000 + identities.Count;
+        });
+
+        Assert.Equal(numbered.Count, identities.Count);
+        Assert.Equal(identities.Count, identities.Distinct().Count());
+        Assert.Equal(Enumerable.Range(1001, numbered.Count).Select(n => n.ToString()), Enumerable.Range(0, numbered.Count).Select(i => Field(numbered, i, "aidx")));
+        Assert.Equal("alert#1", identities[0]);
+        Assert.Contains("btn:HOME#1", identities);
+        Assert.Equal("btn:HOME", numbered.Actions[1001 + identities.IndexOf("btn:HOME#1")].Item!.Key);
+
+        // Without a numbering, 1, 2, 3...
+        var plain = Bbs757EfbElements.Build(page, null, NoExtras);
+        Assert.Equal(Enumerable.Range(1, plain.Count).Select(n => n.ToString()), Enumerable.Range(0, plain.Count).Select(i => Field(plain, i, "aidx")));
     }
 
     [Fact]
@@ -581,6 +611,6 @@ public class Bbs757EfbNavigationCheckTests
     [InlineData("AIRCRAFT", "GROUND SERVICES", "Fuel", false)]
     public void A_navigation_tap_is_judged_by_the_page_name(string app, string section, string tapped, bool landed)
     {
-        Assert.Equal(landed, Bbs757EfbBridge.PageIs(Page(app, section), tapped));
+        Assert.Equal(landed, Bbs757EfbPressRunner.PageIs(Page(app, section), tapped));
     }
 }

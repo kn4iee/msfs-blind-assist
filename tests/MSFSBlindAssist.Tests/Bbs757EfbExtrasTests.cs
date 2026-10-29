@@ -322,4 +322,94 @@ public class Bbs757EfbExtrasTests
         Assert.Equal("", Bbs757EfbExtras.NavDataOutcome(hook, 2609, 2610, true));
         Assert.Equal("", Bbs757EfbExtras.NavDataOutcome(hook, 2610, null, false));
     }
+
+    // ---- the nav data watch (plan 18, Task 8) -----------------------------------------------------------------------------------
+
+    /// <summary>BlueBird's cycle file as the watch reads it, second by second on a clock the watch's waits move: what it holds and
+    /// whether it is there in the first second, the second, and so on (the last reading from then on).</summary>
+    private sealed class CycleFile
+    {
+        public (int? Cycle, bool There)[] Reads = { (2609, true) };
+        public long Now;
+        public readonly List<int> Waits = new();
+
+        private (int? Cycle, bool There) Reading => Reads[Math.Clamp((int)(Now / 1000) - 1, 0, Reads.Length - 1)];
+
+        public int? ReadCycle() => Reading.Cycle;
+
+        public bool There() => Reading.There;
+
+        public Task Delay(int ms, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Waits.Add(ms);
+            Now += ms;
+            return Task.CompletedTask;
+        }
+
+        public Task<string> Watch(Bbs757EfbHook hook, int? before) =>
+            Bbs757EfbExtras.WatchNavDataAsync(hook, before, ReadCycle, There, Delay, () => Now, CancellationToken.None);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task An_update_is_said_as_soon_as_the_file_holds_the_new_cycle(string culture)
+    {
+        var file = new CycleFile { Reads = new (int?, bool)[] { (2609, true), (2609, true), (2610, true) } };
+
+        string said = await TestCulture.Run(culture, () => file.Watch(Bbs757EfbHook.NavDataUpdate, 2609));
+
+        Assert.Equal("Nav data cycle 2610 installed. Reload the flight to use it.", said);
+        Assert.Equal(new[] { 1000, 1000, 1000 }, file.Waits);   // read every second, ended at the third
+    }
+
+    [Fact]
+    public async Task An_update_that_never_comes_is_judged_after_twenty_seconds()
+    {
+        // BlueBird may rewrite the file during an update, so a missing file is judged only once the whole window has passed.
+        var file = new CycleFile { Reads = new (int?, bool)[] { (2609, true), (null, false), (2609, true) } };
+
+        string said = await file.Watch(Bbs757EfbHook.NavDataUpdate, 2609);
+
+        Assert.Equal("The update did not finish. Try again after reloading the flight.", said);
+        Assert.Equal(Bbs757EfbExtras.NavDataWatchMs, file.Waits.Sum());
+        Assert.All(file.Waits, w => Assert.Equal(Bbs757EfbExtras.NavDataPollMs, w));
+    }
+
+    [Fact]
+    public async Task An_update_whose_file_is_gone_at_the_end_was_a_removal()
+    {
+        var file = new CycleFile { Reads = new (int?, bool)[] { (null, false) } };
+
+        Assert.Equal("BlueBird removed the installed nav data instead of updating it. With an active Navigraph subscription, reload the flight and update again.",
+            await file.Watch(Bbs757EfbHook.NavDataUpdate, 2609));
+        Assert.Equal(20_000, file.Waits.Sum());
+    }
+
+    [Fact]
+    public async Task A_removal_is_said_as_soon_as_the_file_is_gone()
+    {
+        var file = new CycleFile { Reads = new (int?, bool)[] { (2610, true), (null, false) } };
+
+        Assert.Equal("BlueBird removed the installed nav data.", await file.Watch(Bbs757EfbHook.NavDataRemove, 2610));
+        Assert.Equal(new[] { 1000, 1000 }, file.Waits);
+    }
+
+    [Fact]
+    public async Task A_removal_that_never_comes_is_said_after_twenty_seconds()
+    {
+        var file = new CycleFile { Reads = new (int?, bool)[] { (2610, true) } };
+
+        Assert.Equal("BlueBird did not remove the nav data.", await file.Watch(Bbs757EfbHook.NavDataRemove, 2610));
+        Assert.Equal(20_000, file.Waits.Sum());
+    }
+
+    [Fact]
+    public async Task A_hook_that_is_no_nav_data_press_watches_nothing()
+    {
+        var file = new CycleFile();
+
+        Assert.Equal("", await file.Watch(Bbs757EfbHook.Fetch, 2609));
+        Assert.Empty(file.Waits);
+    }
 }

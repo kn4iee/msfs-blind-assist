@@ -31,6 +31,13 @@ public sealed class Bbs757NavigraphIo
 
     /// <summary>Opens an address in the pilot's browser (<see cref="Bbs757NavigraphSignIn.OpenInBrowser"/>); false when it could not.</summary>
     public required Func<Uri, bool> OpenBrowser { get; init; }
+
+    /// <summary>
+    /// Puts the line the page keeps ("Navigraph code: {code}") on the page as soon as a code was read, before it is spoken, so the
+    /// pilot can read it character by character while it is said (the tablet window, plan 18 Task 8); null when nothing shows it
+    /// early (the line is still returned). Called on the flow's own thread; never given anything but that line.
+    /// </summary>
+    public Action<string>? Show { get; init; }
 }
 
 /// <summary>
@@ -111,8 +118,9 @@ public static class Bbs757NavigraphSignIn
 
     /// <summary>
     /// The sign-in, said as it goes and returned as the line the page keeps: "Navigraph code: {code}" once a code was spoken
-    /// (whether or not its address could be opened: the pilot can type the code in by hand), else the refusal or the news that the
-    /// pilot is already signed in, which is also what was said. A refusal is said at once, everything else queued:
+    /// (whether or not its address could be opened: the pilot can type the code in by hand; given to <see cref="Bbs757NavigraphIo.Show"/>
+    /// first, before it is spoken), else the refusal or the news that the pilot is already signed in, which is also what was said. A
+    /// refusal is said at once, everything else queued:
     /// <list type="bullet">
     /// <item>the helper view does not answer: <see cref="NotReachableText"/>; it is read again once it does, because a client that
     /// has just connected answers empty;</item>
@@ -144,8 +152,9 @@ public static class Bbs757NavigraphSignIn
 
         // The code is spoken BEFORE the browser opens: opening it moves focus and the screen reader
         // reads the browser, which would cut the code off. The page keeps the code as it is,
-        // for reading character by character.
+        // for reading character by character, and has it before it is spoken.
         string line = $"Navigraph code: {code.Trim()}";
+        io.Show?.Invoke(line);
         if (!IsTrustedNavigraphUri(uriText, out var uri) || uri == null)
         {
             string why = string.IsNullOrWhiteSpace(uriText) ? NoAddressText : NotNavigraphAddressText;

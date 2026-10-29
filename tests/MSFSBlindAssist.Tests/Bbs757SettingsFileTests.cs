@@ -651,6 +651,62 @@ public class Bbs757SettingsFileTests
         Assert.Empty(Bbs757WorkFolder.ExistingFolders(Array.Empty<string>()));
     }
 
+    // ---- reading one setting for a tablet press (plan 18, Task 8) ------------------------------------------------------
+
+    private static Bbs757Setting SettingAt(string path) => Bbs757EfbSettings.ByPath(path) ?? throw new ArgumentException(path);
+
+    [Fact]
+    public void ReadValue_reads_a_global_setting_from_efb_settings()
+    {
+        using var tmp = new TempDir();
+        string work = tmp.Sub("work");
+        Directory.CreateDirectory(work);
+        File.WriteAllText(Path.Combine(work, "efb_settings.json"), "{\"baro_sync\":true,\"loading_speed\":2,\"automatic_loading\":1}");
+
+        Assert.Equal(Bbs757Value.Of(true), Bbs757SettingsFile.ReadValue(work, SettingAt("baro_sync")));
+        Assert.Equal(Bbs757Value.Of(2L), Bbs757SettingsFile.ReadValue(work, SettingAt("loading_speed")));
+        // A value of another type than the setting's, and a key the file lacks, read as nothing.
+        Assert.Null(Bbs757SettingsFile.ReadValue(work, SettingAt("automatic_loading")));
+        Assert.Null(Bbs757SettingsFile.ReadValue(work, SettingAt("cpdlc_network")));
+    }
+
+    [Fact]
+    public void ReadValue_reads_a_registration_setting_from_the_file_written_last()
+    {
+        // BlueBird writes the flown registration's file as the tablet changes it: the newest is the one in use.
+        using var tmp = new TempDir();
+        string work = tmp.Sub("work");
+        string liveries = Path.Combine(work, "liveries");
+        Directory.CreateDirectory(liveries);
+        string older = Path.Combine(liveries, "D-ABCD-opt.json"), newer = Path.Combine(liveries, "G-BBS75-opt.json");
+        File.WriteAllText(older, "{\"options\":{\"egpws_callouts\":{\"2500\":true}}}");
+        File.WriteAllText(newer, "{\"options\":{\"egpws_callouts\":{\"2500\":false}}}");
+        var now = DateTime.UtcNow;
+        File.SetLastWriteTimeUtc(older, now.AddMinutes(-5));
+        File.SetLastWriteTimeUtc(newer, now);
+        var callout = SettingAt("options.egpws_callouts.2500");
+
+        Assert.Equal(newer, Bbs757WorkFolder.LatestRegistrationFile(work));
+        Assert.Equal(Bbs757Value.Of(false), Bbs757SettingsFile.ReadValue(work, callout));
+
+        File.SetLastWriteTimeUtc(older, now.AddMinutes(5));
+        Assert.Equal(older, Bbs757WorkFolder.LatestRegistrationFile(work));
+        Assert.Equal(Bbs757Value.Of(true), Bbs757SettingsFile.ReadValue(work, callout));
+    }
+
+    [Fact]
+    public void ReadValue_reads_nothing_without_the_file()
+    {
+        using var tmp = new TempDir();
+        string work = tmp.Sub("work");
+        Directory.CreateDirectory(work);
+
+        Assert.Null(Bbs757SettingsFile.ReadValue(work, SettingAt("baro_sync")));
+        Assert.Null(Bbs757SettingsFile.ReadValue(work, SettingAt("options.egpws_callouts.2500")));
+        Assert.Null(Bbs757WorkFolder.LatestRegistrationFile(work));
+        Assert.Null(Bbs757SettingsFile.ReadValue(tmp.Sub("no-such-folder"), SettingAt("baro_sync")));
+    }
+
     [Fact]
     public void SimulatorOf_names_the_store_and_steam_roots()
     {

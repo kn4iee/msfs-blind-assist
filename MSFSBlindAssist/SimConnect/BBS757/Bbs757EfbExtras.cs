@@ -34,6 +34,7 @@ public enum Bbs757EfbHook
 /// <item><see cref="PartsFor"/>: which parts of the load a hook has BlueBird start, so which the load watch listens for.</item>
 /// <item><see cref="OffersSignIn"/>: the Navigraph sign-in button, an extra of the AIRAC page while the pilot is signed out.</item>
 /// <item><see cref="NavDataOutcome"/>: what the nav data watch says when BlueBird's cycle file has been watched long enough.</item>
+/// <item><see cref="WatchNavDataAsync"/>: that watch's loop over the file (plan 18, Task 8; MainForm runs it on the UI thread).</item>
 /// </list>
 /// </summary>
 public static class Bbs757EfbExtras
@@ -135,6 +136,36 @@ public static class Bbs757EfbExtras
             default:
                 return "";
         }
+    }
+
+    /// <summary>How long the nav data watch reads BlueBird's cycle file after UPDATE or REMOVE (the classic window's 20 seconds),
+    /// and how often.</summary>
+    public const int NavDataWatchMs = 20_000, NavDataPollMs = 1000;
+
+    /// <summary>
+    /// The nav data watch, over delegates (MainForm reads <c>NavigationData\cycle.json</c> through them): from <paramref name="before"/>,
+    /// the cycle installed when the hook came, the file is read every <see cref="NavDataPollMs"/> for <see cref="NavDataWatchMs"/>
+    /// (the classic window's loop), and what came of it is returned (<see cref="NavDataOutcome"/>). UPDATE ends as soon as the file
+    /// holds a newer cycle, and is otherwise judged only once the whole window has passed, since BlueBird may rewrite the file during
+    /// an update; REMOVE ends as soon as the file is gone. Empty, at once, for a hook that is no nav data press.
+    /// </summary>
+    public static async Task<string> WatchNavDataAsync(Bbs757EfbHook hook, int? before, Func<int?> readCycle, Func<bool> fileThere,
+        Func<int, CancellationToken, Task> delay, Func<long> nowMs, CancellationToken ct)
+    {
+        if (hook is not (Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove)) return "";
+        long until = nowMs() + NavDataWatchMs;
+        int? after;
+        bool there;
+        while (true)
+        {
+            await delay(NavDataPollMs, ct);
+            after = readCycle();
+            there = fileThere();
+            if (hook == Bbs757EfbHook.NavDataUpdate && after is int cycle && (before is null || cycle > before)) break;
+            if (hook == Bbs757EfbHook.NavDataRemove && !there) break;
+            if (nowMs() >= until) break;
+        }
+        return NavDataOutcome(hook, before, after, there);
     }
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

@@ -14,16 +14,30 @@ public sealed class Bbs757EfbBridgeIo
     /// <summary>Moves the camera (type, index), on the UI thread (MainForm marshals).</summary>
     public required Action<int, int> SetCamera { get; init; }
 
-    /// <summary>SIM ON GROUND read fresh: true, false, or null when unread. Not called any more: no preset waits for the ground or the
-    /// air (the owner's ruling of 2026-10-29); the press rework (plan 18, Task 8) removes it.</summary>
-    public required Func<CancellationToken, Task<bool?>> OnGround { get; init; }
-
-    /// <summary>A variable the definition registers, read fresh (the ground power's state, for the GPU tile's flow).</summary>
+    /// <summary>A variable the definition registers, read fresh (the ground power's connection, read after a GPU tile's tap).</summary>
     public required Func<string, CancellationToken, Task<double?>> ReadRegistered { get; init; }
 
-    /// <summary>Opens the classic 757 EFB window (SimBrief load, Navigraph sign-in, nav data update). Not called any more: the
-    /// window presses every control itself; the press rework (plan 18, Task 8) removes it.</summary>
-    public required Action OpenClassicWindow { get; init; }
+    /// <summary>
+    /// A setting read now from BlueBird's file (<c>efb_settings.json</c>, or for a registration setting the registration file
+    /// written last), in the work folder <see cref="Bbs757WorkFolder.Find()"/> picks; null when it cannot be read. Called on the
+    /// bridge's loop, to judge a Settings press by the file (plan 18, Task 8).
+    /// </summary>
+    public required Func<Bbs757Setting, CancellationToken, Task<Bbs757Value?>> ReadSetting { get; init; }
+
+    /// <summary>Whether the pilot is signed in to Navigraph, read through the definition's tablet client: true, false, or null when
+    /// it cannot be read. Called on the bridge's loop when the AIRAC page was newly read.</summary>
+    public required Func<CancellationToken, Task<bool?>> SignedIn { get; init; }
+
+    /// <summary>
+    /// The Navigraph sign-in (<see cref="Bbs757NavigraphSignIn.SignInAsync"/>, MainForm-built over the tablet client): it speaks as
+    /// it goes and returns the line the page keeps. Its early line ("Navigraph code: {code}", before the code is spoken) reaches the
+    /// page through <see cref="Bbs757EfbBridge.ShowSignInLine"/>. Called on the bridge's loop, which awaits it.
+    /// </summary>
+    public required Func<CancellationToken, Task<string>> SignIn { get; init; }
+
+    /// <summary>A press started one of the app's hooks (<see cref="Bbs757EfbExtras.HookFor"/>): the load watch or the nav data watch.
+    /// Called on the UI thread (the bridge marshals), right after the tap went out.</summary>
+    public required Action<Bbs757EfbHook> Hooked { get; init; }
 
     /// <summary>Opens / ends the definition's echo for a service row around the window's own tap (Task 5).</summary>
     public required Action<Bbs757GroundService> ArmServiceEcho { get; init; }
@@ -45,13 +59,26 @@ public sealed class Bbs757EfbBridgeIo
 /// <summary>
 /// The 757 EFB for the shared accessible EFB window (FbwEfbForm, R73): BlueBird's tablet, READ from its
 /// pixels (plan 11, ruling of 2026-10-26: Bbs757EfbPopout, Bbs757EfbOcr, Bbs757EfbScreen) and
-/// operated through the EFB agent's clicks, as an IMcduBridge.
+/// pressed through the EFB agent's clicks where the reader found each control, as an IMcduBridge.
 ///
 /// While the window is shown, the tablet is mirrored onto the captain's ND (the agent's mirror) and the
 /// ND pop-out is captured about every 0.7 s; a page is read (PaddleOCR, about half a second) only when
-/// the picture changed, after an action, or on request, so a still tablet costs a capture and a 32 x 24
-/// compare. Each read becomes the window's elements (<see cref="Bbs757EfbElements"/>); each press taps
-/// the tablet and reads it again. Hidden, nothing is captured and the mirror is off (the ND is the ND).
+/// the picture changed, its top bar's right part changed (the departure countdown, the boarding control,
+/// the notification count: a signature of their own, <see cref="TopBarSignature(Bitmap)"/>), after an
+/// action, or on request, so a still tablet costs a capture and two small compares. Each read becomes the
+/// window's elements (<see cref="Bbs757EfbElements"/>), kept with the frame it was read from
+/// (<see cref="Bbs757EfbPushes"/>); what a read says by itself, a question that appeared or BlueBird's new
+/// notifications, is said as the window's alert (<see cref="Bbs757EfbReadNews"/>). Hidden, nothing is
+/// captured and the mirror is off (the ND is the ND).
+///
+/// Presses (plan 18, Task 8; the owner's ruling of 2026-10-29: nothing refuses a press) queue on the command
+/// channel and run one at a time on the loop, through <see cref="Bbs757EfbPressRunner"/>: a press names the
+/// element of the push it was made on, so it is judged against the page the pilot pressed on and the frame
+/// that page was read from, and is tapped where the control is now, or not at all when it is gone. The
+/// AIRAC page carries the app's extras (the Navigraph sign-in while signed out, and its code line), and a
+/// press that starts one of the app's hooks (the load watch, the nav data watch) tells MainForm on the UI
+/// thread. Speech follows CORE-7: the screen reader reads the control; a control whose label carries its
+/// own state is re-read for the pilot after the press (announceChange); a failure is said as an alert.
 ///
 /// The text recognition engine is loaded at the first read while the window is shown and released when
 /// it hides (<see cref="TextRecognitionEngineSlot{T}"/>), both only on the loop, which runs every read,
@@ -60,13 +87,6 @@ public sealed class Bbs757EfbBridgeIo
 /// something else). It is tried again after the window was hidden and shown, or when the pilot asks for
 /// the reader again with the models Ready (<see cref="RetryTextRecognition"/>: a flag the loop takes
 /// before its next read, so the engine stays the loop's alone).
-///
-/// The plan's rules hold: a ground service or the chocks are judged from their BlueBird variable before
-/// and after a tap and tapped only when they differ (B757-2, <see cref="Bbs757GroundServices"/>); the
-/// GPU goes through plan 07's flow. Every other control is tapped where the reader found it, and nothing
-/// is refused (the owner's ruling of 2026-10-29). Speech follows CORE-7: the screen reader reads the
-/// control; a control whose label carries its own state is re-read for the pilot after the press
-/// (announceChange); a failure is said as an alert.
 /// </summary>
 public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 {
@@ -75,15 +95,23 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private const int TickMs = 700;
     private const int MirrorRefreshMs = 10_000;
     private const int StalePageMs = 20_000;
-    private const int AfterTapMs = 700;
     private const int SettleGapMs = 250;
     private const int SettleMaxMs = 2500;
-    private const int ChangeMaxMs = 3000;
-    private const int NavigateMaxMs = 4000;
+    private const int AlertMs = 8000;
+    private const int StatusMs = 600_000;
+
+    /// <summary>The top bar's right part, which gets a signature of its own (ruling 10): x 1000 to the tablet's right edge.</summary>
+    private const int TopBarLeft = 1000, TopBarRight = Bbs757EfbScreen.Width;
+
+    private const string UnclearText = "The tablet read differently each time, so this page may not be right. Use Read the tablet again.";
+
+    /// <summary>The app's extras on the AIRAC page: the sign-in button and the sign-in's line.</summary>
+    private const string SignInKey = "x:navigraph", SignInLineKey = "x:navigraph-code";
 
     private readonly CoherentBbs757EfbClient _client;
     private readonly Bbs757EfbPopout _popout;
     private readonly Bbs757EfbBridgeIo _io;
+    private readonly Bbs757EfbPressRunner _press;
     private readonly SynchronizationContext? _sync;
     private readonly System.Threading.Channels.Channel<(string Command, Dictionary<string, string>? Payload)> _commands =
         System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?)>();
@@ -92,6 +120,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// <summary>The text recognition engine. Touched only on the loop: Get before a read, ForgetFailure when it
     /// takes a retry, Release when the window hides, Dispose when the loop ends.</summary>
     private readonly TextRecognitionEngineSlot<PaddleOcrEngine> _ocr;
+    /// <summary>The pushes the window may still press on, with the pages they showed and their frames. On the loop only.</summary>
+    private readonly Bbs757EfbPushes _pushes = new();
+    private readonly Bbs757EfbReadNews _news = new();
 
     /// <summary>Set by <see cref="RetryTextRecognition"/> on the UI thread, taken by the loop
     /// (<see cref="TakeTextRecognitionRetry"/>).</summary>
@@ -103,12 +134,20 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private bool _mirrorOn;
     private long _mirrorAtMs;
     private byte[]? _lastSignature;
+    private byte[]? _lastTopBar;
     private Bitmap? _lastReadFrame;
     private string? _lastFingerprint;
     private long _lastReadMs;
     private bool _forceRead = true;
-    private Bbs757EfbScreenModel? _model;
-    private Bbs757EfbElements.Built? _built;
+    /// <summary>The page the window shows, with the frame it was read from; null while a status stands in its place.</summary>
+    private Bbs757EfbShownPage? _shown;
+    /// <summary>The page the last read gave, shown or not (the press runner's read).</summary>
+    private Bbs757EfbScreenModel? _lastRead;
+    /// <summary>When the pilot's last tap went out: BlueBird's notifications are not said for a while after it.</summary>
+    private long _lastOwnTapMs = long.MinValue / 2;
+    private bool? _signedIn;
+    private bool _signInStale;
+    private string? _signInLine;
     private string? _alert;
     private long _alertUntilMs;
     private Task? _loop;
@@ -129,9 +168,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             io.OcrFailed(ex);
             Status(TextRecognitionText.ReaderCannotStart);
         });
+        _press = new Bbs757EfbPressRunner(PressIo());
     }
 
     public bool IsBridgeConnected => _client.IsReady && _popoutReady;
+
+    private Bbs757EfbScreenModel? Model => _shown?.Model;
 
     /// <summary>Starts the bridge's loop (once). It reads only while <see cref="SetActive"/> says the
     /// window is shown.</summary>
@@ -187,8 +229,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         }
         finally
         {
-            // The loop has ended, so no read runs: the engine goes with it (Dispose may have stopped waiting for it).
+            // The loop has ended, so no read runs: the engine and the frames go with it (Dispose may have stopped waiting for it).
             _ocr.Dispose();
+            FreeFrames();
         }
     }
 
@@ -245,10 +288,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 if (_commands.Reader.TryRead(out var cmd))
                 {
                     await HandleAsync(cmd.Command, cmd.Payload, ct);
+                    await RefreshSignInAsync(ct);
                     continue;
                 }
 
                 await ReadIfChangedAsync(ct);
+                await RefreshSignInAsync(ct);
                 await WaitForCommandOrWakeAsync(ct, untilCommand: false, ms: TickMs);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
@@ -268,17 +313,17 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>
-    /// Captures the tablet and reads it when the picture changed (status bar excluded: its clock), a read
-    /// was asked for, or the last read is old AND the pixels moved since. What the pilot hears must not
-    /// change unless the tablet did (plan 11 feedback: "the presentation changed upon refreshes"):
+    /// Captures the tablet and reads it when the picture changed (status bar excluded: its clock), the top bar's
+    /// right part changed, a read was asked for, or the last read is old AND the pixels moved since. What the pilot
+    /// hears must not change unless the tablet did (plan 11 feedback: "the presentation changed upon refreshes"):
     /// <list type="bullet">
     /// <item>a picture that has not really changed (rendering noise only, <see cref="Bbs757EfbFrameCompare"/>) is
     /// never read again on its own: OCR noise was all a re-read could add;</item>
     /// <item>a read waits for the picture to hold still (a page still animating in read as garbage);</item>
     /// <item>a picture that never holds still is read from two captures, and the page is taken only when
-    /// the two reads agree; else a third read decides, and when it agrees with neither the page is shown
-    /// with a warning that it may be wrong;</item>
-    /// <item>a read that says the same as the page already shown is not pushed again.</item>
+    /// the two reads agree on the page itself; else a third read decides, and when it agrees with neither the page
+    /// is shown with a warning that it may be wrong (<see cref="AgreeAsync"/>);</item>
+    /// <item>a read that says the same as the page already shown is not pushed again (<see cref="TakeRead"/>).</item>
     /// </list>
     /// On the loop only, as it gets the engine (OCR-3); internal for the tests, which call it on a bridge whose
     /// loop never started.
@@ -288,17 +333,22 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         // No engine (it could not load, and the reader says so): nothing is captured or read.
         var engine = EngineForRead();
         if (engine == null) return false;
-        var bmp = _popout.CaptureTablet();
+        Bitmap? bmp = _popout.CaptureTablet();
         if (bmp == null) { _popoutReady = false; Status("The tablet reader's window closed. Opening it again."); return false; }
+        var made = new List<TabletRead>();
         try
         {
-            var sig = Signature(bmp);
+            var px = Bbs757EfbPixels.FromBitmap(bmp);
+            var sig = Signature(px);
+            var bar = TopBarSignature(px);
             bool changed = _lastSignature == null || Differs(sig, _lastSignature);
+            bool barChanged = _lastTopBar != null && Differs(bar, _lastTopBar);
             long now = Environment.TickCount64;
             bool stale = now - _lastReadMs >= StalePageMs;
-            if (!force && !_forceRead && !changed && !stale) return false;
-            // Nothing really moved since the last read (rendering noise only): reading again could only add OCR noise.
-            if (!force && !_forceRead && _lastReadFrame != null && Bbs757EfbFrameCompare.Same(bmp, _lastReadFrame))
+            if (!force && !_forceRead && !changed && !barChanged && !stale) return false;
+            // Nothing really moved since the last read (rendering noise only): reading again could only add OCR noise. The top
+            // bar is outside that comparison, so a change there is read whatever the page did.
+            if (!force && !_forceRead && !barChanged && _lastReadFrame != null && Bbs757EfbFrameCompare.Same(bmp, _lastReadFrame))
             {
                 _lastSignature = sig;
                 _lastReadMs = now;
@@ -320,57 +370,107 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 if (same) { still = true; break; }
             }
 
-            var read = await Bbs757EfbPageReader.ReadAsync(engine, bmp, ct);
-            int reads = 1;
-            bool unclear = false;
-            if (!still)
-            {
-                // Never held still (something on the page animates): agree twice before the page is taken.
-                string fp1 = Bbs757EfbPress.Fingerprint(read.Model);
-                var read2 = await ReadFreshCaptureAsync(ct);
-                if (read2 != null)
+            var first = new TabletRead(await Bbs757EfbPageReader.ReadAsync(engine, bmp, ct), bmp);
+            made.Add(first);
+            bmp = null;   // the read's frame from here on
+            var (taken, reads, unclear) = still
+                ? (first, 1, false)
+                : await AgreeAsync(first, async () =>
                 {
-                    reads++;
-                    string fp2 = Bbs757EfbPress.Fingerprint(read2.Model);
-                    if (fp2 != fp1)
-                    {
-                        var read3 = await ReadFreshCaptureAsync(ct);
-                        if (read3 != null)
-                        {
-                            reads++;
-                            string fp3 = Bbs757EfbPress.Fingerprint(read3.Model);
-                            if (fp3 == fp2) read = read2;
-                            else if (fp3 != fp1) { read = read3; unclear = true; }
-                        }
-                        else unclear = true;
-                    }
-                }
-            }
+                    // Never held still (something on the page animates): agree before the page is taken.
+                    var again = await ReadFreshCaptureAsync(ct);
+                    if (again != null) made.Add(again);
+                    return again;
+                }, r => r.Read.Model);
 
-            _lastSignature = Signature(bmp);
+            var takenPx = Bbs757EfbPixels.FromBitmap(taken.Frame);
+            _lastSignature = Signature(takenPx);
+            _lastTopBar = TopBarSignature(takenPx);
             _lastReadFrame?.Dispose();
-            _lastReadFrame = new Bitmap(bmp);
+            _lastReadFrame = new Bitmap(taken.Frame);
             _lastReadMs = Environment.TickCount64;
-            string fp = Bbs757EfbPress.Fingerprint(read.Model);
-            Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, "
-                + $"still={still}, reads={reads}, unclear={unclear}, same-as-shown={fp == _lastFingerprint}");
-            if (unclear)
-                Alert("The tablet read differently each time, so this page may not be right. Use Read the tablet again.");
-            if (fp == _lastFingerprint && !unclear) return true;
-            _lastFingerprint = fp;
-            _model = read.Model;
-            Push();
+            made.Remove(taken);
+            bool pushed = TakeRead(taken.Read.Model, taken.Frame, unclear);
+            Log.Debug("BBS757", $"EFB reader: {taken.Read.Model.PageName}, {taken.Read.Model.Items.Count} items, {taken.Read.OcrMs} ms, "
+                + $"still={still}, reads={reads}, unclear={unclear}, pushed={pushed}");
             return true;
         }
-        finally { bmp.Dispose(); }
+        finally
+        {
+            bmp?.Dispose();
+            foreach (var r in made) r.Frame.Dispose();
+        }
     }
 
-    private async Task<Bbs757EfbPageRead?> ReadFreshCaptureAsync(CancellationToken ct)
+    /// <summary>One read of the tablet and the capture it was read from (owned).</summary>
+    private sealed record TabletRead(Bbs757EfbPageRead Read, Bitmap Frame);
+
+    private async Task<TabletRead?> ReadFreshCaptureAsync(CancellationToken ct)
     {
         var engine = EngineForRead();
         if (engine == null) return null;
-        using var b = _popout.CaptureTablet();
-        return b == null ? null : await Bbs757EfbPageReader.ReadAsync(engine, b, ct);
+        var b = _popout.CaptureTablet();
+        if (b == null) return null;
+        try
+        {
+            return new TabletRead(await Bbs757EfbPageReader.ReadAsync(engine, b, ct), b);
+        }
+        catch
+        {
+            b.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// The read to take of a page that never held still (something on it animates), from <paramref name="first"/> and up to two
+    /// more reads (<paramref name="again"/>, null when none could be made): the later of the first two when they agree; else the
+    /// later of the pair a third agrees with; else the third, unclear. Reads agree when the page itself reads the same
+    /// (<see cref="Bbs757EfbPress.PageUnchanged"/>, ruling 2): the departure countdown ticking or a notification passing between two
+    /// reads never makes them disagree. The count is the reads made. Internal for the tests.
+    /// </summary>
+    internal static async Task<(T Taken, int Reads, bool Unclear)> AgreeAsync<T>(T first, Func<Task<T?>> again, Func<T, Bbs757EfbScreenModel> model)
+        where T : class
+    {
+        var second = await again();
+        if (second == null) return (first, 1, false);
+        if (Bbs757EfbPress.PageUnchanged(model(first), model(second))) return (second, 2, false);
+        var third = await again();
+        if (third == null) return (first, 2, true);
+        if (Bbs757EfbPress.PageUnchanged(model(second), model(third))) return (third, 3, false);
+        if (Bbs757EfbPress.PageUnchanged(model(first), model(third))) return (third, 3, false);
+        return (third, 3, true);
+    }
+
+    /// <summary>
+    /// A read taken as what the tablet shows; <paramref name="frame"/>, the picture it was read from, is the bridge's from here on.
+    /// What the read says by itself is said (<see cref="Bbs757EfbReadNews"/>: a question that was not in the previous read, BlueBird's
+    /// notifications that were not, unless the pilot's own tap was under four seconds ago), with the warning when its reads disagreed,
+    /// as one alert; and it is pushed when it says something the window does not show yet, kept with its frame for the presses made
+    /// on it. A newly shown AIRAC page has the Navigraph sign-in read again. True when pushed. On the loop only; internal for the
+    /// tests, which give it pages read from the captures.
+    /// </summary>
+    internal bool TakeRead(Bbs757EfbScreenModel model, Bitmap frame, bool unclear)
+    {
+        _lastRead = model;
+        string? said = _news.After(model, Environment.TickCount64 - _lastOwnTapMs);
+        if (unclear) said = said == null ? UnclearText : said + " " + UnclearText;
+        string fp = Bbs757EfbPress.Fingerprint(model);
+        bool fresh = fp != _lastFingerprint;
+        if (!fresh)
+        {
+            frame.Dispose();
+            if (said == null) return false;
+        }
+        else
+        {
+            _lastFingerprint = fp;
+            _shown = _pushes.Show(model, frame);
+            if (IsAiracPage(model.PageName)) _signInStale = true;
+        }
+        if (said != null) SetAlert(said);
+        Push();
+        return true;
     }
 
     /// <summary>
@@ -387,11 +487,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>A 32 x 24 grey thumbnail of the tablet below its status bar.</summary>
-    internal static byte[] Signature(Bitmap bmp)
+    internal static byte[] Signature(Bitmap bmp) => Signature(Bbs757EfbPixels.FromBitmap(bmp));
+
+    private static byte[] Signature(Bbs757EfbPixels px)
     {
         // Sampled, not scaled: a scaled thumbnail blends the status bar (its clock) into the cells below it.
-        var px = Bbs757EfbPixels.FromBitmap(bmp);
-        int top = Bbs757EfbScreen.StatusBottom + 4, h = bmp.Height - top;
+        int top = Bbs757EfbScreen.StatusBottom + 4, h = px.Height - top;
         var o = new byte[32 * 24];
         for (int cy = 0; cy < 24; cy++)
             for (int cx = 0; cx < 32; cx++)
@@ -400,8 +501,36 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 for (int sy = 0; sy < 3; sy++)
                     for (int sx = 0; sx < 3; sx++)
                     {
-                        int x = (int)((cx + (sx + 0.5) / 3.0) * bmp.Width / 32), y = top + (int)((cy + (sy + 0.5) / 3.0) * h / 24);
-                        sum += (int)px.Lum(Math.Min(x, bmp.Width - 1), Math.Min(y, bmp.Height - 1));
+                        int x = (int)((cx + (sx + 0.5) / 3.0) * px.Width / 32), y = top + (int)((cy + (sy + 0.5) / 3.0) * h / 24);
+                        sum += (int)px.Lum(Math.Min(x, px.Width - 1), Math.Min(y, px.Height - 1));
+                    }
+                o[cy * 32 + cx] = (byte)(sum / 9);
+            }
+        return o;
+    }
+
+    /// <summary>
+    /// A 32 x 4 grey thumbnail of the top bar's right part, x 1000-1397 and y 0-32 (ruling 10): the departure countdown, the
+    /// boarding control and the notification count, which the page's <see cref="Signature(Bitmap)"/> leaves out with the clock. A
+    /// change there reads the page again (and pushes it only when it reads differently); the clock, the date and the outside air
+    /// temperature at the bar's left never do. Nothing about the top bar is spoken.
+    /// </summary>
+    internal static byte[] TopBarSignature(Bitmap bmp) => TopBarSignature(Bbs757EfbPixels.FromBitmap(bmp));
+
+    private static byte[] TopBarSignature(Bbs757EfbPixels px)
+    {
+        int left = Math.Min(TopBarLeft, px.Width - 1), width = Math.Min(TopBarRight, px.Width) - left;
+        int bottom = Math.Min(Bbs757EfbScreen.StatusBottom, px.Height);
+        var o = new byte[32 * 4];
+        for (int cy = 0; cy < 4; cy++)
+            for (int cx = 0; cx < 32; cx++)
+            {
+                int sum = 0;
+                for (int sy = 0; sy < 3; sy++)
+                    for (int sx = 0; sx < 3; sx++)
+                    {
+                        int x = left + (int)((cx + (sx + 0.5) / 3.0) * width / 32), y = (int)((cy + (sy + 0.5) / 3.0) * bottom / 4);
+                        sum += (int)px.Lum(Math.Min(x, px.Width - 1), Math.Min(y, px.Height - 1));
                     }
                 o[cy * 32 + cx] = (byte)(sum / 9);
             }
@@ -418,7 +547,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     // ------------------------------------------------------------------ commands
 
-    private async Task HandleAsync(string command, Dictionary<string, string>? payload, CancellationToken ct)
+    /// <summary>A command from the window, on the loop: a read asked for, or a press on an element of a push. On the loop only;
+    /// internal for the tests.</summary>
+    internal async Task HandleAsync(string command, Dictionary<string, string>? payload, CancellationToken ct)
     {
         switch (command)
         {
@@ -427,197 +558,98 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 await ReadIfChangedAsync(ct, force: true);
                 return;
             case "click_display_element":
-                if (payload != null && payload.TryGetValue("index", out var ci) && int.TryParse(ci, out int cidx))
-                    await ClickAsync(cidx, ct);
+                if (Pressed(payload) is { } click) await ClickAsync(click.Action, click.Page, ct);
                 return;
             case "set_element_value":
-                if (payload != null && payload.TryGetValue("index", out var si) && int.TryParse(si, out int sidx))
-                    await SetAsync(sidx, payload.TryGetValue("value", out var v) ? v : "", ct);
+                if (Pressed(payload) is { } set) await SetAsync(set.Action, set.Page, payload!.TryGetValue("value", out var v) ? v : "", ct);
                 return;
         }
     }
 
-    private async Task ClickAsync(int aidx, CancellationToken ct)
+    /// <summary>The element a press names (its push's number), with the page that push showed; null when no kept push gave the
+    /// number out, so nothing is tapped.</summary>
+    private (Bbs757EfbElements.Action Action, Bbs757EfbShownPage? Page)? Pressed(Dictionary<string, string>? payload)
     {
-        if (_built == null || !_built.Actions.TryGetValue(aidx, out var act)) return;
+        if (payload == null || !payload.TryGetValue("index", out var index)
+            || !int.TryParse(index, NumberStyles.Integer, CultureInfo.InvariantCulture, out int aidx)) return null;
+        if (_pushes.TryFind(aidx, out var action, out var page) && action != null) return (action, page);
+        Log.Debug("BBS757", $"EFB reader: a press named element {aidx.ToString(CultureInfo.InvariantCulture)}, which no kept push gave out; nothing tapped.");
+        return null;
+    }
+
+    private async Task ClickAsync(Bbs757EfbElements.Action act, Bbs757EfbShownPage? page, CancellationToken ct)
+    {
+        BeginPress();
         switch (act.Kind)
         {
             case Bbs757EfbElements.ActionKind.Refresh:
                 await ReadIfChangedAsync(ct, force: true);
                 return;
-            case Bbs757EfbElements.ActionKind.ScrollDown:
-            case Bbs757EfbElements.ActionKind.ScrollUp:
-                using (var before = _popout.CaptureTablet())
-                {
-                    await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y,
-                        act.Kind == Bbs757EfbElements.ActionKind.ScrollDown ? Bbs757EfbScreen.WheelStep : -Bbs757EfbScreen.WheelStep, ct);
-                    await WaitForChangeAsync(before, ct);
-                }
-                await ReadIfChangedAsync(ct, force: true);
+            case Bbs757EfbElements.ActionKind.ScrollDown or Bbs757EfbElements.ActionKind.ScrollUp:
+                await _press.ScrollAsync(act.Kind == Bbs757EfbElements.ActionKind.ScrollDown, ct);
                 return;
-        }
-        var item = act.Item;
-        if (act.Kind == Bbs757EfbElements.ActionKind.Tap && item != null)
-        {
-            string words = item.Key.StartsWith("btn:", StringComparison.Ordinal) ? item.Key.Substring(4).Split('|').Last().Split('@')[0] : "";
-            // A ground service the plan has proven: its own flow (state read, tap, read back).
-            if (Bbs757GroundServices.ForTile(words) is { } svc && Bbs757GroundServices.Proven.Contains(svc.Key))
-            {
-                double? now = await ReadVarAsync(svc.StateVar, ct);
-                var outcome = await Bbs757GroundServices.SwitchAsync(svc, Bbs757GroundServices.Flag(now) != true, ServiceIo(), ct);
-                Alert(outcome.Text ?? RunProblemText(outcome.Run));
-                await ReadIfChangedAsync(ct, force: true);
+            case Bbs757EfbElements.ActionKind.Extra:
+                await PressExtraAsync(act.ExtraKey, ct);
                 return;
-            }
-            if (words.StartsWith("GPU", StringComparison.Ordinal))
-            {
-                double? connected = await _io.ReadRegistered(Aircraft.BBS757.Bbs757SharedKeys.GpuConnected, ct);
-                bool connect = Bbs757GroundServices.Flag(connected) != true;
-                var outcome = await Bbs757GroundPower.SwitchAsync(connect, GroundPowerIo(), ct);
-                Alert(outcome.Text ?? RunProblemText(outcome.Run));
-                await ReadIfChangedAsync(ct, force: true);
+            case Bbs757EfbElements.ActionKind.Tap when act.Item is { } item && page != null:
+                await _press.ClickAsync(new Bbs757EfbPressed(item, page.Model, page.Frame), ct);
                 return;
-            }
-        }
-        if (item == null) return;
-        using (var before = _popout.CaptureTablet())
-        {
-            await TapAsync(item.Hit, ct);
-            await WaitForChangeAsync(before, ct);
-        }
-        await ReadIfChangedAsync(ct, force: true);
-
-        // Page navigation is checked by the page it lands on. Measured live 2026-10-27: the first change
-        // after an app tap is often the icon's press highlight, and the page itself follows 0.4-2.4 s later,
-        // so a read on the first change can still be the old page. Read again until the page name is the
-        // one tapped, and say so when it never is.
-        string? expect = item.Key == "btn:HOME" ? "Home" : item.Kind == Bbs757EfbKind.Menu ? item.Text : null;
-        if (expect == null) return;
-        long until = Environment.TickCount64 + NavigateMaxMs;
-        while (!PageIs(_model, expect) && Environment.TickCount64 < until)
-        {
-            await Task.Delay(500, ct);
-            await ReadIfChangedAsync(ct, force: true);
-        }
-        if (!PageIs(_model, expect))
-        {
-            Log.Debug("BBS757", $"EFB reader: tapped '{expect}', page reads '{_model?.PageName}'");
-            Alert($"The tablet did not show {expect}. Try again, or use Read the tablet again.");
         }
     }
 
-    /// <summary>Whether the page read is the one a navigation tap asked for (app or section name).</summary>
-    internal static bool PageIs(Bbs757EfbScreenModel? m, string expect)
+    private async Task SetAsync(Bbs757EfbElements.Action act, Bbs757EfbShownPage? page, string value, CancellationToken ct)
     {
-        if (m == null) return false;
-        string want = expect.Replace(" (current page)", "").Trim();
-        return m.PageName.Equals(want, StringComparison.OrdinalIgnoreCase)
-            || m.PageName.StartsWith(want + ",", StringComparison.OrdinalIgnoreCase)
-            || m.PageName.EndsWith(", " + want, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// After a tap or a scroll, waits for the picture to change from <paramref name="before"/> (at most
-    /// <see cref="ChangeMaxMs"/>); the read that follows then settles as usual. Measured live 2026-10-27:
-    /// the tablet's new page reaches the ND pop-out late enough that a read 700 ms after the tap caught
-    /// the OLD page on 4 of 5 app taps — and an unchanged old page looks perfectly still, so the settle
-    /// alone cannot see it. That was the "reads needed repeating" of the first in-sim test.
-    /// </summary>
-    private async Task WaitForChangeAsync(Bitmap? before, CancellationToken ct)
-    {
-        if (before == null) { await Task.Delay(AfterTapMs, ct); return; }
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (sw.ElapsedMilliseconds < ChangeMaxMs)
-        {
-            await Task.Delay(100, ct);
-            using var now = _popout.CaptureTablet();
-            if (now != null && !Bbs757EfbFrameCompare.Same(before, now))
-            {
-                Log.Debug("BBS757", $"EFB reader: picture changed {sw.ElapsedMilliseconds} ms after the tap");
-                return;
-            }
-        }
-        Log.Debug("BBS757", $"EFB reader: no change in {ChangeMaxMs} ms after the tap");
-    }
-
-    private async Task SetAsync(int aidx, string value, CancellationToken ct)
-    {
-        if (_built == null || !_built.Actions.TryGetValue(aidx, out var act) || act.Item is not { } item) return;
+        if (act.Kind != Bbs757EfbElements.ActionKind.Tap || act.Item is not { } item || page == null) return;
+        BeginPress();
+        var pressed = new Bbs757EfbPressed(item, page.Model, page.Frame);
         if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
-        {
-            bool want = value == "true";
-            if (item.On == want) return;
-            await TapAsync(item.Hit, ct);
-            if (!await ConfirmAsync(m => Find(m, item.Key)?.On == want, ct))
-                Alert($"BlueBird did not change {item.Text}.");
-            return;
-        }
-        if (item.Kind == Bbs757EfbKind.Slider && item.Slider is { } sl)
-        {
-            var options = Bbs757EfbElements.OptionsFor(item, _model?.PageName ?? "");
-            int x;
-            if (options != null)
-            {
-                int target = IndexOfChoice(options, value);
-                if (target < 0) return;
-                x = Bbs757EfbPress.ChoiceX(sl, target, options.Count);
-                for (int attempt = 0; attempt < 4; attempt++)
-                {
-                    await TapAsync(new Point(x, item.Hit.Y), ct);
-                    if (await ConfirmAsync(m => ChoiceRead(m, item.Key, options) == target, ct)) return;
-                    // Off by one: step toward it by a third of an option.
-                    int at = ChoiceRead(_model, item.Key, options);
-                    if (at < 0) break;
-                    double seg = (double)(sl.TrackRight - sl.TrackLeft) / Math.Max(1, options.Count - 1);
-                    x += (int)Math.Round(Math.Sign(target - at) * Math.Max(4, seg / 3));
-                }
-                Alert($"{item.Text} could not be set to {value}.");
-                return;
-            }
-            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double pct))
-            {
-                x = sl.TrackLeft + (int)Math.Round(Math.Clamp(pct, 0, 100) / 100.0 * (sl.TrackRight - sl.TrackLeft));
-                await TapAsync(new Point(x, item.Hit.Y), ct);
-                await ConfirmAsync(_ => false, ct, maxMs: 1500);
-            }
-        }
+            await _press.SwitchAsync(pressed, value == "true", ct);
+        else if (item.Kind == Bbs757EfbKind.Slider)
+            await _press.SliderAsync(pressed, value, ct);
     }
 
-    /// <summary>Reads the tablet again until <paramref name="ok"/> holds for the new page, or the time is
-    /// up; true when it held.</summary>
-    private async Task<bool> ConfirmAsync(Func<Bbs757EfbScreenModel?, bool> ok, CancellationToken ct, int maxMs = 4000)
+    /// <summary>A press of the pilot's begins: the alert shown (a press's outcome, a question, a notification) goes, so the window
+    /// speaks the next one even when it has the same words (it says an alert's text once while it stays). A status stays: it is why
+    /// no page is shown.</summary>
+    private void BeginPress()
     {
-        long until = Environment.TickCount64 + maxMs;
-        await Task.Delay(400, ct);
-        while (true)
-        {
-            await ReadIfChangedAsync(ct, force: true);
-            if (ok(_model)) return true;
-            if (Environment.TickCount64 >= until) return false;
-            await Task.Delay(300, ct);
-        }
+        if (_alert == null || Model == null) return;
+        _alert = null;
+        Push();
     }
 
-    private static Bbs757EfbItem? Find(Bbs757EfbScreenModel? m, string key) =>
-        m?.Items.FirstOrDefault(i => i.Key == key) ?? m?.Menu.FirstOrDefault(i => i.Key == key);
-
-    /// <summary>The index among <paramref name="options"/> of the word <paramref name="value"/> (case ignored); -1 when it is none.</summary>
-    private static int IndexOfChoice(IReadOnlyList<string> options, string value)
+    /// <summary>The press runner's seams: the pop-out's captures, this bridge's settled read, the agent's taps, wheel and variable
+    /// reads, BlueBird's file through the app, the window's alert, and the app's echoes and hooks marshalled to the UI thread.</summary>
+    private Bbs757EfbPressIo PressIo() => new()
     {
-        for (int index = 0; index < options.Count; index++)
-            if (string.Equals(options[index], value, StringComparison.OrdinalIgnoreCase)) return index;
-        return -1;
-    }
+        Capture = () => _popout.CaptureTablet(),
+        Same = Bbs757EfbFrameCompare.Same,
+        Read = async ct => await ReadIfChangedAsync(ct, force: true) ? _lastRead : null,
+        Tap = TapAsync,
+        Wheel = async (delta, ct) => await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y, delta, ct),
+        ReadVar = ReadVarAsync,
+        ReadRegistered = (key, ct) => _io.ReadRegistered(key, ct),
+        ReadSetting = (setting, ct) => _io.ReadSetting(setting, ct),
+        Alert = Alert,
+        Delay = (ms, ct) => Task.Delay(ms, ct),
+        NowMs = () => Environment.TickCount64,
+        ArmServiceEcho = s => PostUi(() => _io.ArmServiceEcho(s)),
+        SettleServiceEcho = (s, v) => PostUi(() => _io.SettleServiceEcho(s, v)),
+        ArmGroundPowerEcho = () => PostUi(_io.ArmGroundPowerEcho),
+        SettleGroundPowerEcho = v => PostUi(() => _io.SettleGroundPowerEcho(v)),
+        Hooked = hook => PostUi(() => _io.Hooked(hook)),
+    };
 
-    /// <summary>The choice the slider row <paramref name="key"/> of the page <paramref name="m"/> reads as, among
-    /// <paramref name="options"/>; -1 when the row is not on the page or the reader gave none.</summary>
-    private static int ChoiceRead(Bbs757EfbScreenModel? m, string key, IReadOnlyList<string> options) =>
-        m != null && Find(m, key) is { } row ? Bbs757EfbElements.CurrentChoice(row, m.PageName, options) : -1;
-
-    private async Task TapAsync(Point p, CancellationToken ct)
+    /// <summary>One tap through the EFB agent: true when it went out (done, or started and maybe clicked), and then it is the pilot's
+    /// own press, after which BlueBird's notifications are not said for a while.</summary>
+    private async Task<bool> TapAsync(Point p, CancellationToken ct)
     {
+        long at = Environment.TickCount64;
         var run = await _client.RunAsync(new[] { (new EfbPoint(p.X, p.Y), 250) }, ct);
-        if (run != Bbs757EfbRunResult.Done) Alert(RunProblemText(run));
+        bool tapped = run == Bbs757EfbRunResult.Done || _client.LastRunMayHaveClicked;
+        if (tapped) _lastOwnTapMs = at;
+        if (run != Bbs757EfbRunResult.Done) Log.Debug("BBS757", $"EFB reader: a tap ended {run}{(tapped ? ", and may have clicked" : "")}.");
+        return tapped;
     }
 
     private async Task<double?> ReadVarAsync(string name, CancellationToken ct)
@@ -626,39 +658,58 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         return vals != null && vals.TryGetValue(name, out var v) ? v : null;
     }
 
-    private Bbs757GroundServiceIo ServiceIo() => new()
-    {
-        ReadState = ReadVarAsync,
-        Run = async (seq, ct) => { var r = await _client.RunAsync(seq, ct); return (r, _client.LastRunMayHaveClicked); },
-        Delay = (ms, ct) => Task.Delay(ms, ct),
-        NowMs = () => Environment.TickCount64,
-        ArmEcho = s => PostUi(() => _io.ArmServiceEcho(s)),
-        SettleEcho = (s, v) => PostUi(() => _io.SettleServiceEcho(s, v)),
-    };
+    // ------------------------------------------------------------------ the AIRAC page's extras
 
-    private Bbs757GroundPowerIo GroundPowerIo() => new()
-    {
-        Read = (key, ct) => _io.ReadRegistered(key, ct),
-        Run = async (seq, ct) =>
-        {
-            // The GPU tile where the page reader found it (calibrated), else plan 07's measured point.
-            var gpu = _model?.Items.FirstOrDefault(i => i.Kind == Bbs757EfbKind.Button && i.Key.Contains("GPU", StringComparison.Ordinal));
-            var points = gpu != null ? new[] { (new EfbPoint(gpu.Hit.X, gpu.Hit.Y), 400) } : seq;
-            var r = await _client.RunAsync(points, ct);
-            return (r, _client.LastRunMayHaveClicked);
-        },
-        Delay = (ms, ct) => Task.Delay(ms, ct),
-        NowMs = () => Environment.TickCount64,
-        ArmEcho = () => PostUi(_io.ArmGroundPowerEcho),
-        SettleEcho = v => PostUi(() => _io.SettleGroundPowerEcho(v)),
-    };
+    private static bool IsAiracPage(string pageName) => Bbs757EfbSettingsMatch.SectionFor(pageName) == Bbs757SettingSection.AiracData;
 
-    private static string RunProblemText(Bbs757EfbRunResult run) => run switch
+    /// <summary>The app's extras on the page shown: on the AIRAC page, the Navigraph sign-in while the pilot is known to be signed
+    /// out, and the sign-in's line (the code while it is spoken, then what came of it).</summary>
+    private IReadOnlyList<Bbs757EfbExtraElement> Extras()
     {
-        Bbs757EfbRunResult.Unreachable => "The BlueBird tablet cannot be reached, so nothing was tapped.",
-        Bbs757EfbRunResult.LayoutUnknown => "The 757's EFB layout is not the one this version knows, so nothing was tapped.",
-        _ => "The tablet did not confirm the tap.",
-    };
+        if (Model is not { } page || !IsAiracPage(page.PageName)) return Array.Empty<Bbs757EfbExtraElement>();
+        var extras = new List<Bbs757EfbExtraElement>(2);
+        if (Bbs757EfbExtras.OffersSignIn(page.PageName, _signedIn)) extras.Add(new(SignInKey, Bbs757EfbExtras.SignInText, IsButton: true));
+        if (_signInLine != null) extras.Add(new(SignInLineKey, _signInLine, IsButton: false));
+        return extras;
+    }
+
+    /// <summary>
+    /// The Navigraph sign-in read again once the AIRAC page was newly shown (its picture changed: the pilot may have signed in in
+    /// the browser meanwhile) or a sign-in ran, between presses and reads, never inside one. Signed in, the code line is used up.
+    /// A change is pushed. On the loop only; internal for the tests.
+    /// </summary>
+    internal async Task RefreshSignInAsync(CancellationToken ct)
+    {
+        if (!_signInStale) return;
+        _signInStale = false;
+        bool? signedIn = await _io.SignedIn(ct);
+        bool lineUsed = signedIn == true && _signInLine != null;
+        if (lineUsed) _signInLine = null;
+        if (signedIn == _signedIn && !lineUsed) return;
+        _signedIn = signedIn;
+        if (Model != null) Push();
+    }
+
+    /// <summary>The sign-in button pressed: the flow runs (it speaks as it goes), and the line it returns stays on the page.</summary>
+    private async Task PressExtraAsync(string? key, CancellationToken ct)
+    {
+        if (key != SignInKey) return;
+        string line = await _io.SignIn(ct);
+        _signInLine = line;
+        _signInStale = true;   // the flow may have found the pilot signed in
+        if (Model != null) Push();
+    }
+
+    /// <summary>
+    /// The sign-in's early line ("Navigraph code: {code}"), put on the page before the code is spoken, so the pilot can read it
+    /// character by character while it is said (<see cref="Bbs757NavigraphIo.Show"/>). Called by the sign-in flow the loop awaits
+    /// (MainForm wires it), so on the loop's own flow. Never logged.
+    /// </summary>
+    public void ShowSignInLine(string line)
+    {
+        _signInLine = line;
+        if (Model != null) Push();
+    }
 
     // ------------------------------------------------------------------ pushing
 
@@ -667,46 +718,71 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// </summary>
     internal void Status(string text)
     {
-        _model = null;
+        _shown = null;
         // The page is no longer shown, so the next read reads it even when the picture has not changed (an unchanged
         // tablet is never left behind a status) and pushes it even when it reads the same as before.
         _forceRead = true;
         _lastFingerprint = null;
         _alert = text;
-        _alertUntilMs = Environment.TickCount64 + 600_000;
+        _alertUntilMs = Environment.TickCount64 + StatusMs;
         Push();
+    }
+
+    private void SetAlert(string text)
+    {
+        _alert = text;
+        _alertUntilMs = Environment.TickCount64 + AlertMs;
     }
 
     private void Alert(string text)
     {
-        _alert = text;
-        _alertUntilMs = Environment.TickCount64 + 8000;
+        SetAlert(text);
         Push();
     }
 
+    /// <summary>The window's elements now, numbered and kept with the page they show, for the presses made on them
+    /// (<see cref="Bbs757EfbPushes"/>).</summary>
     private void Push()
     {
         string? alert = _alert != null && Environment.TickCount64 < _alertUntilMs ? _alert : null;
-        _built = Bbs757EfbElements.Build(_model, alert, Array.Empty<Bbs757EfbExtraElement>());
-        Raise(StateTypeElements, _built.Data);
+        var built = _pushes.Push(_shown, alert, Extras());
+        Raise(StateTypeElements, built.Data);
     }
 
     private void Raise(string type, Dictionary<string, string> data)
     {
         var args = new EFBStateUpdateEventArgs { Type = type, Data = data };
-        if (_sync != null) _sync.Post(_ => StateUpdated?.Invoke(this, args), null);
-        else StateUpdated?.Invoke(this, args);
+        if (_sync == null) StateUpdated?.Invoke(this, args);
+        else Post(() => StateUpdated?.Invoke(this, args));
     }
 
     private void PostUi(Action a)
     {
-        if (_sync != null) _sync.Post(_ => a(), null); else a();
+        if (_sync == null) a();
+        else Post(a);
+    }
+
+    /// <summary>Posts to the UI thread's context, tolerating it going away (app exit): a WinForms context's post is a BeginInvoke on
+    /// its marshaling control, which throws once that handle is destroyed (A380C-6's lesson).</summary>
+    private void Post(Action a)
+    {
+        try { _sync!.Post(_ => a(), null); }
+        catch (InvalidOperationException) { }
+    }
+
+    private void FreeFrames()
+    {
+        _pushes.Dispose();
+        _lastReadFrame?.Dispose();
+        _lastReadFrame = null;
     }
 
     public void Dispose()
     {
         _cts.Cancel();
         try { _loop?.Wait(1500); } catch { }
+        // A loop that never started frees nothing itself; one that did frees its frames as it ends.
+        if (_loop == null) FreeFrames();
         _cts.Dispose();
     }
 }

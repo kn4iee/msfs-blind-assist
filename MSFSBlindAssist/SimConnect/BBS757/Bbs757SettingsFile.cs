@@ -118,6 +118,23 @@ public static class Bbs757SettingsFile
     }
 
     /// <summary>
+    /// The value BlueBird's file holds for <paramref name="setting"/> now, read (shared) from the work folder: <c>efb_settings.json</c>
+    /// for a global setting, and for a registration's setting the registration file written last
+    /// (<see cref="Bbs757WorkFolder.LatestRegistrationFile"/>: BlueBird writes the flown registration's file as the tablet changes it).
+    /// Null when there is no such file, it cannot be read, or holds no value of the setting's type there (<see cref="ValueAt"/>). The
+    /// tablet window judges a Settings press by it (plan 18, Task 8). Nothing is logged: the files hold the pilot's codes.
+    /// </summary>
+    public static Bbs757Value? ReadValue(string workFolder, Bbs757Setting setting)
+    {
+        string? file = setting.File == Bbs757SettingFile.Global
+            ? Path.Combine(workFolder, Bbs757WorkFolder.SettingsFile)
+            : Bbs757WorkFolder.LatestRegistrationFile(workFolder);
+        if (file == null) return null;
+        using var doc = Read(file);
+        return doc == null ? null : ValueAt(doc.RootElement, setting.Path, setting.Type);
+    }
+
+    /// <summary>
     /// <paramref name="original"/> with the value at <paramref name="path"/> changed to <paramref name="value"/> and every
     /// other byte kept, or why not: <see cref="UnreadableReason"/> when the file is not JSON, names a key on the path twice
     /// (which one BlueBird reads is unknown), or has text that cannot be read where the edit must read it (an unpaired

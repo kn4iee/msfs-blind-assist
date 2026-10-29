@@ -168,6 +168,32 @@ public static class Bbs757WorkFolder
         }
     }
 
+    /// <summary>
+    /// Of the registration files (<see cref="RegistrationFiles"/>), the one written last: BlueBird writes the flown registration's
+    /// file whenever the tablet changes one of its settings, so that is the one the tablet shows. Null when there is none; never
+    /// throws. Only the files' times are looked at.
+    /// </summary>
+    public static string? LatestRegistrationFile(string folder)
+    {
+        string? latest = null;
+        DateTime latestWrite = DateTime.MinValue;
+        foreach (var (_, file) in RegistrationFiles(folder))
+        {
+            try
+            {
+                var written = File.GetLastWriteTimeUtc(file);
+                if (latest == null || written > latestWrite)
+                {
+                    latest = file;
+                    latestWrite = written;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                           or NotSupportedException) { }
+        }
+        return latest;
+    }
+
     // "G-BBS75" for "...\G-BBS75-opt.json"; "" for a name that does not end so, or is nothing more.
     private static string RegistrationOf(string file)
     {

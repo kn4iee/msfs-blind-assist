@@ -96,9 +96,11 @@ public sealed class Bbs757EfbBridgeTextRecognitionTests
                 {
                     ReadCamera = () => Task.FromResult<(int type, int index)?>(null),
                     SetCamera = (_, _) => { },
-                    OnGround = _ => Task.FromResult<bool?>(null),
                     ReadRegistered = (_, _) => Task.FromResult<double?>(null),
-                    OpenClassicWindow = () => { },
+                    ReadSetting = (_, _) => Task.FromResult<Bbs757Value?>(null),
+                    SignedIn = _ => Task.FromResult<bool?>(null),
+                    SignIn = _ => Task.FromResult(""),
+                    Hooked = _ => { },
                     ArmServiceEcho = _ => { },
                     SettleServiceEcho = (_, _) => { },
                     ArmGroundPowerEcho = () => { },

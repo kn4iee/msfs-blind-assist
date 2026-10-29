@@ -83,10 +83,9 @@ public partial class MainForm
     private void ShowBBS757EfbDialog() => ShowBBS757ClassicEfbDialog();
 
     /// <summary>
-    /// The 757 tablet screen reader (plan 11; read-only since the team review of 2026-10-27): BlueBird's
-    /// tablet in the shared accessible EFB window, read from its pixels (<see cref="Bbs757EfbBridge"/>).
-    /// It only reads, and moves between the tablet's pages; anything that changes the aircraft is done
-    /// from the classic window. The first time it shows, the tablet reader's pop-out is made as the A300
+    /// The 757 tablet window (plan 11; plan 18): BlueBird's tablet in the shared accessible EFB window, read from
+    /// its pixels and pressed where the reader found each control (<see cref="Bbs757EfbBridge"/>, the owner's ruling
+    /// of 2026-10-29: nothing refuses a press). The first time it shows, the tablet reader's pop-out is made as the A300
     /// and A330 CDU windows make theirs: the camera goes to the captain's instrument view, the simulator
     /// comes to the front for a moment, and the camera is put back. While the window is shown the tablet
     /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader
@@ -131,50 +130,198 @@ public partial class MainForm
     /// The text recognition engine loads from the downloaded models with <see cref="PaddleOcrEngine.ThreadsFor"/>'s
     /// threads, on the bridge's loop; a load that fails is logged and the models' installed marker removed, so the
     /// next check offers the download again. That report runs on the loop too, so it never throws.
+    ///
+    /// Plan 18, Task 8: a Settings press is judged by BlueBird's file, read on the bridge's loop
+    /// (<see cref="Bbs757SettingsFile.ReadValue"/> in the work folder <see cref="Bbs757WorkFolder.Find()"/> picks);
+    /// the Navigraph sign-in is read and run over the definition's tablet client (one per view, [DBG-9]), taken here
+    /// on the UI thread, its speech marshalled back to it; and the hooks a press starts run on the UI thread
+    /// (<see cref="OnBbs757EfbHook"/>).
     /// </summary>
-    private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo() => new()
+    private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo()
     {
-        ReadCamera = async () =>
+        // After a switch away this is a disposed client that reads nothing; the bridge goes with the switch (DisposeBBS757Forms).
+        var tablet = EnsureBbs757TabletClient();
+        return new()
         {
-            var sim = simConnectManager;
-            if (sim == null || !sim.IsConnected) return null;
-            var task = (Task<MSFSBlindAssist.Services.CameraViewReading?>)Invoke(new Func<Task<MSFSBlindAssist.Services.CameraViewReading?>>(() => sim.ReadCameraViewAsync(1500)));
-            var r = await task;
-            return r is { } v ? (v.ViewType, v.ViewIndex) : null;
-        },
-        SetCamera = (type, index) =>
-        {
-            var sim = simConnectManager;
-            if (sim == null || !sim.IsConnected) return;
-            Invoke(() => sim.SetCameraViewType(type));
-            Thread.Sleep(150);
-            Invoke(() => sim.SetCameraViewIndex(index));
-        },
-        OnGround = ct => ReadBbs757OnGroundAsync(1500, ct),
-        ReadRegistered = (key, ct) => simConnectManager is { IsConnected: true } sim
-            ? sim.ReadFreshAsync(key, 1500, ct)
-            : Task.FromResult<double?>(null),
-        OpenClassicWindow = ShowBBS757ClassicEfbDialog,
-        ArmServiceEcho = s => { if (currentAircraft is BBS757Definition def) def.ArmServiceEcho(s); },
-        SettleServiceEcho = (s, v) => { if (currentAircraft is BBS757Definition def) def.SettleServiceEcho(s, v); },
-        ArmGroundPowerEcho = () => { if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho(); },
-        SettleGroundPowerEcho = v => { if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(v); },
-        LoadOcr = () => PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount)),
-        OcrFailed = ex =>
-        {
-            // The exception itself, so the log has its type and every inner exception down to the base one: a
-            // TypeInitializationException's own message names only the type that failed, never why. Logging never throws.
-            Log.Error("BBS757", "Text recognition could not start.", ex);
-            try
+            ReadCamera = async () =>
             {
-                TextRecognitionModels.RemoveMarker(TextRecognitionModels.DefaultFolder());
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                var sim = simConnectManager;
+                if (sim == null || !sim.IsConnected) return null;
+                var task = (Task<MSFSBlindAssist.Services.CameraViewReading?>)Invoke(new Func<Task<MSFSBlindAssist.Services.CameraViewReading?>>(() => sim.ReadCameraViewAsync(1500)));
+                var r = await task;
+                return r is { } v ? (v.ViewType, v.ViewIndex) : null;
+            },
+            SetCamera = (type, index) =>
             {
-                Log.Warn("BBS757", $"Could not remove the text recognition marker: {e.Message}");
-            }
-        },
+                var sim = simConnectManager;
+                if (sim == null || !sim.IsConnected) return;
+                Invoke(() => sim.SetCameraViewType(type));
+                Thread.Sleep(150);
+                Invoke(() => sim.SetCameraViewIndex(index));
+            },
+            ReadRegistered = (key, ct) => simConnectManager is { IsConnected: true } sim
+                ? sim.ReadFreshAsync(key, 1500, ct)
+                : Task.FromResult<double?>(null),
+            ReadSetting = (setting, _) => Task.FromResult(
+                Bbs757WorkFolder.Find() is { } folder ? Bbs757SettingsFile.ReadValue(folder, setting) : null),
+            SignedIn = ct => tablet == null ? Task.FromResult<bool?>(null) : ReadBbs757SignedInAsync(tablet, ct),
+            SignIn = ct => tablet == null
+                ? Task.FromResult(Bbs757NavigraphSignIn.NotReachableText)
+                : Bbs757NavigraphSignIn.SignInAsync(Bbs757NavigraphIoFor(tablet), ct),
+            Hooked = OnBbs757EfbHook,
+            ArmServiceEcho = s => { if (currentAircraft is BBS757Definition def) def.ArmServiceEcho(s); },
+            SettleServiceEcho = (s, v) => { if (currentAircraft is BBS757Definition def) def.SettleServiceEcho(s, v); },
+            ArmGroundPowerEcho = () => { if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho(); },
+            SettleGroundPowerEcho = v => { if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(v); },
+            LoadOcr = () => PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount)),
+            OcrFailed = ex =>
+            {
+                // The exception itself, so the log has its type and every inner exception down to the base one: a
+                // TypeInitializationException's own message names only the type that failed, never why. Logging never throws.
+                Log.Error("BBS757", "Text recognition could not start.", ex);
+                try
+                {
+                    TextRecognitionModels.RemoveMarker(TextRecognitionModels.DefaultFolder());
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    Log.Warn("BBS757", $"Could not remove the text recognition marker: {e.Message}");
+                }
+            },
+        };
+    }
+
+    /// <summary>
+    /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client, as the classic window reads it: true,
+    /// false, or null when the helper view cannot be read. A signed-out first answer is read again once the helper answers (it
+    /// may have come before the helper's first scrape). Runs on the bridge's loop; the client is safe from any thread.
+    /// </summary>
+    private static async Task<bool?> ReadBbs757SignedInAsync(CoherentBbs757TabletClient tablet, CancellationToken ct)
+    {
+        var (signedIn, _, _) = await tablet.GetNavigraphAsync().WaitAsync(ct);
+        if (signedIn) return true;
+        if (!await Bbs757NavigraphSignIn.WaitReadableAsync(() => tablet.IsReadable, Task.Delay, ct)) return null;
+        (signedIn, _, _) = await tablet.GetNavigraphAsync().WaitAsync(ct);
+        return signedIn;
+    }
+
+    /// <summary>
+    /// The Navigraph sign-in's seams for the tablet window (<see cref="Bbs757NavigraphSignIn.SignInAsync"/>, run on the bridge's
+    /// loop): the tablet client's sign-in state, the screen reader on the UI thread (an announcement made off it is lost), the
+    /// pilot's browser, and the bridge's page for the code while it is spoken. The code and its address are never logged.
+    /// </summary>
+    private Bbs757NavigraphIo Bbs757NavigraphIoFor(CoherentBbs757TabletClient tablet) => new()
+    {
+        GetNavigraph = () => tablet.GetNavigraphAsync(),
+        WaitReadable = ct => Bbs757NavigraphSignIn.WaitReadableAsync(() => tablet.IsReadable, Task.Delay, ct),
+        Speak = (text, atOnce) => SafeBeginInvoke(() =>
+        {
+            if (atOnce) announcer.AnnounceImmediate(text);
+            else announcer.Announce(text);
+        }),
+        Delay = Task.Delay,
+        OpenBrowser = Bbs757NavigraphSignIn.OpenInBrowser,
+        Show = line => bbs757EfbBridge?.ShowSignInLine(line),
     };
+
+    /// <summary>
+    /// A press on the tablet window started one of the app's hooks (plan 18, Task 8), called on the UI thread right after the
+    /// tap went out. FETCH or REFRESH SIMBRIEF OFP, IMPORT FROM SIMBRIEF and START BOARDING start the definition's load watch
+    /// for the parts BlueBird starts (<see cref="StartBbs757TabletLoadWatchAsync"/>); the AIRAC page's UPDATE and REMOVE watch
+    /// BlueBird's cycle file (<see cref="WatchBbs757NavDataAsync"/>). Both only listen: the tap was the pilot's. Never throws.
+    /// </summary>
+    private void OnBbs757EfbHook(Bbs757EfbHook hook)
+    {
+        if (currentAircraft is not BBS757Definition def) return;
+        switch (hook)
+        {
+            case Bbs757EfbHook.Fetch or Bbs757EfbHook.Import or Bbs757EfbHook.StartBoarding:
+                _ = StartBbs757TabletLoadWatchAsync(def, hook);
+                break;
+            case Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove:
+                _ = WatchBbs757NavDataAsync(def, hook);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The load watch for a tablet press (Task 6's parts): the parts the hook has BlueBird start (<see cref="Bbs757EfbExtras.PartsFor"/>,
+    /// with BlueBird's <c>automatic_loading</c> read from its settings file; a fetch with it off starts nothing), toward the latest
+    /// plan for BlueBird's SimBrief ID, fetched and parsed off the UI thread as BlueBird fetches it. A plan that cannot be fetched,
+    /// read or computed is said once (<see cref="Bbs757EfbExtras.PlanUnreadableText"/>, queued); otherwise the definition watches,
+    /// speaking in the aircraft's units, from the UI thread. The SimBrief ID is never logged or spoken, nor is any message that
+    /// could carry it. Never throws.
+    /// </summary>
+    private async Task StartBbs757TabletLoadWatchAsync(BBS757Definition def, Bbs757EfbHook hook)
+    {
+        try
+        {
+            string? folder = Bbs757WorkFolder.Find();
+            Bbs757Value? automatic = folder != null && Bbs757EfbSettings.ByPath("automatic_loading") is { } setting
+                ? Bbs757SettingsFile.ReadValue(folder, setting)
+                : null;
+            var parts = Bbs757EfbExtras.PartsFor(hook, automatic is { Type: Bbs757ValueType.Bool } on ? on.Bool : null);
+            if (parts == Bbs757LoadParts.None) return;
+
+            long? id = folder == null ? null : Bbs757WorkFolder.ReadSimBriefId(folder);
+            Bbs757Loads? loads = null;
+            if (id is long simBriefId)
+            {
+                var (xml, _) = await Task.Run(() => MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync(simBriefId, null));
+                var plan = xml == null ? null : await Task.Run(() => Bbs757Loadsheet.ParsePlan(xml));
+                if (plan != null) loads = Bbs757Loadsheet.Compute(plan).Loads;
+            }
+            if (!ReferenceEquals(currentAircraft, def)) return;
+            if (loads == null)
+            {
+                announcer.Announce(Bbs757EfbExtras.PlanUnreadableText);
+                return;
+            }
+            if (simConnectManager is not { IsConnected: true } sim)
+            {
+                Log.Info("BBS757", $"EFB tablet {hook}: no simulator connection, so the load is not watched.");
+                return;
+            }
+            Bbs757WeightUnits? units = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
+            Log.Info("BBS757", Bbs757Loadsheet.LogLine($"tablet {hook}, watching {parts}", loads, null));
+            if (!def.StartLoadWatch(loads, units, parts, sim, announcer))
+                Log.Warn("BBS757", $"EFB tablet {hook}: the load watch did not start.");
+        }
+        catch (Exception ex)
+        {
+            // The type alone: a message could carry the plan's address, and with it the SimBrief ID.
+            Log.Warn("BBS757", $"EFB tablet {hook}: the load watch did not start ({ex.GetType().Name}).");
+        }
+    }
+
+    /// <summary>
+    /// The nav data watch for the AIRAC page's UPDATE or REMOVE (the classic window's loop): the cycle installed when the hook
+    /// came, then <c>NavigationData\cycle.json</c> every second for 20 seconds (<see cref="Bbs757EfbExtras.WatchNavDataAsync"/>),
+    /// then what came of it, queued. Without a work folder there is nothing to watch, so nothing is said. On the UI thread (the
+    /// files are a few hundred bytes); never throws.
+    /// </summary>
+    private async Task WatchBbs757NavDataAsync(BBS757Definition def, Bbs757EfbHook hook)
+    {
+        try
+        {
+            string? folder = Bbs757WorkFolder.Find();
+            if (folder == null)
+            {
+                Log.Info("BBS757", $"EFB tablet {hook}: no BlueBird work folder, so the nav data is not watched.");
+                return;
+            }
+            int? before = Bbs757WorkFolder.ReadInstalledCycle(folder);
+            string said = await Bbs757EfbExtras.WatchNavDataAsync(hook, before,
+                () => Bbs757WorkFolder.ReadInstalledCycle(folder), () => Bbs757WorkFolder.HasCycleFile(folder),
+                Task.Delay, () => Environment.TickCount64, CancellationToken.None);
+            if (!ReferenceEquals(currentAircraft, def) || said.Length == 0) return;
+            announcer.Announce(said);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("BBS757", $"EFB tablet {hook}: the nav data watch failed ({ex.GetType().Name}).");
+        }
+    }
 
     /// <summary>
     /// The classic 757 EFB window, which operates BlueBird's tablet by scripted clicks at measured points

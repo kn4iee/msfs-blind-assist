@@ -79,10 +79,13 @@ public class Bbs757NavigraphSignInTests
         public (bool SignedIn, string? Code, string? Uri)[] Reads = { (false, null, null) };
         public bool Readable = true;
         public bool BrowserOpens = true;
+        /// <summary>Whether the page's early line is taken (the tablet window's), so it shows among the events.</summary>
+        public bool Shows;
         private int _next;
 
         public Bbs757NavigraphIo Io => new()
         {
+            Show = Shows ? line => Events.Add("show: " + line) : null,
             GetNavigraph = () =>
             {
                 Events.Add("read");
@@ -185,6 +188,53 @@ public class Bbs757NavigraphSignInTests
             "open " + Trusted,
         }, fakes.Events);
         Assert.Equal(4300, Bbs757NavigraphSignIn.CodeSpeechMs("ABCD1234"));   // 1.5 s and 350 ms for each of the eight
+    }
+
+    [Fact]
+    public async Task The_code_is_on_the_page_before_it_is_spoken()
+    {
+        // Plan 18, Task 8: the tablet window keeps the code for reading character by character while it is spoken, not after the
+        // two to six seconds the browser waits for the speech.
+        var fakes = new Fakes { Reads = new[] { (false, (string?)" ABCD1234 ", (string?)Trusted) }, Shows = true };
+
+        string line = await Bbs757NavigraphSignIn.SignInAsync(fakes.Io, CancellationToken.None);
+
+        Assert.Equal("Navigraph code: ABCD1234", line);
+        Assert.Equal(new[]
+        {
+            "read",
+            "show: Navigraph code: ABCD1234",
+            "say: Navigraph code A B C D 1 2 3 4. The sign-in page opens in your browser in a moment.",
+            "delay 4300",
+            "open " + Trusted,
+        }, fakes.Events);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://evil.example/")]
+    public async Task A_code_with_no_address_to_open_is_on_the_page_too(string? address)
+    {
+        var fakes = new Fakes { Reads = new[] { (false, (string?)"ABCD1234", address) }, Shows = true };
+
+        string line = await Bbs757NavigraphSignIn.SignInAsync(fakes.Io, CancellationToken.None);
+
+        Assert.Equal("Navigraph code: ABCD1234", line);
+        Assert.Equal("show: Navigraph code: ABCD1234", fakes.Events[1]);
+        Assert.StartsWith("say: Navigraph code A B C D 1 2 3 4. ", fakes.Events[2]);
+        Assert.Equal(3, fakes.Events.Count);
+    }
+
+    [Theory]
+    [InlineData(true, null)]       // signed in already
+    [InlineData(false, "")]        // no code waiting
+    public async Task Nothing_is_put_on_the_page_without_a_code(bool signedIn, string? code)
+    {
+        var fakes = new Fakes { Reads = new[] { (signedIn, code, (string?)null) }, Shows = true };
+
+        await Bbs757NavigraphSignIn.SignInAsync(fakes.Io, CancellationToken.None);
+
+        Assert.DoesNotContain(fakes.Events, e => e.StartsWith("show:", StringComparison.Ordinal));
     }
 
     [Theory]

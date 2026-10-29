@@ -887,12 +887,16 @@ public static class Bbs757EfbScreen
     /// <summary>
     /// A settings slider's track. Measured by tapping along each (2026-10-26): NOTIFICATIONS
     /// FADE-OUT TIMER, BOARDING &amp; LOAD RATE and IRS ALIGNMENT TIME run 895-1190 (taps outside are
-    /// ignored); the manual EFB brightness 795-1100. The unfilled part is the page's colour, so it
+    /// ignored); the manual EFB brightness 795-1100; EFB BACKGROUND takes its choices from 804 (DEFAULT)
+    /// to 1050 (9, and anything right of it 9 too), placed unevenly at the left (826 is 1, 875 is 2,
+    /// then every 25 px: efb-settings.md), so its choices are spread over 804-1050 and the press's
+    /// closed loop steps over what the even spread misses. The unfilled part is the page's colour, so it
     /// cannot be seen: a slider not measured takes 895-1190, widened to its knob.
     /// </summary>
     internal static (int Left, int Right) SliderTrack(string label, Bbs757EfbPixels px, int cy, int knobX)
     {
         if (label == "EFB BRIGHTNESS MODE") return (795, 1100);
+        if (label == "EFB BACKGROUND") return (804, 1050);
         return (Math.Min(895, knobX), Math.Max(1190, knobX));
     }
 
