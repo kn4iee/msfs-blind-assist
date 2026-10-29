@@ -91,6 +91,19 @@ three times, on a settled picture, once it has landed.
   set", as BlueBird's settings file holds them; no digit of the ID was in the output.
 - One misread seen in passing: the boarding rate's hover note "Faster service turnaround" read "tumaround".
 
+## The owner's checks by ear (plan 17's in-sim checks 1-4)
+
+2026-10-29, in the app as deployed (5ff4d2906), the same flight:
+
+- **Check 1, reading:** passed. The app's log: the pop-out opened on the first click; Home, four Aircraft pages and
+  PERF calc each landed on their first read, and every re-read matched the page shown; 268-502 ms a read.
+- **Check 2, the models moved aside:** passed. Picking the 757 opened the offer, Not now closed it, and Read the tablet
+  screen opened the offer instead of the reader. Whether "Switched to …" was still heard before the window's own
+  speech was not reported.
+- **Check 3, the offer box unticked:** passed: picking the 757 opened no offer.
+- **Check 4, the app started on the 757 with the models aside:** passed: the offer came after the other startup
+  windows.
+
 ## Not measured here
 
-- How the pages sound to the owner: his checks by ear (plan 17's in-sim checks).
+- Check 5, the first-run download through the app: it waits for the release (plan 17 Task 9).
