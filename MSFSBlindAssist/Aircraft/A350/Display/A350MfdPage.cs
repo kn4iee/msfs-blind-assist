@@ -188,8 +188,10 @@ public static class A350MfdPage
             // A text a later control is drawn over is that control's, never a field's under it (the INSERT key over the
             // AIRWAYS list's off-screen text boxes, live 2026-10-28).
             int at = elements.IndexOf(e);
+            // (A control holds only what is drawn after it begins: a field's own text under a later empty one stays the field's.)
             bool OverByLater(Cell c) => IsField(e) && elements.Skip(at + 1).Any(o => !Containers.Contains(o.Class) && !IsField(o)
-                && !hidden.Contains(o) && c.X >= o.X - shift && c.X <= o.X - shift + o.RectW && c.Y >= o.Y && c.Y <= o.Y + o.RectH + 4);
+                && !hidden.Contains(o) && c.Index >= o.TextStart
+                && c.X >= o.X - shift && c.X <= o.X - shift + o.RectW && c.Y >= o.Y && c.Y <= o.Y + o.RectH + 4);
             var inside = InReadingOrder(cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1
                 && !OverByLater(c)));
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
@@ -427,6 +429,8 @@ public static class A350MfdPage
         var own = lines.Where(Its).Select(l => l with { Popup = true }).ToList();
         var result = lines.Where(l => !Its(l)).ToList();
         int title = result.FindIndex(l => l.Kind == "title");
+        if (title < 0)
+            return lines.Select(l => Its(l) ? l with { Popup = true } : l).ToList();   // no title: in place, still the pop-up's
         result.InsertRange(title + 1, own);
         return result;
     }
@@ -533,11 +537,12 @@ public static class A350MfdPage
             int field = now.ToList().FindIndex(l => l.Popup && l.Kind == "field");
             return field >= 0 ? field : now.ToList().FindIndex(l => l.Popup);
         }
-        if (before.Any(l => l.Kind == "menuitem"))
-            return null;
+        // A menu is new when none of its items stands where one stood before: one replacing another (RWY's list, then
+        // SID's) as well as one opening; the same menu still open, scrolled or not, keeps the pilot's place.
+        var open = before.Where(l => l.Kind == "menuitem").Select(l => (l.ClickX, l.ClickY)).ToHashSet();
         for (int i = 0; i < now.Count; i++)
             if (now[i].Kind == "menuitem")
-                return i;
+                return open.Contains((now[i].ClickX, now[i].ClickY)) ? null : i;
         return null;
     }
 
@@ -552,6 +557,8 @@ public static class A350MfdPage
         var menu = lines.Where(IsItem).OrderBy(l => l.ClickY).ToList();
         var result = lines.Where(l => !IsItem(l)).ToList();
         int title = result.FindIndex(l => l.Kind == "title" && l.Spoken.Contains("F-PLN", StringComparison.Ordinal));
+        if (title < 0)
+            return lines;   // no title to follow (not drawn): the items stay where they read
         result.InsertRange(title + 1, menu);
         return result;
     }

@@ -572,6 +572,41 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.StartsWith("ALT CSTR AT: FL", StringComparison.Ordinal));
     }
 
+    // Review 2026-10-28: a text drawn before a later control is never that control's (every control claims only what is
+    // drawn after it): a field's own text under a later empty element, a hit area drawn over it, stays the field's.
+    [Fact]
+    public void A_fields_own_text_under_a_later_empty_control_stays_its_own()
+    {
+        var page = Fixture();
+        var cap = page with { Elements = page.Elements.Append(new DrawnElement(0, "BaseUIButton", 130, 335, 120, 50, 130, 335, page.Texts.Count)).ToList() };
+        var lines = A350MfdPage.Read(cap, 0);
+        Assert.Contains(lines, l => l.Kind == "field" && l.Spoken == "IDLE: +0.0, green");   // the field, where Enter types
+        Assert.DoesNotContain(lines, l => l.Spoken == "IDLE: empty");
+    }
+
+    // Review 2026-10-28: a menu replacing another between two reads (the RWY list, then the SID list) is a menu just
+    // opened: the window moves to its first item, as it does for the first menu; the same menu still open keeps its place.
+    [Fact]
+    public void A_menu_replacing_another_takes_the_window_to_its_first_item()
+    {
+        var rwy = PageLines("mfd_departure_rwy_list");
+        var sids = PageLines("mfd_departure_tmpy_sids");
+        Assert.Equal(sids.ToList().FindIndex(l => l.Spoken == "NONE button"), A350MfdPage.MenuJustOpened(rwy, sids));
+        Assert.Null(A350MfdPage.MenuJustOpened(sids, sids));
+    }
+
+    // Review 2026-10-28: with no title line to follow, the revision menu went to the very top, above the page's header
+    // keys: it stays where it reads.
+    [Fact]
+    public void Without_a_title_the_revision_menu_stays_in_place()
+    {
+        var page = Load("mfd_fpln_revisions");
+        var lines = A350MfdPage.Read(page with { Texts = page.Texts.Select(t => t.Text == "ACTIVE/F-PLN" ? t with { Text = " " } : t).ToList() }, 0);
+        Assert.Equal("FMS 1 menu, cyan", lines[0].Spoken);
+        int first = lines.ToList().FindIndex(l => l.Kind == "menuitem");
+        Assert.True(first > lines.ToList().FindIndex(l => l.Spoken == "DATA button"), string.Join(" | ", lines.Select(l => l.Spoken)));
+    }
+
     /// <summary>The draw-order index of a side's element of <paramref name="cls"/> at <paramref name="x"/>, <paramref name="y"/>.</summary>
     private static int ElementAt(A350DrawCapture cap, string cls, float x, float y) =>
         cap.Elements.Select((e, i) => (e, i)).Single(p => p.e.Class == cls && p.e.X == x && p.e.Y == y).i;
