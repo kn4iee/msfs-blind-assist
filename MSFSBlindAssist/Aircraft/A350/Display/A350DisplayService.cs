@@ -81,11 +81,17 @@ public sealed class A350DisplayService : IDisposable
         _work.Add(Prepare);
     }
 
+    /// <summary>The module prepared and its identity when it was (<see cref="A350ModuleCache.IdentityOf"/>).</summary>
+    private string? _modulePath;
+    private A350ModuleCache.ModuleIdentity? _moduleIdentity;
+
     private void Prepare()
     {
         try
         {
             var path = A350ModuleCache.FindInstalledModule() ?? throw new A350ModuleException("the A350 is not installed");
+            _modulePath = path;
+            _moduleIdentity = A350ModuleCache.IdentityOf(path);
             var mod = A350WasmModule.Parse(File.ReadAllBytes(path));
             _facts = A350ModuleFacts.From(mod);
             var ui = A350ModulePatcher.UiDrawClassesOf(mod);
@@ -117,6 +123,14 @@ public sealed class A350DisplayService : IDisposable
         var now = DateTime.UtcNow;
         if (!_status.MayLocate(now)) return false;
         bool ok = _reader.TryLocate();
+        if (ok && ModuleChanged())
+        {
+            // An A350 update while MSFSBA stayed open (review 2026-10-29): the prepared patch was made from the old module,
+            // and its code would draw the new memory. Prepared again, and looked for again with the new module's anchors.
+            Log.Info("A350Display", "the installed A350 module changed: preparing it again");
+            Reprepare();
+            return false;
+        }
         if (ok)
         {
             Log.Info("A350Display", $"A350 memory at 0x{_reader.Base:x}");
@@ -133,6 +147,26 @@ public sealed class A350DisplayService : IDisposable
     private void Say(string? line)
     {
         if (line != null) Spoken?.Invoke(line);
+    }
+
+    /// <summary>Whether the installed module is no longer the one prepared (an identity that cannot be read is no change:
+    /// a module being replaced is checked again on the next look).</summary>
+    private bool ModuleChanged() =>
+        _modulePath != null && A350ModuleCache.IdentityOf(_modulePath) is { } now && _moduleIdentity is { } prepared && now != prepared;
+
+    /// <summary>Drops the engine built from the old module and prepares the installed one (on the worker thread).</summary>
+    private void Reprepare()
+    {
+        _draw?.Dispose();
+        _module?.Dispose();
+        _engine?.Dispose();
+        _reader?.Dispose();
+        _draw = null;
+        _module = null;
+        _engine = null;
+        _reader = null;
+        State = A350DisplayState.Preparing;
+        Prepare();
     }
 
     /// <summary>Draws the named gauges on one fresh copy; null while not ready or with no A350 in the sim.</summary>

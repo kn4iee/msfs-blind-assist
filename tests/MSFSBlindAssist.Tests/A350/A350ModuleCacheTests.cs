@@ -31,6 +31,22 @@ public class A350ModuleCacheTests : IDisposable
         Assert.Equal(community, A350ModuleCache.FindInstalledModule(Path.Combine(_root, "Packages")));   // Community wins, as the sim loads it over the official one
     }
 
+    // Review 2026-10-29 (engine I4): the reader prepared the installed module once and never checked it again, so after an
+    // A350 update with MSFSBA left open the old patched code drew the new memory. The module's identity (its size and
+    // write time) is compared on each re-locate; an update changes it, and a missing module has none.
+    [Fact]
+    public void An_updated_module_has_another_identity()
+    {
+        var path = WriteModule("Community");
+        var before = A350ModuleCache.IdentityOf(path);
+        Assert.NotNull(before);
+        Assert.Equal(before, A350ModuleCache.IdentityOf(path));
+        File.WriteAllBytes(path, A350ModulePatcherTests.Sample().Concat(new byte[] { 0 }).ToArray());
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        Assert.NotEqual(before, A350ModuleCache.IdentityOf(path));
+        Assert.Null(A350ModuleCache.IdentityOf(path + ".gone"));
+    }
+
     // Keyed by the hash alone, a module compiled from an older patch was loaded after the patch changed (2026-10-29:
     // the allocator patch would silently not apply). The patch's version is part of the key.
     [Fact]

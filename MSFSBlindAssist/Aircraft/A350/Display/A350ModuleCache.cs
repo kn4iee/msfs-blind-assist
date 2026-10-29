@@ -49,6 +49,20 @@ public static class A350ModuleCache
         return root == null ? null : FindInstalledModule(root);
     }
 
+    /// <summary>What tells an updated module from the one prepared, without hashing 69 MB: its size and write time.</summary>
+    public readonly record struct ModuleIdentity(long Length, DateTime WrittenUtc);
+
+    /// <summary>The module's identity, or null when it cannot be read (gone, or being replaced).</summary>
+    public static ModuleIdentity? IdentityOf(string path)
+    {
+        try
+        {
+            var f = new FileInfo(path);
+            return f.Exists ? new ModuleIdentity(f.Length, f.LastWriteTimeUtc) : null;
+        }
+        catch (Exception) { return null; }
+    }
+
     /// <summary>The compiled module's cache, keyed by the installed module's hash and the patch's version.</summary>
     public static string CachePath(string localAppData, string sha256) =>
         Path.Combine(localAppData, "MSFSBlindAssist", "a350", $"{sha256}-p{A350ModulePatcher.Version}.cwasm");
