@@ -11,8 +11,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350NdMapTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     private static string Line(IReadOnlyList<string> lines, string label) => Assert.Single(lines, l => l.StartsWith(label + ": "));
 

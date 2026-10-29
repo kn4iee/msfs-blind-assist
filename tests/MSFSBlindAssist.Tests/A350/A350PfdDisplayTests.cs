@@ -9,8 +9,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350PfdDisplayTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     [Fact]
     public void The_displays_section_holds_every_display()
@@ -30,7 +29,7 @@ public class A350PfdDisplayTests
     }
 
     [Fact]
-    public void Each_display_line_reads_its_display()
+    public async Task Each_display_line_reads_its_display()
     {
         var def = new IniBuildsA350Definition();
         Assert.True(def.TryGetDisplayOverride(IniBuildsA350Definition.PfdCaptainKey, 1, out var none));
@@ -42,7 +41,7 @@ public class A350PfdDisplayTests
             [("FCU", 0)] = Fixture("ground_FCU"), [("RMP", 0)] = Fixture("ground_RMP_0"), [("BAT", 0)] = Fixture("ground_BAT"),
         };
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
-        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        for (int t = 0; t < 8; t++) await def.Pfd.TickAsync();
 
         string Read(string panel)
         {
@@ -70,7 +69,7 @@ public class A350PfdDisplayTests
     [InlineData("RMP 1 display", "INI_POTENTIOMETER_93")]
     [InlineData("Standby flight display", "INI_ISIS1_POWERED")]
     [InlineData("Standby navigation display", "INI_ISIS2_POWERED")]
-    public void A_display_whose_screen_is_off_reads_dark(string panel, string power)
+    public async Task A_display_whose_screen_is_off_reads_dark(string panel, string power)
     {
         var cache = new Dictionary<string, double>(StringComparer.Ordinal);
         var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
@@ -81,7 +80,7 @@ public class A350PfdDisplayTests
             [("FCU", 0)] = Fixture("ground_FCU"), [("RMP", 0)] = Fixture("ground_RMP_0"),
         };
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
-        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        for (int t = 0; t < 8; t++) await def.Pfd.TickAsync();
         var key = IniBuildsA350Definition.DisplayPanels.Single(d => d.Panel == panel).Key;
 
         cache[def.KeyForInput(power)] = 0;
@@ -101,7 +100,7 @@ public class A350PfdDisplayTests
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "INI_LEFT_EFIS_POWERED", "Captain PFD")]
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadNDWaypoint, "INI_LEFT_EFIS_POWERED", "Captain ND")]
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSquawkCode, "INI_POTENTIOMETER_93", "RMP 1 display")]
-    public void A_readout_from_a_dark_screen_says_it_is_dark(MSFSBlindAssist.Hotkeys.HotkeyAction action, string power, string panel)
+    public async Task A_readout_from_a_dark_screen_says_it_is_dark(MSFSBlindAssist.Hotkeys.HotkeyAction action, string power, string panel)
     {
         var cache = new Dictionary<string, double>(StringComparer.Ordinal);
         var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
@@ -112,7 +111,7 @@ public class A350PfdDisplayTests
             [("EFIS", 0)] = Fixture("efis0_ls_downwind_omdb"), [("RMP", 0)] = Fixture("ground_RMP_0"),
         };
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
-        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        for (int t = 0; t < 8; t++) await def.Pfd.TickAsync();
         cache[def.KeyForInput(power)] = 0;
         var speech = new SpeechCapture();
         Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
@@ -122,13 +121,13 @@ public class A350PfdDisplayTests
     // Review 2026-10-29 (speech 1): a flight load reset the lights and levers but never the display call-outs; it rebaselines
     // both monitors, and the last flight's displays are no longer read as this one's.
     [Fact]
-    public void A_flight_load_rebaselines_the_display_call_outs()
+    public async Task A_flight_load_rebaselines_the_display_call_outs()
     {
         var def = new IniBuildsA350Definition();
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => g == "EFIS" && i == 0 ? Fixture("ground_EFIS_0") : null), _ => false, _ => { });
         def.Ecam = new A350EcamMonitor(() => Task.FromResult<A350DrawCapture?>(Fixture("ctr_powerup_fws_fault")), () => false, _ => { });
-        def.Pfd.TickAsync().Wait();
-        def.Ecam.TickAsync().Wait();
+        await def.Pfd.TickAsync();
+        await def.Ecam.TickAsync();
         Assert.NotNull(def.Pfd.Latest(0));
         Assert.NotNull(def.Ecam.LatestCapture);
         def.OnSimContextReset();
@@ -163,7 +162,7 @@ public class A350PfdDisplayTests
     [InlineData("efis0_ils_below", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedS, "S speed not shown", "S speed not available")]
     [InlineData("efis0_fd_stand", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "Green dot speed not shown", "Green dot speed not available")]
     [InlineData("efis0_climb_bi614", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "Green dot speed below the speed scale", "Green dot speed not available")]
-    public void The_characteristic_speeds_read_off_the_captains_pfd(string fixture, MSFSBlindAssist.Hotkeys.HotkeyAction action, string said,
+    public async Task The_characteristic_speeds_read_off_the_captains_pfd(string fixture, MSFSBlindAssist.Hotkeys.HotkeyAction action, string said,
         string displaysNotRunning)
     {
         var def = new IniBuildsA350Definition { Cached = (_, _) => null };
@@ -175,7 +174,7 @@ public class A350PfdDisplayTests
 
         var captain = Fixture(fixture);
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => g == "EFIS" && i == 0 ? captain : null), _ => false, _ => { });
-        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        for (int t = 0; t < 8; t++) await def.Pfd.TickAsync();
         speech = new SpeechCapture();
         Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
         Assert.Equal(new[] { said }, speech.All);
@@ -212,19 +211,6 @@ public class A350PfdDisplayTests
         Assert.Equal(litLines.Select(l => l.Spoken), litShown);
     }
 
-    // Climbing through FL235 in STD with FL400 selected (live 2026-10-28): the tape's top shows the selected altitude ("FL"
-    // at 587, "400" at 688, y 172). The tape's own selected altitude symbol (the box it draws in range: a black fill x
-    // 587-691 in its frame, the value at x 597) is still drawn out of range, held at the screen's top ("400" at x 646,
-    // y 38), inside the FMA's top row where the tape's clip hides it: it read as the FMA's fourth column ("FMA approach:
-    // 400, cyan"), and before that into the engagement column, whose first text is "1" at 685.
-    [Fact]
-    public void Out_of_range_the_selected_altitude_reads_once_and_never_as_an_fma_column()
-    {
-        var lines = A350Pfd.Read(Fixture("pfd_climb_std_fl400"), 0);
-        Assert.Equal("FMA engagement: AP1; 1 FD 2; A/THR, white", lines.Single(l => l.StartsWith("FMA engagement", StringComparison.Ordinal)));
-        Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
-        Assert.Equal("Selected altitude: FL 400, cyan", lines.Single(l => l.Contains("400")));
-    }
 
     // Review 2026-10-29: with no capture the MFD window said the displays were not available but kept the old page's
     // lines, so Enter clicked where the last page had its fields.

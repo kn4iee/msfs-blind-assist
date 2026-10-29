@@ -32,10 +32,32 @@ public class A350HotkeysTests
     [InlineData(HotkeyAction.FCUSpeedPull, "A350_FCU_SPD_KNOB_PULL")]
     [InlineData(HotkeyAction.FCUVSPush, "A350_FCU_VS_KNOB_PUSH")]
     [InlineData(HotkeyAction.FCUVSPull, "A350_FCU_VS_KNOB_PULL")]
-    public void A_press_hotkey_drives_the_fcu_panels_own_row(HotkeyAction action, string row)
+    public void A_press_hotkey_writes_what_pressing_the_fcu_panels_own_row_writes(HotkeyAction action, string row)
     {
-        Assert.Equal(row, A350Hotkeys.PressRows[action]);
         Assert.Contains(row, MapKeys);
+        var byHotkey = Sends((def, sim) => Assert.True(def.HandleHotkeyAction(action, sim, new SpeechCapture(), null!, null!)));
+        var byPanel = Sends((def, sim) => def.HandleUIVariableSet(row, 1, def.GetVariables()[row], sim, new SpeechCapture()));
+        Assert.NotEmpty(byHotkey);
+        Assert.Equal(byPanel, byHotkey);
+    }
+
+    /// <summary>What a fresh definition writes while <paramref name="act"/> runs (tools review 2026-10-30: the test only
+    /// re-typed the table, so HandleHotkeyAction's press branch was never driven).</summary>
+    private static List<string> Sends(Action<MSFSBlindAssist.Aircraft.IniBuildsA350Definition, MSFSBlindAssist.SimConnect.SimConnectManager> act)
+    {
+        var sent = new List<string>();
+        var sim = new MSFSBlindAssist.SimConnect.SimConnectManager(IntPtr.Zero);
+        var def = new MSFSBlindAssist.Aircraft.IniBuildsA350Definition
+        {
+            CanLand = _ => true,
+            Cached = (_, _) => null,
+            Send = (_, rpn) => sent.Add(rpn),
+            ReRead = (_, _) => { },
+            Delay = _ => new TaskCompletionSource().Task,
+        };
+        def.Attach(sim);
+        act(def, sim);
+        return sent;
     }
 
     // Parity (2026-10-29): another aircraft's window key the A350 has a page for opens its MFD window on that page, pressed

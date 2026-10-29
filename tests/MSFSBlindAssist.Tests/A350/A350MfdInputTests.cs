@@ -32,7 +32,7 @@ public class A350MfdInputTests
     {
         var sent = new List<string>();
         var def = new MSFSBlindAssist.Aircraft.IniBuildsA350Definition { Send = (_, rpn) => { lock (sent) sent.Add(rpn); } };
-        var input = def.NewMfdInput(null!);
+        var input = def.NewMfdInput(null!, (_, _) => Task.CompletedTask);
         Assert.True(await input.TypeAsync(0, "330"));
         input.Press(1, "ENTER");
         Assert.Equal(new[] { "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_0)", "1 (>L:INI_MCDU2_ENTER)" }, sent);

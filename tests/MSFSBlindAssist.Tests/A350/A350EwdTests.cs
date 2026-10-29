@@ -9,8 +9,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350EwdTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     [Fact]
     public void Warning_lines_read_in_order_with_their_colours_without_dot_rows()

@@ -10,8 +10,7 @@ public class A350SdPageTests
 {
     private static IReadOnlyList<string> Page(int page, string fixture = "ctr_sd_page_")
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", $"{fixture}{page}.json")))!;
+        var cap = A350Fixtures.Capture($"{fixture}{page}.json");
         return A350SdPage.Read(A350Ewd.Parse(cap).SystemDisplay, page);
     }
 
@@ -33,8 +32,7 @@ public class A350SdPageTests
     [Fact]
     public void The_permanent_data_line_names_each_value()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sd_live_4.json")))!;
+        var cap = A350Fixtures.Capture("ctr_sd_live_4.json");
         // "FLT" is drawn as text left of the flight time: the caption its field already names.
         Assert.Equal(new[]
         {
@@ -70,8 +68,7 @@ public class A350SdPageTests
     [Fact]
     public void The_isa_deviation_reads_as_one_named_value()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_refuel_door_isa.json")))!;
+        var cap = A350Fixtures.Capture("ctr_refuel_door_isa.json");
         var lines = A350SdPage.ReadPermanentData(A350Ewd.Parse(cap).PermanentData);
         Assert.Contains("ISA: +13 °C, green", lines);
         Assert.DoesNotContain("ISA, white", lines);
@@ -258,8 +255,7 @@ public class A350SdPageTests
     [InlineData(250f, "white", "PRESS STS FOR NEXT STATUS PAGE, white")]
     public void A_line_not_aligned_with_the_columns_ends_them(float x, string colour, string reads)
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sd_status_inop_14.json")))!;
+        var cap = A350Fixtures.Capture("ctr_sd_status_inop_14.json");
         var rgba = colour == "cyan" ? new A350Rgba(0, 1, 1, 1) : new A350Rgba(1, 1, 1, 1);
         var texts = cap.Texts.ToList();
         texts.Add(new DrawnText("PRESS STS FOR NEXT STATUS PAGE", x, 760, x, 760, 1, rgba));

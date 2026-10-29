@@ -10,8 +10,7 @@ public class A350SdSymbolsTests
 {
     private static IReadOnlyList<string> Page(int page)
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", $"ctr_sdsym_{page}.json")))!;
+        var cap = A350Fixtures.Capture($"ctr_sdsym_{page}.json");
         return A350SdSymbols.Read(cap.Shapes, page);
     }
 
@@ -50,8 +49,7 @@ public class A350SdSymbolsTests
     [Fact]
     public void Fuel_follows_the_pumps_and_crossfeed_switched_on()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sdsym_8_pumps_on.json")))!;
+        var cap = A350Fixtures.Capture("ctr_sdsym_8_pumps_on.json");
         var p = A350SdSymbols.Read(cap.Shapes, 8);
         Assert.Contains("Left main pump: running, green", p);
         Assert.Contains("Left standby pump: standby, green", p);
@@ -63,8 +61,7 @@ public class A350SdSymbolsTests
     // Live, on the stand at VCBI: APU running, APU bleed on, both packs on, EXT 1 and 2 on (2026-10-27).
     private static IReadOnlyList<string> Apu(int page)
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", $"ctr_sdsym_apu_{page}.json")))!;
+        var cap = A350Fixtures.Capture($"ctr_sdsym_apu_{page}.json");
         return A350SdSymbols.Read(cap.Shapes, page);
     }
 
@@ -165,8 +162,7 @@ public class A350SdSymbolsTests
     [InlineData("ctr_fctl_rudder_neutral", "Rudder: centred, green")]
     public void Fctl_reads_the_rudders_deflection(string fixture, string rudder)
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!;
+        var cap = A350Fixtures.Capture(fixture + ".json");
         Assert.Contains(rudder, A350SdSymbols.Read(cap.Shapes, 10));
     }
 
@@ -233,8 +229,7 @@ public class A350SdSymbolsTests
     public void Apu_reads_its_generator_and_bleed_valve()
     {
         Assert.Equal(new[] { "APU generator supply: supplying, green", "APU generator: white", "APU bleed valve: open, green" }, Apu(9));
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sdsym_apu_9_bleed_off.json")))!;
+        var cap = A350Fixtures.Capture("ctr_sdsym_apu_9_bleed_off.json");
         Assert.Contains("APU bleed valve: closed, green", A350SdSymbols.Read(cap.Shapes, 9));
         var text = A350SdPage.Read(A350Ewd.Parse(cap).SystemDisplay, 9);
         Assert.Contains("APU generator load: 54 %, green", text);
@@ -245,8 +240,7 @@ public class A350SdSymbolsTests
     [Fact]
     public void An_opened_door_reads_open_in_amber()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_sdsym_door_l1_open.json")))!;
+        var cap = A350Fixtures.Capture("ctr_sdsym_door_l1_open.json");
         var p = A350SdSymbols.Read(cap.Shapes, 11);
         Assert.Contains("Door 1L: open, amber", p);
         Assert.Contains("Door 1R: closed, green", p);

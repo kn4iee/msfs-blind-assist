@@ -8,8 +8,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350MfdPageTests
 {
     private static A350DrawCapture Fixture() =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ground_MFD.json")))!;
+        A350Fixtures.Capture("ground_MFD.json");
 
     // Review 2026-10-29 (readers minor 15): fixtures taken before the allocator patch read titles such as "¨÷é..."
     // and an empty one, and the window would have announced them as a new page. Only a readable title is a page change.
@@ -50,8 +49,7 @@ public class A350MfdPageTests
     [Fact]
     public void Boxes_dashes_and_units_read_as_words()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_init_empty.json")))!;
+        var cap = A350Fixtures.Capture("mfd_init_empty.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("FLT NBR: required, amber", lines);
         Assert.Contains("FROM: required, amber", lines);
@@ -65,8 +63,7 @@ public class A350MfdPageTests
     [Fact]
     public void A_label_shared_by_two_columns_takes_each_columns_header()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_radnav.json")))!;
+        var cap = A350Fixtures.Capture("mfd_radnav.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("VOR 1 IDENT: KAT, cyan", lines);
         Assert.Contains("VOR 2 IDENT: KAT, cyan", lines);
@@ -82,8 +79,7 @@ public class A350MfdPageTests
     [Fact]
     public void A_checklist_item_reads_without_its_dot_leader()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_cl_cockpit_prep.json")))!;
+        var cap = A350Fixtures.Capture("mfd_cl_cockpit_prep.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("GEAR PINS & COVERS: REMOVED button, cyan", lines);
         Assert.Contains("FUEL QUANTITY: blank KG button, cyan", lines);
@@ -96,8 +92,7 @@ public class A350MfdPageTests
     [Fact]
     public void A_ticked_checklist_item_reads_its_colon_unspaced()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_cl_after_start_ticked.json")))!;
+        var cap = A350Fixtures.Capture("mfd_cl_after_start_ticked.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("ANTI ICE: SET button, green", lines);
         Assert.Contains("FLIGHT CONTROLS: CHECKED button, green", lines);
@@ -110,8 +105,7 @@ public class A350MfdPageTests
     [Fact]
     public void A_course_reads_its_degree_sign()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_radnav_ls.json")))!;
+        var cap = A350Fixtures.Capture("mfd_radnav_ls.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("CRS: F040°, cyan", lines);
         Assert.Contains("FREQ/CHAN: 109.90, cyan", lines);
@@ -140,8 +134,7 @@ public class A350MfdPageTests
     [Fact]
     public void Surv_controls_read_their_options_and_check_boxes()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_surv_controls.json")))!;
+        var cap = A350Fixtures.Capture("mfd_surv_controls.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("TERR SYS: ON, selected, green", lines);
         Assert.Contains("TERR SYS: OFF", lines);
@@ -164,8 +157,7 @@ public class A350MfdPageTests
     [Fact]
     public void The_flight_plan_reads_row_by_row()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_fpln_empty.json")))!;
+        var cap = A350Fixtures.Capture("mfd_fpln_empty.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         Assert.Contains("POSITION button", lines);
         Assert.Contains("P.POS none none none, green", lines);
@@ -179,8 +171,7 @@ public class A350MfdPageTests
     [Fact]
     public void An_open_menu_reads_its_own_items_only()
     {
-        var cap = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_fpln_revisions.json")))!;
+        var cap = A350Fixtures.Capture("mfd_fpln_revisions.json");
         var lines = A350MfdPage.Read(cap, 0).Select(l => l.Spoken).ToList();
         // With no flight plan every item but HOLD is unavailable (grey).
         Assert.Contains("FROM P.POS DIR TO button, grey", lines);
@@ -195,9 +186,7 @@ public class A350MfdPageTests
     // headers (FROM, TIME, the SPD ALT menu's words; TRK, DIST, FPA for the leg into it, drawn just above its row),
     // dashes as none, the track's "d" a degree sign; only the rows above the destination bar (a sighted pilot sees
     // no more); the destination bar as one line.
-    private static IReadOnlyList<string> FlightPlan() => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
-        File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350",
-            "Fixtures", "mfd_fpln_route.json")))!, 0).Select(l => l.Spoken).ToList();
+    private static IReadOnlyList<string> FlightPlan() => A350MfdPage.Read(A350Fixtures.Capture("mfd_fpln_route.json"), 0).Select(l => l.Spoken).ToList();
 
     [Fact]
     public void A_flight_plan_reads_one_line_per_waypoint_with_its_leg()
@@ -228,8 +217,7 @@ public class A350MfdPageTests
     [Fact]
     public void A_row_is_texts_near_each_other_and_a_position_reads_degrees()
     {
-        var lines = A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "mfd_irs.json")))!, 0)
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_irs.json"), 0)
             .Select(l => l.Spoken).ToList();
         Assert.Contains("IRS 3: NAV, 0.1 NM, green", lines);
         Assert.Contains("IRS ALIGNED ON GNSS POS: 07°10.5N/079°53.1E, green", lines);
@@ -240,9 +228,7 @@ public class A350MfdPageTests
     // (the font's "d" a degree sign); by order when the counts match (LENGTH's value ends nearer CRS than LENGTH).
     private static IReadOnlyList<string> Page(string fixture) => PageLines(fixture).Select(l => l.Spoken).ToList();
 
-    private static IReadOnlyList<MfdLine> PageLines(string fixture) => A350MfdPage.Read(JsonSerializer.Deserialize<A350DrawCapture>(
-        File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures",
-            fixture + ".json")))!, 0);
+    private static IReadOnlyList<MfdLine> PageLines(string fixture) => A350MfdPage.Read(A350Fixtures.Capture(fixture + ".json"), 0);
 
     // Live 2026-10-28: INSERT NEXT WPT for BASUR opens a pop-up in the revision menu's column (NextWaypointPopup, no
     // rectangle of its own): its entry field read "C220°: none", the label of the F-PLN row under it. The field takes
@@ -501,8 +487,7 @@ public class A350MfdPageTests
         Assert.Equal("FMS 2 menu, cyan", A350MfdPage.Read(Fixture(), 1)[0].Spoken);
     }
 
-    private static A350DrawCapture Load(string fixture) => JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-        ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!;
+    private static A350DrawCapture Load(string fixture) => A350Fixtures.Capture(fixture + ".json");
 
     public static IEnumerable<object[]> MfdFixtures() => Directory.GetFiles(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "tests",
             "MSFSBlindAssist.Tests", "A350", "Fixtures"), "*.json")

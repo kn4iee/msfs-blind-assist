@@ -8,8 +8,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350PfdMonitorTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     /// <summary>A monitor's draw that answers each display it asks for with <paramref name="one"/>.</summary>
     internal static Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> Each(Func<string, int, A350DrawCapture?> one) =>

@@ -129,18 +129,19 @@ public class A350DrawEngineStubTests
     }
 
     [Fact]
-    public void A_draw_that_never_ends_is_cut_off_at_its_deadline_and_the_next_one_works()
+    public async Task A_draw_that_never_ends_is_cut_off_at_its_deadline_and_the_next_one_works()
     {
         // local.get 0; i32.load offset=4; if; loop; br 0; end; end: spins while the object's flag is set.
         var e = Engine(_ => new byte[] { 0x20, 0x00, 0x28, 0x02, 0x04, 0x04, 0x40, 0x03, 0x40, 0x0C, 0x00, 0x0B, 0x0B });
         e.DrawDeadline = TimeSpan.FromMilliseconds(200);
         e.Load(Copy(flag: 1));
         var draw = Task.Run(() => e.Draw("CTR"));
-        Assert.True(draw.Wait(TimeSpan.FromSeconds(10)), "the draw never ended");   // left running, so left undisposed
+        Assert.True(await Task.WhenAny(draw, Task.Delay(TimeSpan.FromSeconds(10))) == draw, "the draw never ended");   // left running, so left undisposed
         try
         {
-            Assert.False(draw.Result.Ok);
-            Assert.Contains("deadline", draw.Result.Error);
+            var cut = await draw;
+            Assert.False(cut.Ok);
+            Assert.Contains("deadline", cut.Error);
             e.Load(Copy(flag: 0));
             Assert.True(e.Draw("CTR").Ok);
         }

@@ -8,8 +8,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350GroundDisplaysTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ground_" + name + ".json")))!;
+        A350Fixtures.Capture("ground_" + name + ".json");
 
     [Fact]
     public void The_nd_reads_its_corners_messages_and_vertical_display()
@@ -32,8 +31,7 @@ public class A350GroundDisplaysTests
     [Fact]
     public void The_nd_reads_its_to_waypoint_block_as_one_line()
     {
-        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "efis0_climb_bi614.json")))!, 0);
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_climb_bi614.json"), 0);
         Assert.Contains("To waypoint: BI614, white; track 296°, green; 6.2 NM, green; ETA 07:20, green", nd);
         Assert.DoesNotContain(nd, l => l.StartsWith("6.", StringComparison.Ordinal) || l.StartsWith("07:20", StringComparison.Ordinal));
     }
@@ -48,8 +46,7 @@ public class A350GroundDisplaysTests
     [InlineData("efis0_ls_downwind_omdb", "Vertical display selected altitude: 4000, cyan", "Vertical display range: 0 1.25 2.5 3.75 5, cyan", "Vertical display altitudes: 6000 5500 5000 4500, white")]
     public void The_vertical_display_reads_its_selected_altitude_apart(string fixture, string selected, string range, string altitudes)
     {
-        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!, 0);
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), 0);
         Assert.Contains(selected, nd);
         Assert.Contains(range, nd);
         Assert.Contains(altitudes, nd);
@@ -61,8 +58,7 @@ public class A350GroundDisplaysTests
     [InlineData("pfd_climb_std_fl400", "MORA: 16, magenta")]
     public void The_vertical_displays_safe_altitude_reads_with_its_name(string fixture, string safe)
     {
-        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!, 0);
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), 0);
         Assert.Contains(safe, nd);
         Assert.DoesNotContain(nd, l => l is "MSA, white" or "MORA, white" or "3 8, white" or "1 6, white");
     }

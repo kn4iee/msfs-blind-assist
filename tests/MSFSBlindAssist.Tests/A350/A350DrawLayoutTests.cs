@@ -9,8 +9,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350DrawLayoutTests
 {
     private static A350DrawCapture Ctr() =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ctr_parked_apu.json")))!;
+        A350Fixtures.Capture("ctr_parked_apu.json");
 
     private static string Show(IReadOnlyList<DrawnCell> row) => string.Join(" | ", row.Select(c => c.Text + "{" + c.Colour + "}"));
 
@@ -19,8 +18,7 @@ public class A350DrawLayoutTests
     [Fact]
     public void Each_side_draws_its_pfd_on_its_own_half()
     {
-        var cpt = JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "efis0_aligning.json")))!;
+        var cpt = A350Fixtures.Capture("efis0_aligning.json");
         Assert.Contains(A350DrawLayout.Region(cpt.Texts, A350DrawLayout.EfisPfd(0)), t => t.Text == "ATT");
         Assert.Contains(A350DrawLayout.Region(cpt.Texts, A350DrawLayout.EfisNd(0)), t => t.Text == "MAP NOT AVAIL");
         Assert.True(A350DrawLayout.EfisPfd(1).Contains(327, 399));

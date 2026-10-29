@@ -10,8 +10,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350SdTextTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     [Fact]
     public void The_page_reads_its_name_then_its_rows_with_colours()

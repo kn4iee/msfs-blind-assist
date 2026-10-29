@@ -34,6 +34,7 @@ public class A350ShapeReaderTests
         var m = WithPaint(100, 0, 1, 0, image: 7);
         F(m, 300, 10, 20, 30, 45);
         var s = A350ShapeReader.Fill(m, 100, 300);
+        Assert.NotNull(s);
         Assert.Equal(new DrawnShape("fill", 10, 20, 30, 45, 7), s with { Colour = null });
         Assert.Equal("green", A350Rgba.NameOf(s.Colour));
     }
@@ -47,6 +48,7 @@ public class A350ShapeReaderTests
         F(m, 1000, 50, 60, 0, 0, 70, 65, 0, 0);
         F(m, 1100, 40, 80, 0, 0);
         var s = A350ShapeReader.Stroke(m, 100, 400, 2);
+        Assert.NotNull(s);
         Assert.Equal(("stroke", 40f, 60f, 70f, 80f), (s.Kind, s.X0, s.Y0, s.X1, s.Y1));
         Assert.Equal("amber", A350Rgba.NameOf(s.Colour));
     }
@@ -57,6 +59,7 @@ public class A350ShapeReaderTests
         var m = WithPaint(100, 1, 1, 1, image: 3);
         F(m, 2000, 5, 6, 0, 0, 9, 2, 0, 0, 7, 8, 0, 0);
         var s = A350ShapeReader.Triangles(m, 100, 2000, 3);
+        Assert.NotNull(s);
         Assert.Equal(("triangles", 5f, 2f, 9f, 8f, 3), (s.Kind, s.X0, s.Y0, s.X1, s.Y1, s.Image));
     }
 

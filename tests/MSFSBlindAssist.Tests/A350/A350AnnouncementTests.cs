@@ -90,7 +90,8 @@ public class A350LampAnnouncementTests
     private readonly SpeechCapture _speech = new();
     private readonly HashSet<string> _muted = new(StringComparer.Ordinal);
     private readonly IniBuildsA350Definition _def;
-    private readonly IReadOnlyList<A350Lamp> _lamps;
+    private static readonly IReadOnlyList<A350Lamp> Lamps = A350PanelLamps.Resolve(A350ControlMap.Load(),
+        A350PanelLayout.Place(A350ControlMap.Load()), new[] { "Overhead", "Glareshield", "Instrument" });
 
     public A350LampAnnouncementTests()
     {
@@ -106,11 +107,9 @@ public class A350LampAnnouncementTests
             IsMuted = key => _muted.Contains(key),
         };
         _def.Attach(new SimConnectManager(IntPtr.Zero));
-        _lamps = A350PanelLamps.Resolve(A350ControlMap.Load(), A350PanelLayout.Place(A350ControlMap.Load()),
-            new[] { "Overhead", "Glareshield", "Instrument" });
     }
 
-    private A350Lamp Lamp(string key) => _lamps.Single(l => l.Key == key);
+    private static A350Lamp Lamp(string key) => Lamps.Single(l => l.Key == key);
 
     /// <summary>Delivers every input of a lamp at <paramref name="value"/>, its own key at <paramref name="first"/>.</summary>
     private void Baseline(A350Lamp lamp, double first)

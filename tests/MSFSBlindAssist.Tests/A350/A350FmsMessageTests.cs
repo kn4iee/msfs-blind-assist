@@ -71,8 +71,7 @@ public class A350FmsMessageAnnouncerTests
 public class A350FmsMessageMonitorTests
 {
     private static A350DrawCapture Load(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     /// <summary>The APPROACH checklist page with the FMS message NAV ACCURACY UPGRADED in the scratchpad's place.</summary>
     private static readonly Lazy<A350DrawCapture> Posted = new(() => Load("mfd_cl_approach"));

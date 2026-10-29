@@ -10,8 +10,7 @@ namespace MSFSBlindAssist.Tests.A350;
 public class A350PfdTests
 {
     private static A350DrawCapture Fixture(string name) =>
-        JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
-            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", name + ".json")))!;
+        A350Fixtures.Capture(name + ".json");
 
     [Fact]
     public void The_captain_pfd_reads_by_area()
@@ -105,7 +104,11 @@ public class A350PfdTests
         Assert.Equal("Selected altitude: 40000, cyan", Assert.Single(lines, l => l.Contains("40000")));
     }
 
+    // Climbing through FL235 in STD with FL400 selected (live 2026-10-28): the tape's own selected altitude symbol is
+    // still drawn out of range, held at the screen's top ("400" at x 646, y 38: the capture as taken) inside the FMA's
+    // top row, where it read as the FMA's fourth column ("FMA approach: 400, cyan"); moved, it never does either.
     [Theory]
+    [InlineData(38f)]
     [InlineData(60f)]
     [InlineData(90f)]
     [InlineData(120f)]

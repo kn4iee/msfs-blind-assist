@@ -187,8 +187,10 @@ public partial class IniBuildsA350Definition
     internal double? ToggleState(string rowKey, SimConnectManager simConnect) => CurrentValue(rowKey, simConnect);
 
     /// <summary>The MFD window's KCCU and mouse: its key presses go out through <see cref="Send"/>, so a repeated key
-    /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4].</summary>
-    internal A350.Display.A350MfdInput NewMfdInput(SimConnectManager simConnect) => new(rpn => Send(simConnect, rpn));
+    /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4]. <paramref name="delay"/> replaces the
+    /// waits between keys (tests).</summary>
+    internal A350.Display.A350MfdInput NewMfdInput(SimConnectManager simConnect, Func<int, CancellationToken, Task>? delay = null) =>
+        new(rpn => Send(simConnect, rpn), delay ?? Task.Delay, null);
 
     /// <summary>The MFD window (input Shift+M, the A380's), opened or brought forward, on <paramref name="page"/> when given (a
     /// KCCU page key, <see cref="A350.A350Hotkeys.MfdPages"/>). While it is open it says the FMS messages itself, and the
