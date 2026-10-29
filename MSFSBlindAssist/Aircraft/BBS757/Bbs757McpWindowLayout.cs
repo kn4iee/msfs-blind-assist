@@ -17,19 +17,22 @@ public static class Bbs757McpWindowLayout
     public const string ChangeoverNode = "B757_MCP_AP_SPD_MACH_SW";
 
     private static readonly string[] Heading = { "B757_MCP_AP_HDG_SEL_SW", "B757_MCP_HOLD_1_BUTTON", "B757_MCP_LNAV_BUTTON" };
-    private static readonly string[] Speed = { "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON", "B757_MCP_AP_SPD_MACH_SW", SpeedInterveneNode };
+    // The knob's own actions first, as the PMDG 737 window has Speed Intervene first (Gus, 2026-10-29: the box, then
+    // intervene, then the changeover, then the modes).
+    private static readonly string[] Speed = { SpeedInterveneNode, "B757_MCP_AP_SPD_MACH_SW", "B757_MCP_SPD_BUTTON", "B757_MCP_THR_BUTTON", "B757_MCP_FLCH_BUTTON" };
     private static readonly string[] Altitude = { "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VNAV_BUTTON", "B757_MCP_FLCH_BUTTON" };
     private static readonly string[] VerticalSpeed = { "B757_MCP_VS_BUTTON" };
 
     /// <summary>
     /// Each button's access key by node, fixed so a relabelled control keeps its key and the keys match
     /// the PMDG windows (ruling R57): Alt+I is intervene, Alt+M the IAS/MACH changeover. FLCH sits in two
-    /// windows with one key.
+    /// windows with one key, Alt+L as the PMDG 737's Level Change (Gus, 2026-10-29: Alt+F was not where he
+    /// looked for it).
     /// </summary>
     private static readonly Dictionary<string, char> Keys = new(StringComparer.Ordinal)
     {
         ["B757_MCP_AP_HDG_SEL_SW"] = 'S', ["B757_MCP_HOLD_1_BUTTON"] = 'H', ["B757_MCP_LNAV_BUTTON"] = 'L',
-        ["B757_MCP_SPD_BUTTON"] = 'S', ["B757_MCP_THR_BUTTON"] = 'T', ["B757_MCP_FLCH_BUTTON"] = 'F',
+        ["B757_MCP_SPD_BUTTON"] = 'S', ["B757_MCP_THR_BUTTON"] = 'T', ["B757_MCP_FLCH_BUTTON"] = 'L',
         ["B757_MCP_AP_SPD_MACH_SW"] = 'M', [SpeedInterveneNode] = 'I',
         ["B757_MCP_HOLD_2_BUTTON"] = 'H', ["B757_MCP_VNAV_BUTTON"] = 'V',
         ["B757_MCP_VS_BUTTON"] = 'V',
@@ -42,8 +45,8 @@ public static class Bbs757McpWindowLayout
     };
 
     /// <summary>
-    /// A window's buttons by node, in order: heading HDG SEL, HDG HOLD, LNAV; speed SPD, THR, FLCH,
-    /// IAS/MACH, Speed Intervene; altitude ALT HOLD, VNAV, FLCH; vertical speed V/S. None for any other action.
+    /// A window's buttons by node, in order: heading HDG SEL, HDG HOLD, LNAV; speed Speed Intervene,
+    /// IAS/MACH, SPD, THR, FLCH; altitude ALT HOLD, VNAV, FLCH; vertical speed V/S. None for any other action.
     /// </summary>
     public static IReadOnlyList<string> NodesFor(HotkeyAction action) => action switch
     {
@@ -64,8 +67,9 @@ public static class Bbs757McpWindowLayout
     /// A window's button texts for these nodes, in order: <see cref="CaptionOverride"/> or
     /// <paramref name="labelOf"/>'s label, with its fixed key marked on the last word that starts with
     /// it ("HDG &amp;HOLD", "IAS/&amp;MACH", "Speed &amp;Intervene"); a word starts after a space or a slash.
-    /// A text where no word starts with the key shows no key rather than a wrong one. An ampersand in a
-    /// label is doubled, so it shows as itself rather than marking a key.
+    /// A text where no word starts with the key marks its first letter that is the key ("F&amp;LCH"); a text
+    /// without the letter shows no key rather than a wrong one. An ampersand in a label is doubled, so it
+    /// shows as itself rather than marking a key.
     /// </summary>
     public static IReadOnlyList<string> Captions(IReadOnlyList<string> nodes, Func<string, string> labelOf)
     {
@@ -73,19 +77,22 @@ public static class Bbs757McpWindowLayout
         for (int i = 0; i < nodes.Count; i++)
         {
             string text = CaptionOverride(nodes[i]) ?? labelOf(nodes[i]);
-            int at = AccessKeyFor(nodes[i]) is char key ? LastWordStartingWith(text, key) : -1;
+            int at = AccessKeyFor(nodes[i]) is char key ? KeyPlace(text, key) : -1;
             captions[i] = at < 0 ? Escape(text) : $"{Escape(text[..at])}&{Escape(text[at..])}";
         }
         return captions;
     }
 
-    private static int LastWordStartingWith(string text, char key)
+    // The last word that starts with the key, else the key's first letter anywhere; -1 when the text has none.
+    private static int KeyPlace(string text, char key)
     {
         for (int i = text.Length - 1; i >= 0; i--)
         {
             bool wordStart = i == 0 || text[i - 1] is ' ' or '/';
             if (wordStart && char.ToUpperInvariant(text[i]) == key) return i;
         }
+        for (int i = 0; i < text.Length; i++)
+            if (char.ToUpperInvariant(text[i]) == key) return i;
         return -1;
     }
 

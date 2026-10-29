@@ -424,7 +424,7 @@ The Glareshield's MCP panel holds the mode and engage buttons. Set its four valu
 All in input mode:
 
 - **Input Ctrl+H** opens **MCP Heading** (0 to 360; 360 is north), with **HDG SEL**, **HDG HOLD** and **LNAV** buttons.
-- **Input Ctrl+S** opens **MCP Speed** (knots, 100 to 399), with **SPD**, **THR**, **FLCH** and **IAS/MACH** buttons.
+- **Input Ctrl+S** opens **MCP Speed** (knots, 100 to 399), with **Speed Intervene**, **IAS/MACH**, **SPD**, **THR** and **FLCH** buttons.
 - **Input Ctrl+A** opens **MCP Altitude** (100 to 49000 feet, rounded to 100), with **ALT HOLD**, **VNAV** and **FLCH** buttons.
 - **Input Ctrl+V** opens **MCP Vertical Speed** (minus 8000 to 6000 feet per minute, rounded to 100), with a **V/S** button.
 
