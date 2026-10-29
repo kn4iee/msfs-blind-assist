@@ -7,6 +7,9 @@ public readonly record struct A350Rgba(float R, float G, float B, float A)
     {
         ("green", 0, 1, 0), ("amber", 1, 0.6f, 0), ("cyan", 0, 1, 1), ("magenta", 1, 0, 1),
         ("white", 1, 1, 1), ("red", 1, 0, 0), ("yellow", 1, 1, 0), ("grey", 0.5f, 0.5f, 0.5f), ("black", 0, 0, 0),
+        // The A350's soft magenta (the LS block's; the vertical display's MSA and MORA, 0.90 0.53 0.90, nearer white
+        // than pure magenta): a sighted pilot's pink-magenta. After the pure one, so a name still maps back to it.
+        ("magenta", 1, 0.47f, 0.91f),
     };
 
     /// <summary>A named colour back as a colour (white for an unknown name), so a text re-built from a cell keeps

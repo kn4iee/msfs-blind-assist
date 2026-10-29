@@ -57,8 +57,8 @@ public class A350GroundDisplaysTests
     }
 
     [Theory]
-    [InlineData("efis0_ls_downwind_omdb", "MSA: 38, white")]
-    [InlineData("pfd_climb_std_fl400", "MORA: 16, white")]
+    [InlineData("efis0_ls_downwind_omdb", "MSA: 38, magenta")]
+    [InlineData("pfd_climb_std_fl400", "MORA: 16, magenta")]
     public void The_vertical_displays_safe_altitude_reads_with_its_name(string fixture, string safe)
     {
         var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(

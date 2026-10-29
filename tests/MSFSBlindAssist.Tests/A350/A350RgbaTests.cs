@@ -20,4 +20,13 @@ public class A350RgbaTests
     {
         Assert.Equal(name, A350Rgba.NameOf(A350Rgba.Of(name)));
     }
+
+    // Review 2026-10-29: the vertical display's MSA and MORA are drawn in the A350's soft magenta (0.90, 0.53, 0.90), a
+    // sighted pilot's pink, which the nearest pure colour named white (0.241 against magenta's 0.301). The LS block's
+    // magenta (1, 0.47, 0.91) stays magenta.
+    [Theory]
+    [InlineData(0.901f, 0.529f, 0.901f)]
+    [InlineData(1f, 0.467f, 0.914f)]
+    public void The_a350s_soft_magentas_read_magenta(float r, float g, float b) =>
+        Assert.Equal("magenta", A350Rgba.NameOf(new A350Rgba(r, g, b, 1)));
 }
