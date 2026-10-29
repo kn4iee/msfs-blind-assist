@@ -23,6 +23,9 @@ public static class A350Pfd
     /// y 207; the target at x 153, y 174).</summary>
     private const float V1X = 129, V1Y = 207;
 
+    /// <summary>The LS block's rows, lower left (live 2026-10-28): ident, frequency, DME.</summary>
+    private const float LsIdentY = 689, LsFrequencyY = 717, LsDmeY = 745;
+
     /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability (its third row is the minimum, read
     /// apart), and the AP/FD/A/THR engagement column (live: "1 FD 2" at x 685-761).</summary>
     private static readonly (string Name, float X0, float X1)[] FmaColumns =
@@ -178,11 +181,12 @@ public static class A350Pfd
         if (lsBlock.Any(c => c.Colour == "magenta"))
         {
             used.UnionWith(lsBlock);
-            var ident = lsBlock.FirstOrDefault(c => c.Colour == "magenta" && c.Text.Length > 0 && c.Text.All(char.IsLetter));
-            var rows = lsBlock.Where(c => c != ident && c.Text.Trim() != "nm").GroupBy(c => (int)MathF.Round(c.Y / 12)).OrderBy(g => g.Key)
-                .Select(g => string.Concat(g.OrderBy(c => c.X).Select(c => c.Text))).ToList();
-            string head = string.Join(" ", new[] { ident?.Text, rows.Count > 0 ? rows[0] : null }.Where(s => !string.IsNullOrEmpty(s)));
-            string dme = rows.Count > 1 ? $", {rows[1]} NM" : "";
+            // Each row on its own line (live: ident y 689, frequency 717, DME 745): an ident with digits (FLS, GLS) is
+            // still the ident.
+            string Row(float y) => string.Concat(lsBlock.Where(c => c.Text.Trim() != "nm" && Math.Abs(c.Y - y) <= 8)
+                .OrderBy(c => c.X).Select(c => c.Text.Trim()));
+            string head = string.Join(" ", new[] { Row(LsIdentY), Row(LsFrequencyY) }.Where(s => s.Length > 0));
+            string dme = Row(LsDmeY) is { Length: > 0 } d ? $", {d} NM" : "";
             ls.Add($"LS: {head}{dme}, magenta");
         }
         foreach (var c in cells.Where(c => !used.Contains(c) && c.Colour == "magenta" && c.Y is >= 725 and < 760 && c.X is >= 140 and < 600

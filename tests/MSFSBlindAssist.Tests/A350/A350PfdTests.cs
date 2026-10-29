@@ -219,6 +219,17 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("110."));
     }
 
+    // Review 2026-10-28 (minor 9): the block's rows were taken in order, the ident by being all letters, so an ident with
+    // digits (an FLS or GLS one) shifted every row: "LS: R22, 110.10 NM". Each row has its own line: ident at y 689,
+    // frequency at 717, DME at 745.
+    [Fact]
+    public void An_ident_with_digits_keeps_the_ls_blocks_rows_in_place()
+    {
+        var cap = Fixture("efis0_ls_downwind_omdb");
+        var lines = A350Pfd.Read(cap with { Texts = cap.Texts.Select(t => t.Text == "IDBL" ? t with { Text = "R22" } : t).ToList() }, 0);
+        Assert.Contains("LS: R22 110.10, 3.0 NM, magenta", lines);
+    }
+
     [Fact]
     public void Without_ls_there_is_no_deviation_line()
     {
