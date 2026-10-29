@@ -27,8 +27,12 @@ public static class A350GroundDisplays
     public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? 0 : HalfWidth;
-        var cells = Cells(A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd, A350DrawLayout.EfisNd(side)).Select(t => t with { X = t.X - shift })
-            .Where(t => t.X is >= 0 and < HalfWidth));
+        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd, A350DrawLayout.EfisNd(side))
+            .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < HalfWidth).ToList();
+        // The airport map at a zoom range (A350NdMap): read by kind, before the rows; its texts are not read again.
+        var mapUsed = new HashSet<DrawnText>();
+        var map = A350NdMap.Read(texts, mapUsed);
+        var cells = Cells(texts.Where(t => !mapUsed.Contains(t)));
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
         void Field(string label, Func<DrawnCell, bool> where)
@@ -38,9 +42,13 @@ public static class A350GroundDisplays
             used.UnionWith(hit);
             o.Add($"{label}: {Speak(hit)}");
         }
-        Field("Ground speed", c => Math.Abs(c.X - 122) <= 12 && Math.Abs(c.Y - 35) <= 8);
-        Field("True airspeed", c => Math.Abs(c.X - 175) <= 12 && Math.Abs(c.Y - 35) <= 8);
+        // GS and TAS, green; with the airport map (zoom range, live 2026-10-28) their white labels are drawn too and GS's
+        // value moves left to x 64 (else x 122). The labels are not read.
+        used.UnionWith(cells.Where(c => c.Colour == "white" && c.Text is "GS" or "TAS" && Math.Abs(c.Y - 35) <= 8));
+        Field("Ground speed", c => c.Colour == "green" && Math.Abs(c.Y - 35) <= 8 && (Math.Abs(c.X - 122) <= 12 || Math.Abs(c.X - 64) <= 12));
+        Field("True airspeed", c => c.Colour == "green" && Math.Abs(c.X - 175) <= 12 && Math.Abs(c.Y - 35) <= 8);
         Field("Wind", c => c.X is >= 60 and < 130 && Math.Abs(c.Y - 63) <= 8);
+        o.AddRange(map);
         // The TO waypoint block, top right (live in the climb): the name (white) and the track to it (green, x 759), the
         // distance a line under ("6." and a smaller "2", then a cyan NM), the ETA under that. One line, as a pilot reads it.
         var toName = cells.Where(c => !used.Contains(c) && c.X is >= 560 and < 740 && Math.Abs(c.Y - 36) <= 8).ToList();
