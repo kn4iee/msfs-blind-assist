@@ -14,7 +14,7 @@ function load(fixtureName, opts) {
   const dom = new JSDOM('<!DOCTYPE html><html><body>' + html + '</body></html>');
   const { window } = dom;
   global.window = window; global.document = window.document;
-  for (const k of ['MouseEvent', 'KeyboardEvent', 'Event', 'HTMLInputElement']) global[k] = window[k];
+  for (const k of ['MouseEvent', 'KeyboardEvent', 'Event', 'HTMLInputElement', 'MutationObserver']) global[k] = window[k];
   window.Element.prototype.getBoundingClientRect = function () {
     const r = this.getAttribute('data-rect');   // "top,left,right,bottom", for a test that places one
     if (r) { const p = r.split(',').map(Number); return { top: p[0], left: p[1], right: p[2], bottom: p[3], width: p[2] - p[1], height: p[3] - p[0], x: p[1], y: p[0] }; }
@@ -25,7 +25,15 @@ function load(fixtureName, opts) {
   Object.defineProperty(window.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
   if (opts.before) opts.before(window);
   window.eval(fs.readFileSync(AGENT, 'utf8'));
-  return { window, A: window.__MSFSBA_A350_OIS };
+  const A = window.__MSFSBA_A350_OIS;
+  // The agent's dirty gate answers {unchanged:true} when its MutationObserver saw nothing, and jsdom delivers mutations
+  // as microtasks: two scrapes in one synchronous test would see the second gated. Each scrape here reads the page in
+  // full, unless the test is the gate's own (opts.gate).
+  if (!opts.gate) {
+    const gated = A.scrape;
+    A.scrape = function () { A._dirty = true; return gated.apply(A, arguments); };
+  }
+  return { window, A };
 }
 
 function scrape(fixtureName, opts) {

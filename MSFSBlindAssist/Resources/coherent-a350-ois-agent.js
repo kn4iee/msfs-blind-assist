@@ -9,7 +9,8 @@
 // sequence).
 //
 // Contract, identical to coherent-pmdg-efb-agent.js so the shared FbwEfbForm consumes it:
-//   scrape()            -> JSON string {ok, page, elements:[...]}
+//   scrape()            -> JSON string {ok, page, elements:[...]}, or {ok, unchanged:true} when the page has not changed
+//                          since the last full scrape (the dirty gate, as the MD-11 reader's)
 //   clickElement(idx)   -> press the element carrying that stamped idx
 //   setValue(idx, text) -> pick an option (an option group), type into a field, or move a range
 // Element: {idx,text,value,controlType,kind,clickable,level,disabled,options,min,max,step,key,announceChange,commit}
@@ -500,7 +501,7 @@
     return h && /^H[1-6]$/.test(h.tagName) ? A.norm(h.innerText) : '';
   };
 
-  A.scrape = function () {
+  A.collectPage = function () {
     try {
       var all = document.body.querySelectorAll('*');
       var i, e;
@@ -939,6 +940,31 @@
     }
   };
 
+  // The dirty gate, as the MD-11 reader's (review 2026-10-29: every 600 ms poll shipped the whole page, 225 KB on the OFP,
+  // parsed and hashed by the client each time): a scrape with nothing changed in the DOM since the last full one answers
+  // {unchanged:true} and the client keeps what it has. Every FORCE_FULL_EVERY-th scrape is full whatever the flag (a change
+  // the observer cannot see: a CSS animation moving a spent toast off the screen), and so is every scrape while a COMPUTE
+  // answer is awaited or held, as it changes with time, not the DOM. The observer is disconnected while the page is read:
+  // the reader's own stamping would otherwise dirty the next poll (the MD-11's self-trigger trap).
+  A._everScraped = false;
+  A._dirty = true;
+  A._pollCount = 0;
+  A._obs = null;
+  A.OBSERVER_OPTS = { childList: true, subtree: true, characterData: true, attributes: true };
+  A.FORCE_FULL_EVERY = 10;
+  A._markDirty = function () { A._dirty = true; };
+
+  A.scrape = function () {
+    A._pollCount++;
+    var forceFull = !A._everScraped || A._pollCount % A.FORCE_FULL_EVERY === 0 || !!A.answer || !!A.pendingCompute;
+    if (!A._dirty && !forceFull) return JSON.stringify({ ok: true, unchanged: true });
+    A._dirty = false;   // cleared before the read: a change landing during it dirties the next poll
+    A._everScraped = true;
+    if (A._obs) { try { A._obs.disconnect(); } catch (e1) {} }
+    try { return A.collectPage(); }
+    finally { if (A._obs) { try { A._obs.observe(document.body, A.OBSERVER_OPTS); } catch (e2) {} } }
+  };
+
   // COMPUTE (T.O PERF, LDG PERF) answers a few seconds after the press, where a sighted pilot sees the
   // RESULTS read-outs fill in: the window speaks them once as they arrive and hold for a read (the OIS may
   // fill a few first), the press's read-back. Only after a COMPUTE press, on its page, within
@@ -1028,6 +1054,34 @@
       return 'ok';
     } catch (err) { return 'error: ' + err.message; }
   };
+
+  // A press or a value set changes the page: the next scrape is full whatever the observer saw.
+  A.clickElement = (function (inner) { return function () { A._dirty = true; return inner.apply(A, arguments); }; })(A.clickElement);
+  A.setValue = (function (inner) { return function () { A._dirty = true; return inner.apply(A, arguments); }; })(A.setValue);
+
+  // The gate's observer and listeners; a re-injection tears down the ones before it first. A toggle's .checked flip writes
+  // no attribute, so a capture-phase change/input listener on the document catches what the observer cannot.
+  try { if (window.__MSFSBA_A350_OIS_OBS) window.__MSFSBA_A350_OIS_OBS.disconnect(); } catch (e0) {}
+  try {
+    var oldHandler = window.__MSFSBA_A350_OIS_HANDLER;
+    if (oldHandler) {
+      document.removeEventListener('change', oldHandler, true);
+      document.removeEventListener('input', oldHandler, true);
+    }
+  } catch (e1) {}
+  try {
+    A._obs = new MutationObserver(A._markDirty);
+    A._obs.observe(document.body, A.OBSERVER_OPTS);
+    window.__MSFSBA_A350_OIS_OBS = A._obs;
+  } catch (e2) {
+    A._obs = null;
+    A.FORCE_FULL_EVERY = 1;   // no observer: never gate (slower, never stale)
+  }
+  try {
+    document.addEventListener('change', A._markDirty, true);
+    document.addEventListener('input', A._markDirty, true);
+    window.__MSFSBA_A350_OIS_HANDLER = A._markDirty;
+  } catch (e3) {}
 
   window.__MSFSBA_A350_OIS = A;
   return A.INSTALLED;
