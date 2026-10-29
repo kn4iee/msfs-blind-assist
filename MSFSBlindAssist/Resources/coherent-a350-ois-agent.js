@@ -889,7 +889,16 @@
         push(null, { kind: 'static', text: own });
       }
       var arrived = A.computeAnswer(page, out);
-      if (arrived) out.push({ idx: 0, kind: 'alert', live: 'assertive', text: arrived });
+      if (arrived) A.answer = { page: page, text: arrived, at: Date.now() };
+      // The answer stays ANSWER_KEEP_MS, first among the alerts: the window speaks only its first alert, once, so a
+      // toast still up would hide it, and a read the window drops would lose it.
+      var kept = A.answer;
+      if (kept && (kept.page !== page || Date.now() - kept.at > A.ANSWER_KEEP_MS)) A.answer = kept = null;
+      if (kept) {
+        var first = 0;
+        while (first < out.length && out[first].kind !== 'alert') first++;
+        out.splice(first, 0, { idx: 0, kind: 'alert', live: 'assertive', text: kept.text });
+      }
       return JSON.stringify({ ok: true, page: page, elements: out });
     } catch (err) {
       return JSON.stringify({ ok: false, error: String(err && err.message || err) });
@@ -897,12 +906,15 @@
   };
 
   // COMPUTE (T.O PERF, LDG PERF) answers a few seconds after the press, where a sighted pilot sees the
-  // RESULTS read-outs fill in: the window speaks them once as they arrive, the press's read-back. Only
-  // after a COMPUTE press, on its page, within COMPUTE_WAIT_MS; a COMPUTE ending in an error line says
-  // only the error (its own alert), and results emptied while computing wait for their values.
+  // RESULTS read-outs fill in: the window speaks them once as they arrive and hold for a read (the OIS may
+  // fill a few first), the press's read-back. Only after a COMPUTE press, on its page, within
+  // COMPUTE_WAIT_MS; a COMPUTE ending in an error line says only the error (its own alert), and results
+  // emptied while computing wait for their values.
   A.COMPUTE_WAIT_MS = 30000;
+  A.ANSWER_KEEP_MS = 3000;
   A.lastResults = null;
   A.pendingCompute = null;
+  A.answer = null;
 
   A.resultLines = function (out) {
     var lines = [], inResults = false;
@@ -926,6 +938,7 @@
     var filled = false;
     for (var j = 0; j < lines.length; j++) if (!/: -( |$)/.test(lines[j])) filled = true;
     if (!filled) { p.sig = sig; return null; }   // emptied while it computes: the values come next
+    if (p.held !== sig) { p.held = sig; return null; }   // filled: said once it holds for a read
     A.pendingCompute = null;
     return 'Results: ' + lines.join(', ');
   };
