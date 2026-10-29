@@ -60,6 +60,26 @@ public static class A350MfdPage
             .Select(p => new Cell(Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         cells = JoinTimes(cells);
+        // Black text is drawn on a filled box (every page, 2026-10-27/28): the scratchpad's message on white or amber, TMPY on
+        // yellow, the page's title on the light title bar. It reads as the colour of the box a pilot sees; the title bar's row
+        // as the page's title (without shapes recorded a text keeps black).
+        var onBox = new HashSet<Cell>();
+        var titleRow = new List<Cell>();
+        for (int k = 0; k < cells.Count; k++)
+        {
+            var c = cells[k];
+            if (c.Colour != "black") continue;
+            var box = (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "fill" && sh.Image == 0
+                    && A350Rgba.NameOf(sh.Colour) != "black" && c.X + shift >= sh.X0 - 2 && c.X + shift <= sh.X1 + 2
+                    && c.Y >= sh.Y0 - 2 && c.Y <= sh.Y1 + 6)
+                .OrderBy(sh => (sh.X1 - sh.X0) * (sh.Y1 - sh.Y0)).FirstOrDefault();
+            if (box != null)
+            {
+                cells[k] = c = c with { Colour = c.Y < TitleBottom && A350Rgba.NameOf(box.Colour) == "grey" ? TitleBar : A350Rgba.NameOf(box.Colour) };
+                onBox.Add(c);
+            }
+            if (c.Y < TitleBottom) titleRow.Add(c);
+        }
         // The green dot speed's label is no text but a drawn green circle, a small square stroke (PERF T.O, live).
         foreach (var sh in (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "stroke" && sh.Image == 0
                      && Mine((sh.X0 + sh.X1) / 2) && A350Rgba.NameOf(sh.Colour) == "green"
@@ -98,6 +118,18 @@ public static class A350MfdPage
             && Covers(p.e, q.e.X - shift + q.e.RectW / 2, q.e.Y + q.e.RectH / 2))).Select(q => q.e).ToHashSet();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
+        // The title bar: the page's title, then what else it holds, in its own box's colour (TMPY on yellow); an open menu
+        // over it (ACTIVE's) hides it.
+        titleRow.RemoveAll(c => !cells.Contains(c));
+        if (titleRow.Count > 0)
+        {
+            used.UnionWith(titleRow);
+            var title = titleRow.Where(c => c.Colour is TitleBar or "black").OrderBy(c => c.X).ToList();
+            var parts = (title.Count > 0 ? new[] { string.Join(" ", title.Select(c => c.Text)) } : Array.Empty<string>())
+                .Concat(titleRow.Except(title).OrderBy(c => c.X).Select(c => $"{c.Text}, {c.Colour}"));
+            var at = title.FirstOrDefault() ?? titleRow.MinBy(c => c.X)!;
+            lines.Add((at.Y - 14, at.X, new MfdLine(title.Count > 0 ? "title" : "text", string.Join("; ", parts), at.X, at.Y - 7)));
+        }
         var fields = new List<(float Top, float X0, float X1, Cell? Label, string? Value, float Cx, float Cy, bool Inherited, bool Above)>();
         var leftLabels = new HashSet<Cell>();
         var checkboxLabels = new HashSet<Cell>();
@@ -141,7 +173,7 @@ public static class A350MfdPage
             overlays.Add(new Overlay(menuItems.Min(m => m.e.X) - shift, menuItems.Max(m => m.e.X + m.e.RectW) - shift,
                 menuItems.Min(m => m.e.Y), menuItems.Max(m => m.e.Y + m.e.RectH), menuItems.Min(m => m.e.TextStart)));
 
-        bool flightPlan = cells.Any(c => c.Colour == "black" && c.Y < 150 && c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
+        bool flightPlan = titleRow.Any(c => c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
         if (flightPlan)
             ReadFlightPlan(capture, shift, Mine, cells.Where(c => !itemCells.Contains(c)).ToList(), used, lines, overlays);
 
@@ -268,6 +300,27 @@ public static class A350MfdPage
             lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
         }
 
+        // A page with no scratchpad box (the checklists) still shows the FMS message in its place, on its box; there is
+        // nothing to type into there.
+        if (!elements.Any(e => e.Class == "NotepadTextbox"))
+        {
+            var message = InReadingOrder(cells.Where(c => !used.Contains(c) && onBox.Contains(c) && c.X >= MessageX0 && c.X <= MessageX1
+                && c.Y >= MessageY0 && c.Y <= MessageY1));
+            if (message.Count > 0)
+            {
+                used.UnionWith(message);
+                lines.Add((MessageY0, MessageX0, new MfdLine("message", $"Scratchpad: {Words(message.Select(c => c.Text))}, {message[0].Colour}",
+                    (MessageX0 + MessageX1) / 2, (MessageY0 + MessageY1) / 2)));
+            }
+        }
+
+        // The header's flight number, top right (live: "UAE111" at x 613, y 36; dashes before INIT).
+        if (cells.FirstOrDefault(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.Y < 45 && c.X >= 560) is { } flight)
+        {
+            used.Add(flight);
+            lines.Add((flight.Y - 14, flight.X, new MfdLine("text", $"Flight number: {Word(flight.Text)}, white", flight.X, flight.Y - 7)));
+        }
+
         // A field with no label of its own shares the label of the field left of it on its row (FUEL&LOAD's RTE RSV
         // weight and percentage, FINAL fuel and time).
         for (int k = 0; k < fields.Count; k++)
@@ -373,7 +426,7 @@ public static class A350MfdPage
             || l.Kind == "text" && texts.Any(c => Math.Abs(c.X - l.ClickX) < 1 && Math.Abs(c.Y - 7 - l.ClickY) < 1);
         var own = lines.Where(Its).Select(l => l with { Popup = true }).ToList();
         var result = lines.Where(l => !Its(l)).ToList();
-        int title = result.FindIndex(l => l.Kind == "text" && l.Spoken.EndsWith(TitleColour, StringComparison.Ordinal));
+        int title = result.FindIndex(l => l.Kind == "title");
         result.InsertRange(title + 1, own);
         return result;
     }
@@ -452,12 +505,17 @@ public static class A350MfdPage
     /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>
     private const string RevisionItem = "FlightplanButtonActionButton";
 
-    private const string TitleColour = ", black";
+    /// <summary>The title bar's colour, as its texts read: they are the page's title, said without a colour.</summary>
+    private const string TitleBar = "title";
 
-    /// <summary>The page's title, its black title bar ("ACTIVE/F-PLN", y 130), or null.</summary>
-    public static string? PageTitle(IReadOnlyList<MfdLine> lines) =>
-        lines.FirstOrDefault(l => l.Kind == "text" && l.ClickY < 150 && l.Spoken.EndsWith(TitleColour, StringComparison.Ordinal))
-            ?.Spoken[..^TitleColour.Length];
+    /// <summary>The title bar's band (its texts drawn at y 137).</summary>
+    private const float TitleBottom = 150;
+
+    /// <summary>Where the FMS message shows: the scratchpad box's place on the pages that have one (x 129, y 960, 597 x 39).</summary>
+    private const float MessageX0 = 129, MessageX1 = 726, MessageY0 = 960, MessageY1 = 1003;
+
+    /// <summary>The page's title line, from its title bar ("ACTIVE/F-PLN", y 137; "ACTIVE/F-PLN; TMPY, yellow"), or null.</summary>
+    public static string? PageTitle(IReadOnlyList<MfdLine> lines) => lines.FirstOrDefault(l => l.Kind == "title")?.Spoken;
 
     /// <summary>The new page's title when the page changed since the last read (a page key, a menu pick, C/L COMPLETE
     /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
@@ -493,7 +551,7 @@ public static class A350MfdPage
         bool IsItem(MfdLine l) => items.Any(e => AtCentre(l, e, shift));
         var menu = lines.Where(IsItem).OrderBy(l => l.ClickY).ToList();
         var result = lines.Where(l => !IsItem(l)).ToList();
-        int title = result.FindIndex(l => l.Kind == "text" && l.Spoken.Contains("F-PLN", StringComparison.Ordinal));
+        int title = result.FindIndex(l => l.Kind == "title" && l.Spoken.Contains("F-PLN", StringComparison.Ordinal));
         result.InsertRange(title + 1, menu);
         return result;
     }

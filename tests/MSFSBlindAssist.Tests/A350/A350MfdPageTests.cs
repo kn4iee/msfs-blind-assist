@@ -16,7 +16,7 @@ public class A350MfdPageTests
     {
         var lines = A350MfdPage.Read(Fixture(), 0).Select(l => l.Spoken).ToList();
         Assert.Equal("FMS 1 menu, cyan", lines[0]);
-        Assert.Equal("none, white", lines[1]);   // the header: no flight number yet
+        Assert.Equal("Flight number: none, white", lines[1]);   // the header: no flight number yet
         Assert.Equal(new[] { "ACTIVE button", "POSITION button", "SEC INDEX button", "DATA button" }, lines.Skip(2).Take(4));
         Assert.Contains("ACFT STATUS tab, selected", lines);
         Assert.Contains("FMS P/N tab", lines);
@@ -29,7 +29,7 @@ public class A350MfdPageTests
         Assert.Contains("CLEAR INFO button", lines);
         Assert.Contains("A350-900P / TRENT XWB-84, green", lines);
         Assert.Contains("NAV DATABASE: SJ6192002, green", lines);
-        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, black", lines[^1]);   // an FMS message shows in the scratchpad
+        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", lines[^1]);   // an FMS message shows in the scratchpad
     }
 
     // The INIT page empty (live, KCCU INIT): amber boxes are a required entry, dashes nothing yet.
@@ -206,7 +206,7 @@ public class A350MfdPageTests
         Assert.Contains("DEST button", lines);
         Assert.DoesNotContain(lines, l => l.StartsWith("FROM TIME") || l.Contains("306d"));
         Assert.Contains("CLEAR INFO button", lines);   // a hidden row's box reaches under the bottom keys
-        Assert.Contains("Scratchpad: NAV ACCURACY UPGRADED, black", lines);
+        Assert.Contains("Scratchpad: NAV ACCURACY UPGRADED, white", lines);
     }
 
     // POSITION/IRS (live, aligned): IRS 3's texts sit at y 430 and 432, either side of a fixed 12 px bucket's edge;
@@ -252,7 +252,7 @@ public class A350MfdPageTests
     public void A_revision_pop_up_reads_together_after_the_page_title(string fixture, string title, string field, string cancel)
     {
         var lines = Page(fixture).ToList();
-        int at = lines.IndexOf("ACTIVE/F-PLN, black");
+        int at = lines.IndexOf("ACTIVE/F-PLN");
         var popup = lines.Skip(at + 1).TakeWhile(l => !l.StartsWith("FROM ", StringComparison.Ordinal) && !l.Contains("(overfly)")
             && !l.StartsWith("DER22", StringComparison.Ordinal)).ToList();
         Assert.Equal(title, popup[0]);
@@ -329,7 +329,7 @@ public class A350MfdPageTests
         int first = lines.IndexOf(items[0]);
         Assert.True(first > 0, string.Join(" | ", lines));
         Assert.Equal(items, lines.Skip(first).Take(items.Length));
-        Assert.Equal("ACTIVE/F-PLN, black", lines[first - 1]);
+        Assert.Equal("ACTIVE/F-PLN", lines[first - 1]);
         Assert.All(all.Skip(first).Take(items.Length), l => Assert.Equal("menuitem", l.Kind));
         Assert.Contains(lines, l => l.StartsWith("BASUR: via BASU1D", StringComparison.Ordinal));
     }
@@ -667,7 +667,46 @@ public class A350MfdPageTests
         Assert.Equal("ACTIVE/INIT", A350MfdPage.PageJustChanged(checklists, init));
         Assert.Null(A350MfdPage.PageJustChanged(init, init));                       // the same page: nothing
         Assert.Null(A350MfdPage.PageJustChanged(Array.Empty<MfdLine>(), init));    // the window's first read: nothing
-        Assert.Equal("ACTIVE/F-PLN TMPY", A350MfdPage.PageJustChanged(init, PageLines("mfd_fpln_tmpy_basu1d")));
+        Assert.Equal("ACTIVE/F-PLN; TMPY, yellow", A350MfdPage.PageJustChanged(init, PageLines("mfd_fpln_tmpy_basu1d")));
+    }
+
+    // Black text is drawn on a filled box (every page, 2026-10-27/28): the scratchpad's message on white or amber, TMPY on
+    // yellow, the page title on the light title bar. It read "black"; a sighted pilot sees the box's colour, and the title.
+    [Fact]
+    public void Black_text_reads_as_the_box_it_is_drawn_on()
+    {
+        Assert.Contains("Scratchpad: CHECK IRS/AIRPORT POS, amber", Page("mfd_wind_crz_empty"));
+        var tmpy = PageLines("mfd_fpln_tmpy_basu1d");
+        var title = Assert.Single(tmpy, l => l.Kind == "title");
+        Assert.Equal("ACTIVE/F-PLN; TMPY, yellow", title.Spoken);
+        Assert.Equal("ACTIVE/F-PLN", A350MfdPage.PageTitle(PageLines("mfd_fpln_basu1d")));
+    }
+
+    [Theory]
+    [InlineData("ground_MFD")]
+    [InlineData("mfd_fpln_basu1d")]
+    [InlineData("mfd_hold_imped")]
+    [InlineData("mfd_cl_approach")]
+    [InlineData("mfd_wind_crz_empty")]
+    [InlineData("mfd_airways_p570_itura")]
+    public void No_line_reads_black(string fixture) =>
+        Assert.DoesNotContain(Page(fixture), l => l.Contains("black", StringComparison.Ordinal));
+
+    // The header's flight number, top right (x 613, y 36; dashes before INIT), read bare.
+    [Fact]
+    public void The_flight_number_reads_by_name() =>
+        Assert.Contains("Flight number: UAE111, white", Page("mfd_cl_approach"));
+
+    // The checklist pages have no scratchpad box, yet the FMS message shows in its place (live 2026-10-28, the APPROACH
+    // checklist): it read as a bare line at the bottom.
+    [Fact]
+    public void A_checklist_page_reads_the_fms_message_as_the_scratchpad()
+    {
+        var lines = PageLines("mfd_cl_approach");
+        var message = Assert.Single(lines, l => l.Spoken.StartsWith("Scratchpad: ", StringComparison.Ordinal));
+        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", message.Spoken);
+        Assert.Equal("message", message.Kind);   // nothing to type into: Enter must not type and press ENTER on a checklist
+        Assert.Equal("APPROACH", A350MfdPage.PageTitle(lines));
     }
 
     // DEPARTURE's RWY key opened (live 2026-10-28): its list starts 6 px under the key and reads right after it.
@@ -771,7 +810,7 @@ public class A350MfdPageTests
     public void The_airways_page_reads_its_entry_fields()
     {
         var lines = Page("mfd_airways_poman");
-        Assert.Contains("ACTIVE/F-PLN/AIRWAYS TMPY, black", lines);
+        Assert.Contains("ACTIVE/F-PLN/AIRWAYS; TMPY, yellow", lines);
         Assert.Contains("VIA: none, cyan", lines);
         Assert.Contains("TO: none, cyan", lines);
     }
