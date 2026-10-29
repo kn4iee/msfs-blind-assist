@@ -184,7 +184,7 @@ public sealed class A350DrawEngine : IDisposable
                     // (code, FLOAT64* fvalue, SINT32* ivalue, PCSTRINGZ* svalue): a string answer is written to the
                     // memory's last page and *svalue pointed at it.
                     string code = CStr(_memory, a[0].AsInt32());
-                    Asked.Add("CALC " + code);
+                    Ask("CALC " + code);
                     int svalue = a.Length > 3 ? a[3].AsInt32() : 0;
                     if (svalue != 0 && CalcStringAnswer(code) is { } text)
                     {
@@ -291,10 +291,23 @@ public sealed class A350DrawEngine : IDisposable
         return t / f * 1_000_000_000 + t % f * 1_000_000_000 / f;
     }
 
-    private static int IdFor(Dictionary<string, int> table, string name)
+    /// <summary>How many A: var or unit names a table holds, and asked questions the diagnostics keep: a torn copy's garbage
+    /// names grew them for the whole session (review 2026-10-29). 1.2.7's draws ask fewer than a hundred.</summary>
+    internal const int MaxNames = 4096, MaxAsked = 1024;
+
+    /// <summary>A name's id, given on first sight; past <see cref="MaxNames"/> a new name has none (0, which nothing
+    /// answers), and a known one keeps its own.</summary>
+    internal static int IdFor(Dictionary<string, int> table, string name)
     {
-        if (!table.TryGetValue(name, out var id)) table[name] = id = table.Count + 1;
-        return id;
+        if (table.TryGetValue(name, out var id)) return id;
+        if (table.Count >= MaxNames) return 0;
+        return table[name] = table.Count + 1;
+    }
+
+    /// <summary>Notes a question the draw code asked (A350Probe lists them), while there is room.</summary>
+    private void Ask(string what)
+    {
+        if (Asked.Count < MaxAsked) Asked.Add(what);
     }
 
     private static string NameOf(Dictionary<string, int> table, int id)
@@ -306,7 +319,7 @@ public sealed class A350DrawEngine : IDisposable
     private double AVar(int varId, int unitId, int index)
     {
         var key = NameOf(_avarIds, varId) + ":" + index + "|" + NameOf(_unitIds, unitId);
-        Asked.Add("A " + key);
+        Ask("A " + key);
         return AVarAnswer(key) ?? 0;
     }
 

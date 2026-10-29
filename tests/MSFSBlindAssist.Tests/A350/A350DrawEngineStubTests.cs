@@ -301,3 +301,20 @@ public class A350DrawEngineStubTests
         Assert.Equal(1, e.StubCalls["wasi_snapshot_preview1.fd_write"]);
     }
 }
+
+/// <summary>Review 2026-10-29 (engine M5): a torn copy's garbage names grew the A: var and unit tables, and the asked list,
+/// for the whole session. Each is bounded; a name past the bound has no id (0, which nothing answers).</summary>
+public class A350DrawEngineNameTableTests
+{
+    [Fact]
+    public void The_name_table_is_bounded_and_a_known_name_keeps_its_id()
+    {
+        var table = new Dictionary<string, int>();
+        int first = A350DrawEngine.IdFor(table, "KOHLSMAN SETTING MB");
+        for (int i = 0; i < A350DrawEngine.MaxNames + 50; i++)
+            A350DrawEngine.IdFor(table, "garbage " + i);
+        Assert.Equal(A350DrawEngine.MaxNames, table.Count);
+        Assert.Equal(0, A350DrawEngine.IdFor(table, "one more"));
+        Assert.Equal(first, A350DrawEngine.IdFor(table, "KOHLSMAN SETTING MB"));
+    }
+}
