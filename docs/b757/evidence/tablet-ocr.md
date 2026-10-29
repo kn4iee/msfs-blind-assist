@@ -1,7 +1,7 @@
 # The 757 tablet reader on PaddleOCR: measurements (plan 17)
 
 Measured 2026-10-29 on the owner's PC (32 logical processors, so the engine runs 4 threads) from saved captures, no
-simulator: the reader as plan 17 Task 4 left it (commit c0d978947): PaddleOCR PP-OCRv6 small through RapidOcrNet
+simulator: the reader as plan 17 Task 4 left it (commit 7d23f8c4a): PaddleOCR PP-OCRv6 small through RapidOcrNet
 4.2.0, `RapidOcrOptions.PPOCRv6` with word boxes on and the orientation step off, one read per page at the tablet's
 own size.
 
@@ -91,7 +91,7 @@ three times, on a settled picture, once it has landed.
   set", as BlueBird's settings file holds them; no digit of the ID was in the output.
 - One misread seen in passing: the boarding rate's hover note "Faster service turnaround" read "tumaround".
 
-## The owner's checks by ear (plan 17's in-sim checks 1-4)
+## The owner's checks (plan 17's in-sim checks)
 
 2026-10-29, in the app as deployed (5ff4d2906), the same flight:
 
@@ -103,7 +103,11 @@ three times, on a settled picture, once it has landed.
 - **Check 3, the offer box unticked:** passed: picking the 757 opened no offer.
 - **Check 4, the app started on the 757 with the models aside:** passed: the offer came after the other startup
   windows.
+- **Check 5, the first-run download, after the release:** passed. With the hand-placed models moved out, the offer's
+  Download fetched the four files from the release: 32,257,432 bytes in about 2 s, each verified, the marker written
+  last (byte-identical to the hand-placed one). It spoke its progress and "Text recognition ready.", and the reader
+  then read PERF calc on its first read (584 ms).
 
 ## Not measured here
 
-- Check 5, the first-run download through the app: it waits for the release (plan 17 Task 9).
+- The live tablet at night: the tours and checks ran in daylight (the dimmed test pages were measured from captures).

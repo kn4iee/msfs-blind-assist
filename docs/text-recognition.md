@@ -39,10 +39,12 @@ Together the files are 32,257,432 bytes.
   `--latest=false`, so `releases/latest` still names the app's newest version.
 - It holds the four files, the Apache 2.0 license text (`LICENSE-PaddleOCR.txt`) and a `README.txt`
   that says what the files are, where they come from and that the app downloads them itself.
-- It is created by hand and last (plan 17's final task, with the owner's word), once the reader has been
-  checked in the sim with the models placed by hand. The app has no test hook for the download; the
-  suite tests the download against a fake server. A 404 (no release yet, or a file missing from it) is
-  told apart from a network failure: "the files were not found on GitHub".
+- It was created by hand and last (plan 17's final task, with the owner's word, 2026-10-29), once the
+  reader had been checked in the sim with the models placed by hand. Its notes and README describe the
+  models generically ("OCR-related features"): public text names no aircraft that is not released. The
+  app has no test hook for the download; the suite tests the download against a fake server. A 404 (no
+  release yet, or a file missing from it) is told apart from a network failure: "the files were not
+  found on GitHub".
 
 **Where the files come from.** They are the ONNX files of PaddleOCR PP-OCRv6 small as RapidOCR v3.10.0
 publishes them on ModelScope (`RapidAI/RapidOCR`), all four under
@@ -75,10 +77,13 @@ for a size that rounds to one and "less than 1 megabyte" for a sliver (the dicti
 bytes), never "1 megabytes" or "0 megabytes". The offer window's "a 32 megabyte download" is the bare
 number, used as an adjective.
 
-**Before the release exists.** The download needs the release, which is created last, so until then a
-developer places the files by hand. Fetch the four files from the addresses above into
+**Placing the files by hand.** Before a list's release exists (plan 17 until 2026-10-29; a later list
+before its own release), or to test the reader without the download, a developer places the files by
+hand. Fetch the four files from the addresses above into
 `%APPDATA%\MSFSBlindAssist\text-recognition`, under the names listed, and check each one's SHA-256
-(PowerShell's `Get-FileHash` prints it in capitals): nothing in the app hashes them then, since the
+(PowerShell's `Get-FileHash` prints it in capitals), from outside any tool sandbox: on 2026-10-29 a copy
+written from a sandboxed shell existed only in that sandbox's view of `%APPDATA%`, and the app never saw
+it. Nothing in the app hashes them then, since the
 installed check reads sizes only and only a download hashes (OCR-1, OCR-4). Then write `installed.json`
 in the same folder with exactly the text `TextRecognitionModels.MarkerJson` gives for this list,
 compact, as UTF-8 without a byte order mark and with no newline at the end:
@@ -97,9 +102,9 @@ The files live in `%APPDATA%\MSFSBlindAssist\text-recognition` (`TextRecognition
 A finished download writes `installed.json` there LAST, after every file was verified:
 `{"version":1,"files":[{"name":"…","sha256":"…"},…]}`, compact, in the list's order. A download in
 progress writes `<name>.part`, which never counts. A folder filled by hand with the four files and a
-marker in this exact format reads Ready ("Before the release exists", above); plan 17's in-sim checks of
-the reader are set up that way, before the release is published, so they test the reading and not the
-download.
+marker in this exact format reads Ready ("Placing the files by hand", above); plan 17's in-sim checks 1-4
+were set up that way, before the release was published, so they tested the reading and not the download.
+Check 5, after the release, tested the download: its marker came out byte-identical to the hand-written one.
 
 `TextRecognitionModels.Check` reads the folder and answers one of four states (OCR-1):
 
