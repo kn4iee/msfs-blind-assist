@@ -184,6 +184,11 @@ public partial class IniBuildsA350Definition
             announcer.AnnounceImmediate("Not available on this aircraft");
     }
 
+    /// <summary>A two-position row's state as a window's toggle flips it: what MSFSBA last commanded while that holds, else
+    /// the cache, else null (review 2026-10-29: flipped from the raw cache, a second FD press within a second asked for On
+    /// again and sent nothing, and an unread FD was taken for Off).</summary>
+    internal double? ToggleState(string rowKey, SimConnectManager simConnect) => CurrentValue(rowKey, simConnect);
+
     /// <summary>The MFD window's KCCU and mouse: its key presses go out through <see cref="Send"/>, so a repeated key
     /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4].</summary>
     internal A350.Display.A350MfdInput NewMfdInput(SimConnectManager simConnect) => new(rpn => Send(simConnect, rpn));

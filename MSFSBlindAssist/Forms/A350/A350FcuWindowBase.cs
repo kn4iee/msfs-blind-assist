@@ -69,8 +69,10 @@ public class A350FcuWindowBase : Form
         var b = new Button { Text = name, Location = new Point(x, y), Size = new Size(width, 35), TabIndex = tab, AccessibleName = name };
         b.Click += (s, e) =>
         {
-            double now = simConnect.GetCachedVariableValue(row) ?? 0;
-            aircraft.PressRow(row, simConnect, announcer, now >= 0.5 ? 0 : 1);
+            // From the definition's own state (its fresh commanded position, else the cache): two presses flip twice. An
+            // unread state goes in as unknown, and the row's plan refuses it aloud rather than take it for Off.
+            double? now = aircraft.ToggleState(row, simConnect);
+            aircraft.PressRow(row, simConnect, announcer, now is >= 0.5 ? 0 : 1);
             RefreshStates();
         };
         _stateButtons.Add((b, row, name));
