@@ -36,8 +36,8 @@ public class A350OverheadPanelTests
     /// each rain repellent holds 1 while pressed and 0 on release, which only the cockpit sound reads. Each side's on a
     /// panel of its own (owner 2026-10-27), though the A380 keeps both wipers on one.</summary>
     [Theory]
-    [InlineData("Captain Wipers", "Captain")]
-    [InlineData("First Officer Wipers", "First officer")]
+    [InlineData("Captain Wiper", "Captain")]
+    [InlineData("First Officer Wiper", "First officer")]
     public void Wipers(string panel, string side)
     {
         Assert.Equal(new[]

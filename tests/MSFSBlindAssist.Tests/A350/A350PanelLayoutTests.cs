@@ -15,8 +15,8 @@ public class A350PanelLayoutTests
         Assert.Equal(new[]
         {
             "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
-            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Captain Wipers",
-            "First Officer Wipers", "ADIRS", "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Captain Wiper",
+            "First Officer Wiper", "ADIRS", "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc",
             "Surveillance", "Cabin", "OIS", "Maintenance", "Interior Lighting", "Exterior Lighting",
         }, Placement.Structure["Overhead"]);
     }
@@ -42,6 +42,23 @@ public class A350PanelLayoutTests
                 && p.Value.Any(r => r.Name.StartsWith("First officer ", StringComparison.Ordinal)))
             .Select(p => p.Key);
         Assert.Empty(mixed);
+    }
+
+    /// <summary>A control with no side on a split panel's group (one a later map could add) stays on the shared panel, in
+    /// its place before the two sides, never at the end of the section (review 2026-10-29).</summary>
+    [Fact]
+    public void A_control_with_no_side_on_a_split_group_keeps_the_shared_panel_in_its_place()
+    {
+        var test = new A350Control
+        {
+            Id = "AIRLINER_WIPER_TEST", Key = "A350_WIPER_TEST", Area = "OVERHEAD", Panel = "WIPERS", Title = "WIPER TEST",
+            Kind = A350Kinds.Button,
+        };
+        Assert.Equal(("Overhead", "Wipers"), (A350PanelLayout.SectionFor(test), A350PanelLayout.PanelFor(test)));
+        var overhead = A350PanelLayout.Place(new A350ControlMap { Controls = A350ControlMap.Load().Controls.Append(test).ToList() })
+            .Structure["Overhead"];
+        Assert.Equal(new[] { "Signs", "Wipers", "Captain Wiper", "First Officer Wiper", "ADIRS" },
+            overhead.SkipWhile(p => p != "Signs").Take(5));
     }
 
     [Fact]
@@ -90,7 +107,7 @@ public class A350PanelLayoutTests
     {
         Assert.Equal("ENG 1 bleed", Row("Bleed Air", "A350_AIR_ENG_BLEED_1").Name);
         Assert.Equal("ENG 2 FADEC GND PWR", Row("Engine FADEC and Manual Start", "A350_MAINT_ENG_FADEC_GND_POWER_2").Name);
-        Assert.Equal("Captain wiper", Row("Captain Wipers", "A350_WIPER_LEFT").Name);
+        Assert.Equal("Captain wiper", Row("Captain Wiper", "A350_WIPER_LEFT").Name);
         Assert.Equal("ENG 2 agent 1", Row("Fire", "A350_FIRE_ENG_2_AGENT_1").Name);
     }
 

@@ -102,8 +102,8 @@ public class A350PanelLampsTests
         {
             ["Captain oxygen flow blinker"] = "Captain Oxygen Mask",
             ["First officer oxygen flow blinker"] = "First Officer Oxygen Mask",
-            ["Third occupant oxygen flow blinker"] = "Oxygen Masks",
-            ["Fourth occupant oxygen flow blinker"] = "Oxygen Masks",
+            ["Third occupant oxygen flow blinker"] = "Observer Oxygen Masks",
+            ["Fourth occupant oxygen flow blinker"] = "Observer Oxygen Masks",
         }, cockpit.Where(l => l.Node.StartsWith("OXYTEST_BLINKER_", StringComparison.Ordinal)).ToDictionary(l => l.Name, l => l.Panel));
         var captain = cockpit.Single(l => l.Node == "OXYTEST_BLINKER_CPT");
         Assert.Equal("A350_LT_OXYTEST_BLINKER_CPT", captain.Key);

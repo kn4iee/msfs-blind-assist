@@ -190,8 +190,8 @@ public static class A350PanelLamps
     {
         ("OXYTEST_BLINKER_CPT", "Captain Oxygen Mask", "Captain oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_CPT) 0.5 >"),
         ("OXYTEST_BLINKER_FO", "First Officer Oxygen Mask", "First officer oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_FO) 0.5 >"),
-        ("OXYTEST_BLINKER_TO", "Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_TO) 0.5 >"),
-        ("OXYTEST_BLINKER_4TH", "Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_4TH) 0.5 >"),
+        ("OXYTEST_BLINKER_TO", "Observer Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_TO) 0.5 >"),
+        ("OXYTEST_BLINKER_4TH", "Observer Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_4TH) 0.5 >"),
     };
 
     public static string? PowerKeyFor(A350LightPower power) => power switch

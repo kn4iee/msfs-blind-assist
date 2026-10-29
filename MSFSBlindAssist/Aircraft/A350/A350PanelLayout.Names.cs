@@ -4,7 +4,8 @@ public static partial class A350PanelLayout
 {
     /// <summary>iniBuilds' group name → the panel the pilot sees; two groups naming one panel merge. Panels take the
     /// FlyByWire A380's names (and order, <see cref="PanelOrder"/>) wherever the two cockpits share a panel, so a pilot finds
-    /// the same panel in the same place on both Airbus widebodies.</summary>
+    /// the same panel in the same place on both Airbus widebodies, except that a panel holding both pilots' controls is
+    /// split by side (<see cref="SidePanels"/>).</summary>
     private static readonly Dictionary<string, string> PanelNames = new(StringComparer.Ordinal)
     {
         // Overhead
@@ -134,62 +135,58 @@ public static partial class A350PanelLayout
 
     /// <summary>The panels both pilots' controls would share, split by side (owner 2026-10-27, backlog 19: never one panel for
     /// both, even where the A380 keeps one): a control goes to its side's panel by its name (<see cref="PanelFor"/>), the
-    /// rest stay on the shared one, which the two follow in <see cref="PanelOrder"/>. Singular where a side holds one of a
-    /// pair; the pedestal Cockpit panel's side keys are iniBuilds' OIS_DISPLAY_TRANSFER group.</summary>
-    private static readonly Dictionary<string, (string Captain, string FirstOfficer)> SidePanels = new(StringComparer.Ordinal)
+    /// rest to the shared part, named by what it still holds; in <see cref="PanelOrder"/>'s place the shared part comes
+    /// first, then the captain's, then the first officer's. Singular where a side holds one of a pair; the pedestal Cockpit
+    /// panel's side keys are iniBuilds' OIS_DISPLAY_TRANSFER group.</summary>
+    private static readonly Dictionary<string, (string Shared, string Captain, string FirstOfficer)> SidePanels = new(StringComparer.Ordinal)
     {
-        ["Wipers"] = ("Captain Wipers", "First Officer Wipers"),
-        ["Warnings"] = ("Captain Warnings", "First Officer Warnings"),
-        ["HUD"] = ("Captain HUD", "First Officer HUD"),
-        ["Loudspeakers and Table Lights"] = ("Captain Loudspeaker and Table Light", "First Officer Loudspeaker and Table Light"),
-        ["Display Power"] = ("Captain Display Power", "First Officer Display Power"),
-        ["ECAM Control Panel"] = ("Captain ECAM Control Panel", "First Officer ECAM Control Panel"),
-        ["Weather Radar"] = ("Captain Weather Radar", "First Officer Weather Radar"),
-        ["Cockpit"] = ("Captain Display Transfer", "First Officer Display Transfer"),
-        ["Sun Shades"] = ("Captain Sun Shades", "First Officer Sun Shades"),
-        ["Oxygen Masks"] = ("Captain Oxygen Mask", "First Officer Oxygen Mask"),
-        ["HUD Units"] = ("Captain HUD Unit", "First Officer HUD Unit"),
-        ["Tillers and Sidesticks"] = ("Captain Tiller and Sidestick", "First Officer Tiller and Sidestick"),
+        ["Wipers"] = ("Wipers", "Captain Wiper", "First Officer Wiper"),
+        ["Warnings"] = ("Warnings", "Captain Warnings", "First Officer Warnings"),
+        ["HUD"] = ("HUD", "Captain HUD", "First Officer HUD"),
+        ["Loudspeakers and Table Lights"] = ("Loudspeakers and Table Lights", "Captain Loudspeaker and Table Light",
+            "First Officer Loudspeaker and Table Light"),
+        ["Display Power"] = ("Display Power", "Captain Display Power", "First Officer Display Power"),
+        ["ECAM Control Panel"] = ("ECAM Control Panel", "Captain ECAM Control Panel", "First Officer ECAM Control Panel"),
+        ["Weather Radar"] = ("Weather Radar", "Captain Weather Radar", "First Officer Weather Radar"),
+        ["Cockpit"] = ("Cockpit", "Captain Display Transfer", "First Officer Display Transfer"),
+        ["Sun Shades"] = ("Center Sun Shade", "Captain Sun Shades", "First Officer Sun Shades"),
+        ["Oxygen Masks"] = ("Observer Oxygen Masks", "Captain Oxygen Mask", "First Officer Oxygen Mask"),
+        ["HUD Units"] = ("HUD Units", "Captain HUD Unit", "First Officer HUD Unit"),
+        ["Tillers and Sidesticks"] = ("Tillers and Sidesticks", "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick"),
     };
 
-    /// <summary>The order of each section's panels, the A380's where the panels are shared, each side's panel after the
-    /// shared one (<see cref="SidePanels"/>); a panel listed here belongs to that section whatever iniBuilds' area (the ISIS,
-    /// filed under the pedestal, is the Instrument section's as on the A380). A panel not named here follows them in
-    /// cockpit file order.</summary>
+    /// <summary>The order of each section's panels, the A380's where the panels are shared, a split panel standing for its
+    /// three parts (<see cref="SidePanels"/>, <see cref="OrderOf"/>); a panel listed here belongs to that section whatever
+    /// iniBuilds' area (the ISIS, filed under the pedestal, is the Instrument section's as on the A380). A panel not named
+    /// here follows them in cockpit file order.</summary>
     private static readonly Dictionary<string, List<string>> PanelOrder = new(StringComparer.Ordinal)
     {
         ["Overhead"] = new()
         {
             "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
-            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Captain Wipers",
-            "First Officer Wipers", "ADIRS", "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc",
-            "Surveillance", "Cabin", "OIS", "Maintenance", "Interior Lighting", "Exterior Lighting",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Wipers", "ADIRS",
+            "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc", "Surveillance", "Cabin", "OIS",
+            "Maintenance", "Interior Lighting", "Exterior Lighting",
         },
-        ["Glareshield"] = new()
-        {
-            "FCU", "EFIS Captain", "EFIS First Officer", "Captain Warnings", "First Officer Warnings", "Captain HUD",
-            "First Officer HUD", "Captain Loudspeaker and Table Light", "First Officer Loudspeaker and Table Light",
-        },
+        ["Glareshield"] = new() { "FCU", "EFIS Captain", "EFIS First Officer", "Warnings", "HUD", "Loudspeakers and Table Lights" },
         ["Instrument"] = new()
         {
-            "Gear", "Autobrake", "ISIS", "SND", "Source Switching", "Display Power", "Captain Display Power",
-            "First Officer Display Power", "Captain Side Panel", "Captain Individual Panel", "First Officer Individual Panel",
-            "First Officer Side Panel",
+            "Gear", "Autobrake", "ISIS", "SND", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
+            "First Officer Individual Panel", "First Officer Side Panel",
         },
         ["Pedestal"] = new()
         {
             "Engines", "Thrust Levers", "Captain RMP", "First Officer RMP", "Emergency Descent", "Flaps and Brakes", "Speed Brake",
-            "Trim", "ECAM Control Panel", "Captain ECAM Control Panel", "First Officer ECAM Control Panel", "Weather Radar",
-            "Captain Weather Radar", "First Officer Weather Radar", "Transponder", "Cockpit", "Captain Display Transfer",
-            "First Officer Display Transfer", "RMP 3",
+            "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
         },
-        ["Cockpit"] = new()
-        {
-            "Doors and Hatches", "Sun Shades", "Captain Sun Shades", "First Officer Sun Shades", "Oxygen Masks",
-            "Captain Oxygen Mask", "First Officer Oxygen Mask", "Captain HUD Unit", "First Officer HUD Unit",
-            "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Misc",
-        },
+        ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
     };
+
+    /// <summary>A section's panels in order: <see cref="PanelOrder"/>, a split panel as its shared part, then its captain's
+    /// and its first officer's.</summary>
+    private static List<string> OrderOf(string section) => PanelOrder.TryGetValue(section, out var order)
+        ? order.SelectMany(p => SidePanels.TryGetValue(p, out var split) ? new[] { split.Shared, split.Captain, split.FirstOfficer } : new[] { p }).ToList()
+        : new List<string>();
 
     /// <summary>Names for controls whose tooltip title is wrong or shared: iniBuilds titles the engine bleeds
     /// "HOT AIR 1/2" (the hot-air buttons' own titles), engine 2's FADEC ground power "ENG 1", and gives both
@@ -209,8 +206,9 @@ public static partial class A350PanelLayout
         ["CTR_VISOR_MAIN_HANDLE"] = "Center sun shade",
         ["HUD_LEFT"] = "Captain HUD cover",
         ["HUD_RIGHT"] = "First officer HUD cover",
-        ["HUD_HANDLE_LEFT"] = "Captain HUD",
-        ["HUD_HANDLE_RIGHT"] = "First officer HUD",
+        // The handle deploys the combiner (named so, not "Captain HUD", the glareshield's HUD key panel).
+        ["HUD_HANDLE_LEFT"] = "Captain HUD combiner",
+        ["HUD_HANDLE_RIGHT"] = "First officer HUD combiner",
         ["CPT_TILLER_DISCO"] = "Captain tiller",
         ["FO_TILLER_DISCO"] = "First officer tiller",
         ["LIGHTS_DOME_OVERRIDE"] = "Dome light override",

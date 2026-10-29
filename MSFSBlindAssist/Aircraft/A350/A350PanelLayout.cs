@@ -53,26 +53,24 @@ public static partial class A350PanelLayout
     public static string SectionFor(A350Control control)
     {
         string panel = PanelFor(control);
-        foreach (var (section, panels) in PanelOrder)
-            if (panels.Contains(panel))
+        foreach (var section in PanelOrder.Keys)
+            if (OrderOf(section).Contains(panel))
                 return section;
         return AreaSections.TryGetValue(control.Area, out var byArea) ? byArea : "Cockpit";
     }
 
-    /// <summary>The panel a control sits on: on a panel both pilots' controls share (<see cref="SidePanels"/>), its side's
-    /// own panel when its name says a side, as every side's twin's does ([VAR-1]: "Captain wiper").</summary>
+    /// <summary>The panel a control sits on: on a panel both pilots' controls would share (<see cref="SidePanels"/>), its
+    /// side's own panel when its name says a side, as every side's twin's does ([VAR-1]: "Captain wiper"), else the shared
+    /// part.</summary>
     public static string PanelFor(A350Control control)
     {
         string panel = SharedPanelFor(control);
-        if (SidePanels.TryGetValue(panel, out var sides))
-        {
-            string name = NameFor(control);
-            if (name.StartsWith("Captain ", StringComparison.Ordinal))
-                return sides.Captain;
-            if (name.StartsWith("First officer ", StringComparison.Ordinal))
-                return sides.FirstOfficer;
-        }
-        return panel;
+        if (!SidePanels.TryGetValue(panel, out var split))
+            return panel;
+        string name = NameFor(control);
+        return name.StartsWith("Captain ", StringComparison.Ordinal) ? split.Captain
+            : name.StartsWith("First officer ", StringComparison.Ordinal) ? split.FirstOfficer
+            : split.Shared;
     }
 
     private static string SharedPanelFor(A350Control control)
@@ -219,7 +217,8 @@ public static partial class A350PanelLayout
 
         foreach (var (section, panels) in placement.Structure)
         {
-            var ordered = panels.OrderBy(p => PanelOrder.TryGetValue(section, out var order) && order.IndexOf(p) is int at && at >= 0 ? at : int.MaxValue)
+            var order = OrderOf(section);
+            var ordered = panels.OrderBy(p => order.IndexOf(p) is int at && at >= 0 ? at : int.MaxValue)
                 .ToList();   // a panel the order does not name keeps its place after the named ones (OrderBy is stable)
             panels.Clear();
             panels.AddRange(ordered);

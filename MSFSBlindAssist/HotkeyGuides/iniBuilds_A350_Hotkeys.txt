@@ -12,13 +12,17 @@ Tip: Press the same bracket key again to cancel a mode you activated by accident
 READ THIS FIRST - WHAT THIS AIRCRAFT CAN DO TODAY
 
 The A350 is being built section by section. Its overhead panel, its glareshield (the FCU
-and both EFIS control panels), its instrument panel (gear, autobrake, ISIS, source
-switching, display power, both side and individual panels) and its pedestal (engines,
-thrust levers, the three RMPs, flaps and brakes, speed brake, trims, ECAM control panel,
-weather radar, transponder and cockpit) and the cockpit around you (doors and hatches, sun shades, oxygen
-masks, HUD units, tillers and the sidestick takeover buttons) are in the Sections list
-(Ctrl+1): every switch, selector, guarded button and knob, with the panels named and
-ordered as on the A380. A switch the aircraft did not move is said once ("BAT 1 did not
+and both EFIS control panels), its instrument panel (gear, autobrake, the ISIS and the SND,
+the standby navigation display, source switching, display power, both side and individual
+panels) and its pedestal (engines, thrust levers, the three RMPs, flaps and brakes, speed
+brake, trims, ECAM control panel, weather radar, transponder and cockpit) and the cockpit
+around you (doors and hatches, sun shades, oxygen masks, HUD units, tillers and the
+sidestick takeover buttons) are in the Sections list (Ctrl+1): every switch, selector,
+guarded button and knob, with the panels named and ordered as on the A380, except that each
+pilot's controls have panels of their own: a panel both pilots share on the A380 is split
+into the shared part, then a "Captain ..." panel and a "First Officer ..." panel right after
+it (Captain Wiper, First Officer Warnings, Captain ECAM Control Panel, Captain Weather
+Radar, First Officer Oxygen Mask). A switch the aircraft did not move is said once ("BAT 1 did not
 move"). Each panel's status display (Ctrl+3) reads its lights, the FCU's four windows,
 each side's baro and the ISIS QNH setting as the cockpit shows them. A button shows its
 state beside its name wherever the cockpit shows one: its light On or Off, its lit legends
@@ -27,7 +31,9 @@ Knots", "Captain baro unit: Hectopascals", "Speed knob push: Managed"). On the A
 baro knob's push selects STD and its pull QNH (the A320's are the other way round). The runway
 condition (Autobrake panel) is one choice from 6 dry to 1 ice: the knob opens its menu on
 the SD, steps to it and closes it. The HUD is an option on the OIS options page: without it
-the HUD panel's controls say "HUD is not fitted"; each side's declutter is an Off/On switch.
+the HUD panels' controls say "HUD is not fitted"; each side's declutter is an Off/On switch.
+The SND is an option too (STANDBY NAV DISPLAY): without it its keys say "Standby navigation
+display is not fitted".
 
 Switches and lights speak when they change on their own ("Seat belts: On", "BAT 1 fault
 light on", "Master caution on"), as the cockpit shows them; what you set yourself is not
@@ -101,8 +107,10 @@ Characteristic Speeds (the values the A350 itself publishes):
   Shift+5    Read the alpha protection and alpha max speeds (the A350's PFD shows no
              stall speed; its low-speed band starts there; "not shown" while it shows none)
   Shift+6    Read VFE Next (next flap limit)
-  Shift+1, Shift+2 and Shift+3 (green dot, S and F) say they are not readable yet: on the
-  A350 they are symbols on the PFD's speed tape with no value of their own.
+  Shift+1    Read Green Dot speed  } the A350 shows these only as symbols on the speed tape:
+  Shift+2    Read S speed          } read off the captain's PFD ("Green dot speed 217 knots";
+  Shift+3    Read F speed          } "not shown" while the tape does not draw one; "more than
+                                     50 knots below" while it sits off the tape's scale)
 
 Fuel:
   F          Read Fuel On Board (pounds)

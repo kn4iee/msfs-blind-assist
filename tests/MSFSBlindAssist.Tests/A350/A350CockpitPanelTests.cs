@@ -18,10 +18,11 @@ public class A350CockpitPanelTests
     [Fact]
     public void The_cockpit_panels()
     {
-        // Each side's on a panel of its own after the shared one (owner 2026-10-27), singular where a side has one.
+        // Each side's on a panel of its own after the shared one (owner 2026-10-27), singular where a side has one; the
+        // shared ones named by what they still hold (review 2026-10-29).
         Assert.Equal(new[]
         {
-            "Doors and Hatches", "Sun Shades", "Captain Sun Shades", "First Officer Sun Shades", "Oxygen Masks",
+            "Doors and Hatches", "Center Sun Shade", "Captain Sun Shades", "First Officer Sun Shades", "Observer Oxygen Masks",
             "Captain Oxygen Mask", "First Officer Oxygen Mask", "Captain HUD Unit", "First Officer HUD Unit",
             "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Misc",
         }, Placement.Structure["Cockpit"]);
@@ -50,14 +51,14 @@ public class A350CockpitPanelTests
             ($"{side} side sun shade", Set, "0=Stowed, 1=Deployed"),
             ($"{side} rear sun shade", Set, "0=Stowed, 1=Deployed"),
         }, Rows(panel));
-        Assert.Equal(new[] { ("Center sun shade", Set, "0=Stowed, 1=Deployed") }, Rows("Sun Shades"));
+        Assert.Equal(new[] { ("Center sun shade", Set, "0=Stowed, 1=Deployed") }, Rows("Center Sun Shade"));
     }
 
     [Theory]
     [InlineData("Captain Oxygen Mask", "Captain")]
     [InlineData("First Officer Oxygen Mask", "First officer")]
-    [InlineData("Oxygen Masks", "Third occupant")]
-    [InlineData("Oxygen Masks", "Fourth occupant")]
+    [InlineData("Observer Oxygen Masks", "Third occupant")]
+    [InlineData("Observer Oxygen Masks", "Fourth occupant")]
     public void Oxygen_masks_by_seat(string panel, string seat)
     {
         var rows = Rows(panel).ToList();
@@ -65,7 +66,7 @@ public class A350CockpitPanelTests
         Assert.Contains(($"{seat} oxygen N/100%", Set, "0=Normal, 1=100%"), rows);
         Assert.Contains(($"{seat} oxygen mask test", Press, ""), rows);
         Assert.Contains(($"{seat} oxygen emergency pressure", Press, ""), rows);
-        Assert.Equal(panel == "Oxygen Masks" ? 8 : 4, rows.Count);   // the two observers' masks share the panel
+        Assert.Equal(panel == "Observer Oxygen Masks" ? 8 : 4, rows.Count);   // the two observers' masks share the panel
     }
 
     [Theory]
@@ -73,10 +74,11 @@ public class A350CockpitPanelTests
     [InlineData("First Officer HUD Unit", "First officer")]
     public void Hud_units_are_the_hud_options(string panel, string side)
     {
+        // The handle deploys the combiner: named so, not "Captain HUD", the glareshield's HUD key panel (review 2026-10-29).
         Assert.Equal(new[]
         {
             ($"{side} HUD cover", Set, "0=Off, 1=On"),
-            ($"{side} HUD", Set, "0=Stowed, 1=Deployed"),
+            ($"{side} HUD combiner", Set, "0=Stowed, 1=Deployed"),
         }, Rows(panel));
         Assert.Equal("INI_IS_HUD", A350Options.For("AIRLINER_HUD_HANDLE_LEFT")!.Var);
     }
