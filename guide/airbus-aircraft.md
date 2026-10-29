@@ -16,17 +16,18 @@ Chapter 1 of 2 in [Part 8: Aircraft Guides](index.md#part-7-aircraft-guides) of 
 - [Fenix A320 CEO](#airbus-fenix)
 - [FlyByWire A380X](#airbus-a380)
 - [Headwind A330-900neo](#airbus-a330)
+- [iniBuilds A350](#airbus-a350)
 
 </nav>
 
-BA supports four Airbus aircraft: the FlyByWire A320neo (often called the A32NX), the Fenix A320 CEO, the FlyByWire A380X and the Headwind A330-900neo. Three of them come from the same family of code. The Headwind A330 is built on top of the FlyByWire A320, and the A380X is made by the same FlyByWire team, so once you have learned one of these three, the others will feel familiar. The Fenix is a separate product with its own way of working, and BA treats it differently in a few places.
+BA supports five Airbus aircraft: the FlyByWire A320neo (often called the A32NX), the Fenix A320 CEO, the FlyByWire A380X, the Headwind A330-900neo and the iniBuilds A350. Three of them come from the same family of code. The Headwind A330 is built on top of the FlyByWire A320, and the A380X is made by the same FlyByWire team, so once you have learned one of these three, the others will feel familiar. The Fenix is a separate product with its own way of working, and BA treats it differently in a few places. The iniBuilds A350 is separate too, but BA gives it the A380's panel names, windows and keys.
 
-A few things are true of all four:
+A few things are true of all five:
 
 - BA does not switch profiles by itself: choose the aircraft from the Aircraft menu before you fly (see [Choosing Your Aircraft](getting-started.md#gs-aircraft)).
 - They all need the free MobiFlight WASM module to operate switches and knobs (see [What You Need](getting-started.md#gs-requirements)).
 - The FCU windows work as described in [Autopilot Windows](takeoff-climb-and-cruise.md#autopilot-windows); this chapter covers the Airbus details.
-- On the A32NX, the Headwind A330 and the Fenix, the MCDU line select keys are Ctrl+1 to Ctrl+6 (left) and Alt+1 to Alt+6 (right), or F1 to F12 with the alternate setting in [FMC Settings](planning-your-flight.md#planning-fmc-settings). The A380's MFD has no line select keys; you arrow to a line and press Enter instead (see its section).
+- On the A32NX, the Headwind A330 and the Fenix, the MCDU line select keys are Ctrl+1 to Ctrl+6 (left) and Alt+1 to Alt+6 (right), or F1 to F12 with the alternate setting in [FMC Settings](planning-your-flight.md#planning-fmc-settings). The A380's and the A350's MFDs have no line select keys; you arrow to a line and press Enter instead (see their sections).
 - Output Ctrl+M opens the aircraft's [Monitor Manager](core-concepts.md#monitor-manager).
 
 ## FlyByWire A320neo (A32NX) {#airbus-a32nx}
@@ -639,6 +640,136 @@ The hotkeys and automatic callouts are the A32NX's, including *"V1"*, *"Rotate"*
 
 - **The Ctrl+B altimeter window** sets both sides as on the A32NX. Its own change is not announced twice.
 - **Visual guidance and taxi guidance use widebody settings** on the A330: a heavier, faster approach profile and a slightly earlier turn cue when taxiing, to suit the longer aircraft.
+
+## iniBuilds A350 {#airbus-a350}
+
+The iniBuilds A350 is a payware simulation of the Airbus A350-900, A350-900 ULR and A350-1000, which share one cockpit. Like the A380 it is a newer generation than the A320: two MFDs worked from a KCCU keyboard instead of MCDUs, and an OIS (onboard information system) on each side instead of a tablet. Its displays are pictures drawn by the aircraft's own code, so BA reads every one of them by running that same code on a private copy of the aircraft's memory. Nothing is written into the simulator, and there is no add-on to install and no Developer Mode. BA was built and tested on A350 version 1.2.7.
+
+### Before you fly {#before-you-fly-5}
+
+You need:
+
+- The iniBuilds A350.
+- The MobiFlight WASM module in your Community folder. Every switch, knob and key BA operates on the A350 goes through it, and BA warns you a short while after connecting if it is missing.
+- The displays powered (batteries on, with external or APU power, or a powered panel state from the OIS) so there is something to read.
+
+The first time you fly after installing or updating the A350, BA prepares its display reader. You hear *"A350 displays getting ready"*, and about 15 seconds later *"A350 displays ready"*. Until then a display reads *"The A350 displays are not available yet."* The next start takes a moment only.
+
+When BA first connects, it stays silent while the aircraft's values settle, so you are not flooded with the whole starting cockpit state. Only changes after that are spoken.
+
+### How the panels are organised {#how-the-panels-are-organised-5}
+
+The A350 has six sections. Its panels take the A380's names and order wherever the two cockpits share a panel, so if you know the A380 you will find your way. Where each pilot has controls of their own, the shared part comes first, then a Captain panel and a First Officer panel right after it, for example **Captain Wiper** and **First Officer Wiper**.
+
+**Overhead**: **ELEC**, **APU**, **Fuel**, **Hydraulics**, **Bleed Air**, **Air Conditioning**, **Pressurization**, **Ventilation**, **Cargo Air**, **Anti Ice**, **Fire**, **Cargo Smoke**, **Cabin Smoke**, **Oxygen**, **Calls**, **Evacuation**, **Signs**, the two wipers, **ADIRS**, **Flight Control Computers**, **Engine FADEC and Manual Start**, **Recorder and Misc**, **Surveillance**, **Cabin**, **OIS**, **Maintenance**, **Interior Lighting** and **Exterior Lighting**.
+
+**Glareshield**: **FCU**, **EFIS Captain**, **EFIS First Officer**, each pilot's **Warnings** (chrono, master caution and warning, autoland and ATC message), each pilot's **HUD**, and each pilot's **Loudspeaker and Table Light**.
+
+**Instrument**: **Gear**, **Autobrake**, **ISIS**, **SND** (the standby navigation display), **Source Switching**, **Display Power** with its Captain and First Officer parts, and each pilot's **Side Panel** and **Individual Panel**.
+
+**Pedestal**: **Engines**, **Thrust Levers**, **Captain RMP**, **First Officer RMP**, **Emergency Descent**, **Flaps and Brakes**, **Speed Brake**, **Trim**, **ECAM Control Panel** with its Captain and First Officer parts, **Weather Radar** with its Captain and First Officer parts, **Transponder**, **Cockpit**, each pilot's **Display Transfer**, and **RMP 3**.
+
+**Cockpit**: what sits around you rather than on a panel: **Doors and Hatches**, the sun shades, the oxygen masks, the HUD units, each pilot's tiller and sidestick (with its takeover button), and **Misc**.
+
+**Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display and the BAT display.
+
+Some A350 controls are worth knowing about:
+
+- **Buttons show their state** beside their name wherever the cockpit shows one: their light (On or Off), their lit legends ("EXT 1: Available"), or what they switch ("SPD/MACH: Knots", "Captain baro unit: Hectopascals").
+- **The baro knobs**: on the A350 a push selects STD and a pull QNH, the other way round from the A320.
+- **Typed values**: a knob whose value the cockpit shows is a field you type into, as on the other Airbus aircraft: the FCU speed, heading, altitude and V/S, each side's QNH (in that side's unit), the ISIS QNH, and the cabin altitude and vertical speed targets. Type the value and press Enter. The aircraft's own knob lands it, and BA says what the cockpit then shows, for example *"FCU speed 250, selected"*. A value the knob cannot take is refused with the reason, for example a Mach number while the window shows knots, or a QNH while that side is on STD.
+- **Levers**: the thrust levers, flaps and speed brake are combos with the A380's positions. The rudder and pitch trims are nudge buttons, with the trim shown on their panel ("Pitch trim: 1.3 degrees up").
+- **Runway condition** (Autobrake panel) is one choice from 6 dry to 1 ice. BA opens the knob's menu on the system display, steps to your choice and closes it.
+- **Options**: the HUD, the standby navigation display, fuel jettison and a few other parts are options, set on the OIS options page. Without one, its controls say so, for example *"HUD is not fitted"*.
+- **System display page** on the ECAM Control Panel shows the SD page and picks one.
+- A switch the aircraft did not move is said once, for example *"BAT 1 did not move"*.
+
+### Autopilot / FCU windows {#autopilot-fcu-windows-5}
+
+The A350 has the A380's FCU windows, in Input mode: Ctrl+S speed (knots, or a Mach number such as 0.85, with SPD/MACH), Ctrl+H heading (with HDG-V/S / TRK-FPA), Ctrl+A altitude (100 to 49000 feet, with 100/1000, metric altitude and ALT level off), Ctrl+V vertical speed or flight path angle, Ctrl+P the autopilot panel (AP 1, AP 2, LOC, APPR, FD, A/THR, ALT and the A/THR disconnect, each labelled with its light, for example "AP 1: On") and Ctrl+B the altimeter. Each value window has the knob's push and pull, and keeps the window's line current in a read-only box.
+
+- A value typed into a managed or dashed window is a preset that the pull then uses, as on the real aircraft. BA tells you so, for example *"FCU speed 260 knots, preset"*.
+- The altimeter window ("A350 Altimeter"): a QNH typed once sets both sides and the ISIS, each in that side's unit; STD or QNH on both sides; and each side's baro unit button, labelled with the unit it shows.
+
+The autopilot and knob keys are the A380's: Input Shift+A autopilot 1, Ctrl+O autopilot 2, Shift+P approach, Ctrl+J autothrust and Ctrl+L localizer; Shift+1 to Shift+4 push and Ctrl+1 to Ctrl+4 pull the heading, altitude, speed and vertical speed knobs. Each one presses the FCU's own control, and the flight mode announcements tell you what changed.
+
+### MCDU {#mcdu-5}
+
+Like the A380, the A350 has MFDs instead of MCDUs, worked from the KCCU. Input Shift+M opens the MFD window ("A350 MFD"): the page as a list of lines, each with its value and colour. BA drives the real display underneath, so you never need the cursor or trackball.
+
+- Up and Down move through the lines. Enter acts on the line: a field takes what you typed in the scratchpad box (Tab to it, type, then Enter); anything else is clicked.
+- Backspace presses CLR. Page Up and Page Down scroll. F5 refreshes and Escape closes.
+- The **Side** box picks the captain's or the first officer's MFD.
+- Alt and a letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF and Alt+X ESC.
+- A new page says its title, and a menu that opens takes you to its first item.
+
+Reading the flight plan: each F-PLN waypoint is one line with its leg, labelled by the page's columns. A constraint says whether it is met, for example "ALT 5000 (constraint met)". Press Enter on a waypoint to open its revision menu.
+
+FMS messages, such as *"Scratchpad: NAV ACCURACY UPGRADED, white"*, are spoken as they appear: by the window while it is open, and in the background while it is closed. The background ones have their own Monitor Manager row, "FMS messages (MFD scratchpad)".
+
+The A350's normal checklists are on the MFD's C/L MENU (Alt+K in the window, or Output Ctrl+Shift+C). Each item is a button: Enter ticks it, and sensed items tick themselves.
+
+Three keys you know from other aircraft open the MFD window straight on the A350's own page: Input Ctrl+N on RAD NAV (the navigation radios), Output Ctrl+Shift+C on C/L MENU (the checklists) and Input Ctrl+Shift+D on ATC COM (the datalink).
+
+### EFB {#efb-5}
+
+The A350's EFB is its OIS, one on each side. It opens in the window the PMDG tablets use: Input Shift+T for the captain's ("A350 OIS") and Input Ctrl+Shift+T for the first officer's ("A350 OIS (First Officer)"). Every page reads in browse mode: FLT OPS, T.O PERF and LDG PERF (type your values, pick the runway, press COMPUTE, and the results are spoken once they arrive, for example *"Results: V1: 141 kt, ..."*), the loadsheet and refuel, charts (the charts themselves are pictures), company messages, GROUND (each door with its state, lights, chocks, pushback and GSX), MAINTENANCE, the panel states, autosave, the options and, on the side chosen as the preferred seat side, the Situation Manager with its failures, each Active or Inactive. The OIS's own messages, errors and confirmation questions are spoken as they appear.
+
+If you turn on STREAMER MODE in the OIS options, your SimBrief ID, API keys and logon codes are hidden in BA too: you hear only how many characters they have, for example "SIMBRIEF ID, hidden, 7 characters", and you can still type into them.
+
+Output Ctrl+Shift+T stays the Cold Temperature Altitude Correction, as on the PMDG aircraft.
+
+### Special windows {#special-windows-5}
+
+**Radio Management Panel: Input Ctrl+Shift+R.** The chosen RMP's screen as a list ("A350 RMP"): each radio's active and standby frequency and the squawk, kept up to date. The **RMP** box picks the Captain's RMP, the First Officer's or RMP 3.
+
+To tune a VHF radio:
+
+1. Press Ctrl+1, Ctrl+2 or Ctrl+3 to pick the radio line.
+2. Type the frequency. The digits and the point go to the cockpit RMP's keypad as you type; the leading 1 and the point are optional, so 2 1 9 is 121.900 and 8 7 is 118.700. The RMP never shows what you type, so Backspace deletes the last digit and tells you what is left.
+3. Press Enter. The frequency becomes that radio's standby, and BA reads the line back (*"standby unchanged"* if the RMP refused it).
+4. Press Alt+1, Alt+2 or Alt+3 to swap that radio's standby in. BA reads it back.
+
+A frequency typed and not loaded is deleted when you press another key, for example *"272 cleared"*. Alt+T, then four digits from 0 to 7, sets the squawk on the fourth digit; Escape cancels. Alt+V, Alt+H, Alt+L, Alt+N and Alt+U press the VHF, HF, TEL, NAV and MENU page keys; the A350 draws only the VHF page, so the others say *"screen unchanged"*. F5 refreshes and Escape closes. Every RMP key, microphone key, volume knob and reception is also on the Pedestal's RMP panels.
+
+Note that Ctrl+Shift+R in Output mode reads your last landing rate instead.
+
+**E/WD window: Output Alt+E.** The engine block, every warning display line with its colour, the ECAM cursor ("selected") and each action box ("to do", "done"), the SD page and its permanent data line. Read with the arrow keys; it updates itself, F5 refreshes now and Escape closes.
+
+**Displays.** Output Alt+P reads the captain's PFD (the flight mode annunciator first, then speeds, altitude, heading and messages), Alt+N the captain's ND, Alt+S the SD page shown with its values named, and Alt+I the standby flight display. Every other display is in the Displays section.
+
+### Aircraft-specific hotkeys and callouts {#aircraft-specific-hotkeys-and-callouts-5}
+
+The Output readouts are the A380's, from what the A350 itself shows:
+
+- Shift+H, Shift+S, Shift+A and Shift+V read each FCU window as the FCU shows it, for example *"FCU speed 250 knots, managed"*.
+- Shift+4 reads VLS and Shift+6 VFE next. Shift+5 reads the alpha protection and alpha max speeds: the A350's PFD shows no stall speed, and its low-speed band starts there. Shift+1, Shift+2 and Shift+3 read green dot, S and F speed off the captain's speed tape (*"below the speed scale"* while beyond its view, *"not shown"* while not drawn).
+- D reads the distance to destination along the route and the time at your ground speed; Shift+D the distance to the top of descent.
+- Ctrl+W reads the ND's TO waypoint, and Ctrl+0 the approach capability as the flight mode annunciator shows it.
+- F and Shift+F read the fuel on board, W and Shift+W the gross weight and centre of gravity, from the system display.
+- X reads the squawk and transponder mode, as the captain's RMP shows them.
+- With the FCU's METRIC ALT button on, Q and A read metres and the altitude callouts come every 300 metres, for example *"3000 meters"*.
+- Ctrl+E turns the E/WD callouts off and on.
+
+What the A350 says on its own, each with its own row in the A350 Monitor Manager (Output Ctrl+M):
+
+- Switches and selectors that something other than you moves, for example *"Seat belts: On"*, and lights as the cockpit lights them (*"BAT 1 fault light on"*, *"Master caution on"*). A light that only blinks says nothing.
+- *"pressed"* after a button's name, for a button with no light or state of its own. A knob you step says the value the cockpit then shows.
+- The FCU altitude window and each side's baro when they change other than by your own entry: *"Altitude 12000 feet"*, *"Captain altimeter 1013 hectopascals"*, *"First officer altimeter standard"*.
+- *"IRS aligned"*, once, as the last IR that is on finishes aligning.
+- The take-off speeds as the FMS takes them (*"V1: 142 knots"*), and *"V1"*, *"Rotate"* and *"V2"* on the take-off roll.
+- Where the thrust levers, flaps and speed brake went (*"All thrust levers Climb"*, *"Spoilers 40 percent"*).
+- Every E/WD line as it appears, with its colour, from power-up on.
+- Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.
+- FMS messages while the MFD window is closed.
+
+### Things to know {#things-to-know-5}
+
+- **The A350's First Officer is not there yet.** Output Shift+C says *"No checklist for this aircraft."* Use the MFD's own checklists (Output Ctrl+Shift+C).
+- **The A380's airport map and BTV window is not on the A350.** Output Ctrl+Shift+B says it is only on the A380. The A350 draws its airport map and brake-to-vacate on the navigation display.
+- **Surroundings window frequencies:** the A350 has no stock COM radio, so pressing Enter on a frequency in the Surroundings window tells you that this aircraft tunes its radios only through its radio management panels.
+- **Pictures stay pictures.** The OIS charts and en-route map, and the tapes, attitude and map symbols on the PFD and ND, are graphics. BA reads their values from the aircraft where it can.
+- **After an A350 update,** BA prepares the displays again (about 15 seconds). If a display stops reading after an update, report it.
 
 <nav class="guide-nav" aria-label="Guide chapters" markdown="1">
 

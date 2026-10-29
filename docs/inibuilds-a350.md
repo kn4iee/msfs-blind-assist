@@ -39,6 +39,8 @@ Nothing is written to the sim and the installed module is only read; the patched
 
 **In MSFSBA** (`MSFSBlindAssist/Aircraft/A350/Display/`, ported from the prototype in `tools/a350-probe` and checked against it on one memory copy, gauge by gauge): `A350WasmModule` reads the module by name, `A350ModulePatcher` builds the scratch module (`patch2.py`'s hooks, plus the allocator answers of [A350-10], which the prototype lacks), `A350ModuleFacts` re-derives the vtables and anchors, `A350ModuleCache` compiles it once per A350 version and patch version under `%LOCALAPPDATA%\MSFSBlindAssist\a350\<sha256>-p<version>.cwasm` [A350-11] (about 15 s; then about 0.3 s), `A350MemoryReader` locates (about 1.2 s) and copies (8-20 ms) the A350's memory, `A350DrawEngine` draws (a round of CTR, both EFIS and the MFD about 70 ms, mostly restoring the copy before each gauge), `A350DrawLayout` reads rows with their colours, and `A350DisplayService` runs it all on one worker thread, started by MainForm while the A350 is active. `A350Probe` modes `patch`, `snapshot`, `draw <copy|live> Gauge[#n] …` (xy.mjs's format; `A350_DRAW_JSON=<dir>` saves captures as fixtures) and `service` exercise each layer.
 
+**Hardening (review 2026-10-29).** The engine's name tables are bounded (4,096 names, 1,024 sim asks), so a torn copy cannot grow them without end. A copy clips at 4 GB, reads in pieces of at most 1 GB, clears a region that has gone since the last copy (`A350MemoryRegions`), and its buffer grows geometrically. Any error out of a draw, not only a trap, makes the next draw start a fresh instance. `nvgReset` resets the fill to white as well as the transform; drawn on two saved 355 MB copies with and without that change, every gauge read the same texts in the same colours. `nvgTransform`, never seen in 1.2.7's draws, is logged once, as positions after it would be wrong. The compile cache builds one module at a time (`BuildGate`), writes under a unique temporary name and moves it into place, deletes a write left over an hour, and keeps the latest other patch version of the same module, so the app and a probe built from different patch versions do not recompile each other's on every start [A350-11]. A cache it cannot write is tolerated: the module then compiles at each start, and every compile says "A350 displays getting ready".
+
 **Traps.** About 40% of fresh copies were torn for the EFIS and MFD draws (they read out of bounds; the CTR draw never did in testing). Most of those traps were the A350's own allocator walking torn free lists, now answered by the engine [A350-10]: on two 355 MB copies saved in flight, 7 of 8 draws trapped before and none after. A trap is the capture's error; the engine then starts a fresh instance, since a trap leaves the wasm globals mid-call, and the service retries once on a new copy. The exe must not be CET-compatible, or a trap kills it [A350-9].
 
 **Tearing.** A copy that spans A350 frames is inconsistent. Walking all 25,000 process regions while reading (0.5 s) gave empty or garbage WD lists in half the draws and once trapped `dlmalloc`. The 8 ms allocation-only copy gave 8 of 8 consistent draws. As the A350's memory grows over a flight (66 MB fresh, 495 MB after hours), a copy takes longer (650 ms at 495 MB) and tears again; the allocator no longer cares [A350-10], but the A350's own data can still be torn (a flight plan list once). Still treat a trap as a torn copy and take another.
@@ -154,6 +156,10 @@ More of the page model, from live pages (2026-10-27):
 - An F-PLN row reads every cell of a column left to right (2026-10-28: BI613's altitude column held a magenta "*" and the predicted 5000, and the reader once kept the star alone). The star reads as the Airbus FMS's constraint prediction, "ALT 5000 (constraint met)" for magenta, "(constraint missed)" for amber; a ditto mark (`"`) reads "same as above"; an arrow after an ident (the font's a, b) is the procedure's turn, "BI611 (right turn)" (BASU1D's right turn after 500 ft), as a screen reader may not say a bare arrow.
 - Typing goes into the field that has focus (click it, type on the KCCU, ENTER); the scratchpad shows FMS messages, and CLR removes one (a message whose condition still holds, NAV ACCUR DOWNGRADED, comes back). An ident with several matches opens DUPLICATE NAMES, each match a button. The normal checklists are C/L MENU's ten, each item a button ticked by a click.
 
+Three other aircraft's window keys open the window on the A350's own page with the KCCU page key (`A350Hotkeys.MfdPages`, parity 2026-10-29): input Ctrl+N on RAD NAV (the PMDG 737's NAV radios window), output Ctrl+Shift+C on C/L MENU (the A380's live ECL), input Ctrl+Shift+D on ATC COM (the A32NX's DCDU). An open window just changes page.
+
+**FMS messages with the window closed** (parity 2026-10-29, as the A32NX's MCDU says them, [A320-34]). The background monitor draws the captain's MFD as it comes round with the other displays (about every 2 s); `A350FmsMessageAnnouncer` says a message the FMS posts in the scratchpad, or in its place on a checklist page, as the window says it ("Scratchpad: NAV ACCURACY UPGRADED, white"), once two reads agree on it (a torn copy's one-off text is never said). The first agreed read is a silent baseline; an emptied scratchpad says nothing; a dark MFD (`INI_FMS_POWERED`, both MFDs share it) decides nothing; after a flight load the new flight's message line is the baseline. Its own Ctrl+M row is "FMS messages (MFD scratchpad)" (`A350_FMS_MESSAGES`). While an MFD window is open it says the messages itself, and the background follows them silently (`IniBuildsA350Definition.MfdWindowOpen`), so closing the window replays nothing.
+
 ## The RMPs in MSFSBA (live 2026-10-28)
 
 Each RMP is a pedestal panel (Captain RMP, First Officer RMP, RMP 3, in the manual's pedestal order) of its 64 input events (`A350PanelLayout.Rmp`): the keypad, the line select keys, the activation keys, the six page keys, eleven microphone keys (lit when theirs is `INI_RMPn_TRANSMIT_CHANNEL`), their volume knobs and receptions (the knob's push-pull, `INI_RMPn_m_RECEIVE_SEL`), brightness, RAD NAV and INT/RAD. Each key is one Set of 1: its set code writes an `RMP_CPT_*_KEY` L:var that the aircraft consumes within a frame or two (read back 0 at 30 ms), and repeated presses of one key all land (the cockpit's click calls the key's `_Toggle`, which flips the latched position; the Set's L:var write is what presses). iniBuilds names the activation keys' L:vars `LSK` and the line select keys' `RSK` (left and right of the screen). Keys must arrive a frame or more apart: 4 3 2 1 sent in a burst landed as 3412 (the aircraft reads one frame's keys in its own order); one at a time they landed in order. The keypad's squawk entry is a state the screen does not show (SQWK then digits landed as 2002 for a typed 2000), so a squawk is set with the stock `XPNDR_SET` (BCD), as the A380 window does: the A350 keeps `TRANSPONDER CODE:1` and the RMP screens in step (8192 showed SQUAWK : 2000). iniBuilds 1.2.7's RMP draws only the VHF page: HF, TEL, SQWK, MENU and NAV leave the screen as it was.
@@ -199,6 +205,14 @@ What changes on its own is spoken, as on the A380, and each spoken thing has its
 - **Switches.** Every switch, selector and knob row is Continuous and announced, spoken by MainForm's generic path with its row's words ("Seat belts: On", "BAT 1: Off"); the pilot's own pick is not repeated (the echo gate, [CORE-8]). Spring and press rows are not listed.
 - **Lights.** The definition speaks them as the cockpit lights them, rule × bus light power (`A350LampBoard`), at a batch end in one netted sentence (`A350LampSpeech`, the iniBuilds A300's timings: 1.5 s gather, 3 s off-hold so a flash reads once, 2.5 s settle after a light power change). A light's first value is a silent baseline; three batch ends after a connect or flight load the lights still unread are seeded from the cache. The master caution and warning speak "on" once (the captain's upper legend, `MasterSpeakers`); the other six legends are echoes with no row. A pressed button's own light is left to its label for 3 s (`PressedLampMs`).
 - **Mutes.** A switch row is muted at MainForm's generic gate; a light inside the definition (`IsMuted`). A delivery that changes several lights (a light power flag, a shared input) is exempt from MainForm's mute wrap and checks each light's own row (`IsMuteWrapExempt`, [VAR-8]).
+- **One light, two lamps.** Lamps both sides light from one rule (ECAM CLR, ATC MSG, AUTOLAND) are one light: the captain's speaks, without its side ("ECAM clear light on"), and the other is its echo, with no Ctrl+M row; a press of either side's button is the pilot's own (review 2026-10-29).
+- **Blinks and the master lights.** A light that goes off and on again within the off-hold says nothing (a pending "on" waits while its off is held). The master caution and warning are steady: lit again after an off, each is a new "on", and a master press never quiets its relight.
+- **The pilot's own presses** (review 2026-10-29, panels minor 3; [CORE-7]). A button whose label shows no state says "<name> pressed" once the press is made; one that shows a state is confirmed by its label, which the screen reader says. An encoder stepped with its increase and decrease rows says the value the cockpit then shows, once the steps settle (`A350FcuCallouts.StepSettleMs`, 400 ms, at the next batch end: a run of steps is read back once).
+- **FCU windows** (parity 2026-10-29, as the iniBuilds A300 speaks its altitude window, in its own pull request). The altitude window and each side's baro speak on their own, in the A380's words (`A350FcuCallouts`): "Altitude 12000 feet"; "Captain altimeter 1013 hectopascals", "First officer altimeter 29.92 inches", "Captain altimeter standard", "Captain altimeter preset 1013 hectopascals". The other windows are the autopilot's to move, so the FMA says what changed. A change is staged to a batch end through the shared FCU call-out (`FcuValueAnnouncer`, [A320-22]), quiet through a load's settle; MSFSBA's own typed value is the echo of its window and says nothing; a unit button MSFSBA pressed is said by the button's label, not by the baro; a preset going out of view on STD is recorded, never said. One Ctrl+M row each: Altitude window, Captain baro, First officer baro.
+- **IRS alignment** (parity 2026-10-29). "IRS aligned", once, as the last IR that is on finishes aligning (`A350IrsAlignment`, from `INI_IRSn_ALIGNED` and each IR pushbutton), judged at a batch end and only once the seed gate has released after a connect or a load: the settled sample is the baseline, so a flight loaded aligned says nothing. Its Ctrl+M row is "IRS alignment" (`A350_IRS_ALIGNMENT`). Each IR's alignment is a status line beside its pushbutton ("IR 1 alignment: Aligned").
+- **Take-off speeds** (parity 2026-10-29, [TKO-5]). The FMS's V-speeds are said as they are entered ("V1: 142 knots", "VR: not set" while 0), and V1, Rotate and V2 are called on the take-off roll from a per-frame airspeed (`A350TakeoffCallouts`, the shared `TakeoffVSpeedCallouts`), each muted by its speed's row.
+- **Display call-outs.** The E/WD lines (above), the FMA columns (below) and the FMS messages with the MFD window closed ("The MFD window" above), each behind its own rows.
+- **Speech thread.** Every line spoken from a background thread (lights, levers, the IRS, the display monitors) is announced on the UI thread (`SafeBeginInvoke`, [A380C-22]): spoken off it, the screen reader can drop it.
 
 Live 2026-10-27 (`A350Probe listen <seconds>`, which applies both of MainForm's gates; `A350_MUTE=key,key` unticks rows in memory only): seat belts, no smoking and BAT 1 moved from outside were spoken, and with seat belts and the BAT 1 fault light muted, neither said anything while BAT 1 and the master caution still did. Earlier: "BAT 1 fault light on/off", "A/BRK light off", "Master caution on" (its reset silent).
 
@@ -265,8 +279,8 @@ Indicator lamps with no control of their own sit on their panel after its button
 ### Pedestal panels, live-tested (A350-900, 1.2.7)
 
 The A380's pedestal panels in its order, the A350's emergency descent and trims beside them. The levers are hand-written
-(`A350Levers`, "Pedestal levers" below). The RMPs (192 keys and a WASM display) and the KCCU wheels have plans of their own
-and are not placed yet (`A350PanelLayout.DeferredPanels`).
+(`A350Levers`, "Pedestal levers" below). The RMPs are pedestal panels of their own ("The RMPs in MSFSBA" above). The KCCU
+(iniBuilds' FMGS_1 and FMGS_2 groups) is not placed: the MFD window types and presses its keys (`A350PanelLayout.DeferredPanels`).
 
 | Panel | Rows | Tested | Notes |
 |---|---|---|---|
@@ -356,6 +370,24 @@ A knob whose value the cockpit shows is one typed field in place of its increase
 - The cabin targets drive the A350's own cabin model, not the stock pressurization variables (frozen): in MAN, a typed 3,000 ft target moved the cabin from 1,250 ft at 450 ft/min (CAB PRESS page, read with the display reader). Switching to MAN seeds the target from the cabin.
 - The 100/1000 ft altitude increment is a value the WASM keeps to itself: a typed altitude with the 1000 ft increment lands on the 1000 ft grid and the read-back writes the typed value.
 
+## Parity with the other aircraft (2026-10-29)
+
+Every hotkey, call-out and feature of the other aircraft was audited for the A350 (the owner's rule: no hierarchy, every item done or made doable). Built from the A350's own variables and displays, test-first:
+
+- **The A380's hotkeys** (`A350Hotkeys`, `IniBuildsA350Definition.Hotkeys`): the FCU read-outs (Shift+H, S, A, V), the autopilot and knob push and pull keys (each drives the FCU panel's own row, so a key acts exactly as the row; the FMA says what changed), the characteristic speeds the A350 publishes (VLS, the alpha speeds, VFE next; green dot, S and F off the speed tape), fuel, weight, flaps, gear, altimeter, squawk, approach capability and the displays (Alt+P, N, S, I, E).
+- **The FCU windows** (Ctrl+S, H, A, V, P, B; `A350FcuWindowBase`), with the A380's Altimeter window: a QNH typed once sets both sides and the ISIS, STD or QNH on both sides, and each side's baro unit button labelled with the unit it shows.
+- **D and Shift+D**: the distance to destination along the route and to the top of descent (`A350RouteDistances`).
+- **Take-off call-outs** and the V-speeds ("Announcements" above).
+- **The universal automation's autopilot engage**: closed loop on the A350's own AP 1 ([FO-18]), pressing only on a definite off.
+- **Visual guidance**: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody, its glidepath and flare biases estimates pending a coupled-ILS calibration (`GetVisualGuidanceProfile`).
+- **The FCU windows' own call-outs, IRS alignment, the FMS messages with the MFD window closed** ("Announcements" and "The MFD window" above).
+- **Metric altitude**: the FCU's METRIC ALT (`A350_FCU_METER`, `INI_FCU_METRIC_STATE`: 0 only feet, 1 showing meters) is the A350's `IAircraftDefinition.MetricAltitude`, as MTRS is the A380's; MainForm asks every aircraft the same way. While it is on, A and Q read metres and the 1,000-ft call-outs run in 300 m bands ([TKO-4]); the FCU altitude window and its typed entry stay in feet (the real A350's FCU is feet-only, metres show on the PFD: to confirm in the sim).
+- **Window keys**: Ctrl+N, Ctrl+Shift+C and Ctrl+Shift+D open the MFD window on RAD NAV, C/L MENU and ATC COM ("The MFD window" above).
+
+Not on the A350 yet: the First Officer (Shift+C, flows and checklists: its own plan, from the iniBuilds manual and the FCOM flows) and the A380's airport map and BTV window (Ctrl+Shift+B: the A350 draws them on the ND). The waypoint flight director's A350 profile lives in its own pull request until both merge. Each of those keys says so when pressed.
+
+Still to confirm in the sim: the IRS flags' order and `INI_IRSn_TIME_REMAIN`'s unit in a real alignment; METRIC ALT's FCU units; an FMS message heard with the MFD window closed and not doubled with it open; whether the stock NAV 1 and 2 receivers that N reads follow the MFD RAD NAV tuning (the A350 keeps its own `INI_VOR1/2_FREQUENCY`); whether the cabin-ready state is an E/WD memo the call-outs say.
+
 ## The OIS (live 2026-10-27, 1.2.7)
 
 The OIS is plain HTML in two Coherent views, `VCockpit10/11 - iniEfbA350`. Which is which is told by
@@ -365,7 +397,7 @@ window: Input mode > Shift+T for the captain's, Ctrl+Shift+T for the first offic
 mode's Ctrl+Shift+T stays Cold Temperature Altitude Correction, as on the PMDG 777). The agent,
 `Resources/coherent-a350-ois-agent.js`, is its own (the flyPad agent's scrape missed the OIS's
 option groups and fields); its behaviour is pinned by jsdom tests on live-captured pages in
-`tools/a350-ois-test` (`node --test`, not run by CI; re-take a fixture with its `capture.js`),
+`tools/a350-ois-test` (`npm test`, run by CI's efb-readers job; re-take a fixture with its `capture.js`),
 and every page was walked on both sides through the real client with `A350Probe ois`.
 
 How the OIS is built, and how each part reads:
@@ -392,8 +424,19 @@ Learned on the way:
   Situation Manager's FAILURES tab; a press toggles one at once.
 - GROUND refuses door toggles with "Unable to toggle when moving or engines running" while an
   engine master is on, even with the engines stopped (a flight test left both on).
-- COMPUTE results arrive a few seconds after the press; like the PMDG tablets' performance pages
-  they are browsed, not spoken.
+- COMPUTE results arrive a few seconds after the press and are said once they hold for a read
+  ("Results: V1: 141 kt, VR: 143 kt, ..."; `A.computeAnswer`, waiting up to 30 s); a COMPUTE that ends in an
+  error line says only the error, which is its own alert.
+- **Credentials** [A350-12]. With OPTIONS > STREAMER MODE on, a field labelled ID, KEY, LOGON, PASSWORD or TOKEN on
+  that page, and any password input, reads "hidden" with its length ("SIMBRIEF ID, hidden, 7 characters";
+  `A.isSecret`, `A.hiddenName`); the EFB shell shows it as a password box and confirms a value set into it as "Set,
+  hidden, 7 characters" (`FbwEfbForm.FieldSetSpoken`). Typing into it still works key by key. With STREAMER MODE off,
+  those fields read as the OIS shows them. No fixture keeps a credential (`secrets.test.js`).
+- **An unchanged page is not shipped again**, as the MD-11 reader's: a MutationObserver (disconnected while the agent
+  itself reads) and capture-phase change and input listeners mark the page changed; a full read still runs every tenth
+  poll and on every poll while a COMPUTE answer is pending or held.
+- **Colour words.** A painted button says its colour only when it has one: grey when its channels are within 30 of each
+  other, red only when red leads; otherwise no word.
 - The OIS shows "LDA 1019 FT" for VCBI 22 against a 10,961 ft runway: its own value, read as shown.
 - The OIS keeps the last opened company message on screen when another box is chosen; an AOC
   request box (LOADSHEET, ADC DELAY, DIVERSION) shows no form without a SimBrief plan.

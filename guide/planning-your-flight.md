@@ -438,6 +438,7 @@ The tablet you get depends on the aircraft:
 | TFDi MD-11 | Input Shift+T | MD-11 EFB |
 | Fenix A320 | Input Shift+T | Fenix EFB |
 | iFly 737 MAX8 | Input Shift+T | iFly 737 EFB |
+| iniBuilds A350 | Input Shift+T, or Input Ctrl+Shift+T for the First Officer's OIS | A350 OIS (with "(First Officer)" for the First Officer's OIS) |
 | HorizonSim 787-9 | none | BA says *"787 E F B not available."* |
 
 </div>

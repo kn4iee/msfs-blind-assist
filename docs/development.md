@@ -151,6 +151,13 @@ Application for the faulting module. Full procedure in [tooling.md §8](tooling.
 - **Microsoft.Extensions.Configuration.Binder** (version 10.0.x) - Configuration binding
 - **NVDA Controller Client** (included) - Direct NVDA integration
 - **Tolk wrapper** (included) - Universal screen reader support
+- **Wasmtime** (version 48.0.2) - runs the iniBuilds A350's own display code on a read-only
+  copy of its memory (`A350DrawEngine`, [inibuilds-a350.md](inibuilds-a350.md)); every exe
+  hosting it keeps `<CETCompat>false</CETCompat>` ([A350-9])
+
+The developer tools in `tools/` add Python 3.14+ (standard library only), Node.js 20+ (22+ for
+`tools/a350-probe`), `npm ci` in each jsdom harness, and optionally pytest: the list, with how to
+install each, is in [tooling.md](tooling.md#prerequisites-what-you-need-installed-to-run-these-tools).
 
 ## Settings System
 

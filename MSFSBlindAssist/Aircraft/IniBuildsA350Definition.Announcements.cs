@@ -201,7 +201,7 @@ public partial class IniBuildsA350Definition
     }
 
     /// <summary>MSFSBA's own typed value is said by its own confirmation: the windows it moves stay quiet for the echo's
-    /// window, armed before each write of the run and again as it is confirmed ([A300-14]'s 2.5 s).</summary>
+    /// window, armed before each write of the run and again as it is confirmed (the shared FCU call-out's 2.5 s, as the iniBuilds A300's).</summary>
     private void ArmTypedEcho(string rowKey)
     {
         if (_typedEchoKeys.TryGetValue(rowKey, out var keys))

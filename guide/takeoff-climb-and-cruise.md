@@ -153,6 +153,7 @@ Several aircraft get spoken *"V1"*, *"Rotate"* and *"V2"* calls on the takeoff r
 |---|---|---|
 | FlyByWire A320 and Headwind A330 | BA | The MCDU PERF TAKE OFF page |
 | FlyByWire A380 | BA | The PERF page |
+| iniBuilds A350 | BA | The MFD PERF page (the OIS T.O PERF can send them there) |
 | iFly 737 MAX 8 | BA | The FMC |
 | TFDi MD-11 | BA, plus *"N1 70 percent"* | The FMS |
 | Fenix A320 | BA (the Fenix also calls *"V1"* itself, so you hear it twice) | The MCDU PERF TAKE OFF page |
@@ -234,7 +235,7 @@ The TFDi MD-11 has the first three pairs (heading, altitude and speed); its vert
 
 ### Autopilot shortcut keys (FlyByWire Airbuses) {#autopilot-windows-toggles}
 
-On the FlyByWire A320, Headwind A330 and FlyByWire A380, these keys work the engage buttons directly:
+On the FlyByWire A320, Headwind A330, FlyByWire A380 and iniBuilds A350, these keys work the engage buttons directly:
 
 <div class="table-wrap" markdown="1">
 
@@ -366,7 +367,7 @@ To keep things quiet in the cruise, BA never repeats the thousand it just called
 
 Nothing is called on the ground, and nothing is called when you first connect in mid-air: BA notes where you are silently and calls the next crossing.
 
-On the FlyByWire A380 with the metric altitude (MTRS) button on, the calls are every 300 metres instead and say the unit: *"3000 meters"*.
+On the FlyByWire A380 with the metric altitude (MTRS) button on, and on the iniBuilds A350 with METRIC ALT on, the calls are every 300 metres instead and say the unit: *"3000 meters"*.
 
 Turn these calls on or off with **Announce 1,000-foot altitude crossings** on the **Announcements** tab of Settings. They are on by default.
 
@@ -398,13 +399,13 @@ On every aircraft, press Output Shift+T to turn trim announcements on or off; yo
 
 ### Thrust lever detents {#flying-thrust-detents}
 
-On the FlyByWire A380, BA tells you when the thrust levers reach a detent: Idle, Climb, Flex MCT, TOGA or Reverse. This is a background announcement: if you pick a detent from the Thrust Levers control yourself, your screen reader reads your choice and BA then tells you once the levers actually arrive. On the FlyByWire A320 and Headwind A330, picking a detent from the Thrust Levers control is not repeated back, because your screen reader has already read it.
+On the FlyByWire A380 and the iniBuilds A350, BA tells you when the thrust levers reach a detent: Idle, Climb, Flex MCT, TOGA or Reverse. This is a background announcement: if you pick a detent from the Thrust Levers control yourself, your screen reader reads your choice and BA then tells you once the levers actually arrive. On the FlyByWire A320 and Headwind A330, picking a detent from the Thrust Levers control is not repeated back, because your screen reader has already read it.
 
 ### Cockpit warnings: ECAM and EICAS {#flying-ecam}
 
 Airliners show warnings, cautions and status messages on a central display: ECAM on Airbus aircraft, EICAS on Boeings. BA reads these to you so you know when something needs attention.
 
-On the FlyByWire A320, Headwind A330 and FlyByWire A380, BA speaks ECAM warnings, cautions and memos as they appear. Press Output Ctrl+E to turn these call-outs off or on; you hear *"E W D monitoring disabled"* or *"E W D monitoring enabled"*. Master Warning and Master Caution are always announced. To read the whole display at any time, press Output Alt+E to open the E/WD window.
+On the FlyByWire A320, Headwind A330, FlyByWire A380 and iniBuilds A350, BA speaks ECAM warnings, cautions and memos as they appear. Press Output Ctrl+E to turn these call-outs off or on; you hear *"E W D monitoring disabled"* or *"E W D monitoring enabled"*. Master Warning and Master Caution are always announced. To read the whole display at any time, press Output Alt+E to open the E/WD window.
 
 Other aircraft work in a similar way: the PMDG aircraft announce Master Warning and Master Caution and their annunciator lights, and the HorizonSim 787 announces Master Warning and Master Caution and lists the full EICAS alerts in its Alt+E window. Each aircraft's guide in Part 8 gives the details, and every one of these announcements can be muted in the Monitor Manager.
 

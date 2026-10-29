@@ -245,10 +245,11 @@ Top of descent is spoken like *"145 miles to top of descent: 00:16:58"*. Once yo
 The Shift+number keys read the speeds your aircraft cares about. What they mean depends on the aircraft:
 
 - **Airbus (FlyByWire A320, A330, A380):** Shift+1 Green Dot, Shift+2 S speed, Shift+3 F speed, Shift+4 VLS, Shift+5 VS (stall), Shift+6 VFE Next.
+- **iniBuilds A350:** the same keys, except that Shift+5 reads the alpha protection and alpha max speeds, because the A350 shows no stall speed. Green Dot, S and F are read off its speed tape.
 - **PMDG 737, PMDG 777 and iFly 737 MAX:** the flap manoeuvring speeds, from flaps up on Shift+1 upward. The exact flap settings differ between types.
 - **MD-11:** Shift+1 slat retraction speed, Shift+2 flap retraction speed.
 
-Output Ctrl+0 reads the approach capability (the CAT rating for an autoland) on the FlyByWire A320neo, Headwind A330-900neo and FlyByWire A380X; see [Approach capability](approach-and-landing.md#land-ctrl-0).
+Output Ctrl+0 reads the approach capability (the CAT rating for an autoland) on the FlyByWire A320neo, Headwind A330-900neo, FlyByWire A380X and iniBuilds A350; see [Approach capability](approach-and-landing.md#land-ctrl-0).
 
 ### Landing and trim {#landing-and-trim}
 

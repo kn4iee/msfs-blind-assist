@@ -10,7 +10,7 @@ Chapter 2 of 4 in [Appendices](index.md#appendices) of the MSFS Blind Assist use
 
 - **ActiveSky** — a third-party weather add-on for MSFS. BA can read richer weather from it if you turn on **Enable ActiveSky integration** on the Weather tab. See [ActiveSky](weather.md#activesky).
 - **AGL (above ground level)** — height above the ground directly below you. Output Q reads it. Compare MSL.
-- **Airbus** — the European aircraft maker. Its airliners in BA include the A320, A330 and A380.
+- **Airbus** — the European aircraft maker. Its airliners in BA include the A320, A330, A350 and A380.
 - **AIRMET** — a weather warning for lighter aircraft about hazards such as moderate turbulence or icing. Compare SIGMET.
 - **Apron** — the paved area where aircraft park, load and refuel. Also called the ramp.
 - **ATC (air traffic control)** — the controllers who give you clearances on the ground and in the air.
@@ -49,7 +49,7 @@ Chapter 2 of 4 in [Appendices](index.md#appendices) of the MSFS Blind Assist use
 - **LOC (localizer)** — the part of an ILS that guides you left and right onto the runway centreline.
 - **Managed mode** — Airbus term for letting the flight computer control speed, route or altitude profile. Compare selected mode.
 - **Mach** — speed as a fraction of the speed of sound, used at high altitude: Mach 0.78.
-- **MCDU (Multipurpose Control and Display Unit)** — Airbus's keyboard and screen for programming the flight computer. Input Shift+M opens it on most Airbus aircraft. The A380 replaces it with the MFD.
+- **MCDU (Multipurpose Control and Display Unit)** — Airbus's keyboard and screen for programming the flight computer. Input Shift+M opens it on most Airbus aircraft. The A350 and A380 replace it with the MFD.
 - **MCP (Mode Control Panel)** — the Boeing autopilot panel on the glareshield, with a button for each mode. Compare FCU.
 - **METAR** — a routine weather report for an airport, issued about every half hour or hour. Output Shift+M opens the METAR report.
 - **MobiFlight WASM module** — a free add-on you put in your MSFS Community folder. BA needs it to operate controls on several aircraft, including the FlyByWire and Fenix Airbuses.

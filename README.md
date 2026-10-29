@@ -42,7 +42,7 @@ Windows 10 or 11 (64-bit) with the **.NET 10 Desktop Runtime (x64)**; see [Downl
 
 ### MobiFlight WASM module
 
-To operate cockpit switches and knobs on the **FlyByWire (A32NX and A380X)** and **Fenix A320** aircraft, MSFS Blind Assist needs the free **MobiFlight WASM module** installed. The app uses it to reliably set the aircraft's internal variables; without it, many controls on these aircraft will not respond (reading and announcements still work). PMDG and HorizonSim aircraft do not require it.
+To operate cockpit switches and knobs on the **FlyByWire (A32NX and A380X)**, **Fenix A320** and **iniBuilds A350** aircraft, MSFS Blind Assist needs the free **MobiFlight WASM module** installed. The app uses it to reliably set the aircraft's internal variables; without it, many controls on these aircraft will not respond (reading and announcements still work). PMDG and HorizonSim aircraft do not require it.
 
 Download it from the [MobiFlight WASM module download page](https://mobiflight.com/download/thank-you), then place the module in your MSFS Community folder (the same place your add-on aircraft live) and restart the simulator.
 
@@ -137,6 +137,18 @@ Full accessibility support for the FlyByWire A380X — the free, high-fidelity A
 - Honours the A380's own units in MSFSBA's read-outs: **metric altitude** (FCU MTRS — every altitude reads, and the FCU altitude input is entered, in metres) and **kg/lb weight**; the clock chronometer and elapsed-time counter; pitch/rudder trim; fuel pumps; and the audio control panel.
 - All our shared features are integrated as well, including taxi guidance, the landing exit planner, route viewer, gate/runway teleport, METAR report, location info and text-based map.
 - A complete screen-reader-first manual ships in the `Guides` folder (`Guides/a380-manual.html`).
+
+### iniBuilds Airbus A350
+
+Full accessibility support for the iniBuilds A350 (A350-900, -900 ULR and -1000; built on version 1.2.7). Every A350 display is drawn by the aircraft's own code with no text to ask for, so MSFS Blind Assist reads them by running that same code on a read-only copy of the aircraft's memory: **nothing is written into the simulator, and no add-on or Developer Mode is required** (operating the controls needs the MobiFlight WASM module, above). The first start after an A350 update says "A350 displays getting ready" while it prepares them (about 15 seconds).
+
+- Every cockpit control (all 696) in panels named and ordered as on the A380, each pilot's controls on panels of their own: overhead, glareshield (the FCU and both EFIS control panels), instrument panel, pedestal (engines, thrust levers, the three RMPs, flaps, speed brake, trims, ECAM control panel, weather radar, transponder) and the cockpit around you. Each button shows its light or state; switches and lights speak when they change on their own.
+- Every display read as text with its colours: the **E/WD** (warnings, cautions, memos and procedures, spoken as they appear), every **SD** page, both **PFDs** (with FMA call-outs) and **NDs**, the FCU, the RMPs, the standby displays and the BAT display.
+- The **MFD**, driven through the KCCU, as a list you arrow through and operate with Enter: flight planning, performance, the checklists, radio navigation and ATC COM. FMS messages are spoken even with the window closed.
+- The **OIS** (the A350's EFB) on both sides as an accessible web document: T.O and LDG performance with spoken results, loadsheet and refuel, ground services and doors, company messages, maintenance, failures and options; streamer mode hides your IDs and keys in MSFS Blind Assist too.
+- The A380's FCU windows (speed, heading, altitude, V/S, autopilot, altimeter) and an RMP window (type a frequency, load it as standby, swap it in; squawk).
+- Automatic announcements: the FMA, V1/Rotate/V2 and the V-speeds as entered, the FCU altitude window and baros, IRS aligned, lever positions, Master Warning/Caution; METRIC ALT honoured in the altitude read-outs and call-outs.
+- All our shared features are integrated as well, including taxi guidance, the landing exit planner, route viewer, gate/runway teleport, METAR report, location info and text-based map.
 
 ## VATSIM (vPilot)
 

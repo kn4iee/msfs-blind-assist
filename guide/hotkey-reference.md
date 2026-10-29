@@ -17,6 +17,7 @@ Chapter 4 of 4 in [Appendices](index.md#appendices) of the MSFS Blind Assist use
 - [Fenix A320 CEO](#hk-fenix)
 - [FlyByWire A380X](#hk-a380)
 - [Headwind A330-900neo](#hk-a330)
+- [iniBuilds A350](#hk-a350)
 - [PMDG 737](#hk-pmdg737)
 - [PMDG 777](#hk-pmdg777)
 - [HorizonSim 787-9](#hk-hs787)
@@ -186,10 +187,10 @@ Each opens a window where you type a value, with the related mode buttons. The b
 
 ### Keys inside shared windows {#keys-inside-shared-windows}
 
-- **Surroundings window**, Frequencies list: **Enter** tunes the frequency into COM 1 standby, **Shift+Enter** straight into COM 1 active. Not on the A380, which tunes through its RMP window.
+- **Surroundings window**, Frequencies list: **Enter** tunes the frequency into COM 1 standby, **Shift+Enter** straight into COM 1 active. Not on the A380 and the A350, which tune through their RMP windows.
 - **Access GSX window**: **F5** opens the GSX menu, **1** to **9**, **0** and **A** to **E** choose a menu option, **C** opens GSX Settings, **Escape** hides the window.
 - **SayIntentions flight information window**: arrow keys read line by line, **Escape** closes.
-- **Every MCDU, CDU and FMC window except the A380's MFD**: **Ctrl+1** to **Ctrl+6** are the left line select keys and **Alt+1** to **Alt+6** the right ones. With **Alternate line select keys** ticked in **File**, **FMC Settings**, they become **F1** to **F6** and **F7** to **F12**. **Alt+S** jumps to the scratchpad box, **Enter** sends what you typed, and **Alt+Home** returns to the screen. The A380's MFD window has no line select keys; see its section.
+- **Every MCDU, CDU and FMC window except the A380's and the A350's MFDs**: **Ctrl+1** to **Ctrl+6** are the left line select keys and **Alt+1** to **Alt+6** the right ones. With **Alternate line select keys** ticked in **File**, **FMC Settings**, they become **F1** to **F6** and **F7** to **F12**. **Alt+S** jumps to the scratchpad box, **Enter** sends what you typed, and **Alt+Home** returns to the screen. The A380's and the A350's MFD windows have no line select keys; see their sections.
 
 ### Hand Fly and Visual Guidance quick keys {#hand-fly-and-visual-guidance-quick-keys}
 
@@ -375,6 +376,60 @@ The Ctrl+A window adds a metric toggle, and Ctrl+P a Flight Director button.
 Full explanations: [Headwind A330-900neo](airbus-aircraft.md#airbus-a330).
 
 The keys are exactly those of the [FlyByWire A320neo](#hk-a32nx), including the MCDU, DCDU and flyPad windows. The only difference you will hear is **Output B**, which reads the simulator's own altimeter on this aircraft.
+
+## iniBuilds A350 {#hk-a350}
+
+Full explanations: [iniBuilds A350](airbus-aircraft.md#airbus-a350).
+
+### Output keys {#hk-a350-output}
+
+- **Output Shift+H**, **Shift+S**, **Shift+A**, **Shift+V** — Each FCU window as the FCU shows it.
+- **Output Shift+1** to **Shift+3** — Green Dot, S and F speed, read off the captain's speed tape.
+- **Output Shift+4** — VLS. **Output Shift+5** — The alpha protection and alpha max speeds (the A350 shows no stall speed). **Output Shift+6** — VFE Next.
+- **Output D** — Distance to destination along the route, with the time at your ground speed. **Output Shift+D** — Distance to the top of descent.
+- **Output Ctrl+W** — The ND's TO waypoint.
+- **Output Ctrl+0** — Approach capability, as the flight mode annunciator shows it.
+- **Output X** — Squawk and transponder mode, as the captain's RMP shows them.
+- **Output Ctrl+E** — Turn the automatic E/WD callouts on or off.
+- **Output Alt+E** — Open the E/WD window.
+- **Output Alt+P**, **Alt+N**, **Alt+S**, **Alt+I** — Read the captain's PFD, the captain's ND, the SD page and the standby flight display.
+- **Output Ctrl+Shift+C** — Open the MFD window on C/L MENU, the A350's checklists.
+
+Q and A read in metres when the FCU's METRIC ALT button is on.
+
+### Input keys {#hk-a350-input}
+
+- **Input Shift+A**, **Ctrl+O**, **Shift+P**, **Ctrl+J**, **Ctrl+L** — Autopilot 1, autopilot 2, approach, autothrust and localiser, each the FCU's own pushbutton.
+- **Input Shift+1** to **Shift+4** and **Ctrl+1** to **Ctrl+4** — Push and pull the heading, altitude, speed and vertical speed knobs.
+- **Input Ctrl+S**, **Ctrl+H**, **Ctrl+A**, **Ctrl+V**, **Ctrl+P**, **Ctrl+B** — The speed, heading, altitude, vertical speed, autopilot and altimeter windows.
+- **Input Shift+M** — Open the MFD window. **Input Ctrl+N** — The MFD window on RAD NAV. **Input Ctrl+Shift+D** — The MFD window on ATC COM.
+- **Input Shift+T** — The captain's OIS. **Input Ctrl+Shift+T** — The first officer's OIS.
+- **Input Ctrl+Shift+R** — Open the RMP window.
+
+### MFD window (Input Shift+M) {#hk-a350-mfd}
+
+- **Up**, **Down** — Move through the lines.
+- **Enter** — Act on the line: a field takes what you typed in the scratchpad box, anything else is clicked.
+- **Tab** — To the scratchpad box.
+- **Backspace** (in the list) — CLR. **Page Up**, **Page Down** — Scroll.
+- **F5** — Refresh. **Escape** — Close.
+- **Alt+I** INIT, **Alt+F** F-PLN, **Alt+E** PERF, **Alt+L** FUEL, **Alt+R** RAD NAV, **Alt+P** SEC, **Alt+D** DIR, **Alt+A** ATC, **Alt+V** SURV, **Alt+C** CLR, **Alt+T** DEST, **Alt+G** PROG, **Alt+M** MAILBOX, **Alt+K** C/L MENU, **Alt+N** NOTEPAD, **Alt+O** DATA, **Alt+U** MENU, **Alt+B** AIRPORT, **Alt+Y** REF, **Alt+X** ESC.
+
+### RMP window (Input Ctrl+Shift+R) {#hk-a350-rmp}
+
+- **Ctrl+1** to **Ctrl+3** — Pick the radio line.
+- Digits and the point — Typed into the RMP's keypad as you type; the leading 1 and the point are optional. **Backspace** deletes the last digit and says what is left.
+- **Enter** — Load the frequency as the line's standby and read the line back.
+- **Alt+1** to **Alt+3** — Swap that line's standby in and read it back.
+- **Alt+T**, then four digits from 0 to 7 — Set the squawk (**Escape** cancels).
+- **Alt+V**, **Alt+H**, **Alt+L**, **Alt+N**, **Alt+U** — The VHF, HF, TEL, NAV and MENU page keys.
+- **F5** — Refresh. **Escape** — Close.
+
+### General keys that differ or don't work here {#hk-a350-general}
+
+- **Output Shift+C** (First Officer) is not on the A350 yet; you hear *"No checklist for this aircraft."*
+- **Output Ctrl+Shift+B** (the A380's airport map and BTV window) is not on the A350.
+- In the Surroundings window, Enter and Shift+Enter do not tune COM 1; use the RMP window.
 
 ## PMDG 737 {#hk-pmdg737}
 

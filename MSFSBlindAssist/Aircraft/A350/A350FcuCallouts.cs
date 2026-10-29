@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.Aircraft.A350;
 
 /// <summary>
 /// What the FCU and EFIS windows say when they change (review 2026-10-29, parity task 9): the altitude window and both baro
-/// windows speak on their own, as the A300 does for its altitude window ([A300-14]: the autopilot writes the others) and the
+/// windows speak on their own, as the iniBuilds A300 does for its altitude window (its own pull request's rule: the autopilot writes the others) and the
 /// A380 for its baros, in the A380's words. When each is said (staged to a batch end, a load's settle, the echo of MSFSBA's
 /// own typed value) is the shared FCU call-out's (<see cref="FcuValueAnnouncer"/>). Pure; numbers invariant ([VAR-5]).
 /// </summary>

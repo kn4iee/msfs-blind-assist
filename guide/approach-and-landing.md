@@ -102,7 +102,7 @@ Separately from this report, BA says *"Glideslope alive"* on its own when your N
 
 ### Approach capability (Output Ctrl+0) {#land-ctrl-0}
 
-On the FlyByWire A320neo, the Headwind A330-900neo and the FlyByWire A380X, Output Ctrl+0 tells you what kind of approach the autoflight system is currently able to fly, the same information the top of the aircraft's flight mode annunciator shows. You hear, for example, *"Approach capability LAND 3 dual"*, *"Approach capability LAND 3 single"*, *"Approach capability LAND 2"* or *"Approach capability none computed"*. These aircraft also announce a change on their own while you are in flight, for example after a system failure lowers the capability.
+On the FlyByWire A320neo, the Headwind A330-900neo, the FlyByWire A380X and the iniBuilds A350, Output Ctrl+0 tells you what kind of approach the autoflight system is currently able to fly, the same information the top of the aircraft's flight mode annunciator shows. You hear, for example, *"Approach capability LAND 3 dual"*, *"Approach capability LAND 3 single"*, *"Approach capability LAND 2"* or *"Approach capability none computed"*. These aircraft also announce a change on their own while you are in flight, for example after a system failure lowers the capability.
 
 On the other aircraft this key does nothing at the moment.
 
