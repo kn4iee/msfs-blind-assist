@@ -270,13 +270,22 @@ public class A350LeverAnnouncementTests
             ReRead = (_, _) => { },
             Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
             IsMuted = key => _muted.Contains(key),
+            Clock = () => _now,
         };
         _def.Attach(new SimConnectManager(IntPtr.Zero));
     }
 
     private readonly Dictionary<string, double> _cache = new(StringComparer.Ordinal);
+    private long _now;
 
     private bool Deliver(string key, double value) => _def.ProcessSimVarUpdate(key, value, _speech);
+
+    /// <summary>A batch end once a lever's gather is over.</summary>
+    private void Later()
+    {
+        _now += A350LeverSpeech.GatherMs;
+        _def.OnContinuousBatchDelivered(0);
+    }
 
     private void Baseline()
     {
@@ -291,7 +300,11 @@ public class A350LeverAnnouncementTests
         Assert.True(Deliver(A350LeverSpeech.Lever1, 25));
         Assert.True(Deliver(A350LeverSpeech.Lever2, 25));
         Assert.True(Deliver(A350LeverSpeech.AllLevers, 25));   // the All row's own delivery: the levers spoke
-        Assert.Equal(new[] { "Thrust lever 1 Climb", "All thrust levers Climb" }, _speech.All);
+        Later();
+        Assert.Equal(new[] { "All thrust levers Climb" }, _speech.All);   // never lever 1's lone "Thrust lever 1 Climb" first
+        Deliver(A350LeverSpeech.Lever2, 45);
+        Later();
+        Assert.Equal(new[] { "All thrust levers Climb", "Thrust lever 2 TOGA" }, _speech.All);
     }
 
     [Fact]
@@ -301,7 +314,13 @@ public class A350LeverAnnouncementTests
         Baseline();
         Deliver(A350LeverSpeech.Lever1, 25);
         Deliver(A350LeverSpeech.Lever2, 25);
-        Assert.Equal(new[] { "Thrust lever 1 Climb" }, _speech.All);
+        Later();
+        Assert.Empty(_speech.All);
+        _muted.Add(A350LeverSpeech.Lever2);
+        Deliver(A350LeverSpeech.Lever2, 45);
+        Deliver(A350LeverSpeech.Lever1, 0);
+        Later();
+        Assert.Equal(new[] { "Thrust lever 1 Idle" }, _speech.All);
         Assert.True(_def.IsMuteWrapExempt(A350LeverSpeech.Lever1));   // its delivery may speak the All row's sentence
         Assert.True(_def.IsMuteWrapExempt(A350LeverSpeech.Lever2));
     }
@@ -328,6 +347,7 @@ public class A350LeverAnnouncementTests
         for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
             _def.OnContinuousBatchDelivered(i);
         Deliver(A350LeverSpeech.Lever1, 0);
+        Later();
         Deliver("A350_FCTL_SPD_BRK_LEVER", 1);
         Assert.Equal(new[] { "Thrust lever 1 Idle", "Spoilers full" }, _speech.All);
     }

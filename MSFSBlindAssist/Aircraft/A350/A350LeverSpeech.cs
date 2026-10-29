@@ -6,7 +6,9 @@ namespace MSFSBlindAssist.Aircraft.A350;
 /// What the A350's levers say as they move, in the A380's words (<c>FlyByWireA380Definition</c>'s TLA detents and
 /// speed brake bands): a thrust lever speaks its detent once it reaches one, "All thrust levers Climb" while both sit at
 /// it, "Thrust lever 2 TOGA" when they are split, nothing mid-travel; the speed brake handle in tenths. The first
-/// values are a silent baseline. Each sentence names the Ctrl+M row it belongs to. Pure.
+/// values are a silent baseline. A lever's own sentence waits <see cref="GatherMs"/> for the other lever, said at a batch
+/// end (<see cref="Flush"/>): moved together they arrive a delivery apart. Each sentence names the Ctrl+M row it belongs
+/// to. Pure.
 /// </summary>
 public sealed class A350LeverSpeech
 {
@@ -14,10 +16,18 @@ public sealed class A350LeverSpeech
     public const string Lever2 = "A350_ENGINE_THROTTLE_2";
     public const string AllLevers = "A350_THRUST_LEVERS_ALL";
 
+    /// <summary>How long a lever's own sentence waits for the other lever (live 2026-10-28: MSFSBA moving both to FLX
+    /// spoke "Thrust lever 1 Flex M C T", then "All thrust levers Flex M C T").</summary>
+    public const int GatherMs = 400;
+
     private readonly double[] _tla = { double.NaN, double.NaN };
     private readonly string?[] _lastDetent = new string?[2];
     private string? _lastAll;
     private int _lastBand = -1;
+
+    /// <summary>Each lever's sentence waiting for the other lever: its detent, when it arrived, and whether its delivery
+    /// was inside MainForm's echo window (the pilot's own pick, which the screen reader said: dropped, never said).</summary>
+    private readonly (string Detent, long At, bool Suppressed)?[] _held = new (string, long, bool)?[2];
 
     /// <summary>The detent a TLA sits at (the A350's: reverse -20 to 0, reverse idle -6, CLB 25, FLX/MCT 35, TOGA 45),
     /// or null between detents. "Flex M C T" so a speech engine spells it.</summary>
@@ -29,8 +39,9 @@ public sealed class A350LeverSpeech
         Math.Abs(tla + 6) < 2.5 ? "Reverse idle" :
         tla <= -17.5 ? "Maximum reverse" : null;
 
-    /// <summary>A lever's new TLA: the row that speaks and its sentence, or null.</summary>
-    public (string Row, string Text)? Thrust(int lever, double tla)
+    /// <summary>A lever's new TLA: "All thrust levers" now when both sit at its detent, else null, its own sentence held
+    /// for <see cref="Flush"/>. <paramref name="suppressed"/>: the delivery is inside MainForm's echo window.</summary>
+    public (string Row, string Text)? Thrust(int lever, double tla, long now, bool suppressed = false)
     {
         int i = lever - 1;
         bool baseline = double.IsNaN(_tla[0]) || double.IsNaN(_tla[1]);
@@ -44,20 +55,38 @@ public sealed class A350LeverSpeech
             return null;
         }
         if (detent == null)
-            return null;   // mid-travel
+            return null;   // mid-travel: a held sentence waits for where the lever stops
         if (Detent(_tla[1 - i]) == detent)
         {
+            _held[0] = _held[1] = null;
             _lastDetent[0] = _lastDetent[1] = detent;
             if (detent == _lastAll)
                 return null;
             _lastAll = detent;
             return (AllLevers, $"All thrust levers {detent}");
         }
-        if (detent == _lastDetent[i])
-            return null;
-        _lastDetent[i] = detent;
-        _lastAll = null;
-        return (i == 0 ? Lever1 : Lever2, $"Thrust lever {lever} {detent}");
+        _held[i] = detent == _lastDetent[i] ? null : (detent, now, suppressed);
+        return null;
+    }
+
+    /// <summary>The lone levers' sentences whose gather is over, each under its lever's row; a lever that moved on since
+    /// says nothing (where it stops holds its own).</summary>
+    public IReadOnlyList<(string Row, string Text)> Flush(long now)
+    {
+        List<(string Row, string Text)>? said = null;
+        for (int i = 0; i < 2; i++)
+        {
+            if (_held[i] is not { } held || now - held.At < GatherMs)
+                continue;
+            _held[i] = null;
+            if (Detent(_tla[i]) != held.Detent)
+                continue;
+            _lastDetent[i] = held.Detent;
+            _lastAll = null;
+            if (!held.Suppressed)
+                (said ??= new()).Add((i == 0 ? Lever1 : Lever2, $"Thrust lever {i + 1} {held.Detent}"));
+        }
+        return said ?? (IReadOnlyList<(string Row, string Text)>)Array.Empty<(string Row, string Text)>();
     }
 
     /// <summary>The speed brake handle (0 to 1) in tenths: "Spoilers retracted", "Spoilers 40 percent",
@@ -81,7 +110,7 @@ public sealed class A350LeverSpeech
     public void SeedThrust(int lever, double tla)
     {
         if (double.IsNaN(_tla[lever - 1]))
-            Thrust(lever, tla);
+            Thrust(lever, tla, 0);
     }
 
     /// <summary>The speed brake's baseline from the cache where none is set; silent.</summary>
@@ -96,6 +125,7 @@ public sealed class A350LeverSpeech
     {
         _tla[0] = _tla[1] = double.NaN;
         _lastDetent[0] = _lastDetent[1] = null;
+        _held[0] = _held[1] = null;
         _lastAll = null;
         _lastBand = -1;
     }

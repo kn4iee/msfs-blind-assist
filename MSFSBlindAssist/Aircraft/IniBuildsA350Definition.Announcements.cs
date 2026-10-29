@@ -67,14 +67,16 @@ public partial class IniBuildsA350Definition
 
     /// <summary>The thrust levers and the speed brake speak as the A380's do (<see cref="A350LeverSpeech"/>). A thrust
     /// lever's delivery may speak the "All thrust levers" row's sentence, so its rows are exempt from MainForm's mute
-    /// wrap and each sentence checks its own row; the All row's own delivery says nothing (the levers spoke).</summary>
+    /// wrap and each sentence checks its own row; the All row's own delivery says nothing (the levers spoke). A lone
+    /// lever's sentence waits for the other lever and is said at a batch end.</summary>
     private bool HandleLeverDelivery(string key, double value, ScreenReaderAnnouncer announcer)
     {
         switch (key)
         {
             case A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2:
                 NotePickReached(key, value);
-                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value) is { } thrust
+                _leverAnnouncer = announcer;
+                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value, Clock(), announcer.Suppressed) is { } thrust
                     && !announcer.Suppressed && !IsMuted(thrust.Row) && !_disposed)
                     announcer.Announce(thrust.Text);
                 return true;
@@ -93,6 +95,7 @@ public partial class IniBuildsA350Definition
 
     private const string SpeedBrakeKey = "A350_FCTL_SPD_BRK_LEVER";
     private readonly A350LeverSpeech _leverSpeech = new();
+    private ScreenReaderAnnouncer? _leverAnnouncer;
 
     /// <summary>A pressed or picked control's lights are its label's for <see cref="PressedLampMs"/>.</summary>
     private void NoteOwnLamps(A350Control control) => _ownLampsUntil[control.Id] = Clock() + PressedLampMs;
@@ -148,6 +151,9 @@ public partial class IniBuildsA350Definition
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
+        foreach (var (row, text) in _leverSpeech.Flush(Clock()))
+            if (!IsMuted(row) && !_disposed)
+                _leverAnnouncer?.Announce(text);
     }
 
     /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; and
