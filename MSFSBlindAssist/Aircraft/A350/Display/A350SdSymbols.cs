@@ -224,6 +224,9 @@ public static class A350SdSymbols
     internal static SdSprite? SpriteFor(int page, float x, float y) =>
         SpriteAt(x, y) ?? (page == WheelPage ? GearDoorAt(x, y) : null);
 
+    /// <summary>The page and symbol of each unknown sprite logged so far.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int Page, string Label), byte> UnknownLogged = new();
+
     public static IReadOnlyList<string> Read(IReadOnlyList<DrawnShape>? shapes, int page)
     {
         var o = new List<string>();
@@ -243,7 +246,14 @@ public static class A350SdSymbols
             }
             var (sx, sy) = A350ShapeReader.SpriteCentre(shape);
             var sprite = SpriteFor(page, sx, sy);
-            if (sprite == null) { MSFSBlindAssist.Utils.Logging.Log.Debug("A350Display", $"SD {page}: unknown sprite {sx:0},{sy:0} at {sym.Label}"); continue; }
+            if (sprite == null)
+            {
+                // Once per page and symbol: the ECAM Control Panel's status display and the Alt+E window read the SD every
+                // second (cleanup review 2026-10-30: a debug.log line a second for each).
+                if (UnknownLogged.TryAdd((page, sym.Label), 0))
+                    MSFSBlindAssist.Utils.Logging.Log.Debug("A350Display", $"SD {page}: unknown sprite {sx:0},{sy:0} at {sym.Label}");
+                continue;
+            }
             var tint = A350Rgba.NameOf(shape.Colour);
             var colour = tint == "white" ? sprite.Colour : tint;
             string? word = sprite.Kind switch

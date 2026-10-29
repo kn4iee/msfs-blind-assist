@@ -294,4 +294,26 @@ public class A350SdSymbolsTests
         Assert.Empty(A350SdSymbols.Read(null, 2));
         Assert.Empty(A350SdSymbols.Read(Array.Empty<DrawnShape>(), 99));
     }
+    // Cleanup review 2026-10-30: a symbol the SD has no sprite for was logged on every read, and the ECAM Control Panel's
+    // status display and the Alt+E window read the SD every second: a debug.log line a second per unknown symbol. Each is
+    // logged once per page and symbol.
+    [Fact]
+    public void An_unknown_symbol_is_logged_once_per_page_and_symbol()
+    {
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var previous = MSFSBlindAssist.Utils.Logging.Log.Redirect;
+        MSFSBlindAssist.Utils.Logging.Log.Redirect = (_, message) => { if (message.Contains("unknown sprite", StringComparison.Ordinal)) logged.Enqueue(message); };
+        try
+        {
+            var ctrs = Directory.GetFiles(A350Fixtures.Dir, "ctr_*.json").Select(f => A350Fixtures.Capture(Path.GetFileName(f))).ToList();
+            for (int pass = 0; pass < 2; pass++)
+                foreach (var cap in ctrs)
+                    for (int page = 1; page <= 16; page++)
+                        A350SdSymbols.Read(cap.Shapes, page);
+        }
+        finally { MSFSBlindAssist.Utils.Logging.Log.Redirect = previous; }
+        Assert.NotEmpty(logged);   // the fixtures hold symbols with no sprite (else this test proves nothing)
+        var keys = logged.Select(m => System.Text.RegularExpressions.Regex.Replace(m, @"unknown sprite [-0-9.,]+ ", "unknown sprite ")).ToList();
+        Assert.Equal(keys.Distinct().Count(), keys.Count);
+    }
 }
