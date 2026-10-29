@@ -212,3 +212,73 @@ test('without a key, "(now …)" and an after-colon tail are part of the key aga
   assert.notStrictEqual(s.buttonByLabel('Runway next'), step, 'an unkeyed "(now …)" change was patched in place');
   assert.notStrictEqual(s.buttonByLabel('GPU'), gpu, 'an unkeyed after-colon change was patched in place');
 });
+
+// A choice as BuildRenderJson posts it (the A350 OIS turns radio groups into these).
+const choice = (idx, text, value, options, extra) => Object.assign({ idx, kind: '', controlType: 'select', text, value, options, clickable: true, level: 0, live: '', disabled: false }, extra || {});
+const selectOf = (s, label) => [...s.window.document.querySelectorAll('#list select')].find((e) => e.getAttribute('aria-label').indexOf(label) === 0);
+const key = (s, el, k) => el.dispatchEvent(new s.window.KeyboardEvent('keydown', { key: k, bubbles: true }));
+function arrowTo(s, el, value) { key(s, el, 'ArrowDown'); el.value = value; el.dispatchEvent(new s.window.Event('change', { bubbles: true })); }
+
+// Review 2026-10-29 (OIS I1): in WebView2 the arrows on a closed select change its value and fire 'change' at each step,
+// and the shell committed every change, so a pilot arrowing just to hear the options pressed each one on the OIS: the
+// NAVDATA source, the CPDLC source, the throttle calibration, the failures switch. A choice the agent flags
+// commit: 'enter' is applied on Enter (or a mouse pick) only; left without Enter it shows its applied value again.
+test('a choice flagged commit enter is applied on Enter, never by the arrows', (t) => {
+  const s = loadShell(t);
+  s.render('Options', [choice(7, 'NAVDATA', 'NAVIGRAPH', ['NAVIGRAPH', 'MSFS', 'DEFAULT'], { commit: 'enter' })]);
+  const sel = selectOf(s, 'NAVDATA');
+  sel.focus();
+  arrowTo(s, sel, 'MSFS');
+  arrowTo(s, sel, 'DEFAULT');
+  assert.deepStrictEqual(s.posted, [], 'an arrow step was applied');
+  key(s, sel, 'Enter');
+  assert.deepStrictEqual(s.posted, [JSON.stringify({ type: 'set', idx: '7', value: 'DEFAULT', controlType: 'select' })]);
+});
+
+test('a choice flagged commit enter left without Enter shows its applied value again', (t) => {
+  const s = loadShell(t);
+  s.render('Options', [choice(7, 'NAVDATA', 'NAVIGRAPH', ['NAVIGRAPH', 'MSFS', 'DEFAULT'], { commit: 'enter' })]);
+  const sel = selectOf(s, 'NAVDATA');
+  sel.focus();
+  arrowTo(s, sel, 'MSFS');
+  sel.blur();
+  assert.strictEqual(sel.value, 'NAVIGRAPH');
+  assert.deepStrictEqual(s.posted, []);
+});
+
+test('a choice flagged commit enter takes a mouse pick at once and says how it applies', (t) => {
+  const s = loadShell(t);
+  s.render('Options', [choice(7, 'NAVDATA', 'NAVIGRAPH', ['NAVIGRAPH', 'MSFS'], { commit: 'enter' })]);
+  const sel = selectOf(s, 'NAVDATA');
+  assert.strictEqual(sel.getAttribute('aria-label'), 'NAVDATA, Enter applies');
+  sel.value = 'MSFS';
+  sel.dispatchEvent(new s.window.Event('change', { bubbles: true }));   // no key before it: a click
+  assert.deepStrictEqual(s.posted, [JSON.stringify({ type: 'set', idx: '7', value: 'MSFS', controlType: 'select' })]);
+});
+
+// Every other EFB's choices are applied as they change, as before.
+test('a choice without the flag is applied as it changes', (t) => {
+  const s = loadShell(t);
+  s.render('Settings', [choice(3, 'Weight unit', 'KG', ['KG', 'LBS'])]);
+  const sel = selectOf(s, 'Weight unit');
+  sel.focus();
+  arrowTo(s, sel, 'LBS');
+  assert.deepStrictEqual(s.posted, [JSON.stringify({ type: 'set', idx: '3', value: 'LBS', controlType: 'select' })]);
+});
+
+// Review 2026-10-29 (OIS I1): a group with nothing picked (CABIN LIGHTING) arrives with the value '', and the select showed
+// its first option as if it were picked; picking that option then changed nothing. It shows "(none)", which cannot be
+// picked, and stays so as the page refreshes.
+test('a choice whose value is none of its options shows (none), not its first option', (t) => {
+  const s = loadShell(t);
+  s.render('Options', [choice(9, 'CABIN LIGHTING', '', ['FULL', 'DIM', 'NIGHT'])]);
+  const sel = selectOf(s, 'CABIN LIGHTING');
+  assert.strictEqual(sel.options[sel.selectedIndex].textContent, '(none)');
+  assert.ok(sel.options[0].disabled, 'the placeholder can be picked');
+  s.render('Options', [choice(9, 'CABIN LIGHTING', '', ['FULL', 'DIM', 'NIGHT']), btn(10, 'BACK')]);
+  assert.strictEqual(selectOf(s, 'CABIN LIGHTING').options[selectOf(s, 'CABIN LIGHTING').selectedIndex].textContent, '(none)');
+  s.render('Options', [choice(9, 'CABIN LIGHTING', 'DIM', ['FULL', 'DIM', 'NIGHT'])]);
+  const now = selectOf(s, 'CABIN LIGHTING');
+  assert.strictEqual(now.value, 'DIM');
+  assert.ok(![...now.options].some((o) => o.textContent === '(none)'), 'the placeholder stayed once a value was picked');
+});

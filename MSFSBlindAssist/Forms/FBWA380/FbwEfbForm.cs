@@ -336,6 +336,7 @@ public class FbwEfbForm : Form
                 case "disabled":  el.Disabled = kv.Value == "true"; break;
                 case "announceChange": el.AnnounceChange = kv.Value == "true"; break;
                 case "key":       el.Key = kv.Value; break;
+                case "commit":    el.Commit = kv.Value; break;
                 case "options":   el.Options = string.IsNullOrEmpty(kv.Value) ? null : kv.Value.Split(OptionSeparator); break;
                 case "min":       el.Min = ParseInv(kv.Value); break;
                 case "max":       el.Max = ParseInv(kv.Value); break;
@@ -417,6 +418,7 @@ public class FbwEfbForm : Form
             disabled = e.Disabled,
             announceChange = e.AnnounceChange,
             key = e.Key,
+            commit = e.Commit,
             options = e.Options,
             min = e.Min,
             max = e.Max,
@@ -872,6 +874,7 @@ public class FbwEfbForm : Form
         public bool Disabled;
         public bool AnnounceChange;   // agent opt-in: speak this control's post-press label change (MD-11 stepper arrows + tiles)
         public string Key = "";       // agent-stamped reconcile key for a control whose LABEL carries changing state; "" = key by label
+        public string Commit = "";    // agent opt-in: "enter" applies a choice on Enter only, never at each arrow step (the A350 OIS)
         public string[]? Options;
         public double? Min;      // range (slider) bounds for controlType "range"
         public double? Max;
@@ -1001,6 +1004,39 @@ public class FbwEfbForm : Form
     post({ type: 'click', idx: idx });
   }
 
+  // A choice's options. A value that is none of them (a group with nothing picked) is shown as '(none)', which cannot be
+  // picked, never as the first option as if it were (review 2026-10-29: the A350 OIS's CABIN LIGHTING showed FULL).
+  function choiceValues(opts, value) { return opts.indexOf(value) < 0 ? [value].concat(opts) : opts.slice(); }
+  function fillChoice(sel, opts, value) {
+    sel.innerHTML = '';
+    var vals = choiceValues(opts, value);
+    for (var o = 0; o < vals.length; o++) {
+      var op = document.createElement('option'); op.value = vals[o];
+      var none = o === 0 && opts.indexOf(value) < 0;
+      op.textContent = none ? (value || '(none)') : vals[o];
+      if (none) op.disabled = true;
+      if (vals[o] === value) op.selected = true;
+      sel.appendChild(op);
+    }
+  }
+
+  // A choice the agent flags commit: 'enter' (the A350 OIS's, whose options act on the aircraft at once): WebView2's
+  // arrows change a closed select and fire 'change' at each step, so a pilot listening through the options pressed each
+  // one (review 2026-10-29). Here the arrows only move it; Enter applies it, and so does a mouse pick (a change no key
+  // just led to); left without Enter it shows its applied value again. Every other EFB's choices apply as they change.
+  function armEnterChoice(sel, value) {
+    sel.setAttribute('data-applied', value);
+    var keyAt = 0;
+    function apply() {
+      if (sel.value === sel.getAttribute('data-applied')) return;
+      sel.setAttribute('data-applied', sel.value);
+      post({ type: 'set', idx: sel.getAttribute('data-idx'), value: sel.value, controlType: 'select' });
+    }
+    sel.addEventListener('keydown', function (ev) { keyAt = Date.now(); if (ev.key === 'Enter') { ev.preventDefault(); apply(); } });
+    sel.addEventListener('change', function () { if (Date.now() - keyAt > 300) apply(); });
+    sel.addEventListener('blur', function () { var a = sel.getAttribute('data-applied'); if (sel.value !== a) sel.value = a; });
+  }
+
   // Build a fresh node for an element.
   function buildEl(it) {
     var type = rk(it), text = it.text || '';
@@ -1017,11 +1053,12 @@ public class FbwEfbForm : Form
       var sl = document.createElement('label'); sl.className = 'fld';
       var sp = document.createElement('span'); sp.textContent = (text || 'Choice') + ': '; sl.appendChild(sp);
       var sel = document.createElement('select'); sel.className = 'sel';
-      sel.setAttribute('data-idx', String(it.idx)); sel.setAttribute('aria-label', text || 'Choice');
+      var byEnter = it.commit === 'enter';
+      sel.setAttribute('data-idx', String(it.idx)); sel.setAttribute('aria-label', (text || 'Choice') + (byEnter ? ', Enter applies' : ''));
       if (it.disabled) sel.disabled = true;
-      var opts = it.options || [];
-      for (var o = 0; o < opts.length; o++) { var op = document.createElement('option'); op.value = opts[o]; op.textContent = opts[o]; if (opts[o] === it.value) op.selected = true; sel.appendChild(op); }
-      sel.addEventListener('change', function () { post({ type: 'set', idx: this.getAttribute('data-idx'), value: this.value, controlType: 'select' }); });
+      fillChoice(sel, it.options || [], it.value || '');
+      if (byEnter) armEnterChoice(sel, it.value || '');
+      else sel.addEventListener('change', function () { post({ type: 'set', idx: this.getAttribute('data-idx'), value: this.value, controlType: 'select' }); });
       sl.appendChild(sel); return sl;
     }
     if (type === 'rng') {
@@ -1094,11 +1131,18 @@ public class FbwEfbForm : Form
     }
     if (type === 'sel') {
       c.disabled = !!it.disabled;
-      var opts = it.options || [];
-      var same = c.options.length === opts.length;
-      if (same) { for (var k = 0; k < opts.length; k++) { if (c.options[k].value !== opts[k]) { same = false; break; } } }
-      if (!same) { c.innerHTML = ''; for (var j = 0; j < opts.length; j++) { var op = document.createElement('option'); op.value = opts[j]; op.textContent = opts[j]; c.appendChild(op); } }
-      if (document.activeElement !== c && c.value !== (it.value || '')) c.value = it.value || '';
+      var opts = it.options || [], cv = it.value || '';
+      var vals = choiceValues(opts, cv);
+      var same = c.options.length === vals.length;
+      if (same) { for (var k = 0; k < vals.length; k++) { if (c.options[k].value !== vals[k]) { same = false; break; } } }
+      if (!same) {
+        // New options: rebuilt, keeping the pilot's own pick while they are on the choice.
+        var keep = document.activeElement === c && opts.indexOf(c.value) >= 0 ? c.value : null;
+        fillChoice(c, opts, cv);
+        if (keep !== null) c.value = keep;
+      }
+      if (document.activeElement !== c && c.value !== cv) c.value = cv;
+      if (c.hasAttribute('data-applied')) c.setAttribute('data-applied', cv);   // what the aircraft shows applied
       var sp = node.querySelector('span'); if (sp) setText(sp, (text || 'Choice') + ': ');
       return;
     }

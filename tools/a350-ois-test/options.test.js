@@ -14,6 +14,16 @@ test('each RA callout is a checkbox', () => {
   assert.ok(!els.some(e => e.kind === 'static' && /^RA CALLOUTS/.test(e.text)), 'not one line');
 });
 
+// Review 2026-10-29 (I1): the OIS's choices act on the aircraft at once (NAVDATA, CPDLC SOURCE, the throttle calibration,
+// the failures switch), and the shell committed each arrow step: every choice asks the shell to apply it on Enter only.
+test('every choice is applied on Enter, never by the arrows', () => {
+  for (const page of ['opt_throttle_calibration', 'opt_simulation', 'opt_sound_cabin_options', 'situations']) {
+    const choices = scrape(page).filter(e => e.controlType === 'select');
+    assert.ok(choices.length > 0, page + ': no choice');
+    for (const c of choices) assert.equal(c.commit, 'enter', page + ': ' + c.text);
+  }
+});
+
 // VOLUME CONTROL: the smaller sliders' labels have their own class; RESET VOLUME holds a button.
 test('every volume slider is labelled and the reset button reads', () => {
   const els = scrape('opt_volume_control');

@@ -508,6 +508,9 @@ namespace MSFSBlindAssist.SimConnect
                     // whose label carries changing state. Present only when stamped, so a key-less
                     // agent's push is unchanged.
                     if (!string.IsNullOrEmpty(elements[i].key)) data[$"items.{i}.key"] = elements[i].key!;
+                    // How a choice is applied: "enter" (the A350 OIS's, whose options act at once) on Enter only, never at
+                    // each arrow step. Present only when the agent sets it, so no other EFB's push changes.
+                    if (!string.IsNullOrEmpty(elements[i].commit)) data[$"items.{i}.commit"] = elements[i].commit!;
                     // Options for a real <select>; unit-separator joined.
                     if (elements[i].options is { Count: > 0 })
                         data[$"items.{i}.options"] = string.Join(OptionSeparator, elements[i].options!);
@@ -714,6 +717,8 @@ namespace MSFSBlindAssist.SimConnect
             // Agent-stamped reconcile key for an element whose label carries changing state (the MD-11
             // reader only). The shell keys the node by it instead of the label; absent everywhere else.
             public string? key { get; set; }
+            // How the shell applies a choice: "enter" (the A350 OIS) on Enter only; absent, as each change.
+            public string? commit { get; set; }
             public List<string>? options { get; set; }
             public double? min { get; set; }
             public double? max { get; set; }

@@ -12,7 +12,8 @@
 //   scrape()            -> JSON string {ok, page, elements:[...]}
 //   clickElement(idx)   -> press the element carrying that stamped idx
 //   setValue(idx, text) -> pick an option (an option group), type into a field, or move a range
-// Element: {idx,text,value,controlType,kind,clickable,level,disabled,options,min,max,step,key,announceChange}
+// Element: {idx,text,value,controlType,kind,clickable,level,disabled,options,min,max,step,key,announceChange,commit}
+// (commit 'enter' on every choice: the shell applies it on Enter, never at each arrow step, as an option acts at once)
 //
 // What the OIS is made of, and how each reads:
 //   .page-title                      the page: a level-1 heading and the scrape's page name
@@ -550,7 +551,8 @@
               opts.push(word);
               if (radios[r].checked) value = word;
             }
-            push(e, { kind: '', controlType: 'select', text: label, value: value, options: opts, clickable: true });
+            // commit 'enter': the shell applies a choice on Enter, never at each arrow step (an option acts at once).
+            push(e, { kind: '', controlType: 'select', text: label, value: value, options: opts, clickable: true, commit: 'enter' });
             // A box beside the choice (SIMULATION's PAUSE AT T.O.D / DIST (nm): YES or NO, then the distance): its
             // own field, named by the label's part after the slash.
             var beside = e.querySelector('input[type=number],input[type=text],input:not([type])');
@@ -616,7 +618,7 @@
               ropts.push(rw);
               if (rads[ri].checked) rval = rw;
             }
-            push(rs.box, { kind: '', controlType: 'select', text: rs.label, value: rval, options: ropts, clickable: true });
+            push(rs.box, { kind: '', controlType: 'select', text: rs.label, value: rval, options: ropts, clickable: true, commit: 'enter' });
             continue;
           }
           if (type === 'checkbox') {
@@ -650,7 +652,7 @@
         if (tag === 'SELECT') {
           var so = [], sv = '';
           for (var s = 0; s < e.options.length; s++) { so.push(A.norm(e.options[s].text)); if (e.options[s].selected) sv = A.norm(e.options[s].text); }
-          push(e, { kind: '', controlType: 'select', text: A.rowLabel(e), value: sv, options: so });
+          push(e, { kind: '', controlType: 'select', text: A.rowLabel(e), value: sv, options: so, commit: 'enter' });
           A.own(e);
           continue;
         }
