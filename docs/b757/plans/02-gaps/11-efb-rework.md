@@ -120,6 +120,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
 - **Status:** claimed
+- **Superseded:** 2026-10-29, by plan 18 (`18-efb-unified.md`): it takes over this plan's remaining work and its files, with Declan Webster's agreement (confirmed by Robin Kipp, 2026-10-29)
 - **Claimed by:** Declan Webster, 2026-10-26 (with Robin Kipp's agreement)
 - **Worked by:** Declan Webster, with Claude (no subagents)
 - **Started:** 2026-10-26, from `B757` 14944413
