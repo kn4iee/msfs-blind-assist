@@ -203,3 +203,61 @@ LEFT AIR START (619, 436) and RIGHT AIR START (1009, 436 or 1009, 455) both togg
 `BBS757_air_start_door` (0 → 1 → 0); (1034, 434) hit nothing. On plan 11's runway session these tiles were grey: at a gate
 they work. `B757_ENG_1/2_AIR_STARTER_RATIO` stayed 0 with the cart connected and the engines off. Everything was removed
 again and the tablet left on Home.
+
+### The panel sweep's first live run (in-sim check 6)
+
+Same evening, the owner present, on the ground at the gate, engines off, APU running, MSFSBA closed. The first start
+stopped at connect before any write (`Could not load file or assembly … Microsoft.FlightSimulator.SimConnect.dll`): the
+JIT loaded the managed SimConnect assembly when it compiled the connect method, before that method had copied the native
+`SimConnect.dll` it needs (fixed: the half that names SimConnect's types is its own method, called after the copy). The
+second run swept the map as of `496dc91a3` (before Tasks 11 and 12): 168 controls, 276 position writes, 267 landed,
+9 did not, 0 not reached, 0 SimConnect exceptions, every control put back (no `RESTORE FAILED`). The table is kept in the
+plan's workspace (`sweep-2026-10-28-202530.tsv`). The nine:
+
+- **Flight Deck Door** (`B757_OVHD_FLT-DK-DOOR_SWITCH`) → Unlocked (0) and → Deny (2): no change (read back Auto, 1).
+  Expected: the component's 1 Hz update writes 1 once a second has passed since `O:UpdateTime`, which only its own click
+  stamps (XML:6684-6687; ruling R12), so both ends are momentary and a direct write is back on Auto by the read 1.5 s
+  later. Not a writer fault; how the app presents a momentary pick here is a follow-up (handoff).
+- **Chrono ET** (`B757_MAIN_CHRONO_ET_SWITCH`, `…_FO`) → RESET (3): read back HOLD. RESET is momentary and springs back to
+  HOLD, as on the real clock: expected.
+- **Autobrake** (`B757_MAIN_knob_gears_altn_autobrake`, `L:BBS_AUTOBRAKE_KNOB`) → 1, 2, 3, 4, MAX AUTO: read back DISARM
+  (2); RTO, OFF and DISARM landed. BlueBird's WASM (`bbs::landing_gear::handle_autobrake`) puts the knob on DISARM and
+  lights `B757_MAIN_AUTOBRAKES_1_DECAL`. Tried again by hand: knob written 3 with the parking brake set and no
+  hydraulics → DISARM; with the R ELEC pump on (R system pressure) → DISARM; with the parking brake released (chocks in)
+  → DISARM. The IRS were off (cold and dark). Then, at the owner's word, all three IRS to NAV and the tablet's IRS
+  rapid align (Home, Aircraft, COCKPIT PRESETS, IRS rapid align at 1209, 519: the ALIGN lights out at once), at KJFK
+  (40.650 N, 73.787 W): knob 3 with the parking brake set → DISARM; with R system pressure as well → DISARM; with the
+  parking brake released (chocks in) → it stayed on 1, no DISARM light. So BlueBird arms the autobrakes only with the
+  IRS aligned, hydraulic pressure and the brakes off, as the real 757 (the sweep ran parked, cold): the writer is right.
+  The parking brake was set again afterwards with full braking.
+
+Also seen: writing `L:B757_FC_PARK_BRAKE` 1 by itself does not set the brake in PARKING BRAKE MODE REALISTIC (it stays
+0, read 2.5 s later); with both brake axes at full (`K:AXIS_LEFT/RIGHT_BRAKE_SET` 16383) the same write set it, and it
+stayed set after the axes were released. The app's Parking Brake already does this (`Bbs757ParkingBrake`).
+
+### Task 11's position names: which are measured, which are read from the model
+
+The windows' Closed/Open come from BlueBird's code (and the model), the visors' Hidden/Shown from the tooltip, the seats'
+Forward/Aft from the code's MOVE_FORWARD/MOVE_BACK. The rest were read from the interior models (both RR and PW, identical
+for these 30 nodes: each animation posed at its first, middle and last frame and its bounding box compared), NOT seen in
+the sim: the armrests 0 Up / 1 Down and which of `_1`/`_2` is inboard (by distance from the aircraft's centreline), the
+headrests 0 Up / 36 Down, the visors along their track (left: frames 1-36 run outboard to inboard and frame 0 repeats
+inboard; right: 0-35 inboard to outboard and 36 repeats inboard), the shades 0 Stowed / 1 Drawn, the jumpseats 0 Stowed /
+1 Deployed, the floor box 0 Closed / 1 Open, the stowage doors (door 2 opens by 18 and shuts again by 36, so its list stops
+at 18). The chart holders' 0 Stowed / 1 Out is a default: the model tilts the holder 70° from level at 0, which decides
+neither. None of these names has been heard in the app yet: the owner's in-sim checks of the evening (2026-10-28, "All
+in sim tests were good") ran on the build before Task 11.
+
+### Holding a P61 test switch without the clicking (the owner's question)
+
+While a P61 test is held, the switch clicks about 33 times a second: BlueBird's template (`BBS_3POS_P61_TEST_SWITCH`
+over Asobo's `ASOBO_GT_Switch_3States` with `MOMENTARY_SWITCH`, `STATE0_TIMER 0.01`) returns it to neutral 0.01 s after
+nothing holds it with the mouse, the app writes the test position again every 30 ms, and the template's animation
+triggers play `bbs757_metal_toggle_switch` at each crossing. The PMDG aircraft take a held mouse press through their SDK
+(mouse-down, then mouse-up), and the Fenix's test buttons are plain variables that stay where written; the sim's way for
+an outside program to press a model's own control is its input events (`SimConnect_SetInputEvent`). Enumerated on the
+loaded 757 (`SimConnect_EnumerateInputEvents`, a probe in the plan's scratch space): 15 input events, the stock ones
+(`AIRLINER_R_VOR_ADF_1/2`, `ENGINE_THROTTLE_1/2`, `ENGINE_THROTTLE_REVERSER_1/2`, `HANDLING_SPOILERS`,
+`HANDLING_YOKE_HIDER_1/2`, `INSTRUMENT_ALTIMETER_0`, `INSTRUMENT_ALTIMETER_ID`, `LIGHTING_CABIN_3`, `LIGHTING_PANEL_5`,
+`LIGHTING_POTENTIOMETER_20/21`), none on the P61 panel. The template's "held" state is the mouse's, inside the model, which
+no outside program can set, so the clicking stays while the app holds a test.
