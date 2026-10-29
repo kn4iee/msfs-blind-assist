@@ -92,7 +92,7 @@ What you set or press yourself is never repeated back to you.
                         inches", "Captain altimeter standard" or the preset shown on STD, when it
                         changes other than by your own entry
   IRS                   "IRS aligned" once, as the last IR that is on finishes aligning; each IR's
-                        alignment is also on the IRS panel's status display
+                        alignment is also on the ADIRS panel's status display
   Take-off speeds       "V1: 142 knots" as the FMS takes them ("VR: not set" while empty); V1,
                         Rotate and V2 called on the take-off roll as the speed reaches them, as on
                         the A380

@@ -709,13 +709,13 @@ FMS messages, such as *"Scratchpad: NAV ACCURACY UPGRADED, white"*, are spoken a
 
 The A350's normal checklists are on the MFD's C/L MENU (Alt+K in the window, or Output Ctrl+Shift+C). Each item is a button: Enter ticks it, and sensed items tick themselves.
 
-Three keys you know from other aircraft open the MFD window straight on the A350's own page: Input Ctrl+N on RAD NAV (the navigation radios), Output Ctrl+Shift+C on C/L MENU (the checklists) and Input Ctrl+Shift+D on ATC COM (the datalink).
+Three keys you know from other aircraft open the MFD window straight on the A350's own page: Input Ctrl+N on RAD NAV (the navigation radios), Output Ctrl+Shift+C on C/L MENU (the checklists) and Input Ctrl+Shift+D on ATC COM (the datalink). If the MFD is still typing your last entry, BA says so and stays on the page: press the key again.
 
 ### EFB {#efb-5}
 
 The A350's EFB is its OIS, one on each side. It opens in the window the PMDG tablets use: Input Shift+T for the captain's ("A350 OIS") and Input Ctrl+Shift+T for the first officer's ("A350 OIS (First Officer)"). Every page reads in browse mode: FLT OPS, T.O PERF and LDG PERF (type your values, pick the runway, press COMPUTE, and the results are spoken once they arrive, for example *"Results: V1: 141 kt, ..."*), the loadsheet and refuel, charts (the charts themselves are pictures), company messages, GROUND (each door with its state, lights, chocks, pushback and GSX), MAINTENANCE, the panel states, autosave, the options and, on the side chosen as the preferred seat side, the Situation Manager with its failures, each Active or Inactive. The OIS's own messages, errors and confirmation questions are spoken as they appear.
 
-If you turn on STREAMER MODE in the OIS options, your SimBrief ID, API keys and logon codes are hidden in BA too: you hear only how many characters they have, for example "SIMBRIEF ID, hidden, 7 characters", and you can still type into them.
+If you turn on STREAMER MODE in the OIS options, your SimBrief ID, API keys and logon codes are hidden in BA too: you hear only how many characters they have, for example "SIMBRIEF USER ID, hidden, 7 characters", and you can still type into them.
 
 Output Ctrl+Shift+T stays the Cold Temperature Altitude Correction, as on the PMDG aircraft.
 

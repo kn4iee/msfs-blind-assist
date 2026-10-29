@@ -36,6 +36,8 @@ public sealed class A350PfdMonitor : IDisposable
     private CancellationTokenSource? _cts;
     private volatile bool _rebaseline, _rebaselineMessages;
     private DateTime? _settleUntil;   // the reading loop's own
+    private readonly object _messageGate = new();   // the message line's reads, and an MFD window opening or closing
+    private readonly HashSet<string> _failing = new();   // the readers whose last read threw (the reading loop's own)
 
     /// <summary>A flight was loaded: the last flight's draws are dropped, and the new flight's FMA, from its first draw, is
     /// followed silently for <see cref="A350EcamMonitor.SettleAfterLoad"/> (review 2026-10-29: each column flight B
@@ -47,12 +49,38 @@ public sealed class A350PfdMonitor : IDisposable
         _rebaselineMessages = true;   // the new flight's message line is its baseline, whichever read comes first
     }
 
-    /// <summary>True while an MFD window is open: it says the FMS messages itself, so they are followed silently here (and
-    /// what it said is never said again as it closes).</summary>
+    /// <summary>True while an MFD window is open: it says the FMS messages itself, so they are followed silently here. The
+    /// window marks itself open and closed through <see cref="MfdWindowOpening"/> and <see cref="MfdWindowClosed"/>.</summary>
     public Func<bool>? MfdWindowOpen { get; set; }
 
     /// <summary>True while the MFD is dark: it shows no message, so its draw decides nothing.</summary>
     public Func<bool>? MfdDark { get; set; }
+
+    /// <summary>An MFD window opens: <paramref name="markOpen"/> marks it open, and the background's agreed read of the
+    /// captain's message line comes back as the window's last read (<see cref="A350MfdWindowMessages"/>), so a message the
+    /// background has read only once is the window's to say, and one it said is not said again. Under the lock of the
+    /// background's reads: an agreement either sees the window open or is in the read the window starts from.</summary>
+    public string? MfdWindowOpening(Action markOpen)
+    {
+        lock (_messageGate)
+        {
+            markOpen();
+            return _messages.Agreed;
+        }
+    }
+
+    /// <summary>An MFD window has closed, <paramref name="captainRead"/> its last read of the captain's message line (null:
+    /// it read none): that read becomes the background's agreed one, so what the window said is not said again and what it
+    /// never saw is (final review 2026-10-29: the background's second read of a message the window had said spoke it again
+    /// once the window closed). <paramref name="markClosed"/> marks it closed under the same lock.</summary>
+    public void MfdWindowClosed(string? captainRead, Action markClosed)
+    {
+        lock (_messageGate)
+        {
+            if (captainRead != null) _messages.Baseline(captainRead);
+            markClosed();
+        }
+    }
 
     /// <param name="draw">Draws the displays asked for on one memory copy, a capture (or null) for each in order; null
     /// for all while the reader cannot draw.</param>
@@ -95,38 +123,65 @@ public sealed class A350PfdMonitor : IDisposable
         var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
             if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);
-        if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt)
-        {
-            if (_rebaseline)
-            {
-                _rebaseline = false;
-                _fma.Reset();
-                _settleUntil = at + A350EcamMonitor.SettleAfterLoad;
-            }
-            bool settling = _settleUntil is { } until && at < until;
-            foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
-                if (!settling && !_muted(key) && !_disposed) _speak(line);
-        }
+        // Each reader reads its own draw, the E/WD's first (its warnings matter most), and one that throws costs that read
+        // only (final review 2026-10-29: a message-line read that threw ended the tick before the E/WD had its CTR).
+        if (ctr != null && caps.Count > 0) Read("E/WD", () => ctr(caps[0]));
+        if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt) Read("FMA", () => ObserveFma(cpt, at));
         int mfdAt = gauges.IndexOf(("MFD", 0));
         if (mfdAt >= 0 && mfdAt < caps.Count && caps[mfdAt] is { Ok: true } mfd)
-            ObserveMessages(mfd, at);
-        if (ctr != null && caps.Count > 0) ctr(caps[0]);
+            Read("FMS message", () => ObserveMessages(mfd, at));
     }
 
-    /// <summary>The captain's MFD drawn: a message the FMS just posted is said, unless muted, settling after a load, or said
-    /// by an open MFD window.</summary>
+    /// <summary>Runs one reader on its draw. A draw it cannot read (a copy read across a frame can draw without trapping and
+    /// still be no page) is logged once, until that reader reads again.</summary>
+    private void Read(string reader, Action read)
+    {
+        try
+        {
+            read();
+            _failing.Remove(reader);
+        }
+        catch (Exception ex)
+        {
+            if (_failing.Add(reader)) Log.Warn("A350Display", $"display monitor: the {reader} reader: {ex.Message}");
+        }
+    }
+
+    /// <summary>The captain's EFIS drawn: each FMA column's change is said, unless muted or settling after a load.</summary>
+    private void ObserveFma(A350DrawCapture cpt, DateTime at)
+    {
+        if (_rebaseline)
+        {
+            _rebaseline = false;
+            _fma.Reset();
+            _settleUntil = at + A350EcamMonitor.SettleAfterLoad;
+        }
+        bool settling = _settleUntil is { } until && at < until;
+        foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
+            if (!settling && !_muted(key) && !_disposed) _speak(line);
+    }
+
+    /// <summary>The captain's MFD drawn: a message the FMS just posted is said, unless muted, settling after a load, or an
+    /// open MFD window says it.</summary>
     private void ObserveMessages(A350DrawCapture mfd, DateTime at)
     {
-        if (_rebaselineMessages)
+        var lines = A350MfdPage.Read(mfd, 0);
+        string? message;
+        bool windowOpen;
+        lock (_messageGate)
         {
-            _rebaselineMessages = false;
-            _messages.Reset();
+            if (_rebaselineMessages)
+            {
+                _rebaselineMessages = false;
+                _messages.Reset();
+            }
+            if (MfdDark?.Invoke() == true)
+                return;
+            message = _messages.Observe(lines);
+            windowOpen = MfdWindowOpen?.Invoke() == true;
         }
-        if (MfdDark?.Invoke() == true)
-            return;
         bool settling = _settleUntil is { } until && at < until;
-        if (_messages.Observe(A350MfdPage.Read(mfd, 0)) is { } message
-            && !settling && MfdWindowOpen?.Invoke() != true && !_muted(A350FmsMessageAnnouncer.MuteKey) && !_disposed)
+        if (message != null && !settling && !windowOpen && !_muted(A350FmsMessageAnnouncer.MuteKey) && !_disposed)
             _speak(message);
     }
 

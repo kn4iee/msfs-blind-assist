@@ -10,7 +10,7 @@ Everything the A350 shows or lets a pilot do is readable and operable without pi
 
 | Surface | Read | Operate | How |
 | --- | --- | --- | --- |
-| Cockpit panels (696 controls) | yes | yes | L:vars named in each control's own set code; placard names from `en-US.locPak` (`INI.TOOLTIPS.*`) |
+| Cockpit panels (696 input events; the KCCU's through the MFD window) | yes | yes | L:vars named in each control's own set code; placard names from `en-US.locPak` (`INI.TOOLTIPS.*`) |
 | FCU, both EFIS control panels | yes | yes | read: FCU gauge draw; operate: `INI_*_COMMAND` / `INI_FCU_*` L:vars |
 | MFD, captain and first officer, every page | yes | yes | read: draw emulation with element rectangles; operate: Coherent `WASM_MOUSE_*` on the MFD gauge + KCCU key L:vars |
 | PFD, ND, VD | yes | yes | read: EFIS draw; ND clicks (pop-ups, ANF, BTV exit) through Coherent `WASM_MOUSE_*` with the KCCU cursor on the ND |
@@ -158,7 +158,7 @@ More of the page model, from live pages (2026-10-27):
 
 Three other aircraft's window keys open the window on the A350's own page with the KCCU page key (`A350Hotkeys.MfdPages`, parity 2026-10-29): input Ctrl+N on RAD NAV (the PMDG 737's NAV radios window), output Ctrl+Shift+C on C/L MENU (the A380's live ECL), input Ctrl+Shift+D on ATC COM (the A32NX's DCDU). An open window just changes page.
 
-**FMS messages with the window closed** (parity 2026-10-29, as the A32NX's MCDU says them, [A320-34]). The background monitor draws the captain's MFD as it comes round with the other displays (about every 2 s); `A350FmsMessageAnnouncer` says a message the FMS posts in the scratchpad, or in its place on a checklist page, as the window says it ("Scratchpad: NAV ACCURACY UPGRADED, white"), once two reads agree on it (a torn copy's one-off text is never said). The first agreed read is a silent baseline; an emptied scratchpad says nothing; a dark MFD (`INI_FMS_POWERED`, both MFDs share it) decides nothing; after a flight load the new flight's message line is the baseline. Its own Ctrl+M row is "FMS messages (MFD scratchpad)" (`A350_FMS_MESSAGES`). While an MFD window is open it says the messages itself, and the background follows them silently (`IniBuildsA350Definition.MfdWindowOpen`), so closing the window replays nothing.
+**FMS messages with the window closed** (parity 2026-10-29, as the A32NX's MCDU says them, [A320-34]). The background monitor draws the captain's MFD as it comes round with the other displays (about every 2 s); `A350FmsMessageAnnouncer` says a message the FMS posts in the scratchpad, or in its place on a checklist page, as the window says it ("Scratchpad: NAV ACCURACY UPGRADED, white"), once two reads agree on it (a torn copy's one-off text is never said). The first agreed read is a silent baseline; an emptied scratchpad says nothing; a dark MFD (`INI_FMS_POWERED`, both MFDs share it) decides nothing; after a flight load the new flight's message line is the baseline. Its own Ctrl+M row is "FMS messages (MFD scratchpad)" (`A350_FMS_MESSAGES`). While an MFD window is open it says the messages itself, and the background follows them silently (`IniBuildsA350Definition.MfdWindowOpen`). The message line is handed over each way under one lock (`A350PfdMonitor.MfdWindowOpening` and `MfdWindowClosed`, `A350MfdWindowMessages`): the window starts from the background's agreed read, so a message the background has read only once is the window's to say, and as it closes its last read of the captain's MFD becomes the background's, so a message the window said is not said again (final review 2026-10-29: one closing the window was said twice, and one posted as it opened by neither). Each reader of a tick (the E/WD, the FMA, the message line) runs on its own, the E/WD first: one that cannot read its draw costs that read only, logged once.
 
 ## The RMPs in MSFSBA (live 2026-10-28)
 
@@ -428,8 +428,9 @@ Learned on the way:
   ("Results: V1: 141 kt, VR: 143 kt, ..."; `A.computeAnswer`, waiting up to 30 s); a COMPUTE that ends in an
   error line says only the error, which is its own alert.
 - **Credentials** [A350-12]. With OPTIONS > STREAMER MODE on, a field labelled ID, KEY, LOGON, PASSWORD or TOKEN on
-  that page, and any password input, reads "hidden" with its length ("SIMBRIEF ID, hidden, 7 characters";
-  `A.isSecret`, `A.hiddenName`); the EFB shell shows it as a password box and confirms a value set into it as "Set,
+  that page, and any password input, reads "hidden" with its length ("SIMBRIEF USER ID, hidden, 7 characters";
+  `A.isSecret`, `A.hiddenName`). Its value still reaches the EFB shell, masked in a password box (an empty box would
+  make list mode's Enter wipe the field), and is never spoken or logged; a value set into it is confirmed as "Set,
   hidden, 7 characters" (`FbwEfbForm.FieldSetSpoken`). Typing into it still works key by key. With STREAMER MODE off,
   those fields read as the OIS shows them. No fixture keeps a credential (`secrets.test.js`).
 - **An unchanged page is not shipped again**, as the MD-11 reader's: a MutationObserver (disconnected while the agent

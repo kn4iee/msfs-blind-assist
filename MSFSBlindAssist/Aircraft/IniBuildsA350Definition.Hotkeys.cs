@@ -192,7 +192,8 @@ public partial class IniBuildsA350Definition
 
     /// <summary>The MFD window (input Shift+M, the A380's), opened or brought forward, on <paramref name="page"/> when given (a
     /// KCCU page key, <see cref="A350.A350Hotkeys.MfdPages"/>). While it is open it says the FMS messages itself, and the
-    /// background follows them silently (<see cref="MfdWindowOpen"/>).</summary>
+    /// background follows them silently (<see cref="MfdWindowOpen"/>); the message line is handed over each way as it opens
+    /// and closes (<see cref="A350.Display.A350PfdMonitor.MfdWindowOpening"/>).</summary>
     private void ShowMfdWindow(SimConnectManager simConnect, ScreenReaderAnnouncer announcer, HotkeyManager hotkeyManager, string? page)
     {
         hotkeyManager.ExitOutputHotkeyMode();
@@ -200,15 +201,20 @@ public partial class IniBuildsA350Definition
         ShowTrackedWindow(
             () =>
             {
-                var window = new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
+                string? agreed = null;
+                if (Pfd is { } opening) agreed = opening.MfdWindowOpening(() => _mfdWindowOpen = true);
+                else _mfdWindowOpen = true;
+                return new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
                     async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
-                    side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer);
-                window.FormClosed += (_, _) => _mfdWindowOpen = false;
-                return window;
+                    side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer, agreed,
+                    captainRead =>
+                    {
+                        if (Pfd is { } closing) closing.MfdWindowClosed(captainRead, () => _mfdWindowOpen = false);
+                        else _mfdWindowOpen = false;
+                    });
             },
             w =>
             {
-                _mfdWindowOpen = true;
                 w.Show();
                 w.BringToFront();
                 w.Activate();

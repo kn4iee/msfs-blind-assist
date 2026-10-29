@@ -8,8 +8,9 @@ namespace MSFSBlindAssist.Forms.A350;
 /// The A350 MFD as a window (Shift+M, A380 parity): the page's lines (A350MfdPage) in a list, kept in place as
 /// the page refreshes. Enter acts on the selected line: a field takes what is in the scratchpad box (clicked,
 /// typed on the KCCU, ENTER), anything else is clicked. Backspace presses CLR; PageUp/PageDown scroll; F5
-/// refreshes; Alt+letter presses a KCCU page key. A new scratchpad message is spoken. The side box chooses the
-/// captain's or the first officer's MFD and KCCU.
+/// refreshes; Alt+letter presses a KCCU page key. A new scratchpad message is spoken (<see cref="A350MfdWindowMessages"/>,
+/// handed over with the background's call-outs as the window opens and closes). The side box chooses the captain's or the
+/// first officer's MFD and KCCU.
 /// </summary>
 public sealed class A350MfdWindow : Form
 {
@@ -35,14 +36,19 @@ public sealed class A350MfdWindow : Form
     private readonly ComboBox _side;
     private readonly IntPtr _previousWindow;
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
-    private string? _lastScratchpad;
+    private readonly A350MfdWindowMessages _messages;
+    private readonly Action<string?>? _closed;
     private readonly A350ShownCapture _shown = new();
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
 
     /// <param name="isDark">Whether a side's screen is dark (0 the captain's, 1 the first officer's).</param>
+    /// <param name="backgroundAgreed">The background's agreed read of the captain's FMS message line as the window opens
+    /// (<see cref="A350PfdMonitor.MfdWindowOpening"/>): a message it does not hold is said on the window's first read.</param>
+    /// <param name="closed">Called as the window closes with its last read of the captain's message line, for the
+    /// background (<see cref="A350PfdMonitor.MfdWindowClosed"/>).</param>
     public A350MfdWindow(Func<A350DrawCapture?> latest, Func<Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
-        A350MfdInput input, ScreenReaderAnnouncer announcer)
+        A350MfdInput input, ScreenReaderAnnouncer announcer, string? backgroundAgreed = null, Action<string?>? closed = null)
     {
         _previousWindow = GetForegroundWindow();
         _latest = latest;
@@ -50,6 +56,8 @@ public sealed class A350MfdWindow : Form
         _isDark = isDark;
         _input = input;
         _announcer = announcer;
+        _messages = new A350MfdWindowMessages(backgroundAgreed);
+        _closed = closed;
 
         Text = "A350 MFD";
         Size = new Size(820, 620);
@@ -140,10 +148,8 @@ public sealed class A350MfdWindow : Form
             if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
                 _list.SelectedIndex = first;
             // The FMS message, in the scratchpad or, on the checklists, in its place: said as it appears.
-            var pad = A350MfdPage.Scratchpad(_lines);
-            if (A350MfdPage.MessageJustArrived(_lastScratchpad, pad) is { } message)
+            if (_messages.Observe(_lines, _linesSide) is { } message)
                 _announcer.Announce(message);
-            if (pad != null) _lastScratchpad = pad;
         }
         catch { /* best-effort; keep the last good page */ }
         finally
@@ -207,8 +213,17 @@ public sealed class A350MfdWindow : Form
     }
 
     /// <summary>Shows a page as its KCCU page key does (A350Hotkeys.MfdPages: another aircraft's window key opening the
-    /// window on the A350's own page).</summary>
-    internal void PressPage(string key) => PressKey(key);
+    /// window on the A350's own page). While a line's action runs the key is refused aloud, never dropped unheard (final
+    /// review 2026-10-29: the window came forward on the page it was on).</summary>
+    internal void PressPage(string key)
+    {
+        if (_input.Busy)
+        {
+            _announcer.AnnounceImmediate("The MFD is still busy with the last entry; press the key again");
+            return;
+        }
+        PressKey(key);
+    }
 
     /// <summary>Presses a KCCU key, unless a line's action is running: its keys would land among the action's.</summary>
     private void PressKey(string key)
@@ -246,6 +261,7 @@ public sealed class A350MfdWindow : Form
         _timer?.Stop();
         _timer?.Dispose();
         _timer = null;
+        _closed?.Invoke(_messages.Captain);
         base.OnFormClosed(e);
         if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
     }

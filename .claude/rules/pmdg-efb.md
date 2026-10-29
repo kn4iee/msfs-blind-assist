@@ -26,4 +26,4 @@ Mirrored from md11.md (they govern the MD-11 view, key and `announceChange` plum
 
 Mirrored from inibuilds-a350.md (they govern the A350 OIS side probe and the OIS fields' `secret` flag in CoherentPmdgEfbClient.cs; change them there and here together):
 - [A350-8] Tell the two OIS views apart by the page each loads (`ini-efb-a350-cpt` / `-fo`, the side probe in `CoherentPmdgEfbClient.ForA350Ois`), never by their VCockpit number. Full: docs/invariants/inibuilds-a350.md#a350-8
-- [A350-12] While the OIS's STREAMER MODE is on, a field labelled ID, KEY, LOGON, PASSWORD or TOKEN, or any password input, ships its length, never its value (`A.isSecret`), and the EFB shell shows it as a password box; no OIS fixture keeps a credential (`secrets.test.js`). Full: docs/invariants/inibuilds-a350.md#a350-12
+- [A350-12] While the OIS's STREAMER MODE is on, a field labelled ID, KEY, LOGON, PASSWORD or TOKEN, or any password input, is named by its length only (`A.isSecret`); its value still reaches the EFB shell, masked in a password box: never speak, log or capture it. No OIS fixture keeps a credential (`secrets.test.js`). Full: docs/invariants/inibuilds-a350.md#a350-12
