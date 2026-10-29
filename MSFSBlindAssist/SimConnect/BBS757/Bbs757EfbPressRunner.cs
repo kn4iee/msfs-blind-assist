@@ -20,6 +20,15 @@ public sealed class Bbs757EfbPressIo
     /// <summary>Whether two captures show the same thing, rendering noise aside (<see cref="Bbs757EfbFrameCompare.Same"/>).</summary>
     public required Func<Bitmap, Bitmap, bool> Same { get; init; }
 
+    /// <summary>Whether two captures' top bars show the same thing (their <c>Bbs757EfbBridge.TopBarSignature</c>s do not differ):
+    /// <see cref="Same"/> leaves the top bar out with its clock, so a press on a top-bar control checks it apart. Only before a tap,
+    /// never in the wait for a tap's change (a countdown ticking right after a tap is no change the tap made).</summary>
+    public required Func<Bitmap, Bitmap, bool> SameTopBar { get; init; }
+
+    /// <summary>The nav data cycle BlueBird has installed now (<c>NavigationData\cycle.json</c>), read before a nav data press's tap;
+    /// null when none is installed or it cannot be read.</summary>
+    public required Func<int?> ReadInstalledCycle { get; init; }
+
     /// <summary>Reads the tablet now, settled, as the bridge's loop reads it, and pushes it to the window when it says something new;
     /// the page read, or null when nothing could be read (the window then shows why).</summary>
     public required Func<CancellationToken, Task<Bbs757EfbScreenModel?>> Read { get; init; }
@@ -58,8 +67,9 @@ public sealed class Bbs757EfbPressIo
 
     public required Action<double?> SettleGroundPowerEcho { get; init; }
 
-    /// <summary>A hook the press started (<see cref="Bbs757EfbExtras.HookFor"/>), right after its tap went out.</summary>
-    public required Action<Bbs757EfbHook> Hooked { get; init; }
+    /// <summary>A hook the press started (<see cref="Bbs757EfbExtras.HookFor"/>), right after its tap went out, with the nav data
+    /// cycle installed before that tap for UPDATE or REMOVE (null for any other hook, or when none was installed).</summary>
+    public required Action<Bbs757EfbHook, int?> Hooked { get; init; }
 }
 
 /// <summary>
@@ -72,11 +82,13 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// <summary>
 /// The tablet window's presses (plan 18, Task 8), on the bridge's loop, one at a time, in the order the plan gives them:
 /// <list type="number">
-/// <item>Where: a fresh capture compared with the frame the page was read from. The same: the control is tapped where the reader
-/// found it. Different: the page is read again (settled) and the control found in it (<see cref="Bbs757EfbPress.Relocate"/>, from the
-/// page the pilot pressed on), the new page pushed, and the control tapped where it is now. Gone, or turned into words that are no
-/// control (START BOARDING become "Boarding… 10 min"): nothing tapped, "{label} is no longer on the tablet." Under a question that
-/// came up meanwhile: nothing tapped and nothing said, since the read that found the question said it.</item>
+/// <item>Where: a fresh capture compared with the frame the page was read from (the page; for a control of the top bar, which the
+/// page's compare leaves out, the bar too). The same: the control is tapped where the reader found it. Different: the page is read
+/// again (settled) and the control found in it (<see cref="Bbs757EfbPress.Relocate"/>, from the page the pilot pressed on), the new
+/// page pushed, and the control tapped where it is now. Gone, turned into words that are no control (START BOARDING become
+/// "Boarding… 10 min"), or an answer whose question is no longer the one asked (every question's YES is keyed alike): nothing
+/// tapped, "{label} is no longer on the tablet." Under a question that came up meanwhile: nothing tapped and nothing said, since
+/// the read that found the question said it.</item>
 /// <item>Whether: a switch or check box only when its state read differs from the wish (<see cref="Bbs757EfbPress.NeedsTap"/>), a
 /// slider only when it does not read the choice asked for. Nothing else refuses a press (the owner's ruling of 2026-10-29).</item>
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then a wait for the picture to change
@@ -459,15 +471,18 @@ public sealed class Bbs757EfbPressRunner
     }
 
     /// <summary>
-    /// The pressed control where it is to be tapped: a fresh capture compared with the frame the page was read from; the same, the
-    /// control as read; else the page read again and the control found in it. Null, with nothing tapped, when it is gone or no longer
-    /// a control ("{label} is no longer on the tablet."), when a question came up over the page (the read that found it said it), when
-    /// the pressed Home is no longer needed (the tablet shows Home), and when nothing could be read (the window says why).
+    /// The pressed control where it is to be tapped: a fresh capture compared with the frame the page was read from (the page's
+    /// compare; for a control of the top bar, which that compare leaves out with its clock, the top bar's too); the same, the control
+    /// as read; else the page read again and the control found in it. Null, with nothing tapped, when it is gone or no longer a control
+    /// ("{label} is no longer on the tablet."), when the question an answer was pressed on is not the one shown now (said the same
+    /// way), when a question came up over the page (the read that found it said it), when the pressed Home is no longer needed (the
+    /// tablet shows Home), and when nothing could be read (the window says why).
     /// </summary>
     private async Task<Target?> LocateAsync(Bbs757EfbPressed pressed, CancellationToken ct)
     {
         var picture = _io.Capture();
-        if (picture != null && pressed.Frame != null && _io.Same(picture, pressed.Frame))
+        if (picture != null && pressed.Frame != null && _io.Same(picture, pressed.Frame)
+            && (!pressed.Page.TopBar.Contains(pressed.Item) || _io.SameTopBar(picture, pressed.Frame)))
             return new Target(pressed.Item, pressed.Page, picture);
         picture?.Dispose();
 
@@ -486,6 +501,16 @@ public sealed class Bbs757EfbPressRunner
         if (item.Key == HomeKey)
             return now.App == "HOME" || now.Question != null ? null : item;
 
+        // Every question's answers are keyed alike (q:YES, q:NO): an answer is the one pressed only under the same question.
+        if (pressed.Page.Question?.Buttons.Contains(item) == true)
+        {
+            var answer = Bbs757EfbPress.SameQuestion(pressed.Page.Question, now.Question)
+                ? Bbs757EfbPress.Relocate(pressed.Page, now, item)
+                : null;
+            gone = answer == null || now.Question?.Buttons.Contains(answer) != true;
+            return gone ? null : answer;
+        }
+
         var found = Bbs757EfbPress.Relocate(pressed.Page, now, item);
         if (found == null || found.Kind is not (Bbs757EfbKind.Button or Bbs757EfbKind.Menu or Bbs757EfbKind.Toggle
                 or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Slider))
@@ -493,22 +518,26 @@ public sealed class Bbs757EfbPressRunner
             gone = true;
             return null;
         }
-        // Under a question the tablet takes no tap on its page: only the answers and the top bar press.
-        bool answer = now.Question?.Buttons.Contains(found) == true;
-        if (now.Question != null && !answer && !now.TopBar.Contains(found)) return null;
+        // Under a question the tablet takes no tap on its page: only the top bar presses (the answers were found above).
+        if (now.Question != null && !now.TopBar.Contains(found)) return null;
         return found;
     }
 
-    /// <summary>The tap at <paramref name="item"/>'s point, and, once it went out, the press's hook; false, said, when nothing was
-    /// tapped.</summary>
+    /// <summary>
+    /// The tap at <paramref name="item"/>'s point, and, once it went out, the press's hook; false, said, when nothing was tapped. A
+    /// nav data press reads the cycle installed BEFORE its tap and hands it over with its hook: BlueBird's REMOVE may delete the file
+    /// as it is tapped, and the watch must know what was there.
+    /// </summary>
     private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct)
     {
+        var hook = Bbs757EfbExtras.HookFor(target.Page.PageName, item);
+        int? cycleBefore = hook is Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove ? _io.ReadInstalledCycle() : null;
         if (!await _io.Tap(item.Hit, ct))
         {
             _io.Alert(Bbs757EfbPress.UnreachableText);
             return false;
         }
-        if (Bbs757EfbExtras.HookFor(target.Page.PageName, item) is var hook && hook != Bbs757EfbHook.None) _io.Hooked(hook);
+        if (hook != Bbs757EfbHook.None) _io.Hooked(hook, cycleBefore);
         return true;
     }
 

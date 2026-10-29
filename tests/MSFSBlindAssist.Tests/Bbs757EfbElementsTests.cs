@@ -283,6 +283,26 @@ public class Bbs757EfbElementsTests
     }
 
     [Fact]
+    public void An_answers_identity_carries_its_question()
+    {
+        // Every question's answers are keyed q:YES, q:NO: their identity also holds the question's words (case, spaces and
+        // punctuation left out), so two questions' YES are two elements; the key the window reconciles by stays q:YES.
+        var page = Bbs757EfbScreenTests.Load("bright", "21-defuel-question");
+        var identities = new List<string>();
+        var b = Bbs757EfbElements.Build(page, null, NoExtras, identity =>
+        {
+            identities.Add(identity);
+            return identities.Count;
+        });
+
+        string yes = identities[IndexOf(b, "Yes")];
+        Assert.StartsWith("q:YES|", yes, StringComparison.Ordinal);
+        Assert.Contains(Bbs757EfbPress.QuestionWords(page.Question!.Text), yes, StringComparison.Ordinal);
+        Assert.Equal("q:YES", Field(b, IndexOf(b, "Yes"), "key"));
+        Assert.DoesNotContain(" ", Bbs757EfbPress.QuestionWords(page.Question.Text));
+    }
+
+    [Fact]
     public void The_page_behind_a_question_is_text_while_the_answers_and_the_top_bar_press()
     {
         // The tablet dims its page under a question and takes no tap on it: the window offers none either (this mirrors the tablet).

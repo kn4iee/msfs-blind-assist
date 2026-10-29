@@ -47,9 +47,10 @@ public static class Bbs757EfbElements
     /// <param name="alert">A word the window speaks at once and shows first (a status, or the outcome of a press); null for none.</param>
     /// <param name="extras">What the app adds to the page, in order (the bridge decides, by page).</param>
     /// <param name="numberFor">The number (aidx) of an element, from its identity on the page: its key, else its words, and which of
-    /// the page's elements with that identity it is ("btn:HOME#1"). The bridge keeps an element's number while the element stays and
-    /// never gives one number to two elements (<see cref="Bbs757EfbPushes"/>), so a press the window sends names the element it was
-    /// made on, even after a later push. Null numbers the elements 1, 2, 3 and so on.</param>
+    /// the page's elements with that identity it is ("btn:HOME#1"); a question's answer also carries its question's words
+    /// (<see cref="Bbs757EfbPress.QuestionWords"/>), as every question's answers are keyed alike. The bridge keeps an element's number
+    /// while the element stays and never gives one number to two elements (<see cref="Bbs757EfbPushes"/>), so a press the window
+    /// sends names the element it was made on, even after a later push. Null numbers the elements 1, 2, 3 and so on.</param>
     public static Built Build(Bbs757EfbScreenModel? model, string? alert, IReadOnlyList<Bbs757EfbExtraElement> extras,
         Func<string, int>? numberFor = null)
     {
@@ -60,10 +61,11 @@ public static class Bbs757EfbElements
 
         void Add(string text, string kind = "", string controlType = "", bool clickable = false, int level = 0,
             string value = "", string key = "", bool announceChange = false, IReadOnlyList<string>? options = null,
-            string live = "", double? min = null, double? max = null, double? step = null, Action? action = null)
+            string live = "", double? min = null, double? max = null, double? step = null, Action? action = null,
+            string? of = null)
         {
             int i = n++;
-            string identity = key.Length > 0 ? key : "text|" + text;
+            string identity = (key.Length > 0 ? key : "text|" + text) + (of != null ? "|" + of : "");
             int occurrence = identities[identity] = identities.GetValueOrDefault(identity) + 1;
             int aidx = numberFor?.Invoke(identity + "#" + occurrence.ToString(CultureInfo.InvariantCulture)) ?? i + 1;
             data[$"items.{i}.aidx"] = aidx.ToString(CultureInfo.InvariantCulture);
@@ -98,8 +100,10 @@ public static class Bbs757EfbElements
             {
                 // Text: an alert here would be said again whenever another alert went (see the class summary).
                 Add(question.Text, key: "question");
+                // Each answer is its question's: the next question's YES is another element, under the same key.
+                string asked = Bbs757EfbPress.QuestionWords(question.Text);
                 foreach (var answer in question.Buttons)
-                    Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer));
+                    Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer), of: asked);
             }
 
             foreach (var barItem in model.TopBar)

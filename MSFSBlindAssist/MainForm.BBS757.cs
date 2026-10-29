@@ -225,12 +225,13 @@ public partial class MainForm
     };
 
     /// <summary>
-    /// A press on the tablet window started one of the app's hooks (plan 18, Task 8), called on the UI thread right after the
-    /// tap went out. FETCH or REFRESH SIMBRIEF OFP, IMPORT FROM SIMBRIEF and START BOARDING start the definition's load watch
-    /// for the parts BlueBird starts (<see cref="StartBbs757TabletLoadWatchAsync"/>); the AIRAC page's UPDATE and REMOVE watch
-    /// BlueBird's cycle file (<see cref="WatchBbs757NavDataAsync"/>). Both only listen: the tap was the pilot's. Never throws.
+    /// A press on the tablet window started one of the app's hooks (plan 18, Task 8), called on the UI thread once the tap went
+    /// out. FETCH or REFRESH SIMBRIEF OFP, IMPORT FROM SIMBRIEF and START BOARDING start the definition's load watch for the parts
+    /// BlueBird starts (<see cref="StartBbs757TabletLoadWatchAsync"/>); the AIRAC page's UPDATE and REMOVE watch BlueBird's cycle
+    /// file from <paramref name="cycleBefore"/>, the cycle the bridge read right before the tap (<see cref="WatchBbs757NavDataAsync"/>).
+    /// Both only listen: the tap was the pilot's. Never throws.
     /// </summary>
-    private void OnBbs757EfbHook(Bbs757EfbHook hook)
+    private void OnBbs757EfbHook(Bbs757EfbHook hook, int? cycleBefore)
     {
         if (currentAircraft is not BBS757Definition def) return;
         switch (hook)
@@ -239,7 +240,7 @@ public partial class MainForm
                 _ = StartBbs757TabletLoadWatchAsync(def, hook);
                 break;
             case Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove:
-                _ = WatchBbs757NavDataAsync(def, hook);
+                _ = WatchBbs757NavDataAsync(def, hook, cycleBefore);
                 break;
         }
     }
@@ -295,12 +296,13 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The nav data watch for the AIRAC page's UPDATE or REMOVE (the classic window's loop): the cycle installed when the hook
-    /// came, then <c>NavigationData\cycle.json</c> every second for 20 seconds (<see cref="Bbs757EfbExtras.WatchNavDataAsync"/>),
-    /// then what came of it, queued. Without a work folder there is nothing to watch, so nothing is said. On the UI thread (the
-    /// files are a few hundred bytes); never throws.
+    /// The nav data watch for the AIRAC page's UPDATE or REMOVE (the classic window's loop): from <paramref name="before"/>, the
+    /// cycle installed before the tap (read by the bridge right before it: BlueBird's REMOVE may delete the file before this runs),
+    /// <c>NavigationData\cycle.json</c> every second for 20 seconds (<see cref="Bbs757EfbExtras.WatchNavDataAsync"/>), then what
+    /// came of it, queued. Without a work folder there is nothing to watch, so nothing is said. On the UI thread (the files are a
+    /// few hundred bytes); never throws.
     /// </summary>
-    private async Task WatchBbs757NavDataAsync(BBS757Definition def, Bbs757EfbHook hook)
+    private async Task WatchBbs757NavDataAsync(BBS757Definition def, Bbs757EfbHook hook, int? before)
     {
         try
         {
@@ -310,7 +312,6 @@ public partial class MainForm
                 Log.Info("BBS757", $"EFB tablet {hook}: no BlueBird work folder, so the nav data is not watched.");
                 return;
             }
-            int? before = Bbs757WorkFolder.ReadInstalledCycle(folder);
             string said = await Bbs757EfbExtras.WatchNavDataAsync(hook, before,
                 () => Bbs757WorkFolder.ReadInstalledCycle(folder), () => Bbs757WorkFolder.HasCycleFile(folder),
                 Task.Delay, () => Environment.TickCount64, CancellationToken.None);

@@ -396,6 +396,16 @@ public class Bbs757EfbExtrasTests
     }
 
     [Fact]
+    public async Task A_removal_whose_file_is_gone_at_the_first_poll_is_said()
+    {
+        // BlueBird deleted cycle.json at once: the cycle the press read before its tap (2610) says something was installed.
+        var file = new CycleFile { Reads = new (int?, bool)[] { (null, false) } };
+
+        Assert.Equal("BlueBird removed the installed nav data.", await file.Watch(Bbs757EfbHook.NavDataRemove, 2610));
+        Assert.Equal(new[] { 1000 }, file.Waits);
+    }
+
+    [Fact]
     public async Task A_removal_that_never_comes_is_said_after_twenty_seconds()
     {
         var file = new CycleFile { Reads = new (int?, bool)[] { (2610, true) } };

@@ -36,8 +36,9 @@ public sealed class Bbs757EfbBridgeIo
     public required Func<CancellationToken, Task<string>> SignIn { get; init; }
 
     /// <summary>A press started one of the app's hooks (<see cref="Bbs757EfbExtras.HookFor"/>): the load watch or the nav data watch.
-    /// Called on the UI thread (the bridge marshals), right after the tap went out.</summary>
-    public required Action<Bbs757EfbHook> Hooked { get; init; }
+    /// Called on the UI thread (the bridge marshals), once the tap went out; for UPDATE or REMOVE with the nav data cycle installed
+    /// before the tap (read on the loop right before it, as BlueBird's REMOVE may delete the file at once), else null.</summary>
+    public required Action<Bbs757EfbHook, int?> Hooked { get; init; }
 
     /// <summary>Opens / ends the definition's echo for a service row around the window's own tap (Task 5).</summary>
     public required Action<Bbs757GroundService> ArmServiceEcho { get; init; }
@@ -113,8 +114,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private readonly Bbs757EfbBridgeIo _io;
     private readonly Bbs757EfbPressRunner _press;
     private readonly SynchronizationContext? _sync;
-    private readonly System.Threading.Channels.Channel<(string Command, Dictionary<string, string>? Payload)> _commands =
-        System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?)>();
+    /// <summary>The window's commands, each with the showing it was sent in (<see cref="_showing"/>).</summary>
+    private readonly System.Threading.Channels.Channel<(string Command, Dictionary<string, string>? Payload, int Showing)> _commands =
+        System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?, int)>();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
     /// <summary>The text recognition engine. Touched only on the loop: Get before a read, ForgetFailure when it
@@ -129,6 +131,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private volatile bool _retryOcr;
 
     private volatile bool _active;
+    /// <summary>Counts the times the window hid (UI thread; read on the loop): a command sent in an earlier showing is dropped.</summary>
+    private int _showing;
     private bool _popoutReady;
     private string? _popoutError;
     private bool _mirrorOn;
@@ -182,9 +186,11 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         _loop ??= Task.Run(() => LoopAsync(_cts.Token));
     }
 
-    /// <summary>The window was shown (true) or hidden (false): reading and the mirror follow it.</summary>
+    /// <summary>The window was shown (true) or hidden (false): reading and the mirror follow it. Hidden, the presses it sent and
+    /// the loop has not come to are dropped: they were made on a tablet the next showing may no longer show.</summary>
     public void SetActive(bool active)
     {
+        if (!active) Interlocked.Increment(ref _showing);
         _active = active;
         if (active) _forceRead = true;
         _wake.Release();
@@ -215,7 +221,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     public void EnqueueCommand(string command, Dictionary<string, string>? payload = null)
     {
-        _commands.Writer.TryWrite((command, payload));
+        _commands.Writer.TryWrite((command, payload, Volatile.Read(ref _showing)));
         _wake.Release();
     }
 
@@ -243,8 +249,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             {
                 if (!_active)
                 {
-                    // Hidden: the engine is freed (no read runs between two turns of the loop), and a load that
-                    // failed is forgotten with the reader's word of it, so the next showing tries again.
+                    // Hidden: what the window sent is dropped (it never runs at the next showing), the engine is freed
+                    // (no read runs between two turns of the loop), and a load that failed is forgotten with the
+                    // reader's word of it, so the next showing tries again.
+                    DropQueuedCommands();
                     _ocr.Release();
                     if (_alert == TextRecognitionText.ReaderCannotStart) _alert = null;
                     if (_mirrorOn) { await _client.SetMirrorAsync(false, ct); _mirrorOn = false; }
@@ -285,9 +293,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                     _mirrorAtMs = now;
                 }
 
-                if (_commands.Reader.TryRead(out var cmd))
+                if (await HandleNextCommandAsync(ct))
                 {
-                    await HandleAsync(cmd.Command, cmd.Payload, ct);
                     await RefreshSignInAsync(ct);
                     continue;
                 }
@@ -547,6 +554,34 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     // ------------------------------------------------------------------ commands
 
+    /// <summary>
+    /// The next command the window sent, handled; false when none waits. A command sent before the window last hid is dropped
+    /// unhandled: a press made on what the window showed then never runs on what it shows now, the tablet having gone on meanwhile.
+    /// On the loop only; internal for the tests.
+    /// </summary>
+    internal async Task<bool> HandleNextCommandAsync(CancellationToken ct)
+    {
+        while (_commands.Reader.TryRead(out var cmd))
+        {
+            if (cmd.Showing != Volatile.Read(ref _showing))
+            {
+                Log.Debug("BBS757", $"EFB reader: {cmd.Command} sent before the window hid, dropped.");
+                continue;
+            }
+            await HandleAsync(cmd.Command, cmd.Payload, ct);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>The window hid: what it sent before is dropped, so nothing it asked for runs at the next showing.</summary>
+    private void DropQueuedCommands()
+    {
+        int dropped = 0;
+        while (_commands.Reader.TryRead(out _)) dropped++;
+        if (dropped > 0) Log.Debug("BBS757", $"EFB reader: {dropped.ToString(CultureInfo.InvariantCulture)} command(s) dropped as the window hid.");
+    }
+
     /// <summary>A command from the window, on the loop: a read asked for, or a press on an element of a push. On the loop only;
     /// internal for the tests.</summary>
     internal async Task HandleAsync(string command, Dictionary<string, string>? payload, CancellationToken ct)
@@ -624,6 +659,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     {
         Capture = () => _popout.CaptureTablet(),
         Same = Bbs757EfbFrameCompare.Same,
+        SameTopBar = (a, b) => !Differs(TopBarSignature(a), TopBarSignature(b)),
+        ReadInstalledCycle = () => Bbs757WorkFolder.Find() is { } folder ? Bbs757WorkFolder.ReadInstalledCycle(folder) : null,
         Read = async ct => await ReadIfChangedAsync(ct, force: true) ? _lastRead : null,
         Tap = TapAsync,
         Wheel = async (delta, ct) => await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y, delta, ct),
@@ -637,7 +674,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         SettleServiceEcho = (s, v) => PostUi(() => _io.SettleServiceEcho(s, v)),
         ArmGroundPowerEcho = () => PostUi(_io.ArmGroundPowerEcho),
         SettleGroundPowerEcho = v => PostUi(() => _io.SettleGroundPowerEcho(v)),
-        Hooked = hook => PostUi(() => _io.Hooked(hook)),
+        Hooked = (hook, cycle) => PostUi(() => _io.Hooked(hook, cycle)),
     };
 
     /// <summary>One tap through the EFB agent: true when it went out (done, or started and maybe clicked), and then it is the pilot's

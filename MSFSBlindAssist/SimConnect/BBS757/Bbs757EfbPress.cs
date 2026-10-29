@@ -136,6 +136,17 @@ public static class Bbs757EfbPress
         return words.ToArray();
     }
 
+    // ------------------------------------------------------------------ a question
+
+    /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and
+    /// punctuation wobble from one read to the next ("defuel?", "defuel ?"); the words do not.</summary>
+    public static string QuestionWords(string text) => string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
+
+    /// <summary>Whether two questions are the same question: both there, and their words the same (<see cref="QuestionWords"/>).
+    /// Every question's answers are keyed alike (q:YES, q:NO), so an answer is the one pressed only under the same question.</summary>
+    public static bool SameQuestion(Bbs757EfbQuestion? a, Bbs757EfbQuestion? b) =>
+        a != null && b != null && QuestionWords(a.Text) == QuestionWords(b.Text);
+
     // ------------------------------------------------------------------ a switch
 
     /// <summary>Whether a switch or check box needs its tap to be as the pilot wished: false only when the tablet already shows the

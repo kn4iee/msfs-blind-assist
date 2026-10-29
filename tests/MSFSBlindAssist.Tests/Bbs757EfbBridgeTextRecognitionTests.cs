@@ -100,7 +100,7 @@ public sealed class Bbs757EfbBridgeTextRecognitionTests
                     ReadSetting = (_, _) => Task.FromResult<Bbs757Value?>(null),
                     SignedIn = _ => Task.FromResult<bool?>(null),
                     SignIn = _ => Task.FromResult(""),
-                    Hooked = _ => { },
+                    Hooked = (_, _) => { },
                     ArmServiceEcho = _ => { },
                     SettleServiceEcho = (_, _) => { },
                     ArmGroundPowerEcho = () => { },

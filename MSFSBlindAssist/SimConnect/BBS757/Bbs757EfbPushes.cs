@@ -132,8 +132,8 @@ public sealed class Bbs757EfbReadNews
     /// <summary>What to say of <paramref name="read"/>, or null when it says nothing new.</summary>
     public string? After(Bbs757EfbScreenModel read, long msSinceOwnPress)
     {
-        string? question = read.Question is { } q && Bare(q.Text) != _question ? q.Text : null;
-        _question = read.Question is { } now ? Bare(now.Text) : null;
+        string? question = read.Question is { } q && Bbs757EfbPress.QuestionWords(q.Text) != _question ? q.Text : null;
+        _question = read.Question is { } now ? Bbs757EfbPress.QuestionWords(now.Text) : null;
 
         string? notices = _notices == null ? null : Bbs757EfbNotices.ToSpeak(_notices, read.Notices, msSinceOwnPress);
         _notices = read.Notices;
@@ -141,6 +141,4 @@ public sealed class Bbs757EfbReadNews
         if (question == null) return notices;
         return notices == null ? question : question + " " + notices;
     }
-
-    private static string Bare(string text) => string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 }
