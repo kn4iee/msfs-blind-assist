@@ -323,10 +323,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
 
+    /// <summary>Rows that share a variable with another row and leave it the batch: the All thrust levers row reads lever 1's
+    /// angle and says nothing on its own delivery, while the two levers must arrive in one message, or a lone lever's
+    /// sentence comes before "All thrust levers" (review 2026-10-29: lever 1 streamed on its own 1 Hz subscription).</summary>
+    private static readonly HashSet<string> BatchYields = new(StringComparer.Ordinal) { A350.A350LeverSpeech.AllLevers };
+
     /// <summary>
     /// One variable per panel row. Switch positions ride the continuous batches (no individual definitions); knobs
     /// are read when their panel opens; buttons are write-only. A position variable two rows share rides the batch
-    /// once ([VAR-7]) and the second row streams it on its own subscription.
+    /// once ([VAR-7]) and the second row streams it on its own subscription; a row in <see cref="BatchYields"/> is
+    /// always the second.
     /// </summary>
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
     {
@@ -336,6 +342,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (ContinuousBatchLayout.RidesBatch(def))
                 batchNames.Add(ContinuousBatchLayout.FullName(def));
 
+        var rowDefs = new List<(string Key, SimVarDefinition Def)>();
         foreach (var row in _rows.Values)
         {
             if (vars.ContainsKey(row.Key))
@@ -343,12 +350,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             var def = BuildRowVariable(row);
             if (_buttonLamps.TryGetValue(row.Key, out var buttonLamps))
                 def.StateVariables = buttonLamps.SelectMany(l => l.InputKeys).Distinct().ToList();   // the label repaints when a light changes
-            if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
-                def.ExcludeFromBatch = true;
+            rowDefs.Add((row.Key, def));
             vars[row.Key] = def;
             if (def.UpdateFrequency == UpdateFrequency.Continuous)
                 _keyByName.TryAdd(def.Name, row.Key);
         }
+        foreach (var (key, def) in rowDefs.OrderBy(r => BatchYields.Contains(r.Key) ? 1 : 0))
+            if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
+                def.ExcludeFromBatch = true;
 
         foreach (var lamp in _lamps.Values)
         {

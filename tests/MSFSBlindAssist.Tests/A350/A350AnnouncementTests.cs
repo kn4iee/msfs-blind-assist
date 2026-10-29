@@ -337,6 +337,20 @@ public class A350LeverAnnouncementTests
         Deliver(A350LeverSpeech.Lever2, 0);
     }
 
+    // Review 2026-10-29: the All row shares lever 1's angle (L:INI_AUTOTHRUST_TLA:1) and, placed first, took its batch
+    // slot [VAR-7]: lever 1 streamed on its own 1 Hz subscription, up to a second apart from lever 2, so a lone lever's
+    // sentence came before "All thrust levers". The levers ride one batch, one message; the All row, silent on its own
+    // delivery, is the copy that streams apart.
+    [Fact]
+    public void Both_thrust_levers_ride_one_batch_and_the_all_row_streams_apart()
+    {
+        var vars = new IniBuildsA350Definition().GetVariables();
+        var batches = MSFSBlindAssist.SimConnect.ContinuousBatchLayout.BatchNumbers(vars);
+        Assert.True(batches.ContainsKey(A350LeverSpeech.Lever1), "lever 1 rides a batch");
+        Assert.Equal(batches[A350LeverSpeech.Lever1], batches[A350LeverSpeech.Lever2]);
+        Assert.True(vars[A350LeverSpeech.AllLevers].ExcludeFromBatch);
+    }
+
     [Fact]
     public void The_thrust_levers_speak_their_detents_after_a_silent_baseline()
     {
