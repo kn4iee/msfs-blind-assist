@@ -150,6 +150,11 @@ internal static class A350Levers
     public static string? SdPageWord(double page) =>
         SdPages.Where(p => p.Page == page).Select(p => p.Word).FirstOrDefault() ?? (page == 13 ? "Cruise" : null);
 
+    /// <summary>The words a row says for a state no pick selects (SimVarDefinition.SpokenOnlyDescriptions), or null: the
+    /// SD page row's CRUISE (review 2026-10-29: said "13.0").</summary>
+    public static Dictionary<double, string>? SpokenOnlyWordsFor(string controlId) =>
+        Same(controlId, "MSFSBA_SD_PAGE") ? new Dictionary<double, string> { [13] = SdPageWord(13)! } : null;
+
     /// <summary>A lever's position words, or null for any other control.</summary>
     public static IReadOnlyDictionary<double, string>? WordsFor(string controlId) =>
         ById.TryGetValue(controlId, out var lever) && lever.Words.Count > 0 ? lever.Words : null;

@@ -127,6 +127,27 @@ public class A350LeversTests
         Assert.True(A350WritePlan.ForSet(page.Control, 12, 12).IsEmpty);
     }
 
+    // Review 2026-10-29: the SD shows CRUISE (page 13) by itself in cruise, and STS with nothing to show brings it up, but
+    // 13 was no word of the row's, so every flight heard "System display page: 13.0" ("13,0" under de-DE). It is said
+    // "Cruise", and never offered as a pick: no ECP key selects it.
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    public void The_cruise_page_is_said_by_name_but_never_offered(string culture)
+    {
+        var def = new MSFSBlindAssist.Aircraft.IniBuildsA350Definition();
+        var row = def.GetVariables()["A350_SD_PAGE"];
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            Assert.Equal("System display page: Cruise",
+                new MSFSBlindAssist.SimConnect.SimConnectManager(IntPtr.Zero).FormatVariableValue("A350_SD_PAGE", row, 13));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
+        Assert.DoesNotContain(13.0, row.ValueDescriptions.Keys);
+    }
+
     /// <summary>The pitch trim switches trim the THS while held, each alone or both together (live 2026-10-27): two
     /// nudges move both together, never a combo left trimming.</summary>
     [Theory]

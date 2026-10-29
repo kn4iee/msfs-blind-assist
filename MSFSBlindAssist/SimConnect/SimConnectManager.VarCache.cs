@@ -257,6 +257,12 @@ public partial class SimConnectManager
             return $"{varDef.DisplayName}: {varDef.ValueDescriptions[value]}";
         }
 
+        // A value said by name that no pick offers (SimVarDefinition.SpokenOnlyDescriptions).
+        if (varDef.SpokenOnlyDescriptions != null && varDef.SpokenOnlyDescriptions.TryGetValue(value, out string? spokenOnly))
+        {
+            return varDef.AnnounceValueOnly ? spokenOnly : $"{varDef.DisplayName}: {spokenOnly}";
+        }
+
         // A cleared sentinel (see SimVarDefinition.NotSetBelow) is "not set", never a number.
         if (varDef.IsNotSet(value))
         {

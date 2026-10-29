@@ -587,6 +587,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     IsAnnounced = true,
                     ExcludeFromMonitorManager = control.Kind == A350Kinds.Spring,
                     ValueDescriptions = new Dictionary<double, string>(row.Positions),
+                    SpokenOnlyDescriptions = A350Levers.SpokenOnlyWordsFor(control.Id),
                     // The combo follows a change made elsewhere: the write fires only on a user commit.
                     RefreshControlWhenDefHandled = _ => true,
                 };

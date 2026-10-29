@@ -28,6 +28,11 @@ public class SimVarDefinition
     public bool AnnounceValueOnly { get; set; }  // True to announce only value (e.g., "On ground") instead of "DisplayName: value" (e.g., "Ground State: On ground")
     public bool ReverseDisplayOrder { get; set; }  // True to display combo box items in reverse order
     public Dictionary<double, string> ValueDescriptions { get; set; } = new Dictionary<double, string>();
+
+    /// <summary>Values said by name but never offered as a pick: a state the aircraft reaches by itself with no control that
+    /// selects it (the A350 SD's CRUISE page, which no ECP key calls). Consulted after <see cref="ValueDescriptions"/>
+    /// when a value is spoken; the panel's combo lists only <see cref="ValueDescriptions"/>.</summary>
+    public Dictionary<double, string>? SpokenOnlyDescriptions { get; set; }
     public bool OnlyAnnounceValueDescriptionMatches { get; set; }  // True to only announce when value matches a ValueDescriptions key (within tolerance), skip intermediate values
 
     /// <summary>
