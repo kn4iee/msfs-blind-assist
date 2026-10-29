@@ -5,11 +5,11 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>
 /// The A350's displays in the background: the CTR drawn first each tick and handed to the E/WD monitor
 /// (<see cref="CtrDrawn"/>); the captain's EFIS drawn every tick and its FMA changes spoken with
-/// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the first officer's EFIS every other tick;
-/// and two of the other displays (MFD, FCU, RMPs, standby displays, BAT) each tick in turn, a tick's displays all
-/// drawn on one memory copy. Each display's latest good draw is kept for its status display. Muted, it still
-/// follows the FMA, so unmuting never replays old modes. The captain's MFD, as it comes round, gives the FMS messages
-/// (A350FmsMessageAnnouncer), heard with the MFD window closed, behind their own Ctrl+M row.
+/// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the captain's MFD every other tick, for the FMS
+/// messages (A350FmsMessageAnnouncer) heard with the MFD window closed, behind their own Ctrl+M row; RMP 1 and the
+/// SFD in turn (<see cref="Others"/>); and one display only a status display or a window reads (<see cref="Quiet"/>)
+/// while it is read, else now and then. A tick's displays are all drawn on one memory copy. Each display's latest good
+/// draw is kept for its status display. Muted, it still follows the FMA, so unmuting never replays old modes.
 /// </summary>
 public sealed class A350PfdMonitor : IDisposable
 {
@@ -20,11 +20,22 @@ public sealed class A350PfdMonitor : IDisposable
     /// few seconds, up to about half a minute with a large memory; an older draw is no draw.</summary>
     public static readonly TimeSpan MaxAge = TimeSpan.FromSeconds(30);
 
-    /// <summary>The displays drawn in turn besides the EFIS.</summary>
-    public static readonly IReadOnlyList<(string Gauge, int Index)> Others = new[]
+    /// <summary>Displays a hotkey reads at once, drawn in turn every tick: RMP 1 (X, the squawk) and the SFD (Alt+I).
+    /// The CTR, the captain's EFIS (each tick) and the MFD (every other tick) are drawn besides: the background speaks
+    /// from them.</summary>
+    public static readonly IReadOnlyList<(string Gauge, int Index)> Others = new[] { ("RMP", 0), ("SFD", 0) };
+
+    /// <summary>Displays only a status display or a window reads: one a tick, in turn, while one was read in the last
+    /// <see cref="WantedFor"/>, and otherwise again after <see cref="QuietEvery"/>, so its latest draw is never older than
+    /// <see cref="MaxAge"/> when a status display opens on it (perf review 2026-10-30: each was drawn every fourth tick,
+    /// read or not).</summary>
+    public static readonly IReadOnlyList<(string Gauge, int Index)> Quiet = new[]
     {
-        ("MFD", 0), ("FCU", 0), ("RMP", 0), ("RMP", 1), ("RMP", 2), ("SFD", 0), ("SND", 0), ("BAT", 0),
+        ("EFIS", 1), ("FCU", 0), ("RMP", 1), ("RMP", 2), ("SND", 0), ("BAT", 0),
     };
+
+    public static readonly TimeSpan WantedFor = TimeSpan.FromSeconds(10), QuietEvery = TimeSpan.FromSeconds(15);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), DateTime> _askedAt = new(), _triedAt = new();
 
     private readonly Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> _draw;
     private readonly Func<string, bool> _muted;
@@ -33,7 +44,7 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly A350FmsMessageAnnouncer _messages = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At)> _latest = new();
     private readonly Func<DateTime> _now;
-    private int _tick, _other;
+    private int _tick, _other, _quiet;
     private CancellationTokenSource? _cts;
     private volatile bool _rebaseline, _rebaselineMessages;
     private DateTime? _settleUntil;   // the reading loop's own
@@ -46,6 +57,7 @@ public sealed class A350PfdMonitor : IDisposable
     public void Rebaseline()
     {
         _latest.Clear();
+        _triedAt.Clear();   // the quiet displays are drawn again at once for the new flight
         _rebaseline = true;
         _rebaselineMessages = true;   // the new flight's message line is its baseline, whichever read comes first
     }
@@ -101,8 +113,12 @@ public sealed class A350PfdMonitor : IDisposable
     public Action<A350DrawCapture?>? CtrDrawn { get; set; }
 
     /// <summary>A display's latest draw that did not trap, or null when there is none younger than <see cref="MaxAge"/>.</summary>
-    public A350DrawCapture? Latest(string gauge, int index) =>
-        _latest.TryGetValue((gauge, index), out var kept) && _now() - kept.At <= MaxAge ? kept.Capture : null;
+    public A350DrawCapture? Latest(string gauge, int index)
+    {
+        var now = _now();
+        _askedAt[(gauge, index)] = now;   // a quiet display read is drawn every tick while it is read
+        return _latest.TryGetValue((gauge, index), out var kept) && now - kept.At <= MaxAge ? kept.Capture : null;
+    }
 
     /// <summary>One tick: the captain's EFIS, every other tick the first officer's, and two of the others, asked for
     /// at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
@@ -114,9 +130,20 @@ public sealed class A350PfdMonitor : IDisposable
         if (ctr != null) gauges.Add(("CTR", 0));
         int cptAt = gauges.Count;
         gauges.Add(("EFIS", 0));
-        if (_tick++ % 2 == 1) gauges.Add(("EFIS", 1));
-        for (int i = 0; i < 2; i++)
-            gauges.Add(Others[_other++ % Others.Count]);
+        if (_tick++ % 2 == 0) gauges.Add(("MFD", 0));   // the FMS messages: two agreeing reads within four ticks
+        gauges.Add(Others[_other++ % Others.Count]);
+        var due = _now();
+        for (int n = 0; n < Quiet.Count; n++)
+        {
+            var q = Quiet[_quiet++ % Quiet.Count];
+            bool read = _askedAt.TryGetValue(q, out var asked) && due - asked < WantedFor;
+            if (read || !_triedAt.TryGetValue(q, out var tried) || due - tried >= QuietEvery)
+            {
+                _triedAt[q] = due;
+                gauges.Add(q);
+                break;
+            }
+        }
         if (await _draw(gauges.ToArray()).ConfigureAwait(false) is not { } caps) return;
         var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)

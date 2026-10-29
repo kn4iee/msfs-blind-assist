@@ -703,9 +703,10 @@ public partial class MainForm
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
             () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
             line => SafeBeginInvoke(() => announcer.Announce(line)));
-        // The displays: the CTR (the E/WD call-outs) and the captain's EFIS drawn twice a second for the FMA call-outs (one
-        // Ctrl+M row per column), the first officer's once a second, the others in turn, each tick's on one memory copy;
-        // each display's latest draw feeds its status display. The E/WD monitor is fed from the tick, never a copy of its own.
+        // The displays: the CTR (the E/WD call-outs) and the captain's EFIS (the FMA call-outs, one Ctrl+M row per column)
+        // each tick, the MFD (the FMS messages) every other tick, RMP 1 and the SFD in turn, and a display only a status
+        // display or window reads while it is read (A350PfdMonitor.Quiet), each tick's on one memory copy; each display's
+        // latest draw feeds its status display. The E/WD monitor is fed from the tick, never a copy of its own.
         var ecam = a350EcamMonitor;
         a350PfdMonitor = new Aircraft.A350.Display.A350PfdMonitor(
             async gauges => await service.DrawAsync(gauges),

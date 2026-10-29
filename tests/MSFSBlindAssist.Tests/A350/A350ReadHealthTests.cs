@@ -138,7 +138,7 @@ public class A350ReadHealthTests
     public void Every_display_drawn_has_a_name()
     {
         var drawn = IniBuildsA350Definition.DisplayPanels.Select(d => (d.Gauge, d.Index))
-            .Concat(A350PfdMonitor.Others).Append(("CTR", 0)).Distinct();
+            .Concat(A350PfdMonitor.Others).Concat(A350PfdMonitor.Quiet).Append(("CTR", 0)).Append(("MFD", 0)).Distinct();
         foreach (var (gauge, index) in drawn)
             Assert.NotEqual(gauge, A350DisplayStatus.NameOf(gauge, index));
     }

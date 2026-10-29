@@ -78,8 +78,8 @@ public class A350PfdMonitorTests
         await m.TickAsync();
         await m.TickAsync();
         Assert.Equal(2, asked.Count);
-        Assert.Equal(new[] { ("EFIS", 0), ("MFD", 0), ("FCU", 0) }, asked[0]);
-        Assert.Equal(new[] { ("EFIS", 0), ("EFIS", 1), ("RMP", 0), ("RMP", 1) }, asked[1]);
+        Assert.Equal(new[] { ("EFIS", 0), ("MFD", 0), ("RMP", 0), ("EFIS", 1) }, asked[0]);
+        Assert.Equal(new[] { ("EFIS", 0), ("SFD", 0), ("FCU", 0) }, asked[1]);
     }
 
     // Review 2026-10-29 (engine I6): the E/WD monitor took a full memory copy of its own every cycle (about 650 ms at
@@ -97,7 +97,7 @@ public class A350PfdMonitorTests
             return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "CTR" ? ctr : null).ToList());
         }, _ => false, _ => { }) { CtrDrawn = handed.Add };
         await m.TickAsync();
-        Assert.Equal(new[] { ("CTR", 0), ("EFIS", 0), ("MFD", 0), ("FCU", 0) }, asked[0]);
+        Assert.Equal(new[] { ("CTR", 0), ("EFIS", 0), ("MFD", 0), ("RMP", 0), ("EFIS", 1) }, asked[0]);
         Assert.Same(ctr, Assert.Single(handed));
     }
 
@@ -164,5 +164,52 @@ public class A350PfdMonitorTests
         await m.TickAsync();
         Assert.Null(m.Latest("EFIS", 0));
         Assert.Empty(said);
+    }
+    /// <summary>The gauges each of <paramref name="ticks"/> ticks half a second apart asks for, every draw good and blank;
+    /// <paramref name="between"/> runs before each tick (a status display reading a display).</summary>
+    private static async Task<(A350PfdMonitor Monitor, List<(string Gauge, int Index)[]> Asked)> Schedule(int ticks, Action<A350PfdMonitor, int>? between = null)
+    {
+        var now = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
+        var asked = new List<(string Gauge, int Index)[]>();
+        var m = new A350PfdMonitor(gauges =>
+        {
+            asked.Add(gauges);
+            return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => (A350DrawCapture?)new A350DrawCapture(g.Gauge,
+                Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1)).ToList());
+        }, _ => false, _ => { }, () => now) { CtrDrawn = _ => { } };
+        for (int t = 0; t < ticks; t++)
+        {
+            between?.Invoke(m, t);
+            await m.TickAsync();
+            now += TimeSpan.FromMilliseconds(500);
+        }
+        return (m, asked);
+    }
+
+    // Perf review 2026-10-30 and the owner's question: what the background speaks from is drawn often (the CTR and the
+    // captain's EFIS each tick; the MFD's FMS messages every other tick, where every fourth made a message wait up to eight
+    // ticks), RMP 1 and the SFD in turn (X and Alt+I read them at once); a display only a status display or window reads is
+    // drawn now and then while none reads it, often enough that its latest draw is never too old to show.
+    [Fact]
+    public async Task The_background_displays_are_drawn_often_and_the_quiet_ones_kept_but_seldom()
+    {
+        var (m, asked) = await Schedule(40);   // 20 s
+        int Count((string, int) g) => asked.Count(t => t.Contains(g));
+        Assert.Equal(40, Count(("CTR", 0)));
+        Assert.Equal(40, Count(("EFIS", 0)));
+        Assert.Equal(20, Count(("MFD", 0)));
+        Assert.True(Count(("RMP", 0)) >= 15 && Count(("SFD", 0)) >= 15, $"RMP 1 {Count(("RMP", 0))}, SFD {Count(("SFD", 0))}");
+        foreach (var q in A350PfdMonitor.Quiet)
+        {
+            Assert.InRange(Count(q), 1, 2);
+            Assert.NotNull(m.Latest(q.Gauge, q.Index));
+        }
+    }
+
+    [Fact]
+    public async Task A_quiet_display_read_is_drawn_every_tick_while_it_is_read()
+    {
+        var (_, asked) = await Schedule(40, (m, t) => { if (t >= 10 && t < 20) m.Latest("FCU", 0); });
+        Assert.Equal(20, Enumerable.Range(10, 20).Count(t => asked[t].Contains(("FCU", 0))));
     }
 }
