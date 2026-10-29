@@ -135,6 +135,43 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
+    public void The_fuel_page_offers_import_from_simbrief_beside_its_figures()
+    {
+        // Plan 18: the template used to ignore the whole content area, which dropped IMPORT FROM SIMBRIEF.
+        var m = Load("bright", "20-fuel-start-boarding");
+
+        var import = Item(m, "Import from SIMBRIEF");
+        Assert.Equal(Bbs757EfbKind.Button, import.Kind);
+        Assert.True(import.Clickable);
+        Assert.InRange(import.Hit.X, 502, 532);
+        Assert.InRange(import.Hit.Y, 936, 966);
+        Assert.Equal("45%", Item(m, "Left tank").Value);
+        Assert.Equal("1000 gal", Item(m, "Left tank volume").Value);
+        Assert.Equal("20100 lbs", Item(m, "Total fuel weight").Value);
+        // The diagram's labels and the panel's own (LEFT, CENTER, RIGHT, TOTAL FUEL) stay out: the note is the only text.
+        Assert.Equal(new[] { "Tank figures as the tablet shows them." },
+            m.Items.Where(i => i.Kind is Bbs757EfbKind.Text or Bbs757EfbKind.Heading).Select(i => i.Text));
+    }
+
+    [Fact]
+    public void The_fuel_page_keeps_the_box_BlueBird_shows_over_it()
+    {
+        var m = Load("bright", "22-fuel-adjustment-complete");
+
+        Assert.Equal("Aircraft, Fuel", m.PageName);
+        var q = Assert.IsType<Bbs757EfbQuestion>(m.Question);
+        Assert.Equal("Fuel adjustment is complete!", q.Text);
+        var ok = Assert.Single(q.Buttons);
+        Assert.Equal("OK", ok.Text);
+        Assert.InRange(ok.Hit.X, 808, 838);
+        Assert.InRange(ok.Hit.Y, 647, 677);
+        Assert.Equal("53%", Item(m, "Left tank").Value);
+        Assert.Equal("15543 lbs", Item(m, "Total fuel weight").Value);
+        // IMPORT FROM SIMBRIEF is gone from the tablet, and the box's OK is the question's.
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Button);
+    }
+
+    [Fact]
     public void Failure_buttons_say_which_failure_they_belong_to()
     {
         var m = Load("bright", "16-aircraft-failures");
@@ -178,6 +215,25 @@ public class Bbs757EfbScreenTests
         Assert.Equal(Bbs757EfbKind.Checkbox, Item(m, "Beacon: ON").Kind);
         Assert.Equal(Bbs757EfbKind.Checkbox, Item(m, "Before start, whole checklist").Kind);
         Assert.Equal(Bbs757EfbKind.Button, Item(m, "Reset").Kind);
+    }
+
+    [Theory]
+    [InlineData("40-checklist", false)]
+    [InlineData("41-checklist-header-ticked", true)]
+    [InlineData("42-checklist-header-unticked", false)]
+    public void The_checklist_header_box_is_judged_inside_its_own_border(string name, bool ticked)
+    {
+        // The header's words sit higher than its box: judged round the words' row, the box's bright top border read as
+        // a tick (42, and live after unticking).
+        var m = Load("bright", name);
+
+        var header = Item(m, "Before start, whole checklist");
+        Assert.Equal(Bbs757EfbKind.Checkbox, header.Kind);
+        Assert.Equal(ticked, header.On);
+        // Every line follows its own box: all ticked with the header on 41, none on 40 and 42.
+        var lines = m.Items.Where(i => i.Kind == Bbs757EfbKind.Checkbox).ToList();
+        Assert.Equal(14, lines.Count);   // the header and the 13 lines of BEFORE START
+        Assert.All(lines, i => Assert.Equal(ticked, i.On));
     }
 
     [Fact]

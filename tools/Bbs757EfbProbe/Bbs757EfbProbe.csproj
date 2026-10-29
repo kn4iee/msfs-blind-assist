@@ -21,6 +21,8 @@
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPopout.cs" Link="Linked\Bbs757EfbPopout.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbOcr.cs" Link="Linked\Bbs757EfbOcr.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbScreen.cs" Link="Linked\Bbs757EfbScreen.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbTopBar.cs" Link="Linked\Bbs757EfbTopBar.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbNotices.cs" Link="Linked\Bbs757EfbNotices.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbVocabulary.cs" Link="Linked\Bbs757EfbVocabulary.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPageReader.cs" Link="Linked\Bbs757EfbPageReader.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbReadingOrder.cs" Link="Linked\Bbs757EfbReadingOrder.cs" />

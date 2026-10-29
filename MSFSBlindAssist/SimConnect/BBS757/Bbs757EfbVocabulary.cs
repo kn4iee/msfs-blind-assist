@@ -269,6 +269,6 @@ public static class Bbs757EfbVocabulary
     {
         "GPU", "APU", "IRS", "CG", "ZFW", "ACARS", "NM", "PB", "SVC", "A/C", "EFB", "TOD", "CPDLC", "FP", "NOTAM", "PERF",
         "AIRAC", "SIMBRIEF", "ID", "EHSI", "VNAV", "EGPWS", "RA", "KTS", "V1", "CBs", "MAC", "%MAC", "FWD", "AFT", "L", "R",
-        "BBS", "MSFS", "GND", "SRVC", "UP", "OK",
+        "BBS", "MSFS", "GND", "SRVC", "UP", "OK", "OFP",
     };
 }

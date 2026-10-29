@@ -151,6 +151,18 @@ public sealed record Bbs757EfbScreenModel(
     /// the window then offers scroll buttons (the agent's wheel).</summary>
     public bool Scrollable { get; init; }
 
+    /// <summary>The tablet's top bar, left to right (<see cref="Bbs757EfbTopBar"/>): the departure countdown, the boarding
+    /// control and the notification control, keyed <c>top:dep</c>, <c>top:boarding</c> and <c>top:notifications</c>
+    /// whatever their words. Empty when none shows.</summary>
+    public IReadOnlyList<Bbs757EfbItem> TopBar { get; init; } = Array.Empty<Bbs757EfbItem>();
+
+    /// <summary>BlueBird's notification panel's entries, top first (<see cref="Bbs757EfbNotices"/>); empty when it does
+    /// not show.</summary>
+    public IReadOnlyList<Bbs757EfbNotice> Notices { get; init; } = Array.Empty<Bbs757EfbNotice>();
+
+    /// <summary>A question the tablet shows over the page, with its answers (not in <see cref="Items"/>); null when none.</summary>
+    public Bbs757EfbQuestion? Question { get; init; }
+
     /// <summary>"Aircraft, Ground services" / "Home".</summary>
     public string PageName =>
         App.Length == 0 ? "Unknown page"
@@ -163,7 +175,8 @@ public sealed record Bbs757EfbScreenModel(
 /// structure. Pure: tested against captured pages, dim and bright (tests/.../Fixtures/bbs757-efb/).
 ///
 /// The layout every BBOS app shares (tablet pixels, 1397 x 1048, measured 2026-10-26): a status bar
-/// (date, times, OAT) above y 32; the app's title at the top left (y 35-85) after a home button at
+/// (date, times, OAT) above y 32, with BlueBird's own controls at its right end (read by
+/// <see cref="Bbs757EfbTopBar"/>); the app's title at the top left (y 35-85) after a home button at
 /// (19, 62); on the AIRCRAFT, NAVIGATION, SETTINGS and CHECKLIST apps a side menu left of x 252 whose
 /// selected entry has a band unlike the others'; the content right of it. The home screen has no
 /// title: five app icons with their labels 75 px under them (the label itself is not clickable).
@@ -242,8 +255,10 @@ public static class Bbs757EfbScreen
                     new Bbs757EfbSlot(new Rectangle(717, 912, 230, 38), "Total fuel volume", UnitGroup: "volume"),
                     new Bbs757EfbSlot(new Rectangle(717, 952, 230, 38), "Total fuel weight", UnitGroup: "weight"),
                 },
-                Ignore: new[] { new Rectangle(256, 88, 1141, 960) },
-                Note: "Tank figures as the tablet shows them. To load fuel and payload, use Load fuel and payload from SimBrief."),
+                // The diagram, the columns' LEFT / CENTER / RIGHT and TOTAL FUEL: the page's own words stay, IMPORT FROM
+                // SIMBRIEF among them (at 517,951 when a plan is loaded and AUTOMATIC BOARDING is off; measured 2026-10-29).
+                Ignore: new[] { new Rectangle(256, 88, 1141, 600), new Rectangle(256, 700, 1141, 60), new Rectangle(500, 865, 215, 55) },
+                Note: "Tank figures as the tablet shows them."),
         },
         ["AIRCRAFT/WEIGHT & BALANCE"] = new[]
         {
@@ -289,7 +304,18 @@ public static class Bbs757EfbScreen
 
     public static Bbs757EfbScreenModel Parse(IReadOnlyList<Bbs757EfbTextLine> lines, Bbs757EfbPixels px)
     {
-        var clean = Clean(lines);
+        // The top bar is read apart from the page; what the tablet shows over the page (BlueBird's notification panel, a
+        // question) is taken out of it before the page is read, from OCR's own lines (see Bbs757EfbNotices).
+        var topBar = Bbs757EfbTopBar.Parse(lines.Where(l => l.Box.Bottom <= StatusBottom).ToList(), px);
+        var below = lines.Where(l => l.Box.Bottom > StatusBottom).ToList();
+        var notices = Bbs757EfbNotices.TakePanel(below, px);
+        var question = Bbs757EfbNotices.TakeQuestion(below, px);
+        return ParsePage(Clean(below), px) with { TopBar = topBar, Notices = notices, Question = question };
+    }
+
+    /// <summary>The page below the top bar, from its cleaned lines.</summary>
+    private static Bbs757EfbScreenModel ParsePage(List<Bbs757EfbTextLine> clean, Bbs757EfbPixels px)
+    {
         string app = "";
         string section = "";
         foreach (var l in clean)
@@ -297,7 +323,7 @@ public static class Bbs757EfbScreen
             if (l.Box.Top < TitleTop - 8 || l.Box.Bottom > TitleBottom + 6 || l.Box.Left > 300) continue;
             if (Array.IndexOf(Bbs757EfbVocabulary.Apps, l.Text) >= 0) { app = l.Text; break; }
         }
-        var body = clean.Where(l => l.Box.Bottom > StatusBottom && !(l.Box.Top < TitleBottom && l.Box.Left < 300 && l.Text == app)).ToList();
+        var body = clean.Where(l => !(l.Box.Top < TitleBottom && l.Box.Left < 300 && l.Text == app)).ToList();
 
         if (app.Length == 0 && IsHome(body)) return ParseHome(body);
 
@@ -428,7 +454,7 @@ public static class Bbs757EfbScreen
         return Bbs757EfbReadingOrder.Lines(o, 5);
     }
 
-    private static bool IsNoise(string t)
+    internal static bool IsNoise(string t)
     {
         if (t.Length == 0) return true;
         if (Bbs757EfbVocabulary.IsKnown(t)) return false;
@@ -1025,14 +1051,26 @@ public static class Bbs757EfbScreen
         return Order(o);
     }
 
-    /// <summary>A checklist box at (x, cy): null when there is none, else whether it is ticked
-    /// (bright pixels inside its border). The border: lighter than the page 11 px either side.</summary>
+    /// <summary>
+    /// A checklist box at (x, cy): null when there is none, else whether it is ticked (bright pixels inside its border).
+    /// The border: lighter than the page 11 px either side. The box's own top and bottom borders are the nearest rows within
+    /// 12 px above and below the row that are lit right across it (x - 9 to x + 9, at least halfway from the band round
+    /// the box to its side border; a tick's fill leaves a dark gap inside each side border); the inside is between them,
+    /// or as far as 12 px where none is found. Measured on the header (2026-10-29): its words sit 5 px above its box's
+    /// centre, so a window round the words took in the box's bright top border, read as a tick on an empty box.
+    /// </summary>
     internal static bool? CheckboxAt(Bbs757EfbPixels px, int x, int cy)
     {
         bool Edge(int ex) => Enumerable.Range(-2, 5).Any(d => px.FromBackground(px.At(ex + d, cy)) > 16);
         if (!Edge(x - 11) || !Edge(x + 11)) return null;
+        double side = Enumerable.Range(x - 14, 6).Max(xx => px.Lum(xx, cy));
+        double band = Math.Min(px.Lum(x - 16, cy), px.Lum(x + 16, cy));
+        bool Border(int y) => Enumerable.Range(x - 9, 19).All(xx => px.Lum(xx, y) >= (side + band) / 2);
+        int top = cy - 12, bottom = cy + 12;
+        for (int y = cy; y >= cy - 12; y--) if (Border(y)) { top = y; break; }
+        for (int y = cy; y <= cy + 12; y++) if (Border(y)) { bottom = y; break; }
         int bright = 0;
-        for (int yy = cy - 7; yy <= cy + 7; yy++)
+        for (int yy = top + 1; yy < bottom; yy++)
             for (int xx = x - 7; xx <= x + 7; xx++)
                 if (px.Lum(xx, yy) > 110) bright++;
         return bright > 10;
