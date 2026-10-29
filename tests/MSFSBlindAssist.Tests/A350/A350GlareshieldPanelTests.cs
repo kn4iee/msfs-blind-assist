@@ -58,33 +58,44 @@ public class A350GlareshieldPanelTests
             ("FCU display brightness", Set, ""), ("FCU integral lighting", Set, ""),
         });
         AssertLights("FCU", new[] { "AP 1 light", "AP 2 light", "A/THR light", "LOC light", "APPR light", "ALT light" });
-        AssertRows("Warnings", new[]
+    }
+
+    /// <summary>Each side's warning lights, HUD keys, loudspeaker and table light on panels of their own (owner 2026-10-27:
+    /// never one panel for both pilots), after the EFIS panels in the A380's order.</summary>
+    [Fact]
+    public void The_glareshield_panels_split_by_side()
+    {
+        Assert.Equal(new[]
         {
-            ("Captain chrono", Press, ""), ("First officer chrono", Press, ""),
-            ("Captain master caution", Press, ""), ("First officer master caution", Press, ""),
-            ("Captain master warning", Press, ""), ("First officer master warning", Press, ""),
-            ("Captain autoland", Press, ""), ("First officer autoland", Press, ""),
-            ("Captain ATC message", Press, ""), ("First officer ATC message", Press, ""),
-        });
-        AssertLights("Warnings", new[] {
-            "Captain master caution light", "Captain master caution lower light",
-            "First officer master caution light", "First officer master caution lower light",
+            "FCU", "EFIS Captain", "EFIS First Officer", "Captain Warnings", "First Officer Warnings", "Captain HUD",
+            "First Officer HUD", "Captain Loudspeaker and Table Light", "First Officer Loudspeaker and Table Light",
+        }, Placement.Structure["Glareshield"]);
+    }
+
+    [Theory]
+    [InlineData("Captain", "Captain")]
+    [InlineData("First Officer", "First officer")]
+    public void Each_sides_warnings_hud_and_loudspeaker(string panelSide, string side)
+    {
+        Assert.Equal(new[]
+        {
+            ($"{side} chrono", Press, ""), ($"{side} master caution", Press, ""), ($"{side} master warning", Press, ""),
+            ($"{side} autoland", Press, ""), ($"{side} ATC message", Press, ""),
+        }, Rows($"{panelSide} Warnings"));
+        Assert.Equal(new[]
+        {
+            $"{side} master caution light", $"{side} master caution lower light",
             // Each MASTER WARN reads its steady warning state, both legends one light (A350PanelLamps.SteadyRules).
-            "Captain master warning light", "First officer master warning light",
-            "Captain autoland light", "First officer autoland light",
-            "Captain ATC message light", "First officer ATC message light",
-        });
-        AssertRows("HUD", new[]
+            $"{side} master warning light", $"{side} autoland light", $"{side} ATC message light",
+            $"{side} priority light", $"{side} priority arrow light",
+        }, Lights($"{panelSide} Warnings"));
+        Assert.Equal(new[]
         {
-            ("Captain HUD brightness", Set, ""), ("First officer HUD brightness", Set, ""),
-            ("Captain HUD crosswind mode", Set, "0=Norm, 1=X-wind"), ("First officer HUD crosswind mode", Set, "0=Norm, 1=X-wind"),
-            ("Captain HUD declutter", Set, OffOn), ("First officer HUD declutter", Set, OffOn),
-        });
-        AssertRows("Loudspeakers and Table Lights", new[]
-        {
-            ("Captain loudspeaker", Set, ""), ("First officer loudspeaker", Set, ""),
-            ("Captain sliding table light", Set, ""), ("First officer sliding table light", Set, ""),
-        });
+            ($"{side} HUD brightness", Set, ""), ($"{side} HUD crosswind mode", Set, "0=Norm, 1=X-wind"),
+            ($"{side} HUD declutter", Set, OffOn),
+        }, Rows($"{panelSide} HUD"));
+        Assert.Equal(new[] { ($"{side} loudspeaker", Set, ""), ($"{side} sliding table light", Set, "") },
+            Rows($"{panelSide} Loudspeaker and Table Light"));
     }
 
     /// <summary>The HUD is an option (OIS OPTIONS, <c>INI_IS_HUD</c>): without it the cockpit hides its controls. A

@@ -378,6 +378,19 @@ public class IniBuildsA350DefinitionTests
         Assert.Equal(new Dictionary<double, string> { [0] = "Not fitted", [1] = "Fitted" }, option.ValueDescriptions);
     }
 
+    /// <summary>An option's line sits on each panel holding its controls and on no other: the HUD's on both sides' HUD keys
+    /// and HUD units, the standby navigation display's on the SND, not on the ISIS beside it.</summary>
+    [Fact]
+    public void An_options_line_sits_with_its_controls()
+    {
+        const string hud = "A350_OPT_INI_IS_HUD", snd = "A350_OPT_INI_OPTION_FO_ISIS";
+        var displays = _def.GetPanelDisplayVariables();
+        Assert.Equal(new[] { "Captain HUD", "Captain HUD Unit", "First Officer HUD", "First Officer HUD Unit" },
+            displays.Where(d => d.Value.Contains(hud)).Select(d => d.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(new[] { "SND" }, displays.Where(d => d.Value.Contains(snd)).Select(d => d.Key));
+        Assert.Equal("Standby navigation display option", _def.GetVariables()[snd].DisplayName);
+    }
+
     private const string CabinAltitudeTarget = "A350_VAL_CABIN_PRESS_ALTITUDE_TARGET";
 
     [Fact]

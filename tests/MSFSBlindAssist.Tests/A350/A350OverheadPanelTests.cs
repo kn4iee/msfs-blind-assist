@@ -33,17 +33,18 @@ public class A350OverheadPanelTests
         "0=Intermittent slow, 1=Intermittent medium, 2=Intermittent fast, 3=Off, 4=Slow, 5=Fast";
 
     /// <summary>Live 2026-10-26: both selectors reach all six positions and the wipers sweep (WIPER_ANIMATION_CPT/_FO);
-    /// each rain repellent holds 1 while pressed and 0 on release, which only the cockpit sound reads.</summary>
-    [Fact]
-    public void Wipers()
+    /// each rain repellent holds 1 while pressed and 0 on release, which only the cockpit sound reads. Each side's on a
+    /// panel of its own (owner 2026-10-27), though the A380 keeps both wipers on one.</summary>
+    [Theory]
+    [InlineData("Captain Wipers", "Captain")]
+    [InlineData("First Officer Wipers", "First officer")]
+    public void Wipers(string panel, string side)
     {
-        AssertRows("Wipers", new[]
+        Assert.Equal(new[]
         {
-            ("Captain wiper", A350RowAction.Set, WiperPositions),
-            ("First officer wiper", A350RowAction.Set, WiperPositions),
-            ("Captain rain repellent", A350RowAction.Press, ""),
-            ("First officer rain repellent", A350RowAction.Press, ""),
-        });
+            ($"{side} wiper", A350RowAction.Set, WiperPositions),
+            ($"{side} rain repellent", A350RowAction.Press, ""),
+        }, Rows(panel));
     }
 
     private static IEnumerable<string> Lights(string panel)

@@ -169,10 +169,10 @@ public static class A350PanelLamps
         // Found 2026-10-28 by scanning every emissive material's variables against what MSFSBA reads. The glareshield's
         // sidestick priority lights: the upper legend the green CAPT or F/O, the lower the red arrow toward the side with
         // priority (the A320 family's layout); the gear lever's red arrow (gear not down in landing configuration).
-        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Warnings", "Captain priority light"),
-        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Warnings", "Captain priority arrow light"),
-        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light"),
-        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light"),
+        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Captain Warnings", "Captain priority light"),
+        ("FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Captain Warnings", "Captain priority arrow light"),
+        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "First Officer Warnings", "First officer priority light"),
+        ("FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "First Officer Warnings", "First officer priority arrow light"),
         ("LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light"),
         // Each RMP's OFF light: the upper legend lit with its BRT/OFF knob at 0 (live 2026-10-28), the lower not seen lit.
         ("RMP_1_OFF_LIGHT_SEQ1_LIGHT", "Captain RMP", "Captain RMP off light"),
@@ -184,11 +184,12 @@ public static class A350PanelLamps
     };
 
     /// <summary>Indicators the map has no lamp node for, read from their own variable, shown after the map's: each oxygen
-    /// mask's flow blinker, yellow while oxygen flows (its PRESS TO TEST held, live 2026-10-28), mechanical, so no bus.</summary>
+    /// mask's flow blinker, yellow while oxygen flows (its PRESS TO TEST held, live 2026-10-28), mechanical, so no bus;
+    /// each beside its mask.</summary>
     private static readonly (string Node, string Panel, string Name, string State)[] OwnIndicators =
     {
-        ("OXYTEST_BLINKER_CPT", "Oxygen Masks", "Captain oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_CPT) 0.5 >"),
-        ("OXYTEST_BLINKER_FO", "Oxygen Masks", "First officer oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_FO) 0.5 >"),
+        ("OXYTEST_BLINKER_CPT", "Captain Oxygen Mask", "Captain oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_CPT) 0.5 >"),
+        ("OXYTEST_BLINKER_FO", "First Officer Oxygen Mask", "First officer oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_FO) 0.5 >"),
         ("OXYTEST_BLINKER_TO", "Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_TO) 0.5 >"),
         ("OXYTEST_BLINKER_4TH", "Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_4TH) 0.5 >"),
     };

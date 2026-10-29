@@ -15,9 +15,9 @@ public class A350PanelLayoutTests
         Assert.Equal(new[]
         {
             "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
-            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Wipers", "ADIRS",
-            "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc", "Surveillance", "Cabin", "OIS",
-            "Maintenance", "Interior Lighting", "Exterior Lighting",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Captain Wipers",
+            "First Officer Wipers", "ADIRS", "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc",
+            "Surveillance", "Cabin", "OIS", "Maintenance", "Interior Lighting", "Exterior Lighting",
         }, Placement.Structure["Overhead"]);
     }
 
@@ -26,9 +26,34 @@ public class A350PanelLayoutTests
     {
         Assert.Equal(new[]
         {
-            "Gear", "Autobrake", "ISIS", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
-            "First Officer Individual Panel", "First Officer Side Panel",
+            "Gear", "Autobrake", "ISIS", "SND", "Source Switching", "Display Power", "Captain Display Power",
+            "First Officer Display Power", "Captain Side Panel", "Captain Individual Panel", "First Officer Individual Panel",
+            "First Officer Side Panel",
         }, Placement.Structure["Instrument"]);
+    }
+
+    /// <summary>Owner 2026-10-27 (backlog 19, "split them" 2026-10-29): no panel holds both pilots' controls, even where the
+    /// A380 keeps one (its Wipers). Each side's rows have a panel of their own, after the panel the rest stay on.</summary>
+    [Fact]
+    public void No_panel_holds_both_pilots_controls()
+    {
+        var mixed = Placement.RowsByPanel
+            .Where(p => p.Value.Any(r => r.Name.StartsWith("Captain ", StringComparison.Ordinal))
+                && p.Value.Any(r => r.Name.StartsWith("First officer ", StringComparison.Ordinal)))
+            .Select(p => p.Key);
+        Assert.Empty(mixed);
+    }
+
+    [Fact]
+    public void A_side_panel_holds_only_its_sides_rows()
+    {
+        foreach (var (panel, rows) in Placement.RowsByPanel)
+        {
+            if (panel.StartsWith("Captain ", StringComparison.Ordinal))
+                Assert.All(rows, r => Assert.StartsWith("Captain ", r.Name));
+            if (panel.StartsWith("First Officer ", StringComparison.Ordinal))
+                Assert.All(rows, r => Assert.StartsWith("First officer ", r.Name));
+        }
     }
 
     [Fact]
@@ -65,7 +90,7 @@ public class A350PanelLayoutTests
     {
         Assert.Equal("ENG 1 bleed", Row("Bleed Air", "A350_AIR_ENG_BLEED_1").Name);
         Assert.Equal("ENG 2 FADEC GND PWR", Row("Engine FADEC and Manual Start", "A350_MAINT_ENG_FADEC_GND_POWER_2").Name);
-        Assert.Equal("Captain wiper", Row("Wipers", "A350_WIPER_LEFT").Name);
+        Assert.Equal("Captain wiper", Row("Captain Wipers", "A350_WIPER_LEFT").Name);
         Assert.Equal("ENG 2 agent 1", Row("Fire", "A350_FIRE_ENG_2_AGENT_1").Name);
     }
 

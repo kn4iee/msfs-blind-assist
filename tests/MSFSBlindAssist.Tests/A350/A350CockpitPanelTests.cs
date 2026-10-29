@@ -18,8 +18,13 @@ public class A350CockpitPanelTests
     [Fact]
     public void The_cockpit_panels()
     {
-        Assert.Equal(new[] { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
-            Placement.Structure["Cockpit"]);
+        // Each side's on a panel of its own after the shared one (owner 2026-10-27), singular where a side has one.
+        Assert.Equal(new[]
+        {
+            "Doors and Hatches", "Sun Shades", "Captain Sun Shades", "First Officer Sun Shades", "Oxygen Masks",
+            "Captain Oxygen Mask", "First Officer Oxygen Mask", "Captain HUD Unit", "First Officer HUD Unit",
+            "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Misc",
+        }, Placement.Structure["Cockpit"]);
     }
 
     [Fact]
@@ -34,59 +39,59 @@ public class A350CockpitPanelTests
         }, Rows("Doors and Hatches"));
     }
 
-    [Fact]
-    public void Sun_shades()
+    [Theory]
+    [InlineData("Captain Sun Shades", "Captain")]
+    [InlineData("First Officer Sun Shades", "First officer")]
+    public void Sun_shades(string panel, string side)
     {
         Assert.Equal(new[]
         {
-            ("Captain sun shade", Set, ""),
-            ("Captain side sun shade", Set, "0=Stowed, 1=Deployed"),
-            ("Captain rear sun shade", Set, "0=Stowed, 1=Deployed"),
-            ("First officer sun shade", Set, ""),
-            ("First officer side sun shade", Set, "0=Stowed, 1=Deployed"),
-            ("First officer rear sun shade", Set, "0=Stowed, 1=Deployed"),
-            ("Center sun shade", Set, "0=Stowed, 1=Deployed"),
-        }, Rows("Sun Shades"));
+            ($"{side} sun shade", Set, ""),
+            ($"{side} side sun shade", Set, "0=Stowed, 1=Deployed"),
+            ($"{side} rear sun shade", Set, "0=Stowed, 1=Deployed"),
+        }, Rows(panel));
+        Assert.Equal(new[] { ("Center sun shade", Set, "0=Stowed, 1=Deployed") }, Rows("Sun Shades"));
     }
 
-    [Fact]
-    public void Oxygen_masks_by_seat()
+    [Theory]
+    [InlineData("Captain Oxygen Mask", "Captain")]
+    [InlineData("First Officer Oxygen Mask", "First officer")]
+    [InlineData("Oxygen Masks", "Third occupant")]
+    [InlineData("Oxygen Masks", "Fourth occupant")]
+    public void Oxygen_masks_by_seat(string panel, string seat)
     {
-        var rows = Rows("Oxygen Masks").ToList();
-        foreach (var seat in new[] { "Captain", "First officer", "Third occupant", "Fourth occupant" })
-        {
-            Assert.Contains(($"{seat} oxygen mask stowage", Set, "0=Closed, 1=Open"), rows);   // its tooltip names the click
-            Assert.Contains(($"{seat} oxygen N/100%", Set, "0=Normal, 1=100%"), rows);
-            Assert.Contains(($"{seat} oxygen mask test", Press, ""), rows);
-            Assert.Contains(($"{seat} oxygen emergency pressure", Press, ""), rows);
-        }
-        Assert.Equal(16, rows.Count);
+        var rows = Rows(panel).ToList();
+        Assert.Contains(($"{seat} oxygen mask stowage", Set, "0=Closed, 1=Open"), rows);   // its tooltip names the click
+        Assert.Contains(($"{seat} oxygen N/100%", Set, "0=Normal, 1=100%"), rows);
+        Assert.Contains(($"{seat} oxygen mask test", Press, ""), rows);
+        Assert.Contains(($"{seat} oxygen emergency pressure", Press, ""), rows);
+        Assert.Equal(panel == "Oxygen Masks" ? 8 : 4, rows.Count);   // the two observers' masks share the panel
     }
 
-    [Fact]
-    public void Hud_units_are_the_hud_options()
+    [Theory]
+    [InlineData("Captain HUD Unit", "Captain")]
+    [InlineData("First Officer HUD Unit", "First officer")]
+    public void Hud_units_are_the_hud_options(string panel, string side)
     {
         Assert.Equal(new[]
         {
-            ("Captain HUD cover", Set, "0=Off, 1=On"),
-            ("First officer HUD cover", Set, "0=Off, 1=On"),
-            ("Captain HUD", Set, "0=Stowed, 1=Deployed"),
-            ("First officer HUD", Set, "0=Stowed, 1=Deployed"),
-        }, Rows("HUD Units"));
+            ($"{side} HUD cover", Set, "0=Off, 1=On"),
+            ($"{side} HUD", Set, "0=Stowed, 1=Deployed"),
+        }, Rows(panel));
         Assert.Equal("INI_IS_HUD", A350Options.For("AIRLINER_HUD_HANDLE_LEFT")!.Var);
     }
 
-    [Fact]
-    public void Tillers_and_sidesticks()
+    [Theory]
+    [InlineData("Captain Tiller and Sidestick", "Captain")]
+    [InlineData("First Officer Tiller and Sidestick", "First officer")]
+    public void Tillers_and_sidesticks(string panel, string side)
     {
         // Both tillers' disconnects flip one variable (INI_TILLER_DISC).
         Assert.Equal(new[]
         {
-            ("Captain sidestick takeover", Press, ""),
-            ("First officer sidestick takeover", Press, ""),
-            ("Captain tiller", Set, "0=Connected, 1=Disconnected"),
-            ("First officer tiller", Set, "0=Connected, 1=Disconnected"),
-        }, Rows("Tillers and Sidesticks"));
+            ($"{side} sidestick takeover", Press, ""),
+            ($"{side} tiller", Set, "0=Connected, 1=Disconnected"),
+        }, Rows(panel));
     }
 
     [Fact]

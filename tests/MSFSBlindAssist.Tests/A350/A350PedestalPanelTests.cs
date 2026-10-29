@@ -24,7 +24,9 @@ public class A350PedestalPanelTests
         Assert.Equal(new[]
         {
             "Engines", "Thrust Levers", "Captain RMP", "First Officer RMP", "Emergency Descent", "Flaps and Brakes", "Speed Brake",
-            "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
+            "Trim", "ECAM Control Panel", "Captain ECAM Control Panel", "First Officer ECAM Control Panel", "Weather Radar",
+            "Captain Weather Radar", "First Officer Weather Radar", "Transponder", "Cockpit", "Captain Display Transfer",
+            "First Officer Display Transfer", "RMP 3",
         }, Placement.Structure["Pedestal"]);
     }
 
@@ -111,22 +113,37 @@ public class A350PedestalPanelTests
             "ECAM ENG", "ECAM APU", "ECAM BLEED", "ECAM COND", "ECAM PRESS", "ECAM DOOR", "ECAM EL/AC", "ECAM EL/DC",
             "ECAM FUEL", "ECAM WHEEL", "ECAM HYD", "ECAM F/CTL", "ECAM all", "ECAM status", "ECAM video",
             "ECAM abnormal proc", "ECAM deferred proc", "ECAM dispatch", "ECAM more", "ECAM T.O config", "ECAM emergency cancel",
-            "ECAM emergency cancel guard", "Captain ECAM clear", "First officer ECAM clear", "Captain ECAM checklist",
-            "First officer ECAM checklist", "ECAM recall last", "ECAM recall all",
+            "ECAM emergency cancel guard", "ECAM recall last", "ECAM recall all",
         })
             Assert.Contains(name, names);
+    }
+
+    /// <summary>Each pilot's ECP keys (CLEAR, CHECKLIST and the wheel at each end of the panel) on a panel of their own
+    /// (owner 2026-10-27), after the shared keys.</summary>
+    [Theory]
+    [InlineData("Captain ECAM Control Panel", "Captain")]
+    [InlineData("First Officer ECAM Control Panel", "First officer")]
+    public void Each_pilots_ecam_keys(string panel, string side)
+    {
+        AssertRows(panel,
+            ($"{side} ECAM checklist", Press, ""),
+            ($"{side} ECAM wheel increase", A350RowAction.Increase, ""),
+            ($"{side} ECAM wheel decrease", A350RowAction.Decrease, ""),
+            ($"{side} ECAM clear", Press, ""));
     }
 
     [Fact]
     public void Weather_radar_and_transponder_split_the_surveillance_panel_as_the_a380()
     {
-        var radar = Rows("Weather Radar").Select(r => r.Name).ToList();
-        Assert.Contains("Weather radar system 1", radar);
-        Assert.Contains("Weather radar system 2", radar);
-        Assert.Contains("Captain weather radar gain auto", radar);       // push: AUTO MODE
-        Assert.Contains("Captain weather radar gain manual", radar);     // pull: MANUAL MODE
-        Assert.Contains("First officer weather radar elevation increase", radar);
-        Assert.Equal(radar.Distinct().Count(), radar.Count);
+        Assert.Equal(new[] { "Weather radar system 1", "Weather radar system 2" }, Rows("Weather Radar").Select(r => r.Name));
+        foreach (var (panel, side) in new[] { ("Captain Weather Radar", "Captain"), ("First Officer Weather Radar", "First officer") })
+        {
+            var radar = Rows(panel).Select(r => r.Name).ToList();
+            foreach (var knob in new[] { "elevation", "gain", "VD azimuth" })
+                Assert.Equal(new[] { "auto", "manual", "increase", "decrease" }.Select(a => $"{side} weather radar {knob} {a}"),
+                    radar.Where(n => n.StartsWith($"{side} weather radar {knob} ", StringComparison.Ordinal)));   // push: AUTO MODE, pull: MANUAL
+            Assert.Equal(12, radar.Count);
+        }
         var xpdr = Rows("Transponder").Select(r => r.Name).ToList();
         Assert.Equal(new[] { "TAWS G/S mode", "TCAS above", "TCAS below", "TCAS TA only", "Transponder system 1", "Transponder system 2" },
             xpdr);   // the cockpit file's order
@@ -142,10 +159,20 @@ public class A350PedestalPanelTests
         // nothing keeps INI_CKPT_LT_DU_MASTER_BRT, which its tooltip reads: no value line that would always read 0.
         var brt = A350ControlMap.Load().Find("AIRLINER_CKPT_LT_DU_MASTER_BRT")!;
         Assert.False(A350Readouts.HasValueLine(brt));
-        Assert.Contains(("Captain OIS on center", Set, "0=Off, 1=On"), cockpit);
-        Assert.Contains(("First officer OIS on center", Set, "0=Off, 1=On"), cockpit);
-        Assert.Contains(("Captain display cycle", Set, "0=Off, 1=On"), cockpit);
-        Assert.Contains(("First officer display cycle", Set, "0=Off, 1=On"), cockpit);
+        Assert.DoesNotContain(cockpit, r => r.Name.Contains("OIS on center", StringComparison.Ordinal));
+    }
+
+    /// <summary>Each side's OIS ON CTR and DISPLAY CYCLE (iniBuilds' OIS_DISPLAY_TRANSFER group) on a panel of their own
+    /// (owner 2026-10-27), with their lights.</summary>
+    [Theory]
+    [InlineData("Captain Display Transfer", "Captain")]
+    [InlineData("First Officer Display Transfer", "First officer")]
+    public void Each_sides_display_transfer(string panel, string side)
+    {
+        AssertRows(panel, ($"{side} OIS on center", Set, "0=Off, 1=On"), ($"{side} display cycle", Set, "0=Off, 1=On"));
+        var map = A350ControlMap.Load();
+        Assert.Equal(new[] { $"{side} OIS on center INOP light", $"{side} display cycle light" },
+            A350PanelLamps.Resolve(map, Placement, new[] { "Pedestal" }).Where(l => l.Panel == panel).Select(l => l.Name));
     }
 }
 

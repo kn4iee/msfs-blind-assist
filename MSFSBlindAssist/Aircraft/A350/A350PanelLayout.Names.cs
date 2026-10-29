@@ -45,8 +45,10 @@ public static partial class A350PanelLayout
         ["EFIS_FO"] = "EFIS First Officer",
         // Instrument panel (main instrument panel and its side consoles)
         ["LDG_PANEL"] = "Autobrake",
+        // The two ISIS units: the ISIS proper (the standby flight display) and the standby navigation display, the OIS
+        // option STANDBY NAV DISPLAY (iniBuilds' INI_OPTION_FO_ISIS); the manual's cockpit layout items 22 and 25.
         ["ISIS_1"] = "ISIS",
-        ["ISIS_2"] = "ISIS",
+        ["ISIS_2"] = "SND",
         ["ADIRS_FMS"] = "Source Switching",
         ["DISPLAY_EFB_LEFT_PWR"] = "Display Power", ["DISPLAY_EFB_RIGHT_PWR"] = "Display Power",
         ["DISPLAY_EFIS_LEFT_PWR"] = "Display Power", ["DISPLAY_EFIS_RIGHT_PWR"] = "Display Power",
@@ -130,30 +132,63 @@ public static partial class A350PanelLayout
         ["WXR_SYS_1"] = "Weather Radar", ["WXR_SYS_2"] = "Weather Radar",
     };
 
-    /// <summary>The order of each section's panels, the A380's where the panels are shared; a panel listed here belongs to
-    /// that section whatever iniBuilds' area (the ISIS, filed under the pedestal, is the Instrument section's as on the
-    /// A380). A panel not named here follows them in cockpit file order.</summary>
+    /// <summary>The panels both pilots' controls would share, split by side (owner 2026-10-27, backlog 19: never one panel for
+    /// both, even where the A380 keeps one): a control goes to its side's panel by its name (<see cref="PanelFor"/>), the
+    /// rest stay on the shared one, which the two follow in <see cref="PanelOrder"/>. Singular where a side holds one of a
+    /// pair; the pedestal Cockpit panel's side keys are iniBuilds' OIS_DISPLAY_TRANSFER group.</summary>
+    private static readonly Dictionary<string, (string Captain, string FirstOfficer)> SidePanels = new(StringComparer.Ordinal)
+    {
+        ["Wipers"] = ("Captain Wipers", "First Officer Wipers"),
+        ["Warnings"] = ("Captain Warnings", "First Officer Warnings"),
+        ["HUD"] = ("Captain HUD", "First Officer HUD"),
+        ["Loudspeakers and Table Lights"] = ("Captain Loudspeaker and Table Light", "First Officer Loudspeaker and Table Light"),
+        ["Display Power"] = ("Captain Display Power", "First Officer Display Power"),
+        ["ECAM Control Panel"] = ("Captain ECAM Control Panel", "First Officer ECAM Control Panel"),
+        ["Weather Radar"] = ("Captain Weather Radar", "First Officer Weather Radar"),
+        ["Cockpit"] = ("Captain Display Transfer", "First Officer Display Transfer"),
+        ["Sun Shades"] = ("Captain Sun Shades", "First Officer Sun Shades"),
+        ["Oxygen Masks"] = ("Captain Oxygen Mask", "First Officer Oxygen Mask"),
+        ["HUD Units"] = ("Captain HUD Unit", "First Officer HUD Unit"),
+        ["Tillers and Sidesticks"] = ("Captain Tiller and Sidestick", "First Officer Tiller and Sidestick"),
+    };
+
+    /// <summary>The order of each section's panels, the A380's where the panels are shared, each side's panel after the
+    /// shared one (<see cref="SidePanels"/>); a panel listed here belongs to that section whatever iniBuilds' area (the ISIS,
+    /// filed under the pedestal, is the Instrument section's as on the A380). A panel not named here follows them in
+    /// cockpit file order.</summary>
     private static readonly Dictionary<string, List<string>> PanelOrder = new(StringComparer.Ordinal)
     {
         ["Overhead"] = new()
         {
             "ELEC", "APU", "Fuel", "Hydraulics", "Bleed Air", "Air Conditioning", "Pressurization", "Ventilation", "Cargo Air",
-            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Wipers", "ADIRS",
-            "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc", "Surveillance", "Cabin", "OIS",
-            "Maintenance", "Interior Lighting", "Exterior Lighting",
+            "Anti Ice", "Fire", "Cargo Smoke", "Cabin Smoke", "Oxygen", "Calls", "Evacuation", "Signs", "Captain Wipers",
+            "First Officer Wipers", "ADIRS", "Flight Control Computers", "Engine FADEC and Manual Start", "Recorder and Misc",
+            "Surveillance", "Cabin", "OIS", "Maintenance", "Interior Lighting", "Exterior Lighting",
         },
-        ["Glareshield"] = new() { "FCU", "EFIS Captain", "EFIS First Officer", "Warnings", "HUD", "Loudspeakers and Table Lights" },
+        ["Glareshield"] = new()
+        {
+            "FCU", "EFIS Captain", "EFIS First Officer", "Captain Warnings", "First Officer Warnings", "Captain HUD",
+            "First Officer HUD", "Captain Loudspeaker and Table Light", "First Officer Loudspeaker and Table Light",
+        },
         ["Instrument"] = new()
         {
-            "Gear", "Autobrake", "ISIS", "Source Switching", "Display Power", "Captain Side Panel", "Captain Individual Panel",
-            "First Officer Individual Panel", "First Officer Side Panel",
+            "Gear", "Autobrake", "ISIS", "SND", "Source Switching", "Display Power", "Captain Display Power",
+            "First Officer Display Power", "Captain Side Panel", "Captain Individual Panel", "First Officer Individual Panel",
+            "First Officer Side Panel",
         },
         ["Pedestal"] = new()
         {
             "Engines", "Thrust Levers", "Captain RMP", "First Officer RMP", "Emergency Descent", "Flaps and Brakes", "Speed Brake",
-            "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
+            "Trim", "ECAM Control Panel", "Captain ECAM Control Panel", "First Officer ECAM Control Panel", "Weather Radar",
+            "Captain Weather Radar", "First Officer Weather Radar", "Transponder", "Cockpit", "Captain Display Transfer",
+            "First Officer Display Transfer", "RMP 3",
         },
-        ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
+        ["Cockpit"] = new()
+        {
+            "Doors and Hatches", "Sun Shades", "Captain Sun Shades", "First Officer Sun Shades", "Oxygen Masks",
+            "Captain Oxygen Mask", "First Officer Oxygen Mask", "Captain HUD Unit", "First Officer HUD Unit",
+            "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Misc",
+        },
     };
 
     /// <summary>Names for controls whose tooltip title is wrong or shared: iniBuilds titles the engine bleeds
@@ -436,12 +471,13 @@ public static partial class A350PanelLayout
         ["INDIV_LAT_VENT_DEFOG_LEFT"] = "Captain lateral vent and defog", ["INDIV_LAT_VENT_DEFOG_RIGHT"] = "First officer lateral vent and defog",
         ["INDIV_FOOT_VENT_LEFT"] = "Captain foot vent", ["INDIV_FOOT_VENT_RIGHT"] = "First officer foot vent",
         ["INDIV_HEATER_LEFT"] = "Captain heater", ["INDIV_HEATER_RIGHT"] = "First officer heater",
-        // ISIS: both units' keys on one panel, by side.
-        ["ISIS_KNOB_BUTTON_1"] = "Captain STD/CHANGE", ["ISIS_LS_1"] = "Captain LS/DIR TO", ["ISIS_MENU_1"] = "Captain menu",
-        ["ISIS_MINUS_1"] = "Captain minus", ["ISIS_MODE_1"] = "Captain mode", ["ISIS_PLUS_1"] = "Captain plus",
-        ["ISIS_KNOB_BUTTON_2"] = "First officer STD/CHANGE", ["ISIS_LS_2"] = "First officer LS/DIR TO",
-        ["ISIS_MENU_2"] = "First officer menu", ["ISIS_MINUS_2"] = "First officer minus", ["ISIS_MODE_2"] = "First officer mode",
-        ["ISIS_PLUS_2"] = "First officer plus", ["ISIS_KNOB_2"] = "First officer set/sel knob",
+        // The ISIS units' keys by their unit (the ISIS proper and the SND, both pilots' standby instruments, no side's):
+        // the same keys on each, named as their placards read.
+        ["ISIS_KNOB_BUTTON_1"] = "ISIS STD/CHANGE", ["ISIS_LS_1"] = "ISIS LS/DIR TO", ["ISIS_MENU_1"] = "ISIS menu",
+        ["ISIS_MINUS_1"] = "ISIS minus", ["ISIS_MODE_1"] = "ISIS mode", ["ISIS_PLUS_1"] = "ISIS plus",
+        ["ISIS_KNOB_BUTTON_2"] = "SND STD/CHANGE", ["ISIS_LS_2"] = "SND LS/DIR TO", ["ISIS_MENU_2"] = "SND menu",
+        ["ISIS_MINUS_2"] = "SND minus", ["ISIS_MODE_2"] = "SND mode", ["ISIS_PLUS_2"] = "SND plus",
+        ["ISIS_KNOB_2"] = "SND set/sel knob",
     };
 
     private static readonly Dictionary<double, string> NdModes = new()

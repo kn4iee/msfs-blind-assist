@@ -314,6 +314,6 @@ public class A350TypedEntryTests
         Assert.All(A350TypedEntry.All, f => Assert.Contains("_SET", f.Key));
         Assert.Equal(A350TypedEntry.All.Count, A350TypedEntry.All.Select(f => f.ControlId).Distinct().Count());
         Assert.Same(A350TypedEntry.Speed, A350TypedEntry.ForControl("AIRLINER_FCU_SPD_KNOB"));
-        Assert.Null(A350TypedEntry.ForControl("AIRLINER_ISIS_KNOB_2"));   // the first officer's unit shows no baro the sim keeps
+        Assert.Null(A350TypedEntry.ForControl("AIRLINER_ISIS_KNOB_2"));   // the SND shows no baro the sim keeps
     }
 }

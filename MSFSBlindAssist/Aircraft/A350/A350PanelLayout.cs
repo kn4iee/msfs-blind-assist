@@ -59,7 +59,23 @@ public static partial class A350PanelLayout
         return AreaSections.TryGetValue(control.Area, out var byArea) ? byArea : "Cockpit";
     }
 
+    /// <summary>The panel a control sits on: on a panel both pilots' controls share (<see cref="SidePanels"/>), its side's
+    /// own panel when its name says a side, as every side's twin's does ([VAR-1]: "Captain wiper").</summary>
     public static string PanelFor(A350Control control)
+    {
+        string panel = SharedPanelFor(control);
+        if (SidePanels.TryGetValue(panel, out var sides))
+        {
+            string name = NameFor(control);
+            if (name.StartsWith("Captain ", StringComparison.Ordinal))
+                return sides.Captain;
+            if (name.StartsWith("First officer ", StringComparison.Ordinal))
+                return sides.FirstOfficer;
+        }
+        return panel;
+    }
+
+    private static string SharedPanelFor(A350Control control)
     {
         if (control.Panel == RmpGroup)
             return RmpPanel(Short(control.Id));

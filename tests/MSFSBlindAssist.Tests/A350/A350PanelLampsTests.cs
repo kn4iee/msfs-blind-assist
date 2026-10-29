@@ -97,14 +97,31 @@ public class A350PanelLampsTests
         // Live 2026-10-28: holding a mask's PRESS TO TEST turns its flow blinker yellow (INI_OXYTEST_BLINKER_CPT 1, the
         // oxy_test sound), 0 once released. A mechanical indicator with no lamp node and no bus.
         var cockpit = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Cockpit" });
-        var blinkers = cockpit.Where(l => l.Panel == "Oxygen Masks").ToList();
-        Assert.Equal(new[] { "Captain", "First officer", "Third occupant", "Fourth occupant" }.Select(s => s + " oxygen flow blinker"),
-            blinkers.Select(l => l.Name));
-        var captain = blinkers[0];
+        // Each beside its own mask: the pilots' on their side's panel (owner 2026-10-27), the observers' on the shared one.
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["Captain oxygen flow blinker"] = "Captain Oxygen Mask",
+            ["First officer oxygen flow blinker"] = "First Officer Oxygen Mask",
+            ["Third occupant oxygen flow blinker"] = "Oxygen Masks",
+            ["Fourth occupant oxygen flow blinker"] = "Oxygen Masks",
+        }, cockpit.Where(l => l.Node.StartsWith("OXYTEST_BLINKER_", StringComparison.Ordinal)).ToDictionary(l => l.Name, l => l.Panel));
+        var captain = cockpit.Single(l => l.Node == "OXYTEST_BLINKER_CPT");
         Assert.Equal("A350_LT_OXYTEST_BLINKER_CPT", captain.Key);
         Assert.Equal(A350LightPower.None, captain.Power);
         Assert.True(captain.IsLit(key => key == captain.Key ? 1 : null));
         Assert.False(captain.IsLit(key => key == captain.Key ? 0 : null));
+    }
+
+    /// <summary>Owner 2026-10-27: no panel shows both pilots' lights; a light no row owns sits on its side's panel too.</summary>
+    [Fact]
+    public void No_panel_shows_both_pilots_lights()
+    {
+        var placement = A350PanelLayout.Place(Map);
+        var mixed = A350PanelLamps.Resolve(Map, placement, placement.Structure.Keys).GroupBy(l => l.Panel)
+            .Where(g => g.Any(l => l.Name.StartsWith("Captain ", StringComparison.Ordinal))
+                && g.Any(l => l.Name.StartsWith("First officer ", StringComparison.Ordinal)))
+            .Select(g => g.Key);
+        Assert.Empty(mixed);
     }
 
     [Theory]
@@ -117,10 +134,10 @@ public class A350PanelLampsTests
     [InlineData("Overhead", "MLG_BAY_LIGHT_SEQ1_LIGHT", "Fire", "MLG bay fire light")]
     [InlineData("Overhead", "IRS_ON_BAT_LIGHT", "ADIRS", "IRS on battery light")]
     [InlineData("Overhead", "CABIN_LAVATORY_SEQ1_LIGHT", "Cabin", "Lavatory occupied light")]
-    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Warnings", "Captain priority light")]
-    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Warnings", "Captain priority arrow light")]
-    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "Warnings", "First officer priority light")]
-    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "Warnings", "First officer priority arrow light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ1_LIGHT", "Captain Warnings", "Captain priority light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_LEFT_SEQ2_LIGHT", "Captain Warnings", "Captain priority arrow light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ1_LIGHT", "First Officer Warnings", "First officer priority light")]
+    [InlineData("Glareshield", "FCU_SIDESTICK_PRIORITY_RIGHT_SEQ2_LIGHT", "First Officer Warnings", "First officer priority arrow light")]
     [InlineData("Instrument", "LDG_ARROW_SEQ1_LIGHT", "Gear", "Gear lever red arrow light")]
     // Live 2026-10-28: RMP 1's BRT/OFF knob at 0 lit RMP_1_OFF_LIGHT_SEQ1; the lower legend's meaning is not known yet.
     [InlineData("Pedestal", "RMP_1_OFF_LIGHT_SEQ1_LIGHT", "Captain RMP", "Captain RMP off light")]
@@ -190,7 +207,8 @@ public class A350PanelLampsTests
         Assert.True(fault.IsLit(read(0, 1)));    // TEST
         Assert.False(fault.IsLit(read(0, 0)));   // TEST, its bus dark
         Assert.All(Lamps, l => Assert.Contains(A350PanelLamps.AnnLtKey, l.InputKeys));
-        var blinker = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Cockpit" }).First(l => l.Panel == "Oxygen Masks");
+        var blinker = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Cockpit" })
+            .First(l => l.Node.StartsWith("OXYTEST_BLINKER_", StringComparison.Ordinal));
         Assert.DoesNotContain(A350PanelLamps.AnnLtKey, blinker.InputKeys);
         Assert.False(blinker.IsLit(key => key == A350PanelLamps.AnnLtKey ? 0 : key == blinker.Key ? 0 : null));
     }

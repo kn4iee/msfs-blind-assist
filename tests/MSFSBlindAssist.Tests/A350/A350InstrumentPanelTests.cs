@@ -70,28 +70,42 @@ public class A350InstrumentPanelTests
         Assert.Equal(A350WritePlan.NotAPositionRefusal, A350RunwayCondition.Plan(knob, 7).Refusal);
     }
 
-    /// <summary>The captain's ISIS: each key is a hold (its set code acts only on 2) and the ISIS consumes each command;
-    /// what it then shows is the ISIS gauge's own (the emulated draw answers sim variables with defaults, so it is read
-    /// with the display reader). Its baro is the sim's KOHLSMAN SETTING MB:3: a typed QNH. The first officer's unit is an
-    /// option (INI_OPTION_FO_ISIS).</summary>
+    /// <summary>The ISIS, the standby flight display (INI_ISIS1_POWERED; the manual's cockpit layout item 22): each key is
+    /// a hold (its set code acts only on 2) and the ISIS consumes each command; what it then shows is the ISIS gauge's own
+    /// (the emulated draw answers sim variables with defaults, so it is read with the display reader). Its baro is the
+    /// sim's KOHLSMAN SETTING MB:3: a typed QNH. Named by the unit, not by a side: it is no captain's instrument.</summary>
     [Fact]
     public void Isis()
     {
         Assert.Equal(new[]
         {
-            ("Captain STD/CHANGE", A350RowAction.Press, ""), ("Captain LS/DIR TO", A350RowAction.Press, ""),
-            ("Captain menu", A350RowAction.Press, ""), ("Captain minus", A350RowAction.Press, ""),
-            ("Captain mode", A350RowAction.Press, ""), ("Captain plus", A350RowAction.Press, ""),
-            // The standby's QNH by name: "Captain QNH" read like the EFIS's "QNH (in Capt unit)" in a flat list (gap 84).
-            ("Captain standby QNH", A350RowAction.Typed, ""),
-            ("First officer STD/CHANGE", A350RowAction.Press, ""), ("First officer LS/DIR TO", A350RowAction.Press, ""),
-            ("First officer menu", A350RowAction.Press, ""), ("First officer minus", A350RowAction.Press, ""),
-            ("First officer mode", A350RowAction.Press, ""), ("First officer plus", A350RowAction.Press, ""),
-            ("First officer set/sel knob increase", A350RowAction.Increase, ""),
-            ("First officer set/sel knob decrease", A350RowAction.Decrease, ""),
+            ("ISIS STD/CHANGE", A350RowAction.Press, ""), ("ISIS LS/DIR TO", A350RowAction.Press, ""),
+            ("ISIS menu", A350RowAction.Press, ""), ("ISIS minus", A350RowAction.Press, ""),
+            ("ISIS mode", A350RowAction.Press, ""), ("ISIS plus", A350RowAction.Press, ""),
+            // Not "QNH": the EFIS's "QNH (in Capt unit)" reads the same in a flat list (gap 84).
+            ("ISIS QNH", A350RowAction.Typed, ""),
         }, Rows("ISIS"));
-        Assert.Equal("INI_OPTION_FO_ISIS", A350Options.For("AIRLINER_ISIS_MENU_2")!.Var);
         Assert.Null(A350Options.For("AIRLINER_ISIS_MENU_1"));
+    }
+
+    /// <summary>The second ISIS unit is the standby navigation display (INI_ISIS2_POWERED; item 25 of the manual's cockpit
+    /// layout), the OIS EQUIPMENT option STANDBY NAV DISPLAY, which iniBuilds' variable calls the first officer's ISIS
+    /// (INI_OPTION_FO_ISIS): the A350 runs one ISIS unit as the SFD and the other as the SND. Its own panel, its keys by
+    /// their unit.</summary>
+    [Fact]
+    public void Standby_navigation_display()
+    {
+        Assert.Equal(new[]
+        {
+            ("SND STD/CHANGE", A350RowAction.Press, ""), ("SND LS/DIR TO", A350RowAction.Press, ""),
+            ("SND menu", A350RowAction.Press, ""), ("SND minus", A350RowAction.Press, ""),
+            ("SND mode", A350RowAction.Press, ""), ("SND plus", A350RowAction.Press, ""),
+            ("SND set/sel knob increase", A350RowAction.Increase, ""),
+            ("SND set/sel knob decrease", A350RowAction.Decrease, ""),
+        }, Rows("SND"));
+        var option = A350Options.For("AIRLINER_ISIS_MENU_2")!;
+        Assert.Equal(("INI_OPTION_FO_ISIS", "Standby navigation display"), (option.Var, option.Name));
+        Assert.Equal("Standby navigation display is not fitted. It is an option on the OIS options page.", option.NotFitted);
     }
 
     /// <summary>Every position of both selectors.</summary>
@@ -106,16 +120,23 @@ public class A350InstrumentPanelTests
     }
 
     /// <summary>Each display off and on, named by what went dark: the OIS displays' INI_EFB1/EFB2_STATE, the captain's
-    /// EFIS draw (PFD and ND), the MFD draw and INI_MFD_STATE, and the centre draw (E/WD and SD).</summary>
+    /// EFIS draw (PFD and ND), the MFD draw and INI_MFD_STATE, and the centre draw (E/WD and SD). Each side's two on a
+    /// panel of their own (owner 2026-10-27), after the centre's.</summary>
     [Fact]
     public void Display_power()
     {
         Assert.Equal(new[]
         {
-            ("Captain OIS display", A350RowAction.Set, OffOn), ("First officer OIS display", A350RowAction.Set, OffOn),
-            ("Captain outer display", A350RowAction.Set, OffOn), ("First officer outer display", A350RowAction.Set, OffOn),
             ("Center lower display", A350RowAction.Set, OffOn), ("Center upper display", A350RowAction.Set, OffOn),
         }, Rows("Display Power"));
+        Assert.Equal(new[]
+        {
+            ("Captain OIS display", A350RowAction.Set, OffOn), ("Captain outer display", A350RowAction.Set, OffOn),
+        }, Rows("Captain Display Power"));
+        Assert.Equal(new[]
+        {
+            ("First officer OIS display", A350RowAction.Set, OffOn), ("First officer outer display", A350RowAction.Set, OffOn),
+        }, Rows("First Officer Display Power"));
     }
 
     /// <summary>The pedal light and every knob; the OIS switch springs back to NEUTRAL and only the cockpit sound reads
