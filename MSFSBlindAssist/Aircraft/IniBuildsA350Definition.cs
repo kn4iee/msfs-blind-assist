@@ -216,6 +216,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string? StockComTuningRefusal =>
         "This aircraft tunes its radios only through its radio management panels.";
 
+    /// <summary>The FCU's METRIC ALT pushbutton row (INI_FCU_METRIC_STATE: 0 only feet, 1 showing meters).</summary>
+    public const string MetricAltitudeKey = "A350_FCU_METER";
+
+    // METRIC ALT is the A350's metric altitude, as MTRS is the A380's (parity task 10): MainForm's A / Q read-outs and
+    // altitude call-outs ask it here. Unread is feet, the switch's rest.
+    public override bool? MetricAltitude =>
+        _rows.ContainsKey(MetricAltitudeKey) ? _sim is { } sim && Cached(sim, MetricAltitudeKey) is double on && on >= 0.5 : null;
+
     // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody (its glidepath and
     // flare biases are estimates pending an in-sim coupled-ILS calibration, the A330's status too), not the A320 baseline;
     // the flare at about 40 ft radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).

@@ -525,9 +525,9 @@ public partial class MainForm
         // below returns for INDICATED_ALTITUDE before speaking, so only these callouts speak.
         if (e.VarName == "INDICATED_ALTITUDE")
         {
-            // Metres under the A380's metric altitude (FCU MTRS), as the A / Q read-outs below.
-            altitudeCalloutAnnouncer.ProcessAltitude(e.Value, _lastOnGround,
-                metric: currentAircraft is Aircraft.FlyByWireA380Definition a380Callouts && a380Callouts.MetricAlt);
+            // Metres under the aircraft's metric altitude (the A380's FCU MTRS, the A350's METRIC ALT), as the A / Q
+            // read-outs below.
+            altitudeCalloutAnnouncer.ProcessAltitude(e.Value, _lastOnGround, metric: currentAircraft?.MetricAltitude == true);
             // 1 Hz gate for the manual-landing flare assist: starts/stops its dedicated
             // SIM_FRAME feed when armed + within the approach altitude window. No-op
             // (single flag compare) when the assist isn't armed.
@@ -996,18 +996,14 @@ public partial class MainForm
         }
 
         // Handle aircraft variable hotkey announcements
-        // A380 metric-altitude mode (FCU MTRS — PRIM FG word 5 bit 14, A380MetricAltitude): when active, the
-        // current-altitude readouts (A = MSL, Q = AGL) speak metres instead of feet. Gated to
-        // the A380 by both the aircraft-type check and the MetricAlt flag — no other aircraft
-        // and no non-metric A380 state reach this branch, so feet behaviour is unchanged.
+        // Metric altitude (IAircraftDefinition.MetricAltitude: the A380's FCU MTRS, PRIM FG word 5 bit 14,
+        // A380MetricAltitude; the A350's METRIC ALT): an aircraft with the mode names the unit of the
+        // current-altitude read-outs (A = MSL, Q = AGL), metres while it is on, feet otherwise. An aircraft
+        // without it (null) falls through to the bare number below, unchanged.
         if ((e.VarName == "ALTITUDE_MSL" || e.VarName == "ALTITUDE_AGL")
-            && currentAircraft is Aircraft.FlyByWireA380Definition a380Alt)
+            && currentAircraft?.MetricAltitude is bool metricAltitude)
         {
-            // Metric on -> "X meters"; metric off -> "X feet". Previously the off case fell
-            // through and spoke just the number with no unit — now it says "feet" for
-            // consistency with the "meters" suffix.
-            if (a380Alt.MetricAlt) announcer.AnnounceImmediate($"{e.Value * 0.3048:0} meters");
-            else announcer.AnnounceImmediate($"{e.Value:0} feet");
+            announcer.AnnounceImmediate(AltitudeReadout.Text(e.Value, metricAltitude));
             return true;
         }
 

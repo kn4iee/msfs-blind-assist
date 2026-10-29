@@ -572,4 +572,12 @@ public interface IAircraftDefinition
     /// (live-verified: its radios tune only through the RMP).
     /// </summary>
     string? StockComTuningRefusal { get; }
+
+    /// <summary>
+    /// Null when this aircraft has no metric altitude mode (the A and Q read-outs speak the bare
+    /// number); otherwise whether it is on: the FBW A380's FCU MTRS, the iniBuilds A350's METRIC ALT.
+    /// While it is on, A and Q read metres and the altitude call-outs run in 300 m bands ([TKO-4]);
+    /// while it is off, A and Q say "feet".
+    /// </summary>
+    bool? MetricAltitude { get; }
 }

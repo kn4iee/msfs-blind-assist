@@ -487,6 +487,9 @@ public partial class FlyByWireA380Definition
     // uses the PRIM's word alone — TryComposeFcuValuePhrase.)
     public bool MetricAlt => MetricAltCommandedOrKnown() ?? _metricAlt;
 
+    /// <summary>MTRS is the A380's metric altitude: MainForm's A / Q read-outs and altitude call-outs ask it here.</summary>
+    public override bool? MetricAltitude => MetricAlt;
+
     /// <summary>Convert a feet altitude to the pilot's selected unit + spoken word (A380 metric-alt).</summary>
     private (double value, string unit) AltUser(double feet)
         => MetricAlt ? (feet * 0.3048, "meters") : (feet, "feet");
