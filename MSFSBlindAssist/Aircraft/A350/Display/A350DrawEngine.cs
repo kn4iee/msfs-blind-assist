@@ -125,6 +125,7 @@ public sealed class A350DrawEngine : IDisposable
             var old = _store;
             (_store, _instance, _memory) = (store, instance, memory);
             _warmed.Clear();
+            _restored = Array.Empty<(uint, int)>();   // a new instance's memory holds nothing restored
             old?.Dispose();
         }
         catch
@@ -502,15 +503,23 @@ public sealed class A350DrawEngine : IDisposable
         return b.Length == 4 ? BitConverter.ToUInt32(b) : 0;
     }
 
-    /// <summary>Puts the copy back into the instance's memory exactly as captured (a draw changes state).</summary>
+    /// <summary>The regions the instance's memory holds from the last restore (none on a new instance).</summary>
+    private IReadOnlyList<(uint Linear, int Length)> _restored = Array.Empty<(uint, int)>();
+
+    /// <summary>Puts the copy back into the instance's memory exactly as captured (a draw changes state). A region the last
+    /// copy held and this one lacks (one that failed to read) is cleared first, so a draw never runs on two copies.</summary>
     private void Restore()
     {
         var copy = _copy ?? throw new InvalidOperationException("no copy loaded");
+        foreach (var (lin, len) in A350MemoryRegions.Gone(_restored, copy.Regions))
+            if ((long)lin + len <= _memory.GetLength())
+                _memory.GetSpan(lin, len).Clear();
         for (int i = 0; i < copy.Regions.Count; i++)
         {
             var (lin, len) = copy.Regions[i];
             copy.RegionBytes(i).CopyTo(_memory.GetSpan(lin, len));
         }
+        _restored = copy.Regions.ToList();
     }
 
     // CustomVariable objects: {u32 id, std::string name, f64 cached value at +16}. A libc++ short string

@@ -22,6 +22,33 @@ public static class A350MemoryRegions
         return end.Where(kv => kv.Value - kv.Key >= minSpan).Select(kv => kv.Key).ToList();
     }
 
+    /// <summary>The longest piece a region is read in: a copy's offsets and lengths are 32-bit.</summary>
+    public const int MaxPiece = 1 << 30;
+
+    /// <summary>A readable region's pieces as a copy holds them: its address, its linear address (from the allocation's
+    /// base), clipped to the 4 GB a WASM memory spans, in pieces of at most <see cref="MaxPiece"/> (review 2026-10-29:
+    /// unchecked casts would have placed a region past 4 GB, or of 2 GB or more, at a wrong address).</summary>
+    public static IEnumerable<(ulong Address, uint Linear, int Length)> Pieces(Region r, ulong allocationBase)
+    {
+        const ulong span = 1UL << 32;
+        if (r.Base < allocationBase) yield break;
+        ulong start = r.Base - allocationBase;
+        if (start >= span) yield break;
+        ulong end = Math.Min(start + r.Size, span);
+        for (ulong at = start; at < end; at += MaxPiece)
+            yield return (allocationBase + at, (uint)at, (int)Math.Min(end - at, MaxPiece));
+    }
+
+    /// <summary>The regions the last copy held that this one does not (a region that failed to read, the heap shrinking):
+    /// the draw's memory still holds the last copy's bytes there, so they are cleared first, never drawn from two copies
+    /// (review 2026-10-29).</summary>
+    public static IReadOnlyList<(uint Linear, int Length)> Gone(IReadOnlyList<(uint Linear, int Length)> before,
+        IReadOnlyList<(uint Linear, int Length)> now)
+    {
+        var kept = new HashSet<(uint, int)>(now);
+        return before.Where(r => !kept.Contains(r)).ToList();
+    }
+
     /// <summary>The committed, readable regions of one allocation, walking from its base until a region
     /// belongs to another allocation.</summary>
     public static IReadOnlyList<Region> ReadableOf(IEnumerable<Region> fromBase, ulong allocationBase)
@@ -49,18 +76,18 @@ public sealed class A350MemoryCopy
     public IReadOnlyList<(uint Linear, int Length)> Regions => _regions;
     public byte[] Buffer { get; private set; } = Array.Empty<byte>();
 
-    /// <summary>The end of the highest region: the linear memory the engine must hold.</summary>
-    public uint End { get; private set; }
+    /// <summary>The end of the highest region: the linear memory the engine must hold (up to 4 GB itself, never wrapped).</summary>
+    public long End { get; private set; }
 
     public void Set(IEnumerable<(uint Linear, int Length)> regions, byte[] buffer)
     {
         _regions.Clear(); _offsets.Clear();
-        int off = 0; uint end = 0;
+        int off = 0; long end = 0;
         foreach (var r in regions)
         {
             _regions.Add(r); _offsets.Add(off);
             off += r.Length;
-            end = Math.Max(end, r.Linear + (uint)r.Length);
+            end = Math.Max(end, (long)r.Linear + r.Length);
         }
         if (off > buffer.Length) throw new ArgumentException("buffer shorter than its regions");
         Buffer = buffer;

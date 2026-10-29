@@ -145,16 +145,18 @@ public sealed class A350MemoryReader : IDisposable
     public A350MemoryCopy Snapshot()
     {
         if (_handle == IntPtr.Zero || Base == 0) throw new InvalidOperationException("not located");
-        var regions = ReadableOf(RegionsFrom(Base), Base);
-        long total = regions.Sum(r => (long)r.Size);
-        if (_buffer.Length < total) _buffer = new byte[total + (8 << 20)];
-        var kept = new List<(uint, int)>(regions.Count);
+        var pieces = ReadableOf(RegionsFrom(Base), Base).SelectMany(r => Pieces(r, Base)).ToList();
+        long total = Math.Min(pieces.Sum(p => (long)p.Length), Array.MaxLength);
+        // Grown by half again each time (review 2026-10-29: 8 MB steps meant dozens of 300-500 MB reallocations over a
+        // flight as the A350's heap grows).
+        if (_buffer.Length < total) _buffer = new byte[Math.Min(Math.Max(total + (8 << 20), _buffer.Length * 3L / 2), Array.MaxLength)];
+        var kept = new List<(uint, int)>(pieces.Count);
         int off = 0;
-        foreach (var r in regions)
+        foreach (var (address, linear, length) in pieces)
         {
-            if (!ReadExact(r.Base, _buffer, off, (int)r.Size)) continue;
-            kept.Add(((uint)(r.Base - Base), (int)r.Size));
-            off += (int)r.Size;
+            if ((long)off + length > _buffer.Length || !ReadExact(address, _buffer, off, length)) continue;
+            kept.Add((linear, length));
+            off += length;
         }
         var runs = _hot.Track(kept, _buffer.AsSpan(0, off));
         int reread = 0;

@@ -132,3 +132,53 @@ public class A350MemoryReaderTests
         finally { VirtualFree(block, UIntPtr.Zero, 0x8000); }
     }
 }
+
+/// <summary>Review 2026-10-29 (engine M6): a copy's edge cases. The casts from a region to its place in the copy were
+/// unchecked (a region past 4 GB, or of 2 GB or more, would land at a wrong address); the copy's end wrapped at 4 GB; and a
+/// region that failed to read kept the previous copy's bytes in the draw's memory, so a draw ran on two copies.</summary>
+public class A350MemoryCopyEdgeTests
+{
+    private const ulong Base = 0x7000_0000_0000;
+    private static A350MemoryRegions.Region R(ulong offset, ulong size) => new(Base + offset, size, 0x1000, 0x04, Base);
+
+    [Fact]
+    public void A_region_inside_the_span_is_one_piece_at_its_linear_address()
+    {
+        var p = Assert.Single(A350MemoryRegions.Pieces(R(0x1000, 0x2000), Base));
+        Assert.Equal((Base + 0x1000, 0x1000u, 0x2000), p);
+    }
+
+    [Fact]
+    public void A_region_is_clipped_to_the_4_gb_a_wasm_memory_spans()
+    {
+        Assert.Empty(A350MemoryRegions.Pieces(R(1UL << 32, 0x1000), Base));                     // past the span: none
+        var p = Assert.Single(A350MemoryRegions.Pieces(R((1UL << 32) - 0x1000, 0x3000), Base)); // across its end: clipped
+        Assert.Equal(0x1000, p.Length);
+    }
+
+    [Fact]
+    public void A_region_of_2_gb_or_more_is_read_in_pieces_whose_lengths_never_wrap()
+    {
+        var pieces = A350MemoryRegions.Pieces(R(0, 3UL << 30), Base).ToList();
+        Assert.Equal(3, pieces.Count);
+        Assert.All(pieces, p => Assert.Equal(A350MemoryRegions.MaxPiece, p.Length));
+        Assert.Equal(new uint[] { 0, 1u << 30, 2u << 30 }, pieces.Select(p => p.Linear));
+    }
+
+    [Fact]
+    public void A_copy_ending_at_4_gb_says_so()
+    {
+        var copy = new A350MemoryCopy();
+        copy.Set(new[] { (uint.MaxValue - 0xFFFu, 0x1000) }, new byte[0x1000]);
+        Assert.Equal(1L << 32, copy.End);
+    }
+
+    [Fact]
+    public void A_region_the_last_copy_held_and_this_one_lacks_is_gone()
+    {
+        var before = new[] { (0x1000u, 0x1000), (0x4000u, 0x2000), (0x9000u, 0x1000) };
+        var now = new[] { (0x1000u, 0x1000), (0x9000u, 0x1000) };
+        Assert.Equal(new[] { (0x4000u, 0x2000) }, A350MemoryRegions.Gone(before, now));
+        Assert.Empty(A350MemoryRegions.Gone(now, now));
+    }
+}
