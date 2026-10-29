@@ -133,6 +133,12 @@ these change, panel by panel, as the dry run lists them on 2026-10-28:
 
 Nothing on the denylist moves (below), nor any button, guard or guarded switch.
 
+Two of these controls change one another, so the sweep can leave them changed without a `RESTORE FAILED`:
+an aft window shade drawn before the run is left stowed (the side windows are swept before the shades, and
+opening a side window makes BlueBird put a drawn aft shade up, which the window's restore does not bring
+back), and stowage door 1 open past Half is left at Half (sweeping Jumpseat 2 pulls it back to 24). Stow
+both before the run, or set them back after it.
+
 ## What it does to a control
 
 1. Reads the control's state variable (`L:` var) with a SimConnect data definition, as the app reads it.
@@ -225,4 +231,9 @@ reads as `no change`; that is how it behaves, not a fault.
 ## Not tested in the sim
 
 The planning half (which controls, which positions, the denylist) runs under `--dry-run` and was checked
-against the map. The live half has not run yet: its first run is its first test.
+against the map. The live half ran once, on 2026-10-28: 168 controls, 267 of 276 positions landed, every
+control was put back and there was no SimConnect exception. The nine that did not land were BlueBird's
+momentary door lock and Chrono ET RESET (they spring back by themselves) and the autobrake's DISARM logic
+with the IRS off and the brakes set (`docs/b757/evidence/flight-12.md`). Its first start had stopped at
+connect, before any write (fixed in `1a9b39c8f`). Plan 12 task 11's 30 windows and furniture controls have
+not been swept live yet.

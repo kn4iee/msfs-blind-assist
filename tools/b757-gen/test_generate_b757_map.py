@@ -2027,11 +2027,12 @@ class Levers(unittest.TestCase):
                   "(>O:CAPT_SEAT_MOVE_FORWARD, bool) } (E:ABSOLUTE TIME, seconds) (>O:Seat_Lever_Anim_Timer)")
     SEAT_POSITIONS = [{"value": 0, "label": "Forward"}, {"value": 100, "label": "Aft"}]
 
-    def seat_row(self, left=None, panel="COCKPIT CAPTAIN CHAIR"):
+    def seat_row(self, left=None, panel="COCKPIT CAPTAIN CHAIR", release=None, other=None):
         """The captain's seat lever as the extractor reads it (BBS_752_BASE_INTERIOR.xml:32106): a toggle on its own animation
-        var, whose click writes only O:vars; its component reads and writes the seat's var."""
+        var, whose click writes only O:vars; its component reads and writes the seat's var. `release` and `other` give the
+        row's other click slots code of their own (the left slot is the click)."""
         return row(node=self.SEAT, kind="toggle", panel=panel, line=32106, state=["L:B757_CAPT_LEVER_SEAT"],
-                   left=left or self.SEAT_CLICK,
+                   left=left or self.SEAT_CLICK, release=release, other=other,
                    component={"reads": ["B757_CAPT_LEVER_SEAT", self.SEAT_VAR],
                               "writes": ["B757_CAPT_LEVER_SEAT", self.SEAT_VAR]})
 
@@ -2097,6 +2098,19 @@ class Levers(unittest.TestCase):
                                             rf"levers names {self.SEAT}, which the rules keep as a toggle whose click code "
                                             rf"writes {written}.*only O:vars, which the sim's calculator cannot set"):
                     g.convert_row(self.seat_row(left=click), c)
+
+        # The check reads every click slot, not only the left one: an L:var written by the release code, or by one of the
+        # other mouse and drag codes (a DRAG_CODE), is a write the app could replay, though the left click writes only O:vars.
+        other_slots = [
+            ("an L:var in the release code", dict(release="100 (>L:B757_CAPT_SEAT, number)")),
+            ("an L:var in a DRAG_CODE", dict(other=[("DRAG_CODE", "100 (M:DragPercent) * (>L:B757_CAPT_SEAT,number)")])),
+        ]
+        for what, slots in other_slots:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError,
+                                            rf"levers names {self.SEAT}, which the rules keep as a toggle whose click code "
+                                            r"writes L:B757_CAPT_SEAT.*only O:vars, which the sim's calculator cannot set"):
+                    g.convert_row(self.seat_row(**slots), c)
 
     def test_the_embedded_map_holds_the_two_levers_on_their_panels(self):
         with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
@@ -4451,7 +4465,7 @@ class Furniture(unittest.TestCase):
             with self.subTest(node=node):
                 self.assertEqual(c["labels"][node], self.EXPECTED[node][1])
 
-    def test_the_seat_levers_write_only_O_vars_so_the_seat_var_is_written(self):
+    def test_the_curation_names_the_seat_levers_Forward_and_Aft_on_the_seat_vars_and_explains_why(self):
         # BBS_752_BASE_INTERIOR.xml:32106-32116 and 32159-: the click sets O:CAPT_SEAT_MOVE_BACK at 0 and
         # O:CAPT_SEAT_MOVE_FORWARD at 100, and the component's Update writes 100 or 0 to the seat's var (so 0 is forward).
         c = g.load_curation(g.DEFAULT_CURATION)
@@ -4460,7 +4474,13 @@ class Furniture(unittest.TestCase):
         self.assertRegex(notes, r"PLAN 12 TASK 11 .*B757_CAPT_LEVER_SEAT.*only O:vars")
         for node in ("B757_CAPT_LEVER_SEAT", "B757_FO_LEVER_SEAT"):
             with self.subTest(node=node):
-                self.assertEqual([p["label"] for p in c["levers"][node]["positions"]], ["Forward", "Aft"])
+                _, _, _, state_var, positions, _ = self.EXPECTED[node]
+                self.assertEqual(c["levers"][node]["state_var"], state_var)
+                self.assertEqual(c["levers"][node]["state_var"], {"B757_CAPT_LEVER_SEAT": "B757_CAPT_SEAT",
+                                                                  "B757_FO_LEVER_SEAT": "B757_FO_SEAT"}[node])
+                self.assertEqual([(p["value"], p["label"]) for p in c["levers"][node]["positions"]],
+                                 [(0, "Forward"), (100, "Aft")])
+                self.assertEqual(positions, [(0, "Forward"), (100, "Aft")])
 
 
 class FindPackage(unittest.TestCase):
