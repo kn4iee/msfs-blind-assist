@@ -88,7 +88,7 @@ class DiffMapsTests(unittest.TestCase):
                          diff_maps.diff(old, new))
 
     def test_a_reordered_control_list_is_reported(self):
-        # The array order is the row order of the panel rows the checklist does not name.
+        # The array order is each panel's row order (A350PanelLayout places rows in map order).
         old = {'controls': [control('A'), control('B')]}
         new = {'controls': [control('B'), control('A')]}
         line = 'order   controls: the surviving controls are listed in a new order'

@@ -173,11 +173,12 @@ public sealed class A350Control
     /// <summary>Springs: the position they return to.</summary>
     [JsonPropertyName("rest")] public double? Rest { get; set; }
     [JsonPropertyName("note")] public string? Note { get; set; }
-    /// <summary>The first step of the aircraft's own checklist that names this control, or null: its panel's
-    /// rows follow these steps.</summary>
+    /// <summary>The first step of the aircraft's own checklist that names this control, or null. A record for whoever
+    /// reviews a regeneration (diff_maps.py reports it): no row reads it, as rows are placed in map order
+    /// (<see cref="A350PanelLayout.Place"/>; review 2026-10-29).</summary>
     [JsonPropertyName("checklist")] public int? Checklist { get; set; }
-    /// <summary>A knob push or pull: what it does, in iniBuilds' tooltip words ("AIRCRAFT HEADING");
-    /// null for every other control.</summary>
+    /// <summary>A knob push or pull: what it does, in iniBuilds' tooltip words ("AIRCRAFT HEADING"); null for every other
+    /// control. A record for review as <see cref="Checklist"/>: the rows' names come from <see cref="A350PanelLayout"/>.</summary>
     [JsonPropertyName("action")] public string? Action { get; set; }
 
     /// <summary>The positions in ascending value order with iniBuilds' words.</summary>

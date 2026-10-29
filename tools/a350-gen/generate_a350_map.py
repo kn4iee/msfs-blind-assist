@@ -131,11 +131,17 @@ def two_words(tt_value, loc=None):
 
 
 def case_words(tt_value, loc):
-    """Position value -> iniBuilds' word. Two tooltip shapes: by the knob's position
+    """iniBuilds' words and what they are keyed by. Two tooltip shapes: by the knob's position
     ("l0 2 == if{ (R:1:KEY) quit }") and, on most A350 selectors, by the state variable's value
-    ("(L:VAR, number) 0 == if{ (R:1:KEY.1) ... }"), whose keys count from 1 (A350-5)."""
-    pairs = CASE_LOC_RE.findall(tt_value or '') or CASE_LVAR_LOC_RE.findall(tt_value or '')
-    return OrderedDict((num(v), loc_text(loc, k)) for v, k in pairs)
+    ("(L:VAR, number) 0 == if{ (R:1:KEY.1) ... }"), whose keys count from 1 (A350-5). Returns (words, by_state):
+    by_state is True for the second shape, so a position's word is the word of the value it writes."""
+    text = tt_value or ''
+    pairs = CASE_LOC_RE.findall(text)
+    by_state = False
+    if not pairs:
+        pairs = CASE_LVAR_LOC_RE.findall(text)
+        by_state = bool(pairs)
+    return OrderedDict((num(v), loc_text(loc, k)) for v, k in pairs), by_state
 
 
 def set_event(ie):
@@ -234,10 +240,11 @@ def classify(entry, ie, loc):
         values = OrderedDict((num(p), num(v)) for p, v, n in case if n.strip() == var)
         if any(p != v for p, v in values.items()):
             entry['values'] = values
-        words = case_words(tt, loc)
+        words, by_state = case_words(tt, loc)
         rng = RANGE_RE.match(s)
         positions = [str(v) for v in range(int(rng.group(1)) + 1)] if rng else list(values)
-        entry['positions'] = OrderedDict((p, words.get(p, '')) for p in positions)
+        # Words keyed by the state value are read through the value each position writes (review 2026-10-29).
+        entry['positions'] = OrderedDict((p, words.get(values.get(p, p) if by_state else p, '')) for p in positions)
         if (len(positions) == 3 and entry['positions'].get('1', '').upper() == 'NEUTRAL'
                 and entry['id'] not in NOT_SPRING):
             entry['kind'] = SPRING
@@ -375,7 +382,8 @@ def add_checklist_steps(data, checklist_text):
     """Gives each control the number of the first checklist step that names it, counting the live checkpoints
     of the aircraft's own checklist in order: by a cockpit part the step points at (Instrument id = the control's
     id without AIRLINER_), a variable it tests or sets (the control's state variable) or an event it fires (the
-    control's Set event). A panel's rows follow these steps. Commented-out checkpoints are not steps."""
+    control's Set event). A record for reviewing a regeneration: MSFSBA places a panel's rows in map order and
+    reads no step. Commented-out checkpoints are not steps."""
     import xml.etree.ElementTree as ET
     root = ET.fromstring(re.sub(r'<!--.*?-->', '', checklist_text, flags=re.S).encode('utf-8'))
     by_part, by_state, by_event = {}, {}, {}

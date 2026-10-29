@@ -21,6 +21,10 @@ LOC = {
     'INI.TOOLTIPS.SIGNS_SEAT_BELTS.1': 'ON',
     'INI.TOOLTIPS.SIGNS_SEAT_BELTS.2': 'AUTO',
     'INI.TOOLTIPS.SIGNS_SEAT_BELTS.3': 'OFF',
+    # A selector whose positions write its L:var's values in reverse (none on the 1.2.7 map; review 2026-10-29).
+    'INI.TOOLTIPS.SIGNS_REVERSED.TITLE': 'REVERSED',
+    'INI.TOOLTIPS.SIGNS_REVERSED.1': 'STATE 0', 'INI.TOOLTIPS.SIGNS_REVERSED.2': 'STATE 1',
+    'INI.TOOLTIPS.SIGNS_REVERSED.3': 'STATE 2',
     'INI.TOOLTIPS.MAINT_ELEC_BAT_VOLTAGE_SELECTOR.TITLE': 'BAT SELECTOR',
     'INI.TOOLTIPS.MAINT_ELEC_BAT_VOLTAGE_SELECTOR.0': 'EMER 1',
     'INI.TOOLTIPS.MAINT_ELEC_BAT_VOLTAGE_SELECTOR.1': 'EMER 2',
@@ -78,6 +82,13 @@ def _fixture():
                   "l0 2 == if{ 2 (>L:INI_SEATBELTS_SWITCH) g1 } :1"),
         init="(L:INI_SEATBELTS_SWITCH) sp0 l0 (>O:AIRLINER_SIGNS_SEAT_BELTS_Position)",
         tt_value=' '.join("(L:INI_SEATBELTS_SWITCH, number) %d == if{ (R:1:INI.TOOLTIPS.SIGNS_SEAT_BELTS.%d) '%%s' (F:Format) }"
+                          % (v, v + 1) for v in range(3)))
+    add(signs, 'AIRLINER_SIGNS_REVERSED', 'INI.TOOLTIPS.SIGNS_REVERSED.TITLE', units='numbers',
+        set_code=("p0 2 min 0 max (>O:AIRLINER_SIGNS_REVERSED_Position) (O:AIRLINER_SIGNS_REVERSED_Position) s0 "
+                  "l0 0 == if{ 2 (>L:INI_REVERSED) g1 } l0 1 == if{ 1 (>L:INI_REVERSED) g1 } "
+                  "l0 2 == if{ 0 (>L:INI_REVERSED) g1 } :1"),
+        init="(L:INI_REVERSED) sp0 l0 (>O:AIRLINER_SIGNS_REVERSED_Position)",
+        tt_value=' '.join("(L:INI_REVERSED, number) %d == if{ (R:1:INI.TOOLTIPS.SIGNS_REVERSED.%d) '%%s' (F:Format) }"
                           % (v, v + 1) for v in range(3)))
     add(maint, 'AIRLINER_MAINT_ELEC_BAT_VOLTAGE_SELECTOR', 'INI.TOOLTIPS.MAINT_ELEC_BAT_VOLTAGE_SELECTOR.TITLE',
         units='numbers',
@@ -140,7 +151,7 @@ def _by_id():
 
 class GenerateA350MapTests(unittest.TestCase):
     def test_every_control_is_read(self):
-        self.assertEqual(11, len(_map()['controls']))
+        self.assertEqual(12, len(_map()['controls']))
 
     def test_area_and_panel_come_from_the_component_tree(self):
         c = _by_id()['AIRLINER_ELEC_BAT_1']
@@ -166,6 +177,13 @@ class GenerateA350MapTests(unittest.TestCase):
         self.assertEqual('selector', c['kind'])
         self.assertEqual('L:INI_SEATBELTS_SWITCH', c['state_var'])
         self.assertEqual({'0': 'ON', '1': 'AUTO', '2': 'OFF'}, c['positions'])
+
+    # Review 2026-10-29 (panels minor 7): words by the L:var's value were looked up by the position, so a selector whose
+    # positions write other values read the wrong words. Each position reads the word of the value it writes.
+    def test_selector_worded_by_its_l_var_value_reads_each_positions_value(self):
+        c = _by_id()['AIRLINER_SIGNS_REVERSED']
+        self.assertEqual({'0': '2', '1': '1', '2': '0'}, c['values'])
+        self.assertEqual({'0': 'STATE 2', '1': 'STATE 1', '2': 'STATE 0'}, c['positions'])
 
     def test_selector_worded_by_position_counts_from_zero(self):
         c = _by_id()['AIRLINER_MAINT_ELEC_BAT_VOLTAGE_SELECTOR']

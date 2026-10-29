@@ -5,8 +5,8 @@ r"""Reports what changed between two A350 control maps, for reviewing a regenera
 
 Every line it prints is something a panel row, a spoken word or a cockpit write may have
 changed for; read each one before committing the new map. It compares every field of every
-control (by id), the order the controls are listed in (it sets the row order of the panel
-rows the checklist does not name), every lamp (by node: the cockpit rule it lights from and
+control (by id), the order the controls are listed in (it sets the order of each panel's
+rows: A350PanelLayout places them in map order), every lamp (by node: the cockpit rule it lights from and
 its bus) and every other top-level key (the package version), so "no differences" means the
 maps agree.
 
@@ -55,8 +55,8 @@ def diff(old, new):
     old_controls, new_controls = old.get('controls', []), new.get('controls', [])
     lines = _diff_list(old_controls, new_controls, 'id', CONTROL_FIELDS,
                        tag=lambda control: ' (%s)' % control.get('kind'))
-    # The controls' array order is the row order of the panel rows the checklist does not name
-    # (A350PanelLayout); lamps are looked up by node, so their order is not reported.
+    # The controls' array order is each panel's row order (A350PanelLayout places rows in map order);
+    # lamps are looked up by node, so their order is not reported.
     if _reordered(old_controls, new_controls, 'id'):
         lines.append('order   controls: the surviving controls are listed in a new order')
     lines += _diff_list(old.get('lamps', []), new.get('lamps', []), 'node', LAMP_FIELDS, prefix='lamp ')
