@@ -619,9 +619,9 @@ R Fuel Control (RR).
 | 16 | 1 BTL Cargo Fire | `B757_PED_1BTL_CARGOFIRE_BUTTON` | 3 | bottle discharge: emergency |
 | 17 | 2 BTL Cargo Fire Guard | `B757_GAURD_12_SWITCH` | 3 | guard, before its switch |
 | 18 | 2 BTL Cargo Fire | `B757_PED_2BTL_CARGOFIRE_BUTTON` | 3 | as 1 BTL |
-| 19 | Sys Fail | `B757_PED_SYS_FAIL_BUTTON` | 3 | fire-system FAIL reset (UP 109) (gp); moved to the end of the panel after the tests moved first |
+| 19 | Sys Fail | `B757_PED_SYS_FAIL_BUTTON` | 3 | fire-system FAIL reset (UP 109) (gp); now right before the tests, which moved to the end of the panel in plan 12 task 12 |
 
-Plan 12 task 12 (2026-10-28, the final review's M1): rows 1 to 3, the three tests, moved after row 19, as Engine Fire Test, Engine, APU and Cargo Fire Test, Wheel Well Fire Test: the option the owner picked ("Keep with fire handles") put them after the handles, so the panel opens with the fire handles in a fire. Rows 4 to 19 keep their order; the tiers and sources above stand as they were.
+Plan 12 task 12 (2026-10-28, the final review's M1): rows 1 to 3, the three tests, moved after row 19, in their own order (Wheel Well Fire Test, Engine Fire Test, Engine, APU and Cargo Fire Test: the preflight flow's): the option the owner picked ("Keep with fire handles") put them after the handles, so the panel opens with the fire handles in a fire. Rows 4 to 19 keep their order; the tiers and sources above stand as they were.
 
 ### Stabilizer trim (changed)
 
@@ -755,7 +755,7 @@ Plan 12 task 12 (2026-10-28, the final review's M1): rows 1 to 3, the three test
 
 Plan 12 task 5 (2026-10-28): rows 4 to 11, the eight `B757_VC_P61_SWITCH_3` to `_10` test switches, became buttons placed by the app (task 5b) and are no longer map nodes; the tiers and sources above stand as they were.
 
-Plan 12 task 12 (2026-10-28, the final review's I1): row 10's switch has no buttons: nothing in BlueBird reads `L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW`, and holding it on the ground with BBS Nest running changed nothing (flight-12.md).
+Plan 12 task 12 (2026-10-28, the final review's I1): row 10's switch has no buttons: nothing in BlueBird reads `L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW`, and holding it on the ground with BBS Nest running changed no variable (flight-12.md).
 
 ## Daily-use order research: the notes order_data.py refers to
 

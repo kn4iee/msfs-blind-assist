@@ -411,14 +411,14 @@ public static class Bbs757SpringControls
         "BBS757_P61_WING_AI_PROBE_HEAT_TEST", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", "Wing anti-ice and probe heat test");
 
     /// <summary>
-    /// The seven P61 test switches (the map's <c>B757_VC_P61_SWITCH_3</c> to <c>_10</c> but <c>_5</c>, which left it in
-    /// task 5a), in the order they stood on the P61 panel. Each rests on neutral (1); 0 and 2 are its two tests. Held
-    /// <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, released with the trims' verified
-    /// release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>). Not here: the duct leak / fuel
-    /// quantity test switch (<c>B757_VC_P61_SWITCH_5</c>, <c>L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW</c>; plan 12 task 12,
-    /// the final review's I1): nothing in BlueBird reads its var (not the WASM, no XML but the switch's own, no gauge),
-    /// and holding it on the ground with BBS Nest running changed nothing (flight-12.md), so a button would say "… test
-    /// done" for a test that never runs.
+    /// The seven P61 test switches (the map's <c>B757_VC_P61_SWITCH_3</c> to <c>_10</c> except <c>_5</c>, all of which
+    /// left the map in task 5a), in the order they stood on the P61 panel. Each rests on neutral (1); 0 and 2 are its two
+    /// tests. Held <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, released with the trims'
+    /// verified release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>). Not here: the duct leak /
+    /// fuel quantity test switch (<c>B757_VC_P61_SWITCH_5</c>, <c>L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW</c>; plan 12
+    /// task 12, the final review's I1): nothing in BlueBird reads its var (not the WASM, no XML but the switch's own, no
+    /// gauge), and holding it on the ground with BBS Nest running changed no variable (flight-12.md), so a button would
+    /// say "… test done" for a test that never runs.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringControl> TestSwitches = new[]
     {

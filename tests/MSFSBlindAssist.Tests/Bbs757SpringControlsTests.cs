@@ -1262,7 +1262,7 @@ public class Bbs757SpringControlsTests
     public void The_duct_leak_fuel_quantity_switch_gets_no_button_because_nothing_reads_it()
     {
         // Plan 12 task 12 (the final review's I1): nothing in BlueBird reads BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW (not the
-        // WASM, no XML but its own switch), and holding it on the ground with BBS Nest running changed nothing
+        // WASM, no XML but its own switch), and holding it on the ground with BBS Nest running changed no variable
         // (flight-12.md), so a button saying "… test done" would promise a test that never runs.
         var def = new BBS757Definition();
         var vars = def.GetVariables();

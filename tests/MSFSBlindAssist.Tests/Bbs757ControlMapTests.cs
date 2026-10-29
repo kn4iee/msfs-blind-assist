@@ -354,8 +354,8 @@ public class Bbs757ControlMapTests
     [InlineData("CDU brightness", "Captain CDU|First Officer CDU")]
     // The owner's answer: the fire and overheat tests stay with the fire handles, after them (plan 12 task 12, the final
     // review's M1): the handles and the cargo fire controls first, so a key pressed on the panel's first control in a fire
-    // is never a test bell, then the three tests.
-    [InlineData("Fire protection", "Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail|Engine Fire Test|Engine, APU and Cargo Fire Test|Wheel Well Fire Test")]
+    // is never a test bell, then the three tests in the preflight flow's order (wheel well first, UP 42).
+    [InlineData("Fire protection", "Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail|Wheel Well Fire Test|Engine Fire Test|Engine, APU and Cargo Fire Test")]
     [InlineData("Weather radar", "WX L WX|WX R WX|WX L Wxt|WX L Map|WX L Gcs|Weather Radar Test|WX R Wxt|WX R Map|WX R Gcs|WX L Tfr|WX R Tfr")]
     [InlineData("Forward attendant panel", "Cabin Ceiling|Cabin Window|Cabin Entry|Cabin Work Light|GND Svc")]
     // Plan 12 task 11: the windows first, then each sun visor's visibility before its position, then the shades.

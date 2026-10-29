@@ -6867,6 +6867,21 @@
    "variant": null
   },
   {
+   "node": "B757_PED_FIRE_WHLWELL_BUTTON",
+   "section": "Pedestal",
+   "panel": "Fire protection",
+   "label": "Wheel Well Fire Test",
+   "kind": "held",
+   "state_var": "B757_PED_FIRE_WHLWELL_BUTTON",
+   "positions": [],
+   "press": "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
+   "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
+   "hold_ms": 3000,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
    "node": "B757_PED_FIRE_ENG_BUTTON",
    "section": "Pedestal",
    "panel": "Fire protection",
@@ -6891,21 +6906,6 @@
    "positions": [],
    "press": "1 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
    "release": "0 (>L:B757_PED_FIRE_CARGO_BUTTON, bool)",
-   "hold_ms": 3000,
-   "cw": null,
-   "ccw": null,
-   "variant": null
-  },
-  {
-   "node": "B757_PED_FIRE_WHLWELL_BUTTON",
-   "section": "Pedestal",
-   "panel": "Fire protection",
-   "label": "Wheel Well Fire Test",
-   "kind": "held",
-   "state_var": "B757_PED_FIRE_WHLWELL_BUTTON",
-   "positions": [],
-   "press": "1 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
-   "release": "0 (>L:B757_PED_FIRE_WHLWELL_BUTTON, bool)",
    "hold_ms": 3000,
    "cw": null,
    "ccw": null,

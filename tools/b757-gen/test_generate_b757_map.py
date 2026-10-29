@@ -4151,14 +4151,15 @@ class Curation(unittest.TestCase):
                           "Audio 1 Voice Range", "Audio 1 Mic Lm Light", "Audio 1 Mic Lm Light Knob",
                           "Audio 1 Mic RR Light", "Audio 1 Mic RR Light Knob", "Audio 1 Boom Oxy", "Audio 1 PTT"],
         # plan 12 task 7 (the owner's answer): the fire and overheat tests stay here with the handles; plan 12 task 12 (the
-        # final review's M1): after them, as the owner's option said, so the panel opens with the fire handles in a fire
+        # final review's M1): after them, as the owner's option said, so the panel opens with the fire handles in a fire; the
+        # tests keep their own order, the preflight flow's (the wheel well test first, UP 42)
         "Fire protection": ["Engine 1 Fire Handle Unlock",
                             "Engine 1 Fire Handle", "Engine 1 Fire Handle Rotation", "Engine 2 Fire Handle Unlock",
                             "Engine 2 Fire Handle", "Engine 2 Fire Handle Rotation", "APU Fire Handle Unlock",
                             "APU Fire Handle", "APU Fire Handle Rotation", "FWD Cargo Fire", "AFT Cargo Fire",
                             "1 BTL Cargo Fire Guard", "1 BTL Cargo Fire", "2 BTL Cargo Fire Guard",
                             "2 BTL Cargo Fire", "Sys Fail",
-                            "Engine Fire Test", "Engine, APU and Cargo Fire Test", "Wheel Well Fire Test"],
+                            "Wheel Well Fire Test", "Engine Fire Test", "Engine, APU and Cargo Fire Test"],
         "Stabilizer trim": ["Stab Trim C Guard", "Stab Trim C Cutout", "Stab Trim R Guard", "Stab Trim R Cutout"],
         # plan 12 task 7: one weather radar panel, its left and right mode rows; a tier at a time, left before right
         "Weather radar": ["WX L WX", "WX R WX", "WX L Wxt", "WX L Map", "WX L Gcs", "Weather Radar Test", "WX R Wxt",
