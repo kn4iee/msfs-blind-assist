@@ -275,9 +275,12 @@ public partial class BBS757Definition : BaseAircraftDefinition
     /// <summary>
     /// Sections and panels from the map, in map order, then the status rows. The map's order is the
     /// order the pilot tabs through them: each panel is one panel of the cockpit (plan 12,
-    /// docs/b757/evidence/panel-audit-12.md), a section's panels come in the owner's every-day order and
-    /// a panel's controls every-day first (the generator's panel_order and control_order; whatever
-    /// they leave out follows alphabetically, or in cockpit file order). A status row whose panel is a
+    /// docs/b757/evidence/panel-audit-12.md), a section's panels follow the first action on each of them
+    /// in BlueBird's Simplified Procedures (plan 12 task 9, docs/b757/evidence/panel-order-12.md), with
+    /// the Forward panel pinned to open with Brakes and the Pedestal's start (Control stand, Engines,
+    /// TCAS and transponder) pinned by plan 01's test, and a panel's controls come every-day first (the
+    /// generator's panel_order and control_order; whatever they leave out follows alphabetically, or in
+    /// cockpit file order). A status row whose panel is a
     /// control panel joins that panel's Status display; any other panel is a display-only panel under
     /// the Status section, with an empty controls entry so the panel builds at all ([HS-5]). Panels are
     /// keyed by name, so no two sections may share one.

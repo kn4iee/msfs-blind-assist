@@ -57,11 +57,11 @@ public sealed record Bbs757SpringButton(string Key, Bbs757SpringControl Control,
 public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringControl? ShownWith = null);
 
 /// <summary>
-/// The 757's spring-loaded switches the panels hold for one second: the rudder trim and the aileron trim (Pedestal,
+/// The 757's spring-loaded switches the panels hold: for one second the rudder trim and the aileron trim (Pedestal,
 /// Rudder and aileron trim, the app's own panel: the cockpit's aileron / rudder trim panel at the aft end of the aisle
 /// stand), the alternate stab trim (Pedestal, Stabilizer trim) and the manual cabin altitude switch (Overhead,
-/// Pressurization). Measured 2026-10-28 (docs/b757/evidence/flight-12.md) and read from BlueBird's code
-/// (research package sections 6 and 7):
+/// Pressurization); for three seconds the P61 test switches (Other, P61 panel). Measured 2026-10-28
+/// (docs/b757/evidence/flight-12.md) and read from BlueBird's code (research package sections 6 and 7):
 /// <list type="bullet">
 /// <item>Each trim switch rests on 1, 0 is left or nose down, 2 right or nose up. BlueBird trims every frame
 /// while one is off 1, and nothing in the aircraft returns it to 1 but the cockpit mouse's own release, so a
@@ -73,10 +73,11 @@ public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringCont
 /// <item>The cabin switch rests on 4; its code uses only the side of 4, and the cockpit's click writes 0 (descend)
 /// or 7 (climb). Its XML writes 4 back within about a second of an outside write, so the hold is written again
 /// at <see cref="HoldRewriteMs"/>. It works only with Mode Select at MAN.</item>
-/// <item>The eight P61 test switches (<see cref="TestSwitches"/>, plan 12 task 5) rest on neutral, 1, and return to it
-/// at once by themselves, so a test runs only while its position is written again: each of their sixteen buttons
+/// <item>The seven P61 test switches (<see cref="TestSwitches"/>, plan 12 task 5) rest on neutral, 1, and return to it
+/// at once by themselves, so a test runs only while its position is written again: each of their fourteen buttons
 /// holds one test for <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, with the same
-/// verified release, then says "{test} done".</item>
+/// verified release, then says "{test} done". The eighth, the duct leak / fuel quantity test switch, has no button:
+/// nothing in BlueBird reads it (plan 12 task 12).</item>
 /// </list>
 /// Every write is <see cref="Bbs757Rpn.SetLVar"/>'s, invariant whatever the PC's culture; every phrase is
 /// invariant too. Pure.
@@ -378,7 +379,7 @@ public static class Bbs757SpringControls
     /// </summary>
     public const int TestRewriteMs = 30;
 
-    /// <summary>The map node the sixteen test buttons follow on the P61 panel: where the switches stood in its daily-use order.</summary>
+    /// <summary>The map node the fourteen test buttons follow on the P61 panel: where the switches stood in its daily-use order.</summary>
     public const string TestButtonsAfterNode = "B757_P6_SQUIBS_BUTTON2";
 
     private const string Other = "Other";
@@ -406,29 +407,29 @@ public static class Bbs757SpringControls
     public static readonly Bbs757SpringControl YawDamperTest = TestSwitch(
         "BBS757_P61_YAW_DAMPER_TEST", "BBS757_YAW_DAMP_P61_TEST_SW", "Yaw damper test");
 
-    public static readonly Bbs757SpringControl DuctLeakFuelQtyTest = TestSwitch(
-        "BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "Duct leak and fuel quantity test");
-
     public static readonly Bbs757SpringControl WingAntiIceProbeHeatTest = TestSwitch(
         "BBS757_P61_WING_AI_PROBE_HEAT_TEST", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", "Wing anti-ice and probe heat test");
 
     /// <summary>
-    /// The eight P61 test switches (the map's <c>B757_VC_P61_SWITCH_3</c> to <c>_10</c>, which left it in task 5a), in the
-    /// order they stood on the P61 panel. Each rests on neutral (1); 0 and 2 are its two tests. Held
+    /// The seven P61 test switches (the map's <c>B757_VC_P61_SWITCH_3</c> to <c>_10</c> but <c>_5</c>, which left it in
+    /// task 5a), in the order they stood on the P61 panel. Each rests on neutral (1); 0 and 2 are its two tests. Held
     /// <see cref="TestHoldMs"/>, written again every <see cref="TestRewriteMs"/>, released with the trims' verified
-    /// release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>).
+    /// release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>). Not here: the duct leak / fuel
+    /// quantity test switch (<c>B757_VC_P61_SWITCH_5</c>, <c>L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW</c>; plan 12 task 12,
+    /// the final review's I1): nothing in BlueBird reads its var (not the WASM, no XML but the switch's own, no gauge),
+    /// and holding it on the ground with BBS Nest running changed nothing (flight-12.md), so a button would say "… test
+    /// done" for a test that never runs.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringControl> TestSwitches = new[]
     {
         GroundProxHydGenTest, LeftAirDataStallTest, RightAirDataStallTest, ConfigTest,
-        EquipCoolingTest, YawDamperTest, DuctLeakFuelQtyTest, WingAntiIceProbeHeatTest,
+        EquipCoolingTest, YawDamperTest, WingAntiIceProbeHeatTest,
     };
 
     /// <summary>
-    /// The sixteen test buttons, one per test position, in the order the P61 panel lists them (after
+    /// The fourteen test buttons, one per test position, in the order the P61 panel lists them (after
     /// <see cref="TestButtonsAfterNode"/>): each switch's two, the discriminator first ([VAR-1]), and the hold the label
-    /// says. <c>Positive</c> holds position 2, otherwise 0. BlueBird names neither position of the duct leak / fuel
-    /// quantity switch: Upper is 0 and Lower 2, as on the equipment cooling and yaw damper switches.
+    /// says. <c>Positive</c> holds position 2, otherwise 0.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringButton> TestButtons = new[]
     {
@@ -444,13 +445,11 @@ public static class Bbs757SpringControls
         new Bbs757SpringButton("BBS757_P61_LOWER_EQUIP_COOLING_TEST", EquipCoolingTest, true, "Lower Equipment Cooling Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_UPPER_YAW_DAMPER_TEST", YawDamperTest, false, "Upper Yaw Damper Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_LOWER_YAW_DAMPER_TEST", YawDamperTest, true, "Lower Yaw Damper Test 3 s"),
-        new Bbs757SpringButton("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, false, "Upper Duct Leak Fuel Quantity Test 3 s"),
-        new Bbs757SpringButton("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", DuctLeakFuelQtyTest, true, "Lower Duct Leak Fuel Quantity Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_WING_AI_TEST", WingAntiIceProbeHeatTest, false, "Wing Anti-ice Test 3 s"),
         new Bbs757SpringButton("BBS757_P61_PROBE_HEAT_TEST", WingAntiIceProbeHeatTest, true, "Probe Heat Test 3 s"),
     };
 
-    /// <summary>The eight test switches' L:vars, read fresh by the release's read-back, each registered under its own name and on no panel.</summary>
+    /// <summary>The seven test switches' L:vars, read fresh by the release's read-back, each registered under its own name and on no panel.</summary>
     public static readonly IReadOnlyList<Bbs757SpringRead> TestReads =
         TestSwitches.Select(c => new Bbs757SpringRead(c.LVar, $"{c.Name} switch")).ToArray();
 

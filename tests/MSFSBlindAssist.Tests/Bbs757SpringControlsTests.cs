@@ -1230,9 +1230,8 @@ public class Bbs757SpringControlsTests
     [InlineData("BBS757_P61_CONFIG_TEST", "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", "Takeoff and landing config test")]
     [InlineData("BBS757_P61_EQUIP_COOLING_TEST", "BBS757_EQUIP_COOLING_P61_TEST_SW", "Equipment cooling test")]
     [InlineData("BBS757_P61_YAW_DAMPER_TEST", "BBS757_YAW_DAMP_P61_TEST_SW", "Yaw damper test")]
-    [InlineData("BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "Duct leak and fuel quantity test")]
     [InlineData("BBS757_P61_WING_AI_PROBE_HEAT_TEST", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", "Wing anti-ice and probe heat test")]
-    public void The_eight_test_switches_are_the_measured_ones(string key, string lvar, string name)
+    public void The_seven_test_switches_are_the_measured_ones(string key, string lvar, string name)
     {
         var c = TestSwitch(key);
 
@@ -1250,11 +1249,31 @@ public class Bbs757SpringControlsTests
         {
             "BBS757_P61_GROUND_PROX_HYD_GEN_TEST", "BBS757_P61_LEFT_AIR_DATA_STALL_TEST", "BBS757_P61_RIGHT_AIR_DATA_STALL_TEST",
             "BBS757_P61_CONFIG_TEST", "BBS757_P61_EQUIP_COOLING_TEST", "BBS757_P61_YAW_DAMPER_TEST",
-            "BBS757_P61_DUCT_LEAK_FUEL_QTY_TEST", "BBS757_P61_WING_AI_PROBE_HEAT_TEST",
+            "BBS757_P61_WING_AI_PROBE_HEAT_TEST",
         }, S.TestSwitches.Select(c => c.Key));
         Assert.Empty(S.TestSwitches.Intersect(S.All));
-        Assert.Equal(12, S.All.Concat(S.TestSwitches).Select(c => c.Key).Distinct().Count());
-        Assert.Equal(12, S.All.Concat(S.TestSwitches).Select(c => c.LVar).Distinct().Count());
+        Assert.Equal(11, S.All.Concat(S.TestSwitches).Select(c => c.Key).Distinct().Count());
+        Assert.Equal(11, S.All.Concat(S.TestSwitches).Select(c => c.LVar).Distinct().Count());
+    }
+
+    private const string DuctLeakFuelQtySwitch = "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW";
+
+    [Fact]
+    public void The_duct_leak_fuel_quantity_switch_gets_no_button_because_nothing_reads_it()
+    {
+        // Plan 12 task 12 (the final review's I1): nothing in BlueBird reads BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW (not the
+        // WASM, no XML but its own switch), and holding it on the ground with BBS Nest running changed nothing
+        // (flight-12.md), so a button saying "… test done" would promise a test that never runs.
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+
+        Assert.DoesNotContain(S.TestSwitches, c => c.LVar == DuctLeakFuelQtySwitch);
+        Assert.DoesNotContain(S.TestButtons, b => b.Key.Contains("DUCT_LEAK", StringComparison.Ordinal));
+        Assert.DoesNotContain(S.TestButtons, b => b.Label.Contains("Duct Leak", StringComparison.Ordinal));
+        Assert.False(vars.ContainsKey(DuctLeakFuelQtySwitch));
+        Assert.Null(S.ForButtonKey("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST"));
+        Assert.Null(S.ForButtonKey("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST"));
+        Assert.DoesNotContain(def.GetPanelControls()[TestPanel], k => k.Contains("DUCT_LEAK", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1286,8 +1305,6 @@ public class Bbs757SpringControlsTests
         ("BBS757_P61_LOWER_EQUIP_COOLING_TEST", "Lower Equipment Cooling Test 3 s", "BBS757_EQUIP_COOLING_P61_TEST_SW", 2, "Lower equipment cooling test done"),
         ("BBS757_P61_UPPER_YAW_DAMPER_TEST", "Upper Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 0, "Upper yaw damper test done"),
         ("BBS757_P61_LOWER_YAW_DAMPER_TEST", "Lower Yaw Damper Test 3 s", "BBS757_YAW_DAMP_P61_TEST_SW", 2, "Lower yaw damper test done"),
-        ("BBS757_P61_UPPER_DUCT_LEAK_FUEL_QTY_TEST", "Upper Duct Leak Fuel Quantity Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 0, "Upper duct leak fuel quantity test done"),
-        ("BBS757_P61_LOWER_DUCT_LEAK_FUEL_QTY_TEST", "Lower Duct Leak Fuel Quantity Test 3 s", "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", 2, "Lower duct leak fuel quantity test done"),
         ("BBS757_P61_WING_AI_TEST", "Wing Anti-ice Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 0, "Wing anti-ice test done"),
         ("BBS757_P61_PROBE_HEAT_TEST", "Probe Heat Test 3 s", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW", 2, "Probe heat test done"),
     };
@@ -1295,14 +1312,14 @@ public class Bbs757SpringControlsTests
     private static readonly string[] TestButtonKeys = TestButtonRows.Select(r => r.Key).ToArray();
 
     [Fact]
-    public void The_sixteen_test_buttons_are_named_and_ordered_as_the_panel_lists_them()
+    public void The_fourteen_test_buttons_are_named_and_ordered_as_the_panel_lists_them()
     {
         // One button per test position, the discriminator first ([VAR-1]), in the order the switches stood on the panel.
         Assert.Equal(TestButtonRows.Select(r => (r.Key, r.Label, r.LVar, r.Value)),
             S.TestButtons.Select(b => (b.Key, b.Label, b.Control.LVar, b.Positive ? b.Control.Positive : b.Control.Negative)));
 
         foreach (var b in S.TestButtons) Assert.Same(b, S.ForButtonKey(b.Key));
-        Assert.Equal(16, S.TestButtons.Select(b => b.Label).Distinct().Count());   // no two rows of the panel share a name
+        Assert.Equal(14, S.TestButtons.Select(b => b.Label).Distinct().Count());   // no two rows of the panel share a name
         Assert.All(S.TestButtons, b => Assert.DoesNotContain("_SET", b.Key, StringComparison.Ordinal));   // never a typed field
         Assert.Empty(S.TestButtons.Select(b => b.Key).Intersect(S.Buttons.Select(b => b.Key)));
         // The trims' and the cabin's eight stay as they were.
@@ -1377,7 +1394,7 @@ public class Bbs757SpringControlsTests
     private static Bbs757Control GlassGuard() => P61Control("BBS_B757_P61_GLASS_GAURD_1", "P61 Glass Guard 1", Bbs757Kinds.Toggle);
 
     [Fact]
-    public void The_shipped_P61_panel_has_the_sixteen_test_buttons_right_after_the_squib_test()
+    public void The_shipped_P61_panel_has_the_fourteen_test_buttons_right_after_the_squib_test()
     {
         var def = new BBS757Definition();
         var panel = def.GetPanelControls()[TestPanel];
@@ -1385,9 +1402,9 @@ public class Bbs757SpringControlsTests
         int squib = panel.IndexOf(SquibTestNode);
 
         Assert.True(squib >= 0, "the squib test is on the P61 panel");
-        Assert.Equal(TestButtonKeys, panel.Skip(squib + 1).Take(16));
-        Assert.Equal(TestButtonRows.Select(r => r.Label), panel.Skip(squib + 1).Take(16).Select(k => vars[k].DisplayName));
-        Assert.Equal(16, panel.Count(k => TestButtonKeys.Contains(k)));   // each once
+        Assert.Equal(TestButtonKeys, panel.Skip(squib + 1).Take(14));
+        Assert.Equal(TestButtonRows.Select(r => r.Label), panel.Skip(squib + 1).Take(14).Select(k => vars[k].DisplayName));
+        Assert.Equal(14, panel.Count(k => TestButtonKeys.Contains(k)));   // each once
         Assert.Single(def.GetPanelStructure()["Other"], TestPanel);
     }
 
@@ -1443,13 +1460,13 @@ public class Bbs757SpringControlsTests
     {
         "BBS757_GRNDPROX_HYDGEN_P61_TEST_SW", "BBS757_AIRDATA_STALL_LEFT_P61_TEST_SW", "BBS757_AIRDATA_STALL_RIGHT_P61_TEST_SW",
         "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW", "BBS757_EQUIP_COOLING_P61_TEST_SW", "BBS757_YAW_DAMP_P61_TEST_SW",
-        "BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW", "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW",
+        "BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW",
     };
 
     private const string LampTestVar = "OVHD_TEST_LTS";
 
     [Fact]
-    public void Registers_sixteen_test_buttons_that_send_nothing_generic()
+    public void Registers_fourteen_test_buttons_that_send_nothing_generic()
     {
         var vars = new BBS757Definition().GetVariables();
 
@@ -1464,7 +1481,7 @@ public class Bbs757SpringControlsTests
             Assert.Equal(UpdateFrequency.OnRequest, def.UpdateFrequency);
             Assert.False(def.IsAnnounced);
         }
-        Assert.Equal(24, S.Buttons.Concat(S.TestButtons).Select(b => vars[b.Key].Name).Distinct().Count());
+        Assert.Equal(22, S.Buttons.Concat(S.TestButtons).Select(b => vars[b.Key].Name).Distinct().Count());
     }
 
     [Fact]
@@ -1494,12 +1511,12 @@ public class Bbs757SpringControlsTests
     }
 
     [Fact]
-    public void The_tests_add_twenty_five_variables_and_the_profile_stays_under_the_ceiling()
+    public void The_tests_add_twenty_two_variables_and_the_profile_stays_under_the_ceiling()
     {
         var vars = new BBS757Definition().GetVariables();
         var mine = S.TestButtons.Select(b => b.Key).Concat(TestReadKeys).Append(LampTestVar).ToList();
 
-        Assert.Equal(25, mine.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(22, mine.Distinct(StringComparer.Ordinal).Count());
         Assert.All(mine, k => Assert.True(vars.ContainsKey(k), k));
         Assert.True(vars.Count < 900, $"{vars.Count} variables");
     }
@@ -1877,6 +1894,51 @@ public class Bbs757SpringControlsTests
 
         Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, TestHoldWrites).Append(ConfigRelease), sim.Writes);   // it ran and was released
         Assert.Equal(new[] { "Takeoff config test done" }, speech.Asked);   // never "… unavailable" after a test that ran
+    }
+
+    /// <summary>An announcer whose <c>AnnounceImmediate</c> throws (a screen reader that failed on the interrupting warning), recording every phrase.</summary>
+    private sealed class FailingImmediateSpeech : ScreenReaderAnnouncer
+    {
+        public FailingImmediateSpeech() : base(IntPtr.Zero) { }
+
+        public List<string> Asked { get; } = new();
+
+        public override void Announce(string message) => Asked.Add(message);
+
+        public override void AnnounceImmediate(string message)
+        {
+            Asked.Add(message);
+            throw new InvalidOperationException("speech failed");
+        }
+    }
+
+    [Fact]
+    public async Task A_did_not_return_warning_that_throws_still_leaves_the_background_release_running()
+    {
+        // Plan 12 task 12 (the final review's recommendation 3): the background release starts before the warning is
+        // spoken, so the safety never depends on speech. The knob stays off rest through the press's three releases and
+        // comes back on the third background one; the warning's speech throws.
+        var rig = new Rig();
+        rig.Sim.Fresh[RudderKnob] = 2;
+        rig.Sim.Hold = ordinal => ordinal == FirstBackgroundWait;
+        int releases = 0;
+        rig.Sim.OnWrite = rpn =>
+        {
+            if (rpn == RudderRelease && ++releases == 6) rig.Sim.Fresh[RudderKnob] = 1;
+        };
+        var speech = new FailingImmediateSpeech();
+
+        var press = rig.Def.PressSpringAsync("BBS757_RUDDER_TRIM_RIGHT", rig.Manager, speech);
+
+        Assert.False(press.IsCompleted);   // still releasing in the background
+        Assert.Equal(RudderDidNotReturn, speech.Asked[0]);
+
+        rig.Sim.Release(FirstBackgroundWait);
+        await press.WaitAsync(Ceiling);
+
+        Assert.Equal(new[] { RudderRight, RudderRight }.Concat(Enumerable.Repeat(RudderRelease, 3 + 3)), rig.Sim.Writes);
+        Assert.Equal(RudderReturned, speech.Asked[^1]);
+        Assert.Equal(0, rig.Sim.CanceledDelays);
     }
 
     [Fact]

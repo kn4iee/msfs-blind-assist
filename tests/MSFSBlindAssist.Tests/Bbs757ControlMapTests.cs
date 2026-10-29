@@ -351,8 +351,10 @@ public class Bbs757ControlMapTests
     [InlineData("First officer EFIS", "ND Mode|ND Range|WXR|TERR|TFC|CTR|NAV AID|APRT|DATA|WPT|DH Reset|PFD Brightness|ND Brightness|INOP")]
     [InlineData("EICAS control", "EICAS R Status|EICAS L Status|Upper EICAS Brightness|Lower EICAS Brightness|EICAS Computer Switch|EICAS Lwr Thrust Ref|Thrust Ref Pull|EICAS Max Ind|EICAS Event")]
     [InlineData("CDU brightness", "Captain CDU|First Officer CDU")]
-    // The owner's answer: the fire and overheat tests stay with the fire handles, in Task 4's order (the preflight tests first).
-    [InlineData("Fire protection", "Wheel Well Fire Test|Engine Fire Test|Engine, APU and Cargo Fire Test|Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail")]
+    // The owner's answer: the fire and overheat tests stay with the fire handles, after them (plan 12 task 12, the final
+    // review's M1): the handles and the cargo fire controls first, so a key pressed on the panel's first control in a fire
+    // is never a test bell, then the three tests.
+    [InlineData("Fire protection", "Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail|Engine Fire Test|Engine, APU and Cargo Fire Test|Wheel Well Fire Test")]
     [InlineData("Weather radar", "WX L WX|WX R WX|WX L Wxt|WX L Map|WX L Gcs|Weather Radar Test|WX R Wxt|WX R Map|WX R Gcs|WX L Tfr|WX R Tfr")]
     [InlineData("Forward attendant panel", "Cabin Ceiling|Cabin Window|Cabin Entry|Cabin Work Light|GND Svc")]
     public void The_most_used_controls_lead_their_panel(string panel, string leading)

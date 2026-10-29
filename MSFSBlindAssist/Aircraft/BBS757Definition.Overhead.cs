@@ -347,14 +347,14 @@ public partial class BBS757Definition
     // =================================================================================
 
     /// <summary>
-    /// The eight trim and cabin buttons and the seven reads their presses make, then the sixteen P61 test buttons
-    /// and their eight switches' reads (<see cref="Bbs757SpringControls"/>), after the map's controls, never
+    /// The eight trim and cabin buttons and the seven reads their presses make, then the fourteen P61 test buttons
+    /// and their seven switches' reads (<see cref="Bbs757SpringControls"/>), after the map's controls, never
     /// shadowing a key already present. A button is an Event registration, as the landing altitude field is: it
     /// takes no data definition, the definition claims its key (<see cref="HandleOverheadSet"/>) so the generic path
     /// never sends it, and its dotted private name changes nothing in the sim even if it were ever sent (ruling
     /// R16). A read is an OnRequest L:var with no Ctrl+M row ([VAR-9]), never announced: a fresh read delivers only
     /// a registered key. The three readouts are also read-only status rows (Rudder Trim, Aileron Trim, Outflow
-    /// Valve), read when their panel's status display is shown, as the landing altitude's row is; the twelve
+    /// Valve), read when their panel's status display is shown, as the landing altitude's row is; the eleven
     /// switches are on no panel. The stab trim's readout (the trim call-out's <c>MON_ElevatorTrim</c>) and Mode
     /// Select (the map's control) are registered already.
     /// </summary>
@@ -393,7 +393,7 @@ public partial class BBS757Definition
     /// Stabilizer trim in the Pedestal (plan 12 task 7: their switches sit on their own trim panel at the aft end of the
     /// aisle stand); the two stab trim buttons go first on the map's Stabilizer trim panel (ahead of the cutouts and
     /// their guards), the two cabin buttons last on Pressurization (the landing altitude field stays first), and the
-    /// sixteen P61 test buttons on the P61 panel right after the squib test
+    /// fourteen P61 test buttons on the P61 panel right after the squib test
     /// (<see cref="Bbs757SpringControls.TestButtonsAfterNode"/>, where the test switches stood in its daily-use order),
     /// or at its end when the map lacks that node. A panel the map lacks is created under its section, after the panel
     /// its control names (<see cref="Bbs757SpringControl.PanelAfter"/>) or at the section's end, so the buttons are
@@ -426,7 +426,7 @@ public partial class BBS757Definition
         var tests = Bbs757SpringControls.TestButtons;
         if (tests.Count > 0)
         {
-            var panel = PanelOf(tests[0].Control);   // all sixteen share the P61 panel
+            var panel = PanelOf(tests[0].Control);   // all fourteen share the P61 panel
             int after = panel.IndexOf(Bbs757SpringControls.TestButtonsAfterNode);
             panel.InsertRange(after >= 0 ? after + 1 : panel.Count, tests.Select(b => b.Key));
         }
@@ -468,10 +468,10 @@ public partial class BBS757Definition
     /// <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
     /// release runs the trim to its stop (flight-12.md, measured twice).</item>
     /// <item>The release is verified (<see cref="ReleaseSpringAsync"/>), even after a profile switch: it is the safety.
-    /// A switch still off rest says "{name} switch did not return; the trim may keep running" (the cabin switch:
-    /// "Cabin altitude switch did not return; check the outflow valve"), interrupting, and is released again in the
-    /// background (<see cref="KeepReleasingAsync"/>, even after a profile switch); the press ends, and the switch may
-    /// be held again, once that ends.</item>
+    /// A switch still off rest is released again in the background (<see cref="KeepReleasingAsync"/>, even after a
+    /// profile switch, started before anything is said so the safety never depends on speech), then says "{name}
+    /// switch did not return; the trim may keep running" (the cabin switch: "Cabin altitude switch did not return;
+    /// check the outflow valve"), interrupting; the press ends, and the switch may be held again, once that ends.</item>
     /// <item>Unless switched away, <see cref="Bbs757SpringControls.ReadoutDelayMs"/> later the readout is read
     /// fresh and said once (CORE-7: the screen reader said the button; the app says only the read-back). The stab
     /// trim's is the exception: the trim call-out already speaks while the stabilizer moves, so the trim is also read
@@ -541,9 +541,11 @@ public partial class BBS757Definition
             {
                 Log.Warn("BBS757", $"{control.LVar} did not read its rest value after {Bbs757SpringControls.MaxReleaseWrites} releases; " +
                     $"releasing it again every {Bbs757SpringControls.ReleaseRetryIntervalMs} ms for up to {Bbs757SpringControls.ReleaseRetryForMs} ms.");
-                if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate(Bbs757SpringControls.DidNotReturnPhrase(control));
                 // The safety goes on even after a profile switch; the switch's gate stays taken until it ends (finally).
+                // Started before the warning is spoken, so speech that fails cannot keep it from starting (plan 12 task 12);
+                // its first step is a 2 s wait, so the warning is still heard first.
                 stillReleasing = KeepReleasingAsync(control, release, io, announcer);
+                if (!_lifetime.IsCancellationRequested) announcer.AnnounceImmediate(Bbs757SpringControls.DidNotReturnPhrase(control));
             }
 
             if (_lifetime.IsCancellationRequested) return;   // switched away: released (or still releasing), nothing is said

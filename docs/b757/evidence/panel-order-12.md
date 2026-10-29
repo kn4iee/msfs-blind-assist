@@ -621,6 +621,8 @@ R Fuel Control (RR).
 | 18 | 2 BTL Cargo Fire | `B757_PED_2BTL_CARGOFIRE_BUTTON` | 3 | as 1 BTL |
 | 19 | Sys Fail | `B757_PED_SYS_FAIL_BUTTON` | 3 | fire-system FAIL reset (UP 109) (gp); moved to the end of the panel after the tests moved first |
 
+Plan 12 task 12 (2026-10-28, the final review's M1): rows 1 to 3, the three tests, moved after row 19, as Engine Fire Test, Engine, APU and Cargo Fire Test, Wheel Well Fire Test: the option the owner picked ("Keep with fire handles") put them after the handles, so the panel opens with the fire handles in a fire. Rows 4 to 19 keep their order; the tiers and sources above stand as they were.
+
 ### Stabilizer trim (changed)
 
 | # | Control | Node | Tier | Why, and the source |
@@ -752,6 +754,8 @@ R Fuel Control (RR).
 | 23 | P61 Press Button 6 | `P61_PRESS_Button_6` | 3 | maintenance page EPCS |
 
 Plan 12 task 5 (2026-10-28): rows 4 to 11, the eight `B757_VC_P61_SWITCH_3` to `_10` test switches, became buttons placed by the app (task 5b) and are no longer map nodes; the tiers and sources above stand as they were.
+
+Plan 12 task 12 (2026-10-28, the final review's I1): row 10's switch has no buttons: nothing in BlueBird reads `L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW`, and holding it on the ground with BBS Nest running changed nothing (flight-12.md).
 
 ## Daily-use order research: the notes order_data.py refers to
 
