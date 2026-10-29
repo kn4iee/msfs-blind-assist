@@ -103,7 +103,7 @@ public static class A350Pfd
         // screen's top (y 38; "400" at x 646 in STD) or bottom (y 742), inside the FMA's top row where the tape's clip hides
         // it: the readout at the tape's edge shows that altitude (live 2026-10-28). Magenta, the symbol is the constraint the
         // vertical mode levels at (at the hold, the SID's 5000), which the readout does not show.
-        var heldSymbol = cells.Where(c => c.X is >= 585 and < 700 && (c.Y is >= 20 and < 60 || c.Y >= 700)
+        var heldSymbol = cells.Where(c => c.X is >= 585 and < 660 && (Math.Abs(c.Y - 38) <= 12 || Math.Abs(c.Y - 742) <= 12)
             && c.Colour is "cyan" or "magenta" && Digits(c.Text)).ToList();
         used.UnionWith(heldSymbol);
 
@@ -180,9 +180,10 @@ public static class A350Pfd
             .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();   // the heading scale's labels share the band, white
         if (lsBlock.Any(c => c.Colour == "magenta"))
         {
-            used.UnionWith(lsBlock);
             // Each row on its own line (live: ident y 689, frequency 717, DME 745): an ident with digits (FLS, GLS) is
-            // still the ident.
+            // still the ident. A text on none of them is no part of the block and reads as drawn.
+            static bool OnLine(DrawnCell c) => new[] { LsIdentY, LsFrequencyY, LsDmeY }.Any(y => Math.Abs(c.Y - y) <= 8);
+            used.UnionWith(lsBlock.Where(OnLine));
             string Row(float y) => string.Concat(lsBlock.Where(c => c.Text.Trim() != "nm" && Math.Abs(c.Y - y) <= 8)
                 .OrderBy(c => c.X).Select(c => c.Text.Trim()));
             string head = string.Join(" ", new[] { Row(LsIdentY), Row(LsFrequencyY) }.Where(s => s.Length > 0));

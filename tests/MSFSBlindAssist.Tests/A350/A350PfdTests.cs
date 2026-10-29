@@ -230,6 +230,22 @@ public class A350PfdTests
         Assert.Contains("LS: R22 110.10, 3.0 NM, magenta", lines);
     }
 
+    // Review 2026-10-29 (minors 4 and 5): a magenta text in the LS block's area but on none of its three lines, and a cyan
+    // number in the PFD's lower right outside the held selected-altitude symbol's place, were taken and never read.
+    [Fact]
+    public void No_text_near_the_ls_block_or_the_altitude_tape_is_dropped_silently()
+    {
+        var cap = Fixture("efis0_ls_downwind_omdb");
+        var texts = cap.Texts.ToList();
+        texts.Add(new DrawnText("XYZ", 836 + 37, 703, 37, 703, 1, new A350Rgba(1, 0.467f, 0.914f, 1)));
+        texts.Add(new DrawnText("25", 836 + 690, 760, 690, 760, 1, new A350Rgba(0, 1, 1, 1)));
+        var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
+        Assert.Contains(lines, l => l.Contains("XYZ", StringComparison.Ordinal));
+        Assert.Contains("25, cyan", lines);
+        Assert.Contains("LS: IDBL 110.10, 3.0 NM, magenta", lines);
+        Assert.Contains("Selected altitude: 4000, cyan", lines);
+    }
+
     [Fact]
     public void Without_ls_there_is_no_deviation_line()
     {
