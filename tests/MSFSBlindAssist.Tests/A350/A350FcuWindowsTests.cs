@@ -17,6 +17,16 @@ public sealed class A350FcuWindowsTests : IDisposable
 
     private static A350FcuWindow W(string name) => A350FcuWindows.All.Single(w => w.Name == name);
 
+    // The Altitude window's hint said 100 to 43000 while the entry takes 100 to 49000, the A350's own clamp (review
+    // 2026-10-29): the hint names the range the entry checks.
+    [Fact]
+    public void The_altitude_window_hint_names_the_range_the_entry_takes()
+    {
+        Assert.Contains("100 to 49000", MSFSBlindAssist.Forms.A350.A350FcuValueWindow.For(MSFSBlindAssist.Hotkeys.HotkeyAction.FCUSetAltitude).Hint);
+        Assert.True(MSFSBlindAssist.Aircraft.FcuValueEntry.TryAltitude(49000, out _, out _));
+        Assert.False(MSFSBlindAssist.Aircraft.FcuValueEntry.TryAltitude(49100, out _, out _));
+    }
+
     [Fact]
     public void The_four_windows_are_on_the_fcu_panel_in_cockpit_order() =>
         Assert.Equal(new[] { "Speed window", "Heading window", "Altitude window", "V/S window" },

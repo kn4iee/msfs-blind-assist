@@ -29,7 +29,7 @@ public sealed class A350FcuValueWindow : A350FcuWindowBase
         HotkeyAction.FCUSetHeading => new("Set FCU Heading", "Heading", "0 to 359 degrees",
             "A350_FCU_HEADING_SET", "A350_FCU_HDG_KNOB_PUSH", "A350_FCU_HDG_KNOB_PULL", "Heading window",
             new[] { ("HDG-V/S / TRK-FPA", "A350_FCU_TRK_FPA", false) }),
-        HotkeyAction.FCUSetAltitude => new("Set FCU Altitude", "Altitude", "in feet, 100 to 43000",
+        HotkeyAction.FCUSetAltitude => new("Set FCU Altitude", "Altitude", "in feet, 100 to 49000",
             "A350_FCU_ALTITUDE_SET", "A350_FCU_ALT_KNOB_PUSH", "A350_FCU_ALT_KNOB_PULL", "Altitude window",
             new[] { ("100/1000", "A350_FCU_ALT_SELECTOR", false), ("Metric altitude", "A350_FCU_METER", true), ("ALT (level off)", "A350_FCU_ALT", false) }),
         _ => new("Set FCU V/S or FPA", "V/S or FPA", "feet per minute (-1500), or a flight path angle in TRK-FPA (-3.0)",
