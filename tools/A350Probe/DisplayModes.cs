@@ -352,8 +352,6 @@ internal static class DisplayModes
         return 0;
     }
 
-    /// <summary>`ecamlisten seconds`: MSFSBA's own E/WD monitor over the service, printing each line it
-    /// would speak, with the time.</summary>
     /// <summary>`pfdlisten seconds`: MSFSBA's PFD monitor on the live sim: the FMA call-outs it would speak, and
     /// at the end each side's PFD as its status display reads it.</summary>
     private static int PfdListen(string[] args)
@@ -446,6 +444,8 @@ internal static class DisplayModes
         return 0;
     }
 
+    /// <summary>`ecamlisten seconds`: MSFSBA's own E/WD monitor over the service, printing each line it
+    /// would speak, with the time; the CTR drawn twice a second and handed to it, as the display tick does.</summary>
     private static int EcamListen(string[] args)
     {
         int seconds = int.Parse(args[0]);
@@ -453,10 +453,12 @@ internal static class DisplayModes
         var sw = System.Diagnostics.Stopwatch.StartNew();
         svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
         svc.Start();
-        using var mon = new A350EcamMonitor(async () => (await svc.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => false,
-            line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
-        mon.Start();
-        Thread.Sleep(seconds * 1000);
+        using var mon = new A350EcamMonitor(() => false, line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
+        while (sw.Elapsed.TotalSeconds < seconds)
+        {
+            mon.Observe(svc.DrawAsync(("CTR", 0)).GetAwaiter().GetResult()?.FirstOrDefault());
+            Thread.Sleep(500);
+        }
         return 0;
     }
 

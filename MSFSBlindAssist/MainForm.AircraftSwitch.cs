@@ -701,7 +701,6 @@ public partial class MainForm
         a350IdentTimer.Start();
         var service = a350DisplayService;
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
-            async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
             () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
             line => SafeBeginInvoke(() => announcer.Announce(line)));
         // The displays: the CTR (the E/WD call-outs) and the captain's EFIS drawn twice a second for the FMA call-outs (one

@@ -399,14 +399,12 @@ internal sealed class ProbeForm : Form
         service.Start();
         await WaitForDisplays(service);
         Line($"displays: {service.State} {service.Reason}");
-        using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(
-            async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => true, _ => { });
+        using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(() => true, _ => { });
         using var pfd = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
-            async gauges => await service.DrawAsync(gauges), _ => true, _ => { });
+            async gauges => await service.DrawAsync(gauges), _ => true, _ => { }) { CtrDrawn = ecam.Observe };
         def.Displays = service;
         def.Ecam = ecam;
         def.Pfd = pfd;
-        ecam.Start();
         pfd.Start();
         await Task.Delay(6000);   // a turn of the rotations, so every display has a latest draw
         var hotkeys = new MSFSBlindAssist.Hotkeys.HotkeyManager();

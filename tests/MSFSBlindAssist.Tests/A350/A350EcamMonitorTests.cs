@@ -15,27 +15,26 @@ public class A350EcamMonitorTests
     private static readonly A350DrawCapture Dark =
         new("CTR", Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1);
 
-    private static (A350EcamMonitor Monitor, List<string> Said, Queue<A350DrawCapture?> Feed, bool[] Muted) Make()
+    private static (A350EcamMonitor Monitor, List<string> Said, bool[] Muted) Make()
     {
-        var feed = new Queue<A350DrawCapture?>();
         var said = new List<string>();
         var muted = new bool[1];
-        var m = new A350EcamMonitor(() => Task.FromResult(feed.Count > 0 ? feed.Dequeue() : null), () => muted[0], said.Add);
-        return (m, said, feed, muted);
+        return (new A350EcamMonitor(() => muted[0], said.Add), said, muted);
     }
 
-    private static async Task Ticks(A350EcamMonitor m, Queue<A350DrawCapture?> feed, params A350DrawCapture?[] caps)
+    /// <summary>The CTR draws handed over, as the display tick hands each one (<see cref="A350PfdMonitor.CtrDrawn"/>).</summary>
+    private static void Ticks(A350EcamMonitor m, params A350DrawCapture?[] caps)
     {
-        foreach (var c in caps) { feed.Enqueue(c); await m.TickAsync(); }
+        foreach (var c in caps) m.Observe(c);
     }
 
     // Review 2026-10-29 (engine M2): a CTR draw handed over after the monitor was disposed (an aircraft switch mid-tick) spoke
     // its new lines. Nothing is said once disposed.
     [Fact]
-    public async Task Nothing_is_said_once_disposed()
+    public void Nothing_is_said_once_disposed()
     {
-        var (m, said, feed, _) = Make();
-        await Ticks(m, feed, Dark, Dark);
+        var (m, said, _) = Make();
+        Ticks(m, Dark, Dark);
         m.Dispose();
         m.Observe(Fixture("ctr_powerup_fws_fault"));
         m.Observe(Fixture("ctr_powerup_fws_fault"));
@@ -43,11 +42,11 @@ public class A350EcamMonitorTests
     }
 
     [Fact]
-    public async Task A_power_up_is_spoken_line_by_line_with_colours()
+    public void A_power_up_is_spoken_line_by_line_with_colours()
     {
-        var (m, said, feed, _) = Make();
+        var (m, said, _) = Make();
         var fws = Fixture("ctr_powerup_fws_fault");
-        await Ticks(m, feed, Dark, Dark, fws, fws);
+        Ticks(m, Dark, Dark, fws, fws);
         Assert.Equal(12, said.Count);
         Assert.Equal("FWS FWS 1+2 & CPIOM FAULT, amber", said[0]);
         Assert.Equal("ALT ALERT & AUTO CALLOUT / NORM C/L & MEMOS, amber", said[^1]);
@@ -55,16 +54,16 @@ public class A350EcamMonitorTests
     }
 
     [Fact]
-    public async Task Muted_it_says_nothing_but_keeps_up_with_the_display()
+    public void Muted_it_says_nothing_but_keeps_up_with_the_display()
     {
-        var (m, said, feed, muted) = Make();
+        var (m, said, muted) = Make();
         muted[0] = true;
         var fws = Fixture("ctr_powerup_fws_fault");
         var apu = Fixture("ctr_apu_emer_shutdown");
-        await Ticks(m, feed, Dark, Dark, fws, fws);
+        Ticks(m, Dark, Dark, fws, fws);
         Assert.Empty(said);
         muted[0] = false;
-        await Ticks(m, feed, apu, apu);
+        Ticks(m, apu, apu);
         Assert.Contains("APU EMER SHUTDOWN, amber", said);
         Assert.DoesNotContain("FWS FWS 1+2 & CPIOM FAULT, amber", said);   // never replayed after unmuting
     }
@@ -73,36 +72,34 @@ public class A350EcamMonitorTests
     // that flight A lacked was spoken as new. After Rebaseline the new flight's E/WD is followed silently for
     // SettleAfterLoad from its first draw (it comes up as the flight loads), then speaks what changes from there.
     [Fact]
-    public async Task After_a_flight_load_the_new_flights_lines_are_a_silent_baseline()
+    public void After_a_flight_load_the_new_flights_lines_are_a_silent_baseline()
     {
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
-        var feed = new Queue<A350DrawCapture?>();
         var said = new List<string>();
-        var m = new A350EcamMonitor(() => Task.FromResult(feed.Count > 0 ? feed.Dequeue() : null), () => false, said.Add, () => now);
+        var m = new A350EcamMonitor(() => false, said.Add, () => now);
         var fws = Fixture("ctr_powerup_fws_fault");
         var apu = Fixture("ctr_apu_emer_shutdown");
-        await Ticks(m, feed, Dark, Dark, apu, apu);   // flight A
+        Ticks(m, Dark, Dark, apu, apu);   // flight A
         said.Clear();
         m.Rebaseline();
         Assert.Null(m.LatestCapture);                 // flight A's E/WD is not this flight's
-        await Ticks(m, feed, Dark, Dark);             // flight B loading
+        Ticks(m, Dark, Dark);             // flight B loading
         now += TimeSpan.FromSeconds(5);
-        await Ticks(m, feed, fws, fws);               // flight B's E/WD comes up while it loads
+        Ticks(m, fws, fws);               // flight B's E/WD comes up while it loads
         Assert.Empty(said);
         now += A350EcamMonitor.SettleAfterLoad;
-        await Ticks(m, feed, apu, apu);
+        Ticks(m, apu, apu);
         Assert.Contains("APU EMER SHUTDOWN, amber", said);
     }
 
     // Review 2026-10-29 (readers I7): Alt+E and the SD line read the last capture whatever its age.
     [Fact]
-    public async Task A_capture_older_than_its_age_is_no_capture()
+    public void A_capture_older_than_its_age_is_no_capture()
     {
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         var fws = Fixture("ctr_powerup_fws_fault");
-        var feed = new Queue<A350DrawCapture?>(new[] { fws });
-        var m = new A350EcamMonitor(() => Task.FromResult(feed.Count > 0 ? feed.Dequeue() : null), () => true, _ => { }, () => now);
-        await m.TickAsync();
+        var m = new A350EcamMonitor(() => true, _ => { }, () => now);
+        m.Observe(fws);
         now += A350PfdMonitor.MaxAge;
         Assert.Same(fws, m.LatestCapture);
         now += TimeSpan.FromSeconds(1);
@@ -110,12 +107,12 @@ public class A350EcamMonitorTests
     }
 
     [Fact]
-    public async Task No_capture_or_a_trapped_one_changes_nothing()
+    public void No_capture_or_a_trapped_one_changes_nothing()
     {
-        var (m, said, feed, _) = Make();
+        var (m, said, _) = Make();
         var fws = Fixture("ctr_powerup_fws_fault");
         var trapped = fws with { Error = "trap: out of bounds" };
-        await Ticks(m, feed, Dark, Dark, null, trapped, fws, trapped, fws);
+        Ticks(m, Dark, Dark, null, trapped, fws, trapped, fws);
         Assert.Equal(12, said.Count);
     }
 
