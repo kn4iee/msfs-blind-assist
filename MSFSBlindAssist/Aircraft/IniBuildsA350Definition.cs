@@ -29,8 +29,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string AircraftCode => Code;
 
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
-    /// (the generated names elsewhere still collide, [VAR-1]).</summary>
-    internal static readonly string[] CuratedSections = { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" };
+    /// (the generated names elsewhere still collide, [VAR-1]). Public for the A350Probe harness, which offers the same.</summary>
+    public static readonly IReadOnlyList<string> CuratedSections = new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" };
 
     private readonly A350Placement _placement;
 

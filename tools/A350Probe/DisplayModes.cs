@@ -244,7 +244,9 @@ internal static class DisplayModes
         if (variant == "debug") cfg = cfg.WithDebugInfo(true);
         if (variant == "guard0") cfg = cfg.WithMemoryGuardSize(0).WithStaticMemoryMaximumSize(0).WithMemoryReservationForGrowth(0);
         using var engine = new Wasmtime.Engine(cfg);
-        var root = variant == null ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) : Path.Combine(Path.GetTempPath(), "a350wt-" + variant);
+        // Its own cache in %TEMP%, never the app's: this engine's settings differ from CreateEngine's, so a module from the
+        // app's cache would not load and the rebuild would replace the app's entry [A350-11] (tools review 2026-10-30).
+        var root = Path.Combine(Path.GetTempPath(), "a350wt-" + (variant ?? "trap"));
         var sw = System.Diagnostics.Stopwatch.StartNew();
         using var module = A350ModuleCache.LoadOrBuild(engine, src, root, out _);
         Console.WriteLine($"module ready in {sw.ElapsedMilliseconds} ms");

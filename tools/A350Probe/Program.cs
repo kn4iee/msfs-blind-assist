@@ -43,10 +43,22 @@ internal static class Program
 internal sealed class ProbeDefinition : IniBuildsA350Definition
 {
     private readonly string[] _watch;
-    // A350_SECTIONS="Overhead,Glareshield" offers a section still being curated.
-    public ProbeDefinition(string[] watch)
-        : base((Environment.GetEnvironmentVariable("A350_SECTIONS") ?? "Overhead").Split(',', StringSplitOptions.RemoveEmptyEntries))
-        => _watch = watch;
+    // The sections MSFSBA offers (all five) unless A350_SECTIONS names some ("Overhead,Glareshield"); a name that is
+    // not one of them is refused with the list (tools review 2026-10-30: the default was Overhead alone, so rows and
+    // variables differed from the app's, and an unknown name ended the run with a KeyNotFound).
+    public ProbeDefinition(string[] watch) : base(Sections()) => _watch = watch;
+
+    private static string[] Sections()
+    {
+        var known = IniBuildsA350Definition.CuratedSections;
+        var asked = Environment.GetEnvironmentVariable("A350_SECTIONS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (asked == null || asked.Length == 0) return known.ToArray();
+        var unknown = asked.Where(s => !known.Contains(s, StringComparer.Ordinal)).ToList();
+        if (unknown.Count > 0)
+            throw new ArgumentException($"A350_SECTIONS: unknown section {string.Join(", ", unknown)}; the sections are "
+                + string.Join(", ", known) + " (Displays is always offered)");
+        return asked;
+    }
 
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
     {
@@ -68,7 +80,7 @@ internal sealed class Cap : ScreenReaderAnnouncer
     // Announce and AnnounceWithQueue drop speech while Suppressed, as ScreenReaderAnnouncer's do.
     public override void Announce(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
     public override void AnnounceImmediate(string m) { lock (Said) Said.Add(m); }
-    public override void AnnounceQueued(string m) { lock (Said) Said.Add(m); }
+    public override void AnnounceQueued(string m) { if (!Suppressed) lock (Said) Said.Add(m); }   // through Announce, as the real one
     public override void AnnounceWithQueue(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
     public string Drain() { lock (Said) { var s = string.Join(" / ", Said); Said.Clear(); return s; } }
     public List<string> DrainList() { lock (Said) { var s = Said.ToList(); Said.Clear(); return s; } }
@@ -110,10 +122,13 @@ internal sealed class ProbeForm : Form
 
     private void Line(string s) { _out.AppendLine(s); Console.WriteLine(s); }
 
-    /// <summary>A KCCU key pressed through MSFSBA's A350MfdInput, for the op's result column.</summary>
-    private static string Pressed(MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput input, int side, string key)
+    /// <summary>A KCCU key pressed through MSFSBA's A350MfdInput, for the op's result column: the cursor keys (ND, MFD)
+    /// are held and let go, as the aircraft never resets them [A350-3] (tools review 2026-10-30: one held at 1 left the
+    /// next press without its rising edge); any other key is one press the aircraft resets.</summary>
+    private static async Task<string> Pressed(MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput input, int side, string key)
     {
-        input.Press(side, key);
+        if (key is "ND" or "MFD") await input.MoveCursorAsync(side, key);
+        else input.Press(side, key);
         return "sent";
     }
 
@@ -422,6 +437,8 @@ internal sealed class ProbeForm : Form
             }
             if (token == "close" && Window() is { } xw) { xw.Close(); await Task.Delay(300); Line("closed"); continue; }
             if (!Enum.TryParse<MSFSBlindAssist.Hotkeys.HotkeyAction>(token, out var action)) { Line($"{token}\tunknown"); continue; }
+            // A hotkey that saves the pilot's settings file (Ctrl+E's E/WD call-outs) is not run from a probe.
+            if (action == MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleECAMMonitoring) { Line($"{token}\tnot run: it saves the pilot's settings file"); continue; }
             bool handled = def.HandleHotkeyAction(action, _m!, cap, this, hotkeys);
             await Task.Delay(1500);
             Line($"{token}\thandled={handled}\tsaid: {cap.Drain()}");
@@ -551,7 +568,7 @@ internal sealed class ProbeForm : Form
                 {
                     "click" => (await input.ClickAsync(side, float.Parse(p[2], CultureInfo.InvariantCulture), float.Parse(p[3], CultureInfo.InvariantCulture))).ToString(),
                     "type" => (await input.TypeAsync(side, p[2])).ToString(),
-                    "key" => Pressed(input, side, p[2]),
+                    "key" => await Pressed(input, side, p[2]),
                     _ => "unknown",
                 };
                 Line($"{op}	{result}");
@@ -591,10 +608,10 @@ internal sealed class ProbeForm : Form
                 {
                     var view = efis.FirstOrDefault(v => v.GuidUrl.EndsWith(side == 0 ? ",L" : ",R", StringComparison.Ordinal)
                         || v.GuidUrl.Contains(side == 0 ? "EFIS,L" : "EFIS,R", StringComparison.Ordinal));
-                    if (view.Title == null && efis.Count == 2) view = efis[side];
-                    if (view.Title == null) { Line($"{op}\tno EFIS view ({efis.Count} found)"); continue; }
-                    input.Press(side, "ND");
-                    await Task.Delay(250);
+                    // Never by the views' titles: VCockpit10 sorts before VCockpit9, and the number is no side [A350-8].
+                    if (view.Title == null) { Line($"{op}\tno EFIS view for side {side} ({efis.Count} found; `views` lists them)"); continue; }
+                    await input.MoveCursorAsync(side, "ND");
+                    await Task.Delay(200);
                     int guid = int.Parse(view.GuidUrl.Split('|')[0], CultureInfo.InvariantCulture);
                     string at = $"{guid},{p[2]},{p[3]},0";
                     result = await CoherentEvalClient.EvalAsync(view.Title, $"(function(){{Coherent.call('WASM_MOUSE_MOVE',{at});Coherent.call('WASM_MOUSE_DOWN',{at});" +
@@ -604,7 +621,7 @@ internal sealed class ProbeForm : Form
                 else result = p[0] switch
                 {
                     "type" => (await input.TypeAsync(side, p[2])).ToString(),
-                    "key" => Pressed(input, side, p[2]),
+                    "key" => await Pressed(input, side, p[2]),
                     _ => "unknown",
                 };
                 Line($"{op}	{result}");
@@ -711,7 +728,8 @@ internal sealed class ProbeForm : Form
                 double val = double.Parse(hash[0], CultureInfo.InvariantCulture);
                 string key = kv[0];
                 if (!vars.TryGetValue(key, out var d)) { Line($"{key}\tMISSING"); continue; }
-                string panel = panels.First(p => p.Value.Contains(key)).Key;
+                string? panel = panels.FirstOrDefault(p => p.Value.Contains(key)).Key;
+                if (panel == null) { Line($"{key}\tnot on an offered panel (A350_SECTIONS?)"); continue; }
                 double? before = d.RenderAsButton ? null : await Read(key);
                 var lightsBefore = await Snapshot(def, displays.GetValueOrDefault(panel) ?? new List<string>());
                 def.HandleUIVariableSet(key, val, d, _m, cap);
@@ -746,6 +764,9 @@ internal sealed class ProbeForm : Form
             // thrust levers would reach TOGA on the stand, and the gravity gear takes Down only with its guards open.
             "A350_ENG_MASTER_1", "A350_ENG_MASTER_2", "A350_ENGINE_THROTTLE_1", "A350_ENGINE_THROTTLE_2", "A350_THRUST_LEVERS_ALL",
             "A350_GRAVITY_GEAR_HANDLE",
+            // Fuel jettisoned is gone (with ARM on, a sweep of ACTIVE opens the valves), and MASK MAN ON drops the cabin's
+            // masks (tools review 2026-10-30).
+            "A350_JETTISON_ARM", "A350_JETTISON_ACTIVE", "A350_OXYGEN_MASK_MAN",
         };
 
         if (_mode == "live")
@@ -760,6 +781,9 @@ internal sealed class ProbeForm : Form
                     var d = vars[key];
                     if (skip.Contains(key)) { Line($"{panel}	{key}	SKIPPED (lasting effect: drive by hand)"); continue; }
                     if (d.RenderAsSlider) { Line($"{panel}\t{key}\tslider\tSKIPPED (knob: drive by hand)"); continue; }
+                    // A typed value (the FCU windows, the QNHs, the cabin targets) has no positions to sweep: never a PASS.
+                    if (!d.RenderAsButton && d.ValueDescriptions is not { Count: > 0 })
+                    { Line($"{panel}\t{key}\ttyped\tUNTESTED (a typed value: drive it with set)"); continue; }
                     var lightsBefore = await Snapshot(def, lights);
                     if (d.RenderAsButton)
                     {

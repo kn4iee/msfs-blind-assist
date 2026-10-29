@@ -114,7 +114,8 @@ public sealed class A350MfdInput
         return null;
     }
 
-    /// <summary>Presses a side's KCCU key once.</summary>
+    /// <summary>Presses a side's KCCU key once: a page or function key the aircraft resets itself. The cursor keys (ND,
+    /// MFD) are not reset by it: <see cref="MoveCursorAsync"/> moves the cursor.</summary>
     public void Press(int side, string key) => _send($"1 (>L:{A350Kccu.LVar(side, key)})");
 
     /// <summary>Whether a line's action is running: a key pressed meanwhile would land among its keys.</summary>
@@ -141,16 +142,21 @@ public sealed class A350MfdInput
         finally { Volatile.Write(ref _acting, 0); }
     }
 
-    /// <summary>Moves a side's KCCU cursor to its MFD. The MFD key is one the aircraft does not reset: held about
-    /// 180 ms, then let go [A350-3] (it was only ever written 1).</summary>
-    private async Task CursorToMfdAsync(int side, CancellationToken ct)
+    /// <summary>Moves a side's KCCU cursor to its ND or MFD ([A350-4]: each takes the mouse only with the cursor on it).
+    /// The cursor keys are ones the aircraft does not reset: held about 180 ms, then let go [A350-3] (the MFD key was only
+    /// ever written 1; the probe's ND key likewise, tools review 2026-10-30), so the next press has its rising edge.</summary>
+    public async Task MoveCursorAsync(int side, string screen, CancellationToken ct = default)
     {
-        string key = A350Kccu.LVar(side, "MFD");
+        if (screen is not ("ND" or "MFD"))
+            throw new ArgumentException("The KCCU cursor keys are ND and MFD.", nameof(screen));
+        string key = A350Kccu.LVar(side, screen);
         _send($"1 (>L:{key})");
         await _delay(MfdKeyHoldMs, ct).ConfigureAwait(false);
         _send($"0 (>L:{key})");
         await _delay(AfterCursorMs, ct).ConfigureAwait(false);
     }
+
+    private Task CursorToMfdAsync(int side, CancellationToken ct) => MoveCursorAsync(side, "MFD", ct);
 
     /// <summary>Clicks a point on a side's MFD once its cursor is there, and returns once the click has landed; false
     /// when the MFD view cannot be reached.</summary>

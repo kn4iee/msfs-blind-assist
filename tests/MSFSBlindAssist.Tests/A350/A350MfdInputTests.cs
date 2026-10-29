@@ -65,6 +65,20 @@ public class A350MfdInputTests
         }, log);
     }
 
+    // Tools review 2026-10-30: the probe pressed the ND key with Press, a single 1 the aircraft never resets, so the next
+    // press had no rising edge and the cursor stayed where it was. The ND and MFD keys move the cursor the same way: held
+    // about 180 ms, then let go [A350-3].
+    [Theory]
+    [InlineData("ND", 0, "INI_MCDU1_ND")]
+    [InlineData("MFD", 1, "INI_MCDU2_MFD")]
+    public async Task The_cursor_keys_are_held_and_let_go(string screen, int side, string lvar)
+    {
+        var (input, log) = Recorded();
+        await input.MoveCursorAsync(side, screen);
+        Assert.Equal(new[] { $"send 1 (>L:{lvar})", "wait 180", $"send 0 (>L:{lvar})", "wait 50" }, log);
+        await Assert.ThrowsAsync<ArgumentException>(() => input.MoveCursorAsync(side, "INIT"));
+    }
+
     [Fact]
     public async Task An_action_with_nothing_typed_only_clicks()
     {
