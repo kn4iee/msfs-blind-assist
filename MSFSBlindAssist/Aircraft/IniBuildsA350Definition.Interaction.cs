@@ -260,14 +260,26 @@ public partial class IniBuildsA350Definition
             : $"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(shown, read)}");
     }
 
-    /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>
-    private double? CurrentValue(string key, SimConnectManager sim) =>
-        _commanded.Resolve(CommandKey(key), Cached(sim, key), Clock());
+    /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache. "All thrust levers"
+    /// is both levers, each so read: one position only while they agree, none while they are split, so a pick always
+    /// writes (review 2026-10-29: its state variable is lever 1's angle, and with lever 2 elsewhere a pick sent nothing).</summary>
+    private double? CurrentValue(string key, SimConnectManager sim)
+    {
+        if (key == A350LeverSpeech.AllLevers)
+            return CurrentValue(A350LeverSpeech.Lever1, sim) is double one && CurrentValue(A350LeverSpeech.Lever2, sim) is double two
+                && Math.Abs(one - two) < A350WritePlan.SameValueTolerance ? one : null;
+        return _commanded.Resolve(CommandKey(key), Cached(sim, key), Clock());
+    }
 
     /// <summary>What a row's commanded position is kept under: its state variable, so two rows that flip one variable
     /// share one hold (a hold kept per row let the second plan from a stale cache and flip the first back).</summary>
     private string CommandKey(string rowKey) =>
         _rows.TryGetValue(rowKey, out var row) && row.Control?.StateVar is { Length: > 0 } stateVar ? stateVar : rowKey;
+
+    /// <summary>The holds a pick of a row sets: its own, and for "All thrust levers" each lever's.</summary>
+    private IEnumerable<string> CommandKeys(string rowKey) => rowKey == A350LeverSpeech.AllLevers
+        ? new[] { CommandKey(A350LeverSpeech.Lever1), CommandKey(A350LeverSpeech.Lever2) }
+        : new[] { CommandKey(rowKey) };
 
     /// <summary>Runs a plan, or refuses it aloud; true when its steps were sent.</summary>
     private bool Execute(A350PlacedRow row, A350Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
@@ -288,7 +300,8 @@ public partial class IniBuildsA350Definition
             return false;
         }
         if (commandedValue is double target)
-            _commanded.Record(CommandKey(row.Key), target, Clock());
+            foreach (var key in CommandKeys(row.Key))
+                _commanded.Record(key, target, Clock());
         _ = RunAsync(row.Key, plan.Steps, sim);
         return true;
     }
@@ -360,6 +373,11 @@ public partial class IniBuildsA350Definition
     private async Task CheckMovedAsync(A350PlacedRow row, double target, SimConnectManager sim,
         ScreenReaderAnnouncer announcer, int pick)
     {
+        if (row.Key == A350LeverSpeech.AllLevers)
+        {
+            await CheckLeversMovedAsync(target, sim, announcer, pick);
+            return;
+        }
         _pendingPicks[row.Key] = (pick, target, false);
         bool Superseded() => !_pendingPicks.TryGetValue(row.Key, out var p) || p.Pick != pick || p.Reached;
         try
@@ -385,6 +403,48 @@ public partial class IniBuildsA350Definition
         {
             if (_pendingPicks.TryGetValue(row.Key, out var p) && p.Pick == pick)
                 _pendingPicks.Remove(row.Key);
+        }
+    }
+
+    /// <summary>"All thrust levers" read back as both levers: the one that stayed is named ("Thrust lever 2 did not move"),
+    /// both "All thrust levers did not move", and each stayed lever's position is remembered. Never cut short by a delivery
+    /// reaching the pick: the row's own variable is lever 1's angle, which says nothing of lever 2 (review 2026-10-29: a
+    /// lever 2 that did not follow was never said); only a newer pick of the row supersedes it.</summary>
+    private async Task CheckLeversMovedAsync(double target, SimConnectManager sim, ScreenReaderAnnouncer announcer, int pick)
+    {
+        string all = A350LeverSpeech.AllLevers;
+        _pendingPicks[all] = (pick, target, false);
+        bool Superseded() => !_pendingPicks.TryGetValue(all, out var p) || p.Pick != pick;
+        try
+        {
+            await Delay(ToggleReadBackMs);
+            if (_disposed || Superseded())
+                return;
+            var stayed = new List<int>();
+            foreach (var (lever, number) in new[] { (A350LeverSpeech.Lever1, 1), (A350LeverSpeech.Lever2, 2) })
+            {
+                if (await ReadFresh(sim, lever, ReadoutTimeoutMs) is not double now || _disposed || Superseded())
+                    return;   // unread: nothing is known to have stayed
+                if (Math.Abs(now - target) >= A350WritePlan.SameValueTolerance)
+                {
+                    stayed.Add(number);
+                    _commanded.Record(CommandKey(lever), now, Clock());
+                    ReRead(lever, sim);
+                }
+            }
+            if (stayed.Count == 0)
+                return;
+            ReRead(all, sim);
+            announcer.Announce(stayed.Count == 2 ? "All thrust levers did not move" : $"Thrust lever {stayed[0]} did not move");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A350", $"Read-back of the thrust levers failed: {ex.Message}");
+        }
+        finally
+        {
+            if (_pendingPicks.TryGetValue(all, out var p) && p.Pick == pick)
+                _pendingPicks.Remove(all);
         }
     }
 }
