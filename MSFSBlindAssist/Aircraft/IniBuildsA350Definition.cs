@@ -417,6 +417,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             Register(line.Key, line.Var, line.Name, Array.Empty<string>(), line.Unit);
             vars[line.Key].ValueDescriptions = new Dictionary<double, string>();
         }
+        // The IRS alignment call-out's Ctrl+M row (A350IrsAlignment), on the A350's own overall flag, consumed silently.
+        if (HasIrsPanel)
+        {
+            Register(IrsAlignmentKey, "INI_IRS_ALIGNED", "IRS alignment", null);
+            vars[IrsAlignmentKey].ExcludeFromMonitorManager = false;
+            _lampInputKeys.Add(IrsAlignmentKey);
+        }
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
         Register(A350PanelLamps.AnnLtKey, A350PanelLamps.AnnLtVar, "Annunciator light test", null);
@@ -661,6 +668,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         if (_speakingByInputKey.TryGetValue(varName, out var windows))
             foreach (var window in windows)
                 ObserveWindow(window, varName, value, announcer);
+        if (varName.StartsWith("A350_STAT_IR", StringComparison.Ordinal))
+            _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
         if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);

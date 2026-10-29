@@ -26,7 +26,15 @@ public static class A350StatusLines
             "Green brake accumulator pressure", Percent),
         new A350StatusLine("A350_STAT_ACCU_YELLOW", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_YELLOW_PRESSURE_PERCENT",
             "Yellow brake accumulator pressure", Percent),
+        // Each IR's alignment beside its pushbutton, as the A380 shows its ADIRUs' (parity task 8; the call-out is
+        // A350IrsAlignment's). The time left waits for the sim: INI_IRSn_TIME_REMAIN's unit is unmeasured.
+        new A350StatusLine("A350_STAT_IR1_ALIGNED", "A350_IRS_IR_1", "INI_IRS1_ALIGNED", "IR 1 alignment", Alignment),
+        new A350StatusLine("A350_STAT_IR2_ALIGNED", "A350_IRS_IR_2", "INI_IRS2_ALIGNED", "IR 2 alignment", Alignment),
+        new A350StatusLine("A350_STAT_IR3_ALIGNED", "A350_IRS_IR_3", "INI_IRS3_ALIGNED", "IR 3 alignment", Alignment),
     };
+
+    /// <summary>An IR's alignment flag: "Aligned" or "Not aligned".</summary>
+    public static string Alignment(double flag) => flag >= 0.5 ? "Aligned" : "Not aligned";
 
     /// <summary>A 0 to 1 travel as a whole percent: "37 percent".</summary>
     public static string Percent(double fraction) =>

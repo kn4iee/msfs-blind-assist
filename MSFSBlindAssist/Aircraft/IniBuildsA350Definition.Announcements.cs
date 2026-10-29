@@ -231,6 +231,33 @@ public partial class IniBuildsA350Definition
         }
     }
 
+    /// <summary>The IRS alignment call-out's Ctrl+M row (<see cref="A350IrsAlignment"/>), carried by the A350's own overall
+    /// flag, consumed silently.</summary>
+    public const string IrsAlignmentKey = "A350_IRS_ALIGNMENT";
+
+    private readonly A350IrsAlignment _irs = new();
+    private ScreenReaderAnnouncer? _irsAnnouncer;
+
+    /// <summary>Whether the IRS panel is offered (its call-out with it).</summary>
+    private bool HasIrsPanel => _rows.ContainsKey("A350_IRS_IR_1");
+
+    /// <summary>Each IR on and aligned, as the batch just delivered left them; while the seed settles after a load, nothing
+    /// is judged (the cache can hold the last flight's values), and the settled sample is the new baseline.</summary>
+    private void ObserveIrs(bool seeded)
+    {
+        if (!HasIrsPanel || _sim is not { } sim)
+            return;
+        if (seeded)
+            _irs.Reset();
+        if (_seedGate.Armed)
+            return;
+        var irs = Enumerable.Range(1, 3).Select(n =>
+            Cached(sim, $"A350_IRS_IR_{n}") is double on && Cached(sim, $"A350_STAT_IR{n}_ALIGNED") is double aligned
+                ? ((bool On, bool Aligned)?)(on >= 0.5, aligned >= 0.5) : null).ToList();
+        if (_irs.Observe(irs) is { } said && !IsMuted(IrsAlignmentKey) && !_disposed)
+            _irsAnnouncer?.Announce(said);
+    }
+
     /// <summary>Whether a light changed with the pilot's own press or pick of its button, or a twin's button.</summary>
     private bool IsOwnLamp(A350Lamp lamp)
     {
@@ -376,8 +403,10 @@ public partial class IniBuildsA350Definition
     public override void OnContinuousBatchDelivered(int batchNum)
     {
         base.OnContinuousBatchDelivered(batchNum);
+        bool seeded = false;
         if (_seedGate.Armed && _sim is { } sim && _seedGate.OnBatchDelivered(batchNum, ActiveBatches(sim), Clock()) != MD11.Md11SeedTrigger.None)
         {
+            seeded = true;
             foreach (var key in _lampBoard.InputKeys)
                 if (Cached(sim, key) is double cached)
                     _lampBoard.Seed(key, cached);
@@ -395,6 +424,7 @@ public partial class IniBuildsA350Definition
         foreach (var (row, text) in _leverSpeech.Flush(Clock()))
             if (!IsMuted(row) && !_disposed)
                 _leverAnnouncer?.Announce(text);
+        ObserveIrs(seeded);
     }
 
     /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; what
@@ -411,6 +441,7 @@ public partial class IniBuildsA350Definition
         _leverSpeech.Reset();
         _ownLampsUntil.Clear();
         _stepReadbacks.Clear();   // a step made before the load is not the new flight's value
+        _irs.Reset();
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();
