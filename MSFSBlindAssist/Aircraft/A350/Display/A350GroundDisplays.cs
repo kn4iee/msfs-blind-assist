@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
@@ -235,7 +236,7 @@ public static class A350GroundDisplays
         if (scale.Count > 0)
         {
             var nearest = scale.OrderBy(c => Math.Abs(c.X - 145)).First();
-            o.Add($"Heading: {(int.Parse(nearest.Text) * 10 + (145 - nearest.X) / 2.3 + 360) % 360:0}");
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(int.Parse(nearest.Text, CultureInfo.InvariantCulture) * 10 + (145 - nearest.X) / 2.3 + 360) % 360:0}"));
         }
         Position(cells, used, o);
         // Tape, drum and scale numbers, and the vertical source letters, are not text to read.

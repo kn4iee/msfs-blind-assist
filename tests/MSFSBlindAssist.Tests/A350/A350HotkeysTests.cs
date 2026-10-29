@@ -173,4 +173,10 @@ public class A350HotkeysTests
         Assert.Equal("V L S 166 knots", A350Hotkeys.Speed("V L S", 165.911));
         Assert.Equal("Alpha protection speed not shown", A350Hotkeys.Speed("Alpha protection speed", 0));
     }
+    // CORE-17: a figure another program drew is parsed as such, so "Infinity" (or "NaN") is no figure, never a weight said.
+    [Fact]
+    public void A_gross_weight_that_is_no_number_is_not_available()
+    {
+        Assert.Equal("Gross weight not available", A350Hotkeys.GrossWeight(new[] { "Gross weight: Infinity KG, green" }, pounds: false));
+    }
 }

@@ -209,7 +209,7 @@ internal static class A350TypedEntry
         // A dashed window turned shows a preset, and so does a turn while NAV stays engaged over an earlier preset.
         bool preset = read("INI_FCU_HDG_DASHED") is >= 0.5 || read("INI_ROLL_MODE") is double roll && Math.Abs(roll - NavRollMode) < 0.5;
         return Landing(dialVar, heading, 0.5, Write(dialVar, neighbour), Click(Heading, dir),
-            (shown, r) => $"FCU {(track ? "track" : "heading")} {(((int)Math.Round(shown)) % 360 + 360) % 360:000}"
+            (shown, r) => string.Create(CultureInfo.InvariantCulture, $"FCU {(track ? "track" : "heading")} {(((int)Math.Round(shown)) % 360 + 360) % 360:000}")
                 + (preset ? Preset : Status(r("INI_FCU_HDG_DOT"))));
     }
 

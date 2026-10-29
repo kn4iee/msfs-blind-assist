@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>The SD page shown, as the ECAM Control Panel's status display reads it (pure; the A380's
@@ -6,7 +7,7 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// The rows come from the CTR draw the E/WD monitor keeps.</summary>
 public static class A350SdText
 {
-    public static string PageName(double page) => A350Levers.SdPageWord(page) ?? $"Page {page:0}";
+    public static string PageName(double page) => A350Levers.SdPageWord(page) ?? string.Create(CultureInfo.InvariantCulture, $"Page {page:0}");
 
     public static string Build(A350DrawCapture? capture, double page)
     {

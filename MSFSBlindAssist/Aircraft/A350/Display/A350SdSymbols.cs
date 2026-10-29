@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>A sprite of ECAM/EcamElements.png by its centre in the atlas: what kind of symbol it is, its own
@@ -113,9 +114,9 @@ public static class A350SdSymbols
     {
         float up = bar.Base0 - y0, down = y1 - bar.Base1;
         if (bar.Spoiler && bar.PxPerDegree <= 0) return up <= 1 ? "retracted" : "extended";   // WHEEL's small wing
-        if (bar.Spoiler) return up <= 1 ? "retracted" : $"{Math.Round(up / bar.PxPerDegree):0} degrees up";
-        if (up > 0.5f) return $"{Math.Round(up / bar.PxPerDegree):0} degrees up";
-        if (down > 0.5f) return $"{Math.Round(down / bar.PxPerDegree):0} degrees down";
+        if (bar.Spoiler) return up <= 1 ? "retracted" : string.Create(CultureInfo.InvariantCulture, $"{Math.Round(up / bar.PxPerDegree):0} degrees up");
+        if (up > 0.5f) return string.Create(CultureInfo.InvariantCulture, $"{Math.Round(up / bar.PxPerDegree):0} degrees up");
+        if (down > 0.5f) return string.Create(CultureInfo.InvariantCulture, $"{Math.Round(down / bar.PxPerDegree):0} degrees down");
         return "neutral";
     }
 
@@ -165,7 +166,7 @@ public static class A350SdSymbols
                     float right = r.X1 - RudderRightEdge, left = RudderLeftEdge - r.X0;
                     float px = Math.Max(right, left);
                     string word = px < 1.5f ? "centred"
-                        : $"{Math.Round(px / RudderPxPerDegree, MidpointRounding.AwayFromZero):0} degrees {(right > left ? "right" : "left")}";
+                        : string.Create(CultureInfo.InvariantCulture, $"{Math.Round(px / RudderPxPerDegree, MidpointRounding.AwayFromZero):0} degrees {(right > left ? "right" : "left")}");
                     yield return $"Rudder: {word}, {A350Rgba.NameOf(r.Colour)}";
                 }
             }
@@ -259,9 +260,9 @@ public static class A350SdSymbols
             string? word = sprite.Kind switch
             {
                 "valve" => ValveWord(sprite, A350ShapeReader.AngleDegrees(shape), sym.Flow),
-                "flap" => $"{FlapOpenPercent(A350ShapeReader.AngleDegrees(shape), sym.Flow):0} percent open",
+                "flap" => string.Create(CultureInfo.InvariantCulture, $"{FlapOpenPercent(A350ShapeReader.AngleDegrees(shape), sym.Flow):0} percent open"),
                 "door" => colour == "green" ? "closed" : "open",
-                "level" => $"{Math.Round((sym.Bottom - (shape.Y0 + shape.Y1) / 2) / (sym.Bottom - sym.Top) * 100):0} percent",
+                "level" => string.Create(CultureInfo.InvariantCulture, $"{Math.Round((sym.Bottom - (shape.Y0 + shape.Y1) / 2) / (sym.Bottom - sym.Top) * 100):0} percent"),
                 _ => sprite.Word,
             };
             if (sym.Say != null) word = sym.Say(word, colour);

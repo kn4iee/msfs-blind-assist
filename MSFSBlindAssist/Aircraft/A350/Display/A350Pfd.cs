@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
@@ -222,7 +223,7 @@ public static class A350Pfd
         if (PatternOf(capture, side, 75, 2285) is { } speedTape)
         {
             double knots = Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero);
-            o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : $"Speed: {knots:0} knots");
+            o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : string.Create(CultureInfo.InvariantCulture, $"Speed: {knots:0} knots"));
             // The tape's symbols as the pilot sees them: only inside its visible window.
             foreach (var (name, _, _, colour) in TapeSymbols)
                 if (TapeSymbol(capture, side, name) is { OffScale: 0 } symbol)
@@ -251,7 +252,7 @@ public static class A350Pfd
                 double pitch = (PitchZeroImageY - (-horizon.PatternB * dx + horizon.PatternA * dy) / det) / PitchPxPerDegree;
                 o.Add($"Pitch: {Math.Abs(pitch).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} degrees {(pitch >= 0 ? "up" : "down")}");
                 double bank = A350ShapeReader.AngleDegrees(horizon);
-                o.Add(Math.Abs(bank) < 1 ? "Bank: wings level" : $"Bank: {Math.Abs(Math.Round(bank)):0} degrees {(bank > 0 ? "left" : "right")}");
+                o.Add(Math.Abs(bank) < 1 ? "Bank: wings level" : string.Create(CultureInfo.InvariantCulture, $"Bank: {Math.Abs(Math.Round(bank)):0} degrees {(bank > 0 ? "left" : "right")}"));
             }
         }
 
@@ -353,7 +354,7 @@ public static class A350Pfd
             double heading = (int.Parse(nearest.Text) * 10 + (HeadingIndexX - nearest.X) / HeadingPxPerDegree + 360) % 360;
             o.Add($"Heading: {Degrees(heading)}");   // three digits, as the selected heading and the track
 
-            static string Degrees(double d) => $"{((int)Math.Round(d) % 360 + 360) % 360:000}";
+            static string Degrees(double d) => ((int)Math.Round(d) % 360 + 360) % 360 is var h ? h.ToString("000", CultureInfo.InvariantCulture) : "";
             float At(DrawnShape sh) => (sh.X0 + sh.X1) / 2 - shift;
             // The selected heading: the cyan number beside the scale while the target is off it (taken above; the bug
             // then waits at the scale's edge), else the bug (shown in HDG, not in LOC or NAV).

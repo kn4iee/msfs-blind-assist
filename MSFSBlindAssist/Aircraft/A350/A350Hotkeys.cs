@@ -122,7 +122,7 @@ public static class A350Hotkeys
         var line = lines.FirstOrDefault(l => l.StartsWith(label + ": ", StringComparison.Ordinal));
         if (line == null) return null;
         var parts = line[(label.Length + 2)..].Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 1 && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+        return parts.Length >= 1 && MSFSBlindAssist.Utils.NumberParsing.TryParseExternal(parts[0], out var v)
             ? (v, parts.Length >= 2 ? parts[1] : "") : null;
     }
 

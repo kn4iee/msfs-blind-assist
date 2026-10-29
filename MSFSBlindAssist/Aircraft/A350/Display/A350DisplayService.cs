@@ -177,6 +177,8 @@ public sealed class A350DisplayService : IDisposable
         Prepare();
     }
 
+    private readonly HashSet<string> _failuresLogged = new();   // the worker thread's own
+
     /// <summary>Draws the named gauges on one fresh copy; null while not ready or with no A350 in the sim.</summary>
     public Task<IReadOnlyList<A350DrawCapture>?> DrawAsync(params (string Gauge, int Index)[] gauges)
     {
@@ -218,7 +220,8 @@ public sealed class A350DisplayService : IDisposable
             }
             catch (Exception ex)
             {
-                Log.Warn("A350Display", "draw: " + ex);
+                // Each distinct failure once, with its trace: the monitor asks twice a second (cleanup review 2026-10-30).
+                if (_failuresLogged.Add(ex.GetType().Name + ": " + ex.Message)) Log.Warn("A350Display", "draw: " + ex);
                 try { Say(_status.Report(A350ReaderFailure.Error, A350Flight(), DateTime.UtcNow)); }
                 catch (Exception) { /* the status is best-effort; the request still answers */ }
                 tcs.SetResult(null);
