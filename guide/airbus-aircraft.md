@@ -688,7 +688,7 @@ Some A350 controls are worth knowing about:
 
 The A350 has the A380's FCU windows, in Input mode: Ctrl+S speed (knots, or a Mach number such as 0.85, with SPD/MACH), Ctrl+H heading (with HDG-V/S / TRK-FPA), Ctrl+A altitude (100 to 49000 feet, with 100/1000, metric altitude and ALT level off), Ctrl+V vertical speed or flight path angle, Ctrl+P the autopilot panel (AP 1, AP 2, LOC, APPR, FD, A/THR, ALT and the A/THR disconnect, each labelled with its light, for example "AP 1: On") and Ctrl+B the altimeter. Each value window has the knob's push and pull, and keeps the window's line current in a read-only box.
 
-- A value typed into a managed or dashed window is a preset that the pull then uses, as on the real aircraft. BA tells you so, for example *"FCU speed 260 knots, preset"*.
+- A value typed into a managed or dashed window is a preset that the pull then uses, as on the real aircraft. BA tells you so, for example *"FCU speed 260, preset"*.
 - The altimeter window ("A350 Altimeter"): a QNH typed once sets both sides and the ISIS, each in that side's unit; STD or QNH on both sides; and each side's baro unit button, labelled with the unit it shows.
 
 The autopilot and knob keys are the A380's: Input Shift+A autopilot 1, Ctrl+O autopilot 2, Shift+P approach, Ctrl+J autothrust and Ctrl+L localizer; Shift+1 to Shift+4 push and Ctrl+1 to Ctrl+4 pull the heading, altitude, speed and vertical speed knobs. Each one presses the FCU's own control, and the flight mode announcements tell you what changed.
