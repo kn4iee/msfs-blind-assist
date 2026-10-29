@@ -112,14 +112,16 @@ public static class A350GroundDisplays
         var cells = Cells(capture.Texts).Where(c => c.Y is < 255 or >= 405).ToList();
         var used = new HashSet<DrawnCell>(cells.Where(c => c.Text is "SPD" or "HDG" or "ALT" or "V/S"));
         var o = new List<string>();
-        void Field(string label, float x, float y)
+        void Field(string label, float x, float y, Func<string, string>? number = null)
         {
             var hit = cells.Where(c => !used.Contains(c) && Math.Abs(c.X - x) <= 12 && Math.Abs(c.Y - y) <= 8).ToList();
             if (hit.Count == 0) return;
             used.UnionWith(hit);
-            o.Add($"{label}: {Speak(hit)}");
+            o.Add(number == null ? $"{label}: {Speak(hit)}"
+                : $"{label}: {number(string.Concat(hit.OrderBy(c => c.X).Select(c => c.Text.Trim())))}, {hit[0].Colour}");
         }
-        Field("Speed", 158, 105); Field("Heading", 455, 105); Field("Altitude", 241, 225); Field("Vertical speed", 275, 225);
+        Field("Speed", 158, 105); Field("Heading", 455, 105);
+        Field("Altitude", 241, 225, FcuAltitude); Field("Vertical speed", 275, 225, FcuVerticalSpeed);
         foreach (var (label, x0, x1) in new[] { ("Captain baro", 0f, 150f), ("First officer baro", 150f, 400f) })
         {
             var baro = cells.Where(c => !used.Contains(c) && c.X >= x0 && c.X < x1 && c.Y is >= 420 and < 520).OrderBy(c => c.Y).ToList();
@@ -129,6 +131,19 @@ public static class A350GroundDisplays
         }
         o.AddRange(Rest(cells, used));
         return o;
+    }
+
+    /// <summary>The FCU's altitude window as a number: it draws five digits ("00100").</summary>
+    private static string FcuAltitude(string drawn) =>
+        drawn.Length > 0 && drawn.All(char.IsDigit) ? (drawn.TrimStart('0') is { Length: > 0 } t ? t : "0") : drawn;
+
+    /// <summary>The FCU's V/S window as a number, signed as the FCU windows say it: it draws the hundreds' zeros small, as
+    /// "oo" ("+12oo" for +1200); dashes and an FPA read as drawn.</summary>
+    private static string FcuVerticalSpeed(string drawn)
+    {
+        var t = drawn.EndsWith("oo", StringComparison.Ordinal) ? drawn[..^2] + "00" : drawn;
+        return int.TryParse(t, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out int fpm)
+            ? fpm.ToString("+0;-0;0", System.Globalization.CultureInfo.InvariantCulture) : drawn;
     }
 
     /// <summary>An RMP's radio page: each radio named in the middle column, its active frequency left, its

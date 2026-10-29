@@ -73,9 +73,38 @@ public class A350GroundDisplaysTests
         var fcu = A350GroundDisplays.ReadFcu(Fixture("FCU"));
         Assert.Equal(new[]
         {
-            "Speed: 100 KT, white", "Heading: 218, white", "Altitude: 00100, white", "Vertical speed: ----, white",
+            "Speed: 100 KT, white", "Heading: 218, white", "Altitude: 100, white", "Vertical speed: ----, white",
             "Captain baro: QNH 1013, white", "First officer baro: QNH 1013, white",
         }, fcu);
+    }
+
+    // The FCU's altitude window draws five digits ("00100") and the V/S window its hundreds' zeros small, as "oo" (live
+    // 2026-10-28: "+00oo"): they read as the numbers they show, as the FCU windows say them ("V/S +1200", "0").
+    [Theory]
+    [InlineData("+12oo", "Vertical speed: +1200, white")]
+    [InlineData("-07oo", "Vertical speed: -700, white")]
+    [InlineData("+00oo", "Vertical speed: 0, white")]
+    public void The_fcu_reads_its_vertical_speed_as_a_number(string drawn, string read)
+    {
+        var cap = Fixture("FCU");
+        var fcu = A350GroundDisplays.ReadFcu(cap with { Texts = cap.Texts.Select(t => t.Text == " ----" ? t with { Text = drawn } : t).ToList() });
+        Assert.Contains(read, fcu);
+        Assert.Contains("Altitude: 100, white", fcu);
+    }
+
+    // sv-SE's negative sign is U+2212: the V/S reads with a plain minus, as the FCU windows say it.
+    [Fact]
+    public void The_fcu_vertical_speed_is_invariant_under_a_swedish_culture()
+    {
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("sv-SE");
+            var cap = Fixture("FCU");
+            Assert.Contains("Vertical speed: -700, white",
+                A350GroundDisplays.ReadFcu(cap with { Texts = cap.Texts.Select(t => t.Text == " ----" ? t with { Text = "-07oo" } : t).ToList() }));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
     }
 
     [Fact]
