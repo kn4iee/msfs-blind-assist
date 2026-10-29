@@ -559,7 +559,7 @@
             if (beside) {
               var slash = label.indexOf(' / ');
               var name = slash > 0 ? label.substring(0, slash) + ' ' + label.substring(slash + 3) : label + ', value';
-              push(beside, { kind: '', controlType: 'text', text: name, value: beside.value, disabled: beside.disabled });
+              push(beside, { kind: '', controlType: 'text', text: name, value: beside.value, disabled: beside.disabled, key: 'field:' + name });
             }
             continue;
           }
@@ -568,21 +568,22 @@
             // A group of switches (CALLOUTS' RA callouts): each its own checkbox.
             for (var cb = 0; cb < cbs.length; cb++) {
               var cl = cbs[cb].id ? e.querySelector('label[for="' + cbs[cb].id + '"]') : null;
-              push(cbs[cb], { kind: '', controlType: 'checkbox', text: label + (cl ? ': ' + A.text(cl) : ''), value: cbs[cb].checked ? 'true' : 'false' });
+              var cbName = label + (cl ? ': ' + A.text(cl) : '');
+              push(cbs[cb], { kind: '', controlType: 'checkbox', text: cbName, value: cbs[cb].checked ? 'true' : 'false', key: 'field:' + cbName });
             }
             continue;
           }
           var field = e.querySelector('input[type=number],input[type=text],input:not([type])');
           if (field) {
             var hint = A.norm((e.innerText || '').replace(label, ''));
-            push(field, { kind: '', controlType: 'text', text: label + (hint ? ', ' + hint : ''), value: field.value, disabled: field.disabled });
+            push(field, { kind: '', controlType: 'text', text: label + (hint ? ', ' + hint : ''), value: field.value, disabled: field.disabled, key: 'field:' + label });
             continue;
           }
           var range = e.querySelector('input[type=range]');
           if (range) {
             push(range, {
               kind: '', controlType: 'range', text: label, value: range.value,
-              min: parseFloat(range.min || '0'), max: parseFloat(range.max || '100'), step: parseFloat(range.step || '1')
+              min: parseFloat(range.min || '0'), max: parseFloat(range.max || '100'), step: parseFloat(range.step || '1'), key: 'field:' + label
             });
             continue;
           }
@@ -621,8 +622,11 @@
             push(rs.box, { kind: '', controlType: 'select', text: rs.label, value: rval, options: ropts, clickable: true, commit: 'enter' });
             continue;
           }
+          // A field, slider or switch keys on its name, never on the result the OIS writes beside it after Enter ("AIRP"
+          // becomes "AIRP, OK"): keyed by its text, the shell rebuilt the field under the pilot's focus (review 2026-10-29).
           if (type === 'checkbox') {
-            push(e, { kind: '', controlType: 'checkbox', text: A.fieldLabel(e, page + '|checkbox|' + (seen.cb = (seen.cb || 0) + 1)).text, value: e.checked ? 'true' : 'false' });
+            var cfl = A.fieldLabel(e, page + '|checkbox|' + (seen.cb = (seen.cb || 0) + 1));
+            push(e, { kind: '', controlType: 'checkbox', text: cfl.text, value: e.checked ? 'true' : 'false', key: 'field:' + (cfl.label || cfl.text) });
             continue;
           }
           var fk = page + '|' + type;
@@ -642,10 +646,10 @@
             continue;
           }
           if (type === 'range') {
-            push(e, { kind: '', controlType: 'range', text: rl, value: e.value, min: parseFloat(e.min || '0'), max: parseFloat(e.max || '100'), step: parseFloat(e.step || '1') });
+            push(e, { kind: '', controlType: 'range', text: rl, value: e.value, min: parseFloat(e.min || '0'), max: parseFloat(e.max || '100'), step: parseFloat(e.step || '1'), key: 'field:' + (fl.label || rl) });
             continue;
           }
-          push(e, { kind: '', controlType: 'text', text: rl, value: e.value, disabled: e.disabled });
+          push(e, { kind: '', controlType: 'text', text: rl, value: e.value, disabled: e.disabled, key: 'field:' + (fl.label || rl) });
           continue;
         }
 

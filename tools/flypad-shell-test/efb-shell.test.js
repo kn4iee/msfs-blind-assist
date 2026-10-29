@@ -191,6 +191,34 @@ test('a flagged control that arrives disabled keeps its node, speaks its outcome
   assert.deepStrictEqual(s.posted, [JSON.stringify({ type: 'click', idx: '12' })], 'the refused press posted a command');
 });
 
+// The A350 OIS writes its result into a field's label after Enter ("AIRP" becomes "AIRP, OK"); its reader keys the field by
+// name (review 2026-10-29, OIS I4), so the field the pilot just typed into keeps its node and the focus.
+const field = (idx, text, value, extra) => Object.assign({ idx, kind: '', controlType: 'text', text, value, clickable: false, level: 0, live: '', disabled: false }, extra || {});
+test('a keyed field keeps its node and the focus when its label gains a result', (t) => {
+  const s = loadShell(t);
+  s.render('T.O PERF', [field(4, 'AIRP', 'VCBI', { key: 'field:AIRP' })]);
+  const inp = s.window.document.querySelector('#list input');
+  inp.focus();
+  s.render('T.O PERF', [field(4, 'AIRP, OK', 'VCBI', { key: 'field:AIRP' })]);
+  assert.strictEqual(s.window.document.querySelector('#list input'), inp, 'the field was rebuilt');
+  assert.strictEqual(s.window.document.activeElement, inp, 'the focus left the field');
+  assert.strictEqual(inp.getAttribute('aria-label'), 'AIRP, OK', 'the result is not in the name');
+});
+
+test('a slider or a choice kept on its node is named by its new label', (t) => {
+  const s = loadShell(t);
+  const slider = { idx: 2, kind: '', controlType: 'range', text: 'MASTER VOLUME', value: '50', min: 0, max: 100, step: 1, clickable: false, level: 0, live: '', disabled: false, key: 'field:MASTER VOLUME' };
+  s.render('Options', [slider, choice(7, 'NAVDATA', 'MSFS', ['NAVIGRAPH', 'MSFS'], { commit: 'enter', key: 'choice:NAVDATA' })]);
+  const rg = s.window.document.querySelector('#list input[type=range]');
+  const sel = selectOf(s, 'NAVDATA');
+  s.render('Options', [Object.assign({}, slider, { text: 'MASTER VOLUME, muted' }),
+    choice(7, 'NAVDATA, restart needed', 'MSFS', ['NAVIGRAPH', 'MSFS'], { commit: 'enter', key: 'choice:NAVDATA' })]);
+  assert.strictEqual(s.window.document.querySelector('#list input[type=range]'), rg, 'the slider was rebuilt');
+  assert.strictEqual(rg.getAttribute('aria-label'), 'MASTER VOLUME, muted');
+  assert.strictEqual(selectOf(s, 'NAVDATA'), sel, 'the choice was rebuilt');
+  assert.strictEqual(sel.getAttribute('aria-label'), 'NAVDATA, restart needed, Enter applies');
+});
+
 test('the explicit key wins over the label: the same text under another key is another node', (t) => {
   const s = loadShell(t);
   s.render('Perf', [btn(5, 'Runway next', { key: 'step-next:Runway' })]);

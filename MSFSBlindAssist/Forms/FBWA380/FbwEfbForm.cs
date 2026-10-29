@@ -1114,6 +1114,11 @@ public class FbwEfbForm : Form
 
   function ctrlOf(node) { if (node.matches && node.matches('[data-idx]')) return node; return node.querySelector ? node.querySelector('[data-idx]') : null; }
 
+  // A control kept on its node by its key is named by its new label, focused or not: the A350 OIS writes its result into
+  // a field's label after Enter ('AIRP' becomes 'AIRP, OK'), and the screen reader says a focused control's new name
+  // itself. Set only on a change, so an unchanged name raises no event.
+  function setName(c, name) { if (c.getAttribute('aria-label') !== name) c.setAttribute('aria-label', name); }
+
   // Patch a reused node's mutable bits IN PLACE — never recreate it, never write to
   // the control the user is currently editing (preserves the screen-reader cursor).
   function patchEl(node, it) {
@@ -1144,6 +1149,7 @@ public class FbwEfbForm : Form
       if (document.activeElement !== c && c.value !== cv) c.value = cv;
       if (c.hasAttribute('data-applied')) c.setAttribute('data-applied', cv);   // what the aircraft shows applied
       var sp = node.querySelector('span'); if (sp) setText(sp, (text || 'Choice') + ': ');
+      setName(c, (text || 'Choice') + (c.hasAttribute('data-applied') ? ', Enter applies' : ''));
       return;
     }
     if (type === 'rng') {
@@ -1153,12 +1159,14 @@ public class FbwEfbForm : Form
       if (it.step != null) c.step = it.step;
       if (document.activeElement !== c) { var rv = it.value || ''; if (c.value !== rv) c.value = rv; }
       var rsp2 = node.querySelector('span'); if (rsp2) setText(rsp2, (text || 'Slider') + ': ');
+      setName(c, text || 'Slider');
       return;
     }
     if (type === 'in') {
       c.disabled = !!it.disabled;
       if (document.activeElement !== c) { var nv = it.value || ''; if (c.value !== nv) c.value = nv; }
       var sp2 = node.querySelector('span'); if (sp2) setText(sp2, (text || 'Field') + ': ');
+      setName(c, text || 'Field');
       return;
     }
     if (type === 'btn' || type === 'lnk') {
