@@ -353,6 +353,29 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
+    public void Disposing_during_a_nudge_lets_its_switch_go()
+    {
+        Set("A350_RUDDER_TRIM_LEFT", 1);
+        Assert.Single(_sent);   // the switch held to the left
+        _def.Dispose();
+        Assert.Equal(2, _sent.Count);
+        Assert.StartsWith("1 (>B:AIRLINER_RUDDER_TRIM_Set)", _sent[1], StringComparison.Ordinal);   // back to rest
+    }
+
+    // [VAR-1] (review 2026-10-29, panels minor 9: one panel's names were checked): no two controls of any panel the
+    // definition offers share a name.
+    [Fact]
+    public void No_two_controls_of_any_panel_share_a_name()
+    {
+        var vars = _def.GetVariables();
+        foreach (var (panel, keys) in _def.GetPanelControls())
+        {
+            var dupes = keys.Select(k => vars[k].DisplayName).GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            Assert.True(dupes.Count == 0, $"{panel}: {string.Join(", ", dupes)}");
+        }
+    }
+
+    [Fact]
     public void A_write_that_cannot_land_is_refused_aloud()
     {
         _def.CanLand = _ => false;

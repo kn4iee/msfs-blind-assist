@@ -21,6 +21,24 @@ public class A350WritePlanTests : IDisposable
     private static IEnumerable<string> Rpn(A350Plan plan) =>
         plan.Steps.Select(s => s is A350CalcStep c ? c.Rpn : $"wait {((A350DelayStep)s).Milliseconds}");
 
+    // Review 2026-10-29 (panels minor 9): no test covered the spring plan. It is held at the picked side, then put back to its
+    // rest; the hold owes the rest (sent at once if the definition goes away mid-hold).
+    [Fact]
+    public void A_spring_switch_is_held_at_the_picked_side_then_put_back_to_rest()
+    {
+        var spring = C("AIRLINER_OIS_AVNCS_EFB_LEFT");
+        double rest = spring.StateForPosition(spring.Rest ?? 1);
+        double away = spring.OrderedPositions().Select(p => spring.StateForPosition(p.Value)).First(v => Math.Abs(v - rest) > 0.01);
+        var plan = A350WritePlan.ForSet(spring, away, rest);
+        string F(double v) => v.ToString(CultureInfo.InvariantCulture);
+        Assert.Equal(new[]
+        {
+            $"{F(away)} (>B:AIRLINER_OIS_AVNCS_EFB_LEFT_Set)", $"wait {A350WritePlan.SpringHoldMsFor(spring)}",
+            $"{F(rest)} (>B:AIRLINER_OIS_AVNCS_EFB_LEFT_Set)",
+        }, Rpn(plan));
+        Assert.True(((A350DelayStep)plan.Steps[1]).OwesRest);
+    }
+
     [Fact]
     public void A_toggle_is_flipped_once_when_it_is_elsewhere()
     {
