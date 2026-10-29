@@ -228,6 +228,9 @@ public static class A350SdSymbols
     /// <summary>The page and symbol of each unknown sprite logged so far.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(int Page, string Label), byte> UnknownLogged = new();
 
+    /// <summary>Forgets the unknown sprites logged (tests: the set is the process's, and another test may log first).</summary>
+    internal static void ForgetUnknownLogged() => UnknownLogged.Clear();
+
     public static IReadOnlyList<string> Read(IReadOnlyList<DrawnShape>? shapes, int page)
     {
         var o = new List<string>();

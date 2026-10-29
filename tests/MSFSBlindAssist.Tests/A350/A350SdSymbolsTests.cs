@@ -301,6 +301,7 @@ public class A350SdSymbolsTests
     public void An_unknown_symbol_is_logged_once_per_page_and_symbol()
     {
         var logged = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        A350SdSymbols.ForgetUnknownLogged();   // another test reading the SD may have logged them first
         var previous = MSFSBlindAssist.Utils.Logging.Log.Redirect;
         MSFSBlindAssist.Utils.Logging.Log.Redirect = (_, message) => { if (message.Contains("unknown sprite", StringComparison.Ordinal)) logged.Enqueue(message); };
         try
