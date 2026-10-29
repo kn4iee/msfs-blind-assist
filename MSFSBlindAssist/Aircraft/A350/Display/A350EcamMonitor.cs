@@ -3,10 +3,10 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
-/// The A350's E/WD call-outs, window open or closed: the CTR drawn twice a second, each new warning-display
-/// line spoken with its colours (A350EcamAnnouncer) unless the one Ctrl+M row is unticked; Ctrl+E flips
-/// that row, as on the A380. It keeps the latest capture for the Alt+E window. Muted, it still follows the
-/// display, so unmuting never replays old lines.
+/// The A350's E/WD call-outs, window open or closed: each CTR draw the display monitor's tick makes on its own
+/// memory copy (<see cref="A350PfdMonitor.CtrDrawn"/>), each new warning-display line spoken with its colours
+/// (A350EcamAnnouncer) unless the one Ctrl+M row is unticked; Ctrl+E flips that row, as on the A380. It keeps the
+/// latest capture for the Alt+E window. Muted, it still follows the display, so unmuting never replays old lines.
 /// </summary>
 public sealed class A350EcamMonitor : IDisposable
 {
@@ -36,10 +36,13 @@ public sealed class A350EcamMonitor : IDisposable
         _now = now ?? (() => DateTime.UtcNow);
     }
 
-    /// <summary>One read: draw, parse, speak what appeared.</summary>
-    public async Task TickAsync()
+    /// <summary>One read: draw, then <see cref="Observe"/> (A350Probe's own loop; MSFSBA feeds it from the display
+    /// monitor's tick instead, <see cref="A350PfdMonitor.CtrDrawn"/>).</summary>
+    public async Task TickAsync() => Observe(await _drawCtr().ConfigureAwait(false));
+
+    /// <summary>One CTR draw read: parse, speak what appeared; nothing for no draw or a trapped one.</summary>
+    public void Observe(A350DrawCapture? cap)
     {
-        var cap = await _drawCtr().ConfigureAwait(false);
         if (cap == null || !cap.Ok) return;
         _latest = new Kept(cap, _now());
         var lines = _announcer.Observe(A350Ewd.Parse(cap));

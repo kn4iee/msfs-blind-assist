@@ -58,6 +58,36 @@ public class A350PfdMonitorTests
         Assert.Equal(new[] { ("EFIS", 0), ("EFIS", 1), ("RMP", 0), ("RMP", 1) }, asked[1]);
     }
 
+    // Review 2026-10-29 (engine I6): the E/WD monitor took a full memory copy of its own every cycle (about 650 ms at
+    // 495 MB), beside the display monitor's. Fed by the display monitor, the CTR is drawn first on the tick's own copy (its
+    // warnings matter most, and a request retries only one trapped draw) and handed to the E/WD.
+    [Fact]
+    public async Task Feeding_the_ecam_a_tick_draws_the_ctr_first_on_its_copy_and_hands_it_over()
+    {
+        var asked = new List<(string Gauge, int Index)[]>();
+        var ctr = Fixture("ctr_powerup_fws_fault");
+        var handed = new List<A350DrawCapture?>();
+        var m = new A350PfdMonitor(gauges =>
+        {
+            asked.Add(gauges);
+            return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "CTR" ? ctr : null).ToList());
+        }, _ => false, _ => { }) { CtrDrawn = handed.Add };
+        await m.TickAsync();
+        Assert.Equal(new[] { ("CTR", 0), ("EFIS", 0), ("MFD", 0), ("FCU", 0) }, asked[0]);
+        Assert.Same(ctr, Assert.Single(handed));
+    }
+
+    // The FMA still reads the captain's EFIS wherever it sits in the tick.
+    [Fact]
+    public async Task Feeding_the_ecam_the_fma_still_reads_the_captains_efis()
+    {
+        var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
+        var said = new List<string>();
+        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), _ => false, said.Add) { CtrDrawn = _ => { } };
+        for (int i = 0; i < 4; i++) await m.TickAsync();
+        Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
+    }
+
     // Review 2026-10-29 (readers I7): the latest capture was kept forever and read as current, so after the reader stopped
     // (the A350 not found after a flight load, every draw failing) the status displays, Alt+P and the MFD window read the
     // last flight's displays as live. A capture older than MaxAge is no capture.

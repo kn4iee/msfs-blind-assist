@@ -45,6 +45,11 @@ public sealed class A350PfdMonitor : IDisposable
         _now = now ?? (() => DateTime.UtcNow);
     }
 
+    /// <summary>The E/WD's reader (<see cref="A350EcamMonitor.Observe"/>): when set, each tick also draws the CTR, first,
+    /// on its own memory copy, and hands it over (review 2026-10-29: the E/WD monitor took a full copy of its own every
+    /// cycle, about 650 ms at 495 MB). First: its warnings matter most, and a request retries only one trapped draw.</summary>
+    public Action<A350DrawCapture?>? CtrDrawn { get; set; }
+
     /// <summary>A side's latest EFIS draw that did not trap, or null.</summary>
     public A350DrawCapture? Latest(int side) => Latest("EFIS", side);
 
@@ -57,7 +62,11 @@ public sealed class A350PfdMonitor : IDisposable
     /// 650 ms, and a tick asking display by display made three or four).</summary>
     public async Task TickAsync()
     {
-        var gauges = new List<(string Gauge, int Index)> { ("EFIS", 0) };
+        var ctr = CtrDrawn;
+        var gauges = new List<(string Gauge, int Index)>();
+        if (ctr != null) gauges.Add(("CTR", 0));
+        int cptAt = gauges.Count;
+        gauges.Add(("EFIS", 0));
         if (_tick++ % 2 == 1) gauges.Add(("EFIS", 1));
         for (int i = 0; i < 2; i++)
             gauges.Add(Others[_other++ % Others.Count]);
@@ -65,9 +74,10 @@ public sealed class A350PfdMonitor : IDisposable
         var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
             if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);
-        if (caps.Count > 0 && caps[0] is { Ok: true } cpt)
+        if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt)
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
                 if (!_muted(key)) _speak(line);
+        if (ctr != null && caps.Count > 0) ctr(caps[0]);
     }
 
     public void Start()
