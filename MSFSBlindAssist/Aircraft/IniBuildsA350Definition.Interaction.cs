@@ -76,6 +76,41 @@ public partial class IniBuildsA350Definition
         return true;
     }
 
+    /// <summary>The FCU's AP 1 row, which the universal auto-autopilot engage presses.</summary>
+    private const string Ap1Row = "A350_FCU_AP_1";
+
+    /// <summary>Either autopilot engaged, as the FCU's AP 1 and AP 2 lights read it (their rules' <c>L:INI_ap1_on</c>,
+    /// <c>L:INI_ap2_on</c>): an engaged one known is engaged; both read off is not; anything else is unknown
+    /// ([FO-18]: unread is null, never false).</summary>
+    public override bool? IsAutopilotEngaged(SimConnectManager simConnect)
+    {
+        double? ap1 = Cached(simConnect, KeyForInput("INI_ap1_on")), ap2 = Cached(simConnect, KeyForInput("INI_ap2_on"));
+        if (ap1 >= 0.5 || ap2 >= 0.5)
+            return true;
+        return ap1 is double && ap2 is double ? false : null;
+    }
+
+    /// <summary>The universal auto-autopilot engage: the press the FCU's own AP 1 row makes, its lights then the pilot's
+    /// (the FMA call-out says the engagement), and only on a definite OFF: the button flips, so a press while engaged would
+    /// disconnect it ([FO-17], [FO-18]). No floor of its own: the A380 sets none, and the closed loop reports a press the
+    /// aircraft refuses (the A350's own lowest engage height is on the sim list).</summary>
+    public override void EngageAutopilot(SimConnectManager simConnect)
+    {
+        if (IsAutopilotEngaged(simConnect) != false || !_rows.TryGetValue(Ap1Row, out var row) || row.Control is not { } control
+            || !CanLand(simConnect))
+            return;
+        var plan = A350WritePlan.ForPress(control);
+        if (plan.Refusal != null || plan.IsEmpty)
+            return;
+        _sim = simConnect;
+        _ = RunAsync(row.Key, plan.Steps, simConnect);
+        NoteOwnLamps(control);
+    }
+
+    /// <summary>A toggle: retried at the toggle aircraft's pace, never on an unread state.</summary>
+    public override int AutopilotEngageRetryIntervalMs => ToggleAutopilotEngageRetryIntervalMs;
+    public override bool AutopilotEngageWaitsForState => true;
+
     /// <summary>Latched hold buttons MSFSBA pressed down, by row, with the run their release is owed under (sent if the
     /// aircraft is switched away or the app closes while one is held).</summary>
     private readonly Dictionary<string, int> _heldRows = new(StringComparer.Ordinal);
