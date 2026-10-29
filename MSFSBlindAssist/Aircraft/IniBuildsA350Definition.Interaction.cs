@@ -211,7 +211,7 @@ public partial class IniBuildsA350Definition
             if (Superseded())
                 return;
             if (shown is not double now)
-                announcer.Announce(plan.Confirm(plan.Target, read));   // no read-back: the value sent, as the A320 says it
+                announcer.Announce(NotConfirmed(row, typed));   // no read-back: sent, never "selected"
             else if (plan.Reached(now))
                 announcer.Announce(plan.Confirm(now, read));
             else
@@ -234,14 +234,26 @@ public partial class IniBuildsA350Definition
             await Delay(A350TypedStepper.SettleMs);
             if (superseded())
                 return;
-            if (await ReadFresh(sim, KeyForInput(stepper.ShowVar), ReadoutTimeoutMs) is not >= 0.5)
+            // An unread flag or value is no answer: never "shows no preset", never silence (review 2026-10-29).
+            if (await ReadFresh(sim, KeyForInput(stepper.ShowVar), ReadoutTimeoutMs) is not double shownFlag)
+            {
+                if (!superseded())
+                    announcer.Announce(NotConfirmed(row, typed));
+                return;
+            }
+            if (shownFlag < 0.5)
             {
                 announcer.Announce(stepper.NotShown);
                 return;
             }
             now = await ReadFresh(sim, KeyForInput(stepper.ValueVar), ReadoutTimeoutMs);
-            if (now is not double value || superseded())
+            if (superseded())
                 return;
+            if (now is not double value)
+            {
+                announcer.Announce(NotConfirmed(row, typed));
+                return;
+            }
             int clicks = (int)Math.Round(stepper.Target - value);
             if (clicks == 0 || round == A350TypedStepper.MaxRounds)
                 break;
@@ -259,6 +271,11 @@ public partial class IniBuildsA350Definition
             ? plan.Confirm(shown, read)
             : $"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(shown, read)}");
     }
+
+    /// <summary>A typed value whose read-back never came: sent, never confirmed as taken (review 2026-10-29: a lost read
+    /// after a missed click left the dial at 11900 and confirmed 12000).</summary>
+    private static string NotConfirmed(A350PlacedRow row, double typed) =>
+        $"{LineName(row.Name)} {A350WritePlan.Format(typed)} sent, not confirmed";
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache. "All thrust levers"
     /// is both levers, each so read: one position only while they agree, none while they are split, so a pick always

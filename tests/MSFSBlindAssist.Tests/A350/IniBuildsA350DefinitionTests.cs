@@ -566,6 +566,47 @@ public class IniBuildsA350ReadBackTests
         Assert.Equal(new[] { "Speed did not take 250. FCU speed 200, selected" }, speech.All);
     }
 
+    // Review 2026-10-29 (panels I4): a read-back that never came was taken for success: altitude 12000 typed from 10000,
+    // the first read 13000 (a 1000 ft step), the correction sent, its read timed out, and the pilot heard "FCU altitude
+    // 12000, selected"; a first read lost after a missed click left the dial at 11900, confirmed as 12000. The value is
+    // said as sent, never as taken.
+    [Theory]
+    [InlineData(13000.0, null)]   // the correction's read-back lost
+    [InlineData(null, null)]      // no read-back at all
+    public async Task A_typed_value_with_no_read_back_is_said_as_sent_not_taken(double? first, double? second)
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, _, speech, readBacks) = Typed(cache);
+        cache[def.KeyForInput("INI_ALTITUDE_DIAL")] = 10000;
+        cache[def.KeyForInput("INI_FCU_ALT_DOT")] = 0;
+        readBacks.Enqueue(first);
+        readBacks.Enqueue(second);
+        def.HandleUIVariableSet("A350_FCU_ALTITUDE_SET", 12000, def.GetVariables()["A350_FCU_ALTITUDE_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        Assert.Equal(new[] { "Altitude 12000 sent, not confirmed" }, speech.All);
+    }
+
+    // The stepped QNH: an unread "shown" flag is no reason to say the knob shows no preset ("as on the ground"), and an
+    // unread value stopped silently.
+    [Theory]
+    [InlineData(null, null)]      // the shown flag unread
+    [InlineData(1.0, null)]       // shown, its value unread
+    public async Task A_stepped_value_with_no_read_back_is_said_as_sent_not_taken(double? shown, double? value)
+    {
+        var cache = new Dictionary<string, double>();
+        var (def, _, speech, readBacks) = Typed(cache);
+        cache[def.KeyForInput("KOHLSMAN SETTING MB:1")] = 1013.25;
+        cache[def.KeyForInput("XMLVAR_Baro1_Mode")] = 3;
+        cache[def.KeyForInput("XMLVAR_Baro_Selector_HPA_1")] = 1;
+        readBacks.Enqueue(shown);
+        readBacks.Enqueue(value);
+        def.HandleUIVariableSet("A350_CAPT_QNH_SET", 1013, def.GetVariables()["A350_CAPT_QNH_SET"], new SimConnectManager(IntPtr.Zero), speech);
+        await Task.Yield();
+        var said = Assert.Single(speech.All);
+        Assert.EndsWith("1013 sent, not confirmed", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("no preset", said, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_switch_the_aircraft_did_not_move_is_said_once()
     {
