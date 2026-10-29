@@ -51,4 +51,53 @@ public class A350ModuleFactsTests
         var e = Assert.Throws<A350ModuleException>(() => A350ModuleFacts.From(Sample(withAnchors: false)));
         Assert.Contains("INI_MCDU{}_ENTER", e.Message);
     }
+
+    // The FMS keeps the take-off speeds in its active flight plan (FlightPlan::getV1Speed() returns this+964 in 1.2.7);
+    // INI_V1, INI_VR and INI_V2 are never written (sim 2026-10-30). Found by name: each getter's returned load is the
+    // speed's offset, and update_v1() passes the active flight plan, a static object, as the getter's constant `this`,
+    // through a local as the unoptimised module does, or pushed straight.
+    private static A350WasmModule WithFlightPlan(bool throughLocal = true, bool withGetters = true)
+    {
+        var m = new WasmTestModule();
+        int t1 = m.AddType(new[] { I32 }, new[] { I32 });
+        int t0 = m.AddType(Array.Empty<byte>(), Array.Empty<byte>());
+        int Getter(string name, int offset) => m.Func(name, t1,
+            new byte[] { 0x20, 0x00, 0x21, 0x01, 0x20, 0x01, 0x28, 0x02 }.Concat(U(offset)).Concat(new byte[] { 0x0F }).ToArray(),
+            localGroups: new byte[] { 1, 1, I32 });
+        int v1 = withGetters ? Getter("FlightPlan::getV1Speed()", 964) : m.Func("other", t1, new byte[] { 0x20, 0x00 });
+        if (withGetters)
+        {
+            Getter("FlightPlan::getVRSpeed()", 968);
+            Getter("FlightPlan::getV2Speed()", 972);
+        }
+        var call = new List<byte> { 0x41 };
+        call.AddRange(S(7));   // a constant that is not the flight plan, consumed first
+        call.Add(0x1A);
+        call.Add(0x41);
+        call.AddRange(S(1418656));
+        if (throughLocal) call.AddRange(new byte[] { 0x21, 0x00, 0x20, 0x00 });
+        call.Add(0x10);
+        call.AddRange(U(v1));
+        call.Add(0x1A);
+        m.Func("update_v1()", t0, call.ToArray(), localGroups: new byte[] { 1, 1, I32 });
+        m.Data(5000, "\0INI_MCDU{}_ENTER\0INI_MCDU_OPTION\0INI_FMC_PAGE1\0");
+        return A350WasmModule.Parse(m.Build());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_take_off_speeds_are_found_by_the_flight_plan_s_getters(bool throughLocal)
+    {
+        var facts = A350ModuleFacts.From(WithFlightPlan(throughLocal));
+        Assert.Equal(new A350TakeoffSpeedFacts(1418656, 964, 968, 972), facts.TakeoffSpeeds);
+    }
+
+    // A version that moved them leaves the call-outs without speeds, never the displays without a reader.
+    [Fact]
+    public void A_module_without_the_getters_has_no_take_off_speeds()
+    {
+        Assert.Null(A350ModuleFacts.From(WithFlightPlan(withGetters: false)).TakeoffSpeeds);
+        Assert.Null(A350ModuleFacts.From(Sample()).TakeoffSpeeds);
+    }
 }

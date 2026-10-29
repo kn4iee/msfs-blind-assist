@@ -11,8 +11,9 @@ public enum A350DisplayState { Idle, Preparing, Ready, Unavailable }
 /// memory reader and the draw engine (a Wasmtime store is never shared between threads). Start prepares
 /// in the background: the installed module is read and, the first time per A350 version, patched and
 /// compiled (spoken: "A350 displays getting ready", then "ready"). A draw request takes one fresh memory
-/// copy for all the gauges it names; a trapped draw is retried once on a new copy (a torn copy, [A350-2]); the
-/// A350 is re-located when its anchors no longer read (a reload). When a display's draws keep failing the pilot is
+/// copy for all the gauges it names, and hands on the FMS's take-off speeds it holds (<see cref="TakeoffSpeedsRead"/>);
+/// a trapped draw is retried once on a new copy (a torn copy, [A350-2]); the A350 is re-located when its anchors no
+/// longer read (a reload). When a display's draws keep failing the pilot is
 /// told, and told again when they read (<see cref="A350ReadHealth"/>); when nothing can be drawn at all (no A350 found
 /// in an A350 flight, no access to the sim, an error in the reader), told once why (<see cref="A350ReaderStatus"/>).
 /// </summary>
@@ -44,6 +45,10 @@ public sealed class A350DisplayService : IDisposable
 
     /// <summary>A status sentence to speak (getting ready, ready, not available).</summary>
     public event Action<string>? Spoken;
+
+    /// <summary>The FMS's take-off speeds in each copy a draw request takes (<see cref="A350TakeoffSpeeds"/>), raised on the
+    /// worker thread; never when this A350 version's module does not say where they are (logged as it is prepared).</summary>
+    public event Action<A350TakeoffSpeeds>? TakeoffSpeedsRead;
 
     public A350DisplayState State { get; private set; } = A350DisplayState.Idle;
     public string? Reason { get; private set; }
@@ -97,6 +102,8 @@ public sealed class A350DisplayService : IDisposable
             _moduleIdentity = A350ModuleCache.IdentityOf(path);
             var mod = A350WasmModule.Parse(File.ReadAllBytes(path));
             _facts = A350ModuleFacts.From(mod);
+            if (_facts.TakeoffSpeeds == null)
+                Log.Warn("A350Display", "this A350 version does not say where its FMS keeps the take-off speeds: no V1, Rotate and V2 call-outs");
             var ui = A350ModulePatcher.UiDrawClassesOf(mod);
             _engine = A350ModuleCache.CreateEngine();
             // Hashed once; "getting ready" is said as a compile starts, whatever the reason (no cache, a corrupt one).
@@ -190,7 +197,11 @@ public sealed class A350DisplayService : IDisposable
             try
             {
                 if (State != A350DisplayState.Ready || _draw == null || !EnsureLocated()) { tcs.SetResult(null); return; }
-                _draw.Load(_reader!.Snapshot());
+                var copy = _reader!.Snapshot();
+                _draw.Load(copy);
+                if (_facts?.TakeoffSpeeds is { } speedsAt && TakeoffSpeedsRead is { } speedsRead
+                    && A350TakeoffSpeeds.Read(copy, speedsAt) is { } speeds)
+                    speedsRead(speeds);
                 var caps = new List<A350DrawCapture>(gauges.Length);
                 bool retried = false;
                 foreach (var (g, i) in gauges)

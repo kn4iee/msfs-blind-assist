@@ -290,6 +290,11 @@ public partial class IniBuildsA350Definition
     private readonly TakeoffVSpeedCallouts _takeoffCallouts = new();
     private bool _calloutOnGround = true;
 
+    /// <summary>The FMS's take-off speeds as the display reader reads them, taken once two reads agree.</summary>
+    private readonly A350.Display.A350StableValue<A350.Display.A350TakeoffSpeeds> _fmsSpeeds = new();
+    private A350.Display.A350TakeoffSpeeds? _speedsTaken;   // the last taken: a change is said against it
+    private bool _flownSinceSpeedsSet;   // airborne since the speeds were last set: a clear now is the FMS's own
+
     public override string? TakeoffCalloutFeedKey => A350TakeoffCallouts.IasKey;
 
     /// <summary>The per-frame airspeed is needed on the ground and while armed only.</summary>
@@ -297,8 +302,7 @@ public partial class IniBuildsA350Definition
 
     /// <summary>The take-off roll call-outs (<see cref="A350TakeoffCallouts"/>), as the A380's: the airspeed feed is
     /// consumed and the calls one sample crosses are one interrupting sentence, each muted by its V-speed's row
-    /// ([TKO-5]); SIM_ON_GROUND and the V-speeds are peeked, never consumed (the base says "On ground", the generic
-    /// monitor "V1: 142 knots").</summary>
+    /// ([TKO-5]); SIM_ON_GROUND is peeked, never consumed (the base says "On ground").</summary>
     private bool HandleTakeoffCallouts(string key, double value, ScreenReaderAnnouncer announcer)
     {
         if (key == A350TakeoffCallouts.IasKey)
@@ -311,10 +315,53 @@ public partial class IniBuildsA350Definition
             return true;
         }
         if (key == "SIM_ON_GROUND")
+        {
             _calloutOnGround = value >= 0.5;
-        else if (A350TakeoffCallouts.Keys.IsVSpeedKey(key))
-            A350TakeoffCallouts.Keys.Feed(_takeoffCallouts, key, value);
+            _flownSinceSpeedsSet |= !_calloutOnGround;
+        }
         return false;
+    }
+
+    /// <summary>
+    /// The FMS's take-off speeds as the display reader read them from a memory copy (<see cref="A350.Display.A350TakeoffSpeeds"/>),
+    /// on the UI thread, taken once two reads agree. The first taken after a flight load is the baseline, said nowhere;
+    /// after it each speed changed is said as the A380's are ("V1: 142 knots", "V1: not set"), behind its own Ctrl+M row,
+    /// which mutes its call on the roll too. A clear once the aircraft has flown since the speeds were set is the FMS's
+    /// own and is consumed silently: [A320-10]'s A350 form, by flight rather than phase, as its reset after landing clears
+    /// them while it sets INI_flight_phase back to 1 (PREFLIGHT). A flight loaded in the air never delivers SIM_ON_GROUND
+    /// here (a first snapshot), so the cache is asked at each read. Every speed taken feeds the roll call-outs.
+    /// </summary>
+    public void ObserveTakeoffSpeeds(A350.Display.A350TakeoffSpeeds read, ScreenReaderAnnouncer announcer)
+    {
+        if (_sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double onGround && onGround < 0.5)
+            _flownSinceSpeedsSet = true;
+        if (!_fmsSpeeds.Offer(read, out var taken))
+            return;
+        var keys = A350TakeoffCallouts.Keys;
+        keys.Feed(_takeoffCallouts, A350TakeoffCallouts.V1Key, taken.V1);
+        keys.Feed(_takeoffCallouts, A350TakeoffCallouts.VrKey, taken.Vr);
+        keys.Feed(_takeoffCallouts, A350TakeoffCallouts.V2Key, taken.V2);
+        var before = _speedsTaken;
+        _speedsTaken = taken;
+        if (before is not { } was)
+            return;
+
+        int[] now = { taken.V1, taken.Vr, taken.V2 }, then = { was.V1, was.Vr, was.V2 };
+        bool cleared = _flownSinceSpeedsSet;
+        for (int i = 0; i < now.Length; i++)
+        {
+            if (now[i] == then[i])
+                continue;
+            var (key, name) = A350TakeoffCallouts.Speeds[i];
+            if (now[i] > 0)
+                _flownSinceSpeedsSet = false;   // set for a take-off still to come
+            else if (cleared)
+                continue;
+            if (!IsMuted(key) && !_disposed)
+                announcer.Announce(now[i] > 0
+                    ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{name}: {now[i]} knots")
+                    : $"{name}: not set");
+        }
     }
 
     /// <summary>A reconnect: the roll call-outs' arm goes, never the speeds, which a reconnect need not deliver again.</summary>
@@ -428,13 +475,16 @@ public partial class IniBuildsA350Definition
     }
 
     /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; what
-    /// MSFSBA last commanded no longer stands for the cockpit (a held button's next press reads the cockpit); and the roll
+    /// MSFSBA last commanded no longer stands for the cockpit (a held button's next press reads the cockpit); the roll
     /// call-outs' arm goes (a load delivers the per-frame airspeed before SIM_ON_GROUND: an arm kept from the stand would
-    /// call all three at a loaded cruise).</summary>
+    /// call all three at a loaded cruise); and the FMS speeds the reader reads next are the new flight's baseline.</summary>
     public override void OnSimContextReset()
     {
         base.OnSimContextReset();
         _takeoffCallouts.Reset();
+        _fmsSpeeds.Reset();
+        _speedsTaken = null;
+        _flownSinceSpeedsSet = false;
         _commanded.Clear();
         _lampBoard.Reset();
         _lampSpeech.Clear();

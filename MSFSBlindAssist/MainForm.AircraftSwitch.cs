@@ -720,6 +720,11 @@ public partial class MainForm
             // The FMS messages heard with the MFD window closed: quiet while it is open (it says them), none from a dark MFD.
             a350PfdMonitor.MfdWindowOpen = () => a350.MfdWindowOpen;
             a350PfdMonitor.MfdDark = () => a350.IsScreenDark("Captain MFD");
+            // The FMS's take-off speeds in each copy the reader takes: said as entered, and the roll call-outs' speeds.
+            a350DisplayService.TakeoffSpeedsRead += speeds => SafeBeginInvoke(() =>
+            {
+                if (ReferenceEquals(currentAircraft, a350)) a350.ObserveTakeoffSpeeds(speeds, announcer);
+            });
         }
         a350DisplayService.Start();
         a350PfdMonitor.Start();

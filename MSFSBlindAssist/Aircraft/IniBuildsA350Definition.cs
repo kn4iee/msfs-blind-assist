@@ -475,26 +475,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _lampInputKeys.Add(A350PanelLamps.InputKey(name));   // consumed silently
         }
 
-        // The take-off roll call-outs (A350TakeoffCallouts), as the A380's: the FMS's V-speeds said as they are entered, a
-        // Ctrl+M row each ("V1: 142 knots", "not set" while 0), read raw as the A350's other INI_ speeds; and the indicated
-        // airspeed per sim frame on its own subscription (the 1 Hz batch would call "Rotate" up to a second late), consumed.
-        foreach (var (key, name, spoken) in A350TakeoffCallouts.Speeds)
-        {
-            var speed = new SimVarDefinition
-            {
-                Name = name,
-                DisplayName = spoken,
-                Type = SimVarType.LVar,
-                UpdateFrequency = UpdateFrequency.Continuous,
-                IsAnnounced = true,
-                NotSetBelow = 1,
-                SpokenNumberFormat = "0' knots'",
-            };
-            if (!batchNames.Add(ContinuousBatchLayout.FullName(speed)))
-                speed.ExcludeFromBatch = true;
-            vars[key] = speed;
-            _keyByName.TryAdd(name, key);
-        }
+        // The take-off roll call-outs (A350TakeoffCallouts), as the A380's: the indicated airspeed per sim frame on its own
+        // subscription (the 1 Hz batch would call "Rotate" up to a second late), consumed. The FMS's V-speeds are no sim
+        // variable: the display reader reads them (ObserveTakeoffSpeeds), INI_V1, INI_VR and INI_V2 being never written.
         vars[A350TakeoffCallouts.IasKey] = new SimVarDefinition
         {
             Name = "AIRSPEED INDICATED",

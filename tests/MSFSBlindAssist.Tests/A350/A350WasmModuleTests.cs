@@ -74,6 +74,37 @@ public class A350WasmModuleTests
         Assert.Throws<A350ModuleException>(() => A350WasmModule.Parse(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
     }
 
+    // The FMS's take-off speeds are found in its code (A350ModuleFacts.TakeoffSpeeds): a function's instructions are
+    // walked after its locals, each with its immediate (a constant, a load's offset, a call's function), the rest skipped.
+    [Fact]
+    public void A_function_s_instructions_are_walked_with_their_immediates()
+    {
+        var m = new WasmTestModule();
+        int t1 = m.AddType(new[] { I32 }, new[] { I32 });
+        int t0 = m.AddType(Array.Empty<byte>(), Array.Empty<byte>());
+        int callee = m.Func("callee", t0, Array.Empty<byte>());
+        // local.get 0; i32.load align=2 offset=964; block void; i32.const -5; drop; end; call callee;
+        // br_table 0 1 (default 0); f64.const 1.5; drop; memory.fill 0; return
+        var body = new List<byte> { 0x20, 0x00, 0x28, 0x02 };
+        body.AddRange(U(964));
+        body.AddRange(new byte[] { 0x02, 0x40, 0x41 });
+        body.AddRange(S(-5));
+        body.AddRange(new byte[] { 0x1A, 0x0B, 0x10 });
+        body.AddRange(U(callee));
+        body.AddRange(new byte[] { 0x0E, 0x02, 0x00, 0x01, 0x00, 0x44 });
+        body.AddRange(BitConverter.GetBytes(1.5));
+        body.AddRange(new byte[] { 0x1A, 0xFC, 0x0B, 0x00, 0x0F });
+        int f = m.Func("FlightPlan::getV1Speed()", t1, body.ToArray(), localGroups: new byte[] { 1, 2, I32 });
+        var mod = A350WasmModule.Parse(m.Build());
+
+        Assert.Equal(new (byte, long)[]
+        {
+            (0x20, 0), (0x28, 964), (0x02, 0), (0x41, -5), (0x1A, 0), (0x0B, 0), (0x10, callee), (0x0E, 0), (0x44, 0),
+            (0x1A, 0), (0xFC, 11), (0x0F, 0), (0x0B, 0),
+        }, mod.Instructions(f).ToArray());
+        Assert.Equal(new (byte, long)[] { (0x0B, 0) }, mod.Instructions(callee).ToArray());   // an empty body: its end only
+    }
+
     [Theory]
     [InlineData(0L)]
     [InlineData(127L)]

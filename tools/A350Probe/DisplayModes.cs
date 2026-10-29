@@ -9,7 +9,7 @@ internal static class DisplayModes
     public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal)
     {
         "patch", "snapshot", "draw", "service", "trap", "traptiny", "ecamwatch", "ecamlisten", "sdmap", "sdtext", "sdsweep",
-        "pfdlisten", "mfdlines", "ndlines", "navdb", "memfind", "memread",
+        "pfdlisten", "mfdlines", "ndlines", "navdb", "memfind", "memread", "speeds",
     };
 
     public static bool Handles(string mode) => Names.Contains(mode);
@@ -42,7 +42,28 @@ internal static class DisplayModes
             case "navdb": return NavDb(args);
             case "memfind": return MemFind(args);
             case "memread": return MemRead(args);
+            case "speeds": return Speeds(args);
             default: return 2;
+        }
+    }
+
+    /// <summary>`speeds [seconds]`: the FMS's take-off speeds as MSFSBA finds and reads them: where, from the installed
+    /// module's facts, then a live copy's read each second for that long (the V-speed rows' and roll call-outs' source).</summary>
+    private static int Speeds(string[] args)
+    {
+        var src = A350ModuleCache.FindInstalledModule();
+        if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
+        var facts = A350ModuleFacts.From(A350WasmModule.Parse(File.ReadAllBytes(src)));
+        Console.WriteLine($"facts: {facts.TakeoffSpeeds?.ToString() ?? "none"}");
+        if (facts.TakeoffSpeeds is not { } at) return 1;
+        using var reader = new A350MemoryReader(facts.Anchors);
+        if (!reader.TryLocate()) { Console.WriteLine("A350 not found in the sim"); return 1; }
+        int seconds = args.Length > 0 ? int.Parse(args[0]) : 0;
+        for (int s = 0; ; s++)
+        {
+            Console.WriteLine($"{s,4}s\t{A350TakeoffSpeeds.Read(reader.Snapshot(), at)?.ToString() ?? "no read"}");
+            if (s >= seconds) return 0;
+            Thread.Sleep(1000);
         }
     }
 
@@ -463,11 +484,13 @@ internal static class DisplayModes
     }
 
     /// <summary>Whether the copy has 1.2.7's Variables layout, which sdsweep and sdmap address directly: the name table's
-    /// entry 215 is INI_FMC_PAGE1 there (tools review 2026-10-30: on another version they set wrong cells and named them
-    /// wrong). Re-derive the addresses after an update (docs/inibuilds-a350.md, "Addresses for 1.2.7").</summary>
+    /// entry 303 is INI_FMC_PAGE1 there (tools review 2026-10-30: on another version they set wrong cells and named them
+    /// wrong; sim 2026-10-30: the table starts at 920480 and the values at 1343616, where 920832 and 1344512, an entry and a
+    /// slot 88 and 112 enums on, named each value 24 enums off). Re-derive the addresses after an update
+    /// (docs/inibuilds-a350.md, "Addresses for 1.2.7").</summary>
     private static bool HasVariablesLayout127(A350WasmModule mod, A350MemoryCopy copy, uint varNames)
     {
-        var p = copy.Read(varNames + 4 * 215, 4);
+        var p = copy.Read(varNames + 4 * 303, 4);
         return p.Length == 4 && mod.CString((int)BitConverter.ToUInt32(p)) == "INI_FMC_PAGE1";
     }
 
@@ -483,7 +506,7 @@ internal static class DisplayModes
     /// and every shape and text that differs from the copy's own value printed.</summary>
     private static int SdSweep(string[] args)
     {
-        const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
+        const uint SdPage = 1451120, VarNames = 920480, VarValues = 1343616; const int VarCount = 1939;
         var src = A350ModuleCache.FindInstalledModule();
         if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
@@ -537,12 +560,12 @@ internal static class DisplayModes
     }
 
     /// <summary>`sdmap copy.bin page [page...]`: which variable each drawn SD value shows. On the copy only:
-    /// each CustomVariable value and each Variables-array slot (1.2.7: names at 920832, values at 1344512,
+    /// each CustomVariable value and each Variables-array slot (1.2.7: names at 920480, values at 1343616,
     /// 1939 entries) in turn set to 4321, the page redrawn, and every SD text that changed reported with the
     /// variable's name. The SD page is set in the copy (1451120).</summary>
     private static int SdMap(string[] args)
     {
-        const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
+        const uint SdPage = 1451120, VarNames = 920480, VarValues = 1343616; const int VarCount = 1939;
         var src = A350ModuleCache.FindInstalledModule();
         if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));

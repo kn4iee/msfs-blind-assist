@@ -11,7 +11,8 @@ public sealed class A350ModuleException : Exception
 
 /// <summary>
 /// A read-only view of a WebAssembly module (MVP + bulk memory): its sections, types, function
-/// imports, function names (the A350's module keeps its full name section) and active data segments.
+/// imports, function names (the A350's module keeps its full name section), active data segments and
+/// its functions' instructions.
 /// Everything the display engine needs is found here by name, never by a hard-coded index, so a new
 /// A350 version is re-derived at load. Port of tools/a350-probe/wdis.py.
 /// </summary>
@@ -30,12 +31,78 @@ public sealed class A350WasmModule
     public IReadOnlyList<DataSegment> DataSegments { get; }
 
     private readonly List<int> _functionTypes;
+    private readonly byte[] _bytes;
+    private readonly List<(int Start, int End)> _bodies;   // each defined function's code, after its locals
 
     private A350WasmModule(List<Section> sections, List<FuncType> types, List<FunctionImport> imports,
-        List<int> functionTypes, Dictionary<int, string> names, List<DataSegment> segments)
+        List<int> functionTypes, Dictionary<int, string> names, List<DataSegment> segments, byte[] bytes,
+        List<(int, int)> bodies)
     {
         Sections = sections; Types = types; FunctionImports = imports;
         _functionTypes = functionTypes; FunctionNames = names; DataSegments = segments;
+        _bytes = bytes; _bodies = bodies;
+    }
+
+    /// <summary>A defined function's instructions in order, its final <c>end</c> included, each with its immediate: a
+    /// constant's value, a load's or store's offset, a call's function, a local's or global's index, a branch's depth, a
+    /// 0xFC instruction's sub-opcode; 0 for the rest (a float constant, a block's type). Port of wdis.py's walk: the A350's
+    /// module has no SIMD and no atomics, and an opcode it does not know has no immediate.</summary>
+    public IEnumerable<(byte Op, long Immediate)> Instructions(int functionIndex)
+    {
+        var (start, end) = _bodies[functionIndex - ImportedFunctionCount];
+        var b = _bytes;
+        int p = start;
+        while (p < end)
+        {
+            byte op = b[p++];
+            long imm = 0;
+            switch (op)
+            {
+                case 0x02 or 0x03 or 0x04:   // block, loop, if: a one-byte block type (never a type index here)
+                    p++;
+                    break;
+                case 0x0C or 0x0D or 0x10 or (>= 0x20 and <= 0x24):   // br, br_if, call, local and global access
+                    imm = (long)ReadU(b, ref p);
+                    break;
+                case 0x0E:   // br_table: the labels and the default
+                {
+                    int n = (int)ReadU(b, ref p);
+                    for (int k = 0; k <= n; k++) ReadU(b, ref p);
+                    break;
+                }
+                case 0x11:   // call_indirect: the type, then the table
+                    imm = (long)ReadU(b, ref p);
+                    ReadU(b, ref p);
+                    break;
+                case >= 0x28 and <= 0x3E:   // loads and stores: alignment, then offset
+                    ReadU(b, ref p);
+                    imm = (long)ReadU(b, ref p);
+                    break;
+                case 0x3F or 0x40:   // memory.size, memory.grow
+                    p++;
+                    break;
+                case 0x41 or 0x42:
+                    imm = ReadS(b, ref p);
+                    break;
+                case 0x43:
+                    p += 4;
+                    break;
+                case 0x44:
+                    p += 8;
+                    break;
+                case 0xFC:
+                    imm = (long)ReadU(b, ref p);
+                    switch (imm)
+                    {
+                        case 8: ReadU(b, ref p); p++; break;   // memory.init: segment, memory
+                        case 9: ReadU(b, ref p); break;        // data.drop: segment
+                        case 10: p += 2; break;                // memory.copy: two memories
+                        case 11: p++; break;                   // memory.fill: memory
+                    }
+                    break;
+            }
+            yield return (op, imm);
+        }
     }
 
     /// <summary>The type index of a function (imported or defined).</summary>
@@ -143,6 +210,7 @@ public sealed class A350WasmModule
         var functionTypes = new List<int>();
         var names = new Dictionary<int, string>();
         var segments = new List<DataSegment>();
+        var bodies = new List<(int, int)>();
 
         foreach (var sec in sections)
         {
@@ -183,6 +251,19 @@ public sealed class A350WasmModule
                 {
                     int n = (int)ReadU(bytes, ref p);
                     for (int k = 0; k < n; k++) functionTypes.Add((int)ReadU(bytes, ref p));
+                    break;
+                }
+                case 10:
+                {
+                    int n = (int)ReadU(bytes, ref p);
+                    for (int k = 0; k < n; k++)
+                    {
+                        int size = (int)ReadU(bytes, ref p), end = p + size, q = p;
+                        int groups = (int)ReadU(bytes, ref q);
+                        for (int g = 0; g < groups; g++) { ReadU(bytes, ref q); q++; }
+                        bodies.Add((q, end));
+                        p = end;
+                    }
                     break;
                 }
                 case 11:
@@ -235,6 +316,6 @@ public sealed class A350WasmModule
         allTypes.AddRange(functionTypes);
         for (int k = 0; k < imports.Count; k++) names.TryAdd(k, "import:" + imports[k].Field);
 
-        return new A350WasmModule(sections, types, imports, allTypes, names, segments);
+        return new A350WasmModule(sections, types, imports, allTypes, names, segments, bytes, bodies);
     }
 }

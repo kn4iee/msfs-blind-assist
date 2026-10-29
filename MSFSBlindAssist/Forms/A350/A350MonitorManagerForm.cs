@@ -21,7 +21,8 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
 
     /// <summary>The variable rows, then one row per display call-out the A350's display reader speaks
     /// (appended after the sort, as the A380's E/WD fold is): the E/WD call-outs, which Ctrl+E flips; each FMA column;
-    /// the FMS messages heard with the MFD window closed.</summary>
+    /// the FMS messages heard with the MFD window closed; each take-off speed, said as it is entered and called on the
+    /// roll (<see cref="Aircraft.A350.A350TakeoffCallouts"/>).</summary>
     internal static List<MonitorRow> BuildRows(IReadOnlyDictionary<string, SimVarDefinition> variables)
     {
         var rows = MonitorRowBuilder.Build(variables);
@@ -29,6 +30,8 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
         foreach (var column in Aircraft.A350.Display.A350FmaAnnouncer.Columns)
             rows.Add(new MonitorRow(Aircraft.A350.Display.A350FmaAnnouncer.KeyFor(column), Aircraft.A350.Display.A350FmaAnnouncer.LabelFor(column)));
         rows.Add(new MonitorRow(Aircraft.A350.Display.A350FmsMessageAnnouncer.MuteKey, Aircraft.A350.Display.A350FmsMessageAnnouncer.MuteLabel));
+        foreach (var (key, name) in Aircraft.A350.A350TakeoffCallouts.Speeds)
+            rows.Add(new MonitorRow(key, name));
         return rows;
     }
 

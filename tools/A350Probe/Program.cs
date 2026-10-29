@@ -544,8 +544,13 @@ internal sealed class ProbeForm : Form
             {
                 if (trace.Contains(e.VarName)) Say($"[trace] {e.VarName}={Fmt(e.Value)}");
                 if (!vars.TryGetValue(e.VarName, out var d)) return;
-                // The base variables (ground speed, altitude…) are MainForm's own readouts, never this generic path.
-                if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal)) return;
+                // The base variables (ground speed, altitude…) are MainForm's own readouts, never this generic path; the
+                // definition still sees SIM_ON_GROUND, as MainForm hands it on (the roll call-outs' ground state).
+                if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal))
+                {
+                    if (e.VarName == "SIM_ON_GROUND") def.ProcessSimVarUpdate(e.VarName, e.Value, said);
+                    return;
+                }
                 bool handled;
                 bool wrap = MSFSBlindAssist.Services.DefAnnounceMuteSets.ShouldWrap(def, e.VarName, settings);
                 if (wrap) said.Suppressed = true;
@@ -560,7 +565,28 @@ internal sealed class ProbeForm : Form
                 string word = d.ValueDescriptions.TryGetValue(e.Value, out var w) ? w : Fmt(e.Value);
                 Say(muted ? $"[generic, muted] ({d.DisplayName}: {word})" : $"[generic] {d.DisplayName}: {word}");
             };
+            // The FMS's take-off speeds, handed on as MainForm hands them: read from each copy the display reader's ticks
+            // take (its own call-outs muted here: pfdlisten and ecamlisten hear those). A350_SPEEDS=0 leaves the reader out.
+            MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService? service = null;
+            MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor? ticks = null;
+            if (Environment.GetEnvironmentVariable("A350_SPEEDS") != "0")
+            {
+                service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+                service.TakeoffSpeedsRead += speeds => BeginInvoke(() =>
+                {
+                    def.ObserveTakeoffSpeeds(speeds, said);
+                    foreach (var text in said.DrainList()) Say(text);
+                });
+                service.Start();
+                await WaitForDisplays(service);
+                Line($"displays: {service.State} {service.Reason}");
+                var drawn = service;
+                ticks = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(async gauges => await drawn.DrawAsync(gauges), _ => true, _ => { });
+                ticks.Start();
+            }
             await Task.Delay(int.Parse(_arg!) * 1000);
+            ticks?.Dispose();
+            service?.Dispose();
             Line("done");
             return;
         }

@@ -48,7 +48,7 @@ secret, as its length only, whatever STREAMER MODE is set to, and never echoes a
 | `A350Probe keep "KEY=v[#ms];…" [L:vars]` | The same without the restore. |
 | `A350Probe disp <panel> [L:vars]` | The panel's status lines as MSFSBA shows them, and the listed L:vars, read fresh. |
 | `A350Probe labels <panel>` | What each row reads beside its name from live values (its button state), or `-`. |
-| `A350Probe listen <seconds>` | What MSFSBA would say on its own meanwhile: the definition's speech (lights) and MainForm's generic announce of a switch, behind both of MainForm's mute gates. Move things from outside while it listens. |
+| `A350Probe listen <seconds>` | What MSFSBA would say on its own meanwhile: the definition's speech (lights) and MainForm's generic announce of a switch, behind both of MainForm's mute gates, and the take-off speeds as entered (the display reader runs as MainForm runs it, its own call-outs muted). Move things from outside while it listens. |
 | `A350Probe cache <key,key>` | What MSFSBA's cache holds for each key, then a fresh read. |
 | `A350Probe rpn "code#ms;…" [L:vars]` | Raw calculator strings through MSFSBA's own sender, each followed by its pause, then the listed L:vars read fresh: for timing measurements. |
 | `A350Probe sample "code#ms;…" [L:vars]` | The strings run in the background while the listed L:vars are read every 100 ms, each change printed with its time: how a value moves inside a hold (a flashing light, a timed test). |
@@ -82,6 +82,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350Probe sdmap <copy.bin> <page>` | Names the variable behind each SD value by setting each variable in the copy and redrawing. |
 | `A350Probe sdsweep <copy.bin> <page> NAME=v1,v2 …` | What one variable's values (`L:x`, or `V:x` in the Variables array) do to an SD page: every shape and text that differs. |
 | `A350Probe navdb <ICAO …>` | What MSFSBA's navdata holds for an airport (runways, ILS), against the A350's own database. |
+| `A350Probe speeds [seconds]` | The FMS's take-off speeds as MSFSBA finds them: the facts from the installed module (the active flight plan's address and each speed's offset), then a live read each second for that long. |
 | `A350Probe memfind TEXT …`, `memread LINEAR[:COUNT] …` | Finds a text in a live copy of the A350's memory and reads bytes there: state no display shows (the RMP's keypad entries, one 12-byte string per line, were found this way). |
 | `A350Probe patch [out.wasm [other.wasm]]` | Builds the patched module (`A350ModulePatcher`), saves it, and compares it with another. |
 | `A350Probe trap <export> <arg>`, `traptiny` | How a trap inside the A350's code (or a two-instruction module's) comes back to .NET, with its own compile cache in %TEMP% (never the app's [A350-11]). |
@@ -96,6 +97,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350_SECTIONS="Overhead,Glareshield"` | SimConnect modes | The sections offered. Default: MSFSBA's own five (Overhead, Glareshield, Instrument, Pedestal, Cockpit); an unknown name is refused with the list. |
 | `A350_MUTE="key,key"` | `listen` | Unticks those Ctrl+M rows, in memory only (the settings file is never written). |
 | `A350_TRACE="key,key"` | `listen` | Prints each delivery of those keys with its time, to see what the speech was made from. |
+| `A350_SPEEDS=0` | `listen` | Leaves the display reader out: no take-off speeds, no memory copies. |
 | `A350_OIS_ALL=1` | `ois` | Prints the page after every step. |
 | `A350_DRAW_JSON=<dir>` | `draw`, `displays` | Saves each good capture as a test fixture, under a new name only (never over a fixture a test pins); a trapped draw is never saved. |
 | `A350_SHAPES=1` | `draw` | Records the shapes (sprites, fills) too. |

@@ -1,27 +1,35 @@
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.A350;
+using MSFSBlindAssist.Aircraft.A350.Display;
 using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests.A350;
 
 /// <summary>
 /// The A350's take-off roll call-outs ("V1", "Rotate", "V2"), as the A380's (A380TakeoffCalloutsTests): the shared
-/// TakeoffVSpeedCallouts machine fed by a per-frame airspeed and the A350 FMS's own V-speeds (INI_V1, INI_VR, INI_V2 in
-/// its var table, 0 before PERF has them), each call muted by its speed's Ctrl+M row, the arm (never the speeds)
-/// dropped on a flight load and a reconnect ([TKO-5]).
+/// TakeoffVSpeedCallouts machine fed by a per-frame airspeed and the FMS's own V-speeds, each call muted by its speed's
+/// Ctrl+M row, the arm (never the speeds) dropped on a flight load and a reconnect ([TKO-5]). The speeds are the active
+/// flight plan's, read from the display reader's memory copy (sim 2026-10-30: INI_V1, INI_VR and INI_V2 stay 0 with
+/// the speeds on PERF, the PFD and in FlightPlan; nothing in 1.2.7 writes them), believed when two reads agree.
 /// </summary>
 public class A350TakeoffCalloutsTests
 {
     private static Dictionary<string, SimVarDefinition> Vars => new IniBuildsA350Definition().GetVariables();
 
-    /// <summary>A definition with the FMS speeds entered and the aircraft parked: armed for a roll.</summary>
-    private static IniBuildsA350Definition Parked(SpeechCapture speech, double v1 = 142, double vr = 143, double v2 = 148,
+    /// <summary>The FMS read <paramref name="reads"/> times, as the display reader's ticks deliver it.</summary>
+    private static void Fms(IniBuildsA350Definition def, SpeechCapture speech, int v1, int vr, int v2, int reads = 2)
+    {
+        for (int i = 0; i < reads; i++)
+            def.ObserveTakeoffSpeeds(new A350TakeoffSpeeds(v1, vr, v2), speech);
+    }
+
+    /// <summary>A definition whose FMS had nothing, then the speeds entered on PERF, the aircraft parked: armed for a roll.</summary>
+    private static IniBuildsA350Definition Parked(SpeechCapture speech, int v1 = 142, int vr = 143, int v2 = 148,
         params string[] muted)
     {
         var def = new IniBuildsA350Definition { IsMuted = key => muted.Contains(key) };
-        def.ProcessSimVarUpdate(A350TakeoffCallouts.V1Key, v1, speech);
-        def.ProcessSimVarUpdate(A350TakeoffCallouts.VrKey, vr, speech);
-        def.ProcessSimVarUpdate(A350TakeoffCallouts.V2Key, v2, speech);
+        Fms(def, speech, 0, 0, 0);
+        Fms(def, speech, v1, vr, v2);
         def.ProcessSimVarUpdate(A350TakeoffCallouts.IasKey, 5, speech);
         return def;
     }
@@ -44,31 +52,150 @@ public class A350TakeoffCalloutsTests
         Assert.True(ias.ExcludeFromMonitorManager);
     }
 
+    // The FMS's own speeds, where FlightPlan::getV1Speed() and its siblings read them; a read the copy cannot answer, or
+    // one no speed can be (a copy torn across frames), is no read.
+    [Fact]
+    public void The_speeds_are_read_from_the_active_flight_plan_in_a_copy()
+    {
+        var facts = new A350TakeoffSpeedFacts(2000, 964, 968, 972);
+        var mem = new byte[8192];
+        BitConverter.GetBytes(142).CopyTo(mem, 2964);
+        BitConverter.GetBytes(143).CopyTo(mem, 2968);
+        BitConverter.GetBytes(148).CopyTo(mem, 2972);
+        var copy = new A350MemoryCopy();
+        copy.Set(new[] { (0u, mem.Length) }, mem);
+
+        Assert.Equal(new A350TakeoffSpeeds(142, 143, 148), A350TakeoffSpeeds.Read(copy, facts));
+        Assert.Null(A350TakeoffSpeeds.Read(copy, facts with { FlightPlan = 8000 }));   // outside the copy
+        BitConverter.GetBytes(-3).CopyTo(mem, 2968);
+        Assert.Null(A350TakeoffSpeeds.Read(copy, facts));
+        BitConverter.GetBytes(1_000_000).CopyTo(mem, 2968);
+        Assert.Null(A350TakeoffSpeeds.Read(copy, facts));
+    }
+
     [Theory]
-    [InlineData("V1", "INI_V1", "V1")]
-    [InlineData("Rotate", "INI_VR", "VR")]
-    [InlineData("V2", "INI_V2", "V2")]
-    public void Each_callout_is_muted_by_its_v_speed_row(string callout, string name, string spoken)
+    [InlineData("V1", "V1")]
+    [InlineData("Rotate", "VR")]
+    [InlineData("V2", "V2")]
+    public void Each_callout_is_muted_by_its_v_speed_row(string callout, string label)
     {
         string key = A350TakeoffCallouts.Keys.MuteKeyFor(callout);
-        var row = Vars[key];
-        Assert.Equal(name, row.Name);   // the A350 FMS's own
-        // Read raw, as the A350's other INI_ speeds: a velocity unit would convert an L:var its writer stored as a number.
-        Assert.Equal((SimVarType.LVar, "number", UpdateFrequency.Continuous), (row.Type, row.Units, row.UpdateFrequency));
-        Assert.True(row.IsAnnounced);
-        Assert.False(row.ExcludeFromMonitorManager);   // said as the speed is entered, its own Ctrl+M row
+        var rows = MSFSBlindAssist.Forms.A350.A350MonitorManagerForm.BuildRows(Vars);
+        Assert.Equal(label, Assert.Single(rows, r => r.Key == key).Label);
+        Assert.False(Vars.ContainsKey(key));   // no sim variable: the dead INI_ speeds are never polled
+    }
+
+    [Fact]
+    public void The_dead_ini_speeds_are_not_read()
+    {
+        Assert.DoesNotContain(Vars.Values, v => v.Name is "INI_V1" or "INI_VR" or "INI_V2");
+    }
+
+    [Fact]
+    public void The_speeds_entered_are_said_once_two_reads_agree()
+    {
         var culture = System.Globalization.CultureInfo.CurrentCulture;
         try
         {
             System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
-            var sim = new SimConnectManager(IntPtr.Zero);
-            Assert.Equal($"{spoken}: 142 knots", sim.FormatVariableValue(key, row, 142));
-            Assert.Equal($"{spoken}: not set", sim.FormatVariableValue(key, row, 0));   // 0 before PERF has it
+            var speech = new SpeechCapture();
+            var def = new IniBuildsA350Definition { IsMuted = _ => false };
+            Fms(def, speech, 0, 0, 0);
+            Fms(def, speech, 142, 143, 148, reads: 1);
+            Assert.Empty(speech.All);   // one read may be a copy torn across frames
+
+            Fms(def, speech, 142, 143, 148, reads: 1);
+            Fms(def, speech, 142, 143, 148);
+            Assert.Equal(new[] { "V1: 142 knots", "VR: 143 knots", "V2: 148 knots" }, speech.All);
+            Assert.Empty(speech.Interrupts);
         }
         finally
         {
             System.Globalization.CultureInfo.CurrentCulture = culture;
         }
+    }
+
+    [Fact]
+    public void The_first_agreed_read_is_a_silent_baseline_that_still_arms_the_roll()
+    {
+        var speech = new SpeechCapture();
+        var def = new IniBuildsA350Definition { IsMuted = _ => false };
+        Fms(def, speech, 142, 143, 148);   // a flight loaded with its speeds entered
+        Assert.Empty(speech.All);
+
+        Roll(def, speech, 5, 120, 142);
+        Assert.Equal(new[] { "V1" }, speech.Interrupts);
+    }
+
+    [Fact]
+    public void A_speed_changed_alone_is_said_alone()
+    {
+        var speech = new SpeechCapture();
+        var def = Parked(speech);
+        speech.All.Clear();
+
+        Fms(def, speech, 145, 143, 148);
+
+        Assert.Equal(new[] { "V1: 145 knots" }, speech.All);
+    }
+
+    // [A320-10]'s A350 form: a clear before take-off (a runway change) is said; once the aircraft has flown since the
+    // speeds were set, a clear is consumed silently (the FMS's reset after landing clears them as it goes to PREFLIGHT,
+    // so a flight phase cannot tell the two apart: resetFMC() sets INI_flight_phase 1 as it clears them).
+    [Fact]
+    public void A_clear_before_take_off_is_said_and_one_after_the_flight_is_not()
+    {
+        var speech = new SpeechCapture();
+        var def = Parked(speech);
+        speech.All.Clear();
+
+        Fms(def, speech, 0, 0, 0);
+        Assert.Equal(new[] { "V1: not set", "VR: not set", "V2: not set" }, speech.All);
+
+        Fms(def, speech, 142, 143, 148);
+        def.ProcessSimVarUpdate("SIM_ON_GROUND", 0, speech);
+        def.ProcessSimVarUpdate("SIM_ON_GROUND", 1, speech);
+        speech.All.Clear();
+        Fms(def, speech, 0, 0, 0);
+        Assert.Empty(speech.All);
+
+        Fms(def, speech, 150, 151, 156);   // the next flight's
+        Assert.Equal(new[] { "V1: 150 knots", "VR: 151 knots", "V2: 156 knots" }, speech.All);
+    }
+
+    // A flight loaded in the air delivers SIM_ON_GROUND only as its first snapshot, which the definition never sees; the
+    // cached value at the read says it flew.
+    [Fact]
+    public void A_flight_loaded_in_the_air_clears_its_speeds_silently_after_landing()
+    {
+        var speech = new SpeechCapture();
+        var cache = new Dictionary<string, double> { ["SIM_ON_GROUND"] = 0 };
+        var def = new IniBuildsA350Definition
+        {
+            IsMuted = _ => false,
+            Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null,
+        };
+        def.Attach(new SimConnectManager(IntPtr.Zero));
+        Fms(def, speech, 142, 143, 148);
+        cache["SIM_ON_GROUND"] = 1;   // landed
+
+        Fms(def, speech, 0, 0, 0);
+
+        Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public void A_muted_row_mutes_its_entry_and_its_call()
+    {
+        var speech = new SpeechCapture();
+        var def = Parked(speech, muted: A350TakeoffCallouts.V1Key);
+        Assert.Equal(new[] { "VR: 143 knots", "V2: 148 knots" }, speech.All);
+
+        Roll(def, speech, 100, 142, 143);
+        def.ProcessSimVarUpdate("SIM_ON_GROUND", 0, speech);
+        Roll(def, speech, 149);
+
+        Assert.Equal(new[] { "Rotate", "V2" }, speech.Interrupts);
     }
 
     [Fact]
@@ -86,11 +213,9 @@ public class A350TakeoffCalloutsTests
     }
 
     [Fact]
-    public void The_v_speeds_still_reach_the_monitor_and_the_feed_is_consumed()
+    public void The_feed_is_consumed()
     {
-        var def = new IniBuildsA350Definition();
-        Assert.False(def.ProcessSimVarUpdate(A350TakeoffCallouts.V1Key, 142, new SpeechCapture()));
-        Assert.True(def.ProcessSimVarUpdate(A350TakeoffCallouts.IasKey, 5, new SpeechCapture()));
+        Assert.True(new IniBuildsA350Definition().ProcessSimVarUpdate(A350TakeoffCallouts.IasKey, 5, new SpeechCapture()));
     }
 
     [Fact]
@@ -105,19 +230,6 @@ public class A350TakeoffCalloutsTests
     }
 
     [Fact]
-    public void A_muted_v1_row_leaves_rotate_and_v2()
-    {
-        var speech = new SpeechCapture();
-        var def = Parked(speech, muted: A350TakeoffCallouts.V1Key);
-
-        Roll(def, speech, 100, 142, 143);
-        def.ProcessSimVarUpdate("SIM_ON_GROUND", 0, speech);
-        Roll(def, speech, 149);
-
-        Assert.Equal(new[] { "Rotate", "V2" }, speech.Interrupts);
-    }
-
-    [Fact]
     public void Speeds_not_yet_entered_leave_the_roll_silent()
     {
         var speech = new SpeechCapture();
@@ -125,7 +237,7 @@ public class A350TakeoffCalloutsTests
 
         Roll(def, speech, 60, 143, 149, 156);
 
-        Assert.Empty(speech.Interrupts);
+        Assert.Empty(speech.All);
     }
 
     [Fact]
@@ -138,6 +250,22 @@ public class A350TakeoffCalloutsTests
         Roll(def, speech, 280);
 
         Assert.Empty(speech.Interrupts);
+    }
+
+    // A flight loaded: its FMS's speeds are its baseline, never said as if entered.
+    [Fact]
+    public void A_flight_loaded_takes_its_speeds_as_a_new_baseline()
+    {
+        var speech = new SpeechCapture();
+        var def = Parked(speech);
+        speech.All.Clear();
+
+        def.OnSimContextReset();
+        Fms(def, speech, 150, 151, 156);
+        Assert.Empty(speech.All);
+
+        Roll(def, speech, 5, 150);
+        Assert.Equal(new[] { "V1" }, speech.Interrupts);
     }
 
     [Fact]
