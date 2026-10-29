@@ -85,6 +85,7 @@ public static class A350Ewd
         // read "ALL PHASES, STS, LIMITATIONS, APPR & LDG, FLAPS SLOW").
         var block = new List<EcamLine>();
         var inBlock = new HashSet<int>();
+        var headings = new HashSet<DrawnCell>();   // the headings alone: another text on their row reads as its own
         int phases = wdRows.FindIndex(r => r.Any(c => c.Text == "ALL PHASES") && r.Any(c => c.Text == "APPR & LDG"));
         float blockTop = float.MaxValue;
         if (phases >= 0)
@@ -92,7 +93,8 @@ public static class A350Ewd
             var allPhases = wdRows[phases].First(c => c.Text == "ALL PHASES");
             var apprLdg = wdRows[phases].First(c => c.Text == "APPR & LDG");
             float split = (allPhases.X + apprLdg.X) / 2;
-            inBlock.Add(phases);
+            headings.Add(allPhases);
+            headings.Add(apprLdg);
             blockTop = wdRows[phases][0].Y;
             if (phases > 0 && wdRows[phases - 1] is [{ Text: "LIMITATIONS" } heading])
             {
@@ -100,9 +102,10 @@ public static class A350Ewd
                 blockTop = heading.Y;
                 block.Add(new EcamLine(new[] { heading }, heading.Y, false, EcamBox.None));
             }
+            // A limitation is cyan, with neither the ECAM cursor nor an action box (those are a procedure's actions).
             var items = new List<IReadOnlyList<DrawnCell>>();
-            for (int k = phases + 1; k < wdRows.Count && wdRows[k].All(c => c.Colour == "cyan")
-                     && wdRows[k][0].Y - wdRows[k - 1][0].Y <= 60; k++)
+            for (int k = phases + 1; k < wdRows.Count && wdRows[k].All(c => c.Colour == "cyan") && !selected.Contains(k)
+                     && !boxes.ContainsKey(k) && wdRows[k][0].Y - wdRows[k - 1][0].Y <= 60; k++)
             {
                 inBlock.Add(k);
                 items.Add(wdRows[k]);
@@ -110,8 +113,8 @@ public static class A350Ewd
             foreach (var (phase, inPhase) in new (DrawnCell Phase, Func<DrawnCell, bool> In)[] { (allPhases, c => c.X < split), (apprLdg, c => c.X >= split) })
                 foreach (var row in items.Select(r => r.Where(inPhase).OrderBy(c => c.X).ToList()).Where(r => r.Count > 0))
                 {
-                    row[0] = row[0] with { Text = phase.Text + ": " + WithoutLeaders(row[0].Text) };
-                    block.Add(new EcamLine(row, row[0].Y, false, EcamBox.None));
+                    var item = row[0] with { Text = phase.Text + ": " + WithoutLeaders(string.Join(" ", row.Select(c => c.Text))) };
+                    block.Add(new EcamLine(new[] { item }, item.Y, false, EcamBox.None));
                 }
         }
 
@@ -122,7 +125,8 @@ public static class A350Ewd
         for (int i = 0; i < wdRows.Count; i++)
         {
             if (inBlock.Contains(i)) continue;
-            var cells = wdRows[i].Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList();
+            var cells = wdRows[i].Where(c => !headings.Contains(c)).Select(c => c with { Text = WithoutLeaders(c.Text) }).ToList();
+            if (cells.Count == 0) continue;
             var left = cells.Where(c => !InMemoColumn(c)).ToList();
             var right = cells.Where(InMemoColumn).ToList();
             if (left.Count == 1 && right.Count == 1 && left[0].Text == "YES" && right[0].Text == "NO")

@@ -121,6 +121,29 @@ public class A350EwdTests
         }, lines);
     }
 
+    // Review 2026-10-28 (minor 8): the headings' row was consumed whole, so another text on it was never read; a cyan
+    // row under the block with the ECAM cursor or an action box (a procedure's action, never a limitation) was taken as
+    // a limitation; and only an item's first text lost its dot leader.
+    [Fact]
+    public void The_limitations_block_takes_only_its_own()
+    {
+        var cap = Fixture("ctr_sd_status_inop_14");
+        var cyan = new A350Rgba(0, 1, 1, 1);
+        var amber = new A350Rgba(1, 0.6f, 0, 1);
+        var texts = cap.Texts.Select(t => t.Text == "FLAPS SLOW" ? t with { Text = "FLAPS" } : t).ToList();
+        texts.Add(new DrawnText("....SLOW", 1340, 385.1f, 504, 385.1f, 1, cyan));        // the item's action, its leader
+        texts.Add(new DrawnText("APU AVAIL", 1253, 343.2f, 417, 343.2f, 1, amber));     // a memo on the headings' row
+        texts.Add(new DrawnText("R TK MAIN PMP..OFF", 856, 430, 20, 430, 1, cyan));     // a procedure's action, boxed
+        var frames = cap.Frames.Append(new DrawnFrame(830, 412, 15, 20, false, cyan)).ToList();
+        var lines = A350Ewd.Parse(cap with { Texts = texts, Frames = frames }).Warning;
+        var spoken = lines.Select(l => l.Spoken).ToList();
+        Assert.Contains("APPR & LDG: FLAPS: SLOW, cyan", spoken);
+        Assert.Contains("APU AVAIL, amber", spoken);
+        var action = Assert.Single(lines, l => l.Spoken.Contains("R TK MAIN PMP", StringComparison.Ordinal));
+        Assert.Equal("R TK MAIN PMP: OFF, cyan", action.Spoken);
+        Assert.Equal(EcamBox.ToDo, action.Box);
+    }
+
     // Live: "WXR ..............................SYS 2" and "APU MASTER SW ......................OFF" came out
     // with their dot leaders, which a screen reader reads as "dot" thirty times. A leader reads as a colon.
     [Theory]
