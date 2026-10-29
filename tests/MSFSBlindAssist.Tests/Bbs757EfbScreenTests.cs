@@ -324,6 +324,8 @@ public class Bbs757EfbScreenTests
     [InlineData("CJGSW2VZ", "CJGSW2VZ")]             // a code stays as read
     [InlineData("ACTIVE 0 ARMED 0", "ACTIVE 0 ARMED 0")]   // a figure is never snapped away (ACTIVE / ARMED)
     [InlineData("RANDOM FAILURE: OFF", "RANDOM FAILURES: OFF")]   // a label snaps, the state after it stays
+    [InlineData("REMOVE FP", "REMOVE FP")]           // the ACARS page's button: three edits from REMOVE ALL, which it must not become
+    [InlineData("REMOVE ALL", "REMOVE ALL")]
     public void Snap_fixes_ocr_habits_without_guessing(string read, string expected) =>
         Assert.Equal(expected, Bbs757EfbVocabulary.Snap(read));
 
@@ -332,8 +334,35 @@ public class Bbs757EfbScreenTests
     [InlineData("GROUND A/C", "Ground A/C")]
     [InlineData("APU QUICK START", "APU quick start")]
     [InlineData("CJGSW2VZ", "CJGSW2VZ")]
+    [InlineData("REMOVE FP", "Remove FP")]
     public void Pretty_keeps_acronyms_and_codes(string s, string expected) =>
         Assert.Equal(expected, Bbs757EfbVocabulary.Pretty(s));
+
+    [Fact]
+    public void The_acars_page_reads_its_remove_fp_button_as_remove_fp()
+    {
+        // Navigation, ACARS dashboard (bright/23, under a question): REFRESH SIMBRIEF OFP and REMOVE FP. REMOVE FP snapped to REMOVE ALL,
+        // so a pilot pressing it was told it removes everything.
+        var page = Load("bright", "23-units-question");
+        var texts = page.Items.Select(i => i.Text).ToList();
+
+        Assert.Contains("Remove FP", texts);
+        Assert.DoesNotContain("Remove all", texts);
+    }
+
+    [Fact]
+    public void The_ehsi_up_reference_words_are_hdg_and_trk()
+    {
+        // The catalog's words and the tablet's, measured; "TRACK UP" and "HEADING UP" were guesses.
+        Assert.True(Bbs757EfbVocabulary.IsKnown("HDG"));
+        Assert.True(Bbs757EfbVocabulary.IsKnown("TRK"));
+        Assert.False(Bbs757EfbVocabulary.IsKnown("TRACK UP"));
+        Assert.False(Bbs757EfbVocabulary.IsKnown("HEADING UP"));
+
+        var ehsi = Bbs757EfbSettings.ByPath("options.ehsi.up_reference");
+        Assert.NotNull(ehsi);
+        Assert.All(Bbs757EfbSettingsMatch.ChoicesFor(ehsi!)!, word => Assert.True(Bbs757EfbVocabulary.IsKnown(word), word));
+    }
 
     [Theory]
     [InlineData(74, 0, 0, Bbs757EfbTint.Red)]

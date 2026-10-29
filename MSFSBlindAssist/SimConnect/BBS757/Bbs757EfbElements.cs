@@ -4,56 +4,56 @@ using System.Globalization;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// A read tablet page (<see cref="Bbs757EfbScreenModel"/>) as the shared EFB window's elements, and what
-/// pressing each does. Pure: tested. The window (FbwEfbForm) renders headings, buttons, check boxes,
-/// choice lists and sliders from the push's "items.N.*" keys (the PMDG client's format) and posts back
-/// click_display_element / set_element_value with the element's aidx.
+/// An element the app adds to the window on top of the tablet's own (plan 18): a button of the app's, such as the Navigraph sign-in,
+/// or a line of text, such as the code to enter at navigraph.com. The bridge decides what is offered on which page.
+/// <see cref="Key"/> is stable while the words change, so the window keeps the screen reader's focus on the element, and it names the
+/// element when it is pressed (<see cref="Bbs757EfbElements.Action.ExtraKey"/>).
+/// </summary>
+public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButton);
+
+/// <summary>
+/// A read tablet page (<see cref="Bbs757EfbScreenModel"/>) as the shared EFB window's elements, and what pressing each does. Pure:
+/// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists and sliders from the push's "items.N.*" keys
+/// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx.
+///
+/// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
+/// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
+/// is the tablet's own: while it shows a question over its page, the page is dimmed and takes no tap, so its controls are text until the
+/// question is answered. The question's answers press, and so does the top bar, which stays lit above the dimming.
+///
+/// The order the pilot meets: the alert; the tablet's question (its words, an alert, then its answers); the top bar; BlueBird's
+/// notifications under a heading; Home and the side menu; the page; the app's extras; the scroll buttons; and "More" with Read the
+/// tablet again.
 /// </summary>
 public static class Bbs757EfbElements
 {
     /// <summary>What pressing an element does.</summary>
-    public enum ActionKind { Tap, Classic, Refresh, Refuse, ScrollDown, ScrollUp }
+    public enum ActionKind { Tap, Refresh, ScrollDown, ScrollUp, Extra }
 
-    /// <summary>One element's action: the tablet item it taps (Tap, and the item a set changes), or the
-    /// refusal said instead.</summary>
-    public sealed record Action(ActionKind Kind, Bbs757EfbItem? Item = null, string? Refusal = null);
+    /// <summary>One element's action: the tablet control it taps (Tap, and the control a set changes), or the key of the app's extra it
+    /// stands for (Extra).</summary>
+    public sealed record Action(ActionKind Kind, Bbs757EfbItem? Item = null, string? ExtraKey = null);
 
     /// <summary>A build: the push's data and each aidx's action.</summary>
     public sealed record Built(Dictionary<string, string> Data, IReadOnlyDictionary<int, Action> Actions, int Count);
 
-    public const string ClassicWindowText =
-        "Classic 757 EFB window: SimBrief load, Navigraph sign-in, nav data update and ground power";
     public const string ReadAgainText = "Read the tablet again";
-    public const string ReadOnlyNote =
-        "This window only reads the tablet. To change anything, use the classic 757 EFB window.";
-    public const string ClassicWindowReadOnlyText = "Classic 757 EFB window";
-    public const string ReadOnlyRefusal = "This window only reads the tablet. Use the classic 757 EFB window to change it.";
-    public const string SaveLoadRefusal =
-        "Custom panel states are not offered here: BlueBird keeps SAVE or LOAD armed, invisibly, for the next tile.";
-    public const string GuardRefusal =
-        "This control shares its place with BlueBird's nav data UPDATE button, so it is not tapped from here.";
-    public const string UpdateRefusal =
-        "Update or remove nav data from the classic 757 EFB window, which checks the cycle first.";
 
+    private const string NotificationsHeading = "Notifications";
     private const char OptionSeparator = (char)0x1f;
 
-    /// <param name="readOnly">
-    /// The tablet screen reader as shipped (team review of 2026-10-27): the tablet is READ from its pixels,
-    /// and a misread must never become a press. Only page navigation stays pressable (Home, the tablet's
-    /// menus, scrolling), since a wrong one only changes the page shown; every button, switch, check box
-    /// and slider is plain text with the state read for it. False keeps the operable window for the tests
-    /// and for a later decision to bring it back.
-    /// </param>
-    public static Built Build(Bbs757EfbScreenModel? model, string? alert, bool readOnly = false)
+    /// <param name="model">The page read, or null when none is shown (a status in its place).</param>
+    /// <param name="alert">A word the window speaks at once and shows first (a status, or the outcome of a press); null for none.</param>
+    /// <param name="extras">What the app adds to the page, in order (the bridge decides, by page).</param>
+    public static Built Build(Bbs757EfbScreenModel? model, string? alert, IReadOnlyList<Bbs757EfbExtraElement> extras)
     {
         var data = new Dictionary<string, string>(StringComparer.Ordinal) { ["page"] = model?.PageName ?? "BlueBird tablet" };
         var actions = new Dictionary<int, Action>();
         int n = 0;
 
         void Add(string text, string kind = "", string controlType = "", bool clickable = false, int level = 0,
-            string value = "", string key = "", bool announceChange = false, string[]? options = null,
-            bool disabled = false, string live = "", double? min = null, double? max = null, double? step = null,
-            Action? action = null)
+            string value = "", string key = "", bool announceChange = false, IReadOnlyList<string>? options = null,
+            string live = "", double? min = null, double? max = null, double? step = null, Action? action = null)
         {
             int i = n++;
             int aidx = i + 1;
@@ -67,7 +67,7 @@ public static class Bbs757EfbElements
             data[$"items.{i}.kind"] = kind;
             data[$"items.{i}.level"] = level.ToString(CultureInfo.InvariantCulture);
             data[$"items.{i}.live"] = live;
-            data[$"items.{i}.disabled"] = disabled ? "true" : "false";
+            data[$"items.{i}.disabled"] = "false";
             if (announceChange) data[$"items.{i}.announceChange"] = "true";
             if (key.Length > 0) data[$"items.{i}.key"] = key;
             if (options != null) data[$"items.{i}.options"] = string.Join(OptionSeparator, options);
@@ -83,15 +83,47 @@ public static class Bbs757EfbElements
 
         if (model != null)
         {
+            // Under a question the tablet dims its page and takes no tap on it.
+            bool dimmed = model.Question != null;
+            if (model.Question is { } question)
+            {
+                Add(question.Text, kind: "alert", live: "assertive", key: "question");
+                foreach (var answer in question.Buttons)
+                    Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer));
+            }
+
+            foreach (var barItem in model.TopBar)
+                AddTopBar(barItem);
+
+            if (model.Notices.Count > 0)
+            {
+                Add(NotificationsHeading, level: 2, key: "h:notifications");
+                foreach (var notice in model.Notices)
+                    Add(NoticeText(notice));
+            }
+
             if (model.App != "HOME")
             {
-                var home = new Bbs757EfbItem(Bbs757EfbKind.Button, "Home", Rectangle.Empty, Bbs757EfbScreen.HomeButton, true, "btn:HOME");
-                Add("Home", kind: "button", clickable: true, key: "btn:HOME", action: new Action(ActionKind.Tap, home));
+                if (dimmed)
+                    Add("Home", key: "btn:HOME");
+                else
+                {
+                    var home = new Bbs757EfbItem(Bbs757EfbKind.Button, "Home", Rectangle.Empty, Bbs757EfbScreen.HomeButton, true, "btn:HOME");
+                    Add("Home", kind: "button", clickable: true, key: "btn:HOME", action: new Action(ActionKind.Tap, home));
+                }
             }
-            foreach (var m in model.Menu)
-                AddItem(m);
+            foreach (var entry in model.Menu)
+                AddItem(entry, model.PageName, dimmed);
             foreach (var it in model.Items)
-                AddItem(it);
+                AddItem(it, model.PageName, dimmed);
+        }
+
+        foreach (var extra in extras)
+        {
+            if (extra.IsButton)
+                Add(extra.Text, kind: "button", clickable: true, key: extra.Key, action: new Action(ActionKind.Extra, ExtraKey: extra.Key));
+            else
+                Add(extra.Text, key: extra.Key);
         }
 
         if (model?.Scrollable == true)
@@ -100,17 +132,25 @@ public static class Bbs757EfbElements
             Add("Scroll up", kind: "button", clickable: true, key: "btn:scroll-up", action: new Action(ActionKind.ScrollUp));
         }
         Add("More", level: 2, key: "h:more");
-        if (readOnly) Add(ReadOnlyNote, key: "txt:read-only");
-        Add(readOnly ? ClassicWindowReadOnlyText : ClassicWindowText, kind: "button", clickable: true, key: "btn:classic", action: new Action(ActionKind.Classic));
         Add(ReadAgainText, kind: "button", clickable: true, key: "btn:refresh", action: new Action(ActionKind.Refresh));
         return new Built(data, actions, n);
 
-        void AddItem(Bbs757EfbItem it)
+        // The top bar stays lit above a question's dimming: its buttons press whatever the page does.
+        void AddTopBar(Bbs757EfbItem it)
         {
-            // On a page that scrolls, a control in the update guard is scrolled out of it and then tapped.
-            if (!it.Clickable && model.Scrollable && Bbs757EfbScreen.UpdateGuard.Contains(it.Hit))
-                it = it with { Clickable = true };
-            if (readOnly && AddReadOnly(it)) return;
+            if (it.Kind != Bbs757EfbKind.Button)
+            {
+                Add(it.Text, key: it.Key);
+                return;
+            }
+            // The notification button's words say whether BlueBird's list is open, and change when it is pressed.
+            Add(it.Text, kind: "button", clickable: true, key: it.Key,
+                announceChange: it.Key == Bbs757EfbTopBar.NotificationsKey || CarriesState(it), action: new Action(ActionKind.Tap, it));
+        }
+
+        void AddItem(Bbs757EfbItem it, string pageName, bool dimmed)
+        {
+            if (dimmed && AddDimmed(it, pageName)) return;
             switch (it.Kind)
             {
                 case Bbs757EfbKind.Heading:
@@ -123,50 +163,36 @@ public static class Bbs757EfbElements
                     Add(it.Value.Length > 0 ? it.Text + ": " + it.Value : it.Text, key: it.Key);
                     break;
                 case Bbs757EfbKind.Menu:
-                {
-                    string text = it.Text + (it.Selected && !it.Text.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
-                    Add(text, kind: "button", clickable: it.Clickable, key: it.Key,
-                        action: it.Clickable ? new Action(ActionKind.Tap, it) : new Action(ActionKind.Refuse, it, GuardRefusal));
+                    Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
-                }
                 case Bbs757EfbKind.Button:
-                {
-                    var refusal = ButtonRefusal(it);
-                    bool state = it.Tint is Bbs757EfbTint.Red or Bbs757EfbTint.Green || it.Text.Contains(':');
-                    Add(it.Text, kind: "button", clickable: refusal == null, key: it.Key, announceChange: state,
-                        disabled: refusal != null,
-                        action: refusal == null ? new Action(ActionKind.Tap, it) : new Action(ActionKind.Refuse, it, refusal));
+                    Add(it.Text, kind: "button", clickable: true, key: it.Key, announceChange: CarriesState(it),
+                        action: new Action(ActionKind.Tap, it));
                     break;
-                }
                 case Bbs757EfbKind.Toggle:
                 {
                     string word = it.Value;
-                    bool plain = word.Length == 0 || word.Equals("On", StringComparison.OrdinalIgnoreCase) || word.Equals("Off", StringComparison.OrdinalIgnoreCase);
-                    string text = plain ? it.Text : it.Text + ": " + word;
-                    Add(text, controlType: "checkbox", clickable: it.Clickable, value: it.On == true ? "true" : "false",
-                        key: it.Key, disabled: !it.Clickable,
-                        action: it.Clickable ? new Action(ActionKind.Tap, it) : new Action(ActionKind.Refuse, it, GuardRefusal));
+                    bool plain = word.Length == 0 || IsOnOff(word);
+                    Add(plain ? it.Text : it.Text + ": " + word, controlType: "checkbox", clickable: true,
+                        value: it.On == true ? "true" : "false", key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 }
                 case Bbs757EfbKind.Checkbox:
-                    Add(it.Text, controlType: "checkbox", clickable: it.Clickable, value: it.On == true ? "true" : "false",
-                        key: it.Key, disabled: !it.Clickable,
-                        action: it.Clickable ? new Action(ActionKind.Tap, it) : new Action(ActionKind.Refuse, it, GuardRefusal));
+                    Add(it.Text, controlType: "checkbox", clickable: true, value: it.On == true ? "true" : "false",
+                        key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Slider:
                 {
-                    var options = OptionsFor(it);
-                    string? current = options?.FirstOrDefault(o => string.Equals(o, it.Value, StringComparison.OrdinalIgnoreCase));
-                    if (options != null && current != null)
-                        Add(it.Text, controlType: "select", clickable: true, value: current, key: it.Key, options: options,
+                    var options = OptionsFor(it, pageName);
+                    int at = options == null ? -1 : CurrentChoice(it, pageName, options);
+                    if (options != null && at >= 0)
+                        Add(it.Text, controlType: "select", clickable: true, value: options[at], key: it.Key, options: options,
                             action: new Action(ActionKind.Tap, it));
                     else if (it.Slider is { } sl)
                     {
-                        // No known choices (the cabin lights): a 0-100 slider from the knob's place.
-                        double pct = sl.TrackRight > sl.TrackLeft ? Math.Round(100.0 * (sl.KnobX - sl.TrackLeft) / (sl.TrackRight - sl.TrackLeft)) : 0;
-                        pct = Math.Clamp(pct, 0, 100);
+                        // No known choices (the cabin lights), or the one set was not read: a 0-100 slider from the knob's place.
                         string label = it.Value.Length > 0 ? it.Text + " (" + it.Value + ")" : it.Text;
-                        Add(label, controlType: "range", clickable: true, value: pct.ToString(CultureInfo.InvariantCulture),
+                        Add(label, controlType: "range", clickable: true, value: KnobPercent(sl).ToString(CultureInfo.InvariantCulture),
                             key: it.Key, min: 0, max: 100, step: 10, action: new Action(ActionKind.Tap, it));
                     }
                     break;
@@ -174,74 +200,98 @@ public static class Bbs757EfbElements
             }
         }
 
-        // A control as text in the read-only window; false for the kinds that render the same either way
-        // (headings, text, rows, the menus).
-        bool AddReadOnly(Bbs757EfbItem it)
+        // A control as text, for the page behind a question: its words and the state read for it. False for the kinds that render the
+        // same either way (headings, text, rows).
+        bool AddDimmed(Bbs757EfbItem it, string pageName)
         {
             switch (it.Kind)
             {
+                case Bbs757EfbKind.Menu:
+                    Add(MenuText(it), key: it.Key);
+                    return true;
                 case Bbs757EfbKind.Button:
                     Add(it.Text, key: it.Key);
                     return true;
                 case Bbs757EfbKind.Toggle:
                 case Bbs757EfbKind.Checkbox:
-                {
-                    string state = it.Value.Length > 0 && !(it.Value.Equals("On", StringComparison.OrdinalIgnoreCase) || it.Value.Equals("Off", StringComparison.OrdinalIgnoreCase))
-                        ? it.Value
-                        : it.On switch { true => "On", false => "Off", _ => "state not read" };
-                    Add(it.Text + ": " + state, key: it.Key);
+                    Add(it.Text + ": " + StateWord(it), key: it.Key);
                     return true;
-                }
                 case Bbs757EfbKind.Slider:
-                {
-                    string value = it.Value;
-                    if (value.Length == 0 && it.Slider is { } sl && sl.TrackRight > sl.TrackLeft)
-                        value = Math.Clamp(Math.Round(100.0 * (sl.KnobX - sl.TrackLeft) / (sl.TrackRight - sl.TrackLeft)), 0, 100)
-                            .ToString(CultureInfo.InvariantCulture) + " percent";
-                    Add(value.Length > 0 ? it.Text + ": " + value : it.Text, key: it.Key);
+                    Add(SliderStateText(it, pageName), key: it.Key);
                     return true;
-                }
                 default:
                     return false;
             }
         }
     }
 
-    /// <summary>Why a tablet button is not tapped from the window, or null when it may be.</summary>
-    internal static string? ButtonRefusal(Bbs757EfbItem it)
+    /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>
+    private static string MenuText(Bbs757EfbItem it) =>
+        it.Text + (it.Selected && !it.Text.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
+
+    /// <summary>Whether a button or tile's words carry its state, so the window says them again when a press changes them: a red or
+    /// green tile (on or off), or words with a colon ("GND SRVC Mode: BBS", "Notifications: 2").</summary>
+    private static bool CarriesState(Bbs757EfbItem it) =>
+        it.Tint is Bbs757EfbTint.Red or Bbs757EfbTint.Green || it.Text.Contains(':');
+
+    /// <summary>A notification as a line of text: the time the tablet shows over its words, when it was read, then the words.</summary>
+    private static string NoticeText(Bbs757EfbNotice notice) =>
+        notice.Time is { Length: > 0 } time ? time + " " + notice.Text : notice.Text;
+
+    private static bool IsOnOff(string word) =>
+        word.Equals("On", StringComparison.OrdinalIgnoreCase) || word.Equals("Off", StringComparison.OrdinalIgnoreCase);
+
+    private static string StateWord(Bbs757EfbItem it) =>
+        it.Value.Length > 0 && !IsOnOff(it.Value) ? it.Value : it.On switch { true => "On", false => "Off", _ => "state not read" };
+
+    private static string SliderStateText(Bbs757EfbItem it, string pageName)
     {
-        if (!it.Clickable) return GuardRefusal;
-        string up = it.Key.ToUpperInvariant();
-        if (up.Contains("SAVE USER CONFIG") || up.Contains("LOAD USER CONFIG")) return SaveLoadRefusal;
-        if (up.Contains("|UPDATE@") || up.Contains("|REMOVE@")) return UpdateRefusal;
-        return null;
+        string value = it.Value;
+        var options = OptionsFor(it, pageName);
+        int at = options == null ? -1 : CurrentChoice(it, pageName, options);
+        if (options != null && at >= 0)
+            value = options[at];
+        else if (value.Length == 0 && it.Slider is { } slider && slider.TrackRight > slider.TrackLeft)
+            value = KnobPercent(slider).ToString(CultureInfo.InvariantCulture) + " percent";
+        return value.Length > 0 ? it.Text + ": " + value : it.Text;
     }
 
-    /// <summary>The classic window's name for a preset tile's words ("COLD & DARK" -> "Cold and dark"),
-    /// or null when the words are no preset: the window keeps the ground / flight gate
-    /// (<see cref="Bbs757EfbLayout.PresetRefusal"/>).</summary>
-    public static string? PresetName(string words)
+    /// <summary>Where a slider's knob is along its track, in whole percent.</summary>
+    private static double KnobPercent(Bbs757EfbSlider slider)
     {
-        string w = (words ?? "").Trim().ToUpperInvariant().Replace(" & ", " AND ");
-        foreach (var name in Bbs757EfbLayout.PresetNames)
-            if (string.Equals(name.ToUpperInvariant(), w, StringComparison.Ordinal)) return name;
-        return null;
+        double percent = slider.TrackRight > slider.TrackLeft
+            ? Math.Round(100.0 * (slider.KnobX - slider.TrackLeft) / (slider.TrackRight - slider.TrackLeft))
+            : 0;
+        return Math.Clamp(percent, 0, 100);
     }
 
-    /// <summary>A slider's choices, left to right, when the tablet's are known
-    /// (<see cref="Bbs757EfbVocabulary.SliderOptions"/>), as the tablet writes them.</summary>
-    public static string[]? OptionsFor(Bbs757EfbItem it)
+    /// <summary>
+    /// A slider's choices, left to right, as the tablet offers them; null when the slider is a number. A row of the Settings pages that is
+    /// one of BlueBird's settings (<see cref="Bbs757EfbSettingsMatch.SettingFor"/>, by the page and the row's label) offers the settings
+    /// catalog's words in its order, which is the tablet's from left to right; a setting with no choices (a continuous slider) offers
+    /// none. A row that matches no setting (a label OCR misread, a slider on another page) takes
+    /// <see cref="Bbs757EfbVocabulary.SliderOptions"/> by its key, and is otherwise a number.
+    /// </summary>
+    public static IReadOnlyList<string>? OptionsFor(Bbs757EfbItem it, string pageName)
     {
+        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { } setting)
+            return Bbs757EfbSettingsMatch.ChoicesFor(setting);
         if (!it.Key.StartsWith("sld:", StringComparison.Ordinal)) return null;
-        return Bbs757EfbVocabulary.SliderOptions.TryGetValue(it.Key.Substring(4), out var o) ? o : null;
+        return Bbs757EfbVocabulary.SliderOptions.TryGetValue(it.Key.Substring(4), out var options) ? options : null;
     }
 
-    /// <summary>Where on a slider's track option <paramref name="index"/> of <paramref name="count"/> sits
-    /// (evenly spread, the ends at the track's ends: measured on IRS ALIGNMENT TIME, BOARDING &amp; LOAD
-    /// RATE and NOTIFICATIONS FADE-OUT TIMER, 2026-10-26).</summary>
-    public static int OptionX(Bbs757EfbSlider s, int index, int count)
+    /// <summary>
+    /// The index among <paramref name="options"/> (the list <see cref="OptionsFor"/> gave for the same row) of the choice the row reads as;
+    /// -1 when the reader gave none or it is none of them. For a catalog setting the reader's words are matched with case, spaces and
+    /// punctuation ignored ("FULL(7 MIN+)" is "Full (7 min+)": <see cref="Bbs757EfbSettingsMatch.ChoiceIndex"/>); for any other slider,
+    /// with case ignored.
+    /// </summary>
+    public static int CurrentChoice(Bbs757EfbItem it, string pageName, IReadOnlyList<string> options)
     {
-        if (count <= 1) return s.TrackLeft;
-        return s.TrackLeft + (int)Math.Round((double)index * (s.TrackRight - s.TrackLeft) / (count - 1));
+        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { } setting)
+            return Bbs757EfbSettingsMatch.ChoiceIndex(setting, it.Value);
+        for (int index = 0; index < options.Count; index++)
+            if (string.Equals(options[index], it.Value, StringComparison.OrdinalIgnoreCase)) return index;
+        return -1;
     }
 }

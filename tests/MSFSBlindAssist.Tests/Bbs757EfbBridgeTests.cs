@@ -4,9 +4,12 @@ using Xunit;
 
 namespace MSFSBlindAssist.Tests;
 
-/// <summary>Plan 11 Task 4: the read page as the shared EFB window's elements, and what each press does.</summary>
+/// <summary>Plan 11 Task 4: the read page as the shared EFB window's elements, and what each press does. (Plan 18, Task 7: every
+/// control presses and the window refuses nothing; the new element tests are in <see cref="Bbs757EfbElementsTests"/>.)</summary>
 public class Bbs757EfbBridgeTests
 {
+    private static readonly IReadOnlyList<Bbs757EfbExtraElement> NoExtras = Array.Empty<Bbs757EfbExtraElement>();
+
     private static Dictionary<string, string> ItemsByText(Bbs757EfbElements.Built b)
     {
         var o = new Dictionary<string, string>();
@@ -27,68 +30,38 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public void Ground_services_become_buttons_whose_state_change_is_spoken()
     {
-        var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services"), null);
+        var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services"), null, NoExtras);
         Assert.Equal("Aircraft, Ground services", b.Data["page"]);
         Assert.Equal("true", Field(b, "Fuel truck off", "clickable"));
         Assert.Equal("true", Field(b, "Fuel truck off", "announceChange"));
         Assert.Equal(Bbs757EfbElements.ActionKind.Tap, ActionFor(b, "Fuel truck off").Kind);
         Assert.Equal(Bbs757EfbElements.ActionKind.Tap, ActionFor(b, "Home").Kind);
-        Assert.Equal(Bbs757EfbElements.ActionKind.Classic, ActionFor(b, Bbs757EfbElements.ClassicWindowText).Kind);
         Assert.Equal("Ground services (current page)", ItemsByText(b).Keys.First(k => k.StartsWith("Ground services", StringComparison.Ordinal)));
     }
 
     [Fact]
     public void Settings_switches_are_check_boxes_and_known_sliders_are_choice_lists()
     {
-        var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "51-settings-aircraft"), null);
+        var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "51-settings-aircraft"), null, NoExtras);
         Assert.Equal("checkbox", Field(b, "Nosewheel steering: Realistic", "type"));
         Assert.Equal("true", Field(b, "Nosewheel steering: Realistic", "value"));
         Assert.Equal("select", Field(b, "IRS alignment time", "type"));
-        Assert.Equal("FULL (7 MIN+)", Field(b, "IRS alignment time", "value"));
-        Assert.Contains("2 MIN", Field(b, "IRS alignment time", "options").Split((char)0x1f));
+        // The choices are BlueBird's own words, in the order of its slider (the settings catalog's).
+        Assert.Equal("Full (7 min+)", Field(b, "IRS alignment time", "value"));
+        Assert.Contains("2 min", Field(b, "IRS alignment time", "options").Split((char)0x1f));
         // A switch's key does not carry its state, so the window keeps focus on it when it flips.
         Assert.Equal("tgl:NOSEWHEEL STEERING", Field(b, "Nosewheel steering: Realistic", "key"));
-    }
-
-    [Fact]
-    public void Save_and_load_user_config_are_refused()
-    {
-        var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "10-aircraft-presets"), null);
-        var a = ActionFor(b, "Save user config");
-        Assert.Equal(Bbs757EfbElements.ActionKind.Refuse, a.Kind);
-        Assert.Equal(Bbs757EfbElements.SaveLoadRefusal, a.Refusal);
-        Assert.Equal("true", Field(b, "Load user config", "disabled"));
-        Assert.Equal(Bbs757EfbElements.ActionKind.Tap, ActionFor(b, "Before start").Kind);
     }
 
     [Fact]
     public void An_alert_is_the_first_element_and_assertive()
     {
         // The page name is the window's own title line (the "page" key), never a list item.
-        var b = Bbs757EfbElements.Build(null, "The tablet reader could not open.");
+        var b = Bbs757EfbElements.Build(null, "The tablet reader could not open.", NoExtras);
         Assert.Equal("BlueBird tablet", b.Data["page"]);
         Assert.Equal("alert", b.Data["items.0.kind"]);
         Assert.Equal("assertive", b.Data["items.0.live"]);
-    }
-
-    [Theory]
-    [InlineData("COLD & DARK", "Cold and dark")]
-    [InlineData("READY FOR TAKEOFF", "Ready for takeoff")]
-    [InlineData("CRUISE", "Cruise")]
-    [InlineData("PUSH ALL CBs", null)]
-    public void Preset_words_map_to_the_gated_presets(string words, string? name) =>
-        Assert.Equal(name, Bbs757EfbElements.PresetName(words));
-
-    [Fact]
-    public void Options_spread_evenly_along_the_track()
-    {
-        var s = new Bbs757EfbSlider(895, 1190, 1000);
-        Assert.Equal(895, Bbs757EfbElements.OptionX(s, 0, 4));
-        Assert.Equal(1190, Bbs757EfbElements.OptionX(s, 3, 4));
-        // Measured: STANDARD (index 1 of 4) between taps at 970 and 1045.
-        Assert.InRange(Bbs757EfbElements.OptionX(s, 1, 4), 970, 1045);
-        // Measured: 10 SEC (index 4 of 16 options) at x 973.
-        Assert.InRange(Bbs757EfbElements.OptionX(s, 4, 16), 965, 985);
+        Assert.Equal("alert", b.Data["items.0.key"]);
     }
 
     [Fact]

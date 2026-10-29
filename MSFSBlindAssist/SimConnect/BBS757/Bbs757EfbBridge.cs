@@ -14,13 +14,15 @@ public sealed class Bbs757EfbBridgeIo
     /// <summary>Moves the camera (type, index), on the UI thread (MainForm marshals).</summary>
     public required Action<int, int> SetCamera { get; init; }
 
-    /// <summary>SIM ON GROUND read fresh: true, false, or null when unread (the preset gate).</summary>
+    /// <summary>SIM ON GROUND read fresh: true, false, or null when unread. Not called any more: no preset waits for the ground or the
+    /// air (the owner's ruling of 2026-10-29); the press rework (plan 18, Task 8) removes it.</summary>
     public required Func<CancellationToken, Task<bool?>> OnGround { get; init; }
 
-    /// <summary>A variable the definition registers, read fresh (external power for REMOVE ALL).</summary>
+    /// <summary>A variable the definition registers, read fresh (the ground power's state, for the GPU tile's flow).</summary>
     public required Func<string, CancellationToken, Task<double?>> ReadRegistered { get; init; }
 
-    /// <summary>Opens the classic 757 EFB window (SimBrief load, Navigraph sign-in, nav data update).</summary>
+    /// <summary>Opens the classic 757 EFB window (SimBrief load, Navigraph sign-in, nav data update). Not called any more: the
+    /// window presses every control itself; the press rework (plan 18, Task 8) removes it.</summary>
     public required Action OpenClassicWindow { get; init; }
 
     /// <summary>Opens / ends the definition's echo for a service row around the window's own tap (Task 5).</summary>
@@ -61,11 +63,10 @@ public sealed class Bbs757EfbBridgeIo
 ///
 /// The plan's rules hold: a ground service or the chocks are judged from their BlueBird variable before
 /// and after a tap and tapped only when they differ (B757-2, <see cref="Bbs757GroundServices"/>); the
-/// GPU goes through plan 07's flow; REMOVE ALL is refused with external power on line; presets keep the
-/// ground / flight gate; custom SAVE/LOAD is never armed; the UPDATE/REMOVE spot is never tapped (the
-/// AIRAC page's update is the classic window's guarded flow). Speech follows CORE-7: the screen reader
-/// reads the control; a control whose label carries its own state is re-read for the pilot after the
-/// press (announceChange); a refusal or a failure is said as an alert.
+/// GPU goes through plan 07's flow. Every other control is tapped where the reader found it, and nothing
+/// is refused (the owner's ruling of 2026-10-29). Speech follows CORE-7: the screen reader reads the
+/// control; a control whose label carries its own state is re-read for the pilot after the press
+/// (announceChange); a failure is said as an alert.
 /// </summary>
 public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 {
@@ -131,13 +132,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     public bool IsBridgeConnected => _client.IsReady && _popoutReady;
-
-    /// <summary>
-    /// True (as shipped since the team review of 2026-10-27): the window reads the tablet and moves
-    /// between its pages, and refuses everything else. A misread must never become a press; the classic
-    /// window does the pressing, checked against a variable or BlueBird's settings file.
-    /// </summary>
-    public bool ReadOnly { get; init; } = true;
 
     /// <summary>Starts the bridge's loop (once). It reads only while <see cref="SetActive"/> says the
     /// window is shown.</summary>
@@ -448,14 +442,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         if (_built == null || !_built.Actions.TryGetValue(aidx, out var act)) return;
         switch (act.Kind)
         {
-            case Bbs757EfbElements.ActionKind.Classic:
-                PostUi(_io.OpenClassicWindow);
-                return;
             case Bbs757EfbElements.ActionKind.Refresh:
                 await ReadIfChangedAsync(ct, force: true);
-                return;
-            case Bbs757EfbElements.ActionKind.Refuse:
-                Alert(act.Refusal ?? "That cannot be pressed from here.");
                 return;
             case Bbs757EfbElements.ActionKind.ScrollDown:
             case Bbs757EfbElements.ActionKind.ScrollUp:
@@ -469,13 +457,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 return;
         }
         var item = act.Item;
-        // Read-only: only page navigation is tapped (Home, the tablet's menus); a wrong one only changes
-        // the page shown. Everything else is the classic window's.
-        if (ReadOnly && !(item != null && (item.Kind == Bbs757EfbKind.Menu || item.Key == "btn:HOME")))
-        {
-            Alert(Bbs757EfbElements.ReadOnlyRefusal);
-            return;
-        }
         if (act.Kind == Bbs757EfbElements.ActionKind.Tap && item != null)
         {
             string words = item.Key.StartsWith("btn:", StringComparison.Ordinal) ? item.Key.Substring(4).Split('|').Last().Split('@')[0] : "";
@@ -496,17 +477,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 Alert(outcome.Text ?? RunProblemText(outcome.Run));
                 await ReadIfChangedAsync(ct, force: true);
                 return;
-            }
-            if (words == "REMOVE ALL")
-            {
-                double? ext = await _io.ReadRegistered(Bbs757GroundPower.ExtPwrOnKey, ct);
-                if (Bbs757GroundServices.RemoveAllRefusal(ext) is { } r) { Alert(r); return; }
-            }
-            if (Bbs757EfbElements.PresetName(words) is { } preset)
-            {
-                bool? ground = await _io.OnGround(ct);
-                if (ground is not bool g) { Alert("Whether the aircraft is on the ground cannot be read, so the preset was not loaded."); return; }
-                if (Bbs757EfbLayout.PresetRefusal(preset, g) is { } pr) { Alert(pr); return; }
             }
         }
         if (item == null) return;
@@ -573,14 +543,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private async Task SetAsync(int aidx, string value, CancellationToken ct)
     {
         if (_built == null || !_built.Actions.TryGetValue(aidx, out var act) || act.Item is not { } item) return;
-        if (ReadOnly) { Alert(Bbs757EfbElements.ReadOnlyRefusal); Push(); return; }
-        if (act.Kind == Bbs757EfbElements.ActionKind.Refuse) { Alert(act.Refusal ?? "That cannot be changed from here."); Push(); return; }
-        if (Bbs757EfbScreen.UpdateGuard.Contains(item.Hit))
-        {
-            var moved = await OutOfGuardAsync(item, ct);
-            if (moved == null) { Alert(Bbs757EfbElements.GuardRefusal); Push(); return; }
-            item = moved;
-        }
         if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
         {
             bool want = value == "true";
@@ -592,22 +554,21 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         }
         if (item.Kind == Bbs757EfbKind.Slider && item.Slider is { } sl)
         {
-            var options = Bbs757EfbElements.OptionsFor(item);
+            var options = Bbs757EfbElements.OptionsFor(item, _model?.PageName ?? "");
             int x;
             if (options != null)
             {
-                int target = Array.FindIndex(options, o => string.Equals(o, value, StringComparison.OrdinalIgnoreCase));
+                int target = IndexOfChoice(options, value);
                 if (target < 0) return;
-                x = Bbs757EfbElements.OptionX(sl, target, options.Length);
+                x = Bbs757EfbPress.ChoiceX(sl, target, options.Count);
                 for (int attempt = 0; attempt < 4; attempt++)
                 {
                     await TapAsync(new Point(x, item.Hit.Y), ct);
-                    if (await ConfirmAsync(m => string.Equals(Find(m, item.Key)?.Value, options[target], StringComparison.OrdinalIgnoreCase), ct)) return;
+                    if (await ConfirmAsync(m => ChoiceRead(m, item.Key, options) == target, ct)) return;
                     // Off by one: step toward it by a third of an option.
-                    var now = Find(_model, item.Key)?.Value;
-                    int at = now == null ? -1 : Array.FindIndex(options, o => string.Equals(o, now, StringComparison.OrdinalIgnoreCase));
+                    int at = ChoiceRead(_model, item.Key, options);
                     if (at < 0) break;
-                    double seg = (double)(sl.TrackRight - sl.TrackLeft) / Math.Max(1, options.Length - 1);
+                    double seg = (double)(sl.TrackRight - sl.TrackLeft) / Math.Max(1, options.Count - 1);
                     x += (int)Math.Round(Math.Sign(target - at) * Math.Max(4, seg / 3));
                 }
                 Alert($"{item.Text} could not be set to {value}.");
@@ -640,31 +601,21 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private static Bbs757EfbItem? Find(Bbs757EfbScreenModel? m, string key) =>
         m?.Items.FirstOrDefault(i => i.Key == key) ?? m?.Menu.FirstOrDefault(i => i.Key == key);
 
-    /// <summary>
-    /// A control in the update guard on a page that scrolls: scroll it out of the guard (one step down,
-    /// up to three), read the page again and return the control where it is now; null when it never
-    /// leaves the guard (then nothing is tapped). Measured: one step moves the Callouts list ~130 px.
-    /// </summary>
-    private async Task<Bbs757EfbItem?> OutOfGuardAsync(Bbs757EfbItem item, CancellationToken ct)
+    /// <summary>The index among <paramref name="options"/> of the word <paramref name="value"/> (case ignored); -1 when it is none.</summary>
+    private static int IndexOfChoice(IReadOnlyList<string> options, string value)
     {
-        var now = item;
-        for (int i = 0; i < 3 && Bbs757EfbScreen.UpdateGuard.Contains(now.Hit); i++)
-        {
-            int dir = now.Hit.Y < Bbs757EfbScreen.UpdateGuard.Top + Bbs757EfbScreen.UpdateGuard.Height / 2 ? -1 : 1;
-            await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y, dir * Bbs757EfbScreen.WheelStep, ct);
-            await Task.Delay(400, ct);
-            await ReadIfChangedAsync(ct, force: true);
-            var found = Find(_model, item.Key);
-            if (found == null) return null;
-            now = found;
-        }
-        return Bbs757EfbScreen.UpdateGuard.Contains(now.Hit) ? null : now;
+        for (int index = 0; index < options.Count; index++)
+            if (string.Equals(options[index], value, StringComparison.OrdinalIgnoreCase)) return index;
+        return -1;
     }
+
+    /// <summary>The choice the slider row <paramref name="key"/> of the page <paramref name="m"/> reads as, among
+    /// <paramref name="options"/>; -1 when the row is not on the page or the reader gave none.</summary>
+    private static int ChoiceRead(Bbs757EfbScreenModel? m, string key, IReadOnlyList<string> options) =>
+        m != null && Find(m, key) is { } row ? Bbs757EfbElements.CurrentChoice(row, m.PageName, options) : -1;
 
     private async Task TapAsync(Point p, CancellationToken ct)
     {
-        // Never into the update guard (the agent would refuse it too).
-        if (Bbs757EfbScreen.UpdateGuard.Contains(p)) { Alert(Bbs757EfbElements.GuardRefusal); return; }
         var run = await _client.RunAsync(new[] { (new EfbPoint(p.X, p.Y), 250) }, ct);
         if (run != Bbs757EfbRunResult.Done) Alert(RunProblemText(run));
     }
@@ -736,7 +687,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private void Push()
     {
         string? alert = _alert != null && Environment.TickCount64 < _alertUntilMs ? _alert : null;
-        _built = Bbs757EfbElements.Build(_model, alert, ReadOnly);
+        _built = Bbs757EfbElements.Build(_model, alert, Array.Empty<Bbs757EfbExtraElement>());
         Raise(StateTypeElements, _built.Data);
     }
 

@@ -54,8 +54,8 @@ public static class Bbs757EfbVocabulary
         "APU FIRE", "FWD CARGO FIRE", "AFT CARGO FIRE",
         // Checklist
         "RESET", "RESET ALL", "INTERACTIVE",
-        // Navigation
-        "SIGN IN TO NAVIGRAPH",
+        // Navigation (REMOVE FP is the ACARS dashboard's: three edits from REMOVE ALL, which it must not become)
+        "SIGN IN TO NAVIGRAPH", "REMOVE FP",
         // Systems
         "SELECT",
         // Settings > General
@@ -89,24 +89,17 @@ public static class Bbs757EfbVocabulary
     {
         "ON", "OFF", "AUTO", "MANUAL", "AUTOMATIC", "DEFAULT", "REALISTIC", "RUDDER", "FAST", "EASY", "OPEN", "CLOSED",
         "STANDARD", "QUICK", "INSTANT", "NEVER", "1 MIN", "2 MIN", "5 MIN", "FULL (7 MIN+)", "IMPERIAL", "METRIC",
-        "HOPPIE", "SAYINTENTIONS", "OPTION 1", "OPTION 2", "TRACK UP", "HEADING UP", "MSFS", "BBS", "DARK BLUE",
+        "HOPPIE", "SAYINTENTIONS", "OPTION 1", "OPTION 2", "HDG", "TRK", "MSFS", "BBS", "DARK BLUE",
         "LIGHT BLUE", "DARK GREY", "LIGHT GREY", "DARK", "CHECKED", "ALIGNED", "NORMAL", "CLOSED & LOCKED",
     };
 
     /// <summary>
-    /// The option lists of the settings that are sliders, in the slider's order (left to right),
-    /// for the window's choice lists. A slider not listed is offered as a number (seconds, miles)
-    /// or as left/right steps. Measured by tapping along each track (docs/b757/evidence/flight-11.md).
+    /// The option lists, by the slider's label and in its order (left to right), of sliders the settings catalog
+    /// (<see cref="Bbs757EfbSettings"/>) does not hold; a slider on no list is offered as a number. None is listed: the catalog holds
+    /// every slider measured so far (IRS alignment time, boarding and load rate, the notifications fade-out timer, the colors theme,
+    /// the CPDLC network) and gives their choices in its own order, which is the tablet's (<see cref="Bbs757EfbElements.OptionsFor"/>).
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, string[]> SliderOptions = new Dictionary<string, string[]>
-    {
-        ["IRS ALIGNMENT TIME"] = new[] { "INSTANT", "1 MIN", "2 MIN", "5 MIN", "FULL (7 MIN+)" },
-        ["BOARDING & LOAD RATE"] = new[] { "REALISTIC", "STANDARD", "QUICK", "INSTANT" },
-        ["NOTIFICATIONS FADE-OUT TIMER"] = new[] { "2 SEC", "4 SEC", "6 SEC", "8 SEC", "10 SEC", "12 SEC", "14 SEC", "16 SEC",
-                                                   "18 SEC", "20 SEC", "22 SEC", "24 SEC", "26 SEC", "28 SEC", "30 SEC", "NEVER" },
-        ["EFB COLORS THEME"] = new[] { "DARK", "LIGHT BLUE", "DARK GREY", "LIGHT GREY", "DARK BLUE" },
-        ["CPDLC NETWORK"] = new[] { "HOPPIE", "SAYINTENTIONS" },
-    };
+    public static readonly IReadOnlyDictionary<string, string[]> SliderOptions = new Dictionary<string, string[]>();
 
     /// <summary>Rows whose value is a credential: never shown, spoken or logged (plan 11).</summary>
     public static readonly string[] CredentialLabels = { "SIMBRIEF ID NUMBER", "HOPPIE LOGON CODE", "SAYINTENTIONS ACARS KEY" };

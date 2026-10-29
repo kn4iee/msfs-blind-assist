@@ -214,20 +214,13 @@ internal static partial class Program
         return null;
     }
 
-    /// <summary>Where to tap, where to tap to put it back (sliders), and how the tap was chosen.</summary>
+    /// <summary>Where to tap, where to tap to put it back (sliders), and how the tap was chosen. A slider is tapped 30 percent along its
+    /// track from the knob, whatever its choices: the settings catalog gives the window their words and places, and the test measures
+    /// what a tap changes, not which choice it names.</summary>
     private static (Point Tap, Point? Back, string How) TapPlan(Bbs757EfbItem i)
     {
         if (i.Kind == Bbs757EfbKind.Slider && i.Slider is { } sl)
         {
-            string name = i.Key.StartsWith("sld:", StringComparison.Ordinal) ? i.Key[4..] : "";
-            if (Bbs757EfbVocabulary.SliderOptions.TryGetValue(name, out var opts))
-            {
-                int cur = Array.FindIndex(opts, o => string.Equals(o, i.Value, StringComparison.OrdinalIgnoreCase));
-                if (cur < 0) return (Point.Empty, null, $"the value '{i.Value}' is none of its options");
-                int target = cur + 1 < opts.Length ? cur + 1 : cur - 1;
-                return (new Point(OptX(sl, target, opts.Length), i.Hit.Y), new Point(OptX(sl, cur, opts.Length), i.Hit.Y),
-                    $"option {opts[cur]} -> {opts[target]}");
-            }
             double pct = sl.TrackRight > sl.TrackLeft ? 100.0 * (sl.KnobX - sl.TrackLeft) / (sl.TrackRight - sl.TrackLeft) : 0;
             double tgt = pct <= 50 ? pct + 30 : pct - 30;
             int x = sl.TrackLeft + (int)Math.Round(tgt / 100 * (sl.TrackRight - sl.TrackLeft));
@@ -235,9 +228,6 @@ internal static partial class Program
         }
         return (i.Hit, null, "hit");
     }
-
-    private static int OptX(Bbs757EfbSlider s, int index, int count) =>
-        count <= 1 ? s.TrackLeft : s.TrackLeft + (int)Math.Round((double)index * (s.TrackRight - s.TrackLeft) / (count - 1));
 
     /// <summary>The control on a page read: the same key, else the control of the same kind whose box overlaps the
     /// old one most (a tile's words change with its state, and its key with them).</summary>

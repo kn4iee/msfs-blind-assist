@@ -382,6 +382,28 @@ public class Bbs757EfbPressTests
     // ---- Fingerprint and PageUnchanged ---------------------------------------------------------------------------------
 
     [Fact]
+    public void Two_reads_that_say_the_same_have_the_same_fingerprint()
+    {
+        // A refresh of an unchanged tablet must say the same thing: a pixel of wobble in a box moves nothing the pilot would hear, a misread does.
+        var a = Ground(Tile("GPU", "btn:GPU", new Rectangle(300, 300, 80, 40)));
+        var b = Ground(Tile("GPU", "btn:GPU", new Rectangle(301, 299, 80, 40)));
+        var c = Ground(Tile("GPV", "btn:GPV", new Rectangle(300, 300, 80, 40)));
+
+        Assert.Equal(Bbs757EfbPress.Fingerprint(a), Bbs757EfbPress.Fingerprint(b));
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(a), Bbs757EfbPress.Fingerprint(c));
+    }
+
+    [Fact]
+    public void A_notification_appearing_over_an_unchanged_page_changes_the_fingerprint()
+    {
+        // The bridge pushes a read only when its fingerprint moved: a notification over a page that did not change must count.
+        var quiet = Ground(Tile("GPU", "btn:GPU", new Rectangle(300, 300, 80, 40)));
+        var toast = quiet with { Notices = new[] { GpuConnected } };
+
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(quiet), Bbs757EfbPress.Fingerprint(toast));
+    }
+
+    [Fact]
     public void The_fingerprint_covers_the_top_bar_the_notices_and_the_question()
     {
         var page = Ground(ReqFuelTruck());
