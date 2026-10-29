@@ -82,6 +82,39 @@ test('an open avionics bay door reads Open', () => {
   assert.ok(els.some(e => e.kind === 'button' && e.text === 'AVIONICS BAY door: Open'));
 });
 
+// Review 2026-10-29 (I2): a set command whose index now names a button (the agent re-stamps every element on each scrape,
+// and the shell learns the new indices a push later) went to typing, whose first act is a press: on GROUND it placed the
+// chocks, moved a door or connected the GPU, then failed. setValue acts only on fields and choices; anything else is
+// "not a field", untouched.
+test('a set command on a button presses nothing', () => {
+  const { load } = require('./run');
+  const { window, A } = load('ground');
+  const els = JSON.parse(A.scrape()).elements;
+  let clicks = 0;
+  window.document.addEventListener('click', () => clicks++, true);
+  window.document.addEventListener('mousedown', () => clicks++, true);
+  for (const b of els.filter(e => e.kind === 'button').slice(0, 5))
+    assert.equal(A.setValue(b.idx, '1'), 'not a field', b.text);
+  assert.equal(clicks, 0);
+});
+
+// [A350-6] (review 2026-10-29, I7: nothing exercised it) A field is typed as key events per character, then Enter: a bare
+// value set shows in the field but COMPUTE ignores it.
+test('a field is typed key by key, then Enter', () => {
+  const { load } = require('./run');
+  const { window, A } = load('loadsheet');
+  const field = JSON.parse(A.scrape()).elements.find(e => e.controlType === 'text' && !e.disabled);
+  assert.ok(field, 'a field on LOADSHEET');
+  const input = window.document.querySelector('[' + A.ATTR + '="' + field.idx + '"]');
+  const seen = [];
+  for (const type of ['keydown', 'keypress', 'input', 'keyup', 'change'])
+    input.addEventListener(type, ev => seen.push(type + (ev.key ? ':' + ev.key : '')));
+  assert.equal(A.setValue(field.idx, '12'), 'ok');
+  assert.deepEqual(seen, ['input', 'keydown:1', 'keypress:1', 'input', 'keyup:1', 'keydown:2', 'keypress:2', 'input', 'keyup:2',
+    'keydown:Enter', 'keyup:Enter', 'change']);
+  assert.equal(input.value, '12');
+});
+
 // The OIS listens on a door's indicator, not its clickspot (live: a press on the clickspot did nothing).
 test('pressing a door presses its indicator', () => {
   const { load } = require('./run');

@@ -989,6 +989,9 @@
         if ((e.checked ? 'true' : 'false') !== String(text)) A.press(e);
         return 'ok';
       }
+      // Typing presses the field first: anything but a text field is no field to type into (review 2026-10-29: a set
+      // command whose index had come to name a button placed the chocks, moved a door or connected the GPU).
+      if (e.tagName !== 'INPUT' || !/^(text|number|search|tel|email|password|)$/i.test(e.type || '')) return 'not a field';
       A.type(e, String(text));
       return 'ok';
     } catch (err) { return 'error: ' + err.message; }
