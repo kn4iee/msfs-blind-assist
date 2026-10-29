@@ -570,6 +570,8 @@ namespace MSFSBlindAssist.SimConnect
                     // How a choice is applied: "enter" (the A350 OIS's, whose options act at once) on Enter only, never at
                     // each arrow step. Present only when the agent sets it, so no other EFB's push changes.
                     if (!string.IsNullOrEmpty(elements[i].commit)) data[$"items.{i}.commit"] = elements[i].commit!;
+                    // A field never shown or read out (the A350 OIS's IDs under STREAMER MODE, a password); present only when set.
+                    if (elements[i].secret) data[$"items.{i}.secret"] = "true";
                     // Options for a real <select>; unit-separator joined.
                     if (elements[i].options is { Count: > 0 })
                         data[$"items.{i}.options"] = string.Join(OptionSeparator, elements[i].options!);
@@ -604,6 +606,7 @@ namespace MSFSBlindAssist.SimConnect
                   .Append('/').Append(e.kind).Append('/').Append(e.level)
                   .Append('/').Append(e.disabled ? '1' : '0')
                   .Append('/').Append(e.key)
+                  .Append('/').Append(e.commit).Append('/').Append(e.secret ? '1' : '0')
                   .Append('/').Append(e.options is { Count: > 0 } ? string.Join(OptionSeparator, e.options!) : "")
                   .Append('|');
             return sb.ToString();
@@ -778,6 +781,8 @@ namespace MSFSBlindAssist.SimConnect
             public string? key { get; set; }
             // How the shell applies a choice: "enter" (the A350 OIS) on Enter only; absent, as each change.
             public string? commit { get; set; }
+            // A field the shell never shows or reads out (the A350 OIS's IDs under STREAMER MODE, a password).
+            public bool secret { get; set; }
             public List<string>? options { get; set; }
             public double? min { get; set; }
             public double? max { get; set; }

@@ -35,6 +35,26 @@ public class CoherentPmdgEfbClientSignatureTests
     public void AChangedKey_ChangesTheSignature() =>
         Assert.NotEqual(Sig(Runway("step-next:Runway")), Sig(Runway("step-next:Arrival Runway")));
 
+    // The shell renders on both flags: a field turning secret becomes a password field (the A350 OIS's IDs under STREAMER
+    // MODE), a choice committed on Enter takes other handlers (review 2026-10-29, OIS I6 and I1).
+    [Fact]
+    public void AFieldTurningSecret_ChangesTheSignature()
+    {
+        var plain = Runway(null);
+        var secret = Runway(null);
+        secret.secret = true;
+        Assert.NotEqual(Sig(plain), Sig(secret));
+    }
+
+    [Fact]
+    public void AChoiceCommittedOnEnter_ChangesTheSignature()
+    {
+        var onChange = Runway(null, "RW06L", "RW06R");
+        var onEnter = Runway(null, "RW06L", "RW06R");
+        onEnter.commit = "enter";
+        Assert.NotEqual(Sig(onChange), Sig(onEnter));
+    }
+
     [Fact]
     public void AKeyAppearing_ChangesTheSignature() =>
         Assert.NotEqual(Sig(Runway(null)), Sig(Runway("step-value:Runway")));

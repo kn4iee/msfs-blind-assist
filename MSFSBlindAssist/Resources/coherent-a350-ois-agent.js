@@ -393,6 +393,29 @@
     return { label: label, text: label && said ? label + ', ' + said : (label || said) };
   };
 
+  // OPTIONS > 3RD PARTY: while STREAMER MODE is ON, the IDs and keys beside it are kept secret, and a password field always
+  // is (review 2026-10-29, I6: a streaming pilot's audience hears the screen reader). The scope holding them, or null.
+  A.SECRET_LABEL = /\b(ID|KEY|LOGON|PASSWORD|TOKEN)\b/i;
+  A.streamerScope = function () {
+    var groups = document.querySelectorAll('.option-group');
+    for (var g = 0; g < groups.length; g++) {
+      var l = groups[g].querySelector('.option-group-label');
+      if (!l || A.norm(l.innerText).toUpperCase() !== 'STREAMER MODE') continue;
+      var on = groups[g].querySelector('input[type=radio]:checked');
+      var lab = on && on.id ? groups[g].querySelector('label[for="' + on.id + '"]') : null;
+      return lab && A.norm(lab.innerText).toUpperCase() === 'ON' ? (groups[g].closest('.options-system') || document.body) : null;
+    }
+    return null;
+  };
+  A.isSecret = function (input, label, scope) {
+    return (input.type || '').toLowerCase() === 'password' || (!!scope && scope.contains(input) && A.SECRET_LABEL.test(label || ''));
+  };
+  // A secret field's name: hidden, and how long it is, never what it holds.
+  A.hiddenName = function (name, value) {
+    var n = (value || '').length;
+    return name + ', hidden, ' + (n === 0 ? 'empty' : n === 1 ? '1 character' : n + ' characters');
+  };
+
   // Claims a field's row-mates (its label and unit cells) before the walk reaches them, so they are
   // read once, inside the field's label, never also as loose text above it.
   A.claimRowCells = function (input) {
@@ -501,6 +524,7 @@
       // chart and map pages have none). Fields' remembered labels are kept per page.
       var act = document.querySelector('.bottom-bar-button.active');
       var out = [], page = act ? A.norm(act.innerText) : '', idx = 0, seen = {};
+      var streamer = A.streamerScope();
       var push = function (el, item) {
         if (el) { idx++; el.setAttribute(A.ATTR, String(idx)); item.idx = idx; } else item.idx = 0;
         out.push(item);
@@ -573,10 +597,12 @@
             }
             continue;
           }
-          var field = e.querySelector('input[type=number],input[type=text],input:not([type])');
+          var field = e.querySelector('input[type=number],input[type=text],input[type=password],input:not([type])');
           if (field) {
             var hint = A.norm((e.innerText || '').replace(label, ''));
-            push(field, { kind: '', controlType: 'text', text: label + (hint ? ', ' + hint : ''), value: field.value, disabled: field.disabled, key: 'field:' + label });
+            var hide = A.isSecret(field, label, streamer);
+            push(field, { kind: '', controlType: 'text', text: hide ? A.hiddenName(label, field.value) : label + (hint ? ', ' + hint : ''),
+              value: field.value, disabled: field.disabled, key: 'field:' + label, secret: hide || undefined });
             continue;
           }
           var range = e.querySelector('input[type=range]');
@@ -649,7 +675,9 @@
             push(e, { kind: '', controlType: 'range', text: rl, value: e.value, min: parseFloat(e.min || '0'), max: parseFloat(e.max || '100'), step: parseFloat(e.step || '1'), key: 'field:' + (fl.label || rl) });
             continue;
           }
-          push(e, { kind: '', controlType: 'text', text: rl, value: e.value, disabled: e.disabled, key: 'field:' + (fl.label || rl) });
+          var hideField = A.isSecret(e, fl.label, streamer);
+          push(e, { kind: '', controlType: 'text', text: hideField ? A.hiddenName(fl.label || rl, e.value) : rl, value: e.value, disabled: e.disabled,
+            key: 'field:' + (fl.label || rl), secret: hideField || undefined });
           continue;
         }
 

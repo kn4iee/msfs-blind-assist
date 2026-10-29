@@ -205,6 +205,21 @@ test('a keyed field keeps its node and the focus when its label gains a result',
   assert.strictEqual(inp.getAttribute('aria-label'), 'AIRP, OK', 'the result is not in the name');
 });
 
+// The A350 OIS's IDs under STREAMER MODE (review 2026-10-29, OIS I6): a field the reader flags secret is a password field,
+// so neither the screen reader nor the screen shows what it holds, and it is a plain field again once no longer secret.
+test('a secret field is a password field, and plain again once no longer secret', (t) => {
+  const s = loadShell(t);
+  s.render('Options', [field(8, 'HOPPIE LOGON, hidden, 4 characters', 'ABCD', { key: 'field:HOPPIE LOGON', secret: true })]);
+  const inp = s.window.document.querySelector('#list input');
+  assert.strictEqual(inp.type, 'password');
+  assert.strictEqual(inp.value, 'ABCD', 'Enter must commit the value it holds, never an empty one');
+  s.render('Options', [field(8, 'HOPPIE LOGON', 'ABCD', { key: 'field:HOPPIE LOGON' })]);
+  assert.strictEqual(s.window.document.querySelector('#list input'), inp, 'the field was rebuilt');
+  assert.strictEqual(inp.type, 'text');
+  s.render('Options', [field(8, 'HOPPIE LOGON, hidden, 4 characters', 'ABCD', { key: 'field:HOPPIE LOGON', secret: true })]);
+  assert.strictEqual(inp.type, 'password');
+});
+
 test('a slider or a choice kept on its node is named by its new label', (t) => {
   const s = loadShell(t);
   const slider = { idx: 2, kind: '', controlType: 'range', text: 'MASTER VOLUME', value: '50', min: 0, max: 100, step: 1, clickable: false, level: 0, live: '', disabled: false, key: 'field:MASTER VOLUME' };

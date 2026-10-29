@@ -337,6 +337,7 @@ public class FbwEfbForm : Form
                 case "announceChange": el.AnnounceChange = kv.Value == "true"; break;
                 case "key":       el.Key = kv.Value; break;
                 case "commit":    el.Commit = kv.Value; break;
+                case "secret":    el.Secret = kv.Value == "true"; break;
                 case "options":   el.Options = string.IsNullOrEmpty(kv.Value) ? null : kv.Value.Split(OptionSeparator); break;
                 case "min":       el.Min = ParseInv(kv.Value); break;
                 case "max":       el.Max = ParseInv(kv.Value); break;
@@ -419,6 +420,7 @@ public class FbwEfbForm : Form
             announceChange = e.AnnounceChange,
             key = e.Key,
             commit = e.Commit,
+            secret = e.Secret,
             options = e.Options,
             min = e.Min,
             max = e.Max,
@@ -542,7 +544,16 @@ public class FbwEfbForm : Form
     private string StructureSignature()
     {
         return _currentPage + "" + string.Join("",
-            _elements.Select(e => e.Index + "|" + (e.ControlType ?? "") + "|" + e.Clickable + "|" + e.Tag + "|" + e.Text));
+            _elements.Select(e => e.Index + "|" + (e.ControlType ?? "") + "|" + e.Clickable + "|" + e.Tag + "|" + e.Text + "|" + e.Secret));
+    }
+
+    /// <summary>What list mode says once Enter sets a field: its new value, except a secret's (the A350 OIS's IDs under
+    /// STREAMER MODE, a password), whose length alone is said (review 2026-10-29, OIS I6).</summary>
+    internal static string FieldSetSpoken(string fieldName, string value, bool secret)
+    {
+        if (!secret) return "Set " + (string.IsNullOrEmpty(fieldName) ? "field" : fieldName) + " to " + value;
+        int n = value.Length;
+        return "Set, hidden, " + (n == 0 ? "empty" : n == 1 ? "1 character" : n + " characters");
     }
 
     // The base (un-dimmed) label each control type shows, derived in ONE place so the build path and
@@ -737,11 +748,13 @@ public class FbwEfbForm : Form
                 AccessibleDescription = fieldDisabled ? "" : "Type a value and press Enter to set it.",
                 // Read-only, never Enabled = false: a disabled TextBox leaves the tab order, so the pilot
                 // could not reach the field to hear its value, or that it is greyed out.
-                ReadOnly = fieldDisabled
+                ReadOnly = fieldDisabled,
+                UseSystemPasswordChar = el.Secret
             };
             int idx = el.AgentIdx;   // stamped agent idx — what click/set look up
             string controlType = el.ControlType!;
             string fieldName = el.Text;
+            bool secret = el.Secret;
             tb.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Return)
@@ -758,7 +771,7 @@ public class FbwEfbForm : Form
                         ["value"] = tb.Text,
                         ["controlType"] = controlType
                     });
-                    _announcer.Announce("Set " + (string.IsNullOrEmpty(fieldName) ? "field" : fieldName) + " to " + tb.Text);
+                    _announcer.Announce(FieldSetSpoken(fieldName, tb.Text, secret));
                     e.Handled = true; e.SuppressKeyPress = true;
                 }
             };
@@ -875,6 +888,7 @@ public class FbwEfbForm : Form
         public bool AnnounceChange;   // agent opt-in: speak this control's post-press label change (MD-11 stepper arrows + tiles)
         public string Key = "";       // agent-stamped reconcile key for a control whose LABEL carries changing state; "" = key by label
         public string Commit = "";    // agent opt-in: "enter" applies a choice on Enter only, never at each arrow step (the A350 OIS)
+        public bool Secret;           // agent opt-in: a field never shown or read out (the A350 OIS's IDs under STREAMER MODE, a password)
         public string[]? Options;
         public double? Min;      // range (slider) bounds for controlType "range"
         public double? Max;
@@ -1077,7 +1091,9 @@ public class FbwEfbForm : Form
     if (type === 'in') {
       var fl = document.createElement('label'); fl.className = 'fld';
       var sp2 = document.createElement('span'); sp2.textContent = (text || 'Field') + ': '; fl.appendChild(sp2);
-      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'in';
+      // A secret (the A350 OIS's IDs under STREAMER MODE, a password) is a password field: never shown, never read out.
+      var inp = document.createElement('input'); inp.type = it.secret ? 'password' : 'text'; inp.className = 'in';
+      if (it.secret) inp.setAttribute('autocomplete', 'off');
       inp.value = it.value || ''; if (it.disabled) inp.disabled = true;
       inp.setAttribute('data-idx', String(it.idx)); inp.setAttribute('aria-label', text || 'Field');
       function commit() { post({ type: 'set', idx: inp.getAttribute('data-idx'), value: inp.value, controlType: 'text' }); }
@@ -1164,6 +1180,7 @@ public class FbwEfbForm : Form
     }
     if (type === 'in') {
       c.disabled = !!it.disabled;
+      var asType = it.secret ? 'password' : 'text'; if (c.type !== asType) c.type = asType;
       if (document.activeElement !== c) { var nv = it.value || ''; if (c.value !== nv) c.value = nv; }
       var sp2 = node.querySelector('span'); if (sp2) setText(sp2, (text || 'Field') + ': ');
       setName(c, text || 'Field');
