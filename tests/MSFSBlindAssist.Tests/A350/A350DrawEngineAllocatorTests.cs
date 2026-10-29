@@ -27,8 +27,9 @@ public class A350DrawEngineAllocatorTests
         .Concat(new byte[] { 0x49, 0x04, 0x40, 0x00, 0x0B }).ToArray();
 
     /// <summary>A CTR gauge whose Draw is <paramref name="draw"/> (two i32 locals besides the object), over a module
-    /// whose allocator traps when reached.</summary>
-    private static byte[] Module(Func<Fns, byte[]> draw)
+    /// whose allocator traps when reached. <paramref name="otherSignatures"/>: a version whose free returns a value and
+    /// whose internal_memalign keeps dlmalloc's mstate first.</summary>
+    private static byte[] Module(Func<Fns, byte[]> draw, bool otherSignatures = false)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -58,10 +59,11 @@ public class A350DrawEngineAllocatorTests
         int dlmalloc = m.Func("dlmalloc", tI, new byte[] { 0x00 });
         int malloc = m.Func("malloc", tI, new byte[] { 0x20, 0x00 }.Concat(Call(dlmalloc)).ToArray());
         int dlfree = m.Func("dlfree", tCtx, new byte[] { 0x00 });
-        int free = m.Func("free", tCtx, new byte[] { 0x20, 0x00 }.Concat(Call(dlfree)).ToArray());
+        int free = otherSignatures ? m.Func("free", tI, new byte[] { 0x00 })
+            : m.Func("free", tCtx, new byte[] { 0x20, 0x00 }.Concat(Call(dlfree)).ToArray());
         int calloc = m.Func("calloc", tII, new byte[] { 0x00 });
         int realloc = m.Func("realloc", tII, new byte[] { 0x00 });
-        int memalign = m.Func("internal_memalign", tII, new byte[] { 0x00 });
+        int memalign = m.Func("internal_memalign", otherSignatures ? tIII : tII, new byte[] { 0x00 });
         int posix = m.Func("posix_memalign", tIII, new byte[] { 0x00 });
         var fns = new Fns(text, malloc, free, calloc, realloc, memalign, posix, flag, dlmalloc, dlfree);
         m.Func("CTR::Draw()", tCtx, draw(fns), new byte[] { 0x01, 0x02, I32 });
@@ -106,6 +108,10 @@ public class A350DrawEngineAllocatorTests
     private static byte[] TextOfLocal(Fns f, int length) => new byte[] { 0x41, 0x01, 0x43 }.Concat(Float(10)).Append((byte)0x43)
         .Concat(Float(20)).Concat(new byte[] { 0x20, 0x01, 0x20, 0x01 }).Concat(I32Const(length)).Append((byte)0x6A)
         .Concat(Call(f.Text)).Append((byte)0x1A).ToArray();
+
+    // "OK" drawn from a fresh block: the draw went on to its end.
+    private static byte[] OkText(Fns f) => I32Const(2).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
+        .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(0x4B4F)).Concat(new byte[] { 0x3B, 0x01, 0x00 }).Concat(TextOfLocal(f, 2)).ToArray();
 
     // local 1 = <allocation>; then a 32-bit word stored at local 1 + offset.
     private static byte[] Store(int offset, uint word) => new byte[] { 0x20, 0x01 }.Concat(I32Const(unchecked((int)word)))
@@ -168,5 +174,64 @@ public class A350DrawEngineAllocatorTests
             .Concat(TextOfLocal(f, 2))
             .Concat(new byte[] { 0x0B, 0x0B }).ToArray());
         Assert.Equal("OK", Assert.Single(texts).Text);
+    }
+
+    // calloc(0xFFFFFFFF, 0xFFFFFFFF): the size overflows 64 bits and was answered with a 1-byte block (review 2026-10-29);
+    // C's calloc answers NULL when count times size does not fit.
+    [Fact]
+    public void Calloc_of_a_size_that_does_not_fit_fails()
+    {
+        var texts = Draw(f => I32Const(-1).Concat(I32Const(-1)).Concat(Call(f.Calloc))
+            .Concat(new byte[] { 0x04, 0x40, 0x00, 0x0B })                                        // calloc != 0: trap
+            .Concat(OkText(f)).ToArray());
+        Assert.Equal("OK", Assert.Single(texts).Text);
+    }
+
+    // posix_memalign with its pointer's address outside the memory: the write failed inside the host, which answered 0
+    // (success) with nothing written (review 2026-10-29). It fails with ENOMEM (48), as when the head room is used up.
+    [Fact]
+    public void Posix_memalign_to_an_address_out_of_the_memory_fails()
+    {
+        var texts = Draw(f => I32Const(-16).Concat(I32Const(16)).Concat(I32Const(8)).Concat(Call(f.PosixMemalign))
+            .Concat(I32Const(48)).Append((byte)0x47)                                                // i32.ne
+            .Concat(new byte[] { 0x04, 0x40, 0x00, 0x0B })                                        // != 48: trap
+            .Concat(OkText(f)).ToArray());
+        Assert.Equal("OK", Assert.Single(texts).Text);
+    }
+
+    // A draw asking for more than the head room (MFD::Draw reaches OANSAirportRenderer::allocateSharedBuffer) gets NULL,
+    // and the engine says so, with the heap the draw used (review 2026-10-29: it was silent, and repeats every draw).
+    [Fact]
+    public void A_draw_that_runs_out_of_head_room_says_so()
+    {
+        using (var e = Engine(Module(f => I32Const(0x7FFFFFF0).Concat(Call(f.Malloc)).Append((byte)0x1A).Concat(OkText(f)).ToArray())))
+        {
+            e.Load(Copy());
+            var cap = e.Draw("CTR");
+            Assert.True(cap.Ok, cap.Error + "\n" + e.LastTrap);
+            Assert.True(e.LastHeapExhausted);
+        }
+        using (var e = Engine(Module(OkText)))
+        {
+            e.Load(Copy());
+            Assert.True(e.Draw("CTR").Ok);
+            Assert.False(e.LastHeapExhausted);
+            Assert.InRange(e.LastHeapBytes, 2, 1 << 20);
+        }
+    }
+
+    // A version whose allocator functions take other arguments (dlmalloc's mstate kept in internal_memalign) or return
+    // a value (a free returning one) is left alone there: a bare return where a result is due does not even compile,
+    // and an answer reading shifted arguments would hand out wrong blocks (review 2026-10-29). The rest is answered.
+    [Fact]
+    public void An_allocator_function_with_another_signature_is_left_alone()
+    {
+        var patched = A350ModulePatcher.Patch(Module(OkText, otherSignatures: true));
+        using var engine = A350ModuleCache.CreateEngine();
+        using var module = Wasmtime.Module.FromBytes(engine, "a350", patched.Bytes);   // valid: compiles
+        Assert.Equal(new[] { "calloc", "dlfree", "dlmalloc", "malloc", "posix_memalign", "realloc" },
+            patched.Allocator.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(new[] { "free", "internal_memalign" }, patched.AllocatorLeftAlone.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(8, A350ModulePatcher.Patch(Module(OkText)).Allocator.Count);   // the usual signatures: every one answered
     }
 }

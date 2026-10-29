@@ -5,7 +5,14 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>A patched scratch copy of the A350 module, and the UI element classes in the order their
 /// draw hook numbers them.</summary>
-public sealed record A350PatchedModule(byte[] Bytes, IReadOnlyList<string> UiDrawClasses);
+public sealed record A350PatchedModule(byte[] Bytes, IReadOnlyList<string> UiDrawClasses)
+{
+    /// <summary>The allocator functions the engine answers [A350-10].</summary>
+    public IReadOnlyList<string> Allocator { get; init; } = Array.Empty<string>();
+
+    /// <summary>The allocator functions found with another signature than the patch's, left to run.</summary>
+    public IReadOnlyList<string> AllocatorLeftAlone { get; init; } = Array.Empty<string>();
+}
 
 /// <summary>
 /// Builds the scratch module the display engine runs: the A350's own module with a report call
@@ -31,7 +38,7 @@ public static class A350ModulePatcher
 
     /// <summary>The patch's version, part of the compiled module cache's key: bump it whenever the patch changes, or
     /// a module compiled from the older patch is loaded.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>The functions exported for the engine to call: export name emu_&lt;Class&gt;_Draw.</summary>
     public static readonly string[] DrawExports =
@@ -72,19 +79,24 @@ public static class A350ModulePatcher
     /// The A350's allocator (wasi-libc's dlmalloc), answered by the engine from the head room above the copy, free a
     /// no-op: a copy taken across frames tears the allocator's free lists, and live 2026-10-28 the draws that trapped
     /// died there (dlmalloc &lt;- malloc &lt;- operator new). Every entry point that reaches the heap state is answered,
-    /// so no allocation reads or writes the copy's heap. A function this A350 version lacks is left alone.
+    /// so no allocation reads or writes the copy's heap. A function this A350 version lacks is left alone, and so is one
+    /// with another signature than the answer reads (dlmalloc's mstate kept in internal_memalign would shift its
+    /// arguments; a bare return where a result is due does not compile).
     /// </summary>
-    private static IEnumerable<(string Name, byte[] Code)> AllocatorPatches(int hook) => new[]
+    private static IEnumerable<(string Name, byte[] Params, byte[] Results, byte[] Code)> AllocatorPatches(int hook) => new[]
     {
-        ("malloc", Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
-        ("dlmalloc", Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
-        ("calloc", Answer(hook, CallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
-        ("realloc", Answer(hook, ReallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
-        ("internal_memalign", Answer(hook, MemalignMagic, Get(0), Get(1), Zero, Zero, Zero)),
-        ("posix_memalign", Answer(hook, PosixMemalignMagic, Get(0), Get(1), Get(2), Zero, Zero)),
-        ("free", Return),
-        ("dlfree", Return),
+        ("malloc", I32s(1), I32s(1), Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
+        ("dlmalloc", I32s(1), I32s(1), Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
+        ("calloc", I32s(2), I32s(1), Answer(hook, CallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("realloc", I32s(2), I32s(1), Answer(hook, ReallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("internal_memalign", I32s(2), I32s(1), Answer(hook, MemalignMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("posix_memalign", I32s(3), I32s(1), Answer(hook, PosixMemalignMagic, Get(0), Get(1), Get(2), Zero, Zero)),
+        ("free", I32s(1), I32s(0), Return),
+        ("dlfree", I32s(1), I32s(0), Return),
     };
+
+    /// <summary>A signature's value types: <paramref name="n"/> i32s (0x7F).</summary>
+    private static byte[] I32s(int n) => Enumerable.Repeat((byte)0x7F, n).ToArray();
 
     /// <summary>The function defined by that one name, or null when none or several are.</summary>
     private static int? TryFindFunction(A350WasmModule mod, string name)
@@ -127,13 +139,25 @@ public static class A350ModulePatcher
         for (int k = 0; k < ui.Count; k++)
             hooks[mod.FindFunction(ui[k])] = Call(hook, ElementMagic, Get(0), Get(1), Const(k), Zero, Zero);
 
-        foreach (var (name, code) in AllocatorPatches(hook))
-            if (TryFindFunction(mod, name) is int fn)
-                hooks[fn] = code;
+        var answered = new List<string>();
+        var leftAlone = new List<string>();
+        foreach (var (name, parameters, results, code) in AllocatorPatches(hook))
+        {
+            if (TryFindFunction(mod, name) is not int fn)
+                continue;
+            var type = mod.Types[mod.FunctionTypeOf(fn)];
+            if (!type.Params.AsSpan().SequenceEqual(parameters) || !type.Results.AsSpan().SequenceEqual(results))
+            {
+                leftAlone.Add(name);
+                continue;
+            }
+            hooks[fn] = code;
+            answered.Add(name);
+        }
 
         var exports = DrawExports.Select(n => (ExportName(n), mod.FindFunction(n))).ToList();
         var bytes = AddExports(PrependToBodies(original, mod, hooks), exports);
-        return new A350PatchedModule(bytes, ui.Select(n => n.Split("::")[0]).ToList());
+        return new A350PatchedModule(bytes, ui.Select(n => n.Split("::")[0]).ToList()) { Allocator = answered, AllocatorLeftAlone = leftAlone };
     }
 
     private static List<string> UiDrawFunctions(A350WasmModule mod) =>

@@ -81,7 +81,9 @@ public static class A350ModuleCache
 
         var patched = A350ModulePatcher.Patch(File.ReadAllBytes(modulePath));
         var module = Module.FromBytes(engine, "a350", patched.Bytes);
-        Log.Info("A350Display", $"module patched and compiled in {sw.ElapsedMilliseconds} ms ({sha[..12]})");
+        Log.Info("A350Display", $"module patched and compiled in {sw.ElapsedMilliseconds} ms ({sha[..12]}); allocator answered: "
+            + string.Join(", ", patched.Allocator)
+            + (patched.AllocatorLeftAlone.Count > 0 ? "; left to run, another signature: " + string.Join(", ", patched.AllocatorLeftAlone) : ""));
         var dir = Path.GetDirectoryName(cache)!;
         Directory.CreateDirectory(dir);
         var tmp = cache + ".tmp";

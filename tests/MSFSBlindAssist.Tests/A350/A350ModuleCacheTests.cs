@@ -70,10 +70,15 @@ public class A350ModuleCacheTests : IDisposable
         File.WriteAllBytes(cache, new byte[] { 1, 2, 3 });
         var old = A350ModuleCache.CachePath(_root, "0ld");
         File.WriteAllBytes(old, new byte[] { 9 });
+        // The name before the patch version was in it (<sha>.cwasm), for this very module: compiled from an older patch,
+        // never loaded, and removed (review 2026-10-29).
+        var legacy = Path.Combine(Path.GetDirectoryName(cache)!, sha + ".cwasm");
+        File.WriteAllBytes(legacy, new byte[] { 7 });
         using var engine = A350ModuleCache.CreateEngine();
         using var m = A350ModuleCache.LoadOrBuild(engine, module, _root, out bool built);
         Assert.True(built);
         Assert.True(new FileInfo(cache).Length > 3);
         Assert.False(File.Exists(old));
+        Assert.False(File.Exists(legacy));
     }
 }

@@ -28,6 +28,9 @@ public sealed class A350DisplayService : IDisposable
     private Func<string, double?> _aVar = _ => null;
     private Func<string, string?> _calcString = _ => null;
     private readonly A350ReadHealth _health = new();
+
+    /// <summary>The displays whose last draw ran out of head room (worker thread only).</summary>
+    private readonly HashSet<(string Gauge, int Index)> _exhausted = new();
     private bool _disposed;
 
     /// <summary>A status sentence to speak (getting ready, ready, not available).</summary>
@@ -132,6 +135,14 @@ public sealed class A350DisplayService : IDisposable
                         cap = _draw.Draw(g, i);
                     }
                     caps.Add(cap);
+                    // The draw asked for more than the head room holds and got NULL: logged when it starts and when it ends,
+                    // never every draw.
+                    if (_draw.LastHeapExhausted != _exhausted.Contains((g, i)))
+                    {
+                        if (_draw.LastHeapExhausted) _exhausted.Add((g, i)); else _exhausted.Remove((g, i));
+                        Log.Warn("A350Display", $"{g}#{i}: the head room {(_draw.LastHeapExhausted ? "ran out" : "is enough again")} "
+                            + $"({_draw.LastHeapBytes / 1048576} MB allocated)");
+                    }
                 }
                 var ended = DateTime.UtcNow;
                 for (int n = 0; n < caps.Count; n++)

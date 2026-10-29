@@ -232,14 +232,22 @@ public sealed class A350DrawEngine : IDisposable
         switch (magic)
         {
             case A350ModulePatcher.MallocMagic: return Allocate((uint)a, 16);
-            case A350ModulePatcher.CallocMagic: return AllocateCleared((long)(uint)a * (uint)b);
+            case A350ModulePatcher.CallocMagic:
+            {
+                // count times size in 64 bits: a product beyond 32 bits is no block (C's calloc answers NULL).
+                ulong size = (ulong)(uint)a * (uint)b;
+                return size > uint.MaxValue ? 0 : AllocateCleared((long)size);
+            }
             case A350ModulePatcher.ReallocMagic: return Reallocate((uint)a, (uint)b);
             case A350ModulePatcher.MemalignMagic: return Allocate((uint)b, (uint)a);
             case A350ModulePatcher.PosixMemalignMagic:
             {
+                // *memptr = the block; a pointer outside the memory is no place to answer (a host write there threw, and
+                // the guard answered 0, success, with nothing written).
+                if ((long)(uint)a + 4 > mem.GetLength()) return 48;   // ENOMEM
                 int p = Allocate((uint)c, (uint)b);
-                if (p == 0) return 48;   // ENOMEM
-                mem.WriteInt32(a, p);
+                if (p == 0) return 48;
+                mem.WriteInt32((uint)a, p);
                 return 0;
             }
             case A350ModulePatcher.TextMagic:
@@ -288,12 +296,14 @@ public sealed class A350DrawEngine : IDisposable
     // The draw code's own heap: the head room above the copy, below the answered strings' page, used afresh by every
     // call of a Draw (what one draw allocates is dead when it returns). The copy's heap is never touched by an
     // allocation: live 2026-10-28 a torn copy's free lists sent the A350's malloc into text bytes.
-    private long _heap, _heapEnd;
+    private long _heap, _heapStart, _heapEnd;
+    private bool _heapExhausted;
 
     private void ResetHeap()
     {
-        _heap = AlignUp(_copy?.End ?? 0, 16);
+        _heap = _heapStart = AlignUp(_copy?.End ?? 0, 16);
         _heapEnd = _memory.GetLength() - StringSlot * StringSlots;
+        _heapExhausted = false;
     }
 
     private static long AlignUp(long v, long a) => (v + a - 1) / a * a;
@@ -306,7 +316,11 @@ public sealed class A350DrawEngine : IDisposable
         if (align < 16 || (align & (align - 1)) != 0) align = Math.Max(16, (long)System.Numerics.BitOperations.RoundUpToPowerOf2((ulong)Math.Max(align, 1)));
         long p = AlignUp(_heap + 8, align);
         long end = p + Math.Max(size, 1);
-        if (end > _heapEnd || p > int.MaxValue) return 0;
+        if (end > _heapEnd || p > int.MaxValue)
+        {
+            _heapExhausted = true;
+            return 0;
+        }
         _memory.WriteInt32(p - 4, (int)(AlignUp(size, 8) + 8) | 3);
         _heap = end;
         return (int)p;
@@ -484,12 +498,20 @@ public sealed class A350DrawEngine : IDisposable
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }
         catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; LastTrap = ex.Message; }
+        LastHeapBytes = _heap - _heapStart;
+        LastHeapExhausted = _heapExhausted;
         return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds)
             { Shapes = RecordShapes ? _shapes : null };
     }
 
     /// <summary>The last trap's whole message, its wasm backtrace included (diagnostics, A350Probe draw).</summary>
     public string? LastTrap { get; private set; }
+
+    /// <summary>The head room the last draw allocated, in bytes.</summary>
+    public long LastHeapBytes { get; private set; }
+
+    /// <summary>Whether the last draw asked for more than the head room held (and got NULL).</summary>
+    public bool LastHeapExhausted { get; private set; }
 
     public void Dispose() => _store.Dispose();
 }
