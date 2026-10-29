@@ -11,10 +11,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// a spoken change, the EFB window's own read of external power, and the echo that window opens around its own
 /// run.
 ///
-/// Speech follows CORE-7. The EFB window's Connect and Disconnect ground power buttons say what came of their
-/// taps themselves (<see cref="Bbs757GroundPower.Result"/>), so the row never says that change a second time:
-/// a change between <see cref="ArmGroundPowerEcho"/> (right before the taps) and <see cref="SettleGroundPowerEcho"/>
-/// (the run's end) is tracked, never spoken. The same window also covers the EXT PWR AVAIL row
+/// Speech follows CORE-7. The tablet window says what came of a press on the GPU tile itself (the tile's new
+/// words, or that nothing changed), so the row never says that change a second time:
+/// a change between <see cref="ArmGroundPowerEcho"/> (right before the tap) and <see cref="SettleGroundPowerEcho"/>
+/// (the press's end) is tracked, never spoken. The same window also covers the EXT PWR AVAIL row
 /// (<see cref="Bbs757SharedKeys.ExtPwrAvail"/>, announced by plan 06): the GPU tap changes that light too (see
 /// <see cref="ArmGroundPowerEcho"/>). The settle ends the echo at once, as a press's read-back does, so
 /// any later change is spoken, even one after a run whose taps did not take. Any other change is spoken once
@@ -74,8 +74,8 @@ public partial class BBS757Definition
                 ValueDescriptions = new Dictionary<double, string> { [0] = Cap(s.OffWord), [1] = Cap(s.OnWord) },
             });
 
-        // The EXT PWR button's ON light, read fresh by the window just before a disconnect and never spoken, so
-        // it has no Ctrl+M row ([VAR-9]) and is on no panel or display. OnRequest and under a key of its own:
+        // The EXT PWR button's ON light, never spoken (the EFB window read it fresh before a disconnect until plan 18
+        // stopped refusing one), so it has no Ctrl+M row ([VAR-9]) and is on no panel or display. OnRequest and under a key of its own:
         // plan 06 registers the same L:var as an announced EXT PWR row (Bbs757SharedKeys.ExtPwrOn), and two
         // Continuous keys on one name would break the batch ([VAR-7]); this one never streams, so the two
         // plans need not wait for each other.
@@ -186,8 +186,8 @@ public partial class BBS757Definition
     /// The EFB window is about to tap the GPU tile (connect or disconnect ground power): from now until
     /// <see cref="SettleGroundPowerEcho"/>, and in any case for at most
     /// <see cref="Bbs757GroundPower.WindowRunMaxMs"/> (a run that never settles), a change of the Ground Power
-    /// row is the run's own and is tracked, never spoken. The window says what came of its taps itself
-    /// (<see cref="Bbs757GroundPower.Result"/>), and the screen reader read the button (CORE-7): the row saying
+    /// row is the run's own and is tracked, never spoken. The window says what came of its press itself
+    /// (the tile's new words), and the screen reader read the button (CORE-7): the row saying
     /// it too would be a second announcement of one change.
     ///
     /// The EXT PWR AVAIL row (<see cref="Bbs757SharedKeys.ExtPwrAvail"/>) is armed with it, for the same time.
@@ -198,10 +198,10 @@ public partial class BBS757Definition
     /// row through the tracker, so no test here can deliver it: plan 16 tests it with both rows present.
     ///
     /// Called by the window, through MainForm, right before its run, on the UI thread, as the deliveries are
-    /// (the tracker is not synchronized). A press refused before any tap (a state that cannot be read, ground
-    /// power already as wished, external power on line) never calls it. A run that then taps nothing, because
-    /// the EFB cannot be reached, does: the client may wait up to about six seconds for its agent before it
-    /// reports that, and the flow then settles with nothing read. A change in that wait is tracked silently.
+    /// (the tracker is not synchronized). A press on a tile that has gone from the tablet (nothing to tap)
+    /// never calls it. A press that then taps nothing, because the EFB cannot be reached, does: the client may
+    /// wait up to about six seconds for its agent before it reports that, and the press then settles with
+    /// nothing read. A change in that wait is tracked silently.
     /// </summary>
     internal void ArmGroundPowerEcho()
     {

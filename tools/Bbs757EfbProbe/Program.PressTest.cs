@@ -140,7 +140,6 @@ internal static partial class Program
             if (item == null) { L($"  [{n}] {planned.Text}: not on the page now"); Row(tsv, page, n, planned, null, "", "", "", "", "", "", "", "", "", "VANISHED"); continue; }
             var (tap, back, how) = TapPlan(item);
             if (tap == Point.Empty) { L($"  [{n}] {item.Text}: {how}"); Row(tsv, page, n, item, null, how, "", "", "", "", "", "", "", "", "SKIPPED"); continue; }
-            if (Bbs757EfbScreen.UpdateGuard.Contains(tap)) { L($"  [{n}] {item.Text}: tap point in the guard box"); continue; }
 
             L($"  [{n}] {item.Kind} '{item.Text}' [{item.Key}] {item.Tint} on={item.On} value='{item.Value}' hit {item.Hit.X},{item.Hit.Y} tap {tap.X},{tap.Y} ({how})");
             var pre1 = await TakeSnap();
@@ -208,7 +207,6 @@ internal static partial class Program
         string up = (i.Text + " " + i.Key).ToUpperInvariant();
         foreach (var w in DangerWords)
             if (up.Contains(w, StringComparison.Ordinal)) return "danger: " + w;
-        if (Bbs757EfbScreen.UpdateGuard.Contains(i.Hit)) return "guard box";
         if (page.StartsWith("Navigation, PERF", StringComparison.OrdinalIgnoreCase) && !i.Key.StartsWith("tab:", StringComparison.Ordinal))
             return "perf calc input";
         return null;

@@ -57,27 +57,6 @@ public sealed class Bbs757LoadWatch
     /// <summary>The cabin and the cargo count as settled when they moved less than this since the last read.</summary>
     public const double PayloadSettledLbs = 1;
 
-    public const string StartedText =
-        "Fueling and boarding started. BlueBird loads at its own pace; boarding can take half an hour.";
-
-    public const string AlreadyRunningText = "The load is already running.";
-
-    /// <summary>
-    /// What the window says once the load's presses are made: <paramref name="confirmed"/> when the EFB
-    /// reported every press made, <paramref name="watching"/> when the load watch started. A run that may
-    /// have pressed something is watched, never retried: what a second START BOARDING press does during a
-    /// boarding is unmeasured (the final review of task 11), and the watch says within
-    /// <see cref="NotStartedMs"/> if nothing started.
-    /// </summary>
-    public static string StartedPhrase(bool confirmed, bool watching) => (confirmed, watching) switch
-    {
-        (true, true) => StartedText,
-        (false, true) => "The EFB did not confirm every press. BA is watching the fuel and payload, and says within three " +
-                         "minutes if BlueBird has not started.",
-        (true, false) => "Fueling and boarding started. BlueBird loads at its own pace; check the fuel with F and the weight with W.",
-        _ => "The EFB did not confirm every press. Check the fuel with F and the weight with W.",
-    };
-
     private readonly Bbs757WeightUnits? _units;
     private (double Left, double Right, double Center)? _firstTanks, _lastTanks;
     private double? _firstCabin, _firstCargo, _lastPassengers, _lastCargo;

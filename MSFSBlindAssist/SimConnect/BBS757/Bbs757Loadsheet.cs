@@ -10,8 +10,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// the block fuel (<c>fuel/plan_ramp</c>), the passengers (<c>weights/pax_count_actual</c>, else
 /// <c>pax_count</c>) and their standard weight (<c>pax_weight</c>), and the payload. Flight, origin
 /// and destination name the plan, the aircraft type (<c>aircraft/icaocode</c>) must be the
-/// 757-200's, and any of them may be empty. <see cref="Units"/> are the plan's own (<c>params/units</c>),
-/// checked against the aircraft's before BlueBird's EFB is tapped.
+/// 757-200's, and any of them may be empty. <see cref="Units"/> are the plan's own (<c>params/units</c>).
 /// </summary>
 public sealed record Bbs757SimBriefPlan(string Flight, string Origin, string Destination, string AircraftIcao,
     double BlockFuelLbs, int Passengers, double PassengerWeightLbs, double PayloadLbs,
@@ -46,17 +45,16 @@ public sealed record Bbs757LoadReadBack(double? LeftGallons, double? RightGallon
 public sealed record Bbs757ReadBackVariable(string Key, string SimVar, string Units, string Label);
 
 /// <summary>
-/// The 757's fuel and payload from a SimBrief plan, which BlueBird's own EFB loads (task 11e): the
-/// window taps IMPORT FROM SIMBRIEF and START BOARDING, and BlueBird fuels and boards at its own pace.
+/// The 757's fuel and payload from a SimBrief plan, which BlueBird's own EFB loads when the pilot presses
+/// IMPORT FROM SIMBRIEF or START BOARDING on the tablet: BlueBird fuels and boards at its own pace.
 /// The targets here are how BlueBird spreads a plan (measured 2026-10-25,
 /// docs/b757/evidence/live-findings.md, sessions 5 and 7): the block evenly over both wings and the
 /// rest in the center, every passenger the cabin seats at the plan's standard weight, and the rest of
 /// the payload as cargo, the forward hold first. The load watch (<see cref="Bbs757LoadWatch"/>) judges
 /// the read tanks and stations against them; every target is whole pounds.
 ///
-/// Pure: parse the plan, compute the targets, refuse a plan in other units than the aircraft's, read
-/// the tanks and stations by key, and the sentences and log lines the watch uses. The window fetches
-/// and taps; the definition reads.
+/// Pure: parse the plan, compute the targets, read the tanks and stations by key, and the sentences
+/// and log lines the watch uses. The app fetches the plan; the definition reads.
 /// </summary>
 public static class Bbs757Loadsheet
 {
@@ -100,7 +98,6 @@ public static class Bbs757Loadsheet
     public const string CargoTooMuchText = "The plan's cargo is more than the holds take.";
     public const string NoAircraftTypeText = "Your latest SimBrief plan names no aircraft type. Create a B752 plan, then try again.";
     public const string WeightAndBalanceText = "For the ACARS weight and balance, request WGTBAL on the CDU.";
-    public const string UnitsUnreadableText = "BlueBird's weight units cannot be read, so nothing was loaded.";
 
     /// <summary>The refusal of a plan for another aircraft.</summary>
     public static string WrongAircraftText(string icao) =>
@@ -260,26 +257,6 @@ public static class Bbs757Loadsheet
 
     /// <summary>A cabin or cargo target's tolerance: the larger of 0.5% of it and 20 lb.</summary>
     internal static double PayloadTolerance(double target) => Math.Max(PayloadToleranceShare * target, PayloadToleranceLbs);
-
-    // ---- the units --------------------------------------------------------------------------
-
-    /// <summary>
-    /// Null when the plan's weight units are the aircraft's; otherwise why the load stops before any
-    /// tap (ruling R44, [B757-4]). BlueBird's FETCH SIMBRIEF OFP asks to switch the aircraft's units
-    /// when they differ, a question the window cannot see, and the load's defuel YES lands beside its
-    /// YES; with the aircraft's units unread, nothing says whether it would ask. Keep units leaves them
-    /// different, so the refusal names the two ways out: "Your SimBrief plan is in kilograms and the
-    /// aircraft in pounds. Fetch the SimBrief flight and accept its units, or create the plan in
-    /// pounds, then try again."
-    /// </summary>
-    public static string? UnitsRefusal(Bbs757WeightUnits planUnits, Bbs757WeightUnits? aircraftUnits) => aircraftUnits switch
-    {
-        null => UnitsUnreadableText,
-        Bbs757WeightUnits a when a == planUnits => null,
-        Bbs757WeightUnits a => $"Your SimBrief plan is in {Bbs757EfbLayout.UnitsName(planUnits)} and the aircraft in " +
-                               $"{Bbs757EfbLayout.UnitsName(a)}. Fetch the SimBrief flight and accept its units, or create " +
-                               $"the plan in {Bbs757EfbLayout.UnitsName(a)}, then try again.",
-    };
 
     // ---- the read-back ----------------------------------------------------------------------
 

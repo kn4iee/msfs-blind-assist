@@ -96,7 +96,7 @@ public class Bbs757LoadsheetTests
         Assert.Equal(84 * 2.20462, plan.PassengerWeightLbs, 6);
         Assert.Equal(23341 * 2.20462, plan.PayloadLbs, 6);
         Assert.Equal(224, plan.Passengers);   // a count, not a weight
-        Assert.Equal(Bbs757WeightUnits.Kilograms, plan.Units);   // what BlueBird's units are checked against
+        Assert.Equal(Bbs757WeightUnits.Kilograms, plan.Units);   // the plan's own units, whatever the weights are converted to
     }
 
     [Fact]
@@ -394,37 +394,6 @@ public class Bbs757LoadsheetTests
             Assert.InRange(loads.LeftLbs - loads.RightLbs, 0, 1);
             Assert.Equal(Math.Round(block, MidpointRounding.AwayFromZero), loads.LeftLbs + loads.RightLbs + loads.CenterLbs);
         }
-    }
-
-    // ---- the units --------------------------------------------------------------------------
-
-    [Theory]
-    [InlineData(Bbs757WeightUnits.Pounds)]
-    [InlineData(Bbs757WeightUnits.Kilograms)]
-    public void A_plan_in_the_aircrafts_units_may_load(Bbs757WeightUnits units)
-    {
-        Assert.Null(Bbs757Loadsheet.UnitsRefusal(units, units));
-    }
-
-    [Fact]
-    public void A_plan_in_other_units_is_refused_so_the_fetch_never_asks()
-    {
-        // BlueBird asks to switch the units after a fetch only when they differ, and that question's
-        // YES is beside the defuel question's: the load refuses before any tap instead. Keep units
-        // would leave them different, so the way out is to accept them or plan in the aircraft's.
-        Assert.Equal("Your SimBrief plan is in kilograms and the aircraft in pounds. " +
-                     "Fetch the SimBrief flight and accept its units, or create the plan in pounds, then try again.",
-            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds));
-        Assert.Equal("Your SimBrief plan is in pounds and the aircraft in kilograms. " +
-                     "Fetch the SimBrief flight and accept its units, or create the plan in kilograms, then try again.",
-            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms));
-    }
-
-    [Fact]
-    public void Unread_aircraft_units_are_refused()
-    {
-        Assert.Equal("BlueBird's weight units cannot be read, so nothing was loaded.",
-            Bbs757Loadsheet.UnitsRefusal(Bbs757WeightUnits.Pounds, null));
     }
 
     // ---- the read-back ----------------------------------------------------------------------

@@ -16,10 +16,10 @@ public enum Bbs757WeightUnits
 /// downloaded: which install locations hold one (<see cref="Find"/>, <see cref="ExistingFolders"/>)
 /// and the simulator each belongs to (<see cref="SimulatorOf"/>), its registrations' settings files
 /// (<see cref="RegistrationFiles"/>), and the four values this class reads from it: the SimBrief ID
-/// (the Fetch SimBrief flight and fuel and payload buttons refuse without one, and fetch the plan with
-/// it), the unit system (to say what the weight units answer did), the parking brake mode (the parking
-/// brake's full-braking retry never runs in EASY mode, <c>Bbs757ParkingBrake</c>) and the installed
-/// AIRAC cycle (so the nav data update never clicks where BlueBird shows REMOVE). The app writes BlueBird's files only
+/// (the load watch fetches the plan with it), the unit system (the load watch speaks weights in the
+/// aircraft's units), the parking brake mode (the parking brake's full-braking retry never runs in
+/// EASY mode, <c>Bbs757ParkingBrake</c>) and the installed AIRAC cycle (the nav data watch compares it
+/// before and after the tablet's UPDATE or REMOVE). The app writes BlueBird's files only
 /// through <see cref="Bbs757SettingsFile"/>, under rule [B757-17].
 ///
 /// <c>efb_settings.json</c> also holds the pilot's Hoppie logon code and SayIntentions ACARS key.
@@ -271,40 +271,6 @@ public static class Bbs757WorkFolder
     }
 
     /// <summary>
-    /// Whether a work folder other than <paramref name="chosen"/> among <paramref name="roots"/>
-    /// holds nav data at or above <paramref name="currentCycle"/>, or a cycle file whose cycle cannot
-    /// be read. Then the folders disagree about what is installed: BlueBird may be using the other
-    /// one, where its AIRAC page shows REMOVE at the UPDATE spot, so the update must not click.
-    /// Folders that do not exist, or hold no cycle file, agree with anything. Paths are compared
-    /// whole, case-insensitive, after normalizing.
-    /// </summary>
-    public static bool OthersDisagree(IReadOnlyList<string> roots, string chosen, int currentCycle)
-    {
-        string chosenKey = PathKey(chosen);
-        foreach (string root in roots)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
-                if (string.Equals(PathKey(root), chosenKey, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!HasCycleFile(root)) continue;
-                int? cycle = ReadInstalledCycle(root);
-                if (cycle == null || cycle >= currentCycle) return true;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
-                                           or NotSupportedException or System.Security.SecurityException) { }
-        }
-        return false;
-    }
-
-    private static string PathKey(string path)
-    {
-        try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException
-                                       or System.Security.SecurityException) { return path; }
-    }
-
-    /// <summary>
     /// The installed AIRAC cycle from <c>NavigationData\cycle.json</c> (its <c>cycle</c> field,
     /// "2610"), or null when there is no such file, or it has another shape.
     /// </summary>
@@ -325,8 +291,14 @@ public static class Bbs757WorkFolder
         {
             return null;
         }
-        return AiracCycle.IsCycleNumber(value) ? value : null;
+        return IsCycleNumber(value) ? value : null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="cycle"/> is shaped like an AIRAC cycle number: YYNN, four digits, NN from 01 to 14 (cycles run 28 days,
+    /// so a year has thirteen or fourteen; 2020 had fourteen, its last 2014).
+    /// </summary>
+    private static bool IsCycleNumber(int cycle) => cycle is >= 1000 and <= 9999 && cycle % 100 is >= 1 and <= 14;
 
     /// <summary>The file parsed, or null when it is missing, too large, unreadable or not JSON.</summary>
     private static JsonDocument? ReadJson(string path)

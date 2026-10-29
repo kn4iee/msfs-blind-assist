@@ -10,21 +10,15 @@
 // real mouse. Nothing on the tablet can be read: the app checks results through files BlueBird
 // writes.
 //
-// The page clock: this view's document is made anew on every flight load, so the moment it loaded
-// (Date.now() - performance.now(), the real clock, measured against the host's UTC) tells which
-// flight load BlueBird's load-time checks belong to. It is fixed once per document, kept on window
-// so a newer agent on the same page keeps it, and sent with every answer as `page`.
+// Nothing here judges where a click lands (the owner's ruling of 2026-10-29): a click goes where it
+// is asked to, the AIRAC page's UPDATE/REMOVE spot included, and the app checks what it taps before
+// it taps. A run is refused only for what the agent cannot run: a sequence that is not
+// [[x, y, delayAfterMs], ...], one still going, or a tablet that is not the measured size.
 //
 // Sequences: clickSeq takes [[x, y, delayAfterMs], ...] and runs it in the page with setTimeout,
 // one run at a time, so a sequence is never interleaved with another and never depends on the
 // app's link staying up between its clicks. Before a new run starts, any older run's pending click
-// is cleared. Its optional guards are checked here, on the page that will be clicked:
-// notBeforeLoadMs (the page loaded at or after it), minAgeMs (the page at least this old),
-// samePageAsMs (the page that loaded then), onceKey (no run with this key started on this page).
-// A sequence with any click near the AIRAC page's UPDATE spot, which is BlueBird's REMOVE whenever
-// its load-time check saw no newer cycle, is refused ('unguarded-update') unless it carries all
-// three of onceKey, notBeforeLoadMs and minAgeMs: only the app's nav data update does.
-// status(id) says how far a run got; cancel() stops one.
+// is cleared. status(id) says how far a run got; cancel() stops one.
 //
 // Install: an agent that cannot click is no agent. When Coherent.call or the tablet's canvas (with
 // its four handlers, at the measured size) is missing - the view's scripts or gauges not ready
@@ -35,35 +29,21 @@
 // try/catch.
 (function () {
   try {
-    // 3: the unguarded-update refusal. The app's clickSeq call asks for this version or later.
+    // 3: refused a click near the AIRAC page's UPDATE spot unless the run carried the nav data update's page guards.
     // 4: mirror(on), for the tablet reader (Bbs757EfbPopout / Bbs757EfbPageReader).
     // 5: wheel(x, y, deltaY), for scrolling a long tablet page.
     // 6: readVars(names), the L:vars the reader judges a tap by.
-    var VERSION = 6;
+    // 7: that refusal, the run guards it needed and the page clock they ran on are gone: a click runs anywhere on the tablet.
+    // The app's calls ask for this version or later; an older agent on the page is replaced.
+    var VERSION = 7;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
     // layout: the measured positions would miss, so nothing is clicked.
     var WIDTH = 1397, MIN_HEIGHT = 1048, MAX_HEIGHT = 1070, SIZE_SLACK = 2;
-    // The UPDATE/REMOVE spot on the AIRAC page (Bbs757EfbLayout.UpdateButton) and how far either
-    // side of it a click counts as one on it (UpdateSpotHalfWidth, UpdateSpotHalfHeight).
-    var UPDATE_X = 1291, UPDATE_Y = 337, UPDATE_HALF_W = 100, UPDATE_HALF_H = 40;
     var MAX_STEPS = 40, MAX_DELAY_MS = 10000;
     // A run still marked running this long after its last click was due is taken as dead.
     var STALE_MS = 5000;
-
-    // This document's load time, once (see the page clock above).
-    if (typeof window.__MSFSBA_BBS757EFB_PAGE !== 'number') {
-      if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
-        window.__MSFSBA_BBS757EFB_PAGE = Math.round(Date.now() - performance.now());
-    }
-    // The once-per-page keys already used, kept on window like the page time.
-    if (!window.__MSFSBA_BBS757EFB_ONCE || typeof window.__MSFSBA_BBS757EFB_ONCE !== 'object')
-      window.__MSFSBA_BBS757EFB_ONCE = {};
-
-    function pageTime() {
-      return typeof window.__MSFSBA_BBS757EFB_PAGE === 'number' ? window.__MSFSBA_BBS757EFB_PAGE : null;
-    }
 
     function canvasProblem(c) {
       if (!c) return 'canvas';
@@ -249,52 +229,22 @@
       return steps;
     }
 
-    function refuse(error) { return { ok: false, error: error, page: pageTime() }; }
-
-    function touchesUpdateSpot(steps) {
-      for (var i = 0; i < steps.length; i++) {
-        if (Math.abs(steps[i][0] - UPDATE_X) <= UPDATE_HALF_W && Math.abs(steps[i][1] - UPDATE_Y) <= UPDATE_HALF_H) return true;
-      }
-      return false;
-    }
-
-    // A click near the UPDATE spot needs every guard the nav data update runs under.
-    function updateGuarded(opts) {
-      return !!opts && opts.onceKey != null && opts.notBeforeLoadMs != null && opts.minAgeMs != null;
-    }
-
-    // Why this page may not run a guarded sequence, or null.
-    function guardProblem(opts) {
-      if (!opts) return null;
-      var page = pageTime();
-      var needsPage = opts.notBeforeLoadMs != null || opts.minAgeMs != null || opts.samePageAsMs != null;
-      if (needsPage && page === null) return 'no-page-time';
-      if (opts.notBeforeLoadMs != null && !(page >= opts.notBeforeLoadMs)) return 'page-too-early';
-      if (opts.minAgeMs != null && !(Date.now() - page >= opts.minAgeMs)) return 'page-too-young';
-      if (opts.samePageAsMs != null && page !== opts.samePageAsMs) return 'other-page';
-      if (opts.onceKey != null && window.__MSFSBA_BBS757EFB_ONCE[String(opts.onceKey)]) return 'already-ran';
-      return null;
-    }
+    function refuse(error) { return { ok: false, error: error }; }
 
     function runInfo(run) {
-      return { ok: true, id: run.id, n: run.n, done: run.done, running: runIsLive(run), error: run.error, page: pageTime() };
+      return { ok: true, id: run.id, n: run.n, done: run.done, running: runIsLive(run), error: run.error };
     }
 
     // Starts a run: the first click now, each next one after the previous step's delay.
-    A.clickSeq = function (json, opts) {
+    A.clickSeq = function (json) {
       if (runIsLive(state.run)) return refuse('busy');
       var steps = parseSeq(json);
       if (!steps) return refuse('bad-seq');
-      if (opts != null && typeof opts !== 'object') return refuse('bad-seq');
-      if (touchesUpdateSpot(steps) && !updateGuarded(opts)) return refuse('unguarded-update');
-      var g = guardProblem(opts);
-      if (g) return refuse(g);
       var p = coherentProblem() || canvasProblem(findCanvas());
       if (p) return refuse('no-canvas: ' + p);
 
       // A dead run may still hold a pending click: cleared before the new run starts.
       stopRun(state.run, 'canceled');
-      if (opts && opts.onceKey != null) window.__MSFSBA_BBS757EFB_ONCE[String(opts.onceKey)] = Date.now();
 
       var total = 0;
       for (var i = 0; i < steps.length; i++) total += steps[i][2];
@@ -319,7 +269,7 @@
         run.timer = setTimeout(function () { step(k + 1); }, steps[k][2]);
       }
       step(0);
-      return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error, page: pageTime() };
+      return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error };
     };
 
     // How far run `id` got.
@@ -331,12 +281,12 @@
 
     // Stops the run in progress: no further click is made.
     A.cancel = function () {
-      return { ok: true, canceled: stopRun(state.run, 'canceled'), page: pageTime() };
+      return { ok: true, canceled: stopRun(state.run, 'canceled') };
     };
 
     A.ping = function () {
       var p = coherentProblem() || canvasProblem(findCanvas());
-      return { ok: true, ready: !p, problem: p, running: runIsLive(state.run), page: pageTime() };
+      return { ok: true, ready: !p, problem: p, running: runIsLive(state.run) };
     };
 
     window.__MSFSBA_BBS757EFB = A;

@@ -1,16 +1,13 @@
 using System.Globalization;
-using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
 
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The parts of the 757 EFB window that need no simulator: the AIRAC cycle for a date, when the
-/// nav data update may click (BlueBird's REMOVE button sits where UPDATE was once the installed
-/// cycle is current), the click sequences, BlueBird's work folder and the two values read from it,
-/// and the ground power buttons' flow (<c>Bbs757GroundPower.SwitchAsync</c>)
-/// over a fake tablet, a fake variable and a fake clock. (The Navigraph sign-in helpers moved with the
-/// flow to <c>Bbs757NavigraphSignInTests</c>.)
+/// The parts of the 757 EFB code that need no simulator and have no test class of their own: how a click sequence goes to the
+/// agent, the SimBrief ID rules, BlueBird's work folder and the values read from it (the SimBrief ID, the unit system, the
+/// parking brake mode, the installed AIRAC cycle), and the EFB client and its agent with nothing to reach. (The Navigraph
+/// sign-in helpers moved with the flow to <c>Bbs757NavigraphSignInTests</c>.)
 /// </summary>
 public class Bbs757EfbTests
 {
@@ -26,176 +23,6 @@ public class Bbs757EfbTests
         {
             CultureInfo.CurrentCulture = saved;
         }
-    }
-
-    private static DateOnly D(string iso) => DateOnly.ParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-
-    // ---- AIRAC cycle ------------------------------------------------------
-
-    [Theory]
-    [InlineData("2026-10-01", 2610)]
-    [InlineData("2026-09-30", 2609)]
-    [InlineData("2026-01-22", 2601)]
-    [InlineData("2025-12-31", 2513)]
-    [InlineData("2025-01-23", 2501)]   // the anchor
-    [InlineData("2025-01-22", 2413)]   // the day before: 2024's last (13th) cycle
-    [InlineData("2026-10-25", 2610)]
-    [InlineData("2026-10-29", 2611)]
-    [InlineData("2020-12-31", 2014)]   // a year with 14 cycles
-    [InlineData("2021-01-27", 2014)]
-    [InlineData("2021-01-28", 2101)]
-    public void AiracCycle_for_a_date(string date, int expected)
-    {
-        Assert.Equal(expected, AiracCycle.ForDate(D(date)));
-    }
-
-    [Theory]
-    [InlineData(2610, false)]   // current on 2026-10-25: BlueBird shows REMOVE at the UPDATE spot
-    [InlineData(2611, false)]   // newer than the date's cycle: nothing to update either
-    [InlineData(null, true)]    // nothing installed (no cycle file)
-    [InlineData(2603, true)]
-    [InlineData(2513, true)]
-    public void AiracUpdate_refuses_when_installed_is_current(int? installed, bool expected)
-    {
-        Assert.Equal(expected, Bbs757EfbLayout.ShouldUpdate(installed, D("2026-10-25")));
-    }
-
-    [Theory]
-    [InlineData(2501, "2025-01-23")]
-    [InlineData(2513, "2025-12-25")]
-    [InlineData(2601, "2026-01-22")]
-    [InlineData(2610, "2026-10-01")]
-    [InlineData(2611, "2026-10-29")]
-    [InlineData(2014, "2020-12-31")]
-    [InlineData(2101, "2021-01-28")]
-    public void AiracCycle_effective_date(int cycle, string date)
-    {
-        Assert.Equal(D(date), AiracCycle.EffectiveDate(cycle));
-    }
-
-    [Theory]
-    [InlineData(2514)]   // 2025 had thirteen cycles
-    [InlineData(2600)]
-    [InlineData(2615)]
-    [InlineData(999)]
-    [InlineData(10001)]
-    public void AiracCycle_effective_date_refuses_a_cycle_that_never_was(int cycle)
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => AiracCycle.EffectiveDate(cycle));
-    }
-
-    [Fact]
-    public void Every_date_falls_in_the_cycle_whose_effective_date_it_follows()
-    {
-        for (var d = D("2020-01-01"); d < D("2031-01-01"); d = d.AddDays(1))
-        {
-            int cycle = AiracCycle.ForDate(d);
-            var effective = AiracCycle.EffectiveDate(cycle);
-            Assert.True(effective <= d && d < effective.AddDays(28), $"{d:yyyy-MM-dd}: {cycle} effective {effective:yyyy-MM-dd}");
-        }
-    }
-
-    // ---- the nav data update gate, bound to the page ---------------------------
-
-    private static DateTime U(string iso) => DateTime.SpecifyKind(
-        DateTime.ParseExact(iso, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture), DateTimeKind.Utc);
-
-    [Theory]
-    // Installed cycle current: nothing to do, whatever else holds.
-    [InlineData(2610, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Current)]
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Allowed)]
-    [InlineData(null, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, false, Bbs757UpdateGate.Allowed)]
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", false, false, Bbs757UpdateGate.NotSignedIn)]
-    // Signed in after this load: BlueBird's load-time check ran signed out.
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 08:00:00", true, true, Bbs757UpdateGate.ReloadFirst)]
-    // The page must have loaded on or after the cycle's first full day (2610: 2026-10-02 00:00 UTC).
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-01 23:59:59", true, false, Bbs757UpdateGate.ReloadFirst)]
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-02 00:00:00", true, false, Bbs757UpdateGate.Allowed)]
-    // On a new cycle's first day no page can qualify yet: reloading would not help.
-    [InlineData(2610, "2026-10-29 10:00:00", "2026-10-29 09:00:00", true, false, Bbs757UpdateGate.NewToday)]
-    [InlineData(2610, "2026-10-30 10:00:00", "2026-10-29 23:00:00", true, false, Bbs757UpdateGate.ReloadFirst)]
-    [InlineData(2610, "2026-10-30 10:00:00", "2026-10-30 00:00:00", true, false, Bbs757UpdateGate.Allowed)]
-    // BlueBird's check needs a minute after the load.
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 11:59:01", true, false, Bbs757UpdateGate.StillChecking)]
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 11:59:00", true, false, Bbs757UpdateGate.Allowed)]
-    [InlineData(2603, "2026-10-25 12:00:00", "2026-10-25 12:00:30", true, false, Bbs757UpdateGate.StillChecking)]
-    public void MayClickUpdate_needs_an_old_cycle_a_signed_in_load_after_the_cycle_s_first_day_and_a_minute(
-        int? installed, string now, string pageLoaded, bool signedIn, bool sawSignedOut, Bbs757UpdateGate expected)
-    {
-        Assert.Equal(expected, Bbs757EfbLayout.MayClickUpdate(installed, U(now), U(pageLoaded), signedIn, sawSignedOut));
-    }
-
-    [Fact]
-    public void The_update_gate_never_allows_what_ShouldUpdate_refuses()
-    {
-        var now = U("2026-10-25 12:00:00");
-        foreach (int installed in new[] { 2610, 2611, 2701 })
-        {
-            Assert.False(Bbs757EfbLayout.ShouldUpdate(installed, DateOnly.FromDateTime(now)));
-            Assert.Equal(Bbs757UpdateGate.Current, Bbs757EfbLayout.MayClickUpdate(installed, now, U("2026-10-25 08:00:00"), true, false));
-        }
-    }
-
-    [Fact]
-    public void The_earliest_page_load_is_the_day_after_the_cycle_took_effect()
-    {
-        Assert.Equal(U("2026-10-02 00:00:00"), Bbs757EfbLayout.EarliestPageLoadUtc(DateOnly.FromDateTime(U("2026-10-25 12:00:00"))));
-        Assert.Equal(U("2026-10-30 00:00:00"), Bbs757EfbLayout.EarliestPageLoadUtc(DateOnly.FromDateTime(U("2026-10-30 00:00:00"))));
-    }
-
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData("2026-10-25 07:59:59", false)]   // read in the flight before this one
-    [InlineData("2026-10-25 08:00:00", true)]
-    [InlineData("2026-10-25 09:30:00", true)]
-    public void A_signed_out_reading_counts_for_the_page_it_was_taken_on(string? signedOutAt, bool expected)
-    {
-        DateTime? at = signedOutAt == null ? null : U(signedOutAt);
-        Assert.Equal(expected, Bbs757EfbLayout.SignedOutDuringLoad(at, U("2026-10-25 08:00:00")));
-    }
-
-    // ---- click sequences --------------------------------------------------
-
-    private static IEnumerable<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>> EveryHomeSequence()
-    {
-        yield return Bbs757EfbLayout.OpenAiracPage();
-        yield return Bbs757EfbLayout.UpdateNavData();
-        yield return Bbs757EfbLayout.FetchOfp();
-        foreach (string preset in Bbs757EfbLayout.PresetNames) yield return Bbs757EfbLayout.LoadPreset(preset);
-        foreach (string quick in Bbs757EfbLayout.QuickStartNames) yield return Bbs757EfbLayout.QuickStart(quick);
-        yield return Bbs757EfbLayout.ToggleChocks();
-        yield return Bbs757EfbLayout.ToggleGroundPower();
-        yield return Bbs757EfbLayout.LoadThroughEfb();
-    }
-
-    [Fact]
-    public void The_load_fetches_the_plan_then_imports_and_boards_answering_the_defuel_question_after_each()
-    {
-        // Measured 2026-10-25 (live-findings.md, "BlueBird's own loading through its EFB"): IMPORT FROM
-        // SIMBRIEF and START BOARDING each ask to defuel when the fuel is above the plan, and the
-        // question's YES is empty background on the Fuel page when no question is up.
-        var seq = Bbs757EfbLayout.LoadThroughEfb();
-
-        Assert.Equal(new[]
-        {
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.NavigationIcon, Bbs757EfbLayout.AcarsDashboard, Bbs757EfbLayout.FetchOfpButton,
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuFuel, Bbs757EfbLayout.ImportFromSimBrief,
-            Bbs757EfbLayout.DefuelYes, Bbs757EfbLayout.StartBoarding, Bbs757EfbLayout.DefuelYes, Bbs757EfbLayout.Home,
-        }, seq.Select(s => s.Point));
-        Assert.All(seq, s => Assert.Equal(Bbs757EfbLayout.NavigateDelayMs, s.DelayAfterMs));
-        Assert.Equal(new EfbPoint(67, 237), Bbs757EfbLayout.AircraftMenuFuel);
-        Assert.Equal(new EfbPoint(508, 962), Bbs757EfbLayout.ImportFromSimBrief);
-        Assert.Equal(new EfbPoint(1231, 24), Bbs757EfbLayout.StartBoarding);
-        Assert.Equal(new EfbPoint(400, 648), Bbs757EfbLayout.DefuelYes);
-    }
-
-    [Fact]
-    public void No_load_tap_comes_near_the_update_and_remove_spot()
-    {
-        // The agent refuses any click this close to UPDATE/REMOVE without the update's guards.
-        Assert.All(Bbs757EfbLayout.LoadThroughEfb(), s => Assert.False(
-            Math.Abs(s.Point.X - Bbs757EfbLayout.UpdateButton.X) <= Bbs757EfbLayout.UpdateSpotHalfWidth &&
-            Math.Abs(s.Point.Y - Bbs757EfbLayout.UpdateButton.Y) <= Bbs757EfbLayout.UpdateSpotHalfHeight, s.Point.ToString()));
     }
 
     [Theory]
@@ -229,426 +56,6 @@ public class Bbs757EfbTests
         Assert.False(Bbs757EfbLayout.IsSimBriefId(text));
     }
 
-    [Fact]
-    public void Every_sequence_from_the_home_screen_starts_with_home_and_1500_ms()
-    {
-        foreach (var seq in EveryHomeSequence())
-        {
-            Assert.NotEmpty(seq);
-            Assert.Equal(Bbs757EfbLayout.Home, seq[0].Point);
-            Assert.Equal(1500, seq[0].DelayAfterMs);
-        }
-    }
-
-    [Fact]
-    public void Only_the_nav_data_update_clicks_the_update_and_remove_spot()
-    {
-        var spot = new EfbPoint(1291, 337);
-        Assert.Equal(spot, Bbs757EfbLayout.UpdateButton);
-
-        var update = Bbs757EfbLayout.UpdateNavData();
-        Assert.Equal(spot, update[^1].Point);
-        Assert.Single(update, s => s.Point == spot);
-
-        var others = new List<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>>
-        {
-            Bbs757EfbLayout.OpenAiracPage(),
-            Bbs757EfbLayout.FetchOfp(),
-            Bbs757EfbLayout.AnswerUnits(accept: true),
-            Bbs757EfbLayout.AnswerUnits(accept: false),
-        };
-        others.AddRange(Bbs757EfbLayout.PresetNames.Select(Bbs757EfbLayout.LoadPreset));
-        others.AddRange(Bbs757EfbLayout.QuickStartNames.Select(Bbs757EfbLayout.QuickStart));
-        others.Add(Bbs757EfbLayout.ToggleChocks());
-        others.Add(Bbs757EfbLayout.ToggleGroundPower());
-        others.Add(Bbs757EfbLayout.LoadThroughEfb());
-        foreach (var seq in others)
-            Assert.DoesNotContain(seq, s => s.Point == spot);
-    }
-
-    // ---- Chocks ----------------------------------------------------------------------------------
-
-    [Fact]
-    public void The_chocks_are_home_aircraft_ground_services_then_the_chocks_tile()
-    {
-        // Measured 2026-10-25 (live-findings.md, EFB Ground Services): the tile toggles L:BBS757_vis_chocks.
-        var seq = Bbs757EfbLayout.ToggleChocks();
-
-        Assert.Equal(new[]
-        {
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuGroundServices,
-            Bbs757EfbLayout.GroundServicesChocks,
-        }, seq.Select(s => s.Point));
-        Assert.Equal(new EfbPoint(320, 190), Bbs757EfbLayout.AircraftIcon);
-        Assert.Equal(new EfbPoint(128, 368), Bbs757EfbLayout.AircraftMenuGroundServices);
-        Assert.Equal(new EfbPoint(404, 556), Bbs757EfbLayout.GroundServicesChocks);
-        Assert.Single(seq, s => s.Point == Bbs757EfbLayout.GroundServicesChocks);   // one tap: it toggles
-        Assert.All(seq, s => Assert.Equal(Bbs757EfbLayout.NavigateDelayMs, s.DelayAfterMs));
-        Assert.Equal("BBS757_vis_chocks", Bbs757EfbLayout.ChocksVar);
-    }
-
-    [Theory]
-    [InlineData(1.0, false, true)]    // in place, removing: tap
-    [InlineData(0.0, true, true)]     // removed, setting: tap
-    [InlineData(0.0, false, false)]   // already removed: a tap would put them back
-    [InlineData(1.0, true, false)]
-    [InlineData(null, false, false)]  // unreadable: never guess on a toggle
-    [InlineData(double.NaN, true, false)]
-    public void The_chocks_tile_is_tapped_only_when_the_chocks_differ_from_what_is_wanted(double? chocks, bool wantInPlace, bool tap)
-    {
-        Assert.Equal(tap, Bbs757EfbLayout.MayClickChocks(chocks, wantInPlace));
-    }
-
-    [Theory]
-    [InlineData(false, 0.0, "Chocks removed")]
-    [InlineData(true, 1.0, "Chocks in place")]
-    [InlineData(false, 1.0, "BlueBird did not move the chocks")]
-    [InlineData(true, 0.0, "BlueBird did not move the chocks")]
-    [InlineData(false, null, "The chocks could not be read back.")]
-    public void The_chocks_result_is_said_from_the_variable_read_after(bool wantInPlace, double? after, string phrase)
-    {
-        Assert.Equal(phrase, Bbs757EfbLayout.ChocksResultPhrase(wantInPlace, after));
-    }
-
-    [Fact]
-    public void Chocks_already_where_wanted_say_so()
-    {
-        Assert.Equal("Chocks are already removed", Bbs757EfbLayout.ChocksAlreadyText(inPlace: false));
-        Assert.Equal("Chocks are already in place", Bbs757EfbLayout.ChocksAlreadyText(inPlace: true));
-    }
-
-    // ---- Ground power ----------------------------------------------------------------------------
-
-    private const string GpuKey = Bbs757SharedKeys.GpuConnected;
-
-    // What the window says: the words are pinned here, as Bbs757GroundPowerTests pins them for the pure half.
-    private const string GpuUnreadSaid = "The ground power cannot be read, so nothing was tapped.";
-    private const string GpuAlreadyConnectedSaid = "Ground power is already connected.";
-    private const string GpuAlreadyDisconnectedSaid = "Ground power is already disconnected.";
-    private const string GpuOnLineSaid =
-        "Ground power is on line. Press EXT PWR on the Electrical panel to take it off, with the APU or the engines " +
-        "powering the aircraft, then try again.";
-    private const string GpuExtPwrUnreadSaid = "External power cannot be read, so nothing was tapped.";
-    private const string GpuConnectedSaid = "Ground power connected. Press EXT PWR on the Electrical panel to put it on line.";
-    private const string GpuDisconnectedSaid = "Ground power disconnected.";
-    private const string GpuNotConnectedSaid = "BlueBird did not connect the ground power.";
-    private const string GpuNotDisconnectedSaid = "BlueBird did not disconnect the ground power.";
-    private const string GpuUnreadNowSaid = "The ground power cannot be read now.";
-
-    /// <summary>
-    /// What stands behind <see cref="Bbs757GroundPowerIo"/> in these tests: the connection's reads come off a queue (the
-    /// last one repeats once it runs dry), EXT PWR is one value, the clock is virtual and moves only when the flow
-    /// waits, and everything the flow did to the echo and the tablet is logged in order: "arm", "run", then
-    /// "settle 1" ("settle null" when the last read was nothing).
-    /// </summary>
-    private sealed class GroundPowerFake
-    {
-        public const long StartMs = 5_000_000;   // not zero: a deadline is a time on a clock, not a length
-
-        private readonly Queue<double?> _reads;
-        private double? _connection;
-
-        public GroundPowerFake(params double?[] connectionReads) => _reads = new Queue<double?>(connectionReads);
-
-        public double? ExtPwr;                   // what EXT PWR reads
-        public (Bbs757EfbRunResult Result, bool MayHaveClicked) Answer = (Bbs757EfbRunResult.Done, true);   // the click sequence's answer
-        public Exception? RunThrows;             // the run throws this instead of answering
-        public bool CancelOnDelay;               // the first wait throws, as a window going away cancels it
-        public long Now = StartMs;               // virtual ms
-        public readonly List<string> Log = new();
-        public readonly List<string> Reads = new();   // the keys read, in order
-        public readonly List<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>> Runs = new();
-        public readonly List<int> Delays = new();
-
-        public Bbs757GroundPowerIo Io => new()
-        {
-            Read = (key, ct) =>
-            {
-                ct.ThrowIfCancellationRequested();
-                Reads.Add(key);
-                if (key == Bbs757GroundPower.ExtPwrOnKey) return Task.FromResult(ExtPwr);
-                if (key != GpuKey) throw new InvalidOperationException($"The flow read {key}.");
-                if (_reads.Count > 0) _connection = _reads.Dequeue();
-                return Task.FromResult(_connection);
-            },
-            Run = (seq, ct) =>
-            {
-                ct.ThrowIfCancellationRequested();
-                Log.Add("run");
-                Runs.Add(seq);
-                return RunThrows is { } ex
-                    ? Task.FromException<(Bbs757EfbRunResult Result, bool MayHaveClicked)>(ex)
-                    : Task.FromResult(Answer);
-            },
-            Delay = (ms, ct) =>
-            {
-                ct.ThrowIfCancellationRequested();
-                if (CancelOnDelay) throw new OperationCanceledException();
-                Delays.Add(ms);
-                Now += ms;
-                return Task.CompletedTask;
-            },
-            NowMs = () => Now,
-            ArmEcho = () => Log.Add("arm"),
-            SettleEcho = after => Log.Add("settle " + (after is double v ? v.ToString(CultureInfo.InvariantCulture) : "null")),
-        };
-    }
-
-    [Fact]
-    public async Task Connect_taps_once_and_reports()
-    {
-        var fake = new GroundPowerFake(0.0, 1.0);   // not connected; then the read-back finds it connected
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
-        // The echo opens right before the one run and ends with the connection the read-back found.
-        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
-        Assert.Equal(Bbs757EfbLayout.ToggleGroundPower(), Assert.Single(fake.Runs));
-        // The connection before the tap and again after it; a connect never looks at EXT PWR.
-        Assert.Equal(new[] { GpuKey, GpuKey }, fake.Reads);
-        Assert.Empty(fake.Delays);   // the read-back found the wish at once
-    }
-
-    [Fact]
-    public async Task Connect_when_connected_taps_nothing()
-    {
-        var fake = new GroundPowerFake(1.0);   // connected already: the tile would disconnect it
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Already, GpuAlreadyConnectedSaid), outcome);
-        Assert.Empty(fake.Log);    // no echo, no run, no settle
-        Assert.Empty(fake.Runs);
-        Assert.Equal(new[] { GpuKey }, fake.Reads);
-    }
-
-    [Fact]
-    public async Task Disconnect_when_disconnected_taps_nothing()
-    {
-        var fake = new GroundPowerFake(0.0) { ExtPwr = 1.0 };   // disconnected already: the tile would connect it
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Already, GpuAlreadyDisconnectedSaid), outcome);
-        Assert.Empty(fake.Log);
-        Assert.Empty(fake.Runs);
-        Assert.Equal(new[] { GpuKey }, fake.Reads);   // not connected, so EXT PWR is not asked
-    }
-
-    [Fact]
-    public async Task Disconnect_refused_while_on_line()
-    {
-        var fake = new GroundPowerFake(1.0) { ExtPwr = 1.0 };
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuOnLineSaid), outcome);
-        Assert.Empty(fake.Log);    // refused before any tap, and no echo opened
-        Assert.Empty(fake.Runs);
-        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey }, fake.Reads);
-    }
-
-    [Fact]
-    public async Task Disconnect_taps_once_and_reports()
-    {
-        var fake = new GroundPowerFake(1.0, 0.0) { ExtPwr = 0.0 };   // connected, EXT PWR off; then the read-back finds it gone
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuDisconnectedSaid), outcome);
-        Assert.Equal(new[] { "arm", "run", "settle 0" }, fake.Log);
-        Assert.Equal(Bbs757EfbLayout.ToggleGroundPower(), Assert.Single(fake.Runs));
-        // The connection, then EXT PWR (it is connected), both before the tap; then the read-back.
-        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey, GpuKey }, fake.Reads);
-    }
-
-    [Theory]
-    [InlineData(true, null)]
-    [InlineData(true, double.NaN)]
-    [InlineData(false, null)]
-    [InlineData(false, double.NaN)]
-    public async Task A_ground_power_that_cannot_be_read_taps_nothing_and_says_so(bool connect, double? reading)
-    {
-        var fake = new GroundPowerFake(reading) { ExtPwr = 1.0 };
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuUnreadSaid), outcome);
-        Assert.Empty(fake.Log);
-        Assert.Empty(fake.Runs);
-        Assert.Equal(new[] { GpuKey }, fake.Reads);   // nothing says which way a tap would go, so EXT PWR is not asked
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData(double.NaN)]
-    public async Task A_disconnect_with_external_power_unread_taps_nothing(double? extPwr)
-    {
-        var fake = new GroundPowerFake(1.0) { ExtPwr = extPwr };
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: false, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Refused, GpuExtPwrUnreadSaid), outcome);
-        Assert.Empty(fake.Log);
-        Assert.Empty(fake.Runs);
-        Assert.Equal(new[] { GpuKey, Bbs757GroundPower.ExtPwrOnKey }, fake.Reads);
-    }
-
-    [Theory]
-    [InlineData(1.0, "settle 1", GpuConnectedSaid)]        // the tile took, though the run never reported finishing
-    [InlineData(0.0, "settle 0", GpuNotConnectedSaid)]     // it did not: said so after the whole read-back
-    public async Task A_run_that_did_not_report_finishing_is_judged_from_the_variable_and_never_run_again(
-        double after, string settle, string said)
-    {
-        var fake = new GroundPowerFake(0.0, after) { Answer = (Bbs757EfbRunResult.NotFinished, true) };   // it may have clicked
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, said), outcome);
-        Assert.Single(fake.Runs);   // exactly one run: a second tap could undo the first
-        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
-    }
-
-    [Theory]
-    [InlineData(Bbs757EfbRunResult.Unreachable)]
-    [InlineData(Bbs757EfbRunResult.LayoutUnknown)]
-    [InlineData(Bbs757EfbRunResult.NotFinished)]
-    public async Task A_run_that_tapped_nothing_is_a_run_problem_and_is_not_read_back(Bbs757EfbRunResult result)
-    {
-        var fake = new GroundPowerFake(0.0) { Answer = (result, false) };
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.RunProblem, null, result), outcome);
-        Assert.Equal(new[] { "arm", "run", "settle null" }, fake.Log);   // the echo ends all the same
-        Assert.Equal(new[] { GpuKey }, fake.Reads);                      // nothing was tapped: nothing to read back
-        Assert.Empty(fake.Delays);
-    }
-
-    [Theory]
-    [InlineData(true, 0.0, "settle 0", GpuNotConnectedSaid)]
-    [InlineData(false, 1.0, "settle 1", GpuNotDisconnectedSaid)]
-    public async Task BlueBird_never_switching_is_said_after_the_whole_read_back(
-        bool connect, double unchanged, string settle, string said)
-    {
-        var fake = new GroundPowerFake(unchanged) { ExtPwr = 0.0 };
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, said), outcome);
-        // Read every 500 ms for 6 s: the flow waited out the deadline, not less and not more.
-        Assert.Equal(Bbs757GroundPower.ReadBackMs, fake.Now - GroundPowerFake.StartMs);
-        Assert.Equal(
-            Enumerable.Repeat(Bbs757GroundPower.ReadBackPollMs, Bbs757GroundPower.ReadBackMs / Bbs757GroundPower.ReadBackPollMs),
-            fake.Delays);
-        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
-    }
-
-    [Fact]
-    public async Task The_read_back_stops_at_the_first_read_of_the_wish()
-    {
-        var fake = new GroundPowerFake(0.0, 0.0, 0.0, 1.0);   // before the tap; then at once, 500 ms later, 1000 ms later
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
-        Assert.Equal(new[] { 500, 500 }, fake.Delays);
-        Assert.Equal(new[] { GpuKey, GpuKey, GpuKey, GpuKey }, fake.Reads);
-        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
-    }
-
-    [Fact]
-    public async Task A_read_back_that_could_not_read_yet_keeps_waiting()
-    {
-        var fake = new GroundPowerFake(0.0, null, double.NaN, 1.0);
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuConnectedSaid), outcome);
-        Assert.Equal(new[] { 500, 500 }, fake.Delays);
-        Assert.Equal(new[] { "arm", "run", "settle 1" }, fake.Log);
-    }
-
-    [Theory]
-    [InlineData(null, "settle null")]
-    [InlineData(double.NaN, "settle NaN")]
-    public async Task A_read_back_that_stays_unread_says_so_and_settles_with_what_it_read(double? unread, string settle)
-    {
-        var fake = new GroundPowerFake(0.0, unread);   // readable before the tap, unreadable after it
-
-        var outcome = await Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default);
-
-        Assert.Equal(new Bbs757GroundPowerOutcome(Bbs757GroundPowerOutcomeKind.Result, GpuUnreadNowSaid), outcome);
-        Assert.Equal(new[] { "arm", "run", settle }, fake.Log);
-        Assert.Equal(Bbs757GroundPower.ReadBackMs, fake.Now - GroundPowerFake.StartMs);   // waited on like a wrong reading
-    }
-
-    [Fact]
-    public async Task A_canceled_run_propagates_and_the_echo_still_ends()
-    {
-        var fake = new GroundPowerFake(0.0) { RunThrows = new OperationCanceledException() };
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default));
-
-        Assert.Equal(new[] { "arm", "run", "settle null" }, fake.Log);   // the echo never outlives the run
-    }
-
-    [Fact]
-    public async Task A_cancel_during_the_read_back_ends_the_echo_with_the_last_connection_read()
-    {
-        var fake = new GroundPowerFake(0.0, 0.0) { CancelOnDelay = true };   // the window goes away while the flow waits
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Bbs757GroundPower.SwitchAsync(connect: true, fake.Io, default));
-
-        Assert.Equal(new[] { "arm", "run", "settle 0" }, fake.Log);
-    }
-
-    [Fact]
-    public void The_read_back_reads_every_500_ms_for_6_seconds_inside_the_echo_window()
-    {
-        Assert.Equal(6000, Bbs757GroundPower.ReadBackMs);
-        Assert.Equal(500, Bbs757GroundPower.ReadBackPollMs);
-        // The taps and the whole read-back fit the echo window the definition opens for the run: the row must not
-        // start saying the window's own change before the window has.
-        Assert.True(Bbs757EfbLayout.TotalMs(Bbs757EfbLayout.ToggleGroundPower()) + Bbs757GroundPower.ReadBackMs
-            < Bbs757GroundPower.WindowRunMaxMs);
-    }
-
-    [Theory]
-    [InlineData("de-DE")]
-    [InlineData("sv-SE")]
-    public async Task The_ground_power_outcomes_do_not_follow_the_pcs_culture(string culture)
-    {
-        // Readings with a fraction (they read as 0 and 1) beside the plain ones: no decision and no word may change
-        // with a decimal comma.
-        static async Task<List<Bbs757GroundPowerOutcome>> All() => new()
-        {
-            await Bbs757GroundPower.SwitchAsync(true, new GroundPowerFake(0.3, 0.7).Io, default),                      // connected
-            await Bbs757GroundPower.SwitchAsync(false, new GroundPowerFake(0.7, 0.3) { ExtPwr = 0.2 }.Io, default),   // disconnected
-            await Bbs757GroundPower.SwitchAsync(true, new GroundPowerFake(0.3).Io, default),                           // never connected
-            await Bbs757GroundPower.SwitchAsync(false, new GroundPowerFake(0.7) { ExtPwr = 0.7 }.Io, default),         // on line
-        };
-
-        CultureInfo saved = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-            var expected = await All();
-            Assert.Equal(new[] { GpuConnectedSaid, GpuDisconnectedSaid, GpuNotConnectedSaid, GpuOnLineSaid },
-                expected.Select(o => o.Text));
-
-            CultureInfo.CurrentCulture = new CultureInfo(culture);
-            Assert.Equal(expected, await All());
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = saved;
-        }
-    }
-
     // ---- The parking brake mode ------------------------------------------------------------
 
     [Theory]
@@ -675,112 +82,14 @@ public class Bbs757EfbTests
         Assert.Null(Bbs757WorkFolder.ReadParkingBrakeRealistic(tmp.Path));
     }
 
-    // ---- The other click sequences and positions -------------------------------------------
+    // ---- The positions and the sequence the agent takes ------------------------------------
 
     [Fact]
-    public void The_nav_data_update_opens_the_airac_page_then_waits_4_s_before_clicking()
-    {
-        var open = Bbs757EfbLayout.OpenAiracPage();
-        var update = Bbs757EfbLayout.UpdateNavData();
-
-        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.SettingsIcon, Bbs757EfbLayout.AiracData },
-            open.Select(s => s.Point));
-        Assert.Equal(open.Select(s => s.Point).Append(Bbs757EfbLayout.UpdateButton), update.Select(s => s.Point));
-        Assert.True(update[^2].DelayAfterMs >= open[^1].DelayAfterMs + 4000);
-    }
-
-    [Fact]
-    public void Fetch_ofp_goes_through_the_navigation_app_and_the_acars_dashboard()
-    {
-        Assert.Equal(new[]
-        {
-            Bbs757EfbLayout.Home, Bbs757EfbLayout.NavigationIcon, Bbs757EfbLayout.AcarsDashboard, Bbs757EfbLayout.FetchOfpButton
-        }, Bbs757EfbLayout.FetchOfp().Select(s => s.Point));
-        Assert.Equal(new EfbPoint(503, 190), Bbs757EfbLayout.NavigationIcon);
-        Assert.Equal(new EfbPoint(135, 179), Bbs757EfbLayout.AcarsDashboard);
-        Assert.Equal(new EfbPoint(441, 120), Bbs757EfbLayout.FetchOfpButton);
-    }
-
-    [Theory]
-    [InlineData("Cold and dark", 433, 214)]
-    [InlineData("Turnaround", 433, 266)]
-    [InlineData("Before start", 433, 319)]
-    [InlineData("Ready for taxi", 433, 369)]      // measured 2026-10-25
-    [InlineData("Ready for takeoff", 433, 421)]   // measured 2026-10-25
-    [InlineData("After takeoff", 818, 214)]
-    [InlineData("Cruise", 818, 266)]
-    [InlineData("Approach", 818, 319)]
-    [InlineData("Final approach", 818, 372)]
-    public void A_preset_is_home_aircraft_cockpit_presets_then_the_preset(string name, int x, int y)
-    {
-        var seq = Bbs757EfbLayout.LoadPreset(name);
-
-        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuCockpitPresets, new EfbPoint(x, y) },
-            seq.Select(s => s.Point));
-        Assert.Contains(name, Bbs757EfbLayout.PresetNames);
-    }
-
-    [Fact]
-    public void Cockpit_presets_is_the_aircraft_apps_first_menu_item()
-    {
-        // Measured 2026-10-25 (live-findings.md, "EFB Aircraft app keeps its last page"): the Aircraft
-        // app reopens on the page it was left on, so a preset or quick start taps this item first.
-        Assert.Equal(new EfbPoint(127, 178), Bbs757EfbLayout.AircraftMenuCockpitPresets);
-    }
-
-    [Fact]
-    public void The_preset_list_is_the_nine_tiles_in_cockpit_order()
-    {
-        Assert.Equal(new[]
-        {
-            "Cold and dark", "Turnaround", "Before start", "Ready for taxi", "Ready for takeoff",
-            "After takeoff", "Cruise", "Approach", "Final approach"
-        }, Bbs757EfbLayout.PresetNames);
-    }
-
-    [Theory]
-    [InlineData("APU quick start", 433, 524)]
-    [InlineData("Engine quick start", 822, 524)]   // measured 2026-10-25
-    [InlineData("IRS rapid align", 1209, 519)]     // measured 2026-10-25
-    public void A_quick_start_is_home_aircraft_cockpit_presets_then_the_tile(string name, int x, int y)
-    {
-        Assert.Equal(new[] { Bbs757EfbLayout.Home, Bbs757EfbLayout.AircraftIcon, Bbs757EfbLayout.AircraftMenuCockpitPresets, new EfbPoint(x, y) },
-            Bbs757EfbLayout.QuickStart(name).Select(s => s.Point));
-    }
-
-    [Fact]
-    public void Unknown_preset_and_quick_start_names_throw()
-    {
-        Assert.Throws<ArgumentException>(() => Bbs757EfbLayout.LoadPreset("Taxi"));
-        Assert.Throws<ArgumentException>(() => Bbs757EfbLayout.QuickStart("APU"));
-    }
-
-    [Fact]
-    public void The_units_answer_is_one_click_on_the_open_dialog_without_going_home()
-    {
-        Assert.Equal(new[] { new EfbPoint(390, 658) }, Bbs757EfbLayout.AnswerUnits(accept: true).Select(s => s.Point));
-        Assert.Equal(new[] { new EfbPoint(993, 658) }, Bbs757EfbLayout.AnswerUnits(accept: false).Select(s => s.Point));
-    }
-
-    [Theory]
-    [InlineData(Bbs757EfbRunKind.FetchOfp, true, true)]
-    [InlineData(Bbs757EfbRunKind.FetchOfp, false, false)]   // the fetch did not finish: no dialog to answer
-    [InlineData(Bbs757EfbRunKind.Units, true, false)]       // already answered
-    [InlineData(Bbs757EfbRunKind.Preset, true, false)]      // another run since the fetch
-    [InlineData(null, false, false)]                        // nothing run yet
-    public void The_units_question_is_answered_only_right_after_a_finished_fetch(Bbs757EfbRunKind? last, bool done, bool expected)
-    {
-        Assert.Equal(expected, Bbs757EfbLayout.MayAnswerUnits(last, done));
-    }
-
-    [Fact]
-    public void Home_and_the_icons_sit_at_their_measured_positions()
+    public void Home_sits_at_its_measured_position_and_the_chocks_have_their_variable()
     {
         Assert.Equal(new EfbPoint(19, 62), Bbs757EfbLayout.Home);
-        Assert.Equal(new EfbPoint(320, 190), Bbs757EfbLayout.AircraftIcon);
-        Assert.Equal(new EfbPoint(1073, 190), Bbs757EfbLayout.SettingsIcon);
-        Assert.Equal(new EfbPoint(95, 486), Bbs757EfbLayout.AiracData);
-        Assert.Equal(new EfbPoint(98, 244), Bbs757EfbLayout.SettingsAircraft);
+        Assert.Equal(new EfbPoint(Bbs757EfbScreen.HomeButton.X, Bbs757EfbScreen.HomeButton.Y), Bbs757EfbLayout.Home);   // the reader's Home button is the layout's
+        Assert.Equal("BBS757_vis_chocks", Bbs757EfbLayout.ChocksVar);
     }
 
     [Fact]
@@ -793,8 +102,15 @@ public class Bbs757EfbTests
         });
         InCulture("sv-SE", () =>
         {
-            Assert.Equal("[[1291,337,0]]", Bbs757EfbLayout.ToJson(new (EfbPoint, int)[] { (Bbs757EfbLayout.UpdateButton, 0) }));
+            Assert.Equal("[[1291,337,0]]", Bbs757EfbLayout.ToJson(new (EfbPoint, int)[] { (new EfbPoint(1291, 337), 0) }));
         });
+    }
+
+    [Fact]
+    public void The_planned_time_of_a_sequence_is_the_sum_of_its_delays()
+    {
+        Assert.Equal(1750, Bbs757EfbLayout.TotalMs(new (EfbPoint, int)[] { (Bbs757EfbLayout.Home, 1500), (new EfbPoint(1291, 337), 250) }));
+        Assert.Equal(0, Bbs757EfbLayout.TotalMs(Array.Empty<(EfbPoint, int)>()));
     }
 
     // ---- BlueBird's work folder -------------------------------------------
@@ -965,23 +281,17 @@ public class Bbs757EfbTests
         client.Start();
 
         Assert.False(client.IsReady);
-        Assert.False(client.IsLayoutUnknown);
-        Assert.Equal(Bbs757EfbRunResult.Unreachable, await client.RunAsync(Bbs757EfbLayout.FetchOfp(), CancellationToken.None));
+        Assert.Equal(Bbs757EfbRunResult.Unreachable,
+            await client.RunAsync(new[] { (Bbs757EfbLayout.Home, 250) }, CancellationToken.None));
         Assert.Equal(Bbs757EfbRunResult.Unreachable, await client.RunAsync(Array.Empty<(EfbPoint, int)>(), CancellationToken.None));
-        Assert.Null(await client.ReadPageAsync(CancellationToken.None));
     }
 
     [Theory]
     [InlineData("no-canvas: size 1200x900", Bbs757EfbRunResult.LayoutUnknown)]
     [InlineData("no-canvas: canvas", Bbs757EfbRunResult.Unreachable)]
     [InlineData("no-canvas: handlers", Bbs757EfbRunResult.Unreachable)]
-    [InlineData("page-too-early", Bbs757EfbRunResult.PageTooEarly)]
-    [InlineData("page-too-young", Bbs757EfbRunResult.PageTooYoung)]
-    [InlineData("already-ran", Bbs757EfbRunResult.AlreadyRan)]
-    [InlineData("other-page", Bbs757EfbRunResult.OtherPage)]
     [InlineData("busy", Bbs757EfbRunResult.NotFinished)]
     [InlineData("bad-seq", Bbs757EfbRunResult.NotFinished)]
-    [InlineData("no-page-time", Bbs757EfbRunResult.NotFinished)]
     public void An_agent_refusal_maps_to_what_the_window_says(string error, Bbs757EfbRunResult expected)
     {
         Assert.Equal(expected, CoherentBbs757EfbClient.ResultForRefusal(error));
@@ -1014,61 +324,32 @@ public class Bbs757EfbTests
         Assert.DoesNotContain(".includes(", code);
         Assert.StartsWith("(function () {", code.TrimStart());
         Assert.Contains("} catch (e) {", code);
-        // The page-bound guards the nav data update relies on, and the page clock they use.
-        Assert.Contains("notBeforeLoadMs", code);
-        Assert.Contains("minAgeMs", code);
-        Assert.Contains("onceKey", code);
-        Assert.Contains("Date.now() - performance.now()", code);
         Assert.DoesNotContain("cancelled", agent);   // US spelling
     }
 
     [Fact]
-    public void The_nav_data_update_runs_once_per_page_under_the_page_guards_on_the_page_it_judged()
+    public void The_efb_agent_runs_a_click_anywhere_on_the_tablet()
     {
-        long judged = new DateTimeOffset(U("2026-10-30 08:00:00")).ToUnixTimeMilliseconds();
-        var guard = Bbs757EfbLayout.UpdateGuard(DateOnly.FromDateTime(U("2026-10-30 10:00:00")), judged);
-
-        Assert.Equal("airac-update", guard.OnceKey);
-        Assert.Equal(60000, guard.MinPageAgeMs);
-        Assert.Equal(new DateTimeOffset(U("2026-10-30 00:00:00")).ToUnixTimeMilliseconds(), guard.NotBeforeLoadMs);
-        // The click lands only on the page whose load time the window judged: a reload in between
-        // (a new page) is refused by the agent as "other-page".
-        Assert.Equal(judged, guard.SamePageAsMs);
-    }
-
-    [Fact]
-    public void The_efb_agent_refuses_an_unguarded_click_near_the_update_spot()
-    {
+        // The owner's ruling of 2026-10-29: nothing refuses a press, the AIRAC page's UPDATE/REMOVE spot included. Agent versions 3 to
+        // 6 refused any click near that spot unless the run carried the nav data update's page guards; the refusal, the spot's constants
+        // and the run guards are gone (version 7), and the client asks for that version.
         string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
         string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
 
-        // The client asks for this agent version, the first that has the guard.
+        Assert.DoesNotContain("unguarded-update", agent);   // not even a comment about it
+        Assert.DoesNotContain("UPDATE_", code);             // the spot: UPDATE_X, UPDATE_Y, UPDATE_HALF_W, UPDATE_HALF_H
+        Assert.DoesNotContain("touchesUpdateSpot", code);
+        Assert.DoesNotContain("updateGuarded", code);
+        foreach (string guard in new[] { "notBeforeLoadMs", "minAgeMs", "samePageAsMs", "onceKey", "guardProblem" })
+            Assert.DoesNotContain(guard, code);
+
+        // The only reasons left to refuse a run are the ones about the run itself, never about where it clicks.
+        var refusals = System.Text.RegularExpressions.Regex.Matches(code, @"refuse\('([^']*)'")
+            .Select(m => m.Groups[1].Value).Distinct().OrderBy(r => r, StringComparer.Ordinal).ToList();
+        Assert.Equal(new[] { "bad-seq", "busy", "no-canvas: ", "unknown-run" }, refusals);
+
+        Assert.Equal(7, CoherentBbs757EfbClient.AgentVersion);
         Assert.Contains("var VERSION = " + CoherentBbs757EfbClient.AgentVersion.ToString(CultureInfo.InvariantCulture) + ";", code);
-        Assert.Contains("'unguarded-update'", code);
-        Assert.Contains("UPDATE_X = " + Bbs757EfbLayout.UpdateButton.X.ToString(CultureInfo.InvariantCulture), code);
-        Assert.Contains("UPDATE_Y = " + Bbs757EfbLayout.UpdateButton.Y.ToString(CultureInfo.InvariantCulture), code);
-        Assert.Contains("UPDATE_HALF_W = " + Bbs757EfbLayout.UpdateSpotHalfWidth.ToString(CultureInfo.InvariantCulture), code);
-        Assert.Contains("UPDATE_HALF_H = " + Bbs757EfbLayout.UpdateSpotHalfHeight.ToString(CultureInfo.InvariantCulture), code);
-        // All three page guards must be there for such a click.
-        Assert.Matches(@"onceKey\s*!=\s*null\s*&&\s*opts\.notBeforeLoadMs\s*!=\s*null\s*&&\s*opts\.minAgeMs\s*!=\s*null", code);
-        Assert.Equal(Bbs757EfbRunResult.NotFinished, CoherentBbs757EfbClient.ResultForRefusal("unguarded-update"));
-    }
-
-    [Fact]
-    public void No_other_sequence_clicks_anywhere_near_the_update_spot()
-    {
-        var spot = Bbs757EfbLayout.UpdateButton;
-        bool Near(EfbPoint p) => Math.Abs(p.X - spot.X) <= Bbs757EfbLayout.UpdateSpotHalfWidth
-                                 && Math.Abs(p.Y - spot.Y) <= Bbs757EfbLayout.UpdateSpotHalfHeight;
-
-        var update = Bbs757EfbLayout.UpdateNavData();
-        Assert.Single(update, s => Near(s.Point));
-        var others = EveryHomeSequence().Where(seq => !seq.Any(s => s.Point == spot)).ToList();
-        others.Add(Bbs757EfbLayout.AnswerUnits(accept: true));
-        others.Add(Bbs757EfbLayout.AnswerUnits(accept: false));
-        Assert.True(others.Count >= 15);
-        foreach (var seq in others)
-            Assert.DoesNotContain(seq, s => Near(s.Point));
     }
 
     // ---- weight units -------------------------------------------------------
@@ -1119,176 +400,5 @@ public class Bbs757EfbTests
         using var tmp = new TempDir();
 
         Assert.Null(Bbs757WorkFolder.ReadUnits(tmp.Path));
-    }
-
-    [Theory]
-    [InlineData(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, "Weight units now pounds")]
-    [InlineData(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms, "Weight units now kilograms")]
-    [InlineData(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, "Weight units unchanged, pounds")]
-    [InlineData(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Kilograms, "Weight units unchanged, kilograms")]
-    [InlineData(null, Bbs757WeightUnits.Pounds, "Weight units are pounds")]
-    [InlineData(Bbs757WeightUnits.Pounds, null, "The weight units could not be read")]
-    [InlineData(null, null, "The weight units could not be read")]
-    public void The_units_answer_says_which_units_are_set(Bbs757WeightUnits? before, Bbs757WeightUnits? after, string expected)
-    {
-        Assert.Equal(expected, Bbs757EfbLayout.UnitsAnswerPhrase(before, after));
-    }
-
-    // ---- the units question left open (the final review's important 3) ------------------
-
-    [Fact]
-    public void A_fetch_in_other_units_leaves_the_question_open_on_its_page_only()
-    {
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
-
-        Assert.True(question.MayBeOpen(1000));
-        Assert.True(question.MayBeOpen(null));    // the page unread: it may still be up
-        Assert.False(question.MayBeOpen(2000));   // the flight reloaded: a new page, without it
-    }
-
-    [Fact]
-    public void Accept_or_keep_units_closes_the_question()
-    {
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
-
-        question.Answered();
-
-        Assert.False(question.MayBeOpen(1000));
-    }
-
-    [Fact]
-    public void A_fetch_in_matching_or_unread_units_raises_no_question()
-    {
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 1000);
-        Assert.False(question.MayBeOpen(1000));
-        question.AfterFetch(null, Bbs757WeightUnits.Pounds, pageMs: 1000);
-        Assert.False(question.MayBeOpen(1000));
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, null, pageMs: 1000);
-        Assert.False(question.MayBeOpen(1000));
-    }
-
-    [Fact]
-    public void A_later_fetch_in_matching_units_on_the_same_page_leaves_an_open_question_open()
-    {
-        // If the question is modal, the later fetch's presses may never have reached the tablet.
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
-
-        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 1000);
-
-        Assert.True(question.MayBeOpen(1000));
-    }
-
-    [Fact]
-    public void A_fetch_on_a_new_page_forgets_the_old_pages_question()
-    {
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: 1000);
-
-        question.AfterFetch(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds, pageMs: 2000);
-
-        Assert.False(question.MayBeOpen(2000));
-    }
-
-    [Fact]
-    public void A_question_raised_on_an_unread_page_blocks_every_page_until_answered()
-    {
-        var question = new Bbs757UnitsQuestion();
-        question.AfterFetch(Bbs757WeightUnits.Kilograms, Bbs757WeightUnits.Pounds, pageMs: null);
-
-        Assert.True(question.MayBeOpen(1000));
-        question.Answered();
-        Assert.False(question.MayBeOpen(1000));
-    }
-
-    // ---- cockpit presets: ground or flight -------------------------------------
-
-    [Theory]
-    [InlineData("Cold and dark")]
-    [InlineData("Turnaround")]
-    [InlineData("Before start")]
-    [InlineData("Ready for taxi")]
-    [InlineData("Ready for takeoff")]
-    public void A_ground_preset_loads_only_on_the_ground(string preset)
-    {
-        Assert.True(Bbs757EfbLayout.IsGroundPreset(preset));
-        Assert.Null(Bbs757EfbLayout.PresetRefusal(preset, onGround: true));
-        Assert.Equal("That preset is for the ground.", Bbs757EfbLayout.PresetRefusal(preset, onGround: false));
-    }
-
-    [Theory]
-    [InlineData("After takeoff")]
-    [InlineData("Cruise")]
-    [InlineData("Approach")]
-    [InlineData("Final approach")]
-    public void A_flight_preset_loads_only_airborne(string preset)
-    {
-        Assert.False(Bbs757EfbLayout.IsGroundPreset(preset));
-        Assert.Null(Bbs757EfbLayout.PresetRefusal(preset, onGround: false));
-        Assert.Equal("That preset is for flight.", Bbs757EfbLayout.PresetRefusal(preset, onGround: true));
-    }
-
-    [Fact]
-    public void Every_preset_is_a_ground_or_a_flight_one()
-    {
-        Assert.Equal(5, Bbs757EfbLayout.PresetNames.Count(Bbs757EfbLayout.IsGroundPreset));
-        Assert.Equal(4, Bbs757EfbLayout.PresetNames.Count(p => !Bbs757EfbLayout.IsGroundPreset(p)));
-        Assert.Throws<ArgumentException>(() => Bbs757EfbLayout.IsGroundPreset("Taxi"));
-    }
-
-    // ---- more than one work folder ------------------------------------------------
-
-    [Fact]
-    public void Work_folders_disagree_when_another_one_holds_the_current_cycle_or_newer()
-    {
-        using var tmp = new TempDir();
-        string chosen = tmp.Sub("chosen"), other = tmp.Sub("other"), missing = tmp.Sub("missing");
-        Directory.CreateDirectory(chosen);
-        Directory.CreateDirectory(other);
-        WriteCycle(chosen, "{\"cycle\":\"2603\"}");
-
-        WriteCycle(other, "{\"cycle\":\"2610\"}");
-        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { chosen, other, missing }, chosen, currentCycle: 2610));
-        WriteCycle(other, "{\"cycle\":\"2611\"}");
-        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { other, chosen }, chosen, currentCycle: 2610));
-    }
-
-    [Fact]
-    public void Work_folders_disagree_when_another_one_holds_a_cycle_file_that_cannot_be_read()
-    {
-        using var tmp = new TempDir();
-        string chosen = tmp.Sub("chosen"), other = tmp.Sub("other");
-        Directory.CreateDirectory(chosen);
-        WriteCycle(other, "not json");
-
-        Assert.True(Bbs757WorkFolder.OthersDisagree(new[] { chosen, other }, chosen, currentCycle: 2610));
-    }
-
-    [Fact]
-    public void Work_folders_agree_when_the_others_hold_an_older_cycle_or_none()
-    {
-        using var tmp = new TempDir();
-        string chosen = tmp.Sub("chosen"), older = tmp.Sub("older"), bare = tmp.Sub("bare"), missing = tmp.Sub("missing");
-        WriteCycle(chosen, "{\"cycle\":\"2603\"}");
-        WriteCycle(older, "{\"cycle\":\"2609\"}");
-        Directory.CreateDirectory(bare);
-
-        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen, older, bare, missing }, chosen, currentCycle: 2610));
-        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen }, chosen, currentCycle: 2610));
-        Assert.False(Bbs757WorkFolder.OthersDisagree(Array.Empty<string>(), chosen, currentCycle: 2610));
-    }
-
-    [Fact]
-    public void The_chosen_folder_itself_never_counts_as_another()
-    {
-        using var tmp = new TempDir();
-        string chosen = tmp.Sub("chosen");
-        WriteCycle(chosen, "{\"cycle\":\"2610\"}");
-
-        // Listed twice, and with another spelling of the same path.
-        Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen, chosen + Path.DirectorySeparatorChar, chosen.ToUpperInvariant() }, chosen, currentCycle: 2610));
     }
 }

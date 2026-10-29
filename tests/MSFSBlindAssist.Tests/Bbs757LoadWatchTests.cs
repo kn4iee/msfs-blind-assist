@@ -333,20 +333,6 @@ public class Bbs757LoadWatchTests
         Assert.Equal(15_000, Bbs757LoadWatch.IntervalMs);
     }
 
-    // ---- what the window says once the taps are made -----------------------------------------
-
-    [Theory]
-    [InlineData(true, true, "Fueling and boarding started. BlueBird loads at its own pace; boarding can take half an hour.")]
-    [InlineData(false, true, "The EFB did not confirm every press. BA is watching the fuel and payload, and says within three minutes if BlueBird has not started.")]
-    [InlineData(true, false, "Fueling and boarding started. BlueBird loads at its own pace; check the fuel with F and the weight with W.")]
-    [InlineData(false, false, "The EFB did not confirm every press. Check the fuel with F and the weight with W.")]
-    public void The_start_is_said_as_far_as_the_taps_and_the_watch_can_tell(bool confirmed, bool watching, string said)
-    {
-        // The final review's important 2: a run that may have pressed something is watched, never retried
-        // (a second START BOARDING press during boarding is unmeasured), so "Try again" is never said here.
-        Assert.Equal(said, Bbs757LoadWatch.StartedPhrase(confirmed, watching));
-    }
-
     // ---- units and culture ------------------------------------------------------------------
 
     [Fact]

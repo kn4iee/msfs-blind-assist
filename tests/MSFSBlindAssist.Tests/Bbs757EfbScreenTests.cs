@@ -300,12 +300,28 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
-    public void Nothing_in_the_update_guard_is_tappable()
+    public void Every_control_is_clickable_at_its_own_centre_the_old_update_guard_box_included()
     {
+        // The reader used to keep a box round the AIRAC page's UPDATE/REMOVE spot (x 1191-1391, y 297-377) clear of taps on every
+        // page: Callouts' Rotate and Positive rate sit in it and read "not clickable", with the tap point moved out. Nothing refuses a
+        // press now (the owner's ruling of 2026-10-29), so each is clickable at the centre of its own switch, like the ones round it.
+        var callouts = Load("bright", "53-settings-callouts");
+        foreach (var (name, x, y) in new[] { ("Rotate", 1247, 308), ("Positive rate", 1247, 359) })
+        {
+            var sw = Item(callouts, name);
+            Assert.Equal(Bbs757EfbKind.Toggle, sw.Kind);
+            Assert.True(sw.Clickable, name);
+            Assert.InRange(sw.Hit.X, x - 5, x + 5);
+            Assert.InRange(sw.Hit.Y, y - 5, y + 5);
+        }
+
         foreach (var (set, name) in new[] { ("bright", "53-settings-callouts"), ("bright", "51-settings-aircraft"), ("bright", "13-aircraft-ground-services") })
         {
             var m = Load(set, name);
-            Assert.DoesNotContain(m.Items, i => i.Clickable && Bbs757EfbScreen.UpdateGuard.Contains(i.Hit));
+            var controls = m.Menu.Concat(m.Items).Where(i => i.Kind is Bbs757EfbKind.Button or Bbs757EfbKind.Toggle or Bbs757EfbKind.Slider
+                or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Menu).ToList();
+            Assert.NotEmpty(controls);
+            Assert.All(controls, i => Assert.True(i.Clickable, $"{name}: {i.Text}"));
         }
     }
 

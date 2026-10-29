@@ -123,8 +123,8 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX);
 
 /// <summary>
 /// One element of the page. <see cref="Hit"/> is where to tap it (tablet pixels, the agent's click
-/// coordinates); <see cref="Clickable"/> false means it must not be tapped (a read-out, a credential,
-/// a guarded spot). <see cref="Key"/> is stable while the element's state changes (its label without
+/// coordinates); <see cref="Clickable"/> false means it is not a control (a read-out, a credential).
+/// <see cref="Key"/> is stable while the element's state changes (its label without
 /// the state word), so the window keeps the screen reader's focus on it across a refresh.
 /// </summary>
 public sealed record Bbs757EfbItem(
@@ -194,10 +194,6 @@ public static class Bbs757EfbScreen
     public const int StatusBottom = 32, TitleTop = 35, TitleBottom = 88, MenuRight = 252;
     /// <summary>The home button left of every app title (the layout's own Home point).</summary>
     public static readonly Point HomeButton = new(19, 62);
-
-    /// <summary>The AIRAC page's UPDATE/REMOVE spot: never tapped from the reader (the agent refuses
-    /// it too; the app's own nav data update owns it). Same box on every page (plan 11).</summary>
-    public static readonly Rectangle UpdateGuard = new(1191, 297, 200, 80);
 
     /// <summary>
     /// What one tablet page is known to show where (measured on the 2026-10-26 captures, dim and
@@ -721,8 +717,7 @@ public static class Bbs757EfbScreen
             if (c.Box.Tint == Bbs757EfbTint.Green && !HasStateWord(state) && !GenericActions.Contains(StripMark(state))) text += ", on";
             if (detail.TryGetValue(box, out var d)) text += ", " + d;
             if (c.Tab && selectedTab.Contains(c.Hit)) text += " (selected)";
-            var hit = SafeHit(c.Hit);
-            o.Add(new(c.Tab ? Bbs757EfbKind.Menu : Bbs757EfbKind.Button, text, c.Hit, hit ?? Centre(c.Hit), hit != null,
+            o.Add(new(c.Tab ? Bbs757EfbKind.Menu : Bbs757EfbKind.Button, text, c.Hit, Centre(c.Hit), true,
                 (c.Tab ? "tab:" : "btn:") + (cap ?? "") + "|" + StripState(state) + "@" + c.Hit.X / 20 + "," + c.Hit.Y / 20, c.Box.Tint,
                 Selected: c.Tab && selectedTab.Contains(c.Hit)));
         }
@@ -748,8 +743,7 @@ public static class Bbs757EfbScreen
         {
             // A button drawn as plain text on the page (the checklist's RESET, the AIRAC page's LOGOUT).
             used.Add(l);
-            var hit = SafeHit(l.Box);
-            o.Add(new(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(l.Text), l.Box, hit ?? l.Centre, hit != null, "btn:" + l.Text));
+            o.Add(new(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(l.Text), l.Box, l.Centre, true, "btn:" + l.Text));
         }
         foreach (var row in Rows(loose.Where(l => !used.Contains(l)).ToList()))
         {
@@ -854,14 +848,14 @@ public static class Bbs757EfbScreen
                 var dual = FindKnob(px, cy, label.Box.Right + 20, s.Hit.X - 40, boxes);
                 if (dual is int dk)
                 {
-                    o.Add(new(Bbs757EfbKind.Toggle, pretty, label.Box, s.Hit, !UpdateGuard.Contains(s.Hit), "tgl:" + name,
+                    o.Add(new(Bbs757EfbKind.Toggle, pretty, label.Box, s.Hit, true, "tgl:" + name,
                         On: s.On, Value: s.On ? "Auto" : "Manual"));
                     var (dl, dr) = SliderTrack(name, px, cy, dk);
                     o.Add(new(Bbs757EfbKind.Slider, Bbs757EfbVocabulary.Pretty(name.Replace(" MODE", "")), label.Box, new Point(dk, cy), true,
                         "sld:" + name, Value: val, Slider: new Bbs757EfbSlider(dl, dr, dk)));
                     continue;
                 }
-                o.Add(new(Bbs757EfbKind.Toggle, pretty, label.Box, s.Hit, !UpdateGuard.Contains(s.Hit), "tgl:" + name,
+                o.Add(new(Bbs757EfbKind.Toggle, pretty, label.Box, s.Hit, true, "tgl:" + name,
                     On: s.On, Value: Bbs757EfbVocabulary.Pretty(val)));
                 continue;
             }
@@ -1218,17 +1212,6 @@ public static class Bbs757EfbScreen
     // ------------------------------------------------------------------ helpers
 
     private static Point Centre(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
-
-    /// <summary>Where to tap a box: its centre, or, when that is in the update guard, the point in
-    /// the box nearest it left of the guard; null when the whole box is inside the guard.</summary>
-    internal static Point? SafeHit(Rectangle box)
-    {
-        var c = Centre(box);
-        if (!UpdateGuard.Contains(c)) return c;
-        int x = UpdateGuard.Left - 4;
-        if (x > box.Left + 2) return new Point(x, c.Y);
-        return null;
-    }
 
     private static IEnumerable<List<Bbs757EfbTextLine>> Rows(List<Bbs757EfbTextLine> lines)
     {

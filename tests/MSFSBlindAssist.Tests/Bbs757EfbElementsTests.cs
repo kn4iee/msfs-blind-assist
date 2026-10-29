@@ -128,7 +128,7 @@ public class Bbs757EfbElementsTests
         foreach (var row in new[] { "Sync barometers", "Automatic boarding", "Nosewheel steering: Realistic", "IRS alignment time" })
             AssertPressable(settings, row);
 
-        // Callouts: Rotate and Positive rate sit where the reader still keeps its old update guard.
+        // Callouts: Rotate and Positive rate sit where the AIRAC page's UPDATE and REMOVE are drawn (x 1191-1391, y 297-377).
         var callouts = BuildOf("bright", "53-settings-callouts");
         foreach (var row in new[] { "80 KTS", "Rotate", "Positive rate" })
             AssertPressable(callouts, row);
@@ -140,13 +140,12 @@ public class Bbs757EfbElementsTests
     }
 
     [Fact]
-    public void The_navigation_data_buttons_are_pressable_in_the_box_the_reader_keeps_clear()
+    public void The_navigation_data_buttons_are_pressable_where_the_airac_page_draws_them()
     {
-        // The AIRAC page's UPDATE or REMOVE and the controls round it, as the reader marks them not clickable inside the old guard box.
-        var guard = Bbs757EfbScreen.UpdateGuard;
-        var update = Control(Bbs757EfbKind.Button, "Update", "btn:|UPDATE@64,15", new Rectangle(guard.Left + 30, guard.Top + 10, 140, 40), false);
-        var remove = Control(Bbs757EfbKind.Button, "Remove", "btn:|REMOVE@64,15", new Rectangle(guard.Left + 30, guard.Top + 10, 140, 40), false);
-        var nearby = Control(Bbs757EfbKind.Toggle, "Some switch", "tgl:SOME SWITCH", new Rectangle(guard.Left + 20, guard.Top + 50, 100, 30), false, on: true);
+        // The AIRAC page's UPDATE or REMOVE (one spot, about x 1291, y 337) and a control beside it.
+        var update = Control(Bbs757EfbKind.Button, "Update", "btn:|UPDATE@64,15", new Rectangle(1221, 307, 140, 40), true);
+        var remove = Control(Bbs757EfbKind.Button, "Remove", "btn:|REMOVE@64,15", new Rectangle(1221, 307, 140, 40), true);
+        var nearby = Control(Bbs757EfbKind.Toggle, "Some switch", "tgl:SOME SWITCH", new Rectangle(1211, 347, 100, 30), true, on: true);
         var model = new Bbs757EfbScreenModel("SETTINGS", "AIRAC DATA", Array.Empty<Bbs757EfbItem>(), new[] { update, remove, nearby });
 
         var b = Bbs757EfbElements.Build(model, null, NoExtras);

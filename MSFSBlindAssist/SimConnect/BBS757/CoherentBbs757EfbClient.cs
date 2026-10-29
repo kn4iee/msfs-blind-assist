@@ -17,25 +17,15 @@ public enum Bbs757EfbRunResult
     LayoutUnknown,
     /// <summary>Started but not completed, not answered, or refused for another reason (another run going).</summary>
     NotFinished,
-    /// <summary>Guard: the page loaded before the run's NotBeforeLoadMs. Nothing was clicked.</summary>
-    PageTooEarly,
-    /// <summary>Guard: the page is younger than the run's MinPageAgeMs. Nothing was clicked.</summary>
-    PageTooYoung,
-    /// <summary>Guard: a run with the same OnceKey already started on this page. Nothing was clicked.</summary>
-    AlreadyRan,
-    /// <summary>Guard: not the page the run's SamePageAsMs names. Nothing was clicked.</summary>
-    OtherPage,
 }
-
-/// <summary>The tablet's page: when its document loaded (Unix ms and UTC).</summary>
-public sealed record Bbs757EfbPage(long LoadedMs, DateTime LoadedUtc);
 
 /// <summary>
 /// The BlueBird 757's EFB tablet, pressed by scripted clicks over the MSFS Coherent GT remote
 /// debugger (127.0.0.1:19999). The tablet (the WASM gauge <c>efb_l</c>) lives in the cockpit view
 /// whose title holds "BBSNavigraphMap"; <c>Resources/coherent-bbs757-efb-agent.js</c> is installed
-/// there (window.__MSFSBA_BBS757EFB) and clicks through the tablet's own mouse handler. Positions
-/// and sequences are <see cref="Bbs757EfbLayout"/>'s.
+/// there (window.__MSFSBA_BBS757EFB) and clicks through the tablet's own mouse handler. The agent
+/// clicks wherever it is asked to: neither the client nor the agent refuses a click for the place it
+/// lands on (the owner's ruling of 2026-10-29); the press pipeline checks what it taps before it taps.
 ///
 /// Shaped like <see cref="CoherentBbs757TabletClient"/>, without its screen polling: the view is
 /// resolved BY TITLE on every (re)connect (its VCockpit number changes on each aircraft load); ONE
@@ -49,15 +39,11 @@ public sealed record Bbs757EfbPage(long LoadedMs, DateTime LoadedUtc);
 /// The loop only keeps the link: it connects, installs, and while the EFB window is shown checks
 /// the agent every <see cref="KeepAliveMs"/> ms so the window's status stays true; hidden, it sends
 /// nothing. Showing the window pings at once, and that ping or a run's start going unanswered
-/// drops the socket straight away (a half-open socket after a reload). <see cref="RunAsync"/> and
-/// <see cref="ReadPageAsync"/> use the loop's socket and never connect themselves, so they cannot
-/// race the loop's connection setup ([A380C-3]); they wake the loop and wait a few seconds for the
-/// agent when the link is down. Sequences run one at a time, in the page; a run given up on is
-/// canceled there before the next may start, and one still going at Dispose is canceled first.
-///
-/// The page clock: the agent reports when its document loaded, which is when the flight loaded
-/// (the view is made anew on each load). The nav data update is bound to it: its guard is checked
-/// by the agent on the page it clicks (<see cref="Bbs757EfbRunGuard"/>).
+/// drops the socket straight away (a half-open socket after a reload). <see cref="RunAsync"/>
+/// uses the loop's socket and never connects itself, so it cannot race the loop's connection setup
+/// ([A380C-3]); it wakes the loop and waits a few seconds for the agent when the link is down.
+/// Sequences run one at a time, in the page; a run given up on is canceled there before the next
+/// may start, and one still going at Dispose is canceled first.
 /// Restart is not supported: dispose and create a new instance.
 /// </summary>
 public sealed class CoherentBbs757EfbClient : IDisposable
@@ -69,18 +55,18 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     private const string NoAgent = "no-agent";
 
     /// <summary>
-    /// The agent version a run asks for (its VERSION): 3 is the first that refuses a click near the
-    /// UPDATE spot without the update's page guards. An older agent on the page answers "no agent"
-    /// to a run and is replaced by the install.
+    /// The agent version the client asks for (its VERSION): 7 is the first without the refusal of a
+    /// click near the AIRAC page's UPDATE spot and the run guards it needed. An older agent on the
+    /// page answers "no agent" to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 6;   // 4: mirror(on), 5: wheel(x, y, deltaY), 6: readVars(names)
+    internal const int AgentVersion = 7;   // 4: mirror(on), 5: wheel(x, y, deltaY), 6: readVars(names), 7: no UPDATE-spot refusal or run guards
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
     private const int TeardownCancelWaitMs = 500;
 
     // The agent's ping, answered "no agent" by a missing agent or one older than AgentVersion, so
-    // the keep-alive and the page read have an old agent replaced before a run needs it.
+    // the keep-alive has an old agent replaced before a run needs it.
     private static readonly string PingExpression =
         $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} ? JSON.stringify(__MSFSBA_BBS757EFB.ping()) : '{NoAgent}'";
 
@@ -121,9 +107,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     private int _installFailures;
     // Set when the agent says the tablet canvas is not the measured size; cleared by an install.
     private volatile bool _layoutUnknown;
-    // The tablet page's load time (Unix ms) as last reported, and the page the last run started on; 0 unknown.
-    private long _pageMs;
-    private long _lastRunPageMs;
     private IDisposable? _viewClaim;
     private bool _disposed;
     // Set by SetActive(true): the loop's next keep-alive is the window's first look at the link,
@@ -154,37 +137,11 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     }
 
     /// <summary>
-    /// True when the agent reported the tablet's canvas at another size than the one the positions
-    /// were measured on (a BlueBird update): nothing is clicked until a later install finds it right.
-    /// </summary>
-    public bool IsLayoutUnknown => _layoutUnknown;
-
-    /// <summary>The tablet page's load time (Unix ms) as the agent last reported it, or null.</summary>
-    public long? PageLoadedMs
-    {
-        get
-        {
-            long ms = Interlocked.Read(ref _pageMs);
-            return ms > 0 ? ms : null;
-        }
-    }
-
-    /// <summary>
     /// Whether the last <see cref="RunAsync"/> may have clicked anything: its start went out and the
     /// agent did not refuse it (an unanswered start counts, since it may have run). False for a run
     /// stopped before its start, or refused by the agent: nothing was clicked then.
     /// </summary>
     public bool LastRunMayHaveClicked => _lastRunMayHaveClicked;
-
-    /// <summary>The page the last run started on (its load time, Unix ms), or null.</summary>
-    public long? LastRunPageLoadedMs
-    {
-        get
-        {
-            long ms = Interlocked.Read(ref _lastRunPageMs);
-            return ms > 0 ? ms : null;
-        }
-    }
 
     public void Start()
     {
@@ -236,32 +193,19 @@ public sealed class CoherentBbs757EfbClient : IDisposable
 
     /// <summary>
     /// Runs one click sequence on the tablet and waits until it has finished (every click made and
-    /// its delay after it passed): <see cref="Bbs757EfbRunResult.Done"/>, or why not. With a
-    /// <paramref name="guard"/>, the agent checks its conditions on the page it would click before
-    /// the first click; the update's guard carries a once-per-page key, and such a run is never
-    /// tried a second time, whatever answered (a missing agent or canvas is reported unreachable).
-    /// Any other run whose start found no agent or canvas, so nothing was clicked, is tried once
-    /// more after a re-install. A start sent but not answered is never sent again: it may have run.
-    /// A run given up on is canceled in the page before the next one may start.
+    /// its delay after it passed): <see cref="Bbs757EfbRunResult.Done"/>, or why not. A run whose
+    /// start found no agent or canvas, so nothing was clicked, is tried once more after a
+    /// re-install. A start sent but not answered is never sent again: it may have run. A run given
+    /// up on is canceled in the page before the next one may start.
     /// </summary>
-    public async Task<Bbs757EfbRunResult> RunAsync(IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq,
-        CancellationToken ct, Bbs757EfbRunGuard? guard = null)
+    public async Task<Bbs757EfbRunResult> RunAsync(IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq, CancellationToken ct)
     {
         _lastRunMayHaveClicked = false;
         // Not started, or started without its agent (no loop runs then): nothing could ever click.
         if (seq.Count == 0 || _viewClaim == null || _disposed) return Bbs757EfbRunResult.Unreachable;
         string json = Bbs757EfbLayout.ToJson(seq);
         int plannedMs = Bbs757EfbLayout.TotalMs(seq);
-        string opts = guard == null
-            ? "null"
-            : JsonSerializer.Serialize(new
-            {
-                notBeforeLoadMs = guard.NotBeforeLoadMs,
-                minAgeMs = guard.MinPageAgeMs,
-                onceKey = guard.OnceKey,
-                samePageAsMs = guard.SamePageAsMs,
-            });
-        int attempts = guard?.OnceKey == null ? 2 : 1;
+        const int attempts = 2;
 
         try
         {
@@ -275,10 +219,10 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                     if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), token))
                         return _layoutUnknown ? Bbs757EfbRunResult.LayoutUnknown : Bbs757EfbRunResult.Unreachable;
 
-                    // Only an agent of this version or later may run it: an older one lacks the
-                    // update-spot guard, answers "no agent", and is replaced by the re-install.
+                    // Only an agent of this version or later may run it: an older one answers "no
+                    // agent" and is replaced by the re-install.
                     string raw = await EvalAsync(
-                        $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} ? JSON.stringify(__MSFSBA_BBS757EFB.clickSeq({JsonSerializer.Serialize(json)},{opts})) : '{NoAgent}'",
+                        $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} ? JSON.stringify(__MSFSBA_BBS757EFB.clickSeq({JsonSerializer.Serialize(json)})) : '{NoAgent}'",
                         token);
                     if (raw.Length == 0)
                     {
@@ -301,7 +245,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                         _lastRunMayHaveClicked = true;   // an answer that cannot be read: it may have run
                         return Bbs757EfbRunResult.NotFinished;
                     }
-                    NotePage(start.page);
                     if (!start.ok)
                     {
                         Log.Debug("BBS757", $"EFB sequence refused: {start.error}");
@@ -314,7 +257,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
                         }
                         return refused;
                     }
-                    Interlocked.Exchange(ref _lastRunPageMs, start.page ?? 0);
                     _lastRunMayHaveClicked = true;
                     if (start.error != null)
                     {
@@ -352,53 +294,11 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     }
 
     /// <summary>
-    /// The tablet's page as it reports itself now: when it loaded (the page clock, see the agent).
-    /// Null when the view or its agent cannot be reached within a few seconds, the agent cannot
-    /// click (<see cref="IsLayoutUnknown"/> tells a tablet of another size), or the page has no
-    /// clock. A read only: it never connects ([A380C-3]) and takes no run's place.
-    /// </summary>
-    public async Task<Bbs757EfbPage?> ReadPageAsync(CancellationToken ct)
-    {
-        if (_viewClaim == null || _disposed) return null;
-        try
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
-            string raw = NoAgent;
-            // An agent missing, or older than AgentVersion (an app update over a loaded flight), is
-            // installed again by the loop and asked once more.
-            for (int attempt = 0; attempt < 2 && raw == NoAgent; attempt++)
-            {
-                if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), linked.Token)) return null;
-                raw = await EvalAsync(PingExpression, linked.Token);
-                if (raw.Length == 0) { NoteUnansweredEval(); return null; }
-                if (raw == NoAgent) AgentUnusable();
-            }
-            if (raw == NoAgent) return null;
-            var ping = JsonSerializer.Deserialize<PingAnswer>(raw);
-            if (ping == null || !ping.ok) return null;
-            NotePage(ping.page);
-            if (!ping.ready)
-            {
-                if (IsSizeProblem(ping.problem)) _layoutUnknown = true;
-                AgentUnusable();
-                return null;
-            }
-            if (ping.page is not long ms || ms <= 0) return null;
-            return new Bbs757EfbPage(ms, DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime);
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or JsonException
-                                       or ArgumentOutOfRangeException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Turns the tablet reader's mirror on or off (the agent's mirror(): the tablet's live image laid
     /// over the captain's ND, so the ND pop-out shows the tablet; <see cref="Bbs757EfbPopout"/>).
     /// True when the agent did it, false when it answered that it could not (no gauge, no image),
-    /// null when the view or agent could not be reached. Like <see cref="ReadPageAsync"/> it never
-    /// connects ([A380C-3]); it may run while no click run is going and takes no run's place.
+    /// null when the view or agent could not be reached. It never connects ([A380C-3]); it may run
+    /// while no click run is going and takes no run's place.
     /// </summary>
     public async Task<bool?> SetMirrorAsync(bool on, CancellationToken ct)
     {
@@ -517,14 +417,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     {
         if (IsSizeProblem(error)) return Bbs757EfbRunResult.LayoutUnknown;
         if (error != null && error.StartsWith("no-canvas", StringComparison.Ordinal)) return Bbs757EfbRunResult.Unreachable;
-        return error switch
-        {
-            "page-too-early" => Bbs757EfbRunResult.PageTooEarly,
-            "page-too-young" => Bbs757EfbRunResult.PageTooYoung,
-            "already-ran" => Bbs757EfbRunResult.AlreadyRan,
-            "other-page" => Bbs757EfbRunResult.OtherPage,
-            _ => Bbs757EfbRunResult.NotFinished,   // busy, bad-seq, no-page-time, …
-        };
+        return Bbs757EfbRunResult.NotFinished;   // busy, bad-seq, …
     }
 
     /// <summary>
@@ -535,11 +428,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         answer != null && (answer.StartsWith("size ", StringComparison.Ordinal)
                            || answer.Contains(":size ", StringComparison.Ordinal)
                            || answer.Contains(": size ", StringComparison.Ordinal));
-
-    private void NotePage(long? page)
-    {
-        if (page is long ms && ms > 0) Interlocked.Exchange(ref _pageMs, ms);
-    }
 
     private static RunAnswer? Parse(string raw)
     {
@@ -641,7 +529,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         {
             var ping = JsonSerializer.Deserialize<PingAnswer>(raw);
             if (ping == null || !ping.ok) return;
-            NotePage(ping.page);
             if (!ping.ready)
             {
                 // The tablet gauge went (a reload in progress) or is another size: the re-install
@@ -939,7 +826,6 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         public int done { get; set; }
         public bool running { get; set; }
         public string? error { get; set; }
-        public long? page { get; set; }
     }
 
     private sealed class PingAnswer
@@ -947,6 +833,5 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         public bool ok { get; set; }
         public bool ready { get; set; }
         public string? problem { get; set; }
-        public long? page { get; set; }
     }
 }
