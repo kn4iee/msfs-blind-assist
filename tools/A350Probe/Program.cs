@@ -110,6 +110,13 @@ internal sealed class ProbeForm : Form
 
     private void Line(string s) { _out.AppendLine(s); Console.WriteLine(s); }
 
+    /// <summary>A KCCU key pressed through MSFSBA's A350MfdInput, for the op's result column.</summary>
+    private static string Pressed(MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput input, int side, string key)
+    {
+        input.Press(side, key);
+        return "sent";
+    }
+
     private ProbeDefinition? _def;
 
     /// <summary>`ois cpt|fo [text]`: the A350 OIS through MSFSBA's own client (side probe, agent, pushes),
@@ -519,11 +526,7 @@ internal sealed class ProbeForm : Form
         if (_mode == "mfd")
         {
             // MFD operations through MSFSBA's A350MfdInput, ";"-separated: click:side:x:y, type:side:TEXT, key:side:KEY.
-            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput((name, v) =>
-            {
-                _m.ExecuteCalculatorCodeUnique($"{v.ToString(CultureInfo.InvariantCulture)} (>L:{name})");
-                return true;
-            });
+            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput(_m.ExecuteCalculatorCodeUnique);
             foreach (var op in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 var p = op.Split(':');
@@ -532,7 +535,7 @@ internal sealed class ProbeForm : Form
                 {
                     "click" => (await input.ClickAsync(side, float.Parse(p[2], CultureInfo.InvariantCulture), float.Parse(p[3], CultureInfo.InvariantCulture))).ToString(),
                     "type" => (await input.TypeAsync(side, p[2])).ToString(),
-                    "key" => input.Press(side, p[2]).ToString(),
+                    "key" => Pressed(input, side, p[2]),
                     _ => "unknown",
                 };
                 Line($"{op}	{result}");
@@ -546,11 +549,7 @@ internal sealed class ProbeForm : Form
             // ND operations, ";"-separated: click:side:x:y (the EFIS gauge's point as drawn: the ND is right of 836),
             // key:side:KEY, type:side:TEXT, views (each WasmInstrument view's guid|url). The ND takes the mouse only with
             // the side's KCCU cursor on it [A350-4], so a click presses the side's ND key first.
-            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput((name, v) =>
-            {
-                _m.ExecuteCalculatorCodeUnique($"{v.ToString(CultureInfo.InvariantCulture)} (>L:{name})");
-                return true;
-            });
+            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput(_m.ExecuteCalculatorCodeUnique);
             const string Find = "(function(){var e=document.querySelector('wasm-instrument');return e?e.getAttribute('guid')+'|'+e.getAttribute('url'):''})()";
             var views = new List<(string Title, string GuidUrl)>();
             using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) })
@@ -589,7 +588,7 @@ internal sealed class ProbeForm : Form
                 else result = p[0] switch
                 {
                     "type" => (await input.TypeAsync(side, p[2])).ToString(),
-                    "key" => input.Press(side, p[2]).ToString(),
+                    "key" => Pressed(input, side, p[2]),
                     _ => "unknown",
                 };
                 Line($"{op}	{result}");

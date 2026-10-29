@@ -49,11 +49,12 @@ public sealed class A350MfdInput
     private const string Find = "(function(){var e=document.querySelector('wasm-instrument');return e?e.getAttribute('guid')+'|'+e.getAttribute('url'):''})()";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(4) };
 
-    private readonly Func<string, double, bool> _setLVar;
+    private readonly Action<string> _send;
     private (string Title, int Guid)? _view;
 
-    /// <param name="setLVar">Writes an L:var once (the definition's SetLVar).</param>
-    public A350MfdInput(Func<string, double, bool> setLVar) => _setLVar = setLVar;
+    /// <param name="send">Runs one calculator string, never coalesced with an identical one before it (the definition's
+    /// Send): a repeated key is the same text, which the MobiFlight channel would otherwise drop [VAR-4].</param>
+    public A350MfdInput(Action<string> send) => _send = send;
 
     /// <summary>The guid of a view's wasm-instrument ("guid|url") when it is the A350's MFD, else null.</summary>
     internal static int? GuidIf(string guidAndUrl)
@@ -91,7 +92,7 @@ public sealed class A350MfdInput
     }
 
     /// <summary>Presses a side's KCCU key once.</summary>
-    public bool Press(int side, string key) => _setLVar(A350Kccu.LVar(side, key), 1);
+    public void Press(int side, string key) => _send($"1 (>L:{A350Kccu.LVar(side, key)})");
 
     /// <summary>Clicks a point on a side's MFD; false when the MFD view cannot be reached.</summary>
     public async Task<bool> ClickAsync(int side, float x, float y, CancellationToken ct = default)

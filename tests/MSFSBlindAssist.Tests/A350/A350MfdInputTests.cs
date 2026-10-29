@@ -24,6 +24,20 @@ public class A350MfdInputTests
         Assert.Equal("INI_MCDU2_INIT", A350Kccu.LVar(1, "INIT"));
     }
 
+    // Review 2026-10-29 (critical): the window pressed keys through SetLVar, whose calculator write is the same text for
+    // a repeated key, and the MobiFlight channel drops a command identical to the one before it [VAR-4]: "330" typed
+    // "30", "WMKK" typed "WMK". A press is one RPN string handed to the definition's Send, which makes each one unique.
+    [Fact]
+    public async Task A_repeated_key_is_pressed_again_through_the_definitions_sender()
+    {
+        var sent = new List<string>();
+        var def = new MSFSBlindAssist.Aircraft.IniBuildsA350Definition { Send = (_, rpn) => { lock (sent) sent.Add(rpn); } };
+        var input = def.NewMfdInput(null!);
+        Assert.True(await input.TypeAsync(0, "330"));
+        input.Press(1, "ENTER");
+        Assert.Equal(new[] { "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_0)", "1 (>L:INI_MCDU2_ENTER)" }, sent);
+    }
+
     [Fact]
     public void The_mfd_view_is_found_by_its_gauge()
     {

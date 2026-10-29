@@ -32,7 +32,7 @@ public partial class IniBuildsA350Definition
             case HotkeyAction.ShowFenixMCDU:
             {
                 hotkeyManager.ExitOutputHotkeyMode();
-                var input = new A350.Display.A350MfdInput((name, value) => { simConnect.SetLVar(name, value); return true; });
+                var input = NewMfdInput(simConnect);
                 ShowTrackedWindow(
                     () => new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
                         async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
@@ -181,6 +181,10 @@ public partial class IniBuildsA350Definition
         else
             announcer.AnnounceImmediate("Not available on this aircraft");
     }
+
+    /// <summary>The MFD window's KCCU and mouse: its key presses go out through <see cref="Send"/>, so a repeated key
+    /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4].</summary>
+    internal A350.Display.A350MfdInput NewMfdInput(SimConnectManager simConnect) => new(rpn => Send(simConnect, rpn));
 
     /// <summary>An FCU window as the cockpit shows it now (<see cref="A350.A350FcuWindows"/>), or null while unread.</summary>
     internal string? FcuWindowText(string windowName, SimConnectManager simConnect)
