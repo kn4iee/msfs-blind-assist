@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.A350;
+using MSFSBlindAssist.Aircraft.MD11;
 using MSFSBlindAssist.Services;
 using MSFSBlindAssist.Settings;
 using MSFSBlindAssist.SimConnect;
@@ -175,12 +176,13 @@ public class A350LampAnnouncementTests
         var def = new IniBuildsA350Definition
         {
             Clock = () => _now, Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null, IsMuted = _ => false,
+            ActiveBatches = _ => new[] { 0 },
         };
         def.Attach(new SimConnectManager(IntPtr.Zero));
         var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
         BaselineWithoutAnnLt(def, bat);
-        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
-            def.OnContinuousBatchDelivered(i);
+        for (int i = 0; i <= Md11SeedGate.QuietCycles; i++)
+            def.OnContinuousBatchDelivered(0);   // the deliveries settled: the seed runs
         def.ProcessSimVarUpdate(bat.Key, 0, _speech);   // its fault input again, unchanged
         _now += 5000;
         def.OnContinuousBatchDelivered(0);
@@ -342,12 +344,34 @@ public class A350LampAnnouncementTests
         var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
         var cache = bat.InputKeys.ToDictionary(k => k, k => k == bat.Key ? 1.0 : 1.0);   // lit
         _def.Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null;
+        _def.ActiveBatches = _ => new[] { 0 };
         _def.OnSimContextReset();
-        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
-            BatchAfter(1000);
+        BatchAfter(1000);                       // the first full cycle
+        BatchAfter(Md11SeedGate.CeilingMs);     // nothing of the A350's own moved (the load changed nothing): seeded at the ceiling
         _def.ProcessSimVarUpdate(bat.Key, 0, _speech);
         BatchAfter(A350LampSpeech.OffHoldMs + 100);
         Assert.Equal(new[] { bat.Name + " off" }, _speech.All);
+    }
+
+    // Review 2026-10-29 (speech 2): the seed ran three batch ends (about a second) after a flight load, while the stream still
+    // repeated the last flight's values (an aircraft publishes seconds after AircraftLoaded: the MD-11 measured 8.47 s), so
+    // those became the baselines and each of the new flight's differences was spoken. The seed now waits for evidence, as
+    // the MD-11's (Md11SeedGate): every batch delivered, a value of the A350's own changed, then quiet cycles.
+    [Fact]
+    public void After_a_load_the_seed_waits_for_the_a350_to_publish()
+    {
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        var gen = Lamp("A350_LT_ELEC_GEN_1A_SEQ1_LIGHT");
+        var cache = bat.InputKeys.Concat(gen.InputKeys).Distinct().ToDictionary(k => k, k => k == bat.Key || k == gen.Key ? 0.0 : 1.0);
+        _def.Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null;   // the last flight's: both dark
+        _def.ActiveBatches = _ => new[] { 0 };
+        _def.OnSimContextReset();
+        for (int i = 0; i < 3; i++)
+            BatchAfter(1000);                                 // the stream still repeats the last flight's values
+        _def.ProcessSimVarUpdate(bat.Key, 1, _speech);        // the new flight publishes: its BAT 1 fault lit
+        for (int i = 0; i <= Md11SeedGate.QuietCycles; i++)
+            BatchAfter(1000);
+        Assert.Empty(_speech.All);                            // the new flight's state is its baseline, never news
     }
 
     [Fact]
@@ -471,8 +495,10 @@ public class A350LeverAnnouncementTests
         _cache[A350LeverSpeech.Lever1] = 25;
         _cache[A350LeverSpeech.Lever2] = 25;
         _cache["A350_FCTL_SPD_BRK_LEVER"] = 0;
-        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
-            _def.OnContinuousBatchDelivered(i);
+        _def.ActiveBatches = _ => new[] { 0 };
+        _def.OnContinuousBatchDelivered(0);   // the first full cycle
+        _now += Md11SeedGate.CeilingMs;
+        _def.OnContinuousBatchDelivered(0);   // nothing of the A350's own moved: seeded at the ceiling
         Deliver(A350LeverSpeech.Lever1, 0);
         Later();
         Deliver("A350_FCTL_SPD_BRK_LEVER", 1);

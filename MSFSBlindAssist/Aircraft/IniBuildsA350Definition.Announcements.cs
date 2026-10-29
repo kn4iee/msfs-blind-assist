@@ -17,12 +17,36 @@ public partial class IniBuildsA350Definition
     /// button's new state, [CORE-7]): the 1 Hz light delivery and the gather window (the iniBuilds A300's value).</summary>
     public const long PressedLampMs = 3000;
 
-    /// <summary>How many batch ends after a reset (a connect, a flight load) the lights still unread are seeded from the
-    /// cache: a load re-delivers only the values it changed, so without a seed a light's first real change would be
-    /// taken for its baseline. Three batch ends (about 3 s) let the load's own deliveries come first.</summary>
-    public const int SeedAfterBatches = 3;
+    /// <summary>When, after a reset (a connect, a flight load), the lights and levers still unread are seeded from the cache
+    /// (a load re-delivers only the values it changed, so without a seed a light's first real change would be taken for its
+    /// baseline): on evidence from the batch deliveries, the MD-11's gate: every batch delivered, a value of the A350's own
+    /// changed, then every batch delivered QuietCycles times with nothing seedable moving, or 30 s after the first full
+    /// cycle. Review 2026-10-29: three batch ends (about a second) seeded while the stream still repeated the last flight's
+    /// values, which became the baselines, and each of the new flight's differences was spoken.</summary>
+    private readonly MD11.Md11SeedGate _seedGate = new();
 
-    private int _seedCountdown = SeedAfterBatches;
+    /// <summary>The keys the seed fills: every light's inputs and the levers' rows.</summary>
+    private HashSet<string> _seedKeys = new(StringComparer.Ordinal);
+
+    /// <summary>The continuous batches registered; tests replace it.</summary>
+    internal Func<SimConnect.SimConnectManager, IReadOnlyCollection<int>> ActiveBatches { get; set; } = sim => sim.ActiveContinuousBatches;
+
+    /// <summary>What the cache holds for the seed's keys as the gate is armed: a redelivery of those is no change.</summary>
+    private IEnumerable<KeyValuePair<string, double>> KnownSeedValues()
+    {
+        if (_sim is not { } sim) yield break;
+        foreach (var key in _seedKeys)
+            if (Cached(sim, key) is double value)
+                yield return new KeyValuePair<string, double>(key, value);
+    }
+
+    /// <summary>Arms the seed; the definition arms it as it is built (a first connection) and on every reset.</summary>
+    private void ArmSeed()
+    {
+        _seedKeys = _lampBoard.InputKeys.Concat(new[] { A350LeverSpeech.Lever1, A350LeverSpeech.Lever2, SpeedBrakeKey }.Where(_rows.ContainsKey))
+            .ToHashSet(StringComparer.Ordinal);
+        _seedGate.Arm(KnownSeedValues().ToList());
+    }
 
     /// <summary>The ANN LT selector's row: its Ctrl+M row mutes the annunciator test's sentence.</summary>
     private const string AnnLtRow = "A350_LIGHTS_INT_ANN_LT";
@@ -231,7 +255,7 @@ public partial class IniBuildsA350Definition
     public override void OnContinuousBatchDelivered(int batchNum)
     {
         base.OnContinuousBatchDelivered(batchNum);
-        if (_seedCountdown > 0 && --_seedCountdown == 0 && _sim is { } sim)
+        if (_seedGate.Armed && _sim is { } sim && _seedGate.OnBatchDelivered(batchNum, ActiveBatches(sim), Clock()) != MD11.Md11SeedTrigger.None)
         {
             foreach (var key in _lampBoard.InputKeys)
                 if (Cached(sim, key) is double cached)
@@ -264,7 +288,7 @@ public partial class IniBuildsA350Definition
         _lampSpeech.Clear();
         _leverSpeech.Reset();
         _ownLampsUntil.Clear();
-        _seedCountdown = SeedAfterBatches;
+        ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();
         Pfd?.Rebaseline();

@@ -167,6 +167,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             AddDisplay(d.Panel, d.Key);
 
         _lampBoard = new A350LampBoard(_lamps.Values);
+        ArmSeed();   // a first connection seeds too, once its deliveries settle
 
         foreach (var group in _lamps.Values.Where(l => l.ControlId != null).GroupBy(l => l.ControlId!))
             foreach (var row in _rows.Values.Where(r => r.Action == A350RowAction.Press && r.Control?.Id == group.Key))
@@ -634,6 +635,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// switch's is consumed, its return to rest being the pilot's own press.</summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        // A seed still pending counts this delivery as evidence for or against the cache having settled (all the A350's own).
+        if (_seedGate.Armed && _seedKeys.Contains(varName))
+            _seedGate.NoteValue(varName, value, ownedByAircraft: true);
         if (HandleTakeoffCallouts(varName, value, announcer))
             return true;
         if (HandleLeverDelivery(varName, value, announcer))
@@ -656,6 +660,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             return;
         _disposed = true;
         ReleaseOwedSteps();   // a held button or a spring switch is let go before the definition goes away
+        _seedGate.Disarm();   // nor may a pending seed run for it
         _sim = null;
         GC.SuppressFinalize(this);
     }
