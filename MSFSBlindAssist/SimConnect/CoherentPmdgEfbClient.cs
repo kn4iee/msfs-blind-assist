@@ -25,6 +25,9 @@ namespace MSFSBlindAssist.SimConnect
     ///     in-page getTabletSide() equals the requested side wins.
     ///   • TFDi MD-11 — <see cref="ForMd11"/>: ONE "TFDi_MD11_efb" view, so there
     ///     is no side to probe and the first match is taken.
+    ///   • iniBuilds A350 OIS — <see cref="ForA350Ois"/>: two "iniEfbA350" views, told apart by the
+    ///     page each loaded ([A350-8]); a page another of these clients holds is never probed
+    ///     (<see cref="PageClaims"/>).
     ///
     /// Page ids shift between sim restarts, so the view is resolved BY TITLE every
     /// (re)connect — never hardcoded.
@@ -115,6 +118,9 @@ namespace MSFSBlindAssist.SimConnect
         // The page this client connected to, claimed from the other clients of its kind (PageClaims) until its socket goes.
         private IDisposable? _pageClaim;
 
+        // The last scrape error logged: each distinct one is logged once.
+        private string? _lastScrapeError;
+
         public bool IsBridgeConnected =>
             _connected && (DateTime.UtcNow - _lastGoodScrapeUtc).TotalSeconds < 5;
 
@@ -138,13 +144,6 @@ namespace MSFSBlindAssist.SimConnect
             => new("PMDGTablet", "coherent-pmdg-efb-agent.js", "__MSFSBA_PMDG_EFB", side);
 
         /// <summary>
-        /// The TFDi MD-11 EFB. One view ("VCockpit04 - TFDi_MD11_efb"), so no side probe.
-        ///
-        /// It ships as its own package (tfdidesign-aircraft-efb) rather than inside the aircraft,
-        /// but it is still just a Coherent view — a React app mounted at #MSFS_REACT_MOUNT, with a
-        /// real DOM. Verified live 2026-07-17: 112 elements, 8 buttons, zero canvases.
-        /// </summary>
-        /// <summary>
         /// The iniBuilds A350's OIS (its EFB). Both views are titled "VCockpitNN - iniEfbA350" and their
         /// numbers follow load order, so the side is the page each loaded: the captain's
         /// ini-efb-a350-cpt.html, the first officer's ini-efb-a350-fo.html (live 2026-10-27, 1.2.7).
@@ -153,6 +152,13 @@ namespace MSFSBlindAssist.SimConnect
             => new("iniEfbA350", "coherent-a350-ois-agent.js", "__MSFSBA_A350_OIS", firstOfficer ? "FO" : "CPT",
                 "((document.documentElement.innerHTML.match(/ini-efb-a350-(cpt|fo)/)||['',''])[1]).toUpperCase()");
 
+        /// <summary>
+        /// The TFDi MD-11 EFB. One view ("VCockpit04 - TFDi_MD11_efb"), so no side probe.
+        ///
+        /// It ships as its own package (tfdidesign-aircraft-efb) rather than inside the aircraft,
+        /// but it is still just a Coherent view — a React app mounted at #MSFS_REACT_MOUNT, with a
+        /// real DOM. Verified live 2026-07-17: 112 elements, 8 buttons, zero canvases.
+        /// </summary>
         public static CoherentPmdgEfbClient ForMd11()
             => new("TFDi_MD11_efb", "coherent-md11-efb-agent.js", "__MSFSBA_MD11_EFB", side: null);
 
@@ -497,7 +503,18 @@ namespace MSFSBlindAssist.SimConnect
             ScrapeResult? result;
             try { result = JsonSerializer.Deserialize<ScrapeResult>(raw); }
             catch { return; }
-            if (result == null || !result.ok) return;
+            if (result == null || !result.ok)
+            {
+                // A scrape that failed in the page (the agent's exception message, never page content) is logged once per
+                // distinct error; the window keeps the last page (review 2026-10-29: it was dropped without a word).
+                if (result?.error is { Length: > 0 } error && error != _lastScrapeError)
+                {
+                    _lastScrapeError = error;
+                    Log.Warn("SimConnect", $"CoherentPmdgEfbClient ({_titleNeedle}) scrape failed: {error}");
+                }
+                return;
+            }
+            _lastScrapeError = null;
 
             _lastGoodScrapeUtc = DateTime.UtcNow;
             if (!_connectedPushSent)

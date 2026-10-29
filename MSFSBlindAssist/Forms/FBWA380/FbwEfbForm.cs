@@ -357,7 +357,9 @@ public class FbwEfbForm : Form
         else if (reallyConnected)
             desired = $"{_deviceNoun} connected — waiting for content…";
         else
-            desired = $"{_deviceNoun} not connected. Make sure MSFS is running, the A380X is loaded, and the displays are powered up.";
+            // Every EFB window shares this form (the flyPad, the PMDG tablets, the MD-11's, the A350's OIS): no aircraft named
+            // (review 2026-10-29: the OIS and the tablets were told the A380X must be loaded).
+            desired = $"{_deviceNoun} not connected. Make sure MSFS is running, the aircraft is loaded, and the {_deviceNoun} is powered up.";
         if (_statusLabel.Text != desired) _statusLabel.Text = desired;
     }
 

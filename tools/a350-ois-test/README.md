@@ -6,17 +6,32 @@ after changing the agent:
 
 ```
 cd tools/a350-ois-test
-npm install
-node --test
+npm ci
+npm test
 ```
+
+Each scrape in a test reads the page in full: the agent's dirty gate answers `{unchanged:true}` when its observer saw
+no change, and jsdom delivers mutations as microtasks, so `run.js` marks the page changed before each scrape unless a
+test passes `{ gate: true }` (`gate.test.js`).
 
 ## Re-taking a fixture
 
-With the A350 loaded and the OIS showing the page (the captain's OIS is `VCockpit10`, the first
-officer's `VCockpit11`; tell them apart by `ini-efb-a350-cpt`/`-fo` in the page):
+With the A350 loaded and the OIS showing the page, find its view. Both OIS views are titled
+`VCockpitNN - iniEfbA350` and their numbers follow load order, so a view's number is no side ([A350-8]): the
+captain's loads `ini-efb-a350-cpt`, the first officer's `ini-efb-a350-fo`. Ask each view (by its index among the
+matches, 0 and 1) which page it loaded:
 
 ```
-node ../a350-probe/ceval.mjs VCockpit11 capture.js | sed -E 's/ data-a350-ois-label="[^"]*"//g; s/ class="__glassout_marker_inst"[^>]*>/>/g' > fixtures/<name>.html
+node ../a350-probe/ceval.mjs iniEfbA350 -e "(document.documentElement.innerHTML.match(/ini-efb-a350-(cpt|fo)/) || [''])[0]" 0
+node ../a350-probe/ceval.mjs iniEfbA350 -e "(document.documentElement.innerHTML.match(/ini-efb-a350-(cpt|fo)/) || [''])[0]" 1
+```
+
+Then capture with the index of the side you want (here 1). MSFSBlindAssist must not hold that view's socket at the
+time: Coherent allows one per page ([DBG-9]), and an OIS window's client keeps its view after the window closes,
+until the aircraft is switched or MSFSBlindAssist quits.
+
+```
+node ../a350-probe/ceval.mjs iniEfbA350 capture.js 1 | sed -E 's/ data-a350-ois-label="[^"]*"//g; s/ class="__glassout_marker_inst"[^>]*>/>/g' > fixtures/<name>.html
 ```
 
 `capture.js` keeps what is drawn, marks an element drawn with no size `data-vis="0"`, keeps small
@@ -59,3 +74,4 @@ the SayIntentions API key and the Hoppie logon), and saves a Navigraph login cod
 | opt_sound_cabin_options | OPTIONS, SOUND/CABIN OPTIONS (CABIN LIGHTING with nothing picked) |
 | opt_navigraph_login | OPTIONS, 3RD PARTY, LOGIN WITH NAVIGRAPH: the user-code pop-up over the QR code |
 | opt_simulation | OPTIONS, SIMULATION: PAUSE AT T.O.D YES with its 30 NM box, time compression AUTO up to 4X |
+| opt_navigraph_login (STREAMER MODE on) | `streamer.test.js` turns STREAMER MODE on in the fixture: the IDs hidden |
