@@ -208,9 +208,14 @@ public static class A350PanelLamps
     public static IReadOnlyList<A350Lamp> Resolve(A350ControlMap map, A350Placement placement, IEnumerable<string> sections)
     {
         var byControl = new Dictionary<string, List<A350MapLamp>>(StringComparer.Ordinal);
-        var ids = map.Controls.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+        // Each control's lamp prefix worked out once, in the ids' own order so a tie goes the same way (tools review
+        // 2026-10-30: two strings for every lamp and control pair were about 35 MB per resolve).
+        var owners = map.Controls.Select(c => c.Id).ToHashSet(StringComparer.Ordinal)
+            .Where(id => id.StartsWith("AIRLINER_", StringComparison.Ordinal))
+            .Select(id => (Id: id, Prefix: id["AIRLINER_".Length..], Under: id["AIRLINER_".Length..] + "_"))
+            .ToList();
         foreach (var lamp in map.Lamps)
-            if (OwnerOf(lamp.Node, ids) is string id)
+            if (OwnerOf(lamp.Node, owners) is string id)
             {
                 if (!byControl.TryGetValue(id, out var list))
                     byControl[id] = list = new List<A350MapLamp>();
@@ -261,19 +266,14 @@ public static class A350PanelLamps
     }
 
     /// <summary>The control id (<c>AIRLINER_</c> + prefix) a lamp node belongs to: the longest one its base starts with.</summary>
-    private static string? OwnerOf(string node, HashSet<string> ids)
+    private static string? OwnerOf(string node, List<(string Id, string Prefix, string Under)> owners)
     {
         string baseName = NodeTail.Replace(node, "");
         string? best = null;
-        foreach (var id in ids)
-        {
-            if (!id.StartsWith("AIRLINER_", StringComparison.Ordinal))
-                continue;
-            string prefix = id.Substring("AIRLINER_".Length);
-            if ((baseName == prefix || baseName.StartsWith(prefix + "_", StringComparison.Ordinal))
+        foreach (var (id, prefix, under) in owners)
+            if ((baseName == prefix || baseName.StartsWith(under, StringComparison.Ordinal))
                 && (best == null || id.Length > best.Length))
                 best = id;
-        }
         return best;
     }
 

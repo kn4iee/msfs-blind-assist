@@ -11,6 +11,20 @@ public class A350PanelLampsTests
 
     private static A350Lamp Lamp(string node) => Assert.Single(Lamps, l => l.Node == node);
 
+    // Tools review 2026-10-30: finding each lamp's control made two strings for every lamp and control pair, about 35 MB
+    // for each definition built (MSFSBA's on every A350 load, and nearly every A350 test's).
+    [Fact]
+    public void Resolving_every_sections_lamps_allocates_little()
+    {
+        var placement = A350PanelLayout.Place(Map);
+        A350PanelLamps.Resolve(Map, placement, A350PanelLayout.SectionOrder);   // warm: the JIT, the regexes
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        var lamps = A350PanelLamps.Resolve(Map, placement, A350PanelLayout.SectionOrder);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.NotEmpty(lamps);
+        Assert.True(allocated < 8_000_000, $"resolving the lamps allocated {allocated:N0} bytes");
+    }
+
     [Fact]
     public void A_fault_legend_is_shown_on_its_rows_panel_named_after_the_row()
     {
