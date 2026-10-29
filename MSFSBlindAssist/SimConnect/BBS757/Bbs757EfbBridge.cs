@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Globalization;
+using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
@@ -29,6 +30,14 @@ public sealed class Bbs757EfbBridgeIo
     /// <summary>Opens / ends plan 07's ground power echo around a GPU tap.</summary>
     public required Action ArmGroundPowerEcho { get; init; }
     public required Action<double?> SettleGroundPowerEcho { get; init; }
+
+    /// <summary>Loads the text recognition engine (PaddleOCR) from the downloaded models; throws when it cannot.
+    /// Called on the bridge's loop, off the UI thread, at the first read while the window is shown.</summary>
+    public required Func<PaddleOcrEngine> LoadOcr { get; init; }
+
+    /// <summary>Told once why the engine could not load (logged, and the models' installed marker removed so the
+    /// download is offered again). Called on the bridge's loop; must never throw.</summary>
+    public required Action<Exception> OcrFailed { get; init; }
 }
 
 /// <summary>
@@ -37,10 +46,15 @@ public sealed class Bbs757EfbBridgeIo
 /// operated through the EFB agent's clicks, as an IMcduBridge.
 ///
 /// While the window is shown, the tablet is mirrored onto the captain's ND (the agent's mirror) and the
-/// ND pop-out is captured about every 0.7 s; a page is read (OCR, about 1-3 s) only when the picture
-/// changed, after an action, or on request, so a still tablet costs a capture and a 32 x 24 compare.
-/// Each read becomes the window's elements (<see cref="Bbs757EfbElements"/>); each press taps the
-/// tablet and reads it again. Hidden, nothing is captured and the mirror is off (the ND is the ND).
+/// ND pop-out is captured about every 0.7 s; a page is read (PaddleOCR, about half a second) only when
+/// the picture changed, after an action, or on request, so a still tablet costs a capture and a 32 x 24
+/// compare. Each read becomes the window's elements (<see cref="Bbs757EfbElements"/>); each press taps
+/// the tablet and reads it again. Hidden, nothing is captured and the mirror is off (the ND is the ND).
+///
+/// The text recognition engine is loaded at the first read while the window is shown and released when
+/// it hides (<see cref="TextRecognitionEngineSlot{T}"/>), both only on the loop, which runs every read,
+/// so it is never released under a running read. An engine that cannot load is said once, as the
+/// reader's status, and tried again only after the window was hidden and shown.
 ///
 /// The plan's rules hold: a ground service or the chocks are judged from their BlueBird variable before
 /// and after a tap and tapped only when they differ (B757-2, <see cref="Bbs757GroundServices"/>); the
@@ -71,6 +85,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?)>();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
+    /// <summary>The text recognition engine. Touched only on the loop: Get before a read, Release when the
+    /// window hides, Dispose when the loop ends.</summary>
+    private readonly TextRecognitionEngineSlot<PaddleOcrEngine> _ocr;
 
     private volatile bool _active;
     private bool _popoutReady;
@@ -96,6 +113,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         _io = io;
         _popout = popout ?? new Bbs757EfbPopout(s => Log.Debug("BBS757", "EFB reader: " + s));
         _sync = SynchronizationContext.Current;
+        // A status, not an alert: an alert is gone after 8 s, and the failure holds until the window is hidden and
+        // shown again (the loop's inactive branch forgets it).
+        _ocr = new TextRecognitionEngineSlot<PaddleOcrEngine>(io.LoadOcr, ex =>
+        {
+            io.OcrFailed(ex);
+            Status(TextRecognitionText.ReaderCannotStart);
+        });
     }
 
     public bool IsBridgeConnected => _client.IsReady && _popoutReady;
@@ -132,12 +156,29 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     private async Task LoopAsync(CancellationToken ct)
     {
+        try
+        {
+            await RunLoopAsync(ct);
+        }
+        finally
+        {
+            // The loop has ended, so no read runs: the engine goes with it (Dispose may have stopped waiting for it).
+            _ocr.Dispose();
+        }
+    }
+
+    private async Task RunLoopAsync(CancellationToken ct)
+    {
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 if (!_active)
                 {
+                    // Hidden: the engine is freed (no read runs between two turns of the loop), and a load that
+                    // failed is forgotten with the reader's word of it, so the next showing tries again.
+                    _ocr.Release();
+                    if (_alert == TextRecognitionText.ReaderCannotStart) _alert = null;
                     if (_mirrorOn) { await _client.SetMirrorAsync(false, ct); _mirrorOn = false; }
                     await _wake.WaitAsync(ct);
                     continue;
@@ -215,6 +256,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// </summary>
     private async Task<bool> ReadIfChangedAsync(CancellationToken ct, bool force = false)
     {
+        // No engine (it could not load, and the reader has said so): nothing is captured or read.
+        var engine = _ocr.Get();
+        if (engine == null) return false;
         var bmp = _popout.CaptureTablet();
         if (bmp == null) { _popoutReady = false; Status("The tablet reader's window closed. Opening it again."); return false; }
         try
@@ -247,7 +291,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 if (same) { still = true; break; }
             }
 
-            var read = await Bbs757EfbPageReader.ReadAsync(bmp, ct);
+            var read = await Bbs757EfbPageReader.ReadAsync(engine, bmp, ct);
             int reads = 1;
             bool unclear = false;
             if (!still)
@@ -279,7 +323,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             _lastReadFrame = new Bitmap(bmp);
             _lastReadMs = Environment.TickCount64;
             string fp = Fingerprint(read.Model);
-            Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, {read.Rereads} re-reads, "
+            Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, "
                 + $"still={still}, reads={reads}, unclear={unclear}, same-as-shown={fp == _lastFingerprint}");
             if (unclear)
                 Alert("The tablet read differently each time, so this page may not be right. Use Read the tablet again.");
@@ -294,8 +338,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     private async Task<Bbs757EfbPageRead?> ReadFreshCaptureAsync(CancellationToken ct)
     {
+        var engine = _ocr.Get();
+        if (engine == null) return null;
         using var b = _popout.CaptureTablet();
-        return b == null ? null : await Bbs757EfbPageReader.ReadAsync(b, ct);
+        return b == null ? null : await Bbs757EfbPageReader.ReadAsync(engine, b, ct);
     }
 
     /// <summary>What a page says, as one string: two reads that say the same thing give the same one.</summary>
@@ -630,6 +676,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private void Status(string text)
     {
         _model = null;
+        // The page is no longer shown, so the next read pushes it even when it reads the same as before.
+        _lastFingerprint = null;
         _alert = text;
         _alertUntilMs = Environment.TickCount64 + 600_000;
         Push();

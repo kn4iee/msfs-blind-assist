@@ -476,12 +476,19 @@ public static class Bbs757EfbScreen
         // An entry can only be one of this app's menu words: snap to the nearest of those, more
         // loosely than the page vocabulary allows (GOCRAL -> GENERAL on a dim tablet, measured).
         if (Bbs757EfbVocabulary.Menus.TryGetValue(app, out var menuWords))
+        {
             lines = lines.Select(l =>
             {
                 string up = l.Text.ToUpperInvariant();
                 var best = menuWords.MinBy(w => Bbs757EfbVocabulary.Distance(up, w));
                 return best != null && Bbs757EfbVocabulary.Distance(up, best) <= best.Length / 2 + 1 ? l with { Text = best } : l;
             }).ToList();
+            // An entry's icon read as a word (COCKPIT PRESETS' icon as "tlt", measured with PaddleOCR): a line that
+            // is none of the menu's words, left of an entry on its row, is no entry.
+            var named = lines.Where(l => menuWords.Contains(l.Text)).ToList();
+            lines = lines.Where(l => menuWords.Contains(l.Text)
+                || !named.Any(e => Math.Abs(e.Centre.Y - l.Centre.Y) <= 10 && l.Centre.X < e.Box.Left)).ToList();
+        }
         // The selected entry's band differs from all the others' at the menu's right edge (measured:
         // darker on both a dim and a bright tablet). Judge it against the menu's own median.
         var entries = lines.Where(l => !(app == "CHECKLIST" && (l.Text == "INTERACTIVE" || l.Text == "RESET ALL"))).ToList();
@@ -632,11 +639,11 @@ public static class Bbs757EfbScreen
             var above = loose.Where(l => l.Text.Length <= 24 && !l.Text.Any(char.IsDigit) && l.Box.Bottom <= box.Top + 3
                     && box.Top - l.Box.Bottom < 30 && l.Centre.X > box.Left - 20 && l.Centre.X < box.Right + 20)
                 .OrderBy(l => box.Top - l.Box.Bottom).FirstOrDefault();
-            // A column header: the same label over more boxes further down its column (ACTIONS over
-            // every FAIL NOW) names none of them.
-            if (above != null && controls.Count(o => !o.Tab && o.Box.Box.Top > box.Bottom && Math.Abs(o.Box.Box.Left - box.Left) <= 12) >= 1
-                && controls.Any(o => !o.Tab && o.Box.Box != box && Math.Abs(o.Box.Box.Left - box.Left) <= 12
-                    && string.Join(" ", o.Lines.Select(l => l.Text)) == string.Join(" ", c.Lines.Select(l => l.Text))))
+            // A column header: a label over a box with more boxes further down its column names none of
+            // them (ACTIONS over every FAIL NOW; Presets' ON GROUND over COLD & DARK, TURNAROUND...;
+            // Failures' title over CATALOG, with FIRES under it). PaddleOCR's line boxes reach a few
+            // pixels below the letters, which brings such a header within reach of the box under it.
+            if (above != null && controls.Any(o => !o.Tab && o.Box.Box.Top > box.Bottom && Math.Abs(o.Box.Box.Left - box.Left) <= 12))
                 above = null;
             if (above != null) { name[box] = above.Text.TrimEnd(':'); loose.Remove(above); }
             var below = loose.Where(l => l.Text.Length <= 24 && l.Box.Height <= 20 && l.Box.Top >= box.Bottom - 3
@@ -748,10 +755,11 @@ public static class Bbs757EfbScreen
     /// <summary>Words that are buttons even drawn as plain text.</summary>
     private static readonly HashSet<string> FlatButtons = new(StringComparer.OrdinalIgnoreCase) { "RESET", "LOGOUT", "SELECT" };
 
-    /// <summary>Buttons whose words do not say what they act on: their row or caption names it.</summary>
+    /// <summary>Buttons whose words do not say what they act on: their row or caption names it. SET UP is
+    /// Failures' button beside FAIL NOW (Windows OCR read it "SET w", which snapped to SET).</summary>
     private static readonly HashSet<string> GenericActions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "FAIL NOW", "SET", "RESET", "REPAIR", "REPAIR ALTN", "OPEN", "CLOSE", "CLEAR", "ARM", "DISARM",
+        "FAIL NOW", "SET", "SET UP", "RESET", "REPAIR", "REPAIR ALTN", "OPEN", "CLOSE", "CLEAR", "ARM", "DISARM",
     };
 
     /// <summary>The words without a dropdown arrow read as a one-letter last word ("SET w").</summary>

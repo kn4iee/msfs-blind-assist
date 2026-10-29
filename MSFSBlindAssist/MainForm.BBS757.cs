@@ -1,5 +1,7 @@
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.SimConnect.BBS757;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist;
 
@@ -115,6 +117,9 @@ public partial class MainForm
     /// The bridge's seams. Camera reads and writes go to the UI thread (SimConnect calls stay there); the
     /// type and the index are written apart, since leaving an instrument view needs the two spaced
     /// (<c>SimConnectManager.SetCameraView</c>, measured). Variables are read fresh (safe from any thread).
+    /// The text recognition engine loads from the downloaded models with <see cref="PaddleOcrEngine.ThreadsFor"/>'s
+    /// threads, on the bridge's loop; a load that fails is logged and the models' installed marker removed, so the
+    /// next check offers the download again. That report runs on the loop too, so it never throws.
     /// </summary>
     private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo() => new()
     {
@@ -143,6 +148,19 @@ public partial class MainForm
         SettleServiceEcho = (s, v) => { if (currentAircraft is BBS757Definition def) def.SettleServiceEcho(s, v); },
         ArmGroundPowerEcho = () => { if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho(); },
         SettleGroundPowerEcho = v => { if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(v); },
+        LoadOcr = () => PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount)),
+        OcrFailed = ex =>
+        {
+            Log.Warn("BBS757", $"Text recognition could not start: {ex.Message}");
+            try
+            {
+                TextRecognitionModels.RemoveMarker(TextRecognitionModels.DefaultFolder());
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn("BBS757", $"Could not remove the text recognition marker: {e.Message}");
+            }
+        },
     };
 
     /// <summary>

@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     Live probe for the BlueBird 757 tablet reader: pops out the captain's ND, mirrors the tablet onto
-    it, captures, OCRs and parses it, taps by text. Compiles the app's own reader files (linked, not
-    copied) so what it proves is the shipped code. Not part of the solution; build on its own:
+    it, captures, OCRs and parses it, taps by text. Compiles the app's own reader files and its
+    PaddleOCR engine host (linked, not copied) so what it proves is the shipped code; it reads with
+    the models the app downloads (%APPDATA%\MSFSBlindAssist\text-recognition). Not part of the
+    solution; build on its own:
       dotnet build tools/Bbs757EfbProbe -c Debug
     See tools/Bbs757EfbProbe/README.md.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -23,7 +25,13 @@
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbPageReader.cs" Link="Linked\Bbs757EfbPageReader.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbReadingOrder.cs" Link="Linked\Bbs757EfbReadingOrder.cs" />
     <Compile Include="..\..\MSFSBlindAssist\SimConnect\BBS757\Bbs757EfbFrameCompare.cs" Link="Linked\Bbs757EfbFrameCompare.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\Services\TextRecognition\PaddleOcrEngine.cs" Link="Linked\PaddleOcrEngine.cs" />
+    <Compile Include="..\..\MSFSBlindAssist\Services\TextRecognition\TextRecognitionModels.cs" Link="Linked\TextRecognitionModels.cs" />
     <None Include="..\..\MSFSBlindAssist\Resources\coherent-bbs757-efb-agent.js" Link="coherent-bbs757-efb-agent.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- As the app: ExcludeAssets="build" keeps the package's 13.7 MB of PP-OCRv5 models out of the output. -->
+    <PackageReference Include="RapidOcrNet" Version="4.2.0" ExcludeAssets="build" />
   </ItemGroup>
 </Project>
 

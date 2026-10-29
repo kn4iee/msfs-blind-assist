@@ -13,12 +13,17 @@
 //   Bbs757EfbProbe noise                       what changes between two captures of an unchanged page
 //   Bbs757EfbProbe tour [n]                    Home, every app and every section, each read n times as the app reads
 //                                              it (navigation taps only); flight-11.md section 8
+//
+// Every read is PaddleOCR, as the app reads: one engine per run, loaded on first use from the models the app
+// downloads (%APPDATA%\MSFSBlindAssist\text-recognition), with the app's thread cap; the load prints its time
+// and the process working set before and after.
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.SimConnect.BBS757;
 
 internal static class Program
@@ -62,11 +67,12 @@ internal static class Program
                 foreach (var n in args.Length > 2 ? args.Skip(2) : Directory.GetFiles(args[1], "*.ocr.json").Select(f => Path.GetFileName(f)[..^9]))
                     PrintModel(Path.Combine(args[1], n));
                 return 0;
-            case "reread":  // reread <dir> [name ...]   the full reader (2x + closer re-reads) on saved pictures
+            case "reread":  // reread <dir> [name ...]   the app's reader (one PaddleOCR read, then the parser) on saved pictures
                 foreach (var n in args.Length > 2 ? args.Skip(2) : Directory.GetFiles(args[1], "*.png").Where(f => !f.EndsWith(".pre.png")).Select(f => Path.GetFileNameWithoutExtension(f)))
                 {
+                    var engine = Engine();
                     using var bmp = new Bitmap(Path.Combine(args[1], n + ".png"));
-                    var read = await Bbs757EfbPageReader.ReadAsync(bmp);
+                    var read = await Bbs757EfbPageReader.ReadAsync(engine, bmp);
                     if (Environment.GetEnvironmentVariable("PROBE_SAVE") is { Length: > 0 } saveDir)
                     {
                         // A test fixture: the picture and the reader's final lines (what Parse is given).
@@ -80,23 +86,19 @@ internal static class Program
                     }
                     if (Environment.GetEnvironmentVariable("PROBE_LINES") == "1")
                         foreach (var l in read.Lines) Console.WriteLine($"    line {l.Box.X},{l.Box.Y} {l.Box.Width}x{l.Box.Height} [{l.Pass}] {l.Text}");
-                    PrintModel(n, read.Model, $"{read.OcrMs} ms, {read.Rereads} re-reads");
+                    PrintModel(n, read.Model, $"{read.OcrMs} ms");
                 }
                 return 0;
-            case "region":  // region <png> x y w h   read one region at 2x..6x
+            case "region":  // region <png> x y w h   read one region of a saved picture, as sweep and tapread read theirs
             {
+                var engine = Engine();
                 using var bmp = new Bitmap(args[1]);
                 var r = new Rectangle(int.Parse(args[2]), int.Parse(args[3]), int.Parse(args[4]), int.Parse(args[5]));
-                foreach (var f in new[] { Bbs757EfbOcr.Filter.Luminance, Bbs757EfbOcr.Filter.DarkestChannel })
-                foreach (bool inv in new[] { false, true })
-                foreach (double sc in new[] { 2.0, 3.0, 4.0 })
-                {
-                    Bbs757EfbOcr.InvertForTest = inv;
-                    var sw = Stopwatch.StartNew();
-                    var ls = await Bbs757EfbOcr.ReadRegionAsync(bmp, r, default, sc, f);
-                    Console.Write($"  {f}");
-                    Console.WriteLine($"  {(inv ? "inv " : "")}x{sc}: '{string.Join(" | ", ls.Select(l => l.Text))}'  {sw.ElapsedMilliseconds} ms");
-                }
+                var sw = Stopwatch.StartNew();
+                var ls = await ReadRegionAsync(engine, bmp, r);
+                long ms = sw.ElapsedMilliseconds;
+                foreach (var l in ls) Console.WriteLine($"  {l.Box.X},{l.Box.Y} {l.Box.Width}x{l.Box.Height} {l.Text}");
+                Console.WriteLine($"  '{string.Join(" | ", ls.Select(l => l.Text))}'  {ms} ms");
                 return 0;
             }
             case "boxes":   // boxes <stem> [x0 y0 x1 y1]   button boxes found from the pixels (and why a region has none)
@@ -135,9 +137,10 @@ internal static class Program
             case "look":    // look   capture the pop-out as it is (no debugger: the app may hold the view) and read it
             {
                 if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out"); return 2; }
+                var engine = Engine();
                 using var t = Popout.CaptureTablet();
                 if (t == null) { Console.WriteLine("capture failed"); return 3; }
-                var read = await Bbs757EfbPageReader.ReadAsync(t);
+                var read = await Bbs757EfbPageReader.ReadAsync(engine, t);
                 PrintModel("live", read.Model, $"{read.OcrMs} ms");
                 return 0;
             }
@@ -183,6 +186,7 @@ internal static class Program
     {
         Directory.CreateDirectory(dir);
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        var engine = Engine();   // loaded before the taps, so its load time is not in the timings
         foreach (var t in taps)
         {
             var xy = t.Split(',');
@@ -200,7 +204,7 @@ internal static class Program
         if (tablet == null) { Console.WriteLine("capture failed"); return 3; }
         tablet.Save(Path.Combine(dir, name + ".png"), ImageFormat.Png);
         var ocrWatch = Stopwatch.StartNew();
-        var lines = await Bbs757EfbOcr.ReadAsync(tablet);
+        var lines = await Bbs757EfbOcr.ReadAsync(engine, tablet);
         long tOcr = ocrWatch.ElapsedMilliseconds;
         File.WriteAllText(Path.Combine(dir, name + ".ocr.json"), JsonSerializer.Serialize(lines.Select(l => new
         {
@@ -272,6 +276,7 @@ internal static class Program
     private static async Task<int> Stability(int n)
     {
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        var engine = Engine();
         await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
         await Task.Delay(MirrorSettleMs);
         var hashes = new List<ulong>(); var fps = new List<string>(); var ms = new List<long>();
@@ -283,11 +288,11 @@ internal static class Program
             hashes.Add(Hash(t));
             if (prev != null) { if (Bbs757EfbFrameCompare.Same(prev, t)) sameAsPrev++; prev.Dispose(); }
             prev = new Bitmap(t);
-            var r = await Bbs757EfbPageReader.ReadAsync(t);
+            var r = await Bbs757EfbPageReader.ReadAsync(engine, t);
             fps.Add(Fp(r.Model)); ms.Add(r.OcrMs);
             if (i == 0)
             {
-                var again = await Bbs757EfbPageReader.ReadAsync(t);
+                var again = await Bbs757EfbPageReader.ReadAsync(engine, t);
                 Console.WriteLine($"  page: {r.Model.PageName}, {r.Model.Menu.Count} menu + {r.Model.Items.Count} items");
                 Console.WriteLine($"  same picture read twice gives the same page: {Fp(again.Model) == fps[0]}");
             }
@@ -331,7 +336,7 @@ internal static class Program
             var (b0, _, _) = await Settled();
             if (b0 == null) break;
             tries++;
-            using (b0) { var r0 = await Bbs757EfbPageReader.ReadAsync(b0); if (r0.Model.PageName.Contains(expect, StringComparison.OrdinalIgnoreCase)) break; }
+            using (b0) { var r0 = await Bbs757EfbPageReader.ReadAsync(Engine(), b0); if (r0.Model.PageName.Contains(expect, StringComparison.OrdinalIgnoreCase)) break; }
             await Task.Delay(500);
         }
         if (tries > 1) Console.WriteLine($"    ({label.Trim()}: right page after {tries} reads, {nav.ElapsedMilliseconds} ms)");
@@ -340,7 +345,7 @@ internal static class Program
             var (b, still, sms) = await Settled();
             if (b == null) break;
             allStill &= still; settle = Math.Max(settle, sms);
-            using (b) { var r = await Bbs757EfbPageReader.ReadAsync(b); first ??= r.Model; fps.Add(Fp(r.Model)); ocr = Math.Max(ocr, r.OcrMs); }
+            using (b) { var r = await Bbs757EfbPageReader.ReadAsync(Engine(), b); first ??= r.Model; fps.Add(Fp(r.Model)); ocr = Math.Max(ocr, r.OcrMs); }
             if (i < n - 1) await Task.Delay(700);
         }
         if (first == null) { Console.WriteLine($"  {label}: capture failed"); return null; }
@@ -356,6 +361,7 @@ internal static class Program
     private static async Task<int> Tour(int n)
     {
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        Engine();   // loaded before the first tap, so no page waits for it
         await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
         await Task.Delay(MirrorSettleMs);
         await Tap(Bbs757EfbScreen.HomeButton);
@@ -447,6 +453,7 @@ internal static class Program
     private static async Task<int> Sweep(int y, int x0, int x1, int step, int valueLeft)
     {
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        Engine();
         await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
         await Task.Delay(700);
         var valueRect = new Rectangle(valueLeft, y - 20, 1397 - valueLeft, 40);
@@ -464,6 +471,7 @@ internal static class Program
     private static async Task<int> TapRead(int x, int y, Rectangle region)
     {
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
+        Engine();
         await Agent("JSON.stringify(__MSFSBA_BBS757EFB.mirror(true))");
         await Task.Delay(700);
         Console.WriteLine($"  before: '{await ValueAt(region)}'");
@@ -478,8 +486,56 @@ internal static class Program
     {
         using var t = Popout.CaptureTablet();
         if (t == null) return "(no capture)";
-        var lines = await Bbs757EfbOcr.ReadRegionAsync(t, r);
+        var lines = await ReadRegionAsync(Engine(), t, r);
         return string.Join(" | ", lines.Select(l => l.Text));
+    }
+
+    // ---------------- PaddleOCR: the engine and region reads ----------------
+
+    private static PaddleOcrEngine? _engine;
+
+    /// <summary>The run's one engine, loaded on first use as the app loads it (the models folder, ThreadsFor's
+    /// threads); prints the load time and the process working set just before and just after the load.</summary>
+    private static PaddleOcrEngine Engine()
+    {
+        if (_engine != null) return _engine;
+        string folder = TextRecognitionModels.DefaultFolder();
+        int threads = PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount);
+        long before = WorkingSetMb();
+        var sw = Stopwatch.StartNew();
+        _engine = PaddleOcrEngine.Load(folder, threads);
+        long loadMs = sw.ElapsedMilliseconds;
+        Console.WriteLine($"  [engine] PaddleOCR loaded in {loadMs} ms ({threads} threads, {folder}); working set {before} MB before, {WorkingSetMb()} MB after");
+        return _engine;
+    }
+
+    private static long WorkingSetMb()
+    {
+        using var self = Process.GetCurrentProcess();
+        return self.WorkingSet64 / (1024 * 1024);
+    }
+
+    /// <summary>One region of the tablet (a value cell, a button) read on its own: cropped with a 12 px black border
+    /// (text that touches a picture's edge reads badly), read with PaddleOCR, boxes put back in tablet pixels.</summary>
+    private static async Task<IReadOnlyList<Bbs757EfbTextLine>> ReadRegionAsync(PaddleOcrEngine engine, Bitmap tablet, Rectangle region)
+    {
+        const int Pad = 12;
+        region.Intersect(new Rectangle(0, 0, tablet.Width, tablet.Height));
+        if (region.Width < 4 || region.Height < 4) return Array.Empty<Bbs757EfbTextLine>();
+        using var crop = new Bitmap(region.Width + 2 * Pad, region.Height + 2 * Pad, PixelFormat.Format24bppRgb);
+        using (var g = Graphics.FromImage(crop))
+        {
+            g.Clear(Color.Black);
+            g.DrawImage(tablet, new Rectangle(Pad, Pad, region.Width, region.Height), region, GraphicsUnit.Pixel);
+        }
+        var lines = await Bbs757EfbOcr.ReadAsync(engine, crop);
+        return lines.Select(l => l with
+        {
+            Box = ToTablet(l.Box),
+            Words = l.Words.Select(w => w with { Box = ToTablet(w.Box) }).ToList(),
+        }).ToList();
+
+        Rectangle ToTablet(Rectangle box) => new(box.X - Pad + region.X, box.Y - Pad + region.Y, box.Width, box.Height);
     }
 
     /// <summary>The slider knob's centre on a row: the widest run of knob-blue pixels between x 600

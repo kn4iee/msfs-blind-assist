@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Text.Json;
+using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.SimConnect.BBS757;
 using Xunit;
 
@@ -8,8 +9,8 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The tablet reader's page model (plan 11) against real captures of BlueBird's tablet (2026-10-26,
 /// 0.1.0, PW, dim night brightness and 100 %): each fixture is the calibrated capture (reduced to 256
-/// colours) and the reader's lines for it (OCR plus its closer re-reads, saved by
-/// tools/Bbs757EfbProbe). Parse is pure, so these pin what the pilot is given for each page.
+/// colours) and the reader's lines for it (one PaddleOCR read, re-recorded for plan 17 by
+/// tools/Bbs757EfbProbe's reread). Parse is pure, so these pin what the pilot is given for each page.
 /// Fixtures are read from the source tree (tests/MSFSBlindAssist.Tests/Fixtures/bbs757-efb).
 /// </summary>
 public class Bbs757EfbScreenTests
@@ -55,6 +56,25 @@ public class Bbs757EfbScreenTests
             // The label is not clickable on BlueBird's home screen (measured): the icon ~70 px above is.
             Assert.True(it.Hit.Y < it.Box.Top - 50);
         }
+    }
+
+    [Fact]
+    public void Home_lists_exactly_the_five_apps()
+    {
+        // An app icon read as text is no menu item (PaddleOCR reads the Systems icon as two CJK characters).
+        var m = Load("dim", "01-home");
+        Assert.Equal(new[] { "Aircraft", "Navigation", "Systems", "Checklist", "Settings" },
+            m.Menu.Concat(m.Items).Where(i => i.Kind == Bbs757EfbKind.Menu).Select(i => i.Text));
+    }
+
+    [Fact]
+    public void A_side_menu_lists_its_entries_and_not_their_icons()
+    {
+        // PaddleOCR reads the COCKPIT PRESETS icon, left of its label, as "tlt" on this page (the 2026-10-27
+        // benchmark's stray menu item).
+        var m = Load("bright", "11-aircraft-fuel");
+        Assert.Equal(new[] { "Cockpit presets", "Fuel", "Weight & balance", "Ground services", "Cabin & doors", "Maintenance", "Failures" },
+            m.Menu.Select(i => i.Text));
     }
 
     [Fact]
@@ -119,9 +139,22 @@ public class Bbs757EfbScreenTests
     {
         var m = Load("bright", "16-aircraft-failures");
         Assert.Equal(Bbs757EfbKind.Button, Item(m, "Fail now, L engine fire").Kind);
-        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Set, L engine fire").Kind);
+        // The button says SET UP (Windows OCR read "SET w", snapped to SET).
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Set UP, L engine fire").Kind);
         Assert.Equal(Bbs757EfbKind.Button, Item(m, "Fail now, R engine fire").Kind);
         Assert.DoesNotContain(m.Items, i => i.Text.StartsWith("Actions", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Failure_counts_stay_figures_and_the_page_title_names_no_tab()
+    {
+        var m = Load("bright", "16-aircraft-failures");
+        // PaddleOCR reads ACTIVE 0 ARMED 0 as one line: its figures make it no tab label (ACTIVE / ARMED).
+        Assert.Contains(m.Items, i => i.Kind == Bbs757EfbKind.Text
+            && i.Text.Contains("active 0", StringComparison.OrdinalIgnoreCase) && i.Text.Contains("armed 0", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Heading && i.Text == "Active / armed");
+        // FAILURES, the page's title, sits over CATALOG with FIRES under it: a column's heading, not the tab's name.
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Catalog").Kind);
     }
 
     [Fact]
@@ -207,6 +240,7 @@ public class Bbs757EfbScreenTests
     [InlineData("Parking brake", "Parking brake")]   // mixed case never snaps to a capitals label
     [InlineData("Windows", "Windows")]
     [InlineData("CJGSW2VZ", "CJGSW2VZ")]             // a code stays as read
+    [InlineData("ACTIVE 0 ARMED 0", "ACTIVE 0 ARMED 0")]   // a figure is never snapped away (ACTIVE / ARMED)
     public void Snap_fixes_ocr_habits_without_guessing(string read, string expected) =>
         Assert.Equal(expected, Bbs757EfbVocabulary.Snap(read));
 
@@ -242,12 +276,36 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
-    public void Ocr_merge_keeps_pass_a_and_adds_only_new_lines_from_b()
+    public void FromEngine_carries_each_line_with_its_box_and_words_as_pass_P()
     {
-        static Bbs757EfbTextLine L(string t, int x, int y, char p) => new(t, new Rectangle(x, y, 50, 14), Array.Empty<Bbs757EfbWord>(), p);
-        var a = new[] { L("ON", 1280, 100, 'A') };
-        var b = new[] { L("0N", 1282, 101, 'B'), L("OFF", 1280, 350, 'B') };
-        var m = Bbs757EfbOcr.Merge(a, b);
-        Assert.Equal(new[] { "ON", "OFF" }, m.Select(l => l.Text));
+        var engine = new[]
+        {
+            new OcrLine("TOD PAUSE", new Rectangle(300, 400, 120, 20), new[]
+            {
+                new OcrWord("TOD", new Rectangle(300, 401, 40, 18), 0.98f),
+                new OcrWord("PAUSE", new Rectangle(350, 400, 70, 20), 0.95f),
+            }, 0.96f),
+        };
+
+        var line = Assert.Single(Bbs757EfbOcr.FromEngine(engine));
+
+        Assert.Equal("TOD PAUSE", line.Text);
+        Assert.Equal(new Rectangle(300, 400, 120, 20), line.Box);
+        Assert.Equal('P', line.Pass);
+        Assert.Equal(new[] { "TOD", "PAUSE" }, line.Words.Select(w => w.Text));
+        Assert.Equal(new[] { new Rectangle(300, 401, 40, 18), new Rectangle(350, 400, 70, 20) }, line.Words.Select(w => w.Box));
+    }
+
+    [Fact]
+    public void FromEngine_reads_two_lines_on_one_row_left_to_right()
+    {
+        static OcrLine L(string text, int x, int y) =>
+            new(text, new Rectangle(x, y, 60, 20), new[] { new OcrWord(text, new Rectangle(x, y, 60, 20), 1f) }, 1f);
+
+        // The engine's own order: the next row first, then the right-hand line, a few pixels higher than its left
+        // neighbor (boxes wobble between reads), so neither its order nor a sort by top is the reading order.
+        var lines = Bbs757EfbOcr.FromEngine(new[] { L("BELOW", 300, 200), L("RIGHT", 900, 100), L("LEFT", 300, 103) });
+
+        Assert.Equal(new[] { "LEFT", "RIGHT", "BELOW" }, lines.Select(l => l.Text));
     }
 }

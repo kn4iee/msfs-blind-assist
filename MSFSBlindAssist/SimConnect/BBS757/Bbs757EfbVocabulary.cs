@@ -164,7 +164,9 @@ public static class Bbs757EfbVocabulary
     /// The known word nearest <paramref name="t"/>, or null when none is within the limit. A read
     /// with small letters ("Parking brake", "Windows": checklist lines) is matched only against the
     /// known words that have small letters too (the notes): the tablet's labels are capitals, and
-    /// snapping a checklist line to a label is how "Parking brake" became PARKING BRAKE MODE.
+    /// snapping a checklist line to a label is how "Parking brake" became PARKING BRAKE MODE. A read
+    /// with a number of its own ("ACTIVE 0 ARMED 0", the Failures counts) is matched only against the
+    /// known words with a figure: snapped to ACTIVE / ARMED, the counts were lost.
     /// </summary>
     public static string? Nearest(string t)
     {
@@ -173,12 +175,14 @@ public static class Bbs757EfbVocabulary
         // or two read off noise ("RIOHT an START", "Apu FIRE") is still a label.
         int letters = t.Count(char.IsLetter), lower = t.Count(char.IsLower);
         bool mixed = letters > 0 && lower * 2 > letters;
+        bool number = t.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(word => word.All(char.IsDigit));
         string up = t.ToUpperInvariant();
         string? best = null;
         int bestD = int.MaxValue;
         foreach (var w in All)
         {
             if (mixed && !w.Any(char.IsLower)) continue;
+            if (number && !w.Any(char.IsDigit)) continue;
             if (Math.Abs(w.Length - up.Length) > Math.Max(2, w.Length / 3)) continue;
             int d = Distance(up, w.ToUpperInvariant());
             if (d < bestD) { bestD = d; best = w; }
