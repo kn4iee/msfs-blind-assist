@@ -34,12 +34,12 @@ public partial class IniBuildsA350Definition
         ["A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = "Master warning",
     };
 
-    /// <summary>The other six master legends: the same two lights, shown, never spoken.</summary>
+    /// <summary>The other master legends: the same two lights, shown, never spoken (a side's two warning legends are one
+    /// light, A350PanelLamps.SteadyRules).</summary>
     private static readonly HashSet<string> MasterEchoes = new(StringComparer.Ordinal)
     {
         "A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ2_LIGHT", "A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ1_LIGHT",
-        "A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ2_LIGHT", "A350_LT_FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT",
-        "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT", "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT",
+        "A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ2_LIGHT", "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT",
     };
 
     /// <summary>A light that shows what another row speaks: the master lights' other legends, and the ECP page keys'

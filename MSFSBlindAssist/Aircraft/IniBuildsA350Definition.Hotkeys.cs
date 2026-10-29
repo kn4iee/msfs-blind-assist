@@ -138,19 +138,22 @@ public partial class IniBuildsA350Definition
                     : "The A350 displays are not available yet.");
                 return true;
             // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
+            // A readout from a dark screen says so (a dark PFD's "none shown" read as no capability, review 2026-10-28).
             case HotkeyAction.ReadSquawkCode:
-                announcer.AnnounceImmediate(DisplayLines("A350_DISP_RMP_1") is { } rmp ? A350.A350Hotkeys.Squawk(rmp)
-                    : "The A350 displays are not available yet.");
+                announcer.AnnounceImmediate(DarkReadout("A350_DISP_RMP_1") ?? (DisplayLines("A350_DISP_RMP_1") is { } rmp ? A350.A350Hotkeys.Squawk(rmp)
+                    : "The A350 displays are not available yet."));
                 return true;
             // Ctrl+W: the ND's TO waypoint; Ctrl+0: the FMA's approach capability column.
             case HotkeyAction.ReadNDWaypoint:
-                announcer.AnnounceImmediate(DisplayLines("A350_DISP_ND_CPT")?.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal))
+                announcer.AnnounceImmediate(DarkReadout("A350_DISP_ND_CPT")
+                    ?? DisplayLines("A350_DISP_ND_CPT")?.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal))
                     ?? "No TO waypoint shown");
                 return true;
             case HotkeyAction.ReadApproachCapability:
-                announcer.AnnounceImmediate(DisplayLines(PfdCaptainKey)?.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
-                    ? "Approach capability " + cap["FMA approach:".Length..].Trim()
-                    : "Approach capability none shown");
+                announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
+                    ?? (DisplayLines(PfdCaptainKey)?.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
+                        ? "Approach capability " + cap["FMA approach:".Length..].Trim()
+                        : "Approach capability none shown"));
                 return true;
             default:
                 return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
@@ -191,11 +194,17 @@ public partial class IniBuildsA350Definition
             : IsDark(d) ? Array.Empty<string>()
             : Pfd?.Latest(d.Gauge, d.Index) is { } capture ? d.Read(capture) : null;
 
+    /// <summary>"Captain PFD dark: ..." while that display's screen is dark, else null.</summary>
+    private string? DarkReadout(string displayKey) =>
+        DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is { } display && IsDark(display)
+            ? display.Panel + " " + char.ToLowerInvariant(DarkScreen[0]) + DarkScreen[1..]
+            : null;
+
     private void AnnounceDisplay(string displayKey, ScreenReaderAnnouncer announcer)
     {
-        if (DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is { } display && IsDark(display))
+        if (DarkReadout(displayKey) is { } dark)
         {
-            announcer.AnnounceImmediate(display.Panel + " " + char.ToLowerInvariant(DarkScreen[0]) + DarkScreen[1..]);
+            announcer.AnnounceImmediate(dark);
             return;
         }
         var lines = DisplayLines(displayKey);

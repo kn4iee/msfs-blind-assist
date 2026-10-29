@@ -93,6 +93,31 @@ public class A350PfdDisplayTests
         Assert.DoesNotContain("Dark", lit);
     }
 
+    // Review 2026-10-28: with the captain's PFD dark, Ctrl+0 said "Approach capability none shown", which reads as no
+    // capability at all; Ctrl+W ("No TO waypoint shown") and X read a dark ND and RMP the same way. A readout from a
+    // dark screen says it is dark, as Alt+P does.
+    [Theory]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadApproachCapability, "INI_LEFT_EFIS_POWERED", "Captain PFD")]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadNDWaypoint, "INI_LEFT_EFIS_POWERED", "Captain ND")]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSquawkCode, "INI_POTENTIOMETER_93", "RMP 1 display")]
+    public void A_readout_from_a_dark_screen_says_it_is_dark(MSFSBlindAssist.Hotkeys.HotkeyAction action, string power, string panel)
+    {
+        var cache = new Dictionary<string, double>(StringComparer.Ordinal);
+        var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        var sim = new SimConnect.SimConnectManager(IntPtr.Zero);
+        def.Attach(sim);
+        var draws = new Dictionary<(string, int), A350DrawCapture>
+        {
+            [("EFIS", 0)] = Fixture("efis0_ls_downwind_omdb"), [("RMP", 0)] = Fixture("ground_RMP_0"),
+        };
+        def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => draws.GetValueOrDefault((g, i))), _ => false, _ => { });
+        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        cache[def.KeyForInput(power)] = 0;
+        var speech = new SpeechCapture();
+        Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
+        Assert.Equal(new[] { panel + " dark: its screen is off or has no power." }, speech.All);
+    }
+
     // Review 2026-10-28: Shift+M and Ctrl+Shift+R read the latest draw directly, so a screen the status display called
     // dark showed its whole content in its window, where the pilot could even click it.
     [Theory]

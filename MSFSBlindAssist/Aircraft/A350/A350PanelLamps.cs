@@ -116,9 +116,7 @@ public static class A350PanelLamps
         ["FCU_MASTER_CAUTION_RIGHT_SEQ1_LIGHT"] = "First officer master caution light",
         ["FCU_MASTER_CAUTION_RIGHT_SEQ2_LIGHT"] = "First officer master caution lower light",
         ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = "Captain master warning light",
-        ["FCU_MASTER_WARNING_LEFT_SEQ2_LIGHT"] = "Captain master warning lower light",
         ["FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT"] = "First officer master warning light",
-        ["FCU_MASTER_WARNING_RIGHT_SEQ2_LIGHT"] = "First officer master warning lower light",
         ["FCU_AUTO_LAND_LEFT_SEQ1_LIGHT"] = "Captain autoland light", ["FCU_AUTO_LAND_RIGHT_SEQ1_LIGHT"] = "First officer autoland light",
         ["FCU_ATC_MSG_LEFT_SEQ1_LIGHT"] = "Captain ATC message light", ["FCU_ATC_MSG_RIGHT_SEQ1_LIGHT"] = "First officer ATC message light",
         // Each cargo isolation valve's upper legend: lit while the valve and its button disagree.
