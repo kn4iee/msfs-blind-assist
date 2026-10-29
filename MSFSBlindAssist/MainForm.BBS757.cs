@@ -7,21 +7,26 @@ namespace MSFSBlindAssist;
 
 /// <summary>
 /// BlueBird 757-200 windows and menu entry. Kept in its own partial so the aircraft's surfaces sit
-/// together: the Ctrl+M monitor manager, the Shift+M CDU window and the Shift+T EFB window;
-/// <see cref="DisposeBBS757Forms"/> is where each is torn down.
+/// together: the Ctrl+M monitor manager, the Shift+M CDU window and the Shift+T EFB windows (the tablet window and the
+/// settings window, <see cref="ShowBBS757EfbDialog"/> picking one); <see cref="DisposeBBS757Forms"/> is where each is torn down.
 /// </summary>
 public partial class MainForm
 {
     private Forms.BBS757.BBS757MonitorManagerForm? bbs757MonitorManagerForm;
     private Forms.BBS757.BBS757CduForm? bbs757CduForm;
-    private Forms.BBS757.BBS757EfbForm? bbs757EfbForm;
+
+    /// <summary>
+    /// The 757 EFB settings window (Shift+T while no simulator runs): BlueBird's settings files, read and changed in
+    /// place. It reads and writes files only, so it holds no Coherent client.
+    /// </summary>
+    private Forms.BBS757.BBS757EfbForm? bbs757SettingsForm;
 
     /// <summary>
     /// The one client on the 757's "BBSTablet" Coherent view ([DBG-9]: one socket per view), which the
     /// 757 definition owns (<see cref="BBS757Definition.EnsureTabletClient"/>): the CDU window reads and
-    /// presses through it, and the EFB window reads the Navigraph code through it; the windows only
+    /// presses through it, and the tablet window's bridge reads the Navigraph sign-in through it; the windows only
     /// subscribe to it. Null when the 757 is not the loaded aircraft. The definition disposes the
-    /// client when the pilot switches away, after closing these windows
+    /// client when the pilot switches away, after closing the CDU window
     /// (<see cref="CloseBbs757TabletWindows"/>, handed to it here).
     /// </summary>
     internal CoherentBbs757TabletClient? EnsureBbs757TabletClient()
@@ -31,18 +36,19 @@ public partial class MainForm
         return bbs757.EnsureTabletClient();
     }
 
-    /// <summary>The windows on the tablet client: the CDU window and the EFB window.</summary>
+    /// <summary>
+    /// The CDU window, which reads and presses through the tablet client and so closes before the definition disposes it. (The
+    /// tablet window and its bridge, and the settings window, are torn down in <see cref="DisposeBBS757Forms"/>.)
+    /// </summary>
     private void CloseBbs757TabletWindows()
     {
         if (bbs757CduForm != null && !bbs757CduForm.IsDisposed) bbs757CduForm.Dispose();
         bbs757CduForm = null;
-        if (bbs757EfbForm != null && !bbs757EfbForm.IsDisposed) bbs757EfbForm.Dispose();
-        bbs757EfbForm = null;
     }
 
     /// <summary>
     /// The one client on the 757's "BBSNavigraphMap" Coherent view, where BlueBird's EFB tablet is
-    /// drawn ([DBG-9]): the EFB window clicks the tablet through it. Created on first use, disposed
+    /// drawn ([DBG-9]): the tablet window's bridge captures and taps the tablet through it. Created on first use, disposed
     /// in <see cref="DisposeBBS757Forms"/>; the window never disposes it.
     /// </summary>
     private CoherentBbs757EfbClient? bbs757EfbClient;
@@ -74,35 +80,64 @@ public partial class MainForm
         bbs757CduForm.ShowForm();
     }
 
-    /// <summary>The reworked 757 EFB window (plan 11): the shared accessible EFB window over the tablet reader.</summary>
-    private Forms.FBWA380.FbwEfbForm? bbs757EfbReaderForm;
+    /// <summary>The 757 tablet window (plan 11; plan 18): the shared accessible EFB window over the tablet bridge.</summary>
+    private Forms.FBWA380.FbwEfbForm? bbs757TabletForm;
     private Bbs757EfbBridge? bbs757EfbBridge;
 
-    /// <summary>Shift+T on the 757: the classic EFB window, whose every press is checked against a
-    /// variable or BlueBird's settings file. The tablet screen reader is a button in it.</summary>
-    private void ShowBBS757EfbDialog() => ShowBBS757ClassicEfbDialog();
-
     /// <summary>
-    /// The 757 tablet window (plan 11; plan 18): BlueBird's tablet in the shared accessible EFB window, read from
-    /// its pixels and pressed where the reader found each control (<see cref="Bbs757EfbBridge"/>, the owner's ruling
-    /// of 2026-10-29: nothing refuses a press). The first time it shows, the tablet reader's pop-out is made as the A300
-    /// and A330 CDU windows make theirs: the camera goes to the captain's instrument view, the simulator
-    /// comes to the front for a moment, and the camera is put back. While the window is shown the tablet
-    /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader
-    /// reads with the downloaded text recognition: while that is not Ready it does not open, and the offer
-    /// window is shown instead, whatever the offer checkbox says (the pilot asked for the reader). Ready, a
-    /// press also has the reader try again an engine that could not load: its status sent the pilot to
-    /// download the models again, and the window may still be open.
+    /// Shift+T on the 757 opens one of two windows, by whether a simulator runs, asked afresh on each press
+    /// (<see cref="Bbs757EfbWindowChoice.For"/> over <see cref="Bbs757SimGuard.Check()"/>). With one running, or when the
+    /// process list cannot be read, it is the tablet window (<see cref="ShowBBS757TabletWindow"/>): BlueBird's tablet itself,
+    /// read and pressed. With none running it is the settings window (<see cref="ShowBBS757SettingsWindow"/>): the 757 is not
+    /// loaded then, and BlueBird's settings files can change. The input hotkey mode ends first, whichever opens (or the
+    /// offer, when the tablet window cannot): its global hotkeys would otherwise take keys typed into the window.
     /// </summary>
-    private void ShowBBS757EfbReader()
+    private void ShowBBS757EfbDialog()
     {
         if (currentAircraft is not BBS757Definition) return;
+        hotkeyManager.ExitInputHotkeyMode();
+
+        Bbs757SimState state = Bbs757SimGuard.Check();
+        Bbs757EfbWindow window = Bbs757EfbWindowChoice.For(state);
+        Log.Debug("BBS757", $"Shift+T: simulator {state}, so the {window} window.");
+        if (window == Bbs757EfbWindow.Settings)
+            ShowBBS757SettingsWindow();
+        else
+            ShowBBS757TabletWindow();
+    }
+
+    /// <summary>
+    /// The 757 settings window (titled "757 EFB settings"): BlueBird's settings files, read and changed in place while no
+    /// simulator runs. It needs no Coherent client, no tablet and no SimConnect connection. Made by the first call and shown
+    /// again by each later one, which has it read BlueBird's files afresh; <see cref="DisposeBBS757Forms"/> disposes it with the
+    /// 757's other windows.
+    /// </summary>
+    private void ShowBBS757SettingsWindow()
+    {
+        if (bbs757SettingsForm == null || bbs757SettingsForm.IsDisposed)
+            bbs757SettingsForm = new Forms.BBS757.BBS757EfbForm(announcer);
+        bbs757SettingsForm.ShowForm();
+    }
+
+    /// <summary>
+    /// The 757 tablet window (titled "757 EFB"; plan 11, plan 18), which Shift+T opens while a simulator runs: BlueBird's
+    /// tablet in the shared accessible EFB window, read from its pixels and pressed where the reader found each control
+    /// (<see cref="Bbs757EfbBridge"/>, the owner's ruling of 2026-10-29: nothing refuses a press). The first time it shows,
+    /// the tablet reader's pop-out is made as the A300 and A330 CDU windows make theirs: the camera goes to the captain's
+    /// instrument view, the simulator comes to the front for a moment, and the camera is put back. While the window is shown
+    /// the tablet is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader reads
+    /// with the downloaded text recognition: while that is not Ready the window does not open, and the offer window is shown
+    /// instead, whatever the offer checkbox says (the pilot asked for the tablet with Shift+T, [OCR-2]). Ready, a press also has
+    /// the reader try again an engine that could not load: its status sent the pilot to download the models again, and the
+    /// window may still be open.
+    /// </summary>
+    private void ShowBBS757TabletWindow()
+    {
         if (textRecognitionDownloader.Installed().State != TextRecognitionState.Ready)
         {
             ShowTextRecognitionOffer();
             return;
         }
-        hotkeyManager.ExitInputHotkeyMode();
 
         var efb = EnsureBbs757EfbClient();
         if (bbs757EfbBridge == null)
@@ -112,15 +147,23 @@ public partial class MainForm
         }
         // Only after the Ready check above, so a retry never loads models without their marker (OCR-1).
         bbs757EfbBridge.RetryTextRecognition();
-        if (bbs757EfbReaderForm == null || bbs757EfbReaderForm.IsDisposed)
+        if (bbs757TabletForm == null || bbs757TabletForm.IsDisposed)
         {
-            var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "BlueBird 757 tablet screen", "tablet", "BlueBird tablet");
+            var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "757 EFB", "tablet", "BlueBird tablet");
             var bridge = bbs757EfbBridge;
-            form.VisibleChanged += (_, _) => bridge.SetActive(form.Visible && !form.IsDisposed);
-            bbs757EfbReaderForm = form;
+            form.VisibleChanged += (_, _) =>
+            {
+                bool shown = form.Visible && !form.IsDisposed;
+                bridge.SetActive(shown);
+                // The EFB client checks its link only while a window is shown (CoherentBbs757EfbClient.SetActive). The old
+                // EFB window was that window; this one is.
+                efb.SetActive(shown);
+            };
+            bbs757TabletForm = form;
         }
-        bbs757EfbReaderForm.ShowForm();
+        bbs757TabletForm.ShowForm();
         bbs757EfbBridge.SetActive(true);
+        efb.SetActive(true);
     }
 
     /// <summary>
@@ -192,9 +235,9 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client, as the classic window reads it: true,
-    /// false, or null when the helper view cannot be read. A signed-out first answer is read again once the helper answers (it
-    /// may have come before the helper's first scrape). Runs on the bridge's loop; the client is safe from any thread.
+    /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client: true, false, or null when the helper
+    /// view cannot be read. A signed-out first answer is read again once the helper answers (it may have come before the
+    /// helper's first scrape). Runs on the bridge's loop; the client is safe from any thread.
     /// </summary>
     private static async Task<bool?> ReadBbs757SignedInAsync(CoherentBbs757TabletClient tablet, CancellationToken ct)
     {
@@ -296,8 +339,8 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The nav data watch for the AIRAC page's UPDATE or REMOVE (the classic window's loop): from <paramref name="before"/>, the
-    /// cycle installed before the tap (read by the bridge right before it: BlueBird's REMOVE may delete the file before this runs),
+    /// The nav data watch for the AIRAC page's UPDATE or REMOVE: from <paramref name="before"/>, the cycle installed before the
+    /// tap (read by the bridge right before it: BlueBird's REMOVE may delete the file before this runs),
     /// <c>NavigationData\cycle.json</c> every second for 20 seconds (<see cref="Bbs757EfbExtras.WatchNavDataAsync"/>), then what
     /// came of it, queued. Without a work folder there is nothing to watch, so nothing is said. On the UI thread (the files are a
     /// few hundred bytes); never throws.
@@ -325,68 +368,6 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The classic 757 EFB window, which operates BlueBird's tablet by scripted clicks at measured points
-    /// (the EFB client) and reads the Navigraph sign-in off the hidden helper view (the shared tablet
-    /// client). Both go over the Coherent debugger; a cockpit preset needs SimConnect for its ground
-    /// or flight check (<see cref="ReadBbs757OnGroundAsync"/>), and the SimBrief fuel and payload
-    /// load for that check and the definition's load watch (<see cref="CreateBbs757LoadIo"/>).
-    /// </summary>
-    private void ShowBBS757ClassicEfbDialog()
-    {
-        if (currentAircraft is not BBS757Definition) return;
-        hotkeyManager.ExitInputHotkeyMode();
-
-        var tablet = EnsureBbs757TabletClient();
-        if (tablet == null) return;
-        var efb = EnsureBbs757EfbClient();
-        if (bbs757EfbForm == null || bbs757EfbForm.IsDisposed)
-            bbs757EfbForm = new Forms.BBS757.BBS757EfbForm(efb, tablet, announcer, ReadBbs757OnGroundAsync, CreateBbs757LoadIo())
-            {
-                OpenScreenReader = ShowBBS757EfbReader,
-            };
-        bbs757EfbForm.ShowForm();
-    }
-
-    /// <summary>
-    /// The EFB window's seams: fresh reads of the variables the definition registers (the chocks, the
-    /// ground power), the plan fetch for BlueBird's SimBrief ID, and the current 757 definition's load
-    /// watch and ground power echo (the window's own ground power run, so the Ground Power row does not
-    /// say its change a second time). Each reads <c>simConnectManager</c> and <c>currentAircraft</c> when
-    /// it is called, so a reconnect is followed; the window is disposed on every profile switch.
-    /// </summary>
-    private Forms.BBS757.Bbs757LoadIo CreateBbs757LoadIo() => new()
-    {
-        Read = (key, timeoutMs, ct) => simConnectManager is { IsConnected: true } sim
-            ? sim.ReadFreshAsync(key, timeoutMs, ct)
-            : Task.FromResult<double?>(null),
-        FetchOfpXml = (id, ct) => MSFSBlindAssist.Services.SimBriefService.FetchLatestOfpXmlAsync(id, null, ct),
-        WatchRunning = () => currentAircraft is BBS757Definition { LoadWatchRunning: true },
-        NestRunning = () => currentAircraft is BBS757Definition def ? def.NestRunning() : Aircraft.BBS757.Bbs757Nest.IsRunning(),
-        StartWatch = (loads, units) => currentAircraft is BBS757Definition def && simConnectManager is { IsConnected: true } sim
-            && def.StartLoadWatch(loads, units, Bbs757LoadParts.Both, sim, announcer),
-        ArmGroundPowerEcho = () =>
-        {
-            if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho();
-        },
-        SettleGroundPowerEcho = after =>
-        {
-            if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(after);
-        },
-    };
-
-    /// <summary>
-    /// SIM ON GROUND read fresh for the EFB window's preset gate: true on the ground, false airborne,
-    /// null when it cannot be read (no connection, or no delivery within the timeout).
-    /// </summary>
-    private async Task<bool?> ReadBbs757OnGroundAsync(int timeoutMs, CancellationToken ct)
-    {
-        var sim = simConnectManager;
-        if (sim == null || !sim.IsConnected) return null;
-        double? value = await sim.ReadFreshAsync("SIM_ON_GROUND", timeoutMs, ct);
-        return value is double v && double.IsFinite(v) ? v > 0.5 : null;
-    }
-
-    /// <summary>
     /// The 757's monitor manager (Ctrl+M) — mute individual auto-announced variables. Rebuilt from
     /// the live definition each time it is created. Public because the definition calls it, after
     /// leaving output hotkey mode itself; the aircraft guard keeps a queued call that lands after a
@@ -401,20 +382,24 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Closes every 757 window, then the EFB-view client (windows first, so none is left subscribed
-    /// to or running on a disposed client). Called by SwitchAircraft on every switch, and on app
-    /// exit: the monitor manager's rows are snapshotted from the definition it was built for, so a
-    /// surviving one would list the outgoing definition, and the client holds the one inspector
-    /// socket Coherent allows on its view. The tablet client is the definition's, disposed by its
-    /// OnSwitchedAway (which closes the CDU and EFB windows first).
+    /// Closes every 757 window (the monitor manager, the settings window, the CDU window and the tablet
+    /// window), then the EFB-view client (windows first, so none is left subscribed to or running on a
+    /// disposed client). Called by SwitchAircraft on every switch, and on app exit: the monitor manager's
+    /// rows are snapshotted from the definition it was built for, so a surviving one would list the
+    /// outgoing definition, and the client holds the one inspector socket Coherent allows on its view.
+    /// The tablet client is the definition's, disposed by its OnSwitchedAway (which closes the CDU
+    /// window first).
     /// </summary>
     private void DisposeBBS757Forms()
     {
         if (bbs757MonitorManagerForm != null && !bbs757MonitorManagerForm.IsDisposed) bbs757MonitorManagerForm.Dispose();
         bbs757MonitorManagerForm = null;
+        // The settings window holds no client (it reads BlueBird's files), so the tablet client's close does not reach it.
+        if (bbs757SettingsForm != null && !bbs757SettingsForm.IsDisposed) bbs757SettingsForm.Dispose();
+        bbs757SettingsForm = null;
         CloseBbs757TabletWindows();
-        if (bbs757EfbReaderForm != null && !bbs757EfbReaderForm.IsDisposed) bbs757EfbReaderForm.Dispose();
-        bbs757EfbReaderForm = null;
+        if (bbs757TabletForm != null && !bbs757TabletForm.IsDisposed) bbs757TabletForm.Dispose();
+        bbs757TabletForm = null;
         // The bridge before the client it reads through (it turns the mirror off on its way out).
         bbs757EfbBridge?.Dispose();
         bbs757EfbBridge = null;

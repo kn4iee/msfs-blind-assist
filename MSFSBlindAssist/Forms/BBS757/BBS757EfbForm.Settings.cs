@@ -4,30 +4,30 @@ using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Forms.BBS757;
 
-// The 757 EFB window's Settings page (BBS757EfbForm.cs builds the window and calls BuildSettingsTab): every setting of
-// BlueBird's tablet, read from BlueBird's own files (efb_settings.json and each registration's
+// The 757 EFB settings window's content (BBS757EfbForm.cs builds the window and calls BuildSettingsContent): every setting
+// of BlueBird's tablet, read from BlueBird's own files (efb_settings.json and each registration's
 // liveries\<registration>-opt.json) and changed in them while no simulator process runs. BlueBird reads the files once,
 // when the 757 loads, and writes its own copy back over them while it is loaded, so a change takes effect at the next
-// load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The AIRAC data
-// section also holds Sign in to Navigraph and Update nav data, the page's only live controls, with the window's own
-// handlers; the EFB status they report to is the Flight page's.
+// load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The window holds
+// nothing else: the Navigraph sign-in, the nav data update and the SimBrief load are on the tablet window's own pages
+// (Bbs757EfbExtras), where the simulator runs.
 //
 // Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the Section list (the tablet's
 // pages, and ACARS) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice
 // list for the tablet's words, a label and a slider for the random failure frequency, a label and a box for a number or
 // text. A registration section starts with the registrations its rows apply to. Picking a section rebuilds only the
-// rows' panel; everything else (a save, the simulator closing, the page opening) updates the rows in place, so no
+// rows' panel; everything else (a save, the simulator closing, the window opening) updates the rows in place, so no
 // control is recreated and focus never moves.
 //
-// The page is writable only while Bbs757SimGuard.SettingsWritable holds, checked when the page opens, on every 1 s
-// status tick while the window shows, and by every write. While it does not, every input stays focusable and readable
+// The settings are writable only while Bbs757SimGuard.SettingsWritable holds, checked when the window opens, on every 1 s
+// guard tick while the window shows, and by every write. While it does not, every input stays focusable and readable
 // but does not change (a check box does not toggle, a choice list and the slider swallow what would move them, a box is
 // read-only) and an attempt says why, at once (ReadOnlyAttemptText). So does a row that waits for another (the
 // announcement categories) or that cannot change for its own state (unreadable, automatic). A box is saved by Enter; one
 // left with a change not saved shows the stored value again. A box that can be cleared says in its description what
 // empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's: every key checked first, the writes in
 // order through Bbs757SettingsFile (which logs each save and refusal), the first not done everywhere stopping the rest,
-// and the wording; this page reads the files for it, says the outcome and reads the files again.
+// and the wording; this window reads the files for it, says the outcome and reads the files again.
 //
 // Speech (CORE-7): a check box, a choice list or the slider that saved says nothing, as the reader has said its new
 // state; a number or text box says "<label> saved", and "<label> not saved" when left with a change not saved; every
@@ -37,13 +37,11 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // are shown in plain text and never logged: no value, write or row goes into a log line or an exception message here.
 public partial class BBS757EfbForm
 {
-    // The rows inside the section panel: the label column, the input column, one row's height, the rows' width, and a
-    // section's own buttons' height.
+    // The rows inside the section panel: the label column, the input column, one row's height and the rows' width.
     private const int RowLeft = 4;
     private const int RowInputLeft = 205;
     private const int RowStep = 30;
     private const int RowWidth = 412;
-    private const int SectionButtonHeight = 30;
 
     // A switch's choices are Off, then On (Bbs757SettingKind.OnOff; On's index is Bbs757SettingsRows.OnChoiceIndex).
     private const int OffChoice = 0;
@@ -71,10 +69,13 @@ public partial class BBS757EfbForm
     private TextBox? _registrationsBox;
     private Bbs757SettingSection _shownSection;
 
-    // BlueBird's work folder (the newest settings file's, Bbs757WorkFolder.Find), found again when the page opens and
+    // BlueBird's work folder (the newest settings file's, Bbs757WorkFolder.Find), found again when the window opens and
     // when the simulator closes, and the simulator it belongs to, named only for a pilot with more than one work folder.
     private string? _settingsFolder;
     private string? _settingsSimulatorName;
+    // The work folder last written to the log, so a change of folder is logged once.
+    private string? _loggedFolder;
+    private bool _folderLogged;
 
     // What the last check found; read-only until a check says otherwise.
     private bool _settingsWritable;
@@ -90,15 +91,16 @@ public partial class BBS757EfbForm
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Builds the Settings page, top to bottom in tab order: the status box, the Section list and the panel of the chosen
-    /// section's rows (General first).
+    /// Builds the window's content on the window itself, top to bottom in tab order: the status box, the Section list and the
+    /// panel of the chosen section's rows (General first). Nothing comes before them and no control follows: there are no
+    /// tabs, no buttons.
     /// </summary>
-    private void BuildSettingsTab(TabPage page)
+    private void BuildSettingsContent()
     {
         const int left = 15, fullW = 440, h = 32, gap = 8, statusH = 64;
         int y = 15, tab = 0;
 
-        page.Controls.Add(new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ });
+        Controls.Add(new Label { Text = "Status", Location = new Point(left, y), AutoSize = true, TabIndex = tab++ });
         y += 20;
         _settingsStatusBox = new TextBox
         {
@@ -112,10 +114,10 @@ public partial class BBS757EfbForm
             AccessibleName = "Settings status",
             TabIndex = tab++,
         };
-        page.Controls.Add(_settingsStatusBox);
+        Controls.Add(_settingsStatusBox);
         y += statusH + gap + 4;
 
-        page.Controls.Add(new Label { Text = "Section", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ });
+        Controls.Add(new Label { Text = "Section", Location = new Point(left, y + 6), AutoSize = true, TabIndex = tab++ });
         _sectionCombo = new ComboBox
         {
             Location = new Point(left + 90, y + 2),
@@ -128,7 +130,7 @@ public partial class BBS757EfbForm
             _sectionCombo.Items.Add(Bbs757EfbSettings.SectionName(section));
         _sectionCombo.SelectedIndex = 0;
         _sectionCombo.SelectedIndexChanged += (_, _) => OnSectionPicked();
-        page.Controls.Add(_sectionCombo);
+        Controls.Add(_sectionCombo);
         y += h + gap;
 
         int panelTop = y;
@@ -139,15 +141,11 @@ public partial class BBS757EfbForm
             AutoScroll = true,
             TabIndex = tab++,
         };
-        page.Controls.Add(_sectionPanel);
-        // The rows take what the page leaves below the section list, whatever height the tab control gives the page.
-        page.Resize += (_, _) => _sectionPanel.Height = Math.Max(120, page.ClientSize.Height - panelTop - 10);
-
-        // The page opens: BlueBird's folder and files are read fresh.
-        _tabs.Selected += (_, e) =>
-        {
-            if (e.TabPage == page) ReadSettingsAfresh();
-        };
+        Controls.Add(_sectionPanel);
+        // The rows take what the window leaves below the section list: now, and whenever the window's size changes.
+        void FitSectionPanel() => _sectionPanel.Height = Math.Max(120, ClientSize.Height - panelTop - 10);
+        FitSectionPanel();
+        Resize += (_, _) => FitSectionPanel();
 
         ShowSection(Sections[0]);
     }
@@ -163,8 +161,8 @@ public partial class BBS757EfbForm
 
     /// <summary>
     /// Replaces the panel's rows with <paramref name="section"/>'s, in the tablet's order, and fills them from the
-    /// files; AIRAC data ends with Sign in to Navigraph and Update nav data, as the tablet's page does. The only place
-    /// rows are made; called when the page is built and when the pilot picks a section.
+    /// files. Every section holds its settings' rows and nothing else. The only place rows are made; called when the window
+    /// is built and when the pilot picks a section.
     /// </summary>
     private void ShowSection(Bbs757SettingSection section)
     {
@@ -205,33 +203,12 @@ public partial class BBS757EfbForm
                 _settingControls.Add(AddRow(setting, y, ref tab));
                 y += RowStep;
             }
-            // The window's own handlers, unchanged; both need the 757 loaded.
-            if (section == Bbs757SettingSection.AiracData)
-            {
-                AddSectionButton("Sign in to Navigraph", SignInToNavigraphAsync, ref y, ref tab);
-                AddSectionButton("Update nav data", UpdateNavDataAsync, ref y, ref tab);
-            }
         }
         finally
         {
             _sectionPanel.ResumeLayout();
         }
         RefreshSettingValues();
-    }
-
-    // A button of the window's own after a section's rows: its action runs as the Flight page's buttons' do.
-    private void AddSectionButton(string text, Func<Task> action, ref int y, ref int tab)
-    {
-        var button = new Button
-        {
-            Text = text,
-            Location = new Point(RowLeft, y + 4),
-            Size = new Size(RowWidth, SectionButtonHeight),
-            TabIndex = tab++,
-        };
-        button.Click += (_, _) => RunAction(action);
-        _sectionPanel.Controls.Add(button);
-        y += SectionButtonHeight + 8;
     }
 
     // One setting's row: a check box for a switch; a label and a choice list for the tablet's words; a label and a slider
@@ -336,8 +313,8 @@ public partial class BBS757EfbForm
     // Reading
     // ------------------------------------------------------------------
 
-    // The window shows (ShowForm): the page is read as when it opens, and no simulator change is news until the
-    // window's next check. A box change not saved, in a window that was still open, is dropped and said first.
+    // The window shows (ShowForm): BlueBird's files are read afresh, and no simulator change is news until the window's next
+    // check. A box change not saved, in a window that was still open, is dropped and said first.
     private void OpenSettings()
     {
         DropUnsavedEntry();
@@ -345,7 +322,7 @@ public partial class BBS757EfbForm
         ReadSettingsAfresh();
     }
 
-    // The page opens: BlueBird's work folder found again, the simulator checked and the files read.
+    // The window opens: BlueBird's work folder found again, the simulator checked and the files read.
     private void ReadSettingsAfresh()
     {
         if (_disposed) return;
@@ -364,11 +341,24 @@ public partial class BBS757EfbForm
             : null;
     }
 
+    /// <summary>The work folder now (newest settings file, <see cref="Bbs757WorkFolder.Find(IReadOnlyList{string})"/>); a change is logged once, never a file's content.</summary>
+    private string? ResolveWorkFolder(IReadOnlyList<string> roots)
+    {
+        string? folder = Bbs757WorkFolder.Find(roots);
+        if (!_folderLogged || !string.Equals(folder, _loggedFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            _folderLogged = true;
+            _loggedFolder = folder;
+            Log.Info("BBS757", folder == null ? "BlueBird work folder: none found." : $"BlueBird work folder: {folder}");
+        }
+        return folder;
+    }
+
     /// <summary>
     /// Reads BlueBird's files again and shows what they hold in the rows of the section shown, in place: each control's
     /// value, its description (an inactive row's <see cref="Bbs757SettingsRows.InactiveText"/>, a box's
     /// <see cref="Bbs757EfbSettings.EmptyHint"/>) and whether it may change. No control is recreated and focus does not
-    /// move. After every save, when the page opens and when the simulator closes.
+    /// move. After every save, when the window opens and when the simulator closes.
     /// </summary>
     private void RefreshSettingValues()
     {
@@ -473,7 +463,7 @@ public partial class BBS757EfbForm
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Whether BlueBird's settings may change now, on every 1 s status tick while the window shows and when the page
+    /// Whether BlueBird's settings may change now, on every 1 s guard tick while the window shows and when the window
     /// opens: the simulator checked (<see cref="Bbs757SimGuard.Check()"/>), the settings file looked for, the status box
     /// set and every input locked or unlocked. The first check after the window shows only remembers the simulator's
     /// state. After it, a change is said once (<see cref="SimChangeText"/>): a simulator that starts, a check that starts
@@ -730,7 +720,7 @@ public partial class BBS757EfbForm
     // Rows and files
     // ------------------------------------------------------------------
 
-    // One setting's controls on the page and what they show. Never logged or put in a message: its row's text can be
+    // One setting's controls in the window and what they show. Never logged or put in a message: its row's text can be
     // the pilot's codes.
     private sealed class SettingControl
     {

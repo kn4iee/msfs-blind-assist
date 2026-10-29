@@ -265,7 +265,7 @@ public partial class MainForm
             case HotkeyAction.ShowPMDGEFB:
                 if (currentAircraft?.AircraftCode == "BBS_757")
                 {
-                    // BlueBird 757 — the EFB window operating BlueBird's tablet by scripted clicks.
+                    // BlueBird 757 — the tablet window while a simulator runs, BlueBird's settings window while none does.
                     // First, so no broader test (an interface check) can ever take the 757's Shift+T.
                     ShowBBS757EfbDialog();
                 }

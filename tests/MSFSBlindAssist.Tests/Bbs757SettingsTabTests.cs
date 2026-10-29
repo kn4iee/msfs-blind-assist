@@ -5,10 +5,12 @@ using MSFSBlindAssist.SimConnect.BBS757;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The pure parts of the 757 EFB window's Settings page: what leaving a number or text box with a change not saved says
-/// (<c>BBS757EfbForm.UnsavedEditText</c>), where a key moves the random failure frequency's slider
-/// (<c>Bbs757LockableSlider.Target</c>) and which keys with Control it takes and ignores
-/// (<c>Bbs757LockableSlider.IsSliderKeyWithControl</c>). The page itself is checked in the simulator, by ear.
+/// The 757 EFB settings window (Shift+T with no simulator running): the pure parts of its content (what leaving a number or
+/// text box with a change not saved says, <c>BBS757EfbForm.UnsavedEditText</c>; where a key moves the random failure
+/// frequency's slider, <c>Bbs757LockableSlider.Target</c>; which keys with Control it takes and ignores,
+/// <c>Bbs757LockableSlider.IsSliderKeyWithControl</c>), and what the window is made of once it is built: its title, no tab
+/// control, the settings status box first, and none of the Flight page's controls or the nav data buttons in any section.
+/// The window is built and never shown, so no handle is made; how it reads and behaves is checked in the simulator, by ear.
 /// </summary>
 public class Bbs757SettingsTabTests
 {
@@ -97,5 +99,118 @@ public class Bbs757SettingsTabTests
     public void An_arrow_home_or_end_with_control_is_taken_and_moves_nothing(Keys key, bool taken)
     {
         Assert.Equal(taken, Bbs757LockableSlider.IsSliderKeyWithControl(key));
+    }
+
+    // ---- the window, built and never shown -----------------------------------------------------------
+
+    /// <summary>
+    /// The settings window built over an empty work folder (the only one it is told of) and an announcer that speaks nowhere.
+    /// Never shown: no handle is made and no message loop runs, so what is checked is what the constructor builds. Disposing
+    /// it disposes the window, the announcer and the folder.
+    /// </summary>
+    private sealed class SettingsWindow : IDisposable
+    {
+        private readonly DirectoryInfo _work = Directory.CreateTempSubdirectory("msfsba-bbs757-settings-");
+        private readonly SpeechCapture _announcer = new();
+
+        public SettingsWindow() => Form = new BBS757EfbForm(_announcer, () => new[] { _work.FullName });
+
+        public BBS757EfbForm Form { get; }
+
+        public void Dispose()
+        {
+            Form.Dispose();
+            _announcer.Dispose();
+            try
+            {
+                _work.Delete(recursive: true);
+            }
+            catch (IOException)
+            {
+                // A temp folder left behind is no failure.
+            }
+        }
+    }
+
+    // Every control under a parent, a control before its children.
+    private static IEnumerable<Control> Under(Control parent) =>
+        parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Under(child)));
+
+    // Every control under a parent in the order Tab visits them: a parent's children by TabIndex, each before its own children.
+    private static IEnumerable<Control> InTabOrder(Control parent) =>
+        parent.Controls.Cast<Control>().OrderBy(child => child.TabIndex)
+            .SelectMany(child => new[] { child }.Concat(InTabOrder(child)));
+
+    // What the window no longer holds: the Flight page's buttons and status, the button that opened the tablet reader and the
+    // two buttons that ended the AIRAC data section (the tablet window has their work now).
+    private static readonly string[] RemovedWords =
+    {
+        "Read the tablet screen", "EFB status", "Sign in to Navigraph", "Update nav data",
+        "Fetch SimBrief flight", "Accept units", "Keep units", "Load fuel and payload", "Cockpit preset", "Load preset",
+        "APU quick start", "IRS rapid align", "Remove chocks", "Set chocks", "Connect ground power", "Disconnect ground power",
+    };
+
+    [Fact]
+    public void The_settings_window_is_titled_for_its_settings_and_has_no_tab_control()
+    {
+        using var window = new SettingsWindow();
+
+        Assert.Equal("757 EFB settings", window.Form.Text);
+        Assert.DoesNotContain(Under(window.Form), control => control is TabControl or TabPage);
+    }
+
+    [Fact]
+    public void The_settings_window_starts_with_its_settings_content_and_its_status_box_is_the_first_stop()
+    {
+        using var window = new SettingsWindow();
+
+        // The settings content begins with its "Status" label; no tab strip, no Flight page comes before it.
+        Assert.Equal("Status", Assert.IsType<Label>(InTabOrder(window.Form).First()).Text);
+        // The first stop Tab reaches is the settings status: a read-only TextBox, not a Label ([VAT-13]).
+        TextBox status = Assert.IsType<TextBox>(InTabOrder(window.Form).First(control => control.TabStop));
+        Assert.Equal("Settings status", status.AccessibleName);
+        Assert.True(status.ReadOnly);
+    }
+
+    [Fact]
+    public void No_section_of_the_settings_window_holds_a_flight_control_or_a_nav_data_button()
+    {
+        using var window = new SettingsWindow();
+        ComboBox sections = Under(window.Form).OfType<ComboBox>().Single(combo => combo.AccessibleName == "Section");
+        Assert.Equal(Enum.GetValues<Bbs757SettingSection>().Length, sections.Items.Count);
+
+        for (int index = 0; index < sections.Items.Count; index++)
+        {
+            // The window rebuilds the rows of the section picked; that needs no handle.
+            sections.SelectedIndex = index;
+            string section = (string)sections.Items[index]!;
+            List<Control> controls = Under(window.Form).ToList();
+
+            // Every Button the old window had (Close, Read the tablet screen, the Flight page's, the two AIRAC data ones) is gone.
+            Assert.DoesNotContain(controls, control => control is Button);
+            foreach (Control control in controls)
+            {
+                foreach (string words in new[] { control.Text, control.AccessibleName ?? "", control.AccessibleDescription ?? "" })
+                {
+                    foreach (string removed in RemovedWords)
+                    {
+                        Assert.False(words.Contains(removed, StringComparison.OrdinalIgnoreCase),
+                            $"{section}: a {control.GetType().Name} still carries '{removed}'.");
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void The_airac_data_section_still_shows_the_simbrief_id()
+    {
+        using var window = new SettingsWindow();
+        ComboBox sections = Under(window.Form).OfType<ComboBox>().Single(combo => combo.AccessibleName == "Section");
+
+        sections.SelectedIndex = sections.Items.IndexOf(Bbs757EfbSettings.SectionName(Bbs757SettingSection.AiracData));
+
+        // The section keeps its one setting; the Navigraph sign-in and the nav data update are on the tablet window's page.
+        Assert.Contains(Under(window.Form), control => control is TextBox { AccessibleName: "SimBrief ID number" });
     }
 }

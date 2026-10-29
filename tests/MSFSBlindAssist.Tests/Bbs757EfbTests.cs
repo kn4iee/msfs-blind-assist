@@ -1,6 +1,5 @@
 using System.Globalization;
 using MSFSBlindAssist.Aircraft.BBS757;
-using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
 
 namespace MSFSBlindAssist.Tests;
@@ -1072,16 +1071,6 @@ public class Bbs757EfbTests
             Assert.DoesNotContain(seq, s => Near(s.Point));
     }
 
-    [Fact]
-    public void The_new_cycle_s_first_day_refusal_says_after_midnight_utc()
-    {
-        string text = BBS757EfbForm.NewTodayText(2611);
-
-        Assert.Contains("2611", text);
-        Assert.Contains("after midnight UTC", text);
-        Assert.DoesNotContain("tomorrow", text, StringComparison.OrdinalIgnoreCase);
-    }
-
     // ---- weight units -------------------------------------------------------
 
     [Fact]
@@ -1143,37 +1132,6 @@ public class Bbs757EfbTests
     public void The_units_answer_says_which_units_are_set(Bbs757WeightUnits? before, Bbs757WeightUnits? after, string expected)
     {
         Assert.Equal(expected, Bbs757EfbLayout.UnitsAnswerPhrase(before, after));
-    }
-
-    [Fact]
-    public void After_a_fetch_the_window_does_not_assume_the_pilot_saw_the_units_question()
-    {
-        string text = BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds);
-
-        Assert.DoesNotContain("If BlueBird asks", text);
-        Assert.Contains("If the plan's weight units differ from the aircraft's", text);
-        Assert.Contains("Accept units switches", text);
-        Assert.Contains("Keep units keeps them", text);
-        Assert.Contains("the app says which units are set", text);
-        Assert.Contains("The aircraft uses pounds.", text);
-        Assert.Contains("ACARS INIT FLT", text);
-        Assert.DoesNotContain("The aircraft uses", BBS757EfbForm.FetchedText(null));
-    }
-
-    [Fact]
-    public void After_a_fetch_in_other_units_the_window_says_the_question_is_up()
-    {
-        Assert.Equal("SimBrief flight requested. The plan is in kilograms and the aircraft in pounds, so BlueBird is asking " +
-                     "whether to switch: Accept units switches, Keep units keeps them, and the app says which units are set. " +
-                     "Then run ACARS INIT FLT in the CDU window.",
-            BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Kilograms));
-    }
-
-    [Fact]
-    public void After_a_fetch_in_the_aircrafts_units_the_window_says_no_question_comes()
-    {
-        Assert.Equal("SimBrief flight requested. The plan and the aircraft both use pounds. Then run ACARS INIT FLT in the CDU window.",
-            BBS757EfbForm.FetchedText(Bbs757WeightUnits.Pounds, Bbs757WeightUnits.Pounds));
     }
 
     // ---- the units question left open (the final review's important 3) ------------------

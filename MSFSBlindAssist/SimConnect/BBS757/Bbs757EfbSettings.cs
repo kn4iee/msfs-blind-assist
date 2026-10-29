@@ -570,8 +570,9 @@ public static class Bbs757EfbSettings
     }
 
     // AIRAC data (efb_settings.json), evidence section 8, which lists this row but was not tapped: the "not set" value
-    // (-1) comes from the spec and earlier notes. The pilot's own identifier: never logged. The tab adds the Navigraph
-    // sign-in and the nav data update to this section, as the tablet's AIRAC data page holds them.
+    // (-1) comes from the spec and earlier notes. The pilot's own identifier: never logged. The tablet's AIRAC data page also
+    // holds the Navigraph sign-in and the nav data update; the settings window shows only this setting, and those two are on
+    // the tablet window's page.
     private static Bbs757Setting[] AiracDataSettings()
     {
         const Bbs757SettingSection section = Bbs757SettingSection.AiracData;
