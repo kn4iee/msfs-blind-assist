@@ -111,5 +111,27 @@ class DiffMapsTests(unittest.TestCase):
         self.assertEqual((1, 'changed lamp N power: "DC" -> "AC"\n'), run_main(same, moved))
 
 
+class GitRevisionTests(unittest.TestCase):
+    # Tools review 2026-10-30: the docstring's redirect of git show worked only in cmd.exe (PowerShell's > writes UTF-16).
+    # "git:REV" reads that revision of the other argument's file from git itself; a byte-order mark is read too.
+    def test_git_rev_reads_the_committed_map_and_a_bom_is_fine(self):
+        git = ['git', '-c', 'user.name=test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false']
+        with tempfile.TemporaryDirectory() as repo:
+            import subprocess
+            subprocess.run(git + ['init', '-q', repo], check=True)
+            path = os.path.join(repo, 'map.json')
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'controls': [control('A')], 'lamps': []}, f)
+            subprocess.run(git + ['add', 'map.json'], cwd=repo, check=True)
+            subprocess.run(git + ['commit', '-q', '-m', 'map'], cwd=repo, check=True)
+            with open(path, 'w', encoding='utf-8-sig') as f:
+                json.dump({'controls': [control('A'), control('B')], 'lamps': []}, f)
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                status = diff_maps.main(['git:HEAD', path])
+            self.assertEqual(1, status)
+            self.assertIn('B', printed.getvalue())
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -139,10 +139,12 @@ def _fixture():
 
 
 def _map():
-    path = os.path.join(tempfile.mkdtemp(), 'A350_Interior.behavior.xml')
-    with open(path, 'w', encoding='utf-8') as fh:
-        fh.write(_fixture())
-    return gen.build_map(gen.read_behavior(path), LOC, '1.2.7')
+    # In a folder of its own, removed after (each call left one in %TEMP% until 2026-10-30).
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, 'A350_Interior.behavior.xml')
+        with open(path, 'w', encoding='utf-8') as fh:
+            fh.write(_fixture())
+        return gen.build_map(gen.read_behavior(path), LOC, '1.2.7')
 
 
 def _by_id():
@@ -222,9 +224,6 @@ class GenerateA350MapTests(unittest.TestCase):
                          (data['package'], data['package_version'], data['generator']))
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class LampRuleTests(unittest.TestCase):
     def test_a_lamp_with_its_power_at_the_end(self):
@@ -245,3 +244,7 @@ class KeyEventLeverTests(unittest.TestCase):
         self.assertEqual('selector', c['kind'])
         self.assertEqual('L:INI_GEAR_HANDLE_STATUS', c['state_var'])
         self.assertEqual({'0': 'UP', '1': 'DOWN'}, dict(c['positions']))
+
+
+if __name__ == '__main__':
+    unittest.main()

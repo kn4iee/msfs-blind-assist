@@ -1,7 +1,9 @@
 r"""Reports what changed between two A350 control maps, for reviewing a regeneration.
 
-    git show HEAD:MSFSBlindAssist/Resources/a350_control_map.json > %TEMP%\old_map.json
-    python tools/a350-gen/diff_maps.py %TEMP%\old_map.json MSFSBlindAssist/Resources/a350_control_map.json
+    python tools/a350-gen/diff_maps.py git:HEAD MSFSBlindAssist/Resources/a350_control_map.json
+
+"git:REV" reads that revision of the other argument's file straight from git, in any shell (a redirect of git show
+writes UTF-16 in Windows PowerShell, and %TEMP% means nothing outside cmd.exe); either argument can also be a file.
 
 Every line it prints is something a panel row, a spoken word or a cockpit write may have
 changed for; read each one before committing the new map. It compares every field of every
@@ -13,6 +15,8 @@ maps agree.
 Exit status: 1 when the maps differ, 0 when they agree, 2 for a wrong argument count.
 """
 import json
+import os
+import subprocess
 import sys
 
 # The control fields a review reads first, in this order; any other field follows, sorted.
@@ -71,15 +75,25 @@ def exit_status(lines):
     return 1 if lines else 0
 
 
+def load(arg, other):
+    """A map: a file (a UTF-8 byte-order mark is fine), or "git:REV" for that revision of the other argument's file."""
+    if arg.startswith('git:'):
+        path = os.path.abspath(other)
+        top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=os.path.dirname(path), capture_output=True,
+                             text=True, check=True).stdout.strip()
+        rel = os.path.relpath(path, top).replace(os.sep, '/')
+        shown = subprocess.run(['git', 'show', '%s:%s' % (arg[4:], rel)], cwd=top, capture_output=True, check=True).stdout
+        return json.loads(shown.decode('utf-8-sig'))
+    with open(arg, encoding='utf-8-sig') as f:
+        return json.load(f)
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 2:
         print(__doc__)
         return 2
-    with open(argv[0], encoding='utf-8') as f:
-        old = json.load(f)
-    with open(argv[1], encoding='utf-8') as f:
-        new = json.load(f)
+    old, new = load(argv[0], argv[1]), load(argv[1], argv[0])
     lines = diff(old, new)
     print('\n'.join(lines) if lines else 'no differences')
     return exit_status(lines)
