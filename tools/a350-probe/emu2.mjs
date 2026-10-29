@@ -159,22 +159,3 @@ export function toLines(texts, rowH = 12, withColor = true) {
   if (line.length) lines.push(line.join(' | '));
   return lines;
 }
-
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
-  const [dump, ...gauges] = process.argv.slice(2);
-  const emu = await createEmulator();
-  emu.load(dump);
-  console.log('compile ms', emu.compileMs.toFixed(0));
-  for (const g of gauges) {
-    const [cls, nStr] = g.split('#');
-    const objs = emu.findObjects(cls);
-    const n = +(nStr || 0);
-    if (!objs.length) { console.log(`== ${g}: no object`); continue; }
-    emu.restore();
-    const args = (cls === 'SFD' || cls === 'SND') ? [objs[n], 0] : [objs[n]];
-    const r = emu.draw('emu_' + cls + '_Draw', ...args);
-    console.log(`== ${g} @${objs[n]} (${objs.length} objs) ${r.texts.length} texts ${r.ms.toFixed(1)} ms${r.error ? ' ERROR ' + r.error.message : ''}`);
-    for (const l of toLines(r.texts)) console.log('  ' + l);
-  }
-  console.log('stubbed calls:', JSON.stringify([...emu.calls]));
-}

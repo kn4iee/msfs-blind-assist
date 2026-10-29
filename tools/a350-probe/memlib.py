@@ -1,5 +1,5 @@
-import struct, json
-VT = {int(k): v for k, v in json.load(open('vtables.json')).items()}
+import struct, json, os
+VT = {int(k): v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vtables.json'))).items()}
 class Mem:
     def __init__(s, path):
         buf = open(path, 'rb').read(); s.regs = []; i = 0

@@ -5,17 +5,8 @@ using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.SimConnect;
 
 // Live harness for the iniBuilds A350: runs MSFSBA's real SimConnectManager and IniBuildsA350Definition and calls
-// HandleUIVariableSet exactly as the panel does. See README.md before running it against a sim.
-//
-// A350Probe list [panel]                         - offline: every offered row (panel, key, action, name, positions)
-// A350Probe live <panel|key,key> [watch,watch]       - every position of every row (presses too), read back, restore;
-//                                                  logs the panel's lights and the watched L:vars that changed
-// A350Probe set "key=val[#ms];..." [watch,...]   - set, read back, restore
-// A350Probe keep "key=val[#ms];..." [watch,...]  - set and read back, no restore
-// A350Probe cache "key,key"                     - MSFSBA's cached value, a fresh read, and how each key streams
-// A350Probe disp <panel> [watch,...]             - the panel's status lines and the watched L:vars, read fresh
-// A350Probe rpn "code#ms;code#ms" [watch,...]  - raw calculator strings, paced, then the watched L:vars
-// A350Probe listen <seconds>                     - what MSFSBA would say on its own meanwhile (lights, switches)
+// HandleUIVariableSet exactly as the panel does, and MSFSBA's display engine on a live or saved memory copy. Every
+// mode (A350Probe <mode> ...) and environment variable is in README.md; read it before running one against a sim.
 internal static class Program
 {
     [STAThread]
@@ -32,6 +23,13 @@ internal static class Program
         string? arg = args.Length > 1 ? args[1] : null;
         var watch = args.Length > 2 ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
         if (DisplayModes.Handles(mode)) return DisplayModes.Run(mode, args.Skip(1).ToArray());
+        if (!ProbeForm.Modes.Contains(mode))
+        {
+            // A typo connected and ran nothing for half a minute (tools review 2026-10-30).
+            Console.Error.WriteLine($"A350Probe: no mode \"{mode}\". The modes (README.md describes each): "
+                + string.Join(", ", ProbeForm.Modes.Concat(DisplayModes.Names).Order(StringComparer.Ordinal)));
+            return 2;
+        }
         ApplicationConfiguration.Initialize();
         var f = new ProbeForm(mode, arg, watch);
         Application.Run(f);
@@ -91,6 +89,13 @@ internal sealed class ProbeForm : Form
     private readonly string _mode; private readonly string? _arg; private readonly string[] _watch;
     private SimConnectManager? _m;
     public int ExitCode;
+
+    /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
+    internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "list", "vars", "live", "set", "keep", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd",
+        "rmpwin", "hotkey", "displays", "gsx",
+    };
     private readonly StringBuilder _out = new();
 
     public ProbeForm(string mode, string? arg, string[] watch)
@@ -282,15 +287,21 @@ internal sealed class ProbeForm : Form
     /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
     /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
     /// holds one of the names.</summary>
+    /// <summary>Waits up to 2 minutes for the display service to be ready (the module's first compile takes about 10 s).</summary>
+    private static async Task WaitForDisplays(MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService service)
+    {
+        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
+            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
+            await Task.Delay(500);
+    }
+
     private async Task RunDisplays()
     {
         using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
         service.AVarAnswer = new MSFSBlindAssist.Aircraft.A350.Display.A350AVarAnswers(
             key => _m!.GetCachedVariableValue(key), ask => Line("unanswered ask: " + ask)).Answer;
         service.Start();
-        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
-            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
-            await Task.Delay(500);
+        await WaitForDisplays(service);
         var filters = (_arg ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         foreach (var d in IniBuildsA350Definition.DisplayPanels)
         {
@@ -327,9 +338,7 @@ internal sealed class ProbeForm : Form
     {
         using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
         service.Start();
-        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
-            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
-            await Task.Delay(500);
+        await WaitForDisplays(service);
         Line($"displays: {service.State} {service.Reason}");
         using var monitor = new MSFSBlindAssist.Aircraft.A350.Display.A350PfdMonitor(
             async gauges => await service.DrawAsync(gauges), _ => true, _ => { });
@@ -388,9 +397,7 @@ internal sealed class ProbeForm : Form
     {
         using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
         service.Start();
-        for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
-            or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
-            await Task.Delay(500);
+        await WaitForDisplays(service);
         Line($"displays: {service.State} {service.Reason}");
         using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(
             async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(), () => true, _ => { });
@@ -491,7 +498,14 @@ internal sealed class ProbeForm : Form
             _m.SimVarUpdated += (_, e) => { try { def.ProcessSimVarUpdate(e.VarName, e.Value, cap); } catch { } };
         _m.Connect();
         Line("connecting...");
-        for (int i = 0; i < 40 && !_m.IsFullyConnected; i++) await Task.Delay(500);
+        for (int i = 0; i < 40 && !_m.IsFullyConnected && (i < 4 || _m.IsConnected); i++) await Task.Delay(500);
+        if (!_m.IsConnected)
+        {
+            // With no sim every row waited out its read and printed a FAIL (tools review 2026-10-30).
+            Line("not connected: start the sim with the A350 loaded, then run again (nothing was driven)");
+            ExitCode = 3;
+            return;
+        }
         await Task.Delay(8000);   // registration, the first batches, the calculator-path probe
         Line($"connected={_m.IsConnected} full={_m.IsFullyConnected} calcOk={_m.CanExecuteCalculatorCode} canLand={_m.CalcWriteCanLand}");
         cap.Drain();

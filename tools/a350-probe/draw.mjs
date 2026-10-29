@@ -13,3 +13,4 @@ for (const g of process.argv.slice(3)) {
   console.log('==', g + (r.error ? `  ERROR (a torn copy traps: take another) ${r.error.message}` : ''));
   for (const l of toLines(r.texts)) console.log('  ' + l);
 }
+console.log('stubbed calls:', JSON.stringify([...emu.calls]));

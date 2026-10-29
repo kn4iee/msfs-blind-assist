@@ -5,7 +5,14 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "ndlines" or "navdb" or "memfind" or "memread";
+    /// <summary>The display-engine modes: no SimConnect, no form.</summary>
+    public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "patch", "snapshot", "draw", "service", "trap", "traptiny", "ecamwatch", "ecamlisten", "sdmap", "sdtext", "sdsweep",
+        "pfdlisten", "mfdlines", "ndlines", "navdb", "memfind", "memread",
+    };
+
+    public static bool Handles(string mode) => Names.Contains(mode);
 
     public static int Run(string mode, string[] args)
     {
@@ -164,7 +171,7 @@ internal static class DisplayModes
                 draw.Load(copy);
                 continue;
             }
-                        if (g == "reload")
+            if (g == "reload")
             {
                 if (reader == null) { Console.Error.WriteLine("reload needs live"); continue; }
                 Console.Error.WriteLine("snapshot..."); var c2 = reader.Snapshot();
@@ -199,6 +206,14 @@ internal static class DisplayModes
         return 0;
     }
 
+    /// <summary>Waits up to 2 minutes for the service to finish preparing; the milliseconds it took.</summary>
+    private static long WaitPrepared(A350DisplayService svc)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+        return sw.ElapsedMilliseconds;
+    }
+
     /// <summary>`service [rounds]`: the A350DisplayService as MSFSBA runs it: ready, then rounds of CTR, EFIS 0/1
     /// and MFD on one fresh copy each, timed, with the WD rows of the last round.</summary>
     private static int Service(string[] args)
@@ -208,8 +223,8 @@ internal static class DisplayModes
         svc.Spoken += s => Console.WriteLine("SAY: " + s);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         svc.Start();
-        while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
-        Console.WriteLine($"state {svc.State} after {sw.ElapsedMilliseconds} ms {svc.Reason}");
+        long ready = WaitPrepared(svc);
+        Console.WriteLine($"state {svc.State} after {ready} ms {svc.Reason}");
         IReadOnlyList<A350DrawCapture>? caps = null;
         for (int r = 0; r < rounds; r++)
         {
@@ -240,7 +255,8 @@ internal static class DisplayModes
     /// empty instance, to see how a trap inside the A350 code comes back to .NET.</summary>
     private static int TrapTest(string[] args)
     {
-        var src = A350ModuleCache.FindInstalledModule()!;
+        var src = A350ModuleCache.FindInstalledModule();
+        if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var variant = Environment.GetEnvironmentVariable("A350_WT_VARIANT");
         var cfg = new Wasmtime.Config().WithOptimizationLevel(variant == "noopt" ? Wasmtime.OptimizationLevel.None : Wasmtime.OptimizationLevel.Speed);
         if (variant == "unwind") cfg = cfg.WithUnwindInfo(true);
@@ -310,7 +326,7 @@ internal static class DisplayModes
         using var svc = new A350DisplayService();
         svc.Start();
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+        WaitPrepared(svc);
         Console.WriteLine($"state {svc.State} {svc.Reason}");
         var stable = new A350StableValue<string>();
         int n = 0, traps = 0;
@@ -330,7 +346,7 @@ internal static class DisplayModes
             n++;
             Console.WriteLine($"===== state {n} at {sw.Elapsed.TotalSeconds:F1} s ({c.Frames.Count} frames: {string.Join(", ", c.Frames.Select(f => $"{f.X:0},{f.Y:0} {f.W:0}x{f.H:0} {A350Rgba.NameOf(f.Colour)}{(f.Wide ? " wide" : "")}"))})");
             Console.WriteLine(state);
-            if (dir != null) File.WriteAllText(Path.Combine(dir, $"ctr_{n:000}.json"), System.Text.Json.JsonSerializer.Serialize(c, opts));
+            if (dir != null) SaveNew(Path.Combine(dir, $"ctr_{n:000}.json"), System.Text.Json.JsonSerializer.Serialize(c, opts));
         }
         Console.WriteLine($"traps {traps}");
         return 0;
@@ -395,8 +411,7 @@ internal static class DisplayModes
         {
             using var svc = new A350DisplayService();
             svc.Start();
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+            WaitPrepared(svc);
             var caps = svc.DrawAsync(("EFIS", side)).GetAwaiter().GetResult();
             if (caps == null || caps.Count == 0) { Console.WriteLine($"no draw ({svc.State} {svc.Reason})"); return 1; }
             cap = caps[0];
@@ -414,8 +429,7 @@ internal static class DisplayModes
         {
             using var svc = new A350DisplayService();
             svc.Start();
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+            WaitPrepared(svc);
             var caps = svc.DrawAsync(("MFD", 0)).GetAwaiter().GetResult();
             if (caps == null || caps.Count == 0) { Console.WriteLine($"no draw ({svc.State} {svc.Reason})"); return 1; }
             cap = caps[0];
@@ -468,7 +482,8 @@ internal static class DisplayModes
     private static int SdSweep(string[] args)
     {
         const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
-        var src = A350ModuleCache.FindInstalledModule()!;
+        var src = A350ModuleCache.FindInstalledModule();
+        if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
         var facts = A350ModuleFacts.From(mod);
         using var engine = A350ModuleCache.CreateEngine();
@@ -526,7 +541,8 @@ internal static class DisplayModes
     private static int SdMap(string[] args)
     {
         const uint SdPage = 1451120, VarNames = 920832, VarValues = 1344512; const int VarCount = 1939;
-        var src = A350ModuleCache.FindInstalledModule()!;
+        var src = A350ModuleCache.FindInstalledModule();
+        if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
         var facts = A350ModuleFacts.From(mod);
         using var engine = A350ModuleCache.CreateEngine();

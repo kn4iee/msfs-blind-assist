@@ -1,7 +1,7 @@
 # Scratch module for whole-cockpit draw emulation (A350 1.2.7+). Re-finds everything by name.
 # Hooks: nvgText (0x7E57: str,end,ctx,xbits,ybits), nvgFillColor (0x7E58: ctx,colorPtr),
 #        nvgSave (0x7E59: ctx), nvgRestore (0x7E5A: ctx). All report via the unused WASI path_readlink import.
-import sys, wdis
+import sys, os, wdis
 from patchtext import uleb, sleb, find_by_name, hook_import_index, patch_code, add_exports
 
 def call_hook(argbytes, magic):
@@ -37,7 +37,7 @@ UI_DRAWS = sorted(v for k, v in wdis.fn.items() if _re.match(r'^[A-Za-z_]+::draw
 for _i, _nm in enumerate(UI_DRAWS):
     HOOKS2[_nm] = call_hook(b'\x20\x00\x20\x01\x41' + sleb(_i) + Z + Z, 0x7E65)
 import json as _json
-_json.dump(UI_DRAWS, open('ui_draws.json', 'w'))
+_json.dump(UI_DRAWS, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ui_draws.json'), 'w'))
 
 def build(out):
     data = wdis.data
@@ -50,5 +50,5 @@ def build(out):
     return len(data), ex
 
 if __name__ == '__main__':
-    print(build(sys.argv[1] if len(sys.argv) > 1 else 'a350-all.wasm'))
+    print(build(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'a350-all.wasm')))
 

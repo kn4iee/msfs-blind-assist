@@ -28,14 +28,27 @@ k32.ReadProcessMemory.restype = wt.BOOL
 k32.ReadProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
 
 
-def find_pid(exe='FlightSimulator2024.exe'):
+SIM_EXES = ('FlightSimulator2024.exe', 'FlightSimulator.exe')   # MSFS 2024, then 2020, as A350MemoryReader.ProcessNames
+
+
+def find_pid(exe=None):
+    """The sim's process id (MSFS 2024 first, then 2020), or None when no sim runs."""
     import subprocess
-    out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq ' + exe, '/FO', 'CSV', '/NH'], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        parts = [p.strip('"') for p in line.split('","')]
-        if parts and parts[0].lower() == exe.lower():
-            return int(parts[1])
+    for name in (exe,) if exe else SIM_EXES:
+        out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq ' + name, '/FO', 'CSV', '/NH'], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            parts = [p.strip('"') for p in line.split('","')]
+            if parts and parts[0].lower() == name.lower():
+                return int(parts[1])
     return None
+
+
+def sim_pid():
+    """find_pid, or an exit with a sentence when no sim runs (a None pid crashed in ctypes, tools review 2026-10-30)."""
+    pid = find_pid()
+    if pid is None:
+        sys.exit('the sim is not running (' + ' or '.join(SIM_EXES) + ')')
+    return pid
 
 
 def open_proc(pid):
@@ -76,10 +89,32 @@ def linear_addr_of(s):
     return None
 
 
+# The A350's anchor names, 1.2.7's (1.2.6's INI_MCDU{}_TACT_MODE and INI_FMC{}_MCDU no longer exist), each at a fixed
+# linear address in its memory: a memory holding all three is the A350's. One list for every script.
+ANCHORS = ['INI_MCDU{}_ENTER', 'INI_MCDU_OPTION', 'INI_FMC_PAGE1']
+
+
+def anchored(h, base):
+    """Whether the A350's anchor names sit at their offsets from base."""
+    return all((read(h, base + la, len(s) + 1) or b'') == s.encode() + b'\0'
+               for s, la in zip(ANCHORS, [linear_addr_of(a) for a in ANCHORS]))
+
+
+def alloc_regions(h, base):
+    """The committed, readable regions of the allocation at base: the A350's memory alone [A350-2]."""
+    out = []; a = base; mbi = MBI()
+    while True:
+        if not k32.VirtualQueryEx(h, ctypes.c_void_p(a), ctypes.byref(mbi), ctypes.sizeof(mbi)): break
+        if (mbi.AllocationBase or 0) != base: break
+        if mbi.State == MEM_COMMIT and not (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)):
+            out.append((mbi.BaseAddress, mbi.RegionSize))
+        a = mbi.BaseAddress + mbi.RegionSize
+    return out
+
+
 def locate(h, verbose=True):
-    # The slow whole-process scan, for when fastlocate.py's large-reservation rule finds nothing. The anchors are
-    # 1.2.7's (1.2.6's INI_MCDU{}_TACT_MODE and INI_FMC{}_MCDU no longer exist): fastlocate.py's, one list.
-    from fastlocate import ANCHORS as anchors
+    # The slow whole-process scan, for when fastlocate.py's large-reservation rule finds nothing.
+    anchors = ANCHORS
     lin = [linear_addr_of(a) for a in anchors]
     assert all(lin), lin
     needle = anchors[0].encode() + b'\0'
@@ -101,7 +136,7 @@ def locate(h, verbose=True):
                 while p >= 0:
                     hit = base + off + p
                     cand = hit - lin[0]
-                    ok = all((read(h, cand + la, len(a) + 1) or b'') == a.encode() + b'\0' for a, la in zip(anchors[1:], lin[1:]))
+                    ok = anchored(h, cand)
                     found.append((hex(cand), ok, hex(base), size, hex(typ)))
                     p = blob.find(needle, p + 1)
             off += CH
@@ -113,7 +148,7 @@ def locate(h, verbose=True):
 if __name__ == '__main__':
     print('slow: this reads every committed region of the sim, in 64 MB pieces (minutes, and many GB read);'
           ' fastlocate.py finds the A350 in about a second: use it first')
-    pid = find_pid()
+    pid = sim_pid()
     print('pid', pid)
     h = open_proc(pid)
     hits = locate(h)

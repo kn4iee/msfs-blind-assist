@@ -20,6 +20,10 @@ modes (`list`, `vars`, `disp`, `cache`, `labels`, `listen`) can run beside it. C
 Coherent takes one inspector socket per page [DBG-9]. The SimConnect modes print to the console and to
 `%TEMP%\a350probe_<mode>.tsv`; the display-engine modes print to the console only.
 
+**Exit codes.** 0 done; 1 a display-engine mode that could not run (no A350 module, no draw); 2 an unknown mode (the
+list of modes is printed) or a fatal error; 3 a SimConnect mode with no sim connected, after about 2 s (nothing is
+driven).
+
 **Safety.** A `live` pass changes the aircraft while it runs. What a restore cannot undo is never in a `live` pass and is
 driven by hand with `keep`: the fire buttons and agents, the cargo smoke agents, the IDG disconnects, RAT MAN ON, the
 hydraulic supply buttons, the engine masters, the thrust levers, the gravity gear handle, the fuel jettison (ARM and
@@ -66,7 +70,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 
 | Mode | What it does |
 |---|---|
-| `A350Probe draw <copy.bin\|live> Gauge[#n] …` | Runs the gauges' own draw code on a memory copy and prints the drawn texts, frames and UI elements (xy.mjs's format). |
+| `A350Probe draw <copy.bin\|live> Gauge[#n] …` | Runs the gauges' own draw code on a memory copy and prints the drawn texts, frames and UI elements (xy.mjs's format). Between gauges, `poke:LINEAR=VALUE` sets a 32-bit value in the copy (never in the sim) and draws on from it, and `reload` takes a fresh copy (`live` only). |
 | `A350Probe snapshot <file …>` | Saves live memory copies for offline draws. |
 | `A350Probe service [rounds]` | The display service as MainForm runs it: ready, then rounds of CTR, both EFIS and the MFD on one fresh copy each, timed, with the WD rows of the last round. |
 | `A350Probe pfdlisten <seconds>` | MSFSBA's PFD monitor on the live sim: the FMA call-outs it would speak, the draw code's sim asks, and each side's PFD at the end. |
@@ -102,5 +106,5 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350_SAVE=<file>` | `mfdlines live` | Saves the live MFD draw, never over an existing file. |
 | `A350_SD=<page>` | `service` | Also prints the engine display and that SD page as MSFSBA reads them. |
 | `A350_SDMAP_VALUES=4321,…` | `sdmap` | The values each variable is set to (default 4321). |
-| `A350_WT_VARIANT=noopt\|unwind\|debug\|guard0` | `trap` | A Wasmtime configuration to try. |
+| `A350_WT_VARIANT=noopt\|unwind\|debug\|guard0` | `trap`, `draw` | A Wasmtime configuration to try, compiled into its own cache under `%TEMP%\a350wt-<variant>` (never the app's [A350-11]); `draw` builds its engine differently for `guard0` only. |
 | `A350_BIG_STACK=1` | display-engine modes | Runs the mode on a thread with a 256 MB stack. |

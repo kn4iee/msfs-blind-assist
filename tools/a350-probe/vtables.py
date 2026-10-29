@@ -1,4 +1,4 @@
-import wdis, struct, json, re
+import wdis, struct, json, re, os
 # Build a flat image of initial memory from data segments.
 mem = {}
 segs = [(b, blob) for b, blob in wdis.segs if b is not None]
@@ -25,7 +25,7 @@ for b, blob in segs:
         nm = demangle_simple(s)
         if nm:
             vt[a] = nm
-json.dump({str(k): v for k, v in vt.items()}, open('vtables.json', 'w'))
+json.dump({str(k): v for k, v in vt.items()}, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vtables.json'), 'w'))
 print('vtables found', len(vt))
 names = sorted(set(vt.values()))
 print([n for n in names if re.search(r'UI|TextBox|Button|Label|Element|FMSpage|Dropdown|Notepad|^FMS_Init$|^FMC_FPLAN$|FMGS$|^MFD$', n)])

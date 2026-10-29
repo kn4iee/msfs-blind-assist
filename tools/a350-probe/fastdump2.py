@@ -4,25 +4,20 @@
 # membase.json (fastlocate.py, every sim session) is checked first: the sim must be the same process and the A350's
 # anchors must still sit at its base, or the copy would be empty or another module's (tools review 2026-10-30).
 # usage: python fastdump2.py c1.bin [c2.bin ...]
-import struct, sys, time, json, ctypes
-import memscan, fastdump, fastlocate
+import struct, sys, time, json, ctypes, os
+import memscan
 
-
-def anchored(h, base):
-    """Whether the A350's anchor names still sit at their offsets from base."""
-    lin = [memscan.linear_addr_of(a) for a in fastlocate.ANCHORS]
-    return all((memscan.read(h, base + la, len(s) + 1) or b'') == s.encode() + b'\0'
-               for s, la in zip(fastlocate.ANCHORS, lin))
-
-
-cfg = json.load(open('membase.json'))
-if memscan.find_pid() != cfg['pid']:
+try:
+    cfg = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'membase.json')))
+except FileNotFoundError:
+    sys.exit('no membase.json: run fastlocate.py first (once per sim session)')
+if memscan.sim_pid() != cfg['pid']:
     sys.exit('membase.json is from another sim session: run fastlocate.py first')
 h = memscan.open_proc(cfg['pid'])
 base = cfg['bases'][0]
-if not anchored(h, base):
+if not memscan.anchored(h, base):
     sys.exit("the A350's anchors are not at membase.json's base (the aircraft reloaded?): run fastlocate.py again")
-regs = fastdump.alloc_regions(h, base)
+regs = memscan.alloc_regions(h, base)
 total = sum(s for _, s in regs)
 buf = bytearray(total)
 cb = (ctypes.c_char * total).from_buffer(buf)
