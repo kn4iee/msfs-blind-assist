@@ -81,9 +81,10 @@ public static class A350SdPage
         Read(rows, PermanentData, float.MaxValue);
 
     /// <summary>The E/WD's engine block above the warning display: the thrust limit, each engine's THR, N1 and EGT
-    /// (their labels are TopEngineStatic.png).</summary>
+    /// (their labels are TopEngineStatic.png), in that order whatever rows their texts share (engines off, N1's XX sits 6 px
+    /// above EGT's and shared its row, so EGT 1 read first).</summary>
     public static IReadOnlyList<string> ReadEngineBlock(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>
-        Read(rows, EngineBlock, float.MaxValue);
+        Read(rows, EngineBlock, float.MaxValue, fieldOrder: true);
 
     private static readonly SdField[] EngineBlock =
     {
@@ -98,8 +99,10 @@ public static class A350SdPage
     };
 
     /// <summary>Rows read against a field table (any display's): a field with an empty label swallows what it
-    /// matches (a caption the reading already names).</summary>
-    internal static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split)
+    /// matches (a caption the reading already names). <paramref name="fieldOrder"/>: the fields read in the table's order,
+    /// a loose text right after the field read before it.</summary>
+    internal static IReadOnlyList<string> Read(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, SdField[] fields, float split,
+        bool fieldOrder = false)
     {
         var all = rows.SelectMany(r => r).ToList();
         string? PageUnit(params string[] options) => all.FirstOrDefault(c => IsUnit(c) && options.Contains(c.Text))?.Text;
@@ -109,7 +112,7 @@ public static class A350SdPage
         // A field gathers its texts across rows: UTC's colons are drawn a few pixels below its digits.
         var byField = new Dictionary<SdField, (int Row, List<DrawnCell> Cells)>();
         var units = new Dictionary<SdField, string>();
-        var items = new List<(int Row, float X, string Text)>();
+        var items = new List<(int Row, float X, string Text, int Field)>();
         for (int r = 0; r < rows.Count; r++)
         {
             var row = rows[r].Select(c => c with { Text = DegreeGlyph.Replace(c.Text.TrimStart('.').Trim(), " °C") })
@@ -133,7 +136,7 @@ public static class A350SdPage
                 entry.Cells.Add(c);
             }
             foreach (var cluster in Clusters(loose))
-                items.Add((r, cluster[0].X, A350DrawLayout.Speak(cluster)));
+                items.Add((r, cluster[0].X, A350DrawLayout.Speak(cluster), -1));
         }
         foreach (var (f, (row, cells)) in byField)
         {
@@ -145,9 +148,19 @@ public static class A350SdPage
                 ordered = new List<DrawnCell> { ordered[0] with { Text = string.Join(f.Join, ordered.Select(c => c.Text)) } };
             var unit = units.GetValueOrDefault(f) ?? f.Unit?.Replace("{weight}", weight ?? "").Replace("{flow}", flow ?? "");
             var value = TimeColon.Replace(SpeakWithUnit(ordered, string.IsNullOrEmpty(unit) ? null : unit), ":");
-            items.Add((row, ordered[0].X, f.Label + ": " + value));
+            items.Add((row, ordered[0].X, f.Label + ": " + value, Array.IndexOf(fields, f)));
         }
-        return items.OrderBy(i => i.X >= split).ThenBy(i => i.Row).ThenBy(i => i.X).Select(i => i.Text).ToList();
+        var reading = items.OrderBy(i => i.X >= split).ThenBy(i => i.Row).ThenBy(i => i.X).ToList();
+        if (!fieldOrder)
+            return reading.Select(i => i.Text).ToList();
+        var keyed = new List<(double Key, int Seq, string Text)>();
+        double lastField = -1;
+        for (int k = 0; k < reading.Count; k++)
+        {
+            if (reading[k].Field >= 0) lastField = reading[k].Field;
+            keyed.Add((reading[k].Field >= 0 ? reading[k].Field : lastField + 0.5, k, reading[k].Text));
+        }
+        return keyed.OrderBy(i => i.Key).ThenBy(i => i.Seq).Select(i => i.Text).ToList();
     }
 
     /// <summary>The E/WD font's degree sign is "!": the flex temperature is drawn "67!C" (live).</summary>
