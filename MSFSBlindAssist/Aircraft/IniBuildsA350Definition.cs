@@ -438,6 +438,39 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _lampInputKeys.Add(A350PanelLamps.InputKey(name));   // consumed silently
         }
 
+        // The take-off roll call-outs (A350TakeoffCallouts), as the A380's: the FMS's V-speeds said as they are entered, a
+        // Ctrl+M row each ("V1: 142 knots", "not set" while 0), read raw as the A350's other INI_ speeds; and the indicated
+        // airspeed per sim frame on its own subscription (the 1 Hz batch would call "Rotate" up to a second late), consumed.
+        foreach (var (key, name, spoken) in A350TakeoffCallouts.Speeds)
+        {
+            var speed = new SimVarDefinition
+            {
+                Name = name,
+                DisplayName = spoken,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                NotSetBelow = 1,
+                SpokenNumberFormat = "0' knots'",
+            };
+            if (!batchNames.Add(ContinuousBatchLayout.FullName(speed)))
+                speed.ExcludeFromBatch = true;
+            vars[key] = speed;
+            _keyByName.TryAdd(name, key);
+        }
+        vars[A350TakeoffCallouts.IasKey] = new SimVarDefinition
+        {
+            Name = "AIRSPEED INDICATED",
+            DisplayName = "Take-off callout airspeed",
+            Type = SimVarType.SimVar,
+            Units = "knots",
+            UpdateFrequency = UpdateFrequency.Continuous,
+            IsAnnounced = true,
+            ExcludeFromBatch = true,
+            HighFrequency = true,
+            ExcludeFromMonitorManager = true,
+        };
+
         // What a button with no light reads on its label; the label repaints with it.
         foreach (var (rowKey, state) in _buttonStates)
         {
@@ -584,6 +617,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// switch's is consumed, its return to rest being the pilot's own press.</summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        if (HandleTakeoffCallouts(varName, value, announcer))
+            return true;
         if (HandleLeverDelivery(varName, value, announcer))
             return true;
         if (_rows.TryGetValue(varName, out var row))

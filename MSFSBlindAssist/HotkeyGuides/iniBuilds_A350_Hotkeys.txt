@@ -39,6 +39,10 @@ Switches and lights speak when they change on their own ("Seat belts: On", "BAT 
 light on", "Master caution on"), as the cockpit shows them; what you set yourself is not
 repeated. Each one has its own row in the Monitor Manager (Ctrl+M), where you can mute it.
 
+The take-off speeds are said as the FMS takes them ("V1: 142 knots", "VR: not set"), and on
+the take-off roll V1, Rotate and V2 are called as the speed reaches them, as on the A380; the
+V1, VR and V2 rows in the Monitor Manager mute each one.
+
 A knob whose value the cockpit shows is a typed field, as on the other Airbus aircraft: the
 FCU Speed, Heading, Altitude and VS/FPA fields, each side's QNH (in that side's unit), the
 ISIS QNH (hectopascals or inches) and the cabin altitude and V/S targets. Type the value and press Enter: the aircraft's own knob lands it

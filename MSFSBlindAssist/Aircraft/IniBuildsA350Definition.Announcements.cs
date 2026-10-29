@@ -61,9 +61,48 @@ public partial class IniBuildsA350Definition
     private readonly Dictionary<string, long> _ownLampsUntil = new(StringComparer.Ordinal);
 
     /// <summary>A delivery that changes several lights (a light power flag, a shared rule input) checks each light's
-    /// own row here, so MainForm must not wrap it in one row's mute ([VAR-8]).</summary>
+    /// own row here, so MainForm must not wrap it in one row's mute ([VAR-8]); so does the take-off airspeed feed, whose
+    /// calls are the V-speed rows'.</summary>
     public override bool IsMuteWrapExempt(string varName) =>
-        _lampBoard.SharedInputKeys.Contains(varName) || varName is A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2;
+        _lampBoard.SharedInputKeys.Contains(varName) || varName is A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2
+        || varName == A350TakeoffCallouts.IasKey;
+
+    private readonly TakeoffVSpeedCallouts _takeoffCallouts = new();
+    private bool _calloutOnGround = true;
+
+    public override string? TakeoffCalloutFeedKey => A350TakeoffCallouts.IasKey;
+
+    /// <summary>The per-frame airspeed is needed on the ground and while armed only.</summary>
+    public override bool TakeoffCalloutFeedNeeded => _takeoffCallouts.NeedsSamples(_calloutOnGround);
+
+    /// <summary>The take-off roll call-outs (<see cref="A350TakeoffCallouts"/>), as the A380's: the airspeed feed is
+    /// consumed and the calls one sample crosses are one interrupting sentence, each muted by its V-speed's row
+    /// ([TKO-5]); SIM_ON_GROUND and the V-speeds are peeked, never consumed (the base says "On ground", the generic
+    /// monitor "V1: 142 knots").</summary>
+    private bool HandleTakeoffCallouts(string key, double value, ScreenReaderAnnouncer announcer)
+    {
+        if (key == A350TakeoffCallouts.IasKey)
+        {
+            var callouts = _takeoffCallouts.ProcessSample(value, _calloutOnGround);
+            if (callouts.Count > 0 && !announcer.Suppressed && !_disposed
+                && TakeoffVSpeedCallouts.Compose(callouts,
+                    callout => A350TakeoffCallouts.Keys.MuteKeyFor(callout) is { Length: > 0 } row && IsMuted(row)) is { } sentence)
+                announcer.AnnounceImmediate(sentence);
+            return true;
+        }
+        if (key == "SIM_ON_GROUND")
+            _calloutOnGround = value >= 0.5;
+        else if (A350TakeoffCallouts.Keys.IsVSpeedKey(key))
+            A350TakeoffCallouts.Keys.Feed(_takeoffCallouts, key, value);
+        return false;
+    }
+
+    /// <summary>A reconnect: the roll call-outs' arm goes, never the speeds, which a reconnect need not deliver again.</summary>
+    public override void ResetAnnouncementBaselines()
+    {
+        base.ResetAnnouncementBaselines();
+        _takeoffCallouts.Reset();
+    }
 
     /// <summary>The thrust levers and the speed brake speak as the A380's do (<see cref="A350LeverSpeech"/>). A thrust
     /// lever's delivery may speak the "All thrust levers" row's sentence, so its rows are exempt from MainForm's mute
@@ -159,11 +198,14 @@ public partial class IniBuildsA350Definition
                 _leverAnnouncer?.Announce(text);
     }
 
-    /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; and
-    /// what MSFSBA last commanded no longer stands for the cockpit (a held button's next press reads the cockpit).</summary>
+    /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; what
+    /// MSFSBA last commanded no longer stands for the cockpit (a held button's next press reads the cockpit); and the roll
+    /// call-outs' arm goes (a load delivers the per-frame airspeed before SIM_ON_GROUND: an arm kept from the stand would
+    /// call all three at a loaded cruise).</summary>
     public override void OnSimContextReset()
     {
         base.OnSimContextReset();
+        _takeoffCallouts.Reset();
         _commanded.Clear();
         _lampBoard.Reset();
         _lampSpeech.Clear();
