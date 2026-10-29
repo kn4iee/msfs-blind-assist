@@ -77,12 +77,30 @@ public static class A350GroundDisplays
             }
             o.Add("To waypoint: " + string.Join("; ", parts));
         }
+        // The selected altitude beyond the vertical display's altitude range: a cyan value at its top left (y 786) or bottom
+        // left (y 1010), "FL 400" in STD (live 2026-10-28); it is neither a range nor an altitude label.
+        Field("Vertical display selected altitude", c => c.Colour == "cyan" && Math.Abs(c.X - 105) <= 12
+            && (Math.Abs(c.Y - 786) <= 8 || Math.Abs(c.Y - 1010) <= 8));
         Field("Vertical display range", c => c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c));
-        var altitudes = cells.Where(c => c.X is >= 90 and < 150 && c.Y >= 810 && Number(c)).OrderBy(c => c.Y).ToList();
+        // The labels run up to the range line (the top one at y 799 on the stand at VCBI, 2026-10-28).
+        var altitudes = cells.Where(c => !used.Contains(c) && c.X is >= 90 and < 150 && (c.Y >= 810 || c.Y >= 790 && c.Colour == "white")
+            && Number(c)).OrderBy(c => c.Y).ToList();
         if (altitudes.Count > 0)
         {
             used.UnionWith(altitudes);
-            o.Add("Vertical display altitudes: " + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
+            // In flight levels the scale says so with a white "FL" left of its labels.
+            var unit = cells.FirstOrDefault(c => !used.Contains(c) && c.Text == "FL" && c.Colour == "white" && c.X < 90 && c.Y >= 810);
+            if (unit != null) used.Add(unit);
+            o.Add("Vertical display altitudes: " + (unit != null ? "FL " : "") + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
+        }
+        // The safe altitude under the vertical display (MSA or MORA, white), its value just above its name ("3" and "8").
+        foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 900).ToList())
+        {
+            var value = cells.Where(c => !used.Contains(c) && c != name && c.Text.Length > 0 && c.Text.All(char.IsDigit)
+                && name.Y - c.Y is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
+            used.Add(name);
+            used.UnionWith(value);
+            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
         }
         o.AddRange(Rest(cells, used));
         return o;

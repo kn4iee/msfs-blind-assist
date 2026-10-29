@@ -38,6 +38,35 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(nd, l => l.StartsWith("6.", StringComparison.Ordinal) || l.StartsWith("07:20", StringComparison.Ordinal));
     }
 
+    // The vertical display (live 2026-10-28): the selected altitude beyond its altitude range is a cyan value at its top
+    // left (x 105, y 786; "FL 400" in STD) or bottom left (y 1010). It read inside the range line ("40000 0 2.5 5 7.5 10")
+    // or as the lowest altitude label, or bare; the scale's "FL" (white, x 58) read as a line of its own, and the safe
+    // altitude (MSA or MORA, white, its value above it) as two.
+    [Theory]
+    [InlineData("efis0_takeoff_ready", "Vertical display selected altitude: 40000, cyan", "Vertical display range: 0 2.5 5 7.5 10, cyan", "Vertical display altitudes: 3000 2000 1000 0, white")]
+    [InlineData("efis0_climb_bi614", "Vertical display selected altitude: FL 400, cyan", "Vertical display range: 0 2.5 5 7.5 10, cyan", "Vertical display altitudes: FL 190 180 170 160, white")]
+    [InlineData("efis0_ls_downwind_omdb", "Vertical display selected altitude: 4000, cyan", "Vertical display range: 0 1.25 2.5 3.75 5, cyan", "Vertical display altitudes: 6000 5500 5000 4500, white")]
+    public void The_vertical_display_reads_its_selected_altitude_apart(string fixture, string selected, string range, string altitudes)
+    {
+        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!, 0);
+        Assert.Contains(selected, nd);
+        Assert.Contains(range, nd);
+        Assert.Contains(altitudes, nd);
+        Assert.DoesNotContain(nd, l => l is "FL, white" or "FL 400, cyan" or "4000, cyan");
+    }
+
+    [Theory]
+    [InlineData("efis0_ls_downwind_omdb", "MSA: 38, white")]
+    [InlineData("pfd_climb_std_fl400", "MORA: 16, white")]
+    public void The_vertical_displays_safe_altitude_reads_with_its_name(string fixture, string safe)
+    {
+        var nd = A350GroundDisplays.ReadNd(JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
+            ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", fixture + ".json")))!, 0);
+        Assert.Contains(safe, nd);
+        Assert.DoesNotContain(nd, l => l is "MSA, white" or "MORA, white" or "3 8, white" or "1 6, white");
+    }
+
     [Fact]
     public void The_fcu_reads_its_windows_and_both_baros()
     {
