@@ -167,14 +167,16 @@
 The models are in place (Task 4 Step 0); this run tests reading, not the download.
 
 1. Read the tablet screen: pages read and navigated, the dense ones included (OFP, ACARS, performance); how accurate and how steady the reads sound.
-2. With the models moved aside (Claude moves them): pick the 757, and the offer opens; Not now; then Read the tablet screen opens the offer instead of the reader.
+2. With the models moved aside (Claude moves them): pick the 757, and the offer opens (listen whether "Switched to …" is still heard before the window's own speech); Not now; then Read the tablet screen opens the offer instead of the reader.
 3. Untick the box in Settings, Text recognition; pick the 757: no offer.
 4. Start the app on the 757 with the models moved aside: the offer comes after the other startup windows.
+5. After Task 9 (the release exists), with the models moved aside: the first-run download through the app: the offer, Download, the progress speech and "Text recognition ready.", then Read the tablet screen opens the reader and reads.
 
 ## Handoff to plan 16
 
 - **Pilot-facing:** "The 757 tablet screen reader now reads with PaddleOCR text recognition, much more accurately. It needs a one-time 32 megabyte download, offered when you select the BlueBird 757 and in Settings, Text recognition." Changelog `improvement`; the guide chapter for the Text recognition tab, the offer and the reader's refusal (strings in `TextRecognitionText`).
 - **docs/b757.md:** the EFB section names PaddleOCR and the download; plan 11's "Build output folder" handoff no longer depends on a Windows SDK framework (the pinned folder lines stay).
+- **docs/updates.md and UPD-9:** the startup update check is now also skipped while the text recognition download runs (`MainForm_Shown`), as it is for the location data download.
 - **The index:** list plan 17 (it could not edit the frozen `00-index.md`).
 
 ## Execution record
@@ -183,10 +185,18 @@ The models are in place (Task 4 Step 0); this run tests reading, not the downloa
 - **Claimed by:** Robin Kipp (robin24), 2026-10-28
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-10-28, from `B757` 71532bf72
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+- **Landed:** not yet: built and reviewed on `B757-p17-tablet-paddleocr`, held back from `B757` until the owner's word (recommended after Task 9, so teammates' downloads work)
+- **Tests at landing:** 2026-10-29 on 082500fc2: full suite 19,055 passed, 0 failed (18,887 at the claim)
+- **Tasks:** 0 done (claim 218be890c). 1 done (d0217e0c6). 2 done (1e5fe2c23, 107d61b33). 3 done (40e83d11e). 4 done (c36560152, 7fccff974, c0d978947; Step 0, the models placed by hand, done by the controller). 5 done (0b1d852e3). 6 done (0d9106572, fc91d72c6). 7 done (ef272b03d, `docs/b757/evidence/tablet-ocr.md`). Each task reviewed, then one whole-branch review and one fix wave (3d67e8fbc, 082500fc2). 8 and 9 waiting on the owner.
+- **Waiting on the owner:** Task 8 (deploy to `C:\MSFSBA-B757`; the probe's tour with the simulator up and MSFSBA closed; in-sim checks 1-4), Task 9 (the public release, with the owner's word), in-sim check 5 (the first-run download), then the push to `B757` (the owner's word).
+- **In-sim results:** none yet.
 - **Changed from the plan:**
-- **Rulings made while working:** 2026-10-28, the owner with Claude: the design above (no Windows OCR fallback; v6 small; the tab and offers; the app's own GitHub release, created last; plan 17 may change plan 11's files and the frozen files listed); before the release, the models are placed by hand, with no test hook in the app.
+  - OCR-3's line names both release points ("released only on its own loop (the inactive branch, and when the loop ends)"); Task 6's text above has the plan's narrower wording.
+  - Two more rule lines, from the reviews: OCR-4 (a model file is kept only by its SHA-256, never by its size) and OCR-5 (status boxes and offer buttons read `DisplayStatus()`/`Installed()`, never `Status`). OCR-1 and OCR-2 are also mirrored into `b757.md` and OCR-2 into `mainform-main-call-sites.md`, where their code lives.
+  - The reader tries a failed engine again when the pilot asks for it again ("Read the tablet screen") after the models are back, not only after the window was hidden and shown (the Review Focus wording): the planned behavior left a blind pilot in silence after following the reader's own advice. F5 inside the reader does not retry.
+  - The engine failure is a lasting status (`Status`), not an 8-second alert, and a later status no longer hides it.
+  - Texts: an Idle line for an incomplete install; "1 megabyte", "less than 1 megabyte" and no "Downloading…" sentence when nothing is fetched; a 404 reason ("the files were not found on GitHub"); a cancelled repair no longer says "0 megabytes".
+  - The download job hashes the files present to decide what it fetches (a same-size damaged file after a failed load is fetched again).
+  - Parser changes for PaddleOCR's padded boxes, each with its test: column headings name no button; a figure is never snapped away; a side-menu icon is no entry; SET UP names its failure row; a known label ending in ":" keeps the rest as its value (the Failures page's "off"). One changed expectation ("Set UP, L engine fire"). `RegionsToReread` and `EmptySlots` removed (dead once the re-reads went).
+  - The dictionary is named `ppocrv6_dict.txt`, as ModelScope and RapidOcrNet name it.
+- **Rulings made while working:** 2026-10-28, the owner with Claude: the design above (no Windows OCR fallback; v6 small; the tab and offers; the app's own GitHub release, created last; plan 17 may change plan 11's files and the frozen files listed); before the release, the models are placed by hand, with no test hook in the app. The controller's rulings while building (accepted deviations, wording, the extra rules and mirrors, the retry) are listed under "Changed from the plan" and in the commit messages.
