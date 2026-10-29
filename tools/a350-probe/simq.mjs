@@ -1,8 +1,11 @@
+// Which sim variables a draw asks for (the prototype's; `A350Probe pfdlisten` lists them from the app's engine).
+// A trapped draw or a missing gauge is said, never shown as an empty list.
 import { createEmulator } from './emu2.mjs';
 const emu = await createEmulator(); emu.load(process.argv[2]);
 for (const g of process.argv.slice(3)) {
   const [cls, n = 0] = g.split('#'); const o = emu.findObjects(cls)[+n];
+  if (o === undefined) { console.log('==', g, `NO ${cls} OBJECT #${n} in this copy`); continue; }
   emu.simq.log.clear(); emu.restore();
-  emu.draw('emu_' + cls + '_Draw', ...((cls === 'SFD' || cls === 'SND') ? [o, 0] : [o]));
-  console.log('==', g, [...emu.simq.log].join('\n   '));
+  const r = emu.draw('emu_' + cls + '_Draw', ...((cls === 'SFD' || cls === 'SND') ? [o, 0] : [o]));
+  console.log('==', g + (r.error ? `  ERROR (a torn copy traps: take another) ${r.error.message}` : ''), [...emu.simq.log].join('\n   '));
 }

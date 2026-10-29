@@ -77,7 +77,9 @@ def linear_addr_of(s):
 
 
 def locate(h, verbose=True):
-    anchors = ['INI_MCDU{}_TACT_MODE', 'INI_MCDU_OPTION', 'INI_FMC{}_MCDU']
+    # The slow whole-process scan, for when fastlocate.py's large-reservation rule finds nothing. The anchors are
+    # 1.2.7's (1.2.6's INI_MCDU{}_TACT_MODE and INI_FMC{}_MCDU no longer exist): fastlocate.py's, one list.
+    from fastlocate import ANCHORS as anchors
     lin = [linear_addr_of(a) for a in anchors]
     assert all(lin), lin
     needle = anchors[0].encode() + b'\0'
@@ -109,6 +111,8 @@ def locate(h, verbose=True):
 
 
 if __name__ == '__main__':
+    print('slow: this reads every committed region of the sim, in 64 MB pieces (minutes, and many GB read);'
+          ' fastlocate.py finds the A350 in about a second: use it first')
     pid = find_pid()
     print('pid', pid)
     h = open_proc(pid)

@@ -1,4 +1,5 @@
 # READ-ONLY fast copy: list ONLY the A350 allocation's regions (walk from its base), then read them back-to-back.
+# fastdump2.py is the copy to take (it checks membase.json and every read); this file keeps alloc_regions for it.
 import struct, sys, time, json, ctypes
 import memscan
 

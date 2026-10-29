@@ -1,10 +1,10 @@
 """Reader for the MSFS 2024 *compiled* ModelBehavior XML (Compiled="True") shipped by iniBuilds
 aircraft. Read-only; no simulator, no network. Adapted from the 2026-10-02 investigation's
-mbparse.py. The A300's file (A300_Interior.behavior.xml, package 1.0.11) has empty part-marker tags
-that begin with a digit, which an XML parser rejects; generate_a300_map.read_behavior rewrites them
-first.
+mbparse.py (the iniBuilds A300's map generator, in its own pull request, shares it). The A350's file
+(A350_Interior.behavior.xml) has empty part-marker tags that begin with a digit, which an XML parser
+rejects; generate_a350_map.read_behavior rewrites them first. tools/a350-probe/beh.py uses this copy.
 
-The format is documented in a300_fixture.py. Every RPN string lives in the trailing <Strings> section,
+The format is documented in a350_fixture.py. Every RPN string lives in the trailing <Strings> section,
 one "<hash>escaped code</hash>" per line, and elements point at it through a StringID attribute.
 Note: a TooltipEntry can spell an input event id in a different case from the InputEvent's own
 ID (INSTRUMENT_TOGGLE_Battery_IE_ID vs INSTRUMENT_TOGGLE_BATTERY_IE_ID), so look ids up with

@@ -36,6 +36,6 @@ if __name__ == '__main__':
     print('regions %d, big blocks checked %d, listing %.2fs, total %.2fs' % (nreg, ncand, t_enum, t_all))
     print('A350 found at', [hex(x) for x in hits])
     if hits:
-        # membase.json is what memread/objscan/pagedump/pointer read; refresh it every session.
+        # membase.json is what fastdump2.py (and fastdump.py) read; refresh it every sim session.
         json.dump({'pid': pid, 'bases': hits}, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'membase.json'), 'w'))
         print('wrote membase.json')

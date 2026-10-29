@@ -103,7 +103,7 @@ iniBuilds' ECAM class names are swapped: `EWD` draws the SD pages (`EWD::DrawLow
 | What | 1.2.7 | How to find it |
 | --- | --- | --- |
 | `Variables` f64 array | 1344512 | the `i32.const` in `Variables::GetInt` |
-| `VariablesEnum` name table | 920832 (1939 names; `INI_FMC_PAGE1` = 303) | pointer array whose entries point at `INI_FMC_PAGE1` and its neighbours |
+| `VariablesEnum` name table | 920832 (1939 names; `INI_FMC_PAGE1` = 215, checked by the probe's sdmap and sdsweep) | pointer array whose entries point at `INI_FMC_PAGE1` and its neighbours |
 | `VariablesEnum` → L:var id | 1336752 | store in `Variables::Init` |
 | SD page shown | i32 at 1451120 | `EWD::SetCurrentPage` |
 | FMGS page vector | FMGS+52 (99 pages, the 1.2.6 order) | vector whose entries' vtables are `FMS_Status`, `FMS_Init`, `FMC_Ref`, … |

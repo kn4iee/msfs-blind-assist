@@ -434,6 +434,22 @@ internal static class DisplayModes
         return 0;
     }
 
+    /// <summary>Whether the copy has 1.2.7's Variables layout, which sdsweep and sdmap address directly: the name table's
+    /// entry 215 is INI_FMC_PAGE1 there (tools review 2026-10-30: on another version they set wrong cells and named them
+    /// wrong). Re-derive the addresses after an update (docs/inibuilds-a350.md, "Addresses for 1.2.7").</summary>
+    private static bool HasVariablesLayout127(A350WasmModule mod, A350MemoryCopy copy, uint varNames)
+    {
+        var p = copy.Read(varNames + 4 * 215, 4);
+        return p.Length == 4 && mod.CString((int)BitConverter.ToUInt32(p)) == "INI_FMC_PAGE1";
+    }
+
+    private static int Refuse127()
+    {
+        Console.WriteLine("This mode uses A350 1.2.7's Variables addresses, which this A350 does not have: re-derive them "
+            + "(docs/inibuilds-a350.md, Addresses for 1.2.7).");
+        return 1;
+    }
+
     /// <summary>`sdsweep copy.bin page NAME=v1,v2 [NAME=...]`: what one variable's values do to an SD page. NAME is
     /// "L:x" (a CustomVariable) or "V:x" (the 1.2.7 Variables array); each value set in the copy, the page drawn,
     /// and every shape and text that differs from the copy's own value printed.</summary>
@@ -448,6 +464,7 @@ internal static class DisplayModes
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts) { RecordShapes = true };
         var copy = A350MemoryCopy.Load(args[0]);
         draw.Load(copy);
+        if (!HasVariablesLayout127(mod, copy, VarNames)) return Refuse127();
         copy.WriteInt32(SdPage, int.Parse(args[1]));
         var addr = new Dictionary<string, uint>();
         foreach (var cv in draw.CustomVariables) addr["L:" + cv.Name] = cv.Address + 16;
@@ -505,6 +522,7 @@ internal static class DisplayModes
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
         var copy = A350MemoryCopy.Load(args[0]);
         draw.Load(copy);
+        if (!HasVariablesLayout127(mod, copy, VarNames)) return Refuse127();
         draw.RecordShapes = true;
         var targets = new List<(string Name, uint Address)>();
         foreach (var cv in draw.CustomVariables) targets.Add(("L:" + cv.Name, cv.Address + 16));
