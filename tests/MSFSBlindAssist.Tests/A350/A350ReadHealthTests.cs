@@ -81,13 +81,15 @@ public class A350ReadHealthTests
 
     // Live 2026-10-28, the A350's memory at 495 MB: one draw took 5 to 9 seconds and every one failed for a minute,
     // yet nothing was said, because each gap between two draws' ends was longer than the pause. A pause is time with
-    // no draw running: from one draw's end to the next one's start.
+    // no draw running: from one draw's end to the next one's start. Told on the third failed draw (three in a row as well
+    // as the ten seconds, final review 2026-10-30).
     [Fact]
     public void Slow_draws_back_to_back_are_not_a_pause()
     {
         var health = new A350ReadHealth();
         Assert.Null(health.Report("EFIS", 0, false, T0, T0.AddSeconds(8)));
-        Assert.Equal(PfdGone, health.Report("EFIS", 0, false, T0.AddSeconds(8), T0.AddSeconds(16)));
+        Assert.Null(health.Report("EFIS", 0, false, T0.AddSeconds(8), T0.AddSeconds(16)));
+        Assert.Equal(PfdGone, health.Report("EFIS", 0, false, T0.AddSeconds(16), T0.AddSeconds(24)));
     }
 
     // Live 2026-10-28 the E/WD read on some draws while the PFD, ND and MFD never did. With one health for every
@@ -112,7 +114,10 @@ public class A350ReadHealthTests
         var health = new A350ReadHealth();
         Assert.Null(Draw(health, "RMP", 1, false, 0));
         for (int s = 1; s < 30; s++)
+        {
             Draw(health, "EFIS", 0, true, s);
+            if (s == 15) Assert.Null(Draw(health, "RMP", 1, false, s));
+        }
         Assert.Equal("A350 RMP 2 display cannot be read at the moment", Draw(health, "RMP", 1, false, 30));
     }
 
@@ -141,5 +146,17 @@ public class A350ReadHealthTests
             .Concat(A350PfdMonitor.Others).Concat(A350PfdMonitor.Quiet).Append(("CTR", 0)).Append(("MFD", 0)).Distinct();
         foreach (var (gauge, index) in drawn)
             Assert.NotEqual(gauge, A350DisplayStatus.NameOf(gauge, index));
+    }
+    // Final review 2026-10-30: a display drawn only every 15 s (a quiet display nobody reads) failed twice, 15 s apart, and
+    // was said unreadable, though a few failed draws in a row are normal; three failed draws are needed as well as the time.
+    [Fact]
+    public void Two_failed_draws_far_apart_are_not_yet_unreadable()
+    {
+        var health = new A350ReadHealth();
+        Assert.Null(Draw(health, "EFIS", 1, false, 0));
+        for (int s = 1; s < 15; s++) Draw(health, "EFIS", 0, true, s);
+        Assert.Null(Draw(health, "EFIS", 1, false, 15));
+        for (int s = 16; s < 30; s++) Draw(health, "EFIS", 0, true, s);
+        Assert.Equal("A350 first officer PFD and ND cannot be read at the moment", Draw(health, "EFIS", 1, false, 30));
     }
 }

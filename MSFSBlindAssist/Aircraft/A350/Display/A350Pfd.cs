@@ -313,7 +313,7 @@ public static class A350Pfd
         {
             var tape = tapeLabels.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
             var tens = drumTens.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
-            o.Add($"Altitude: {Altitude(int.Parse(tape.Text), tape.Y, int.Parse(tens.Text), tens.Y)} feet, {tens.Colour}");
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Altitude: {Altitude(int.Parse(tape.Text, CultureInfo.InvariantCulture), tape.Y, int.Parse(tens.Text, CultureInfo.InvariantCulture), tens.Y)} feet, {tens.Colour}"));
         }
 
         // The vertical speed, in hundreds of feet a minute beside the altitude tape: above the window climbing.

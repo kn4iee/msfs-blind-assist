@@ -212,4 +212,24 @@ public class A350PfdMonitorTests
         var (_, asked) = await Schedule(40, (m, t) => { if (t >= 10 && t < 20) m.Latest("FCU", 0); });
         Assert.Equal(20, Enumerable.Range(10, 20).Count(t => asked[t].Contains(("FCU", 0))));
     }
+    // Final review 2026-10-30: a quiet display was marked drawn when a tick asked for it while the reader could not draw
+    // (preparing, or no A350 while a flight loads), so once it could, the quiet displays waited 15 s for a first draw.
+    [Fact]
+    public async Task The_quiet_displays_are_drawn_as_soon_as_the_reader_can_draw()
+    {
+        var now = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
+        bool ready = false;
+        var asked = new List<(string Gauge, int Index)[]>();
+        var m = new A350PfdMonitor(gauges =>
+        {
+            if (!ready) return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(null);
+            asked.Add(gauges);
+            return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => (A350DrawCapture?)new A350DrawCapture(g.Gauge,
+                Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1)).ToList());
+        }, _ => false, _ => { }, () => now);
+        for (int t = 0; t < 8; t++) { await m.TickAsync(); now += TimeSpan.FromMilliseconds(500); }
+        ready = true;
+        for (int t = 0; t < A350PfdMonitor.Quiet.Count; t++) { await m.TickAsync(); now += TimeSpan.FromMilliseconds(500); }
+        foreach (var q in A350PfdMonitor.Quiet) Assert.Contains(asked, g => g.Contains(q));
+    }
 }

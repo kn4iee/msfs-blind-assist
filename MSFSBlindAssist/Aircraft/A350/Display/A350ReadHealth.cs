@@ -3,8 +3,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>
 /// Whether each display can be read (pure; the service reports every draw). A draw fails when its copy tears, and a
 /// few in a row are normal; live 2026-10-28 every draw failed for many minutes and the FMA call-outs, the ECAM and the
-/// MFD window simply went quiet. When a display's draws have failed for <see cref="UnreadableAfter"/> the pilot is told
-/// once which display it is, and told again once <see cref="GoodToRecover"/> of its draws in a row read (one good draw
+/// MFD window simply went quiet. When a display's draws have failed for <see cref="UnreadableAfter"/>, at least
+/// <see cref="FailuresToSay"/> of them in a row (a display drawn only every 15 s while nothing reads it failed twice and
+/// was said unreadable, final review 2026-10-30), the pilot is told once which display it is, and told again once <see cref="GoodToRecover"/> of its draws in a row read (one good draw
 /// among failures said so and flapped, review 2026-10-28). Each display keeps its own count: live 2026-10-28 the E/WD
 /// read on some draws while the PFD, ND and MFD never did, and one count for all let each E/WD read hide them.
 /// A pause in the reader's draws longer than <see cref="Pause"/> (no A350 while a flight loads, nothing asking) starts
@@ -17,12 +18,13 @@ public sealed class A350ReadHealth
     public static readonly TimeSpan UnreadableAfter = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan Pause = TimeSpan.FromSeconds(5);
     public const int GoodToRecover = 3;
+    public const int FailuresToSay = 3;
 
     private sealed class Display
     {
         public DateTime? FailingSince;
         public bool Said;
-        public int Good;
+        public int Good, Failed;
     }
 
     private readonly Dictionary<(string, int), Display> _displays = new();
@@ -34,13 +36,17 @@ public sealed class A350ReadHealth
     {
         if (_last is { } last && started - last > Pause)
             foreach (var d in _displays.Values)
+            {
                 d.FailingSince = null;
+                d.Failed = 0;
+            }
         if (_last is not { } previous || ended > previous) _last = ended;
         if (!_displays.TryGetValue((gauge, index), out var display))
             _displays[(gauge, index)] = display = new Display();
         if (ok)
         {
             display.FailingSince = null;
+            display.Failed = 0;
             if (!display.Said || ++display.Good < GoodToRecover)
                 return null;
             display.Said = false;
@@ -48,8 +54,9 @@ public sealed class A350ReadHealth
             return A350DisplayStatus.Readable(gauge, index);
         }
         display.Good = 0;
+        display.Failed++;
         display.FailingSince ??= started;
-        if (display.Said || ended - display.FailingSince < UnreadableAfter) return null;
+        if (display.Said || ended - display.FailingSince < UnreadableAfter || display.Failed < FailuresToSay) return null;
         display.Said = true;
         return A350DisplayStatus.Unreadable(gauge, index);
     }

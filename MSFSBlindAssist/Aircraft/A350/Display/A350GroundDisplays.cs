@@ -225,7 +225,7 @@ public static class A350GroundDisplays
         {
             var t = tape.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
             var d = drum.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
-            o.Add($"Altitude: {A350Pfd.Altitude(int.Parse(t.Text), t.Y, int.Parse(d.Text), d.Y, SfdWindowY, SfdTapePxPerFoot, SfdDrumPxPerFoot)} feet");
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Altitude: {A350Pfd.Altitude(int.Parse(t.Text, CultureInfo.InvariantCulture), t.Y, int.Parse(d.Text, CultureInfo.InvariantCulture), d.Y, SfdWindowY, SfdTapePxPerFoot, SfdDrumPxPerFoot)} feet"));
         }
         foreach (var b in cells.Where(c => c.Colour == "cyan" && Number(c)))
         {

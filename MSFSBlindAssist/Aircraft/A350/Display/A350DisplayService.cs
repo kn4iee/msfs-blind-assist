@@ -216,6 +216,7 @@ public sealed class A350DisplayService : IDisposable
                 Say(_status.Report(null, true, ended));
                 for (int n = 0; n < caps.Count; n++)
                     if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Say(said);
+                _failuresLogged.Clear();   // read again: a failure that comes back later is logged again
                 tcs.SetResult(caps);
             }
             catch (Exception ex)

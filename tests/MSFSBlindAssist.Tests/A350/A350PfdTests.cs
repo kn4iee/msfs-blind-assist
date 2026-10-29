@@ -545,4 +545,27 @@ public class A350PfdTests
         Assert.Contains("Speed: 239 knots", lines);
         Assert.Contains(lines, l => l.StartsWith("Pitch: 4."));
     }
+    // Final review 2026-10-30: the PFD's altitude was formatted in the PC's culture, so below sea level (EHAM, about -11 ft)
+    // sv-SE wrote U+2212. The tape's label 000 at the window and the drum's tens 20 about 31 ft above it read -11 ft.
+    [Fact]
+    public void An_altitude_below_sea_level_reads_with_a_plain_minus_in_any_culture()
+    {
+        var cap = Fixture("efis0_takeoff_ready");
+        bool Tape(DrawnText t) => t.X - 836 is >= 585 and < 610 or >= 658 and < 676;
+        var below = cap with
+        {
+            Texts = cap.Texts.Where(t => !Tape(t)).Concat(new[]
+            {
+                new DrawnText("000", 836 + 595, 389, 0, 0, 0, new A350Rgba(1, 1, 1, 1)),
+                new DrawnText("20", 836 + 665, 389 - 31 * 21.75f / 20, 0, 0, 0, new A350Rgba(0, 1, 0, 1)),
+            }).ToList(),
+        };
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("sv-SE");
+            Assert.Contains("Altitude: -11 feet, green", A350Pfd.Read(below, 0));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
+    }
 }

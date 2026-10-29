@@ -120,8 +120,8 @@ public sealed class A350PfdMonitor : IDisposable
         return _latest.TryGetValue((gauge, index), out var kept) && now - kept.At <= MaxAge ? kept.Capture : null;
     }
 
-    /// <summary>One tick: the captain's EFIS, every other tick the first officer's, and two of the others, asked for
-    /// at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
+    /// <summary>One tick: the CTR (when the E/WD is fed) and the captain's EFIS, the MFD every other tick, one of
+    /// <see cref="Others"/> and at most one of <see cref="Quiet"/>, asked for at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
     /// 650 ms, and a tick asking display by display made three or four).</summary>
     public async Task TickAsync()
     {
@@ -133,18 +133,22 @@ public sealed class A350PfdMonitor : IDisposable
         if (_tick++ % 2 == 0) gauges.Add(("MFD", 0));   // the FMS messages: two agreeing reads within four ticks
         gauges.Add(Others[_other++ % Others.Count]);
         var due = _now();
+        (string Gauge, int Index)? quiet = null;
         for (int n = 0; n < Quiet.Count; n++)
         {
             var q = Quiet[_quiet++ % Quiet.Count];
             bool read = _askedAt.TryGetValue(q, out var asked) && due - asked < WantedFor;
             if (read || !_triedAt.TryGetValue(q, out var tried) || due - tried >= QuietEvery)
             {
-                _triedAt[q] = due;
+                quiet = q;
                 gauges.Add(q);
                 break;
             }
         }
         if (await _draw(gauges.ToArray()).ConfigureAwait(false) is not { } caps) return;
+        // Marked drawn only when the reader could draw: a tick while it prepares, or while a flight loads, draws nothing
+        // (final review 2026-10-30: the quiet displays then waited 15 s for a first draw).
+        if (quiet is { } drawn) _triedAt[drawn] = due;
         var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
             if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);

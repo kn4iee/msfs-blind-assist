@@ -131,11 +131,20 @@ public sealed class A350RmpWindow : Form
         _busy = true;
         try
         {
-            var cap = now ? await _drawNow(Rmp) : null;
-            if (cap is { Ok: true }) _shown.Fresh(_latest(Rmp));
+            // The RMP picked as it began: another picked mid-draw is read by the refresh that follows (final review
+            // 2026-10-30: the old RMP's draw was shown under the new one).
+            int rmp = Rmp;
+            var cap = now ? await _drawNow(rmp) : null;
+            if (rmp != Rmp)
+            {
+                _refreshAgain = true;
+                _refreshAgainNow |= now;
+                return;
+            }
+            if (cap is { Ok: true }) _shown.Fresh(_latest(rmp));
             else
             {
-                cap = _latest(Rmp);
+                cap = _latest(rmp);
                 if (_shown.Superseded(cap)) return;   // older than the fresh draw shown
             }
             if (IsDisposed) return;

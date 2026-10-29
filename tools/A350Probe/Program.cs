@@ -280,10 +280,6 @@ internal sealed class ProbeForm : Form
         await Task.Delay(1000);
     }
 
-    /// <summary>`displays [name,name]`: every display on demand (the Displays section's panels) as its status display reads
-    /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
-    /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
-    /// holds one of the names.</summary>
     /// <summary>Waits up to 2 minutes for the display service to be ready (the module's first compile takes about 10 s).</summary>
     private static async Task WaitForDisplays(MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService service)
     {
@@ -292,6 +288,10 @@ internal sealed class ProbeForm : Form
             await Task.Delay(500);
     }
 
+    /// <summary>`displays [name,name]`: every display on demand (the Displays section's panels) as its status display reads
+    /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
+    /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
+    /// holds one of the names.</summary>
     private async Task RunDisplays()
     {
         using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();

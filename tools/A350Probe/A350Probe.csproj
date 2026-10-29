@@ -3,6 +3,9 @@
        Build: dotnet build tools/A350Probe -c Debug -p:Platform=x64   See tools/A350Probe/README.md. -->
   <PropertyGroup>
     <CETCompat>false</CETCompat>
+    <!-- The app lets the probe see its internals (its rmpwin mode drives the RMP window), its own generated
+         ApplicationConfiguration among them, beside the probe's: CS0436, and the probe's is the one meant. -->
+    <NoWarn>$(NoWarn);CS0436</NoWarn>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
