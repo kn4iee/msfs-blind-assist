@@ -158,22 +158,28 @@ public sealed class A350MfdWindow : Form
         if (i < 0 || i >= _lines.Count) return;
         var line = _lines[i];
         string typed = _scratchpad.Text.Trim();
-        if (!await _input.ClickAsync(Side, line.ClickX, line.ClickY))
+        bool types = line.Kind is "field" or "scratchpad" && typed.Length > 0;
+        switch (await _input.ActAsync(Side, line.ClickX, line.ClickY, types ? typed : null))
         {
-            _announcer.AnnounceImmediate("The MFD cannot be reached: is the Coherent debugger running?");
-            return;
-        }
-        if (line.Kind is "field" or "scratchpad" && typed.Length > 0)
-        {
-            if (!await _input.TypeAsync(Side, typed))
-            {
+            case MfdAction.Busy:
+                return;   // the action running already says how it went
+            case MfdAction.Unreachable:
+                _announcer.AnnounceImmediate("The MFD cannot be reached: is the Coherent debugger running?");
+                return;
+            case MfdAction.NoKey:
                 _announcer.AnnounceImmediate("The KCCU has no key for a character in " + typed);
                 return;
-            }
-            _input.Press(Side, "ENTER");
-            _scratchpad.Clear();
         }
+        if (types) _scratchpad.Clear();
         await AfterActionAsync();
+    }
+
+    /// <summary>Presses a KCCU key, unless a line's action is running: its keys would land among the action's.</summary>
+    private void PressKey(string key)
+    {
+        if (_input.Busy) return;
+        _input.Press(Side, key);
+        _ = AfterActionAsync();
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -181,8 +187,7 @@ public sealed class A350MfdWindow : Form
         var key = keyData & Keys.KeyCode;
         if ((keyData & Keys.Alt) == Keys.Alt && PageKeys.TryGetValue(key, out var page))
         {
-            _input.Press(Side, page);
-            _ = AfterActionAsync();
+            PressKey(page);
             return true;
         }
         if (ActiveControl == _list)
@@ -190,9 +195,9 @@ public sealed class A350MfdWindow : Form
             switch (keyData)
             {
                 case Keys.Enter: _ = ActivateAsync(); return true;
-                case Keys.Back: _input.Press(Side, "CLR"); _ = AfterActionAsync(); return true;
-                case Keys.PageUp: _input.Press(Side, "SCROLL_UP"); _ = AfterActionAsync(); return true;
-                case Keys.PageDown: _input.Press(Side, "SCROLL_DOWN"); _ = AfterActionAsync(); return true;
+                case Keys.Back: PressKey("CLR"); return true;
+                case Keys.PageUp: PressKey("SCROLL_UP"); return true;
+                case Keys.PageDown: PressKey("SCROLL_DOWN"); return true;
             }
         }
         if (keyData == Keys.F5) { _ = RefreshAsync(true); return true; }

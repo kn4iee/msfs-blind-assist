@@ -38,6 +38,76 @@ public class A350MfdInputTests
         Assert.Equal(new[] { "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_3)", "1 (>L:INI_MCDU1_0)", "1 (>L:INI_MCDU2_ENTER)" }, sent);
     }
 
+    /// <summary>An input whose sends, waits and clicks are recorded in order; the click waits on <paramref name="click"/>
+    /// when given.</summary>
+    private static (A350MfdInput Input, List<string> Log) Recorded(TaskCompletionSource<bool>? click = null)
+    {
+        var log = new List<string>();
+        var input = new A350MfdInput(rpn => { lock (log) log.Add("send " + rpn); },
+            (ms, _) => { lock (log) log.Add("wait " + ms); return Task.CompletedTask; },
+            (side, x, y, _) => { lock (log) log.Add($"click {side} {x} {y}"); return click?.Task ?? Task.FromResult(true); });
+        return (input, log);
+    }
+
+    // Review 2026-10-29: [A350-3] the MFD key is one the aircraft does not reset (1, a hold of about 180 ms, then 0), and
+    // it was only ever written 1. The click's release goes out 120 ms after ClickJs returns, and typing started at once,
+    // so the first key could reach the field focused before. A line's action moves the cursor, lets the key go, clicks,
+    // waits for the click to land, then types and presses ENTER.
+    [Fact]
+    public async Task An_action_lets_the_mfd_key_go_and_types_after_the_click_lands()
+    {
+        var (input, log) = Recorded();
+        Assert.Equal(MfdAction.Done, await input.ActAsync(1, 583.5f, 442f, "FL"));
+        Assert.Equal(new[]
+        {
+            "send 1 (>L:INI_MCDU2_MFD)", "wait 180", "send 0 (>L:INI_MCDU2_MFD)", "wait 50", "click 1 583.5 442", "wait 250",
+            "send 1 (>L:INI_MCDU2_F)", "wait 150", "send 1 (>L:INI_MCDU2_L)", "wait 150", "send 1 (>L:INI_MCDU2_ENTER)",
+        }, log);
+    }
+
+    [Fact]
+    public async Task An_action_with_nothing_typed_only_clicks()
+    {
+        var (input, log) = Recorded();
+        Assert.Equal(MfdAction.Done, await input.ActAsync(0, 10, 20, null));
+        Assert.Equal("click 0 10 20", log[^2]);
+        Assert.DoesNotContain(log, l => l.Contains("ENTER"));
+    }
+
+    // Review 2026-10-29: a second Enter during the first action's 1-2 s ran a second click and typing among the first
+    // one's keys ("VVCCBBII").
+    [Fact]
+    public async Task A_second_action_while_one_runs_is_busy_and_sends_nothing()
+    {
+        var click = new TaskCompletionSource<bool>();
+        var (input, log) = Recorded(click);
+        var first = input.ActAsync(0, 10, 20, "VCBI");
+        Assert.True(input.Busy);
+        int before = log.Count;
+        Assert.Equal(MfdAction.Busy, await input.ActAsync(0, 30, 40, "WMKK"));
+        Assert.Equal(before, log.Count);
+        click.SetResult(true);
+        Assert.Equal(MfdAction.Done, await first);
+        Assert.False(input.Busy);
+    }
+
+    [Fact]
+    public async Task A_text_with_no_key_is_refused_before_anything_is_clicked()
+    {
+        var (input, log) = Recorded();
+        Assert.Equal(MfdAction.NoKey, await input.ActAsync(0, 10, 20, "VC#BI"));
+        Assert.Empty(log);
+    }
+
+    [Fact]
+    public async Task An_unreachable_mfd_types_nothing()
+    {
+        var log = new List<string>();
+        var input = new A350MfdInput(rpn => log.Add("send " + rpn), (_, _) => Task.CompletedTask, (_, _, _, _) => Task.FromResult(false));
+        Assert.Equal(MfdAction.Unreachable, await input.ActAsync(0, 10, 20, "VCBI"));
+        Assert.DoesNotContain(log, l => l.Contains("INI_MCDU1_V") || l.Contains("ENTER"));
+    }
+
     [Fact]
     public void The_mfd_view_is_found_by_its_gauge()
     {
