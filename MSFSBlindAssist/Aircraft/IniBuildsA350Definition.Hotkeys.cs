@@ -28,16 +28,22 @@ public partial class IniBuildsA350Definition
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
-            // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU.
+            // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU. While it is open it says
+            // the FMS messages itself, and the background follows them silently (MfdWindowOpen).
             case HotkeyAction.ShowFenixMCDU:
             {
                 hotkeyManager.ExitOutputHotkeyMode();
                 var input = NewMfdInput(simConnect);
                 ShowTrackedWindow(
-                    () => new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
-                        async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
-                        side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer),
-                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                    () =>
+                    {
+                        var window = new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
+                            async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
+                            side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer);
+                        window.FormClosed += (_, _) => _mfdWindowOpen = false;
+                        return window;
+                    },
+                    w => { _mfdWindowOpen = true; w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             }
             // Ctrl+Shift+R: the RMP window (A380 parity): the chosen RMP's screen, a frequency typed on its keypad, Enter

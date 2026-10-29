@@ -65,6 +65,12 @@ public partial class IniBuildsA350Definition
     /// <summary>The background display reads (FMA call-outs, each display's latest draw), or null.</summary>
     public A350PfdMonitor? Pfd { get; set; }
 
+    /// <summary>Set on the UI thread as the MFD window opens and closes; read by the display monitor's tick.</summary>
+    private volatile bool _mfdWindowOpen;
+
+    /// <summary>An MFD window is open: it says the FMS messages itself, so the background follows them silently.</summary>
+    internal bool MfdWindowOpen => _mfdWindowOpen;
+
     /// <summary>A display as its status display reads it: its name, then its lines.</summary>
     internal string DisplayText(A350DisplayPanel d)
     {

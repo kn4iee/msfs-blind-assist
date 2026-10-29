@@ -7,7 +7,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the first officer's EFIS every other tick;
 /// and two of the other displays (MFD, FCU, RMPs, standby displays, BAT) each tick in turn, a tick's displays all
 /// drawn on one memory copy. Each display's latest good draw is kept for its status display. Muted, it still
-/// follows the FMA, so unmuting never replays old modes.
+/// follows the FMA, so unmuting never replays old modes. The captain's MFD, as it comes round, gives the FMS messages
+/// (A350FmsMessageAnnouncer), heard with the MFD window closed, behind their own Ctrl+M row.
 /// </summary>
 public sealed class A350PfdMonitor : IDisposable
 {
@@ -28,11 +29,12 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350FmaAnnouncer _fma = new();
+    private readonly A350FmsMessageAnnouncer _messages = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At)> _latest = new();
     private readonly Func<DateTime> _now;
     private int _tick, _other;
     private CancellationTokenSource? _cts;
-    private volatile bool _rebaseline;
+    private volatile bool _rebaseline, _rebaselineMessages;
     private DateTime? _settleUntil;   // the reading loop's own
 
     /// <summary>A flight was loaded: the last flight's draws are dropped, and the new flight's FMA, from its first draw, is
@@ -42,7 +44,15 @@ public sealed class A350PfdMonitor : IDisposable
     {
         _latest.Clear();
         _rebaseline = true;
+        _rebaselineMessages = true;   // the new flight's message line is its baseline, whichever read comes first
     }
+
+    /// <summary>True while an MFD window is open: it says the FMS messages itself, so they are followed silently here (and
+    /// what it said is never said again as it closes).</summary>
+    public Func<bool>? MfdWindowOpen { get; set; }
+
+    /// <summary>True while the MFD is dark: it shows no message, so its draw decides nothing.</summary>
+    public Func<bool>? MfdDark { get; set; }
 
     /// <param name="draw">Draws the displays asked for on one memory copy, a capture (or null) for each in order; null
     /// for all while the reader cannot draw.</param>
@@ -97,7 +107,27 @@ public sealed class A350PfdMonitor : IDisposable
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
                 if (!settling && !_muted(key) && !_disposed) _speak(line);
         }
+        int mfdAt = gauges.IndexOf(("MFD", 0));
+        if (mfdAt >= 0 && mfdAt < caps.Count && caps[mfdAt] is { Ok: true } mfd)
+            ObserveMessages(mfd, at);
         if (ctr != null && caps.Count > 0) ctr(caps[0]);
+    }
+
+    /// <summary>The captain's MFD drawn: a message the FMS just posted is said, unless muted, settling after a load, or said
+    /// by an open MFD window.</summary>
+    private void ObserveMessages(A350DrawCapture mfd, DateTime at)
+    {
+        if (_rebaselineMessages)
+        {
+            _rebaselineMessages = false;
+            _messages.Reset();
+        }
+        if (MfdDark?.Invoke() == true)
+            return;
+        bool settling = _settleUntil is { } until && at < until;
+        if (_messages.Observe(A350MfdPage.Read(mfd, 0)) is { } message
+            && !settling && MfdWindowOpen?.Invoke() != true && !_muted(A350FmsMessageAnnouncer.MuteKey) && !_disposed)
+            _speak(message);
     }
 
     public void Start()

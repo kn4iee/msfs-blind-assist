@@ -717,6 +717,9 @@ public partial class MainForm
             a350.Displays = a350DisplayService;
             a350.Ecam = a350EcamMonitor;
             a350.Pfd = a350PfdMonitor;
+            // The FMS messages heard with the MFD window closed: quiet while it is open (it says them), none from a dark MFD.
+            a350PfdMonitor.MfdWindowOpen = () => a350.MfdWindowOpen;
+            a350PfdMonitor.MfdDark = () => a350.IsScreenDark("Captain MFD");
         }
         a350DisplayService.Start();
         a350PfdMonitor.Start();
