@@ -9,8 +9,9 @@ namespace MSFSBlindAssist.Tests;
 /// The parts of the 757 EFB window that need no simulator: the AIRAC cycle for a date, when the
 /// nav data update may click (BlueBird's REMOVE button sits where UPDATE was once the installed
 /// cycle is current), the click sequences, BlueBird's work folder and the two values read from it,
-/// the Navigraph sign-in helpers, and the ground power buttons' flow (<c>Bbs757GroundPower.SwitchAsync</c>)
-/// over a fake tablet, a fake variable and a fake clock.
+/// and the ground power buttons' flow (<c>Bbs757GroundPower.SwitchAsync</c>)
+/// over a fake tablet, a fake variable and a fake clock. (The Navigraph sign-in helpers moved with the
+/// flow to <c>Bbs757NavigraphSignInTests</c>.)
 /// </summary>
 public class Bbs757EfbTests
 {
@@ -956,39 +957,6 @@ public class Bbs757EfbTests
         Assert.Null(Bbs757WorkFolder.ReadSimBriefId(tmp.Path));
     }
 
-    // ---- Navigraph sign-in ------------------------------------------------
-
-    [Theory]
-    [InlineData("https://navigraph.com/code?user_code=ABCD1234", true)]
-    [InlineData("https://identity.api.navigraph.com/code?user_code=ABCD1234", true)]
-    [InlineData("https://NAVIGRAPH.COM/code", true)]
-    [InlineData("http://navigraph.com/code", false)]                // not https
-    [InlineData("https://evilnavigraph.com/code", false)]
-    [InlineData("https://navigraph.com.evil.example/code", false)]
-    [InlineData("https://evil.example/navigraph.com", false)]
-    [InlineData("https://evil.example/?next=https://navigraph.com", false)]
-    [InlineData("https://navigraph.com@evil.example/", false)]
-    [InlineData("https://sub.navigraph.com/code", false)]
-    [InlineData("https://navigraph.com:8443/code", false)]
-    [InlineData("javascript:alert(1)", false)]
-    [InlineData("file:///C:/Windows/notepad.exe", false)]
-    [InlineData("navigraph.com/code", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void Only_https_navigraph_addresses_are_opened(string? uri, bool expected)
-    {
-        Assert.Equal(expected, BBS757EfbForm.IsTrustedNavigraphUri(uri, out _));
-    }
-
-    [Theory]
-    [InlineData("ABCD1234", "A B C D 1 2 3 4")]
-    [InlineData("ab-12", "a b dash 1 2")]
-    [InlineData(" XY ", "X Y")]
-    public void The_navigraph_code_is_spelled_letter_by_letter(string code, string expected)
-    {
-        Assert.Equal(expected, BBS757EfbForm.SpellCode(code));
-    }
-
     // ---- client with nothing to reach ---------------------------------------
 
     [Fact]
@@ -1364,17 +1332,5 @@ public class Bbs757EfbTests
 
         // Listed twice, and with another spelling of the same path.
         Assert.False(Bbs757WorkFolder.OthersDisagree(new[] { chosen, chosen + Path.DirectorySeparatorChar, chosen.ToUpperInvariant() }, chosen, currentCycle: 2610));
-    }
-
-    // ---- the Navigraph code is spoken before the browser opens -----------------
-
-    [Theory]
-    [InlineData("A", 2000)]                           // never shorter than two seconds
-    [InlineData("ABCD", 2900)]                        // 1.5 s, then 350 ms a spoken character
-    [InlineData("ABCD-1234", 4650)]                   // the dash is a word too
-    [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 6000)]
-    public void The_browser_waits_for_the_code_to_be_spoken(string code, int expectedMs)
-    {
-        Assert.Equal(expectedMs, BBS757EfbForm.CodeSpeechMs(code));
     }
 }

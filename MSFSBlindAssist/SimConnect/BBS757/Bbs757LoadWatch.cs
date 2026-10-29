@@ -3,8 +3,16 @@ using System.Globalization;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// The load watch's judgement (task 11e), pure. Once the 757 EFB window has tapped IMPORT FROM
-/// SIMBRIEF and START BOARDING, BlueBird loads at its own pace with only a picture to show it: the
+/// The parts of a SimBrief load that BlueBird starts on their own (plan 18, Task 6): FETCH SIMBRIEF OFP with its automatic boarding
+/// on starts both, IMPORT FROM SIMBRIEF the fueling, START BOARDING the boarding. A <see cref="Bbs757LoadWatch"/> watches, and
+/// speaks of, only the parts it was given.
+/// </summary>
+[Flags]
+public enum Bbs757LoadParts { None = 0, Fuel = 1, Boarding = 2, Both = 3 }
+
+/// <summary>
+/// The load watch's judgement (task 11e), pure. Once IMPORT FROM SIMBRIEF and START BOARDING have been pressed
+/// on BlueBird's tablet, BlueBird loads at its own pace with only a picture to show it: the
 /// fuel in about two minutes, the boarding at its REALISTIC rate in under 40 minutes (measured
 /// 2026-10-25, live-findings.md). The definition reads the tanks and stations every
 /// <see cref="IntervalMs"/> and hands each read to <see cref="Observe"/>, which says once each:
@@ -23,6 +31,11 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <item>after <see cref="TimeoutMs"/> without both, what has not finished; then the watch ends.</item>
 /// </list>
 /// The first read only seeds; a group with a value unread is neither judged nor kept as the last read.
+/// <para>
+/// A watch speaks only of its <see cref="Parts"/>: the fuel alone (IMPORT FROM SIMBRIEF) never says the boarding has not started, and
+/// the boarding alone (START BOARDING) never says the fueling is complete. A part pressed while the watch runs joins it
+/// (<see cref="Include"/>) and is judged from its own start: its first read seeds, and its three minutes begin when it was added.
+/// </para>
 /// </summary>
 public sealed class Bbs757LoadWatch
 {
@@ -68,18 +81,40 @@ public sealed class Bbs757LoadWatch
     private readonly Bbs757WeightUnits? _units;
     private (double Left, double Right, double Center)? _firstTanks, _lastTanks;
     private double? _firstCabin, _firstCargo, _lastPassengers, _lastCargo;
-    private bool _startJudged;
+    // When each part's watch began, on the watch's clock: 0 for a part the watch was made with, the moment of the press for one
+    // included later. The three minutes of NotStartedMs run from there, and each part's start is judged once.
+    private long _fuelStartMs, _boardingStartMs;
+    private bool _fuelJudged, _boardingJudged;
 
     /// <param name="loads">The targets (<see cref="Bbs757Loadsheet.Compute"/>).</param>
     /// <param name="units">The aircraft's weight units, for what is said; pounds when null.</param>
-    public Bbs757LoadWatch(Bbs757Loads loads, Bbs757WeightUnits? units)
+    /// <param name="parts">What to watch and speak of: both by default.</param>
+    public Bbs757LoadWatch(Bbs757Loads loads, Bbs757WeightUnits? units, Bbs757LoadParts parts = Bbs757LoadParts.Both)
     {
         Loads = loads;
         _units = units;
+        Parts = parts & Bbs757LoadParts.Both;
     }
 
     /// <summary>The targets the reads are judged against.</summary>
     public Bbs757Loads Loads { get; }
+
+    /// <summary>The parts this watch watches, and the only ones it speaks of.</summary>
+    public Bbs757LoadParts Parts { get; private set; }
+
+    /// <summary>
+    /// Adds parts to the watch, <paramref name="elapsedMs"/> after it started: IMPORT FROM SIMBRIEF or START BOARDING pressed while
+    /// the other part is still being watched. A part that joins is judged from its own start (it is seeded by its own first read,
+    /// and the three minutes of <see cref="NotStartedMs"/> run from <paramref name="elapsedMs"/>); one already watched keeps its
+    /// start, and the watch keeps its targets and units. The hour of <see cref="TimeoutMs"/> stays the watch's own.
+    /// </summary>
+    public void Include(Bbs757LoadParts parts, long elapsedMs)
+    {
+        var added = parts & Bbs757LoadParts.Both & ~Parts;
+        if (added.HasFlag(Bbs757LoadParts.Fuel)) _fuelStartMs = elapsedMs;
+        if (added.HasFlag(Bbs757LoadParts.Boarding)) _boardingStartMs = elapsedMs;
+        Parts |= added;
+    }
 
     public bool FuelDone { get; private set; }
     public bool BoardingDone { get; private set; }
@@ -91,19 +126,24 @@ public sealed class Bbs757LoadWatch
     /// <summary>Boarding had not started at <see cref="NotStartedMs"/> and is no longer watched.</summary>
     public bool BoardingGaveUp { get; private set; }
 
-    /// <summary>Nothing more to say: each part done or given up, or the hour is up.</summary>
-    public bool Finished => ((FuelDone || FuelGaveUp) && (BoardingDone || BoardingGaveUp)) || TimedOut;
+    /// <summary>Nothing more to say: each part watched done or given up, or the hour is up.</summary>
+    public bool Finished => TimedOut
+        || (Resolved(Bbs757LoadParts.Fuel, FuelDone, FuelGaveUp) && Resolved(Bbs757LoadParts.Boarding, BoardingDone, BoardingGaveUp));
+
+    /// <summary>Whether a part needs no more watching: it is not one of the watch's, or it is done, or it was given up.</summary>
+    private bool Resolved(Bbs757LoadParts part, bool done, bool gaveUp) => !Parts.HasFlag(part) || done || gaveUp;
 
     /// <summary>
     /// One read, <paramref name="elapsedMs"/> after the watch started: what to say now (the fuel's
-    /// sentence before the boarding's when both finish at one read), or null.
+    /// sentence before the boarding's when both finish at one read), or null. Only the watch's <see cref="Parts"/> are judged.
     /// </summary>
     public string? Observe(Bbs757LoadReadBack read, long elapsedMs)
     {
         if (Finished) return null;
         var said = new List<string>();
+        bool fuelWatched = Parts.HasFlag(Bbs757LoadParts.Fuel), boardingWatched = Parts.HasFlag(Bbs757LoadParts.Boarding);
 
-        if (Tanks(read) is { } tanks)
+        if (fuelWatched && Tanks(read) is { } tanks)
         {
             double fuel = tanks.Left + tanks.Right + tanks.Center;
             double target = Loads.LeftLbs + Loads.RightLbs + Loads.CenterLbs;
@@ -117,7 +157,7 @@ public sealed class Bbs757LoadWatch
             _lastTanks = tanks;
         }
 
-        if (read.PassengerLbs is double cabin && read.CargoLbs is double cargo)
+        if (boardingWatched && read.PassengerLbs is double cabin && read.CargoLbs is double cargo)
         {
             double cargoTarget = Loads.ForwardLbs + Loads.AftLbs;
             if (!BoardingDone && !BoardingGaveUp && _lastPassengers is double lastCabin && _lastCargo is double lastCargo
@@ -134,12 +174,17 @@ public sealed class Bbs757LoadWatch
             _lastCargo = cargo;
         }
 
-        if (!_startJudged && elapsedMs >= NotStartedMs)
+        // Each part's start is judged once, NotStartedMs after ITS OWN start: together for parts that began together (the usual
+        // case), apart for one added later.
+        bool fuelDue = fuelWatched && !_fuelJudged && elapsedMs - _fuelStartMs >= NotStartedMs;
+        bool boardingDue = boardingWatched && !_boardingJudged && elapsedMs - _boardingStartMs >= NotStartedMs;
+        if (fuelDue || boardingDue)
         {
-            _startJudged = true;
-            bool fuelStalled = !FuelDone && _firstTanks is { } firstTanks && _lastTanks is { } lastTanks
+            _fuelJudged |= fuelDue;
+            _boardingJudged |= boardingDue;
+            bool fuelStalled = fuelDue && !FuelDone && _firstTanks is { } firstTanks && _lastTanks is { } lastTanks
                 && MovedLess(lastTanks, firstTanks, FuelMovedLbs);
-            bool boardingStalled = !BoardingDone && _firstCabin is double firstCabin && _lastPassengers is double lastCabin
+            bool boardingStalled = boardingDue && !BoardingDone && _firstCabin is double firstCabin && _lastPassengers is double lastCabin
                 && _firstCargo is double firstCargo && _lastCargo is double lastCargo
                 && Math.Abs(lastCabin - firstCabin) < PayloadSettledLbs && Math.Abs(lastCargo - firstCargo) < PayloadSettledLbs;
             if (NotStartedPhrase(fuelStalled, boardingStalled) is { } notStarted) said.Add(notStarted);
@@ -150,7 +195,8 @@ public sealed class Bbs757LoadWatch
         if (!Finished && elapsedMs >= TimeoutMs)
         {
             TimedOut = true;
-            said.Add(UnfinishedPhrase(fuelPending: !FuelDone && !FuelGaveUp, boardingPending: !BoardingDone && !BoardingGaveUp));
+            said.Add(UnfinishedPhrase(fuelPending: fuelWatched && !FuelDone && !FuelGaveUp,
+                boardingPending: boardingWatched && !BoardingDone && !BoardingGaveUp));
         }
         return said.Count > 0 ? string.Join(" ", said) : null;
     }

@@ -215,7 +215,7 @@ public partial class MainForm
         WatchRunning = () => currentAircraft is BBS757Definition { LoadWatchRunning: true },
         NestRunning = () => currentAircraft is BBS757Definition def ? def.NestRunning() : Aircraft.BBS757.Bbs757Nest.IsRunning(),
         StartWatch = (loads, units) => currentAircraft is BBS757Definition def && simConnectManager is { IsConnected: true } sim
-            && def.StartLoadWatch(loads, units, sim, announcer),
+            && def.StartLoadWatch(loads, units, Bbs757LoadParts.Both, sim, announcer),
         ArmGroundPowerEcho = () =>
         {
             if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho();

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using MSFSBlindAssist.Accessibility;
@@ -52,7 +51,7 @@ public partial class BBS757EfbForm : Form
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    public const string NotReachableText = "The 757's EFB is not reachable. Is the aircraft loaded?";
+    public const string NotReachableText = Bbs757NavigraphSignIn.NotReachableText;
     public const string LayoutUnknownText = "The 757's EFB layout is not the one this version knows.";
     public const string BusyText = "The EFB is still busy with the last action.";
     public const string NotFinishedText = "The EFB did not finish the clicks. Try again.";
@@ -75,9 +74,6 @@ public partial class BBS757EfbForm : Form
     public const string UnitsQuestionOpenText =
         "BlueBird is asking whether to switch the weight units. Press Accept units or Keep units first.";
 
-    /// <summary>The two hosts a Navigraph sign-in address may have to be opened.</summary>
-    private static readonly string[] NavigraphHosts = { "navigraph.com", "identity.api.navigraph.com" };
-
     private const int StatusTickMs = 1000;
     private const int CyclePollMs = 1000;
     private const int CycleWaitMs = 20000;
@@ -88,8 +84,6 @@ public partial class BBS757EfbForm : Form
     private const int UnitsPollMs = 250;
     // The fresh SIM ON GROUND read a preset waits for (the 1 Hz batch carries it).
     private const int OnGroundReadTimeoutMs = 2500;
-    // The tablet client scrapes every second while the CDU window is hidden: two cycles and a margin.
-    private const int TabletReadableWaitMs = 2500;
     // One fresh read of a registered variable (an individual definition answers within a frame or two).
     private const int LoadReadTimeoutMs = 1500;
     // The fresh ground power reads: a batch row answers with the next 1 Hz delivery, as OnGroundReadTimeoutMs does.
@@ -185,52 +179,6 @@ public partial class BBS757EfbForm : Form
     // ------------------------------------------------------------------
     // Pure helpers
     // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Whether a sign-in address may be opened in the pilot's browser: an absolute https address on
-    /// the default port, no user name, its host exactly navigraph.com or identity.api.navigraph.com.
-    /// The host is compared whole, never searched in the text ("navigraph.com.example" and
-    /// "example/navigraph.com" are refused).
-    /// </summary>
-    internal static bool IsTrustedNavigraphUri(string? text, out Uri? uri)
-    {
-        uri = null;
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        if (!Uri.TryCreate(text.Trim(), UriKind.Absolute, out var parsed)) return false;
-        if (parsed.Scheme != Uri.UriSchemeHttps || !parsed.IsDefaultPort || parsed.UserInfo.Length > 0) return false;
-        foreach (string host in NavigraphHosts)
-        {
-            if (string.Equals(parsed.Host, host, StringComparison.OrdinalIgnoreCase))
-            {
-                uri = parsed;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>A sign-in code spelled for speech: "A B 1 2", a dash said as "dash", spaces dropped.</summary>
-    internal static string SpellCode(string code)
-    {
-        var parts = new List<string>();
-        foreach (char c in code)
-        {
-            if (char.IsWhiteSpace(c)) continue;
-            parts.Add(c == '-' ? "dash" : c.ToString());
-        }
-        return string.Join(" ", parts);
-    }
-
-    /// <summary>
-    /// How long the browser waits after the code is spoken, so opening it (which moves focus, and
-    /// NVDA then reads the browser) does not cut the code off: 1.5 s and 350 ms per spoken
-    /// character (a dash is a word), at least 2 s and at most 6 s. The code also stays in the status box.
-    /// </summary>
-    internal static int CodeSpeechMs(string code)
-    {
-        int spoken = SpellCode(code).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        return Math.Clamp(1500 + 350 * spoken, 2000, 6000);
-    }
 
     /// <summary>The refusal on a new cycle's first day: no flight loaded today can have seen it.</summary>
     internal static string NewTodayText(int cycle) =>
@@ -504,56 +452,30 @@ public partial class BBS757EfbForm : Form
 
     private CancellationToken Lifetime => _lifetime.Token;
 
+    /// <summary>
+    /// The Navigraph sign-in (<see cref="Bbs757NavigraphSignIn.SignInAsync"/>, which the tablet window shares): the code is spoken
+    /// letter by letter before the browser opens, and the status box ends on the line the flow returns, which holds the code
+    /// as it is for reading character by character. A refusal is said at once, as before.
+    /// </summary>
     private async Task SignInToNavigraphAsync()
     {
         SetResult("Reading the Navigraph sign-in.");
-        var (signedIn, code, uriText) = await _tablet.GetNavigraphAsync();
-        if (_disposed) return;
-        if (!signedIn && string.IsNullOrWhiteSpace(code))
+        var io = new Bbs757NavigraphIo
         {
-            // Nothing read, or read too soon after the helper's client connected: read again once
-            // it answers, so the answer given is the helper's, not the empty one.
-            if (!await TabletReadableAsync())
+            GetNavigraph = () => _tablet.GetNavigraphAsync(),
+            WaitReadable = TabletReadableAsync,
+            Speak = (text, atOnce) =>
             {
-                Refuse(NotReachableText);
-                return;
-            }
-            (signedIn, code, uriText) = await _tablet.GetNavigraphAsync();
-            if (_disposed) return;
-        }
-        if (signedIn)
-        {
-            Say("Already signed in to Navigraph");
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            Refuse("No Navigraph sign-in code is waiting yet. Try again in a minute.");
-            return;
-        }
-
-        // The code is spoken BEFORE the browser opens: opening it moves focus and the screen reader
-        // reads the browser, which would cut the code off. The status box holds the code as it is,
-        // for reading character by character.
-        if (!IsTrustedNavigraphUri(uriText, out var uri) || uri == null)
-        {
-            string why = string.IsNullOrWhiteSpace(uriText)
-                ? "No sign-in address came with it."
-                : "Its sign-in address is not a Navigraph address, so it was not opened.";
-            SetResult($"Navigraph code {code.Trim()}. {why}");
-            _announcer.Announce($"Navigraph code {SpellCode(code)}. {why}");
-            return;
-        }
-
-        SetResult($"Navigraph code {code.Trim()}. The sign-in page opens in your browser.");
-        _announcer.Announce($"Navigraph code {SpellCode(code)}. The sign-in page opens in your browser in a moment.");
-        await Task.Delay(CodeSpeechMs(code), Lifetime);
+                if (_disposed) return;
+                if (atOnce) _announcer.AnnounceImmediate(text);
+                else _announcer.Announce(text);
+            },
+            Delay = Task.Delay,
+            OpenBrowser = Bbs757NavigraphSignIn.OpenInBrowser,
+        };
+        string line = await Bbs757NavigraphSignIn.SignInAsync(io, Lifetime);
         if (_disposed) return;
-        if (!OpenInBrowser(uri))
-        {
-            SetResult($"Navigraph code {code.Trim()}. The sign-in page could not be opened.");
-            _announcer.Announce("The sign-in page could not be opened.");
-        }
+        SetResult(line);
     }
 
     /// <summary>
@@ -562,31 +484,8 @@ public partial class BBS757EfbForm : Form
     /// connected is readable only after its first scrape (about a second later, measured), so this
     /// waits a little before it says the helper cannot be read.
     /// </summary>
-    private async Task<bool> TabletReadableAsync()
-    {
-        var until = DateTime.UtcNow.AddMilliseconds(TabletReadableWaitMs);
-        while (!_tablet.IsReadable)
-        {
-            if (DateTime.UtcNow >= until) return false;
-            await Task.Delay(100, Lifetime);
-        }
-        return true;
-    }
-
-    private static bool OpenInBrowser(Uri uri)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // Never the address: it carries the sign-in code.
-            Log.Debug("BBS757", $"Navigraph sign-in page not opened: {ex.GetType().Name}");
-            return false;
-        }
-    }
+    private Task<bool> TabletReadableAsync(CancellationToken ct) =>
+        Bbs757NavigraphSignIn.WaitReadableAsync(() => _tablet.IsReadable, Task.Delay, ct);
 
     /// <summary>
     /// Whether the pilot is signed in to Navigraph, read fresh: true, false, or null when the
@@ -597,7 +496,7 @@ public partial class BBS757EfbForm : Form
     {
         var (signedIn, _, _) = await _tablet.GetNavigraphAsync();
         if (signedIn) return true;
-        if (!await TabletReadableAsync()) return null;
+        if (!await TabletReadableAsync(Lifetime)) return null;
         (signedIn, _, _) = await _tablet.GetNavigraphAsync();
         return signedIn;
     }
