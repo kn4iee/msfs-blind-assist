@@ -75,6 +75,45 @@ public class A350EcamAnnouncerTests
         Assert.Empty(a.Observe(View("SURV TCAS STBY|amber")));
     }
 
+    // Review 2026-10-29 (speech 6): the whole list had to agree, so one ticking line (a procedure's countdown) held back every
+    // other: with reads a second apart a countdown never agrees, and new warnings went unsaid while it ran. Each line agrees
+    // on its own, and a line changing only in its digits is the same line (a countdown), except a warning or a caution
+    // (red, amber), whose digits say which engine or system it is.
+    [Fact]
+    public void A_ticking_line_holds_back_no_other_line()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("ANTI ICE|amber", "WAIT 40 S|cyan"));
+        Assert.Empty(a.Observe(View("ANTI ICE|amber", "WAIT 39 S|cyan", "ENG 1 FIRE|red")));
+        Assert.Equal(new[] { "ENG 1 FIRE, red" }, a.Observe(View("ANTI ICE|amber", "WAIT 38 S|cyan", "ENG 1 FIRE|red")));
+    }
+
+    [Fact]
+    public void A_ticking_line_is_not_said_again_as_it_ticks()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("WAIT 40 S|cyan"));
+        Assert.Empty(Twice(a, View("WAIT 39 S|cyan")));
+        Assert.Empty(Twice(a, View("WAIT 38 S|cyan")));
+    }
+
+    [Fact]
+    public void A_warning_differing_from_another_only_in_a_digit_is_said()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("ENG 1 FIRE|red"));
+        Assert.Equal(new[] { "ENG 2 FIRE, red" }, Twice(a, View("ENG 2 FIRE|red")));   // one replaced by the other
+        Assert.Equal(new[] { "ENG 1 FIRE, red" }, Twice(a, View("ENG 1 FIRE|red", "ENG 2 FIRE|red")));
+    }
+
+    [Fact]
+    public void A_second_line_differing_only_in_a_digit_is_said()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("THR LEVER 1 IDLE|cyan"));
+        Assert.Equal(new[] { "THR LEVER 2 IDLE, cyan" }, Twice(a, View("THR LEVER 1 IDLE|cyan", "THR LEVER 2 IDLE|cyan")));
+    }
+
     [Fact]
     public void Reset_makes_the_next_read_a_baseline()
     {
