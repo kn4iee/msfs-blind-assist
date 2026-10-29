@@ -106,8 +106,9 @@ public sealed class A350HotPages
         return -1;
     }
 
-    // Four independent multiply-xor lanes over the page's 64-bit words: about 15 ms for 355 MB, and only a
-    // change has to be noticed (nothing is looked up by it).
+    // Four independent multiply-xor-rotate lanes over the page's 64-bit words (about 28 ms for 372 MB, live), and only a
+    // change has to be noticed (nothing is looked up by it). The rotate carries a difference down as well as up: without
+    // it two flips of a word's top bit in one lane cancelled (review 2026-10-28).
     private static ulong Hash(ReadOnlySpan<byte> page)
     {
         const ulong Prime = 0x100000001B3;
@@ -116,13 +117,13 @@ public sealed class A350HotPages
         int i = 0;
         for (; i + 4 <= w.Length; i += 4)
         {
-            a = (a ^ w[i]) * Prime;
-            b = (b ^ w[i + 1]) * Prime;
-            c = (c ^ w[i + 2]) * Prime;
-            d = (d ^ w[i + 3]) * Prime;
+            a = System.Numerics.BitOperations.RotateLeft((a ^ w[i]) * Prime, 31);
+            b = System.Numerics.BitOperations.RotateLeft((b ^ w[i + 1]) * Prime, 31);
+            c = System.Numerics.BitOperations.RotateLeft((c ^ w[i + 2]) * Prime, 31);
+            d = System.Numerics.BitOperations.RotateLeft((d ^ w[i + 3]) * Prime, 31);
         }
-        for (; i < w.Length; i++) a = (a ^ w[i]) * Prime;
-        for (int k = w.Length * 8; k < page.Length; k++) b = (b ^ page[k]) * Prime;
+        for (; i < w.Length; i++) a = System.Numerics.BitOperations.RotateLeft((a ^ w[i]) * Prime, 31);
+        for (int k = w.Length * 8; k < page.Length; k++) b = System.Numerics.BitOperations.RotateLeft((b ^ page[k]) * Prime, 31);
         return a ^ (b << 1 | b >> 63) ^ (c << 2 | c >> 62) ^ (d << 3 | d >> 61);
     }
 }

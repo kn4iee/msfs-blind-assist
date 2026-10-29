@@ -34,6 +34,19 @@ public class A350HotPagesTests
         Assert.Equal(new[] { (2 * Page, 0x10000u + 2 * Page, Page) }, hot.Track(OneRegion(4), Pages(4, (2, 7))));
     }
 
+    // Review 2026-10-28 (minor 7): multiply-xor without a rotate carries a difference only upward, so two flips of a
+    // word's top bit in one lane (words 0 and 4) cancelled and the changed page stayed cold, its torn bytes kept.
+    [Fact]
+    public void Two_top_bit_flips_in_one_lane_still_change_the_page()
+    {
+        var hot = new A350HotPages();
+        hot.Track(OneRegion(1), Pages(1));
+        var flipped = Pages(1);
+        flipped[7] ^= 0x80;        // word 0's bit 63
+        flipped[4 * 8 + 7] ^= 0x80;   // word 4's bit 63, the same lane
+        Assert.Single(hot.Track(OneRegion(1), flipped));
+    }
+
     [Fact]
     public void Neighbouring_hot_pages_are_one_run_that_stops_at_a_region_end()
     {
