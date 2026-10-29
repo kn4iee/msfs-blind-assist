@@ -5,7 +5,7 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 /// and compares it byte for byte with another build (the Python prototype's a350-all.wasm).</summary>
 internal static class DisplayModes
 {
-    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "navdb" or "memfind" or "memread";
+    public static bool Handles(string mode) => mode is "patch" or "snapshot" or "draw" or "service" or "trap" or "traptiny" or "ecamwatch" or "ecamlisten" or "sdmap" or "sdtext" or "sdsweep" or "pfdlisten" or "mfdlines" or "ndlines" or "navdb" or "memfind" or "memread";
 
     public static int Run(string mode, string[] args)
     {
@@ -31,6 +31,7 @@ internal static class DisplayModes
             case "sdsweep": return SdSweep(args);
             case "pfdlisten": return PfdListen(args);
             case "mfdlines": return MfdLines(args);
+            case "ndlines": return NdLines(args);
             case "navdb": return NavDb(args);
             case "memfind": return MemFind(args);
             case "memread": return MemRead(args);
@@ -361,6 +362,29 @@ internal static class DisplayModes
 
     /// <summary>`mfdlines mfd.json side`: a saved MFD draw read as the MFD window's lines, with each line's click
     /// point; `mfdlines live side` draws the sim's MFD now.</summary>
+    /// <summary>`ndlines efis.json side`: a saved EFIS draw's ND read as MSFSBA reads it (the airport map by kind);
+    /// `ndlines live side` draws the side's EFIS now (the A: var asks, the aircraft's position, answered from SimConnect
+    /// are not available here: use a saved capture taken with A350_LAT/A350_LON for the airport map).</summary>
+    private static int NdLines(string[] args)
+    {
+        int side = int.Parse(args[1]);
+        A350DrawCapture cap;
+        if (args[0] == "live")
+        {
+            using var svc = new A350DisplayService();
+            svc.Start();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (svc.State == A350DisplayState.Preparing && sw.ElapsedMilliseconds < 120000) Thread.Sleep(50);
+            var caps = svc.DrawAsync(("EFIS", side)).GetAwaiter().GetResult();
+            if (caps == null || caps.Count == 0) { Console.WriteLine($"no draw ({svc.State} {svc.Reason})"); return 1; }
+            cap = caps[0];
+        }
+        else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        if (!cap.Ok) Console.WriteLine($"draw: ok={cap.Ok} texts={cap.Texts.Count} error={cap.Error}");
+        foreach (var l in A350GroundDisplays.ReadNd(cap, side)) Console.WriteLine(l);
+        return 0;
+    }
+
     private static int MfdLines(string[] args)
     {
         A350DrawCapture cap;
