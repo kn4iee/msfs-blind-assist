@@ -112,6 +112,9 @@ namespace MSFSBlindAssist.SimConnect
         private Dictionary<string, string>? _lastElementsData;
         private bool _disposed;
 
+        // The page this client connected to, claimed from the other clients of its kind (PageClaims) until its socket goes.
+        private IDisposable? _pageClaim;
+
         public bool IsBridgeConnected =>
             _connected && (DateTime.UtcNow - _lastGoodScrapeUtc).TotalSeconds < 5;
 
@@ -196,6 +199,7 @@ namespace MSFSBlindAssist.SimConnect
             _cts?.Cancel();
             try { _ws?.Abort(); } catch { }
             _ws = null;
+            ReleasePage();
             _connected = false;
             _agentInstalled = false;
         }
@@ -275,6 +279,7 @@ namespace MSFSBlindAssist.SimConnect
                     _agentInstalled = false;
                     try { _ws?.Abort(); } catch { }
                     _ws = null;
+                    ReleasePage();
                     // Fail any in-flight Runtime.evaluate calls now instead of letting
                     // them hang until their per-call timeout (the socket is dead).
                     foreach (var kv in _pending) kv.Value.TrySetCanceled();
@@ -307,12 +312,16 @@ namespace MSFSBlindAssist.SimConnect
                 _ws = null;
                 _agentInstalled = false;
             }
+            ReleasePage();   // the page is chosen again below
 
-            int? pageId = await ResolveEfbPageId(ct);
-            if (pageId == null) { _connected = false; return false; }
+            var resolved = await ResolveEfbPageId(ct);
+            if (resolved is not { } page) { _connected = false; return false; }
+            Interlocked.Exchange(ref _pageClaim, page.Claim)?.Dispose();
+            // Stop() cancels, then releases: a claim stored after its release would hold the page from every later client.
+            if (ct.IsCancellationRequested) { ReleasePage(); ct.ThrowIfCancellationRequested(); }
 
             var ws = new ClientWebSocket();
-            var url = new Uri($"ws://127.0.0.1:19999/devtools/inspector/{pageId.Value}");
+            var url = new Uri($"ws://127.0.0.1:19999/devtools/inspector/{page.Id}");
             try
             {
                 // Per-attempt connect timeout (CoherentEvalClient pattern). Without it a
@@ -327,6 +336,7 @@ namespace MSFSBlindAssist.SimConnect
                 // Timeout, NOT shutdown — must not surface as OperationCanceledException,
                 // which the RunLoop catch treats as "stop": that would kill the loop forever.
                 try { ws.Dispose(); } catch { }
+                ReleasePage();
                 _connected = false;
                 return false;
             }
@@ -341,7 +351,10 @@ namespace MSFSBlindAssist.SimConnect
             return _agentInstalled;
         }
 
-        private async Task<int?> ResolveEfbPageId(CancellationToken ct)
+        private void ReleasePage() => Interlocked.Exchange(ref _pageClaim, null)?.Dispose();
+
+        /// <summary>The page this client connects to, with its claim (none for a one-view EFB); null when none answers.</summary>
+        private async Task<(int Id, IDisposable? Claim)?> ResolveEfbPageId(CancellationToken ct)
         {
             try
             {
@@ -359,22 +372,68 @@ namespace MSFSBlindAssist.SimConnect
                 // One-view EFB (MD-11): nothing to disambiguate, so skip the probe. It would open a
                 // second inspector socket on the very page we are about to connect to — Coherent
                 // allows only one per page — for an answer we already have.
-                if (_side == null) return candidates.Count > 0 ? candidates[0] : null;
+                if (_side == null) return candidates.Count > 0 ? (candidates[0], null) : null;
 
-                foreach (var id in candidates)
+                if (await ClaimSidePageAsync(candidates, _side, id => EvalSideAsync(id, ct)) is { } picked)
                 {
-                    string side = await EvalSideAsync(id, ct);
-                    if (string.Equals(side, _side, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Let the probe socket's close fully release the page before the main
-                        // socket connects to the SAME id (Coherent allows ONE inspector per page).
-                        try { await Task.Delay(200, ct); } catch (OperationCanceledException) { }
-                        return id;
-                    }
+                    // Let the probe socket's close fully release the page before the main
+                    // socket connects to the SAME id (Coherent allows ONE inspector per page).
+                    try { await Task.Delay(200, ct); } catch (OperationCanceledException) { }
+                    return (picked.Page, picked.Claim);
                 }
             }
             catch (Exception ex) { Log.Debug("SimConnect", $"ResolvePmdgTablet: {ex.Message}"); }
             return null;
+        }
+
+        /// <summary>
+        /// The first candidate whose side probe answers <paramref name="side"/>, claimed for the caller. Each candidate is
+        /// claimed before its probe and released unless it is the one: a page another client holds or is probing (the
+        /// other side's OIS or tablet, the same title) is skipped, as a socket opened on it would displace that client
+        /// ([DBG-9], review 2026-10-29). Skipped, it is found on a later pass once its holder lets it go.
+        /// </summary>
+        internal static async Task<(int Page, IDisposable Claim)?> ClaimSidePageAsync(IReadOnlyList<int> candidates, string side,
+            Func<int, Task<string>> probeSide)
+        {
+            foreach (int id in candidates)
+            {
+                var claim = PageClaims.TryClaim(id);
+                if (claim == null) continue;
+                bool kept = false;
+                try
+                {
+                    if (string.Equals(await probeSide(id), side, StringComparison.OrdinalIgnoreCase)) { kept = true; return (id, claim); }
+                }
+                finally { if (!kept) claim.Dispose(); }
+            }
+            return null;
+        }
+
+        /// <summary>The pages these clients hold or are probing, process-wide: Coherent allows one inspector socket per page.</summary>
+        internal static class PageClaims
+        {
+            private static readonly object Gate = new();
+            private static readonly HashSet<int> Held = new();
+
+            /// <summary>The page for the caller alone until the claim is disposed; null while another holds it.</summary>
+            public static IDisposable? TryClaim(int pageId)
+            {
+                lock (Gate) { if (!Held.Add(pageId)) return null; }
+                return new Claim(pageId);
+            }
+
+            /// <summary>Releases once, however often disposed, so a late second release never frees a claim taken since.</summary>
+            private sealed class Claim : IDisposable
+            {
+                private readonly int _pageId;
+                private int _released;
+                public Claim(int pageId) => _pageId = pageId;
+                public void Dispose()
+                {
+                    if (Interlocked.Exchange(ref _released, 1) != 0) return;
+                    lock (Gate) Held.Remove(_pageId);
+                }
+            }
         }
 
         // One-shot WS eval of getTabletSide() on a candidate page (separate from the main socket).
