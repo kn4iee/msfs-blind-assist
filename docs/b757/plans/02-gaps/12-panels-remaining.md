@@ -226,6 +226,49 @@ R ENG Start, R Fuel Control (PW), R Fuel Control (RR) — the loaded type's pair
 L ENG Start, L Fuel Control, R ENG Start, R Fuel Control. This replaces ruling R37's order for this panel.
 - [x] Test first, regenerate, full suite, commit `fix(b757): the Engines panel lists engine 1's start and fuel, then engine 2's`. Plan 01's frozen `Bbs757DefinitionTests` Engines test was updated to the new order (its expected array only), as the owner's instruction replaces ruling R37's order it pinned.
 
+### Task 11: The side windows, sun visors, shades, seats and stowage (added 2026-10-28, the owner's instruction)
+
+The owner asked whether the furniture and the windows can be reached, and said "Yes add". BlueBird draws them all as
+clickable cockpit parts; the map left them out (banners MISC PARTS, COCKPIT CAPTAIN CHAIR, COCKPIT FIRST OFFICER CHAIR and
+RIGHT WINDOW RAIN EFFECTS are excluded, and the armrests, sun visor bases and floor box are excluded nodes). Measured on the
+ground 2026-10-28 (`flight-12.md`, "Windows and furniture"): every variable below holds a written value and goes back.
+
+**Files:** `curation.json`, the generator only where a seat needs it, the map, `test_generate_b757_map.py`,
+`Bbs757ControlMapTests.cs`, `docs/b757/evidence/panel-order-12.md` (one line for the two new panels).
+- Two new panels in Other, after Forward attendant panel, in this order:
+  - **Windows and sun visors:** Left Side Window, Right Side Window (`L2win_handle`, `R2win_handle`: `B757_L/R_COCKPIT_WINDOW`
+    0 Closed, 1 Open; BlueBird closes both above 35 kt ground speed); Left Sun Visor, Right Sun Visor (`B757_SUNVISOR_L/R_base`:
+    `B757_SUNVISOR_L/R_vis` 0 Hidden, 1 Shown, the tooltip "Toggle Sunvisor visibility"); Left/Right Sun Visor Position
+    (`B757_SUNVISOR_L/R_move`, a drag lever `B757_SUNVISOR_L/R` 0-36); the four window shades (`L2_SHADE_GUIDE`,
+    `L3_SHADE_GUIDE`, `R2_SHADE_GUIDE`, `R3_SHADE_GUIDE`: Left/Right Sliding Window Shade for L2/R2, Left/Right Aft Window
+    Shade for L3/R3; an aft shade moves only while its side window is closed and is put up while it is open).
+  - **Seats and stowage:** Captain Seat, First Officer Seat (`B757_CAPT_SEAT` / `B757_FO_SEAT` 0 Forward, 100 Aft, from the
+    XML's MOVE_FORWARD/MOVE_BACK; the seat levers' clicks write only `O:` vars, which the sim's calculator cannot set, so the
+    app writes the seat var to the picked position); the captain's and first officer's armrests (`…_SEAT_ARM_REST_1/2`) and
+    headrests (`…_SEAT_HEAD_REST_1`, a drag lever 0-36); Jumpseat 1 and 2 (`B757_JUMP_1/2_SEAT_BASE`) and their armrests
+    (`B757_JUMPSEAT_1/2_SEAT_ARM_REST_1/2`); Captain and First Officer Chart Holder (`B757_CAPTAIN_MAIN_CHART`,
+    `B757_FO_MAIN_CHART`); Floor Box (`B757_FLOOR_BOX`); Stowage Door 1-3 (`B757_STOWAGE_DOOR_1` 0-34, `_2`/`_3` 0-36, drag
+    levers, tooltip "Sliding door").
+- Position labels: from BlueBird's code or tooltip where it says (the windows, the visors' visibility, the seats); else
+  from the interior model's animation where the geometry decides it (which armrest is inboard, which way a shade, visor,
+  headrest or door moves); else the labels in the brief, and each such label is listed in `flight-12.md` as not verified.
+- [ ] Tests first (the two panels, their order, each control's state var and positions, the seats written through their
+  state var with no click code), regenerate, full suite, commit `feat(b757): the side windows, sun visors, shades, seats
+  and stowage on the panels`.
+
+### Task 12: The final review's fixes (2026-10-28)
+
+The whole-branch review of Tasks 5-10 (`final-review-5-10.md` in the workspace): "With fixes", no Critical.
+- I1: the two Duct Leak Fuel Quantity Test buttons go (nothing in BlueBird reads `BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW`:
+  not the WASM, no XML but its own switch, and nothing changed when it was held on the ground with BBS Nest running).
+- M1: Fire protection lists the fire handles first and the three fire tests after them, as the option the owner picked
+  said ("Keep with fire handles": after the handles), so a key pressed on the panel's first control during a fire is no test
+  bell.
+- M4: the two untrue doc comments (`BBS757Definition.cs` on the panel order, `Bbs757SpringControls.cs` on one second).
+- Recommendation 3: the background release starts before the "did not return" warning is spoken.
+- M2, M3, M5: this file's record, handoff and in-sim check 1 (the controller).
+- [ ] Tests first where behaviour changes, full suite, commit `fix(b757): the final review's fixes`.
+
 ## In-sim checks (owner)
 
 1. On the ground, powered: Overhead > Pressurization, Auto Rate to MAX, then INDEX; Pedestal > Captain EFIS, PFD Brightness to Half (the PFD dims), then Full; Overhead > Air conditioning and bleed, Flight Deck Temperature to 20 °C. Each section's panel list opens with its first panel of the day (Overhead: Electrical; Glareshield: MCP; Forward panel: Brakes; Pedestal: Control stand), and inside a panel the every-day controls come first (Electrical: Battery, EXT PWR, …). On the RR, Pedestal > Engines lists only the RR fuel control switches.

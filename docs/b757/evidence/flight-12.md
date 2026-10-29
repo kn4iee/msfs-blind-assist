@@ -146,3 +146,60 @@ own in flight), released, and read again. Everything read as before afterwards.
 - The lamp test (Warning Test, `OVHD_TEST_LTS_PRESS`) is not held: its press toggles `L:OVHD_TEST_LTS` (when circuit 27
   is on) and it stays on after the release (the overhead fault lights, the IRS lights, the radio panels' lights all
   on); a second press turns it off. Turned off again.
+
+## On the ground: the tests that showed nothing in flight, the door, the windows and furniture (the same evening)
+
+2026-10-28, parked at a gate, engines off. The first attempt changed nothing at all, not even the engine fire test:
+BBS Nest was not running (spec 1.1: without it no system reacts). With Nest started the owner reloaded the flight cold
+and dark; the battery and the APU were switched on (both AC buses on the APU). Each test was held as in flight (the P61
+switches re-written every 30 ms for 2.4 s, the buttons written 1 and back to 0 after 3 s, both through the tablet page),
+read with a snapshot diff against an idle one (no variable drifted on its own over 12 s), and read again after.
+
+- P61 test switches:
+  - takeoff configuration test (`BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW` = 0): `B757_MAIN_CONFIG_1_DECAL` 1, master warning
+    both sides and its aural (`BBS_PLAY_MASTER_WARNING_A`); landing configuration (= 2) the same; both cleared after;
+  - ground proximity test (`BBS757_GRNDPROX_HYDGEN_P61_TEST_SW` = 0): `B757_MAIN_GNDPROX_1_DECAL` 1 and the glideslope
+    aural (`BBS_PLAY_GPWS_GLIDESLOPE`); the GND PROX light stays on for about 15 to 20 s after the test;
+  - stall warning left and right (`…_AIRDATA_STALL_LEFT/RIGHT_P61_TEST_SW` = 2): the captain's or first officer's stick
+    shaker and the pitch limit indicator (`BBS757_PLI_VISIBLE` 1, about 10°), as in flight;
+  - wing anti-ice test (`BBS757_WINGAI_WINDOWHEAT_P61_TEST_SW` = 0): both engine anti-ice VALVE lights
+    (`B757_OVHD_ANTI_ICE_ENGL/ENGR_VALVE_DECAL`) on while held; probe heat test (= 2): the seven probe heat lights (captain
+    and first officer pitot, L/R AOA, L/R AUX, L TAT) go OFF while held;
+  - nothing in any L:var: the hydraulic generator test (`…GRNDPROX_HYDGEN…` = 2), the air data tests (stall left/right
+    = 0), the equipment cooling test (0, 2), the yaw damper test (0, 2) and the duct leak / fuel quantity test (0, 2).
+    BlueBird's WASM names every one of these switches except the duct leak / fuel quantity one (the final review), so the
+    others may show on the EICAS, which no variable gives; the duct leak / fuel quantity switch is read by nothing.
+- Held buttons: the autoland status tests 1 and 2, both sides (`B757_MAIN_L/R_AUTOLAND_1/2_BUTTON`), change the autoland
+  status lights while held (`…_AUTOLAND_1_BUTTON_ON` 1 → 0 or 2, `…_2_BUTTON_ON` 2 → 0) and they come back after the
+  release. The takeoff config check (`B757_MAIN_TOCHK_BUTTON`, 1 s) with the flaps up: the CONFIG light, master warning
+  both sides and both aurals, and they STAY after the release. The captain's master warning and caution button (its map
+  press and release) then cleared the master warning on both sides and the CONFIG light. The four oxygen tests, the TCAS
+  test, the ILS test and the weather radar test changed no L:var on the ground (sound or display only, or not modelled).
+- The radio panel test: its release writes only an `O:` var, and `L:B757_PED_NAV_1_TEST_BUTTON` stays 1 after it (read 3 s
+  later). The cockpit's own click does the same (the XML's release is that `O:` write), and no gauge or WASM string names
+  the L:var, so it changes nothing; it was put back to 0 by hand.
+- The cockpit door (`B757_COCKPIT_DOOR`, the map's press): open → closed, `B757_DECAL_LOCK_FAIL` off and
+  `BBS757_FDAS_DISARM` 0; closed → open, the lock fail light on again (on the ground with circuit 312 powered). A second
+  identical calculator string through the MCP did nothing: MobiFlight skips a string the same as the last one, which is
+  why the app prefixes each write (`<n> 0 *`).
+
+### Windows and furniture (for Task 11)
+
+Each variable written on the tablet page, read 2.5 s later, written back, read again: every one held its value and went
+back. Side windows `B757_L/R_COCKPIT_WINDOW` 0 → 1 (open; `L:AVERAGE_WINDOW` follows), and an aft window shade written 1
+while its window was open read 0 (the XML puts `L3/R3_SHADE_GUIDE` up while the window is open, and its click moves it
+only while the window is closed). The four shades `L2/L3/R2/R3_SHADE_GUIDE` 0 → 1; the sun visors `B757_SUNVISOR_L/R_vis`
+0 → 1 and `B757_SUNVISOR_L/R` 0 → 18; the armrests (captain, first officer, both jumpseats, `…_ARM_REST_1/2`) 0 → 1; the
+headrests `B757_CAPTAIN/FO_SEAT_HEAD_REST_1` 0 → 18; the jumpseats `B757_JUMP_1/2_SEAT_BASE`, the chart holders
+`B757_CAPTAIN/FO_MAIN_CHART` and the floor box 0 → 1; the stowage doors `B757_STOWAGE_DOOR_1/2/3` 0 → 17/18/18; the seats
+`B757_CAPT_SEAT` / `B757_FO_SEAT` 100 → 0. Seen only as numbers: which way each part moves is BlueBird's code or the
+model's, not seen here.
+
+### The tablet's ground air and air start tiles (for plan 11)
+
+On the tablet's GROUND SERVICES page (Home, Aircraft, GROUND SERVICES; proved by the AFT STAIRS tile, 0 → 1 → 0), taps
+through the app's EFB agent, every variable read after each: GROUND A/C (411, 373) toggles `BBS757_vis_aircon` 0 → 1 → 0;
+LEFT AIR START (619, 436) and RIGHT AIR START (1009, 436 or 1009, 455) both toggle the same `BBS757_vis_airstart` with
+`BBS757_air_start_door` (0 → 1 → 0); (1034, 434) hit nothing. On plan 11's runway session these tiles were grey: at a gate
+they work. `B757_ENG_1/2_AIR_STARTER_RATIO` stayed 0 with the cart connected and the engines off. Everything was removed
+again and the tablet left on Home.
