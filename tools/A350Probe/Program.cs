@@ -606,7 +606,7 @@ internal sealed class ProbeForm : Form
             {
                 var hash = item.Split('#');
                 _m.ExecuteCalculatorCodeUnique(hash[0]);
-                await Task.Delay(hash.Length > 1 ? int.Parse(hash[1]) : 100);
+                await Task.Delay(hash.Length > 1 ? int.Parse(hash[1], System.Globalization.CultureInfo.InvariantCulture) : 100);
             }
             foreach (var name in _watch)
                 Line($"{name}\t{Fmt(await Read("W:" + name))}");
@@ -615,8 +615,8 @@ internal sealed class ProbeForm : Form
 
         if (_mode == "sample")
         {
-            // "code#ms;code#ms" run in the background while the watched L:vars are read every 100 ms for _watch's
-            // first-listed duration: how a value moves inside a hold (a flashing light, a timed test).
+            // "code#ms;code#ms" run in the background while the watched L:vars are read every 100 ms, each change printed
+            // with its time, until the strings have all run: how a value moves inside a hold (a flashing light, a timed test).
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var run = Task.Run(async () =>
             {
@@ -624,7 +624,7 @@ internal sealed class ProbeForm : Form
                 {
                     var hash = item.Split('#');
                     _m.ExecuteCalculatorCodeUnique(hash[0]);
-                    await Task.Delay(hash.Length > 1 ? int.Parse(hash[1]) : 100);
+                    await Task.Delay(hash.Length > 1 ? int.Parse(hash[1], System.Globalization.CultureInfo.InvariantCulture) : 100);
                 }
             });
             string last = "";
@@ -638,6 +638,8 @@ internal sealed class ProbeForm : Form
                 last = now;
                 await Task.Delay(100);
             }
+            if (run.Exception?.InnerException is { } failed)   // a bad "#ms" ended the run: say so, never end silently
+                Line("sample: the strings stopped: " + failed.Message);
             return;
         }
 
