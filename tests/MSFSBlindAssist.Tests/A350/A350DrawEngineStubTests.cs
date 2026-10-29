@@ -249,6 +249,22 @@ public class A350DrawEngineStubTests
         Assert.True(e.Draw("CTR").Ok);
     }
 
+    // Perf review 2026-10-30: each load checked that the CustomVariables found still sit where they were by making a string
+    // of every one's name (about 1,200 strings, 83 KB, a tick).
+    [Fact]
+    public void Checking_the_variables_found_makes_no_string_of_their_names()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        var copy = Copy(variables: Enumerable.Range(1, 1000).Select(i => ((uint)i, "INI_V" + i.ToString("0000", System.Globalization.CultureInfo.InvariantCulture), 10000 + 24 * i, (double)i)).ToArray());
+        e.Load(copy);   // the first load finds them
+        Assert.Equal(1000, e.CustomVariableCount);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        e.Load(copy);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1000, e.CustomVariableCount);
+        Assert.True(allocated < 16_000, $"a load allocated {allocated:N0} bytes");
+    }
+
     // A gauge object beyond those found (the first officer's, built after the first scan) is looked for again too.
     [Fact]
     public void A_gauge_object_beyond_those_found_is_looked_for_again()

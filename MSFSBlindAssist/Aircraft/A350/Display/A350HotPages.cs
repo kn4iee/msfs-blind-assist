@@ -110,6 +110,9 @@ public sealed class A350HotPages
     // noticed (nothing is looked up by it). Each step multiplies, folds the high half down and rotates: a multiply passes
     // a top-bit difference through unchanged, so without the fold two such differences in one lane could cancel (two
     // top bits; bit 63 of a word with bit 30 of the lane's next: reviews 2026-10-28 and 29).
+    // Compiled fully optimised at once: tiered compilation ran the first ticks' hash passes slowly (perf review 2026-10-30:
+    // 85-151 ms against 45 ms at 495 MB); the hash is the same.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     private static ulong Hash(ReadOnlySpan<byte> page)
     {
         var w = MemoryMarshal.Cast<byte, ulong>(page);
@@ -127,6 +130,7 @@ public sealed class A350HotPages
         return a ^ (b << 1 | b >> 63) ^ (c << 2 | c >> 62) ^ (d << 3 | d >> 61);
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     private static ulong Step(ulong lane, ulong word)
     {
         ulong y = (lane ^ word) * 0x100000001B3;

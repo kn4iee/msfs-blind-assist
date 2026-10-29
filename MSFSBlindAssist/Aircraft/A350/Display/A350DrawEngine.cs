@@ -531,7 +531,7 @@ public sealed class A350DrawEngine : IDisposable
         // every one still holds its id and name (about 1,200 checks instead of a 38 MB scan), unless a draw asked
         // for one they lack (one created since), at most every RescanMissingAfter.
         bool missed = _customVarMissed && Elapsed(_customScanAt);
-        if (!missed && _customVars.Count > 0 && _customVars.All(kv => NameAt(copy, kv.Value.Address, (uint)kv.Key) == kv.Value.Name)) return;
+        if (!missed && _customVars.Count > 0 && _customVars.All(kv => NameIs(copy, kv.Value.Address, (uint)kv.Key, kv.Value.Name))) return;
         _customVarMissed = false;
         _customScanAt = Environment.TickCount64;
         _customVars.Clear();
@@ -604,20 +604,30 @@ public sealed class A350DrawEngine : IDisposable
     public IReadOnlyList<(int Id, string Name, uint Address)> CustomVariables =>
         _customVars.Select(kv => (kv.Key, kv.Value.Name, kv.Value.Address)).ToList();
 
-    /// <summary>The name of the CustomVariable at an address if it still holds this id, else null.</summary>
-    private static string? NameAt(A350MemoryCopy copy, uint address, uint id)
+    /// <summary>Whether the CustomVariable at an address still holds this id and name, compared in place (perf review
+    /// 2026-10-30: a string of each name on every load was about 83 KB a tick). A name found holds ASCII only.</summary>
+    private static bool NameIs(A350MemoryCopy copy, uint address, uint id, string name)
     {
         var head = copy.Read(address, 16);
-        if (head.Length < 16 || BitConverter.ToUInt32(head) != id) return null;
+        if (head.Length < 16 || BitConverter.ToUInt32(head) != id) return false;
         var s = head[4..];
+        ReadOnlySpan<byte> held;
         if ((s[11] & 0x80) == 0)
         {
             int n = s[11];
-            return n <= 10 ? Encoding.ASCII.GetString(s[..n]) : null;
+            if (n > 10) return false;
+            held = s[..n];
         }
-        uint p = BitConverter.ToUInt32(s), len = BitConverter.ToUInt32(s[4..]);
-        var name = len <= 80 ? copy.Read(p, (int)len) : ReadOnlySpan<byte>.Empty;
-        return name.Length == 0 ? null : Encoding.ASCII.GetString(name);
+        else
+        {
+            uint p = BitConverter.ToUInt32(s), len = BitConverter.ToUInt32(s[4..]);
+            held = len <= 80 ? copy.Read(p, (int)len) : ReadOnlySpan<byte>.Empty;
+            if (held.Length == 0) return false;
+        }
+        if (held.Length != name.Length) return false;
+        for (int i = 0; i < held.Length; i++)
+            if (held[i] != name[i]) return false;
+        return true;
     }
 
     /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables). A scan that finds
