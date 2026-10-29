@@ -24,9 +24,10 @@ public static class A350LampCallouts
 /// <c>INI_DC_LIGHTS_FAILURE</c>) that reach MSFSBA on their own once-a-second subscriptions, out of the aircraft's order:
 /// a light's first change since the last sentence waits <see cref="GatherMs"/> from its own arrival, a light power
 /// change holds everything <see cref="SettleMs"/>, and a light going dark is spoken only once it has stayed dark
-/// <see cref="OffHoldMs"/> (a flashing light reads as one "on", then "off" once it stops). A light added with a silent
-/// off (a master light: its going out is the pilot's own press) has its off held the same way and then dropped, so a
-/// flash neither cancels its pending "on" nor says it again. A change the definition does not keep tells this class to
+/// <see cref="OffHoldMs"/> (a flashing light reads as one "on", then "off" once it stops); while its off is held a light's
+/// pending "on" waits, so a blink says nothing. A light added with a silent off (a master light: its going out is the
+/// pilot's own press) has its off held the same way and then dropped, so a flash neither cancels its pending "on" nor says
+/// it again; a steady one (MASTER CAUT) lit again after its off is a new "on". A change the definition does not keep tells this class to
 /// <see cref="Forget"/> the light, so an earlier opposite change is not spoken stale. Pure.
 /// </summary>
 public sealed class A350LampSpeech
@@ -38,17 +39,25 @@ public sealed class A350LampSpeech
     private readonly List<A350LampChange> _pending = new();
     private readonly Dictionary<string, long> _heldOff = new(StringComparer.Ordinal);
     private readonly HashSet<string> _silentOff = new(StringComparer.Ordinal);
+
+    /// <summary>Lights whose matured off is pending but never said (a silent off): dropped from the sentence that nets it.</summary>
+    private readonly HashSet<string> _droppedOff = new(StringComparer.Ordinal);
     private long _holdUntil = long.MinValue;
 
     /// <summary>A power change's sentence is still to come: until it is spoken, an off nets in it unheld.</summary>
     private bool _powerSettling;
 
-    public void Add(A350LampChange change, long now, bool silentOff = false)
+    public void Add(A350LampChange change, long now, bool silentOff = false, bool steady = false)
     {
         if (change.On && _heldOff.Remove(change.Name))
         {
             _silentOff.Remove(change.Name);
-            return;   // lit again while its off was held: a flash
+            // A steady light (MASTER CAUT; only MASTER WARN flashes) lit again after its off is a new "on", never a flash
+            // (review 2026-10-29: a second caution right after the pilot's press was swallowed), unless its "on" is still
+            // to be said.
+            if (steady && !_pending.Exists(p => p.On && string.Equals(p.Name, change.Name, StringComparison.Ordinal)))
+                Queue(change, now);
+            return;   // else lit again while its off was held: a flash
         }
         if (!change.On && (silentOff || !_powerSettling))
         {
@@ -72,17 +81,26 @@ public sealed class A350LampSpeech
     {
         foreach (var (name, _) in _heldOff.Where(h => now - h.Value >= OffHoldMs).OrderBy(h => h.Value).ToList())
         {
+            // Its off has matured: it nets with an "on" still waiting (a blink says nothing); a silent one is then dropped
+            // from what is said, on whichever sentence nets it.
             _heldOff.Remove(name);
-            if (!_silentOff.Remove(name))
-                _pending.Add(new A350LampChange(name, false));
+            _pending.Add(new A350LampChange(name, false));
+            if (_silentOff.Remove(name))
+                _droppedOff.Add(name);
         }
         if (now < _holdUntil)
             return null;
         _powerSettling = false;
         if (_pending.Count == 0)
             return null;
-        var net = Net(_pending);
-        _pending.Clear();
+        // A light dark with its off still held came on and went back off since the last sentence: its changes wait, so a
+        // blink nets to nothing once its off matures, and a flashing light, lit again, says its one "on" (review 2026-10-29:
+        // a blink was said "on" after it was out, then "off").
+        var due = _pending.Where(p => !_heldOff.ContainsKey(p.Name)).ToList();
+        _pending.RemoveAll(p => !_heldOff.ContainsKey(p.Name));
+        var net = Net(due).Where(c => c.On || !_droppedOff.Contains(c.Name)).ToList();
+        foreach (var change in due)
+            _droppedOff.Remove(change.Name);
         return net.Count == 0 ? null : A350LampCallouts.Compose(net);
     }
 
@@ -92,6 +110,7 @@ public sealed class A350LampSpeech
     {
         _heldOff.Remove(name);
         _silentOff.Remove(name);
+        _droppedOff.Remove(name);
         _pending.RemoveAll(change => string.Equals(change.Name, name, StringComparison.Ordinal));
     }
 
@@ -100,6 +119,7 @@ public sealed class A350LampSpeech
         _pending.Clear();
         _heldOff.Clear();
         _silentOff.Clear();
+        _droppedOff.Clear();
         _holdUntil = long.MinValue;
         _powerSettling = false;
     }

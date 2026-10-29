@@ -57,6 +57,47 @@ public class A350LampSpeechTests
         Assert.Null(speech.Flush(2100 + A350LampSpeech.SettleMs + A350LampSpeech.OffHoldMs));
     }
 
+    // Review 2026-10-29 (speech 10): a light that came on and went back off within its gather was said "on" after it was
+    // already out, then "off" two seconds later. While its off is held, the light is dark: its "on" waits, and the off
+    // maturing nets the two to nothing.
+    [Fact]
+    public void A_blink_inside_the_gather_says_nothing()
+    {
+        var speech = new A350LampSpeech();
+        speech.Add(On("Captain autoland light"), 0);
+        speech.Add(Off("Captain autoland light"), 500);
+        Assert.Null(speech.Flush(A350LampSpeech.GatherMs));
+        Assert.Null(speech.Flush(500 + A350LampSpeech.OffHoldMs));
+        Assert.Null(speech.Flush(10_000));
+    }
+
+    [Fact]
+    public void A_flashing_light_still_says_one_on()
+    {
+        var speech = new A350LampSpeech();
+        for (int t = 0; t <= 2000; t += 1000)
+        {
+            speech.Add(On("Captain autoland light"), t);
+            if (t < 2000) speech.Add(Off("Captain autoland light"), t + 500);
+        }
+        Assert.Equal("Captain autoland light on", speech.Flush(2000));
+        Assert.Null(speech.Flush(4000));
+    }
+
+    // Review 2026-10-29 (speech 9): MASTER CAUT is steady (only MASTER WARN flashes), so its coming back on after the pilot's
+    // press is a new caution, never a flash: a second caution in a failure cascade was not said.
+    [Fact]
+    public void A_steady_master_light_relit_after_its_off_is_said_again()
+    {
+        var speech = new A350LampSpeech();
+        speech.Add(On("Master caution"), 0, silentOff: true, steady: true);
+        Assert.Equal("Master caution on", speech.Flush(A350LampSpeech.GatherMs));
+        speech.Add(Off("Master caution"), 2000, silentOff: true, steady: true);   // pressed: never said
+        speech.Add(On("Master caution"), 3000, silentOff: true, steady: true);    // the next caution
+        Assert.Equal("Master caution on", speech.Flush(3000 + A350LampSpeech.GatherMs));
+        Assert.Null(speech.Flush(3000 + A350LampSpeech.GatherMs + A350LampSpeech.OffHoldMs));
+    }
+
     // The owner (2026-10-27): several lights changing at once spoke "2 lights on: ..."; each light is spoken on its own,
     // one at a time, as every other aircraft's lights are.
     [Fact]

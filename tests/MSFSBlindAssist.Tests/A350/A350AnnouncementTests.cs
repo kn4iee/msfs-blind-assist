@@ -337,6 +337,58 @@ public class A350LampAnnouncementTests
         Assert.Single(_speech.All);   // going out is the pilot's own press of it
     }
 
+    // Review 2026-10-29 (speech 9): a master light lit again within 3 s of its acknowledgement was never said: pressed
+    // through MSFSBA, its own press's window quieted it; pressed in the cockpit, its held off took it for a flash. Both
+    // lamps are steady (MASTER WARN's rule holds while its warning is active): lit again, it is the next caution or warning.
+    [Fact]
+    public void A_master_caution_lit_again_right_after_its_press_through_msfsba_is_said()
+    {
+        var caution = Lamp("A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT");
+        Baseline(caution, 0);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(caution.Key, 1, _speech);
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        _def.HandleUIVariableSet("A350_FCU_MASTER_CAUTION_LEFT", 1, _def.GetVariables()["A350_FCU_MASTER_CAUTION_LEFT"],
+            new SimConnectManager(IntPtr.Zero), _speech);
+        _def.ProcessSimVarUpdate(caution.Key, 0, _speech);   // out: the press
+        _now += 1000;
+        _def.ProcessSimVarUpdate(caution.Key, 1, _speech);   // the next caution, inside the press's own window
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        Assert.Equal(new[] { "Master caution on", "Master caution on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_master_caution_lit_again_right_after_a_cockpit_press_is_said()
+    {
+        var caution = Lamp("A350_LT_FCU_MASTER_CAUTION_LEFT_SEQ1_LIGHT");
+        Baseline(caution, 0);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(caution.Key, 1, _speech);
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        _def.ProcessSimVarUpdate(caution.Key, 0, _speech);   // pressed in the cockpit
+        _now += 1000;
+        _def.ProcessSimVarUpdate(caution.Key, 1, _speech);   // the next caution, inside the off's hold
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        Assert.Equal(new[] { "Master caution on", "Master caution on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_master_warning_raised_again_right_after_a_cockpit_press_is_said()
+    {
+        var warning = Lamp("A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT");
+        string active = warning.KeyFor("INI_MASTER_WARNING_ACTIVE"), bottom = warning.KeyFor("INI_MASTER_WARNING_CAPT_BOTTOM");
+        foreach (var key in warning.InputKeys)
+            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active ? 0 : 1, _speech);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(active, 1, _speech);   // a warning
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        _def.ProcessSimVarUpdate(active, 0, _speech);   // pressed in the cockpit
+        _now += 1000;
+        _def.ProcessSimVarUpdate(active, 1, _speech);   // the next warning, inside the off's hold
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        Assert.Equal(new[] { "Master warning on", "Master warning on" }, _speech.All);
+    }
+
     [Fact]
     public void A_flashing_master_warning_is_spoken_once_whatever_phase_a_delivery_catches()
     {

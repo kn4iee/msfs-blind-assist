@@ -357,13 +357,18 @@ public partial class IniBuildsA350Definition
             var lamp = turn.Lamp;
             string name = SpokenName(lamp);
             bool master = MasterSpeakers.ContainsKey(lamp.Key);
-            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp) || IsOwnLamp(lamp);
+            // A master light's press only ever puts it out (its off is silent anyway): lit again inside the press's own
+            // window, it is the next caution or warning, never the pilot's own (review 2026-10-29).
+            bool own = IsOwnLamp(lamp) && !(master && turn.On);
+            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp) || own;
             if (quiet)
             {
                 _lampSpeech.Forget(name);   // the light moved on from any earlier change still waiting
                 continue;
             }
-            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock(), silentOff: master);
+            // Both master lamps are steady (MASTER WARN's rule holds while its warning is active, its legends flashing): lit
+            // again after an off, each is a new "on".
+            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock(), silentOff: master, steady: master);
             _lampAnnouncer = announcer;
         }
     }
