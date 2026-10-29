@@ -91,10 +91,14 @@ public static class A350Pfd
     /// <summary>The altitude at the window (y 389): the tape's label gives it roughly (0.35 px a foot), the drum's
     /// tens label exactly (21.75 px per 20 ft); the reading is the value with the drum's last two digits nearest
     /// the tape's.</summary>
-    internal static int Altitude(int tapeHundreds, float tapeY, int tens, float tensY)
+    internal static int Altitude(int tapeHundreds, float tapeY, int tens, float tensY) =>
+        Altitude(tapeHundreds, tapeY, tens, tensY, WindowY, TapePxPerFoot, DrumPxPerFoot);
+
+    /// <summary>The same reading on a display whose window, tape and drum are drawn at its own scale (the SFD's).</summary>
+    internal static int Altitude(int tapeHundreds, float tapeY, int tens, float tensY, float windowY, float tapePxPerFoot, float drumPxPerFoot)
     {
-        double rough = tapeHundreds * 100 + (tapeY - WindowY) / TapePxPerFoot;
-        double last = tens + (tensY - WindowY) / DrumPxPerFoot;
+        double rough = tapeHundreds * 100 + (tapeY - windowY) / tapePxPerFoot;
+        double last = tens + (tensY - windowY) / drumPxPerFoot;
         return (int)Math.Round(Math.Round((rough - last) / 100) * 100 + last, MidpointRounding.AwayFromZero);
     }
 

@@ -139,4 +139,34 @@ public class A350GroundDisplaysTests
         Assert.Contains("Position: N07 10.6 E079 53.1, green", snd);
         Assert.Contains("Heading source: IR3, white", snd);
     }
+
+    // Review 2026-10-29: the SFD dropped its speed and altitude, so Alt+I with a failed PFD gave baro, heading and position
+    // only. They are its tapes, read as the PFD's: the labels nearest the window's text line (y 132.5); speed labels every
+    // 20 kt 44 px apart (x 42), the altitude tape's hundreds 70 px per 500 ft (x 243), the drum's tens 26 px per 20 ft
+    // (x 259, green). On the stand the speed tape rests on its 30 kt floor and the drum shows 70 ft (the PFD's 71 from the
+    // same copy).
+    [Fact]
+    public void The_standby_flight_display_reads_its_speed_and_altitude()
+    {
+        var sfd = A350GroundDisplays.ReadSfd(Fixture("SFD"));
+        Assert.Equal("Speed: 30 knots or less", sfd[0]);
+        Assert.Equal("Altitude: 70 feet", sfd[1]);
+    }
+
+    // The same draw with its tapes relabelled as at 230 kt and about 5,070 ft: a label above the window is the faster or
+    // higher one.
+    [Fact]
+    public void In_flight_the_standby_tapes_read_from_their_labels()
+    {
+        var cap = Fixture("SFD");
+        var relabel = new Dictionary<(string, float), string>
+        {
+            [("40", 110f)] = "240", [("60", 66f)] = "260", [("80", 22f)] = "280",
+            [("005", 212.8f)] = "045", [("000", 142.8f)] = "050", [("005", 72.8f)] = "055",
+        };
+        var texts = cap.Texts.Select(t => relabel.TryGetValue((t.Text.Trim(), MathF.Round(t.Y, 1)), out var n) ? t with { Text = n } : t).ToList();
+        var sfd = A350GroundDisplays.ReadSfd(cap with { Texts = texts });
+        Assert.Contains("Speed: 230 knots", sfd);
+        Assert.Contains("Altitude: 5070 feet", sfd);
+    }
 }

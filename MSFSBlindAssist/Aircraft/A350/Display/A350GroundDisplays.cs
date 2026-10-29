@@ -193,13 +193,38 @@ public static class A350GroundDisplays
         }
     }
 
-    /// <summary>The standby flight display: baro, heading (scale labels 2.3 px a degree, index at x 145),
-    /// position and its source; flags as drawn. Its speed and altitude tapes are read in flight.</summary>
+    /// <summary>The standby flight display's tapes, read as the PFD's (<see cref="A350Pfd.Altitude(int, float, int, float,
+    /// float, float, float)"/>): the window's text line at y 132.5 (its box 106 to 143, the digits' baseline 8 px under its
+    /// middle; on the stand the drum reads 70 ft there, the PFD 71 from the same copy, and the speed tape its 30 kt floor);
+    /// speed labels every 20 kt, 44 px apart; the altitude tape's hundreds 70 px per 500 ft; the drum's tens 26 px per
+    /// 20 ft, evenly spaced (no perspective, unlike the PFD's).</summary>
+    private const float SfdWindowY = 132.5f, SfdSpeedPxPerKnot = 2.2f, SfdTapePxPerFoot = 0.14f, SfdDrumPxPerFoot = 1.3f;
+
+    /// <summary>The standby flight display: speed and altitude (its tapes), baro, heading (scale labels 2.3 px a degree,
+    /// index at x 145), position and its source; flags as drawn.</summary>
     public static IReadOnlyList<string> ReadSfd(A350DrawCapture capture)
     {
         var cells = Cells(capture.Texts);
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
+        // The speed tape's labels (x 42, white), the label nearest the window read off; on the ground the tape rests on its
+        // 30 kt floor, as the PFD's (review 2026-10-29: the SFD read no speed or altitude at all).
+        var speedLabels = cells.Where(c => c.X is >= 20 and < 60 && c.Colour == "white" && c.Text.Length is 2 or 3 && c.Text.All(char.IsDigit)).ToList();
+        if (speedLabels.Count > 0)
+        {
+            var s = speedLabels.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
+            double knots = Math.Round(int.Parse(s.Text) + (s.Y - SfdWindowY) / SfdSpeedPxPerKnot, MidpointRounding.AwayFromZero);
+            o.Add(knots <= 30 ? "Speed: 30 knots or less" : $"Speed: {knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} knots");
+        }
+        // The altitude: the tape's hundreds (x 243, white, three digits) and the drum's tens (x 259), each nearest the window.
+        var tape = cells.Where(c => c.X is >= 235 and < 252 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
+        var drum = cells.Where(c => c.X is >= 252 and < 270 && c.Text.Length == 2 && c.Text.All(char.IsDigit)).ToList();
+        if (tape.Count > 0 && drum.Count > 0)
+        {
+            var t = tape.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
+            var d = drum.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
+            o.Add($"Altitude: {A350Pfd.Altitude(int.Parse(t.Text), t.Y, int.Parse(d.Text), d.Y, SfdWindowY, SfdTapePxPerFoot, SfdDrumPxPerFoot)} feet");
+        }
         foreach (var b in cells.Where(c => c.Colour == "cyan" && Number(c)))
         {
             used.Add(b);
