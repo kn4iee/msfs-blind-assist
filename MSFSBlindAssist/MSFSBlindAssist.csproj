@@ -125,6 +125,8 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- RapidOcrNet: ExcludeAssets="build" because its build targets copy 13.7 MB of PP-OCRv5 models next to the exe; the app downloads PP-OCRv6 small on demand instead. -->
+    <PackageReference Include="RapidOcrNet" Version="4.2.0" ExcludeAssets="build" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="System.Speech" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
