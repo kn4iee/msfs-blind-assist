@@ -8779,6 +8779,754 @@
    "cw": null,
    "ccw": null,
    "variant": null
+  },
+  {
+   "node": "L2win_handle",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Left Side Window",
+   "kind": "toggle",
+   "state_var": "B757_L_COCKPIT_WINDOW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:B757_L_COCKPIT_WINDOW,bool) ! (>L:B757_L_COCKPIT_WINDOW,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "R2win_handle",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Right Side Window",
+   "kind": "toggle",
+   "state_var": "B757_R_COCKPIT_WINDOW",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:B757_R_COCKPIT_WINDOW,bool) ! (>L:B757_R_COCKPIT_WINDOW,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_SUNVISOR_L_base",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Left Sun Visor",
+   "kind": "toggle",
+   "state_var": "B757_SUNVISOR_L_vis",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Hidden"
+    },
+    {
+     "value": 1,
+     "label": "Shown"
+    }
+   ],
+   "press": "(L:B757_SUNVISOR_L_vis, bool) ! (>L:B757_SUNVISOR_L_vis, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_SUNVISOR_L_move",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Left Sun Visor Position",
+   "kind": "switch",
+   "state_var": "B757_SUNVISOR_L",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Inboard"
+    },
+    {
+     "value": 1,
+     "label": "Outboard"
+    },
+    {
+     "value": 18,
+     "label": "Half"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_SUNVISOR_R_base",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Right Sun Visor",
+   "kind": "toggle",
+   "state_var": "B757_SUNVISOR_R_vis",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Hidden"
+    },
+    {
+     "value": 1,
+     "label": "Shown"
+    }
+   ],
+   "press": "(L:B757_SUNVISOR_R_vis, bool) ! (>L:B757_SUNVISOR_R_vis, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_SUNVISOR_R_move",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Right Sun Visor Position",
+   "kind": "switch",
+   "state_var": "B757_SUNVISOR_R",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Inboard"
+    },
+    {
+     "value": 18,
+     "label": "Half"
+    },
+    {
+     "value": 35,
+     "label": "Outboard"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "L2_SHADE_GUIDE",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Left Sliding Window Shade",
+   "kind": "toggle",
+   "state_var": "L2_SHADE_GUIDE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Drawn"
+    }
+   ],
+   "press": "(L:L2_SHADE_GUIDE, bool) ! (>L:L2_SHADE_GUIDE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "L3_SHADE_GUIDE",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Left Aft Window Shade",
+   "kind": "toggle",
+   "state_var": "L3_SHADE_GUIDE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Drawn"
+    }
+   ],
+   "press": "(L:B757_L_COCKPIT_WINDOW, bool) 0 == if{ (L:L3_SHADE_GUIDE, bool) ! (>L:L3_SHADE_GUIDE, bool) }",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "R2_SHADE_GUIDE",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Right Sliding Window Shade",
+   "kind": "toggle",
+   "state_var": "R2_SHADE_GUIDE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Drawn"
+    }
+   ],
+   "press": "(L:R2_SHADE_GUIDE, bool) ! (>L:R2_SHADE_GUIDE, bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "R3_SHADE_GUIDE",
+   "section": "Other",
+   "panel": "Windows and sun visors",
+   "label": "Right Aft Window Shade",
+   "kind": "toggle",
+   "state_var": "R3_SHADE_GUIDE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Drawn"
+    }
+   ],
+   "press": "(L:B757_R_COCKPIT_WINDOW, bool) 0 == if{ (L:R3_SHADE_GUIDE, bool) ! (>L:R3_SHADE_GUIDE, bool) }",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_CAPT_LEVER_SEAT",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Captain Seat",
+   "kind": "switch",
+   "state_var": "B757_CAPT_SEAT",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Forward"
+    },
+    {
+     "value": 100,
+     "label": "Aft"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FO_LEVER_SEAT",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "First Officer Seat",
+   "kind": "switch",
+   "state_var": "B757_FO_SEAT",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Forward"
+    },
+    {
+     "value": 100,
+     "label": "Aft"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_CAPTAIN_SEAT_ARM_REST_2",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Captain Inboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_CAPTAIN_SEAT_ARM_REST_2",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_CAPTAIN_SEAT_ARM_REST_2,bool) ! (>L:B757_CAPTAIN_SEAT_ARM_REST_2,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_CAPTAIN_SEAT_ARM_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Captain Outboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_CAPTAIN_SEAT_ARM_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_CAPTAIN_SEAT_ARM_REST_1,bool) ! (>L:B757_CAPTAIN_SEAT_ARM_REST_1,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_CAPTAIN_SEAT_HEAD_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Captain Headrest",
+   "kind": "switch",
+   "state_var": "B757_CAPTAIN_SEAT_HEAD_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 18,
+     "label": "Half"
+    },
+    {
+     "value": 36,
+     "label": "Down"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FO_SEAT_ARM_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "First Officer Inboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_FO_SEAT_ARM_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_FO_SEAT_ARM_REST_1,bool) ! (>L:B757_FO_SEAT_ARM_REST_1,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FO_SEAT_ARM_REST_2",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "First Officer Outboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_FO_SEAT_ARM_REST_2",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_FO_SEAT_ARM_REST_2,bool) ! (>L:B757_FO_SEAT_ARM_REST_2,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FO_SEAT_HEAD_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "First Officer Headrest",
+   "kind": "switch",
+   "state_var": "B757_FO_SEAT_HEAD_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 18,
+     "label": "Half"
+    },
+    {
+     "value": 36,
+     "label": "Down"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMP_1_SEAT_BASE",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 1",
+   "kind": "toggle",
+   "state_var": "B757_JUMP_1_SEAT_BASE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Deployed"
+    }
+   ],
+   "press": "(L:B757_JUMP_1_SEAT_BASE,bool) ! (>L:B757_JUMP_1_SEAT_BASE,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMPSEAT_1_SEAT_ARM_REST_2",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 1 Inboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_JUMPSEAT_1_SEAT_ARM_REST_2",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_JUMPSEAT_1_SEAT_ARM_REST_2,bool) ! (>L:B757_JUMPSEAT_1_SEAT_ARM_REST_2,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMPSEAT_1_SEAT_ARM_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 1 Outboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_JUMPSEAT_1_SEAT_ARM_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_JUMPSEAT_1_SEAT_ARM_REST_1,bool) ! (>L:B757_JUMPSEAT_1_SEAT_ARM_REST_1,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMP_2_SEAT_BASE",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 2",
+   "kind": "toggle",
+   "state_var": "B757_JUMP_2_SEAT_BASE",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Deployed"
+    }
+   ],
+   "press": "(L:B757_STOWAGE_DOOR_1, number) 24 > if{ 24 (>L:B757_STOWAGE_DOOR_1, number) (L:B757_JUMP_2_SEAT_BASE,bool) ! (>L:B757_JUMP_2_SEAT_BASE,bool) } els{ (L:B757_JUMP_2_SEAT_BASE,bool) ! (>L:B757_JUMP_2_SEAT_BASE,bool) }",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 2 Inboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_JUMPSEAT_2_SEAT_ARM_REST_1,bool) ! (>L:B757_JUMPSEAT_2_SEAT_ARM_REST_1,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_JUMPSEAT_2_SEAT_ARM_REST_2",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Jumpseat 2 Outboard Armrest",
+   "kind": "toggle",
+   "state_var": "B757_JUMPSEAT_2_SEAT_ARM_REST_2",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Up"
+    },
+    {
+     "value": 1,
+     "label": "Down"
+    }
+   ],
+   "press": "(L:B757_JUMPSEAT_2_SEAT_ARM_REST_2,bool) ! (>L:B757_JUMPSEAT_2_SEAT_ARM_REST_2,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_CAPTAIN_MAIN_CHART",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Captain Chart Holder",
+   "kind": "toggle",
+   "state_var": "B757_CAPTAIN_MAIN_CHART",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Out"
+    }
+   ],
+   "press": "(L:B757_CAPTAIN_MAIN_CHART,bool) ! (>L:B757_CAPTAIN_MAIN_CHART,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FO_MAIN_CHART",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "First Officer Chart Holder",
+   "kind": "toggle",
+   "state_var": "B757_FO_MAIN_CHART",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Stowed"
+    },
+    {
+     "value": 1,
+     "label": "Out"
+    }
+   ],
+   "press": "(L:B757_FO_MAIN_CHART,bool) ! (>L:B757_FO_MAIN_CHART,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_FLOOR_BOX",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Floor Box",
+   "kind": "toggle",
+   "state_var": "B757_FLOOR_BOX",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 1,
+     "label": "Open"
+    }
+   ],
+   "press": "(L:B757_FLOOR_BOX,bool) ! (>L:B757_FLOOR_BOX,bool)",
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_STOWAGE_DOOR_1",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Stowage Door 1",
+   "kind": "switch",
+   "state_var": "B757_STOWAGE_DOOR_1",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 24,
+     "label": "Half"
+    },
+    {
+     "value": 34,
+     "label": "Open"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_STOWAGE_DOOR_2",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Stowage Door 2",
+   "kind": "switch",
+   "state_var": "B757_STOWAGE_DOOR_2",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 9,
+     "label": "Half"
+    },
+    {
+     "value": 18,
+     "label": "Open"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
+  },
+  {
+   "node": "B757_STOWAGE_DOOR_3",
+   "section": "Other",
+   "panel": "Seats and stowage",
+   "label": "Stowage Door 3",
+   "kind": "switch",
+   "state_var": "B757_STOWAGE_DOOR_3",
+   "positions": [
+    {
+     "value": 0,
+     "label": "Closed"
+    },
+    {
+     "value": 27,
+     "label": "Half"
+    },
+    {
+     "value": 36,
+     "label": "Open"
+    }
+   ],
+   "press": null,
+   "release": null,
+   "hold_ms": 0,
+   "cw": null,
+   "ccw": null,
+   "variant": null
   }
  ],
  "status": [

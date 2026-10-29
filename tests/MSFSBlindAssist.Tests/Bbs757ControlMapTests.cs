@@ -296,7 +296,8 @@ public class Bbs757ControlMapTests
     [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
     [InlineData("Forward panel", "Brakes|Caution, config and G/S inhibit|Landing gear|Captain foot and shoulder heat|Captain instrument source selectors|Heading reference|Thrust mode select|Alternate flaps|Ground proximity overrides|First officer instrument source selectors|First officer foot and shoulder heat|Yokes|Captain autoland status|Standby instruments|Captain DDRMI|Captain chronometer|First officer autoland status|First officer DDRMI|First officer chronometer")]
     [InlineData("Pedestal", "Control stand|Engines|TCAS and transponder|Radio tuning panel 1|Audio panel 1|Radio tuning panel 2|Radio tuning panel 3|Audio panel 2|ILS tuning|Fire protection|Stabilizer trim|EICAS control|Captain EFIS|First officer EFIS|CDU brightness|Weather radar")]
-    [InlineData("Other", "P61 panel|Oxygen|Flight deck door|Forward attendant panel")]
+    // Plan 12 task 11: the two furniture panels are changed by no step of the flow, so they come last in Other.
+    [InlineData("Other", "P61 panel|Oxygen|Flight deck door|Forward attendant panel|Windows and sun visors|Seats and stowage")]
     public void The_panels_of_each_section_follow_the_manuals_preflight_flow(string section, string panels)
     {
         Assert.Equal(panels.Split('|'), Map.Controls.Where(c => c.Section == section).Select(c => c.Panel).Distinct());
@@ -357,6 +358,10 @@ public class Bbs757ControlMapTests
     [InlineData("Fire protection", "Engine 1 Fire Handle Unlock|Engine 1 Fire Handle|Engine 1 Fire Handle Rotation|Engine 2 Fire Handle Unlock|Engine 2 Fire Handle|Engine 2 Fire Handle Rotation|APU Fire Handle Unlock|APU Fire Handle|APU Fire Handle Rotation|FWD Cargo Fire|AFT Cargo Fire|1 BTL Cargo Fire Guard|1 BTL Cargo Fire|2 BTL Cargo Fire Guard|2 BTL Cargo Fire|Sys Fail|Engine Fire Test|Engine, APU and Cargo Fire Test|Wheel Well Fire Test")]
     [InlineData("Weather radar", "WX L WX|WX R WX|WX L Wxt|WX L Map|WX L Gcs|Weather Radar Test|WX R Wxt|WX R Map|WX R Gcs|WX L Tfr|WX R Tfr")]
     [InlineData("Forward attendant panel", "Cabin Ceiling|Cabin Window|Cabin Entry|Cabin Work Light|GND Svc")]
+    // Plan 12 task 11: the windows first, then each sun visor's visibility before its position, then the shades.
+    [InlineData("Windows and sun visors", "Left Side Window|Right Side Window|Left Sun Visor|Left Sun Visor Position|Right Sun Visor|Right Sun Visor Position|Left Sliding Window Shade|Left Aft Window Shade|Right Sliding Window Shade|Right Aft Window Shade")]
+    // The two seats, each pilot's armrests and headrest, each jumpseat followed by its armrests, then the stowage.
+    [InlineData("Seats and stowage", "Captain Seat|First Officer Seat|Captain Inboard Armrest|Captain Outboard Armrest|Captain Headrest|First Officer Inboard Armrest|First Officer Outboard Armrest|First Officer Headrest|Jumpseat 1|Jumpseat 1 Inboard Armrest|Jumpseat 1 Outboard Armrest|Jumpseat 2|Jumpseat 2 Inboard Armrest|Jumpseat 2 Outboard Armrest|Captain Chart Holder|First Officer Chart Holder|Floor Box|Stowage Door 1|Stowage Door 2|Stowage Door 3")]
     public void The_most_used_controls_lead_their_panel(string panel, string leading)
     {
         // By the names the pilot hears.
@@ -1478,6 +1483,93 @@ public class Bbs757ControlMapTests
             "B757_OVHD_STBY_POWER_SWITCH", "B757_OVHD_L_BUS_TIE_BUTTON", "B757_OVHD_R_BUS_TIE_BUTTON",
             "B757_OVHD_L_GEN_CONT_BUTTON", "B757_OVHD_R_GEN_CONT_BUTTON", "B757_OVHD_APU_GEN_BUTTON",
         });
+    }
+
+    // ---- Plan 12, task 11: the side windows, sun visors, shades, seats and stowage ----
+
+    private const string Windows = "Windows and sun visors";
+    private const string Seats = "Seats and stowage";
+
+    [Theory]
+    // node, panel, label, kind, state var, positions ("value=label;..."), whether the cockpit's own click code is
+    // replayed. A toggle replays its click; a drag handle (the generator's levers) and a seat lever, whose click writes
+    // only O:vars that the sim's calculator cannot set, are switches with none, written through the var the cockpit
+    // moves. Names from BlueBird's code or tooltip, else from the interior models' animations (curation's plan 12 task
+    // 11 note says which), the chart holders' from the brief (not verified).
+    [InlineData("L2win_handle", Windows, "Left Side Window", Bbs757Kinds.Toggle, "B757_L_COCKPIT_WINDOW", "0=Closed;1=Open", true)]
+    [InlineData("R2win_handle", Windows, "Right Side Window", Bbs757Kinds.Toggle, "B757_R_COCKPIT_WINDOW", "0=Closed;1=Open", true)]
+    [InlineData("B757_SUNVISOR_L_base", Windows, "Left Sun Visor", Bbs757Kinds.Toggle, "B757_SUNVISOR_L_vis", "0=Hidden;1=Shown", true)]
+    // The left visor's track runs outboard (1) to inboard (36); its first frame repeats the last, so 0, its load value,
+    // is inboard too.
+    [InlineData("B757_SUNVISOR_L_move", Windows, "Left Sun Visor Position", Bbs757Kinds.Switch, "B757_SUNVISOR_L", "0=Inboard;1=Outboard;18=Half", false)]
+    [InlineData("B757_SUNVISOR_R_base", Windows, "Right Sun Visor", Bbs757Kinds.Toggle, "B757_SUNVISOR_R_vis", "0=Hidden;1=Shown", true)]
+    // The right visor's runs inboard (0) to outboard (35); its last frame repeats the first.
+    [InlineData("B757_SUNVISOR_R_move", Windows, "Right Sun Visor Position", Bbs757Kinds.Switch, "B757_SUNVISOR_R", "0=Inboard;18=Half;35=Outboard", false)]
+    [InlineData("L2_SHADE_GUIDE", Windows, "Left Sliding Window Shade", Bbs757Kinds.Toggle, "L2_SHADE_GUIDE", "0=Stowed;1=Drawn", true)]
+    [InlineData("L3_SHADE_GUIDE", Windows, "Left Aft Window Shade", Bbs757Kinds.Toggle, "L3_SHADE_GUIDE", "0=Stowed;1=Drawn", true)]
+    [InlineData("R2_SHADE_GUIDE", Windows, "Right Sliding Window Shade", Bbs757Kinds.Toggle, "R2_SHADE_GUIDE", "0=Stowed;1=Drawn", true)]
+    [InlineData("R3_SHADE_GUIDE", Windows, "Right Aft Window Shade", Bbs757Kinds.Toggle, "R3_SHADE_GUIDE", "0=Stowed;1=Drawn", true)]
+    [InlineData("B757_CAPT_LEVER_SEAT", Seats, "Captain Seat", Bbs757Kinds.Switch, "B757_CAPT_SEAT", "0=Forward;100=Aft", false)]
+    [InlineData("B757_FO_LEVER_SEAT", Seats, "First Officer Seat", Bbs757Kinds.Switch, "B757_FO_SEAT", "0=Forward;100=Aft", false)]
+    [InlineData("B757_CAPTAIN_SEAT_ARM_REST_2", Seats, "Captain Inboard Armrest", Bbs757Kinds.Toggle, "B757_CAPTAIN_SEAT_ARM_REST_2", "0=Up;1=Down", true)]
+    [InlineData("B757_CAPTAIN_SEAT_ARM_REST_1", Seats, "Captain Outboard Armrest", Bbs757Kinds.Toggle, "B757_CAPTAIN_SEAT_ARM_REST_1", "0=Up;1=Down", true)]
+    [InlineData("B757_CAPTAIN_SEAT_HEAD_REST_1", Seats, "Captain Headrest", Bbs757Kinds.Switch, "B757_CAPTAIN_SEAT_HEAD_REST_1", "0=Up;18=Half;36=Down", false)]
+    [InlineData("B757_FO_SEAT_ARM_REST_1", Seats, "First Officer Inboard Armrest", Bbs757Kinds.Toggle, "B757_FO_SEAT_ARM_REST_1", "0=Up;1=Down", true)]
+    [InlineData("B757_FO_SEAT_ARM_REST_2", Seats, "First Officer Outboard Armrest", Bbs757Kinds.Toggle, "B757_FO_SEAT_ARM_REST_2", "0=Up;1=Down", true)]
+    [InlineData("B757_FO_SEAT_HEAD_REST_1", Seats, "First Officer Headrest", Bbs757Kinds.Switch, "B757_FO_SEAT_HEAD_REST_1", "0=Up;18=Half;36=Down", false)]
+    [InlineData("B757_JUMP_1_SEAT_BASE", Seats, "Jumpseat 1", Bbs757Kinds.Toggle, "B757_JUMP_1_SEAT_BASE", "0=Stowed;1=Deployed", true)]
+    [InlineData("B757_JUMPSEAT_1_SEAT_ARM_REST_2", Seats, "Jumpseat 1 Inboard Armrest", Bbs757Kinds.Toggle, "B757_JUMPSEAT_1_SEAT_ARM_REST_2", "0=Up;1=Down", true)]
+    [InlineData("B757_JUMPSEAT_1_SEAT_ARM_REST_1", Seats, "Jumpseat 1 Outboard Armrest", Bbs757Kinds.Toggle, "B757_JUMPSEAT_1_SEAT_ARM_REST_1", "0=Up;1=Down", true)]
+    [InlineData("B757_JUMP_2_SEAT_BASE", Seats, "Jumpseat 2", Bbs757Kinds.Toggle, "B757_JUMP_2_SEAT_BASE", "0=Stowed;1=Deployed", true)]
+    [InlineData("B757_JUMPSEAT_2_SEAT_ARM_REST_1", Seats, "Jumpseat 2 Inboard Armrest", Bbs757Kinds.Toggle, "B757_JUMPSEAT_2_SEAT_ARM_REST_1", "0=Up;1=Down", true)]
+    [InlineData("B757_JUMPSEAT_2_SEAT_ARM_REST_2", Seats, "Jumpseat 2 Outboard Armrest", Bbs757Kinds.Toggle, "B757_JUMPSEAT_2_SEAT_ARM_REST_2", "0=Up;1=Down", true)]
+    [InlineData("B757_CAPTAIN_MAIN_CHART", Seats, "Captain Chart Holder", Bbs757Kinds.Toggle, "B757_CAPTAIN_MAIN_CHART", "0=Stowed;1=Out", true)]
+    [InlineData("B757_FO_MAIN_CHART", Seats, "First Officer Chart Holder", Bbs757Kinds.Toggle, "B757_FO_MAIN_CHART", "0=Stowed;1=Out", true)]
+    [InlineData("B757_FLOOR_BOX", Seats, "Floor Box", Bbs757Kinds.Toggle, "B757_FLOOR_BOX", "0=Closed;1=Open", true)]
+    // Door 1 swings open from about 10 to 34, its own clamp; 24 is where jumpseat 2's click stops it. Door 2 is open by 18 and
+    // closes again past it; door 3 does not move until 18.
+    [InlineData("B757_STOWAGE_DOOR_1", Seats, "Stowage Door 1", Bbs757Kinds.Switch, "B757_STOWAGE_DOOR_1", "0=Closed;24=Half;34=Open", false)]
+    [InlineData("B757_STOWAGE_DOOR_2", Seats, "Stowage Door 2", Bbs757Kinds.Switch, "B757_STOWAGE_DOOR_2", "0=Closed;9=Half;18=Open", false)]
+    [InlineData("B757_STOWAGE_DOOR_3", Seats, "Stowage Door 3", Bbs757Kinds.Switch, "B757_STOWAGE_DOOR_3", "0=Closed;27=Half;36=Open", false)]
+    public void Each_window_and_furniture_control_has_its_state_var_and_positions(string node, string panel, string label,
+        string kind, string stateVar, string positions, bool replaysClick)
+    {
+        Bbs757Control c = Find(node);
+        var expected = positions.Split(';').Select(p => p.Split('='))
+            .Select(p => (double.Parse(p[0], CultureInfo.InvariantCulture), p[1])).ToArray();
+
+        Assert.Equal(("Other", panel, label, kind, stateVar), (c.Section, c.Panel, c.Label, c.Kind, c.StateVar));
+        Assert.Equal(expected, Pairs(c));
+        Assert.Null(c.Variant);   // both cockpit models have every one of them
+        if (replaysClick) Assert.False(string.IsNullOrWhiteSpace(c.Press), $"{node} replays the cockpit's click");
+        else AssertNoClickCode(c);
+    }
+
+    [Theory]
+    [InlineData("B757_CAPT_LEVER_SEAT", "B757_CAPT_SEAT")]
+    [InlineData("B757_FO_LEVER_SEAT", "B757_FO_SEAT")]
+    public void A_seat_is_written_through_its_own_var_whatever_the_culture(string node, string seatVar)
+    {
+        // The seat lever's click writes only O:vars (O:CAPT_SEAT_MOVE_BACK or _FORWARD, which the component's Update turns into
+        // 100 or 0 in the seat's var), which the sim's calculator cannot set, so the app writes the seat's var itself.
+        Bbs757Control seat = Find(node);
+
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE" })
+        {
+            Assert.Equal(new[] { $"0 (>L:{seatVar})" }, TestCulture.Run(culture, () => WritesFor(seat, 100, 0)));
+            Assert.Equal(new[] { $"100 (>L:{seatVar})" }, TestCulture.Run(culture, () => WritesFor(seat, 0, 100)));
+        }
+        Assert.Equal(Bbs757WriteOutcome.AtPosition, Bbs757Write.ToPosition(seat, 100, 100).Outcome);
+    }
+
+    [Fact]
+    public void Jumpseat_2_keeps_its_click_that_also_moves_stowage_door_1()
+    {
+        // Its click pulls stowage door 1 back to 24 when it is open past that (the two collide), so it is replayed, never written.
+        Bbs757Control jumpseat = Find("B757_JUMP_2_SEAT_BASE");
+
+        Assert.Contains("(>L:B757_STOWAGE_DOOR_1", jumpseat.Press, StringComparison.Ordinal);
+        Assert.Contains("(>L:B757_JUMP_2_SEAT_BASE", jumpseat.Press, StringComparison.Ordinal);
     }
 
     [Fact]

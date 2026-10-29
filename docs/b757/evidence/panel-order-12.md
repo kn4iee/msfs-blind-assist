@@ -957,3 +957,4 @@ Judgment calls:
 | 2 | Oxygen | 40:16 | a press of a test or a button: "CREW OXYGEN EQUIPMENT ... TEST" | 36:23 check |
 | 3 | Flight deck door | 46:22 | moves the flight deck door from Open (cold and dark) to CLOSED: "DOORS ... CLOSED" |  |
 | 4 | Forward attendant panel | not changed in the flow |  |  |
+| 5-6 | Windows and sun visors, Seats and stowage (plan 12 task 11, new) | not changed in the flow |  | at the end of Other, in that order |

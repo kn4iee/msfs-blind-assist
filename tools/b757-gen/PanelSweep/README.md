@@ -65,8 +65,8 @@ cockpit, that the sim says the aircraft is on the ground with both engines off (
 that a one-shot calculator write of a test value into a variable of its own (`L:PANELSWEEP_PROBE`) comes
 back on a read (it refuses if not: the MobiFlight module is missing or the aircraft is not loaded).
 
-It takes about 14 minutes for the whole 757 (the dry run's estimate on 2026-10-28: 168 controls to sweep,
-276 position writes, each control put back afterwards). **Ctrl+C** stops after the step in progress and
+It takes about 16 minutes for the whole 757 (the dry run's estimate on 2026-10-28, with plan 12 task 11's
+windows and furniture: 198 controls to sweep, 313 position writes, each control put back afterwards). **Ctrl+C** stops after the step in progress and
 puts that control back, then writes the results so far. A second Ctrl+C stops at once and names the
 control that may need putting back by hand.
 
@@ -125,6 +125,11 @@ these change, panel by panel, as the dry run lists them on 2026-10-28:
 - **Other, Oxygen:** the four O2 Ears switches (captain, first officer, jumpseat, observer).
 - **Other, Flight deck door:** the cockpit door.
 - **Other, Forward attendant panel:** the ceiling, window and entry lights and the work light.
+- **Other, Windows and sun visors:** both side windows open and close, both sun visors appear and slide
+  along their track, and the four window shades are drawn and stowed (an aft shade moves only while its
+  side window is closed).
+- **Other, Seats and stowage:** both pilots' seats run aft or forward, and the armrests, headrests, both
+  jumpseats and their armrests, the chart holders, the floor box and the three stowage doors move.
 
 Nothing on the denylist moves (below), nor any button, guard or guarded switch.
 

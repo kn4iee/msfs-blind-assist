@@ -12,7 +12,7 @@
     "kinds: node -> toggle or button, for a control whose click code the extractor misreads. Two re-readings only: a momentary button made a toggle (its click sets its own state var by a gate, not a flip) and a select made a button (a radio-style choice that is only ever pressed). Only the kind changes (and with it the positions the generator derives: two for a toggle, none for a button, unless positions names them); the state var and the click code stay the vendor's, verbatim. The rules decide first, on the row as the extractor read it, so an entry never brings back a control they drop: it changes nothing and is only reported, like a label for a dropped node. An entry for a node the package does not have, for a control the extractor already reads that way, for any other re-reading, or for a kind the control cannot be built as (a toggle needs an L:var state), is an error.",
     "guarded: node -> {state_var, positions, guard, guard_closed, close_sets}: a switch whose vendor click only runs while its guard is open. The extractor writes that gate as an '[if <test>] ' note in front of the click code, which is not RPN, so none of the click is kept: the control is emitted as a switch on state_var with the named positions (laid onto the control's own values, as under positions), the guard's node, the value the guard reads while closed (guard_closed) and the value closing it writes to the control (close_sets, null when closing leaves it alone), and press, release, cw and ccw are empty: the app opens the guard, writes the position and closes the guard. The guard keeps its own row. An entry takes in a control the rules leave out (the emergency lights switch) or re-reads one they keep (the stab trims), and the run names each; it never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped fact or a change of BlueBird's stops the run: the click writes state_var, its gate reads the guard's var, and the guard's own click writes close_sets to the control. An entry for a node or a guard the package does not have, names that do not fit the vendor's count of positions, a positions or kinds entry for the same node, and any other control whose click code carries the gate note are errors.",
     "direct_write: list of nodes whose vendor click code the map leaves out: the control is emitted as the rules build it (state var, kind, label, panel and positions unchanged, the positions still checked against what the vendor's code writes) and press, release, cw and ccw are empty, so the app writes the state var to the picked position, as it does for any switch with no click code. For a switch whose code cannot take a pick where it aims and writes nothing but its own L:var, and at most O:vars (the chronometer ET levers; the flight deck door switch). It is checked against the vendor's code, so that a change of BlueBird's stops the run instead of reaching the app: the click code must exist (else the entry does nothing), carry no gate note (a gated click belongs under guarded, which opens the guard first) and write nothing but the state var (another L:var, a K: or an H: event would no longer run; an O:var write is let through, because O:vars are component-local and the sim's calculator cannot set them, so the app's replay never performed it). The run names each, and what it left out. An entry for a node the package does not have or the map does not keep, a node also under guarded or kinds, a control that is not a switch or has no state var or no positions, and a click code that fails those checks are errors.",
-    "levers: node -> {state_var, positions}: a lever the rules leave out and the pilot needs (the gear lever and the flap lever: drag handles, which the extractor reads as a 'lever' with no click code a pick could replay). BlueBird publishes the state var of each with its detents ('Write a detent position'), so the entry gives the state var and the positions with their values, [{value, label}] in the order of the lever's travel (a lever's row names no values a list of names could be laid onto: the flap lever runs 0..150), and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each lever it takes in. The label comes from labels, the place from the banner table or a node_panels rule, and a lever under an excluded banner (the flap lever) needs include_nodes as well, which keeps the banner's other controls out: an entry never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the lever's whole component reads or writes (the extractor keeps that per row as _component_vars), and each position must lie in the range the lever's own code clamps to, where the extractor found one. An entry for a node the package does not have, for a node the rules keep or leave out for another reason than being a lever, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under guarded, direct_write, kinds or positions, for a state var the lever's component never touches and for a position outside the lever's range is an error.",
+    "levers: node -> {state_var, positions}: a lever the rules leave out and the pilot needs (the gear lever and the flap lever: drag handles, which the extractor reads as a 'lever' with no click code a pick could replay). BlueBird publishes the state var of each with its detents ('Write a detent position'), so the entry gives the state var and the positions with their values, [{value, label}] in the order of the lever's travel (a lever's row names no values a list of names could be laid onto: the flap lever runs 0..150), and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each lever it takes in. The label comes from labels, the place from the banner table or a node_panels rule, and a lever under an excluded banner (the flap lever) needs include_nodes as well, which keeps the banner's other controls out: an entry never overrides exclude_nodes or an excluded banner. It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the lever's whole component reads or writes (the extractor keeps that per row as _component_vars), and each position must lie in the range the lever's own code clamps to, where the extractor found one. Plan 12 task 11 adds the cockpit's furniture drag handles (the sun visors' tracks, the headrests, the stowage doors) and one exception: a node the rules keep whose click code writes only O:vars (the seat levers B757_CAPT_LEVER_SEAT and B757_FO_LEVER_SEAT, whose click sets an O: flag that the component's Update turns into a write of the seat's var), because the sim's calculator cannot set an O:var and a replay of that click would do nothing; the entry then writes the var the component moves (L:B757_CAPT_SEAT, L:B757_FO_SEAT), held to the component's reads and writes as any lever's state var. An entry for a node the package does not have, for a node the rules keep whose click code writes anything but O:vars (an L:var, a K: or H: event) or nothing at all, for a node the rules leave out for another reason than being a lever, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under guarded, direct_write, kinds or positions, for a state var the lever's component never touches and for a position outside the lever's range is an error.",
     "direct_positions: node -> {state_var, positions}: a knob the rules leave out and a combo can drive (the pressurization Auto Rate knob, the three zone temperature selectors, the eight display brightness knobs). The rules drop a finite knob with more than 12 positions (Auto Rate has 131, a brightness knob 31 or 21) and every infinite knob (a zone selector wraps), and a pick by click steps would take dozens of clicks. The entry has the form of levers: state_var is the L:var the systems read and positions are [{value, label}] WITH their values, rising, and the control is emitted as a switch on state_var with press, release, cw and ccw empty: the app writes the state var to the picked position, as it does for any switch with no click code. The run names each knob it takes in. The label comes from labels, the place from the banner table or a node_panels rule; an entry never overrides exclude_nodes or an excluded banner (a knob under one needs include_nodes as well). None of the vendor's click code is kept, so the positions are not checked against the range that code clamps to: the cockpit mouse stops the brightness knobs at 30 (20 on the F/O ADI knob) while the systems take 0-40 (docs/b757/evidence/flight-12.md). It is checked against the vendor's code, so that a mistyped var or a change of BlueBird's stops the run: state_var must be an L:var the knob's whole component reads or writes (the extractor keeps that per row as _component_vars). An entry for a node the package does not have, for a node the rules keep (positions and direct_write are the keys for those) or leave out for another reason than being a knob whose positions cannot be listed (a lever has its own key), for a node curation leaves out, for a node neither cockpit model has (keep_without_node keeps it, as for any entry), for a node also under levers, guarded, direct_write, kinds or positions, for a state var the knob's component never touches, and for fewer than two positions, a repeated value or an empty label is an error.",
     "hold_ms: node -> milliseconds: a button the cockpit shows a result for only while it is held (the fire tests, the CVR and squib tests, the other test buttons). BlueBird's template for it is the plain momentary button, which the rules keep as a button (the app presses it for 200 ms), so the entry makes it a held button (kind held) with this hold_ms: the app presses it, holds it that long and lets go (Bbs757Write.PressFor), with its press and release exactly as the rules built them. The label, panel and state var are the rules' own. A hold under 500 or over 10000 ms, or one that is not a whole number of milliseconds, is an error when the file loads. It is checked against the control the map holds, so that a change of BlueBird's stops the run: a node the package does not have or the map does not keep, a node also under kinds, a control that is not a button (a toggle, a switch, a guard, a select, or a button the extractor already reads as held, which has the hold the vendor's template gives it) and a button with no press or no release are errors. The run names each, and the hold.",
     "keep_without_node: list of nodes kept although neither cockpit model has a node of that name. The generator reads the node names of the package's two interior models, BBS_752_PW_INTERIOR.gltf and BBS_752_RR_INTERIOR.gltf (it stops when either is missing), and leaves out every control the other rules keep whose node is in neither: a switch the cockpit does not have is noise to a pilot who cannot find it, and the run names each one. A control one model alone has says which, with (PW) or (RR) at the end of its label unless the label already does (L Fuel Control (PW)); a label that names the wrong variant stops the run. An entry here keeps a control BlueBird's published list proves real, and the run names each; it stays empty unless that list proves one. An entry for a node the package does not have, for a node a model has (it does nothing), for a node also in exclude_nodes or for one the rules leave out for another reason is an error, and so is a guarded, levers or include_nodes entry for a node no cockpit has that this list does not keep. A direct_write entry for one stops the run until it is removed, and a kinds, labels or positions entry for one changes nothing and is only reported.",
@@ -21,7 +21,7 @@
     "B757_OVHD_CABINALT_SWITCH is excluded (label kept for later): it is spring-loaded and gets buttons in the app (plan 12 task 3), not a row of positions. Its click code writes only 0 (anticlockwise) or 7 (clockwise), every vendor panel-state snapshot rests it at 4, the XML writes 4 back within a second of any write (XML:10128-10151), and BlueBird's WASM uses only which side of 4 the value is on: above 4 climbs, below 4 descends, 4 holds, in MAN only (Mode Select B757_OVHD_MODE_SELECT_SWITCH at 2). The vendor's OFF/AUTO/ON tips are a copy-paste. measured (docs/b757/evidence/flight-12.md): with the outflow valve L:BBS_CABIN_VALVE at 1, a 0 held for 1.2 s closed it to 0.869 and an 8 held for 1.3 s opened it to 0.963; back at 4 the valve held.",
     "B757_OVHD_L_ENG_START_SWITCH and B757_OVHD_R_ENG_START_SWITCH: the extractor counts 6 positions, but the click code computes its values and never writes 2 (cw goes 1 to 3, ccw 3 to 1), so the list is explicit pairs without 2. All 9 vendor panel-state snapshots hold both selectors at 3, the manual's normal position is AUTO, and engine start is GND, which is ccw of AUTO. 4 OFF, 5 CONT and 6 FLT are BlueBird's names (its simvar list, cited below); unmeasured in the sim.",
     "A banner with no entry under panels is not guessed: it is printed as a note (unmapped_banners) unless a node_panels rule names its controls. The four BBS_fuelcut_* switches (one banner is '(no banner)') are named by a node rule.",
-    "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in); BBS757_lever_flaps (banner RIGHT WINDOW RAIN EFFECTS: the flap lever, which the rules still drop as a lever, so it is under levers as well). All sit in Pedestal / Control stand, in the order control_order gives.",
+    "include_nodes: single controls taken in from an excluded banner BY NODE; the banner stays excluded and its other controls stay out, and the panel and section come from a node_panels rule. A name the package does not have, a node also in exclude_nodes, a node no excluded banner hides and a node the rules still drop are errors. In: BBS757_PEDESTAL_Park_Brake_Lever, BBS757_SPOILERDOWN_CLICK, BBS757_SPOILERARMED_CLICK, BBS757_SPOILERUP_CLICK (banner RIGHT WINDOW RAIN EFFECTS); ENGINE_Switch_ATDisc_1 (the left TO/GA button only; ENGINE_Switch_ATDisc_2 is not taken in) and B757_AT_DISC_1 (banner THROTTLES MAIN; B757_AT_DISC_2 is not taken in); BBS757_lever_flaps (banner RIGHT WINDOW RAIN EFFECTS: the flap lever, which the rules still drop as a lever, so it is under levers as well). All sit in Pedestal / Control stand, in the order control_order gives. PLAN 12 TASK 11 takes in the side windows and the window shades (banner RIGHT WINDOW RAIN EFFECTS), the seat levers (banners COCKPIT CAPTAIN CHAIR and COCKPIT FIRST OFFICER CHAIR, under levers as well) and the jumpseats, their armrests, the chart holders and the stowage doors (banner MISC PARTS; the doors under levers as well), on the Other panels Windows and sun visors and Seats and stowage (see its note).",
     "EVIDENCE for the control stand and the position names below (2026-10-25). preset = the nine vendor panel states in Data/panel_states/*.snap (cold and dark, turnaround, before start, ready for taxi, ready for takeoff, after takeoff, cruise, approach, final approach; positional arrays, but most knob states also sit in them as named L:var pairs). manual = BlueBird's v1.01 User Procedures and Complete Flight Guide. measured = read live in the sim (docs/b757/evidence/live-findings.md). unmeasured = no live read: the name rests on the sources given and goes on the in-sim plan. Names are the panel's legends as printed (capitals), as the brief spells them; a list entry 'Position N' is a position nothing names.",
     "Position names from BlueBird's simvar list (support.bluebirdsim.com/docs/simvars, values checked against source 2026-10-21), read 2026-10-25.",
     "PLAN 02 TASK 1 (2026-10-26): positions named from that list alone, unmeasured in the sim and with no preset or manual evidence of their own (the controls whose other notes cite the list have such evidence besides): B757_CABIN_CEILING (0 Off, 1 33%, 2 66%, 3 100%), B757_CABIN_WINDOW and B757_CABIN_ENTRY (0 Off, 1 50%, 2 100%), B757_OVHD_WARNING_IND_SWITCH (0 DIM, 11 BRT: its click code writes those two values, which the extractor takes as its positions), B757_MAIN_M_Gau_STBY_GYRO_SELECTOR (0 OFF, 1 ILS, 2 BCRS), B757_ECAM_LRAUTO_KNOB (0 L, 1 AUTO, 2 R) and B757_VC_P61_SWITCH_2, the Flight Recorder (0 ON, 1 AUTO, 2 TEST).",
@@ -73,7 +73,8 @@
     "PLAN 12 TASK 6, added later the same day (2026-10-28, the owner): B757_COCKPIT_DOOR (label Cockpit Door, Other > Flight deck door), the door itself, a toggle on L:B757_COCKPIT_DOOR, reads 0 Closed and 1 Open (positions), no longer Off and On. Read from BBS_752_BASE_INTERIOR.xml (component B757_COCKPIT_DOOR, XML:32000-32047), unmeasured in the sim: the door's animation is '(L:B757_COCKPIT_DOOR, bool) 100 *' (XML:32038), so 0 is the door shut and 1 the full swing; a disabled update block (XML:32006-32009) names the two ends, B757_COCKPIT_DOOR_CLOSED at 0 and B757_COCKPIT_DOOR_OPEN at 100 (the full value); and the live update lights B757_DECAL_LOCK_FAIL while the door reads above 0 on the ground with power (XML:32002-32004), which an open door does. The click flips the var (XML:32040-32045) and writes nothing else but O:vars, so the positions are its two values. Not to be confused with B757_OVHD_FLT-DK-DOOR_SWITCH, the overhead door lock switch (Unlocked, Auto, Deny), which keeps its positions.",
     "PLAN 12 TASK 9 (2026-10-28, the owner: 'reorder', then the owner's rule 'Actions only', read by the controller's round 3 ruling): panel_order follows the preflight flow's changes, replacing the order plan 12 task 7 kept. Each section's panels are in the order of the first step of BlueBird's Simplified Procedures (BlueBird_757_User_Procedures_v1.01.pdf, PDF pages 34-62, cold and dark to securing) that CHANGES one of the panel's controls on a normal flight, by PDF page and then line. Counted: a press of a test or a button; setting a value (a landing altitude, a heading, a speed, a frequency, a flap or trim setting); ON, ARM, START, SET or a selector to a position the control does not rest in cold and dark; and (the controller's round 4 ruling) a step that sets a radio, audio or ILS value (a frequency, a course, a receiver or transmitter selection: its words say SET or TUNE) even when it says AS REQUIRED, because the radios are tuned on every flight. Not counted: a step that only checks or verifies a position (the whole cockpit safety inspection, PDF page 34, and any CHECK, VERIFY, CONFIRM or CHECKED step elsewhere); any other step marked AS REQUIRED or AS DESIRED (optional; AS APPROPRIATE is read the same way), and a PARK or PARK AS APPROPRIATE step of the radios; and a step that sets a control to the position it already rests in cold and dark (NORMAL, NORM, AUTO, OFF, or an ON or SET of a control already on or set), read from BlueBird's own cold and dark panel state (Data/panel_states/coldanddark_wpb.snap). Panels first changed in the same line, and the panels no step changes, keep task 7's order, the latter after the rest. Pinned whatever the flow gives: the Pedestal keeps its start, Control stand, Engines, TCAS and transponder, which plan 01's frozen Bbs757DefinitionTests pins; and the Forward panel opens with Brakes, the autobrake's panel (the owner: 'I really want forward to open to the panel with autobrakes first because that's what will be used most'). The derivation (a script in the plan's workspace) and its table, each panel's first change with its page, line, words and why it counts, and the steps before it that do not count: docs/b757/evidence/panel-order-12.md, 'Plan 12 Task 9'. Only panel_order changed: no control, label or position, and the order inside each panel stays as control_order gives it. The app's own panels keep their places by their code: Rudder and aileron trim right after Stabilizer trim, the COM radios right after TCAS and transponder.",
     "PLAN 12 TASK 12 (2026-10-28, the final review's I1): left out, with the reason. The duct leak / fuel quantity test switch (B757_VC_P61_SWITCH_5, L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW) gets no test buttons in the app: nothing in BlueBird reads its var (BBS752.wasm names the other seven P61 test vars and not this one; the only XML that names it is BBS_752_BASE_INTERIOR.xml, its load write and its own switch template; no JS or HTML file names it), and measured on the ground 2026-10-28 with BBS Nest running (docs/b757/evidence/flight-12.md), holding it at 0 and at 2 changed nothing. Its node stays under exclude_nodes with the other P61 test switches (plan 12 task 5), so the map holds nothing of it; the seven other test switches keep their fourteen buttons (Bbs757SpringControls).",
-    "PLAN 12 TASK 12 (2026-10-28, the final review's M1): Fire protection lists the fire handles first and the three fire tests after them, as the option the owner picked said ('Keep with fire handles': after the handles), so a key pressed on the panel's first control during a fire is no test bell. control_order: the engine 1, engine 2 and APU fire handles (each its unlock, the handle and its rotation, as before), the cargo fire controls with their guards and Sys Fail, in the order they had, then B757_PED_FIRE_ENG_BUTTON (Engine Fire Test), B757_PED_FIRE_CARGO_BUTTON (Engine, APU and Cargo Fire Test) and B757_PED_FIRE_WHLWELL_BUTTON (Wheel Well Fire Test). The tests go after the cargo fire controls too, so no fire-fighting control sits behind a test. This replaces the order plan 12 task 7 kept from task 4 (the tests first, by tier); no other panel and no label, position or hold changed."
+    "PLAN 12 TASK 12 (2026-10-28, the final review's M1): Fire protection lists the fire handles first and the three fire tests after them, as the option the owner picked said ('Keep with fire handles': after the handles), so a key pressed on the panel's first control during a fire is no test bell. control_order: the engine 1, engine 2 and APU fire handles (each its unlock, the handle and its rotation, as before), the cargo fire controls with their guards and Sys Fail, in the order they had, then B757_PED_FIRE_ENG_BUTTON (Engine Fire Test), B757_PED_FIRE_CARGO_BUTTON (Engine, APU and Cargo Fire Test) and B757_PED_FIRE_WHLWELL_BUTTON (Wheel Well Fire Test). The tests go after the cargo fire controls too, so no fire-fighting control sits behind a test. This replaces the order plan 12 task 7 kept from task 4 (the tests first, by tier); no other panel and no label, position or hold changed.",
+    "PLAN 12 TASK 11 (2026-10-28, the owner: 'Yes add'): the side windows, sun visors, window shades, seats, armrests, headrests, jumpseats, chart holders, floor box and stowage doors, which BlueBird draws as clickable cockpit parts, are on two new Other panels after Forward attendant panel, Windows and sun visors and Seats and stowage (no step of the preflight flow changes them: docs/b757/evidence/panel-order-12.md). measured on the ground 2026-10-28 (docs/b757/evidence/flight-12.md, 'Windows and furniture'): each var held a written value and went back. How each came in: the toggles under excluded banners by include_nodes and node_panels rules, the banners staying excluded (RIGHT WINDOW RAIN EFFECTS: L2win_handle, R2win_handle, L2_SHADE_GUIDE, L3_SHADE_GUIDE, R2_SHADE_GUIDE, R3_SHADE_GUIDE; MISC PARTS: B757_JUMP_1_SEAT_BASE, B757_JUMP_2_SEAT_BASE, B757_JUMPSEAT_1_SEAT_ARM_REST_1 and _2, B757_JUMPSEAT_2_SEAT_ARM_REST_1 and _2, B757_CAPTAIN_MAIN_CHART, B757_FO_MAIN_CHART); the stowage doors (MISC PARTS, drag handles) by include_nodes and levers; B757_SUNVISOR_L_base, B757_SUNVISOR_R_base, the pilots' four armrests and B757_FLOOR_BOX left exclude_nodes (their banner, CHANGE MAJOR CODE and UPDATES BELOW, is the Flight deck door's, so node_panels rules place them); the sun visor tracks (B757_SUNVISOR_L_move, _R_move) and the headrests (B757_CAPTAIN_SEAT_HEAD_REST_1, B757_FO_SEAT_HEAD_REST_1) are drag handles under levers. The seats: B757_CAPT_LEVER_SEAT (banner COCKPIT CAPTAIN CHAIR) is a toggle on its own animation var to the rules, and its click writes only O:vars, O:CAPT_SEAT_MOVE_BACK while L:B757_CAPT_SEAT reads 0 and O:CAPT_SEAT_MOVE_FORWARD while it reads 100 (XML:32115-32116), which the component's Update turns into 100 or 0 in L:B757_CAPT_SEAT (XML:32100-32103; the first officer's lever the same on L:B757_FO_SEAT, XML:32143-32169, whose init writes 100 to both seats). The sim's calculator cannot set an O:var (spec 3.7 #6), so a replay of that click does nothing: a levers entry writes the seat var instead (the generator takes a kept control under levers only when its click writes only O:vars), 0 Forward and 100 Aft from that code (the move back writes 100), and the interior model agrees (the seat runs 19 cm aft and 16 cm outboard from frame 0 to frame 100). B757_JUMP_2_SEAT_BASE's click also pulls L:B757_STOWAGE_DOOR_1 back to 24 while the door is open past it (the two collide), so it stays a toggle replaying its click. Position names, by source. BlueBird's code or tooltip: the side windows 0 Closed, 1 Open (the window component's Update reads 0 as closed and writes 0 to both above 35 kt ground speed, XML:32550-32563; the model: at 1 the window has slid 0.44 m aft); the sun visors' visibility 0 Hidden, 1 Shown (the tooltip 'Toggle Sunvisor visibility'); the seats (above). The interior models (BBS_752_RR_INTERIOR.gltf and BBS_752_PW_INTERIOR.gltf, which pose all of these identically; each animation posed at its first, middle and last frame, axes as in docs/b757/evidence/panel-audit-12.md): the shades 0 Stowed, 1 Drawn (at 1 each guide has moved 0.38 to 0.46 m along its window; the XML also puts L3 and R3 back to 0 while the side window is open, XML:32512-32513); the armrests 0 Up, 1 Down (upright at 0, level at 1, all eight), and which is inboard: the captain's _2 and the first officer's _1 (each 0.19 m inboard of its seat's center), jumpseat 1's _2 and jumpseat 2's _1; the headrests 0 Up, 18 Half, 36 Down (it tilts 110 degrees forward and its top drops 7 cm); the jumpseats 0 Stowed, 1 Deployed (folded up at 0, the seat pan level at 1); the floor box 0 Closed, 1 Open (its front drops open at 1); the sun visors' track, which BlueBird animates the opposite way on each side, each with one frame that repeats the other end: the left runs outboard at frame 1 to inboard at 36 and its frame 0 repeats frame 36, the right runs inboard at 0 to outboard at 35 and its frame 36 repeats frame 0, so the left lists 0 Inboard (its load value), 1 Outboard and 18 Half, the right 0 Inboard, 18 Half and 35 Outboard; the stowage doors: door 1 (0-34, its own clamp) swings open from about frame 10, so 0 Closed, 24 Half (where jumpseat 2's click stops it) and 34 Open; door 2 slides open by frame 18 and shut again by 36, so 0 Closed, 9 Half, 18 Open; door 3 does not move until frame 18 and slides open by 36, so 0 Closed, 27 Half, 36 Open. Neither source decides (the brief's default, not verified): the chart holders 0 Stowed, 1 Out (the model tilts the holder 70 degrees down from frame 0, level, to frame 100, which says neither). Labels: the side or the seat first ([VAR-1]), unique in the map. None of these is on the panel sweep's denylist: each moves only furniture, and the sweep runs on the ground."
   ],
   "_suspected_slips": [
     "Information only, never applied: press / release / cw / ccw are the vendor's click code verbatim, because the app replays exactly what the cockpit click runs. The generator prints the same list as suspected_slips.",
@@ -107,13 +108,6 @@
   "exclude_nodes": [
     "switch_yoke_trim_01_pilot",
     "switch_yoke_trim_01_copilot",
-    "B757_SUNVISOR_L_base",
-    "B757_SUNVISOR_R_base",
-    "B757_CAPTAIN_SEAT_ARM_REST_1",
-    "B757_CAPTAIN_SEAT_ARM_REST_2",
-    "B757_FO_SEAT_ARM_REST_1",
-    "B757_FO_SEAT_ARM_REST_2",
-    "B757_FLOOR_BOX",
     "B757_OVHD_CABINALT_SWITCH",
     "B757_VC_P61_SWITCH_3",
     "B757_VC_P61_SWITCH_4",
@@ -131,7 +125,26 @@
     "BBS757_SPOILERUP_CLICK",
     "ENGINE_Switch_ATDisc_1",
     "B757_AT_DISC_1",
-    "BBS757_lever_flaps"
+    "BBS757_lever_flaps",
+    "L2win_handle",
+    "R2win_handle",
+    "L2_SHADE_GUIDE",
+    "L3_SHADE_GUIDE",
+    "R2_SHADE_GUIDE",
+    "R3_SHADE_GUIDE",
+    "B757_CAPT_LEVER_SEAT",
+    "B757_FO_LEVER_SEAT",
+    "B757_JUMP_1_SEAT_BASE",
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_1",
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_2",
+    "B757_JUMP_2_SEAT_BASE",
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_2",
+    "B757_CAPTAIN_MAIN_CHART",
+    "B757_FO_MAIN_CHART",
+    "B757_STOWAGE_DOOR_1",
+    "B757_STOWAGE_DOOR_2",
+    "B757_STOWAGE_DOOR_3"
   ],
   "panels": {
     "YOKES + RUDDER + TILLER SYSTEM": {
@@ -664,6 +677,86 @@
       "prefix": "BBS757_lever_flaps",
       "panel": "Control stand",
       "section": "Pedestal"
+    },
+    {
+      "prefix": "L2win_handle",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "R2win_handle",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_SUNVISOR_",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "L2_SHADE_GUIDE",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "L3_SHADE_GUIDE",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "R2_SHADE_GUIDE",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "R3_SHADE_GUIDE",
+      "panel": "Windows and sun visors",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_CAPT_LEVER_SEAT",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_FO_LEVER_SEAT",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_CAPTAIN_SEAT_",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_FO_SEAT_",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_JUMP",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_CAPTAIN_MAIN_CHART",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_FO_MAIN_CHART",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_FLOOR_BOX",
+      "panel": "Seats and stowage",
+      "section": "Other"
+    },
+    {
+      "prefix": "B757_STOWAGE_DOOR_",
+      "panel": "Seats and stowage",
+      "section": "Other"
     }
   ],
   "panel_order": {
@@ -738,7 +831,9 @@
       "P61 panel",
       "Oxygen",
       "Flight deck door",
-      "Forward attendant panel"
+      "Forward attendant panel",
+      "Windows and sun visors",
+      "Seats and stowage"
     ]
   },
   "control_order": {
@@ -1216,6 +1311,40 @@
       "B757_CABIN_ENTRY",
       "B757_CABIN_WORK_LT002",
       "B757_GND_SVC_BUTTON"
+    ],
+    "Windows and sun visors": [
+      "L2win_handle",
+      "R2win_handle",
+      "B757_SUNVISOR_L_base",
+      "B757_SUNVISOR_L_move",
+      "B757_SUNVISOR_R_base",
+      "B757_SUNVISOR_R_move",
+      "L2_SHADE_GUIDE",
+      "L3_SHADE_GUIDE",
+      "R2_SHADE_GUIDE",
+      "R3_SHADE_GUIDE"
+    ],
+    "Seats and stowage": [
+      "B757_CAPT_LEVER_SEAT",
+      "B757_FO_LEVER_SEAT",
+      "B757_CAPTAIN_SEAT_ARM_REST_2",
+      "B757_CAPTAIN_SEAT_ARM_REST_1",
+      "B757_CAPTAIN_SEAT_HEAD_REST_1",
+      "B757_FO_SEAT_ARM_REST_1",
+      "B757_FO_SEAT_ARM_REST_2",
+      "B757_FO_SEAT_HEAD_REST_1",
+      "B757_JUMP_1_SEAT_BASE",
+      "B757_JUMPSEAT_1_SEAT_ARM_REST_2",
+      "B757_JUMPSEAT_1_SEAT_ARM_REST_1",
+      "B757_JUMP_2_SEAT_BASE",
+      "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+      "B757_JUMPSEAT_2_SEAT_ARM_REST_2",
+      "B757_CAPTAIN_MAIN_CHART",
+      "B757_FO_MAIN_CHART",
+      "B757_FLOOR_BOX",
+      "B757_STOWAGE_DOOR_1",
+      "B757_STOWAGE_DOOR_2",
+      "B757_STOWAGE_DOOR_3"
     ]
   },
   "labels": {
@@ -1391,9 +1520,123 @@
     "ENGINE_Switch_ATDisc_1": "TO/GA",
     "B757_AT_DISC_1": "A/T Disconnect",
     "B757_MAIN_Landing_Gear_Y": "Gear Lever",
-    "BBS757_lever_flaps": "Flap Lever"
+    "BBS757_lever_flaps": "Flap Lever",
+    "L2win_handle": "Left Side Window",
+    "R2win_handle": "Right Side Window",
+    "B757_SUNVISOR_L_base": "Left Sun Visor",
+    "B757_SUNVISOR_L_move": "Left Sun Visor Position",
+    "B757_SUNVISOR_R_base": "Right Sun Visor",
+    "B757_SUNVISOR_R_move": "Right Sun Visor Position",
+    "L2_SHADE_GUIDE": "Left Sliding Window Shade",
+    "L3_SHADE_GUIDE": "Left Aft Window Shade",
+    "R2_SHADE_GUIDE": "Right Sliding Window Shade",
+    "R3_SHADE_GUIDE": "Right Aft Window Shade",
+    "B757_CAPT_LEVER_SEAT": "Captain Seat",
+    "B757_FO_LEVER_SEAT": "First Officer Seat",
+    "B757_CAPTAIN_SEAT_ARM_REST_2": "Captain Inboard Armrest",
+    "B757_CAPTAIN_SEAT_ARM_REST_1": "Captain Outboard Armrest",
+    "B757_CAPTAIN_SEAT_HEAD_REST_1": "Captain Headrest",
+    "B757_FO_SEAT_ARM_REST_1": "First Officer Inboard Armrest",
+    "B757_FO_SEAT_ARM_REST_2": "First Officer Outboard Armrest",
+    "B757_FO_SEAT_HEAD_REST_1": "First Officer Headrest",
+    "B757_JUMP_1_SEAT_BASE": "Jumpseat 1",
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_2": "Jumpseat 1 Inboard Armrest",
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_1": "Jumpseat 1 Outboard Armrest",
+    "B757_JUMP_2_SEAT_BASE": "Jumpseat 2",
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_1": "Jumpseat 2 Inboard Armrest",
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_2": "Jumpseat 2 Outboard Armrest",
+    "B757_CAPTAIN_MAIN_CHART": "Captain Chart Holder",
+    "B757_FO_MAIN_CHART": "First Officer Chart Holder",
+    "B757_FLOOR_BOX": "Floor Box",
+    "B757_STOWAGE_DOOR_1": "Stowage Door 1",
+    "B757_STOWAGE_DOOR_2": "Stowage Door 2",
+    "B757_STOWAGE_DOOR_3": "Stowage Door 3"
   },
   "positions": {
+    "L2win_handle": [
+      "Closed",
+      "Open"
+    ],
+    "R2win_handle": [
+      "Closed",
+      "Open"
+    ],
+    "B757_SUNVISOR_L_base": [
+      "Hidden",
+      "Shown"
+    ],
+    "B757_SUNVISOR_R_base": [
+      "Hidden",
+      "Shown"
+    ],
+    "L2_SHADE_GUIDE": [
+      "Stowed",
+      "Drawn"
+    ],
+    "L3_SHADE_GUIDE": [
+      "Stowed",
+      "Drawn"
+    ],
+    "R2_SHADE_GUIDE": [
+      "Stowed",
+      "Drawn"
+    ],
+    "R3_SHADE_GUIDE": [
+      "Stowed",
+      "Drawn"
+    ],
+    "B757_CAPTAIN_SEAT_ARM_REST_1": [
+      "Up",
+      "Down"
+    ],
+    "B757_CAPTAIN_SEAT_ARM_REST_2": [
+      "Up",
+      "Down"
+    ],
+    "B757_FO_SEAT_ARM_REST_1": [
+      "Up",
+      "Down"
+    ],
+    "B757_FO_SEAT_ARM_REST_2": [
+      "Up",
+      "Down"
+    ],
+    "B757_JUMP_1_SEAT_BASE": [
+      "Stowed",
+      "Deployed"
+    ],
+    "B757_JUMP_2_SEAT_BASE": [
+      "Stowed",
+      "Deployed"
+    ],
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_1": [
+      "Up",
+      "Down"
+    ],
+    "B757_JUMPSEAT_1_SEAT_ARM_REST_2": [
+      "Up",
+      "Down"
+    ],
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_1": [
+      "Up",
+      "Down"
+    ],
+    "B757_JUMPSEAT_2_SEAT_ARM_REST_2": [
+      "Up",
+      "Down"
+    ],
+    "B757_CAPTAIN_MAIN_CHART": [
+      "Stowed",
+      "Out"
+    ],
+    "B757_FO_MAIN_CHART": [
+      "Stowed",
+      "Out"
+    ],
+    "B757_FLOOR_BOX": [
+      "Closed",
+      "Open"
+    ],
     "B757_OVHD_APU_SWITCH": [
       "Off",
       "On",
@@ -1836,6 +2079,76 @@
           "value": 150,
           "label": "30"
         }
+      ]
+    },
+    "B757_SUNVISOR_L_move": {
+      "state_var": "B757_SUNVISOR_L",
+      "positions": [
+        { "value": 0, "label": "Inboard" },
+        { "value": 1, "label": "Outboard" },
+        { "value": 18, "label": "Half" }
+      ]
+    },
+    "B757_SUNVISOR_R_move": {
+      "state_var": "B757_SUNVISOR_R",
+      "positions": [
+        { "value": 0, "label": "Inboard" },
+        { "value": 18, "label": "Half" },
+        { "value": 35, "label": "Outboard" }
+      ]
+    },
+    "B757_CAPT_LEVER_SEAT": {
+      "state_var": "B757_CAPT_SEAT",
+      "positions": [
+        { "value": 0, "label": "Forward" },
+        { "value": 100, "label": "Aft" }
+      ]
+    },
+    "B757_FO_LEVER_SEAT": {
+      "state_var": "B757_FO_SEAT",
+      "positions": [
+        { "value": 0, "label": "Forward" },
+        { "value": 100, "label": "Aft" }
+      ]
+    },
+    "B757_CAPTAIN_SEAT_HEAD_REST_1": {
+      "state_var": "B757_CAPTAIN_SEAT_HEAD_REST_1",
+      "positions": [
+        { "value": 0, "label": "Up" },
+        { "value": 18, "label": "Half" },
+        { "value": 36, "label": "Down" }
+      ]
+    },
+    "B757_FO_SEAT_HEAD_REST_1": {
+      "state_var": "B757_FO_SEAT_HEAD_REST_1",
+      "positions": [
+        { "value": 0, "label": "Up" },
+        { "value": 18, "label": "Half" },
+        { "value": 36, "label": "Down" }
+      ]
+    },
+    "B757_STOWAGE_DOOR_1": {
+      "state_var": "B757_STOWAGE_DOOR_1",
+      "positions": [
+        { "value": 0, "label": "Closed" },
+        { "value": 24, "label": "Half" },
+        { "value": 34, "label": "Open" }
+      ]
+    },
+    "B757_STOWAGE_DOOR_2": {
+      "state_var": "B757_STOWAGE_DOOR_2",
+      "positions": [
+        { "value": 0, "label": "Closed" },
+        { "value": 9, "label": "Half" },
+        { "value": 18, "label": "Open" }
+      ]
+    },
+    "B757_STOWAGE_DOOR_3": {
+      "state_var": "B757_STOWAGE_DOOR_3",
+      "positions": [
+        { "value": 0, "label": "Closed" },
+        { "value": 27, "label": "Half" },
+        { "value": 36, "label": "Open" }
       ]
     }
   },

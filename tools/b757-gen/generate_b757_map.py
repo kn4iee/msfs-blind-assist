@@ -38,7 +38,8 @@ What is derived and what is curated (curation.json):
             (guarded: a switch whose click only runs while a guard is open), the switches whose click code is left
             out (direct_write: a lever whose code cannot take a pick where it aims), the levers the rules leave out
             and the pilot needs (levers: the gear lever and the flap lever, drag handles BlueBird publishes the
-            detents of), the knobs the rules leave out and a combo can drive (direct_positions: Auto Rate, the zone
+            detents of; the sun visors, headrests and stowage doors; and the seats, whose click code writes only
+            O:vars), the knobs the rules leave out and a combo can drive (direct_positions: Auto Rate, the zone
             temperature selectors, the display brightness knobs), the buttons that must be held (hold_ms: the fire,
             CVR and squib tests, which show only while their button is down), the nodes kept although no cockpit model
             has them (keep_without_node), the status rows, and the ORDER the pilot tabs through: the panels of a section
@@ -109,8 +110,13 @@ What is derived and what is curated (curation.json):
             a switch with no click code: press, release, cw and ccw are empty, and the app writes the state var to the
             picked position, as it does for any switch with none. An entry takes in a lever the rules leave out, and
             the run names each; it never overrides curation's own exclusions (a lever under an excluded banner needs
-            an include_nodes entry as well, which keeps the banner's other controls out), and a node the rules keep or
-            leave out for another reason than being a lever is an error. The entry is checked against the vendor's
+            an include_nodes entry as well, which keeps the banner's other controls out), and a node the rules leave out
+            for another reason than being a lever is an error. A node the rules keep is an error too, unless its click
+            code writes only O:vars (plan 12 task 11: the seat levers, whose click sets an O: flag that the component's
+            own Update turns into a write of the seat's var): the sim's calculator cannot set an O:var, so the app's
+            replay of that click would do nothing, and the entry writes the var the component moves instead; a kept node
+            whose click writes an L:var, a K: or H: event, or nothing at all, is refused, so that its click code is
+            replayed. The entry is checked against the vendor's
             code, so that a mistyped var or a change of BlueBird's stops the run instead of reaching the app: the
             state var must be one that the lever's whole component reads or writes (the extractor's _component_vars:
             the gear lever's is set by its component's Update and shown by the lever's other animation, which the
@@ -691,19 +697,32 @@ def guarded_control(row, cur, cockpit=None):
     }
 
 
+def click_writes(row):
+    """Every variable the row's click code writes, as 'X:name' ('L:B757_X', 'O:Seat_Lever_Anim_Timer', 'K:EVENT', 'H:EVENT'),
+    the code of every slot taken together (press, release, turns and the other mouse and drag codes)."""
+    code = " ".join(c for slot in row["_clicks"].values() for _, c in slot)
+    return {f"{kind}:{name}" for is_write, kind, name in extract_controls.var_refs(code) if is_write}
+
+
 def lever_control(row, cur, cockpit=None):
-    """The control curation's 'levers' entry describes: a lever the rules leave out, built as a switch with no click code.
+    """The control curation's 'levers' entry describes: a lever the rules leave out, or a control whose click code writes only
+    O:vars, built as a switch with no click code.
 
     The extractor reads a drag handle as a "lever", which the rules drop (a drag is no click a pick could replay), and BlueBird
     publishes its state var with its detents ("Write a detent position"), so the entry gives the state var and the positions
     with their values and the app writes the state var to the picked one, as for any switch with no click code
     (Bbs757Write.ToPosition). Nothing of the vendor's code is kept: press, release, cw and ccw are empty. The row gives the
     control's place in the cockpit (its banner and node, for its panel and section) and is what the entry is checked
-    against (check_levers). The rules must leave the row out AS A LEVER and for no other reason: curation's exclusions never
-    give way to an entry (a lever under an excluded banner needs include_nodes too, which keeps the banner's other controls
-    out), nor does a cockpit without the node (a switch no model has is not there to be written: lacks_cockpit_node, asked
-    here because the rules' reason for a lever never is the cockpit's), and a row the rules keep, or leave out for another
-    reason, is no lever for an entry to take in."""
+    against (check_levers). The rules must leave the row out AS A LEVER and for no other reason, with one exception: a row
+    the rules keep whose click code writes ONLY O:vars (no L:var, no K:, H: or other event; the seat levers, whose click sets
+    O:CAPT_SEAT_MOVE_BACK or _FORWARD for the component's own Update to write the seat's var). An O:var belongs to the
+    component and the sim's calculator cannot set one (spec 3.7 #6; see check_direct_write), so the app's replay of that
+    click would do nothing, and the entry names the var the component moves instead (check_levers holds it to the
+    component's reads and writes, as for any lever). A kept row whose click writes anything else, or nothing at all, is
+    refused: a click the app can replay is replayed. Curation's exclusions never give way to an entry (a lever under an
+    excluded banner needs include_nodes too, which keeps the banner's other controls out), nor does a cockpit without the
+    node (a switch no model has is not there to be written: lacks_cockpit_node, asked here because the rules' reason for a
+    lever never is the cockpit's), and a row the rules leave out for another reason is no lever for an entry to take in."""
     node, entry = row["node"], cur["levers"][row["node"]]
     why = drop_reason(row, cur, cockpit)
     if why in EXCLUSIONS:
@@ -711,11 +730,18 @@ def lever_control(row, cur, cockpit=None):
     if lacks_cockpit_node(node, cur, cockpit):
         raise CurationError(f"curation levers names {node}, which neither cockpit model has a node for: an entry never "
                             "keeps a control no cockpit has (remove it, or list the node under keep_without_node)")
-    if why != LEVER:
-        what = (f"keep as a {KIND_MAP[row['kind']]}" if why is None
-                else f"leave out for another reason than being a lever ({why})")
-        raise CurationError(f"curation levers names {node}, which the rules {what}: an entry takes in a lever the rules "
-                            "leave out (remove it)")
+    if why is None:
+        writes = click_writes(row)
+        others = sorted(w for w in writes if not w.startswith("O:"))
+        if others or not writes:
+            what = ", ".join(others) if others else "nothing"
+            raise CurationError(f"curation levers names {node}, which the rules keep as a {KIND_MAP[row['kind']]} whose click "
+                                f"code writes {what}: an entry takes in a lever the rules leave out, or a control whose click "
+                                "code writes only O:vars, which the sim's calculator cannot set (remove it, so that the app "
+                                "replays the click code)")
+    elif why != LEVER:
+        raise CurationError(f"curation levers names {node}, which the rules leave out for another reason than being a lever "
+                            f"({why}): an entry takes in a lever the rules leave out (remove it)")
     return entry_switch(row, cur, entry)
 
 
@@ -1046,9 +1072,13 @@ def guarded_how(row, cur):
 
 
 def lever_how(row, cur):
-    """What curation's 'levers' did to this row, in words, for the run's report: it took in a lever the rules leave out
-    (lever_control has already stopped the run for a row they do not leave out as a lever)."""
-    return f"taken in (the rules alone leave it out: {drop_reason(row, cur)})"
+    """What curation's 'levers' did to this row, in words, for the run's report: it took in a lever the rules leave out, or a
+    control they keep whose click code writes only O:vars (lever_control has already stopped the run for any other row)."""
+    why = drop_reason(row, cur)
+    if why is None:
+        return (f"taken in (the rules alone keep it as a {KIND_MAP[row['kind']]}, but its click code writes only O:vars, which "
+                "the sim's calculator cannot set)")
+    return f"taken in (the rules alone leave it out: {why})"
 
 
 def direct_positions_how(row, cur):

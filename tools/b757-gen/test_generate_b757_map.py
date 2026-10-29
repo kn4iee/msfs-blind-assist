@@ -1945,7 +1945,8 @@ class Levers(unittest.TestCase):
             ("a node the package does not have", {}, dict(levers={**self.entry(gear), ghost: entry}),
              rf"levers name nodes the package does not have: {ghost}"),
             ("a node the rules keep", {}, dict(levers={**self.entry(gear), self.LOCK_OVRD: entry}),
-             rf"levers names {self.LOCK_OVRD}, which the rules keep as a toggle"),
+             rf"levers names {self.LOCK_OVRD}, which the rules keep as a toggle whose click code writes "
+             r"L:BBS757_GEAR_LOCK_OVRD_BUTTON"),
             ("a node the rules leave out for another reason", extra,
              dict(levers={**self.entry(gear), breaker["node"]: entry}),
              rf"levers names {breaker['node']}, which the rules leave out for another reason than being a lever "
@@ -2016,6 +2017,86 @@ class Levers(unittest.TestCase):
         only_pw = g.Cockpit(pw={self.LOCK_OVRD, self.GEAR, self.FLAP}, rr={self.LOCK_OVRD, self.FLAP})
         m, _ = self.build(cockpit=only_pw)
         self.assertEqual({c["node"]: c["label"] for c in m["controls"]}[self.GEAR], "Gear Lever (PW)")
+
+    # Plan 12 task 11: the seat levers. Their click writes only O:vars (O:CAPT_SEAT_MOVE_BACK and _FORWARD, which the
+    # component's own Update turns into a write of L:B757_CAPT_SEAT, BBS_752_BASE_INTERIOR.xml:32100-32116), and the sim's
+    # calculator cannot set an O:var (spec 3.7 #6), so a replay of the click would do nothing. The rules keep the row as a
+    # toggle on the lever's own animation var; a levers entry takes it in on the seat's var, as a switch with no click code.
+    SEAT, SEAT_VAR = "B757_CAPT_LEVER_SEAT", "B757_CAPT_SEAT"
+    SEAT_CLICK = ("(L:B757_CAPT_SEAT) 0 == if{ 1 (>O:CAPT_SEAT_MOVE_BACK, bool) } (L:B757_CAPT_SEAT) 100 == if{ 1 "
+                  "(>O:CAPT_SEAT_MOVE_FORWARD, bool) } (E:ABSOLUTE TIME, seconds) (>O:Seat_Lever_Anim_Timer)")
+    SEAT_POSITIONS = [{"value": 0, "label": "Forward"}, {"value": 100, "label": "Aft"}]
+
+    def seat_row(self, left=None, panel="COCKPIT CAPTAIN CHAIR"):
+        """The captain's seat lever as the extractor reads it (BBS_752_BASE_INTERIOR.xml:32106): a toggle on its own animation
+        var, whose click writes only O:vars; its component reads and writes the seat's var."""
+        return row(node=self.SEAT, kind="toggle", panel=panel, line=32106, state=["L:B757_CAPT_LEVER_SEAT"],
+                   left=left or self.SEAT_CLICK,
+                   component={"reads": ["B757_CAPT_LEVER_SEAT", self.SEAT_VAR],
+                              "writes": ["B757_CAPT_LEVER_SEAT", self.SEAT_VAR]})
+
+    def seat_curation(self, **changes):
+        c = curation(exclude_banners=["COCKPIT CAPTAIN CHAIR"], include_nodes=[self.SEAT],
+                     node_panels=[{"prefix": self.SEAT, "panel": "Seats and stowage", "section": "Other"}],
+                     labels={self.SEAT: "Captain Seat"},
+                     levers={self.SEAT: {"state_var": self.SEAT_VAR, "positions": self.SEAT_POSITIONS}})
+        c.update(changes)
+        return c
+
+    def test_a_control_whose_click_writes_only_O_vars_is_taken_in_on_the_entrys_state_var(self):
+        seat, c = self.seat_row(), self.seat_curation()
+
+        # Without the entry the rules keep it as a toggle on the lever's animation var, replaying a click that cannot run.
+        bare, why, _ = g.convert_row(seat, dict(c, levers={}))
+        self.assertIsNone(why)
+        self.assertEqual((bare["kind"], bare["state_var"], bare["press"]), ("toggle", "B757_CAPT_LEVER_SEAT", self.SEAT_CLICK))
+
+        control, why, slips = g.convert_row(seat, c)
+        self.assertIsNone(why)
+        self.assertEqual(control, {"node": self.SEAT, "section": "Other", "panel": "Seats and stowage", "label": "Captain Seat",
+                                   "kind": "switch", "state_var": self.SEAT_VAR, "positions": self.SEAT_POSITIONS,
+                                   "press": None, "release": None, "hold_ms": 0, "cw": None, "ccw": None})
+        self.assertEqual(slips, [])
+
+        m, report = g.build_map([seat], c, "pkg", "1", g.Cockpit(pw={self.SEAT}, rr={self.SEAT}))
+        self.assertEqual([x["node"] for x in m["controls"]], [self.SEAT])
+        self.assertEqual(report["levers"][self.SEAT], "taken in (the rules alone keep it as a toggle, but its click code "
+                                                      "writes only O:vars, which the sim's calculator cannot set)")
+        self.assertEqual(report["taken_in"], [self.SEAT])
+        self.assertEqual(report["dropped"], collections.Counter())
+
+    def test_an_O_var_only_control_still_never_overrides_an_exclusion_or_a_missing_cockpit_node(self):
+        c = self.seat_curation()
+        with self.assertRaisesRegex(g.CurationError, rf"levers names {self.SEAT}, which curation also leaves out "
+                                                     r"\(excluded banner\)"):
+            g.convert_row(self.seat_row(), dict(c, include_nodes=[]))
+        with self.assertRaisesRegex(g.CurationError, rf"levers names {self.SEAT}, which curation also leaves out "
+                                                     r"\(excluded node\)"):
+            g.convert_row(self.seat_row(panel="SEATS"), dict(c, include_nodes=[], exclude_nodes=[self.SEAT]))
+        with self.assertRaisesRegex(g.CurationError, rf"levers names {self.SEAT}, which neither cockpit model has a node for"):
+            g.convert_row(self.seat_row(), c, g.Cockpit(pw=set(), rr=set()))
+        # its state var is checked against the component as any lever's
+        with self.assertRaisesRegex(g.CurationError, rf"{self.SEAT}'s own vendor code never reads or writes B757_FO_SEAT"):
+            g.build_map([self.seat_row()], dict(c, levers={self.SEAT: {"state_var": "B757_FO_SEAT",
+                                                                         "positions": self.SEAT_POSITIONS}}), "pkg", "1")
+
+    def test_a_kept_control_whose_click_writes_more_than_O_vars_is_refused(self):
+        # A click the app can replay is replayed: an entry never takes a control's click code away unless all it writes is
+        # what the calculator cannot set anyway.
+        c = self.seat_curation()
+        cases = [
+            ("an L:var besides the O:vars", self.SEAT_CLICK + " 100 (>L:B757_CAPT_SEAT, number)", r"L:B757_CAPT_SEAT"),
+            ("a K: event", self.SEAT_CLICK + " 1 (>K:TOGGLE_CABIN_LIGHTS)", r"K:TOGGLE_CABIN_LIGHTS"),
+            ("an H: event", "(>H:B757_SEAT_MOVE) " + self.SEAT_CLICK, r"H:B757_SEAT_MOVE"),
+            ("only an L:var", "(L:B757_CAPT_SEAT) ! (>L:B757_CAPT_SEAT)", r"L:B757_CAPT_SEAT"),
+            ("nothing at all", "(L:B757_CAPT_SEAT) 0 ==", r"nothing"),
+        ]
+        for what, click, written in cases:
+            with self.subTest(what):
+                with self.assertRaisesRegex(g.CurationError,
+                                            rf"levers names {self.SEAT}, which the rules keep as a toggle whose click code "
+                                            rf"writes {written}.*only O:vars, which the sim's calculator cannot set"):
+                    g.convert_row(self.seat_row(left=click), c)
 
     def test_the_embedded_map_holds_the_two_levers_on_their_panels(self):
         with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
@@ -3396,7 +3477,8 @@ class Curation(unittest.TestCase):
 
     def test_the_shipped_curation_takes_in_the_control_stand_by_node_and_keeps_the_banners_out(self):
         c = g.load_curation(g.DEFAULT_CURATION)
-        self.assertEqual(sorted(c["include_nodes"]), sorted(self.CONTROL_STAND))
+        # the control stand's, and since plan 12 task 11 the windows' and the furniture's (Furniture.TAKEN_IN)
+        self.assertEqual(sorted(c["include_nodes"]), sorted(set(self.CONTROL_STAND) | Furniture.TAKEN_IN))
         for node, banner in self.CONTROL_STAND.items():
             with self.subTest(node=node):
                 self.assertIn(banner, c["exclude_banners"])
@@ -3906,7 +3988,10 @@ class Curation(unittest.TestCase):
         c = g.load_curation(g.DEFAULT_CURATION)
         gear, flap = self.LEVERS
 
-        self.assertEqual(c["levers"], self.LEVERS)
+        # plan 12 task 11 adds the furniture's drag handles and the seats (Furniture below): these two stay as they were
+        self.assertEqual({node: c["levers"][node] for node in self.LEVERS}, self.LEVERS)
+        self.assertEqual(set(c["levers"]) - set(self.LEVERS),
+                         {n for n, x in Furniture.EXPECTED.items() if not x[5]})
         self.assertEqual([c["labels"][node] for node in self.LEVERS], ["Gear Lever", "Flap Lever"])
         # no other table speaks for a lever, and none leaves it out
         for node in self.LEVERS:
@@ -3967,7 +4052,9 @@ class Curation(unittest.TestCase):
                      "Radio tuning panel 2", "Radio tuning panel 3", "Audio panel 2", "ILS tuning", "Fire protection",
                      "Stabilizer trim", "EICAS control", "Captain EFIS", "First officer EFIS", "CDU brightness",
                      "Weather radar"],
-        "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel"],
+        # plan 12 task 11: the windows and the furniture, which no step of the flow changes, at the end
+        "Other": ["P61 panel", "Oxygen", "Flight deck door", "Forward attendant panel", "Windows and sun visors",
+                  "Seats and stowage"],
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).
     # Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first
@@ -4090,6 +4177,17 @@ class Curation(unittest.TestCase):
                           "Audio 2 Mic RR Light", "Audio 2 Mic RR Light Knob", "Audio 2 Boom Oxy", "Audio 2 PTT"],
         # plan 12 task 7: the cabin lights and the ground service switch, on the forward attendant panel by door 1L
         "Forward attendant panel": ["Cabin Ceiling", "Cabin Window", "Cabin Entry", "Cabin Work Light", "GND Svc"],
+        # plan 12 task 11: the windows, then each sun visor's visibility before its position, then the shades
+        "Windows and sun visors": ["Left Side Window", "Right Side Window", "Left Sun Visor", "Left Sun Visor Position",
+                                   "Right Sun Visor", "Right Sun Visor Position", "Left Sliding Window Shade",
+                                   "Left Aft Window Shade", "Right Sliding Window Shade", "Right Aft Window Shade"],
+        # the two seats, each pilot's armrests and headrest, each jumpseat followed by its armrests, then the stowage
+        "Seats and stowage": ["Captain Seat", "First Officer Seat", "Captain Inboard Armrest", "Captain Outboard Armrest",
+                              "Captain Headrest", "First Officer Inboard Armrest", "First Officer Outboard Armrest",
+                              "First Officer Headrest", "Jumpseat 1", "Jumpseat 1 Inboard Armrest",
+                              "Jumpseat 1 Outboard Armrest", "Jumpseat 2", "Jumpseat 2 Inboard Armrest",
+                              "Jumpseat 2 Outboard Armrest", "Captain Chart Holder", "First Officer Chart Holder",
+                              "Floor Box", "Stowage Door 1", "Stowage Door 2", "Stowage Door 3"],
         # plan 12 task 5: the eight P61 test switches (Ground Prox Hyd Gen, Air Data Stall Left and Right, TO and Land Config,
         # Equip Cooling, Yaw Damp, Duct Leak Fuel Qty, Wing AI Window Heat) left the map; the app places their buttons
         "P61 panel": ["Flight Recorder", "Service Interphone", "Squib Test",
@@ -4239,6 +4337,129 @@ class Curation(unittest.TestCase):
         self.assertNotIn("Engine start", named)
         self.assertNotIn("Fuel control", named)
         self.assertEqual(set(c["control_order"]["Engines"]), set(self.ENGINE_CONTROLS))
+
+
+class Furniture(unittest.TestCase):
+    """Plan 12, task 11 (the owner: "Yes add"): the side windows, sun visors, shades, seats, armrests, headrests, jumpseats,
+    chart holders, floor box and stowage doors, which BlueBird draws as clickable cockpit parts. Measured on the ground
+    2026-10-28 (docs/b757/evidence/flight-12.md, "Windows and furniture"): every var below holds a written value and goes back.
+    The toggles under excluded vendor banners are taken in by node (include_nodes and a node_panels rule; their banners stay
+    excluded), the armrests, sun visor bases and floor box left exclude_nodes, the drag handles are levers, and the two seat
+    levers, whose click writes only O:vars, are levers on the seat's var."""
+    WINDOWS, SEATS = "Windows and sun visors", "Seats and stowage"
+    # node -> (panel, label, kind, state var, [(value, label)], whether the cockpit's click code is replayed)
+    EXPECTED = {
+        "L2win_handle": (WINDOWS, "Left Side Window", "toggle", "B757_L_COCKPIT_WINDOW", [(0, "Closed"), (1, "Open")], True),
+        "R2win_handle": (WINDOWS, "Right Side Window", "toggle", "B757_R_COCKPIT_WINDOW", [(0, "Closed"), (1, "Open")], True),
+        "B757_SUNVISOR_L_base": (WINDOWS, "Left Sun Visor", "toggle", "B757_SUNVISOR_L_vis", [(0, "Hidden"), (1, "Shown")],
+                                 True),
+        "B757_SUNVISOR_L_move": (WINDOWS, "Left Sun Visor Position", "switch", "B757_SUNVISOR_L",
+                                 [(0, "Inboard"), (1, "Outboard"), (18, "Half")], False),
+        "B757_SUNVISOR_R_base": (WINDOWS, "Right Sun Visor", "toggle", "B757_SUNVISOR_R_vis", [(0, "Hidden"), (1, "Shown")],
+                                 True),
+        "B757_SUNVISOR_R_move": (WINDOWS, "Right Sun Visor Position", "switch", "B757_SUNVISOR_R",
+                                 [(0, "Inboard"), (18, "Half"), (35, "Outboard")], False),
+        "L2_SHADE_GUIDE": (WINDOWS, "Left Sliding Window Shade", "toggle", "L2_SHADE_GUIDE", [(0, "Stowed"), (1, "Drawn")],
+                           True),
+        "L3_SHADE_GUIDE": (WINDOWS, "Left Aft Window Shade", "toggle", "L3_SHADE_GUIDE", [(0, "Stowed"), (1, "Drawn")], True),
+        "R2_SHADE_GUIDE": (WINDOWS, "Right Sliding Window Shade", "toggle", "R2_SHADE_GUIDE", [(0, "Stowed"), (1, "Drawn")],
+                           True),
+        "R3_SHADE_GUIDE": (WINDOWS, "Right Aft Window Shade", "toggle", "R3_SHADE_GUIDE", [(0, "Stowed"), (1, "Drawn")], True),
+        "B757_CAPT_LEVER_SEAT": (SEATS, "Captain Seat", "switch", "B757_CAPT_SEAT", [(0, "Forward"), (100, "Aft")], False),
+        "B757_FO_LEVER_SEAT": (SEATS, "First Officer Seat", "switch", "B757_FO_SEAT", [(0, "Forward"), (100, "Aft")], False),
+        "B757_CAPTAIN_SEAT_ARM_REST_2": (SEATS, "Captain Inboard Armrest", "toggle", "B757_CAPTAIN_SEAT_ARM_REST_2",
+                                         [(0, "Up"), (1, "Down")], True),
+        "B757_CAPTAIN_SEAT_ARM_REST_1": (SEATS, "Captain Outboard Armrest", "toggle", "B757_CAPTAIN_SEAT_ARM_REST_1",
+                                         [(0, "Up"), (1, "Down")], True),
+        "B757_CAPTAIN_SEAT_HEAD_REST_1": (SEATS, "Captain Headrest", "switch", "B757_CAPTAIN_SEAT_HEAD_REST_1",
+                                          [(0, "Up"), (18, "Half"), (36, "Down")], False),
+        "B757_FO_SEAT_ARM_REST_1": (SEATS, "First Officer Inboard Armrest", "toggle", "B757_FO_SEAT_ARM_REST_1",
+                                    [(0, "Up"), (1, "Down")], True),
+        "B757_FO_SEAT_ARM_REST_2": (SEATS, "First Officer Outboard Armrest", "toggle", "B757_FO_SEAT_ARM_REST_2",
+                                    [(0, "Up"), (1, "Down")], True),
+        "B757_FO_SEAT_HEAD_REST_1": (SEATS, "First Officer Headrest", "switch", "B757_FO_SEAT_HEAD_REST_1",
+                                     [(0, "Up"), (18, "Half"), (36, "Down")], False),
+        "B757_JUMP_1_SEAT_BASE": (SEATS, "Jumpseat 1", "toggle", "B757_JUMP_1_SEAT_BASE", [(0, "Stowed"), (1, "Deployed")],
+                                  True),
+        "B757_JUMPSEAT_1_SEAT_ARM_REST_2": (SEATS, "Jumpseat 1 Inboard Armrest", "toggle", "B757_JUMPSEAT_1_SEAT_ARM_REST_2",
+                                            [(0, "Up"), (1, "Down")], True),
+        "B757_JUMPSEAT_1_SEAT_ARM_REST_1": (SEATS, "Jumpseat 1 Outboard Armrest", "toggle", "B757_JUMPSEAT_1_SEAT_ARM_REST_1",
+                                            [(0, "Up"), (1, "Down")], True),
+        "B757_JUMP_2_SEAT_BASE": (SEATS, "Jumpseat 2", "toggle", "B757_JUMP_2_SEAT_BASE", [(0, "Stowed"), (1, "Deployed")],
+                                  True),
+        "B757_JUMPSEAT_2_SEAT_ARM_REST_1": (SEATS, "Jumpseat 2 Inboard Armrest", "toggle", "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+                                            [(0, "Up"), (1, "Down")], True),
+        "B757_JUMPSEAT_2_SEAT_ARM_REST_2": (SEATS, "Jumpseat 2 Outboard Armrest", "toggle", "B757_JUMPSEAT_2_SEAT_ARM_REST_2",
+                                            [(0, "Up"), (1, "Down")], True),
+        "B757_CAPTAIN_MAIN_CHART": (SEATS, "Captain Chart Holder", "toggle", "B757_CAPTAIN_MAIN_CHART",
+                                    [(0, "Stowed"), (1, "Out")], True),
+        "B757_FO_MAIN_CHART": (SEATS, "First Officer Chart Holder", "toggle", "B757_FO_MAIN_CHART", [(0, "Stowed"), (1, "Out")],
+                               True),
+        "B757_FLOOR_BOX": (SEATS, "Floor Box", "toggle", "B757_FLOOR_BOX", [(0, "Closed"), (1, "Open")], True),
+        "B757_STOWAGE_DOOR_1": (SEATS, "Stowage Door 1", "switch", "B757_STOWAGE_DOOR_1",
+                                [(0, "Closed"), (24, "Half"), (34, "Open")], False),
+        "B757_STOWAGE_DOOR_2": (SEATS, "Stowage Door 2", "switch", "B757_STOWAGE_DOOR_2",
+                                [(0, "Closed"), (9, "Half"), (18, "Open")], False),
+        "B757_STOWAGE_DOOR_3": (SEATS, "Stowage Door 3", "switch", "B757_STOWAGE_DOOR_3",
+                                [(0, "Closed"), (27, "Half"), (36, "Open")], False),
+    }
+    # the toggles taken in by node from an excluded banner, and the nodes that left exclude_nodes
+    TAKEN_IN = {"L2win_handle", "R2win_handle", "L2_SHADE_GUIDE", "L3_SHADE_GUIDE", "R2_SHADE_GUIDE", "R3_SHADE_GUIDE",
+                "B757_CAPT_LEVER_SEAT", "B757_FO_LEVER_SEAT", "B757_JUMP_1_SEAT_BASE", "B757_JUMP_2_SEAT_BASE",
+                "B757_JUMPSEAT_1_SEAT_ARM_REST_1", "B757_JUMPSEAT_1_SEAT_ARM_REST_2", "B757_JUMPSEAT_2_SEAT_ARM_REST_1",
+                "B757_JUMPSEAT_2_SEAT_ARM_REST_2", "B757_CAPTAIN_MAIN_CHART", "B757_FO_MAIN_CHART",
+                "B757_STOWAGE_DOOR_1", "B757_STOWAGE_DOOR_2", "B757_STOWAGE_DOOR_3"}
+    NO_LONGER_EXCLUDED = {"B757_SUNVISOR_L_base", "B757_SUNVISOR_R_base", "B757_CAPTAIN_SEAT_ARM_REST_1",
+                          "B757_CAPTAIN_SEAT_ARM_REST_2", "B757_FO_SEAT_ARM_REST_1", "B757_FO_SEAT_ARM_REST_2",
+                          "B757_FLOOR_BOX"}
+
+    def test_the_embedded_map_holds_each_window_and_furniture_control(self):
+        with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
+            by_node = {c["node"]: c for c in json.load(fh)["controls"]}
+
+        for node, (panel, label, kind, state_var, positions, replayed) in self.EXPECTED.items():
+            with self.subTest(node=node):
+                x = by_node[node]
+                self.assertEqual((x["section"], x["panel"], x["label"], x["kind"], x["state_var"]),
+                                 ("Other", panel, label, kind, state_var))
+                self.assertEqual([(p["value"], p["label"]) for p in x["positions"]], positions)
+                self.assertIsNone(x["variant"], "both cockpit models have it")
+                if replayed:
+                    self.assertTrue(x["press"], "a toggle replays the cockpit's click")
+                else:
+                    self.assertEqual([x[f] for f in ("press", "release", "cw", "ccw")], [None] * 4,
+                                     "written through its state var")
+        # jumpseat 2's click also pulls stowage door 1 back to 24 (they collide): it stays the cockpit's click, replayed
+        self.assertIn("(>L:B757_STOWAGE_DOOR_1", by_node["B757_JUMP_2_SEAT_BASE"]["press"])
+        # the two panels hold exactly these, and nothing else of the vendor's furniture banners came in with them
+        self.assertEqual({n for n, x in by_node.items() if x["panel"] in (self.WINDOWS, self.SEATS)}, set(self.EXPECTED))
+
+    def test_the_shipped_curation_takes_them_in_by_node_and_leaves_their_banners_out(self):
+        c = g.load_curation(g.DEFAULT_CURATION)
+
+        for banner in ("MISC PARTS", "COCKPIT CAPTAIN CHAIR", "COCKPIT FIRST OFFICER CHAIR", "RIGHT WINDOW RAIN EFFECTS"):
+            self.assertIn(banner, c["exclude_banners"])
+        self.assertLessEqual(self.TAKEN_IN, set(c["include_nodes"]))
+        self.assertFalse(self.NO_LONGER_EXCLUDED & set(c["exclude_nodes"]))
+        levers = {n for n, x in self.EXPECTED.items() if not x[5]}
+        self.assertLessEqual(levers, set(c["levers"]))
+        for node in levers:
+            with self.subTest(node=node):
+                self.assertEqual(c["levers"][node]["state_var"], self.EXPECTED[node][3])
+        for node in self.EXPECTED:
+            with self.subTest(node=node):
+                self.assertEqual(c["labels"][node], self.EXPECTED[node][1])
+
+    def test_the_seat_levers_write_only_O_vars_so_the_seat_var_is_written(self):
+        # BBS_752_BASE_INTERIOR.xml:32106-32116 and 32159-: the click sets O:CAPT_SEAT_MOVE_BACK at 0 and
+        # O:CAPT_SEAT_MOVE_FORWARD at 100, and the component's Update writes 100 or 0 to the seat's var (so 0 is forward).
+        c = g.load_curation(g.DEFAULT_CURATION)
+        with open(g.DEFAULT_CURATION, encoding="utf-8") as fh:
+            notes = "\n".join(json.load(fh)["_notes"])
+        self.assertRegex(notes, r"PLAN 12 TASK 11 .*B757_CAPT_LEVER_SEAT.*only O:vars")
+        for node in ("B757_CAPT_LEVER_SEAT", "B757_FO_LEVER_SEAT"):
+            with self.subTest(node=node):
+                self.assertEqual([p["label"] for p in c["levers"][node]["positions"]], ["Forward", "Aft"])
 
 
 class FindPackage(unittest.TestCase):
