@@ -9,8 +9,8 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The tablet reader's page model (plan 11) against real captures of BlueBird's tablet (2026-10-26,
 /// 0.1.0, PW, dim night brightness and 100 %): each fixture is the calibrated capture (reduced to 256
-/// colours) and the reader's lines for it (one PaddleOCR read, re-recorded for plan 17 by
-/// tools/Bbs757EfbProbe's reread). Parse is pure, so these pin what the pilot is given for each page.
+/// colours) and the reader's lines for it (one PaddleOCR read, re-recorded for plan 17 and again for plan 18's
+/// brightening by tools/Bbs757EfbProbe's reread). Parse is pure, so these pin what the pilot is given for each page.
 /// Fixtures are read from the source tree (tests/MSFSBlindAssist.Tests/Fixtures/bbs757-efb).
 /// </summary>
 public class Bbs757EfbScreenTests
@@ -217,6 +217,23 @@ public class Bbs757EfbScreenTests
         Assert.Equal("Settings, General", m.PageName);
         Assert.Equal("On", Item(m, "Lock keyboard to EFB").Value);
         Assert.Equal("10 SEC", Item(m, "Notifications fade-out timer").Value);
+    }
+
+    [Fact]
+    public void The_faint_gear_doors_are_offered_when_dim()
+    {
+        // At 0 percent brightness the gear doors' OPEN is pink on pink: the small model missed it on the raw picture,
+        // so the nose and right doors had no button. Read brightened (plan 18), all three have one, with its state.
+        var m = Load("dim", "15-aircraft-maintenance");
+        foreach (var (door, x) in new[] { ("Nose door", 844), ("Left door", 985), ("Right door", 1124) })
+        {
+            // What trails the state is the percentage under the button, small text that wobbles ("0%" read as "05").
+            var button = Assert.Single(m.Items, i => i.Text.StartsWith(door + ": Open", StringComparison.Ordinal));
+            Assert.Equal(Bbs757EfbKind.Button, button.Kind);
+            Assert.True(button.Clickable);
+            Assert.InRange(button.Hit.X, x - 15, x + 15);
+            Assert.InRange(button.Hit.Y, 645, 675);
+        }
     }
 
     [Fact]
