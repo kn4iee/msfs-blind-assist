@@ -127,7 +127,8 @@ public static class A350GroundDisplays
             var baro = cells.Where(c => !used.Contains(c) && c.X >= x0 && c.X < x1 && c.Y is >= 420 and < 520).OrderBy(c => c.Y).ToList();
             if (baro.Count == 0) continue;
             used.UnionWith(baro);
-            o.Add($"{label}: " + string.Join(" ", baro.Select(c => c.Text)) + ", " + baro[^1].Colour);
+            o.Add(A350Pfd.UnansweredBaro(baro.Select(c => c.Text)) ? $"{label}: not available"
+                : $"{label}: " + string.Join(" ", baro.Select(c => c.Text)) + ", " + baro[^1].Colour);
         }
         o.AddRange(Rest(cells, used));
         return o;
@@ -228,7 +229,7 @@ public static class A350GroundDisplays
         foreach (var b in cells.Where(c => c.Colour == "cyan" && Number(c)))
         {
             used.Add(b);
-            o.Add($"Baro: {b.Text}, cyan");
+            o.Add(A350Pfd.UnansweredBaro(new[] { b.Text }) ? "Baro: not available" : $"Baro: {b.Text}, cyan");
         }
         var scale = cells.Where(c => c.Y is >= 230 and < 250 && c.Colour == "white" && c.Text.Length == 2 && c.Text.All(char.IsDigit)).ToList();
         if (scale.Count > 0)

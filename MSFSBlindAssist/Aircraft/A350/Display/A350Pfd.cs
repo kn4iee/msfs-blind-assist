@@ -74,6 +74,13 @@ public static class A350Pfd
 
     private static string Knots(double knots) => knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>Whether a baro's drawn digits read a setting of 0: no altimeter reads 0, so it is a sim value the draw code
+    /// asked for that MSFSBA had not answered yet (review 2026-10-29: "QNH: 0, cyan" after a load). Such a baro is not
+    /// available, never spoken as a setting. The digits are read together, as a value may be drawn a cell per digit.</summary>
+    internal static bool UnansweredBaro(IEnumerable<string> texts) =>
+        string.Concat(texts.Select(t => t.Trim()).Where(t => t.Any(char.IsDigit))) is { Length: > 0 } digits
+        && MSFSBlindAssist.Utils.NumberParsing.TryParseExternal(digits, out double setting) && setting == 0;
+
     /// <summary>Where V1 is drawn above the speed tape while off its scale, under the speed target (live: 142 at x 129,
     /// y 207; the target at x 153, y 174).</summary>
     private const float V1X = 129, V1Y = 207;
@@ -320,7 +327,7 @@ public static class A350Pfd
             var label = baro.FirstOrDefault(c => c.Text is "QNH" or "QFE");
             var value = baro.Where(c => c != label).ToList();
             o.Add(label != null && value.Count > 0
-                ? $"{label.Text}: {A350DrawLayout.Speak(value)}"
+                ? UnansweredBaro(value.Select(c => c.Text)) ? $"{label.Text}: not available" : $"{label.Text}: {A350DrawLayout.Speak(value)}"
                 : "Baro: " + A350DrawLayout.Speak(baro));
         }
         // In STD the box holds no text but its sprite (review 2026-10-29: the PFD read no baro at all).

@@ -118,6 +118,20 @@ public class A350GroundDisplaysTests
     }
 
     // The overhead BAT display: seven-segment digits with the decimal point drawn apart (live: BAT 1 selected).
+    // Review 2026-10-29 (readers minor 14): no baro reads 0; drawn 0 it is a sim value MSFSBA had not answered yet.
+    [Fact]
+    public void A_baro_of_zero_on_the_fcu_or_the_standby_display_is_not_available()
+    {
+        var fcu = Fixture("FCU");
+        var zero = A350GroundDisplays.ReadFcu(fcu with { Texts = fcu.Texts.Select(t => t.Text.Trim() == "1013" ? t with { Text = "0" } : t).ToList() });
+        Assert.Contains("Captain baro: not available", zero);
+        Assert.Contains("First officer baro: not available", zero);
+        var sfd = Fixture("SFD");
+        var standby = A350GroundDisplays.ReadSfd(sfd with { Texts = sfd.Texts.Select(t => t.Text.Trim() == "1013" ? t with { Text = "0" } : t).ToList() });
+        Assert.Contains("Baro: not available", standby);
+        Assert.DoesNotContain("Baro: 0, cyan", standby);
+    }
+
     [Fact]
     public void The_bat_display_reads_the_selected_battery_voltage()
     {

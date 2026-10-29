@@ -235,6 +235,19 @@ public class A350PfdTests
         Assert.Contains("Altitude: 2941 feet, amber", A350Pfd.Read(amber, 0));
     }
 
+    // Review 2026-10-29 (readers minor 14): a sim value the draw code asked for and MSFSBA had not answered draws as 0, and a
+    // baro of 0 was spoken ("QNH: 0, cyan", the ILS fixtures). No baro reads 0: it is not available.
+    [Theory]
+    [InlineData("efis0_ils_above")]
+    [InlineData("efis0_ils_below")]
+    [InlineData("efis0_ils_gs_off")]
+    public void A_baro_of_zero_is_not_available(string fixture)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        Assert.Contains("QNH: not available", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("QNH: 0", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void In_the_climb_the_pfd_reads_altitude_heading_and_vertical_speed()
     {
