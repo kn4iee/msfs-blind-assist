@@ -247,5 +247,5 @@ internal static class A350Levers
         return new A350Lever(control, words, write);
     }
 
-    private static string Format(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+    private static string Format(double value) => A350WritePlan.Format(value);
 }

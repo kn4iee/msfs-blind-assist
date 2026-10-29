@@ -11,7 +11,7 @@ public static class A350SdText
     public static string Build(A350DrawCapture? capture, double page)
     {
         var head = PageName(page) + " page";
-        if (capture == null) return head + "\r\nThe A350 displays are not available yet.";
+        if (capture == null) return head + "\r\n" + A350DisplayStatus.NotAvailableYet;
         var view = A350Ewd.Parse(capture);
         if (!view.Powered) return head + "\r\nThe SD is off: no power.";
         var o = new List<string> { head };

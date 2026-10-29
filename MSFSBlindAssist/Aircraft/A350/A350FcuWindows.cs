@@ -92,7 +92,7 @@ public static class A350FcuWindows
         // The ISIS keeps its unit and STD to itself (its gauge's own state): its line is the setting the sim holds.
         new A350FcuWindow("ISIS QNH setting", new[] { "KOHLSMAN SETTING MB:3" },
             v => Whole(v("KOHLSMAN SETTING MB:3")) + " hectopascals, "
-                + (v("KOHLSMAN SETTING MB:3") / 33.8639).ToString("0.00", CultureInfo.InvariantCulture) + " inches", "ISIS"),
+                + Inches(v("KOHLSMAN SETTING MB:3") / AltimeterPhrase.HpaPerInHg), "ISIS"),
     };
 
     /// <summary>
@@ -111,7 +111,7 @@ public static class A350FcuWindows
                         : (v(preset) / 100).ToString("0.00", CultureInfo.InvariantCulture) + " inches")
                     : "STD"
             : v(unit) >= 0.5 ? "QNH " + Hectopascals(v(setting)) + " hectopascals"
-            : "QNH " + (v(setting) / 33.8639).ToString("0.00", CultureInfo.InvariantCulture) + " inches", panel);
+            : "QNH " + Inches(v(setting) / AltimeterPhrase.HpaPerInHg), panel);
     }
 
     private static string Window(double dashed, double dot, string value) =>
@@ -124,7 +124,9 @@ public static class A350FcuWindows
     private static string Speed(double v, bool mach) =>
         mach ? "Mach " + v.ToString("0.00", CultureInfo.InvariantCulture) : Whole(v) + " knots";
 
-    private static string Whole(double v) => Math.Round(v).ToString("0", CultureInfo.InvariantCulture);
+    internal static string Whole(double v) => Math.Round(v).ToString("0", CultureInfo.InvariantCulture);
+
+    internal static string Inches(double inches) => inches.ToString("0.00", CultureInfo.InvariantCulture) + " inches";
 
     /// <summary>The FCU truncates its heading: 218.9 shows 218.</summary>
     private static string Degrees(double v) => (((int)Math.Floor(v) % 360 + 360) % 360).ToString("000", CultureInfo.InvariantCulture);

@@ -30,7 +30,7 @@ public static class A350Readouts
 
     /// <summary>The value line's MSFSBA key: <c>A350_VAL_</c> plus the control's id after <c>AIRLINER_</c>.</summary>
     public static string KeyFor(A350Control control) =>
-        "A350_VAL_" + (control.Id.StartsWith("AIRLINER_", StringComparison.Ordinal) ? control.Id.Substring(9) : control.Id);
+        "A350_VAL_" + A350PanelLayout.Short(control.Id);
 
     /// <summary>The value as the line reads it: whole, invariant digits, its unit ("2200 feet").</summary>
     public static string Format(A350Control control, double value)

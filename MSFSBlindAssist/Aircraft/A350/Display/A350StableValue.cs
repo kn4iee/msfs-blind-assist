@@ -39,6 +39,12 @@ public sealed class A350StableValue<T>
 public static class A350DisplayStatus
 {
     public const string GettingReady = "A350 displays getting ready";
+
+    /// <summary>What a display reads before its first good draw (none yet, or none young enough).</summary>
+    public const string NotAvailableYet = "The A350 displays are not available yet.";
+
+    /// <summary>What a display reads when a good draw shows nothing on it.</summary>
+    public const string Blank = "Off: no power, or nothing shown.";
     public const string Ready = "A350 displays ready";
     public static string NotAvailable(string reason) => "A350 displays not available: " + reason;
     public static string Unreadable(string gauge, int index) => $"A350 {NameOf(gauge, index)} cannot be read at the moment";

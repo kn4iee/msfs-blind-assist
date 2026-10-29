@@ -170,15 +170,15 @@ public sealed class A350DrawEngine : IDisposable
                 },
                 "fsRenderFill" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Fill(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Fill(WholeMemory(), a[1].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "fsRenderStroke" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Stroke(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[6].AsInt32(), a[7].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Stroke(WholeMemory(), a[1].AsInt32(), a[6].AsInt32(), a[7].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "fsRenderTriangles" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Triangles(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[4].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Triangles(WholeMemory(), a[1].AsInt32(), a[4].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "execute_calculator_code" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
@@ -208,6 +208,9 @@ public sealed class A350DrawEngine : IDisposable
         long have = _memory.GetSize();
         if (needPages > have) _memory.Grow(needPages - have);
     }
+
+    /// <summary>The instance's memory as one span (the shape readers follow pointers anywhere in it).</summary>
+    private Span<byte> WholeMemory() => _memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength()));
 
     /// <summary>Called with the import's name and the exception a guarded callback caught (a torn copy hands the
     /// callbacks garbage pointers).</summary>

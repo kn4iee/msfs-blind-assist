@@ -47,7 +47,7 @@ public partial class IniBuildsA350Definition
     internal const string DarkScreen = "Dark: its screen is off or has no power.";
 
     /// <summary>What a readout says while the display reader has no capture to read.</summary>
-    internal const string NotAvailableYet = "The A350 displays are not available yet.";
+    internal const string NotAvailableYet = A350.Display.A350DisplayStatus.NotAvailableYet;
 
     /// <summary>Whether a display's screen is dark: its power variable read below 0.5. Unread, it is taken as lit.</summary>
     internal bool IsDark(A350DisplayPanel d) =>
@@ -75,8 +75,8 @@ public partial class IniBuildsA350Definition
     internal string DisplayText(A350DisplayPanel d)
     {
         if (IsDark(d)) return d.Panel + "\r\n" + DarkScreen;
-        if (Pfd?.Latest(d.Gauge, d.Index) is not { } capture) return d.Panel + "\r\nThe A350 displays are not available yet.";
+        if (Pfd?.Latest(d.Gauge, d.Index) is not { } capture) return d.Panel + "\r\n" + NotAvailableYet;
         var lines = d.Read(capture);
-        return lines.Count == 0 ? d.Panel + "\r\nOff: no power, or nothing shown." : d.Panel + "\r\n" + string.Join("\r\n", lines);
+        return lines.Count == 0 ? d.Panel + "\r\n" + A350.Display.A350DisplayStatus.Blank : d.Panel + "\r\n" + string.Join("\r\n", lines);
     }
 }

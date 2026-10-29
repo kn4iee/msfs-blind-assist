@@ -42,11 +42,11 @@ public static class A350FcuCallouts
             if (read(preset + "_SHOW") is not double shown || read(preset) is not double value)
                 return null;
             return shown < 0.5 ? $"{who} altimeter standard"
-                : $"{who} altimeter preset " + (hectopascals ? Whole(value) + " hectopascals" : Inches(value / 100));
+                : $"{who} altimeter preset " + (hectopascals ? Whole(value) + " hectopascals" : A350FcuWindows.Inches(value / 100));
         }
         if (read($"KOHLSMAN SETTING MB:{side}") is not double mb)
             return null;
-        return $"{who} altimeter " + (hectopascals ? A350FcuWindows.Hectopascals(mb) + " hectopascals" : Inches(mb / 33.8639));
+        return $"{who} altimeter " + (hectopascals ? A350FcuWindows.Hectopascals(mb) + " hectopascals" : A350FcuWindows.Inches(mb / AltimeterPhrase.HpaPerInHg));
     }
 
     /// <summary>The baro a unit button switches, by map control id: MSFSBA's own press of it is not said back by the baro
@@ -64,7 +64,5 @@ public static class A350FcuCallouts
         previous != null && previous.Contains(" altimeter preset ", StringComparison.Ordinal)
         && next.EndsWith(" altimeter standard", StringComparison.Ordinal);
 
-    private static string Whole(double v) => Math.Round(v).ToString("0", CultureInfo.InvariantCulture);
-
-    private static string Inches(double inches) => inches.ToString("0.00", CultureInfo.InvariantCulture) + " inches";
+    private static string Whole(double v) => A350FcuWindows.Whole(v);
 }

@@ -125,8 +125,8 @@ internal static class A350TypedEntry
 
     public const string VerticalInvalid = "Invalid value. VS: plus or minus 100 to 6000, FPA: plus or minus 9.9 or less";
 
-    private const double MbPerInch = 33.8639;
-    private const double MbPerHundredthInch = 0.338639;
+    private const double MbPerInch = AltimeterPhrase.HpaPerInHg;
+    private const double MbPerHundredthInch = AltimeterPhrase.HpaPerInHg / 100;
 
     /// <summary>The variables a field's plan reads, by name (A350 L:vars or the sim's baro setting).</summary>
     public static IReadOnlyList<string> Inputs(A350TypedField field) => field switch

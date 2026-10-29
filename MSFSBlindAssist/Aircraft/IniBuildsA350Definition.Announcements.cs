@@ -108,8 +108,8 @@ public partial class IniBuildsA350Definition
                 _twinEchoes.Add(echo.Key);
         }
         var switchVars = _rows.Values
-            .Where(r => r.Action == A350RowAction.Set && r.Control?.StateVar is { Length: > 2 } sv && sv[1] == ':')
-            .Select(r => r.Control!.StateVar![2..]).ToHashSet(StringComparer.Ordinal);
+            .Where(r => r.Action == A350RowAction.Set && r.Control?.StateVarName != null)
+            .Select(r => r.Control!.StateVarName!).ToHashSet(StringComparer.Ordinal);
         foreach (var lamp in _lamps.Values)
             if (lamp.Rule.Inputs.Count == 1 && switchVars.Contains(lamp.Rule.Inputs[0]))
                 _mirrorEchoes.Add(lamp.Key);

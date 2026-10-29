@@ -1010,6 +1010,7 @@
   A.find = function (idx) { return document.body.querySelector('[' + A.ATTR + '="' + idx + '"]'); };
 
   A.clickElement = function (idx) {
+    A._dirty = true;   // a press changes the page: the next scrape is full whatever the observer saw
     try {
       var e = A.find(idx);
       if (!e) return 'missing';
@@ -1021,6 +1022,7 @@
   };
 
   A.setValue = function (idx, text) {
+    A._dirty = true;   // so does a value set
     try {
       var e = A.find(idx);
       if (!e) return 'missing';
@@ -1058,10 +1060,6 @@
       return 'ok';
     } catch (err) { return 'error: ' + err.message; }
   };
-
-  // A press or a value set changes the page: the next scrape is full whatever the observer saw.
-  A.clickElement = (function (inner) { return function () { A._dirty = true; return inner.apply(A, arguments); }; })(A.clickElement);
-  A.setValue = (function (inner) { return function () { A._dirty = true; return inner.apply(A, arguments); }; })(A.setValue);
 
   // The gate's observer and listeners; a re-injection tears down the ones before it first. A toggle's .checked flip writes
   // no attribute, so a capture-phase change/input listener on the document catches what the observer cannot.

@@ -231,7 +231,7 @@ public static class A350PanelLamps
                 {
                     if (row.Control is not { } control || !byControl.TryGetValue(control.Id, out var own))
                         continue;
-                    string? stateVar = control.StateVar is { Length: > 2 } sv && sv[1] == ':' ? sv.Substring(2) : null;
+                    string? stateVar = control.StateVarName;
                     var rules = new HashSet<string>(StringComparer.Ordinal);
                     var rowLamps = new List<(A350MapLamp Lamp, A350LampRule Rule, string Legend)>();
                     foreach (var mapLamp in own.OrderBy(l => l.Node, StringComparer.Ordinal))

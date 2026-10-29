@@ -137,15 +137,13 @@ public partial class IniBuildsA350Definition
             // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
             // A readout from a dark screen says so (a dark PFD's "none shown" read as no capability, review 2026-10-28).
             case HotkeyAction.ReadSquawkCode:
-                announcer.AnnounceImmediate(DarkReadout("A350_DISP_RMP_1") ?? (DisplayLines("A350_DISP_RMP_1") is { } rmp ? A350.A350Hotkeys.Squawk(rmp)
-                    : NotAvailableYet));
+                announcer.AnnounceImmediate(Readout("A350_DISP_RMP_1", A350.A350Hotkeys.Squawk));
                 return true;
             // Ctrl+W: the ND's TO waypoint; Ctrl+0: the FMA's approach capability column. With no capture yet, the displays
             // are not available, never "none shown" (review 2026-10-29).
             case HotkeyAction.ReadNDWaypoint:
-                announcer.AnnounceImmediate(DarkReadout("A350_DISP_ND_CPT")
-                    ?? (DisplayLines("A350_DISP_ND_CPT") is not { } nd ? NotAvailableYet
-                        : nd.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal)) ?? "No TO waypoint shown"));
+                announcer.AnnounceImmediate(Readout("A350_DISP_ND_CPT",
+                    nd => nd.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal)) ?? "No TO waypoint shown"));
                 return true;
             // D and Shift+D: the aircraft's own VNAV distances (A350RouteDistances), the time at the ground speed; an unread
             // distance is no route, never 0 miles.
@@ -161,11 +159,10 @@ public partial class IniBuildsA350Definition
                     Cached(simConnect, "GROUND_VELOCITY") ?? 0, FormatEtaFromDistance));
                 return true;
             case HotkeyAction.ReadApproachCapability:
-                announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
-                    ?? (DisplayLines(PfdCaptainKey) is not { } pfd ? NotAvailableYet
-                        : pfd.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
-                            ? "Approach capability " + cap["FMA approach:".Length..].Trim()
-                            : "Approach capability none shown"));
+                announcer.AnnounceImmediate(Readout(PfdCaptainKey,
+                    pfd => pfd.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
+                        ? "Approach capability " + cap["FMA approach:".Length..].Trim()
+                        : "Approach capability none shown"));
                 return true;
             default:
                 return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
@@ -268,15 +265,12 @@ public partial class IniBuildsA350Definition
             ? display.Panel + " " + char.ToLowerInvariant(DarkScreen[0]) + DarkScreen[1..]
             : null;
 
-    private void AnnounceDisplay(string displayKey, ScreenReaderAnnouncer announcer)
-    {
-        if (DarkReadout(displayKey) is { } dark)
-        {
-            announcer.AnnounceImmediate(dark);
-            return;
-        }
-        var lines = DisplayLines(displayKey);
-        announcer.AnnounceImmediate(lines == null ? NotAvailableYet
-            : lines.Count == 0 ? "Off: no power, or nothing shown." : string.Join(". ", lines));
-    }
+    private void AnnounceDisplay(string displayKey, ScreenReaderAnnouncer announcer) =>
+        announcer.AnnounceImmediate(Readout(displayKey,
+            lines => lines.Count == 0 ? A350.Display.A350DisplayStatus.Blank : string.Join(". ", lines)));
+
+    /// <summary>A display read aloud: dark while its screen is dark, not available before its first good draw, else what
+    /// <paramref name="read"/> makes of its lines (a dark PFD's "none shown" read as no capability, review 2026-10-28).</summary>
+    private string Readout(string displayKey, Func<IReadOnlyList<string>, string> read) =>
+        DarkReadout(displayKey) ?? (DisplayLines(displayKey) is { } lines ? read(lines) : NotAvailableYet);
 }

@@ -123,7 +123,7 @@ public sealed class A350RmpWindow : Form
                 if (_shown.Superseded(cap)) return;   // older than the fresh draw shown
             }
             if (IsDisposed) return;
-            if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
+            if (cap == null) { _list.SetText(A350DisplayStatus.NotAvailableYet); return; }
             Show(Lines(cap, _isDark(Rmp)));
         }
         catch { /* best-effort; keep the last good screen */ }

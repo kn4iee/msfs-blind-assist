@@ -160,6 +160,8 @@ public sealed class A350Control
     [JsonPropertyName("event")] public string Event { get; set; } = string.Empty;
     /// <summary><c>L:NAME</c> or <c>A:NAME</c> holding the position or the display value; null for buttons.</summary>
     [JsonPropertyName("state_var")] public string? StateVar { get; set; }
+    /// <summary>The state variable's name without its "L:" or "A:" (a SimVarDefinition name), or null when it has none.</summary>
+    [JsonIgnore] public string? StateVarName => StateVar is { Length: > 2 } sv && sv[1] == ':' ? sv[2..] : null;
     /// <summary>The unit an A: state variable is read in (e.g. "Bool", "Degrees").</summary>
     [JsonPropertyName("state_unit")] public string? StateUnit { get; set; }
     /// <summary>Knobs: state variable = Set value × scale (1 unless the map says otherwise).</summary>
@@ -204,7 +206,7 @@ public sealed class A350Control
 
     private static double Parse(string text) => double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
 
-    private static string FormatKey(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+    private static string FormatKey(double value) => A350WritePlan.Format(value);
 }
 
 /// <summary>Which bus's light power a lamp needs (its cockpit code multiplies by <c>INI_AC_LIGHTS_FAILURE</c> or

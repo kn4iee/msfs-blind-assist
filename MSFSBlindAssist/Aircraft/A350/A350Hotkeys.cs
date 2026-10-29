@@ -70,7 +70,7 @@ public static class A350Hotkeys
         Math.Abs(mode - 3) < 0.5
             ? "Altimeter standard"
             : "Altimeter: " + A350FcuWindows.Hectopascals(millibars) + ", "
-              + (millibars / 33.8639).ToString("0.00", CultureInfo.InvariantCulture);
+              + (millibars / AltimeterPhrase.HpaPerInHg).ToString("0.00", CultureInfo.InvariantCulture);
 
     private static readonly string[] FlapDetents = { "Up", "1", "2", "3", "Full" };
 

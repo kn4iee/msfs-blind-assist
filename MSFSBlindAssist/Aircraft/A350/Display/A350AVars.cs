@@ -28,7 +28,7 @@ public static class A350AVars
         new($"{name}:{index}|{units}", $"A350_AVAR_{name.Replace(' ', '_')}_{index}", index == 0 ? name : $"{name}:{index}", units);
 
     /// <summary>One inch of mercury in millibars: a baro asked in millibars is answered from the inches.</summary>
-    public const double MillibarsPerInch = 33.8639;
+    public const double MillibarsPerInch = AltimeterPhrase.HpaPerInHg;
 
     private static readonly Dictionary<string, string> KeyByAsk = All.ToDictionary(a => a.Ask, a => a.Key, StringComparer.Ordinal);
 

@@ -7,7 +7,7 @@ public static class A350EwdText
     /// <param name="sdPage">INI_ECAM_ACTIVE_PAGE when known: the SD section then names the page and its values.</param>
     public static string Build(A350DrawCapture? capture, double? sdPage = null)
     {
-        if (capture == null) return "The A350 displays are not available yet.";
+        if (capture == null) return A350DisplayStatus.NotAvailableYet;
         var view = A350Ewd.Parse(capture);
         if (!view.Powered) return "The E/WD and SD are off: no power.";
 
