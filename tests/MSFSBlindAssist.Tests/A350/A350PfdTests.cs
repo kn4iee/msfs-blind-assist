@@ -163,6 +163,76 @@ public class A350PfdTests
         Assert.Contains("Bank: wings level", lines);
     }
 
+    // The speed tape is SpeedTape.png (75 x 2285): its 10 kt ticks are 48 1/3 px apart, 30 kt at row 2283 up to 500 kt at
+    // row 11, so it moves 145 px every 30 kt. Read at 4.875 px a knot from one live pair (240.2 kt), every speed away from
+    // 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141.
+    [Theory]
+    [InlineData(30)]
+    [InlineData(60)]
+    [InlineData(100)]
+    [InlineData(140)]
+    [InlineData(300)]
+    [InlineData(340)]
+    public void The_speed_tape_moves_145_px_every_30_knots(int knots)
+    {
+        var level = Fixture("efis0_level6000");   // 240.2 kt with the tape at -885.21 (live, the sim's airspeed)
+        float shift = (float)((240.2 - knots) * 145 / 30);
+        var lines = A350Pfd.Read(level with
+        {
+            Shapes = level.Shapes!.Select(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 >= 836
+                ? s with { Y0 = s.Y0 - shift, Y1 = s.Y1 - shift, PatternY = s.PatternY - shift } : s).ToList(),
+        }, 0);
+        Assert.Contains(knots == 30 ? "Speed: 30 knots or less" : $"Speed: {knots} knots", lines);
+    }
+
+    // Green dot, S, F and VFE next are sprites on the speed tape (PFDA350Elements.png: the green circle at 976,719, F's
+    // dash and letter at 887,724, S's under it at 887,757, the amber "=" at 1001,702), each marking its speed at its
+    // middle; the tape reads the current speed at y 381.5, the middle of the band a symbol off the scale is pinned to
+    // (139.5 to 623.5, 50 kt either way). One approach's F reads the same at 159 and 185 kt; VFE next reads 255 clean at
+    // four speeds from 210 to 298 kt; one flight's green dot falls as it burns fuel.
+    [Theory]
+    [InlineData("efis0_climb", "Green dot: 218, green")]
+    [InlineData("efis0_level6000", "Green dot: 217, green")]
+    [InlineData("efis0_turn_left", "Green dot: 217, green")]
+    [InlineData("efis0_ls_downwind_omdb", "Green dot: 186, green")]
+    [InlineData("efis0_ils_above", "F speed: 137, green")]
+    [InlineData("efis0_ils_below", "F speed: 137, green")]
+    [InlineData("efis0_level6000", "VFE next: 255, amber")]
+    [InlineData("efis0_ls_downwind_omdb", "VFE next: 255, amber")]
+    [InlineData("efis0_climb_bi614", "VFE next: 255, amber")]
+    [InlineData("efis0_ils_above", "VFE next: 186, amber")]
+    [InlineData("efis0_ils_below", "VFE next: 186, amber")]
+    // Pinned to the tape's edge, off its scale: the green dot 50 kt under 298, VFE next 50 kt under 151 (it cannot be 101).
+    [InlineData("efis0_climb_bi614", "Green dot: more than 50 knots below, green")]
+    [InlineData("efis0_ils_gs_off", "VFE next: more than 50 knots below, amber")]
+    [InlineData("efis0_climb", "VFE next: more than 50 knots above, amber")]
+    public void The_characteristic_speeds_read_off_their_symbols(string fixture, string line)
+    {
+        Assert.Contains(line, A350Pfd.Read(Fixture(fixture), 0));
+    }
+
+    [Fact]
+    public void S_reads_off_its_own_sprite()
+    {
+        // Not yet seen drawn (configuration 1): the atlas holds it under F, its dash at the same height in its box.
+        var approach = Fixture("efis0_ils_above");
+        var lines = A350Pfd.Read(approach with
+        {
+            Shapes = approach.Shapes!.Select(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - 887) < 1.5f
+                && Math.Abs(s.Y0 - s.PatternY - 724) < 1.5f ? s with { PatternY = s.PatternY - 33 } : s).ToList(),
+        }, 0);
+        Assert.Contains("S speed: 137, green", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("F speed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void On_the_stand_the_tape_shows_none_of_them()
+    {
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_takeoff_ready"), 0),
+            l => l.StartsWith("Green dot", StringComparison.Ordinal) || l.StartsWith("S speed", StringComparison.Ordinal)
+                || l.StartsWith("F speed", StringComparison.Ordinal));
+    }
+
     // The EFIS draws its ND, then its PFD (live, both sides); an ND map label can land on the PFD's half (the
     // display clips it), so each display reads only its own part of the draw.
     [Fact]

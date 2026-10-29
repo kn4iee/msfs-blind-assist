@@ -13,11 +13,55 @@ public static class A350Pfd
 {
     private const float PfdWidth = 836, FmaBottom = 125, BottomLine = 860;   // the FMA has three rows (live: A/THR at y 113)
     private const float WindowY = 389, TapePxPerFoot = 0.35f, DrumPxPerFoot = 21.75f / 20, HeadingIndexX = 359, HeadingPxPerDegree = 7;
-    private const float SpeedPxPerKnot = 4.875f, SpeedRefPattern = -885.2f, SpeedRefKnots = 240.2f;
+    /// <summary>The speed tape is SpeedTape.png (75 x 2285), its 10 kt ticks 48 1/3 px apart (30 kt at row 2283 up to 500 kt
+    /// at row 11): 145 px every 30 kt. Live pair: 240.2 kt with the tape at -885.2. (Read at 4.875 px a knot, every speed
+    /// away from 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141.)</summary>
+    private const float SpeedPxPerKnot = 145f / 30, SpeedRefPattern = -885.2f, SpeedRefKnots = 240.2f;
     private const float PitchPxPerDegree = 8.61f, PitchZeroImageY = 620.5f;
 
-    /// <summary>The speed the tape's offset reads at its 30 kt floor and a knot over (32 on the stand, live).</summary>
-    private const double SpeedFloorReads = 33;
+    /// <summary>The speed the tape's offset reads at its 30 kt floor and a knot over (30.03 on the stand, live).</summary>
+    private const double SpeedFloorReads = 31;
+
+    /// <summary>Where the tape reads the current speed: the middle of the band a symbol off its scale is pinned to, its
+    /// middle at y 139.5 above and 623.5 below (both live), 50 kt either way. (The tape's 240 kt row lands at 382.8 with
+    /// the tape at -885.21, 240.2 kt, where the 240 kt target was drawn, live.)</summary>
+    private const float SpeedIndexY = 381.5f;
+
+    /// <summary>How far from the current speed the tape shows a symbol; one further is drawn pinned to the tape's edge.</summary>
+    private const double TapeHalfRangeKnots = 50;
+
+    /// <summary>Speeds the tape shows only as symbols, by where each sprite sits in PFDA350Elements.png, each marking its
+    /// speed at its middle: the green dot (a green circle), F (a dash and the letter), S under it in the atlas (not yet
+    /// seen drawn: configuration 1), VFE next (an amber "="). Read live in a climb, level flight, a turn, a downwind and an
+    /// ILS approach: VFE next 255 kt clean at four speeds from 210 to 298 kt, 186 kt in both captures of one approach.</summary>
+    public static readonly IReadOnlyList<(string Name, float AtlasX, float AtlasY, string Colour)> TapeSymbols = new[]
+    {
+        ("Green dot", 976f, 719f, "green"), ("S speed", 887f, 757f, "green"), ("F speed", 887f, 724f, "green"),
+        ("VFE next", 1001f, 702f, "amber"),
+    };
+
+    /// <summary>A tape symbol's speed (<see cref="TapeSymbols"/>) in whole knots, from where its middle sits against the
+    /// speed index; or, pinned to the tape's edge, which way it is off the scale (+1 above, -1 below, Knots 0). Null while
+    /// the tape does not draw it.</summary>
+    public static (double Knots, int OffScale)? TapeSymbol(A350DrawCapture capture, int side, string name)
+    {
+        var (_, atlasX, atlasY, _) = TapeSymbols.First(t => t.Name == name);
+        if (PatternOf(capture, side, 75, 2285) is not { } speedTape
+            || capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f
+                && Math.Abs(s.Y0 - s.PatternY - atlasY) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0)
+                && s.X0 - (side == 0 ? PfdWidth : 0) < 250) is not { } symbol)
+            return null;
+        double offset = (SpeedIndexY - (symbol.Y0 + symbol.Y1) / 2) / SpeedPxPerKnot;
+        if (Math.Abs(offset) >= TapeHalfRangeKnots)
+            return (0, Math.Sign(offset));
+        double current = SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot;
+        return (Math.Round(current + offset, MidpointRounding.AwayFromZero), 0);
+    }
+
+    /// <summary>What a tape symbol reads as a status line's value or a hotkey's: "218" or "more than 50 knots below".</summary>
+    public static string TapeSymbolValue((double Knots, int OffScale) symbol) => symbol.OffScale == 0
+        ? symbol.Knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture)
+        : $"more than {TapeHalfRangeKnots:0} knots {(symbol.OffScale > 0 ? "above" : "below")}";
 
     /// <summary>Where V1 is drawn above the speed tape while off its scale, under the speed target (live: 142 at x 129,
     /// y 207; the target at x 153, y 174).</summary>
@@ -152,6 +196,9 @@ public static class A350Pfd
         {
             double knots = Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero);
             o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : $"Speed: {knots:0} knots");
+            foreach (var (name, _, _, colour) in TapeSymbols)
+                if (TapeSymbol(capture, side, name) is { } symbol)
+                    o.Add($"{name}: {TapeSymbolValue(symbol)}, {colour}");
         }
         // The Mach number under the speed tape (live in the climb: ".681", green).
         foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 140 && c.Y is >= 640 and < 680 && MachText.IsMatch(c.Text.Trim())))

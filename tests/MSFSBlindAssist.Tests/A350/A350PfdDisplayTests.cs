@@ -98,6 +98,7 @@ public class A350PfdDisplayTests
     // dark screen says it is dark, as Alt+P does.
     [Theory]
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadApproachCapability, "INI_LEFT_EFIS_POWERED", "Captain PFD")]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "INI_LEFT_EFIS_POWERED", "Captain PFD")]
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadNDWaypoint, "INI_LEFT_EFIS_POWERED", "Captain ND")]
     [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSquawkCode, "INI_POTENTIOMETER_93", "RMP 1 display")]
     public void A_readout_from_a_dark_screen_says_it_is_dark(MSFSBlindAssist.Hotkeys.HotkeyAction action, string power, string panel)
@@ -116,6 +117,34 @@ public class A350PfdDisplayTests
         var speech = new SpeechCapture();
         Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
         Assert.Equal(new[] { panel + " dark: its screen is off or has no power." }, speech.All);
+    }
+
+    // Shift+1 to 3 read the A380's green dot, S and F speeds; the A350 shows them only as symbols on the captain's PFD
+    // speed tape, so they are read off it, "not shown" while the tape does not draw one (as a sighted pilot sees it).
+    [Theory]
+    [InlineData("efis0_level6000", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "Green dot speed 217 knots")]
+    [InlineData("efis0_ils_below", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedF, "F speed 137 knots")]
+    [InlineData("efis0_ils_below", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedS, "S speed not shown")]
+    [InlineData("efis0_fd_stand", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "Green dot speed not shown")]
+    [InlineData("efis0_climb_bi614", MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD, "Green dot speed more than 50 knots below")]
+    public void The_characteristic_speeds_read_off_the_captains_pfd(string fixture, MSFSBlindAssist.Hotkeys.HotkeyAction action, string said)
+    {
+        var def = new IniBuildsA350Definition { Cached = (_, _) => null };
+        var sim = new SimConnect.SimConnectManager(IntPtr.Zero);
+        def.Attach(sim);
+        var speech = new SpeechCapture();
+        Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
+        Assert.Equal(new[] { "Green dot speed not available" }.Take(action == MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedGD ? 1 : 0)
+            .Concat(new[] { "S speed not available" }.Take(action == MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedS ? 1 : 0))
+            .Concat(new[] { "F speed not available" }.Take(action == MSFSBlindAssist.Hotkeys.HotkeyAction.ReadSpeedF ? 1 : 0)),
+            speech.All);   // the displays not running
+
+        var captain = Fixture(fixture);
+        def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => g == "EFIS" && i == 0 ? captain : null), _ => false, _ => { });
+        for (int t = 0; t < 8; t++) def.Pfd.TickAsync().Wait();
+        speech = new SpeechCapture();
+        Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
+        Assert.Equal(new[] { said }, speech.All);
     }
 
     // Review 2026-10-28: Shift+M and Ctrl+Shift+R read the latest draw directly, so a screen the status display called
