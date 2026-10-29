@@ -187,6 +187,75 @@ public class A350LampAnnouncementTests
         Assert.Empty(_speech.All);
     }
 
+    private static readonly Lazy<IReadOnlyList<A350Lamp>> Everywhere = new(() =>
+    {
+        var map = A350ControlMap.Load();
+        var placement = A350PanelLayout.Place(map);
+        return A350PanelLamps.Resolve(map, placement, placement.Structure.Keys);
+    });
+
+    private static A350Lamp AnyLamp(string key) => Everywhere.Value.Single(l => l.Key == key);
+
+    // Review 2026-10-29 (speech 4): ECAM CLR, ATC MSG and AUTOLAND light on both sides from one rule each, and both sides
+    // spoke ("Captain ECAM clear light on. First officer ECAM clear light on."). Lamps sharing a rule are one light: the
+    // first speaks, without its side; the others are its echoes, with no Ctrl+M row.
+    [Theory]
+    [InlineData("A350_LT_ECAM_CLEAR_LEFT_SEQ1_LIGHT", "A350_LT_ECAM_CLEAR_RIGHT_SEQ1_LIGHT")]
+    [InlineData("A350_LT_FCU_ATC_MSG_LEFT_SEQ1_LIGHT", "A350_LT_FCU_ATC_MSG_RIGHT_SEQ1_LIGHT")]
+    [InlineData("A350_LT_FCU_AUTO_LAND_LEFT_SEQ1_LIGHT", "A350_LT_FCU_AUTO_LAND_RIGHT_SEQ1_LIGHT")]
+    public void Lights_both_sides_show_from_one_rule_are_one_light(string captain, string firstOfficer)
+    {
+        var (cpt, fo) = (AnyLamp(captain), AnyLamp(firstOfficer));
+        Assert.StartsWith("Captain ", cpt.Name, StringComparison.Ordinal);
+        string spoken = char.ToUpperInvariant(cpt.Name["Captain ".Length]) + cpt.Name[("Captain ".Length + 1)..];
+        Baseline(cpt, 0);
+        Baseline(fo, 0);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(cpt.Key, 1, _speech);
+        _def.ProcessSimVarUpdate(fo.Key, 1, _speech);
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        Assert.Equal(new[] { spoken + " on" }, _speech.All);
+        var rows = MonitorRowBuilder.Build(_def.GetVariables()).ToList();
+        Assert.Equal(spoken, Assert.Single(rows, r => r.Key == captain).Label);
+        Assert.DoesNotContain(rows, r => r.Key == firstOfficer);
+    }
+
+    // A press of the first officer's CLR puts the one light out: the pilot's own press, never "ECAM clear light off".
+    [Fact]
+    public void A_press_of_either_twin_is_the_pilots_own()
+    {
+        var (cpt, fo) = (AnyLamp("A350_LT_ECAM_CLEAR_LEFT_SEQ1_LIGHT"), AnyLamp("A350_LT_ECAM_CLEAR_RIGHT_SEQ1_LIGHT"));
+        Baseline(cpt, 1);
+        Baseline(fo, 1);
+        BatchAfter(5000);
+        string foRow = A350PanelLayout.Place(A350ControlMap.Load()).RowsByPanel.Values.SelectMany(r => r)
+            .First(r => r.Control?.Id == fo.ControlId && r.Action == A350RowAction.Press).Key;
+        _def.HandleUIVariableSet(foRow, 1, _def.GetVariables()[foRow], new SimConnectManager(IntPtr.Zero), _speech);
+        _speech.All.Clear();
+        _def.ProcessSimVarUpdate(cpt.Key, 0, _speech);
+        _def.ProcessSimVarUpdate(fo.Key, 0, _speech);
+        BatchAfter(A350LampSpeech.OffHoldMs + 100);   // an off is said once it has stayed off this long
+        Assert.Empty(_speech.All);
+    }
+
+    // Review 2026-10-29 (speech 5): a light whose rule reads only another switch row's variable repeats that row: each RMP
+    // reception light (its reception selector's), the cockpit door's OPEN light (the door row's), each display-cycle light
+    // (the other side's OIS on center). The row speaks the change; the light never does, and has no Ctrl+M row.
+    [Theory]
+    [InlineData("A350_LT_RMP_VHF1_VOL_1_LIGHT")]
+    [InlineData("A350_LT_CKPT_DOOR_LT_SEQ1_LIGHT")]
+    [InlineData("A350_LT_OIS_DISPLAY_TRANSFER_DISPLAY_CYCLE_LEFT_SEQ1_LIGHT")]
+    public void A_light_that_mirrors_a_switch_row_never_speaks(string key)
+    {
+        var lamp = AnyLamp(key);
+        Baseline(lamp, 0);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(lamp.Key, 1, _speech);
+        BatchAfter(A350LampSpeech.GatherMs + 100);
+        Assert.Empty(_speech.All);
+        Assert.DoesNotContain(MonitorRowBuilder.Build(_def.GetVariables()), r => r.Key == key);
+    }
+
     [Fact]
     public void A_muted_light_says_nothing()
     {

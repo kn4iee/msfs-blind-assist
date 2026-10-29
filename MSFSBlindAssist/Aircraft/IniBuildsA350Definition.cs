@@ -139,6 +139,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _lampInputKeys.UnionWith(lamp.InputKeys);
             AddDisplay(lamp.Panel, lamp.Key);
         }
+        FindEchoLamps();
 
         var offeredPanels = _sections.SelectMany(s => _placement.Structure[s]).ToHashSet(StringComparer.Ordinal);
         foreach (var window in A350FcuWindows.All)
@@ -376,8 +377,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
         foreach (var lamp in _lamps.Values)
         {
-            Register(lamp.Key, lamp.Rule.Inputs[0], MasterSpeakers.GetValueOrDefault(lamp.Key, lamp.Name), lamp.InputKeys);
-            // Spoken by the definition as the cockpit lights it, one Ctrl+M row each; a master light's echoes are not.
+            Register(lamp.Key, lamp.Rule.Inputs[0], SpokenName(lamp), lamp.InputKeys);
+            // Spoken by the definition as the cockpit lights it, one Ctrl+M row each; an echo of another light or row is not.
             vars[lamp.Key].ExcludeFromMonitorManager = IsEcho(lamp);
         }
         foreach (var lamp in _lamps.Values)

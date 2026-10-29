@@ -42,10 +42,63 @@ public partial class IniBuildsA350Definition
         "A350_LT_FCU_MASTER_CAUTION_RIGHT_SEQ2_LIGHT", "A350_LT_FCU_MASTER_WARNING_RIGHT_SEQ1_LIGHT",
     };
 
-    /// <summary>A light that shows what another row speaks: the master lights' other legends, and the ECP page keys'
-    /// lights, which follow the SD page the "System display page" row speaks (the A380's), each change at once.</summary>
-    private static bool IsEcho(A350Lamp lamp) =>
-        MasterEchoes.Contains(lamp.Key) || lamp.Rule.Inputs.Contains(SdPageVar, StringComparer.Ordinal);
+    /// <summary>A light that shows what another row or light speaks: the master lights' other legends; the ECP page keys'
+    /// lights, which follow the SD page the "System display page" row speaks (the A380's), each change at once; the second
+    /// of lamps lit by one rule (<see cref="_twinEchoes"/>); a light mirroring a switch row (<see cref="_mirrorEchoes"/>).</summary>
+    private bool IsEcho(A350Lamp lamp) =>
+        MasterEchoes.Contains(lamp.Key) || lamp.Rule.Inputs.Contains(SdPageVar, StringComparer.Ordinal)
+        || _twinEchoes.Contains(lamp.Key) || _mirrorEchoes.Contains(lamp.Key);
+
+    /// <summary>The lamps after the first of those lit by one rule (ECAM CLR, ATC MSG, AUTOLAND on both sides: review
+    /// 2026-10-29, "Captain ECAM clear light on. First officer ECAM clear light on."): the first is the light.</summary>
+    private readonly HashSet<string> _twinEchoes = new(StringComparer.Ordinal);
+
+    /// <summary>Lamps whose rule reads only a placed switch row's variable (an RMP's reception lights, the cockpit door's
+    /// OPEN light, each display-cycle light): the row speaks the change, the light repeated it (review 2026-10-29).</summary>
+    private readonly HashSet<string> _mirrorEchoes = new(StringComparer.Ordinal);
+
+    /// <summary>The first of lamps lit by one rule: what it is called, without its side, and every button whose press
+    /// makes it the pilot's own.</summary>
+    private readonly Dictionary<string, (string Name, IReadOnlyList<string> Controls)> _twinLights = new(StringComparer.Ordinal);
+
+    /// <summary>What a light is called when it speaks (and on its Ctrl+M row).</summary>
+    private string SpokenName(A350Lamp lamp) =>
+        MasterSpeakers.TryGetValue(lamp.Key, out var master) ? master
+        : _twinLights.TryGetValue(lamp.Key, out var twin) ? twin.Name
+        : lamp.Name;
+
+    /// <summary>Works out the twins and the mirrors among the lamps (once, as the definition is built).</summary>
+    private void FindEchoLamps()
+    {
+        foreach (var group in _lamps.Values.GroupBy(l => l.Rule.Source, StringComparer.Ordinal).Where(g => g.Count() > 1))
+        {
+            var lamps = group.ToList();
+            var first = lamps[0];
+            bool bothSides = lamps.Any(l => l.Name.StartsWith("Captain ", StringComparison.Ordinal))
+                && lamps.Any(l => l.Name.StartsWith("First officer ", StringComparison.Ordinal));
+            string name = bothSides && first.Name.StartsWith("Captain ", StringComparison.Ordinal)
+                ? char.ToUpperInvariant(first.Name["Captain ".Length]) + first.Name[("Captain ".Length + 1)..]
+                : first.Name;
+            _twinLights[first.Key] = (name, lamps.Select(l => l.ControlId).OfType<string>().Distinct(StringComparer.Ordinal).ToList());
+            foreach (var echo in lamps.Skip(1))
+                _twinEchoes.Add(echo.Key);
+        }
+        var switchVars = _rows.Values
+            .Where(r => r.Action == A350RowAction.Set && r.Control?.StateVar is { Length: > 2 } sv && sv[1] == ':')
+            .Select(r => r.Control!.StateVar![2..]).ToHashSet(StringComparer.Ordinal);
+        foreach (var lamp in _lamps.Values)
+            if (lamp.Rule.Inputs.Count == 1 && switchVars.Contains(lamp.Rule.Inputs[0]))
+                _mirrorEchoes.Add(lamp.Key);
+    }
+
+    /// <summary>Whether a light changed with the pilot's own press or pick of its button, or a twin's button.</summary>
+    private bool IsOwnLamp(A350Lamp lamp)
+    {
+        IEnumerable<string> controls = _twinLights.TryGetValue(lamp.Key, out var twin) ? twin.Controls
+            : lamp.ControlId is { } id ? new[] { id } : Array.Empty<string>();
+        long now = Clock();
+        return controls.Any(c => _ownLampsUntil.TryGetValue(c, out var until) && now <= until);
+    }
 
     private const string SdPageVar = "INI_ECAM_ACTIVE_PAGE";
 
@@ -152,7 +205,7 @@ public partial class IniBuildsA350Definition
         {
             bool testing = _lampBoard.TestFlips(key, value) == true;
             foreach (var turn in _lampBoard.Update(key, value))
-                _lampSpeech.Forget(MasterSpeakers.GetValueOrDefault(turn.Lamp.Key, turn.Lamp.Name));
+                _lampSpeech.Forget(SpokenName(turn.Lamp));
             if (testing && !announcer.Suppressed && !IsMuted(AnnLtRow))
                 announcer.Announce(A350LampCallouts.AnnunciatorTest);
             return;
@@ -162,15 +215,15 @@ public partial class IniBuildsA350Definition
         foreach (var turn in _lampBoard.Update(key, value))
         {
             var lamp = turn.Lamp;
-            string name = MasterSpeakers.TryGetValue(lamp.Key, out var master) ? master : lamp.Name;
-            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp)
-                || (lamp.ControlId != null && _ownLampsUntil.TryGetValue(lamp.ControlId, out var until) && Clock() <= until);
+            string name = SpokenName(lamp);
+            bool master = MasterSpeakers.ContainsKey(lamp.Key);
+            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp) || IsOwnLamp(lamp);
             if (quiet)
             {
                 _lampSpeech.Forget(name);   // the light moved on from any earlier change still waiting
                 continue;
             }
-            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock(), silentOff: master != null);
+            _lampSpeech.Add(new A350LampChange(name, turn.On), Clock(), silentOff: master);
             _lampAnnouncer = announcer;
         }
     }

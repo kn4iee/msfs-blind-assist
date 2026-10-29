@@ -21,14 +21,18 @@ public sealed class A350LampRule
 
     private readonly IReadOnlyList<Step> _program;
 
-    private A350LampRule(IReadOnlyList<Step> program, IReadOnlyList<string> inputs)
+    private A350LampRule(IReadOnlyList<Step> program, IReadOnlyList<string> inputs, string source)
     {
         _program = program;
         Inputs = inputs;
+        Source = source;
     }
 
     /// <summary>Every L:var the rule reads (bare names, units dropped), once each, in the order it first reads them.</summary>
     public IReadOnlyList<string> Inputs { get; }
+
+    /// <summary>The rule as the cockpit writes it: two lamps with the same source are lit by one rule, one light.</summary>
+    public string Source { get; }
 
     /// <summary>Parses a rule; a form the cockpit does not use throws <see cref="FormatException"/>.</summary>
     public static A350LampRule Parse(string state)
@@ -41,7 +45,7 @@ public sealed class A350LampRule
             throw new FormatException($"A350 lamp rule: an unopened '}}' ({state})");
         if (Depth(program, 0, state) != 1)
             throw new FormatException($"A350 lamp rule: does not leave one value ({state})");
-        return new A350LampRule(program, inputs);
+        return new A350LampRule(program, inputs, state.Trim());
     }
 
     /// <summary>Reads steps up to a closing brace (<paramref name="closed"/>) or the end.</summary>
