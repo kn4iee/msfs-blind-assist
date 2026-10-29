@@ -276,9 +276,11 @@ internal static class A350TypedEntry
             || read($"KOHLSMAN SETTING MB:{side}") is not double mb)
             return A350TypedPlan.Refused(A350WritePlan.UnknownPositionRefusal);
         bool inches = hpaUnit < 0.5;
-        // The A380's range and words, in the side's own unit.
-        double targetMb = inches ? Math.Round(typed, 2, MidpointRounding.AwayFromZero) * MbPerInch : Math.Round(typed, MidpointRounding.AwayFromZero);
-        if (targetMb < 900 || targetMb > 1100)
+        // The A380 baro window's range and words, checked in the side's own unit (review 2026-10-29: inches checked in
+        // millibars refused 32.49 and 32.5 with a sentence allowing them, and took 26.59).
+        double rounded = Math.Round(typed, inches ? 2 : 0, MidpointRounding.AwayFromZero);
+        double targetMb = inches ? rounded * MbPerInch : rounded;
+        if (inches ? rounded < 26.6 || rounded > 32.5 : targetMb < 900 || targetMb > 1100)
             return A350TypedPlan.Refused(inches ? "QNH must be between 26.6 and 32.5 inches." : "QNH must be between 900 and 1100 hectopascals.");
         if (Math.Abs(mode - 3) < 0.5)
             return PlanStdPreset(field, sideName, inches, inches ? Math.Round(typed * 100, MidpointRounding.AwayFromZero) : targetMb);

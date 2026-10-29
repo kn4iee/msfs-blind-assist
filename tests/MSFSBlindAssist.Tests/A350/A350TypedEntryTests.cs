@@ -236,6 +236,20 @@ public class A350TypedEntryTests
         Assert.Equal("QNH must be between 26.6 and 32.5 inches.", A350TypedEntry.Plan(A350TypedEntry.CaptainQnh, 1013, Baro(1, 1009, hpa: 0)).Refusal);
     }
 
+    // Review 2026-10-29 (panels minor 2): inches were checked in millibars, so 32.49 and 32.5 (above 1100 hPa) were refused
+    // by a sentence that allows them. Inches are checked in inches, as the A380's baro window does.
+    [Theory]
+    [InlineData(26.6, true)]
+    [InlineData(32.49, true)]
+    [InlineData(32.5, true)]
+    [InlineData(26.59, false)]
+    [InlineData(32.51, false)]
+    public void A_qnh_in_inches_is_checked_against_the_inches_it_names(double typed, bool taken)
+    {
+        var plan = A350TypedEntry.Plan(A350TypedEntry.CaptainQnh, typed, Baro(1, 1009, hpa: 0));
+        Assert.Equal(taken ? null : "QNH must be between 26.6 and 32.5 inches.", plan.Refusal);
+    }
+
     [Fact]
     public void A_qnh_typed_while_std_is_a_preset_the_knob_steps_to()
     {
