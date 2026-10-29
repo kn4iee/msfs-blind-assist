@@ -315,6 +315,24 @@ public class IniBuildsA350DefinitionTests
         Assert.NotEqual(_sent[0], _sent[1]);   // and let go
     }
 
+    // Review 2026-10-29 (panels minor 5, [VAR-6]): the lever rows' combo refresh accepted every value, so a lever sweeping
+    // between detents moved the combo through values it does not hold. A switch row's combo follows a delivery only at one
+    // of its positions.
+    [Theory]
+    [InlineData(A350LeverSpeech.Lever1)]
+    [InlineData(A350LeverSpeech.Lever2)]
+    [InlineData(A350LeverSpeech.AllLevers)]
+    [InlineData("A350_FCTL_SPD_BRK_LEVER")]
+    [InlineData("A350_ELEC_BAT_1")]
+    public void A_switch_rows_combo_follows_a_delivery_only_at_one_of_its_positions(string key)
+    {
+        var def = _def.GetVariables()[key];
+        var positions = def.ValueDescriptions.Keys.OrderBy(k => k).ToList();
+        Assert.All(positions, p => Assert.True(def.RefreshControlWhenDefHandled!(p), $"{key} at {p}"));
+        double between = (positions[0] + positions[1]) / 2;
+        Assert.False(def.RefreshControlWhenDefHandled!(between), $"{key} between detents at {between}");
+    }
+
     [Fact]
     public void A_write_that_cannot_land_is_refused_aloud()
     {

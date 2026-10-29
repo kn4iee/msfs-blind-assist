@@ -582,6 +582,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             case A350RowAction.Set:
             {
                 bool stockVar = control.StateVar!.StartsWith("A:", StringComparison.Ordinal);
+                var positions = row.Positions.Keys.ToArray();
                 return new SimVarDefinition
                 {
                     Name = Bare(control.StateVar),
@@ -596,8 +597,10 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     ExcludeFromMonitorManager = control.Kind == A350Kinds.Spring,
                     ValueDescriptions = new Dictionary<double, string>(row.Positions),
                     SpokenOnlyDescriptions = A350Levers.SpokenOnlyWordsFor(control.Id),
-                    // The combo follows a change made elsewhere: the write fires only on a user commit.
-                    RefreshControlWhenDefHandled = _ => true,
+                    // The combo follows a change made elsewhere (the write fires only on a user commit), and only to one of
+                    // its positions: a lever sweeping between detents never moves it through values it does not hold
+                    // ([VAR-6]; review 2026-10-29).
+                    RefreshControlWhenDefHandled = v => positions.Any(p => Math.Abs(p - v) < A350WritePlan.SameValueTolerance),
                 };
             }
 
