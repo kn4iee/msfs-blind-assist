@@ -1,7 +1,8 @@
 # A350 OIS agent tests
 
 Offline tests of `MSFSBlindAssist/Resources/coherent-a350-ois-agent.js` against OIS pages captured live
-(iniBuilds A350 1.2.7). CI runs xUnit only, so run these by hand after changing the agent:
+(iniBuilds A350 1.2.7). CI runs them in the efb-readers job of `.github/workflows/tests.yml`; run them by hand
+after changing the agent:
 
 ```
 cd tools/a350-ois-test
@@ -22,6 +23,11 @@ node ../a350-probe/ceval.mjs VCockpit11 capture.js | sed -E 's/ data-a350-ois-la
 hidden lists whole (the runway choices), drops styles except a fixed overlay's (dialogs), a colour
 (door indicators, lit buttons), an opacity (the chock pictures), a percentage width (fluid bars), and the agent's own attributes. The sed drops labels a previous agent kept, so the fixture is the OIS as
 first seen.
+
+A fixture never keeps the owner's credentials. `capture.js` saves blank every password field and every text field
+in a row labelled as an ID, key, logon, password, token or PIN (OPTIONS > 3RD PARTY prints the SimBrief user ID,
+the SayIntentions API key and the Hoppie logon), and saves a Navigraph login code ("Code: ...") as `0AAA000A`;
+`secrets.test.js` fails if a fixture still holds one. Read a new fixture before committing it all the same.
 
 | Fixture | Page |
 | --- | --- |

@@ -106,3 +106,12 @@ jobs:
       - name: A380 OANS agent
         working-directory: tools/oans-agent-test
         run: npm test
+
+      # The A350 OIS agent (coherent-a350-ois-agent.js): its labels, dialogs, forms and page readers replayed on
+      # OIS pages captured live from the iniBuilds A350 1.2.7, and secrets.test.js, which fails when a fixture
+      # keeps a credential or login code the capture should have blanked.
+      - name: A350 OIS agent
+        working-directory: tools/a350-ois-test
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
