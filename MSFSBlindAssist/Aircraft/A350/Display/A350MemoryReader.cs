@@ -8,11 +8,12 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
 /// Copies the A350's linear memory out of the sim, read-only [A350-1]: the process is opened with
-/// QUERY_INFORMATION and VM_READ only. Locating lists every region without reading, keeps allocations
-/// shaped like a WASM memory (4 GB or more) and reads the three anchor strings at their linear
-/// addresses (about 4 s, once per A350 load). A snapshot re-lists only that allocation's regions and reads
-/// them back-to-back into one reused buffer [A350-2] (about 8-60 ms). Port of tools/a350-probe
-/// fastlocate.py and fastdump2.py.
+/// QUERY_INFORMATION and VM_READ only. Locating lists every region without reading (about 25,000 queries, over a
+/// second), keeps allocations shaped like a WASM memory (4 GB or more) and reads the three anchor strings at their
+/// linear addresses, once per A350 load; a look that finds nothing says why (<see cref="LastFailure"/>), and the
+/// service waits before the next (<see cref="A350ReaderStatus"/>). A snapshot re-lists only that allocation's regions
+/// and reads them back-to-back into one reused buffer [A350-2] (hundreds of milliseconds for a grown heap). Port of
+/// tools/a350-probe fastlocate.py and fastdump2.py.
 /// </summary>
 public sealed class A350MemoryReader : IDisposable
 {
@@ -64,11 +65,16 @@ public sealed class A350MemoryReader : IDisposable
     {
         foreach (var name in ProcessNames)
         {
-            var p = Process.GetProcessesByName(name).FirstOrDefault();
-            if (p != null) return p.Id;
+            var found = Process.GetProcessesByName(name);
+            int? id = found.Length > 0 ? found[0].Id : null;
+            foreach (var p in found) p.Dispose();
+            if (id != null) return id;
         }
         return null;
     }
+
+    /// <summary>Why the last <see cref="TryLocate"/> found nothing (null when it found the A350).</summary>
+    public A350ReaderFailure? LastFailure { get; private set; }
 
     private IEnumerable<Region> RegionsFrom(ulong address, ulong limit = 0x7FFF_FFFF_FFFF)
     {
@@ -105,12 +111,27 @@ public sealed class A350MemoryReader : IDisposable
         CloseProcess();
         _hot = new A350HotPages();   // another A350 (or sim): nothing to compare with
         int? pid = _pid ?? FindSim();
-        if (pid == null) return false;
+        if (pid == null)
+        {
+            LastFailure = A350ReaderFailure.NoSim;
+            return false;
+        }
         _handle = OpenProcess(ProcessQueryInformation | ProcessVmRead, false, pid.Value);
-        if (_handle == IntPtr.Zero) return false;
+        if (_handle == IntPtr.Zero)
+        {
+            // ERROR_ACCESS_DENIED (5): the sim runs elevated and MSFSBA does not; anything else, it has just gone.
+            LastFailure = Marshal.GetLastWin32Error() == 5 ? A350ReaderFailure.AccessDenied : A350ReaderFailure.NoSim;
+            return false;
+        }
         foreach (var b in Candidates(RegionsFrom(0), _minSpan))
-            if (AnchorsAt(b)) { Base = b; return true; }
+            if (AnchorsAt(b))
+            {
+                Base = b;
+                LastFailure = null;
+                return true;
+            }
         CloseProcess();
+        LastFailure = A350ReaderFailure.NotFound;
         return false;
     }
 

@@ -54,3 +54,51 @@ public sealed class A350ReadHealth
         return A350DisplayStatus.Unreadable(gauge, index);
     }
 }
+
+/// <summary>Why the reader could not draw at all: no sim process, no access to it, no A350 in it, or an error in the
+/// reader itself (a copy or a draw that threw).</summary>
+public enum A350ReaderFailure { NoSim, AccessDenied, NotFound, Error }
+
+/// <summary>
+/// Whether the reader can reach the A350 at all (pure; the service reports each draw request's outcome). Review
+/// 2026-10-29: while the A350 could not be found, every draw request walked the sim's whole address space back to back,
+/// and the call-outs simply stopped, unannounced. After a look that found nothing the next waits <see cref="RetryAfter"/>.
+/// A cause is said once, and once more when it changes: no access to the sim at once (it never cures itself: MSFS running
+/// as administrator), the rest after <see cref="SayAfter"/> of an A350 flight (a flight load takes that long to publish
+/// the A350); outside an A350 flight (the menu, another aircraft) nothing is said and nothing counts. A request that
+/// draws after a cause was said says the displays read again, once.
+/// </summary>
+public sealed class A350ReaderStatus
+{
+    public static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan SayAfter = TimeSpan.FromSeconds(30);
+
+    private DateTime? _lookFailedAt, _failingSince;
+    private A350ReaderFailure? _said;
+
+    /// <summary>Whether the reader may look for the A350 now: never within <see cref="RetryAfter"/> of a look that found
+    /// nothing (about 25,000 region queries and over a second each).</summary>
+    public bool MayLocate(DateTime now) => _lookFailedAt is not { } at || now - at >= RetryAfter;
+
+    /// <summary>A draw request's outcome: null when it drew, else why it could not; the sentence to speak, if any.</summary>
+    public string? Report(A350ReaderFailure? failure, bool a350Flight, DateTime now)
+    {
+        if (failure is not { } why)
+        {
+            _lookFailedAt = _failingSince = null;
+            if (_said == null) return null;
+            _said = null;
+            return A350DisplayStatus.ReadableAgain;
+        }
+        if (why != A350ReaderFailure.Error) _lookFailedAt = now;
+        if (!a350Flight)
+        {
+            _failingSince = null;
+            return null;
+        }
+        _failingSince ??= now;
+        if (_said == why || why != A350ReaderFailure.AccessDenied && now - _failingSince < SayAfter) return null;
+        _said = why;
+        return A350DisplayStatus.CannotRead(why);
+    }
+}

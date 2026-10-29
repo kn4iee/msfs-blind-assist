@@ -57,8 +57,11 @@ public sealed class SimStateTracker
     private bool? _slew;
     private double? _simRate;
     // Assumed running until "Sim" says otherwise, so a missing "Sim" delivery can never mute the
-    // announcements for a whole session.
-    private bool _simRunning = true;
+    // announcements for a whole session. Volatile: SimConnectManager.FlightRunning is read off the UI thread.
+    private volatile bool _simRunning = true;
+
+    /// <summary>Whether a flight runs, by the last "Sim" event (true until one says otherwise).</summary>
+    public bool SimRunning => _simRunning;
 
     /// <summary>Forgets every state: the next delivery of each signal seeds silently. Call per connection.</summary>
     public void Reset()

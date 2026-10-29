@@ -209,6 +209,16 @@ public class A350PfdDisplayTests
         Assert.Equal("Selected altitude: FL 400, cyan", lines.Single(l => l.Contains("400")));
     }
 
+    // Review 2026-10-29: with no capture the MFD window said the displays were not available but kept the old page's
+    // lines, so Enter clicked where the last page had its fields.
+    [Fact]
+    public void The_mfd_window_with_no_capture_has_no_line_to_click()
+    {
+        var (lines, shown) = Forms.A350.A350MfdWindow.PageLines(null, 0, dark: false);
+        Assert.Empty(lines);
+        Assert.Equal(new[] { IniBuildsA350Definition.NotAvailableYet }, shown);
+    }
+
     [Fact]
     public void The_rmp_window_shows_a_dark_screen_as_dark() =>
         Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, Forms.A350.A350RmpWindow.Lines(Fixture("ground_RMP_0"), dark: true));

@@ -58,6 +58,25 @@ public class A350PfdMonitorTests
         Assert.Equal(new[] { ("EFIS", 0), ("EFIS", 1), ("RMP", 0), ("RMP", 1) }, asked[1]);
     }
 
+    // Review 2026-10-29 (readers I7): the latest capture was kept forever and read as current, so after the reader stopped
+    // (the A350 not found after a flight load, every draw failing) the status displays, Alt+P and the MFD window read the
+    // last flight's displays as live. A capture older than MaxAge is no capture.
+    [Fact]
+    public async Task A_capture_older_than_its_age_is_no_capture()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var cpt = Fixture("efis0_fd_stand");
+        bool draws = true;
+        var m = new A350PfdMonitor(Each((g, side) => draws && g == "EFIS" && side == 0 ? cpt : null), _ => false, _ => { }, () => now);
+        await m.TickAsync();
+        draws = false;
+        now += A350PfdMonitor.MaxAge;
+        await m.TickAsync();
+        Assert.Same(cpt, m.Latest(0));
+        now += TimeSpan.FromSeconds(1);
+        Assert.Null(m.Latest(0));
+    }
+
     // The reader not ready (or no A350 in the sim) answers the whole tick with nothing: nothing is kept or said.
     [Fact]
     public async Task A_tick_the_reader_cannot_draw_keeps_nothing()

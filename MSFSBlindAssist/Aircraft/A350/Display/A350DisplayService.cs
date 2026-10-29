@@ -11,9 +11,10 @@ public enum A350DisplayState { Idle, Preparing, Ready, Unavailable }
 /// memory reader and the draw engine (a Wasmtime store is never shared between threads). Start prepares
 /// in the background: the installed module is read and, the first time per A350 version, patched and
 /// compiled (spoken: "A350 displays getting ready", then "ready"). A draw request takes one fresh memory
-/// copy for all the gauges it names, so they agree with each other; a trapped draw is retried once on a
-/// new copy (a torn copy, [A350-2]); the A350 is re-located when its anchors no longer read (a reload).
-/// When every draw keeps failing the pilot is told, and told again when they read (<see cref="A350ReadHealth"/>).
+/// copy for all the gauges it names; a trapped draw is retried once on a new copy (a torn copy, [A350-2]); the
+/// A350 is re-located when its anchors no longer read (a reload). When a display's draws keep failing the pilot is
+/// told, and told again when they read (<see cref="A350ReadHealth"/>); when nothing can be drawn at all (no A350 found
+/// in an A350 flight, no access to the sim, an error in the reader), told once why (<see cref="A350ReaderStatus"/>).
 /// </summary>
 public sealed class A350DisplayService : IDisposable
 {
@@ -28,6 +29,11 @@ public sealed class A350DisplayService : IDisposable
     private Func<string, double?> _aVar = _ => null;
     private Func<string, string?> _calcString = _ => null;
     private readonly A350ReadHealth _health = new();
+    private readonly A350ReaderStatus _status = new();
+
+    /// <summary>Whether the sim runs a flight with the A350 loaded: why nothing can be read is said only then (the menu
+    /// or another aircraft finds no A350, and that is no news). Asked on the worker thread.</summary>
+    public Func<bool> A350Flight { get; set; } = () => true;
 
     /// <summary>The displays whose last draw ran out of head room (worker thread only).</summary>
     private readonly HashSet<(string Gauge, int Index)> _exhausted = new();
@@ -102,13 +108,27 @@ public sealed class A350DisplayService : IDisposable
         }
     }
 
+    /// <summary>Whether the A350 is located, looking for it again once its anchors no longer read (a reload); after a
+    /// look that found nothing, the next waits (<see cref="A350ReaderStatus.MayLocate"/>).</summary>
     private bool EnsureLocated()
     {
         if (_reader == null) return false;
         if (_reader.Base != 0 && _reader.IsStillValid()) return true;
+        var now = DateTime.UtcNow;
+        if (!_status.MayLocate(now)) return false;
         bool ok = _reader.TryLocate();
         if (ok) Log.Info("A350Display", $"A350 memory at 0x{_reader.Base:x}");
+        else
+        {
+            Log.Debug("A350Display", "A350 not located: " + _reader.LastFailure);
+            Say(_status.Report(_reader.LastFailure ?? A350ReaderFailure.NotFound, A350Flight(), now));
+        }
         return ok;
+    }
+
+    private void Say(string? line)
+    {
+        if (line != null) Spoken?.Invoke(line);
     }
 
     /// <summary>Draws the named gauges on one fresh copy; null while not ready or with no A350 in the sim.</summary>
@@ -145,13 +165,16 @@ public sealed class A350DisplayService : IDisposable
                     }
                 }
                 var ended = DateTime.UtcNow;
+                Say(_status.Report(null, true, ended));
                 for (int n = 0; n < caps.Count; n++)
                     if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Spoken?.Invoke(said);
                 tcs.SetResult(caps);
             }
             catch (Exception ex)
             {
-                Log.Warn("A350Display", "draw: " + ex.Message);
+                Log.Warn("A350Display", "draw: " + ex);
+                try { Say(_status.Report(A350ReaderFailure.Error, A350Flight(), DateTime.UtcNow)); }
+                catch (Exception) { /* the status is best-effort; the request still answers */ }
                 tcs.SetResult(null);
             }
         });

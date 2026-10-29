@@ -683,6 +683,9 @@ public partial class MainForm
         if (a350DisplayService != null) return;
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
         a350DisplayService.Spoken += line => announcer.Announce(line);
+        // Why nothing can be read is said only in an A350 flight (the menu or another aircraft finds no A350).
+        a350DisplayService.A350Flight = () => simConnectManager is { IsConnected: true } sim && sim.FlightRunning
+            && sim.CurrentAircraftTitle.Contains("A350", StringComparison.OrdinalIgnoreCase);
         // The draw code's own sim reads (engine N2, baro settings): answered from the streamed cache.
         var avars = new Aircraft.A350.Display.A350AVarAnswers(key => simConnectManager?.GetCachedVariableValue(key),
             ask => Log.Info("A350Display", "draw code asked an A: var MSFSBA does not stream: " + ask));

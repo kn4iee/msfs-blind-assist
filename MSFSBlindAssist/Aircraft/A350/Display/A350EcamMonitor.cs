@@ -18,16 +18,22 @@ public sealed class A350EcamMonitor : IDisposable
     private readonly Func<bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350EcamAnnouncer _announcer = new();
+    private readonly Func<DateTime> _now;
+    private sealed record Kept(A350DrawCapture Capture, DateTime At);
+    private volatile Kept? _latest;   // one reference, written by the monitor's loop, read by the windows
     private CancellationTokenSource? _cts;
 
-    /// <summary>The latest CTR capture that drew without a trap, or null.</summary>
-    public A350DrawCapture? LatestCapture { get; private set; }
+    /// <summary>The latest CTR capture that drew without a trap, or null when there is none younger than
+    /// <see cref="A350PfdMonitor.MaxAge"/> (review 2026-10-29: Alt+E read the last capture whatever its age).</summary>
+    public A350DrawCapture? LatestCapture => _latest is { } kept && _now() - kept.At <= A350PfdMonitor.MaxAge ? kept.Capture : null;
 
-    public A350EcamMonitor(Func<Task<A350DrawCapture?>> drawCtr, Func<bool> muted, Action<string> speak)
+    /// <param name="now">The time a draw arrives and is read (tests replace it).</param>
+    public A350EcamMonitor(Func<Task<A350DrawCapture?>> drawCtr, Func<bool> muted, Action<string> speak, Func<DateTime>? now = null)
     {
         _drawCtr = drawCtr;
         _muted = muted;
         _speak = speak;
+        _now = now ?? (() => DateTime.UtcNow);
     }
 
     /// <summary>One read: draw, parse, speak what appeared.</summary>
@@ -35,7 +41,7 @@ public sealed class A350EcamMonitor : IDisposable
     {
         var cap = await _drawCtr().ConfigureAwait(false);
         if (cap == null || !cap.Ok) return;
-        LatestCapture = cap;
+        _latest = new Kept(cap, _now());
         var lines = _announcer.Observe(A350Ewd.Parse(cap));
         if (lines.Count == 0 || _muted()) return;
         foreach (var l in lines) _speak(l);

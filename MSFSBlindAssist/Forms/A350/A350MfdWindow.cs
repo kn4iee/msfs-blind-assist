@@ -112,7 +112,6 @@ public sealed class A350MfdWindow : Form
                 if (_shown.Superseded(cap)) return;
             }
             if (IsDisposed) return;
-            if (cap == null) { _list.SetText("The A350 displays are not available yet."); return; }
             var before = _lines;
             (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
             _list.SetLines(shown);
@@ -137,9 +136,12 @@ public sealed class A350MfdWindow : Form
     }
 
     /// <summary>The page's lines (what Enter acts on) and what the list shows: a dark screen shows dark, with nothing
-    /// to click, as the status display reads it.</summary>
-    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture cap, int side, bool dark)
+    /// to click, as the status display reads it; with no capture (none yet, or none young enough) there is nothing to
+    /// click either (review 2026-10-29: Enter clicked where the last page had its fields).</summary>
+    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark)
     {
+        if (cap == null)
+            return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.NotAvailableYet });
         if (dark)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
         var lines = A350MfdPage.Read(cap, side);

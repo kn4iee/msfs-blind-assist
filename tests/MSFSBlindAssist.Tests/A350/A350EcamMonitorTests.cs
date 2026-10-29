@@ -57,6 +57,21 @@ public class A350EcamMonitorTests
         Assert.DoesNotContain("FWS FWS 1+2 & CPIOM FAULT, amber", said);   // never replayed after unmuting
     }
 
+    // Review 2026-10-29 (readers I7): Alt+E and the SD line read the last capture whatever its age.
+    [Fact]
+    public async Task A_capture_older_than_its_age_is_no_capture()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var fws = Fixture("ctr_powerup_fws_fault");
+        var feed = new Queue<A350DrawCapture?>(new[] { fws });
+        var m = new A350EcamMonitor(() => Task.FromResult(feed.Count > 0 ? feed.Dequeue() : null), () => true, _ => { }, () => now);
+        await m.TickAsync();
+        now += A350PfdMonitor.MaxAge;
+        Assert.Same(fws, m.LatestCapture);
+        now += TimeSpan.FromSeconds(1);
+        Assert.Null(m.LatestCapture);
+    }
+
     [Fact]
     public async Task No_capture_or_a_trapped_one_changes_nothing()
     {

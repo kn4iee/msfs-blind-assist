@@ -43,6 +43,16 @@ public static class A350DisplayStatus
     public static string NotAvailable(string reason) => "A350 displays not available: " + reason;
     public static string Unreadable(string gauge, int index) => $"A350 {NameOf(gauge, index)} cannot be read at the moment";
     public static string Readable(string gauge, int index) => $"A350 {NameOf(gauge, index)} readable again";
+    public const string ReadableAgain = "A350 displays readable again";
+
+    /// <summary>Why no display can be read (<see cref="A350ReaderStatus"/>).</summary>
+    public static string CannotRead(A350ReaderFailure why) => "A350 displays cannot be read: " + why switch
+    {
+        A350ReaderFailure.NoSim => "the simulator is not running",
+        A350ReaderFailure.AccessDenied => "MSFSBA may not read the simulator; is MSFS running as administrator?",
+        A350ReaderFailure.NotFound => "the A350 is not found in the simulator",
+        _ => "an error in the reader, written to the log",
+    };
 
     /// <summary>A drawn display as the pilot knows it: an EFIS is one side's PFD and ND, the CTR the E/WD and SD,
     /// MFD 0 both MFDs.</summary>

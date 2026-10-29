@@ -13,6 +13,11 @@ public sealed class A350PfdMonitor : IDisposable
 {
     public const int PeriodMs = 500;
 
+    /// <summary>How old a display's latest draw may be and still be read as its display (review 2026-10-29: kept for ever,
+    /// the last flight's displays were read as live after the reader stopped). A display drawn in turn comes round every
+    /// few seconds, up to about half a minute with a large memory; an older draw is no draw.</summary>
+    public static readonly TimeSpan MaxAge = TimeSpan.FromSeconds(30);
+
     /// <summary>The displays drawn in turn besides the EFIS.</summary>
     public static readonly IReadOnlyList<(string Gauge, int Index)> Others = new[]
     {
@@ -23,24 +28,29 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350FmaAnnouncer _fma = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), A350DrawCapture> _latest = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At)> _latest = new();
+    private readonly Func<DateTime> _now;
     private int _tick, _other;
     private CancellationTokenSource? _cts;
 
     /// <param name="draw">Draws the displays asked for on one memory copy, a capture (or null) for each in order; null
     /// for all while the reader cannot draw.</param>
-    public A350PfdMonitor(Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> draw, Func<string, bool> muted, Action<string> speak)
+    /// <param name="now">The time a draw arrives and is read (tests replace it).</param>
+    public A350PfdMonitor(Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> draw, Func<string, bool> muted, Action<string> speak,
+        Func<DateTime>? now = null)
     {
         _draw = draw;
         _muted = muted;
         _speak = speak;
+        _now = now ?? (() => DateTime.UtcNow);
     }
 
     /// <summary>A side's latest EFIS draw that did not trap, or null.</summary>
     public A350DrawCapture? Latest(int side) => Latest("EFIS", side);
 
-    /// <summary>A display's latest draw that did not trap, or null.</summary>
-    public A350DrawCapture? Latest(string gauge, int index) => _latest.GetValueOrDefault((gauge, index));
+    /// <summary>A display's latest draw that did not trap, or null when there is none younger than <see cref="MaxAge"/>.</summary>
+    public A350DrawCapture? Latest(string gauge, int index) =>
+        _latest.TryGetValue((gauge, index), out var kept) && _now() - kept.At <= MaxAge ? kept.Capture : null;
 
     /// <summary>One tick: the captain's EFIS, every other tick the first officer's, and two of the others, asked for
     /// at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
@@ -52,8 +62,9 @@ public sealed class A350PfdMonitor : IDisposable
         for (int i = 0; i < 2; i++)
             gauges.Add(Others[_other++ % Others.Count]);
         if (await _draw(gauges.ToArray()).ConfigureAwait(false) is not { } caps) return;
+        var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
-            if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = cap;
+            if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);
         if (caps.Count > 0 && caps[0] is { Ok: true } cpt)
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
                 if (!_muted(key)) _speak(line);
