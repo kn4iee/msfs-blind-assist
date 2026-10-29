@@ -163,9 +163,11 @@ public class A350PfdTests
         Assert.Contains("Bank: wings level", lines);
     }
 
-    // The speed tape is SpeedTape.png (75 x 2285): its 10 kt ticks are 48 1/3 px apart, 30 kt at row 2283 up to 500 kt at
-    // row 11, so it moves 145 px every 30 kt. Read at 4.875 px a knot from one live pair (240.2 kt), every speed away from
-    // 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141.
+    // The speed tape is SpeedTape.png (75 x 2285): its 10 kt ticks are 48 1/3 px apart, 30 kt at row 2283.59 up to 500 kt
+    // at row 11.75, so it moves 145 px every 30 kt. Read at 4.875 px a knot from one live pair (240.2 kt), every speed away
+    // from 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141. (This theory moves the tape by the same
+    // 145/30 the reader uses, so it pins the constant; the evidence for it is the texture's ticks, VFE next reading 255 at
+    // four speeds, and the speed target triangles below reading whole knots.)
     [Theory]
     [InlineData(30)]
     [InlineData(60)]
@@ -187,28 +189,77 @@ public class A350PfdTests
 
     // Green dot, S, F and VFE next are sprites on the speed tape (PFDA350Elements.png: the green circle at 976,719, F's
     // dash and letter at 887,724, S's under it at 887,757, the amber "=" at 1001,702), each marking its speed at its
-    // middle; the tape reads the current speed at y 381.5, the middle of the band a symbol off the scale is pinned to
-    // (139.5 to 623.5, 50 kt either way). One approach's F reads the same at 159 and 185 kt; VFE next reads 255 clean at
-    // four speeds from 210 to 298 kt; one flight's green dot falls as it burns fuel.
+    // middle, read off the tape texture itself. One approach's F reads the same at 159 and 185 kt; VFE next reads 255
+    // clean at three speeds; one flight's green dot falls as it burns fuel (217.8, 217.6, 217.4).
     [Theory]
     [InlineData("efis0_climb", "Green dot: 218, green")]
-    [InlineData("efis0_level6000", "Green dot: 217, green")]
+    [InlineData("efis0_level6000", "Green dot: 218, green")]
     [InlineData("efis0_turn_left", "Green dot: 217, green")]
     [InlineData("efis0_ls_downwind_omdb", "Green dot: 186, green")]
     [InlineData("efis0_ils_above", "F speed: 137, green")]
-    [InlineData("efis0_ils_below", "F speed: 137, green")]
     [InlineData("efis0_level6000", "VFE next: 255, amber")]
-    [InlineData("efis0_ls_downwind_omdb", "VFE next: 255, amber")]
-    [InlineData("efis0_climb_bi614", "VFE next: 255, amber")]
+    [InlineData("efis0_turn_left", "VFE next: 255, amber")]
     [InlineData("efis0_ils_above", "VFE next: 186, amber")]
     [InlineData("efis0_ils_below", "VFE next: 186, amber")]
-    // Pinned to the tape's edge, off its scale: the green dot 50 kt under 298, VFE next 50 kt under 151 (it cannot be 101).
-    [InlineData("efis0_climb_bi614", "Green dot: more than 50 knots below, green")]
-    [InlineData("efis0_ils_gs_off", "VFE next: more than 50 knots below, amber")]
-    [InlineData("efis0_climb", "VFE next: more than 50 knots above, amber")]
     public void The_characteristic_speeds_read_off_their_symbols(string fixture, string line)
     {
         Assert.Contains(line, A350Pfd.Read(Fixture(fixture), 0));
+    }
+
+    // The tape shows y 180 to 585 (ScalesBackground.png's speed window, about 42 kt either way): a symbol drawn outside it
+    // is clipped, or parked at y 139.5 or 623.5 with no value at all (VFE next with flaps FULL reads "101" at 151 kt; there
+    // is no next configuration). A sighted pilot sees none of them, so none is read (review 2026-10-29).
+    [Theory]
+    [InlineData("efis0_ils_below", "F speed")]               // 48 kt below, clipped
+    [InlineData("efis0_ls_downwind_omdb", "VFE next")]       // 45 kt above, clipped
+    [InlineData("efis0_climb_bi614", "VFE next")]            // 43 kt below, clipped
+    [InlineData("efis0_climb_bi614", "Green dot")]           // parked at the foot
+    [InlineData("efis0_ils_gs_off", "VFE next")]             // flaps FULL: parked, no value
+    [InlineData("efis0_climb", "VFE next")]                  // parked at the top
+    public void A_symbol_off_the_visible_tape_is_not_read(string fixture, string symbol)
+    {
+        Assert.DoesNotContain(A350Pfd.Read(Fixture(fixture), 0), l => l.StartsWith(symbol + ":", StringComparison.Ordinal));
+    }
+
+    // The speed target triangle (atlas 957,748) marks the FCU's whole-knot target, so it calibrates the tape apart from the
+    // reader's own numbers: every one in the captures reads within 0.15 kt of a whole knot. On the scale it is read as the
+    // pilot sees it, cyan selected, magenta managed; off the scale the aircraft writes the target as a number instead.
+    [Theory]
+    [InlineData("efis0_level6000", 240, "Selected speed: 240, cyan")]
+    [InlineData("efis0_turn_left", 240, "Selected speed: 240, cyan")]
+    [InlineData("efis0_ils_above", 160, "Selected speed: 160, cyan")]
+    [InlineData("efis0_ils_below", 160, "Selected speed: 160, cyan")]
+    [InlineData("efis0_ils_gs_off", 140, "Selected speed: 140, cyan")]
+    [InlineData("efis0_climb_bi614", 300, "Speed target: 300, magenta")]
+    [InlineData("efis0_ls_downwind_omdb", 210, "Speed target: 210, magenta")]
+    public void The_speed_target_reads_its_whole_knot_off_the_tape(string fixture, int target, string line)
+    {
+        var capture = Fixture(fixture);
+        var tape = capture.Shapes!.Single(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 >= 836);
+        var triangle = capture.Shapes!.Single(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - 957) < 1.5f
+            && Math.Abs(s.Y0 - s.PatternY - 748) < 1.5f && s.X0 >= 836);
+        Assert.InRange(A350Pfd.TapeKnotsAt(tape, (triangle.Y0 + triangle.Y1) / 2), target - 0.15, target + 0.15);
+        var lines = A350Pfd.Read(capture, 0);
+        Assert.Contains(line, lines);
+        Assert.Single(lines, l => l.StartsWith("Selected speed", StringComparison.Ordinal) || l.StartsWith("Speed target", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_tape_symbols_read_the_same_whatever_the_culture()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            var lines = A350Pfd.Read(Fixture("efis0_level6000"), 0);
+            Assert.Contains("Green dot: 218, green", lines);
+            Assert.Contains("VFE next: 255, amber", lines);
+            Assert.Contains("Selected speed: 240, cyan", lines);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
     }
 
     [Fact]
@@ -276,7 +327,9 @@ public class A350PfdTests
         var lines = A350Pfd.Read(Fixture("efis0_ls_downwind_omdb"), 0);
         Assert.Contains("LS: IDBL 110.10, 3.0 NM, magenta", lines);
         Assert.Contains("LS course: 119, magenta", lines);
-        Assert.DoesNotContain(lines, l => l.StartsWith("Speed target") || l.StartsWith("Selected speed"));
+        // The magenta course is no speed target; the managed target here is the triangle's, 210.
+        Assert.DoesNotContain(lines, l => (l.StartsWith("Speed target") || l.StartsWith("Selected speed")) && l.Contains("119"));
+        Assert.Contains("Speed target: 210, magenta", lines);
     }
 
     // Before its ident decodes the block shows the frequency and DME alone: still the LS block.

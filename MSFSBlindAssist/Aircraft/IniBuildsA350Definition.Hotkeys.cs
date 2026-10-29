@@ -109,9 +109,9 @@ public partial class IniBuildsA350Definition
                 return true;
             // Green dot, S and F are symbols on the PFD's speed tape with no value of their own in the A350: read off the
             // captain's tape (A350Pfd.TapeSymbol), as Shift+1 to 3 read the A380's.
-            case HotkeyAction.ReadSpeedGD: AnnounceTapeSpeed("Green dot", "Green dot speed", announcer); return true;
-            case HotkeyAction.ReadSpeedS: AnnounceTapeSpeed("S speed", "S speed", announcer); return true;
-            case HotkeyAction.ReadSpeedF: AnnounceTapeSpeed("F speed", "F speed", announcer); return true;
+            case HotkeyAction.ReadSpeedGD: AnnounceTapeSpeed(A350.Display.A350Pfd.GreenDot, "Green dot speed", announcer); return true;
+            case HotkeyAction.ReadSpeedS: AnnounceTapeSpeed(A350.Display.A350Pfd.SSpeed, "S speed", announcer); return true;
+            case HotkeyAction.ReadSpeedF: AnnounceTapeSpeed(A350.Display.A350Pfd.FSpeed, "F speed", announcer); return true;
             // Fuel: F pounds, Shift+F kilograms, the fleet's shared requests (the A380's phrasing).
             case HotkeyAction.ReadFuelQuantity:
                 RequestFuelQuantity(simConnect, "A350");
@@ -200,16 +200,17 @@ public partial class IniBuildsA350Definition
     private void AnnounceSpeed(string name, string var, SimConnectManager simConnect, ScreenReaderAnnouncer announcer) =>
         announcer.AnnounceImmediate(CachedInput(simConnect, var) is double knots ? A350.A350Hotkeys.Speed(name, knots) : name + " not available");
 
-    /// <summary>A speed the captain's PFD shows only as a symbol on its tape, as the pilot sees it there: its value, how far
-    /// off the scale it is pinned, "not shown" while the tape does not draw it, dark while the screen is.</summary>
+    /// <summary>A speed the captain's PFD shows only as a symbol on its tape, as the pilot sees it there: its value on the
+    /// visible tape, above or below the speed scale while it is drawn outside it, "not shown" while the tape does not draw
+    /// it, dark while the screen is.</summary>
     private void AnnounceTapeSpeed(string symbol, string name, ScreenReaderAnnouncer announcer)
     {
         var pfd = DisplayPanels.First(d => d.Key == PfdCaptainKey);
         announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
             ?? (Pfd?.Latest(pfd.Gauge, pfd.Index) is not { } capture ? name + " not available"
-                : A350.Display.A350Pfd.TapeSymbol(capture, 0, symbol) is { } shown
-                    ? $"{name} {A350.Display.A350Pfd.TapeSymbolValue(shown)}{(shown.OffScale == 0 ? " knots" : "")}"
-                    : name + " not shown"));
+                : A350.Display.A350Pfd.TapeSymbol(capture, 0, symbol) is not { } shown ? name + " not shown"
+                : shown.OffScale != 0 ? $"{name} {(shown.OffScale > 0 ? "above" : "below")} the speed scale"
+                : $"{name} {shown.Knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} knots"));
     }
 
     /// <summary>A display's latest lines, as its status display reads them (none while its screen is dark), or null while

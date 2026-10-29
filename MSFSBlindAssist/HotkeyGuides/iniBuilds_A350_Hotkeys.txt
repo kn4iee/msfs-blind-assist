@@ -116,9 +116,9 @@ Characteristic Speeds (the values the A350 itself publishes):
              stall speed; its low-speed band starts there; "not shown" while it shows none)
   Shift+6    Read VFE Next (next flap limit)
   Shift+1    Read Green Dot speed  } the A350 shows these only as symbols on the speed tape:
-  Shift+2    Read S speed          } read off the captain's PFD ("Green dot speed 217 knots";
-  Shift+3    Read F speed          } "not shown" while the tape does not draw one; "more than
-                                     50 knots below" while it sits off the tape's scale)
+  Shift+2    Read S speed          } read off the captain's PFD ("Green dot speed 218 knots";
+  Shift+3    Read F speed          } "below the speed scale" while it is beyond the tape's view,
+                                     about 42 knots either way; "not shown" while not drawn)
 
 Fuel:
   F          Read Fuel On Board (pounds)

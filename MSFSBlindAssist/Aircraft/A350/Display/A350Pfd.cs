@@ -13,55 +13,59 @@ public static class A350Pfd
 {
     private const float PfdWidth = 836, FmaBottom = 125, BottomLine = 860;   // the FMA has three rows (live: A/THR at y 113)
     private const float WindowY = 389, TapePxPerFoot = 0.35f, DrumPxPerFoot = 21.75f / 20, HeadingIndexX = 359, HeadingPxPerDegree = 7;
-    /// <summary>The speed tape is SpeedTape.png (75 x 2285), its 10 kt ticks 48 1/3 px apart (30 kt at row 2283 up to 500 kt
-    /// at row 11): 145 px every 30 kt. Live pair: 240.2 kt with the tape at -885.2. (Read at 4.875 px a knot, every speed
-    /// away from 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141.)</summary>
+    /// <summary>The speed tape is SpeedTape.png (75 x 2285), its 10 kt ticks 48 1/3 px apart (30 kt at row 2283.59 up to
+    /// 500 kt at row 11.75): 145 px every 30 kt. Live pair: 240.2 kt with the tape at -885.2. (Read at 4.875 px a knot,
+    /// every speed away from 240 read high: the stand's 30 kt floor as 32, an approach's 140 as 141.)</summary>
     private const float SpeedPxPerKnot = 145f / 30, SpeedRefPattern = -885.2f, SpeedRefKnots = 240.2f;
     private const float PitchPxPerDegree = 8.61f, PitchZeroImageY = 620.5f;
 
-    /// <summary>The speed the tape's offset reads at its 30 kt floor and a knot over (30.03 on the stand, live).</summary>
-    private const double SpeedFloorReads = 31;
+    /// <summary>The speed the tape's offset reads at its 30 kt floor (30.03 on the stand, live).</summary>
+    private const double SpeedFloorReads = 30;
 
-    /// <summary>Where the tape reads the current speed: the middle of the band a symbol off its scale is pinned to, its
-    /// middle at y 139.5 above and 623.5 below (both live), 50 kt either way. (The tape's 240 kt row lands at 382.8 with
-    /// the tape at -885.21, 240.2 kt, where the 240 kt target was drawn, live.)</summary>
-    private const float SpeedIndexY = 381.5f;
+    /// <summary>The 30 kt tick's centre row in SpeedTape.png, which a symbol is read against: the texture itself, no index
+    /// (every speed target triangle in the captures reads within 0.15 kt of its whole-knot target this way).</summary>
+    private const float TapeFloorRow = 2283.59f;
 
-    /// <summary>How far from the current speed the tape shows a symbol; one further is drawn pinned to the tape's edge.</summary>
-    private const double TapeHalfRangeKnots = 50;
+    /// <summary>The tape's visible window: ScalesBackground.png's speed window, opaque from y 180 to 584, the tape's bottom
+    /// frame at 585 (about 42 kt either way). A symbol drawn outside it is clipped (an off-scale target is written as a
+    /// number instead), or parked at y 139.5 or 623.5, sometimes with no value at all (VFE next with the flaps FULL).</summary>
+    private const float TapeTop = 180, TapeBottom = 585;
+
+    public const string GreenDot = "Green dot", SSpeed = "S speed", FSpeed = "F speed", VfeNext = "VFE next";
 
     /// <summary>Speeds the tape shows only as symbols, by where each sprite sits in PFDA350Elements.png, each marking its
     /// speed at its middle: the green dot (a green circle), F (a dash and the letter), S under it in the atlas (not yet
     /// seen drawn: configuration 1), VFE next (an amber "="). Read live in a climb, level flight, a turn, a downwind and an
-    /// ILS approach: VFE next 255 kt clean at four speeds from 210 to 298 kt, 186 kt in both captures of one approach.</summary>
+    /// ILS approach: VFE next 255 kt clean at three speeds, 186 kt in both captures of one approach.</summary>
     public static readonly IReadOnlyList<(string Name, float AtlasX, float AtlasY, string Colour)> TapeSymbols = new[]
     {
-        ("Green dot", 976f, 719f, "green"), ("S speed", 887f, 757f, "green"), ("F speed", 887f, 724f, "green"),
-        ("VFE next", 1001f, 702f, "amber"),
+        (GreenDot, 976f, 719f, "green"), (SSpeed, 887f, 757f, "green"), (FSpeed, 887f, 724f, "green"), (VfeNext, 1001f, 702f, "amber"),
     };
 
-    /// <summary>A tape symbol's speed (<see cref="TapeSymbols"/>) in whole knots, from where its middle sits against the
-    /// speed index; or, pinned to the tape's edge, which way it is off the scale (+1 above, -1 below, Knots 0). Null while
-    /// the tape does not draw it.</summary>
+    /// <summary>The speed target's triangle in the atlas: cyan selected, magenta managed.</summary>
+    private const float TargetAtlasX = 957, TargetAtlasY = 748;
+
+    /// <summary>The speed the tape shows at screen y, read off the texture's 30 kt tick.</summary>
+    internal static double TapeKnotsAt(DrawnShape tape, float y) => 30 + (TapeFloorRow - (y - tape.PatternY)) / SpeedPxPerKnot;
+
+    /// <summary>A sprite in the speed tape's band (x 0 to 250 of the side's PFD) by where it sits in the atlas.</summary>
+    private static DrawnShape? TapeSprite(A350DrawCapture capture, int side, float atlasX, float atlasY) =>
+        Sprite(capture, side, (atlasX, atlasY), s => s.X0 - (side == 0 ? PfdWidth : 0) is >= 0 and < 250);
+
+    /// <summary>A tape symbol's speed in whole knots, read off the tape where its middle sits; or, drawn outside the tape's
+    /// visible window, which way (+1 above, -1 below, Knots 0). Null while the tape does not draw it.</summary>
     public static (double Knots, int OffScale)? TapeSymbol(A350DrawCapture capture, int side, string name)
     {
         var (_, atlasX, atlasY, _) = TapeSymbols.First(t => t.Name == name);
-        if (PatternOf(capture, side, 75, 2285) is not { } speedTape
-            || capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f
-                && Math.Abs(s.Y0 - s.PatternY - atlasY) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0)
-                && s.X0 - (side == 0 ? PfdWidth : 0) < 250) is not { } symbol)
+        if (PatternOf(capture, side, 75, 2285) is not { } tape || TapeSprite(capture, side, atlasX, atlasY) is not { } symbol)
             return null;
-        double offset = (SpeedIndexY - (symbol.Y0 + symbol.Y1) / 2) / SpeedPxPerKnot;
-        if (Math.Abs(offset) >= TapeHalfRangeKnots)
-            return (0, Math.Sign(offset));
-        double current = SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot;
-        return (Math.Round(current + offset, MidpointRounding.AwayFromZero), 0);
+        float middle = (symbol.Y0 + symbol.Y1) / 2;
+        return middle < TapeTop ? (0, 1)
+            : middle >= TapeBottom ? (0, -1)
+            : (Math.Round(TapeKnotsAt(tape, middle), MidpointRounding.AwayFromZero), 0);
     }
 
-    /// <summary>What a tape symbol reads as a status line's value or a hotkey's: "218" or "more than 50 knots below".</summary>
-    public static string TapeSymbolValue((double Knots, int OffScale) symbol) => symbol.OffScale == 0
-        ? symbol.Knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture)
-        : $"more than {TapeHalfRangeKnots:0} knots {(symbol.OffScale > 0 ? "above" : "below")}";
+    private static string Knots(double knots) => knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Where V1 is drawn above the speed tape while off its scale, under the speed target (live: 142 at x 129,
     /// y 207; the target at x 153, y 174).</summary>
@@ -102,9 +106,9 @@ public static class A350Pfd
     /// the selected heading bug, the track diamond.</summary>
     private static readonly (float X, float Y) SelectedHeadingAtlas = (811, 333), TrackAtlas = (296, 281);
 
-    private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas) =>
+    private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas, Func<DrawnShape, bool>? where = null) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
-            && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
+            && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0) && (where?.Invoke(s) ?? true));
 
     private static IEnumerable<DrawnShape> PfdSprites(A350DrawCapture capture, int side, float w, float h) =>
         (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Image > 1 && Math.Abs(s.X1 - s.X0 - w) < 1.5f
@@ -191,14 +195,23 @@ public static class A350Pfd
             o.Add($"Altitude constraint: {c.Text.Trim()}, magenta");
 
         // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre. On the stand
-        // the tape rests on its 30 kt floor, which its offset reads as 32.
+        // the tape rests on its 30 kt floor, which its offset reads as 30.03.
         if (PatternOf(capture, side, 75, 2285) is { } speedTape)
         {
             double knots = Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero);
             o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : $"Speed: {knots:0} knots");
+            // The tape's symbols as the pilot sees them: only inside its visible window.
             foreach (var (name, _, _, colour) in TapeSymbols)
-                if (TapeSymbol(capture, side, name) is { } symbol)
-                    o.Add($"{name}: {TapeSymbolValue(symbol)}, {colour}");
+                if (TapeSymbol(capture, side, name) is { OffScale: 0 } symbol)
+                    o.Add($"{name}: {Knots(symbol.Knots)}, {colour}");
+            // The speed target on the visible tape: its triangle, cyan selected, magenta managed (off the scale the aircraft
+            // writes it as a number instead, read with the texts below).
+            if (TapeSprite(capture, side, TargetAtlasX, TargetAtlasY) is { } target && (target.Y0 + target.Y1) / 2 is var middle
+                && middle >= TapeTop && middle < TapeBottom)
+            {
+                string at = Knots(Math.Round(TapeKnotsAt(speedTape, middle), MidpointRounding.AwayFromZero));
+                o.Add(A350Rgba.NameOf(target.Colour) == "magenta" ? $"Speed target: {at}, magenta" : $"Selected speed: {at}, cyan");
+            }
         }
         // The Mach number under the speed tape (live in the climb: ".681", green).
         foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 140 && c.Y is >= 640 and < 680 && MachText.IsMatch(c.Text.Trim())))
