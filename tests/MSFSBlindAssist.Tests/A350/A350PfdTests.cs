@@ -19,7 +19,7 @@ public class A350PfdTests
         var lines = A350Pfd.Read(Fixture("efis0_fd_stand"), 0);
         foreach (var l in new[]
         {
-            "FMA engagement: 1 FD 2, white", "Selected speed: 100, cyan", "Altitude: 43 feet",
+            "FMA engagement: 1 FD 2, white", "Selected speed: 100, cyan", "Altitude: 43 feet, green",
             "Selected altitude: 100, cyan", "QNH: 1013, cyan", "Radio altitude: 0, amber", "Heading: 219",
             "Speed: 30 knots or less",   // on the stand the tape rests on its 30 kt floor (its offset reads 32)
         })
@@ -220,12 +220,27 @@ public class A350PfdTests
         Assert.Equal(feet, A350Pfd.Altitude(tapeHundreds, tapeY, tens, tensY));
     }
 
+    // Review 2026-10-29 (readers minor 12): the drum turns amber below the BARO minimum, and only green drum digits were read,
+    // so the altitude went unread right there; the line now says the drum's colour, as every PFD line says its own.
+    [Fact]
+    public void Below_the_minimum_the_altitude_reads_amber()
+    {
+        var climb = Fixture("efis0_climb");
+        var amber = climb with
+        {
+            // The drum on the captain's PFD, which the capture draws 836 px in (its right half).
+            Texts = climb.Texts.Select(t => A350Rgba.NameOf(t.Colour) == "green" && t.X - 836 is >= 605 and < 676 && t.Y is >= 330 and < 460
+                ? t with { Colour = A350Rgba.Of("amber") } : t).ToList(),
+        };
+        Assert.Contains("Altitude: 2941 feet, amber", A350Pfd.Read(amber, 0));
+    }
+
     [Fact]
     public void In_the_climb_the_pfd_reads_altitude_heading_and_vertical_speed()
     {
         var lines = A350Pfd.Read(Fixture("efis0_climb"), 0);
-        Assert.Contains("Altitude: 2941 feet", lines);
-        Assert.Contains("Heading: 31", lines);
+        Assert.Contains("Altitude: 2941 feet, green", lines);
+        Assert.Contains("Heading: 031", lines);
         Assert.Contains("Vertical speed: 1400 feet per minute up, green", lines);
         Assert.Contains("FMA autothrust: SPEED, green", lines);
         Assert.Contains("FMA vertical: ALT CRZ*, green", lines);
@@ -387,7 +402,7 @@ public class A350PfdTests
         texts.Insert(1, nd);
         var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
         Assert.DoesNotContain(lines, l => l.Contains("MTL"));
-        Assert.Contains("Heading: 18", lines);   // mid-turn towards 330
+        Assert.Contains("Heading: 018", lines);   // mid-turn towards 330
     }
 
     // The ILS 04 at VCBI (live 2026-10-27, LS on, LOC engaged, G/S armed): the deviation diamonds read in dots
@@ -472,9 +487,9 @@ public class A350PfdTests
     // waits at the scale's edge). The flap indication at the bottom: "S" and "F" labels and the configuration,
     // cyan while moving, green once there.
     [Theory]
-    [InlineData("efis0_level6000", "Selected heading: 031, cyan", "Track: 034")]
-    [InlineData("efis0_climb", "Selected heading: 031, cyan", "Track: 033")]
-    [InlineData("efis0_turn_left", "Selected heading: 330, cyan", "Track: 024")]
+    [InlineData("efis0_level6000", "Selected heading: 031, cyan", "Track: 034, green")]
+    [InlineData("efis0_climb", "Selected heading: 031, cyan", "Track: 033, green")]
+    [InlineData("efis0_turn_left", "Selected heading: 330, cyan", "Track: 024, green")]
     public void The_heading_scale_reads_the_selected_heading_and_track(string fixture, string selected, string track)
     {
         var lines = A350Pfd.Read(Fixture(fixture), 0);
@@ -488,7 +503,7 @@ public class A350PfdTests
     {
         var lines = A350Pfd.Read(Fixture("efis0_ils_below"), 0);
         Assert.DoesNotContain(lines, l => l.StartsWith("Selected heading"));
-        Assert.Contains("Track: 037", lines);
+        Assert.Contains("Track: 037, green", lines);
         Assert.Contains("Flaps: 3, cyan", lines);
         Assert.DoesNotContain(lines, l => l is "S, white" or "F, white" or "3, cyan");
     }

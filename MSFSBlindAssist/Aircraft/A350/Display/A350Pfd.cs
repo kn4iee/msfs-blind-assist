@@ -292,17 +292,19 @@ public static class A350Pfd
         }
 
         // The altitude: the tape's label nearest the window and the drum's tens label nearest it; the drum's big
-        // digits only repeat it.
+        // digits only repeat it. The drum is green, amber below the BARO minimum (review 2026-10-29: only green was
+        // read, so the altitude went unread there), and the line says which.
+        static bool Drum(string colour) => colour is "green" or "amber";
         var tapeLabels = cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
-        var drumTens = cells.Where(c => c.X is >= 658 and < 676 && c.Y is >= 330 and < 460 && c.Colour == "green"
+        var drumTens = cells.Where(c => c.X is >= 658 and < 676 && c.Y is >= 330 and < 460 && Drum(c.Colour)
             && c.Text.Length == 2 && c.Text.All(char.IsDigit)).ToList();
         used.UnionWith(drumTens);
-        used.UnionWith(cells.Where(c => c.X is >= 605 and < 658 && c.Y is >= 330 and < 460 && c.Colour == "green"));
+        used.UnionWith(cells.Where(c => c.X is >= 605 and < 658 && c.Y is >= 330 and < 460 && Drum(c.Colour)));
         if (tapeLabels.Count > 0 && drumTens.Count > 0)
         {
             var tape = tapeLabels.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
             var tens = drumTens.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
-            o.Add($"Altitude: {Altitude(int.Parse(tape.Text), tape.Y, int.Parse(tens.Text), tens.Y)} feet");
+            o.Add($"Altitude: {Altitude(int.Parse(tape.Text), tape.Y, int.Parse(tens.Text), tens.Y)} feet, {tens.Colour}");
         }
 
         // The vertical speed, in hundreds of feet a minute beside the altitude tape: above the window climbing.
@@ -342,7 +344,7 @@ public static class A350Pfd
             used.UnionWith(scale);
             var nearest = scale.OrderBy(c => Math.Abs(c.X - HeadingIndexX)).First();
             double heading = (int.Parse(nearest.Text) * 10 + (HeadingIndexX - nearest.X) / HeadingPxPerDegree + 360) % 360;
-            o.Add($"Heading: {Math.Round(heading) % 360:0}");
+            o.Add($"Heading: {Degrees(heading)}");   // three digits, as the selected heading and the track
 
             static string Degrees(double d) => $"{((int)Math.Round(d) % 360 + 360) % 360:000}";
             float At(DrawnShape sh) => (sh.X0 + sh.X1) / 2 - shift;
@@ -352,8 +354,9 @@ public static class A350Pfd
                 o.Add($"Selected heading: {offScaleHeading[0].Text}, cyan");
             else if (Sprite(capture, side, SelectedHeadingAtlas) is { } bug)
                 o.Add($"Selected heading: {Degrees(heading + (At(bug) - HeadingIndexX) / HeadingPxPerDegree)}, cyan");
+            // The track diamond is a green sprite: its colour is the atlas's, never a drawn text's (as STD's).
             if (Sprite(capture, side, TrackAtlas) is { } track)
-                o.Add($"Track: {Degrees(heading + (At(track) - HeadingIndexX) / HeadingPxPerDegree)}");
+                o.Add($"Track: {Degrees(heading + (At(track) - HeadingIndexX) / HeadingPxPerDegree)}, green");
         }
         else if (offScaleHeading.Count > 0)
             o.Add($"Selected heading: {offScaleHeading[0].Text}, cyan");
