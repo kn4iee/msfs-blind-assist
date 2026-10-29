@@ -30,6 +30,16 @@ public class A350PedestalPanelTests
         }, Placement.Structure["Pedestal"]);
     }
 
+    // Review 2026-10-29 (panels I1): the guard's tooltip words name the click ({0 OPEN, 1 CLOSE}, ACTION "OPEN GUARD"), as
+    // the ELT guard's and the gravity gear cover's do, so the row read "Open" with the guard shut, and every EMER CANCEL
+    // press (whose release writes 0 to the guard: it shuts) was announced "ECAM emergency cancel guard: Open".
+    [Fact]
+    public void The_emergency_cancel_guard_reads_closed_at_zero()
+    {
+        var guard = Placement.RowsByPanel.Values.SelectMany(r => r).Single(r => r.Name == "ECAM emergency cancel guard");
+        Assert.Equal(new Dictionary<double, string> { [0] = "Closed", [1] = "Open" }, guard.Positions);
+    }
+
     [Fact]
     public void The_kccu_wheels_wait_for_the_kccu_panel()
     {

@@ -513,6 +513,8 @@ public static partial class A350PanelLayout
         ["SIGNS_EMER_EXIT"] = new() { [0] = "On", [1] = "Arm", [2] = "Off" },
         ["EVAC_CAPT_PURS"] = new() { [0] = "Captain only", [1] = "Captain and purser" },
         ["ELT_GUARD"] = new() { [0] = "Closed", [1] = "Open" },   // its tooltip words are the click's action
+        // The same: EMER CANCEL's release writes 0 to its guard, which shuts it (review 2026-10-29: read "Open" shut).
+        ["ECAM_EMER_CANCEL_GUARD"] = new() { [0] = "Closed", [1] = "Open" },
         ["FCU_FD"] = new() { [0] = "Off", [1] = "On" },
         ["FCU_METER"] = new() { [0] = "Off", [1] = "On" },
         ["FCU_TRUE_MAG"] = new() { [0] = "Magnetic", [1] = "True" },
