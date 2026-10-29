@@ -93,10 +93,7 @@ public sealed class A350DrawEngine : IDisposable
             Function.UntypedCallbackDelegate body = imp.Name switch
             {
                 A350ModulePatcher.HookImport => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
-                {
-                    Hook(_memory, a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32(), a[3].AsInt32(), a[4].AsInt32(), a[5].AsInt32());
-                    r[0] = 0;
-                },
+                    r[0] = Hook(_memory, a[0].AsInt32(), a[1].AsInt32(), a[2].AsInt32(), a[3].AsInt32(), a[4].AsInt32(), a[5].AsInt32()),
                 "get_aircraft_var_enum" or "fsVarsGetAircraftVarId" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                     r[0] = IdFor(_avarIds, CStr(_memory, a[0].AsInt32())),
                 "get_units_enum" or "fsVarsGetUnitId" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
@@ -229,10 +226,22 @@ public sealed class A350DrawEngine : IDisposable
 
     private static float F(int bits) => BitConverter.Int32BitsToSingle(bits);
 
-    private void Hook(Memory mem, int a, int b, int c, int d, int e, int magic)
+    /// <summary>A report from the draw code (0), or a question from its allocator (the answer).</summary>
+    private int Hook(Memory mem, int a, int b, int c, int d, int e, int magic)
     {
         switch (magic)
         {
+            case A350ModulePatcher.MallocMagic: return Allocate((uint)a, 16);
+            case A350ModulePatcher.CallocMagic: return AllocateCleared((long)(uint)a * (uint)b);
+            case A350ModulePatcher.ReallocMagic: return Reallocate((uint)a, (uint)b);
+            case A350ModulePatcher.MemalignMagic: return Allocate((uint)b, (uint)a);
+            case A350ModulePatcher.PosixMemalignMagic:
+            {
+                int p = Allocate((uint)c, (uint)b);
+                if (p == 0) return 48;   // ENOMEM
+                mem.WriteInt32(a, p);
+                return 0;
+            }
             case A350ModulePatcher.TextMagic:
             {
                 uint s = (uint)a, end = (uint)b;
@@ -273,6 +282,54 @@ public sealed class A350DrawEngine : IDisposable
                 break;
             }
         }
+        return 0;
+    }
+
+    // The draw code's own heap: the head room above the copy, below the answered strings' page, used afresh by every
+    // call of a Draw (what one draw allocates is dead when it returns). The copy's heap is never touched by an
+    // allocation: live 2026-10-28 a torn copy's free lists sent the A350's malloc into text bytes.
+    private long _heap, _heapEnd;
+
+    private void ResetHeap()
+    {
+        _heap = AlignUp(_copy?.End ?? 0, 16);
+        _heapEnd = _memory.GetLength() - StringSlot * StringSlots;
+    }
+
+    private static long AlignUp(long v, long a) => (v + a - 1) / a * a;
+
+    /// <summary>A block of <paramref name="size"/> bytes at a multiple of <paramref name="align"/>, after an 8-byte
+    /// header holding its size as dlmalloc's chunk head (size | in use) for code that asks a block's size; 0 when the
+    /// head room is used up.</summary>
+    private int Allocate(long size, long align)
+    {
+        if (align < 16 || (align & (align - 1)) != 0) align = Math.Max(16, (long)System.Numerics.BitOperations.RoundUpToPowerOf2((ulong)Math.Max(align, 1)));
+        long p = AlignUp(_heap + 8, align);
+        long end = p + Math.Max(size, 1);
+        if (end > _heapEnd || p > int.MaxValue) return 0;
+        _memory.WriteInt32(p - 4, (int)(AlignUp(size, 8) + 8) | 3);
+        _heap = end;
+        return (int)p;
+    }
+
+    private int AllocateCleared(long size)
+    {
+        int p = Allocate(size, 16);
+        if (p != 0) _memory.GetSpan(p, (int)size).Clear();
+        return p;
+    }
+
+    /// <summary>A new block holding what the old one held (as many bytes as the new size, at most to the memory's
+    /// end: a block's own size is not trusted on a torn copy, and reading past it is harmless).</summary>
+    private int Reallocate(long old, long size)
+    {
+        int p = Allocate(size, 16);
+        if (p != 0 && old != 0)
+        {
+            int n = (int)Math.Min(size, _memory.GetLength() - old);
+            if (n > 0) _memory.GetSpan(old, n).CopyTo(_memory.GetSpan(p, n));
+        }
+        return p;
     }
 
     private static A350Rgba ReadRgba(Memory mem, int p) =>
@@ -417,10 +474,12 @@ public sealed class A350DrawEngine : IDisposable
             if (_warmed.Add(cls + "#" + index))
             {
                 Restore();
+                ResetHeap();
                 if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
                 _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
             }
             Restore();
+            ResetHeap();
             if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }

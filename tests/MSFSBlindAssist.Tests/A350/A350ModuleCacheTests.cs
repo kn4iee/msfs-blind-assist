@@ -31,11 +31,13 @@ public class A350ModuleCacheTests : IDisposable
         Assert.Equal(community, A350ModuleCache.FindInstalledModule(Path.Combine(_root, "Packages")));   // Community wins, as the sim loads it over the official one
     }
 
+    // Keyed by the hash alone, a module compiled from an older patch was loaded after the patch changed (2026-10-29:
+    // the allocator patch would silently not apply). The patch's version is part of the key.
     [Fact]
-    public void The_cache_is_keyed_by_the_module_hash()
+    public void The_cache_is_keyed_by_the_module_hash_and_the_patch_version()
     {
         var a = A350ModuleCache.CachePath(_root, "abc");
-        Assert.Equal(Path.Combine(_root, "MSFSBlindAssist", "a350", "abc.cwasm"), a);
+        Assert.Equal(Path.Combine(_root, "MSFSBlindAssist", "a350", $"abc-p{A350ModulePatcher.Version}.cwasm"), a);
         Assert.NotEqual(a, A350ModuleCache.CachePath(_root, "abd"));
     }
 

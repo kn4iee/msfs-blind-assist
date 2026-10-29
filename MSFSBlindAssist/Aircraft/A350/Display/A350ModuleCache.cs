@@ -47,8 +47,9 @@ public static class A350ModuleCache
         return root == null ? null : FindInstalledModule(root);
     }
 
+    /// <summary>The compiled module's cache, keyed by the installed module's hash and the patch's version.</summary>
     public static string CachePath(string localAppData, string sha256) =>
-        Path.Combine(localAppData, "MSFSBlindAssist", "a350", sha256 + ".cwasm");
+        Path.Combine(localAppData, "MSFSBlindAssist", "a350", $"{sha256}-p{A350ModulePatcher.Version}.cwasm");
 
     public static string Sha256Of(string path)
     {

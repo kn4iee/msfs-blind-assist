@@ -22,7 +22,15 @@ public static class A350ModulePatcher
         ResetMagic = 0x7E5F, TransformMagic = 0x7E60, FrameMagic = 0x7E61, FrameColourMagic = 0x7E62,
         ElementMagic = 0x7E65;
 
+    /// <summary>The allocator's questions to the engine, whose answer the patched function returns.</summary>
+    public const int MallocMagic = 0x7E70, CallocMagic = 0x7E71, ReallocMagic = 0x7E72, MemalignMagic = 0x7E73,
+        PosixMemalignMagic = 0x7E74;
+
     public const string HookImport = "path_readlink";
+
+    /// <summary>The patch's version, part of the compiled module cache's key: bump it whenever the patch changes, or
+    /// a module compiled from the older patch is loaded.</summary>
+    public const int Version = 2;
 
     /// <summary>The functions exported for the engine to call: export name emu_&lt;Class&gt;_Draw.</summary>
     public static readonly string[] DrawExports =
@@ -48,6 +56,40 @@ public static class A350ModulePatcher
     {
         if (args.Length != 5) throw new ArgumentException("a report takes five arguments");
         return Concat(Concat(args), Const(magic), Concat(new byte[] { 0x10 }, Uleb(hookIndex)), new byte[] { 0x1A });
+    }
+
+    /// <summary>A question to the engine whose answer the function returns at once: the rest of its body never runs.</summary>
+    private static byte[] Answer(int hookIndex, int magic, params byte[][] args)
+    {
+        if (args.Length != 5) throw new ArgumentException("a question takes five arguments");
+        return Concat(Concat(args), Const(magic), Concat(new byte[] { 0x10 }, Uleb(hookIndex)), new byte[] { 0x0F });
+    }
+
+    private static readonly byte[] Return = { 0x0F };
+
+    /// <summary>
+    /// The A350's allocator (wasi-libc's dlmalloc), answered by the engine from the head room above the copy, free a
+    /// no-op: a copy taken across frames tears the allocator's free lists, and live 2026-10-28 the draws that trapped
+    /// died there (dlmalloc &lt;- malloc &lt;- operator new). Every entry point that reaches the heap state is answered,
+    /// so no allocation reads or writes the copy's heap. A function this A350 version lacks is left alone.
+    /// </summary>
+    private static IEnumerable<(string Name, byte[] Code)> AllocatorPatches(int hook) => new[]
+    {
+        ("malloc", Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
+        ("dlmalloc", Answer(hook, MallocMagic, Get(0), Zero, Zero, Zero, Zero)),
+        ("calloc", Answer(hook, CallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("realloc", Answer(hook, ReallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("internal_memalign", Answer(hook, MemalignMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("posix_memalign", Answer(hook, PosixMemalignMagic, Get(0), Get(1), Get(2), Zero, Zero)),
+        ("free", Return),
+        ("dlfree", Return),
+    };
+
+    /// <summary>The function defined by that one name, or null when none or several are.</summary>
+    private static int? TryFindFunction(A350WasmModule mod, string name)
+    {
+        var hits = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && kv.Value == name).Select(kv => kv.Key).ToList();
+        return hits.Count == 1 ? hits[0] : null;
     }
 
     public static A350PatchedModule Patch(byte[] original)
@@ -83,6 +125,10 @@ public static class A350ModulePatcher
         var ui = UiDrawFunctions(mod);
         for (int k = 0; k < ui.Count; k++)
             hooks[mod.FindFunction(ui[k])] = Call(hook, ElementMagic, Get(0), Get(1), Const(k), Zero, Zero);
+
+        foreach (var (name, code) in AllocatorPatches(hook))
+            if (TryFindFunction(mod, name) is int fn)
+                hooks[fn] = code;
 
         var exports = DrawExports.Select(n => (ExportName(n), mod.FindFunction(n))).ToList();
         var bytes = AddExports(PrependToBodies(original, mod, hooks), exports);
