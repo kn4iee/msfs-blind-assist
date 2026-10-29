@@ -45,6 +45,34 @@ public sealed class A350DrawEngine : IDisposable
     /// <summary>Calculator strings and A: vars the last draws asked for (diagnostics, A350Probe simq).</summary>
     public HashSet<string> Asked { get; } = new();
 
+    /// <summary>How long one call of a gauge's Draw may run: past it the draw traps (epoch interruption, ticked every
+    /// <see cref="EpochTickMs"/>) and the next one starts a fresh instance. A torn copy can give a list walk a cycle, and
+    /// one draw that never returned stopped every later display read (review 2026-10-29).</summary>
+    public TimeSpan DrawDeadline { get; set; } = TimeSpan.FromSeconds(5);
+
+    private const int EpochTickMs = 50;
+    private readonly System.Threading.Timer _epochTicker;
+
+    private ulong DeadlineTicks => (ulong)Math.Max(1, Math.Ceiling(DrawDeadline.TotalMilliseconds / EpochTickMs));
+
+    /// <summary>The most texts, frames, elements or shapes one draw records: a cycle that draws on every pass would
+    /// otherwise grow them without bound, and a draw past it fails with what it kept.</summary>
+    public int MaxRecorded { get; set; } = 100_000;
+    private bool _overRecorded;
+
+    private bool Room(int count)
+    {
+        if (count < MaxRecorded) return true;
+        _overRecorded = true;
+        return false;
+    }
+
+    private readonly Dictionary<string, int> _stubCalls = new();
+
+    /// <summary>The imports the last draw called that only a stub answers, by "module.name", with how often
+    /// (diagnostics, A350Probe draw).</summary>
+    public IReadOnlyDictionary<string, int> StubCalls => _stubCalls;
+
     /// <summary>The value of an A: var asked by the draw code: "KOHLSMAN SETTING HG:1|inches of mercury".</summary>
     public Func<string, double?> AVarAnswer { get; set; } = _ => null;
 
@@ -73,6 +101,10 @@ public sealed class A350DrawEngine : IDisposable
         _facts = facts;
         _engine = engine;
         _module = module;
+        _epochTicker = new System.Threading.Timer(_ =>
+        {
+            try { _engine.IncrementEpoch(); } catch (Exception) { /* the engine is gone: nothing left to interrupt */ }
+        }, null, EpochTickMs, EpochTickMs);
         Instantiate();
     }
 
@@ -84,6 +116,7 @@ public sealed class A350DrawEngine : IDisposable
         _store?.Dispose();
         _warmed.Clear();
         _store = new Store(_engine);
+        _store.SetEpochDeadline(DeadlineTicks);   // a store's deadline starts at 0: without one, its first check traps
         using var linker = new Linker(_engine);
         foreach (var imp in _module.Imports)
         {
@@ -113,15 +146,15 @@ public sealed class A350DrawEngine : IDisposable
                 },
                 "fsRenderFill" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && A350ShapeReader.Fill(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Fill(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "fsRenderStroke" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && A350ShapeReader.Stroke(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[6].AsInt32(), a[7].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Stroke(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[6].AsInt32(), a[7].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "fsRenderTriangles" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
-                    if (RecordShapes && A350ShapeReader.Triangles(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[4].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
+                    if (RecordShapes && Room(_shapes.Count) && A350ShapeReader.Triangles(_memory.GetSpan(0, (int)Math.Min(int.MaxValue, _memory.GetLength())), a[1].AsInt32(), a[4].AsInt32(), a[5].AsInt32()) is { } s) _shapes.Add(s);
                 },
                 "execute_calculator_code" => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
                 {
@@ -137,7 +170,7 @@ public sealed class A350DrawEngine : IDisposable
                     }
                     else r[0] = 0;
                 },
-                _ => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => Zero(rs, r),
+                _ => Stub(imp.ModuleName, imp.Name, rs),
             };
             linker.Define(imp.ModuleName, imp.Name, Function.FromCallback(_store, Guard(imp.Name, body, rs, OnHostError), ps, rs));
         }
@@ -189,6 +222,51 @@ public sealed class A350DrawEngine : IDisposable
                 ValueKind.Float64 => (ValueBox)0d,
                 _ => (ValueBox)0,
             };
+    }
+
+    /// <summary>WASI's EBADF (no such file: nothing is open), ENOSYS, and the SimConnect E_FAIL ("no message").</summary>
+    private const int Ebadf = 8, Enosys = 52, EFail = unchecked((int)0x80004005);
+
+    /// <summary>An import the engine has no answer of its own for, answered as a sandbox with no files, no environment
+    /// and a real clock; anything else answers zero. Review 2026-10-29: a bare "success" writes no out-parameter, so libc
+    /// read a stale stack word, and musl's write loop (fd_write until all is written) or wasi-libc's preopen scan
+    /// (fd_prestat_get until EBADF) never ended; a dispatch loop on SimConnect_GetNextDispatch's S_OK would not either.
+    /// Each call is counted (<see cref="StubCalls"/>).</summary>
+    private Function.UntypedCallbackDelegate Stub(string module, string name, ValueKind[] results)
+    {
+        string key = module + "." + name;
+        Function.UntypedCallbackDelegate answer = (module, name) switch
+        {
+            ("wasi_snapshot_preview1", "clock_time_get") => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+            {
+                _memory.WriteInt64((uint)a[2].AsInt32(), ClockNanoseconds(a[0].AsInt32()));
+                r[0] = 0;
+            },
+            ("wasi_snapshot_preview1", "environ_sizes_get") => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+            {
+                _memory.WriteInt32((uint)a[0].AsInt32(), 0);
+                _memory.WriteInt32((uint)a[1].AsInt32(), 0);
+                r[0] = 0;
+            },
+            ("wasi_snapshot_preview1", "poll_oneoff") => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => r[0] = Enosys,
+            ("wasi_snapshot_preview1", _) when name.StartsWith("fd_", StringComparison.Ordinal) || name.StartsWith("path_", StringComparison.Ordinal) =>
+                (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => r[0] = Ebadf,
+            (_, "SimConnect_GetNextDispatch") => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => r[0] = EFail,
+            _ => (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) => Zero(results, r),
+        };
+        return (Caller c, ReadOnlySpan<ValueBox> a, Span<ValueBox> r) =>
+        {
+            _stubCalls[key] = _stubCalls.GetValueOrDefault(key) + 1;
+            answer(c, a, r);
+        };
+    }
+
+    /// <summary>WASI's clocks in nanoseconds: 0 is the real time since 1970, the others a monotonic count.</summary>
+    private static long ClockNanoseconds(int clockId)
+    {
+        if (clockId == 0) return (DateTime.UtcNow - DateTime.UnixEpoch).Ticks * 100;
+        long t = Stopwatch.GetTimestamp(), f = Stopwatch.Frequency;
+        return t / f * 1_000_000_000 + t % f * 1_000_000_000 / f;
     }
 
     private static int IdFor(Dictionary<string, int> table, string name)
@@ -252,9 +330,11 @@ public sealed class A350DrawEngine : IDisposable
             }
             case A350ModulePatcher.TextMagic:
             {
+                if (!Room(_texts.Count)) break;
                 uint s = (uint)a, end = (uint)b;
                 string text;
-                if (end > s) text = Encoding.Latin1.GetString(mem.GetSpan(s, (int)(end - s)));
+                // A torn copy's end pointer can lie far past its start: a text is never longer than a C string is read.
+                if (end > s) text = Encoding.Latin1.GetString(mem.GetSpan(s, (int)Math.Min(end - s, 4096)));
                 else text = CStr(mem, a);
                 float lx = F(d), ly = F(e);
                 var (x, y) = _state.Apply(c, lx, ly);
@@ -273,6 +353,7 @@ public sealed class A350DrawEngine : IDisposable
             case A350ModulePatcher.ResetMagic: _state.ResetTransform(a); break;
             case A350ModulePatcher.FrameMagic:
             {
+                if (!Room(_frames.Count)) break;
                 var (x, y) = _state.Apply(a, F(b), F(c));
                 _frames.Add(new DrawnFrame(x, y, F(d), F(e), false, null));
                 break;
@@ -282,6 +363,7 @@ public sealed class A350DrawEngine : IDisposable
                 break;
             case A350ModulePatcher.ElementMagic:
             {
+                if (!Room(_elements.Count)) break;
                 uint el = (uint)a;
                 float rx = mem.ReadSingle(el + 4), ry = mem.ReadSingle(el + 8), rw = mem.ReadSingle(el + 12), rh = mem.ReadSingle(el + 16);
                 var (x, y) = _state.Apply(b, rx, ry);
@@ -473,7 +555,13 @@ public sealed class A350DrawEngine : IDisposable
     /// "FCU", "RMP" (0-2), "SFD", "SND", "ISIS", "BAT", "HUD". A trap is returned as the capture's error.</summary>
     public A350DrawCapture Draw(string cls, int index = 0)
     {
-        _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
+        void Clear()
+        {
+            _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
+            _overRecorded = false;
+            _stubCalls.Clear();
+        }
+        Clear();
         var objs = Objects(cls);
         if (index >= objs.Count) return new A350DrawCapture(cls, _texts, _frames, _elements, $"no {cls} object #{index}", 0);
         var sw = Stopwatch.StartNew();
@@ -483,21 +571,32 @@ public sealed class A350DrawEngine : IDisposable
             if (_fresh) { Instantiate(); _fresh = false; }
             var f = _instance.GetFunction(A350ModulePatcher.ExportName(cls + "::Draw()"))
                 ?? throw new A350ModuleException("no export for " + cls);
+            void Run()
+            {
+                Restore();
+                ResetHeap();
+                _store.SetEpochDeadline(DeadlineTicks);
+                if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
+            }
             // The first draw of a gauge on a new instance draws only part of it (live: the E/WD's title
             // without its procedure lines): run it once as a warm-up and keep only the second.
             if (_warmed.Add(cls + "#" + index))
             {
-                Restore();
-                ResetHeap();
-                if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
-                _texts = new(); _frames = new(); _elements = new(); _shapes = new(); _state.Clear();
+                Run();
+                Clear();
             }
-            Restore();
-            ResetHeap();
-            if (cls is "SFD" or "SND") f.Invoke(objs[index], 0); else f.Invoke(objs[index]);
+            Run();
+        }
+        catch (TrapException ex) when (ex.Type == TrapCode.Interrupt)
+        {
+            error = $"trap: the draw ran past its {DrawDeadline.TotalSeconds:0.#} s deadline";
+            LastTrap = ex.Message;
+            _fresh = true;
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }
         catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; LastTrap = ex.Message; }
+        if (error == null && _overRecorded)
+            error = $"the draw recorded more than {MaxRecorded} items (a torn copy drawing in a cycle)";
         LastHeapBytes = _heap - _heapStart;
         LastHeapExhausted = _heapExhausted;
         return new A350DrawCapture(cls, _texts, _frames, _elements, error, sw.Elapsed.TotalMilliseconds)
@@ -513,5 +612,9 @@ public sealed class A350DrawEngine : IDisposable
     /// <summary>Whether the last draw asked for more than the head room held (and got NULL).</summary>
     public bool LastHeapExhausted { get; private set; }
 
-    public void Dispose() => _store.Dispose();
+    public void Dispose()
+    {
+        _epochTicker.Dispose();
+        _store.Dispose();
+    }
 }

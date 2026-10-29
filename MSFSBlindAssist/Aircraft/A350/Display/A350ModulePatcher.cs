@@ -37,8 +37,9 @@ public static class A350ModulePatcher
     public const string HookImport = "path_readlink";
 
     /// <summary>The patch's version, part of the compiled module cache's key: bump it whenever the patch changes, or
-    /// a module compiled from the older patch is loaded.</summary>
-    public const int Version = 3;
+    /// a module compiled from the older patch is loaded; and whenever <see cref="A350ModuleCache.CreateEngine"/>'s
+    /// compile settings change (4: epoch interruption, the draw deadline).</summary>
+    public const int Version = 4;
 
     /// <summary>The functions exported for the engine to call: export name emu_&lt;Class&gt;_Draw.</summary>
     public static readonly string[] DrawExports =

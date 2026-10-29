@@ -17,8 +17,10 @@ public static class A350ModuleCache
     public static readonly string ModuleRelativePath = Path.Combine(
         "SimObjects", "Airplanes", "A350", "attachments", "inibuilds", "Function_Interior_A350", "panel", "inibuilds-A350.wasm");
 
-    /// <summary>The engine every A350 module is compiled with; a cache only loads into the same config.</summary>
-    public static Engine CreateEngine() => new(new Config().WithOptimizationLevel(OptimizationLevel.Speed));
+    /// <summary>The engine every A350 module is compiled with; a cache only loads into the same config, so a change here
+    /// bumps <see cref="A350ModulePatcher.Version"/> too. Epoch interruption puts a deadline on every draw
+    /// (<see cref="A350DrawEngine.DrawDeadline"/>).</summary>
+    public static Engine CreateEngine() => new(new Config().WithOptimizationLevel(OptimizationLevel.Speed).WithEpochInterruption(true));
 
     /// <summary>The installed module under a packages root: Community folders first (the sim loads an
     /// add-on there over an official package), then the Official folders' packages. A package folder

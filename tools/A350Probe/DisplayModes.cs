@@ -179,6 +179,10 @@ internal static class DisplayModes
                 File.WriteAllText(Path.Combine(jsonDir, g.Replace('#', '_') + ".json"), System.Text.Json.JsonSerializer.Serialize(cap,
                     new System.Text.Json.JsonSerializerOptions { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             Console.Error.WriteLine($"== {g}: {cap.Texts.Count} texts, {cap.Frames.Count} frames, {cap.Elements.Count} elements in {cap.Milliseconds:F1} ms {cap.Error}");
+            // The imports only a stub answered (review 2026-10-29: clock_time_get, path_open or fd_write is the OANS
+            // profiler's way into libc's file code).
+            if (draw.StubCalls.Count > 0)
+                Console.Error.WriteLine("   stubs: " + string.Join(", ", draw.StubCalls.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} x{kv.Value}")));
             if (!cap.Ok && Environment.GetEnvironmentVariable("A350_TRAP") == "1") Console.Error.WriteLine(draw.LastTrap);
             foreach (var t in cap.Texts)
                 Console.WriteLine($"{F0(t.X).PadLeft(5)} {F0(t.Y).PadLeft(5)} ( {F0(t.LocalX)} {F0(t.LocalY)} ) {t.ColourName.PadRight(7)} {System.Text.Json.JsonSerializer.Serialize(t.Text, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })}");
