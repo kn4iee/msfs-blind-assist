@@ -716,15 +716,20 @@ public static class A350MfdPage
         }
     }
 
+    /// <summary>A unit the MFD may draw in a colour of its own just right of its value (HOLD's LAST EXIT EFOB: "--.-"
+    /// magenta, "T" cyan 8 px right).</summary>
+    private static readonly Regex UnitWord = new(@"^(T|KG|LBS|NM|KT|FT|MN)$", RegexOptions.Compiled);
+
     /// <summary>A row's texts as tokens: each read as a word, a time drawn in parts joined ("--", grey ":", "--"), a
-    /// grey unit kept with the value left of it (its "d" a degree sign).</summary>
+    /// grey unit, or a unit word just right of it, kept with the value left of it (its "d" a degree sign).</summary>
     private static List<DrawnCell> Tokens(IReadOnlyList<DrawnCell> row)
     {
         var tokens = new List<DrawnCell>();
         foreach (var c in row.OrderBy(c => c.X))
         {
             var prev = tokens.LastOrDefault();
-            if (c.Colour == "grey" && prev != null && prev.Colour is not ("grey" or "white") && c.X - prev.X <= 60)
+            if (prev != null && prev.Colour is not ("grey" or "white")
+                && (c.Colour == "grey" && c.X - prev.X <= 60 || UnitWord.IsMatch(c.Text) && c.X - prev.X <= 20))
                 tokens[^1] = prev with { Text = prev.Text + (c.Text == "d" ? "°" : " " + c.Text) };
             else
                 tokens.Add(c with { Text = Word(c.Text) });

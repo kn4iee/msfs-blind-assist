@@ -763,6 +763,17 @@ public class A350MfdPageTests
         Assert.Contains("INBOUND CRS: 297°, yellow", Page("mfd_hold_imped"));
     }
 
+    // The HOLD page's LAST EXIT row (live 2026-10-28 at IMPED): under AT, UTC and EFOB, the time ("--:--", nearest UTC) and
+    // the EFOB ("--.-") with its unit "T" drawn cyan 8 px right of it. The unit counted as a third value, so the row paired
+    // by order: "AT none, UTC none, EFOB T (cyan), magenta".
+    [Fact]
+    public void The_last_exit_row_pairs_its_values_with_their_headings()
+    {
+        var lines = Page("mfd_hold_imped");
+        Assert.Contains("UTC none, EFOB none T, magenta", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("EFOB T (cyan)", StringComparison.Ordinal));
+    }
+
     // SEC 1's DEPARTURE with nothing selected yet (live 2026-10-28): its tables' empty values are white like their
     // headings (dashes, EOSID's NONE), so no row paired and "RWY LENGTH CRS" read apart from "none none ... d".
     [Fact]
