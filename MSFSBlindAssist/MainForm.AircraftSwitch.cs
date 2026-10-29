@@ -682,7 +682,9 @@ public partial class MainForm
     {
         if (a350DisplayService != null) return;
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
-        a350DisplayService.Spoken += line => announcer.Announce(line);
+        // The reader speaks from its worker thread and the monitors from pool threads: each line is posted to the UI thread,
+        // the only one the announcer speaks from (off it a line is lost unheard, [A380C-22]).
+        a350DisplayService.Spoken += line => SafeBeginInvoke(() => announcer.Announce(line));
         // Why nothing can be read is said only in an A350 flight (the menu or another aircraft finds no A350).
         a350DisplayService.A350Flight = () => simConnectManager is { IsConnected: true } sim && sim.FlightRunning
             && sim.CurrentAircraftTitle.Contains("A350", StringComparison.OrdinalIgnoreCase);
@@ -701,7 +703,7 @@ public partial class MainForm
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
             async () => (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
             () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
-            line => announcer.Announce(line));
+            line => SafeBeginInvoke(() => announcer.Announce(line)));
         // The displays: the CTR (the E/WD call-outs) and the captain's EFIS drawn twice a second for the FMA call-outs (one
         // Ctrl+M row per column), the first officer's once a second, the others in turn, each tick's on one memory copy;
         // each display's latest draw feeds its status display. The E/WD monitor is fed from the tick, never a copy of its own.
@@ -709,7 +711,7 @@ public partial class MainForm
         a350PfdMonitor = new Aircraft.A350.Display.A350PfdMonitor(
             async gauges => await service.DrawAsync(gauges),
             key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
-            line => announcer.Announce(line)) { CtrDrawn = ecam.Observe };
+            line => SafeBeginInvoke(() => announcer.Announce(line))) { CtrDrawn = ecam.Observe };
         if (currentAircraft is IniBuildsA350Definition a350)
         {
             a350.Displays = a350DisplayService;
