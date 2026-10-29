@@ -11,7 +11,8 @@ public sealed record A350PatchedModule(byte[] Bytes, IReadOnlyList<string> UiDra
 /// Builds the scratch module the display engine runs: the A350's own module with a report call
 /// prepended to each drawing function and each gauge's Draw exported. A report is a call to the WASI
 /// import <c>path_readlink</c> (never called while drawing) with a magic number as its sixth argument,
-/// so the engine learns every text, colour, transform, frame and UI element the draw code produces.
+/// so the engine learns every text, colour, transform, frame and UI element the draw code produces. The A350's
+/// allocator is answered by the engine instead of run [A350-10], which the prototype did not do.
 /// The installed module is only read; the result lives on the pilot's machine. Port of
 /// tools/a350-probe/patchtext.py and patch2.py; magics as in docs/inibuilds-a350.md "The patch".
 /// </summary>

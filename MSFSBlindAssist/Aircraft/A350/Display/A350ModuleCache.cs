@@ -9,8 +9,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>
 /// Finds the pilot's installed A350 module and gives the display engine its compiled, patched copy.
 /// The patched module is built on this machine from the pilot's own install (never shipped [A350-1]),
-/// compiled once per A350 version (about 10 s, 1.4 GB peak) and cached by the module's SHA-256 under
-/// %LOCALAPPDATA%\MSFSBlindAssist\a350; later starts deserialize it (about 125 ms).
+/// compiled once per A350 version (about 10 s, 1.4 GB peak) and cached by the module's SHA-256 and the patch's
+/// version [A350-11] under %LOCALAPPDATA%\MSFSBlindAssist\a350; later starts deserialize it (about 125 ms).
 /// </summary>
 public static class A350ModuleCache
 {

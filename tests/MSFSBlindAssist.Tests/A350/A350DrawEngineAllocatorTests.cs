@@ -17,9 +17,16 @@ public class A350DrawEngineAllocatorTests
     private static byte[] Call(int f) => new byte[] { 0x10 }.Concat(U(f)).ToArray();
     private static byte[] I32Const(long v) => new byte[] { 0x41 }.Concat(S(v)).ToArray();
 
-    private sealed record Fns(int Text, int Malloc, int Free, int Calloc, int Realloc, int Memalign, int PosixMemalign, int Flag);
+    private sealed record Fns(int Text, int Malloc, int Free, int Calloc, int Realloc, int Memalign, int PosixMemalign, int Flag,
+        int DlMalloc, int DlFree);
 
-    /// <summary>A CTR gauge whose Draw is <paramref name="draw"/> (one i32 local besides the object), over a module
+    /// <summary>Traps unless local <paramref name="local"/> is a block above the copy (the copy ends at 65536): a NULL
+    /// answer, or a block carved out of the copy, fails the draw (review 2026-10-29: without it every test passed with
+    /// the allocator answering 0, as address 0 of the restored copy reads back what the draw wrote).</summary>
+    private static byte[] AboveCopy(int local) => new byte[] { 0x20, (byte)local }.Concat(I32Const(65536))
+        .Concat(new byte[] { 0x49, 0x04, 0x40, 0x00, 0x0B }).ToArray();
+
+    /// <summary>A CTR gauge whose Draw is <paramref name="draw"/> (two i32 locals besides the object), over a module
     /// whose allocator traps when reached.</summary>
     private static byte[] Module(Func<Fns, byte[]> draw)
     {
@@ -56,8 +63,8 @@ public class A350DrawEngineAllocatorTests
         int realloc = m.Func("realloc", tII, new byte[] { 0x00 });
         int memalign = m.Func("internal_memalign", tII, new byte[] { 0x00 });
         int posix = m.Func("posix_memalign", tIII, new byte[] { 0x00 });
-        var fns = new Fns(text, malloc, free, calloc, realloc, memalign, posix, flag);
-        m.Func("CTR::Draw()", tCtx, draw(fns), new byte[] { 0x01, 0x01, I32 });
+        var fns = new Fns(text, malloc, free, calloc, realloc, memalign, posix, flag, dlmalloc, dlfree);
+        m.Func("CTR::Draw()", tCtx, draw(fns), new byte[] { 0x01, 0x02, I32 });
         m.Data(2000, U32(0, 3000, 11));
         m.Data(3000, U32(1, 3100));
         m.Data(3100, "3CTR\0");
@@ -104,12 +111,17 @@ public class A350DrawEngineAllocatorTests
     private static byte[] Store(int offset, uint word) => new byte[] { 0x20, 0x01 }.Concat(I32Const(unchecked((int)word)))
         .Concat(new byte[] { 0x36, 0x02 }).Concat(U(offset)).ToArray();
 
+    // Also dlmalloc and dlfree called directly (on 1.2.7 only patched functions call them, but a version may not), and
+    // a second block that lies after the first, never over it.
     [Fact]
     public void Malloc_and_free_never_reach_the_copys_own_heap()
     {
-        var texts = Draw(f => I32Const(8).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 })
+        var texts = Draw(f => I32Const(8).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(Store(0, 0x4C4C4548))                                                        // "HELL"
             .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const('O')).Concat(new byte[] { 0x3A, 0x00, 0x04 })   // 'O' at +4
+            .Concat(I32Const(8)).Concat(Call(f.DlMalloc)).Concat(new byte[] { 0x21, 0x02 }).Concat(AboveCopy(2))
+            .Concat(new byte[] { 0x20, 0x02, 0x20, 0x01 }).Concat(I32Const(8)).Concat(new byte[] { 0x6A, 0x49, 0x04, 0x40, 0x00, 0x0B })   // second < first + 8: trap
+            .Concat(new byte[] { 0x20, 0x02 }).Concat(Call(f.DlFree))
             .Concat(TextOfLocal(f, 5))
             .Concat(new byte[] { 0x20, 0x01 }).Concat(Call(f.Free)).ToArray());
         Assert.Equal("HELLO", Assert.Single(texts).Text);
@@ -121,10 +133,10 @@ public class A350DrawEngineAllocatorTests
     {
         var texts = Draw(f => new byte[] { 0x23, (byte)f.Flag, 0x45, 0x04, 0x40 }                      // first call (the warm-up):
             .Concat(I32Const(1)).Concat(new byte[] { 0x24, (byte)f.Flag })
-            .Concat(I32Const(8)).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 })
+            .Concat(I32Const(8)).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(Store(0, 0x58585858)).Concat(Store(4, 0x58585858))                            // "XXXXXXXX"
             .Concat(new byte[] { 0x0F, 0x0B })                                                    // return; end
-            .Concat(I32Const(1)).Concat(I32Const(8)).Concat(Call(f.Calloc)).Concat(new byte[] { 0x21, 0x01 })
+            .Concat(I32Const(1)).Concat(I32Const(8)).Concat(Call(f.Calloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(TextOfLocal(f, 8)).ToArray());
         Assert.Equal(new string('\0', 8), Assert.Single(texts).Text);
     }
@@ -132,9 +144,9 @@ public class A350DrawEngineAllocatorTests
     [Fact]
     public void Realloc_keeps_what_the_block_held()
     {
-        var texts = Draw(f => I32Const(4).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 })
+        var texts = Draw(f => I32Const(4).Concat(Call(f.Malloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(Store(0, 0x44434241))                                                         // "ABCD"
-            .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(64)).Concat(Call(f.Realloc)).Concat(new byte[] { 0x21, 0x01 })
+            .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(64)).Concat(Call(f.Realloc)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(TextOfLocal(f, 4)).ToArray());
         Assert.Equal("ABCD", Assert.Single(texts).Text);
     }
@@ -144,11 +156,12 @@ public class A350DrawEngineAllocatorTests
     public void Aligned_allocations_are_aligned()
     {
         var ok = I32Const(0x4B4F);   // "OK"
-        var texts = Draw(f => I32Const(64).Concat(I32Const(8)).Concat(Call(f.Memalign)).Concat(new byte[] { 0x21, 0x01 })
+        var texts = Draw(f => I32Const(64).Concat(I32Const(8)).Concat(Call(f.Memalign)).Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
             .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(63)).Append((byte)0x71).Append((byte)0x45)  // (p & 63) == 0
             .Concat(new byte[] { 0x04, 0x40 })
-            .Concat(I32Const(6100)).Concat(I32Const(128)).Concat(I32Const(8)).Concat(Call(f.PosixMemalign)).Append((byte)0x1A)
-            .Concat(I32Const(6100)).Concat(new byte[] { 0x28, 0x02, 0x00, 0x21, 0x01 })            // local 1 = *(6100)
+            .Concat(I32Const(6100)).Concat(I32Const(128)).Concat(I32Const(8)).Concat(Call(f.PosixMemalign))
+            .Concat(new byte[] { 0x04, 0x40, 0x00, 0x0B })                                        // posix_memalign != 0: trap
+            .Concat(I32Const(6100)).Concat(new byte[] { 0x28, 0x02, 0x00, 0x21, 0x01 }).Concat(AboveCopy(1))   // local 1 = *(6100)
             .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(127)).Append((byte)0x71).Append((byte)0x45)
             .Concat(new byte[] { 0x04, 0x40 })
             .Concat(new byte[] { 0x20, 0x01 }).Concat(ok).Concat(new byte[] { 0x3B, 0x01, 0x00 })     // i32.store16 "OK"

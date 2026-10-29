@@ -37,11 +37,11 @@ Every A350 display except the OIS, FAP and printer is a WASM gauge drawn with Na
 
 Nothing is written to the sim and the installed module is only read; the patched module and its compiled cache are built on the user's machine from their own copy and never shipped.
 
-**In MSFSBA** (`MSFSBlindAssist/Aircraft/A350/Display/`, ported from the prototype in `tools/a350-probe` and checked against it on one memory copy, gauge by gauge): `A350WasmModule` reads the module by name, `A350ModulePatcher` builds the scratch module (byte-identical to `patch2.py`'s), `A350ModuleFacts` re-derives the vtables and anchors, `A350ModuleCache` compiles it once per A350 version under `%LOCALAPPDATA%\MSFSBlindAssist\a350\<sha256>.cwasm` (about 15 s; then about 0.3 s), `A350MemoryReader` locates (about 1.2 s) and copies (8-20 ms) the A350's memory, `A350DrawEngine` draws (a round of CTR, both EFIS and the MFD about 70 ms, mostly restoring the copy before each gauge), `A350DrawLayout` reads rows with their colours, and `A350DisplayService` runs it all on one worker thread, started by MainForm while the A350 is active. `A350Probe` modes `patch`, `snapshot`, `draw <copy|live> Gauge[#n] …` (xy.mjs's format; `A350_DRAW_JSON=<dir>` saves captures as fixtures) and `service` exercise each layer.
+**In MSFSBA** (`MSFSBlindAssist/Aircraft/A350/Display/`, ported from the prototype in `tools/a350-probe` and checked against it on one memory copy, gauge by gauge): `A350WasmModule` reads the module by name, `A350ModulePatcher` builds the scratch module (`patch2.py`'s hooks, plus the allocator answers of [A350-10], which the prototype lacks), `A350ModuleFacts` re-derives the vtables and anchors, `A350ModuleCache` compiles it once per A350 version and patch version under `%LOCALAPPDATA%\MSFSBlindAssist\a350\<sha256>-p<version>.cwasm` [A350-11] (about 15 s; then about 0.3 s), `A350MemoryReader` locates (about 1.2 s) and copies (8-20 ms) the A350's memory, `A350DrawEngine` draws (a round of CTR, both EFIS and the MFD about 70 ms, mostly restoring the copy before each gauge), `A350DrawLayout` reads rows with their colours, and `A350DisplayService` runs it all on one worker thread, started by MainForm while the A350 is active. `A350Probe` modes `patch`, `snapshot`, `draw <copy|live> Gauge[#n] …` (xy.mjs's format; `A350_DRAW_JSON=<dir>` saves captures as fixtures) and `service` exercise each layer.
 
-**Traps.** About 40% of fresh copies are torn for the EFIS and MFD draws (they read out of bounds; the CTR draw never did in testing). A trap is the capture's error; the engine then starts a fresh instance, since a trap leaves the wasm globals mid-call, and the service retries once on a new copy. The exe must not be CET-compatible, or a trap kills it [A350-9].
+**Traps.** About 40% of fresh copies were torn for the EFIS and MFD draws (they read out of bounds; the CTR draw never did in testing). Most of those traps were the A350's own allocator walking torn free lists, now answered by the engine [A350-10]: on two 355 MB copies saved in flight, 7 of 8 draws trapped before and none after. A trap is the capture's error; the engine then starts a fresh instance, since a trap leaves the wasm globals mid-call, and the service retries once on a new copy. The exe must not be CET-compatible, or a trap kills it [A350-9].
 
-**Tearing.** A copy that spans A350 frames is inconsistent. Walking all 25,000 process regions while reading (0.5 s) gave empty or garbage WD lists in half the draws and once trapped `dlmalloc`. The 8 ms allocation-only copy gave 8 of 8 consistent draws. Still treat a trap as a torn copy and take another.
+**Tearing.** A copy that spans A350 frames is inconsistent. Walking all 25,000 process regions while reading (0.5 s) gave empty or garbage WD lists in half the draws and once trapped `dlmalloc`. The 8 ms allocation-only copy gave 8 of 8 consistent draws. As the A350's memory grows over a flight (66 MB fresh, 495 MB after hours), a copy takes longer (650 ms at 495 MB) and tears again; the allocator no longer cares [A350-10], but the A350's own data can still be torn (a flight plan list once). Still treat a trap as a torn copy and take another.
 
 **Runtime.** Wasmtime for .NET (`Wasmtime` 48.0.2, net10.0): the 69 MB patched module compiles in 10 s with a 1.4 GB peak, once per A350 version; `Module.Serialize` caches it (118 MB), and the cached start takes 125 ms and 357 MB. Draws take 1-15 ms (CTR first draw 11 ms, then under 1 ms; MFD 2 ms).
 
@@ -58,6 +58,17 @@ Each hook prepends a call to WASI `path_readlink` (an import never used while dr
 | `nvgResetTransform`, `nvgReset`, `nvgTransform` | 0x7E5E-0x7E60 | ctx |
 | `DrawFrame`, `DrawWideFrame` | 0x7E61 + 0x7E62 | rectangle, then colour (wide flag set): the ECAM selection box is a cyan wide frame |
 | every `<Class>::draw(NVGcontext*, bool, int)` UI element (40 classes in 1.2.7) | 0x7E65 | element pointer, ctx, class index: rectangle at element +4/+8/+12/+16 |
+
+The allocator is answered, not reported [A350-10]: the call is followed by `return`, so the function returns the engine's answer and its own body never runs. A function a version lacks is left alone.
+
+| Function | Magic | The engine answers |
+| --- | --- | --- |
+| `malloc`, `dlmalloc` | 0x7E70 | size: a block from the head room above the copy |
+| `calloc` | 0x7E71 | count, size: a cleared block |
+| `realloc` | 0x7E72 | pointer, size: a new block holding the old one's bytes |
+| `internal_memalign` | 0x7E73 | alignment, size: an aligned block (1.2.7 dropped dlmalloc's `mstate` argument) |
+| `posix_memalign` | 0x7E74 | out pointer, alignment, size: writes the block, returns 0 (48 when the head room is used up) |
+| `free`, `dlfree` | none | a bare `return` |
 
 Exports added: `CTR::Draw`, `EFIS::Draw`, `FCU::Draw`, `HUD::Draw`, `ISIS::Draw`, `RMP::Draw`, `BAT::Draw`, `MFD::Draw`, `FMGS::Draw`, `SFD::Draw(int)`, `SND::Draw(int)`, `Systems::Draw`, `nvgBeginFrame`, `nvgEndFrame`. Texts must be placed with the tracked transform: the CTR draws the SD and WD with `nvgTranslate`, so raw positions overlap.
 
