@@ -58,6 +58,19 @@ public class A350AnnouncementTests
         Assert.True(Def.ProcessSimVarUpdate("A350_OIS_AVNCS_EFB_LEFT", 1, new SpeechCapture()));
     }
 
+    // Review 2026-10-29 (panels minor 1, speech 7): both tiller disconnects are switch rows on one INI_TILLER_DISC, so a
+    // change made elsewhere was said twice. The first row on a variable speaks; its twin follows silently, no Ctrl+M row.
+    [Fact]
+    public void Two_switch_rows_on_one_variable_speak_once()
+    {
+        Assert.Equal(new Dictionary<string, string> { ["A350_FO_TILLER_DISCO"] = "A350_CPT_TILLER_DISCO" }, Def.SetTwins);
+        var keys = MonitorKeys();
+        Assert.Contains("A350_CPT_TILLER_DISCO", keys);
+        Assert.DoesNotContain("A350_FO_TILLER_DISCO", keys);
+        Assert.False(Def.ProcessSimVarUpdate("A350_CPT_TILLER_DISCO", 1, new SpeechCapture()));   // MainForm's announce says it
+        Assert.True(Def.ProcessSimVarUpdate("A350_FO_TILLER_DISCO", 1, new SpeechCapture()));
+    }
+
     [Fact]
     public void Ctrl_m_lists_one_row_per_master_light_pair_side()
     {
@@ -238,6 +251,30 @@ public class A350LampAnnouncementTests
         _def.ProcessSimVarUpdate(fo.Key, 0, _speech);
         BatchAfter(A350LampSpeech.OffHoldMs + 100);   // an off is said once it has stayed off this long
         Assert.Empty(_speech.All);
+    }
+
+    // A pick on the first officer's tiller row moves the captain's too: the pilot's own pick, which the screen reader said,
+    // is never said back by the captain's row; a later change to another position is.
+    [Fact]
+    public void A_pick_on_a_twin_row_is_not_said_back_by_the_row_that_speaks()
+    {
+        var def = new IniBuildsA350Definition
+        {
+            Clock = () => _now,
+            CanLand = _ => true,
+            Send = (_, _) => { },
+            ReRead = (_, _) => { },
+            Delay = _ => new TaskCompletionSource().Task,
+            ReadFresh = (_, _, _) => Task.FromResult<double?>(null),
+            Cached = (_, key) => key.EndsWith("_TILLER_DISCO", StringComparison.Ordinal) ? 0 : null,   // both connected
+            IsMuted = _ => false,
+        };
+        var sim = new SimConnectManager(IntPtr.Zero);
+        def.Attach(sim);
+        def.HandleUIVariableSet("A350_FO_TILLER_DISCO", 1, def.GetVariables()["A350_FO_TILLER_DISCO"], sim, _speech);
+        Assert.True(def.ProcessSimVarUpdate("A350_FO_TILLER_DISCO", 1, _speech));
+        Assert.True(def.ProcessSimVarUpdate("A350_CPT_TILLER_DISCO", 1, _speech));    // the pick: consumed
+        Assert.False(def.ProcessSimVarUpdate("A350_CPT_TILLER_DISCO", 0, _speech));   // not the pick: MainForm says it
     }
 
     // Review 2026-10-29 (speech 5): a light whose rule reads only another switch row's variable repeats that row: each RMP

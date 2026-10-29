@@ -115,6 +115,33 @@ public partial class IniBuildsA350Definition
                 _mirrorEchoes.Add(lamp.Key);
     }
 
+    /// <summary>Switch rows another row's variable drives, to the row that speaks for both, the first on the variable (both
+    /// tiller disconnects flip one INI_TILLER_DISC: review 2026-10-29, a change elsewhere was said twice and a pick on one
+    /// was said back by the other). A twin follows silently with no Ctrl+M row; the speaking row keeps quiet on a delivery
+    /// its twin's pick made. The All thrust levers row is not one: its levers speak as one (HandleLeverDelivery).</summary>
+    internal IReadOnlyDictionary<string, string> SetTwins => _setTwins;
+    private readonly Dictionary<string, string> _setTwins = new(StringComparer.Ordinal);
+
+    private void FindSetTwins()
+    {
+        var speakers = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var row in _rows.Values)
+        {
+            if (row.Action != A350RowAction.Set || row.Control is not { StateVar: { } stateVar } control
+                || control.Kind == A350Kinds.Knob || row.Key == A350LeverSpeech.AllLevers)
+                continue;
+            if (speakers.TryGetValue(stateVar, out var speaker))
+                _setTwins[row.Key] = speaker;
+            else
+                speakers[stateVar] = row.Key;
+        }
+    }
+
+    /// <summary>A delivery to a speaking row that its twin's pending pick made: the pilot's own, said by the screen reader.</summary>
+    private bool IsTwinPick(string key, double value) =>
+        _setTwins.Any(t => t.Value == key && _pendingPicks.TryGetValue(t.Key, out var p)
+            && Math.Abs(value - p.Target) < A350WritePlan.SameValueTolerance);
+
     /// <summary>Whether a light changed with the pilot's own press or pick of its button, or a twin's button.</summary>
     private bool IsOwnLamp(A350Lamp lamp)
     {

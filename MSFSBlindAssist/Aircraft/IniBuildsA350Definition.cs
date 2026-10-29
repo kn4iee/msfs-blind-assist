@@ -140,6 +140,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             AddDisplay(lamp.Panel, lamp.Key);
         }
         FindEchoLamps();
+        FindSetTwins();
 
         var offeredPanels = _sections.SelectMany(s => _placement.Structure[s]).ToHashSet(StringComparer.Ordinal);
         foreach (var window in A350FcuWindows.All)
@@ -365,6 +366,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (vars.ContainsKey(row.Key))
                 continue;   // never shadow a base variable
             var def = BuildRowVariable(row);
+            if (_setTwins.ContainsKey(row.Key))
+                def.ExcludeFromMonitorManager = true;   // its twin speaks for both: a Ctrl+M row here would mute nothing ([VAR-9])
             if (_buttonLamps.TryGetValue(row.Key, out var buttonLamps))
                 def.StateVariables = buttonLamps.SelectMany(l => l.InputKeys).Distinct().ToList();   // the label repaints when a light changes
             rowDefs.Add((row.Key, def));
@@ -645,7 +648,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         if (_rows.TryGetValue(varName, out var row))
         {
             NotePickReached(varName, value);
-            return row.Control?.Kind == A350Kinds.Spring;
+            return row.Control?.Kind == A350Kinds.Spring || _setTwins.ContainsKey(varName) || IsTwinPick(varName, value);
         }
         if (_lampBoard.Handles(varName))
             HandleLampDelivery(varName, value, announcer);
