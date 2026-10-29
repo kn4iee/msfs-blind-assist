@@ -110,13 +110,33 @@ public sealed class A350DrawEngine : IDisposable
 
     /// <summary>A new store and instance. A trap leaves the old one mid-call: its globals (the stack
     /// pointer above all) are not part of the memory copy, so restoring memory does not repair it, and
-    /// every later draw on it traps (live, and in the prototype).</summary>
+    /// every later draw on it traps (live, and in the prototype). The old one goes only once the new one is
+    /// built: a new instance that fails (commit exhaustion, a trap in its start) leaves the old one in place and is
+    /// tried again by the next draw (review 2026-10-29: the old store was disposed first, and every later copy's Load
+    /// threw on it for the rest of the session).</summary>
     private void Instantiate()
     {
-        _store?.Dispose();
-        _warmed.Clear();
-        _store = new Store(_engine);
-        _store.SetEpochDeadline(DeadlineTicks);   // a store's deadline starts at 0: without one, its first check traps
+        var store = new Store(_engine);
+        try
+        {
+            store.SetEpochDeadline(DeadlineTicks);   // a store's deadline starts at 0: without one, its first check traps
+            var (instance, memory) = Build(store);
+            var old = _store;
+            (_store, _instance, _memory) = (store, instance, memory);
+            _warmed.Clear();
+            old?.Dispose();
+        }
+        catch
+        {
+            if (!ReferenceEquals(store, _store)) store.Dispose();
+            throw;
+        }
+        if (_copy != null) GrowFor(_copy);
+    }
+
+    /// <summary>Links every import into <paramref name="store"/> and instantiates the module there.</summary>
+    private (Instance Instance, Memory Memory) Build(Store store)
+    {
         using var linker = new Linker(_engine);
         foreach (var imp in _module.Imports)
         {
@@ -172,11 +192,10 @@ public sealed class A350DrawEngine : IDisposable
                 },
                 _ => Stub(imp.ModuleName, imp.Name, rs),
             };
-            linker.Define(imp.ModuleName, imp.Name, Function.FromCallback(_store, Guard(imp.Name, body, rs, OnHostError), ps, rs));
+            linker.Define(imp.ModuleName, imp.Name, Function.FromCallback(store, Guard(imp.Name, body, rs, OnHostError), ps, rs));
         }
-        _instance = linker.Instantiate(_store, _module);
-        _memory = _instance.GetMemory("memory") ?? throw new A350ModuleException("A350 module exports no memory");
-        if (_copy != null) GrowFor(_copy);
+        var instance = linker.Instantiate(store, _module);
+        return (instance, instance.GetMemory("memory") ?? throw new A350ModuleException("A350 module exports no memory"));
     }
 
     private void GrowFor(A350MemoryCopy copy)

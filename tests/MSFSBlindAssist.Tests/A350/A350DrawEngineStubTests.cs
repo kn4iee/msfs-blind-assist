@@ -36,6 +36,7 @@ public class A350DrawEngineStubTests
         ("wasi_snapshot_preview1", "environ_sizes_get", new[] { I32, I32 }, new[] { I32 }),
         ("wasi_snapshot_preview1", "random_get", new[] { I32, I32 }, new[] { I32 }),
         ("env", "SimConnect_GetNextDispatch", new[] { I64, I32, I32 }, new[] { I32 }),
+        ("env", "aircraft_varget", new[] { I32, I32, I32 }, new[] { F64 }),
     };
 
     /// <summary>An import's function index: the hook (path_readlink) is import 0, the table above follows it.</summary>
@@ -50,8 +51,8 @@ public class A350DrawEngineStubTests
         }).Concat(Call(Imp(name))).ToArray();
 
     /// <summary>A CTR gauge whose Draw is <paramref name="draw"/> (one i32 local besides the object), given nvgText's
-    /// function index.</summary>
-    private static byte[] Module(Func<int, byte[]> draw)
+    /// function index; <paramref name="start"/>, when given, runs as the module is instantiated.</summary>
+    private static byte[] Module(Func<int, byte[]> draw, byte[]? start = null)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -76,6 +77,7 @@ public class A350DrawEngineStubTests
         foreach (var g in new[] { "EFIS", "FCU", "HUD", "ISIS", "RMP", "BAT", "MFD", "FMGS", "Systems" })
             m.Func(g + "::Draw()", tCtx, Array.Empty<byte>());
         m.Func("CTR::Draw()", tCtx, draw(text), new byte[] { 0x01, 0x01, I32 });
+        if (start != null) m.Start(m.Func("start", m.AddType(Array.Empty<byte>(), Array.Empty<byte>()), start));
         m.Data(2000, U32(0, 3000, 11));
         m.Data(3000, U32(1, 3100));
         m.Data(3100, "3CTR\0");
@@ -98,9 +100,9 @@ public class A350DrawEngineStubTests
         return copy;
     }
 
-    private static A350DrawEngine Engine(Func<int, byte[]> draw)
+    private static A350DrawEngine Engine(Func<int, byte[]> draw, byte[]? start = null)
     {
-        var original = Module(draw);
+        var original = Module(draw, start);
         var mod = A350WasmModule.Parse(original);
         var engine = A350ModuleCache.CreateEngine();
         var module = Wasmtime.Module.FromBytes(engine, "a350", A350ModulePatcher.Patch(original).Bytes);
@@ -195,6 +197,29 @@ public class A350DrawEngineStubTests
         Assert.False(cap.Ok);
         Assert.Contains("more than 50", cap.Error);
         Assert.Equal(50, cap.Texts.Count);
+    }
+
+    // Review 2026-10-29 (engine I5): a new instance whose start failed (commit exhaustion, a trap in its start) left the
+    // engine on the store it had already disposed, and the next copy's Load threw on it for good: every later draw of the
+    // session failed, unsaid. The old instance goes only once a new one is built, and a failed one is tried again.
+    [Fact]
+    public void A_new_instance_that_fails_to_start_is_tried_again_on_the_next_draw()
+    {
+        bool failStart = false;
+        // start: aircraft_varget(1, 1, 0) > 0 traps. CTR::Draw traps while the object's flag is set.
+        byte[] start = I32Const(1).Concat(I32Const(1)).Concat(I32Const(0)).Concat(Call(Imp("aircraft_varget")))
+            .Concat(new byte[] { 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0x64 }).Concat(TrapIfTrue).ToArray();
+        using var e = Engine(_ => new byte[] { 0x20, 0x00, 0x28, 0x02, 0x04 }.Concat(TrapIfTrue).ToArray(), start);
+        e.AVarAnswer = _ => failStart ? 1 : 0;
+        e.Load(Copy(flag: 1));
+        Assert.False(e.Draw("CTR").Ok);   // a trap: the next draw starts a new instance
+        failStart = true;
+        e.Load(Copy());
+        Assert.False(e.Draw("CTR").Ok);   // the new instance's start traps
+        failStart = false;
+        e.Load(Copy());
+        var cap = e.Draw("CTR");
+        Assert.True(cap.Ok, cap.Error);
     }
 
     [Fact]

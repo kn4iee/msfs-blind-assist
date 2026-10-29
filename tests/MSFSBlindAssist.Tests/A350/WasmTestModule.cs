@@ -15,6 +15,10 @@ internal sealed class WasmTestModule
     private readonly List<(string Name, int Func)> _exports = new();
     private readonly List<(int Base, byte[] Bytes)> _data = new();
     private readonly List<int> _globals = new();
+    private int? _start;
+
+    /// <summary>The function run when the module is instantiated (the start section).</summary>
+    public void Start(int func) => _start = func;
 
     /// <summary>A mutable i32 global with its initial value; returns its index.</summary>
     public int AddGlobal(int initial)
@@ -80,6 +84,8 @@ internal sealed class WasmTestModule
         exports.AddRange(Name("memory")); exports.Add(2); exports.Add(0);
         foreach (var (n, f) in _exports) { exports.AddRange(Name(n)); exports.Add(0); exports.AddRange(U(f)); }
         Section(o, 7, exports);
+
+        if (_start is int start) Section(o, 8, new List<byte>(U(start)));
 
         var code = new List<byte>(U(_funcs.Count));
         foreach (var f in _funcs)
