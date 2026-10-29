@@ -88,6 +88,30 @@ public class A350PfdMonitorTests
         Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
     }
 
+    // Review 2026-10-29 (speech 1): after a flight load each FMA column flight B showed differently from flight A was spoken
+    // ("FMA vertical clear", "FMA engagement: 1 FD 2, white"). After Rebaseline the new flight's FMA is followed silently
+    // for SettleAfterLoad from its first draw.
+    [Fact]
+    public async Task After_a_flight_load_the_new_flights_fma_is_a_silent_baseline()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"),
+            Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand"), Fixture("efis0_aligning"), Fixture("efis0_aligning") });
+        var said = new List<string>();
+        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), _ => false, said.Add, () => now);
+        await m.TickAsync();
+        await m.TickAsync();
+        m.Rebaseline();
+        Assert.Null(m.Latest(0));                 // flight A's PFD is not this flight's
+        await m.TickAsync();
+        await m.TickAsync();                      // flight B's FDs, on as it loads
+        Assert.Empty(said);
+        now += A350EcamMonitor.SettleAfterLoad;
+        await m.TickAsync();
+        await m.TickAsync();                      // the FDs going off afterwards is news
+        Assert.Contains("FMA engagement clear", said);
+    }
+
     // Review 2026-10-29 (readers I7): the latest capture was kept forever and read as current, so after the reader stopped
     // (the A350 not found after a flight load, every draw failing) the status displays, Alt+P and the MFD window read the
     // last flight's displays as live. A capture older than MaxAge is no capture.

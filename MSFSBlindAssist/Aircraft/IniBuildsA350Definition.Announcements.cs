@@ -212,5 +212,8 @@ public partial class IniBuildsA350Definition
         _leverSpeech.Reset();
         _ownLampsUntil.Clear();
         _seedCountdown = SeedAfterBatches;
+        // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
+        Ecam?.Rebaseline();
+        Pfd?.Rebaseline();
     }
 }

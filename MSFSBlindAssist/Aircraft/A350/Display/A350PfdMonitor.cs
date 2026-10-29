@@ -32,6 +32,17 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly Func<DateTime> _now;
     private int _tick, _other;
     private CancellationTokenSource? _cts;
+    private volatile bool _rebaseline;
+    private DateTime? _settleUntil;   // the reading loop's own
+
+    /// <summary>A flight was loaded: the last flight's draws are dropped, and the new flight's FMA, from its first draw, is
+    /// followed silently for <see cref="A350EcamMonitor.SettleAfterLoad"/> (review 2026-10-29: each column flight B
+    /// showed differently from flight A was spoken); the reading loop resets the announcer itself, which only it touches.</summary>
+    public void Rebaseline()
+    {
+        _latest.Clear();
+        _rebaseline = true;
+    }
 
     /// <param name="draw">Draws the displays asked for on one memory copy, a capture (or null) for each in order; null
     /// for all while the reader cannot draw.</param>
@@ -75,8 +86,17 @@ public sealed class A350PfdMonitor : IDisposable
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
             if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);
         if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt)
+        {
+            if (_rebaseline)
+            {
+                _rebaseline = false;
+                _fma.Reset();
+                _settleUntil = at + A350EcamMonitor.SettleAfterLoad;
+            }
+            bool settling = _settleUntil is { } until && at < until;
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
-                if (!_muted(key)) _speak(line);
+                if (!settling && !_muted(key)) _speak(line);
+        }
         if (ctr != null && caps.Count > 0) ctr(caps[0]);
     }
 

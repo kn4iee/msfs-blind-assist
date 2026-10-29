@@ -119,6 +119,23 @@ public class A350PfdDisplayTests
         Assert.Equal(new[] { panel + " dark: its screen is off or has no power." }, speech.All);
     }
 
+    // Review 2026-10-29 (speech 1): a flight load reset the lights and levers but never the display call-outs; it rebaselines
+    // both monitors, and the last flight's displays are no longer read as this one's.
+    [Fact]
+    public void A_flight_load_rebaselines_the_display_call_outs()
+    {
+        var def = new IniBuildsA350Definition();
+        def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => g == "EFIS" && i == 0 ? Fixture("ground_EFIS_0") : null), _ => false, _ => { });
+        def.Ecam = new A350EcamMonitor(() => Task.FromResult<A350DrawCapture?>(Fixture("ctr_powerup_fws_fault")), () => false, _ => { });
+        def.Pfd.TickAsync().Wait();
+        def.Ecam.TickAsync().Wait();
+        Assert.NotNull(def.Pfd.Latest(0));
+        Assert.NotNull(def.Ecam.LatestCapture);
+        def.OnSimContextReset();
+        Assert.Null(def.Pfd.Latest(0));
+        Assert.Null(def.Ecam.LatestCapture);
+    }
+
     // Review 2026-10-29: with no capture (the reader still preparing, not available, or every draw failing) Ctrl+W said
     // "No TO waypoint shown" and Ctrl+0 "Approach capability none shown", as if the screen showed nothing there; X and
     // Alt+P say the displays are not available yet.

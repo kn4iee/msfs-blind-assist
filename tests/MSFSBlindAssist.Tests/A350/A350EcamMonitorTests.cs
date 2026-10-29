@@ -57,6 +57,31 @@ public class A350EcamMonitorTests
         Assert.DoesNotContain("FWS FWS 1+2 & CPIOM FAULT, amber", said);   // never replayed after unmuting
     }
 
+    // Review 2026-10-29 (speech 1): the call-outs were never re-baselined after a flight load, so each WD line flight B shows
+    // that flight A lacked was spoken as new. After Rebaseline the new flight's E/WD is followed silently for
+    // SettleAfterLoad from its first draw (it comes up as the flight loads), then speaks what changes from there.
+    [Fact]
+    public async Task After_a_flight_load_the_new_flights_lines_are_a_silent_baseline()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var feed = new Queue<A350DrawCapture?>();
+        var said = new List<string>();
+        var m = new A350EcamMonitor(() => Task.FromResult(feed.Count > 0 ? feed.Dequeue() : null), () => false, said.Add, () => now);
+        var fws = Fixture("ctr_powerup_fws_fault");
+        var apu = Fixture("ctr_apu_emer_shutdown");
+        await Ticks(m, feed, Dark, Dark, apu, apu);   // flight A
+        said.Clear();
+        m.Rebaseline();
+        Assert.Null(m.LatestCapture);                 // flight A's E/WD is not this flight's
+        await Ticks(m, feed, Dark, Dark);             // flight B loading
+        now += TimeSpan.FromSeconds(5);
+        await Ticks(m, feed, fws, fws);               // flight B's E/WD comes up while it loads
+        Assert.Empty(said);
+        now += A350EcamMonitor.SettleAfterLoad;
+        await Ticks(m, feed, apu, apu);
+        Assert.Contains("APU EMER SHUTDOWN, amber", said);
+    }
+
     // Review 2026-10-29 (readers I7): Alt+E and the SD line read the last capture whatever its age.
     [Fact]
     public async Task A_capture_older_than_its_age_is_no_capture()

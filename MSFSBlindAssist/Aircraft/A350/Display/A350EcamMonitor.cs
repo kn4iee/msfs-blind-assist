@@ -14,6 +14,14 @@ public sealed class A350EcamMonitor : IDisposable
     public const string MuteLabel = "ECAM E/WD call-outs";
     public const int PeriodMs = 500;
 
+    /// <summary>How long after a flight load (<see cref="Rebaseline"/>) the display call-outs follow the new flight
+    /// silently, from its first draw: what it shows as it loads is its baseline, never news (review 2026-10-29: each line
+    /// flight B showed that flight A lacked was spoken as new).</summary>
+    public static readonly TimeSpan SettleAfterLoad = TimeSpan.FromSeconds(10);
+
+    private volatile bool _rebaseline;
+    private DateTime? _settleUntil;   // the reading loop's own
+
     private readonly Func<Task<A350DrawCapture?>> _drawCtr;
     private readonly Func<bool> _muted;
     private readonly Action<string> _speak;
@@ -44,10 +52,25 @@ public sealed class A350EcamMonitor : IDisposable
     public void Observe(A350DrawCapture? cap)
     {
         if (cap == null || !cap.Ok) return;
-        _latest = new Kept(cap, _now());
+        var now = _now();
+        _latest = new Kept(cap, now);
+        if (_rebaseline)
+        {
+            _rebaseline = false;
+            _announcer.Reset();
+            _settleUntil = now + SettleAfterLoad;
+        }
         var lines = _announcer.Observe(A350Ewd.Parse(cap));
-        if (lines.Count == 0 || _muted()) return;
+        if (lines.Count == 0 || _muted() || _settleUntil is { } until && now < until) return;
         foreach (var l in lines) _speak(l);
+    }
+
+    /// <summary>A flight was loaded: the last flight's E/WD is dropped, and the new one's, from its first draw, is followed
+    /// silently for <see cref="SettleAfterLoad"/> (the reading loop resets the announcer itself, which only it touches).</summary>
+    public void Rebaseline()
+    {
+        _latest = null;
+        _rebaseline = true;
     }
 
     public void Start()
