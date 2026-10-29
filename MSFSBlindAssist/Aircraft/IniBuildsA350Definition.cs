@@ -212,6 +212,21 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string? StockComTuningRefusal =>
         "This aircraft tunes its radios only through its radio management panels.";
 
+    // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody (its glidepath and
+    // flare biases are estimates pending an in-sim coupled-ILS calibration, the A330's status too), not the A320 baseline;
+    // the flare at about 40 ft radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
+    public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
+    {
+        TypicalApproachAoaDeg = 4.5,
+        ReferenceVrefKnots = 145.0,
+        MaxPitchRateDegPerSec = 2.0,
+        MaxBankRateDegPerSec = 2.5,
+        GlideslopeAltitudeBiasFt = 70.0,   // estimate
+        FlareAltitudeBiasFt = 30.0,        // estimate
+        FlareTriggerWheelHeightFt = 40.0,
+        FlareTargetPitchDeg = 5.0,
+    };
+
     public override FCUControlType GetAltitudeControlType() => FCUControlType.SetValue;
     public override FCUControlType GetHeadingControlType() => FCUControlType.SetValue;
     public override FCUControlType GetSpeedControlType() => FCUControlType.SetValue;
