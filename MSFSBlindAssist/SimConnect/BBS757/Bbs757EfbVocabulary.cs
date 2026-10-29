@@ -128,7 +128,8 @@ public static class Bbs757EfbVocabulary
     /// <summary>
     /// What OCR read, snapped to the tablet's word when it is one. Strips a stray icon glyph read
     /// as a leading token ("E) FUEL", "e CABIN & DOORS", "V AIRCRAFT"), fixes the seconds misread,
-    /// then snaps to the nearest known word within the edit-distance limit; else the read, trimmed.
+    /// keeps the state after a label that ends in a colon ("RANDOM FAILURES: OFF"), then snaps to
+    /// the nearest known word within the edit-distance limit; else the read, trimmed.
     /// </summary>
     public static string Snap(string read)
     {
@@ -137,6 +138,13 @@ public static class Bbs757EfbVocabulary
         if (SecondsMisread.IsMatch(t)) return "10 SEC";
         var sec = Seconds.Match(t);
         if (sec.Success) return sec.Groups[1].Value + " SEC";
+
+        // A label and its state on one line (PaddleOCR reads "RANDOM FAILURES: OFF" whole): the label
+        // snaps and the rest stays as its value. Snapped whole, the line was the bare label, its state lost.
+        int colon = t.IndexOf(':');
+        if (colon > 0 && t[(colon + 1)..].Trim() is { Length: > 0 } value
+            && Nearest(t[..(colon + 1)]) is { } label && label.EndsWith(':'))
+            return label + " " + value;
 
         // A dropdown arrow or a stray mark read as a one-letter last word ("SET w", measured).
         var words = t.Split(' ', StringSplitOptions.RemoveEmptyEntries);

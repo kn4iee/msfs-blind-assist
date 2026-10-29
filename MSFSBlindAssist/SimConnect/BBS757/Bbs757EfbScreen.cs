@@ -1154,30 +1154,6 @@ public static class Bbs757EfbScreen
     }
 
     /// <summary>
-    /// Where the reader should read again, closer (3x): every button box with no text read on it,
-    /// and every box whose text OCR got only nearly right (snapped, not exact), since a near miss
-    /// can snap to the wrong word ("CLOSO" is one edit from CLOSE, two from CLOSED). Pure; tested.
-    /// </summary>
-    public static IReadOnlyList<Rectangle> RegionsToReread(IReadOnlyList<Bbs757EfbTextLine> lines, Bbs757EfbPixels px)
-    {
-        var o = new List<Rectangle>();
-        var boxes = FindButtonBoxes(px, ContentArea);
-        foreach (var b in boxes)
-        {
-            var on = lines.Where(l => b.Box.Contains(l.Centre)).ToList();
-            bool exact = on.Count > 0 && on.All(l => string.Equals(Bbs757EfbVocabulary.Nearest(l.Text), l.Text.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (!exact) o.Add(new Rectangle(b.Box.X - 4, b.Box.Y - 4, b.Box.Width + 8, b.Box.Height + 8));
-        }
-        return o;
-    }
-
-    /// <summary>The template slots that read no figure on this page (for the reader to read again,
-    /// closer): a brake temperature or a "0" cargo field that the whole-page read missed.</summary>
-    public static IReadOnlyList<Rectangle> EmptySlots(IReadOnlyList<Bbs757EfbTextLine> lines, Bbs757EfbPixels px) =>
-        Parse(lines, px).Items.Where(i => i.Key.StartsWith("slot:", StringComparison.Ordinal) && i.Value == "not read")
-            .Select(i => i.Box).ToList();
-
-    /// <summary>
     /// A scroll bar down the page's right edge: column x 1386 lighter than 100 (normalised) for 300 rows
     /// or more between y 90 and 1040. Measured: Settings, Callouts 944 rows (track and thumb), Settings,
     /// Aircraft none (its page fits).

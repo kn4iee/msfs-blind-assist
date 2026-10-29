@@ -158,6 +158,15 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
+    public void Failure_switches_keep_their_state()
+    {
+        // PaddleOCR reads each switch whole, RANDOM FAILURES: OFF: snapped whole to its label, the state was lost.
+        var m = Load("bright", "16-aircraft-failures");
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Random failures: off").Kind);
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Notifications: off").Kind);
+    }
+
+    [Fact]
     public void Checklist_lines_are_boxes_with_their_values()
     {
         var m = Load("bright", "40-checklist");
@@ -241,6 +250,7 @@ public class Bbs757EfbScreenTests
     [InlineData("Windows", "Windows")]
     [InlineData("CJGSW2VZ", "CJGSW2VZ")]             // a code stays as read
     [InlineData("ACTIVE 0 ARMED 0", "ACTIVE 0 ARMED 0")]   // a figure is never snapped away (ACTIVE / ARMED)
+    [InlineData("RANDOM FAILURE: OFF", "RANDOM FAILURES: OFF")]   // a label snaps, the state after it stays
     public void Snap_fixes_ocr_habits_without_guessing(string read, string expected) =>
         Assert.Equal(expected, Bbs757EfbVocabulary.Snap(read));
 
