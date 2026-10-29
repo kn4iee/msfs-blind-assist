@@ -30,6 +30,17 @@ public static class A350Hotkeys
         [HotkeyAction.FCUVSPull] = "A350_FCU_VS_KNOB_PULL",
     };
 
+    /// <summary>Another aircraft's window key the A350 has a page for: its MFD window opens on that page, pressed with the
+    /// KCCU's own page key (parity, 2026-10-29): the NAV radios (input Ctrl+N, the PMDG 737's and the iFly's window) on
+    /// RAD NAV, the checklists (output Ctrl+Shift+C, the A380's live ECL) on C/L MENU, the datalink (input Ctrl+Shift+D,
+    /// the A32NX's DCDU) on ATC COM.</summary>
+    public static readonly IReadOnlyDictionary<HotkeyAction, string> MfdPages = new Dictionary<HotkeyAction, string>
+    {
+        [HotkeyAction.SetNavRadios] = "RADNAV",
+        [HotkeyAction.ShowChecklistECL] = "CL_MENU",
+        [HotkeyAction.ShowDCDU] = "ATC",
+    };
+
     /// <summary>The A350's own characteristic speeds the read-outs say (Shift+4 VLS, Shift+5 the alpha speeds, Shift+6 VFE
     /// next; live in a clean climb: VLS 166, VFE 255, VMAX 340, the alpha speeds 0), streamed for them.</summary>
     public const string Vls = "INI_VLS_SPEED", VfeNext = "INI_VFE_SPEED", Vmax = "INI_VMAX_SPEED",

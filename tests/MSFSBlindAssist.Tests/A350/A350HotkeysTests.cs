@@ -38,6 +38,19 @@ public class A350HotkeysTests
         Assert.Contains(row, MapKeys);
     }
 
+    // Parity (2026-10-29): another aircraft's window key the A350 has a page for opens its MFD window on that page, pressed
+    // with the KCCU's own page key: the NAV radios (Ctrl+N, the PMDG 737's and the iFly's window) on RAD NAV, the checklists
+    // (Ctrl+Shift+C, the A380's live ECL) on C/L MENU, the datalink (Ctrl+Shift+D, the A32NX's DCDU) on ATC COM.
+    [Theory]
+    [InlineData(HotkeyAction.SetNavRadios, "RADNAV")]
+    [InlineData(HotkeyAction.ShowChecklistECL, "CL_MENU")]
+    [InlineData(HotkeyAction.ShowDCDU, "ATC")]
+    public void A_window_key_opens_the_mfd_on_the_a350_s_own_page(HotkeyAction action, string key)
+    {
+        Assert.Equal(key, A350Hotkeys.MfdPages[action]);
+        Assert.Contains(key, MSFSBlindAssist.Aircraft.A350.Display.A350Kccu.FunctionKeys);
+    }
+
     [Theory]
     [InlineData("Speed window", "250 knots, managed", "FCU speed 250 knots, managed")]
     [InlineData("Speed window", "Mach 0.85", "FCU speed mach 0.85")]

@@ -35,13 +35,8 @@ the HUD panels' controls say "HUD is not fitted"; each side's declutter is an Of
 The SND is an option too (STANDBY NAV DISPLAY): without it its keys say "Standby navigation
 display is not fitted".
 
-Switches and lights speak when they change on their own ("Seat belts: On", "BAT 1 fault
-light on", "Master caution on"), as the cockpit shows them; what you set yourself is not
-repeated. Each one has its own row in the Monitor Manager (Ctrl+M), where you can mute it.
-
-The take-off speeds are said as the FMS takes them ("V1: 142 knots", "VR: not set"), and on
-the take-off roll V1, Rotate and V2 are called as the speed reaches them, as on the A380; the
-V1, VR and V2 rows in the Monitor Manager mute each one.
+What speaks on its own, and the Monitor Manager (Ctrl+M) row that mutes it, is listed under
+WHAT SPEAKS ON ITS OWN below.
 
 A knob whose value the cockpit shows is a typed field, as on the other Airbus aircraft: the
 FCU Speed, Heading, Altitude and VS/FPA fields, each side's QNH (in that side's unit), the
@@ -81,6 +76,40 @@ The A350 tunes its radios only through its radio management panels; the stock CO
 the other aircraft use does not exist in it.
 
 
+WHAT SPEAKS ON ITS OWN
+
+Each call-out below has its own row in the Monitor Manager (Ctrl+M), where you can mute it.
+What you set or press yourself is never repeated back to you.
+
+  Switches, selectors   when something other than you moves one ("Seat belts: On")
+  Lights                as the cockpit lights them ("BAT 1 fault light on", "Master caution on");
+                        a light that only blinks says nothing
+  Your presses          a button with no light or state of its own says "<name> pressed" once the
+                        press is made; a knob you step with its Increase and Decrease buttons says
+                        the value the cockpit then shows, once your steps settle
+  FCU altitude window   "Altitude 12000 feet" when it changes other than by your typed value
+  Each side's baro      "Captain altimeter 1013 hectopascals", "First officer altimeter 29.92
+                        inches", "Captain altimeter standard" or the preset shown on STD, when it
+                        changes other than by your own entry
+  IRS                   "IRS aligned" once, as the last IR that is on finishes aligning; each IR's
+                        alignment is also on the IRS panel's status display
+  Take-off speeds       "V1: 142 knots" as the FMS takes them ("VR: not set" while empty); V1,
+                        Rotate and V2 called on the take-off roll as the speed reaches them, as on
+                        the A380
+  Levers                where the thrust levers, flaps and speed brake went ("All thrust levers
+                        Climb", "Spoilers 40 percent")
+  E/WD                  each warning, caution, memo and procedure line with its colour, window open
+                        or closed (Ctrl+E turns them off and on)
+  FMA                   each column's change with its colours ("FMA vertical: SRS, green"), one
+                        row per column
+  FMS messages          a message the FMS posts in the MFD scratchpad ("Scratchpad: NAV ACCURACY
+                        UPGRADED, white") while the MFD window is closed; the window says them
+                        itself while it is open
+
+The 1,000-foot altitude call-outs (a setting, as on every aircraft) come every 300 metres while
+the FCU's METRIC ALT is on ("3000 meters"), and A and Q then read metres.
+
+
 OUTPUT MODE - Press ] to activate
 
 FCU Controls (each window as the FCU shows it, in the typed entries' words):
@@ -89,7 +118,7 @@ FCU Controls (each window as the FCU shows it, in the typed entries' words):
   Shift+A    Read FCU Altitude ("FCU altitude 40000 feet, managed")
   Shift+V    Read FCU V/S or FPA ("FCU vertical speed +1200 feet per minute")
 
-Altitude:
+Altitude (in metres while the FCU's METRIC ALT is on, else in feet):
   Q          Read Altitude AGL
   A          Read Altitude MSL
 
@@ -109,6 +138,8 @@ Navigation:
              speed ("541 miles to destination: 01:16:44"; "not available" with no route)
   Shift+D    Read the distance to the top of descent ("443 miles to top of descent", "Top of
              descent not yet computed", "Past top of descent")
+  N          Read NAV 1 and NAV 2 radio info (the simulator's receivers: frequency, ident,
+             localizer, glideslope, DME)
 
 Characteristic Speeds (the values the A350 itself publishes):
   Shift+4    Read VLS (minimum selectable speed)
@@ -169,17 +200,8 @@ Displays:
              permanent data. Read with the arrow keys; auto-refreshes, F5 refreshes now,
              Escape closes.
   Ctrl+E     Toggle the E/WD auto call-outs (also in the Monitor Manager, Ctrl+M)
-
-  Shift+M    Open the MFD window (A380 parity): the MFD page as lines (menus, buttons,
-             tabs, fields with their values and colours, the scratchpad). Up/Down move;
-             Enter acts on the line: a field takes what you typed in the scratchpad box
-             (Tab to it, type, Enter), anything else is clicked. Backspace presses CLR,
-             PageUp/PageDown scroll, F5 refreshes, Escape closes. The Side box picks the
-             captain's or the first officer's MFD. A new scratchpad message is spoken.
-             Alt+letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF,
-             Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV,
-             Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU,
-             Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF, Alt+X ESC.
+  Ctrl+Shift+C  The A350's checklists: the MFD window (input mode Shift+M) opened on C/L MENU,
+             as the A380's live ECL key opens its checklist
 
   The other displays have no hotkey window, as on the A380: open Displays in the Panels
   list (Ctrl+2): Captain and First Officer PFD (FMA, selected speed, altitude, selected
@@ -200,6 +222,7 @@ Tools:
   Ctrl+T     Activate/deactivate Takeoff Assistance
   Ctrl+D     Read Distance to Selected Runway
   Ctrl+I     Read ILS Guidance System Report
+  Alt+D      Describe outside scene (AI)
   Ctrl+M     A350 Monitor Manager (mute or unmute each switch and light that speaks)
 
 Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
@@ -334,8 +357,25 @@ the pushbuttons beside it; the window's line kept current in a read-only box):
   Ctrl+V     Vertical Speed / FPA window (HDG-V/S / TRK-FPA)
   Ctrl+P     Autopilot panel (AP 1, AP 2, LOC, APPR, FD, A/THR, ALT level off and the A/THR
              disconnect, each labelled with its light: "AP 1: On")
-  Ctrl+B     Altimeter window (a QNH typed once sets both sides and the ISIS; STD or QNH on
-             both sides; both baros and the ISIS setting kept current)
+  Ctrl+B     Altimeter window (a QNH typed once sets both sides and the ISIS, in each side's
+             unit; STD or QNH on both sides; each side's baro unit button, labelled with the
+             unit it shows; both baros and the ISIS setting kept current)
+
+MFD (the A350's flight management, its checklists and datalink):
+  Shift+M    Open the MFD window (A380 parity): the MFD page as lines (menus, buttons,
+             tabs, fields with their values and colours, the scratchpad). Up/Down move;
+             Enter acts on the line: a field takes what you typed in the scratchpad box
+             (Tab to it, type, Enter), anything else is clicked. Backspace presses CLR,
+             PageUp/PageDown scroll, F5 refreshes, Escape closes. The Side box picks the
+             captain's or the first officer's MFD. A new FMS message is spoken (with the
+             window closed, the background says it). Alt+letter presses a KCCU page key:
+             Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC,
+             Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG,
+             Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU,
+             Alt+B AIRPORT, Alt+Y REF, Alt+X ESC.
+  Ctrl+N     The MFD window opened on RAD NAV, where the A350 tunes its navaids (the
+             PMDG 737's NAV radios key)
+  Ctrl+Shift+D  The MFD window opened on ATC COM, the A350's datalink (the A32NX's DCDU key)
 
 OIS (the A350's EFB, one on each side):
   Shift+T       Captain's OIS
@@ -361,6 +401,12 @@ Radios (the A380's keys):
                 Every RMP key, microphone key, volume knob and reception (the knob pulled
                 out) is also on the Pedestal's Captain RMP, First Officer RMP and RMP 3
                 panels.
+
+NOT ON THE A350 YET (each key says so when pressed):
+  Shift+C       The First Officer window, with its flows and checklists ("No checklist for this
+                aircraft."). The A350's own checklists are on the MFD: Ctrl+Shift+C.
+  Ctrl+Shift+B  The A380's airport map and BTV (OANS) window ("OANS airport map is only
+                available on the A380."). The A350 draws its airport map and BTV on the ND.
 
 General:
   Escape     Exit active hotkey mode

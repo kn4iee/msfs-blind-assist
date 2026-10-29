@@ -31,21 +31,12 @@ public partial class IniBuildsA350Definition
             // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU. While it is open it says
             // the FMS messages itself, and the background follows them silently (MfdWindowOpen).
             case HotkeyAction.ShowFenixMCDU:
-            {
-                hotkeyManager.ExitOutputHotkeyMode();
-                var input = NewMfdInput(simConnect);
-                ShowTrackedWindow(
-                    () =>
-                    {
-                        var window = new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
-                            async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
-                            side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer);
-                        window.FormClosed += (_, _) => _mfdWindowOpen = false;
-                        return window;
-                    },
-                    w => { _mfdWindowOpen = true; w.Show(); w.BringToFront(); w.Activate(); });
+                ShowMfdWindow(simConnect, announcer, hotkeyManager, page: null);
                 return true;
-            }
+            // Ctrl+N, Ctrl+Shift+C, Ctrl+Shift+D: another aircraft's window, the A350's page for it on the MFD.
+            case var windowKey when A350.A350Hotkeys.MfdPages.TryGetValue(windowKey, out var page):
+                ShowMfdWindow(simConnect, announcer, hotkeyManager, page);
+                return true;
             // Ctrl+Shift+R: the RMP window (A380 parity): the chosen RMP's screen, a frequency typed on its keypad, Enter
             // loads it as standby, Alt+1/2/3 swaps it in; Alt+T a squawk.
             case HotkeyAction.ShowRMP:
@@ -198,6 +189,32 @@ public partial class IniBuildsA350Definition
     /// <summary>The MFD window's KCCU and mouse: its key presses go out through <see cref="Send"/>, so a repeated key
     /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4].</summary>
     internal A350.Display.A350MfdInput NewMfdInput(SimConnectManager simConnect) => new(rpn => Send(simConnect, rpn));
+
+    /// <summary>The MFD window (input Shift+M, the A380's), opened or brought forward, on <paramref name="page"/> when given (a
+    /// KCCU page key, <see cref="A350.A350Hotkeys.MfdPages"/>). While it is open it says the FMS messages itself, and the
+    /// background follows them silently (<see cref="MfdWindowOpen"/>).</summary>
+    private void ShowMfdWindow(SimConnectManager simConnect, ScreenReaderAnnouncer announcer, HotkeyManager hotkeyManager, string? page)
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+        var input = NewMfdInput(simConnect);
+        ShowTrackedWindow(
+            () =>
+            {
+                var window = new Forms.A350.A350MfdWindow(() => Pfd?.Latest("MFD", 0),
+                    async () => Displays == null ? null : (await Displays.DrawAsync(("MFD", 0)))?.FirstOrDefault(),
+                    side => IsScreenDark(side == 0 ? "Captain MFD" : "First Officer MFD"), input, announcer);
+                window.FormClosed += (_, _) => _mfdWindowOpen = false;
+                return window;
+            },
+            w =>
+            {
+                _mfdWindowOpen = true;
+                w.Show();
+                w.BringToFront();
+                w.Activate();
+                if (page != null) w.PressPage(page);
+            });
+    }
 
     /// <summary>An FCU window as the cockpit shows it now (<see cref="A350.A350FcuWindows"/>), or null while unread.</summary>
     internal string? FcuWindowText(string windowName, SimConnectManager simConnect)

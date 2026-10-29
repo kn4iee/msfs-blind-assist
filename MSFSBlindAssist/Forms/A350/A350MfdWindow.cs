@@ -206,6 +206,10 @@ public sealed class A350MfdWindow : Form
         await AfterActionAsync();
     }
 
+    /// <summary>Shows a page as its KCCU page key does (A350Hotkeys.MfdPages: another aircraft's window key opening the
+    /// window on the A350's own page).</summary>
+    internal void PressPage(string key) => PressKey(key);
+
     /// <summary>Presses a KCCU key, unless a line's action is running: its keys would land among the action's.</summary>
     private void PressKey(string key)
     {
