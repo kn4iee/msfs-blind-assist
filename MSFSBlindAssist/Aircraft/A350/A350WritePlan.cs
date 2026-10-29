@@ -33,8 +33,8 @@ public sealed record A350Plan(IReadOnlyList<A350Step> Steps, string? Refusal)
 /// is sent only when the current position is KNOWN and differs; an unknown position (or a reading that is none
 /// of the control's positions) is refused, because a flip sent the wrong way round inverts the switch.</item>
 /// <item>Selectors and knobs are absolute: Set n is position n (NO SMOKING went to 2 for a Set of 2).</item>
-/// <item>A hold button is pressed with Set 2 and released with Set 0 after <see cref="HoldMsFor"/>; a spring
-/// switch is held at the picked side for <see cref="SpringHoldMsFor"/>, then returned to rest.</item>
+/// <item>A hold button is pressed with Set 2 and released with Set 0 after <see cref="HoldMs"/>; a spring
+/// switch is held at the picked side for <see cref="SpringHoldMs"/>, then returned to rest.</item>
 /// </list>
 /// </summary>
 public static class A350WritePlan
@@ -46,10 +46,6 @@ public static class A350WritePlan
 
     /// <summary>How long a spring switch is held off center.</summary>
     public const int SpringHoldMs = 1000;
-
-    /// <summary>Hold buttons a tap is too short for, by a fixed time (none: one a pilot holds is <see cref="Latched"/>).</summary>
-    public static readonly IReadOnlyDictionary<string, int> TestHoldMs =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Buttons a pilot presses and holds, held for as long as the pilot chooses: the first press holds, the next
@@ -90,10 +86,6 @@ public static class A350WritePlan
     /// <summary>A latched button let go.</summary>
     public static A350Plan ForHoldUp(A350Control control) => Steps(Set(control, 0));
 
-    /// <summary>Spring switches that work only while held longer than <see cref="SpringHoldMs"/> (none yet).</summary>
-    public static readonly IReadOnlyDictionary<string, int> SpringHolds =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// Switches whose input event only animates the key while the click code flips the state: the app writes what the
     /// click code writes. The HUD declutter keys (1.2.7, LeftSingle): the key's ANIM to 0 and a 2-frame TIMER, after
@@ -108,12 +100,6 @@ public static class A350WritePlan
 
     private static string HudDeclutter(string side, double position) =>
         $"0 (>L:INI_FCU_HUD_DECLUTTER_{side}_ANIM) 2 (>L:INI_FCU_HUD_DECLUTTER_{side}_TIMER) {Format(position)} (>L:INI_FCU_HUD_DECLUTTER_{side})";
-
-    public static int HoldMsFor(A350Control control) =>
-        TestHoldMs.TryGetValue(control.Id, out var ms) ? ms : HoldMs;
-
-    public static int SpringHoldMsFor(A350Control control) =>
-        SpringHolds.TryGetValue(control.Id, out var ms) ? ms : SpringHoldMs;
 
     /// <summary>A switch whose position is not read yet: the PMDGs' sentence, spoken alone.</summary>
     public const string UnknownPositionRefusal = "Switch not ready, please try again in a moment.";
@@ -163,7 +149,7 @@ public static class A350WritePlan
                 double rest = control.Rest ?? 1;
                 if (Math.Abs(position - rest) < SameValueTolerance)
                     return Steps(Set(control, rest));
-                return Steps(Set(control, position), new A350DelayStep(SpringHoldMsFor(control)), Set(control, rest));
+                return Steps(Set(control, position), new A350DelayStep(SpringHoldMs), Set(control, rest));
             }
             case A350Kinds.Knob:
             {
@@ -180,7 +166,7 @@ public static class A350WritePlan
         : control.Kind switch
     {
         A350Kinds.Button => Steps(Set(control, control.Press ?? 1)),
-        A350Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A350DelayStep(HoldMsFor(control)), Set(control, 0)),
+        A350Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A350DelayStep(HoldMs), Set(control, 0)),
         A350Kinds.Toggle when A350PanelLayout.IsMomentary(control) => Steps(Set(control, 1)),   // the cockpit returns it
         _ => A350Plan.Refused(NotSettableRefusal),
     };

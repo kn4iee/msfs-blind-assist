@@ -23,8 +23,8 @@ public class A350PfdMonitorTests
         var m = new A350PfdMonitor(Each((g, side) => g != "EFIS" ? null : side == 0 ? cpt.Dequeue() : fo), _ => false, said.Add);
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
-        Assert.Same(fo, m.Latest(1));
-        Assert.NotNull(m.Latest(0));
+        Assert.Same(fo, m.Latest("EFIS", 1));
+        Assert.NotNull(m.Latest("EFIS", 0));
     }
 
     // Review 2026-10-29 (engine M2): a tick already drawing when the aircraft was switched spoke its FMA change after the
@@ -126,7 +126,7 @@ public class A350PfdMonitorTests
         await m.TickAsync();
         await m.TickAsync();
         m.Rebaseline();
-        Assert.Null(m.Latest(0));                 // flight A's PFD is not this flight's
+        Assert.Null(m.Latest("EFIS", 0));                 // flight A's PFD is not this flight's
         await m.TickAsync();
         await m.TickAsync();                      // flight B's FDs, on as it loads
         Assert.Empty(said);
@@ -150,9 +150,9 @@ public class A350PfdMonitorTests
         draws = false;
         now += A350PfdMonitor.MaxAge;
         await m.TickAsync();
-        Assert.Same(cpt, m.Latest(0));
+        Assert.Same(cpt, m.Latest("EFIS", 0));
         now += TimeSpan.FromSeconds(1);
-        Assert.Null(m.Latest(0));
+        Assert.Null(m.Latest("EFIS", 0));
     }
 
     // The reader not ready (or no A350 in the sim) answers the whole tick with nothing: nothing is kept or said.
@@ -162,7 +162,7 @@ public class A350PfdMonitorTests
         var said = new List<string>();
         var m = new A350PfdMonitor(_ => Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(null), _ => false, said.Add);
         await m.TickAsync();
-        Assert.Null(m.Latest(0));
+        Assert.Null(m.Latest("EFIS", 0));
         Assert.Empty(said);
     }
 }

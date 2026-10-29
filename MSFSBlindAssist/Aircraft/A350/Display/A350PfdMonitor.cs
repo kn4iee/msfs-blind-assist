@@ -99,9 +99,6 @@ public sealed class A350PfdMonitor : IDisposable
     /// cycle, about 650 ms at 495 MB). First: its warnings matter most, and a request retries only one trapped draw.</summary>
     public Action<A350DrawCapture?>? CtrDrawn { get; set; }
 
-    /// <summary>A side's latest EFIS draw that did not trap, or null.</summary>
-    public A350DrawCapture? Latest(int side) => Latest("EFIS", side);
-
     /// <summary>A display's latest draw that did not trap, or null when there is none younger than <see cref="MaxAge"/>.</summary>
     public A350DrawCapture? Latest(string gauge, int index) =>
         _latest.TryGetValue((gauge, index), out var kept) && _now() - kept.At <= MaxAge ? kept.Capture : null;

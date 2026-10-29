@@ -56,8 +56,6 @@ public static class A350DrawLayout
     public static IReadOnlyList<DrawnText> Region(IEnumerable<DrawnText> texts, A350Rect r) =>
         texts.Where(t => r.Contains(t.X, t.Y)).ToList();
 
-    private static int RowOf(float y, float rowHeight) => (int)MathF.Floor(y / rowHeight + 0.5f);   // JavaScript Math.round
-
     /// <summary>Non-blank texts as rows in reading order: a row is the texts within half a row height of its top
     /// text, read left to right (live: MFD IRS 3's texts at y 430 and 432 straddled a fixed bucket's edge).</summary>
     public static IReadOnlyList<IReadOnlyList<DrawnCell>> Rows(IEnumerable<DrawnText> texts, float rowHeight = 12)

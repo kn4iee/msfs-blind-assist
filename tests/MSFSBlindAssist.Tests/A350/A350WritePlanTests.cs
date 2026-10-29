@@ -33,7 +33,7 @@ public class A350WritePlanTests : IDisposable
         string F(double v) => v.ToString(CultureInfo.InvariantCulture);
         Assert.Equal(new[]
         {
-            $"{F(away)} (>B:AIRLINER_OIS_AVNCS_EFB_LEFT_Set)", $"wait {A350WritePlan.SpringHoldMsFor(spring)}",
+            $"{F(away)} (>B:AIRLINER_OIS_AVNCS_EFB_LEFT_Set)", $"wait {A350WritePlan.SpringHoldMs}",
             $"{F(rest)} (>B:AIRLINER_OIS_AVNCS_EFB_LEFT_Set)",
         }, Rpn(plan));
         Assert.True(((A350DelayStep)plan.Steps[1]).OwesRest);

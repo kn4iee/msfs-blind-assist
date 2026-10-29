@@ -22,7 +22,6 @@ public sealed class A350WasmModule
     public sealed record FunctionImport(string Module, string Field, int Type);
     public sealed record DataSegment(int Base, byte[] Bytes);
 
-    public byte[] Bytes { get; }
     public IReadOnlyList<Section> Sections { get; }
     public IReadOnlyList<FuncType> Types { get; }
     public IReadOnlyList<FunctionImport> FunctionImports { get; }
@@ -32,10 +31,10 @@ public sealed class A350WasmModule
 
     private readonly List<int> _functionTypes;
 
-    private A350WasmModule(byte[] bytes, List<Section> sections, List<FuncType> types, List<FunctionImport> imports,
+    private A350WasmModule(List<Section> sections, List<FuncType> types, List<FunctionImport> imports,
         List<int> functionTypes, Dictionary<int, string> names, List<DataSegment> segments)
     {
-        Bytes = bytes; Sections = sections; Types = types; FunctionImports = imports;
+        Sections = sections; Types = types; FunctionImports = imports;
         _functionTypes = functionTypes; FunctionNames = names; DataSegments = segments;
     }
 
@@ -236,6 +235,6 @@ public sealed class A350WasmModule
         allTypes.AddRange(functionTypes);
         for (int k = 0; k < imports.Count; k++) names.TryAdd(k, "import:" + imports[k].Field);
 
-        return new A350WasmModule(bytes, sections, types, imports, allTypes, names, segments);
+        return new A350WasmModule(sections, types, imports, allTypes, names, segments);
     }
 }

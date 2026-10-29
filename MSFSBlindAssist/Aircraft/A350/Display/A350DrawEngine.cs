@@ -209,15 +209,12 @@ public sealed class A350DrawEngine : IDisposable
         if (needPages > have) _memory.Grow(needPages - have);
     }
 
-    /// <summary>Host callback errors so far (a torn copy hands the callbacks garbage pointers).</summary>
-    public int HostErrors { get; private set; }
-
-    /// <summary>Called with the import's name and the exception a guarded callback caught.</summary>
+    /// <summary>Called with the import's name and the exception a guarded callback caught (a torn copy hands the
+    /// callbacks garbage pointers).</summary>
     public Action<string, Exception>? HostError { get; set; }
 
     private void OnHostError(string name, Exception ex)
     {
-        HostErrors++;
         HostError?.Invoke(name, ex);
     }
 

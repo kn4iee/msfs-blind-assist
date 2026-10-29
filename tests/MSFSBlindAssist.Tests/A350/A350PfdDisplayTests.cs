@@ -128,10 +128,10 @@ public class A350PfdDisplayTests
         def.Ecam = new A350EcamMonitor(() => Task.FromResult<A350DrawCapture?>(Fixture("ctr_powerup_fws_fault")), () => false, _ => { });
         await def.Pfd.TickAsync();
         await def.Ecam.TickAsync();
-        Assert.NotNull(def.Pfd.Latest(0));
+        Assert.NotNull(def.Pfd.Latest("EFIS", 0));
         Assert.NotNull(def.Ecam.LatestCapture);
         def.OnSimContextReset();
-        Assert.Null(def.Pfd.Latest(0));
+        Assert.Null(def.Pfd.Latest("EFIS", 0));
         Assert.Null(def.Ecam.LatestCapture);
     }
 
