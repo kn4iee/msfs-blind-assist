@@ -89,17 +89,21 @@
     return rgb || null;
   };
 
-  // A colour as the word a pilot would say: green, amber, red, blue, white, black.
+  // A colour as the word a pilot would say: green, amber, red, blue, white, black, grey; none for any other.
   A.colourWord = function (c) {
     var rgb = A.rgb(c);
     if (!rgb) return '';
     var r = rgb[0], g = rgb[1], b = rgb[2];
     if (r > 200 && g > 200 && b > 200) return 'white';
     if (r < 40 && g < 40 && b < 40) return 'black';
+    // A grey (channels within 30 of each other) is grey, never a state colour; red only where red leads; anything else
+    // has no word (review 2026-10-29: every unclassified colour read "red", a state: an engine cowl "Open").
+    if (Math.max(r, g, b) - Math.min(r, g, b) <= 30) return 'grey';
     if (b > r && b > g) return 'blue';
     if (g > r && g > b) return 'green';
     if (r > b && g > 80) return 'amber';
-    return 'red';
+    if (r > g && r > b) return 'red';
+    return '';
   };
 
   A.colourState = function (c) {
