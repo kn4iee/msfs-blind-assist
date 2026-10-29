@@ -79,9 +79,10 @@ public static class A350ModulePatcher
     /// The A350's allocator (wasi-libc's dlmalloc), answered by the engine from the head room above the copy, free a
     /// no-op: a copy taken across frames tears the allocator's free lists, and live 2026-10-28 the draws that trapped
     /// died there (dlmalloc &lt;- malloc &lt;- operator new). Every entry point that reaches the heap state is answered,
-    /// so no allocation reads or writes the copy's heap. A function this A350 version lacks is left alone, and so is one
-    /// with another signature than the answer reads (dlmalloc's mstate kept in internal_memalign would shift its
-    /// arguments; a bare return where a result is due does not compile).
+    /// so no allocation reads or writes the copy's heap. A function is answered in each signature the patch knows
+    /// (dlmalloc's own internal_memalign keeps its mstate first); one this A350 version lacks, or has with a signature the
+    /// patch does not know, is left alone (an answer reading shifted arguments hands out wrong blocks; a bare return
+    /// where a result is due does not compile).
     /// </summary>
     private static IEnumerable<(string Name, byte[] Params, byte[] Results, byte[] Code)> AllocatorPatches(int hook) => new[]
     {
@@ -90,6 +91,7 @@ public static class A350ModulePatcher
         ("calloc", I32s(2), I32s(1), Answer(hook, CallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
         ("realloc", I32s(2), I32s(1), Answer(hook, ReallocMagic, Get(0), Get(1), Zero, Zero, Zero)),
         ("internal_memalign", I32s(2), I32s(1), Answer(hook, MemalignMagic, Get(0), Get(1), Zero, Zero, Zero)),
+        ("internal_memalign", I32s(3), I32s(1), Answer(hook, MemalignMagic, Get(1), Get(2), Zero, Zero, Zero)),   // (mstate, alignment, bytes)
         ("posix_memalign", I32s(3), I32s(1), Answer(hook, PosixMemalignMagic, Get(0), Get(1), Get(2), Zero, Zero)),
         ("free", I32s(1), I32s(0), Return),
         ("dlfree", I32s(1), I32s(0), Return),
@@ -141,18 +143,19 @@ public static class A350ModulePatcher
 
         var answered = new List<string>();
         var leftAlone = new List<string>();
-        foreach (var (name, parameters, results, code) in AllocatorPatches(hook))
+        foreach (var function in AllocatorPatches(hook).GroupBy(p => p.Name))
         {
-            if (TryFindFunction(mod, name) is not int fn)
+            if (TryFindFunction(mod, function.Key) is not int fn)
                 continue;
             var type = mod.Types[mod.FunctionTypeOf(fn)];
-            if (!type.Params.AsSpan().SequenceEqual(parameters) || !type.Results.AsSpan().SequenceEqual(results))
+            var known = function.FirstOrDefault(p => type.Params.AsSpan().SequenceEqual(p.Params) && type.Results.AsSpan().SequenceEqual(p.Results));
+            if (known.Code == null)
             {
-                leftAlone.Add(name);
+                leftAlone.Add(function.Key);
                 continue;
             }
-            hooks[fn] = code;
-            answered.Add(name);
+            hooks[fn] = known.Code;
+            answered.Add(function.Key);
         }
 
         var exports = DrawExports.Select(n => (ExportName(n), mod.FindFunction(n))).ToList();

@@ -220,18 +220,34 @@ public class A350DrawEngineAllocatorTests
         }
     }
 
-    // A version whose allocator functions take other arguments (dlmalloc's mstate kept in internal_memalign) or return
-    // a value (a free returning one) is left alone there: a bare return where a result is due does not even compile,
-    // and an answer reading shifted arguments would hand out wrong blocks (review 2026-10-29). The rest is answered.
+    // A version whose allocator functions have another signature is answered where the patch knows that signature
+    // (dlmalloc's own internal_memalign keeps its mstate first: alignment and size are its last two arguments) and left
+    // alone where it does not (a free returning a value: a bare return where a result is due does not even compile; an
+    // answer reading shifted arguments would hand out wrong blocks). Review 2026-10-29.
     [Fact]
-    public void An_allocator_function_with_another_signature_is_left_alone()
+    public void An_allocator_function_with_another_signature_is_answered_or_left_alone()
     {
         var patched = A350ModulePatcher.Patch(Module(OkText, otherSignatures: true));
         using var engine = A350ModuleCache.CreateEngine();
         using var module = Wasmtime.Module.FromBytes(engine, "a350", patched.Bytes);   // valid: compiles
-        Assert.Equal(new[] { "calloc", "dlfree", "dlmalloc", "malloc", "posix_memalign", "realloc" },
+        Assert.Equal(new[] { "calloc", "dlfree", "dlmalloc", "internal_memalign", "malloc", "posix_memalign", "realloc" },
             patched.Allocator.OrderBy(n => n, StringComparer.Ordinal));
-        Assert.Equal(new[] { "free", "internal_memalign" }, patched.AllocatorLeftAlone.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(new[] { "free" }, patched.AllocatorLeftAlone);
         Assert.Equal(8, A350ModulePatcher.Patch(Module(OkText)).Allocator.Count);   // the usual signatures: every one answered
+    }
+
+    // internal_memalign(mstate, 64, 8), dlmalloc's own signature: an aligned block above the copy, never the copy's heap.
+    [Fact]
+    public void A_dlmalloc_style_internal_memalign_is_answered_from_the_head_room()
+    {
+        using var e = Engine(Module(f => I32Const(0).Concat(I32Const(64)).Concat(I32Const(8)).Concat(Call(f.Memalign))
+            .Concat(new byte[] { 0x21, 0x01 }).Concat(AboveCopy(1))
+            .Concat(new byte[] { 0x20, 0x01 }).Concat(I32Const(63)).Append((byte)0x71)            // p & 63
+            .Concat(new byte[] { 0x04, 0x40, 0x00, 0x0B })                                        // misaligned: trap
+            .Concat(OkText(f)).ToArray(), otherSignatures: true));
+        e.Load(Copy());
+        var cap = e.Draw("CTR");
+        Assert.True(cap.Ok, cap.Error + "\n" + e.LastTrap);
+        Assert.Equal("OK", Assert.Single(cap.Texts).Text);
     }
 }
