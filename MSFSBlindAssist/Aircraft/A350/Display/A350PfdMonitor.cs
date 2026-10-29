@@ -3,7 +3,8 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
-/// The A350's displays in the background: the captain's EFIS drawn every tick and its FMA changes spoken with
+/// The A350's displays in the background: the CTR drawn first each tick and handed to the E/WD monitor
+/// (<see cref="CtrDrawn"/>); the captain's EFIS drawn every tick and its FMA changes spoken with
 /// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the first officer's EFIS every other tick;
 /// and two of the other displays (MFD, FCU, RMPs, standby displays, BAT) each tick in turn, a tick's displays all
 /// drawn on one memory copy. Each display's latest good draw is kept for its status display. Muted, it still
@@ -95,7 +96,7 @@ public sealed class A350PfdMonitor : IDisposable
     }
 
     /// <summary>The E/WD's reader (<see cref="A350EcamMonitor.Observe"/>): when set, each tick also draws the CTR, first,
-    /// on its own memory copy, and hands it over (review 2026-10-29: the E/WD monitor took a full copy of its own every
+    /// on the tick's one memory copy, and hands it over (review 2026-10-29: the E/WD monitor took a full copy of its own every
     /// cycle, about 650 ms at 495 MB). First: its warnings matter most, and a request retries only one trapped draw.</summary>
     public Action<A350DrawCapture?>? CtrDrawn { get; set; }
 

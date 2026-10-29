@@ -30,10 +30,6 @@ internal sealed record A350TypedStepper(string ValueVar, string ShowVar, double 
 }
 
 /// <summary>What a typed value does: the steps that land it, and how to check and correct it afterwards.</summary>
-/// <param name="Refusal">Said instead of doing anything (an invalid value, a window in the other unit).</param>
-/// <param name="ReadBackVar">The variable the cockpit shows the value in (an A350 L:var or the sim's baro).</param>
-/// <param name="Target">The value it should read, in that variable's unit.</param>
-/// <param name="Correction">A direct write of the target, sent when the click landed elsewhere.</param>
 internal sealed class A350TypedPlan
 {
     private readonly Func<double, Func<string, double?>, string>? _confirm;
@@ -60,11 +56,15 @@ internal sealed class A350TypedPlan
 
     public static A350TypedPlan Refused(string why) => new(why);
 
+    /// <summary>Said instead of doing anything (an invalid value, a window in the other unit).</summary>
     public string? Refusal { get; }
     public IReadOnlyList<A350Step> Steps { get; }
+    /// <summary>The variable the cockpit shows the value in (an A350 L:var or the sim's baro).</summary>
     public string ReadBackVar { get; } = string.Empty;
+    /// <summary>The value it should read, in that variable's unit.</summary>
     public double Target { get; }
     public double Tolerance { get; }
+    /// <summary>A direct write of the target, sent when the click landed elsewhere.</summary>
     public A350CalcStep Correction { get; }
 
     /// <summary>Set when the value is stepped to by clicks read between them, not written.</summary>

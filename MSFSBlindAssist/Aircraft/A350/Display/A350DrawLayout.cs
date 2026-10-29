@@ -10,8 +10,8 @@ public readonly record struct A350Rect(float X0, float Y0, float X1, float Y1)
 }
 
 /// <summary>
-/// Reading order for what a gauge drew: texts grouped into rows (by their y in steps of a row height)
-/// and read left to right, and the rectangles that cut a gauge into the displays it draws
+/// Reading order for what a gauge drew: texts grouped into rows (a row is the texts within half a row height of
+/// its top text) and read left to right, and the rectangles that cut a gauge into the displays it draws
 /// (docs/inibuilds-a350.md "Gauges and where they draw"). A row is spoken with its colours, because on
 /// the A350 a colour carries meaning (amber caution, red warning, cyan action, green normal).
 /// </summary>

@@ -43,7 +43,7 @@ public sealed class A350DrawEngine : IDisposable
     private readonly Dictionary<string, List<int>> _objects = new();
     private A350MemoryCopy? _copy;
 
-    /// <summary>Calculator strings and A: vars the last draws asked for (diagnostics, A350Probe simq).</summary>
+    /// <summary>Calculator strings and A: vars the last draws asked for (diagnostics: A350Probe's draw mode prints them).</summary>
     public HashSet<string> Asked { get; } = new();
 
     /// <summary>How long one call of a gauge's Draw may run: past it the draw traps (epoch interruption, ticked every

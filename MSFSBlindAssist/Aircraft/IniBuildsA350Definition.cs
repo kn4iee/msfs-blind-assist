@@ -16,9 +16,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// <item>A write fires the control's OWN B: event, <c>value (&gt;B:AIRLINER_…_Set)</c>, through the calculator path,
 /// unique-ified so a repeat is never coalesced (<see cref="A350WritePlan"/>). A push button's event FLIPS it whatever
 /// value it is given, so a write is planned from the position the switch is in now.</item>
-/// <item>Switch positions ride the continuous batches and are consumed silently: the screen reader already speaks the
-/// pilot's own picks. (Announcing a change made elsewhere, with its Ctrl+M row, comes with the A380-parity
-/// announcements.)</item>
+/// <item>Switch positions ride the continuous batches. A change made elsewhere is spoken by MainForm's generic path, one
+/// Ctrl+M row each (the A380's convention); the pilot's own pick is the echo the screen reader already said.</item>
 /// </list>
 /// </summary>
 public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposable
@@ -29,7 +28,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override string AircraftCode => Code;
 
     /// <summary>The sections offered: a section joins once its panels, names and positions are curated and live-tested
-    /// (the generated names elsewhere still collide, [VAR-1]). Public for the A350Probe harness, which offers the same.</summary>
+    /// (all five are). Public for the A350Probe harness, which offers the same.</summary>
     public static readonly IReadOnlyList<string> CuratedSections = new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" };
 
     private readonly A350Placement _placement;
@@ -545,7 +544,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 Type = SimVarType.LVar,
                 UpdateFrequency = UpdateFrequency.Continuous,
                 IsAnnounced = true,                     // consumed silently in ProcessSimVarUpdate
-                ExcludeFromMonitorManager = true,       // nothing speaks yet, so a Ctrl+M row would mute nothing ([VAR-9])
+                ExcludeFromMonitorManager = true,       // a row only where something speaks: the lights, FCU windows and IRS rows set theirs ([VAR-9])
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
                 RenderAsReadOnlyStatus = stateVariables != null,
                 StateVariables = stateVariables is { Count: > 0 } ? stateVariables : null,   // a power change repaints a light

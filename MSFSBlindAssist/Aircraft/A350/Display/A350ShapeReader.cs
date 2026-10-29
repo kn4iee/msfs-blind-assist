@@ -4,8 +4,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// it covers on the gauge, the image it painted with (0 for a plain colour) and its colour.</summary>
 public sealed record DrawnShape(string Kind, float X0, float Y0, float X1, float Y1, int Image, A350Rgba? Colour = null)
 {
-    /// <summary>An image paint's pattern: where the image's origin lands and its drawn size. With the shape's box
-    /// they say which sprite of an atlas was drawn (a pump running or off, a valve open or closed).</summary>
+    // An image paint's pattern: where the image's origin lands and its drawn size. With the shape's box they say which
+    // sprite of an atlas was drawn (a pump running or off, a valve open or closed).
     /// <summary>The pattern's transform (NanoVG's xform: x' = A x + C y + X, y' = B x + D y + Y).</summary>
     public float PatternA { get; init; } = 1;
     public float PatternB { get; init; }

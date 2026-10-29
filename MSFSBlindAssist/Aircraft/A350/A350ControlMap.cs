@@ -174,6 +174,8 @@ public sealed class A350Control
     [JsonPropertyName("press")] public double? Press { get; set; }
     /// <summary>Springs: the position they return to.</summary>
     [JsonPropertyName("rest")] public double? Rest { get; set; }
+    /// <summary>The generator's note on a control it planned no write for ("no write the map can drive"): a record for
+    /// whoever reads the map, nothing reads it.</summary>
     [JsonPropertyName("note")] public string? Note { get; set; }
     /// <summary>The first step of the aircraft's own checklist that names this control, or null. A record for whoever
     /// reviews a regeneration (diff_maps.py reports it): no row reads it, as rows are placed in map order

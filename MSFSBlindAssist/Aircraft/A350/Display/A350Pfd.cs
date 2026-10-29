@@ -7,8 +7,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// altitude tape with its drum, QNH and target, the radio altitude under the aircraft symbol, the heading
 /// scale and the line under it. Tape and drum labels are read as the values they show, never as text. What
 /// fits no area (a red ATT flag) reads as drawn, with its colour.
-/// Calibrated live on the stand at VCBI (2026-10-27): 12.8 ft put the drum window at y 422, 219 degrees
-/// put the heading index at x 359 with 7 px a degree. The FMA columns' bounds are provisional until flown.
+/// Calibrated live on the stand at VCBI (2026-10-27): 219 degrees put the heading index at x 359 with 7 px a degree.
+/// The altitude window (y 389) reads the tape's label with the drum; the FMA strip (to y 125, three rows) was read in
+/// flight on 2026-10-28.
 /// </summary>
 public static class A350Pfd
 {
