@@ -143,6 +143,50 @@ public class A350LampAnnouncementTests
         Assert.Single(_speech.All);
     }
 
+    /// <summary>Delivers every input of a lamp but the ANN LT switch (a light is decided without it, as not tested).</summary>
+    private void BaselineWithoutAnnLt(IniBuildsA350Definition def, A350Lamp lamp)
+    {
+        foreach (var key in lamp.InputKeys.Where(k => k != A350PanelLamps.AnnLtKey))
+            def.ProcessSimVarUpdate(key, key == lamp.Key ? 0 : 1, _speech);
+    }
+
+    // Review 2026-10-28 (minor 6): ANN LT's first value arriving at TEST after the lights were decided (its own
+    // subscription can land after the batch; a flight load or reconnect mid-test) turned every light on through the
+    // normal path, one by one: the flood the test's one sentence exists to prevent. A first value is a baseline.
+    [Fact]
+    public void A_first_ann_lt_value_at_test_speaks_no_light()
+    {
+        BaselineWithoutAnnLt(_def, Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT"));
+        BaselineWithoutAnnLt(_def, Lamp("A350_LT_ELEC_GEN_1A_SEQ1_LIGHT"));
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(A350PanelLamps.AnnLtKey, 0, _speech);   // its first value: TEST
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(A350PanelLamps.AnnLtKey, 1, _speech);   // BRT: the lights return, unspoken
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);
+    }
+
+    // The same after a flight load: ANN LT seeded from the cache at TEST left the lights decided before it dark in the
+    // board, so each was said "on" at its next delivery.
+    [Fact]
+    public void Ann_lt_seeded_at_test_takes_the_lights_it_lights_as_their_baseline()
+    {
+        var cache = new Dictionary<string, double>(StringComparer.Ordinal) { [A350PanelLamps.AnnLtKey] = 0 };
+        var def = new IniBuildsA350Definition
+        {
+            Clock = () => _now, Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null, IsMuted = _ => false,
+        };
+        def.Attach(new SimConnectManager(IntPtr.Zero));
+        var bat = Lamp("A350_LT_ELEC_BAT_1_SEQ1_LIGHT");
+        BaselineWithoutAnnLt(def, bat);
+        for (int i = 0; i < IniBuildsA350Definition.SeedAfterBatches; i++)
+            def.OnContinuousBatchDelivered(i);
+        def.ProcessSimVarUpdate(bat.Key, 0, _speech);   // its fault input again, unchanged
+        _now += 5000;
+        def.OnContinuousBatchDelivered(0);
+        Assert.Empty(_speech.All);
+    }
+
     [Fact]
     public void A_muted_light_says_nothing()
     {

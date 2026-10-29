@@ -106,9 +106,12 @@ public partial class IniBuildsA350Definition
     private void HandleLampDelivery(string key, double value, ScreenReaderAnnouncer announcer)
     {
         // ANN LT to TEST lights every light at once, and back to BRT or DIM returns them: the lights follow unspoken
-        // (the switch's position is the screen reader's), and the test is said once, as the ANN LT row's.
-        if (_lampBoard.TestFlips(key, value) is bool testing)
+        // (the switch's position is the screen reader's), and the test is said once, as the ANN LT row's. Every ANN LT
+        // delivery goes this way: a first value at TEST (after a load, or arriving after the lights were decided) is a
+        // baseline, never each light turning on.
+        if (key == A350PanelLamps.AnnLtKey)
         {
+            bool testing = _lampBoard.TestFlips(key, value) == true;
             foreach (var turn in _lampBoard.Update(key, value))
                 _lampSpeech.Forget(MasterSpeakers.GetValueOrDefault(turn.Lamp.Key, turn.Lamp.Name));
             if (testing && !announcer.Suppressed && !IsMuted(AnnLtRow))

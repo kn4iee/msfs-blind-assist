@@ -183,15 +183,16 @@ public sealed class A350LampBoard
         return turns ?? (IReadOnlyList<A350LampTurn>)Array.Empty<A350LampTurn>();
     }
 
-    /// <summary>Records a value only where none has been read yet, and baselines the lights it completes, silently;
-    /// true when the value was taken.</summary>
+    /// <summary>Records a value only where none has been read yet, and baselines the lights it decides, silently: those
+    /// it completes, and those decided without it (a light decided before ANN LT's first value, as not tested); true
+    /// when the value was taken.</summary>
     public bool Seed(string key, double value)
     {
         if (!_byInput.Contains(key) || _values.ContainsKey(key))
             return false;
         _values[key] = value;
         foreach (var lamp in _byInput[key])
-            if (!_lit.ContainsKey(lamp.Key) && lamp.IsLit(Read) is bool lit)
+            if (lamp.IsLit(Read) is bool lit)
                 _lit[lamp.Key] = lit;
         return true;
     }
