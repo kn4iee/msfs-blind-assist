@@ -633,7 +633,7 @@ namespace MSFSBlindAssist.SimConnect
 
         private Task<string> EvalAsync(string expression) => EvalAsync(expression, _cts?.Token ?? CancellationToken.None);
 
-        private async Task<string> EvalAsync(string expression, CancellationToken ct)
+        internal async Task<string> EvalAsync(string expression, CancellationToken ct)   // internal: A350Probe's ois eval: step
         {
             var ws = _ws;
             if (ws == null || ws.State != WebSocketState.Open) return "";

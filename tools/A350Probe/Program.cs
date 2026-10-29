@@ -192,10 +192,7 @@ internal sealed class ProbeForm : Form
             if (step.StartsWith("eval:"))
             {
                 // A diagnostic expression in the OIS page, over the client's own inspector socket (one per page, [DBG-9]).
-                var eval = typeof(MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient).GetMethod("EvalAsync",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null,
-                    new[] { typeof(string), typeof(CancellationToken) }, null)!;
-                var result = await (Task<string>)eval.Invoke(client, new object[] { step[5..], CancellationToken.None })!;
+                var result = await client.EvalAsync(step[5..], CancellationToken.None);
                 Line($"--- eval\n{result}");
                 continue;
             }
@@ -349,8 +346,8 @@ internal sealed class ProbeForm : Form
             async rmp => (await service.DrawAsync(MSFSBlindAssist.Aircraft.A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
             _ => false, rpn => _m!.ExecuteCalculatorCodeUnique(rpn), cap);
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-        var list = (Control)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_list", flags)!.GetValue(window)!;
-        var side = (ComboBox)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_side", flags)!.GetValue(window)!;
+        var list = window.ListControl;
+        var side = window.SideBox;
         var process = typeof(Control).GetMethod("ProcessCmdKey", flags)!;
         window.Show();
         await Task.Delay(1500);
@@ -381,7 +378,7 @@ internal sealed class ProbeForm : Form
         Said();
         if (!window.IsDisposed)
         {
-            foreach (var line in (IReadOnlyList<string>)typeof(MSFSBlindAssist.Forms.A350.A350RmpWindow).GetField("_lines", flags)!.GetValue(window)!)
+            foreach (var line in window.ShownLines)
                 Line($"screen\t{line}");
             window.Close();
         }

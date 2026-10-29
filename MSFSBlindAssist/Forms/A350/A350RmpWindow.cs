@@ -52,6 +52,12 @@ public sealed class A350RmpWindow : Form
     private bool _pumping;
     private int _rmp = 1;   // the RMP shown, kept so a change of RMP deletes the entry typed on the one left
     private IReadOnlyList<string> _lines = Array.Empty<string>();
+
+    // For A350Probe's rmpwin mode, which drives the window as a pilot does (it read these by reflection, which a rename
+    // broke only at run time: cleanup review 2026-10-30).
+    internal Control ListControl => _list;
+    internal ComboBox SideBox => _side;
+    internal IReadOnlyList<string> ShownLines => _lines;
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
     private int _line = 1;
@@ -109,9 +115,19 @@ public sealed class A350RmpWindow : Form
 
     private int Rmp => (_side.SelectedIndex < 0 ? 0 : _side.SelectedIndex) + 1;
 
+    /// <summary>A refresh asked for while one runs (F5, another RMP picked mid-draw), run once that one ends: dropped, the
+    /// list stayed on the screen it had (cleanup review 2026-10-30; the MFD window's fix of 2026-10-29).</summary>
+    private bool _refreshAgain, _refreshAgainNow;
+
     private async Task RefreshAsync(bool now)
     {
-        if (_busy || IsDisposed) return;
+        if (IsDisposed) return;
+        if (_busy)
+        {
+            _refreshAgain = true;
+            _refreshAgainNow |= now;
+            return;
+        }
         _busy = true;
         try
         {
@@ -127,7 +143,16 @@ public sealed class A350RmpWindow : Form
             Show(Lines(cap, _isDark(Rmp)));
         }
         catch { /* best-effort; keep the last good screen */ }
-        finally { _busy = false; }
+        finally
+        {
+            _busy = false;
+            if (_refreshAgain && !IsDisposed)
+            {
+                bool again = _refreshAgainNow;
+                _refreshAgain = _refreshAgainNow = false;
+                _ = RefreshAsync(again);
+            }
+        }
     }
 
     /// <summary>What the list shows of an RMP's screen: dark while its BRT/OFF knob or its power has it dark, as the
