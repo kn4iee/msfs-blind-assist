@@ -106,24 +106,31 @@ public sealed class A350HotPages
         return -1;
     }
 
-    // Four independent multiply-xor-rotate lanes over the page's 64-bit words (about 28 ms for 372 MB, live), and only a
-    // change has to be noticed (nothing is looked up by it). The rotate carries a difference down as well as up: without
-    // it two flips of a word's top bit in one lane cancelled (review 2026-10-28).
+    // Four independent lanes over the page's 64-bit words (about 28 ms for 372 MB, live), and only a change has to be
+    // noticed (nothing is looked up by it). Each step multiplies, folds the high half down and rotates: a multiply passes
+    // a top-bit difference through unchanged, so without the fold two such differences in one lane could cancel (two
+    // top bits; bit 63 of a word with bit 30 of the lane's next: reviews 2026-10-28 and 29).
     private static ulong Hash(ReadOnlySpan<byte> page)
     {
-        const ulong Prime = 0x100000001B3;
         var w = MemoryMarshal.Cast<byte, ulong>(page);
         ulong a = 0x9E3779B97F4A7C15, b = 0xC2B2AE3D27D4EB4F, c = 0x165667B19E3779F9, d = 0x27D4EB2F165667C5;
         int i = 0;
         for (; i + 4 <= w.Length; i += 4)
         {
-            a = System.Numerics.BitOperations.RotateLeft((a ^ w[i]) * Prime, 31);
-            b = System.Numerics.BitOperations.RotateLeft((b ^ w[i + 1]) * Prime, 31);
-            c = System.Numerics.BitOperations.RotateLeft((c ^ w[i + 2]) * Prime, 31);
-            d = System.Numerics.BitOperations.RotateLeft((d ^ w[i + 3]) * Prime, 31);
+            a = Step(a, w[i]);
+            b = Step(b, w[i + 1]);
+            c = Step(c, w[i + 2]);
+            d = Step(d, w[i + 3]);
         }
-        for (; i < w.Length; i++) a = System.Numerics.BitOperations.RotateLeft((a ^ w[i]) * Prime, 31);
-        for (int k = w.Length * 8; k < page.Length; k++) b = System.Numerics.BitOperations.RotateLeft((b ^ page[k]) * Prime, 31);
+        for (; i < w.Length; i++) a = Step(a, w[i]);
+        for (int k = w.Length * 8; k < page.Length; k++) b = Step(b, page[k]);
         return a ^ (b << 1 | b >> 63) ^ (c << 2 | c >> 62) ^ (d << 3 | d >> 61);
+    }
+
+    private static ulong Step(ulong lane, ulong word)
+    {
+        ulong y = (lane ^ word) * 0x100000001B3;
+        y ^= y >> 29;
+        return System.Numerics.BitOperations.RotateLeft(y, 31);
     }
 }

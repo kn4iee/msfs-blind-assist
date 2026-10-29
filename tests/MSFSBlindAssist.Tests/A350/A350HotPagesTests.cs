@@ -34,6 +34,26 @@ public class A350HotPagesTests
         Assert.Equal(new[] { (2 * Page, 0x10000u + 2 * Page, Page) }, hot.Track(OneRegion(4), Pages(4, (2, 7))));
     }
 
+    // Review 2026-10-29: with the rotate some pairs still cancelled (bit 63 of a word with bit 30 of the lane's next): the
+    // multiply passes a top-bit difference through unchanged and the rotate only moves it. Every two-bit change across
+    // two words of one lane changes the page.
+    [Fact]
+    public void No_two_bit_change_in_one_lane_leaves_the_page_cold()
+    {
+        var failed = new List<string>();
+        for (int b1 = 0; b1 < 64; b1++)
+            for (int b2 = 0; b2 < 64; b2++)
+            {
+                var hot = new A350HotPages();
+                hot.Track(OneRegion(1), Pages(1));
+                var page = Pages(1);
+                page[b1 / 8] ^= (byte)(1 << (b1 % 8));          // word 0
+                page[32 + b2 / 8] ^= (byte)(1 << (b2 % 8));     // word 4, the same lane
+                if (hot.Track(OneRegion(1), page).Count != 1) failed.Add($"{b1}+{b2}");
+            }
+        Assert.Empty(failed);
+    }
+
     // Review 2026-10-28 (minor 7): multiply-xor without a rotate carries a difference only upward, so two flips of a
     // word's top bit in one lane (words 0 and 4) cancelled and the changed page stayed cold, its torn bytes kept.
     [Fact]
