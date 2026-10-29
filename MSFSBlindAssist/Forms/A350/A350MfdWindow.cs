@@ -126,11 +126,11 @@ public sealed class A350MfdWindow : Form
             // A menu that has just opened takes the selection to its first item, where a sighted pilot looks.
             if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
                 _list.SelectedIndex = first;
-            // The FMS message, in the scratchpad or, on the checklists, in its place.
-            var pad = _lines.FirstOrDefault(l => l.Kind is "scratchpad" or "message")?.Spoken;
-            if (_lastScratchpad != null && pad != null && pad != _lastScratchpad && pad != "Scratchpad: empty")
-                _announcer.Announce(pad);
-            _lastScratchpad = pad;
+            // The FMS message, in the scratchpad or, on the checklists, in its place: said as it appears.
+            var pad = A350MfdPage.Scratchpad(_lines);
+            if (A350MfdPage.MessageJustArrived(_lastScratchpad, pad) is { } message)
+                _announcer.Announce(message);
+            if (pad != null) _lastScratchpad = pad;
         }
         catch { /* best-effort; keep the last good page */ }
         finally { _busy = false; }

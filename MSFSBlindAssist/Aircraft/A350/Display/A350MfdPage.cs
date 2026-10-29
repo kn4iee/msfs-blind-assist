@@ -523,6 +523,19 @@ public static class A350MfdPage
     /// <summary>The page's title line, from its title bar ("ACTIVE/F-PLN", y 137; "ACTIVE/F-PLN; TMPY, yellow"), or null.</summary>
     public static string? PageTitle(IReadOnlyList<MfdLine> lines) => lines.FirstOrDefault(l => l.Kind == "title")?.Spoken;
 
+    /// <summary>The FMS message line as the window compares it: the scratchpad's, or a checklist page's message; a read page
+    /// showing none is an empty scratchpad (a checklist page has no box, so the first message there is a change too);
+    /// null before any page is read.</summary>
+    public static string? Scratchpad(IReadOnlyList<MfdLine> lines) =>
+        lines.Count == 0 ? null : lines.FirstOrDefault(l => l.Kind is "scratchpad" or "message")?.Spoken ?? EmptyScratchpad;
+
+    /// <summary>The message to speak when the FMS posted one since the last read (a sighted pilot sees it appear), else
+    /// null: never on the window's first read, never for the scratchpad emptying.</summary>
+    public static string? MessageJustArrived(string? before, string? now) =>
+        before != null && now != null && now != before && now != EmptyScratchpad ? now : null;
+
+    private const string EmptyScratchpad = "Scratchpad: empty";
+
     /// <summary>The new page's title when the page changed since the last read (a page key, a menu pick, C/L COMPLETE
     /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
     /// first read.</summary>
@@ -539,7 +552,7 @@ public static class A350MfdPage
             int field = now.ToList().FindIndex(l => l.Popup && l.Kind == "field");
             return field >= 0 ? field : now.ToList().FindIndex(l => l.Popup);
         }
-        // A menu is new when none of its items stands where one stood before: one replacing another (RWY's list, then
+        // A menu is new when its first item stands where no item stood before: one replacing another (RWY's list, then
         // SID's) as well as one opening; the same menu still open, scrolled or not, keeps the pilot's place.
         var open = before.Where(l => l.Kind == "menuitem").Select(l => (l.ClickX, l.ClickY)).ToHashSet();
         for (int i = 0; i < now.Count; i++)

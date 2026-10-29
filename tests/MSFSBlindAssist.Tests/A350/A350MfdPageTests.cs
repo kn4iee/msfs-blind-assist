@@ -757,6 +757,22 @@ public class A350MfdPageTests
         Assert.Equal("APPROACH", A350MfdPage.PageTitle(lines));
     }
 
+    // Review 2026-10-29 (Important 2): a checklist page with no message has no scratchpad line, so the window's last
+    // scratchpad became null and the first message to appear there was never said, only one replacing another.
+    [Fact]
+    public void A_first_message_on_a_checklist_page_is_said()
+    {
+        var page = Load("mfd_cl_approach");
+        var quiet = A350MfdPage.Read(page with { Texts = page.Texts.Select(t => t.Text == "NAV ACCURACY UPGRADED" ? t with { Text = " " } : t).ToList() }, 0);
+        var posted = A350MfdPage.Read(page, 0);
+        Assert.Equal("Scratchpad: empty", A350MfdPage.Scratchpad(quiet));
+        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white",
+            A350MfdPage.MessageJustArrived(A350MfdPage.Scratchpad(quiet), A350MfdPage.Scratchpad(posted)));
+        Assert.Null(A350MfdPage.MessageJustArrived(null, A350MfdPage.Scratchpad(posted)));                 // the window's first read
+        Assert.Null(A350MfdPage.MessageJustArrived(A350MfdPage.Scratchpad(posted), "Scratchpad: empty"));  // cleared: nothing to say
+        Assert.Null(A350MfdPage.Scratchpad(Array.Empty<MfdLine>()));                                       // no page read
+    }
+
     // DEPARTURE's RWY key opened (live 2026-10-28): its list starts 6 px under the key and reads right after it.
     [Fact]
     public void The_runway_list_hangs_from_the_rwy_key()
