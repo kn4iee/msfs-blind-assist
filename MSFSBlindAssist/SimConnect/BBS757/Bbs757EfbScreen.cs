@@ -803,7 +803,9 @@ public static class Bbs757EfbScreen
     private static bool IsHeadingText(string t) =>
         t.Length >= 3 && !t.Any(char.IsLower) && t.Count(char.IsLetter) >= 3 && t.Split(' ').Length <= 3 && !t.Any(char.IsDigit);
 
-    private static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED" };
+    /// <summary>The words a tile's state ends its text with. The reader leaves them out of the tile's key, and
+    /// <see cref="Bbs757EfbPress.Relocate"/> leaves them out when it compares a tile's words with another's.</summary>
+    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED" };
 
     private static bool HasStateWord(string t) => StateWords.Any(w => t.EndsWith(" " + w, StringComparison.Ordinal) || t == w);
 

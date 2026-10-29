@@ -77,8 +77,19 @@ public class Bbs757EfbReadOnlyTests
         var a = Model(new Bbs757EfbItem(Bbs757EfbKind.Button, "GPU", new Rectangle(300, 300, 80, 40), new Point(340, 320), true, "btn:GPU"));
         var b = Model(new Bbs757EfbItem(Bbs757EfbKind.Button, "GPU", new Rectangle(301, 299, 80, 40), new Point(341, 319), true, "btn:GPU"));
         var c = Model(new Bbs757EfbItem(Bbs757EfbKind.Button, "GPV", new Rectangle(300, 300, 80, 40), new Point(340, 320), true, "btn:GPV"));
-        Assert.Equal(Bbs757EfbBridge.Fingerprint(a), Bbs757EfbBridge.Fingerprint(b));
-        Assert.NotEqual(Bbs757EfbBridge.Fingerprint(a), Bbs757EfbBridge.Fingerprint(c));
+        Assert.Equal(Bbs757EfbPress.Fingerprint(a), Bbs757EfbPress.Fingerprint(b));
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(a), Bbs757EfbPress.Fingerprint(c));
+    }
+
+    [Fact]
+    public void A_notification_appearing_over_an_unchanged_page_changes_the_fingerprint()
+    {
+        // The bridge pushes a read only when its fingerprint moved: a notification over a page that did not change must count.
+        var button = new Bbs757EfbItem(Bbs757EfbKind.Button, "GPU", new Rectangle(300, 300, 80, 40), new Point(340, 320), true, "btn:GPU");
+        var quiet = Model(button);
+        var toast = Model(button) with { Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:17Z") } };
+
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(quiet), Bbs757EfbPress.Fingerprint(toast));
     }
 }
 

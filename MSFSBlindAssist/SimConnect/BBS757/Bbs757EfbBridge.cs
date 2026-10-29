@@ -332,19 +332,19 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             if (!still)
             {
                 // Never held still (something on the page animates): agree twice before the page is taken.
-                string fp1 = Fingerprint(read.Model);
+                string fp1 = Bbs757EfbPress.Fingerprint(read.Model);
                 var read2 = await ReadFreshCaptureAsync(ct);
                 if (read2 != null)
                 {
                     reads++;
-                    string fp2 = Fingerprint(read2.Model);
+                    string fp2 = Bbs757EfbPress.Fingerprint(read2.Model);
                     if (fp2 != fp1)
                     {
                         var read3 = await ReadFreshCaptureAsync(ct);
                         if (read3 != null)
                         {
                             reads++;
-                            string fp3 = Fingerprint(read3.Model);
+                            string fp3 = Bbs757EfbPress.Fingerprint(read3.Model);
                             if (fp3 == fp2) read = read2;
                             else if (fp3 != fp1) { read = read3; unclear = true; }
                         }
@@ -357,7 +357,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             _lastReadFrame?.Dispose();
             _lastReadFrame = new Bitmap(bmp);
             _lastReadMs = Environment.TickCount64;
-            string fp = Fingerprint(read.Model);
+            string fp = Bbs757EfbPress.Fingerprint(read.Model);
             Log.Debug("BBS757", $"EFB reader: {read.Model.PageName}, {read.Model.Items.Count} items, {read.OcrMs} ms, "
                 + $"still={still}, reads={reads}, unclear={unclear}, same-as-shown={fp == _lastFingerprint}");
             if (unclear)
@@ -390,16 +390,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         var engine = _ocr.Get();
         if (engine == null && _alert != TextRecognitionText.ReaderCannotStart) Status(TextRecognitionText.ReaderCannotStart);
         return engine;
-    }
-
-    /// <summary>What a page says, as one string: two reads that say the same thing give the same one.</summary>
-    internal static string Fingerprint(Bbs757EfbScreenModel m)
-    {
-        var sb = new System.Text.StringBuilder(m.PageName).Append('\n');
-        foreach (var i in m.Menu.Concat(m.Items))
-            sb.Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
-              .Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected).Append('\n');
-        return sb.ToString();
     }
 
     /// <summary>A 32 x 24 grey thumbnail of the tablet below its status bar.</summary>
