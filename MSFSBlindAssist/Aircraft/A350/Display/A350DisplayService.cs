@@ -35,9 +35,12 @@ public sealed class A350DisplayService : IDisposable
     /// or another aircraft finds no A350, and that is no news). Asked on the worker thread.</summary>
     public Func<bool> A350Flight { get; set; } = () => true;
 
+    /// <summary>Where the installed module is (tests point it at a module of their own).</summary>
+    internal Func<string?> FindModule { get; init; } = A350ModuleCache.FindInstalledModule;
+
     /// <summary>The displays whose last draw ran out of head room (worker thread only).</summary>
     private readonly HashSet<(string Gauge, int Index)> _exhausted = new();
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>A status sentence to speak (getting ready, ready, not available).</summary>
     public event Action<string>? Spoken;
@@ -89,28 +92,31 @@ public sealed class A350DisplayService : IDisposable
     {
         try
         {
-            var path = A350ModuleCache.FindInstalledModule() ?? throw new A350ModuleException("the A350 is not installed");
+            var path = FindModule() ?? throw new A350ModuleException("the A350 is not installed");
             _modulePath = path;
             _moduleIdentity = A350ModuleCache.IdentityOf(path);
             var mod = A350WasmModule.Parse(File.ReadAllBytes(path));
             _facts = A350ModuleFacts.From(mod);
             var ui = A350ModulePatcher.UiDrawClassesOf(mod);
-            bool cached = File.Exists(A350ModuleCache.CachePath(_localAppData, A350ModuleCache.Sha256Of(path)));
-            if (!cached) Spoken?.Invoke(A350DisplayStatus.GettingReady);
             _engine = A350ModuleCache.CreateEngine();
-            _module = A350ModuleCache.LoadOrBuild(_engine, path, _localAppData, out _);
-            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, CalcStringAnswer = _calcString, RecordShapes = true };   // the SD's symbols
+            // Hashed once; "getting ready" is said as a compile starts, whatever the reason (no cache, a corrupt one).
+            _module = A350ModuleCache.LoadOrBuild(_engine, path, A350ModuleCache.Sha256Of(path), _localAppData,
+                () => Say(A350DisplayStatus.GettingReady), out bool built);
+            _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, CalcStringAnswer = _calcString, RecordShapes = true };   // sprites: the SD's symbols, the PFD's tape and heading scale, the MFD's
             _reader = new A350MemoryReader(_facts.Anchors);
             State = A350DisplayState.Ready;
-            if (!cached) Spoken?.Invoke(A350DisplayStatus.Ready);
+            if (built) Say(A350DisplayStatus.Ready);
             Log.Info("A350Display", "ready");
         }
-        catch (Exception ex) when (ex is A350ModuleException or WasmtimeException or IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
+            // Any failure leaves the displays unavailable and says why (review 2026-10-29: a module that could not be
+            // parsed, a truncated file mid-update, threw past the four types caught here and left "Preparing" for good).
+            bool known = ex is A350ModuleException or WasmtimeException or IOException or UnauthorizedAccessException;
             State = A350DisplayState.Unavailable;
-            Reason = ex.Message;
-            Log.Warn("A350Display", "not available: " + ex.Message);
-            Spoken?.Invoke(A350DisplayStatus.NotAvailable(ex.Message));
+            Reason = known ? ex.Message : "the A350's module could not be read";
+            Log.Warn("A350Display", "not available: " + (known ? ex.Message : ex.ToString()));
+            Say(A350DisplayStatus.NotAvailable(Reason));
         }
     }
 
@@ -144,9 +150,11 @@ public sealed class A350DisplayService : IDisposable
         return ok;
     }
 
+    /// <summary>Speaks a status sentence, never once the service is disposed: a compile or a draw queued before it ends
+    /// after the pilot switched aircraft, and its "ready" would be said over the next aircraft (review 2026-10-29).</summary>
     private void Say(string? line)
     {
-        if (line != null) Spoken?.Invoke(line);
+        if (line != null && !_disposed) Spoken?.Invoke(line);
     }
 
     /// <summary>Whether the installed module is no longer the one prepared (an identity that cannot be read is no change:
@@ -205,7 +213,7 @@ public sealed class A350DisplayService : IDisposable
                 var ended = DateTime.UtcNow;
                 Say(_status.Report(null, true, ended));
                 for (int n = 0; n < caps.Count; n++)
-                    if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Spoken?.Invoke(said);
+                    if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Say(said);
                 tcs.SetResult(caps);
             }
             catch (Exception ex)

@@ -76,6 +76,98 @@ public class A350ModuleCacheTests : IDisposable
         }
     }
 
+    // Review 2026-10-29 (engine M3): the reader said "getting ready" only when no cache file existed, so a corrupt cache was
+    // compiled again in silence. A build says so as it starts, whatever the reason; a cache load says nothing.
+    [Fact]
+    public void A_build_says_so_as_it_starts_and_a_cache_load_does_not()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        var cache = A350ModuleCache.CachePath(_root, sha);
+        Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
+        File.WriteAllBytes(cache, new byte[] { 1, 2, 3 });   // corrupt
+        using var engine = A350ModuleCache.CreateEngine();
+        int starts = 0;
+        using (var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, () => starts++, out bool built))
+            Assert.True(built);
+        Assert.Equal(1, starts);
+        using (var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, () => starts++, out bool built))
+            Assert.False(built);
+        Assert.Equal(1, starts);
+    }
+
+    // A cache that cannot be written (a full disk, a folder in its place) made the displays unavailable although the module
+    // compiled, and leaked it: the compiled module is used anyway, and no half-written file is left.
+    [Fact]
+    public void A_cache_that_cannot_be_written_still_gives_the_compiled_module()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        var cache = A350ModuleCache.CachePath(_root, sha);
+        Directory.CreateDirectory(cache);   // a folder where the file goes: the move fails
+        using var engine = A350ModuleCache.CreateEngine();
+        using var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, null, out bool built);
+        Assert.True(built);
+        Assert.Contains(m.Exports, e => e.Name == "emu_CTR_Draw");
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(cache)!, "*.tmp"));
+    }
+
+    // A killed write left a ~118 MB .tmp that nothing removed; two writes at once shared one .tmp name. Each write has a
+    // name of its own, and one left over an hour is removed; one being written now is not.
+    [Fact]
+    public void A_left_over_write_is_removed_and_a_live_one_kept()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        var dir = Path.GetDirectoryName(A350ModuleCache.CachePath(_root, sha))!;
+        Directory.CreateDirectory(dir);
+        var stale = Path.Combine(dir, "x.cwasm.1.dead.tmp");
+        var live = Path.Combine(dir, "x.cwasm.2.live.tmp");
+        File.WriteAllBytes(stale, new byte[] { 1 });
+        File.WriteAllBytes(live, new byte[] { 2 });
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-2));
+        using var engine = A350ModuleCache.CreateEngine();
+        using var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, null, out _);
+        Assert.False(File.Exists(stale));
+        Assert.True(File.Exists(live));
+    }
+
+    // Two builds with another patch version (the app and a probe, a release and a test build) removed each other's cache,
+    // so each recompiled on every start. The module's caches of one other version are kept: the latest written.
+    [Fact]
+    public void Another_patch_versions_cache_of_the_same_module_is_kept()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        var dir = Path.GetDirectoryName(A350ModuleCache.CachePath(_root, sha))!;
+        Directory.CreateDirectory(dir);
+        var newer = Path.Combine(dir, $"{sha}-p{A350ModulePatcher.Version + 1}.cwasm");
+        var older = Path.Combine(dir, $"{sha}-p{A350ModulePatcher.Version - 1}.cwasm");
+        File.WriteAllBytes(newer, new byte[] { 1 });
+        File.WriteAllBytes(older, new byte[] { 2 });
+        File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddDays(-1));
+        using var engine = A350ModuleCache.CreateEngine();
+        using var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, null, out _);
+        Assert.True(File.Exists(newer));
+        Assert.False(File.Exists(older));
+    }
+
+    // Switching back to the A350 while its first compile ran started a second one (1.4 GB each) on the same file. One
+    // build at a time: the second waits and loads the first's cache.
+    [Fact]
+    public void Two_loads_at_once_compile_once()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        using var engine = A350ModuleCache.CreateEngine();
+        int builds = 0;
+        Parallel.For(0, 2, i =>
+        {
+            using var m = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, () => Interlocked.Increment(ref builds), out _);
+        });
+        Assert.Equal(1, builds);
+    }
+
     [Fact]
     public void A_corrupt_cache_is_rebuilt_and_an_old_version_cache_removed()
     {

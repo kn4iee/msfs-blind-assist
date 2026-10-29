@@ -73,42 +73,116 @@ public static class A350ModuleCache
         return Convert.ToHexStringLower(SHA256.HashData(f));
     }
 
-    /// <summary>The compiled patched module: the cache when it loads, else patched, compiled and cached
-    /// (replacing other versions' caches). <paramref name="built"/> says it was compiled now.</summary>
-    public static Module LoadOrBuild(Engine engine, string modulePath, string localAppData, out bool built)
-    {
-        var sha = Sha256Of(modulePath);
-        var cache = CachePath(localAppData, sha);
-        var sw = Stopwatch.StartNew();
-        if (File.Exists(cache))
-        {
-            try
-            {
-                var cached = Module.Deserialize(engine, "a350", File.ReadAllBytes(cache));
-                built = false;
-                Log.Info("A350Display", $"module cache loaded in {sw.ElapsedMilliseconds} ms ({sha[..12]})");
-                return cached;
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("A350Display", "module cache unreadable, rebuilding: " + ex.Message);
-            }
-        }
+    /// <summary>The compiled patched module: the cache when it loads, else patched, compiled and cached.
+    /// <paramref name="built"/> says it was compiled now.</summary>
+    public static Module LoadOrBuild(Engine engine, string modulePath, string localAppData, out bool built) =>
+        LoadOrBuild(engine, modulePath, Sha256Of(modulePath), localAppData, null, out built);
 
-        var patched = A350ModulePatcher.Patch(File.ReadAllBytes(modulePath));
-        var module = Module.FromBytes(engine, "a350", patched.Bytes);
-        Log.Info("A350Display", $"module patched and compiled in {sw.ElapsedMilliseconds} ms ({sha[..12]}); allocator answered: "
-            + string.Join(", ", patched.Allocator)
-            + (patched.AllocatorLeftAlone.Count > 0 ? "; left to run, another signature: " + string.Join(", ", patched.AllocatorLeftAlone) : ""));
-        var dir = Path.GetDirectoryName(cache)!;
-        Directory.CreateDirectory(dir);
-        var tmp = cache + ".tmp";
-        File.WriteAllBytes(tmp, module.Serialize());
-        File.Move(tmp, cache, overwrite: true);
-        foreach (var other in Directory.GetFiles(dir, "*.cwasm"))
-            if (!string.Equals(other, cache, StringComparison.OrdinalIgnoreCase))
-                try { File.Delete(other); } catch (Exception) { }
-        built = true;
-        return module;
+    /// <summary>One build at a time in this process: a second load waits and takes the first's cache (review 2026-10-29:
+    /// switching back to the A350 while its first compile ran started a second, 1.4 GB each, on the same file).</summary>
+    private static readonly object BuildGate = new();
+
+    /// <summary>A write left this long is a killed one: a compile and its write take seconds.</summary>
+    private static readonly TimeSpan StaleWrite = TimeSpan.FromHours(1);
+
+    /// <summary>The compiled patched module for a module whose hash the caller has (hashed once per start): the cache when
+    /// it loads, else patched, compiled and cached; <paramref name="beforeBuild"/> runs as a compile starts, for whatever
+    /// reason (no cache, a corrupt one: review 2026-10-29, a corrupt cache was compiled again in silence).</summary>
+    public static Module LoadOrBuild(Engine engine, string modulePath, string sha, string localAppData, Action? beforeBuild,
+        out bool built)
+    {
+        var cache = CachePath(localAppData, sha);
+        if (TryLoad(engine, cache, sha) is { } loaded)
+        {
+            built = false;
+            return loaded;
+        }
+        lock (BuildGate)
+        {
+            if (TryLoad(engine, cache, sha) is { } meanwhile)
+            {
+                built = false;   // compiled by the load before this one
+                return meanwhile;
+            }
+            beforeBuild?.Invoke();
+            var sw = Stopwatch.StartNew();
+            var patched = A350ModulePatcher.Patch(File.ReadAllBytes(modulePath));
+            var module = Module.FromBytes(engine, "a350", patched.Bytes);
+            Log.Info("A350Display", $"module patched and compiled in {sw.ElapsedMilliseconds} ms ({Short(sha)}); allocator answered: "
+                + string.Join(", ", patched.Allocator)
+                + (patched.AllocatorLeftAlone.Count > 0 ? "; left to run, another signature: " + string.Join(", ", patched.AllocatorLeftAlone) : ""));
+            WriteCache(module, cache, sha);
+            built = true;
+            return module;
+        }
+    }
+
+    private static Module? TryLoad(Engine engine, string cache, string sha)
+    {
+        if (!File.Exists(cache))
+            return null;
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var cached = Module.Deserialize(engine, "a350", File.ReadAllBytes(cache));
+            Log.Info("A350Display", $"module cache loaded in {sw.ElapsedMilliseconds} ms ({Short(sha)})");
+            return cached;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A350Display", "module cache unreadable, rebuilding: " + ex.Message);
+            return null;
+        }
+    }
+
+    private static string Short(string sha) => sha.Length > 12 ? sha[..12] : sha;
+
+    /// <summary>Writes the cache under a name of its own and moves it in (two writes never share a file). One that cannot
+    /// be written is logged, never a failure: the compiled module is used this time (review 2026-10-29: the displays went
+    /// unavailable and the module leaked).</summary>
+    private static void WriteCache(Module module, string cache, string sha)
+    {
+        string tmp = $"{cache}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
+            File.WriteAllBytes(tmp, module.Serialize());
+            File.Move(tmp, cache, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A350Display", "module cache not written, the compiled module is used: " + ex.Message);
+            try { File.Delete(tmp); } catch (Exception) { }
+            return;
+        }
+        Prune(Path.GetDirectoryName(cache)!, cache, sha);
+    }
+
+    /// <summary>Removes other modules' caches and older names, writes left over an hour (a killed one), and of this
+    /// module's other patch versions all but the latest written: two builds of different versions (the app and a probe, a
+    /// release and a test build) keep each other's instead of compiling on every start (review 2026-10-29).</summary>
+    private static void Prune(string dir, string cache, string sha)
+    {
+        string[] files;
+        try { files = Directory.GetFiles(dir); }
+        catch (Exception) { return; }
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { cache };
+        var otherVersion = files
+            .Where(f => !keep.Contains(f) && f.EndsWith(".cwasm", StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileName(f).StartsWith(sha + "-p", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (otherVersion != null)
+            keep.Add(otherVersion);
+        var now = DateTime.UtcNow;
+        foreach (var f in files)
+        {
+            if (keep.Contains(f))
+                continue;
+            bool write = f.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
+            if (write ? now - File.GetLastWriteTimeUtc(f) < StaleWrite : !f.EndsWith(".cwasm", StringComparison.OrdinalIgnoreCase))
+                continue;   // a write under way, or no file of ours
+            try { File.Delete(f); } catch (Exception) { }
+        }
     }
 }
