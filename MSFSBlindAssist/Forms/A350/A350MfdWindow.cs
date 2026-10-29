@@ -96,9 +96,22 @@ public sealed class A350MfdWindow : Form
 
     private int Side => _side.SelectedIndex < 0 ? 0 : _side.SelectedIndex;
 
+    /// <summary>The side <see cref="_lines"/> were read for: Enter acts only on lines of the side the box shows.</summary>
+    private int _linesSide;
+
+    /// <summary>A refresh asked for while one runs (the side changed mid-draw), run once that one ends: the running one may
+    /// keep the last good page, so without it the lines stayed the other side's (review 2026-10-29).</summary>
+    private bool _refreshAgain, _refreshAgainNow;
+
     private async Task RefreshAsync(bool now)
     {
-        if (_busy || IsDisposed) return;
+        if (IsDisposed) return;
+        if (_busy)
+        {
+            _refreshAgain = true;
+            _refreshAgainNow |= now;
+            return;
+        }
         _busy = true;
         try
         {
@@ -114,6 +127,7 @@ public sealed class A350MfdWindow : Form
             if (IsDisposed) return;
             var before = _lines;
             (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
+            _linesSide = Side;
             _list.SetLines(shown);
             // A new page says its title once and takes the selection to it, as the A380's MFD window does.
             if (A350MfdPage.PageJustChanged(before, _lines) is { } title)
@@ -132,7 +146,16 @@ public sealed class A350MfdWindow : Form
             if (pad != null) _lastScratchpad = pad;
         }
         catch { /* best-effort; keep the last good page */ }
-        finally { _busy = false; }
+        finally
+        {
+            _busy = false;
+            if (_refreshAgain && !IsDisposed)
+            {
+                bool again = _refreshAgainNow;
+                _refreshAgain = _refreshAgainNow = false;
+                _ = RefreshAsync(again);
+            }
+        }
     }
 
     /// <summary>The page's lines (what Enter acts on) and what the list shows: a dark screen shows dark, with nothing
@@ -158,6 +181,13 @@ public sealed class A350MfdWindow : Form
     {
         int i = _list.SelectedIndex;
         if (i < 0 || i >= _lines.Count) return;
+        if (_linesSide != Side)
+        {
+            // The list still shows the other side's page (its refresh is on its way): its places are not this side's.
+            _announcer.AnnounceImmediate("The list was the other side's MFD; reading this side's now");
+            await RefreshAsync(false);
+            return;
+        }
         var line = _lines[i];
         string typed = _scratchpad.Text.Trim();
         bool types = line.Kind is "field" or "scratchpad" && typed.Length > 0;

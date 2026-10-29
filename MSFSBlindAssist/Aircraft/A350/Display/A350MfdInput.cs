@@ -85,12 +85,15 @@ public sealed class A350MfdInput
     }
 
     /// <summary>The JavaScript that moves, presses and releases the mouse at a side's MFD point (the first
-    /// officer's MFD is drawn 836 to the right).</summary>
+    /// officer's MFD is drawn 836 to the right). It first checks the page still holds the MFD it was found with: after a
+    /// reload the view can keep its title while the gauge's guid changes, and a click on the old guid lands nowhere, so
+    /// it answers 'moved' and clicks nothing, and the view is found again (review 2026-10-29).</summary>
     internal static string ClickJs(int guid, int side, float x, float y)
     {
         string X = (x + side * 836).ToString(CultureInfo.InvariantCulture), Y = y.ToString(CultureInfo.InvariantCulture);
         string at = $"{guid},{X},{Y},0";
-        return $"(function(){{Coherent.call('WASM_MOUSE_MOVE',{at});Coherent.call('WASM_MOUSE_DOWN',{at});" +
+        return $"(function(){{var e=document.querySelector('wasm-instrument');if(!e||e.getAttribute('guid')!=='{guid}')return 'moved';" +
+               $"Coherent.call('WASM_MOUSE_MOVE',{at});Coherent.call('WASM_MOUSE_DOWN',{at});" +
                $"setTimeout(function(){{Coherent.call('WASM_MOUSE_UP',{at});Coherent.call('WASM_CLICK',{at});}},120);return 'ok'}})()";
     }
 

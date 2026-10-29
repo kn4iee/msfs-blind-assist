@@ -127,6 +127,19 @@ public class A350MfdInputTests
         Assert.Contains("'WASM_CLICK',30,1419.5,442,0", js);
     }
 
+    // Review 2026-10-29 (readers minor 17): the view was found once per window and the click answered 'ok' whatever happened,
+    // so after a reload (a new guid in the same view) a click landed nowhere while typing went on. The click checks the page
+    // still holds the guid it was found with before it clicks, and answers 'moved' when not, so the view is found again.
+    [Fact]
+    public void A_click_checks_its_mfd_is_still_there_before_it_clicks()
+    {
+        var js = A350MfdInput.ClickJs(30, 1, 583.5f, 442f);
+        int check = js.IndexOf("getAttribute('guid')!=='30'", StringComparison.Ordinal);
+        Assert.True(check >= 0, js);
+        Assert.Contains("return 'moved'", js);
+        Assert.True(check < js.IndexOf("WASM_MOUSE_MOVE", StringComparison.Ordinal), "the check comes before any mouse call");
+    }
+
     [Fact]
     public void A_click_is_culture_safe()
     {
