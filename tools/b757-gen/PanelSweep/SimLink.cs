@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.FlightSimulator.SimConnect;
 using MSFSBlindAssist.Utils;
@@ -145,7 +146,19 @@ internal sealed class SimLink : IDisposable
     public static SimLink Connect(TextWriter output)
     {
         EnsureNativeDll(output);
+        return Open(output);
+    }
 
+    /// <summary>
+    /// The half of <see cref="Connect"/> that names SimConnect's types. It is its own method, never inlined, because
+    /// the JIT loads Microsoft.FlightSimulator.SimConnect.dll when it compiles a method that names one of its types, and
+    /// that assembly needs the native SimConnect.dll beside it to load at all: with both halves in one method the load
+    /// failed before <see cref="EnsureNativeDll"/> had copied it (the first live run, 2026-10-28: "Could not load file
+    /// or assembly … Microsoft.FlightSimulator.SimConnect.dll", nothing written).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static SimLink Open(TextWriter output)
+    {
         Microsoft.FlightSimulator.SimConnect.SimConnect sc;
         try
         {
