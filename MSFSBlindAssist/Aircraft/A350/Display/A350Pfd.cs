@@ -23,9 +23,8 @@ public static class A350Pfd
     /// y 207; the target at x 153, y 174).</summary>
     private const float V1X = 129, V1Y = 207;
 
-    /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability (in climb its top row holds the
-    /// altitude the capture aims at, "400" at x 646), and the AP/FD/A/THR engagement column (live: "1 FD 2" at x
-    /// 685-761).</summary>
+    /// <summary>The FMA's five columns: A/THR, vertical, lateral, approach capability (its third row is the minimum, read
+    /// apart), and the AP/FD/A/THR engagement column (live: "1 FD 2" at x 685-761).</summary>
     private static readonly (string Name, float X0, float X1)[] FmaColumns =
     {
         ("autothrust", 0, 170), ("vertical", 170, 340), ("lateral", 340, 510), ("approach", 510, 670), ("engagement", 670, PfdWidth),
@@ -97,13 +96,31 @@ public static class A350Pfd
         // The altitude tape's scale labels reach up into the FMA strip: never read as text.
         used.UnionWith(cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)));
 
-        // The selected altitude, at the top of the altitude tape, reaches up into the FMA strip too: taken out
-        // first, read after the FMA. Beyond the tape's range it is a box at the tape's top or bottom, "FL" at 587 and its
-        // number at 688 (live 2026-10-28: y 172 above, 615 below), read as one value.
-        var selectedAltitude = cells.Where(c => c.Colour == "cyan" && (c.X is >= 585 and < 620 && c.Y < 640
+        // The tape's selected altitude symbol (a box, its value at x 597) is drawn out of the tape's range too, held at the
+        // screen's top (y 38; "400" at x 646 in STD) or bottom (y 742), inside the FMA's top row where the tape's clip hides
+        // it: the readout at the tape's edge shows that altitude (live 2026-10-28). Magenta, the symbol is the constraint the
+        // vertical mode levels at (at the hold, the SID's 5000), which the readout does not show.
+        var heldSymbol = cells.Where(c => c.X is >= 585 and < 700 && (c.Y is >= 20 and < 60 || c.Y >= 700)
+            && c.Colour is "cyan" or "magenta" && Digits(c.Text)).ToList();
+        used.UnionWith(heldSymbol);
+
+        // The selected altitude, read after the FMA: in range the tape's symbol; beyond the tape's range the readout at the
+        // tape's top or bottom, "FL" at 587 and its number at 688 (live 2026-10-28: y 172 above, 615 below), one value.
+        var selectedAltitude = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && (c.X is >= 585 and < 620 && c.Y < 640
                 || c.X is >= 620 and < 720 && c.Y is >= FmaBottom and < 640))
             .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
+        if (selectedAltitude.Count == 0)
+            selectedAltitude = heldSymbol.Where(c => c.Colour == "cyan").ToList();
         used.UnionWith(selectedAltitude);
+        var constraint = heldSymbol.Where(c => c.Colour == "magenta").Concat(cells.Where(c => !used.Contains(c) && c.Colour == "magenta"
+            && c.X is >= 585 and < 620 && c.Y is >= FmaBottom and < 640 && Digits(c.Text))).ToList();
+        used.UnionWith(constraint);
+
+        // The minimum set on PERF APPR, on the FMA's fourth column's third row: "RADIO" or "BARO", white, and its height in
+        // cyan (live 2026-10-28, RADIO 50); the column's top rows are the approach capability.
+        var minimum = cells.Where(c => !used.Contains(c) && c.X is >= 510 and < 670 && Math.Abs(c.Y - 113) <= 8).OrderBy(c => c.X).ToList();
+        if (minimum.Any(c => c.Text.Trim() is "RADIO" or "BARO")) used.UnionWith(minimum);
+        else minimum.Clear();
 
         // The FMA strip, one column at a time.
         foreach (var (name, x0, x1) in FmaColumns)
@@ -118,8 +135,13 @@ public static class A350Pfd
                 : string.Join("; ", rows.Select(A350DrawLayout.Speak))));
         }
 
+        if (minimum.Count > 0)
+            o.Add($"Minimum: {string.Join(" ", minimum.Select(c => c.Text.Trim()))}, "
+                + (minimum.LastOrDefault(c => c.Text.Trim() is not ("RADIO" or "BARO")) ?? minimum[0]).Colour);
         if (selectedAltitude.Count > 0)
             o.Add($"Selected altitude: {string.Join(" ", selectedAltitude.Select(c => c.Text))}, cyan");
+        foreach (var c in constraint)
+            o.Add($"Altitude constraint: {c.Text.Trim()}, magenta");
 
         // Speed and attitude are textures: the speed tape's offset, the horizon under the attitude centre. On the stand
         // the tape rests on its 30 kt floor, which its offset reads as 32.
@@ -127,6 +149,12 @@ public static class A350Pfd
         {
             double knots = Math.Round(SpeedRefKnots + (speedTape.PatternY - SpeedRefPattern) / SpeedPxPerKnot, MidpointRounding.AwayFromZero);
             o.Add(knots <= SpeedFloorReads ? "Speed: 30 knots or less" : $"Speed: {knots:0} knots");
+        }
+        // The Mach number under the speed tape (live in the climb: ".681", green).
+        foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 140 && c.Y is >= 640 and < 680 && MachText.IsMatch(c.Text.Trim())))
+        {
+            used.Add(c);
+            o.Add($"Mach: 0{c.Text.Trim()}, {c.Colour}");
         }
         if (PatternOf(capture, side, 298, 1168) is { } horizon)
         {
@@ -271,5 +299,9 @@ public static class A350Pfd
     }
 
     private static DrawnText ToText(DrawnCell c) => new(c.Text, c.X, c.Y, c.X, c.Y, 0, A350Rgba.Of(c.Colour));
+
+    private static bool Digits(string s) => s.Trim() is { Length: > 0 } t && t.All(char.IsDigit);
+
+    private static readonly System.Text.RegularExpressions.Regex MachText = new(@"^\.\d{2,3}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
 }

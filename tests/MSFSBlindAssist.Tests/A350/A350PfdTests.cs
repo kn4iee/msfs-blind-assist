@@ -44,6 +44,54 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("OUT OF", StringComparison.Ordinal) || l.StartsWith("RANGE", StringComparison.Ordinal));
     }
 
+    // Out of the tape's range the selected altitude is drawn twice: the readout at the tape's top or bottom edge (x 688; y
+    // 172 above, 615 below) and the tape's own symbol held at the screen's top or bottom (x 597; y 38, 742), where the
+    // tape's clip hides it. It read "Selected altitude: 40000 40000, cyan" on the stand, and a bare "4000, cyan" on the
+    // downwind at OMDB descending to 4000.
+    [Theory]
+    [InlineData("efis0_takeoff_ready", "Selected altitude: 40000, cyan")]
+    [InlineData("efis0_ls_downwind_omdb", "Selected altitude: 4000, cyan")]
+    public void Out_of_range_the_selected_altitude_reads_once(string fixture, string selected)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        Assert.Equal(selected, Assert.Single(lines, l => l.Contains("000, cyan")));
+    }
+
+    // At the hold with the SID's 5000 ft constraint ahead (live 2026-10-28: "FMA approach: 5000, magenta"), the tape's
+    // symbol is the constraint the vertical mode will level at, magenta, while the readout keeps the FCU's altitude.
+    [Fact]
+    public void A_magenta_altitude_symbol_reads_as_the_constraint()
+    {
+        var cap = Fixture("efis0_takeoff_ready");
+        var magenta = new A350Rgba(1, 0, 1, 1);
+        var texts = cap.Texts.Select(t => t.Text == "40000" && t.LocalY < 60 ? t with { Text = "5000", Colour = magenta } : t).ToList();
+        var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
+        Assert.Contains("Altitude constraint: 5000, magenta", lines);
+        Assert.Contains("Selected altitude: 40000, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
+    }
+
+    // Under the speed tape in the climb (live 2026-10-28, ".681" green at x 50, y 657 in STD at FL226): the Mach number,
+    // which read bare.
+    [Fact]
+    public void The_mach_number_under_the_speed_tape_reads_by_name()
+    {
+        var lines = A350Pfd.Read(Fixture("pfd_climb_std_fl400"), 0);
+        Assert.Contains("Mach: 0.681, green", lines);
+        Assert.DoesNotContain(".681, green", lines);
+    }
+
+    // The FMA's fourth column holds the approach capability (APPR1, LAND3 SINGLE) and, on its third row, the minimum the
+    // pilot set on PERF APPR: "RADIO" white and its height cyan (the downwind at OMDB, RADIO 50). It read as part of the
+    // capability ("FMA approach: APPR1, white; RADIO, white; 50, cyan").
+    [Fact]
+    public void The_minimum_reads_apart_from_the_approach_capability()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_ls_downwind_omdb"), 0);
+        Assert.Contains("FMA approach: APPR1, white", lines);
+        Assert.Contains("Minimum: RADIO 50, cyan", lines);
+    }
+
     // Live 2026-10-28 the PFD said "Selected speed: 305, cyan" with the speed managed. The selected heading off the
     // scale is a cyan number at the scale's end, here its left end (x 192, y 690: stopped on OMDB 12L heading 121 with
     // 305 selected), inside the speed tape's band, so it was read twice: as a speed and as the heading.

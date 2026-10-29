@@ -124,17 +124,18 @@ public class A350PfdDisplayTests
         Assert.Equal(litLines.Select(l => l.Spoken), litShown);
     }
 
-    // Climbing through FL235 in STD with FL400 selected (live 2026-10-28): the FMA's fourth column shows the altitude the
-    // armed capture aims at ("400" in cyan at x 646, as the SID's 5000 constraint showed magenta there on the ground), and
-    // the tape's top box shows the selected altitude ("FL" at 587, "400" at 688, y 172). The "400" at 646 was read into
-    // the engagement column ("400, cyan; AP1, white; ..."), whose first text is "1" at 685, and the box read "FL" alone.
+    // Climbing through FL235 in STD with FL400 selected (live 2026-10-28): the tape's top shows the selected altitude ("FL"
+    // at 587, "400" at 688, y 172). The tape's own selected altitude symbol (the box it draws in range: a black fill x
+    // 587-691 in its frame, the value at x 597) is still drawn out of range, held at the screen's top ("400" at x 646,
+    // y 38), inside the FMA's top row where the tape's clip hides it: it read as the FMA's fourth column ("FMA approach:
+    // 400, cyan"), and before that into the engagement column, whose first text is "1" at 685.
     [Fact]
-    public void The_fma_altitude_target_and_the_selected_altitude_box_read_where_they_are_drawn()
+    public void Out_of_range_the_selected_altitude_reads_once_and_never_as_an_fma_column()
     {
         var lines = A350Pfd.Read(Fixture("pfd_climb_std_fl400"), 0);
         Assert.Equal("FMA engagement: AP1; 1 FD 2; A/THR, white", lines.Single(l => l.StartsWith("FMA engagement", StringComparison.Ordinal)));
-        Assert.Contains("FMA approach: 400, cyan", lines);
-        Assert.Contains("Selected altitude: FL 400, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
+        Assert.Equal("Selected altitude: FL 400, cyan", lines.Single(l => l.Contains("400")));
     }
 
     [Fact]
