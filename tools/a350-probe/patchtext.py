@@ -3,7 +3,9 @@
 #      (WASI path_readlink, import 18) tagged with a magic number, then runs as normal.
 #   2. A few internal drawing functions are exported so the emulator can call them.
 # The installed aircraft file is only READ. Output goes to the path given (default: a350-texthook.wasm).
-# Function indices are for A350 v1.2.6; after an update, re-find them by name (see find_by_name).
+# Every function is found by its name in the module's name section (find_by_name), never by index, so an A350 update
+# needs no edit here. This is the first, text-only scratch module (1.2.6, October 2026); patch2.py, which the README's
+# once-per-version steps run, builds the whole-cockpit one from these helpers.
 import sys
 import wdis
 

@@ -46,6 +46,11 @@ jobs:
       - name: MD-11 generator path tests (Python)
         run: python -m unittest discover -s tools/md11-gen -p "test_*.py" -v
 
+      # The A350 control-map generator (tools/a350-gen): the cockpit-behavior parse, the control and lamp classification
+      # and the map diff, unit-tested on synthetic behavior files with stdlib unittest (no pip install, no aircraft).
+      - name: A350 generator tests (Python)
+        run: python -m unittest discover -s tools/a350-gen -p "test_*.py" -v
+
   efb-readers:
     name: EFB reader tests (jsdom)
     runs-on: ubuntu-latest
