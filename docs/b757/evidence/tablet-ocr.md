@@ -69,7 +69,28 @@ parser's pixel distances were tuned on the tight boxes.
   "Random failures: off" and "Notifications: off" (Windows OCR lost both states).
 - Accepted as read: the presets page's CIRCUITS STATE now names its one button ("Circuits state: PUSH ALL CBs").
 
+## On the live tablet (plan 17 Task 8)
+
+Measured 2026-10-29 with the probe's `tour 3` on the deployed models: MSFS 2024, BlueBird 757-200 RR at Frankfurt, on
+the ground in daylight, MSFS Blind Assist closed. The tour opens every app and section it reaches and reads each page
+three times, on a settled picture, once it has landed.
+
+- **From Home:** 25 pages; all 25 read the same all three times; 24 landed on the page tapped. The Navigation tap was
+  lost while Home was still sliding in (the tour taps as soon as the first change shows), as the Checklist tap was in
+  Windows OCR's tour (flight-11.md section 8). The app cannot race like that: it offers the next tap only after it has
+  read the settled page.
+- **From Settings:** 30 pages, Navigation's six sections included; all 30 landed; 29 read the same all three times. The
+  exception, the Navigation map, was still loading during the first read: "Loading navigraph map" and the map layer's
+  status line were on that read only.
+- **Before:** Windows OCR's tour 3 on 2026-10-27: 22 pages, 21 landed, 21 read the same (Aircraft Failures differed
+  in small text while a build loaded the CPU).
+- **Time:** the engine loaded in 310 ms in the first run and 148 ms in the second (working set 31 MB to 99 MB); a page
+  read in 293-1,344 ms, the Charts list the slowest; a page showed 161-773 ms after its tap.
+- **Credential rows** (Settings > AIRAC data), read three times, the reader's output searched by script for the SimBrief
+  ID's digits and never shown: "SimBrief ID number: set", "Hoppie logon code: not set", "SayIntentions ACARS key: not
+  set", as BlueBird's settings file holds them; no digit of the ID was in the output.
+- One misread seen in passing: the boarding rate's hover note "Faster service turnaround" read "tumaround".
+
 ## Not measured here
 
-- Steadiness between refreshes on the live tablet: the probe's tour with the simulator running (plan 17 Task 8).
 - How the pages sound to the owner: his checks by ear (plan 17's in-sim checks).

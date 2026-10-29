@@ -184,11 +184,11 @@ The models are in place (Task 4 Step 0); this run tests reading, not the downloa
 - **Status:** claimed
 - **Claimed by:** Robin Kipp (robin24), 2026-10-28
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-10-28, from `B757` 71532bf72
-- **Landed:** not yet: built and reviewed on `B757-p17-tablet-paddleocr`, held back from `B757` until the owner's word (recommended after Task 9, so teammates' downloads work)
+- **Started:** 2026-10-28, from `B757` 71532bf72; rebased onto `B757` b7d473fcf on 2026-10-29 (full suite 19,195 passed)
+- **Landed:** not yet: built and reviewed on `B757-p17-tablet-paddleocr`, held back from `B757` until the release exists (the owner's ruling, 2026-10-29: teammates' readers would refuse and their downloads fail before it)
 - **Tests at landing:** 2026-10-29 on 082500fc2: full suite 19,055 passed, 0 failed (18,887 at the claim)
-- **Tasks:** 0 done (claim 218be890c). 1 done (d0217e0c6). 2 done (1e5fe2c23, 107d61b33). 3 done (40e83d11e). 4 done (c36560152, 7fccff974, c0d978947; Step 0, the models placed by hand, done by the controller). 5 done (0b1d852e3). 6 done (0d9106572, fc91d72c6). 7 done (ef272b03d, `docs/b757/evidence/tablet-ocr.md`). Each task reviewed, then one whole-branch review and one fix wave (3d67e8fbc, 082500fc2). 8 and 9 waiting on the owner.
-- **Waiting on the owner:** Task 8 (deploy to `C:\MSFSBA-B757`; the probe's tour with the simulator up and MSFSBA closed; in-sim checks 1-4), Task 9 (the public release, with the owner's word), in-sim check 5 (the first-run download), then the push to `B757` (the owner's word).
+- **Tasks:** 0 done (claim 218be890c). 1 done (d0217e0c6). 2 done (1e5fe2c23, 107d61b33). 3 done (40e83d11e). 4 done (c36560152, 7fccff974, c0d978947; Step 0, the models placed by hand, done by the controller, and placed again on the real disk on 2026-10-29: the first copy had landed only in a sandboxed view of `%APPDATA%`). 5 done (0b1d852e3). 6 done (0d9106572, fc91d72c6). 7 done (ef272b03d, `docs/b757/evidence/tablet-ocr.md`). Each task reviewed, then one whole-branch review and one fix wave (3d67e8fbc, 082500fc2). 8: Steps 1 and 2 done 2026-10-29 (5ff4d2906 deployed to `C:\MSFSBA-B757`; the probe's tour from Home and from Settings, and the credential rows, in the evidence file); Step 3 waiting on the owner. 9 waiting on the owner.
+- **Waiting on the owner:** in-sim checks 1-4 (Task 8 Step 3), Task 9 (the public release, with the owner's word), in-sim check 5 (the first-run download), then the push to `B757` once the release exists.
 - **In-sim results:** none yet.
 - **Changed from the plan:**
   - OCR-3's line names both release points ("released only on its own loop (the inactive branch, and when the loop ends)"); Task 6's text above has the plan's narrower wording.
