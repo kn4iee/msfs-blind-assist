@@ -7,9 +7,10 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// texts, "26 TO 27"), and the unit the texture prints for it. "{weight}" and "{flow}" stand for the unit the
 /// page draws itself (LBS or KG, LBS/H or KG/H), which follows the aircraft's unit setting. Caption is a text the
 /// page draws there as a name, not a value (a door's number in its symbol): drawn alone, it reads nothing. Join is the
-/// word the background prints between a field's texts (CRUISE's cabin "20 TO 21"), said between them.</summary>
+/// word the background prints between a field's texts (CRUISE's cabin "20 TO 21"), said between them. Prefix is a word
+/// drawn before the value that the label already says (an invalid THR gauge's "THR XX"), not said again.</summary>
 public sealed record SdField(string Label, float X, float Y, string? Unit = null, float Width = 0, string? Caption = null,
-    string? Join = null);
+    string? Join = null, string? Prefix = null);
 
 /// <summary>
 /// One SD page read the way a sighted pilot reads it: each drawn value named by the label printed beside it
@@ -88,8 +89,12 @@ public static class A350SdPage
     {
         new("Thrust limit mode", 345, 41), new("Thrust limit", 438, 41, "%", 20), new("Flex temperature", 495, 41),
         new("Engine 1 THR", 346, 174, "%"), new("Engine 2 THR", 594, 174, "%"),
-        new("Engine 1 N1", 304, 232, "%"), new("Engine 2 N1", 554, 232, "%"),
-        new("Engine 1 EGT", 153, 239, "°C"), new("Engine 2 EGT", 728, 239, "°C"),
+        // Engines off (live, on the stand): a THR gauge with no data is "THR XX" at its top; N1's XX stands 28 px right of
+        // where a running engine's number does, EGT's 14 px left of it: each field spans both. The white THR between the
+        // THR gauges is their caption, which the fields say.
+        new("Engine 1 THR", 235, 83, Prefix: "THR"), new("Engine 2 THR", 483, 83, Prefix: "THR"), new("", 408, 124),
+        new("Engine 1 N1", 304, 232, "%", 28), new("Engine 2 N1", 554, 232, "%", 28),
+        new("Engine 1 EGT", 139, 239, "°C", 14), new("Engine 2 EGT", 714, 239, "°C", 14),
     };
 
     /// <summary>Rows read against a field table (any display's): a field with an empty label swallows what it
@@ -133,7 +138,8 @@ public static class A350SdPage
         foreach (var (f, (row, cells)) in byField)
         {
             if (f.Label.Length == 0) continue;
-            var ordered = cells.OrderBy(c => c.X).ToList();
+            var ordered = cells.OrderBy(c => c.X).Select(c => f.Prefix != null && c.Text.StartsWith(f.Prefix + " ", StringComparison.Ordinal)
+                ? c with { Text = c.Text[(f.Prefix.Length + 1)..] } : c).ToList();
             if (f.Caption != null && string.Concat(ordered.Select(c => c.Text)) == f.Caption) continue;
             if (f.Join != null && ordered.Count > 1)
                 ordered = new List<DrawnCell> { ordered[0] with { Text = string.Join(f.Join, ordered.Select(c => c.Text)) } };

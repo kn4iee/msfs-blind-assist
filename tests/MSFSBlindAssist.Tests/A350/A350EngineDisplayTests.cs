@@ -37,6 +37,25 @@ public class A350EngineDisplayTests
         Assert.Contains("Engine 1 EGT: 22 °C, green", block);
     }
 
+    // Engines off on the stand (APU running): each gauge's value is an amber XX, the THR gauges' a "THR XX" at their top
+    // (y 83) and N1's 28 px right of where a running engine's sits (x 332, 580); they read bare, and the white THR caption
+    // between the THR gauges read as a line of its own in every state (the fields already say THR). An XX reads with the
+    // unit the background prints beside it, as the SD's do ("Engine 2 N2: XX %").
+    [Fact]
+    public void Engines_off_the_xx_values_read_by_name()
+    {
+        var block = A350SdPage.ReadEngineBlock(A350Ewd.Parse(Fixture("ctr_parked_apu")).Engine);
+        Assert.Equal(new[]
+        {
+            "Thrust limit mode: XX, amber",
+            "Engine 1 THR: XX, amber", "Engine 2 THR: XX, amber",
+            "Engine 1 N1: XX %, amber", "Engine 2 N1: XX %, amber",
+            "Engine 1 EGT: XX °C, amber", "Engine 2 EGT: XX °C, amber",
+        }, block.OrderBy(l => l.StartsWith("Thrust", StringComparison.Ordinal) ? 0 : l.Contains("THR") ? 1 : l.Contains("N1") ? 2 : 3)
+            .ThenBy(l => l, StringComparer.Ordinal));
+        Assert.DoesNotContain("THR, white", A350SdPage.ReadEngineBlock(A350Ewd.Parse(Fixture("ctr_eng2_running")).Engine));
+    }
+
     // Live, engine 2 starting during the pushback with FLEX 67 sent from the OIS (2026-10-28): the flex temperature
     // is drawn right of the thrust limit as "67!C", the E/WD font's "!" being its degree sign; it read bare.
     [Fact]
