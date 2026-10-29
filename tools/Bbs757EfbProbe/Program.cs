@@ -13,6 +13,11 @@
 //   Bbs757EfbProbe noise                       what changes between two captures of an unchanged page
 //   Bbs757EfbProbe tour [n]                    Home, every app and every section, each read n times as the app reads
 //                                              it (navigation taps only); flight-11.md section 8
+//   Bbs757EfbProbe presstest <dir> <label> …   every control on the page shown tapped where the reader placed it,
+//                                              judged by every BlueBird L:var and the settings files, then put back;
+//                                              tablet-presses.md (Program.PressTest.cs has the options)
+//   Bbs757EfbProbe compare <dir>               saved pages read with the small and the medium model: the controls
+//                                              that differ
 //
 // Every read is PaddleOCR, as the app reads: one engine per run, loaded on first use from the models the app
 // downloads (%APPDATA%\MSFSBlindAssist\text-recognition), with the app's thread cap; the load prints its time
@@ -26,7 +31,7 @@ using System.Text.Json;
 using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.SimConnect.BBS757;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly Bbs757EfbPopout Popout = new(s => Console.WriteLine("  [popout] " + s));
 
@@ -178,6 +183,10 @@ internal static class Program
             }
             case "tour":        // tour [n]   every menu entry of the page shown, each read n times (menu taps only)
                 return await Tour(args.Length > 1 ? int.Parse(args[1]) : 3);
+            case "presstest":   // presstest <outDir> <label> [--nav x,y ...] [--only t] [--skip t] [--dry]   Program.PressTest.cs
+                return await PressTest(args);
+            case "compare":     // compare <dir>   saved pages read with the small and the medium model
+                return await Compare(args[1]);
         }
         Console.WriteLine("unknown command"); return 1;
     }
@@ -499,11 +508,11 @@ internal static class Program
     private static PaddleOcrEngine Engine()
     {
         if (_engine != null) return _engine;
-        string folder = TextRecognitionModels.DefaultFolder();
+        string folder = EngineName == "medium" ? Environment.GetEnvironmentVariable("PROBE_MEDIUM") ?? "" : TextRecognitionModels.DefaultFolder();
         int threads = PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount);
         long before = WorkingSetMb();
         var sw = Stopwatch.StartNew();
-        _engine = PaddleOcrEngine.Load(folder, threads);
+        _engine = EngineName == "medium" ? LoadMedium() : PaddleOcrEngine.Load(folder, threads);
         long loadMs = sw.ElapsedMilliseconds;
         Console.WriteLine($"  [engine] PaddleOCR loaded in {loadMs} ms ({threads} threads, {folder}); working set {before} MB before, {WorkingSetMb()} MB after");
         return _engine;
