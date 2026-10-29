@@ -23,10 +23,7 @@ public class A350NdMapTests
         Assert.Equal("Airport: DUBAI INTL OMDB DXB", Line(lines, "Airport"));
         Assert.Equal("Position: 12L-30R, yellow", Line(lines, "Position"));
         Assert.Equal("Map range: 2 NM, cyan", Line(lines, "Map range"));
-        var runways = Line(lines, "Runways");
-        foreach (var r in new[] { "12L", "30R", "12R", "30L" })
-            Assert.Contains(r, runways);
-        Assert.EndsWith(", white", runways);
+        Assert.Equal("Runways: 30R, 30L, white", Line(lines, "Runways"));   // 12L and 12R are drawn below the screen
         var taxiways = Line(lines, "Taxiways");
         Assert.EndsWith(", grey", taxiways);
         Assert.Single(Regex.Matches(taxiways, @"\bM13\b"));   // drawn several times along the taxiway: named once
@@ -34,12 +31,26 @@ public class A350NdMapTests
         Assert.Contains("N10", taxiways);
     }
 
-    // Nearest first: stopped about 3,775 m down 12L (590 m before its end), the 30R ident ahead is nearer than 12L's behind.
+    // Nearest first: stopped about 3,775 m down 12L (590 m before its end), the 30R ident ahead is nearer than 30L's
+    // across the field.
     [Fact]
     public void Names_are_nearest_the_aircraft_first()
     {
         var runways = Line(A350GroundDisplays.ReadNd(Fixture("efis0_stopped_omdb_12l"), 0), "Runways");
-        Assert.True(runways.IndexOf("30R", StringComparison.Ordinal) < runways.IndexOf("12L", StringComparison.Ordinal), runways);
+        Assert.True(runways.IndexOf("30R", StringComparison.Ordinal) < runways.IndexOf("30L", StringComparison.Ordinal), runways);
+    }
+
+    // Review 2026-10-29: the ND is 1024 px tall, and the draw code puts names below it too (the screen clips them): the
+    // map listed 12L (y 1299) and 12R (1055), the first officer's at A5 read "Runways: 30R" with no ident on its screen
+    // (30R at y 1240), and in the climb the route's next names (BI613 at y 2404, its -5000 constraint, KAT at 3197) and a
+    // second BI614 (1194) were read beside the TO waypoint.
+    [Fact]
+    public void Names_drawn_below_the_screen_are_not_read()
+    {
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(Fixture("efis1_stand_omdb_a5"), 1), l => l.StartsWith("Runways: ", StringComparison.Ordinal));
+        var climb = A350GroundDisplays.ReadNd(Fixture("efis0_climb_bi614"), 0);
+        Assert.DoesNotContain(climb, l => l.Contains("BI613") || l.Contains("-5000") || l.Contains("KAT"));
+        Assert.Single(climb, l => l == "BI614, white");
     }
 
     // The compass labels around the aircraft are a scale, never text; the messages under the map still read.

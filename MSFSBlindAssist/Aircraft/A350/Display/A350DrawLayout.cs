@@ -25,17 +25,22 @@ public static class A350DrawLayout
     public static readonly A350Rect CtrPermanentData = new(0, 940, 822, Far);
     public static readonly A350Rect CtrWarningDisplay = new(822, 0, Far, Far);
 
+    /// <summary>The EFIS screens' height: the ND's and the PFD's backgrounds are 1024 px tall, and the draw code puts names
+    /// below them too (the next route points, runway idents off the map), which the screen clips.</summary>
+    private const float EfisScreenBottom = 1024;
+
     /// <summary>EFIS: each side draws its PFD on its outboard half, mirrored (live): the captain's (side 0) on the
-    /// right half, the ND on the left; the first officer's (side 1) the PFD on the left, the ND on the right.</summary>
-    public static A350Rect EfisPfd(int side) => side == 0 ? new(836, 0, Far, Far) : new(0, 0, 836, Far);
-    public static A350Rect EfisNd(int side) => side == 0 ? new(0, 0, 836, Far) : new(836, 0, Far, Far);
+    /// right half, the ND on the left; the first officer's (side 1) the PFD on the left, the ND on the right. Each is the
+    /// screen as shown: nothing drawn below it.</summary>
+    public static A350Rect EfisPfd(int side) => side == 0 ? new(836, 0, Far, EfisScreenBottom) : new(0, 0, 836, EfisScreenBottom);
+    public static A350Rect EfisNd(int side) => side == 0 ? new(0, 0, 836, EfisScreenBottom) : new(836, 0, Far, EfisScreenBottom);
 
     /// <summary>An EFIS draw cut into its ND part and its PFD part. Both sides draw the ND first, then the PFD
     /// (live); an ND map label can land on the PFD's half (the display clips it), so the cut is where the draw
-    /// best changes from texts outside the PFD's half to texts inside it.</summary>
+    /// best changes from texts outside the PFD's half to texts inside it (the whole half, below the screen too).</summary>
     public static (IReadOnlyList<DrawnText> Nd, IReadOnlyList<DrawnText> Pfd) SplitEfis(IReadOnlyList<DrawnText> texts, int side)
     {
-        var pfd = EfisPfd(side);
+        var pfd = side == 0 ? new A350Rect(836, 0, Far, Far) : new A350Rect(0, 0, 836, Far);
         var inPfd = texts.Select(t => pfd.Contains(t.X, t.Y) && t.X is >= 0 and < 1672).ToArray();
         int best = 0, bestScore = int.MinValue, before = 0, after = inPfd.Count(x => x);
         for (int k = 0; k <= texts.Count; k++)
