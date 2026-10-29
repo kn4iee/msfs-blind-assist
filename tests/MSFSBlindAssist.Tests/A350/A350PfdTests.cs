@@ -44,6 +44,18 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("OUT OF", StringComparison.Ordinal) || l.StartsWith("RANGE", StringComparison.Ordinal));
     }
 
+    // Live 2026-10-28 the PFD said "Selected speed: 305, cyan" with the speed managed. The selected heading off the
+    // scale is a cyan number at the scale's end, here its left end (x 192, y 690: stopped on OMDB 12L heading 121 with
+    // 305 selected), inside the speed tape's band, so it was read twice: as a speed and as the heading.
+    [Fact]
+    public void The_off_scale_selected_heading_is_not_a_speed()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_stopped_omdb_12l"), 0);
+        Assert.Contains("Selected heading: 305, cyan", lines);
+        Assert.Contains("Selected speed: 100, cyan", lines);
+        Assert.DoesNotContain("Selected speed: 305, cyan", lines);
+    }
+
     [Fact]
     public void The_first_officer_pfd_is_the_left_half()
     {

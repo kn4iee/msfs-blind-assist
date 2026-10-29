@@ -164,6 +164,13 @@ public static class A350Pfd
             ls.Add($"LS course: {c.Text}, magenta");
         }
 
+        // The selected heading while off the heading scale: a cyan number at the scale's end. At its left end it sits inside
+        // the speed tape's band and was read as a speed too (live 2026-10-28 "Selected speed: 305" with the speed managed):
+        // taken before the speed tape, read with the heading.
+        var offScaleHeading = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.Y is >= 675 and < 705
+            && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
+        used.UnionWith(offScaleHeading);
+
         // The speed tape: its target while off the scale, magenta managed (the V2 before takeoff), cyan selected; V1 in
         // cyan under it.
         foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 250 && c.Y >= FmaBottom && c.Y < BottomLine
@@ -227,19 +234,17 @@ public static class A350Pfd
 
             static string Degrees(double d) => $"{((int)Math.Round(d) % 360 + 360) % 360:000}";
             float At(DrawnShape sh) => (sh.X0 + sh.X1) / 2 - shift;
-            // The selected heading: a cyan number beside the scale while the target is off it (the bug then
-            // waits at the scale's edge), else the bug (shown in HDG, not in LOC or NAV).
-            var offScale = cells.Where(c => c.Colour == "cyan" && c.Y is >= 675 and < 705 && c.Text.Length == 3 && c.Text.All(char.IsDigit)).ToList();
-            if (offScale.Count > 0)
-            {
-                used.UnionWith(offScale);
-                o.Add($"Selected heading: {offScale[0].Text}, cyan");
-            }
+            // The selected heading: the cyan number beside the scale while the target is off it (taken above; the bug
+            // then waits at the scale's edge), else the bug (shown in HDG, not in LOC or NAV).
+            if (offScaleHeading.Count > 0)
+                o.Add($"Selected heading: {offScaleHeading[0].Text}, cyan");
             else if (Sprite(capture, side, SelectedHeadingAtlas) is { } bug)
                 o.Add($"Selected heading: {Degrees(heading + (At(bug) - HeadingIndexX) / HeadingPxPerDegree)}, cyan");
             if (Sprite(capture, side, TrackAtlas) is { } track)
                 o.Add($"Track: {Degrees(heading + (At(track) - HeadingIndexX) / HeadingPxPerDegree)}");
         }
+        else if (offScaleHeading.Count > 0)
+            o.Add($"Selected heading: {offScaleHeading[0].Text}, cyan");
 
         // The flap indication at the bottom: "S" and "F" labels and the configuration, cyan while moving.
         var flaps = cells.Where(c => c.X < 330 && c.Y >= 900).ToList();
