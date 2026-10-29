@@ -175,8 +175,11 @@ internal static class DisplayModes
             var parts = g.Split('#');
             var cap = draw.Draw(parts[0], parts.Length > 1 ? int.Parse(parts[1]) : 0);
             var jsonDir = Environment.GetEnvironmentVariable("A350_DRAW_JSON");
-            if (jsonDir != null)
-                File.WriteAllText(Path.Combine(jsonDir, g.Replace('#', '_') + ".json"), System.Text.Json.JsonSerializer.Serialize(cap,
+            // A fixture is a good draw only (a torn copy traps), saved under a new name only.
+            if (jsonDir != null && !cap.Ok)
+                Console.Error.WriteLine($"not saved: {g} trapped ({cap.Error}); take another copy");
+            else if (jsonDir != null)
+                SaveNew(Path.Combine(jsonDir, g.Replace('#', '_') + ".json"), System.Text.Json.JsonSerializer.Serialize(cap,
                     new System.Text.Json.JsonSerializerOptions { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             Console.Error.WriteLine($"== {g}: {cap.Texts.Count} texts, {cap.Frames.Count} frames, {cap.Elements.Count} elements in {cap.Milliseconds:F1} ms {cap.Error}");
             // The imports only a stub answered (review 2026-10-29: clock_time_get, path_open or fd_write is the OANS
@@ -219,10 +222,10 @@ internal static class DisplayModes
         {
             foreach (var row in A350DrawLayout.Rows(A350DrawLayout.Region(caps[0].Texts, A350DrawLayout.CtrWarningDisplay)))
                 Console.WriteLine("  WD: " + A350DrawLayout.Speak(row));
-            // `A350_SAVE=<prefix>`: each draw saved as <prefix>_<gauge><n>.json (CTR0, EFIS0, EFIS1, MFD0).
+            // `A350_SAVE=<prefix>`: each good draw saved as <prefix>_<gauge><n>.json (CTR0, EFIS0, EFIS1, MFD0), new names only.
             if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
                 foreach (var (c, n) in caps.Zip(new[] { "CTR0", "EFIS0", "EFIS1", "MFD0" }))
-                    File.WriteAllText($"{save}_{n}.json", System.Text.Json.JsonSerializer.Serialize(c));
+                    if (c is { Ok: true }) SaveNew($"{save}_{n}.json", System.Text.Json.JsonSerializer.Serialize(c));
             // `A350_SD=<page>`: also the engine display and that SD page as MSFSBA reads them.
             if (double.TryParse(Environment.GetEnvironmentVariable("A350_SD"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sd))
             {
@@ -266,6 +269,19 @@ internal static class DisplayModes
         try { inst.GetFunction(args[0])!.Invoke(int.Parse(args[1])); Console.WriteLine("returned"); }
         catch (Exception ex) { Console.WriteLine("caught " + ex.GetType().Name + ": " + ex.Message.Split((char)10)[0]); }
         return 0;
+    }
+
+    /// <summary>Writes a capture under a new name only, never over a fixture a test pins (a re-capture under its name
+    /// broke one, 2026-10-28; tools review 2026-10-30: draw, service and displays still could).</summary>
+    internal static bool SaveNew(string path, string json)
+    {
+        if (File.Exists(path))
+        {
+            Console.Error.WriteLine($"not saved: {path} exists; give the capture a new name");
+            return false;
+        }
+        File.WriteAllText(path, json);
+        return true;
     }
 
     /// <summary>`traptiny`: a two-instruction module whose only function reads out of bounds.</summary>
@@ -405,11 +421,7 @@ internal static class DisplayModes
             cap = caps[0];
             if (Environment.GetEnvironmentVariable("A350_SAVE") is { Length: > 0 } save)
             {
-                // Never over a fixture a test pins (a re-capture under its name broke one, 2026-10-28): a new name, or nothing.
-                if (File.Exists(save))
-                    Console.WriteLine($"not saved: {save} exists; give the capture a new name");
-                else
-                    File.WriteAllText(save, System.Text.Json.JsonSerializer.Serialize(cap));
+                SaveNew(save, System.Text.Json.JsonSerializer.Serialize(cap));
             }
         }
         else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;

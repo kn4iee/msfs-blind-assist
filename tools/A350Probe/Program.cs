@@ -311,7 +311,7 @@ internal sealed class ProbeForm : Form
                 ctr = (await service.DrawAsync(("CTR", 0)))?.FirstOrDefault();
             Line("== E/WD" + (ctr is { Ok: true } ? "" : ": no good draw"));
             if (ctr is { Ok: true } && Environment.GetEnvironmentVariable("A350_DRAW_JSON") is { } jsonDir)   // a fixture, sim asks answered
-                File.WriteAllText(Path.Combine(jsonDir, "CTR_0.json"), System.Text.Json.JsonSerializer.Serialize(ctr));
+                DisplayModes.SaveNew(Path.Combine(jsonDir, "CTR_0.json"), System.Text.Json.JsonSerializer.Serialize(ctr));
             if (ctr is { Ok: true })
                 foreach (var line in MSFSBlindAssist.Aircraft.A350.Display.A350EwdText.Build(ctr, _m!.GetCachedVariableValue("A350_SD_PAGE"))
                              .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
