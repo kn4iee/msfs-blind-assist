@@ -137,3 +137,25 @@ small's 31 MB) and compares the controls the press test would pick: kind, words,
 The tap point comes from the parser's pixel work (a box's centre, a switch's pill, a slider's knob, a menu entry's
 row), not from the OCR's word boxes: the model names a control, it does not place it. So a bigger model buys nothing
 for where a tap lands, and on a dim tablet the brightening gets small to where medium is, at no cost in time.
+
+## Captures for plan 18 (Task 1)
+
+Taken 2026-10-29 afternoon, same aircraft, MSFS Blind Assist closed; saved as test pages in
+`tests/MSFSBlindAssist.Tests/Fixtures/bbs757-efb/` (the picture and the reader's lines, `reread` with `PROBE_SAVE`).
+
+| Page | Shows |
+|---|---|
+| `bright/12-aircraft-fuel-boarding` | The top bar during an automatic boarding: "DEP -00:46" (red), "BOARDING… 10 MIN" in the green box, the notification count |
+| `bright/18-aircraft-ground-services-notification` | BlueBird's notification over the page right after a GPU tap: a panel at about x 1040-1390, y 40-160, "Notifications", the time ("14:17Z"), "GPU CONNECTED." |
+| `bright/19-notification-list` | The list, opened by the arrow at the top bar's right end (1373,15; the count pill disappears while it is open): "Clear all", one entry per notification (an icon, the time, the text, an x), scrolling; it covers the page's right side (to about y 515) |
+| `bright/20-fuel-start-boarding` | After FETCH SIMBRIEF OFP with AUTOMATIC BOARDING off: "» START BOARDING" in the top bar's green box, "DEP -03:19", and IMPORT FROM SIMBRIEF on the Fuel page at about (517,951). The reader drops that button today: the Fuel page's template ignores the whole content area |
+| `bright/21-defuel-question` | After IMPORT FROM SIMBRIEF with 20,100 lb aboard and a 15,543 lb plan: a box over a dimmed page (about x 320-1075, y 415-665): "Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?", YES (green, about 424,619), NO (dark blue, about 971,619). The reader today loses the page's section under the dimming and finds no NO |
+| `bright/22-fuel-adjustment-complete` | About 40 s after YES: "FUEL ADJUSTMENT IS COMPLETE!" in a box with OK (about 823,662); IMPORT FROM SIMBRIEF gone. The reader drops both today (the Fuel template again) |
+| `bright/23-units-question` | REFRESH SIMBRIEF OFP with the aircraft in kilograms: "Mismatch between flight plan and aircraft weight units! The loaded flight plan uses LBS, but the aircraft is currently set to KG. Do you want to switch the aircraft unit system?", YES (about 393,633), NO (about 1001,633), and the "SIMBRIEF OFP RECEIVED." notification. The flight plan behind it is painted over (the page's colour), so no route, callsign or plan data is in the repository |
+| `bright/41-checklist-header-ticked`, `42-checklist-header-unticked` | The checklist with its header box ticked (every line ticked) and unticked; on the unticked one, and live after unticking, the reader still reads the header as ticked |
+| `dim/15-aircraft-maintenance` | 0 percent brightness: the gear doors' faint pink OPEN, which the small model misses on the raw picture |
+
+- REMOVE FP removes the plan at once, with no question.
+- Put back afterwards: AUTOMATIC BOARDING on, the aircraft in pounds (the units question's YES), the GPU off, the
+  checklist unticked, the plan removed; `efb_settings.json` and `G-BBS75-opt.json` identical to before (credentials
+  compared by hash). The fuel stays at the plan's 15,543 lb (defueled from 20,100 lb by the captures).
