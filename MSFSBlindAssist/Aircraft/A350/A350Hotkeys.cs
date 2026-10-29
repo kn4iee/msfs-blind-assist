@@ -35,7 +35,10 @@ public static class A350Hotkeys
     public const string Vls = "INI_VLS_SPEED", VfeNext = "INI_VFE_SPEED", Vmax = "INI_VMAX_SPEED",
         AlphaProt = "INI_V_ALPHA_PROT_SPEED", AlphaMax = "INI_V_ALPHA_MAX_SPEED";
 
-    public static readonly IReadOnlyList<string> ReadoutVars = new[] { Vls, VfeNext, Vmax, AlphaProt, AlphaMax };
+    public static readonly IReadOnlyList<string> ReadoutVars = new[]
+    {
+        Vls, VfeNext, Vmax, AlphaProt, AlphaMax, A350RouteDistances.DestinationVar, A350RouteDistances.TopOfDescentVar,
+    };
 
     /// <summary>An FCU window's line (<see cref="A350FcuWindows"/>) as the Shift+S, H, A and V read-outs say it.</summary>
     public static string FcuReadout(string window, string shown) => window switch

@@ -149,6 +149,19 @@ public partial class IniBuildsA350Definition
                     ?? DisplayLines("A350_DISP_ND_CPT")?.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal))
                     ?? "No TO waypoint shown");
                 return true;
+            // D and Shift+D: the aircraft's own VNAV distances (A350RouteDistances), the time at the ground speed; an unread
+            // distance is no route, never 0 miles.
+            case HotkeyAction.ReadDistanceToDest:
+                announcer.AnnounceImmediate(A350.A350RouteDistances.Destination(
+                    CachedInput(simConnect, A350.A350RouteDistances.DestinationVar) ?? 0, Cached(simConnect, "GROUND_VELOCITY") ?? 0,
+                    FormatEtaFromDistance));
+                return true;
+            case HotkeyAction.ReadDistanceToTOD:
+                announcer.AnnounceImmediate(A350.A350RouteDistances.TopOfDescent(
+                    CachedInput(simConnect, A350.A350RouteDistances.DestinationVar) ?? 0,
+                    CachedInput(simConnect, A350.A350RouteDistances.TopOfDescentVar) ?? double.NaN,
+                    Cached(simConnect, "GROUND_VELOCITY") ?? 0, FormatEtaFromDistance));
+                return true;
             case HotkeyAction.ReadApproachCapability:
                 announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
                     ?? (DisplayLines(PfdCaptainKey)?.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap

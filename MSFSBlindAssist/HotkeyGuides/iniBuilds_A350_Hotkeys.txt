@@ -101,6 +101,10 @@ Heading:
 
 Navigation:
   Ctrl+W     Read the ND's TO waypoint (the captain's ND)
+  D          Read the distance to destination along the route, and the time at the ground
+             speed ("541 miles to destination: 01:16:44"; "not available" with no route)
+  Shift+D    Read the distance to the top of descent ("443 miles to top of descent", "Top of
+             descent not yet computed", "Past top of descent")
 
 Characteristic Speeds (the values the A350 itself publishes):
   Shift+4    Read VLS (minimum selectable speed)
