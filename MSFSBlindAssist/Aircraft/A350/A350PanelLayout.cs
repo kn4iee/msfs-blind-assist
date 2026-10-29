@@ -202,7 +202,7 @@ public static partial class A350PanelLayout
                 case A350Kinds.Encoder when control.Id == A350RunwayCondition.KnobId:
                     // A pick the knob makes by its own clicks (A350RunwayCondition), as one choice.
                     rows.Add(new A350PlacedRow(A350RunwayCondition.Key, A350RunwayCondition.Name, A350RowAction.Custom, control,
-                        A350RunwayCondition.Codes));
+                        A350RunwayCondition.Positions));
                     break;
                 case A350Kinds.Encoder when A350TypedEntry.ForControl(control.Id) is { } typed:
                     // A value the cockpit shows is typed, as the released aircraft type theirs.

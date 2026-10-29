@@ -45,7 +45,7 @@ public class A350InstrumentPanelTests
             ("Runway condition knob push", A350RowAction.Press, ""),
             ("Runway condition knob pull", A350RowAction.Press, ""),
             ("Runway condition", A350RowAction.Custom,
-                "1=1, ice, poor, 2=2, standing water or slush, medium to poor, 3=3, snow or slippery when wet, medium, "
+                "0=Not known, 1=1, ice, poor, 2=2, standing water or slush, medium to poor, 3=3, snow or slippery when wet, medium, "
                 + "4=4, compacted snow, good to medium, 5=5, wet, good, 6=6, dry"),
             ("Runway condition or braking action", A350RowAction.Set, "0=Runway condition, 1=Braking action"),
             ("A/BRK", A350RowAction.Press, ""),
@@ -68,6 +68,18 @@ public class A350InstrumentPanelTests
         Assert.All(plan.Steps.Zip(plan.Steps.Skip(1)), pair =>
             Assert.True(pair.First is A350DelayStep || pair.Second is A350DelayStep));
         Assert.Equal(A350WritePlan.NotAPositionRefusal, A350RunwayCondition.Plan(knob, 7).Refusal);
+    }
+
+    // Review 2026-10-29 (panels I5): nothing reads the code back (the WASM keeps it to itself), so with no pick yet the combo
+    // opened on its first item, "1, ice, poor": a default read as a setting, and ICE could not be picked without first
+    // picking another code. The first item is "Not known", which is no code: picked, it is refused.
+    [Fact]
+    public void The_runway_condition_opens_on_not_known_which_is_no_code()
+    {
+        var knob = A350ControlMap.Load().Find("AIRLINER_LDG_RWY_COND_BRK_ACTION_SELECTOR")!;
+        Assert.Equal("Not known", A350RunwayCondition.Positions[0]);
+        Assert.Equal(0, A350RunwayCondition.Positions.Keys.Min());
+        Assert.Equal(A350RunwayCondition.NotKnownRefusal, A350RunwayCondition.Plan(knob, 0).Refusal);
     }
 
     /// <summary>The ISIS, the standby flight display (INI_ISIS1_POWERED; the manual's cockpit layout item 22): each key is

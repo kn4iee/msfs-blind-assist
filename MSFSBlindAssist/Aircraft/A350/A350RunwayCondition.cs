@@ -34,9 +34,19 @@ public static class A350RunwayCondition
         [6] = "6, dry",
     };
 
+    /// <summary>The row's items: first "Not known", which is no code, then the codes. Nothing reads the code back, so with
+    /// no pick yet the combo opens on its first item: "1, ice, poor" there read as a setting, and ICE could not be picked
+    /// without first picking another code (review 2026-10-29).</summary>
+    public static readonly IReadOnlyDictionary<double, string> Positions =
+        new Dictionary<double, string> { [0] = "Not known" }.Concat(Codes).ToDictionary(p => p.Key, p => p.Value);
+
+    public const string NotKnownRefusal = "not known is no code; pick one";
+
     /// <summary>The clicks that pick <paramref name="code"/> (6 DRY to 1 ICE) with the knob <paramref name="knob"/>.</summary>
     public static A350Plan Plan(A350Control knob, double code)
     {
+        if (code == 0)
+            return A350Plan.Refused(NotKnownRefusal);
         if (!Codes.ContainsKey(code))
             return A350Plan.Refused(A350WritePlan.NotAPositionRefusal);
         var steps = new List<A350Step> { Event(knob.Id + "_PULL", 1), new A350DelayStep(MenuMs) };
