@@ -95,7 +95,7 @@ public sealed class A350PfdMonitor : IDisposable
             }
             bool settling = _settleUntil is { } until && at < until;
             foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
-                if (!settling && !_muted(key)) _speak(line);
+                if (!settling && !_muted(key) && !_disposed) _speak(line);
         }
         if (ctr != null && caps.Count > 0) ctr(caps[0]);
     }
@@ -116,8 +116,13 @@ public sealed class A350PfdMonitor : IDisposable
         }, ct);
     }
 
+    /// <summary>Set by <see cref="Dispose"/>: a tick that ends after it (an aircraft switch mid-draw) says nothing (review
+    /// 2026-10-29).</summary>
+    private volatile bool _disposed;
+
     public void Dispose()
     {
+        _disposed = true;
         _cts?.Cancel();
         _cts = null;
     }

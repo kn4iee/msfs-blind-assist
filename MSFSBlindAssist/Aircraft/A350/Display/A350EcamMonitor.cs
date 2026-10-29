@@ -61,7 +61,7 @@ public sealed class A350EcamMonitor : IDisposable
             _settleUntil = now + SettleAfterLoad;
         }
         var lines = _announcer.Observe(A350Ewd.Parse(cap));
-        if (lines.Count == 0 || _muted() || _settleUntil is { } until && now < until) return;
+        if (lines.Count == 0 || _muted() || _disposed || _settleUntil is { } until && now < until) return;
         foreach (var l in lines) _speak(l);
     }
 
@@ -99,8 +99,13 @@ public sealed class A350EcamMonitor : IDisposable
 
     public static string ToggleSpoken(bool enabled) => enabled ? "E W D monitoring enabled" : "E W D monitoring disabled";
 
+    /// <summary>Set by <see cref="Dispose"/>: a tick that ends after it (an aircraft switch mid-draw) says nothing (review
+    /// 2026-10-29).</summary>
+    private volatile bool _disposed;
+
     public void Dispose()
     {
+        _disposed = true;
         _cts?.Cancel();
         _cts = null;
     }

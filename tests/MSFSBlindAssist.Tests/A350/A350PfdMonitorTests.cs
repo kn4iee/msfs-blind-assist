@@ -28,6 +28,31 @@ public class A350PfdMonitorTests
         Assert.NotNull(m.Latest(0));
     }
 
+    // Review 2026-10-29 (engine M2): a tick already drawing when the aircraft was switched spoke its FMA change after the
+    // monitor was disposed. A tick that ends after Dispose says nothing.
+    [Fact]
+    public async Task A_tick_ending_after_dispose_says_nothing()
+    {
+        // An FMA change is taken on two agreeing reads: the FDs come on in the last live read and are confirmed by the held one.
+        var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand") });
+        var pending = new TaskCompletionSource<IReadOnlyList<A350DrawCapture?>?>();
+        bool hold = false;
+        var said = new List<string>();
+        var m = new A350PfdMonitor(gauges => hold ? pending.Task
+            : Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "EFIS" && g.Index == 0 ? cpt.Dequeue() : null).ToList()),
+            _ => false, said.Add);
+        await m.TickAsync();
+        await m.TickAsync();   // the aligning FMA, a baseline
+        await m.TickAsync();   // the FDs first seen
+        Assert.Empty(said);
+        hold = true;
+        var tick = m.TickAsync();
+        m.Dispose();
+        pending.SetResult(new A350DrawCapture?[] { Fixture("efis0_fd_stand"), null, null });   // the FDs come on
+        await tick;
+        Assert.Empty(said);
+    }
+
     [Fact]
     public async Task A_muted_column_says_nothing()
     {

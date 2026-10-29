@@ -30,6 +30,19 @@ public class A350EcamMonitorTests
         foreach (var c in caps) { feed.Enqueue(c); await m.TickAsync(); }
     }
 
+    // Review 2026-10-29 (engine M2): a CTR draw handed over after the monitor was disposed (an aircraft switch mid-tick) spoke
+    // its new lines. Nothing is said once disposed.
+    [Fact]
+    public async Task Nothing_is_said_once_disposed()
+    {
+        var (m, said, feed, _) = Make();
+        await Ticks(m, feed, Dark, Dark);
+        m.Dispose();
+        m.Observe(Fixture("ctr_powerup_fws_fault"));
+        m.Observe(Fixture("ctr_powerup_fws_fault"));
+        Assert.Empty(said);
+    }
+
     [Fact]
     public async Task A_power_up_is_spoken_line_by_line_with_colours()
     {
