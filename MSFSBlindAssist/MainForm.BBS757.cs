@@ -162,7 +162,9 @@ public partial class MainForm
         LoadOcr = () => PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount)),
         OcrFailed = ex =>
         {
-            Log.Warn("BBS757", $"Text recognition could not start: {ex.Message}");
+            // The exception itself, so the log has its type and every inner exception down to the base one: a
+            // TypeInitializationException's own message names only the type that failed, never why. Logging never throws.
+            Log.Error("BBS757", "Text recognition could not start.", ex);
             try
             {
                 TextRecognitionModels.RemoveMarker(TextRecognitionModels.DefaultFolder());

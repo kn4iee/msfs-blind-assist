@@ -76,6 +76,15 @@ public sealed class TextRecognitionTextTests
     });
 
     [Theory, MemberData(nameof(Cultures))]
+    public void A_cancel_with_every_file_at_its_size_says_the_files_are_not_checked(string culture) => Under(culture, () =>
+    {
+        // A cancelled repair: every file is at its size and there is no marker, so by size nothing is left to fetch;
+        // the next download checks the files (and fetches one that fails). Never "fetches the rest, 0 megabytes".
+        Assert.Equal("Download cancelled. The files are here but not checked. Download text recognition to check them.",
+            TextRecognitionText.Cancelled(4, 0));
+    });
+
+    [Theory, MemberData(nameof(Cultures))]
     public void What_a_job_speaks_is_worded_as_specified(string culture) => Under(culture, () =>
     {
         // The press: the megabytes this job still fetches, 32 on a fresh download.

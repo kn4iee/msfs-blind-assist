@@ -64,7 +64,7 @@ How to apply. Whatever decides what the job fetches compares SHA-256, never a le
 
 ## OCR-5
 
-- Every status box and offer button reads `TextRecognitionDownloader.DisplayStatus()` (and `Installed()`), never `Status`: `Status` keeps a finished job's Ready after a failed load removed the marker, which would leave Download disabled all session. → [text-recognition.md](../text-recognition.md)
+- Every status box and offer button reads `TextRecognitionDownloader.DisplayStatus()` (and `Installed()`), never `Status`: `Status` keeps a finished job's Ready after a failed load removed the marker, so the offer's Download button, never disabled, would read "Text recognition ready" and a press would do nothing all session. → [text-recognition.md](../text-recognition.md)
 
 Why. `Status` is the job's last status as the job set it: after a job that ended in Ready it says Ready until the next job starts, whatever happened to the files since. The case that matters: the pilot downloads, the reader's engine then fails to load, and `OcrFailed` removes the marker (OCR-1). `Status` still says Ready, so a status box that read it would show "Ready: PaddleOCR PP-OCRv6 small." over models that cannot be used, and the offer window that "Read the tablet screen" then opens would build its Download button from the phase: it would read "Text recognition ready" and start nothing when pressed (`TextRecognitionText.OfferButton` makes a press start nothing once the phase is Ready), for the rest of the session. Plan 17's work on the downloader found it (2026-10-29).
 

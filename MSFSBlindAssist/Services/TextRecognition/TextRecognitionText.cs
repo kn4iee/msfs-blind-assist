@@ -54,11 +54,18 @@ internal static class TextRecognitionText
 
     internal static string Failed(string reason) => $"The last download failed: {reason}. Download again to retry.";
 
-    /// <summary>The status line after the pilot cancelled: the files kept, and the megabytes the next download fetches.</summary>
-    internal static string Cancelled(int kept, long bytesLeft) => kept <= 0
-        ? "Download cancelled."
-        : string.Create(CultureInfo.InvariantCulture,
-            $"Download cancelled. {kept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {MegabytePhrase(bytesLeft)}.");
+    /// <summary>
+    /// The status line after the pilot cancelled: the files kept, and the megabytes the next download fetches. With
+    /// every file at its size and nothing left to fetch (a cancelled repair), it says what <see cref="Idle"/> says of
+    /// such a folder: the files are here but not checked, never "fetches the rest, 0 megabytes".
+    /// </summary>
+    internal static string Cancelled(int kept, long bytesLeft) => (kept, bytesLeft) switch
+    {
+        (<= 0, _) => "Download cancelled.",
+        (_, <= 0) => "Download cancelled. The files are here but not checked. Download text recognition to check them.",
+        _ => string.Create(CultureInfo.InvariantCulture,
+            $"Download cancelled. {kept} of {TextRecognitionModels.Files.Count} files are kept; the next download fetches the rest, {MegabytePhrase(bytesLeft)}."),
+    };
 
     // ---- spoken ----
 

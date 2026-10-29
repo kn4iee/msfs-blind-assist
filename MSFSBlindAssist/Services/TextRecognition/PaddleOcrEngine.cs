@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using RapidOcrNet;
 using SkiaSharp;
@@ -45,10 +46,10 @@ public sealed class PaddleOcrEngine : IDisposable
     }
 
     /// <summary>
-    /// How the library reads: its PP-OCRv6 preset (no white border and no long-side cap, so a picture the tablet's
-    /// size is read at its native size; a short side under 736 pixels is raised to it, as the v6 models were
-    /// exported; the v5 defaults starve the v6 detector), with word boxes on (the reader clicks on words) and the
-    /// orientation classifier off (the tablet is upright).
+    /// How the library reads: its PP-OCRv6 preset (no white border; a short side under 736 pixels is raised to it,
+    /// as the v6 models were exported, and the long side is bounded at 2000 pixels, so the 1397 x 1048 tablet is
+    /// read at its own size; the v5 defaults starve the v6 detector), with word boxes on (the reader clicks on
+    /// words) and the orientation classifier off (the tablet is upright).
     /// </summary>
     internal static RapidOcrOptions Options { get; } = RapidOcrOptions.PPOCRv6 with { ReturnWordBox = true, DoAngle = false };
 
@@ -152,18 +153,29 @@ public sealed class PaddleOcrEngine : IDisposable
     /// agree. The alpha is kept as it is, not premultiplied. The caller disposes the result and still owns
     /// <paramref name="picture"/>.
     /// </summary>
-    internal static SKBitmap ToSkBitmap(Bitmap picture)
+    internal static SKBitmap ToSkBitmap(Bitmap picture) => ToSkBitmap(picture, info => new SKBitmap(info));
+
+    /// <summary>
+    /// <see cref="ToSkBitmap(Bitmap)"/> into the bitmap <paramref name="allocate"/> makes for the picture's size (a
+    /// test's comes back without pixels). A bitmap without pixels, an allocation that failed without throwing, is
+    /// released and refused with an <see cref="InvalidOperationException"/> that names the size, before the picture
+    /// is locked: nothing is written through a null pointer.
+    /// </summary>
+    internal static SKBitmap ToSkBitmap(Bitmap picture, Func<SKImageInfo, SKBitmap> allocate)
     {
         int width = picture.Width;
         int height = picture.Height;
-        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
+        SKBitmap bitmap = allocate(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
         try
         {
+            IntPtr target = bitmap.GetPixels();
+            if (target == IntPtr.Zero)
+                throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture,
+                    $"Could not allocate the {width} x {height} pixel copy of the picture for text recognition."));
             BitmapData source = picture.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try
             {
                 var row = new byte[width * 4];
-                IntPtr target = bitmap.GetPixels();
                 for (int y = 0; y < height; y++)
                 {
                     Marshal.Copy(source.Scan0 + y * source.Stride, row, 0, row.Length);

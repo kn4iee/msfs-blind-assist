@@ -45,24 +45,29 @@ Together the files are 32,257,432 bytes.
   told apart from a network failure: "the files were not found on GitHub".
 
 **Where the files come from.** They are the ONNX files of PaddleOCR PP-OCRv6 small as RapidOCR v3.10.0
-publishes them on ModelScope (`RapidAI/RapidOCR`). RapidOCR's `default_models.yaml` pins the detector, the
-recognizer and the text-line classifier by SHA-256, and the values below are those. The dictionary is
-RapidOCR's `ppocrv6_dict.txt` for `PP-OCRv6_rec_small`, for which RapidOCR pins no hash: its SHA-256
-below is that of the copy the benchmark used, and the release step fetches ModelScope's file,
-`https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/paddle/PP-OCRv6/rec/PP-OCRv6_rec_small/ppocrv6_dict.txt`,
-and stops unless its SHA-256 is the one pinned here. The models are PaddlePaddle's, under Apache 2.0;
-the Text recognition tab's credits box says so (below).
+publishes them on ModelScope (`RapidAI/RapidOCR`), all four under
+`https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0` and each kept under its own name
+(the addresses are below). RapidOCR's `default_models.yaml` pins the detector, the recognizer and the
+text-line classifier by SHA-256, and the values below are those. The dictionary is RapidOCR's
+`ppocrv6_dict.txt` for `PP-OCRv6_rec_small`, for which RapidOCR pins no hash: its SHA-256 below is that
+of the copy the benchmark used, and the release step fetches ModelScope's file and stops unless its
+SHA-256 is the one pinned here. The models are PaddlePaddle's, under Apache 2.0; the Text recognition
+tab's credits box says so (below).
 
 - `PP-OCRv6_det_small.onnx`, 9,929,594 bytes, finds the lines of text.
-  SHA-256 `090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f`.
+  SHA-256 `090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f`. From
+  `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx`.
 - `PP-OCRv6_rec_small.onnx`, 21,234,383 bytes, reads each line.
-  SHA-256 `6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884`.
+  SHA-256 `6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884`. From
+  `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx`.
 - `ppocrv6_dict.txt`, 74,947 bytes, the recognizer's character dictionary.
-  SHA-256 `b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d`.
+  SHA-256 `b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d`. From
+  `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/paddle/PP-OCRv6/rec/PP-OCRv6_rec_small/ppocrv6_dict.txt`.
 - `ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx`, 1,018,508 bytes, the text-line orientation
-  classifier. RapidOcrNet loads it whenever it loads the models, so it stays in the list although the
-  reader never turns angle detection on.
-  SHA-256 `54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7`.
+  classifier (PP-OCRv5's: PP-OCRv6 has none of its own). RapidOcrNet loads it whenever it loads the
+  models, so it stays in the list although the reader never turns angle detection on.
+  SHA-256 `54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7`. From
+  `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/cls/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx`.
 
 "32 megabytes" is decimal, rounded to the nearest (a half up): 32,257,432 bytes. Every size the status
 lines and the speech tell goes through `TextRecognitionText.MegabytePhrase`: "N megabytes", "1 megabyte"
@@ -70,14 +75,31 @@ for a size that rounds to one and "less than 1 megabyte" for a sliver (the dicti
 bytes), never "1 megabytes" or "0 megabytes". The offer window's "a 32 megabyte download" is the bare
 number, used as an adjective.
 
+**Before the release exists.** The download needs the release, which is created last, so until then a
+developer places the files by hand. Fetch the four files from the addresses above into
+`%APPDATA%\MSFSBlindAssist\text-recognition`, under the names listed, and check each one's SHA-256
+(PowerShell's `Get-FileHash` prints it in capitals): nothing in the app hashes them then, since the
+installed check reads sizes only and only a download hashes (OCR-1, OCR-4). Then write `installed.json`
+in the same folder with exactly the text `TextRecognitionModels.MarkerJson` gives for this list,
+compact, as UTF-8 without a byte order mark and with no newline at the end:
+
+```json
+{"version":1,"files":[{"name":"PP-OCRv6_det_small.onnx","sha256":"090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"},{"name":"PP-OCRv6_rec_small.onnx","sha256":"6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"},{"name":"ppocrv6_dict.txt","sha256":"b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d"},{"name":"ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx","sha256":"54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7"}]}
+```
+
+The folder then reads Ready, so "Read the tablet screen" opens the reader, which loads the models from
+it. The 757 probe (`tools/Bbs757EfbProbe`) loads the same four files from the same folder; it needs
+only the files, not the marker.
+
 ## The folder and the marker
 
 The files live in `%APPDATA%\MSFSBlindAssist\text-recognition` (`TextRecognitionModels.DefaultFolder`).
 A finished download writes `installed.json` there LAST, after every file was verified:
 `{"version":1,"files":[{"name":"…","sha256":"…"},…]}`, compact, in the list's order. A download in
 progress writes `<name>.part`, which never counts. A folder filled by hand with the four files and a
-marker in this exact format reads Ready; plan 17's in-sim checks of the reader are set up that way, before
-the release is published, so they test the reading and not the download.
+marker in this exact format reads Ready ("Before the release exists", above); plan 17's in-sim checks of
+the reader are set up that way, before the release is published, so they test the reading and not the
+download.
 
 `TextRecognitionModels.Check` reads the folder and answers one of four states (OCR-1):
 
@@ -161,7 +183,8 @@ rewritten in place at a phase change or a whole percent, so NVDA keeps its line.
   file at its size but no marker: "Incomplete: the files are here but not checked. Download text recognition to check them."
 - Failed: "The last download failed: {reason}. Download again to retry."
 - Cancelled: "Download cancelled. {k} of 4 files are kept; the next download fetches the rest, {size}."
-  With none kept: "Download cancelled."
+  With none kept: "Download cancelled." With every file at its size, so nothing left to fetch (a cancelled
+  repair): "Download cancelled. The files are here but not checked. Download text recognition to check them."
 
 {size} is what the next download still fetches, told as "N megabytes", "1 megabyte" or "less than 1
 megabyte". A failure or a cancel stays on the line until the next job.

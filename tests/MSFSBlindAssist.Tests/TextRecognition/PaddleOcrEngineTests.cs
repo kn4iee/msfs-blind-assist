@@ -52,8 +52,10 @@ public sealed class PaddleOcrEngineTests
         RapidOcrOptions options = PaddleOcrEngine.Options;
 
         Assert.Equal(0, options.Padding);          // no white border around the tablet
-        Assert.Equal(0, options.ImgResize);        // not the long-side cap the v5 model was tuned for
+        Assert.Equal(0, options.ImgResize);        // not the v5 default's 1024-pixel cap on the long side
         Assert.Equal(736, options.LimitSideLen);   // short-side adaptive resize, as the v6 model was exported
+        Assert.Equal(2000, options.MaxSideLen);    // the long side bounded at 2000 pixels
+        // So the 1397 x 1048 tablet is read at its own size: its short side is over 736, its long side under 2000.
         Assert.True(options.ReturnWordBox);        // the reader clicks on words
         Assert.False(options.DoAngle);             // the tablet is upright
 
@@ -296,6 +298,24 @@ public sealed class PaddleOcrEngineTests
         {
             pin.Free();
         }
+    }
+
+    [Fact]
+    public void ToSkBitmap_refuses_a_copy_without_pixels_and_releases_it()
+    {
+        using Bitmap picture = Picture(PixelFormat.Format32bppArgb, Palette);
+        SKBitmap? copy = null;
+
+        // An allocation that failed without throwing leaves a bitmap with no pixels (SkiaSharp 3.119's constructor
+        // throws on its own, measured; this guards any path that does not): the copy is refused with what went
+        // wrong, never written through a null pointer, and it is released.
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(
+            () => PaddleOcrEngine.ToSkBitmap(picture, _ => copy = new SKBitmap()));
+
+        Assert.Contains("3 x 2", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(IntPtr.Zero, copy!.Handle);
+        // The picture was never locked: it can still be read.
+        Assert.Equal(Palette[1, 2].ToArgb(), picture.GetPixel(2, 1).ToArgb());
     }
 
     // ---- reading ----
