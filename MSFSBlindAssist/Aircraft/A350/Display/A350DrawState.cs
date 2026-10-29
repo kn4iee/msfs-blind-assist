@@ -43,6 +43,14 @@ public sealed class A350DrawState
 
     public void ResetTransform(int ctx) => _xf[ctx] = Identity;
 
+    /// <summary>nvgReset: the context's whole state back to NanoVG's start, the fill white as well as the transform
+    /// (review 2026-10-29: only the transform was, so a text after a reset kept the colour before it).</summary>
+    public void Reset(int ctx)
+    {
+        _xf[ctx] = Identity;
+        _fill[ctx] = new A350Rgba(1, 1, 1, 1);
+    }
+
     public void Save(int ctx)
     {
         if (!_stack.TryGetValue(ctx, out var st)) _stack[ctx] = st = new();

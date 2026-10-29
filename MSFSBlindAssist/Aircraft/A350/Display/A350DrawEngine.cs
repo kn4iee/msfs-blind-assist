@@ -22,7 +22,8 @@ public sealed class A350DrawEngine : IDisposable
     private Store _store = null!;
     private Instance _instance = null!;
     private Memory _memory = null!;
-    private bool _fresh;   // set after a trap: the next draw starts a new instance
+    private bool _fresh;   // set after a trap or any error out of a draw: the next draw starts a new instance
+    private bool _transformSeen;   // nvgTransform said once (it is not applied)
     private readonly HashSet<string> _warmed = new();   // gauges drawn once on this instance
     private readonly IReadOnlyList<string> _uiClasses;
     private readonly A350ModuleFacts _facts;
@@ -377,8 +378,17 @@ public sealed class A350DrawEngine : IDisposable
             case A350ModulePatcher.TranslateMagic: _state.Translate(a, F(b), F(c)); break;
             case A350ModulePatcher.ScaleMagic: _state.Scale(a, F(b), F(c)); break;
             case A350ModulePatcher.RotateMagic: _state.Rotate(a, F(b)); break;
-            case A350ModulePatcher.ResetTransformMagic:
-            case A350ModulePatcher.ResetMagic: _state.ResetTransform(a); break;
+            case A350ModulePatcher.ResetTransformMagic: _state.ResetTransform(a); break;
+            case A350ModulePatcher.ResetMagic: _state.Reset(a); break;
+            case A350ModulePatcher.TransformMagic:
+                // nvgTransform's six numbers do not fit the hook (only the context is passed): never seen in 1.2.7's draws;
+                // said once if it ever is, as every text after it would then be placed wrong (review 2026-10-29).
+                if (!_transformSeen)
+                {
+                    _transformSeen = true;
+                    MSFSBlindAssist.Utils.Logging.Log.Warn("A350Display", "the draw code called nvgTransform, which the reader does not apply: positions after it may be wrong");
+                }
+                break;
             case A350ModulePatcher.FrameMagic:
             {
                 if (!Room(_frames.Count)) break;
@@ -661,7 +671,10 @@ public sealed class A350DrawEngine : IDisposable
             _fresh = true;
         }
         catch (TrapException ex) { error = "trap: " + ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }
-        catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; LastTrap = ex.Message; }
+        // Any other error out of a draw may have left the instance mid-call too ([A350-9]; review 2026-10-29): the next
+        // draw starts a fresh one, and an error that is not the engine's still reaches the reader's status.
+        catch (WasmtimeException ex) { error = ex.Message.Split('\n')[0]; LastTrap = ex.Message; _fresh = true; }
+        catch (Exception) { _fresh = true; throw; }
         if (error == null && _overRecorded)
             error = $"the draw recorded more than {MaxRecorded} items (a torn copy drawing in a cycle)";
         LastHeapBytes = _heap - _heapStart;

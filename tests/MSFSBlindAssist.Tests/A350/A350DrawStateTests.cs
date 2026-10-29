@@ -82,3 +82,30 @@ public class A350DrawStateTests
         Assert.Equal("?", A350Rgba.NameOf(null));
     }
 }
+
+/// <summary>Review 2026-10-29 (engine M8): nvgReset puts a context's whole state back, its fill white as well as its
+/// transform; only the transform was reset, so a text drawn after a reset kept the colour before it.</summary>
+public class A350DrawStateResetTests
+{
+    [Fact]
+    public void A_reset_puts_the_fill_back_to_white_and_the_transform_to_identity()
+    {
+        var state = new A350DrawState();
+        state.Fill(3, A350Rgba.Of("amber"));
+        state.Translate(3, 100, 50);
+        state.Reset(3);
+        Assert.Equal("white", A350Rgba.NameOf(state.FillOf(3)));
+        Assert.Equal((10f, 20f), state.Apply(3, 10, 20));
+    }
+
+    [Fact]
+    public void A_transform_reset_keeps_the_fill()
+    {
+        var state = new A350DrawState();
+        state.Fill(3, A350Rgba.Of("amber"));
+        state.Translate(3, 100, 50);
+        state.ResetTransform(3);
+        Assert.Equal("amber", A350Rgba.NameOf(state.FillOf(3)));
+        Assert.Equal((10f, 20f), state.Apply(3, 10, 20));
+    }
+}
