@@ -113,6 +113,9 @@ public static class A350Pfd
     /// the selected heading bug, the track diamond.</summary>
     private static readonly (float X, float Y) SelectedHeadingAtlas = (811, 333), TrackAtlas = (296, 281);
 
+    /// <summary>The baro box's STD, which is no text: a sprite, "STD" in cyan boxed in yellow (66 x 36).</summary>
+    private static readonly (float X, float Y) StdAtlas = (954, 545);
+
     private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas, Func<DrawnShape, bool>? where = null) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
             && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0) && (where?.Invoke(s) ?? true));
@@ -314,6 +317,9 @@ public static class A350Pfd
                 ? $"{label.Text}: {A350DrawLayout.Speak(value)}"
                 : "Baro: " + A350DrawLayout.Speak(baro));
         }
+        // In STD the box holds no text but its sprite (review 2026-10-29: the PFD read no baro at all).
+        if (Sprite(capture, side, StdAtlas) != null)
+            o.Add("Baro: STD, cyan in a yellow box");
 
         o.AddRange(Deviation(capture, side));
         o.AddRange(ls);

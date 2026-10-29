@@ -152,6 +152,17 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("Selected heading: 900", StringComparison.Ordinal));
     }
 
+    // Review 2026-10-29: in STD the baro box holds no text but a sprite (PFDA350Elements.png at 954, 545, 66 x 36: "STD"
+    // in cyan, boxed in yellow), so the PFD read no baro at all, where QNH reads "QNH: 1013, cyan".
+    [Fact]
+    public void Std_reads_as_the_baro()
+    {
+        Assert.Contains("Baro: STD, cyan in a yellow box", A350Pfd.Read(Fixture("efis0_climb_bi614"), 0));
+        var qnh = A350Pfd.Read(Fixture("efis0_level6000"), 0);
+        Assert.Contains("QNH: 1013, cyan", qnh);
+        Assert.DoesNotContain(qnh, l => l.Contains("STD", StringComparison.Ordinal));
+    }
+
     // Under the speed tape in the climb (live 2026-10-28, ".681" green at x 50, y 657 in STD at FL226): the Mach number,
     // which read bare.
     [Fact]
