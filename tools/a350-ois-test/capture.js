@@ -1,6 +1,7 @@
 // Captures the visible OIS page as a fixture: run through tools/a350-probe/ceval.mjs (see README.md). Never keeps the
 // owner's credentials: a text field in a row labelled as an ID, key, logon, password, token or PIN, and every password
-// field, is saved blank, and a login code shown as "Code: ..." is saved as 0AAA000A (secrets.test.js checks).
+// field, is saved blank, a login code shown as "Code: ..." is saved as 0AAA000A, and an embedded (data:) image is saved
+// without its picture: the Navigraph login's QR code holds the same login code (secrets.test.js checks).
 (function(){
   var SECRET_ROW=/USER ID|\bID\b|API KEY|\bKEY\b|LOGON|PASSWORD|TOKEN|SECRET|\bPIN\b/;
   function secret(e){if(/^password$/i.test(e.type||''))return true;var row=e.closest&&e.closest('.option-group');
@@ -15,6 +16,8 @@
   for(var i=0;i<src.length;i++){src[i].removeAttribute('data-cap-v');src[i].removeAttribute('data-cap-k');}
   var kill=c.querySelectorAll('script,style,svg,canvas,link');
   for(var k=0;k<kill.length;k++)if(kill[k].parentNode)kill[k].parentNode.removeChild(kill[k]);
+  var pics=c.querySelectorAll('[src^="data:"],[srcset*="data:"]');
+  for(var k=0;k<pics.length;k++){if(pics[k].hasAttribute('src'))pics[k].setAttribute('src','');pics[k].removeAttribute('srcset');}
   function keep(e){return e.getAttribute('data-cap-v')==='1'||e.getAttribute('data-cap-k')==='1';}
   var all=c.querySelectorAll('[data-cap-v]');
   for(var j=0;j<all.length;j++){var e=all[j];if(!e.parentNode||!e.parentElement)continue;

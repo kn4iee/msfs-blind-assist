@@ -4,7 +4,9 @@
   var seen = 0;
   for (var i = 0; i < els.length && out.length < 60; i++) {
     var e = els[i];
-    var txt = (e.innerText || e.value || '').trim().replace(/\s+/g, ' ');
+    // A field's value is never printed (it can be a credential, [A350-12]): this lists what can be clicked.
+    var field = /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName);
+    var txt = field ? '[' + (e.type || e.tagName.toLowerCase()) + ' field]' : (e.innerText || '').trim().replace(/\s+/g, ' ');
     if (!txt || txt.length > 40) continue;
     if (e.children.length > 0 && e.tagName !== 'BUTTON') continue;
     var r = e.getBoundingClientRect();

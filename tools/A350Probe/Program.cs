@@ -141,13 +141,21 @@ internal sealed class ProbeForm : Form
             }
             return last;
         }
+        // A field holding a credential (OPTIONS > 3RD PARTY: SimBrief ID, API keys, logon codes) prints its length only,
+        // whatever STREAMER MODE is set to, on the console and in the %TEMP% copy alike ([A350-12], A350OisSecrets).
+        static bool Secret(Dictionary<string, string> d, int i) =>
+            d.TryGetValue($"items.{i}.secret", out var s) && (s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase));
         void Print(Dictionary<string, string> d)
         {
             int n = int.Parse(d["count"]);
             Line($"page={d["page"]} items={n}");
             for (int i = 0; i < n; i++)
-                Line($"{d[$"items.{i}.aidx"]}	{d[$"items.{i}.kind"]}{d[$"items.{i}.type"]}	{d[$"items.{i}.text"]}	{d[$"items.{i}.value"]}"
+            {
+                string text = d[$"items.{i}.text"];
+                string value = MSFSBlindAssist.Aircraft.A350.A350OisSecrets.Printable(text, d[$"items.{i}.value"], Secret(d, i));
+                Line($"{d[$"items.{i}.aidx"]}	{d[$"items.{i}.kind"]}{d[$"items.{i}.type"]}	{text}	{value}"
                     + (d.TryGetValue($"items.{i}.options", out var opts) && opts.Length > 0 ? $"	[{opts}]" : ""));
+            }
         }
         var first = await Next(15000);
         if (first == null) { Line("no push"); client.Dispose(); return; }
@@ -180,6 +188,14 @@ internal sealed class ProbeForm : Form
             for (int i = 0; i < count && idx == null; i++)
                 if (cur[$"items.{i}.text"].StartsWith(find, StringComparison.OrdinalIgnoreCase)) idx = cur[$"items.{i}.aidx"];
             if (idx == null) { Line($"no element {find}"); Print(cur); client.Dispose(); return; }
+            // The step as printed: a value set into a credential field is never echoed.
+            string shown = step;
+            if (eq > 0)
+                for (int i = 0; i < count; i++)
+                    if (cur[$"items.{i}.aidx"] == idx)
+                        shown = find + "=" + MSFSBlindAssist.Aircraft.A350.A350OisSecrets.Printable(cur[$"items.{i}.text"], val, Secret(cur, i));
+            if (eq > 0 && shown == step && MSFSBlindAssist.Aircraft.A350.A350OisSecrets.IsSecretLabel(find))
+                shown = find + "=" + MSFSBlindAssist.Aircraft.A350.A350OisSecrets.Printable(find, val, true);
             last = null;
             if (eq > 0)
                 client.EnqueueCommand("set_element_value", new Dictionary<string, string> { ["index"] = idx, ["value"] = val });
@@ -188,9 +204,9 @@ internal sealed class ProbeForm : Form
             await Task.Delay(2500);
             client.EnqueueCommand("get_display_elements");
             var after = await Next(8000);
-            if (after == null) { Line($"no push after {step}"); break; }
+            if (after == null) { Line($"no push after {shown}"); break; }
             cur = after;
-            if (all || s == steps.Length - 1) { Line($"--- after {step}"); Print(cur); }
+            if (all || s == steps.Length - 1) { Line($"--- after {shown}"); Print(cur); }
         }
         client.Dispose();
     }

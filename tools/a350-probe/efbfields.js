@@ -5,7 +5,10 @@
     var e = els[i]; var r = e.getBoundingClientRect(); if (!r.width) continue;
     var lab = '';
     var p = e.parentElement; for (var k = 0; k < 3 && p && !lab; k++) { var t = (p.innerText||'').trim().split('\n')[0]; if (t && t.length < 40) lab = t; p = p.parentElement; }
-    var v = e.tagName === 'SELECT' ? (e.options[e.selectedIndex] ? e.options[e.selectedIndex].text : '') + ' of [' + [].map.call(e.options, function(o){return o.text;}).slice(0,8).join('|') + ']' : (e.value || e.innerText || '').trim();
+    // A credential (a password box, or a field labelled ID, KEY, LOGON, PASSWORD or TOKEN: OPTIONS > 3RD PARTY) prints its
+    // length only, whatever STREAMER MODE is set to ([A350-12], the OIS agent's A.SECRET_LABEL).
+    var secret = (e.type || '').toLowerCase() === 'password' || /\b(ID|KEY|LOGON|PASSWORD|TOKEN)\b/i.test(lab);
+    var v = secret ? '<hidden, ' + String(e.value || '').length + ' chars>' : e.tagName === 'SELECT' ? (e.options[e.selectedIndex] ? e.options[e.selectedIndex].text : '') + ' of [' + [].map.call(e.options, function(o){return o.text;}).slice(0,8).join('|') + ']' : (e.value || e.innerText || '').trim();
     out.push(e.tagName + (e.type ? ':' + e.type : '') + ' label="' + lab + '" value="' + v.slice(0,80) + '"' + (e.disabled ? ' DISABLED' : ''));
   }
   return out.join('\n');
