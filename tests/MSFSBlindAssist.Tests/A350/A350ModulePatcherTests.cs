@@ -50,6 +50,17 @@ public class A350ModulePatcherTests
         return m.Build();
     }
 
+    // [A350-11] (review 2026-10-29, engine M10: only the cache path's format was pinned): the compiled module is cached by
+    // the patch's version, so a patch whose output changes without a new version loads the old compile and the change never
+    // applies. The patch's output on the sample is pinned beside its version: when this fails, bump
+    // A350ModulePatcher.Version, then record the new hash here.
+    [Fact]
+    public void The_patch_version_moves_whenever_the_patch_output_does()
+    {
+        string hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(A350ModulePatcher.Patch(Sample()).Bytes));
+        Assert.Equal((4, "299761e03ade37d1be607a936dae1563f3bd15911ccfa3ab46b373b20bf3fbc3"), (A350ModulePatcher.Version, hash));
+    }
+
     [Fact]
     public void The_patched_module_exports_every_gauge_draw()
     {

@@ -54,11 +54,14 @@ public class A350DrawEngineGuardTests
 
     // [A350-9] Wasmtime returns from a trap with a non-local jump, which a CET shadow stack refuses with a
     // fast-fail (0xC0000409): .NET 9+ marks x64 apps CET-compatible by default, so every trap in the A350
-    // draw code (a torn copy) would kill MSFSBA. The app that hosts the engine opts out.
-    [Fact]
-    public void The_app_is_not_cet_compatible_so_a_trap_cannot_kill_it()
+    // draw code (a torn copy) would kill MSFSBA. Every exe that hosts the engine opts out: the app and A350Probe
+    // (review 2026-10-29, engine M10: only the app was checked).
+    [Theory]
+    [InlineData("MSFSBlindAssist", "MSFSBlindAssist.csproj")]
+    [InlineData("tools", "A350Probe", "A350Probe.csproj")]
+    public void Every_exe_hosting_the_engine_is_not_cet_compatible_so_a_trap_cannot_kill_it(params string[] path)
     {
-        var csproj = System.Xml.Linq.XDocument.Load(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "MSFSBlindAssist", "MSFSBlindAssist.csproj"));
+        var csproj = System.Xml.Linq.XDocument.Load(Path.Combine(new[] { ClaudeContextBudgetTests.RepoRoot() }.Concat(path).ToArray()));
         var cet = csproj.Descendants().FirstOrDefault(e => e.Name.LocalName == "CETCompat");
         Assert.NotNull(cet);
         Assert.Equal("false", cet!.Value.Trim(), ignoreCase: true);
