@@ -64,10 +64,11 @@ the Text recognition tab's credits box says so (below).
   reader never turns angle detection on.
   SHA-256 `54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7`.
 
-"32 megabytes" is decimal, rounded to the nearest (a half up): 32,257,432 bytes. Every size the app
-tells goes through `TextRecognitionText.MegabytePhrase`: "N megabytes", "1 megabyte" for a size that
-rounds to one and "less than 1 megabyte" for a sliver (the dictionary alone is 74,947 bytes), never
-"1 megabytes" or "0 megabytes".
+"32 megabytes" is decimal, rounded to the nearest (a half up): 32,257,432 bytes. Every size the status
+lines and the speech tell goes through `TextRecognitionText.MegabytePhrase`: "N megabytes", "1 megabyte"
+for a size that rounds to one and "less than 1 megabyte" for a sliver (the dictionary alone is 74,947
+bytes), never "1 megabytes" or "0 megabytes". The offer window's "a 32 megabyte download" is the bare
+number, used as an adjective.
 
 ## The folder and the marker
 
@@ -136,7 +137,7 @@ invariant culture, so a German or Swedish Windows hears and reads the same words
 
 | When | Words | How |
 |---|---|---|
-| The press of Download, when the job fetches something | "Downloading text recognition, 32 megabytes." (a job that resumes says its own size: "21 megabytes", "2 megabytes", "less than 1 megabyte") | immediate |
+| The press of Download, when the job fetches something | "Downloading text recognition, 32 megabytes." (a job that resumes says only what it still fetches: "21 megabytes" with only the recognizer missing, "1 megabyte" with only the classifier, "less than 1 megabyte" with only the dictionary) | immediate |
 | 25, 50 and 75 percent of the whole list | "Text recognition 25 percent." (50, 75); milestones that the kept files already cover stay quiet | queued |
 | No data for 20 s | "Text recognition download stalled." | queued |
 | Data again after a stall | "Download resumed." | queued |
@@ -205,8 +206,9 @@ when the offers are done makes that launch skip the update check, and the next l
 
 `PaddleOcrEngine` is the host: it loads the four models from the folder and reads one picture at a time
 into `OcrLine`s (text, the rectangle around it, its words in order with their boxes, and a confidence).
-`OcrLine` and `OcrWord` are public because the reader's public signatures take them; the rest of the
-feature is internal.
+`PaddleOcrEngine`, `OcrLine` and `OcrWord` are public: the reader's public members take or return the
+engine (`Bbs757EfbBridgeIo.LoadOcr`, `Bbs757EfbOcr.ReadAsync`, `Bbs757EfbPageReader.ReadAsync`), and its
+public `ReadAsync` returns the lines and words. The rest of the feature is internal.
 
 - **Package.** RapidOcrNet 4.2.0, referenced with `ExcludeAssets="build"`: its build targets would copy
   13.7 MB of PP-OCRv5 models next to the exe. The app, the test project and the probe all target
@@ -215,9 +217,10 @@ feature is internal.
   library's own are relative to the app) and, from 260 characters on, in the extended form (`\\?\`, or
   `\\?\UNC\` for a network path) that the file calls under ONNX Runtime need past MAX_PATH.
 - **Options.** `RapidOcrOptions.PPOCRv6` with word boxes on (the reader clicks on words) and angle
-  detection off (the tablet is upright). The preset adds no white border and no resize cap, and raises a
-  short side under 736 pixels to 736, as the v6 models were exported (the v5 defaults starve the v6
-  detector). The tablet, 1397 by 1048 pixels, is read at its own size.
+  detection off (the tablet is upright). The preset adds no white border, raises a short side under 736
+  pixels to 736, as the v6 models were exported, and bounds the long side at 2000 pixels (the v5 defaults
+  starve the v6 detector). The tablet, 1397 by 1048 pixels, is inside those bounds, so it is read at its
+  own size.
 - **Threads.** `PaddleOcrEngine.ThreadsFor`: one per eight logical processors, at least 1, at most 4
   (4 on the owner's PC), so reading the tablet leaves the simulator its cores (OCR-3).
 - **One read at a time.** A second `ReadAsync` waits outside the engine and can be cancelled there.
