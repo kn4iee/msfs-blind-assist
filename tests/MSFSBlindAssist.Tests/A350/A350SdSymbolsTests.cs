@@ -188,6 +188,24 @@ public class A350SdSymbolsTests
         Assert.Equal(14, p.Count(l => l.Contains("spoiler: retracted, amber") || l.Contains("spoiler") && l.EndsWith("retracted, amber")));
     }
 
+    // Review 2026-10-29: the accumulator and brake pressures followed the PC's culture ("3,4 thousand PSI" under de-DE and
+    // sv-SE), the only lines across all 126 fixtures that did.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Wheel_pressures_read_the_same_in_every_culture(string culture)
+    {
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            var p = Apu(12);
+            Assert.Contains("Y accumulator pressure: 3.4 thousand PSI, green", p);
+            Assert.Contains("Left brake pressure: 3.5 thousand PSI, green", p);
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
+    }
+
     [Theory]
     [InlineData(453, 0)]
     [InlineData(395, 1)]

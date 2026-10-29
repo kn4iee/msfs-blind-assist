@@ -119,6 +119,10 @@ public static class A350SdSymbols
         return "neutral";
     }
 
+    /// <summary>A pressure in thousands of PSI as said, one decimal with a point in every culture (review 2026-10-29:
+    /// "3,4 thousand PSI" under de-DE).</summary>
+    private static string Kpsi(double kpsi) => kpsi.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>WHEEL's BRAKES gauge (x 1000 PSI): 0 at y 453, 1 at 395, then 2 at 380 and 3 at 364, 3.5 at the top.</summary>
     internal static double BrakeKpsi(float top) =>
         Math.Max(0, top >= 395 ? (453 - top) / 58.0 : 1 + (395 - top) / 15.5);
@@ -139,7 +143,7 @@ public static class A350SdSymbols
             foreach (var (label, x0) in new[] { ("Left brake pressure", 610f), ("Right brake pressure", 692f) })
             {
                 var b = fills.FirstOrDefault(s => Math.Abs(s.X0 - x0) <= 2 && s.Y0 >= 340 && s.Y1 <= 460 && s.Y1 - s.Y0 > 1);
-                if (b != null) yield return $"{label}: {BrakeKpsi(b.Y0):0.0} thousand PSI, {A350Rgba.NameOf(b.Colour)}";
+                if (b != null) yield return $"{label}: {Kpsi(BrakeKpsi(b.Y0))} thousand PSI, {A350Rgba.NameOf(b.Colour)}";
             }
         foreach (var bar in bars)
         {
@@ -227,7 +231,7 @@ public static class A350SdSymbols
             if (sym.Kind == "accumulator")
             {
                 var (kpsi, band) = Accumulator(A350ShapeReader.AngleDegrees(shape));
-                o.Add($"{sym.Label}: {kpsi:0.0} thousand PSI, {band}");
+                o.Add($"{sym.Label}: {Kpsi(kpsi)} thousand PSI, {band}");
                 continue;
             }
             var (sx, sy) = A350ShapeReader.SpriteCentre(shape);
