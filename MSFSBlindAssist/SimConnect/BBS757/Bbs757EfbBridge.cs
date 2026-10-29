@@ -54,7 +54,10 @@ public sealed class Bbs757EfbBridgeIo
 /// The text recognition engine is loaded at the first read while the window is shown and released when
 /// it hides (<see cref="TextRecognitionEngineSlot{T}"/>), both only on the loop, which runs every read,
 /// so it is never released under a running read. An engine that cannot load is said once, as the
-/// reader's status, and tried again only after the window was hidden and shown.
+/// reader's status, and said again when a later status took its place (the window never blames
+/// something else). It is tried again after the window was hidden and shown, or when the pilot asks for
+/// the reader again with the models Ready (<see cref="RetryTextRecognition"/>: a flag the loop takes
+/// before its next read, so the engine stays the loop's alone).
 ///
 /// The plan's rules hold: a ground service or the chocks are judged from their BlueBird variable before
 /// and after a tap and tapped only when they differ (B757-2, <see cref="Bbs757GroundServices"/>); the
@@ -85,9 +88,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?)>();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
-    /// <summary>The text recognition engine. Touched only on the loop: Get before a read, Release when the
-    /// window hides, Dispose when the loop ends.</summary>
+    /// <summary>The text recognition engine. Touched only on the loop: Get before a read, ForgetFailure when it
+    /// takes a retry, Release when the window hides, Dispose when the loop ends.</summary>
     private readonly TextRecognitionEngineSlot<PaddleOcrEngine> _ocr;
+
+    /// <summary>Set by <see cref="RetryTextRecognition"/> on the UI thread, taken by the loop
+    /// (<see cref="TakeTextRecognitionRetry"/>).</summary>
+    private volatile bool _retryOcr;
 
     private volatile bool _active;
     private bool _popoutReady;
@@ -114,7 +121,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         _popout = popout ?? new Bbs757EfbPopout(s => Log.Debug("BBS757", "EFB reader: " + s));
         _sync = SynchronizationContext.Current;
         // A status, not an alert: an alert is gone after 8 s, and the failure holds until the window is hidden and
-        // shown again (the loop's inactive branch forgets it).
+        // shown again or the pilot asks for the reader again (the loop's inactive branch, or the retry it takes,
+        // forgets it).
         _ocr = new TextRecognitionEngineSlot<PaddleOcrEngine>(io.LoadOcr, ex =>
         {
             io.OcrFailed(ex);
@@ -144,6 +152,29 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         _active = active;
         if (active) _forceRead = true;
         _wake.Release();
+    }
+
+    /// <summary>
+    /// The pilot asked for the reader with the models Ready (MainForm calls it only after its Ready check, so the
+    /// models never load from a folder without their marker, OCR-1): an engine that could not load is tried again at
+    /// the next read, now that the pilot downloaded the models again as the reader's status asked. Only a flag: the
+    /// loop takes it before its next read (<see cref="TakeTextRecognitionRetry"/>), since only the loop touches the
+    /// engine (OCR-3).
+    /// </summary>
+    public void RetryTextRecognition() => _retryOcr = true;
+
+    /// <summary>
+    /// The loop's side of <see cref="RetryTextRecognition"/>, at the top of each turn while the window is shown,
+    /// before any read: a load that failed is forgotten (a loaded engine is kept and nothing is released), so the
+    /// next read loads again, and the reader's status of the failure is taken back, so a load that works does not
+    /// keep showing it. On the loop only; internal for the tests, which call it on a bridge whose loop never started.
+    /// </summary>
+    internal void TakeTextRecognitionRetry()
+    {
+        if (!_retryOcr) return;
+        _retryOcr = false;
+        _ocr.ForgetFailure();
+        if (_alert == TextRecognitionText.ReaderCannotStart) _alert = null;
     }
 
     public void EnqueueCommand(string command, Dictionary<string, string>? payload = null)
@@ -183,6 +214,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                     await _wake.WaitAsync(ct);
                     continue;
                 }
+                // Shown: a retry the pilot asked for is taken before anything is read.
+                TakeTextRecognitionRetry();
                 if (!_popoutReady)
                 {
                     if (_popout.Find() != IntPtr.Zero) { _popout.Park(_popout.Find()); _popoutReady = true; }
@@ -253,11 +286,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// with a warning that it may be wrong;</item>
     /// <item>a read that says the same as the page already shown is not pushed again.</item>
     /// </list>
+    /// On the loop only, as it gets the engine (OCR-3); internal for the tests, which call it on a bridge whose
+    /// loop never started.
     /// </summary>
-    private async Task<bool> ReadIfChangedAsync(CancellationToken ct, bool force = false)
+    internal async Task<bool> ReadIfChangedAsync(CancellationToken ct, bool force = false)
     {
-        // No engine (it could not load, and the reader has said so): nothing is captured or read.
-        var engine = _ocr.Get();
+        // No engine (it could not load, and the reader says so): nothing is captured or read.
+        var engine = EngineForRead();
         if (engine == null) return false;
         var bmp = _popout.CaptureTablet();
         if (bmp == null) { _popoutReady = false; Status("The tablet reader's window closed. Opening it again."); return false; }
@@ -338,10 +373,23 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     private async Task<Bbs757EfbPageRead?> ReadFreshCaptureAsync(CancellationToken ct)
     {
-        var engine = _ocr.Get();
+        var engine = EngineForRead();
         if (engine == null) return null;
         using var b = _popout.CaptureTablet();
         return b == null ? null : await Bbs757EfbPageReader.ReadAsync(engine, b, ct);
+    }
+
+    /// <summary>
+    /// The engine for a read, or null when it could not load. A load that fails is reported once and said as the
+    /// reader's status (the slot's report). While the failure is remembered, a later status that took the window
+    /// (the tablet could not be reached, say) gives way to it again, with no second report, so the window never
+    /// blames something else.
+    /// </summary>
+    private PaddleOcrEngine? EngineForRead()
+    {
+        var engine = _ocr.Get();
+        if (engine == null && _alert != TextRecognitionText.ReaderCannotStart) Status(TextRecognitionText.ReaderCannotStart);
+        return engine;
     }
 
     /// <summary>What a page says, as one string: two reads that say the same thing give the same one.</summary>
@@ -673,10 +721,15 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     // ------------------------------------------------------------------ pushing
 
-    private void Status(string text)
+    /// <summary>
+    /// Shows <paramref name="text"/> in the page's place, until the next page or status. Internal for the tests.
+    /// </summary>
+    internal void Status(string text)
     {
         _model = null;
-        // The page is no longer shown, so the next read pushes it even when it reads the same as before.
+        // The page is no longer shown, so the next read reads it even when the picture has not changed (an unchanged
+        // tablet is never left behind a status) and pushes it even when it reads the same as before.
+        _forceRead = true;
         _lastFingerprint = null;
         _alert = text;
         _alertUntilMs = Environment.TickCount64 + 600_000;

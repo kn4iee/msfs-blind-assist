@@ -247,12 +247,19 @@ engine's lines to the reader's, pass P, in reading order. `Bbs757EfbPageReader` 
 - The engine loads on the bridge's loop, off the UI thread, at the first read while the tablet screen
   window is shown (`MainForm` supplies `PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), ...)`
   with `ThreadsFor(Environment.ProcessorCount)`), and is released when the window hides. The slot is
-  touched only on that loop: `Release` in its inactive branch and `Dispose` in the `finally` after it
-  ended, so it is never released under a running read.
+  touched only on that loop: `Get` before a read, `ForgetFailure` when it takes a retry, `Release` in its
+  inactive branch and `Dispose` in the `finally` after it ended, so it is never released under a running
+  read.
 - A load that fails is reported once. MainForm logs it and removes the marker (OCR-1), so the next check
   offers the download again, and the reader's status says: "Text recognition could not start, so the
-  tablet cannot be read. Download it again from Settings, Text recognition." Until the window was hidden
-  and shown again nothing is captured or read, and the slot does not try to load again.
+  tablet cannot be read. Download it again from Settings, Text recognition." From then on nothing is
+  captured or read, and the slot does not load again, until the window is hidden and shown, or until the
+  pilot, with the models downloaded again, presses "Read the tablet screen": that passes its Ready check
+  (OCR-1) and has the loop forget the failure, take the status back and load again at its next read (a
+  load that fails again is reported again). F5 and "Read the tablet again" do not try again, since they
+  cannot check that the models are Ready. A status that takes the window's place meanwhile (the tablet
+  could not be reached, say) gives way to the reader's status again at the next read, so the window never
+  blames something else.
 - The window opens only when the models are Ready; otherwise "Read the tablet screen" shows the offer
   window instead (OCR-2).
 

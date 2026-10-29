@@ -4,8 +4,9 @@ namespace MSFSBlindAssist.Tests.TextRecognition;
 
 /// <summary>
 /// The 757 tablet reader's hold on the text recognition engine: loaded on first use, a failed load reported once
-/// and not tried again until the window was hidden (released), and the engine disposed on release. A fake engine
-/// stands in for PaddleOCR, so no models are needed.
+/// and not tried again until the window was hidden (released) or the pilot asked for the reader again with the
+/// models Ready (the failure forgotten), and the engine disposed on release. A fake engine stands in for PaddleOCR,
+/// so no models are needed.
 /// </summary>
 public sealed class TextRecognitionEngineSlotTests
 {
@@ -54,6 +55,52 @@ public sealed class TextRecognitionEngineSlotTests
         Assert.Null(slot.Get());
         Assert.Equal(2, attempts);
         Assert.Equal(2, reported.Count);
+    }
+
+    [Fact]
+    public void ForgetFailure_has_the_next_Get_load_again()
+    {
+        int attempts = 0;
+        var reported = new List<Exception>();
+        var engine = new FakeEngine();
+        // The first two loads fail (the models damaged, then still damaged); the third works (downloaded again).
+        using var slot = new TextRecognitionEngineSlot<FakeEngine>(
+            () => ++attempts < 3 ? throw new FileNotFoundException("Detector model file does not exist") : engine,
+            reported.Add);
+
+        Assert.Null(slot.Get());
+        Assert.Null(slot.Get());
+        Assert.Equal(1, attempts);
+
+        // The pilot asked for the reader again with the models Ready: the next Get loads again, and a load that
+        // fails again is reported again, once.
+        slot.ForgetFailure();
+        Assert.Null(slot.Get());
+        Assert.Null(slot.Get());
+        Assert.Equal(2, attempts);
+        Assert.Equal(2, reported.Count);
+
+        slot.ForgetFailure();
+        Assert.Same(engine, slot.Get());
+        Assert.Equal(3, attempts);
+        Assert.Equal(2, reported.Count);
+        Assert.Equal(0, engine.Disposals);
+    }
+
+    [Fact]
+    public void ForgetFailure_keeps_a_loaded_engine()
+    {
+        int loads = 0;
+        var engine = new FakeEngine();
+        using var slot = new TextRecognitionEngineSlot<FakeEngine>(() => { loads++; return engine; }, NeverFails);
+        Assert.Same(engine, slot.Get());
+
+        // A retry while the engine is loaded (it never failed): nothing is released, nothing is loaded again.
+        slot.ForgetFailure();
+
+        Assert.Same(engine, slot.Get());
+        Assert.Equal(1, loads);
+        Assert.Equal(0, engine.Disposals);
     }
 
     [Fact]

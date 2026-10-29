@@ -91,7 +91,9 @@ public partial class MainForm
     /// comes to the front for a moment, and the camera is put back. While the window is shown the tablet
     /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader
     /// reads with the downloaded text recognition: while that is not Ready it does not open, and the offer
-    /// window is shown instead, whatever the offer checkbox says (the pilot asked for the reader).
+    /// window is shown instead, whatever the offer checkbox says (the pilot asked for the reader). Ready, a
+    /// press also has the reader try again an engine that could not load: its status sent the pilot to
+    /// download the models again, and the window may still be open.
     /// </summary>
     private void ShowBBS757EfbReader()
     {
@@ -109,6 +111,8 @@ public partial class MainForm
             bbs757EfbBridge = new Bbs757EfbBridge(efb, CreateBbs757EfbBridgeIo());
             bbs757EfbBridge.Start();
         }
+        // Only after the Ready check above, so a retry never loads models without their marker (OCR-1).
+        bbs757EfbBridge.RetryTextRecognition();
         if (bbs757EfbReaderForm == null || bbs757EfbReaderForm.IsDisposed)
         {
             var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "BlueBird 757 tablet screen", "tablet", "BlueBird tablet");
