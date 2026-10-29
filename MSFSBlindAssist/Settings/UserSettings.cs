@@ -73,6 +73,12 @@ public class UserSettings
         // dialog: a dismissal is never remembered.
         public bool CheckForMissingDataOnStartup { get; set; } = true;
 
+        // On by default: while the BlueBird 757 tablet reader's text recognition is not installed, offer
+        // the download when the 757 is selected (the Aircraft menu, and at startup on that profile;
+        // Services/TextRecognition/TextRecognitionOffer). The ONLY thing that silences the offer: a
+        // dismissal is never remembered.
+        public bool OfferTextRecognitionFor757 { get; set; } = true;
+
         // Hand Fly Settings
         // Default is Both (tone + spoken pitch/bank): spoken pitch is safety-relevant
         // whenever Hand Fly engages — the auto-handoff at rotation AND a manual

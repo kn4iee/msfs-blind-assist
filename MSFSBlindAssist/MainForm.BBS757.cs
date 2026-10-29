@@ -89,11 +89,18 @@ public partial class MainForm
     /// from the classic window. The first time it shows, the tablet reader's pop-out is made as the A300
     /// and A330 CDU windows make theirs: the camera goes to the captain's instrument view, the simulator
     /// comes to the front for a moment, and the camera is put back. While the window is shown the tablet
-    /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND.
+    /// is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader
+    /// reads with the downloaded text recognition: while that is not Ready it does not open, and the offer
+    /// window is shown instead, whatever the offer checkbox says (the pilot asked for the reader).
     /// </summary>
     private void ShowBBS757EfbReader()
     {
         if (currentAircraft is not BBS757Definition) return;
+        if (textRecognitionDownloader.Installed().State != TextRecognitionState.Ready)
+        {
+            ShowTextRecognitionOffer();
+            return;
+        }
         hotkeyManager.ExitInputHotkeyMode();
 
         var efb = EnsureBbs757EfbClient();
@@ -261,8 +268,40 @@ public partial class MainForm
         bbs757EfbClient = null;
     }
 
+    /// <summary>
+    /// The text recognition offer, made like the startup data check ([UPD-9]): at startup on a restored 757
+    /// profile (<c>MainForm_Shown</c>, after the PMDG SDK check and before the update check) and after a pick of
+    /// the 757 in the Aircraft menu, never at connect; a dismissal is never remembered and only the pilot's
+    /// checkbox silences it (<see cref="TextRecognitionOffer.ShouldOffer"/>). The window waits for the pilot;
+    /// the download it starts keeps running when it closes.
+    /// </summary>
+    private void OfferTextRecognition()
+    {
+        if (currentAircraft is not BBS757Definition) return;
+        bool settingOn = MSFSBlindAssist.Settings.SettingsManager.Current.OfferTextRecognitionFor757;
+        if (!TextRecognitionOffer.ShouldOffer(true, settingOn, textRecognitionDownloader.Installed().State, textRecognitionDownloader.IsRunning))
+            return;
+        ShowTextRecognitionOffer();
+    }
+
+    /// <summary>Shows the offer window, modal over the main window, and never throws: the pilot is not left
+    /// without the app because a window could not open.</summary>
+    private void ShowTextRecognitionOffer()
+    {
+        try
+        {
+            using var dialog = new Forms.TextRecognitionOfferDialog(textRecognitionDownloader);
+            dialog.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("BBS757", $"The text recognition offer failed: {ex.Message}");
+        }
+    }
+
     private void BBS757MenuItem_Click(object? sender, EventArgs e)
     {
         SwitchAircraft(new BBS757Definition());
+        OfferTextRecognition();
     }
 }

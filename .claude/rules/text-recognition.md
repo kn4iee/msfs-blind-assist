@@ -1,6 +1,8 @@
 ---
 paths:
   - "MSFSBlindAssist/Services/TextRecognition/**"
+  - "MSFSBlindAssist/Forms/Settings/TextRecognitionPanel.cs"
+  - "MSFSBlindAssist/Forms/TextRecognitionOfferDialog.cs"
   - "tests/MSFSBlindAssist.Tests/TextRecognition/**"
 ---
 # Text recognition rules

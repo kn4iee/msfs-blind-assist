@@ -83,6 +83,11 @@ public partial class MainForm : Form
     private readonly Services.Geography.OfflineLocationService offlineLocationService =
         new(Services.Geography.LocationDataStore.Default);
 
+    // The BlueBird 757 tablet reader reads with PaddleOCR models the pilot downloads once, from Settings →
+    // Text recognition or from the offer window (MainForm.BBS757.cs). Owned here, like the location data job
+    // above, so the download keeps running after either closes. Its speech is marshalled in InitializeManagers.
+    private readonly Services.TextRecognition.TextRecognitionDownloader textRecognitionDownloader = new();
+
     private FenixMonitorManagerForm? fenixMonitorManagerForm;
 
     private Forms.FBWA380.FBWA380MonitorManagerForm? fbwA380MonitorManagerForm;
@@ -574,14 +579,25 @@ public partial class MainForm : Form
         await OfferPmdgSdkSetupAsync(currentAircraft.AircraftCode);
         if (IsDisposed) return;
 
+        // Third, and it waits for the pilot too: the BlueBird 757 tablet reader's text recognition, offered
+        // while a restored 757 profile lacks it. A pick of the 757 in the Aircraft menu offers it from
+        // BBS757MenuItem_Click; never at connect, and nothing about a dismissal is remembered.
+        OfferTextRecognition();
+        if (IsDisposed) return;
+
         if (!SettingsManager.Current.CheckForUpdatesOnStartup) return;
 
-        // A location download started from that dialog may still run: an update accepted now
-        // restarts the app and Shutdown cancels the download without a word. Skip this launch's
+        // A location data or text recognition download started from those dialogs may still run: an update
+        // accepted now restarts the app and Shutdown cancels the download without a word. Skip this launch's
         // check; the next launch asks again (UPD-9).
-        if (locationDataDownloader.IsRunning)
+        bool locationRunning = locationDataDownloader.IsRunning;
+        bool textRecognitionRunning = textRecognitionDownloader.IsRunning;
+        if (locationRunning || textRecognitionRunning)
         {
-            Log.Debug("Updates", "Startup update check skipped: the location data download is running.");
+            string running = locationRunning && textRecognitionRunning ? "location data and text recognition downloads are"
+                : locationRunning ? "location data download is"
+                : "text recognition download is";
+            Log.Debug("Updates", $"Startup update check skipped: the {running} running.");
             return;
         }
 
@@ -640,6 +656,13 @@ public partial class MainForm : Form
         // UI-thread only, so marshal (BeginInvoke, never Invoke). Progress and stalls are queued
         // so they never cut off a callout; the press confirmation, errors and "ready" are immediate.
         locationDataDownloader.Speak += (_, speech) => SafeBeginInvoke(() =>
+        {
+            if (speech.Immediate) announcer.AnnounceImmediate(speech.Text);
+            else announcer.Announce(speech.Text);
+        });
+        // The text recognition download speaks the same way (LOC-5): worker threads, marshalled, with only the
+        // press confirmation, the end and errors immediate.
+        textRecognitionDownloader.Speak += (_, speech) => SafeBeginInvoke(() =>
         {
             if (speech.Immediate) announcer.AnnounceImmediate(speech.Text);
             else announcer.Announce(speech.Text);
@@ -1426,6 +1449,11 @@ public partial class MainForm : Form
         // for next time. Before announcer.Cleanup below, though it speaks nothing on this path.
         locationDataDownloader.Shutdown(TimeSpan.FromSeconds(2));
         locationDataDownloader.Dispose();
+
+        // The text recognition download: cancelled the same way, without a word. A .part file a killed job
+        // leaves never counts as a kept file, and the next job deletes it.
+        textRecognitionDownloader.Shutdown(TimeSpan.FromSeconds(2));
+        textRecognitionDownloader.Dispose();
 
         // Clean up A380X Coherent clients
         coherentClient?.Dispose();
