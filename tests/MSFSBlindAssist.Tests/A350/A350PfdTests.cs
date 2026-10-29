@@ -71,6 +71,87 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
     }
 
+    // Review 2026-10-29 (critical): between the tape's visible window (y 177 to 585, ScalesBackground.png's altitude
+    // column) and the held places, the symbol is drawn where the altitude puts it, hidden by the tape's clip: above,
+    // inside the FMA strip; below, among the baro and the heading scale's numbers. Moved there it read "FMA approach:
+    // 5000, magenta", "FMA approach: 400, cyan" (about 900 ft before every STD level-off), "Selected altitude: 40000
+    // 40000", "QNH: 1013 4000" and "Selected heading: 900" (the real one dropped).
+    private static A350DrawCapture Moved(A350DrawCapture cap, string text, float fromY, float toY, string? newText = null, A350Rgba? colour = null) =>
+        cap with
+        {
+            Texts = cap.Texts.Select(t => t.Text.Trim() == text && Math.Abs(t.Y - fromY) < 1
+                ? t with { Text = newText ?? t.Text, Y = toY, LocalY = t.LocalY + toY - fromY, Colour = colour ?? t.Colour } : t).ToList(),
+        };
+
+    [Theory]
+    [InlineData(70f)]
+    [InlineData(110f)]
+    [InlineData(150f)]
+    public void A_hidden_constraint_above_the_tape_reads_as_the_constraint(float y)
+    {
+        var lines = A350Pfd.Read(Moved(Fixture("efis0_takeoff_ready"), "40000", 38, y, "5000", new A350Rgba(1, 0, 1, 1)), 0);
+        Assert.Contains("Altitude constraint: 5000, magenta", lines);
+        Assert.Contains("Selected altitude: 40000, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(100f)]
+    [InlineData(150f)]
+    [InlineData(170f)]
+    public void A_hidden_selected_altitude_above_the_tape_reads_once(float y)
+    {
+        var lines = A350Pfd.Read(Moved(Fixture("efis0_takeoff_ready"), "40000", 38, y), 0);
+        Assert.Equal("Selected altitude: 40000, cyan", Assert.Single(lines, l => l.Contains("40000")));
+    }
+
+    [Theory]
+    [InlineData(60f)]
+    [InlineData(90f)]
+    [InlineData(120f)]
+    [InlineData(160f)]
+    public void A_hidden_selected_flight_level_above_the_tape_is_no_fma_column(float y)
+    {
+        var lines = A350Pfd.Read(Moved(Fixture("pfd_climb_std_fl400"), "400", 38, y), 0);
+        Assert.Equal("Selected altitude: FL 400, cyan", Assert.Single(lines, l => l.Contains("400")));
+        Assert.DoesNotContain(lines, l => l.StartsWith("FMA approach", StringComparison.Ordinal));
+        Assert.Equal("FMA engagement: AP1; 1 FD 2; A/THR, white", lines.Single(l => l.StartsWith("FMA engagement", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData(600f)]
+    [InlineData(657f)]
+    [InlineData(700f)]
+    [InlineData(730f)]
+    public void A_hidden_selected_altitude_below_the_tape_stays_out_of_the_baro(float y)
+    {
+        var lines = A350Pfd.Read(Moved(Fixture("efis0_ls_downwind_omdb"), "4000", 742, y), 0);
+        Assert.Equal("Selected altitude: 4000, cyan", Assert.Single(lines, l => l.Contains("4000")));
+        Assert.Contains("QNH: 1013, cyan", lines);
+    }
+
+    // In STD the baro shows no text, so the symbol passing it read as a baro of its own.
+    [Theory]
+    [InlineData(657f)]
+    [InlineData(690f)]
+    public void A_hidden_selected_flight_level_below_the_tape_is_no_baro(float y)
+    {
+        var cap = Moved(Moved(Moved(Fixture("pfd_climb_std_fl400"), "400", 38, y), "FL", 172, 615), "400", 172, 615);
+        var lines = A350Pfd.Read(cap, 0);
+        Assert.Equal("Selected altitude: FL 400, cyan", Assert.Single(lines, l => l.Contains("400")));
+        Assert.DoesNotContain(lines, l => l.StartsWith("Baro", StringComparison.Ordinal));
+    }
+
+    // A three-digit symbol in the heading scale's band (a flight level in STD) read as the off-scale selected heading, and
+    // the heading bug on the scale (031 at 6000 ft) was dropped for it.
+    [Fact]
+    public void A_hidden_selected_altitude_never_reads_as_the_selected_heading()
+    {
+        var lines = A350Pfd.Read(Moved(Fixture("efis0_level6000"), "6000", 389, 690, "900"), 0);
+        Assert.Contains("Selected heading: 031, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Selected heading: 900", StringComparison.Ordinal));
+    }
+
     // Under the speed tape in the climb (live 2026-10-28, ".681" green at x 50, y 657 in STD at FL226): the Mach number,
     // which read bare.
     [Fact]

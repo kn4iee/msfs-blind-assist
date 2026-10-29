@@ -31,6 +31,13 @@ public static class A350Pfd
     /// number instead), or parked at y 139.5 or 623.5, sometimes with no value at all (VFE next with the flaps FULL).</summary>
     private const float TapeTop = 180, TapeBottom = 585;
 
+    /// <summary>The altitude tape's visible window: ScalesBackground.png's altitude column is opaque from y 177 to 584 (the
+    /// drum's window cut out of it at 363 to 403). The tape's selected altitude symbol outside it is hidden by the clip.</summary>
+    private const float AltitudeTapeTop = 177, AltitudeTapeBottom = 585;
+
+    /// <summary>Where the tape's selected altitude symbol writes its value: x 597, or 646 in STD (its box 587 to 691).</summary>
+    private const float SymbolX = 597, StdSymbolX = 646;
+
     public const string GreenDot = "Green dot", SSpeed = "S speed", FSpeed = "F speed", VfeNext = "VFE next";
 
     /// <summary>Speeds the tape shows only as symbols, by where each sprite sits in PFDA350Elements.png, each marking its
@@ -147,25 +154,27 @@ public static class A350Pfd
         // The altitude tape's scale labels reach up into the FMA strip: never read as text.
         used.UnionWith(cells.Where(c => c.X is >= 585 and < 610 && c.Colour == "white" && c.Text.Length == 3 && c.Text.All(char.IsDigit)));
 
-        // The tape's selected altitude symbol (a box, its value at x 597) is drawn out of the tape's range too, held at the
-        // screen's top (y 38; "400" at x 646 in STD) or bottom (y 742), inside the FMA's top row where the tape's clip hides
-        // it: the readout at the tape's edge shows that altitude (live 2026-10-28). Magenta, the symbol is the constraint the
-        // vertical mode levels at (at the hold, the SID's 5000), which the readout does not show.
-        var heldSymbol = cells.Where(c => c.X is >= 585 and < 660 && (Math.Abs(c.Y - 38) <= 12 || Math.Abs(c.Y - 742) <= 12)
+        // The tape's selected altitude symbol (a box, its value at x 597; "400" at x 646 in STD) is drawn where the altitude
+        // puts it even outside the tape's visible window, where the tape's clip hides it: on its way out it crosses the FMA
+        // strip above or the baro and the heading scale's band below, and beyond the tape's range it is held at the screen's
+        // top (y 38) or bottom (y 742) (live 2026-10-28; review 2026-10-29: moved along the tape it read as an FMA column,
+        // the baro and the selected heading). Taken first and never read where it lies. Cyan, it is the selected altitude,
+        // which the readout at the tape's edge shows while it is hidden; magenta, the constraint the vertical mode levels
+        // at (at the hold, the SID's 5000), which the readout does not show.
+        var altitudeSymbol = cells.Where(c => (Math.Abs(c.X - SymbolX) <= 3 || Math.Abs(c.X - StdSymbolX) <= 3)
             && c.Colour is "cyan" or "magenta" && Digits(c.Text)).ToList();
-        used.UnionWith(heldSymbol);
+        used.UnionWith(altitudeSymbol);
+        static bool Hidden(DrawnCell c) => c.Y < AltitudeTapeTop || c.Y >= AltitudeTapeBottom;
 
-        // The selected altitude, read after the FMA: in range the tape's symbol; beyond the tape's range the readout at the
-        // tape's top or bottom, "FL" at 587 and its number at 688 (live 2026-10-28: y 172 above, 615 below), one value.
-        var selectedAltitude = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && (c.X is >= 585 and < 620 && c.Y < 640
-                || c.X is >= 620 and < 720 && c.Y is >= FmaBottom and < 640))
+        // The selected altitude, read after the FMA: beyond the tape's range the readout at the tape's top or bottom, "FL"
+        // at 587 and its number at 688 (live 2026-10-28: y 172 above, 615 below), one value; in range the tape's symbol.
+        var selectedAltitude = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.X is >= 585 and < 720
+                && c.Y is >= FmaBottom and < 640)
             .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
-        if (selectedAltitude.Count == 0)
-            selectedAltitude = heldSymbol.Where(c => c.Colour == "cyan").ToList();
         used.UnionWith(selectedAltitude);
-        var constraint = heldSymbol.Where(c => c.Colour == "magenta").Concat(cells.Where(c => !used.Contains(c) && c.Colour == "magenta"
-            && c.X is >= 585 and < 620 && c.Y is >= FmaBottom and < 640 && Digits(c.Text))).ToList();
-        used.UnionWith(constraint);
+        if (selectedAltitude.Count == 0)
+            selectedAltitude = altitudeSymbol.Where(c => c.Colour == "cyan").OrderBy(Hidden).Take(1).ToList();
+        var constraint = altitudeSymbol.Where(c => c.Colour == "magenta").ToList();
 
         // The minimum set on PERF APPR, on the FMA's fourth column's third row: "RADIO" or "BARO", white, and its height in
         // cyan (live 2026-10-28, RADIO 50); the column's top rows are the approach capability.
