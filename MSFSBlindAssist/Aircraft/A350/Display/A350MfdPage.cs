@@ -540,7 +540,12 @@ public static class A350MfdPage
     /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
     /// first read.</summary>
     public static string? PageJustChanged(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now) =>
-        before.Count == 0 || PageTitle(now) is not { } title || title == PageTitle(before) ? null : title;
+        before.Count == 0 || PageTitle(now) is not { } title || !Readable(title) || title == PageTitle(before) ? null : title;
+
+    /// <summary>Whether a title can be said: some text and no control character. A copy read across a frame (fixtures taken
+    /// before the allocator patch, [A350-10]) drew titles such as "¨÷é\x13…" and an empty one; announced as a new page they
+    /// told the pilot nothing (review 2026-10-29).</summary>
+    private static bool Readable(string title) => !string.IsNullOrWhiteSpace(title) && !title.Any(char.IsControl);
 
     /// <summary>Where the MFD window moves when a menu has just opened: its first item, as a sighted pilot's eyes go to
     /// it; null while none opened since the last read (an open menu keeps the pilot's own place).</summary>

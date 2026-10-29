@@ -11,6 +11,20 @@ public class A350MfdPageTests
         JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(Path.Combine(
             ClaudeContextBudgetTests.RepoRoot(), "tests", "MSFSBlindAssist.Tests", "A350", "Fixtures", "ground_MFD.json")))!;
 
+    // Review 2026-10-29 (readers minor 15): fixtures taken before the allocator patch read titles such as "¨÷é..."
+    // and an empty one, and the window would have announced them as a new page. Only a readable title is a page change.
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("¨÷é…")]
+    [InlineData("ACTIVE/INIT")]
+    public void A_title_that_cannot_be_read_is_no_page_change(string title)
+    {
+        var before = new[] { new MfdLine("title", "ACTIVE/F-PLN", 0, 0) };
+        Assert.Null(A350MfdPage.PageJustChanged(before, new[] { new MfdLine("title", title, 0, 0) }));
+        Assert.Equal("ACTIVE/INIT", A350MfdPage.PageJustChanged(before, new[] { new MfdLine("title", "ACTIVE/INIT", 0, 0) }));
+    }
+
     [Fact]
     public void The_data_status_page_reads_as_lines()
     {
