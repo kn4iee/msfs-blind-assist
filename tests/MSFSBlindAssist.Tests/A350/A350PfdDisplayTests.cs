@@ -119,6 +119,22 @@ public class A350PfdDisplayTests
         Assert.Equal(new[] { panel + " dark: its screen is off or has no power." }, speech.All);
     }
 
+    // Review 2026-10-29: with no capture (the reader still preparing, not available, or every draw failing) Ctrl+W said
+    // "No TO waypoint shown" and Ctrl+0 "Approach capability none shown", as if the screen showed nothing there; X and
+    // Alt+P say the displays are not available yet.
+    [Theory]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadApproachCapability)]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ReadNDWaypoint)]
+    public void A_readout_with_no_capture_says_the_displays_are_not_available(MSFSBlindAssist.Hotkeys.HotkeyAction action)
+    {
+        var def = new IniBuildsA350Definition { Cached = (_, _) => null };
+        var sim = new SimConnect.SimConnectManager(IntPtr.Zero);
+        def.Attach(sim);
+        var speech = new SpeechCapture();
+        Assert.True(def.HandleHotkeyAction(action, sim, speech, null!, null!));
+        Assert.Equal(new[] { "The A350 displays are not available yet." }, speech.All);
+    }
+
     // Shift+1 to 3 read the A380's green dot, S and F speeds; the A350 shows them only as symbols on the captain's PFD
     // speed tape, so they are read off it: "not shown" while the tape does not draw one, above or below the speed scale
     // while it is drawn outside the tape's visible window (as a sighted pilot sees it), "not available" while the displays

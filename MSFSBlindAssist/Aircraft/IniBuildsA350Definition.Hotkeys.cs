@@ -135,19 +135,20 @@ public partial class IniBuildsA350Definition
             case HotkeyAction.ReadDisplayLowerECAM:
                 announcer.AnnounceImmediate(Ecam?.LatestCapture is { } sd && simConnect.GetCachedVariableValue(SdPageKey) is double sdPage
                     ? A350.A350Hotkeys.Sentences(A350.Display.A350SdText.Build(sd, sdPage))
-                    : "The A350 displays are not available yet.");
+                    : NotAvailableYet);
                 return true;
             // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
             // A readout from a dark screen says so (a dark PFD's "none shown" read as no capability, review 2026-10-28).
             case HotkeyAction.ReadSquawkCode:
                 announcer.AnnounceImmediate(DarkReadout("A350_DISP_RMP_1") ?? (DisplayLines("A350_DISP_RMP_1") is { } rmp ? A350.A350Hotkeys.Squawk(rmp)
-                    : "The A350 displays are not available yet."));
+                    : NotAvailableYet));
                 return true;
-            // Ctrl+W: the ND's TO waypoint; Ctrl+0: the FMA's approach capability column.
+            // Ctrl+W: the ND's TO waypoint; Ctrl+0: the FMA's approach capability column. With no capture yet, the displays
+            // are not available, never "none shown" (review 2026-10-29).
             case HotkeyAction.ReadNDWaypoint:
                 announcer.AnnounceImmediate(DarkReadout("A350_DISP_ND_CPT")
-                    ?? DisplayLines("A350_DISP_ND_CPT")?.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal))
-                    ?? "No TO waypoint shown");
+                    ?? (DisplayLines("A350_DISP_ND_CPT") is not { } nd ? NotAvailableYet
+                        : nd.FirstOrDefault(l => l.StartsWith("To waypoint", StringComparison.Ordinal)) ?? "No TO waypoint shown"));
                 return true;
             // D and Shift+D: the aircraft's own VNAV distances (A350RouteDistances), the time at the ground speed; an unread
             // distance is no route, never 0 miles.
@@ -164,9 +165,10 @@ public partial class IniBuildsA350Definition
                 return true;
             case HotkeyAction.ReadApproachCapability:
                 announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
-                    ?? (DisplayLines(PfdCaptainKey)?.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
-                        ? "Approach capability " + cap["FMA approach:".Length..].Trim()
-                        : "Approach capability none shown"));
+                    ?? (DisplayLines(PfdCaptainKey) is not { } pfd ? NotAvailableYet
+                        : pfd.FirstOrDefault(l => l.StartsWith("FMA approach:", StringComparison.Ordinal)) is { } cap
+                            ? "Approach capability " + cap["FMA approach:".Length..].Trim()
+                            : "Approach capability none shown"));
                 return true;
             default:
                 return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
@@ -238,7 +240,7 @@ public partial class IniBuildsA350Definition
             return;
         }
         var lines = DisplayLines(displayKey);
-        announcer.AnnounceImmediate(lines == null ? "The A350 displays are not available yet."
+        announcer.AnnounceImmediate(lines == null ? NotAvailableYet
             : lines.Count == 0 ? "Off: no power, or nothing shown." : string.Join(". ", lines));
     }
 }

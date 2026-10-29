@@ -46,6 +46,9 @@ public partial class IniBuildsA350Definition
     /// <summary>What a dark screen reads, as a sighted pilot sees it.</summary>
     internal const string DarkScreen = "Dark: its screen is off or has no power.";
 
+    /// <summary>What a readout says while the display reader has no capture to read.</summary>
+    internal const string NotAvailableYet = "The A350 displays are not available yet.";
+
     /// <summary>Whether a display's screen is dark: its power variable read below 0.5. Unread, it is taken as lit.</summary>
     internal bool IsDark(A350DisplayPanel d) =>
         d.Power != null && _sim is { } sim && Cached(sim, KeyForInput(d.Power)) is double lit && lit < 0.5;
