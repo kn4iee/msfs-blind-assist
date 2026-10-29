@@ -142,6 +142,95 @@ public partial class IniBuildsA350Definition
         _setTwins.Any(t => t.Value == key && _pendingPicks.TryGetValue(t.Key, out var p)
             && Math.Abs(value - p.Target) < A350WritePlan.SameValueTolerance);
 
+    /// <summary>The FCU windows that speak on their own (<see cref="A350FcuCallouts.Speaking"/>), by each cache key one of
+    /// their inputs streams under; and per typed row, the speaking windows its value moves, whose change it confirms itself
+    /// (parity task 9, 2026-10-29).</summary>
+    private readonly Dictionary<string, List<A350FcuWindow>> _speakingByInputKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string[]> _typedEchoKeys = new(StringComparer.Ordinal);
+
+    /// <summary>Each speaking window's last phrase, for the preset going out of view (<see cref="A350FcuCallouts.IsQuiet"/>).</summary>
+    private readonly Dictionary<string, string> _windowPhrase = new(StringComparer.Ordinal);
+
+    /// <summary>The cache key a window input streams under: its first under the window's own key.</summary>
+    private static string WindowInputKey(A350FcuWindow window, string input) =>
+        input == window.Inputs[0] ? window.Key : A350PanelLamps.InputKey(input);
+
+    private void FindSpeakingWindows()
+    {
+        var speaking = _fcuWindows.Values.Where(w => A350FcuCallouts.Speaking.Contains(w.Name)).ToList();
+        foreach (var window in speaking)
+            foreach (var input in window.Inputs)
+            {
+                string key = WindowInputKey(window, input);
+                if (!_speakingByInputKey.TryGetValue(key, out var windows))
+                    _speakingByInputKey[key] = windows = new List<A350FcuWindow>();
+                windows.Add(window);
+            }
+        foreach (var (rowKey, field) in _typed)
+        {
+            var inputs = A350TypedEntry.Inputs(field);
+            var keys = speaking.Where(w => w.Inputs.Intersect(inputs, StringComparer.Ordinal).Any()).Select(w => w.Key).ToArray();
+            if (keys.Length > 0)
+                _typedEchoKeys[rowKey] = keys;
+        }
+    }
+
+    /// <summary>A speaking window's input arrived: its phrase goes to the shared FCU call-out, which stages it to the batch
+    /// end, absorbs a load's values and MSFSBA's own typed value, and is muted by the window's Ctrl+M row ([A320-37]). An
+    /// input still unread is no phrase, never a baseline; the preset going out of view is recorded, never said.</summary>
+    private void ObserveWindow(A350FcuWindow window, string deliveredKey, double value, ScreenReaderAnnouncer announcer)
+    {
+        if (_sim is not { } sim)
+            return;
+        string? phrase = A350FcuCallouts.Phrase(window.Name, input =>
+        {
+            string key = WindowInputKey(window, input);
+            return key == deliveredKey ? value : Cached(sim, key);
+        });
+        if (phrase == null)
+            return;
+        // A window reads several inputs and the call-out keeps one phrase per key: another input arriving with the same
+        // words is no new sample, and passed on it would unstage the change the first one staged.
+        if (_windowPhrase.TryGetValue(window.Key, out var last) && last == phrase)
+            return;
+        if (A350FcuCallouts.IsQuiet(last, phrase))
+            RebaselineFcuValue(window.Key, phrase);
+        else
+            AnnounceFcuValue(window.Key, phrase, announcer, muted: IsMuted(window.Key));
+        _windowPhrase[window.Key] = phrase;
+    }
+
+    /// <summary>MSFSBA's own typed value is said by its own confirmation: the windows it moves stay quiet for the echo's
+    /// window, armed before each write of the run and again as it is confirmed ([A300-14]'s 2.5 s).</summary>
+    private void ArmTypedEcho(string rowKey)
+    {
+        if (_typedEchoKeys.TryGetValue(rowKey, out var keys))
+            SuppressFcuValueChangeEcho(keys);
+    }
+
+    /// <summary>MSFSBA's own press of a baro unit button: its label says the new unit, so the baro does not say it again.</summary>
+    private void ArmUnitButtonEcho(A350Control control)
+    {
+        if (A350FcuCallouts.UnitButtonWindow(control.Id) is { } name && _fcuWindows.Values.FirstOrDefault(w => w.Name == name) is { } window)
+            SuppressFcuValueChangeEcho(window.Key);
+    }
+
+    /// <summary>Encoders stepped with a value line, by value key, with their last step's time: the value they left is said
+    /// once at the first batch end <see cref="A350FcuCallouts.StepSettleMs"/> after the last step (panels minor 3).</summary>
+    private readonly Dictionary<string, long> _stepReadbacks = new(StringComparer.Ordinal);
+    private ScreenReaderAnnouncer? _stepAnnouncer;
+
+    private void ReleaseStepReadbacks()
+    {
+        long now = Clock();
+        foreach (var (key, at) in _stepReadbacks.Where(s => now - s.Value >= A350FcuCallouts.StepSettleMs).ToList())
+        {
+            _stepReadbacks.Remove(key);
+            if (_sim is { } sim && Cached(sim, key) is double value && !_disposed && _values.TryGetValue(key, out var line))
+                _stepAnnouncer?.Announce($"{line.Name}: {A350Readouts.Format(line.Control, value)}");
+        }
+    }
+
     /// <summary>Whether a light changed with the pilot's own press or pick of its button, or a twin's button.</summary>
     private bool IsOwnLamp(A350Lamp lamp)
     {
@@ -297,6 +386,7 @@ public partial class IniBuildsA350Definition
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
+        ReleaseStepReadbacks();
         foreach (var (row, text) in _leverSpeech.Flush(Clock()))
             if (!IsMuted(row) && !_disposed)
                 _leverAnnouncer?.Announce(text);
@@ -315,6 +405,7 @@ public partial class IniBuildsA350Definition
         _lampSpeech.Clear();
         _leverSpeech.Reset();
         _ownLampsUntil.Clear();
+        _stepReadbacks.Clear();   // a step made before the load is not the new flight's value
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();

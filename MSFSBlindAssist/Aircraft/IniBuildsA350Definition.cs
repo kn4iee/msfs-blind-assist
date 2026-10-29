@@ -151,6 +151,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 _lampInputKeys.UnionWith(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
                 AddDisplay(window.Panel, window.Key);
             }
+        FindSpeakingWindows();
 
         foreach (var line in A350StatusLines.All)
             if (_rows.ContainsKey(line.Beside))
@@ -318,7 +319,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             return true;
         }
         if (_fcuWindows.TryGetValue(varKey, out var window) && _sim is { } fcuSim
-            && window.Compose(input => Cached(fcuSim, input == window.Inputs[0] ? window.Key : A350PanelLamps.InputKey(input))) is string shown)
+            && window.Compose(input => Cached(fcuSim, WindowInputKey(window, input))) is string shown)
         {
             displayText = shown;
             return true;
@@ -400,6 +401,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             keys.AddRange(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
             Register(window.Key, window.Inputs[0], window.Name, keys);
             vars[window.Key].ValueDescriptions = new Dictionary<double, string>();
+            // A window that speaks on its own (A350FcuCallouts) has its Ctrl+M row; the call-out checks it ([A320-37]).
+            vars[window.Key].ExcludeFromMonitorManager = !A350FcuCallouts.Speaking.Contains(window.Name);
             foreach (var input in window.Inputs.Skip(1))
                 if (!vars.ContainsKey(A350PanelLamps.InputKey(input)))
                     Register(A350PanelLamps.InputKey(input), input, input, null);
@@ -652,6 +655,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         }
         if (_lampBoard.Handles(varName))
             HandleLampDelivery(varName, value, announcer);
+        if (_speakingByInputKey.TryGetValue(varName, out var windows))
+            foreach (var window in windows)
+                ObserveWindow(window, varName, value, announcer);
         if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);

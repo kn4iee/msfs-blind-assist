@@ -6,9 +6,10 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// Writes: every panel row is claimed here, so MainForm's generic paths (SetLVar's data-definition write, "pressed"
-/// announcements) never touch an A350 control. Nothing the pilot does on a panel is spoken back; only errors are,
-/// and a switch the aircraft did not move ([CORE-7]).
+/// Writes: every panel row is claimed here, so MainForm's generic paths (SetLVar's data-definition write) never touch an
+/// A350 control. What the pilot does is confirmed once, only with what the screen reader cannot say ([CORE-7]): a press
+/// whose label shows no state says "&lt;name&gt; pressed", as the A380's momentary buttons and MainForm's generic button do; a
+/// step of an encoder with a value line says the value it left; errors, and a switch the aircraft did not move, are said.
 /// </summary>
 public partial class IniBuildsA350Definition
 {
@@ -67,13 +68,39 @@ public partial class IniBuildsA350Definition
         double? commanded = row.Action != A350RowAction.Set ? null
             : control.Kind == A350Kinds.Spring ? control.StateForPosition(control.Rest ?? 1)
             : value;
+        if (row.Action == A350RowAction.Press)
+            ArmUnitButtonEcho(control);   // before the write, so its echo can never arrive first
         if (!Execute(row, plan, simConnect, announcer, commanded))
             return true;   // refused, already there or unavailable: nothing was written
         NoteOwnLamps(control);   // its lights follow the pilot's own press or pick: its label says them
 
+        if (row.Action == A350RowAction.Press && !ShowsState(row.Key))
+            announcer.Announce($"{row.Name} pressed");
+        else if (row.Action is A350RowAction.Increase or A350RowAction.Decrease)
+            ConfirmStep(row, control, announcer);
+
         if (commanded is double target && control.Kind is A350Kinds.Toggle or A350Kinds.Command or A350Kinds.Selector)
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
         return true;
+    }
+
+    /// <summary>Whether a press row's label shows a state after the press (its lights, its held record, its button state),
+    /// which the screen reader says; otherwise the press is confirmed "&lt;name&gt; pressed" (review 2026-10-29, panels minor 3).</summary>
+    private bool ShowsState(string rowKey) =>
+        _held.ContainsKey(rowKey) || _buttonLamps.ContainsKey(rowKey) || _buttonStates.ContainsKey(rowKey);
+
+    /// <summary>An encoder step: the value it leaves is said once the run of steps settles (<see cref="ReleaseStepReadbacks"/>);
+    /// an encoder whose value nothing reads says "&lt;name&gt; pressed" at once.</summary>
+    private void ConfirmStep(A350PlacedRow row, A350Control control, ScreenReaderAnnouncer announcer)
+    {
+        string valueKey = A350Readouts.KeyFor(control);
+        if (_values.ContainsKey(valueKey))
+        {
+            _stepReadbacks[valueKey] = Clock();
+            _stepAnnouncer = announcer;
+        }
+        else
+            announcer.Announce($"{row.Name} pressed");
     }
 
     /// <summary>The FCU's AP 1 row, which the universal auto-autopilot engage presses.</summary>
@@ -178,6 +205,7 @@ public partial class IniBuildsA350Definition
         bool Superseded() => _disposed || _latestRunByRow.GetValueOrDefault(row.Key) != run;
         try
         {
+            ArmTypedEcho(row.Key);
             foreach (var step in plan.Steps)
             {
                 if (step is A350CalcStep calc)
@@ -202,6 +230,7 @@ public partial class IniBuildsA350Definition
             if (shown is double landed && !plan.Reached(landed) && !Superseded())
             {
                 Log.Debug("A350", $"{row.Key}: the click landed {A350WritePlan.Format(landed)}, not {A350WritePlan.Format(plan.Target)}; corrected");
+                ArmTypedEcho(row.Key);
                 Send(sim, plan.Correction.Rpn);   // e.g. a 1000 ft altitude step, or the managed speed's own preset
                 await Delay(TypedReadBackMs);
                 if (Superseded())
@@ -210,6 +239,7 @@ public partial class IniBuildsA350Definition
             }
             if (Superseded())
                 return;
+            ArmTypedEcho(row.Key);   // the confirmation is the value's one sentence: a late echo stays quiet
             if (shown is not double now)
                 announcer.Announce(NotConfirmed(row, typed));   // no read-back: sent, never "selected"
             else if (plan.Reached(now))
@@ -259,6 +289,7 @@ public partial class IniBuildsA350Definition
                 break;
             for (int i = 0; i < Math.Abs(clicks); i++)
             {
+                ArmTypedEcho(row.Key);
                 Send(sim, stepper.Click(Math.Sign(clicks)).Rpn);
                 await Delay(A350TypedStepper.GapMs);
                 if (superseded())
@@ -267,6 +298,7 @@ public partial class IniBuildsA350Definition
         }
         if (now is not double shown)
             return;
+        ArmTypedEcho(row.Key);
         announcer.Announce(plan.Reached(shown)
             ? plan.Confirm(shown, read)
             : $"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(shown, read)}");
