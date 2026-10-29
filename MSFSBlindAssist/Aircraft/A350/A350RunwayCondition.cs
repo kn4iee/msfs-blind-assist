@@ -49,18 +49,18 @@ public static class A350RunwayCondition
             return A350Plan.Refused(NotKnownRefusal);
         if (!Codes.ContainsKey(code))
             return A350Plan.Refused(A350WritePlan.NotAPositionRefusal);
-        var steps = new List<A350Step> { Event(knob.Id + "_PULL", 1), new A350DelayStep(MenuMs) };
+        var steps = new List<A350Step> { Event(knob.Id + "_PULL", 1), new A350DelayStep(MenuMs, OwesRest: false) };
         for (int i = 0; i < 5; i++)
         {
             steps.Add(Event(knob.Id, 1));
-            steps.Add(new A350DelayStep(ClickGapMs));
+            steps.Add(new A350DelayStep(ClickGapMs, OwesRest: false));
         }
         for (int i = 0; i < 6 - (int)code; i++)
         {
             steps.Add(Event(knob.Id, -1));
-            steps.Add(new A350DelayStep(ClickGapMs));
+            steps.Add(new A350DelayStep(ClickGapMs, OwesRest: false));
         }
-        steps.Add(new A350DelayStep(MenuMs));
+        steps.Add(new A350DelayStep(MenuMs, OwesRest: false));
         steps.Add(Event(knob.Id + "_PUSH", 1));
         return new A350Plan(steps, null);
     }

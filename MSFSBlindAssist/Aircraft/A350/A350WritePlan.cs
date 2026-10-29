@@ -8,8 +8,11 @@ public abstract record A350Step;
 /// <summary>Send this RPN through the calculator path (unique-ified by the sender).</summary>
 public sealed record A350CalcStep(string Rpn) : A350Step;
 
-/// <summary>Wait before the next step (a hold button's hold, a spring switch's hold).</summary>
-public sealed record A350DelayStep(int Milliseconds) : A350Step;
+/// <summary>Wait before the next step (a hold button's hold, a spring switch's hold). <paramref name="OwesRest"/>: the wait
+/// holds a control, so the steps after it (its release) are owed and sent at once if the definition goes away mid-wait; a
+/// wait between a menu's clicks owes nothing (review 2026-10-29: the runway condition's remaining clicks and PUSH, sent in
+/// one burst, landed as one click).</summary>
+public sealed record A350DelayStep(int Milliseconds, bool OwesRest = true) : A350Step;
 
 /// <summary>What to do, or why nothing will be done. An empty plan with no refusal means the
 /// control is already where the pilot asked; a refusal is an error the pilot must hear.</summary>

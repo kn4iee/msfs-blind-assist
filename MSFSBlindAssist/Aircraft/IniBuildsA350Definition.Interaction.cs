@@ -374,7 +374,10 @@ public partial class IniBuildsA350Definition
                         Send(sim, calc.Rpn);
                         break;
                     case A350DelayStep delay:
-                        _owed[run] = steps.Skip(i + 1).ToList();
+                        if (delay.OwesRest)
+                            _owed[run] = steps.Skip(i + 1).ToList();   // a hold's release, sent if the definition goes
+                        else
+                            _owed.Remove(run);                          // a menu walk's next clicks: abandoned, never burst
                         await Delay(delay.Milliseconds);
                         _owed.Remove(run);
                         if (_latestRunByRow.GetValueOrDefault(rowKey) != run)

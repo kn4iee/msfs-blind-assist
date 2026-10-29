@@ -287,6 +287,34 @@ public class IniBuildsA350DefinitionTests
         Assert.Equal(new[] { "2 (>B:AIRLINER_FIRE_TEST_Set)", "0 (>B:AIRLINER_FIRE_TEST_Set)" }, _sent);
     }
 
+    // Review 2026-10-29 (panels minor 4): every step after a wait was owed, so disposing mid-way through a runway condition
+    // pick sent its remaining clicks and PUSH in one burst, which one frame takes as one click: the condition landed wrong.
+    // Only a wait that holds a control owes the rest; an abandoned menu walk sends nothing more.
+    [Fact]
+    public void Disposing_during_a_runway_condition_pick_abandons_its_clicks()
+    {
+        string row = A350PanelLayout.Place(A350ControlMap.Load()).RowsByPanel.Values.SelectMany(r => r)
+            .First(r => r.Control?.Id == A350RunwayCondition.KnobId && r.Action == A350RowAction.Custom).Key;
+        Set(row, 3);
+        Assert.Single(_sent);   // the PULL that opens the menu, then a wait
+        _def.Dispose();
+        Assert.Single(_sent);
+    }
+
+    [Fact]
+    public void Disposing_during_a_spring_hold_returns_the_switch_to_rest()
+    {
+        var spring = A350ControlMap.Load().Controls.Single(c => c.Id == "AIRLINER_OIS_AVNCS_EFB_LEFT");
+        double rest = spring.StateForPosition(spring.Rest ?? 1);
+        double away = spring.OrderedPositions().Select(p => spring.StateForPosition(p.Value)).First(v => Math.Abs(v - rest) > 0.01);
+        _cache["A350_OIS_AVNCS_EFB_LEFT"] = rest;
+        Set("A350_OIS_AVNCS_EFB_LEFT", away);
+        Assert.Single(_sent);   // held at the picked side
+        _def.Dispose();
+        Assert.Equal(2, _sent.Count);
+        Assert.NotEqual(_sent[0], _sent[1]);   // and let go
+    }
+
     [Fact]
     public void A_write_that_cannot_land_is_refused_aloud()
     {
