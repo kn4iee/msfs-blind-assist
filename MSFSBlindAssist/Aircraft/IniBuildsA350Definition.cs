@@ -63,6 +63,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     private readonly Dictionary<string, A350Doors.Door> _doors = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _doorOpen = new(StringComparer.Ordinal);
 
+    /// <summary>The VHF frequencies and the squawk last seen (<see cref="A350RadioCallouts"/>), and the squawk the RMP window
+    /// set and said itself, or -1.</summary>
+    private readonly Dictionary<string, double> _radios = new(StringComparer.Ordinal);
+    private int _windowSquawk = -1;
+
+    /// <summary>The RMP window set this squawk (BCO16) and said it: its delivery is not said again.</summary>
+    public void NoteWindowSquawk(int bcd) => _windowSquawk = bcd;
+
     /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
     private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
 
@@ -452,6 +460,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             vars[IrsAlignmentKey].ExcludeFromMonitorManager = false;
             _lampInputKeys.Add(IrsAlignmentKey);
         }
+        // The VHF 1 and 2 frequencies and the squawk (A350RadioCallouts), each on its own Ctrl+M row, consumed and said.
+        foreach (var (key, name, label, units) in A350RadioCallouts.Rows)
+        {
+            Register(key, name, label, null, units);
+            vars[key].ExcludeFromMonitorManager = false;
+            vars[key].ValueDescriptions = new Dictionary<double, string>();
+        }
         // The doors (A350Doors): each its interactive point, on its own Ctrl+M row, consumed and said as it moves.
         foreach (var door in _doors.Values)
         {
@@ -695,6 +710,26 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         if (_speakingByInputKey.TryGetValue(varName, out var windows))
             foreach (var window in windows)
                 ObserveWindow(window, varName, value, announcer);
+        // A VHF frequency or the squawk, as the A380's: said as it changes, never while the seed settles; the squawk the RMP
+        // window just set (and said) once not.
+        if (A350RadioCallouts.IsRadioKey(varName))
+        {
+            double? was = _radios.TryGetValue(varName, out var last) ? last : null;
+            _radios[varName] = value;
+            if (_seedGate.Armed || was is not double before)
+                return true;
+            bool squawk = varName == A350RadioCallouts.SquawkKey;
+            if (squawk ? (int)Math.Round(value) == (int)Math.Round(before) : Math.Abs(value - before) <= 0.0004)
+                return true;
+            if (squawk && (int)Math.Round(value) == _windowSquawk)
+            {
+                _windowSquawk = -1;
+                return true;
+            }
+            if ((squawk || A350RadioCallouts.InVhfBand(value)) && !IsMuted(varName) && !_disposed)
+                announcer.Announce(squawk ? A350RadioCallouts.Squawk((int)Math.Round(value)) : A350RadioCallouts.Frequency(varName, value));
+            return true;
+        }
         // A door, as the A380's: said once per transition, never while the seed settles (the new flight's state).
         if (_doors.TryGetValue(varName, out var door))
         {

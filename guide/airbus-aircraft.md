@@ -761,6 +761,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - The take-off speeds as the FMS takes them (*"V1: 142 knots"*), and *"V1"*, *"Rotate"* and *"V2"* on the take-off roll.
 - The approach minimums as PERF APPR takes them: *"Baro minimum 520 feet"*, *"Decision height 200 feet"*, *"No DH"*, and *"Baro minimum cleared"* when one goes, for example when you enter the other (the A350 keeps one) or change the approach. The FMS's own reset after landing says nothing.
 - Where the thrust levers, flaps and speed brake went (*"All thrust levers Climb"*, *"Spoilers 40 percent"*).
+- VHF 1 and VHF 2 frequencies and the squawk when they change, wherever they were changed: *"VHF 1 standby 121.900"*, *"VHF 1 active 121.900"*, *"Squawk 4321"*. A squawk you set in the RMP window is said once, by the window.
 - Each door as it opens and closes, whatever moved it (the OIS, GSX): *"Door L1 open"*, *"Forward cargo door closed"*, and *"Fuel truck connected"*. The **Doors and Hatches** panel shows every door's state.
 - Every E/WD line as it appears, with its colour, from power-up on.
 - Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.

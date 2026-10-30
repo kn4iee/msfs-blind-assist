@@ -63,6 +63,9 @@ public sealed class A350RmpWindow : Form
     private int _line = 1;
     private string? _squawk;   // the squawk being typed, or null
 
+    /// <summary>A squawk the window set (BCO16), as it sends it: the window says it.</summary>
+    public event Action<int>? SquawkSet;
+
     /// <param name="isDark">Whether RMP n's screen is dark (1 to 3).</param>
     public A350RmpWindow(Func<int, A350DrawCapture?> latest, Func<int, Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
         Action<string> send, ScreenReaderAnnouncer announcer)
@@ -253,6 +256,7 @@ public sealed class A350RmpWindow : Form
         if (_squawk!.Length < 4) { _announcer.AnnounceImmediate(c.ToString()); return; }
         if (A350Rmp.SquawkBcd(_squawk) is int bcd)
         {
+            SquawkSet?.Invoke(bcd);   // said here: the squawk call-out leaves it
             _send($"{bcd} (>K:XPNDR_SET)");
             _announcer.AnnounceImmediate($"Squawk {_squawk}");
         }

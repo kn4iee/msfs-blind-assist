@@ -501,6 +501,9 @@ public partial class IniBuildsA350Definition
             foreach (var key in _doors.Keys)
                 if (!_doorOpen.ContainsKey(key) && Cached(sim, key) is double point)
                     _doorOpen[key] = A350Doors.IsOpen(point);
+            foreach (var (key, _, _, _) in A350RadioCallouts.Rows)
+                if (!_radios.ContainsKey(key) && Cached(sim, key) is double radio)
+                    _radios[key] = radio;
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
@@ -549,6 +552,8 @@ public partial class IniBuildsA350Definition
         _irs.Reset();
         _watchdog.Reset();
         _doorOpen.Clear();   // the seed takes the new flight's doors
+        _radios.Clear();     // and radios
+        _windowSquawk = -1;
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();

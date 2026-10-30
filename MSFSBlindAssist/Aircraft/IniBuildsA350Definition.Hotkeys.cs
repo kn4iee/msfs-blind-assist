@@ -42,9 +42,14 @@ public partial class IniBuildsA350Definition
             case HotkeyAction.ShowRMP:
                 hotkeyManager.ExitOutputHotkeyMode();
                 ShowTrackedWindow(
-                    () => new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
-                        async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
-                        rmp => IsScreenDark($"RMP {rmp} display"), rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer),
+                    () =>
+                    {
+                        var window = new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
+                            async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
+                            rmp => IsScreenDark($"RMP {rmp} display"), rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer);
+                        window.SquawkSet += NoteWindowSquawk;   // the window says its own squawk
+                        return window;
+                    },
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).
