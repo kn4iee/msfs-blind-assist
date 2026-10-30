@@ -50,6 +50,7 @@ public sealed class A350RmpWindow : Form
     /// closes too (its entry's deletion).</summary>
     private readonly Queue<Func<Task>> _work = new();
     private bool _pumping;
+    private readonly HashSet<string> _failures = new();
     private int _rmp = 1;   // the RMP shown, kept so a change of RMP deletes the entry typed on the one left
     private IReadOnlyList<string> _lines = Array.Empty<string>();
 
@@ -154,7 +155,11 @@ public sealed class A350RmpWindow : Form
             if (cap == null) { _list.SetText(A350DisplayStatus.NotAvailableYet); return; }
             Show(Lines(cap, _isDark(Rmp)));
         }
-        catch { /* best-effort; keep the last good screen */ }
+        catch (Exception ex)
+        {
+            // Best-effort: the last good screen stays; each distinct failure once a window, so a report can name it.
+            if (_failures.Add(ex.Message)) Utils.Logging.Log.Warn("A350Display", "RMP window refresh: " + ex);
+        }
         finally
         {
             _busy = false;
@@ -206,7 +211,11 @@ public sealed class A350RmpWindow : Form
             while (_work.Count > 0)
                 await _work.Dequeue()();
         }
-        catch { /* best-effort; the next key starts a new pump */ }
+        catch (Exception ex)
+        {
+            // Best-effort: the next key starts a new pump; each distinct failure once a window.
+            if (_failures.Add(ex.Message)) Utils.Logging.Log.Warn("A350Display", "RMP window keys: " + ex);
+        }
         finally { _pumping = false; }
     }
 

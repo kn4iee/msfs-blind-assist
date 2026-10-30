@@ -158,7 +158,42 @@ public static class A350Pfd
         }
     }
 
-    public static IReadOnlyList<string> Read(A350DrawCapture capture, int side)
+    public static IReadOnlyList<string> Read(A350DrawCapture capture, int side) => ReadParts(capture, side).Lines;
+
+    /// <summary>A read of the PFD: all its lines, the last of them (from <paramref name="RestFrom"/>) what fits no area,
+    /// which is where the PFD's flags and warnings land (<see cref="A350PfdFlagAnnouncer"/>).</summary>
+    public readonly record struct PfdRead(IReadOnlyList<string> Lines, int RestFrom)
+    {
+        public IEnumerable<string> Rest => Lines.Skip(RestFrom);
+    }
+
+    /// <summary>Letters drawn one under another make one flag: the T C A S at x 700, y 480 to 563, amber (live 2026-10-30).</summary>
+    private const float StackedLetterX = 3, StackedLetterGap = 36;
+
+    /// <summary>The rest's cells as the pilot sees them: a text drawn twice in one place is the one on top (PULL UP, green
+    /// and then red at x 359, y 400, live 2026-10-30), and letters stacked in one colour are one word.</summary>
+    private static List<DrawnCell> AsSeen(List<DrawnCell> cells)
+    {
+        var top = new List<DrawnCell>();
+        foreach (var c in cells)
+        {
+            top.RemoveAll(t => t.Text == c.Text && Math.Abs(t.X - c.X) < 1 && Math.Abs(t.Y - c.Y) < 1);
+            top.Add(c);
+        }
+        var seen = new List<DrawnCell>();
+        foreach (var c in top.OrderBy(c => c.Y))
+        {
+            string letter = c.Text.Trim();
+            if (letter.Length == 1 && char.IsLetter(letter[0]) && seen.LastOrDefault(s => Math.Abs(s.X - c.X) <= StackedLetterX
+                    && s.Colour == c.Colour && s.Text.All(char.IsLetter)) is { } above && c.Y - above.Y <= StackedLetterGap * above.Text.Length)
+                seen[seen.IndexOf(above)] = above with { Text = above.Text + letter };
+            else
+                seen.Add(c);
+        }
+        return seen;
+    }
+
+    public static PfdRead ReadParts(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? PfdWidth : 0;
         List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn) => A350DrawLayout.Rows(
@@ -405,7 +440,7 @@ public static class A350Pfd
 
         // Everything else as drawn: flags, messages, the line under the heading scale. A two-line message there is one
         // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row.
-        var rest = cells.Where(c => !used.Contains(c)).ToList();
+        var rest = AsSeen(cells.Where(c => !used.Contains(c)).ToList());
         foreach (var upper in rest.Where(c => c.Y >= BottomLine).OrderBy(c => c.Y).ToList())
             if (rest.Contains(upper) && rest.FirstOrDefault(c => c != upper && c.Colour == upper.Colour && Math.Abs(c.X - upper.X) <= 6
                     && c.Y - upper.Y is >= 12 and <= 30) is { } lower)
@@ -413,9 +448,10 @@ public static class A350Pfd
                 rest.Remove(lower);
                 rest[rest.IndexOf(upper)] = upper with { Text = upper.Text + " " + lower.Text, Y = (upper.Y + lower.Y) / 2 };
             }
+        int restFrom = o.Count;
         foreach (var row in A350DrawLayout.Rows(rest.Select(ToText)))
             o.Add(A350DrawLayout.Speak(row));
-        return o;
+        return new PfdRead(o, restFrom);
     }
 
     private static DrawnText ToText(DrawnCell c) => new(c.Text, c.X, c.Y, c.X, c.Y, 0, A350Rgba.Of(c.Colour));

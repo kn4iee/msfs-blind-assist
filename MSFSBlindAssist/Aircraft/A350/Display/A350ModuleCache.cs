@@ -63,6 +63,22 @@ public static class A350ModuleCache
         catch (Exception) { return null; }
     }
 
+    /// <summary>The installed package's version, from the manifest.json at the package's root, or null when it cannot be
+    /// read (for the log: the control map names the version it was measured on).</summary>
+    public static string? PackageVersionOf(string modulePath)
+    {
+        try
+        {
+            // The module's relative path has as many folders as it has separators: up that many from the module.
+            var root = modulePath;
+            for (int n = ModuleRelativePath.Count(c => c == Path.DirectorySeparatorChar) + 1; n > 0; n--)
+                root = Path.GetDirectoryName(root) ?? throw new IOException("no package root");
+            using var manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "manifest.json")));
+            return manifest.RootElement.TryGetProperty("package_version", out var version) ? version.GetString() : null;
+        }
+        catch (Exception) { return null; }
+    }
+
     /// <summary>The compiled module's cache, keyed by the installed module's hash and the patch's version.</summary>
     public static string CachePath(string localAppData, string sha256) =>
         Path.Combine(localAppData, "MSFSBlindAssist", "a350", $"{sha256}-p{A350ModulePatcher.Version}.cwasm");

@@ -51,8 +51,13 @@ public sealed class A350EcamMonitor : IDisposable
             _settleUntil = now + SettleAfterLoad;
         }
         var lines = _announcer.Observe(A350Ewd.Parse(cap));
-        if (lines.Count == 0 || _muted() || _disposed || _settleUntil is { } until && now < until) return;
-        foreach (var l in lines) _speak(l);
+        if (lines.Count == 0 || _disposed) return;
+        string? quiet = _settleUntil is { } until && now < until ? "settling after a load" : _muted() ? "muted" : null;
+        foreach (var l in lines)
+        {
+            if (quiet != null) A350SpeechLog.Quiet("E/WD", quiet, l);
+            else _speak(l);
+        }
     }
 
     /// <summary>A flight was loaded: the last flight's E/WD is dropped, and the new one's, from its first draw, is followed

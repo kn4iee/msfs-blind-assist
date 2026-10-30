@@ -682,6 +682,11 @@ public partial class MainForm
     {
         if (a350DisplayService != null) return;
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
+        // Everything said while the A350's reader runs goes in a350_speech.log, what is unticked in Ctrl+M in the main log:
+        // together they answer "it never told me" from a pilot's logs.
+        announcer.Trace = Aircraft.A350.Display.A350SpeechLog.Said;
+        Log.Info("A350", "Ctrl+M rows unticked: " + string.Join(", ", Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet));
+        a350DisplayService.Muted = key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key);
         // The reader speaks from its worker thread and the monitors from pool threads: each line is posted to the UI thread,
         // the only one the announcer speaks from (off it a line is lost unheard, [A380C-22]).
         a350DisplayService.Spoken += line => SafeBeginInvoke(() => announcer.Announce(line));
@@ -737,6 +742,7 @@ public partial class MainForm
 
     private void StopA350DisplayService(IAircraftDefinition? owner = null)
     {
+        announcer.Trace = null;
         if ((owner ?? currentAircraft) is IniBuildsA350Definition a350)
         {
             a350.Displays = null;

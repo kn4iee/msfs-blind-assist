@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
@@ -61,6 +62,7 @@ public sealed class A350MfdInput
     private readonly Func<int, float, float, CancellationToken, Task<bool>> _click;
     private (string Title, int Guid)? _view;
     private int _acting;
+    private volatile bool _unreachableLogged;   // said once, until the MFD is reached again
 
     /// <param name="send">Runs one calculator string, never coalesced with an identical one before it (the definition's
     /// Send): a repeated key is the same text, which the MobiFlight channel would otherwise drop [VAR-4].</param>
@@ -102,7 +104,11 @@ public sealed class A350MfdInput
         if (_view is { } known) return known;
         string list;
         try { list = await Http.GetStringAsync("http://127.0.0.1:19999/pagelist.json", ct).ConfigureAwait(false); }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            NoteUnreachable("the Coherent debugger did not answer: " + ex.Message);
+            return null;
+        }
         using var doc = JsonDocument.Parse(list);
         foreach (var page in doc.RootElement.EnumerateArray())
         {
@@ -111,12 +117,27 @@ public sealed class A350MfdInput
             if (GuidIf(await CoherentEvalClient.EvalAsync(title, Find, ct).ConfigureAwait(false)) is int guid)
                 return _view = (title, guid);
         }
+        NoteUnreachable("no view holds the A350's MFD");
         return null;
+    }
+
+    /// <summary>Why a click could not reach the MFD, in the log once until one does.</summary>
+    private void NoteUnreachable(string why)
+    {
+        if (_unreachableLogged) return;
+        _unreachableLogged = true;
+        Log.Warn("A350Display", "MFD input: " + why);
     }
 
     /// <summary>Presses a side's KCCU key once: a page or function key the aircraft resets itself. The cursor keys (ND,
     /// MFD) are not reset by it: <see cref="MoveCursorAsync"/> moves the cursor.</summary>
-    public void Press(int side, string key) => _send($"1 (>L:{A350Kccu.LVar(side, key)})");
+    public void Press(int side, string key)
+    {
+        Log.Debug("A350Display", $"KCCU {side + 1}: {key}");
+        SendKey(side, key);
+    }
+
+    private void SendKey(int side, string key) => _send($"1 (>L:{A350Kccu.LVar(side, key)})");
 
     /// <summary>Whether a line's action is running: a key pressed meanwhile would land among its keys.</summary>
     public bool Busy => Volatile.Read(ref _acting) == 1;
@@ -130,13 +151,22 @@ public sealed class A350MfdInput
         try
         {
             IReadOnlyList<string>? keys = null;
-            if (!string.IsNullOrEmpty(typed) && (keys = A350Kccu.KeysFor(typed)) == null) return MfdAction.NoKey;
-            if (!await ClickAsync(side, x, y, ct).ConfigureAwait(false)) return MfdAction.Unreachable;
+            if (!string.IsNullOrEmpty(typed) && (keys = A350Kccu.KeysFor(typed)) == null)
+            {
+                Log.Debug("A350Display", $"MFD {side + 1}: a text no key types, {typed}");
+                return MfdAction.NoKey;
+            }
+            if (!await ClickAsync(side, x, y, ct).ConfigureAwait(false))
+            {
+                Log.Debug("A350Display", FormattableString.Invariant($"MFD {side + 1}: click {x:0},{y:0} did not reach it"));
+                return MfdAction.Unreachable;
+            }
             if (keys != null)
             {
                 await PressAllAsync(side, keys, ct).ConfigureAwait(false);
-                Press(side, "ENTER");
+                SendKey(side, "ENTER");
             }
+            Log.Debug("A350Display", FormattableString.Invariant($"MFD {side + 1}: click {x:0},{y:0}") + (keys != null ? ", typed " + typed : ""));
             return MfdAction.Done;
         }
         finally { Volatile.Write(ref _acting, 0); }
@@ -175,9 +205,14 @@ public sealed class A350MfdInput
         for (int attempt = 0; attempt < 2; attempt++)
         {
             if (await ViewAsync(ct).ConfigureAwait(false) is not { } view) return false;
-            if (await CoherentEvalClient.EvalAsync(view.Title, ClickJs(view.Guid, side, x, y), ct).ConfigureAwait(false) == "ok") return true;
+            if (await CoherentEvalClient.EvalAsync(view.Title, ClickJs(view.Guid, side, x, y), ct).ConfigureAwait(false) == "ok")
+            {
+                _unreachableLogged = false;
+                return true;
+            }
             _view = null;   // the view moved (a new session): find it again
         }
+        NoteUnreachable("the MFD's view did not take the click");
         return false;
     }
 
@@ -193,7 +228,7 @@ public sealed class A350MfdInput
     {
         foreach (var key in keys)
         {
-            Press(side, key);
+            SendKey(side, key);
             await _delay(KeyMs, ct).ConfigureAwait(false);
         }
     }

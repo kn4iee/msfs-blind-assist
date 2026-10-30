@@ -41,6 +41,7 @@ public sealed class A350MfdWindow : Form
     private readonly A350ShownCapture _shown = new();
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
+    private readonly HashSet<string> _refreshFailures = new();
 
     /// <param name="isDark">Whether a side's screen is dark (0 the captain's, 1 the first officer's).</param>
     /// <param name="backgroundAgreed">The background's agreed read of the captain's FMS message line as the window opens
@@ -151,7 +152,11 @@ public sealed class A350MfdWindow : Form
             if (_messages.Observe(_lines, _linesSide) is { } message)
                 _announcer.Announce(message);
         }
-        catch { /* best-effort; keep the last good page */ }
+        catch (Exception ex)
+        {
+            // Best-effort: the last good page stays; each distinct failure once a window, so a report can name it.
+            if (_refreshFailures.Add(ex.Message)) Utils.Logging.Log.Warn("A350Display", "MFD window refresh: " + ex);
+        }
         finally
         {
             _busy = false;

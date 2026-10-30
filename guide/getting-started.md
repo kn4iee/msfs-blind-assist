@@ -491,7 +491,7 @@ BA writes diagnostic logs as it runs. They do not affect how it flies, but they 
 
 **%APPDATA%\\MSFSBlindAssist\\logs**
 
-To open it, press Windows+R, type %APPDATA%\\MSFSBlindAssist\\logs and press Enter. The main log is **debug.log**. Others cover particular features, for example **startup.log** (replaced on every launch), **taxi\_guidance.log**, **taxi\_router.log**, **landing\_exit.log**, **takeoff\_assist.log**, **ground\_traffic.log**, **gsx.log** and **sayintentions.log**. Logs are kept to a sensible size automatically, with older entries rotated away.
+To open it, press Windows+R, type %APPDATA%\\MSFSBlindAssist\\logs and press Enter. The main log is **debug.log**. Others cover particular features, for example **startup.log** (replaced on every launch), **taxi\_guidance.log**, **taxi\_router.log**, **landing\_exit.log**, **takeoff\_assist.log**, **ground\_traffic.log**, **gsx.log**, **sayintentions.log**, and on the A350 **a350\_speech.log** (everything BA said) and **a350\_display.log**. Logs are kept to a sensible size automatically, with older entries rotated away.
 
 ### Reporting a problem {#reporting-a-problem}
 

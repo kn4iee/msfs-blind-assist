@@ -1,6 +1,7 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -11,6 +12,7 @@ public partial class IniBuildsA350Definition
         ScreenReaderAnnouncer announcer, System.Windows.Forms.Form parentForm, HotkeyManager hotkeyManager)
     {
         Attach(simConnect);
+        Log.Debug("A350", $"hotkey: {action}");
         switch (action)
         {
             case HotkeyAction.MonitorManager:

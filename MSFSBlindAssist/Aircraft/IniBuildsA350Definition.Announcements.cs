@@ -467,9 +467,11 @@ public partial class IniBuildsA350Definition
             // A master light's press only ever puts it out (its off is silent anyway): lit again inside the press's own
             // window, it is the next caution or warning, never the pilot's own (review 2026-10-29).
             bool own = IsOwnLamp(lamp) && !(master && turn.On);
-            bool quiet = announcer.Suppressed || IsMuted(lamp.Key) || IsEcho(lamp) || own;
-            if (quiet)
+            string? quiet = announcer.Suppressed ? "just loaded" : IsMuted(lamp.Key) ? "muted"
+                : IsEcho(lamp) ? "its switch's echo" : own ? "the pilot's own press" : null;
+            if (quiet != null)
             {
+                A350.Display.A350SpeechLog.Quiet("light", quiet, $"{name} {(turn.On ? "on" : "off")}");
                 _lampSpeech.Forget(name);   // the light moved on from any earlier change still waiting
                 continue;
             }

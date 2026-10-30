@@ -31,6 +31,12 @@ public sealed class A350DisplayService : IDisposable
     private Func<string, string?> _calcString = _ => null;
     private readonly A350ReadHealth _health = new();
     private readonly A350ReaderStatus _status = new();
+    private readonly A350ReaderStats _stats = new();
+    private readonly A350MemoryWarning _memoryWarning = new();
+    private static readonly LogChannel Diagnostics = Log.Channel("a350_display");
+
+    /// <summary>Whether a call-out's Ctrl+M row is unticked (the low memory warning's).</summary>
+    public Func<string, bool> Muted { get; set; } = _ => false;
 
     /// <summary>Whether the sim runs a flight with the A350 loaded: why nothing can be read is said only then (the menu
     /// or another aircraft finds no A350, and that is no news). Asked on the worker thread.</summary>
@@ -102,6 +108,7 @@ public sealed class A350DisplayService : IDisposable
         {
             var path = FindModule() ?? throw new A350ModuleException("the A350 is not installed");
             _modulePath = path;
+            Log.Info("A350Display", $"installed A350 package {A350ModuleCache.PackageVersionOf(path) ?? "(version not read)"}, MSFSBA's control map measured on {A350ControlMap.Load().PackageVersion}, patch version {A350ModulePatcher.Version}: {path}");
             _moduleIdentity = A350ModuleCache.IdentityOf(path);
             var mod = A350WasmModule.Parse(File.ReadAllBytes(path));
             _facts = A350ModuleFacts.From(mod);
@@ -166,7 +173,9 @@ public sealed class A350DisplayService : IDisposable
     /// after the pilot switched aircraft, and its "ready" would be said over the next aircraft (review 2026-10-29).</summary>
     private void Say(string? line)
     {
-        if (line != null && !_disposed) Spoken?.Invoke(line);
+        if (line == null || _disposed) return;
+        Log.Info("A350Display", "said: " + line);
+        Spoken?.Invoke(line);
     }
 
     /// <summary>Whether the installed module is no longer the one prepared (an identity that cannot be read is no change:
@@ -202,7 +211,9 @@ public sealed class A350DisplayService : IDisposable
             try
             {
                 if (State != A350DisplayState.Ready || _draw == null || !EnsureLocated()) { tcs.SetResult(null); return; }
+                var copyClock = System.Diagnostics.Stopwatch.StartNew();
                 var copy = _reader!.Snapshot();
+                _stats.Copied(started, copyClock.Elapsed.TotalMilliseconds, _reader.LastBytes, _reader.LastReread, _reader.LastLeftOut);
                 _draw.Load(copy);
                 if (_facts?.TakeoffSpeeds is { } speedsAt && TakeoffSpeedsRead is { } speedsRead
                     && A350TakeoffSpeeds.Read(copy, speedsAt) is { } speeds)
@@ -215,11 +226,16 @@ public sealed class A350DisplayService : IDisposable
                 foreach (var (g, i) in gauges)
                 {
                     var cap = _draw.Draw(g, i);
+                    NoteDraw(g, i, cap);
                     if (!cap.Ok && !retried && cap.Error!.StartsWith("trap"))
                     {
                         retried = true;
+                        _stats.Retried();
+                        copyClock.Restart();
                         _draw.Load(_reader.Snapshot());
+                        _stats.Copied(started, copyClock.Elapsed.TotalMilliseconds, _reader.LastBytes, _reader.LastReread, _reader.LastLeftOut);
                         cap = _draw.Draw(g, i);
+                        NoteDraw(g, i, cap);
                     }
                     caps.Add(cap);
                     // The draw asked for more than the head room holds and got NULL: logged when it starts and when it ends,
@@ -236,6 +252,12 @@ public sealed class A350DisplayService : IDisposable
                 for (int n = 0; n < caps.Count; n++)
                     if (_health.Report(gauges[n].Gauge, gauges[n].Index, caps[n].Ok, started, ended) is { } said) Say(said);
                 _failuresLogged.Clear();   // read again: a failure that comes back later is logged again
+                if (_stats.IsDue(ended))
+                {
+                    var machine = A350MachineMemory.Read();
+                    Diagnostics.Info(_stats.Due(ended, machine)!);
+                    if (_memoryWarning.Observe(machine.FreeCommit) is { } low && !Muted(A350MemoryWarning.MuteKey)) Say(low);
+                }
                 tcs.SetResult(caps);
             }
             catch (Exception ex)
@@ -248,6 +270,16 @@ public sealed class A350DisplayService : IDisposable
             }
         });
         return tcs.Task;
+    }
+
+    /// <summary>One draw's numbers for the minute's line, and a failure's text, with the wasm backtrace of a trap, each
+    /// display's each error at most once a minute (<see cref="A350ReaderStats.LogFailure"/>).</summary>
+    private void NoteDraw(string gauge, int index, A350DrawCapture cap)
+    {
+        _stats.Drew(gauge, index, cap.Milliseconds, cap.Ok, cap.Texts.Count(t => t.Text.Any(char.IsControl)), _draw!.LastHeapBytes);
+        if (!cap.Ok && _stats.LogFailure(gauge, index, cap.Error!, DateTime.UtcNow))
+            Diagnostics.Warn($"{gauge}#{index}: {cap.Error}"
+                + (cap.Error!.StartsWith("trap") && _draw.LastTrap is { } trap ? Environment.NewLine + trap : ""));
     }
 
     public void Dispose()

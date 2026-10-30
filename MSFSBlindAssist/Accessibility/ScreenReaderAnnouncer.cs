@@ -20,6 +20,13 @@ public class ScreenReaderAnnouncer : IDisposable
     /// </summary>
     public bool Suppressed { get; set; } = false;
 
+    /// <summary>
+    /// Told every sentence an announce entry point takes and how ("announce", "immediate", "queue", or "dropped" when
+    /// <see cref="Suppressed"/> drops it), for an aircraft's speech log; null, the usual case, costs nothing. MainForm sets
+    /// it only while the A350's reader runs (a350_speech.log).
+    /// </summary>
+    public Action<string, string>? Trace { get; set; }
+
     // Screen reader integration components
     private TolkWrapper? tolkWrapper;
     private NvdaControllerWrapper? nvdaWrapper;
@@ -225,7 +232,11 @@ public class ScreenReaderAnnouncer : IDisposable
                 return;
             // Initial-detect grace: drop automatic announcements (not user hotkeys).
             if (Suppressed)
+            {
+                Trace?.Invoke("dropped", message);
                 return;
+            }
+            Trace?.Invoke("announce", message);
 
             // Log.Debug("Accessibility", $"[ScreenReaderAnnouncer] Announce called - Mode: {currentMode}, Message: {message}");
 
@@ -284,6 +295,7 @@ public class ScreenReaderAnnouncer : IDisposable
         {
             if (string.IsNullOrEmpty(message))
                 return;
+            Trace?.Invoke("immediate", message);
 
             // Log.Debug("Accessibility", $"[ScreenReaderAnnouncer] AnnounceImmediate called - Mode: {currentMode}, Message: {message}");
 
@@ -345,7 +357,11 @@ public class ScreenReaderAnnouncer : IDisposable
             if (string.IsNullOrEmpty(message))
                 return;
             if (Suppressed)
+            {
+                Trace?.Invoke("dropped", message);
                 return;
+            }
+            Trace?.Invoke("queue", message);
 
             lock (announcementQueue)
             {

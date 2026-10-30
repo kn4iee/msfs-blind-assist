@@ -12,6 +12,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // A350_LOG=1: this run writes the log folder as the app does (a check of the logging itself).
+        if (Environment.GetEnvironmentVariable("A350_LOG") == "1") MSFSBlindAssist.Utils.Logging.Log.Init();
         // The app copies the versioned SimConnect DLL to SimConnect.dll at startup; the managed wrapper loads that name.
         string dir = AppContext.BaseDirectory, target = Path.Combine(dir, "SimConnect.dll");
         if (!File.Exists(target))

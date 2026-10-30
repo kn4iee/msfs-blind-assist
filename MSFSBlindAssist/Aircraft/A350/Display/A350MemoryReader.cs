@@ -54,6 +54,10 @@ public sealed class A350MemoryReader : IDisposable
     /// <summary>Bytes the last snapshot read a second time (its pages that are changing).</summary>
     public int LastReread { get; private set; }
 
+    /// <summary>The bytes the last snapshot holds, and the pieces of it that failed to read and were left out.</summary>
+    public long LastBytes { get; private set; }
+    public int LastLeftOut { get; private set; }
+
     public A350MemoryReader(IReadOnlyList<(string Text, int Linear)> anchors, int? pid = null, ulong minSpan = WasmMemorySpan)
     {
         _anchors = anchors;
@@ -151,13 +155,19 @@ public sealed class A350MemoryReader : IDisposable
         // flight as the A350's heap grows).
         if (_buffer.Length < total) _buffer = new byte[Math.Min(Math.Max(total + (8 << 20), _buffer.Length * 3L / 2), Array.MaxLength)];
         var kept = new List<(uint, int)>(pieces.Count);
-        int off = 0;
+        int off = 0, leftOut = 0;
         foreach (var (address, linear, length) in pieces)
         {
-            if ((long)off + length > _buffer.Length || !ReadExact(address, _buffer, off, length)) continue;
+            if ((long)off + length > _buffer.Length || !ReadExact(address, _buffer, off, length))
+            {
+                leftOut++;
+                continue;
+            }
             kept.Add((linear, length));
             off += length;
         }
+        LastBytes = off;
+        LastLeftOut = leftOut;
         var runs = _hot.Track(kept, _buffer.AsSpan(0, off));
         int reread = 0;
         foreach (var (offset, linear, length) in runs)

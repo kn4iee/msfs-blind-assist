@@ -20,6 +20,18 @@ public class A350ModuleCacheTests : IDisposable
     }
 
     [Fact]
+    public void The_packages_version_comes_from_its_manifest()
+    {
+        var module = WriteModule("Community");
+        Assert.Null(A350ModuleCache.PackageVersionOf(module));   // no manifest
+        var manifest = Path.Combine(_root, "Packages", "Community", "inibuilds-aircraft-a350", "manifest.json");
+        File.WriteAllText(manifest, "{\"title\":\"A350\",\"package_version\":\"1.2.7\"}");
+        Assert.Equal("1.2.7", A350ModuleCache.PackageVersionOf(module));
+        File.WriteAllText(manifest, "not json");
+        Assert.Null(A350ModuleCache.PackageVersionOf(module));   // a log line's figure: never a throw
+    }
+
+    [Fact]
     public void The_module_is_found_in_a_community_folder_or_an_official_one()
     {
         Assert.Null(A350ModuleCache.FindInstalledModule(Path.Combine(_root, "Packages")));

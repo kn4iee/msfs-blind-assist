@@ -29,11 +29,13 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
         rows.Add(new MonitorRow(Aircraft.A350.Display.A350EcamMonitor.MuteKey, Aircraft.A350.Display.A350EcamMonitor.MuteLabel));
         foreach (var column in Aircraft.A350.Display.A350FmaAnnouncer.Columns)
             rows.Add(new MonitorRow(Aircraft.A350.Display.A350FmaAnnouncer.KeyFor(column), Aircraft.A350.Display.A350FmaAnnouncer.LabelFor(column)));
+        rows.Add(new MonitorRow(Aircraft.A350.Display.A350PfdFlagAnnouncer.MuteKey, Aircraft.A350.Display.A350PfdFlagAnnouncer.MuteLabel));
         rows.Add(new MonitorRow(Aircraft.A350.Display.A350FmsMessageAnnouncer.MuteKey, Aircraft.A350.Display.A350FmsMessageAnnouncer.MuteLabel));
         foreach (var (key, name) in Aircraft.A350.A350TakeoffCallouts.Speeds)
             rows.Add(new MonitorRow(key, name));
         foreach (var (key, label) in Aircraft.A350.A350MinimumsCallout.Rows)
             rows.Add(new MonitorRow(key, label));
+        rows.Add(new MonitorRow(Aircraft.A350.Display.A350MemoryWarning.MuteKey, Aircraft.A350.Display.A350MemoryWarning.MuteLabel));
         return rows;
     }
 

@@ -772,7 +772,9 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - Each door as it opens and closes, whatever moved it (the OIS, GSX): *"Door L1 open"*, *"Forward cargo door closed"*, and *"Fuel truck connected"*. The **Doors and Hatches** panel shows every door's state.
 - Every E/WD line as it appears, with its colour, from power-up on.
 - Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.
+- The flags and warnings the PFD raises, with their colours, for example *"PULL UP, red"*, *"ATT, red"*, *"TCAS, amber"*, *"AUTO BRK OFF, amber"*, *"DECEL, green"*. Said once as each appears; the PFD's own status display shows what is up now.
 - FMS messages while the MFD window is closed.
+- *"Memory low: 9 gigabytes left. The sim may close soon: save the flight in the OIS, then restart it."* when your PC is running out of memory. Long A350 flights make the simulator grow until it closes without warning, so this is said once below 10 gigabytes and once more below 5.
 - *"A350 module stopped responding: its displays and controls no longer work"* if the aircraft's own software stops (its displays freeze and nothing you press works), and *"A350 module responding again"* if it recovers. A paused simulator never counts.
 
 ### Things to know {#things-to-know-5}

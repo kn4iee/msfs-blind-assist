@@ -5,7 +5,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// <summary>
 /// The A350's displays in the background: the CTR drawn first each tick and handed to the E/WD monitor
 /// (<see cref="CtrDrawn"/>); the captain's EFIS drawn every tick and its FMA changes spoken with
-/// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row; the captain's MFD every other tick, for the FMS
+/// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row, and the flags it raises (A350PfdFlagAnnouncer), behind
+/// their one row; the captain's MFD every other tick, for the FMS
 /// messages (A350FmsMessageAnnouncer) heard with the MFD window closed, behind their own Ctrl+M row; RMP 1 and the
 /// SFD in turn (<see cref="Others"/>); and one display only a status display or a window reads (<see cref="Quiet"/>)
 /// while it is read, else now and then. A tick's displays are all drawn on one memory copy. Each display's latest good
@@ -41,6 +42,7 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350FmaAnnouncer _fma = new();
+    private readonly A350PfdFlagAnnouncer _flags = new();
     private readonly A350FmsMessageAnnouncer _messages = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At)> _latest = new();
     private readonly Func<DateTime> _now;
@@ -56,6 +58,7 @@ public sealed class A350PfdMonitor : IDisposable
     /// showed differently from flight A was spoken); the reading loop resets the announcer itself, which only it touches.</summary>
     public void Rebaseline()
     {
+        Log.Info("A350Display", "a flight was loaded: the displays' call-outs follow it silently at first");
         _latest.Clear();
         _triedAt.Clear();   // the quiet displays are drawn again at once for the new flight
         _rebaseline = true;
@@ -183,11 +186,25 @@ public sealed class A350PfdMonitor : IDisposable
         {
             _rebaseline = false;
             _fma.Reset();
+            _flags.Reset();
             _settleUntil = at + A350EcamMonitor.SettleAfterLoad;
         }
         bool settling = _settleUntil is { } until && at < until;
-        foreach (var (key, line) in _fma.Observe(A350Pfd.Read(cpt, 0)))
-            if (!settling && !_muted(key) && !_disposed) _speak(line);
+        var pfd = A350Pfd.ReadParts(cpt, 0);
+        foreach (var (key, line) in _fma.Observe(pfd.Lines))
+        {
+            if (_disposed) return;
+            if (settling) A350SpeechLog.Quiet("FMA", "settling after a load", line);
+            else if (_muted(key)) A350SpeechLog.Quiet("FMA", "muted", line);
+            else _speak(line);
+        }
+        foreach (var line in _flags.Observe(pfd.Rest))
+        {
+            if (_disposed) return;
+            if (settling) A350SpeechLog.Quiet("PFD flag", "settling after a load", line);
+            else if (_muted(A350PfdFlagAnnouncer.MuteKey)) A350SpeechLog.Quiet("PFD flag", "muted", line);
+            else _speak(line);
+        }
     }
 
     /// <summary>The captain's MFD drawn: a message the FMS just posted is said, unless muted, settling after a load, or an
@@ -210,8 +227,11 @@ public sealed class A350PfdMonitor : IDisposable
             windowOpen = MfdWindowOpen?.Invoke() == true;
         }
         bool settling = _settleUntil is { } until && at < until;
-        if (message != null && !settling && !windowOpen && !_muted(A350FmsMessageAnnouncer.MuteKey) && !_disposed)
-            _speak(message);
+        if (message == null || _disposed) return;
+        if (settling) A350SpeechLog.Quiet("FMS message", "settling after a load", message);
+        else if (windowOpen) A350SpeechLog.Quiet("FMS message", "the MFD window says it", message);
+        else if (_muted(A350FmsMessageAnnouncer.MuteKey)) A350SpeechLog.Quiet("FMS message", "muted", message);
+        else _speak(message);
     }
 
     public void Start()

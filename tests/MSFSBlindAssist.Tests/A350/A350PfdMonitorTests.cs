@@ -10,6 +10,9 @@ public class A350PfdMonitorTests
     private static A350DrawCapture Fixture(string name) =>
         A350Fixtures.Capture(name + ".json");
 
+    /// <summary>These are the FMA's tests: the aligning fixture also flags ATT, which A350PfdFlagTests say.</summary>
+    private static bool FlagsMuted(string key) => key == A350PfdFlagAnnouncer.MuteKey;
+
     /// <summary>A monitor's draw that answers each display it asks for with <paramref name="one"/>.</summary>
     internal static Func<(string Gauge, int Index)[], Task<IReadOnlyList<A350DrawCapture?>?>> Each(Func<string, int, A350DrawCapture?> one) =>
         gauges => Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => one(g.Gauge, g.Index)).ToList());
@@ -20,7 +23,7 @@ public class A350PfdMonitorTests
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
         var fo = Fixture("efis1_fd_stand");
         var said = new List<string>();
-        var m = new A350PfdMonitor(Each((g, side) => g != "EFIS" ? null : side == 0 ? cpt.Dequeue() : fo), _ => false, said.Add);
+        var m = new A350PfdMonitor(Each((g, side) => g != "EFIS" ? null : side == 0 ? cpt.Dequeue() : fo), FlagsMuted, said.Add);
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
         Assert.Same(fo, m.Latest("EFIS", 1));
@@ -39,7 +42,7 @@ public class A350PfdMonitorTests
         var said = new List<string>();
         var m = new A350PfdMonitor(gauges => hold ? pending.Task
             : Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "EFIS" && g.Index == 0 ? cpt.Dequeue() : null).ToList()),
-            _ => false, said.Add);
+            FlagsMuted, said.Add);
         await m.TickAsync();
         await m.TickAsync();   // the aligning FMA, a baseline
         await m.TickAsync();   // the FDs first seen
@@ -58,7 +61,7 @@ public class A350PfdMonitorTests
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
         var said = new List<string>();
         var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null),
-            key => key == A350FmaAnnouncer.KeyFor("engagement"), said.Add);
+            key => FlagsMuted(key) || key == A350FmaAnnouncer.KeyFor("engagement"), said.Add);
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Empty(said);
     }
@@ -107,7 +110,7 @@ public class A350PfdMonitorTests
     {
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"), Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") });
         var said = new List<string>();
-        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), _ => false, said.Add) { CtrDrawn = _ => { } };
+        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), FlagsMuted, said.Add) { CtrDrawn = _ => { } };
         for (int i = 0; i < 4; i++) await m.TickAsync();
         Assert.Equal(new[] { "FMA engagement: 1 FD 2, white" }, said);
     }
@@ -122,7 +125,7 @@ public class A350PfdMonitorTests
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"),
             Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand"), Fixture("efis0_aligning"), Fixture("efis0_aligning") });
         var said = new List<string>();
-        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), _ => false, said.Add, () => now);
+        var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), FlagsMuted, said.Add, () => now);
         await m.TickAsync();
         await m.TickAsync();
         m.Rebaseline();
