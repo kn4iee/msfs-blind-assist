@@ -244,6 +244,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     private async Task<double?> TuneVhf1(SimConnectManager sim, int frequencyHz, bool active)
     {
         int run = ++_tuneRun;
+        NoteOwnTune();
         foreach (string key in A350Rmp.ComTuningKeys(frequencyHz, active))
         {
             if (run != _tuneRun || _disposed)
@@ -251,6 +252,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             Send(sim, A350Rmp.Press(1, key));
             await Delay(RmpKeyGapMs);
         }
+        NoteOwnTune();
         if (run != _tuneRun || _disposed)
             return null;
         double? read = null;
@@ -260,7 +262,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             if (Displays != null && (await Displays.DrawAsync(A350Rmp.Gauge(1)))?.FirstOrDefault() is { Ok: true } capture)
                 read = A350.Display.A350RmpPage.Vhf1Hz(A350.Display.A350RmpPage.Read(capture), active);
         }
+        NoteOwnTune();
         return read;
+    }
+
+    /// <summary>The tune's own confirmation says whether it took: the stock mirror following it is its echo, as a window's set is.</summary>
+    private void NoteOwnTune()
+    {
+        ArmWindowEcho(A350RadioCallouts.ActiveKey(1));
+        ArmWindowEcho(A350RadioCallouts.StandbyKey(1));
     }
 
     /// <summary>Between two RMP keys (the RMP window's own gap); from the last key to a read of the screen, and how many such reads.</summary>
@@ -768,6 +778,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 return true;
             bool squawk = varName == A350RadioCallouts.SquawkKey;
             if (squawk ? (int)Math.Round(value) == (int)Math.Round(before) : Math.Abs(value - before) <= 0.0004)
+                return true;
+            if (WindowEchoActive(varName))
                 return true;
             if (squawk && (int)Math.Round(value) == _windowSquawk)
             {

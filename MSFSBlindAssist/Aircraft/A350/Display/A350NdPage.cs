@@ -243,7 +243,7 @@ public static class A350NdPage
         {
             bool onScreen = item.X is >= 0 and < HalfWidth && item.Y is >= 0 && item.Y < bottom;
             string mark = item.Kind == "Runway" && item.Colour == "cyan" ? " (landing)" : item.IsBtvExit ? " (BTV exit)" : "";
-            string said = $"{item.Kind} {item.Name}{mark}" + (item.Where is { } where ? $": {where}" : "");
+            string said = $"{item.Kind} {item.Name}{mark}, {item.Colour}" + (item.Where is { } where ? $": {where}" : "");
             if (item.OnRunway is { } onRunway) said += $", {onRunway}";
             said += onScreen ? "" : ", off the screen";
             o.Add(onScreen ? new MfdLine("map", said, item.X, item.Y) : new MfdLine("text", said, -1, -1));
@@ -251,7 +251,7 @@ public static class A350NdPage
         if (A350NdMap.FrameOf(map) is { } frame)
             foreach (var s in capture.Shapes ?? Array.Empty<DrawnShape>())
                 foreach (var (name, atlasX, atlasY, w, h) in Marks)
-                    if (s.Image > 1 && Mine(s.X0) && Math.Abs(s.X0 - s.PatternX - atlasX - (side == 0 ? 0 : 0)) < 1.5f && Math.Abs(s.Y0 - s.PatternY - atlasY) < 1.5f
+                    if (s.Image > 1 && Mine(s.X0) && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f && Math.Abs(s.Y0 - s.PatternY - atlasY) < 1.5f
                         && Math.Abs(s.X1 - s.X0 - w) < 1.5f && Math.Abs(s.Y1 - s.Y0 - h) < 1.5f)
                     {
                         float x = (s.X0 + s.X1) / 2 - shift, y = (s.Y0 + s.Y1) / 2;

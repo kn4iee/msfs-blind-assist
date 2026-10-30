@@ -153,17 +153,17 @@ public class A350NdPageTests
     public void The_maps_names_read_where_they_lie_and_can_be_clicked()
     {
         var lines = Lines("efis0_anf_arc_02");
-        var a7 = Line(lines, "Stand A7: 2 o'clock, 75 m");
+        var a7 = Line(lines, "Stand A7, cyan: 2 o'clock, 75 m");
         Assert.Equal("map", a7.Kind);
         Assert.InRange(a7.ClickX, 470, 495);
-        Assert.Contains(lines, l => l.Kind == "text" && l.Spoken.StartsWith("Runway 22:", StringComparison.Ordinal) && l.Spoken.EndsWith("off the screen", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Kind == "text" && l.Spoken.StartsWith("Runway 22, white:", StringComparison.Ordinal) && l.Spoken.EndsWith("off the screen", StringComparison.Ordinal));
     }
 
     [Fact]
     public void A_rose_map_scales_its_half_range_mark()
     {
         // The same stand at the same zoom as the ARC map: the mark says 0.1 where ARC's says 0.2.
-        Assert.Contains(Lines("efis0_anf_rose_01"), l => l.Spoken == "Stand A7: 2 o'clock, 75 m");
+        Assert.Contains(Lines("efis0_anf_rose_01"), l => l.Spoken == "Stand A7, cyan: 2 o'clock, 75 m");
     }
 
     [Fact]
@@ -352,7 +352,7 @@ public class A350NdPageTests
     {
         var m9 = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M9", StringComparison.Ordinal));
         Assert.Equal((624.5f, 537.4f), (MathF.Round(m9.ClickX, 1), MathF.Round(m9.ClickY, 1)));
-        Assert.StartsWith("Taxiway M9 (BTV exit):", m9.Spoken);
+        Assert.StartsWith("Taxiway M9 (BTV exit), cyan:", m9.Spoken);
         var m7a = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M7A", StringComparison.Ordinal));
         Assert.DoesNotContain("(BTV exit)", m7a.Spoken);
     }
@@ -360,15 +360,15 @@ public class A350NdPageTests
     [Fact]
     public void The_landing_runway_says_so()
     {
-        Assert.Contains(Lines("efis0_anf_btv_set"), l => l.Spoken.StartsWith("Runway 12L (landing):", StringComparison.Ordinal));
+        Assert.Contains(Lines("efis0_anf_btv_set"), l => l.Spoken.StartsWith("Runway 12L (landing), cyan:", StringComparison.Ordinal));
     }
 
     [Fact]
     public void A_taxiway_near_the_landing_runway_says_how_far_along_it_is()
     {
-        var m7a = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M7A:", StringComparison.Ordinal));
+        var m7a = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M7A,", StringComparison.Ordinal));
         Assert.Contains("on runway 12L, about 1930 m from its threshold", m7a.Spoken);
-        var far = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway K5:", StringComparison.Ordinal));
+        var far = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway K5,", StringComparison.Ordinal));
         Assert.DoesNotContain("on runway", far.Spoken);
     }
 

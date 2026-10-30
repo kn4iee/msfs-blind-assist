@@ -26,6 +26,18 @@ public class A350MailboxTests
         Assert.Contains("CANCEL button", spoken);
     }
 
+    // Review 3 (M8): a key the mailbox greys read as a working one.
+    [Fact]
+    public void A_button_says_its_colour_unless_it_is_white()
+    {
+        var capture = Draft();
+        var send = capture.Texts.First(t => t.Text.Trim() == "SEND");
+        var grey = capture with { Texts = capture.Texts.Select(t => t.Text.Trim() == "SEND" ? t with { Colour = new(0.5f, 0.5f, 0.5f, 1) } : t).ToList() };
+        var spoken = A350Mailbox.Read(grey).Select(l => l.Spoken).ToList();
+        Assert.Contains("SEND button, grey", spoken);
+        Assert.Contains("PRINT button", spoken);
+    }
+
     [Fact]
     public void A_button_drawn_over_another_hides_it()
     {

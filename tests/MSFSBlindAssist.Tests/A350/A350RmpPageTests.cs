@@ -14,6 +14,44 @@ public class A350RmpPageTests
 
     private const string Squawk = "SQUAWK : 2000 - STBY, white";
 
+    // Review 3 (M9): a page's rule reads what it knows; a line it does not know was lost on most pages, where the radio page reads the rest.
+    [Theory]
+    [InlineData("rmp_nav_page.json")]
+    [InlineData("rmp_menu_page.json")]
+    [InlineData("rmp_router_page.json")]
+    [InlineData("rmp_com_status.json")]
+    [InlineData("rmp_datalink_init.json")]
+    [InlineData("rmp_vhf_provider.json")]
+    [InlineData("rmp_ls_page.json")]
+    [InlineData("rmp_vor_page.json")]
+    [InlineData("rmp_sqwk_page.json")]
+    [InlineData("rmp_vhf_page.json")]
+    public void What_a_page_does_not_name_still_reads(string fixture)
+    {
+        var capture = A350Fixtures.Capture(fixture);
+        var extra = capture.Texts.First(t => !string.IsNullOrWhiteSpace(t.Text)) with { Text = "XYZZY", X = 500, Y = 300 };
+        var lines = A350RmpPage.Read(capture with { Texts = capture.Texts.Append(extra).ToList() });
+        Assert.Single(lines, l => l.Spoken.Contains("XYZZY", StringComparison.Ordinal));
+    }
+
+    // ...and what the rule has read is not said a second time.
+    [Theory]
+    [InlineData("rmp_nav_page.json")]
+    [InlineData("rmp_menu_page.json")]
+    [InlineData("rmp_router_page.json")]
+    [InlineData("rmp_com_status.json")]
+    [InlineData("rmp_datalink_init.json")]
+    [InlineData("rmp_vhf_provider.json")]
+    [InlineData("rmp_ls_page.json")]
+    [InlineData("rmp_vor_page.json")]
+    [InlineData("rmp_sqwk_page.json")]
+    [InlineData("rmp_vhf_page.json")]
+    public void Nothing_a_page_read_comes_twice(string fixture)
+    {
+        var lines = A350RmpPage.Read(A350Fixtures.Capture(fixture)).Select(l => l.Spoken).ToList();
+        Assert.Equal(lines.Count, lines.Distinct().Count());
+    }
+
     [Fact]
     public void The_vhf_page_keeps_its_radios_and_presses_through_the_windows_own_keys()
     {

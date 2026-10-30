@@ -236,6 +236,35 @@ public class A350StateEvaluatorTests
         Assert.Equal(said, new A350StateEvaluator(def).TakeoffDataText());
     }
 
+    // Review 3 (M10): the blanks the docs promise a value for.
+    [Fact]
+    public void The_anti_ice_and_parking_brake_blanks_read_their_switches()
+    {
+        var state = Evaluator(("A350_ANTI_ICE_ENG_LEFT", 1), ("A350_ANTI_ICE_ENG_RIGHT", 1), ("A350_ANTI_ICE_WING", 0), ("A350_PARK_BRK_PARKING_BRAKE", 1));
+        Assert.Equal("engine anti-ice on, wing anti-ice off", state.AntiIceText());
+        Assert.Equal("set", state.ParkingBrakeText());
+        Assert.Equal("released", Evaluator(("A350_PARK_BRK_PARKING_BRAKE", 0)).ParkingBrakeText());
+        Assert.Null(Evaluator().ParkingBrakeText());
+    }
+
+    [Theory]
+    [InlineData(0, 50, "RADIO 50")]
+    [InlineData(3000, 0, "BARO 3000")]
+    [InlineData(0, -1, "NO DH")]
+    [InlineData(0, 0, "not set")]
+    public void The_minimum_blank_reads_the_fms(int baro, int radio, string said)
+    {
+        var def = new IniBuildsA350Definition();
+        var speech = new SpeechCapture();
+        for (int i = 0; i < 2; i++)
+            def.ObserveMinimums(new A350Minimums(baro, radio), speech);
+        Assert.Equal(said, new A350StateEvaluator(def).MinimumText());
+    }
+
+    [Fact]
+    public void The_minimum_blank_unread_says_nothing() =>
+        Assert.Null(new A350StateEvaluator(new IniBuildsA350Definition()).MinimumText());
+
     [Fact]
     public void The_takeoff_data_unread_says_nothing()
     {

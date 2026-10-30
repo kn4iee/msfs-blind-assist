@@ -34,6 +34,10 @@ public static class A350RmpPage
         else if (page.Any(c => c.Text == "SQWK")) SquawkPage(page, lines);
         else if (page.Any(c => c.Text is "MENU" or "DATALINK ROUTER" && c.Y < 120)) KeyList(page, lines);
         else RadioPage(page, lines);
+        // What no rule read still reads: a sighted pilot sees it. A page's own headings are said in its lines' words.
+        foreach (var rest in page.Where(c => c.Text is not ("FREQ" or "CRS" or "STBY" or "EQPT STATUS" or "DTLNK COM STATUS") && !c.Text.Contains('!')
+                     && !lines.Any(l => l.Spoken.Contains(c.Text, StringComparison.Ordinal))).OrderBy(c => c.Y).ThenBy(c => c.X))
+            lines.Add(new RmpLine(A350DrawLayout.Speak(new[] { rest })));
         lines.AddRange(squawk.Select(c => new RmpLine(A350DrawLayout.Speak(new[] { c }))));
         return lines;
     }

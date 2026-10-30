@@ -170,7 +170,7 @@ public static class A350ChecklistDefinitions
             Reminder("BSC_TODATA", "BEFORE_START_CL", "T.O data: SET", s => s.TakeoffDataText()),
             Reminder("BSC_DOORS", "BEFORE_START_CL", "Doors: CLOSED and ARMED"),
             Auto("BSC_THRUST", "BEFORE_START_CL", "Thrust levers: IDLE", A350StateEvaluator.LeversIdleField, v => v > 0.5, action: null),
-            Reminder("BSC_PARKBRK", "BEFORE_START_CL", "Parking brake: AS REQUIRED"),
+            Reminder("BSC_PARKBRK", "BEFORE_START_CL", "Parking brake: AS REQUIRED", s => s.ParkingBrakeText()),
             Auto("BSC_BEACON", "BEFORE_START_CL", "Beacon: ON", "A350_LIGHTS_EXT_BEACON", v => v > 0.5, action: null),
         }
     };
@@ -212,7 +212,7 @@ public static class A350ChecklistDefinitions
         Id = "AFTER_START_CL", Name = "After Start Checklist",
         Items = new()
         {
-            Reminder("ASC_ANTIICE", "AFTER_START_CL", "Anti-ice: AS REQUIRED"),
+            Reminder("ASC_ANTIICE", "AFTER_START_CL", "Anti-ice: AS REQUIRED", s => s.AntiIceText()),
             Reminder("ASC_STATUS", "AFTER_START_CL", "ECAM status: NORMAL"),
             Reminder("ASC_PITCHTRIM", "AFTER_START_CL", "Pitch trim: T.O"),
             Auto("ASC_RUDDERTRIM", "AFTER_START_CL", "Rudder trim: NEUTRAL", "A350_STAT_RUDDER_TRIM", A350FlowDefinitions.RudderTrimNeutral, action: null),
@@ -323,7 +323,7 @@ public static class A350ChecklistDefinitions
             Reminder("APC_STATUS", "APPROACH_CL", "ECAM status: NORMAL"),
             Auto("APC_SEATBELT", "APPROACH_CL", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, action: null),
             Reminder("APC_BARO", "APPROACH_CL", "Baro reference: SET", s => s.BaroText()),
-            Reminder("APC_MINIMUM", "APPROACH_CL", "Minimum: SET"),
+            Reminder("APC_MINIMUM", "APPROACH_CL", "Minimum: SET", s => s.MinimumText()),
         }
     };
 

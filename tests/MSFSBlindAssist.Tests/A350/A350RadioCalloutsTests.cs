@@ -63,6 +63,22 @@ public class A350RadioCalloutsTests
         Assert.Equal("Squawk code", Assert.Single(rows, r => r.Key == A350RadioCallouts.SquawkKey).Label);
     }
 
+    // Review 3 (M7): a Surroundings tune said "VHF 1 standby 118.700" here and MainForm's "COM 1 standby 118.700" over it. The tune's own
+    // confirmation is the one that says whether it took; a change from anywhere else still speaks.
+    [Fact]
+    public void A_tune_from_surroundings_leaves_its_confirmation_to_the_window()
+    {
+        _cache[A350RadioCallouts.ActiveKey(1)] = 122.8;
+        _cache[A350RadioCallouts.StandbyKey(1)] = 123.45;
+        Settle();
+        _ = _def.TuneCom1Own(new SimConnectManager(IntPtr.Zero), 118_700_000, false);
+        Deliver(A350RadioCallouts.StandbyKey(1), 118.7);
+        Assert.Empty(_speech.All);
+        _now += IniBuildsA350Definition.WindowEchoMs + 1;
+        Deliver(A350RadioCallouts.StandbyKey(1), 121.9);
+        Assert.Equal(new[] { "VHF 1 standby 121.900" }, _speech.All);
+    }
+
     [Fact]
     public void A_frequency_changed_anywhere_is_said_once_in_any_culture()
     {

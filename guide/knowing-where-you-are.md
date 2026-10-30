@@ -147,7 +147,7 @@ A list cannot tell you that anything happened, so BA reads COM 1 back after tuni
 - *"COM 1 did not report back after tuning 121.9."*: BA sent the frequency but could not read the radio back.
 - *"Not connected to the simulator."*: BA is not connected.
 
-Some aircraft cannot be tuned this way. On the FlyByWire A380X you hear *"This aircraft tunes its radios only through its RMP window, input mode Ctrl+Shift+R."* On the iniBuilds A350 you hear *"This aircraft tunes its radios only through its radio management panels."*
+Some aircraft cannot be tuned this way. On the FlyByWire A380X you hear *"This aircraft tunes its radios only through its RMP window, input mode Ctrl+Shift+R."* On the iniBuilds A350 BA presses the RMP's own keys instead, so it works the same.
 
 When there is nothing to show at all, BA speaks instead of opening an empty window: *"No surroundings data for"* the airport, or *"Nothing within 1000 metres."*
 

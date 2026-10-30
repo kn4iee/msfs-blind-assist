@@ -37,7 +37,7 @@ The First Officer never programs the MCDU, CDU or FMC: you still enter the fligh
 
 <div class="callout note" role="note" markdown="1">
 
-**Note:** On the A350 the read-backs are the aircraft's own checklists, in its order, and the First Officer never touches the MFD: the transponder, TCAS and weather radar live on the MFD's SURV page, so those lines are reminders. Ground power comes from the OIS's GROUND page: it reminds you, and switches the EXT buttons on only once a ground power unit is there.
+**Note:** On the A350 the read-backs are the aircraft's own checklists, in its order, and the First Officer never touches the MFD: the transponder and TCAS live on the MFD's SURV page, so those lines are reminders; the weather radar it switches with the EFIS's WX keys. Ground power comes from the OIS's GROUND page: it reminds you, and switches the EXT buttons on only once a ground power unit is there.
 
 **Note:** The A380X also has a live Electronic Checklist, read from the aircraft's own display and ticked by the aircraft's own sensing, on Output Ctrl+Shift+C. See [Airbus Aircraft](airbus-aircraft.md).
 

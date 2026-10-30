@@ -130,7 +130,7 @@ public static class A350NdMap
         var compass = texts.Where(t => !string.IsNullOrWhiteSpace(t.Text) && t.ColourName == "white"
             && (AtLocal(t, -3, -517) || AtLocal(t, -3, -272))).ToList();
         float? scale = null;
-        foreach (var t in texts.Where(t => t.ColourName == "cyan" && Untransformed(t) is var plain && Math.Abs(t.X - t.LocalX) < 0.5f && t.Y is >= 250 and < 760 && t.X < 300))
+        foreach (var t in texts.Where(t => t.ColourName == "cyan" && Math.Abs(t.X - t.LocalX) < 0.5f && t.Y is >= 250 and < 760 && t.X < 300))
         {
             string label = t.Text.Trim();
             if (compass.Any(c => AtLocal(c, -3, -272)) || compass.Count == 0)
@@ -160,6 +160,8 @@ public static class A350NdMap
     /// <summary>How far the symbol's middle is from its altitude's text: it is under a "+", over a "-".</summary>
     internal const float TrafficSymbolPixels = 22;
 
+    /// <summary>A point's place on a range map: its clock position and distance in NM (round on PLAN, from the map's centre); "" when the
+    /// frame has no scale.</summary>
     internal static string PlaceNm(NdMapFrame frame, float x, float y)
     {
         if (frame.PixelsPerMetre is not float pixelsPerNm) return "";
@@ -191,9 +193,7 @@ public static class A350NdMap
     /// 3 to 55 m off it at OMDB, live 2026-10-30; the next taxiway along is further).</summary>
     private const float OnRunwayMetres = 60;
 
-    /// <summary>Where a name lies along a runway, from one ident to the other: "on runway 12L, about 1930 m from its threshold", or
-    /// null when it is off the runway. A name is drawn along its taxiway, so a fast exit's reads long (M9 2342 m, its exit 2087 m
-    /// on the ND): "about", and the ND's EXIT line once set is the figure.</summary>
+    /// <summary>How far a point lies from a runway's centreline, in metres; the most there is with no scale or no length.</summary>
     private static double LateralMetres(NdMapFrame frame, (float X, float Y) threshold, (float X, float Y) far, float x, float y)
     {
         double dx = far.X - threshold.X, dy = far.Y - threshold.Y, length = Math.Sqrt(dx * dx + dy * dy);
@@ -201,6 +201,9 @@ public static class A350NdMap
             : Math.Abs((x - threshold.X) * dy - (y - threshold.Y) * dx) / length / scale;
     }
 
+    /// <summary>Where a name lies along a runway, from one ident to the other: "on runway 12L, about 1930 m from its threshold", or
+    /// null when it is off the runway. A name is drawn along its taxiway, so a fast exit's reads long (M9 2342 m, its exit 2087 m
+    /// on the ND): "about", and the ND's EXIT line once set is the figure.</summary>
     internal static string? AlongRunway(NdMapFrame frame, string ident, (float X, float Y) threshold, (float X, float Y) far, float x, float y)
     {
         if (frame.PixelsPerMetre is not float scale) return null;

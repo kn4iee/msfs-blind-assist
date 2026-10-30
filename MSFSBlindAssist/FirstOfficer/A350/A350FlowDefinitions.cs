@@ -9,8 +9,8 @@ using Step = Models.FlowStep<A350StateEvaluator>;
 /// <summary>
 /// The iniBuilds A350's First Officer flows, the A380's twelve phases with the A350's own rows (values are state values, the
 /// rows' own: A350_LIGHTS_EXT_NOSE 0 T.O, 1 Taxi, 2 Off; A350_SIGNS_* 0 On, 1 Auto, 2 Off; A350_LIGHTS_EXT_NAV 0 and 1 On, 2 Off).
-/// Surveillance (transponder, TCAS, weather radar, predictive windshear) is set on the MFD's SURV page, which no row reaches: the
-/// First Officer reminds and never writes it (FOA-9's reasoning; FO-2). Every write completes its own action line, and the
+/// Surveillance (transponder, TCAS, predictive windshear) is set on the MFD's SURV page, which no row reaches: the First Officer
+/// reminds and never writes it (FOA-9's reasoning; FO-2); the weather radar's display is the EFIS's WX keys, which are rows. Every write completes its own action line, and the
 /// read-only checks complete the aircraft's own checklist lines a later condition makes true (FO-6).
 /// </summary>
 public static class A350FlowDefinitions

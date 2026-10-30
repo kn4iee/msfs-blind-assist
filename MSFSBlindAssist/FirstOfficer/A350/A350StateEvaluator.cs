@@ -110,6 +110,17 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     /// <summary>The FMS's V1, VR, V2 and FLEX temperature as a blank's value, "not set" until entered; null while the reader has not read them.</summary>
     public string? TakeoffDataText() => _definition?.FmsTakeoffSpeeds is { } s ? AirbusReadbackFormat.TakeoffSpeeds(s.V1, s.Vr, s.V2, s.Flex) : null;
 
+    /// <summary>PERF APPR's minimum as a blank's value, "not set" until entered; null while the reader has not read it.</summary>
+    public string? MinimumText() => _definition?.FmsMinimums is { } m
+        ? m.Radio > 0 ? $"RADIO {m.Radio}" : m.Radio < 0 ? "NO DH" : m.Baro > 0 ? $"BARO {m.Baro}" : "not set"
+        : null;
+
+    /// <summary>The anti-ice switches as a blank's value.</summary>
+    public string? AntiIceText() => AirbusReadbackFormat.AntiIce(GetValue("A350_ANTI_ICE_ENG_LEFT"), GetValue("A350_ANTI_ICE_ENG_RIGHT"), GetValue("A350_ANTI_ICE_WING"));
+
+    /// <summary>The parking brake as a blank's value.</summary>
+    public string? ParkingBrakeText() => GetValue("A350_PARK_BRK_PARKING_BRAKE") is var brake && double.IsNaN(brake) ? null : brake > 0.5 ? "set" : "released";
+
     /// <summary>The flap lever as a blank's value.</summary>
     public string? FlapsText() => AirbusReadbackFormat.FlapsLever(GetValue("A350_FLAPS"));
 

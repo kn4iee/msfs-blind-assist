@@ -98,7 +98,6 @@ Full accessibility support for the PMDG 777.
 - Cockpit furniture panels (Cockpit section): armrests, foot and shoulder heaters, sun visors, sliding windows with handle and clipboard, window shades, cockpit and crew-rest doors, cockpit curtain, and all four worktables.
 - Using the power of Google Gemini to read PMDG displays. Requires the user's own free AIStudio API key.
 - System Display synoptic read-outs (Displays section → System Display) — standardized status pages organized like the real Display Select Panel synoptics (Engine, Status, Electrical, Hydraulics, Fuel, Air, Doors, Gear, Flight Controls), read live from the SDK broadcast and stock simulator data with no display OCR required.
-- The **First Officer**: flows from cold and dark to securing the aircraft, with the aircraft's own checklists as its read-backs.
 - All our shared features are integrated as well, including taxi guidance, the landing exit planner, route viewer, gate/runway teleport, METAR report, location info and text-based map.
 
 ### PMDG Boeing 737 (NG3)
@@ -147,6 +146,7 @@ Full accessibility support for the iniBuilds A350 (A350-900, -900 ULR and -1000;
 - Every display read as text with its colours: the **E/WD** (warnings, cautions, memos and procedures, spoken as they appear), every **SD** page, both **PFDs** (with FMA call-outs) and **NDs**, the FCU, the RMPs, the standby displays and the BAT display.
 - The **MFD**, driven through the KCCU, as a list you arrow through and operate with Enter: flight planning, performance, the checklists, radio navigation and ATC COM. FMS messages are spoken even with the window closed.
 - The **OIS** (the A350's EFB) on both sides as an accessible web document: T.O and LDG performance with spoken results, loadsheet and refuel, ground services and doors, company messages, maintenance, failures and options; streamer mode hides your IDs and keys in MSFS Blind Assist too.
+- The **First Officer**: flows from cold and dark to securing the aircraft, with the aircraft's own checklists as its read-backs.
 - The A380's FCU windows (speed, heading, altitude, V/S, autopilot, altimeter) and an RMP window (type a frequency, load it as standby, swap it in; squawk).
 - Automatic announcements: the FMA, V1/Rotate/V2 and the V-speeds as entered, the FCU altitude window and baros, IRS aligned, lever positions, Master Warning/Caution; METRIC ALT honoured in the altitude read-outs and call-outs.
 - All our shared features are integrated as well, including taxi guidance, the landing exit planner, route viewer, gate/runway teleport, METAR report, location info and text-based map.

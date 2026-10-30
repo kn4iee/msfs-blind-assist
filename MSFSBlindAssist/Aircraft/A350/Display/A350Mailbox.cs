@@ -30,7 +30,7 @@ public static class A350Mailbox
         var elements = capture.Elements.Where(e => band.Contains(e.X, e.Y) && e.RectW > 0 && e.RectH > 0).ToList();
         var shapes = capture.Shapes ?? Array.Empty<DrawnShape>();
         var ownedTexts = new HashSet<int>();
-        var controls = new List<(DrawnElement Element, string Name)>();
+        var controls = new List<(DrawnElement Element, string Name, string? Colour)>();
         for (int i = 0; i < elements.Count; i++)
         {
             var e = elements[i];
@@ -45,7 +45,7 @@ public static class A350Mailbox
             if (name.Length == 0)
                 continue;
             controls.RemoveAll(c => Math.Abs(c.Element.X - e.X) <= SameSpotPixels && Math.Abs(c.Element.Y - e.Y) <= SameSpotPixels);
-            controls.Add((e, name));
+            controls.Add((e, name, own.Count > 0 ? capture.Texts[own[0]].ColourName : null));
         }
 
         var free = capture.Texts.Where((t, k) => !ownedTexts.Contains(k) && band.Contains(t.X, t.Y)).ToList();
@@ -53,7 +53,7 @@ public static class A350Mailbox
         foreach (var column in new[] { free.Where(t => t.X >= BodyLeft && t.X < BodyRight), free.Where(t => t.X < BodyLeft), free.Where(t => t.X >= BodyRight) })
             lines.AddRange(CountsJoined(A350DrawLayout.Rows(column)).Select(row =>
                 new MfdLine("text", A350DrawLayout.Speak(row.Select(c => Painted(c, shapes)).ToList()), -1, -1)));
-        lines.AddRange(controls.Select(c => new MfdLine("button", c.Name + " button", c.Element.X + c.Element.RectW / 2, c.Element.Y + c.Element.RectH / 2)));
+        lines.AddRange(controls.Select(c => new MfdLine("button", c.Name + (c.Colour is null or "white" ? " button" : $" button, {c.Colour}"), c.Element.X + c.Element.RectW / 2, c.Element.Y + c.Element.RectH / 2)));
         return lines;
     }
 

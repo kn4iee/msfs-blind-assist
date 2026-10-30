@@ -187,7 +187,7 @@ Each opens a window where you type a value, with the related mode buttons. The b
 
 ### Keys inside shared windows {#keys-inside-shared-windows}
 
-- **Surroundings window**, Frequencies list: **Enter** tunes the frequency into COM 1 standby, **Shift+Enter** straight into COM 1 active. Not on the A380 and the A350, which tune through their RMP windows.
+- **Surroundings window**, Frequencies list: **Enter** tunes the frequency into COM 1 standby, **Shift+Enter** straight into COM 1 active. Not on the A380, which tunes through its RMP window; on the A350 BA presses the RMP's own keys for you.
 - **Access GSX window**: **F5** opens the GSX menu, **1** to **9**, **0** and **A** to **E** choose a menu option, **C** opens GSX Settings, **Escape** hides the window.
 - **SayIntentions flight information window**: arrow keys read line by line, **Escape** closes.
 - **Every MCDU, CDU and FMC window except the A380's and the A350's MFDs**: **Ctrl+1** to **Ctrl+6** are the left line select keys and **Alt+1** to **Alt+6** the right ones. With **Alternate line select keys** ticked in **File**, **FMC Settings**, they become **F1** to **F6** and **F7** to **F12**. **Alt+S** jumps to the scratchpad box, **Enter** sends what you typed, and **Alt+Home** returns to the screen. The A380's and the A350's MFD windows have no line select keys; see their sections.
@@ -369,7 +369,7 @@ The Ctrl+A window adds a metric toggle, and Ctrl+P a Flight Director button.
 
 - **Output Alt+P, Alt+N, Alt+S, Alt+I** do nothing; read the displays from the panels.
 - **Input Ctrl+Shift+D** (DCDU) is not on the A380.
-- In the Surroundings window, Enter and Shift+Enter do not tune COM 1; use the RMP window.
+- In the Surroundings window, Enter and Shift+Enter tune VHF 1 by pressing the RMP's own keys.
 
 ## Headwind A330-900neo {#hk-a330}
 
@@ -428,7 +428,7 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 ### General keys that differ or don't work here {#hk-a350-general}
 
 - **Output Ctrl+Shift+B** opens the ND window: the ND and its airport map (ANF) and Brake To Vacate, line by line, as [the A350's chapter](airbus-aircraft.md#a350-nd-window) describes.
-- In the Surroundings window, Enter and Shift+Enter do not tune COM 1; use the RMP window.
+- In the Surroundings window, Enter and Shift+Enter tune VHF 1 by pressing the RMP's own keys.
 
 ## PMDG 737 {#hk-pmdg737}
 

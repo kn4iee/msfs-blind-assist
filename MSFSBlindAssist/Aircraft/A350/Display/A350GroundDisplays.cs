@@ -216,8 +216,8 @@ public static class A350GroundDisplays
 
     /// <summary>The overhead BAT display (the battery the BAT selector picks): seven-segment digits, the decimal
     /// point drawn as its own text before the last digit (live: "282" and "." for 28.2 V).</summary>
-    /// <summary>The HUD (live 2026-10-30): the FMA's columns in its top rows, each scale's numbers the clip leaves, the values by name. Its
-    /// altitude drum's digits are no reading; the rest reads as rows. A stowed combiner draws nothing.</summary>
+    /// <summary>The HUD (live 2026-10-30): the FMA's columns in its top rows, each scale's numbers the clip leaves, the values by name;
+    /// the altitude drum's digits are no reading; the rest reads as rows. A stowed combiner draws nothing.</summary>
     public static IReadOnlyList<string> ReadHud(A350DrawCapture capture)
     {
         var cells = capture.Texts.Where(t => !t.Clipped && !string.IsNullOrWhiteSpace(t.Text)).Select(t => new DrawnCell(t.Text.Trim(), t.ColourName, t.X, t.Y)).ToList();

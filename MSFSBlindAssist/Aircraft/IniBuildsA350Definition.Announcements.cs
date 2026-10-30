@@ -379,6 +379,9 @@ public partial class IniBuildsA350Definition
     /// air, or at the gate before a flight, is an approach change and is said. On the ground is the sim's cache where there is
     /// one (a flight loaded in the air never delivers SIM_ON_GROUND here).
     /// </summary>
+    /// <summary>The FMS's approach minimums as last agreed on, null until read.</summary>
+    internal A350.Display.A350Minimums? FmsMinimums => _minimumsTaken;
+
     public void ObserveMinimums(A350.Display.A350Minimums read, ScreenReaderAnnouncer announcer)
     {
         bool onGround = _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
