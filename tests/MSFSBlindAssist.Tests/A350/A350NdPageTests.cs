@@ -7,6 +7,30 @@ namespace MSFSBlindAssist.Tests.A350;
 // ANF and BTV guides name them. Each line carries where a click lands, in the ND's own coordinates.
 public class A350NdPageTests
 {
+    // Traffic on the ND (an AI A320 passing overhead in the cruise, live 2026-10-30): the relative altitude in hundreds of feet beside its
+    // symbol, over it when above, under it when below. It says what it is and, in the window, where.
+    [Fact]
+    public void Traffic_says_how_far_above_and_where()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("nd_traffic.json"), 0, mode: 2, range: 5).Select(l => l.Spoken).ToList();
+        Assert.Contains(lines, l => l.StartsWith("Traffic 700 feet above: 6 o'clock, 10", StringComparison.Ordinal) && l.EndsWith(", white", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("+07", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("+07", "700 feet above")]
+    [InlineData("-13", "1300 feet below")]
+    [InlineData("+00", "at the same level")]
+    [InlineData("-00", "at the same level")]
+    public void Traffic_altitude_in_words(string drawn, string said) => Assert.Equal(said, A350NdMap.TrafficAltitude(drawn));
+
+    [Fact]
+    public void The_status_display_says_traffic_too()
+    {
+        var lines = A350GroundDisplays.ReadNd(A350Fixtures.Capture("nd_traffic.json"), 0);
+        Assert.Contains("Traffic 700 feet above, white", lines);
+    }
+
     private static IReadOnlyList<MfdLine> Lines(string fixture, int side = 0) =>
         A350NdPage.Read(A350Fixtures.Capture(fixture + ".json"), side);
 

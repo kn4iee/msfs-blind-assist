@@ -169,6 +169,15 @@ public static class A350NdPage
             float cy = roseOrPlan ? RoseCentreY : ArcCentreY, reach = roseOrPlan ? RoseRangePixels : ArcRangePixels;
             float? nm = range is int r && r >= 5 && r - 5 < RangeNm.Length ? RangeNm[r - 5] : null;
             var rangeFrame = mode != null && nm != null ? new A350NdMap.NdMapFrame(MapCentreX, cy, mode == 4, reach / nm.Value) : (A350NdMap.NdMapFrame?)null;
+            foreach (var t in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => !taken.Contains(t) && A350NdMap.TrafficText.IsMatch(t.Text.Trim())))
+            {
+                var at = t with { X = t.X - shift };
+                if (at.X is < 0 or >= HalfWidth) continue;
+                taken.Add(t);
+                float symbolY = at.Y + (at.Text.Trim()[0] == '+' ? A350NdMap.TrafficSymbolPixels : -A350NdMap.TrafficSymbolPixels);
+                string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X, symbolY) : "";
+                names.Add(new MfdLine("text", $"Traffic {A350NdMap.TrafficAltitude(at.Text.Trim())}{(place.Length > 0 ? ": " + place : "")}, {at.ColourName}", -1, -1));
+            }
             foreach (var t in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => Plain(t) && !taken.Contains(t)))
             {
                 var at = t with { X = t.X - shift };

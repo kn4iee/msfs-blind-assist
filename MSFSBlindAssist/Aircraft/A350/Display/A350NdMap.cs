@@ -99,6 +99,20 @@ public static class A350NdMap
 
     /// <summary>A point's place on a range map, its frame's scale in pixels per NM: "1 o'clock, 190 NM", on PLAN "north west, 110 NM
     /// from the map's centre". To the nearest 10 NM at most: a name is drawn beside its point.</summary>
+    /// <summary>A traffic symbol's relative altitude as the ND draws it beside the symbol: a sign and hundreds of feet (live 2026-10-30).</summary>
+    internal static readonly System.Text.RegularExpressions.Regex TrafficText = new(@"^[+-]\d\d$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>"+07" as said: "700 feet above".</summary>
+    internal static string TrafficAltitude(string drawn)
+    {
+        int hundreds = int.Parse(drawn[1..], System.Globalization.CultureInfo.InvariantCulture);
+        if (hundreds == 0) return "at the same level";
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{hundreds * 100} feet {(drawn[0] == '+' ? "above" : "below")}");
+    }
+
+    /// <summary>How far the symbol's middle is from its altitude's text: it is under a "+", over a "-".</summary>
+    internal const float TrafficSymbolPixels = 22;
+
     internal static string PlaceNm(NdMapFrame frame, float x, float y)
     {
         if (frame.PixelsPerMetre is not float pixelsPerNm) return "";

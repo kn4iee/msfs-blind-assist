@@ -37,6 +37,7 @@ public static class A350GroundDisplays
         var cells = Cells(texts.Where(t => !mapUsed.Contains(t)));
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
+        var trafficLines = new List<string>();
         void Field(string label, Func<DrawnCell, bool> where)
         {
             var hit = cells.Where(c => !used.Contains(c) && where(c)).ToList();
@@ -47,6 +48,11 @@ public static class A350GroundDisplays
         // GS and TAS, green; with the airport map (zoom range, live 2026-10-28) their white labels are drawn too and GS's
         // value moves left to x 64 (else x 122). The labels are not read.
         used.UnionWith(cells.Where(c => c.Colour == "white" && c.Text is "GS" or "TAS" && Math.Abs(c.Y - 35) <= 8));
+        foreach (var traffic in cells.Where(c => A350NdMap.TrafficText.IsMatch(c.Text)).ToList())
+        {
+            used.Add(traffic);
+            trafficLines.Add($"Traffic {A350NdMap.TrafficAltitude(traffic.Text)}, {traffic.Colour}");
+        }
         Field("Ground speed", c => c.Colour == "green" && Math.Abs(c.Y - 35) <= 8 && (Math.Abs(c.X - 122) <= 12 || Math.Abs(c.X - 64) <= 12));
         // The BTV block at the top left (ND::DrawBTVInfo, live 2026-10-30), where the wind is drawn without it.
         foreach (var (name, y) in new[] { ("RWY", 64f), ("EXIT", 89f), ("ROT", 112f), ("TURNAROUND", 136f) })
@@ -124,6 +130,7 @@ public static class A350GroundDisplays
             used.UnionWith(value);
             o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
         }
+        o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;
     }
