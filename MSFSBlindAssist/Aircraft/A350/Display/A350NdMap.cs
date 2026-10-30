@@ -55,7 +55,11 @@ public static class A350NdMap
 
     /// <summary>A name through the map's transform: a runway's ident at local 0,5, white or, the landing runway's, cyan (live
     /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
-    private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 0) || AtLocal(t, 0, 5));
+    private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 5) || AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t));
+
+    /// <summary>The plan's runway on a range map: the airport's name over the runway's ("OMDB", "12L"), white, through a transform
+    /// like the airport map's names, none of which is ever white (grey, olive, cyan, green; every ND draw kept, 2026-10-30).</summary>
+    internal static bool IsPlanRunwayLabel(DrawnText t) => t.ColourName == "white" && AtLocal(t, 0, 0) && !string.IsNullOrWhiteSpace(t.Text);
 
     /// <summary>A runway's name along its centre: "04", "-", "22", white, each through the map's transform at a small x of its
     /// own at local y 0 (8.5, -7.5, -39.5 at VCBI; live 2026-10-30).</summary>
@@ -235,7 +239,7 @@ public static class A350NdMap
         var named = texts.Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList();
         var runways = named.Where(t => AtLocal(t, 0, 5)).ToList();
         // Grey at OMDB, olive at VCBI (0.71, 0.67, 0.20; live 2026-10-30): whatever is not a stand, a building or the tower.
-        var taxiways = named.Where(t => t.ColourName is not ("cyan" or "green") && AtLocal(t, 0, 0)).ToList();
+        var taxiways = named.Where(t => t.ColourName is not ("cyan" or "green") && AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t)).ToList();
         // A taxiway's name also drawn in cyan is the BTV exit, as in Items: a taxiway, never a building.
         var taxiwayNames = taxiways.Select(t => t.Text.Trim()).ToHashSet(StringComparer.Ordinal);
         var cyanNames = named.Where(t => t.ColourName == "cyan" && AtLocal(t, 0, 0)).ToList();

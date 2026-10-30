@@ -38,8 +38,8 @@ public static class A350FlowDefinitions
         "A350_FUEL_PUMP_CTR_TANK_LEFT", "A350_FUEL_PUMP_CTR_TANK_RIGHT",
     });
 
-    /// <summary>How long the Engine Start flow waits for an engine to run: its start measured about two minutes with the
-    /// motoring a warm Trent wants (live 2026-10-30), so 180 s.</summary>
+    /// <summary>How long the Engine Start flow waits for an engine to run: its start measured about a minute, hot or cold
+    /// (live 2026-10-30, both engines, twice), so 180 s is well clear of it.</summary>
     internal const int EngineStartTimeoutSeconds = 180;
 
     private static Flow BuildCockpitPrep() => new()

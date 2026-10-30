@@ -254,6 +254,16 @@ public class A350NdPageTests
         Assert.Contains(shown, l => l.StartsWith("Taxiways:", StringComparison.Ordinal) && l.Contains("M9", StringComparison.Ordinal));
     }
 
+    // The plan's runway on a range map: it is no taxiway, and it says where it lies, once, as the map's other names do.
+    [Fact]
+    public void A_range_map_says_where_the_plans_runway_is()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0, 3, 7);
+        Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("Taxiway", StringComparison.Ordinal));
+        var runway = Assert.Single(lines, l => l.Kind == "map" && l.Spoken.StartsWith("OMDB 12L, white: ", StringComparison.Ordinal));
+        Assert.Contains("o'clock", runway.Spoken);
+    }
+
     [Fact]
     public void An_exit_too_short_says_so()
     {

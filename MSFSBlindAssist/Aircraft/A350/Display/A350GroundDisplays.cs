@@ -77,6 +77,22 @@ public static class A350GroundDisplays
             o.Add($"ARPT NOT IN ACTIVE F-PLN, {notInPlan[0].Colour}");
         }
         o.AddRange(map);
+        // The same corner on ROSE LS (live on the arrival to OMDB, 2026-10-30): the receiver (white), its frequency ("110", ".",
+        // "10"), the course under it ("CRS" and its value), the ident under that.
+        if (cells.FirstOrDefault(c => !used.Contains(c) && c.Text == "CRS" && c.X >= 560 && Math.Abs(c.Y - 69) <= 8) is { } courseName)
+        {
+            used.Add(courseName);
+            List<DrawnCell> Row(float y) => cells.Where(c => !used.Contains(c) && c.X >= 560 && Math.Abs(c.Y - y) <= 8).OrderBy(c => c.X).ToList();
+            List<DrawnCell> top = Row(36), course = Row(69), ident = Row(100);
+            used.UnionWith(top.Concat(course).Concat(ident));
+            var value = top.Where(c => c.Colour != "white").ToList();
+            var said = new List<string>();
+            said.AddRange(top.Where(c => c.Colour == "white").Select(c => c.Text));
+            if (value.Count > 0) said.Add(string.Concat(value.Select(c => c.Text)));
+            if (course.Count > 0) said.Add($"course {string.Concat(course.Select(c => c.Text))}");
+            said.AddRange(ident.Select(c => c.Text));
+            o.Add($"Receiver: {string.Join(", ", said)}, {value.Concat(course).Concat(ident).FirstOrDefault()?.Colour ?? courseName.Colour}");
+        }
         // The TO waypoint block, top right (live in the climb): the name (white) and the track to it (green, x 759), the
         // distance a line under ("6." and a smaller "2", then a cyan NM), the ETA under that. One line, as a pilot reads it.
         var toName = cells.Where(c => !used.Contains(c) && c.X is >= 560 and < 740 && Math.Abs(c.Y - 36) <= 8).ToList();
@@ -121,11 +137,12 @@ public static class A350GroundDisplays
             if (unit != null) used.Add(unit);
             o.Add("Vertical display altitudes: " + (unit != null ? "FL " : "") + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
         }
-        // The safe altitude under the vertical display (MSA or MORA, white), its value just above its name ("3" and "8").
+        // The safe altitude under the vertical display (MSA or MORA, white), its value just above its name ("3" and "8"), or
+        // just under it low down.
         foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 900).ToList())
         {
             var value = cells.Where(c => !used.Contains(c) && c != name && c.Text.Length > 0 && c.Text.All(char.IsDigit)
-                && name.Y - c.Y is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
+                && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
             used.Add(name);
             used.UnionWith(value);
             o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");

@@ -49,6 +49,26 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(nd, l => l.StartsWith("6.", StringComparison.Ordinal) || l.StartsWith("07:20", StringComparison.Ordinal));
     }
 
+    // Live on the arrival to OMDB (2026-10-30, ROSE LS): the same corner says which receiver feeds the ND ("ILS2", white), its
+    // frequency ("110", ".", "10"), the course under it ("CRS", "119") and the ident under that. It read as a TO waypoint.
+    [Fact]
+    public void The_nd_reads_its_ls_block_by_name()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0);
+        Assert.Contains("Receiver: ILS2, 110.10, course 119, IDBL, magenta", nd);
+        Assert.DoesNotContain(nd, l => l.StartsWith("To waypoint", StringComparison.Ordinal) || l == "CRS, white");
+    }
+
+    // Live on the arrival to OMDB at 40 NM ARC (2026-10-30): the plan's runway on a range map is white at local 0,0 ("OMDB" over
+    // "12L"), the airport map's own transform. It read as "Taxiways: OMDB, 12L, white", and the TO waypoint's name as the airport.
+    [Fact]
+    public void A_range_map_is_no_airport_map()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0);
+        Assert.DoesNotContain(nd, l => l.StartsWith("Taxiways:", StringComparison.Ordinal) || l.StartsWith("Airport:", StringComparison.Ordinal));
+        Assert.Contains(nd, l => l.StartsWith("To waypoint: DB403, white; track", StringComparison.Ordinal));
+    }
+
     // The vertical display (live 2026-10-28): the selected altitude beyond its altitude range is a cyan value at its top
     // left (x 105, y 786; "FL 400" in STD) or bottom left (y 1010). It read inside the range line ("40000 0 2.5 5 7.5 10")
     // or as the lowest altitude label, or bare; the scale's "FL" (white, x 58) read as a line of its own, and the safe
@@ -64,6 +84,15 @@ public class A350GroundDisplaysTests
         Assert.Contains(range, nd);
         Assert.Contains(altitudes, nd);
         Assert.DoesNotContain(nd, l => l is "FL, white" or "FL 400, cyan" or "4000, cyan");
+    }
+
+    // Live at OMDB on the ground (2026-10-30, ROSE LS): the name stood above its value and they read apart, "MSA, magenta", "3 8, magenta".
+    [Fact]
+    public void The_safe_altitude_reads_with_its_name_above_its_value()
+    {
+        var capture = A350Fixtures.Capture("efis0_ls_rose_ils2.json");
+        var nd = A350GroundDisplays.ReadNd(capture with { Texts = capture.Texts.Select(t => t.Text.Trim() == "MSA" ? t with { Y = 962 } : t).ToList() }, 0);
+        Assert.Contains("MSA: 38, magenta", nd);
     }
 
     [Theory]

@@ -324,7 +324,8 @@ public static class A350Pfd
             used.UnionWith(lsBlock.Where(OnLine));
             string Row(float y) => string.Concat(lsBlock.Where(c => c.Text.Trim() != "nm" && Math.Abs(c.Y - y) <= 8)
                 .OrderBy(c => c.X).Select(c => c.Text.Trim()));
-            string head = string.Join(" ", new[] { Row(LsIdentY), Row(LsFrequencyY) }.Where(s => s.Length > 0));
+            // Far out the ident's row holds the frequency too (live 2026-10-30, 110.10 twice at 13 NM): one is enough.
+            string head = string.Join(" ", new[] { Row(LsIdentY), Row(LsFrequencyY) }.Where(s => s.Length > 0).Distinct());
             string dme = Row(LsDmeY) is { Length: > 0 } d ? $", {d} NM" : "";
             ls.Add($"LS: {head}{dme}, magenta");
         }

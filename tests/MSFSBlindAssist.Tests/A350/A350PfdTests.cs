@@ -465,6 +465,14 @@ public class A350PfdTests
         Assert.DoesNotContain(lines, l => l.StartsWith("110."));
     }
 
+    // Live on the arrival to OMDB (2026-10-30): far out the ident's row holds the frequency too, "LS: 110.10 110.10, 9.6 NM".
+    [Fact]
+    public void A_frequency_in_the_idents_row_reads_once()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_ls_rose_ils2"), 0);
+        Assert.Contains("LS: 110.10, 9.6 NM, magenta", lines);
+    }
+
     // Review 2026-10-28 (minor 9): the block's rows were taken in order, the ident by being all letters, so an ident with
     // digits (an FLS or GLS one) shifted every row: "LS: R22, 110.10 NM". Each row has its own line: ident at y 689,
     // frequency at 717, DME at 745.

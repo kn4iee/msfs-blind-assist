@@ -178,6 +178,16 @@ public static class A350NdPage
                 string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X, symbolY) : "";
                 names.Add(new MfdLine("text", $"Traffic {A350NdMap.TrafficAltitude(at.Text.Trim())}{(place.Length > 0 ? ": " + place : "")}, {at.ColourName}", -1, -1));
             }
+            // The plan's runway, the airport's name over the runway's, through a transform of its own.
+            foreach (var label in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => !taken.Contains(t) && A350NdMap.IsPlanRunwayLabel(t))
+                         .GroupBy(t => (int)MathF.Round(t.X)).Select(g => g.OrderBy(t => t.Y).ToList()))
+            {
+                var at = label[0] with { X = label[0].X - shift };
+                if (at.X is < 0 or >= HalfWidth || at.Y is < MapTop or >= MapBottom) continue;
+                foreach (var t in label) taken.Add(t);
+                string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X - NameOffsetX, at.Y - NameOffsetY) : "";
+                names.Add(new MfdLine("map", $"{string.Join(" ", label.Select(t => t.Text.Trim()))}, {at.ColourName}" + (place.Length > 0 ? $": {place}" : ""), at.X, at.Y));
+            }
             foreach (var t in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => Plain(t) && !taken.Contains(t)))
             {
                 var at = t with { X = t.X - shift };
