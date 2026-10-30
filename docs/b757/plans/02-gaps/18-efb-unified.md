@@ -166,21 +166,64 @@
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "Shift+T on the 757 now opens the tablet itself, read aloud, with every button, switch and slider pressable as a sighted pilot presses them; BlueBird's notifications and questions are spoken while it is open. With the simulator closed, Shift+T opens BlueBird's settings." Changelog `feature`; the guide's 757 EFB chapter (the strings in `Bbs757EfbPress`, `Bbs757EfbExtras`, `Bbs757NavigraphSignIn`); `HotkeyGuides/BBS757_Hotkeys.txt`.
-- **docs/b757.md:** the EFB section rewritten for the one window (the press pipeline, reading, extras, the settings window), the classic window's measured sequences left to the history.
-- **CLAUDE.md, CORE-7's list of today's cases:** the 757 EFB's press read-backs (a tile's new words, "no change on the tablet", "did not change", "turned off").
+- **Pilot-facing:** "Shift+T on the 757 now opens the tablet itself, read aloud, with every button, switch and slider pressable as a sighted pilot presses them; BlueBird's notifications and questions are spoken while it is open. With the simulator closed, Shift+T opens BlueBird's settings." Changelog `feature`; `MSFSBlindAssist/HotkeyGuides/BBS757_Hotkeys.txt`; the guide's 757 EFB chapter:
+  - the strings in `Bbs757EfbPress`, `Bbs757EfbExtras` and `Bbs757NavigraphSignIn`;
+  - the AIRAC data page's buttons ("Update, Latest cycle" and the two LOGOUTs);
+  - a two-choice setting says its new choice ("EHSI up reference: TRK");
+  - the colors theme is a note in both windows (B757-21); a pilot whose tablet shows another theme sets it back with the simulator closed: Shift+T, then "Set to Dark blue";
+  - the load watch speaks in the units the aircraft uses when it speaks;
+  - Alt+F4 closes the tablet window (Escape is the screen reader's).
+- **"Boarding complete." without WGTBAL:** the app no longer says "For the ACARS weight and balance, request WGTBAL on the CDU." (the aircraft requests it by itself once boarding completes); take it out where it is quoted: `guide/boeing-aircraft-and-the-md-11.md:503`, `MSFSBlindAssist/HotkeyGuides/BBS757_Hotkeys.txt:337` and `docs/b757.md:364`.
+- **docs/b757.md:** the EFB section rewritten for the one window (the press pipeline, reading, extras, the settings window, B757-21), the classic window's measured sequences left to the history.
+- **CLAUDE.md, CORE-7's list of today's cases:** the 757 EFB's press read-backs: a pressed control's new words, "no change on the tablet", "did not change", "turned off", and a two-choice switch's new choice (`Bbs757EfbPressRunner`).
+- **Words that name retired code** (B757-2 and B757-4 retired, the classic window's tablet sequences gone): `CoherentBbs757TabletClient.cs:394`'s cref and `LastSignedOutUtc`; `BBS757Definition.cs:162` and `:421`; `docs/b757/spec-gaps.md:196`; `docs/b757/tools/live/efb-tap.sh:3`; `docs/b757.md:301`, `:306`, `:342` and `:383`.
+- **US spelling:** "colour" in `Bbs757EfbFrameCompare.cs:12`, a line plan 18 did not change.
 - **The index:** list plan 18 (it cannot edit the frozen `00-index.md`).
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** done (2026-10-30): landed on `kn4iee/B757` at the owner's word; the probe's press test and the owner's in-sim checks passed
 - **Claimed by:** Robin Kipp (robin24), 2026-10-29
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-10-29, from `B757` da7e39c8e
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+- **Started:** 2026-10-29, from `B757` da7e39c8e (claim 3a3d0b208); rebased onto `B757` d71f707d6 on 2026-10-30 (Daniel Wolak's FLCH fix and a merge of main, no file in common with plan 18)
+- **Landed:** 2026-10-30, as a fast-forward of `B757` d71f707d6; the last code commit `fix(b757): the fix round review's minors: identifier rows, pins, joins` (97f64a28e), the record in the commit that carries this line; `git log --grep "^Plan: 18"` lists the plan's commits
+- **Tests at landing:** 2026-10-30, on `B757` d71f707d6 with plan 18 on top (7486d896d; only this record after it): full suite 19,774 passed, 0 failed (19,195 at the claim; 19,763 before the rebase)
+- **Tasks** (hashes after the rebase onto d71f707d6):
+  - 0 done: the claim (3a3d0b208); Declan Webster agreed that plan 18 supersedes plan 11's remaining work, noted in plan 11's record (e2b346183).
+  - 1 done: the press measurement and the probe's `presstest` (444a5babf, tablet-presses.md); ten tablet captures as test pages (e466925b1).
+  - 2 to 11 done, each reviewed: 2 (6fcfd8fcb), 3 (685c6dd9a), 4 (63d4b4c44), 5 (c8afde438), 6 (f05c189ef), 7 (c0ec63927), 8 (22b08266e; its review fixes 6cc6cef09), 9 (eee1d4079), 10 (bc3f10dc6: B757-2 and B757-4 retired, agent version 7), 11 (dd06836d9: B757-18 to B757-20, OCR-2 and OCR-3 reworded).
+  - The whole-branch review, its fix wave (e917533ab, 2f17f547d, 9df3d4bd5, 03016b2b9, 881e94b78) and a re-review; then the two-choice read-back the owner ruled on (df92d9569), reviewed.
+  - 12 done 2026-10-30: the probe's crop fix (9f591fc01) and its press test after plan 18 (fcbfe7114, 7486d896d: tablet-presses.md, "After plan 18"); three deploys to `C:\MSFSBA-B757` for the owner's in-sim checks, made before the rebase (their ProductVersion commits 90ee5f791, 50da22d1b and 65414dba7 are df92d9569, fcbfe7114 and 97f64a28e here); the fix round (04181be58, eb93c3e64, 56d517127, 091d4b84a, 48bc92837, 943932ce9) and the last round (e2fc7c449, 8276a44d7, 97f64a28e), each reviewed.
+- **Waiting on the owner:** nothing for the plan; the items under "Open at landing" are later work.
+- **In-sim results:** 2026-10-30, EDDF stand C6, the owner by ear on the deployed builds; every check passed in the end:
+  - Shift+T opens "757 EFB" on the tablet's page with a simulator running, and "757 EFB settings" with none.
+  - Ground services, with the GND SRVC mode on BBS (the MSFS mode's fuel truck does not work, by BlueBird's design): the fuel truck attached and detached, the chocks, the air start unit requested and heard outside; BlueBird's jetway stayed at "Requesting…" (its own state at this stand, tablet-presses.md).
+  - Read-backs: a pressed control's new words once (GND SRVC mode, the gear doors), the tabs' "(selected)", two quick presses (Chocks, then Ground A/C) run in order and each said once; with the window hidden right after them, the presses already taken ran, the command still queued was dropped, and Shift+T read the page again.
+  - Settings: switches say only the screen reader's checked or not checked; a choice list says nothing when it lands; a two-choice setting says its new choice ("EHSI up reference: TRK", then "…: HDG"); EFB background to 3 and back.
+  - The top bar's notification button opens BlueBird's list and closes it.
+  - FETCH SIMBRIEF OFP with the aircraft in kilograms: the units question spoken at once, YES first, and it took; with Automatic boarding on, the defuel question spoken and answered; boarding started from the top bar's START BOARDING; the ground services' notifications spoken, no double speech reported.
+  - The load watch: "Fueling complete." and "Boarding complete." with the window closed, in pounds after the units question switched the aircraft from kilograms (after the fix round).
+  - AIRAC data: "Update, Latest cycle" installed cycle 2611 ("Nav data cycle 2611 installed. Reload the flight to use it."); the Navigraph LOGOUT pressed, then the app's Sign in to Navigraph spoke the code and opened the browser, and the page came back signed in.
+  - The colors theme: a note in both windows; with the simulator closed, Ctrl+Page Up and Down on the settings window's slider do nothing, and "Set to Dark blue" set BlueBird's file back from Light blue with every other value unchanged and the app's safety copy written.
+  - Found and fixed in Task 12: the AIRAC page's buttons read as row values; under a light theme the reader finds no control (B757-21); the load watch kept the units of its start; by the owner's rulings, the WGTBAL sentence dropped and Set to Dark blue added.
+  - Not tested: the agent's v6 to v7 replacement within one sim session (the probe installed v7 first); a BlueBird notification after a detached and re-requested fuel truck (none came in BBS mode).
 - **Changed from the plan:**
-- **Rulings made while working:** 2026-10-29, the owner with Claude: the design above, measured first (tablet-presses.md): the read-only ruling overturned, no refusals of any press, the Flight tab retired, extras on their pages, no reading without the models, Shift+T by simulator state, typing into fields, PERF calc, icon-only buttons and the Fuel page's sliders left for a later plan.
+  - **New words:** a pressed control's new words are said by the press runner, once, whatever its key; the window's `announceChange` is never set for the 757 (the plan had the shell say them). A tab press says its new words ("Landing gear (selected)"); a two-choice switch says its new choice ("{label}: {word}", the owner's "Yes, speak it"), while On/Off switches, check boxes and the TOD switch stay silent; a menu press whose page is already shown says nothing.
+  - **Presses and questions:** presses queued when the window hides are dropped; a top-bar press checks the top bar too (`SameTopBar`); a question's answers are bound to their question.
+  - **AIRAC data:** the Settings pages' boxed buttons are buttons, so UPDATE, REMOVE and the two LOGOUTs press; `HookFor` also matches a button's own words, which carry no caption.
+  - **The colors theme (B757-21, a rule beyond the plan's):** a text note in the tablet window and a read-only box in the settings window, with one "Set to Dark blue" button while BlueBird's file holds another theme, the settings window's only write of the theme (under B757-17).
+  - **The settings window:** Ctrl+Page Up and Ctrl+Page Down do nothing on its slider and choice lists (the owner's Settings tab controls `Bbs757LockableSlider` and `Bbs757LockableComboBox`).
+  - **The load watch:** it reads the units when it speaks; "Boarding complete." no longer names WGTBAL.
+  - **Privacy:** a credential row is known by its distinctive word (SIMBRIEF, HOPPIE, SAYINTENTIONS; letters and digits folded), and the lines inside a found field box stay out of a row's text.
+  - **Comment-only edits outside the owned list:** `MainForm.Hotkeys.cs` (Shift+T's comment) and `TextRecognitionOffer.cs` (its summary).
+- **Open at landing (later work, none blocking):**
+  - **Privacy, the next step:** rows with no button (the Hoppie logon code, the SayIntentions key) are kept out by their label's distinctive word alone, and a label OCR runs into its field keeps the field's words; on Settings pages, drop every line inside a found box left of the value column, and filter each line's words inside found boxes. Nothing is logged or committed today.
+  - **Reading:** an empty tank's "0%" is dropped as noise ("Center tank: not read") and a dim gear door's "0%" can read "05" (an `IsNoise` change must be measured against icon glyphs); the top bar is measured on the Dark blue theme only, and a one-digit notification count is often not read (the button is then "Notifications"); the numeric keypad's OK may be taken for a question (the typing plan); a misread answer word ("N0", "0K") fails safe, the page staying pressable.
+  - **Presses:** OCR wobble in a pressed control's own words ("Recall"/"Recal") is spoken as new words (`ButtonOutcome` compares exactly; not heard in the in-sim checks); `Relocate`'s in-place rule could take a same-kind neighbor that slid into the pressed box (IoU 0.6, which no measured page allows); each press on Settings, AIRAC data runs a sign-in check after it, up to about 8.5 s while the helper view does not answer (unmeasured).
+  - **The shared window (`FbwEfbForm`, every EFB):** after an answered question the page is silent until BlueBird's next box, and the rebuild drops focus; an alert replaced within 8 s may be spoken twice (not heard in the in-sim checks); F6 says nothing while focus is in the page, as it is wired on the form's KeyDown only (a task of its own on main).
+  - **The load watch:** a second IMPORT with a revised plan keeps the first targets; a single-part watch's "has not started" never names BBS Nest.
+  - **Code:** `Bbs757EfbVocabulary.IsCredential` has no production caller; three of the settings window's inputs do not use `RowInputWidth`; "Set to Dark blue" is tested at the save and file levels only (a window-level test would write the real `%APPDATA%` backup: inject the backup folder and the guard through the internal constructor).
+- **Rulings made while working:**
+  - 2026-10-29, the owner with Claude: the design above, measured first (tablet-presses.md): the read-only ruling overturned, no refusals of any press, the Flight tab retired, extras on their pages, no reading without the models, Shift+T by simulator state, typing into fields, PERF calc, icon-only buttons and the Fuel page's sliders left for a later plan.
+  - 2026-10-30, the owner, at the in-sim checks: a two-choice setting speaks its new choice; the gear door buttons keep BlueBird's words ("Nose door: Open" names the action, as the tablet does); the colors theme is a note in both windows, with a way back to Dark blue in the settings window; "Boarding complete." without the WGTBAL sentence (the aircraft requests the weight and balance by itself); the AIRAC update tested before the Navigraph sign-out.
+  - The controller's rulings while building (accepted deviations, wording, guards) are under "Changed from the plan" and in the commit messages.
