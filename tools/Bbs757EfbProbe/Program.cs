@@ -525,19 +525,22 @@ internal static partial class Program
     }
 
     /// <summary>One region of the tablet (a value cell, a button) read on its own: cropped with a 12 px black border
-    /// (text that touches a picture's edge reads badly), read with PaddleOCR, boxes put back in tablet pixels.</summary>
+    /// (text that touches a picture's edge reads badly) from the whole tablet brightened as the reader brightens it,
+    /// read with PaddleOCR as it stands (brightening the crop again, from its own row 36, would wash a short crop out),
+    /// boxes put back in tablet pixels.</summary>
     private static async Task<IReadOnlyList<Bbs757EfbTextLine>> ReadRegionAsync(PaddleOcrEngine engine, Bitmap tablet, Rectangle region)
     {
         const int Pad = 12;
         region.Intersect(new Rectangle(0, 0, tablet.Width, tablet.Height));
         if (region.Width < 4 || region.Height < 4) return Array.Empty<Bbs757EfbTextLine>();
+        using var bright = Bbs757EfbOcr.Brighten(tablet);
         using var crop = new Bitmap(region.Width + 2 * Pad, region.Height + 2 * Pad, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(crop))
         {
             g.Clear(Color.Black);
-            g.DrawImage(tablet, new Rectangle(Pad, Pad, region.Width, region.Height), region, GraphicsUnit.Pixel);
+            g.DrawImage(bright, new Rectangle(Pad, Pad, region.Width, region.Height), region, GraphicsUnit.Pixel);
         }
-        var lines = await Bbs757EfbOcr.ReadAsync(engine, crop);
+        var lines = Bbs757EfbOcr.FromEngine(await engine.ReadAsync(crop, CancellationToken.None));
         return lines.Select(l => l with
         {
             Box = ToTablet(l.Box),
