@@ -68,6 +68,30 @@ public class A350MfdPageTests
     }
 
     // ATC COM, live 2026-10-30, a flight plan inserted and nothing sent.
+    // ATC COM's REQUEST pages, in the air (live 2026-10-30, nothing sent): each template's boxes are among many hidden ones, whose rectangles
+    // cover the labels; a box is on the screen when framed, named by the text on its left or by the words that share it.
+    [Theory]
+    [InlineData("mfd_atc_climb_to", new[] { "REQUEST CLB TO: required, amber", "AT: empty", "Delete request button" })]
+    [InlineData("mfd_atc_req_direct", new[] { "REQUEST DIR TO: required, amber", "Delete request button" })]
+    [InlineData("mfd_atc_req_tailored", new[] { "TA DESIGNATOR: empty", "SPEED: empty" })]
+    [InlineData("mfd_atc_req_oceanic", new[] { "OCEANIC CENTER: required, amber", "ENTRY POINT: required, amber", "MACH: required, amber" })]
+    public void A_request_templates_boxes_read_by_their_own_words(string fixture, string[] expected)
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture(fixture + ".json"), 0).Select(l => l.Spoken).ToList();
+        foreach (var line in expected)
+            Assert.Contains(line, spoken);
+        Assert.DoesNotContain(spoken, l => l.StartsWith("Field:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_request_template_with_no_entry_of_its_own_says_what_it_holds()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_req_oceanic.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("OCEANIC REQUEST, white", spoken);
+        Assert.Contains("(NO NOTIFICATION REQUIRED), white", spoken);
+        Assert.Contains("XFR TO MAILBOX button, grey", spoken);
+    }
+
     // A real D-ATIS (Hoppie, VCBI, live 2026-10-30): the airport's box keeps its name, the time beside it is a line of its own.
     [Fact]
     public void A_received_atis_says_its_time_apart_from_its_airport()

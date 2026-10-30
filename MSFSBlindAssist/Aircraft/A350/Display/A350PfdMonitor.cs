@@ -32,7 +32,7 @@ public sealed class A350PfdMonitor : IDisposable
     /// read or not).</summary>
     public static readonly IReadOnlyList<(string Gauge, int Index)> Quiet = new[]
     {
-        ("EFIS", 1), ("FCU", 0), ("RMP", 1), ("RMP", 2), ("SND", 0), ("BAT", 0),
+        ("EFIS", 1), ("FCU", 0), ("RMP", 1), ("RMP", 2), ("SND", 0), ("BAT", 0), ("HUD", 0), ("HUD", 1),
     };
 
     public static readonly TimeSpan WantedFor = TimeSpan.FromSeconds(10), QuietEvery = TimeSpan.FromSeconds(15);

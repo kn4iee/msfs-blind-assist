@@ -41,6 +41,9 @@ public partial class IniBuildsA350Definition
         new("Standby flight display", "A350_DISP_SFD", "SFD", 0, A350GroundDisplays.ReadSfd, "INI_ISIS1_POWERED"),
         new("Standby navigation display", "A350_DISP_SND", "SND", 0, A350GroundDisplays.ReadSnd, "INI_ISIS2_POWERED"),
         new("BAT display", "A350_DISP_BAT", "BAT", 0, A350GroundDisplays.ReadBat),
+        // Dark while stowed or not fitted (the OIS's HUD option): its handle's state (the HUD Units panel).
+        new("Captain HUD", "A350_DISP_HUD_CPT", "HUD", 0, A350GroundDisplays.ReadHud, "INI_HUD_LEFT_STATE"),
+        new("First Officer HUD", "A350_DISP_HUD_FO", "HUD", 1, A350GroundDisplays.ReadHud, "INI_HUD_RIGHT_STATE"),
     };
 
     /// <summary>What a dark screen reads, as a sighted pilot sees it.</summary>

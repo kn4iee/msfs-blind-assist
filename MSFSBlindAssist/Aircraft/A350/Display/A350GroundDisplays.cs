@@ -191,6 +191,65 @@ public static class A350GroundDisplays
 
     /// <summary>The overhead BAT display (the battery the BAT selector picks): seven-segment digits, the decimal
     /// point drawn as its own text before the last digit (live: "282" and "." for 28.2 V).</summary>
+    /// <summary>The HUD (live 2026-10-30): the FMA's columns in its top rows, each scale's numbers the clip leaves, the values by name. Its
+    /// altitude drum's digits are no reading; the rest reads as rows. A stowed combiner draws nothing.</summary>
+    public static IReadOnlyList<string> ReadHud(A350DrawCapture capture)
+    {
+        var cells = capture.Texts.Where(t => !t.Clipped && !string.IsNullOrWhiteSpace(t.Text)).Select(t => new DrawnCell(t.Text.Trim(), t.ColourName, t.X, t.Y)).ToList();
+        if (cells.Count == 0) return new[] { "HUD: blank" };
+        var o = new List<string>();
+        var used = new HashSet<DrawnCell>();
+        void Column(string name, float x0, float x1)
+        {
+            var column = cells.Where(c => c.Y < HudFmaBottom && c.X >= x0 && c.X < x1).OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
+            if (column.Count == 0) return;
+            used.UnionWith(column);
+            var rows = column.GroupBy(c => (int)Math.Round(c.Y / 10)).Select(g => string.Join(" ", g.Select(c => c.Text)));
+            o.Add($"FMA {name}: {string.Join("; ", rows)}, {column[0].Colour}");
+        }
+        Column("autothrust", 0, 520);
+        Column("vertical", 520, 760);
+        Column("lateral", 760, 1100);
+        Column("engagement", 1100, float.MaxValue);
+        void Named(string name, Func<DrawnCell, bool> which, string separator = " ")
+        {
+            var found = cells.Where(c => !used.Contains(c) && which(c)).OrderBy(c => c.X).ToList();
+            if (found.Count == 0) return;
+            used.UnionWith(found);
+            o.Add($"{name}: {string.Join(separator, found.Select(c => c.Text))}, {found[0].Colour}");
+        }
+        foreach (var gs in cells.Where(c => !used.Contains(c) && c.Text.StartsWith("GS ", StringComparison.Ordinal)).ToList())
+        {
+            used.Add(gs);
+            o.Add($"Ground speed: {gs.Text[3..]}, {gs.Colour}");
+        }
+        Named("Selected altitude", c => c.X >= 1400 && c.Text.Length >= 3 && c.Text.All(char.IsDigit));
+        if (cells.FirstOrDefault(c => c.Text == "QNH") is { } qnh)
+        {
+            used.Add(qnh);
+            Named("QNH", c => c.Y == qnh.Y && c.X > qnh.X);
+        }
+        // The wind's three texts are at one height left of the speed scale's right edge (303, /, 8).
+        var slash = cells.FirstOrDefault(c => c.Text == "/");
+        if (slash != null)
+            Named("Wind", c => Math.Abs(c.Y - slash.Y) <= 2 && c.X < 700);
+        Named("Speed scale", c => c.X is >= 150 and < 240 && c.Text.All(char.IsDigit) && c.Colour != "black", ", ");
+        Named("Altitude scale", c => Math.Abs(c.X - 1303) <= 2 && c.Text.Length == 3 && c.Text.All(char.IsDigit), ", ");
+        // The heading scale's numbers, tens of degrees, stand on one line that moves with the pitch; the first two-digit run across the width.
+        var heading = cells.Where(c => !used.Contains(c) && c.Text.Length == 2 && c.Text.All(char.IsDigit) && c.X < 1450 && c.X > 240 && Math.Abs(c.X - 1379) > 2)
+            .GroupBy(c => (int)Math.Round(c.Y / 40)).Where(g => g.Count() >= 2).OrderByDescending(g => g.Count()).FirstOrDefault()?.ToList();
+        if (heading != null)
+        {
+            used.UnionWith(heading);
+            o.Add($"Heading scale: {string.Join(", ", heading.OrderBy(c => c.X).Select(c => c.Text))}, {heading[0].Colour}");
+        }
+        // The altitude drum's digits: its column and the rolling tens beside it.
+        used.UnionWith(cells.Where(c => c.X is >= 1300 and < 1400 && c.Y is >= 500 and < 800 && c.Text.TrimStart('-').All(char.IsDigit)));
+        return o;
+    }
+
+    private const float HudFmaBottom = 230;
+
     public static IReadOnlyList<string> ReadBat(A350DrawCapture capture)
     {
         var cells = Cells(capture.Texts);

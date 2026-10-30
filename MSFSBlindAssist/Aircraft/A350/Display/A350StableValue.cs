@@ -73,6 +73,8 @@ public static class A350DisplayStatus
         ("SFD", _) => "standby flight display",
         ("SND", _) => "standby navigation display",
         ("BAT", _) => "BAT display",
+        ("HUD", 0) => "captain HUD",
+        ("HUD", 1) => "first officer HUD",
         _ => gauge,
     };
 }

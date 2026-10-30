@@ -228,6 +228,7 @@ public static class A350MfdPage
             overlays.Add(new Overlay(menuItems.Min(m => m.e.X) - shift, menuItems.Max(m => m.e.X + m.e.RectW) - shift,
                 menuItems.Min(m => m.e.Y), menuItems.Max(m => m.e.Y + m.e.RectH), menuItems.Min(m => m.e.TextStart)));
 
+        bool requestPage = titleRow.Any(c => c.Text == "REQUEST");
         bool flightPlan = titleRow.Any(c => c.Text.EndsWith("F-PLN", StringComparison.Ordinal));
         if (flightPlan)
             ReadFlightPlan(capture, shift, Mine, cells.Where(c => !itemCells.Contains(c)).ToList(), used, lines, overlays);
@@ -319,6 +320,31 @@ public static class A350MfdPage
                     && sh.Y0 >= y0 && sh.Y1 <= y0 + e.RectH) == true;
                 string state = $"{value} check box, {(check ? "checked" : "not checked")}";
                 lines.Add((y0, x0, new MfdLine("checkbox", colour == "grey" ? $"{state}, unavailable" : colour == "white" ? state : $"{state}, {colour}", cx, cy)));
+                continue;
+            }
+            if (IsField(e) && requestPage)
+            {
+                // ATC COM's REQUEST pages (live 2026-10-30): every template keeps its boxes in the draw, framed only while up, their rectangles over
+                // the labels. Up, a box is named by the words sharing it (OCEANIC CENTER ooooo), else by the text left of it on its row.
+                bool framed = capture.Shapes is not { Count: > 0 } drawn || drawn.Any(sh => sh.Kind == "stroke" && sh.Image == 0
+                    && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
+                if (!framed) continue;
+                float line = y0 + e.RectH * 0.75f;
+                var words = inside.Where(c => c.Colour == "white" && Word(c.Text) is not ("required" or "none")).ToList();
+                var entry = inside.Except(words).ToList();
+                var beside = cells.Where(c => !inside.Contains(c) && c.Colour == "white" && c.X < x0 && x0 - c.X <= 300 && Math.Abs(c.Y - line) <= 12)
+                    .OrderByDescending(c => c.X).FirstOrDefault();
+                used.UnionWith(inside);
+                if (beside != null) used.Add(beside);
+                string requestName = entry.Count > 0 && words.Count > 0 ? Words(words.Select(c => c.Text)) : beside?.Text ?? "Request";
+                string requestValue = entry.Count > 0 ? $"{Words(entry.Select(c => c.Text))}, {entry[0].Colour}" : words.Count > 0 ? $"{Words(words.Select(c => c.Text))}, {words[0].Colour}" : "empty";
+                lines.Add((y0, x0, new MfdLine("field", $"{requestName}: {requestValue}", cx, cy)));
+                continue;
+            }
+            if (requestPage && e.Class == "BaseTexturedButton" && capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0
+                    && Math.Abs(sh.X0 - shift - x0) <= 2 && Math.Abs(sh.Y0 - y0) <= 2) == true)
+            {
+                lines.Add((y0, x0, new MfdLine("button", "Delete request button", cx, cy)));
                 continue;
             }
             if (IsField(e))

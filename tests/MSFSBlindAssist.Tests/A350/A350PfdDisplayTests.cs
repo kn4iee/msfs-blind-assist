@@ -19,7 +19,7 @@ public class A350PfdDisplayTests
         {
             "Captain PFD", "First Officer PFD", "Captain ND", "First Officer ND", "Captain MFD", "First Officer MFD",
             "FCU display", "RMP 1 display", "RMP 2 display", "RMP 3 display",
-            "Standby flight display", "Standby navigation display", "BAT display",
+            "Standby flight display", "Standby navigation display", "BAT display", "Captain HUD", "First Officer HUD",
         }, def.GetPanelStructure()["Displays"]);
         foreach (var d in IniBuildsA350Definition.DisplayPanels)
         {
