@@ -675,7 +675,7 @@ The A350 has six sections. Its panels take the A380's names and order wherever t
 
 Some A350 controls are worth knowing about:
 
-- **Buttons show their state** beside their name wherever the cockpit shows one: their light (On or Off), their lit legends ("EXT 1: Available"), or what they switch ("SPD/MACH: Knots", "Captain baro unit: Hectopascals").
+- **Buttons show their state** beside their name wherever the cockpit shows one: their light (On or Off), their lit legends ("EXT 1: Available"), or what they switch ("SPD/MACH: Knots", "Captain baro unit: Hectopascals"). Each EFIS VOR 1 and VOR 2 key reads VOR, ADF or Off: each press steps to the next (ADF only when the ADF option is fitted), and its light is on for VOR and ADF alike.
 - **The baro knobs**: on the A350 a push selects STD and a pull QNH, the other way round from the A320.
 - **Typed values**: a knob whose value the cockpit shows is a field you type into, as on the other Airbus aircraft: the FCU speed, heading, altitude and V/S, each side's QNH (in that side's unit), the ISIS QNH, and the cabin altitude and vertical speed targets. Type the value and press Enter. The aircraft's own knob lands it, and BA says what the cockpit then shows, for example *"FCU speed 250, selected"*. A value the knob cannot take is refused with the reason, for example a Mach number while the window shows knots, or a QNH while that side is on STD.
 - **Levers**: the thrust levers, flaps and speed brake are combos with the A380's positions. The rudder and pitch trims are nudge buttons, with the trim shown on their panel ("Pitch trim: 1.3 degrees up").
@@ -762,6 +762,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - Every E/WD line as it appears, with its colour, from power-up on.
 - Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.
 - FMS messages while the MFD window is closed.
+- *"A350 module stopped responding: its displays and controls no longer work"* if the aircraft's own software stops (its displays freeze and nothing you press works), and *"A350 module responding again"* if it recovers. A paused simulator never counts.
 
 ### Things to know {#things-to-know-5}
 

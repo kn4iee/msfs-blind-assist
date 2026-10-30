@@ -88,6 +88,27 @@ public class A350ButtonStateTests
         Assert.Contains(_def.KeyForInput(var), _def.GetVariables()[row].StateVariables!);   // the label repaints with it
     }
 
+    // A navaid key lights for VOR and ADF alike (the cockpit XML's one legend): live 2026-10-30 the captain's VOR 1 key went
+    // Off, VOR (INI_CPT_VOR1_ACTIVE 1), ADF (INI_CPT_ADF1_ACTIVE 1, the light still on), Off, with the ADF option fitted. Its
+    // label says which, as the ND's needle labels do.
+    [Theory]
+    [InlineData("A350_EFIS_BSK_1_LEFT", "INI_CPT_VOR1_ACTIVE", "INI_CPT_ADF1_ACTIVE")]
+    [InlineData("A350_EFIS_BSK_5_LEFT", "INI_CPT_VOR2_ACTIVE", "INI_CPT_ADF2_ACTIVE")]
+    [InlineData("A350_EFIS_BSK_1_RIGHT", "INI_FO_VOR1_ACTIVE", "INI_FO_ADF1_ACTIVE")]
+    [InlineData("A350_EFIS_BSK_5_RIGHT", "INI_FO_VOR2_ACTIVE", "INI_FO_ADF2_ACTIVE")]
+    public void A_navaid_key_reads_vor_adf_or_off_where_its_light_cannot(string row, string vor, string adf)
+    {
+        Inputs((vor, 1), (adf, 0));
+        Assert.Equal("VOR", State(row));
+        Inputs((vor, 0), (adf, 1));
+        Assert.Equal("ADF", State(row));
+        Inputs((vor, 0), (adf, 0));
+        Assert.Equal("Off", State(row));
+        var repaint = _def.GetVariables()[row].StateVariables!;
+        Assert.Contains(_def.KeyForInput(vor), repaint);
+        Assert.Contains(_def.KeyForInput(adf), repaint);
+    }
+
     // The heading knob reads managed while NAV is engaged (INI_ROLL_MODE 1, even with a heading preset in the window
     // during a NAV turn, dot 0) or armed (the window's managed dot, INI_FCU_HDG_DOT: on the ground before takeoff the
     // FCU shows dashes and the dot while no lateral mode is engaged yet, roll mode 0). Live 2026-10-28: on the stand

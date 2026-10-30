@@ -472,6 +472,21 @@ public partial class IniBuildsA350Definition
             if (!IsMuted(row) && !_disposed)
                 _leverAnnouncer?.Announce(text);
         ObserveIrs(seeded);
+        ObserveWatchdog();
+    }
+
+    private readonly A350ModuleWatchdog _watchdog = new();
+    private ScreenReaderAnnouncer? _watchdogAnnouncer;
+
+    /// <summary>The module watchdog (<see cref="A350ModuleWatchdog"/>) at a batch end, on what the cache holds: an unchanged
+    /// heartbeat is not delivered again, the sim's clock is each batch.</summary>
+    private void ObserveWatchdog()
+    {
+        if (_sim is not { } sim)
+            return;
+        if (_watchdog.Observe(Cached(sim, A350ModuleWatchdog.HeartbeatKey), Cached(sim, A350ModuleWatchdog.SimTimeKey), Clock()) is { } said
+            && !IsMuted(A350ModuleWatchdog.HeartbeatKey) && !_disposed)
+            _watchdogAnnouncer?.Announce(said);
     }
 
     /// <summary>A disconnect or a flight load: every light's baseline goes, so the next value of each is silent; what
@@ -492,6 +507,7 @@ public partial class IniBuildsA350Definition
         _ownLampsUntil.Clear();
         _stepReadbacks.Clear();   // a step made before the load is not the new flight's value
         _irs.Reset();
+        _watchdog.Reset();
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();

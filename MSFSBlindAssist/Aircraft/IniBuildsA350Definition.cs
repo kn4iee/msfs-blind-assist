@@ -176,6 +176,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         foreach (var (rowKey, state) in A350ButtonStates.ByRow)
             if (_rows.ContainsKey(rowKey) && !_buttonLamps.ContainsKey(rowKey))
                 _buttonStates[rowKey] = state;
+        foreach (var (rowKey, state) in A350ButtonStates.OverLamps)
+            if (_rows.ContainsKey(rowKey))
+                _buttonStates[rowKey] = state;   // read before its light, which says less
         foreach (var row in _rows.Values)
             if (row.Action == A350RowAction.Press && row.Control is { } held && A350WritePlan.HeldVarFor(held) is { } heldVar)
                 _held[row.Key] = heldVar;
@@ -266,8 +269,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>Each panel's status display: its lights, built once ([SIM-16]).</summary>
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => _panelDisplays;
 
-    /// <summary>A button row reads its state as the cockpit shows it: its lit legends, or the state it switches
-    /// (<see cref="A350ButtonStates"/>). Nothing while an input is unread.</summary>
+    /// <summary>A button row reads its state as the cockpit shows it: the state it switches where that says more than its
+    /// lights or it has none (<see cref="A350ButtonStates"/>), else its lit legends. Nothing while an input is unread.</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
         if (_sim is { } sim && _rows.TryGetValue(varKey, out var row))
@@ -284,6 +287,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     return true;
                 }
             }
+            else if (_buttonStates.TryGetValue(varKey, out var state)
+                     && state.Vars.Select(v => Cached(sim, KeyForInput(v))).ToList() is var values && values.All(v => v.HasValue))
+            {
+                stateText = state.Words(values.Select(v => v!.Value).ToList());
+                return true;
+            }
             else if (_buttonLamps.ContainsKey(varKey))
             {
                 if (Legends(row, sim) is { } legends)
@@ -291,12 +300,6 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                     stateText = legends;
                     return true;
                 }
-            }
-            else if (_buttonStates.TryGetValue(varKey, out var state)
-                     && state.Vars.Select(v => Cached(sim, KeyForInput(v))).ToList() is var values && values.All(v => v.HasValue))
-            {
-                stateText = state.Words(values.Select(v => v!.Value).ToList());
-                return true;
             }
         }
         return base.TryDescribeControlState(varKey, out stateText);
@@ -431,6 +434,15 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             vars[IrsAlignmentKey].ExcludeFromMonitorManager = false;
             _lampInputKeys.Add(IrsAlignmentKey);
         }
+        // The module watchdog (A350ModuleWatchdog): the heartbeat on the call-out's own Ctrl+M row and the sim's clock, both
+        // consumed silently and judged at each batch end.
+        Register(A350ModuleWatchdog.HeartbeatKey, A350ModuleWatchdog.HeartbeatVar, A350ModuleWatchdog.MuteLabel, null);
+        vars[A350ModuleWatchdog.HeartbeatKey].ExcludeFromMonitorManager = false;
+        vars[A350ModuleWatchdog.HeartbeatKey].ValueDescriptions = new Dictionary<double, string>();
+        _lampInputKeys.Add(A350ModuleWatchdog.HeartbeatKey);
+        Register(A350ModuleWatchdog.SimTimeKey, "ABSOLUTE TIME", "Sim time", null, "seconds");
+        vars[A350ModuleWatchdog.SimTimeKey].ValueDescriptions = new Dictionary<double, string>();
+        _lampInputKeys.Add(A350ModuleWatchdog.SimTimeKey);
         Register(A350PanelLamps.AcPowerKey, A350PanelLamps.AcPowerVar, "AC light power", null);
         Register(A350PanelLamps.DcPowerKey, A350PanelLamps.DcPowerVar, "DC light power", null);
         Register(A350PanelLamps.AnnLtKey, A350PanelLamps.AnnLtVar, "Annunciator light test", null);
@@ -491,7 +503,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             ExcludeFromMonitorManager = true,
         };
 
-        // What a button with no light reads on its label; the label repaints with it.
+        // What a button reads on its label from the state it switches (A350ButtonStates); the label repaints with it.
         foreach (var (rowKey, state) in _buttonStates)
         {
             foreach (var name in state.Vars.Where(v => !_keyByName.ContainsKey(v)))
@@ -660,6 +672,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 ObserveWindow(window, varName, value, announcer);
         if (varName.StartsWith("A350_STAT_IR", StringComparison.Ordinal))
             _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
+        else if (varName is A350ModuleWatchdog.HeartbeatKey or A350ModuleWatchdog.SimTimeKey)
+            _watchdogAnnouncer = announcer;   // so does the module watchdog
         if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);

@@ -45,6 +45,18 @@ internal static class A350ButtonStates
         ["A350_EFIS_QNH_UNIT_SELECTOR_LEFT"] = BaroUnit(1), ["A350_EFIS_QNH_UNIT_SELECTOR_RIGHT"] = BaroUnit(2),
     };
 
+    // A navaid key lights for VOR and ADF alike (the cockpit XML's one legend): live 2026-10-30 the captain's VOR 1 key went
+    // Off, VOR, ADF (the light still on), Off, the ADF option fitted (INI_OPTION_ADF; without it the ADF step never comes).
+    private static A350ButtonState Navaid(string side, int n) => new(new[] { $"INI_{side}_VOR{n}_ACTIVE", $"INI_{side}_ADF{n}_ACTIVE" },
+        v => v[0] >= 0.5 ? "VOR" : v[1] >= 0.5 ? "ADF" : "Off");
+
+    /// <summary>Buttons whose light says less than the state they switch: their label reads the state, not the light.</summary>
+    public static readonly IReadOnlyDictionary<string, A350ButtonState> OverLamps = new Dictionary<string, A350ButtonState>(StringComparer.Ordinal)
+    {
+        ["A350_EFIS_BSK_1_LEFT"] = Navaid("CPT", 1), ["A350_EFIS_BSK_5_LEFT"] = Navaid("CPT", 2),
+        ["A350_EFIS_BSK_1_RIGHT"] = Navaid("FO", 1), ["A350_EFIS_BSK_5_RIGHT"] = Navaid("FO", 2),
+    };
+
     /// <summary>
     /// A button's lights read together: one light reads On or Off; several read their lit legends ("Available",
     /// "Squib and discharged"), a legend with no word of its own (a master light's lower half) reading On, and Off when
