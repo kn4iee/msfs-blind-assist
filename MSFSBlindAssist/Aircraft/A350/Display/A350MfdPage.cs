@@ -328,7 +328,8 @@ public static class A350MfdPage
                 // the labels. Up, a box is named by the words sharing it (OCEANIC CENTER ooooo), else by the text left of it on its row.
                 bool framed = capture.Shapes is not { Count: > 0 } drawn || drawn.Any(sh => sh.Kind == "stroke" && sh.Image == 0
                     && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
-                if (!framed) continue;
+                // (Two templates' boxes can stand on one place, a pixel apart.)
+                if (!framed || lines.Any(l => l.Line.Kind == "field" && Math.Abs(l.Line.ClickX - cx) <= 2 && Math.Abs(l.Line.ClickY - cy) <= 2)) continue;
                 float line = y0 + e.RectH * 0.75f;
                 var words = inside.Where(c => c.Colour == "white" && Word(c.Text) is not ("required" or "none")).ToList();
                 var entry = inside.Except(words).ToList();

@@ -84,6 +84,13 @@ public class A350MfdPageTests
     }
 
     [Fact]
+    public void A_request_box_kept_twice_in_the_draw_is_one_line()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_climb_to.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Equal(1, spoken.Count(l => l == "AT: empty"));
+    }
+
+    [Fact]
     public void A_request_template_with_no_entry_of_its_own_says_what_it_holds()
     {
         var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_req_oceanic.json"), 0).Select(l => l.Spoken).ToList();
