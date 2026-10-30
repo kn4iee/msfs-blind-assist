@@ -96,7 +96,6 @@ public static class Bbs757Loadsheet
     public const string FuelTooMuchText = "The plan's fuel is more than the tanks hold.";
     public const string CargoTooMuchText = "The plan's cargo is more than the holds take.";
     public const string NoAircraftTypeText = "Your latest SimBrief plan names no aircraft type. Create a B752 plan, then try again.";
-    public const string WeightAndBalanceText = "For the ACARS weight and balance, request WGTBAL on the CDU.";
 
     /// <summary>The refusal of a plan for another aircraft.</summary>
     public static string WrongAircraftText(string icao) =>

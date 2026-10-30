@@ -21,9 +21,9 @@ public class Bbs757LoadWatchTests
 
     private const string Fueled = "Fueling complete. Fuel 16400 pounds: left 8200, right 8200, center 0.";
 
-    private const string Boarded =
-        "Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 3990, aft 0. " +
-        "For the ACARS weight and balance, request WGTBAL on the CDU.";
+    // Nothing about the ACARS weight and balance: the aircraft's systems request it by themselves once boarding completes (the
+    // owner's ruling of 2026-10-30), so the WGTBAL sentence that ended this was dropped.
+    private const string Boarded = "Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 3990, aft 0.";
 
     /// <summary>A read in pounds (one pound per "gallon"), each wing holding <paramref name="wing"/>.</summary>
     private static Bbs757LoadReadBack Read(double wing, double center = 0, double first = 0, double economy = 0,
@@ -182,8 +182,7 @@ public class Bbs757LoadWatchTests
         var watch = FueledWatch();
         watch.Observe(Boarding(1850, 19240, forward: 2000, aft: 1990), 30_000);
 
-        Assert.Equal("Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 2000, aft 1990. " +
-                     "For the ACARS weight and balance, request WGTBAL on the CDU.",
+        Assert.Equal("Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 2000, aft 1990.",
             watch.Observe(Boarding(1850, 19240, forward: 2000, aft: 1990), 45_000));
     }
 
@@ -227,9 +226,9 @@ public class Bbs757LoadWatchTests
         var aboard = Read(12775, first: 2800, economy: 28000, forward: 10300, aft: 10359);
         watch.Observe(aboard, 30_000);
 
+        // The cap is the phrase's last sentence.
         Assert.Equal("Boarding complete. Passengers 30800 pounds. Cargo 20660 pounds: forward 10300, aft 10360. " +
-                     "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds. " +
-                     "For the ACARS weight and balance, request WGTBAL on the CDU.",
+                     "The plan's 224 passengers are capped at the 757's 176 seats; the rest of the payload goes in the holds.",
             watch.Observe(aboard, 45_000));
     }
 

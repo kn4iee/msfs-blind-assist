@@ -21,10 +21,10 @@ public enum Bbs757LoadParts { None = 0, Fuel = 1, Boarding = 2, Both = 3 }
 /// of the plan's block and every tank moved less than <see cref="FuelSettledLbs"/> since the last read
 /// (the APU burns fuel, so the tanks never read unchanged; and BlueBird can move fuel between tanks
 /// while the total holds still);</item>
-/// <item>"Boarding complete." with the passengers, the cargo and where the ACARS weight and balance
-/// comes from, when the cabin and the cargo's TOTAL are each within the larger of 0.5% and 20 lb of the
-/// plan and moved less than <see cref="PayloadSettledLbs"/> since the last read (BlueBird's split
-/// between the holds is not judged, ruling R43);</item>
+/// <item>"Boarding complete." with the passengers and the cargo, when the cabin and the cargo's TOTAL are each
+/// within the larger of 0.5% and 20 lb of the plan and moved less than <see cref="PayloadSettledLbs"/> since the
+/// last read (BlueBird's split between the holds is not judged, ruling R43). Nothing about the ACARS weight and
+/// balance: the aircraft's systems request it by themselves once boarding completes (the owner's ruling of 2026-10-30);</item>
 /// <item>at <see cref="NotStartedMs"/>, for each part not done whose tanks or stations have not moved
 /// since the first read, that BlueBird has not started it, and that part is no longer watched: fueling
 /// and boarding start at once (measured), and with BBS Nest closed BlueBird ignores every tap;</item>
@@ -200,10 +200,9 @@ public sealed class Bbs757LoadWatch
         Math.Abs(now.Left - from.Left) < lbs && Math.Abs(now.Right - from.Right) < lbs && Math.Abs(now.Center - from.Center) < lbs;
 
     /// <summary>
-    /// "Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 3990, aft 0. For the ACARS
-    /// weight and balance, request WGTBAL on the CDU.", with the cap before the last sentence when the
-    /// plan has more passengers than the 757 seats (BlueBird puts the rest of the payload in the holds). Its weights are in the
-    /// units read now, once for the phrase.
+    /// "Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 3990, aft 0.", then the cap when the plan has
+    /// more passengers than the 757 seats (BlueBird puts the rest of the payload in the holds). Its weights are in the units read
+    /// now, once for the phrase.
     /// </summary>
     private string BoardedPhrase(Bbs757LoadReadBack read)
     {
@@ -217,7 +216,6 @@ public sealed class Bbs757LoadWatch
         if (Loads.PassengersCapped)
             said.Add($"The plan's {Loads.PlannedPassengers.ToString(CultureInfo.InvariantCulture)} passengers are capped at " +
                      $"the 757's {Bbs757Loadsheet.Seats.ToString(CultureInfo.InvariantCulture)} seats; the rest of the payload goes in the holds.");
-        said.Add(Bbs757Loadsheet.WeightAndBalanceText);
         return string.Join(" ", said);
     }
 
