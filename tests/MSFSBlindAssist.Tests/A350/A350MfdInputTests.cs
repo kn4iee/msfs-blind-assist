@@ -169,6 +169,7 @@ public class A350MfdInputTests
     [Fact]
     public void Every_alt_letter_page_key_is_a_kccu_key()
     {
+        Assert.All(MSFSBlindAssist.Forms.A350.A350MfdWindow.ArrowKeys.Values, k => Assert.Contains(k, A350Kccu.FunctionKeys));
         Assert.All(MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys.Values, k => Assert.Contains(k, A350Kccu.FunctionKeys));
         Assert.Equal("INIT", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.I]);   // A380 letters
         Assert.Equal("FPLAN", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.F]);

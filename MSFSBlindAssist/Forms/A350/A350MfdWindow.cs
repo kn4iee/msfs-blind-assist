@@ -23,7 +23,13 @@ public sealed class A350MfdWindow : Form
         [Keys.I] = "INIT", [Keys.F] = "FPLAN", [Keys.E] = "PERF", [Keys.L] = "FUEL", [Keys.R] = "RADNAV",
         [Keys.P] = "SEC", [Keys.D] = "DIR", [Keys.A] = "ATC", [Keys.V] = "SURV", [Keys.C] = "CLR",
         [Keys.T] = "DEST", [Keys.G] = "PROG", [Keys.M] = "MAILBOX", [Keys.K] = "CL_MENU", [Keys.N] = "NOTEPAD",
-        [Keys.O] = "DATA", [Keys.U] = "MENU", [Keys.B] = "AIRPORT", [Keys.Y] = "REF", [Keys.X] = "ESC",
+        [Keys.O] = "DATA", [Keys.U] = "MENU", [Keys.B] = "AIRPORT", [Keys.Y] = "REF", [Keys.X] = "ESC", [Keys.S] = "OIS",
+    };
+
+    /// <summary>Control+arrow presses the KCCU's own arrows (F-PLN line by line, a list's options).</summary>
+    internal static readonly IReadOnlyDictionary<Keys, string> ArrowKeys = new Dictionary<Keys, string>
+    {
+        [Keys.Control | Keys.Up] = "UP", [Keys.Control | Keys.Down] = "DOWN", [Keys.Control | Keys.Left] = "LEFT", [Keys.Control | Keys.Right] = "RIGHT",
     };
 
     private readonly Func<A350DrawCapture?> _latest;
@@ -250,6 +256,11 @@ public sealed class A350MfdWindow : Form
         }
         if (ActiveControl == _list)
         {
+            if (ArrowKeys.TryGetValue(keyData, out var arrow))
+            {
+                PressKey(arrow);
+                return true;
+            }
             switch (keyData)
             {
                 case Keys.Enter: _ = ActivateAsync(); return true;
