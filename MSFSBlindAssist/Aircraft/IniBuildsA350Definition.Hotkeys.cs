@@ -47,7 +47,7 @@ public partial class IniBuildsA350Definition
             case HotkeyAction.ShowFenixMCDU:
                 ShowMfdWindow(simConnect, announcer, hotkeyManager, page: null);
                 return true;
-            // Ctrl+N, Ctrl+Shift+C, Ctrl+Shift+D: another aircraft's window, the A350's page for it on the MFD.
+            // Ctrl+N, Ctrl+Shift+C: another aircraft's window, the A350's page for it on the MFD.
             case var windowKey when A350.A350Hotkeys.MfdPages.TryGetValue(windowKey, out var page):
                 ShowMfdWindow(simConnect, announcer, hotkeyManager, page);
                 return true;

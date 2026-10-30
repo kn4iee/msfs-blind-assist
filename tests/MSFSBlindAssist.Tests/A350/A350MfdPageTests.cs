@@ -64,6 +64,113 @@ public class A350MfdPageTests
         Assert.DoesNotContain(A350MfdPage.Read(A350Fixtures.Capture("mfd_radnav_ls.json"), 0), l => l.Spoken.Contains("check box", StringComparison.Ordinal));
     }
 
+    // ATC COM, live 2026-10-30, a flight plan inserted and nothing sent.
+    [Fact]
+    public void The_atc_datis_page_names_its_airports_and_its_keys_only_by_their_own_words()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_datis.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("Airport: VCBI, cyan", spoken);
+        Assert.Contains("Airport: OMDB, cyan", spoken);
+        Assert.Contains("SEND REQUEST button", spoken);       // the flight number in the header is no column of these keys
+        Assert.DoesNotContain(spoken, l => l.Contains("UAE111 SEND", StringComparison.Ordinal) || l.Contains("UAE111 AUTO", StringComparison.Ordinal));
+    }
+
+    // The notepad, live 2026-10-30 (KCCU NOTEPAD, Alt+N in the window): open, a light bar named NOTE PAD is painted across the
+    // scratchpad's row, over CLEAR INFO and the FMS message, with its own box, a key for the saved notes and a key that closes it.
+    [Fact]
+    public void An_open_notepad_reads_as_its_field_and_its_keys_and_hides_what_it_covers()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_open.json"), 0);
+        var spoken = lines.Select(l => l.Spoken).ToList();
+        var note = lines.Single(l => l.Spoken == "Notepad: HELLO WORLD, cyan");
+        Assert.Equal("field", note.Kind);
+        Assert.Equal(414, note.ClickX);
+        Assert.Equal(979.5f, note.ClickY);
+        Assert.Equal(712, lines.Single(l => l.Spoken == "Saved notes button").ClickX);
+        Assert.Equal(759, lines.Single(l => l.Spoken == "Close notepad button").ClickX);
+        Assert.DoesNotContain(spoken, l => l.Contains("CLEAR", StringComparison.Ordinal) || l.Contains("NOTE", StringComparison.Ordinal)
+            || l.StartsWith("Scratchpad", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Kind == "scratchpad");
+    }
+
+    [Fact]
+    public void The_saved_notes_read_after_the_notepad_oldest_first_each_one_a_key()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_list.json"), 0);
+        var spoken = lines.Select(l => l.Spoken).ToList();
+        int note = spoken.IndexOf("Notepad: HELLO WORLD, cyan, menu open");
+        Assert.True(note >= 0, string.Join(" | ", spoken));
+        Assert.Equal("GATE A6 button", spoken[note + 1]);
+        Assert.Equal("HELLO WORLD button", spoken[note + 2]);
+        Assert.Equal("menuitem", lines[note + 2].Kind);
+        Assert.Equal(931, lines[note + 2].ClickY);
+    }
+
+    [Fact]
+    public void A_note_being_typed_is_read_in_its_box()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_typing.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains(spoken, l => l.StartsWith("Notepad: BCDEFGHIJKLMNOPQRSTUVWXYZ0123", StringComparison.Ordinal));
+    }
+
+    // On the F-PLN the list reaches over the destination and INIT keys, whose rectangles hold the start of its rows: an item's text is
+    // the item's, and the keys keep their names (live 2026-10-30: "GATE A6 OMDB HELLO WORLD button" pressed the destination).
+    [Fact]
+    public void A_list_over_a_key_keeps_its_own_text()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_list_fpln.json"), 0);
+        var spoken = lines.Select(l => l.Spoken).ToList();
+        Assert.Contains("INIT button", spoken);
+        var items = lines.Where(l => l.Kind == "menuitem" && l.ClickX == 416).Select(l => l.Spoken).ToList();   // (F-PLN INFO's menu was open too)
+        Assert.Equal(new[] { "GATE A6 button", "HELLO WORLD button", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123- button", "STAND 6 PUSH 1440 button" }, items);
+        Assert.Equal(823, lines.Single(l => l.Spoken == "GATE A6 button").ClickY);
+    }
+
+    // ATC COM's pages have no scratchpad box: the open notepad's bar and empty box still cover CLEAR INFO and the message (live 2026-10-30).
+    [Fact]
+    public void An_open_notepad_on_a_page_with_no_box_says_so_and_still_covers_the_message()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_atc.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("Notepad open, no box on this page", spoken);
+        Assert.DoesNotContain(spoken, l => l.Contains("CLEAR", StringComparison.Ordinal) || l.Contains("NOTE", StringComparison.Ordinal)
+            || l.StartsWith("Scratchpad", StringComparison.Ordinal));
+    }
+
+    // Closed, its close key is there but draws nothing and takes no press (live 2026-10-30): no line.
+    [Fact]
+    public void A_closed_notepad_is_no_line()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_request.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("CLEAR INFO button", spoken);
+        Assert.DoesNotContain(spoken, l => l.Contains("otepad", StringComparison.Ordinal) || l.Contains("Saved notes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_scratchpads_message_never_names_a_key_with_no_text()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_msg_record.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.DoesNotContain(spoken, l => l.EndsWith("UPGRADED button", StringComparison.Ordinal) || l.EndsWith("DOWNGRADED button", StringComparison.Ordinal));
+        Assert.Contains("ALL MSG button", spoken);
+    }
+
+    // ATC COM's sixth tab, black on amber above the title bar (live 2026-10-30): a key, never the title's.
+    [Fact]
+    public void The_atc_emergency_tab_is_a_key_and_no_part_of_the_title()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_msg_record.json"), 0);
+        Assert.Equal("MSG RECORD", lines.Single(l => l.Kind == "title").Spoken);
+        var emer = lines.Single(l => l.Spoken == "EMER button, amber");
+        Assert.Equal(734.5f, emer.ClickX);
+        Assert.Equal(76.5f, emer.ClickY);
+    }
+
+    [Fact]
+    public void A_label_drawn_with_its_colon_is_said_once()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_atc_connect.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("NOTIFY TO ATC: none, cyan", spoken);
+    }
+
     [Fact]
     public void The_data_status_page_reads_as_lines()
     {

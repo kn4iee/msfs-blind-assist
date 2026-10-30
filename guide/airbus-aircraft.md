@@ -716,7 +716,22 @@ FMS messages, such as *"Scratchpad: NAV ACCURACY UPGRADED, white"*, are spoken a
 
 The A350's normal checklists are on the MFD's C/L MENU (Alt+K in the window, or Output Ctrl+Shift+C). Each item is a button: Enter ticks it, and sensed items tick themselves.
 
-Three keys you know from other aircraft open the MFD window straight on the A350's own page: Input Ctrl+N on RAD NAV (the navigation radios), Output Ctrl+Shift+C on C/L MENU (the checklists) and Input Ctrl+Shift+D on ATC COM (the datalink). If the MFD is still typing your last entry, BA says so and stays on the page: press the key again.
+Two keys you know from other aircraft open the MFD window straight on the A350's own page: Input Ctrl+N on RAD NAV (the navigation radios) and Output Ctrl+Shift+C on C/L MENU (the checklists). If the MFD is still typing your last entry, BA says so and stays on the page: press the key again.
+
+**The notepad** (Alt+N) is the MFD's place for your own notes. While it is open it covers the scratchpad's row, so the FMS message and CLEAR INFO are hidden until you close it, for a sighted pilot too.
+
+- *"Notepad: ..."* is its box. Type a note in the scratchpad box and press Enter on that line: it holds up to 31 characters, and only what the KCCU has keys for (letters, digits, space and / . + -).
+- **Saved notes** opens the list of your notes, oldest first; Enter on one brings it back into the box.
+- **Close notepad** closes it; so does Alt+N again.
+- ATC COM's pages have no box: there it says *"Notepad open, no box on this page"*.
+
+**ATC COM** (Alt+A) holds the datalink pages, each a tab:
+
+- **CONNECT:** NOTIFY TO ATC logs on to a station, the active and next ATC, the maximum uplink delay and ADS-C.
+- **REQUEST:** on the ground only CLEARANCE, DEPARTURE works: fill its GATE and D-ATIS CODE, then XFR TO MAILBOX passes it to the [mailbox](#a350-windows), where nothing goes out until you press SEND. VERTICAL, LATERAL, SPEED, WHEN CAN WE EXPECT, OTHER, ADD TEXT and the OCEANIC clearance stay grey on the ground. GENERIC is always grey on this aircraft.
+- **REPORT & MODIFY** and **MSG RECORD**, the messages kept, with ALL MSG, MONITORED MSG, ERASE ALL and PRINT.
+- **D-ATIS:** the airports from your flight plan, each with DEP, ARR or NONE, SEND REQUEST and AUTO UPDATE, and PRINT ALL and UPDATE ALL.
+- **EMER:** MAYDAY, PANPAN and the other emergency reports, and ADS-C EMERGENCY. On version 1.2.7 of the A350 these report keys do nothing when pressed, for a sighted pilot too.
 
 ### EFB {#efb-5}
 
@@ -812,7 +827,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 
 **The printer** window holds what the printer last printed, to read line by line, and shows a new printout as it arrives; **F5** reads it now, **Escape** closes. Printouts come from the MFD (ACTIVE, DATA, PRINTER: its PRINT keys and AUTO PRINT check boxes) and the OIS. The **Cockpit** panel's **Printer paper tear off** takes the paper off the printer and puts it beside the seat, and the **Misc** panel's **Torn paper put away** removes it; each has a status line.
 
-**The ATC mailbox** (**Input Ctrl+Shift+D**, the A32NX's DCDU key, or the list above) is where the A350 shows its datalink messages, above the warning display. It lists the message shown, line by line, with its time and station, how many messages there are (*"MSG 1/2"*), then its buttons: **Enter** presses one. A request you prepare on the MFD's ATC COM pages and pass over with XFR TO MAILBOX waits here with **SEND** and **CANCEL**; a message from ATC comes with its replies, such as WILCO, STANDBY and UNABLE. **SEND** and a reply go out to ATC, as they do for a sighted pilot. **PRINT** prints the message, and the arrows move between messages and pages. *"MAILBOX NOT AVAIL"* is what it shows for the first 20 seconds after power-up and whenever the bus feeding it has no power. Output Alt+E reads its lines too.
+**The ATC mailbox** (**Input Ctrl+Shift+D**, the A32NX's DCDU key, or the list above, or Alt+M in the MFD window) is where the A350 shows its datalink messages, above the warning display. It lists the message shown, line by line, with its time and station, how many messages there are (*"MSG 1/2"*), then its buttons: **Enter** presses one. A request you prepare on the MFD's ATC COM pages and pass over with XFR TO MAILBOX waits here with **SEND** and **CANCEL**; a message from ATC comes with its replies, such as WILCO, STANDBY and UNABLE. **SEND** and a reply go out to ATC, as they do for a sighted pilot. **PRINT** prints the message, and the arrows move between messages and pages. *"MAILBOX NOT AVAIL"* is what it shows for the first 20 seconds after power-up and whenever the bus feeding it has no power. Output Alt+E reads its lines too.
 
 ### Things to know {#things-to-know-5}
 

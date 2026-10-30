@@ -305,6 +305,35 @@ internal sealed partial class ProbeForm
                             Line($"{box.SelectedIndex}: {box.SelectedItem}");
                             break;
                         }
+                        case "text":   // text WORDS: into the top window's text box, as the pilot types it there
+                        {
+                            var box = Window()?.Controls.OfType<TextBox>().FirstOrDefault();
+                            if (box == null) { Line("no text box"); break; }
+                            box.Text = rest;
+                            Line("typed");
+                            break;
+                        }
+                        case "raw":   // raw GAUGE INDEX [Y0 Y1 [X0 X1]]: what a draw holds in a band: its texts and its controls, each with its index
+                        {
+                            var p = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            float F(int i, float d) => p.Length > i ? float.Parse(p[i], CultureInfo.InvariantCulture) : d;
+                            float y0 = F(2, 0), y1 = F(3, 99999), x0 = F(4, 0), x1 = F(5, 99999);
+                            if (await Draw(p[0], int.Parse(p[1])) is not { } c) { Line("no draw"); break; }
+                            for (int k = 0; k < c.Texts.Count; k++)
+                                if (c.Texts[k] is var t && t.Y >= y0 && t.Y < y1 && t.X >= x0 && t.X < x1 && t.Text.Trim().Length > 0)
+                                    Line(FormattableString.Invariant($"T{k,-4} {t.X,7:0} {t.Y,6:0} {t.ColourName,-7} {t.Text}"));
+                            foreach (var e in c.Elements.Where(e => e.Y >= y0 && e.Y < y1 && e.X >= x0 && e.X < x1))
+                                Line(FormattableString.Invariant($"E{e.TextStart,-4} {e.X,7:0} {e.Y,6:0} {e.RectW,5:0}x{e.RectH,-4:0} {e.Class}"));
+                            break;
+                        }
+                        case "save":   // save GAUGE INDEX PATH: a draw as a fixture
+                        {
+                            var p = rest.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+                            if (await Draw(p[0], int.Parse(p[1])) is not { } c) { Line("no draw"); break; }
+                            File.WriteAllText(p[2], System.Text.Json.JsonSerializer.Serialize(c));
+                            Line("saved " + p[2]);
+                            break;
+                        }
                         case "stats":
                         {
                             var sim = System.Diagnostics.Process.GetProcessesByName("FlightSimulator2024").FirstOrDefault();

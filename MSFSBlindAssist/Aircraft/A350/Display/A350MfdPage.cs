@@ -94,10 +94,10 @@ public static class A350MfdPage
                 .OrderBy(sh => (sh.X1 - sh.X0) * (sh.Y1 - sh.Y0)).FirstOrDefault();
             if (box != null)
             {
-                cells[k] = c = c with { Colour = c.Y < TitleBottom && A350Rgba.NameOf(box.Colour) == "grey" ? TitleBar : A350Rgba.NameOf(box.Colour) };
+                cells[k] = c = c with { Colour = InTitleBar(c) && A350Rgba.NameOf(box.Colour) == "grey" ? TitleBar : A350Rgba.NameOf(box.Colour) };
                 onBox.Add(c);
             }
-            if (c.Y < TitleBottom) titleRow.Add(c);
+            if (InTitleBar(c)) titleRow.Add(c);
         }
         // The green dot speed's label is no text but a drawn green circle, a small square stroke (PERF T.O, live).
         foreach (var sh in (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "stroke" && sh.Image == 0
@@ -111,6 +111,18 @@ public static class A350MfdPage
         // after it begins, inside it: the dismissed consent dialog sits in every frame, and what is drawn after it (the
         // FMS system menu beside it, a list over its place) is never its own (review, 2026-10-28).
         var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
+        // The notepad, open (KCCU NOTEPAD, live 2026-10-30): a light bar named NOTE PAD across the scratchpad's row hides CLEAR INFO and the
+        // FMS message; what is left of it is its own box, the key for its saved notes in the box's row and the key right of it that closes it.
+        // ATC COM's pages paint the bar and an empty box, with no control in it.
+        bool notepadOpen = capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && Math.Abs(sh.X0 - shift - NotepadBarX0) <= 2 && Math.Abs(sh.X1 - shift - NotepadBarX1) <= 2
+            && Math.Abs(sh.Y0 - NotepadBarY0) <= 2 && Math.Abs(sh.Y1 - NotepadBarY1) <= 2) == true;
+        var notepad = elements.FirstOrDefault(e => e.Class == "NotepadTextbox");
+        var notepadBox = !notepadOpen || notepad == null ? null : elements.FirstOrDefault(e => e.Class == "BaseUITextBox" && Math.Abs(e.X - notepad.X) <= 2 && Math.Abs(e.Y - notepad.Y) <= 2);
+        if (notepadOpen)
+        {
+            cells.RemoveAll(c => (notepadBox == null || c.Index < notepadBox.TextStart) && c.X >= NotepadBarX0 && c.X <= NotepadBarX1 && c.Y >= NotepadBarY0 && c.Y <= NotepadBarY1);
+            elements.RemoveAll(e => e.Class == "MessageListButton");
+        }
         var popups = elements.Select((e, i) => (e, i)).Where(p => p.e.Class is "PopupDialog" or "EULADialog"
             && cells.Where(c => c.Index >= p.e.TextStart).MinBy(c => c.Index) is { } first && Inside(p.e, first.X, first.Y)).ToList();
         // An open drop-down menu's items (DropdownButtonUI with their own texts drawn after them) hide what they cover,
@@ -137,6 +149,8 @@ public static class A350MfdPage
             && Covers(p.e, q.e.X - shift + q.e.RectW / 2, q.e.Y + q.e.RectH / 2))).Select(q => q.e).ToHashSet();
         var used = new HashSet<Cell>();
         var lines = new List<(float Top, float Left, MfdLine Line)>();
+        if (notepadOpen && notepad == null)
+            lines.Add((NotepadBarY0, NotepadBarX0, new MfdLine("text", NotepadNoBox, (NotepadBarX0 + NotepadBarX1) / 2, (NotepadBarY0 + NotepadBarY1) / 2)));
         // The title bar: the page's title, then what else it holds, in its own box's colour (TMPY on yellow); an open menu
         // over it (ACTIVE's) hides it.
         titleRow.RemoveAll(c => !cells.Contains(c));
@@ -227,15 +241,25 @@ public static class A350MfdPage
             bool OverByLater(Cell c) => IsField(e) && elements.Skip(at + 1).Any(o => !Containers.Contains(o.Class) && !IsField(o)
                 && !hidden.Contains(o) && c.Index >= o.TextStart
                 && c.X >= o.X - shift && c.X <= o.X - shift + o.RectW && c.Y >= o.Y && c.Y <= o.Y + o.RectH + 4);
+            // An open list's item owns its text, over whatever key it hangs across (the notepad's saved notes over the F-PLN's INIT key, live 2026-10-30).
+            bool isItem = e.Class == RevisionItem || menuItems.Any(m => m.e == e);
             var inside = InReadingOrder(cells.Where(c => !used.Contains(c) && c.Index >= from && c.X >= x0 && c.X <= x1 && c.Y >= y0 && c.Y <= y1
-                && !OverByLater(c)));
+                && !OverByLater(c) && (isItem || !itemCells.Contains(c))));
             float cx = x0 + e.RectW / 2, cy = y0 + e.RectH / 2;
             string value = Words(inside.Select(c => c.Text));
             string colour = inside.FirstOrDefault(c => c.Colour != "grey")?.Colour ?? inside.FirstOrDefault()?.Colour ?? "white";
+            if (e == notepadBox) continue;
             if (e.Class == "NotepadTextbox")
             {
                 used.UnionWith(inside);
-                lines.Add((y0, x0, new MfdLine("scratchpad", inside.Count == 0 ? "Scratchpad: empty" : $"Scratchpad: {value}, {colour}", cx, cy)));
+                lines.Add(notepadBox == null
+                    ? (y0, x0, new MfdLine("scratchpad", inside.Count == 0 ? "Scratchpad: empty" : $"Scratchpad: {value}, {colour}", cx, cy))
+                    : (y0, x0, new MfdLine("field", inside.Count == 0 ? "Notepad: empty" : $"Notepad: {value}, {colour}", x0 + notepadBox.RectW / 2, cy)));
+                continue;
+            }
+            if (notepadBox != null && e.Class == "BaseTexturedButton" && Math.Abs(cy - (notepadBox.Y + notepadBox.RectH / 2f)) <= 2)
+            {
+                lines.Add((notepadBox.Y, x0, new MfdLine("button", x0 < notepadBox.X - shift + notepadBox.RectW + NotepadKeyReach ? "Saved notes button" : "Close notepad button", cx, cy)));
                 continue;
             }
             if (e.Class.EndsWith("BoxItem", StringComparison.Ordinal))
@@ -324,7 +348,7 @@ public static class A350MfdPage
             // BKUP's EFIS keys: CSTR to ARPT under theirs, WX, TERR and TRAF over theirs; live 2026-10-30). Its colour is its
             // light's, an empty text inside it (grey while the backup is not in use).
             if (inside.Count == 0 && e.Class == "BaseUIButton"
-                && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 10 && c.X <= x1
+                && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && !onBox.Contains(c) && c.Colour == "white" && c.X >= x0 - 10 && c.X <= x1
                         && (c.Y > y1 && c.Y - y1 <= 45 || c.Y < y0 && y0 - c.Y <= 25))
                     .OrderBy(c => c.Y > y1 ? c.Y - y1 : y0 - c.Y).FirstOrDefault() is { } nameBeside)
             {
@@ -402,7 +426,8 @@ public static class A350MfdPage
         // row where its column holds several.
         string? ColumnHeader(float top, float x0, float x1)
         {
-            var over = cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c)
+            // (Under the title bar: the header's flight number is no column's, live 2026-10-30.)
+            var over = cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c) && c.Y >= TitleBottom
                 && c.Colour == "white" && c.Y < top && top - c.Y <= 300 && c.X >= x0 - 40 && c.X <= x1 + 40).ToList();
             if (over.Count == 0) return null;
             float row = over.Max(c => c.Y);
@@ -432,7 +457,9 @@ public static class A350MfdPage
             var f = fields[k];
             // With no label and no column, the tab the page is on says what the page's one such box holds (VERT REV's SPD);
             // with several, a tab name would mislead ("CRZ: ..." on PERF CRZ).
-            string name = f.Label?.Text ?? columnNames.GetValueOrDefault(k) ?? (unnamed == 1 ? pageTab : null) ?? "Field";
+            // (A label may be drawn with its colon: NOTIFY TO ATC:. D-ATIS's boxes hold airports and have no label.)
+            string name = f.Label?.Text.TrimEnd(':', ' ') ?? columnNames.GetValueOrDefault(k) ?? (unnamed == 1 ? pageTab : null)
+                ?? (titleRow.Any(c => c.Text.StartsWith("D-ATIS", StringComparison.Ordinal)) ? "Airport" : "Field");
             if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)
@@ -482,7 +509,9 @@ public static class A350MfdPage
         var ordered = lines.OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Line).ToList();
         if (menuItems.Count > 0)
             ordered = WithMenuAfterItsButton(ordered, menuItems.Select(m => m.e).ToList(),
-                elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)), shift);
+                // (The notepad's saved notes hang from its box, whatever key the top of their list comes to.)
+                notepadBox != null && Math.Abs(menuItems.Max(m => m.e.Y + m.e.RectH) - notepadBox.Y) <= TouchPx ? new[] { notepadBox }
+                    : elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)), shift);
         if (revisionItems.Count > 0)
             ordered = WithRevisionMenuAfterTitle(ordered, revisionItems, shift);
         if (revisionPopup != null)
@@ -593,8 +622,18 @@ public static class A350MfdPage
     /// <summary>The title bar's colour, as its texts read: they are the page's title, said without a colour.</summary>
     private const string TitleBar = "title";
 
-    /// <summary>The title bar's band (its texts drawn at y 137).</summary>
-    private const float TitleBottom = 150;
+    /// <summary>The title bar's band (its fill from y 108, its texts drawn at y 137). Above it black on a box is a key's: ATC COM's
+    /// EMER tab, on amber (live 2026-10-30).</summary>
+    private const float TitleTop = 108, TitleBottom = 150;
+
+    private static bool InTitleBar(Cell c) => c.Y >= TitleTop && c.Y < TitleBottom;
+
+    /// <summary>What an open notepad reads as on a page with no box in it (ATC COM's).</summary>
+    public const string NotepadNoBox = "Notepad open, no box on this page";
+
+    /// <summary>The open notepad's light bar (live 2026-10-30), and how far right of its box its saved notes' key stands: the box
+    /// ends where that key begins, the key that closes it is 36 px on.</summary>
+    private const float NotepadBarX0 = 20, NotepadBarX1 = 789, NotepadBarY0 = 950, NotepadBarY1 = 1009, NotepadKeyReach = 10;
 
     /// <summary>Where the FMS message shows: the scratchpad box's place on the pages that have one (x 129, y 960, 597 x 39).</summary>
     private const float MessageX0 = 129, MessageX1 = 726, MessageY0 = 960, MessageY1 = 1003;
@@ -683,8 +722,8 @@ public static class A350MfdPage
     }
 
     /// <summary>How far an open list may stand from the control it hangs from: RWY's list starts 6 px under its key,
-    /// ACTIVE's flush with it (live).</summary>
-    private const float TouchPx = 10;
+    /// ACTIVE's flush with it, the notepad's saved notes 11 px over its box (live).</summary>
+    private const float TouchPx = 12;
 
     /// <summary>An open drop-down's items read right after the control it hangs from, which says the menu is open; a
     /// sighted pilot sees the list hanging off it. That control is the one whose edge the list touches (a field's list
