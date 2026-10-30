@@ -470,7 +470,7 @@ All in `%APPDATA%\MSFSBlindAssist\logs`, through `Log` ([CORE-15]), top to botto
 | `a350_display.log` | one line a minute (`A350ReaderStats`): copies (count, average and worst time, size, what was read again, regions left out), draws (count, average and worst time and which display, head room), failures per display, retries and torn texts, and the machine's memory (sim commit, free commit, free physical, MSFSBA); each failed draw's text with the wasm backtrace of a trap, each display's each error at most once a minute |
 | `a350_speech.log` | every sentence said while the reader runs (`ScreenReaderAnnouncer.Trace`, set only then, whatever said it: panels, hotkeys, MainForm, call-outs), and at Debug each call-out kept quiet and why (muted, settling after a load, the MFD window says it, a light's own press) |
 
-So "it never told me" reads from `a350_speech.log` and the unticked rows, "the display went quiet" from `a350_display.log`. What is never spoken is never in them ([A350-12]); an OIS value is not logged. To check the logging itself with the probe, run it with `A350_LOG=1`, which starts the writer it otherwise leaves off.
+So "it never told me" reads from `a350_speech.log` and the unticked rows, "the display went quiet" from `a350_display.log`. What is never spoken is never in them ([A350-12]); an OIS value is not logged, even where the window's list fallback speaks it ("Set HOPPIE LOGON to (value not logged)", `A350SpeechLog.ForTheLog`). To check the logging itself with the probe, run it with `A350_LOG=1`, which starts the writer it otherwise leaves off.
 
 ## Parity with the other aircraft (2026-10-29)
 
