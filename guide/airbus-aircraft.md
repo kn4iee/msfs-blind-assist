@@ -737,7 +737,13 @@ To tune a VHF radio:
 3. Press Enter. The frequency becomes that radio's standby, and BA reads the line back (*"standby unchanged"* if the RMP refused it).
 4. Press Alt+1, Alt+2 or Alt+3 to swap that radio's standby in. BA reads it back.
 
-A frequency typed and not loaded is deleted when you press another key, for example *"272 cleared"*. Alt+T, then four digits from 0 to 7, sets the squawk on the fourth digit; Escape cancels. Alt+V, Alt+H, Alt+L, Alt+N and Alt+U press the VHF, HF, TEL, NAV and MENU page keys; the A350 draws only the VHF page, so the others say *"screen unchanged"*. F5 refreshes and Escape closes. Every RMP key, microphone key, volume knob and reception is also on the Pedestal's RMP panels.
+A frequency typed and not loaded is deleted when you press another key, for example *"272 cleared"*. Alt+T, then four digits from 0 to 7, sets the squawk on the fourth digit; Escape cancels. Alt+V, Alt+H, Alt+L, Alt+N and Alt+U press the VHF, HF, TEL, NAV and MENU page keys and read what changed (TEL has no page, so it says *"screen unchanged"*). F5 refreshes and Escape closes. Every RMP key, microphone key, volume knob and reception is also on the Pedestal's RMP panels.
+
+On the other pages each line says what it is and **Enter** presses it:
+
+- **MENU** leads to the **Datalink Router**: **INIT**, **COM STATUS** and **VHF PROVIDER**, with **RETURN** to go back.
+- **NAV**: the first line is **STBY RAD NAV**, which the A350 needs before its RMP can tune navaids (normally the MFD's RAD NAV page does). Press Enter on it, then on **LS** or **VOR**. On those pages arrow to a frequency or course, type the value and press Enter: *"VOR1 frequency: 113.90, white"*, *"VOR1 course: 270, cyan"*. The point in a frequency is optional, and a course not yet set says *"not set"*. A value out of range is refused aloud. Turn STBY RAD NAV off again to give the navaids back to the FMS. It is also a row on each RMP's panel.
+- **SQWK** shows the mode and the code, and **IDENT**.
 
 Note that Ctrl+Shift+R in Output mode reads your last landing rate instead.
 

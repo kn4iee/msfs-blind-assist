@@ -76,26 +76,27 @@ internal sealed class ProbeDefinition : IniBuildsA350Definition
 internal sealed class Cap : ScreenReaderAnnouncer
 {
     public readonly List<string> Said = new();
+    public Func<string, string> Stamp = s => s;
     public Cap(IntPtr h) : base(h) { }
     // Announce and AnnounceWithQueue drop speech while Suppressed, as ScreenReaderAnnouncer's do.
-    public override void Announce(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
-    public override void AnnounceImmediate(string m) { lock (Said) Said.Add(m); }
-    public override void AnnounceQueued(string m) { if (!Suppressed) lock (Said) Said.Add(m); }   // through Announce, as the real one
-    public override void AnnounceWithQueue(string m) { if (!Suppressed) lock (Said) Said.Add(m); }
+    public override void Announce(string m) { if (!Suppressed) lock (Said) Said.Add(Stamp(m)); }
+    public override void AnnounceImmediate(string m) { lock (Said) Said.Add(Stamp(m)); }
+    public override void AnnounceQueued(string m) { if (!Suppressed) lock (Said) Said.Add(Stamp(m)); }   // through Announce, as the real one
+    public override void AnnounceWithQueue(string m) { if (!Suppressed) lock (Said) Said.Add(Stamp(m)); }
     public string Drain() { lock (Said) { var s = string.Join(" / ", Said); Said.Clear(); return s; } }
     public List<string> DrainList() { lock (Said) { var s = Said.ToList(); Said.Clear(); return s; } }
 }
 
-internal sealed class ProbeForm : Form
+internal sealed partial class ProbeForm : Form
 {
-    private readonly string _mode; private readonly string? _arg; private readonly string[] _watch;
+    private string _mode; private string? _arg; private readonly string[] _watch;
     private SimConnectManager? _m;
     public int ExitCode;
 
     /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
     internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "fap", "mfd", "nd", "ndpage", "mailbox",
+        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "fap", "repl", "mfd", "nd", "ndpage", "mailbox",
         "rmpwin", "hotkey", "displays", "gsx",
     };
     private readonly StringBuilder _out = new();
@@ -127,7 +128,7 @@ internal sealed class ProbeForm : Form
         base.WndProc(ref m);
     }
 
-    private void Line(string s) { _out.AppendLine(s); Console.WriteLine(s); }
+    private void Line(string s) { if (_capture != null) { _capture.AppendLine(s); return; } _out.AppendLine(s); Console.WriteLine(s); }
 
     /// <summary>A KCCU key pressed through MSFSBA's A350MfdInput, for the op's result column: the cursor keys (ND, MFD)
     /// are held and let go, as the aircraft never resets them [A350-3] (tools review 2026-10-30: one held at 1 left the
@@ -558,7 +559,7 @@ internal sealed class ProbeForm : Form
 
         _m = new SimConnectManager(Handle) { CurrentAircraft = def };
         def.Attach(_m);
-        if (_mode != "listen")   // listen feeds the definition itself, with its own announcer
+        if (_mode is not ("listen" or "repl"))   // these feed the definition themselves, with their own announcer
             _m.SimVarUpdated += (_, e) => { try { def.ProcessSimVarUpdate(e.VarName, e.Value, cap); } catch { } };
         _m.Connect();
         Line("connecting...");
@@ -573,6 +574,12 @@ internal sealed class ProbeForm : Form
         await Task.Delay(8000);   // registration, the first batches, the calculator-path probe
         Line($"connected={_m.IsConnected} full={_m.IsFullyConnected} calcOk={_m.CanExecuteCalculatorCode} canLand={_m.CalcWriteCanLand}");
         cap.Drain();
+
+        if (_mode == "repl")
+        {
+            await RunRepl(def, cap, vars);
+            return;
+        }
 
         if (_mode == "cache")
         {

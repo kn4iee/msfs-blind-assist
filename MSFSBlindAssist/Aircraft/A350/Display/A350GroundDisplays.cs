@@ -15,7 +15,7 @@ public static class A350GroundDisplays
         texts.Where(t => !string.IsNullOrWhiteSpace(t.Text))
             .GroupBy(t => (t.Text.Trim(), (int)MathF.Round(t.X), (int)MathF.Round(t.Y))).Select(g => g.First()).ToList();
 
-    private static List<DrawnCell> Cells(IEnumerable<DrawnText> texts) => A350DrawLayout.Rows(Distinct(texts)).SelectMany(r => r).ToList();
+    internal static List<DrawnCell> Cells(IEnumerable<DrawnText> texts) => A350DrawLayout.Rows(Distinct(texts)).SelectMany(r => r).ToList();
 
     private static string Speak(IEnumerable<DrawnCell> cells) => A350DrawLayout.Speak(cells.OrderBy(c => c.X).ToList());
 
@@ -186,27 +186,8 @@ public static class A350GroundDisplays
             ? fpm.ToString("+0;-0;0", System.Globalization.CultureInfo.InvariantCulture) : drawn;
     }
 
-    /// <summary>An RMP's radio page: each radio named in the middle column, its active frequency left, its
-    /// standby right (cyan: the one the knob tunes).</summary>
-    public static IReadOnlyList<string> ReadRmp(A350DrawCapture capture)
-    {
-        var cells = Cells(capture.Texts);
-        var used = new HashSet<DrawnCell>(cells.Where(c => c.Text == "STBY" && c.Y < 120));
-        var o = new List<string>();
-        foreach (var name in cells.Where(c => c.X is >= 400 and < 600 && c.Y >= 120).OrderBy(c => c.Y).ToList())
-        {
-            var active = cells.FirstOrDefault(c => !used.Contains(c) && c.X < 400 && Math.Abs(c.Y - name.Y) <= 12);
-            var standby = cells.FirstOrDefault(c => !used.Contains(c) && c.X >= 600 && Math.Abs(c.Y - name.Y) <= 12);
-            if (active == null && standby == null) continue;
-            used.Add(name);
-            var parts = new List<string>();
-            if (active != null) { used.Add(active); parts.Add($"active {active.Text}, {active.Colour}"); }
-            if (standby != null) { used.Add(standby); parts.Add($"standby {standby.Text}, {standby.Colour}"); }
-            o.Add($"{name.Text}: " + string.Join("; ", parts));
-        }
-        o.AddRange(Rest(cells, used));
-        return o;
-    }
+    /// <summary>An RMP's screen, page by page (<see cref="A350RmpPage"/>).</summary>
+    public static IReadOnlyList<string> ReadRmp(A350DrawCapture capture) => A350RmpPage.Read(capture).Select(l => l.Spoken).ToList();
 
     /// <summary>The overhead BAT display (the battery the BAT selector picks): seven-segment digits, the decimal
     /// point drawn as its own text before the last digit (live: "282" and "." for 28.2 V).</summary>

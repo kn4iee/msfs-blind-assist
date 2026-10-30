@@ -57,7 +57,7 @@ public class A350PedestalPanelTests
     public void Each_rmp_is_a_panel_of_its_own_keys(string panel, int n, string side)
     {
         var rows = Placement.RowsByPanel[panel];
-        Assert.Equal(64, rows.Count);   // 53 keys and knobs, and the 11 reception knobs' push-pull
+        Assert.Equal(65, rows.Count);   // 53 keys and knobs, the 11 reception knobs' push-pull, and STBY RAD NAV
         Assert.All(rows, r => Assert.Matches($"_{n}(_BUTTON)?$", r.Control!.Id));
         Assert.Equal(rows.Count, rows.Select(r => r.Name).Distinct().Count());
         Assert.All(rows, r => Assert.StartsWith(side + " ", r.Name));
@@ -68,7 +68,7 @@ public class A350PedestalPanelTests
             ("point", Press, ""), ("load", Press, ""), ("line select key 1", Press, ""), ("line select key 3", Press, ""),
             ("message clear", Press, ""), ("activation key 1", Press, ""), ("activation key 3", Press, ""),
             ("VHF page", Press, ""), ("HF page", Press, ""), ("TEL page", Press, ""), ("SQWK page", Press, ""),
-            ("MENU page", Press, ""), ("NAV page", Press, ""), ("VHF1 microphone", Press, ""), ("VHF1 volume", Set, ""),
+            ("MENU page", Press, ""), ("NAV page", Press, ""), ("STBY RAD NAV", Set, "0=Off, 1=On"), ("VHF1 microphone", Press, ""), ("VHF1 volume", Set, ""),
             ("HF2 microphone", Press, ""), ("TEL2 volume", Set, ""), ("INT microphone", Press, ""), ("PA microphone", Press, ""),
             ("voice microphone", Press, ""), ("CAB volume", Set, ""), ("brightness", Set, ""),
             ("VHF1 reception", Set, "0=Off, 1=On"), ("voice reception", Set, "0=Off, 1=On"),

@@ -15,7 +15,9 @@ namespace MSFSBlindAssist.Forms.A350;
 /// refused it; Alt+1/2/3 swaps that line's standby in (the activation key) and reads it back. Alt+V/H/L/N/U press the
 /// VHF, HF, TEL, NAV and MENU page keys, and the lines that changed are spoken. A key that would leave an entry behind
 /// (an activation or page key, another RMP, closing) deletes it first and says so. Alt+T starts a squawk: four digits
-/// 0-7, set on the fourth through the stock XPNDR_SET (the A350 keeps the transponder and its RMPs in step). Keys go in
+/// 0-7, set on the fourth through the stock XPNDR_SET (the A350 keeps the transponder and its RMPs in step). On the other
+/// pages the list's lines act (<see cref="A350RmpPage"/>): Enter presses the key of a line that has one; on an LS or VOR
+/// frequency or course type the value and press Enter (its key, then the digits; the field takes it as they complete). Keys go in
 /// order, one at a time, 150 ms apart: two in one frame are read in the aircraft's own order (live: 4 3 2 1 typed in a
 /// burst became 3412).
 /// </summary>
@@ -53,6 +55,8 @@ public sealed class A350RmpWindow : Form
     private readonly HashSet<string> _failures = new();
     private int _rmp = 1;   // the RMP shown, kept so a change of RMP deletes the entry typed on the one left
     private IReadOnlyList<string> _lines = Array.Empty<string>();
+    private IReadOnlyList<RmpLine> _page = Array.Empty<RmpLine>();
+    private readonly System.Text.StringBuilder _tuning = new();   // what is typed for an LS or VOR field, sent on Enter
 
     // For A350Probe's rmpwin mode, which drives the window as a pilot does (it read these by reflection, which a rename
     // broke only at run time: cleanup review 2026-10-30).
@@ -99,7 +103,8 @@ public sealed class A350RmpWindow : Form
         {
             Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 1, AccessibleName = "RMP screen",
             AccessibleDescription = "Control plus 1 to 3 picks the radio, type a frequency, Enter loads it as standby, Alt plus 1 to 3 "
-                + "swaps it in, Backspace deletes a digit. Alt plus V, H, L, N, U: VHF, HF, TEL, NAV, MENU pages. Alt plus T: squawk.",
+                + "swaps it in, Backspace deletes a digit. Alt plus V, H, L, N, U: VHF, HF, TEL, NAV, MENU pages. Alt plus T: squawk. "
+                + "On the other pages Enter presses the line; on a frequency or course, type it, then Enter.",
         };
         _list.SetText("Loading the RMP...");
 
@@ -153,6 +158,7 @@ public sealed class A350RmpWindow : Form
             }
             if (IsDisposed) return;
             if (cap == null) { _list.SetText(A350DisplayStatus.NotAvailableYet); return; }
+            _page = _isDark(Rmp) ? Array.Empty<RmpLine>() : A350RmpPage.Read(cap);
             Show(Lines(cap, _isDark(Rmp)));
         }
         catch (Exception ex)
@@ -235,6 +241,7 @@ public sealed class A350RmpWindow : Form
         await Task.Delay(ReadBackMs);
         if (IsDisposed || rmp != Rmp || await _drawNow(rmp) is not { Ok: true } cap || IsDisposed || rmp != Rmp) return;
         _shown.Fresh(_latest(rmp));
+        _page = A350RmpPage.Read(cap);
         var lines = Lines(cap, _isDark(rmp));
         string said = A350Rmp.PageReadBack(page, _lines, lines);
         Show(lines);
@@ -256,6 +263,31 @@ public sealed class A350RmpWindow : Form
             if (lines.ElementAtOrDefault(line - 1) is { } read) _announcer.Announce(say == null ? read : say(read));
             return;
         }
+    }
+
+    /// <summary>The line the list is on, when the page's lines are what it shows.</summary>
+    private RmpLine? SelectedLine => _list.SelectedIndex >= 0 && _list.SelectedIndex < _page.Count ? _page[_list.SelectedIndex] : null;
+
+    /// <summary>Enter on a line that acts: a typed field takes its key and digits, any other line its key; false for a radio page's line,
+    /// where Enter loads the entry.</summary>
+    private bool ActOnLine()
+    {
+        if (SelectedLine is not { Key: { } key } line) return false;
+        int rmp = Rmp, at = _list.SelectedIndex;
+        if (line.Typed)
+        {
+            string typed = _tuning.ToString();
+            _tuning.Clear();
+            if (A350Rmp.TuningKeys(typed, line.IsFrequency) is not { } digits)
+            {
+                _announcer.AnnounceImmediate(line.IsFrequency ? "A frequency is 108.00 to 117.95" : "A course is 0 to 360");
+                return true;
+            }
+            Press(new[] { key }.Concat(digits), () => ReadBackAsync(rmp, at + 1));
+            return true;
+        }
+        Press(new[] { key }, () => ChangesAsync(key));
+        return true;
     }
 
     private void TypeSquawk(char c)
@@ -316,6 +348,7 @@ public sealed class A350RmpWindow : Form
             if (c is char ch)
             {
                 if (_squawk != null) TypeSquawk(ch);
+                else if (SelectedLine is { Typed: true }) _tuning.Append(ch);
                 else Press(_entry.Type(ch, _line));
                 return true;
             }
@@ -324,6 +357,7 @@ public sealed class A350RmpWindow : Form
                 case Keys.Enter:
                 {
                     _squawk = null;
+                    if (_entry.Typed.Length == 0 && ActOnLine()) return true;
                     int rmp = Rmp, line = _line;
                     string typed = _entry.Typed;
                     string? before = _lines.ElementAtOrDefault(line - 1);
@@ -332,6 +366,7 @@ public sealed class A350RmpWindow : Form
                 }
                 case Keys.Back:
                     if (_squawk is { Length: > 0 }) { _squawk = _squawk[..^1]; _announcer.AnnounceImmediate("Deleted"); }
+                    else if (_tuning.Length > 0) { _tuning.Length--; _announcer.AnnounceImmediate(_tuning.Length == 0 ? "Entry empty" : "Entry " + _tuning); }
                     else
                     {
                         if (_entry.DeleteLast() is { } clr) Press(new[] { clr });

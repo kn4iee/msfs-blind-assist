@@ -108,6 +108,9 @@ internal static class A350Levers
                 : "'INI.SPOILERS_ARM_OFF' (>F:KeyEvent)",
             key: "A350_SPOILERS_ARM")),
         ("AIRLINER_ECAM_SD_KNOB_PUSH", true, SystemDisplayPage()),
+        ("AIRLINER_RMP_NAV_1", false, StbyRadNav(1)),
+        ("AIRLINER_RMP_NAV_2", false, StbyRadNav(2)),
+        ("AIRLINER_RMP_NAV_3", false, StbyRadNav(3)),
         ("AIRLINER_RUDDER_TRIM", false, Nudge("RUDDER_TRIM_LEFT", "Rudder trim left (nudge)", 2, NudgeMs, "AIRLINER_RUDDER_TRIM_Set")),
         ("AIRLINER_RUDDER_TRIM", false, Nudge("RUDDER_TRIM_RIGHT", "Rudder trim right (nudge)", 0, NudgeMs, "AIRLINER_RUDDER_TRIM_Set")),
         ("AIRLINER_PITCH_TRIM_RIGHT", false, Nudge("PITCH_TRIM_UP", "Pitch trim nose up (nudge)", 0, PitchNudgeMs,
@@ -181,6 +184,10 @@ internal static class A350Levers
     }
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>An RMP's STBY RAD NAV: no input event writes its variable in 1.2.7, so the row writes it (<see cref="A350Rmp.StbyRadNavKey"/>).</summary>
+    private static A350Lever StbyRadNav(int rmp) => Lever($"MSFSBA_RMP_STBY_RAD_NAV_{rmp}", "STBY RAD NAV", A350Kinds.Selector, "L:" + A350Rmp.RadioModeVar(rmp),
+        new[] { (0.0, "Off"), (1, "On") }, (position, _) => $"{Format(position)} (>L:{A350Rmp.RadioModeVar(rmp)})", key: $"A350_RMP_STBY_RAD_NAV_{rmp}");
 
     private static A350Lever SystemDisplayPage()
     {

@@ -47,6 +47,7 @@ public static partial class A350PanelLayout
     {
         bool reception = shortId.EndsWith(ButtonSuffix, StringComparison.Ordinal);
         string id = WithoutButton(shortId);
+        if (id.StartsWith("MSFSBA_RMP_STBY_RAD_NAV", StringComparison.Ordinal)) return "STBY RAD NAV";
         string key = id.StartsWith("RMP_", StringComparison.Ordinal) ? id[4..^2] : id;
         if (reception && key.EndsWith("_VOL", StringComparison.Ordinal))
             return (key == "VOICE_VOL" ? "Voice" : key[..^4]) + " reception";
