@@ -36,6 +36,12 @@ public enum Bbs757LoadParts { None = 0, Fuel = 1, Boarding = 2, Both = 3 }
 /// the boarding alone (START BOARDING) never says the fueling is complete. A part pressed while the watch runs joins it
 /// (<see cref="Include"/>) and is judged from its own start: its first read seeds, and its three minutes begin when it was added.
 /// </para>
+/// <para>
+/// The weights are said in the aircraft's units as they are when a sentence is said: the watch asks its units reader for each
+/// sentence that carries weights, never once for the whole watch. A fetch's units question can switch the aircraft's units after the
+/// watch began (in-sim check 11, 2026-10-30: FETCH pressed in kilograms, the question's YES switched the aircraft to pounds, and
+/// "Fueling complete." and "Boarding complete." were said in kilograms).
+/// </para>
 /// </summary>
 public sealed class Bbs757LoadWatch
 {
@@ -57,7 +63,7 @@ public sealed class Bbs757LoadWatch
     /// <summary>The cabin and the cargo count as settled when they moved less than this since the last read.</summary>
     public const double PayloadSettledLbs = 1;
 
-    private readonly Bbs757WeightUnits? _units;
+    private readonly Func<Bbs757WeightUnits?> _units;
     private (double Left, double Right, double Center)? _firstTanks, _lastTanks;
     private double? _firstCabin, _firstCargo, _lastPassengers, _lastCargo;
     // When each part's watch began, on the watch's clock: 0 for a part the watch was made with, the moment of the press for one
@@ -66,9 +72,10 @@ public sealed class Bbs757LoadWatch
     private bool _fuelJudged, _boardingJudged;
 
     /// <param name="loads">The targets (<see cref="Bbs757Loadsheet.Compute"/>).</param>
-    /// <param name="units">The aircraft's weight units, for what is said; pounds when null.</param>
+    /// <param name="units">Reads the aircraft's weight units now, for a sentence about to be said: null when they cannot be read,
+    /// which is said in pounds. Asked only when a sentence carries weights; it must not throw.</param>
     /// <param name="parts">What to watch and speak of: both by default.</param>
-    public Bbs757LoadWatch(Bbs757Loads loads, Bbs757WeightUnits? units, Bbs757LoadParts parts = Bbs757LoadParts.Both)
+    public Bbs757LoadWatch(Bbs757Loads loads, Func<Bbs757WeightUnits?> units, Bbs757LoadParts parts = Bbs757LoadParts.Both)
     {
         Loads = loads;
         _units = units;
@@ -85,7 +92,7 @@ public sealed class Bbs757LoadWatch
     /// Adds parts to the watch, <paramref name="elapsedMs"/> after it started: IMPORT FROM SIMBRIEF or START BOARDING pressed while
     /// the other part is still being watched. A part that joins is judged from its own start (it is seeded by its own first read,
     /// and the three minutes of <see cref="NotStartedMs"/> run from <paramref name="elapsedMs"/>); one already watched keeps its
-    /// start, and the watch keeps its targets and units. The hour of <see cref="TimeoutMs"/> stays the watch's own.
+    /// start, and the watch keeps its targets and its units reader. The hour of <see cref="TimeoutMs"/> stays the watch's own.
     /// </summary>
     public void Include(Bbs757LoadParts parts, long elapsedMs)
     {
@@ -130,7 +137,7 @@ public sealed class Bbs757LoadWatch
                 && Math.Abs(fuel - target) <= Bbs757Loadsheet.FuelTolerance(target))
             {
                 FuelDone = true;
-                said.Add($"Fueling complete. {Bbs757Loadsheet.FuelSentence(read, _units)}");
+                said.Add($"Fueling complete. {Bbs757Loadsheet.FuelSentence(read, _units())}");
             }
             _firstTanks ??= tanks;
             _lastTanks = tanks;
@@ -195,15 +202,17 @@ public sealed class Bbs757LoadWatch
     /// <summary>
     /// "Boarding complete. Passengers 21090 pounds. Cargo 3990 pounds: forward 3990, aft 0. For the ACARS
     /// weight and balance, request WGTBAL on the CDU.", with the cap before the last sentence when the
-    /// plan has more passengers than the 757 seats (BlueBird puts the rest of the payload in the holds).
+    /// plan has more passengers than the 757 seats (BlueBird puts the rest of the payload in the holds). Its weights are in the
+    /// units read now, once for the phrase.
     /// </summary>
     private string BoardedPhrase(Bbs757LoadReadBack read)
     {
+        var units = _units();
         var said = new List<string>
         {
             "Boarding complete.",
-            Bbs757Loadsheet.PassengersSentence(read, _units)!,
-            Bbs757Loadsheet.CargoSentence(read, _units)!,
+            Bbs757Loadsheet.PassengersSentence(read, units)!,
+            Bbs757Loadsheet.CargoSentence(read, units)!,
         };
         if (Loads.PassengersCapped)
             said.Add($"The plan's {Loads.PlannedPassengers.ToString(CultureInfo.InvariantCulture)} passengers are capped at " +

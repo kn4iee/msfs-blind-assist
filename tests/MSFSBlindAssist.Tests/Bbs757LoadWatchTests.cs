@@ -36,10 +36,13 @@ public class Bbs757LoadWatchTests
     private static Bbs757LoadReadBack Boarding(double first, double economy, double forward = 0, double aft = 0)
         => Read(8200, first: first, economy: economy, forward: forward, aft: aft);
 
+    /// <summary>The aircraft's units as the watch reads them each time it speaks: pounds, as most tests have them.</summary>
+    private static readonly Func<Bbs757WeightUnits?> Pounds = () => Bbs757WeightUnits.Pounds;
+
     /// <summary>A watch whose fuel is said already, so a test hears the boarding alone.</summary>
-    private static Bbs757LoadWatch FueledWatch(Bbs757Loads? plan = null, Bbs757WeightUnits? units = Bbs757WeightUnits.Pounds)
+    private static Bbs757LoadWatch FueledWatch(Bbs757Loads? plan = null)
     {
-        var watch = new Bbs757LoadWatch(plan ?? Plan, units);
+        var watch = new Bbs757LoadWatch(plan ?? Plan, Pounds);
         var full = Read(((plan ?? Plan).LeftLbs + (plan ?? Plan).RightLbs) / 2);
         watch.Observe(full, 0);
         Assert.StartsWith("Fueling complete.", watch.Observe(full, 15_000));
@@ -65,7 +68,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fueling_complete_is_said_once_the_fuel_reaches_the_plan_and_holds_still()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
 
         Assert.Null(watch.Observe(Read(6554.5), 0));       // 13,109 lb at the start: seeds the watch
         Assert.Null(watch.Observe(Read(7500), 15_000));     // fueling
@@ -80,7 +83,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void The_first_read_never_completes_even_at_the_plan()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
 
         Assert.Null(watch.Observe(Read(8200), 0));
         Assert.Equal(Fueled, watch.Observe(Read(8200), 15_000));
@@ -89,7 +92,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fuel_still_moving_twenty_pounds_in_a_tank_is_not_complete()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(8170), 0);
 
         Assert.Null(watch.Observe(Read(8190), 15_000));     // 20 lb more in each wing: still fueling
@@ -102,7 +105,7 @@ public class Bbs757LoadWatchTests
         // The final review's minor 2: a turnaround whose fuel is already near the plan. BlueBird moves fuel
         // between tanks (session 5: it filled the wings while draining the center), so the total holds
         // still while the tanks do not.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(7000, center: 2400), 0);
 
         Assert.Null(watch.Observe(Read(7600, center: 1200), 15_000));
@@ -114,7 +117,7 @@ public class Bbs757LoadWatchTests
     public void A_slow_transfer_between_tanks_counts_as_started()
     {
         // The fuel's total holds still while the tanks trade fuel: that is loading, never "not started".
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         for (int i = 0; i <= 16; i++)
         {
             string? said = watch.Observe(
@@ -127,7 +130,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fuel_that_stops_short_of_the_plan_is_not_complete()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(8000), 0);
 
         // 16,000 lb is 400 short: more than the larger of 1% (164) and 100 lb.
@@ -142,7 +145,7 @@ public class Bbs757LoadWatchTests
     [InlineData(16566, false)]
     public void The_fuel_counts_within_one_percent_of_the_plan_or_100_pounds(double total, bool complete)
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(total / 2), 0);
 
         Assert.Equal(complete, watch.Observe(Read(total / 2), 15_000) != null);
@@ -152,7 +155,7 @@ public class Bbs757LoadWatchTests
     public void A_small_block_counts_within_100_pounds()
     {
         var small = new Bbs757Loads(2000, 2000, 0, 0, 0, 0, 0, 0);   // 1% of 4,000 is 40: the 100 lb floor
-        var watch = new Bbs757LoadWatch(small, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(small, Pounds);
         watch.Observe(Read(1950), 0);
 
         Assert.StartsWith("Fueling complete.", watch.Observe(Read(1950), 15_000));
@@ -209,7 +212,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Both_done_at_one_read_are_said_together_the_fuel_first()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Loaded, 0);
 
         Assert.Equal(Fueled + " " + Boarded, watch.Observe(Loaded, 15_000));
@@ -238,7 +241,7 @@ public class Bbs757LoadWatchTests
         // The final review's important 1: with BBS Nest closed BlueBird ignores every tap. Otherwise
         // fueling and boarding start at once (measured), so nothing moving for three minutes means the load
         // never started.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         for (long t = 0; t < 180_000; t += 15_000)
             Assert.Null(watch.Observe(Read(5000), t));
 
@@ -251,7 +254,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fueling_that_never_starts_is_said_and_the_boarding_is_still_watched()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(5000), 0);
         watch.Observe(Read(5000, first: 1850, economy: 2000), 90_000);   // boarding under way
 
@@ -279,7 +282,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void An_unread_value_neither_completes_nor_counts_as_the_previous_read()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(8200), 0);
 
         Assert.Null(watch.Observe(Read(8200) with { PoundsPerGallon = null }, 15_000));
@@ -303,7 +306,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fuel_and_boarding_unfinished_after_an_hour_say_both()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         watch.Observe(Read(5000), 0);
         watch.Observe(Read(5100, first: 500), 165_000);   // both under way, slowly
 
@@ -315,7 +318,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Fuel_unfinished_after_an_hour_with_the_boarding_done_says_the_fuel()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+        var watch = new Bbs757LoadWatch(Plan, Pounds);
         var shortOfFuel = Loaded with { LeftGallons = 5000, RightGallons = 5000 };
         watch.Observe(shortOfFuel, 0);
         Assert.Equal(Boarded, watch.Observe(shortOfFuel, 15_000));
@@ -335,13 +338,75 @@ public class Bbs757LoadWatchTests
 
     // ---- units and culture ------------------------------------------------------------------
 
+    public static TheoryData<string> Cultures => new() { "en-US", "de-DE", "sv-SE" };
+
+    private const string FueledInKilograms = "Fueling complete. Fuel 7440 kilograms: left 3720, right 3720, center 0.";
+
     [Fact]
     public void A_kilogram_aircraft_hears_kilograms()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Kilograms);
+        var watch = new Bbs757LoadWatch(Plan, () => Bbs757WeightUnits.Kilograms);
         watch.Observe(Read(8200), 0);
 
-        Assert.Equal("Fueling complete. Fuel 7440 kilograms: left 3720, right 3720, center 0.", watch.Observe(Read(8200), 15_000));
+        Assert.Equal(FueledInKilograms, watch.Observe(Read(8200), 15_000));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_units_are_read_when_a_sentence_is_said_not_when_the_watch_began(string culture)
+    {
+        // In-sim check 11 (2026-10-30): FETCH SIMBRIEF OFP pressed with the aircraft in kilograms; BlueBird's units question came a
+        // moment later and its YES switched the aircraft to pounds. Read once when the watch began, both sentences came in kilograms.
+        InCulture(culture, () =>
+        {
+            Bbs757WeightUnits? units = Bbs757WeightUnits.Kilograms;
+            int reads = 0;
+            var watch = new Bbs757LoadWatch(Plan, () =>
+            {
+                reads++;
+                return units;
+            });
+
+            Assert.Null(watch.Observe(Read(6000), 0));                                                   // the hook, in kilograms
+            units = Bbs757WeightUnits.Pounds;                                                            // the question's YES
+            Assert.Null(watch.Observe(Read(7000, first: 1000, economy: 9000, forward: 2000), 15_000));
+            Assert.Null(watch.Observe(Loaded, 30_000));
+            Assert.Equal(0, reads);                                                                      // nothing said, nothing read
+
+            Assert.Equal(Fueled + " " + Boarded, watch.Observe(Loaded, 45_000));
+            Assert.Equal(2, reads);                                                                      // one read for each sentence
+            Assert.True(watch.Finished);
+        });
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void Each_sentence_is_said_in_the_units_of_its_moment(string culture)
+    {
+        // The fueling done while the aircraft was in kilograms, then the units switched: the boarding is said in pounds.
+        InCulture(culture, () =>
+        {
+            Bbs757WeightUnits? units = Bbs757WeightUnits.Kilograms;
+            var watch = new Bbs757LoadWatch(Plan, () => units);
+            watch.Observe(Read(8200), 0);
+            Assert.Equal(FueledInKilograms, watch.Observe(Read(8200), 15_000));
+
+            units = Bbs757WeightUnits.Pounds;
+            Assert.Null(watch.Observe(Loaded, 30_000));
+            Assert.Equal(Boarded, watch.Observe(Loaded, 45_000));
+        });
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void Units_that_cannot_be_read_are_said_in_pounds(string culture)
+    {
+        InCulture(culture, () =>
+        {
+            var watch = new Bbs757LoadWatch(Plan, () => null);
+            watch.Observe(Loaded, 0);
+            Assert.Equal(Fueled + " " + Boarded, watch.Observe(Loaded, 15_000));
+        });
     }
 
     [Theory]
@@ -351,7 +416,7 @@ public class Bbs757LoadWatchTests
     {
         InCulture(culture, () =>
         {
-            var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
+            var watch = new Bbs757LoadWatch(Plan, Pounds);
             watch.Observe(Loaded, 0);
             Assert.Equal(Fueled + " " + Boarded, watch.Observe(Loaded, 15_000));
         });
@@ -373,8 +438,8 @@ public class Bbs757LoadWatchTests
     public void A_watch_of_both_says_as_today()
     {
         // No parts named means both, and naming both changes nothing: fuel then boarding, then each never starting.
-        var asDefault = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds);
-        var named = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both);
+        var asDefault = new Bbs757LoadWatch(Plan, Pounds);
+        var named = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Both);
         Assert.Equal(Bbs757LoadParts.Both, asDefault.Parts);
         Assert.Equal(Bbs757LoadParts.Both, named.Parts);
 
@@ -391,7 +456,7 @@ public class Bbs757LoadWatchTests
             Assert.True(watch.Finished);
         }
 
-        foreach (var watch in new[] { new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds), new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both) })
+        foreach (var watch in new[] { new Bbs757LoadWatch(Plan, Pounds), new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Both) })
         {
             for (long t = 0; t < 180_000; t += 15_000) Assert.Null(watch.Observe(Read(5000), t));
             Assert.Equal("BlueBird has not started loading. Is BBS Nest running? Check the fuel with F and the weight with W.",
@@ -406,7 +471,7 @@ public class Bbs757LoadWatchTests
     public void Fuel_only_never_says_boarding_has_not_started()
     {
         // IMPORT FROM SIMBRIEF alone: the cabin and the holds stay empty for ten minutes, and that is not the watch's to say.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         var said = new List<string>();
         for (long t = 0; t <= 600_000; t += 15_000)
             if (watch.Observe(Read(Wandering(t)), t) is { } text) said.Add(text);
@@ -427,7 +492,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void A_fuel_only_watch_whose_fuel_never_starts_says_only_fueling_and_ends()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         for (long t = 0; t < 180_000; t += 15_000) Assert.Null(watch.Observe(Read(5000), t));
 
         // Not the "loading" sentence, which names BBS Nest for fuel and boarding both standing still.
@@ -440,7 +505,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void A_fuel_only_watch_still_loading_after_an_hour_says_only_the_fuel()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         for (long t = 0; t < Bbs757LoadWatch.TimeoutMs; t += 15_000) Assert.Null(watch.Observe(Read(Wandering(t)), t));
 
         Assert.Equal("Fueling has not finished after an hour. Check the fuel with F.",
@@ -453,7 +518,7 @@ public class Bbs757LoadWatchTests
     {
         // START BOARDING alone: the tanks are at the plan and settled from the first read. A fuel watch would say so at the
         // second read; this one is about the boarding and says nothing of the fuel.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding);
 
         Assert.Null(watch.Observe(Read(8200), 0));
         Assert.Null(watch.Observe(Read(8200, first: 1000, economy: 8000, forward: 2000), 15_000));
@@ -466,7 +531,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void A_boarding_only_watch_whose_boarding_never_starts_says_only_boarding_and_ends()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding);
         for (long t = 0; t < 180_000; t += 15_000) Assert.Null(watch.Observe(Read(8200), t));
 
         Assert.Equal("BlueBird has not started boarding. Check the weight with W.", watch.Observe(Read(8200), 180_000));
@@ -479,7 +544,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void A_boarding_only_watch_still_boarding_after_an_hour_says_only_the_boarding()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding);
         for (long t = 0; t < Bbs757LoadWatch.TimeoutMs; t += 15_000)
             Assert.Null(watch.Observe(Read(8200, first: 100 + t / 15_000, economy: 0), t));   // a pound or so more at every read
 
@@ -494,7 +559,7 @@ public class Bbs757LoadWatchTests
         // IMPORT FROM SIMBRIEF, then START BOARDING a minute later. The fuel keeps loading, so the watch lives; the cabin and the
         // holds never move. The fuel's start is judged three minutes after the import (and fuel is loading), the boarding's three
         // minutes after ITS press: not at 180 s, when the boarding is two minutes old.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         var said = new List<(long At, string Text)>();
         for (long t = 0; t <= 300_000; t += 15_000)
         {
@@ -514,7 +579,7 @@ public class Bbs757LoadWatchTests
     {
         // The payload is aboard already when START BOARDING is pressed. As at the start of a watch, the first read of the part
         // only seeds, so "Boarding complete." comes with the second.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         Bbs757LoadReadBack WithPayload(long t) => Read(Wandering(t), first: 1850, economy: 19240, forward: 3990);
         for (long t = 0; t < 60_000; t += 15_000) Assert.Null(watch.Observe(WithPayload(t), t));
 
@@ -531,7 +596,7 @@ public class Bbs757LoadWatchTests
     {
         // START BOARDING first, IMPORT FROM SIMBRIEF two minutes later: the tanks stand still, and that is said three minutes
         // after the import, not at 180 s.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding);
         var said = new List<(long At, string Text)>();
         for (long t = 0; t <= 330_000; t += 15_000)
         {
@@ -549,7 +614,7 @@ public class Bbs757LoadWatchTests
     public void Including_a_part_already_watched_keeps_its_start()
     {
         // A second IMPORT press while the first is watched: the fuel is still judged from the first.
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
         watch.Observe(Read(5000), 0);
         watch.Include(Bbs757LoadParts.Fuel, 120_000);
         for (long t = 15_000; t < 180_000; t += 15_000) Assert.Null(watch.Observe(Read(5000), t));
@@ -561,7 +626,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void Parts_only_ever_grow_by_the_parts_included()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
 
         watch.Include(Bbs757LoadParts.None, 15_000);
         Assert.Equal(Bbs757LoadParts.Fuel, watch.Parts);
@@ -576,7 +641,7 @@ public class Bbs757LoadWatchTests
     [Fact]
     public void A_watch_of_no_parts_is_finished_and_silent()
     {
-        var watch = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.None);
+        var watch = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.None);
 
         Assert.True(watch.Finished);
         Assert.Null(watch.Observe(Loaded, 0));
@@ -592,11 +657,11 @@ public class Bbs757LoadWatchTests
     {
         InCulture(culture, () =>
         {
-            var fuel = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel);
+            var fuel = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel);
             fuel.Observe(Loaded, 0);
             Assert.Equal(Fueled, fuel.Observe(Loaded, 15_000));
 
-            var boarding = new Bbs757LoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding);
+            var boarding = new Bbs757LoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding);
             boarding.Observe(Loaded, 0);
             Assert.Equal(Boarded, boarding.Observe(Loaded, 15_000));
         });
@@ -674,12 +739,32 @@ public class Bbs757LoadWatchTests
         sim.Set(Loaded);
         var (def, speech) = Watching(sim);
 
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));
 
         Assert.Equal(new[] { Fueled + " " + Boarded }, speech.All);
         Assert.Empty(speech.Interrupts);            // never cuts the pilot off
         Assert.False(def.LoadWatchRunning);         // both said: the watch is over
         Assert.Equal(new[] { Bbs757LoadWatch.IntervalMs }, sim.Waits);
+    }
+
+    [Fact]
+    public void The_definitions_watch_speaks_in_the_units_read_as_it_speaks()
+    {
+        // MainForm hands the watch a reader of BlueBird's units: kilograms when the hook came, pounds by the time the load is aboard
+        // (the units question answered meanwhile), so the sentences are in pounds.
+        var sim = new LoadSim { Manual = true };
+        sim.Set(Read(6000));
+        var (def, speech) = Watching(sim);
+        Bbs757WeightUnits? units = Bbs757WeightUnits.Kilograms;
+
+        Assert.True(def.StartLoadWatch(Plan, () => units, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));
+        units = Bbs757WeightUnits.Pounds;
+        sim.Set(Loaded);
+        sim.Release();   // 15 s: the load aboard, against the read at the hook
+        sim.Release();   // 30 s: settled
+
+        Assert.Equal(new[] { Fueled + " " + Boarded }, speech.All);
+        Assert.False(def.LoadWatchRunning);
     }
 
     [Fact]
@@ -689,7 +774,7 @@ public class Bbs757LoadWatchTests
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
 
-        def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
+        def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
 
         Assert.Equal(new[] { "BlueBird has not started loading. Is BBS Nest running? Check the fuel with F and the weight with W." },
             speech.All);
@@ -705,9 +790,9 @@ public class Bbs757LoadWatchTests
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
 
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
         Assert.True(def.LoadWatchRunning);
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
 
         Assert.Single(sim.Waits);   // one loop: one read made, one wait pending
         def.OnSwitchedAway();
@@ -720,7 +805,7 @@ public class Bbs757LoadWatchTests
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
 
-        Assert.False(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.None, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.False(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.None, new SimConnectManager(IntPtr.Zero), speech));
 
         Assert.False(def.LoadWatchRunning);
         Assert.Empty(sim.Waits);
@@ -735,11 +820,11 @@ public class Bbs757LoadWatchTests
         var sim = new LoadSim { Manual = true };
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
         for (int i = 0; i < 4; i++) sim.Release();
         Assert.Equal(60_000, sim.Now);
 
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
         Assert.True(def.LoadWatchRunning);
         Assert.Empty(speech.All);
         while (def.LoadWatchRunning) sim.Release();
@@ -760,11 +845,11 @@ public class Bbs757LoadWatchTests
         sim.Set(Loaded);
         var (def, speech) = Watching(sim);
 
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Fuel, new SimConnectManager(IntPtr.Zero), speech));
         Assert.Equal(new[] { Fueled }, speech.All);
         Assert.False(def.LoadWatchRunning);   // the fuel was all there was to watch
 
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Boarding, new SimConnectManager(IntPtr.Zero), speech));
         Assert.Equal(new[] { Fueled, Boarded }, speech.All);
         Assert.False(def.LoadWatchRunning);
     }
@@ -775,13 +860,13 @@ public class Bbs757LoadWatchTests
         var sim = new LoadSim { WaitForever = true };
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
-        def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
+        def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
 
         def.OnSimContextReset();
 
         Assert.False(def.LoadWatchRunning);
         Assert.Empty(speech.All);
-        Assert.True(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));   // a new load may start
+        Assert.True(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));   // a new load may start
         def.OnSwitchedAway();
     }
 
@@ -791,12 +876,12 @@ public class Bbs757LoadWatchTests
         var sim = new LoadSim { WaitForever = true };
         sim.Set(Read(5000));
         var (def, speech) = Watching(sim);
-        def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
+        def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech);
 
         def.OnSwitchedAway();
 
         Assert.False(def.LoadWatchRunning);
-        Assert.False(def.StartLoadWatch(Plan, Bbs757WeightUnits.Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));
+        Assert.False(def.StartLoadWatch(Plan, Pounds, Bbs757LoadParts.Both, new SimConnectManager(IntPtr.Zero), speech));
         Assert.Empty(speech.All);
     }
 }

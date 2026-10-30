@@ -293,8 +293,9 @@ public partial class MainForm
     /// with BlueBird's <c>automatic_loading</c> read from its settings file; a fetch with it off starts nothing), toward the latest
     /// plan for BlueBird's SimBrief ID, fetched and parsed off the UI thread as BlueBird fetches it. A plan that cannot be fetched,
     /// read or computed is said once (<see cref="Bbs757EfbExtras.PlanUnreadableText"/>, queued); otherwise the definition watches,
-    /// speaking in the aircraft's units, from the UI thread. The SimBrief ID is never logged or spoken, nor is any message that
-    /// could carry it. Never throws.
+    /// from the UI thread, speaking in the aircraft's units read from BlueBird's settings file each time a sentence is said, never
+    /// once here: the units question a fetch raises can switch them a moment after the tap (in-sim check 11, 2026-10-30). The
+    /// SimBrief ID is never logged or spoken, nor is any message that could carry it. Never throws.
     /// </summary>
     private async Task StartBbs757TabletLoadWatchAsync(BBS757Definition def, Bbs757EfbHook hook)
     {
@@ -326,7 +327,8 @@ public partial class MainForm
                 Log.Info("BBS757", $"EFB tablet {hook}: no simulator connection, so the load is not watched.");
                 return;
             }
-            Bbs757WeightUnits? units = folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
+            // Read when a sentence is said (a file of about 1 KB, on the UI thread); never throws, null when it cannot be read.
+            Func<Bbs757WeightUnits?> units = () => folder == null ? null : Bbs757WorkFolder.ReadUnits(folder);
             Log.Info("BBS757", Bbs757Loadsheet.LogLine($"tablet {hook}, watching {parts}", loads, null));
             if (!def.StartLoadWatch(loads, units, parts, sim, announcer))
                 Log.Warn("BBS757", $"EFB tablet {hook}: the load watch did not start.");

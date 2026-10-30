@@ -33,11 +33,12 @@ public partial class BBS757Definition
 
     /// <summary>
     /// Starts watching the <paramref name="parts"/> of a load BlueBird has started, toward <paramref name="loads"/>, speaking in
-    /// the aircraft's <paramref name="units"/>. While a watch runs, the parts join it instead (its targets and units stay: they
-    /// are the load it was started for) and are judged from their own start. False, and nothing watched, when there is no part
-    /// to watch or the profile was switched away. Never throws: the loop catches and logs.
+    /// the aircraft's units as <paramref name="units"/> reads them each time a sentence is said (a fetch's units question can
+    /// switch them after the hook). While a watch runs, the parts join it instead (its targets and units reader stay: they are
+    /// the load it was started for) and are judged from their own start. False, and nothing watched, when there is no part to
+    /// watch or the profile was switched away. Never throws: the loop catches and logs.
     /// </summary>
-    internal bool StartLoadWatch(Bbs757Loads loads, Bbs757WeightUnits? units, Bbs757LoadParts parts, SimConnectManager sim,
+    internal bool StartLoadWatch(Bbs757Loads loads, Func<Bbs757WeightUnits?> units, Bbs757LoadParts parts, SimConnectManager sim,
         ScreenReaderAnnouncer announcer)
     {
         if (_lifetime.IsCancellationRequested || (parts & Bbs757LoadParts.Both) == Bbs757LoadParts.None) return false;
