@@ -332,6 +332,17 @@ The A380's pedestal panels in its order, the A350's emergency descent and trims 
 | Transponder | G/S mode, TCAS above, below and TA only, transponder system 1 and 2; their lights | every row and light | ABV and BLW toggle `INI_tcas_mode` (2, 3, back to 1); TA only `INI_tcas_mode_pedestal` (2 TA/RA, 3 TA) |
 | Cockpit | captain and first officer OIS on center and display cycle, dome, flood and integral lights, DU master brightness, DU master (Inhibit, On), cockpit door switch (Lock, Norm, Unlock), printer; the OIS on center INOP, door OPEN and FAULT lights | every row; the light knobs land on the value typed | an OIS on center button lights the other side's display cycle key. DU MASTER BRT's steps are consumed by the WASM, but nothing keeps `INI_CKPT_LT_DU_MASTER_BRT` (its tooltip's value), so it has no value line |
 
+### Exterior panels, live-tested (A350-900, 1.2.7)
+
+The exterior models' clickspots (`A359_Exterior`, `A35K_Exterior`, `A350_Engine_RR_*`, `A350_Gear_Nose` behaviors; MSFS 2024's walkaround), so not in the control map: `A350Levers.Exterior`. Every input event only flips an L:var (`p0 if{ (L:INI_ASU_AVAIL) ! (>L:INI_ASU_AVAIL) }`), so a row writes the state asked for. Each was set and read back on the stand on 2026-10-30.
+
+| Panel | Rows | What it does |
+|---|---|---|
+| Ground Services | HP air `INI_ASU_AVAIL`, LP air `INI_ACU_AVAIL`, external power `INI_GPU_AVAIL` (the OIS's GPU), potable and waste water doors, refuel door `INI_Refuel_Door`, refuel mode selector | HP air: the SD's Bleed page says "ASU: flow". Refuel door: memo REFUEL PNL DOOR OPEN. The selector's two positions have no names in the aircraft: Off and On here |
+| Service Hatches | green and yellow hydraulic hatches, `INI_APU_Service`, `INI_AVIONICS_DOOR_STATE`, the four `INI_CARGO_*_Panel_Door` | move their door |
+| Gear Bays | `INI_MLG_Door_Opening_Hatch`, `INI_Gear_GND_Opening_Left/Right`, `INI_NLG_Door_Opening_Hatch`, `INI_NLG_Door_Opening`, `INI_NWS_NG`, `INI_INTPH_PANEL` | a main gear door's variable falls back to 0 unless the hatch is open, so its row says it did not move. The 900's handles and the 1000's switches write the same variables |
+| Engine Cowlings and Covers | `INI_Engine_Cowl_Left/Right`, `INI_COVERS_ENABLED` (every engine cover and the 19 pitot covers) | status lines beside the cowlings read `INI_ENGn_OIL_QUANTITY`, what the sight gauge's animation follows |
+
 ### Cockpit panels, live-tested (A350-900, 1.2.7)
 
 iniBuilds' MISC area: what sits around the crew rather than on a panel. The cabin-side door handle and seven of the eight

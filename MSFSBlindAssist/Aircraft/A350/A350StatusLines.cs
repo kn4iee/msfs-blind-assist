@@ -35,7 +35,13 @@ public static class A350StatusLines
         // beside the seat until put away (INI_PRINTER_SIDE_PAPER_VIS 1 to 4 picks where, 0 none; live 2026-10-30).
         new A350StatusLine("A350_STAT_PRINTER_PAPER", "A350_PRINTER_PAPER_PED", "INI_PRINTER_PAPER_OUT_PERCENT", "Paper at the printer", PrinterPaper),
         new A350StatusLine("A350_STAT_TORN_PAPER", "A350_PRINTER_PAPER_SIDE_1_CS", "INI_PRINTER_SIDE_PAPER_VIS", "Torn paper", TornPaper),
+        // The sight gauge under each cowling (the model's ENG1_OIL_INDICATOR animation reads it).
+        new A350StatusLine("A350_STAT_ENG1_OIL", "A350_EXT_COWL_LEFT", "INI_ENG1_OIL_QUANTITY", "Left engine oil level", Quarts),
+        new A350StatusLine("A350_STAT_ENG2_OIL", "A350_EXT_COWL_RIGHT", "INI_ENG2_OIL_QUANTITY", "Right engine oil level", Quarts),
     };
+
+    /// <summary>"16.3 quarts", as the SD's oil quantity.</summary>
+    public static string Quarts(double quantity) => quantity.ToString("0.0", CultureInfo.InvariantCulture) + " quarts";
 
     /// <summary>The paper out of the printer: "Hanging out" or "None".</summary>
     public static string PrinterPaper(double percent) => percent > 0 ? "Hanging out" : "None";

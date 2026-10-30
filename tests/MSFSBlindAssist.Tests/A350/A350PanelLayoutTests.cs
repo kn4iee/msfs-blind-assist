@@ -76,7 +76,7 @@ public class A350PanelLayoutTests
     [Fact]
     public void Sections_come_in_cockpit_order()
     {
-        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit" }, Placement.Structure.Keys);
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Exterior" }, Placement.Structure.Keys);
     }
 
     [Fact]

@@ -53,7 +53,7 @@ public class IniBuildsA350DefinitionTests
     [Fact]
     public void Only_the_curated_sections_are_offered()
     {
-        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Displays" }, _def.GetPanelStructure().Keys);
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Exterior", "Displays" }, _def.GetPanelStructure().Keys);
         Assert.Contains("A350_EFIS_RANGE_LEFT", _def.GetVariables().Keys);
         Assert.Contains("A350_LDG_LEVER", _def.GetVariables().Keys);
         Assert.Contains("A350_PARK_BRK_PARKING_BRAKE", _def.GetVariables().Keys);

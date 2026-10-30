@@ -671,6 +671,13 @@ The A350 has six sections. Its panels take the A380's names and order wherever t
 
 **Cockpit**: what sits around you rather than on a panel: **Doors and Hatches**, the sun shades, the oxygen masks, the HUD units, each pilot's tiller and sidestick (with its takeover button), and **Misc**.
 
+**Exterior**: what a sighted pilot clicks on the walkaround:
+
+- **Ground Services:** **HP air** (the air start unit: the Bleed page then shows its flow), **LP air** (the air conditioning unit), **External power**, the potable and waste water panels, the **Refuel panel door** (the ECAM then shows *REFUEL PNL DOOR OPEN*) and its mode selector.
+- **Service Hatches:** the green and yellow hydraulic panels, the APU service door, the avionics bay door and the cargo doors' upper and lower panels.
+- **Gear Bays:** the main gear door hatch, the left and right main gear doors (open the hatch first, or BA says the door did not move), the nose gear door hatch and door, the nose wheel steering panel and the nose gear interphone panel.
+- **Engine Cowlings and Covers:** each engine's cowling, with a status line for the oil level its sight gauge shows, and the engine and pitot covers.
+
 **Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display and the BAT display.
 
 Some A350 controls are worth knowing about:

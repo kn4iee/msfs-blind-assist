@@ -32,7 +32,7 @@ public static partial class A350PanelLayout
 {
     public static readonly IReadOnlyList<string> SectionOrder = new[]
     {
-        "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit",
+        "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Exterior",
     };
 
     private static readonly Dictionary<string, string> AreaSections = new(StringComparer.Ordinal)
@@ -42,6 +42,7 @@ public static partial class A350PanelLayout
         ["MIP"] = "Instrument",
         ["PEDESTAL"] = "Pedestal",
         ["MISC"] = "Cockpit",
+        ["EXTERIOR"] = "Exterior",
     };
 
     /// <summary>Whether a map control is placed on a panel at all.</summary>
@@ -119,7 +120,7 @@ public static partial class A350PanelLayout
     private static readonly HashSet<string> SpokenAsLetters = new(StringComparer.OrdinalIgnoreCase)
     {
         "AC", "ACMS", "ADIRS", "ADR", "APU", "ATC", "AVNCS", "BAT", "CAB", "CKPT", "CTR", "CVR", "DC", "DFDR", "ELEC",
-        "ELM", "ELT", "EMER", "ENG", "EVAC", "FADEC", "GND", "HF", "IDG", "IFEC", "IR", "IRS", "ISOL", "LT", "OIS",
+        "ELM", "ELT", "EMER", "ENG", "EVAC", "FADEC", "GND", "HF", "HP", "IDG", "IFEC", "IR", "IRS", "ISOL", "LP", "LT", "OIS",
         "PAX", "PRIM", "PURS", "PWR", "RAT", "RCDR", "ROP", "ROW", "SEC", "STBY", "SVCE", "SW", "TK", "VHF", "XBLEED",
         "XFR",
     };

@@ -119,8 +119,41 @@ internal static class A350Levers
             "AIRLINER_PITCH_TRIM_LEFT_Set", "AIRLINER_PITCH_TRIM_RIGHT_Set")),
     };
 
+    /// <summary>The walkaround's service panels, hatches and cowlings: the exterior models' clickspots, not the cockpit's, so not in the
+    /// map. Each input event only flips an L:var ("(L:INI_ASU_AVAIL) ! (>L:INI_ASU_AVAIL)"), so a row writes the state asked for. Live
+    /// 2026-10-30: HP air makes the SD's Bleed page say ASU flow, the refuel door gives the memo REFUEL PNL DOOR OPEN, a main gear door
+    /// stays open only with its hatch open; the rest move their door.</summary>
+    private static readonly A350Lever[] Exterior =
+    {
+        Walkaround("EXT_SERVICES", "HP_AIR", "HP air (air start unit)", "INI_ASU_AVAIL", "Not connected", "Connected"),
+        Walkaround("EXT_SERVICES", "LP_AIR", "LP air (air conditioning unit)", "INI_ACU_AVAIL", "Not connected", "Connected"),
+        Walkaround("EXT_SERVICES", "EXT_POWER", "External power", "INI_GPU_AVAIL", "Not connected", "Connected"),
+        Walkaround("EXT_SERVICES", "POTABLE_WATER", "Potable water panel", "INI_Potable_Water_Door"),
+        Walkaround("EXT_SERVICES", "WASTE_WATER", "Waste water panel", "INI_Waste_Water_Door"),
+        Walkaround("EXT_SERVICES", "REFUEL_DOOR", "Refuel panel door", "INI_Refuel_Door"),
+        Walkaround("EXT_SERVICES", "REFUEL_MODE", "Refuel mode selector", "INI_Refuel_Mode_Selector", "Off", "On"),
+        Walkaround("EXT_HATCHES", "HYD_GREEN", "Green hydraulic panel", "INI_HYD_Green_Hatch"),
+        Walkaround("EXT_HATCHES", "HYD_YELLOW", "Yellow hydraulic panel", "INI_HYD_Yellow_Hatch"),
+        Walkaround("EXT_HATCHES", "APU_SERVICE", "APU service door", "INI_APU_Service"),
+        Walkaround("EXT_HATCHES", "AVIONICS_DOOR", "Avionics bay door", "INI_AVIONICS_DOOR_STATE"),
+        Walkaround("EXT_HATCHES", "CARGO_FWD_UP", "Forward cargo upper panel", "INI_CARGO_FWD_UP_Panel_Door"),
+        Walkaround("EXT_HATCHES", "CARGO_FWD_DOWN", "Forward cargo lower panel", "INI_CARGO_FWD_DOWN_Panel_Door"),
+        Walkaround("EXT_HATCHES", "CARGO_AFT_UP", "Aft cargo upper panel", "INI_CARGO_AFT_UP_Panel_Door"),
+        Walkaround("EXT_HATCHES", "CARGO_AFT_DOWN", "Aft cargo lower panel", "INI_CARGO_AFT_DOWN_Panel_Door"),
+        Walkaround("EXT_GEAR", "MLG_HATCH", "Main gear door hatch", "INI_MLG_Door_Opening_Hatch"),
+        Walkaround("EXT_GEAR", "MLG_DOOR_LEFT", "Left main gear door", "INI_Gear_GND_Opening_Left"),
+        Walkaround("EXT_GEAR", "MLG_DOOR_RIGHT", "Right main gear door", "INI_Gear_GND_Opening_Right"),
+        Walkaround("EXT_GEAR", "NLG_HATCH", "Nose gear door hatch", "INI_NLG_Door_Opening_Hatch"),
+        Walkaround("EXT_GEAR", "NLG_DOOR", "Nose gear door", "INI_NLG_Door_Opening"),
+        Walkaround("EXT_GEAR", "NWS_PANEL", "Nose wheel steering panel", "INI_NWS_NG"),
+        Walkaround("EXT_GEAR", "INTERPHONE_PANEL", "Nose gear interphone panel", "INI_INTPH_PANEL"),
+        Walkaround("EXT_ENGINES", "COWL_LEFT", "Left engine cowling", "INI_Engine_Cowl_Left"),
+        Walkaround("EXT_ENGINES", "COWL_RIGHT", "Right engine cowling", "INI_Engine_Cowl_Right"),
+        Walkaround("EXT_ENGINES", "COVERS", "Engine and pitot covers", "INI_COVERS_ENABLED", "Removed", "Fitted"),
+    };
+
     private static readonly Dictionary<string, A350Lever> ById =
-        Replacements.Values.Concat(Extras.Select(e => e.Lever)).ToDictionary(l => l.Control.Id, StringComparer.OrdinalIgnoreCase);
+        Replacements.Values.Concat(Extras.Select(e => e.Lever)).Concat(Exterior).ToDictionary(l => l.Control.Id, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The map's controls with each lever in its place: a lever replaces its map entry (keeping the map's key,
     /// area, panel and event), and a lever with no input event sits beside its anchor.</summary>
@@ -146,6 +179,8 @@ internal static class A350Levers
             foreach (var extra in Extras.Where(e => !e.Before && Same(e.Anchor, control.Id)))
                 yield return Placed(extra.Lever.Control, control);
         }
+        foreach (var lever in Exterior)
+            yield return lever.Control;
     }
 
     /// <summary>The SD page's name by its page number (`INI_ECAM_ACTIVE_PAGE`: 8 is "Fuel"), or null. CRUISE (13) has no
@@ -184,6 +219,15 @@ internal static class A350Levers
     }
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static A350Lever Walkaround(string panel, string name, string title, string lvar, string off = "Closed", string on = "Open")
+    {
+        var lever = Lever($"MSFSBA_EXT_{name}", title, A350Kinds.Selector, "L:" + lvar, new[] { (0.0, off), (1.0, on) },
+            (position, _) => $"{Format(position)} (>L:{lvar})", key: $"A350_EXT_{name}");
+        lever.Control.Area = "EXTERIOR";
+        lever.Control.Panel = panel;
+        return lever;
+    }
 
     /// <summary>An RMP's STBY RAD NAV: no input event writes its variable in 1.2.7, so the row writes it (<see cref="A350Rmp.StbyRadNavKey"/>).</summary>
     private static A350Lever StbyRadNav(int rmp) => Lever($"MSFSBA_RMP_STBY_RAD_NAV_{rmp}", "STBY RAD NAV", A350Kinds.Selector, "L:" + A350Rmp.RadioModeVar(rmp),

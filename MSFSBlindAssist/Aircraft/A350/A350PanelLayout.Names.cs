@@ -8,6 +8,11 @@ public static partial class A350PanelLayout
     /// split by side (<see cref="SidePanels"/>).</summary>
     private static readonly Dictionary<string, string> PanelNames = new(StringComparer.Ordinal)
     {
+        // Exterior (A350Levers.Exterior)
+        ["EXT_SERVICES"] = "Ground Services",
+        ["EXT_HATCHES"] = "Service Hatches",
+        ["EXT_GEAR"] = "Gear Bays",
+        ["EXT_ENGINES"] = "Engine Cowlings and Covers",
         // Overhead
         ["ELEC"] = "ELEC",
         ["EMER_ELEC"] = "ELEC",
@@ -180,6 +185,7 @@ public static partial class A350PanelLayout
             "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
         },
         ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
+        ["Exterior"] = new() { "Ground Services", "Service Hatches", "Gear Bays", "Engine Cowlings and Covers" },
     };
 
     /// <summary>A section's panels in order: <see cref="PanelOrder"/>, a split panel as its shared part, then its captain's
