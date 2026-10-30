@@ -38,7 +38,13 @@ public static class A350MfdPage
     /// <summary>Decoration: a run of spaced dashes around a marker ("- - - - END OF TMPY F-PLN - - - -").</summary>
     private static readonly Regex MarkerDashes = new(@"\s*(?:-\s){2,}-\s*", RegexOptions.Compiled);
 
-    private static string Glyphs(string text)
+    /// <summary>The right arrow between two words of a key: the mode it switches to (FCU BKUP's "SPD b MACH", "MAG b TRUE").</summary>
+    private static readonly Regex WordArrow = new(@"(?<=\S) b (?=\S)", RegexOptions.Compiled);
+
+    /// <summary>The triangle before a word is a delta (FUEL&amp;LOAD's "fFUEL", "fTIME").</summary>
+    private static readonly Regex Delta = new(@"(?<![A-Za-z0-9])f(?=[A-Z])", RegexOptions.Compiled);
+
+    internal static string Glyphs(string text)
     {
         var t = MarkerDashes.Replace(text, " ").Trim();
         if (t.Length == 0) t = text.Trim();
@@ -46,8 +52,15 @@ public static class A350MfdPage
         var m = IdentSymbol.Match(t);
         return m.Success
             ? m.Groups["id"].Value + (m.Groups["g"].Value switch { "a" => " (left turn)", "b" => " (right turn)", _ => " (overfly)" })
-            : t;
+            : Delta.Replace(WordArrow.Replace(t, " to "), "delta ");
     }
+
+    /// <summary>What a torn text reads as: a copy read across a frame caught a label the A350 rebuilds every frame freed,
+    /// its bytes a malloc chunk's pointers (FCU BKUP's HPA -> INHG key, live 2026-10-30). No A350 MFD text holds a control
+    /// character (127 captures); a torn one always does.</summary>
+    public const string Unreadable = "unreadable";
+
+    private static bool Torn(string text) => text.Any(char.IsControl);
 
     /// <summary>A drawn text; <see cref="Index"/> is its place in the draw order.</summary>
     private sealed record Cell(string Text, string Colour, float X, float Y, int Index);
@@ -57,7 +70,8 @@ public static class A350MfdPage
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
         var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
-            .Select(p => new Cell(Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")), p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
+            .Select(p => new Cell(Torn(p.t.Text) ? Unreadable : Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")),
+                p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
         cells = JoinTimes(cells);
         // Black text is drawn on a filled box (every page, 2026-10-27/28): the scratchpad's message on white or amber, TMPY on
@@ -134,6 +148,7 @@ public static class A350MfdPage
         var leftLabels = new HashSet<Cell>();
         var checkboxLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
+        var keys = new List<(int At, string Name, float X0, float X1, float Top)>();   // the keys' lines, for their columns
         string? pageTab = null;   // the tab the page is on
         // Texts inside a control are its own, never another control's label or header.
         var inControls = elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)).SelectMany(e =>
@@ -271,6 +286,19 @@ public static class A350MfdPage
                 fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy, false, beside == null));
                 continue;
             }
+            // A key with no text of its own is named by the white text drawn just under it or over it, across its width (FCU
+            // BKUP's EFIS keys: CSTR to ARPT under theirs, WX, TERR and TRAF over theirs; live 2026-10-30). Its colour is its
+            // light's, an empty text inside it (grey while the backup is not in use).
+            if (inside.Count == 0 && e.Class == "BaseUIButton"
+                && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 10 && c.X <= x1
+                        && (c.Y > y1 && c.Y - y1 <= 45 || c.Y < y0 && y0 - c.Y <= 25))
+                    .OrderBy(c => c.Y > y1 ? c.Y - y1 : y0 - c.Y).FirstOrDefault() is { } nameBeside)
+            {
+                inside = new List<Cell> { nameBeside };
+                value = nameBeside.Text;
+                colour = capture.Texts.Skip(from).FirstOrDefault(t => t.X - shift >= x0 && t.X - shift <= x1 && t.Y >= y0 && t.Y <= y1)?.ColourName
+                    ?? "white";
+            }
             if (inside.Count == 0) continue;
             used.UnionWith(inside);
             // The tab the page is on is filled black, the others dark grey (every tabbed page, 2026-10-27/28).
@@ -299,6 +327,7 @@ public static class A350MfdPage
                 "DropdownButtonUI" or RevisionItem => ("menuitem", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
             };
+            if (kind == "button") keys.Add((lines.Count, value, x0, x1, y0));
             lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
         }
 
@@ -335,19 +364,32 @@ public static class A350MfdPage
         }
 
         // A box with no label of its own takes its column's header: the nearest white text above it over its column (WIND
-        // CRZ's ALT and T.WIND, live 2026-10-28), numbered by row where its column holds several.
-        Cell? ColumnHeader(float top, float x0, float x1) => cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c)
-                && c.Colour == "white" && c.Y < top && top - c.Y <= 300 && c.X >= x0 - 40 && c.X <= x1 + 40)
-            .OrderByDescending(c => c.Y).ThenBy(c => Math.Abs(c.X - (x0 + x1) / 2)).FirstOrDefault();
+        // CRZ's ALT and T.WIND, live 2026-10-28), every word of that row over the column (FCU BKUP's MAG HDG), numbered by
+        // row where its column holds several.
+        string? ColumnHeader(float top, float x0, float x1)
+        {
+            var over = cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c)
+                && c.Colour == "white" && c.Y < top && top - c.Y <= 300 && c.X >= x0 - 40 && c.X <= x1 + 40).ToList();
+            if (over.Count == 0) return null;
+            float row = over.Max(c => c.Y);
+            return string.Join(" ", over.Where(c => row - c.Y <= 4).OrderBy(c => c.X).Select(c => c.Text));
+        }
         var columnNames = new Dictionary<int, string>();
         foreach (var column in fields.Select((f, k) => (f, k)).Where(p => p.f.Label == null)
                      .Select(p => (p.k, p.f, Header: ColumnHeader(p.f.Top, p.f.X0, p.f.X1))).Where(p => p.Header != null)
-                     .GroupBy(p => (p.Header!.Text, (int)Math.Round(p.f.X0))))
+                     .GroupBy(p => (p.Header!, (int)Math.Round(p.f.X0))))
         {
             var rowsOf = column.OrderBy(p => p.f.Top).ToList();
             for (int r = 0; r < rowsOf.Count; r++)
-                columnNames[rowsOf[r].k] = rowsOf.Count > 1 ? $"{column.Key.Text} {r + 1}" : column.Key.Text;
+                columnNames[rowsOf[r].k] = rowsOf.Count > 1 ? $"{column.Key.Item1} {r + 1}" : column.Key.Item1;
         }
+
+        // Keys of one name in several columns take their column's header (FCU BKUP's SELECTED and MANAGED under SPD, MAG HDG,
+        // ALT and V/S; live 2026-10-30).
+        foreach (var same in keys.GroupBy(k => k.Name).Where(g => g.Count() > 1))
+            foreach (var key in same)
+                if (ColumnHeader(key.Top, key.X0, key.X1) is { } header)
+                    lines[key.At] = lines[key.At] with { Line = lines[key.At].Line with { Spoken = $"{header} {lines[key.At].Line.Spoken}" } };
 
         // A label two fields share takes each field's column header: the nearest text above it in its column.
         int unnamed = Enumerable.Range(0, fields.Count).Count(k => fields[k].Label == null && !columnNames.ContainsKey(k));
@@ -542,10 +584,22 @@ public static class A350MfdPage
     public static string? PageJustChanged(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now) =>
         before.Count == 0 || PageTitle(now) is not { } title || !Readable(title) || title == PageTitle(before) ? null : title;
 
+    /// <summary>The page with each line a torn text left unreadable read as it last read whole, where the last read has a
+    /// line of its kind at the same click point: the window does not flicker to "unreadable" while the A350 rebuilds a
+    /// label every frame (most copies catch it torn), and a label that changed reads anew on its next whole read.</summary>
+    public static IReadOnlyList<MfdLine> KeepReadable(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
+    {
+        static bool HasUnreadable(MfdLine l) => l.Spoken.Contains(Unreadable, StringComparison.Ordinal);
+        return now.Select(l => HasUnreadable(l) && before.FirstOrDefault(b => b.Kind == l.Kind && !HasUnreadable(b)
+                && Math.Abs(b.ClickX - l.ClickX) <= 2 && Math.Abs(b.ClickY - l.ClickY) <= 2) is { } whole
+            ? l with { Spoken = whole.Spoken } : l).ToList();
+    }
+
     /// <summary>Whether a title can be said: some text and no control character. A copy read across a frame (fixtures taken
     /// before the allocator patch, [A350-10]) drew titles such as "¨÷é\x13…" and an empty one; announced as a new page they
     /// told the pilot nothing (review 2026-10-29).</summary>
-    private static bool Readable(string title) => !string.IsNullOrWhiteSpace(title) && !title.Any(char.IsControl);
+    private static bool Readable(string title) => !string.IsNullOrWhiteSpace(title) && !title.Any(char.IsControl)
+        && !title.Contains(Unreadable, StringComparison.Ordinal);
 
     /// <summary>Where the MFD window moves when a menu has just opened: its first item, as a sighted pilot's eyes go to
     /// it; null while none opened since the last read (an open menu keeps the pilot's own place).</summary>

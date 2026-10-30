@@ -706,6 +706,12 @@ Like the A380, the A350 has MFDs instead of MCDUs, worked from the KCCU. Input S
 
 Reading the flight plan: each F-PLN waypoint is one line with its leg, labelled by the page's columns. A constraint says whether it is met, for example "ALT 5000 (constraint met)". Press Enter on a waypoint to open its revision menu.
 
+The MFD's own symbols are said in words. An arrow between two words of a key is the mode it switches to, for example "SPD to MACH". A triangle before a word is a delta, as in "delta FUEL".
+
+FCU BKUP, the last item of the MFD's application menu (the first line of the page), is the backup of the FCU and both EFIS control panels. Its keys stay grey and do nothing while the FCU works, as in the aircraft. Keys that share a name say their column, for example "SPD SELECTED button" and "MAG HDG MANAGED button".
+
+Now and then BA catches a label while the aircraft is redrawing it. It then says "unreadable" instead of the label. The window keeps showing that line as it last read it, and the next refresh, or F5, brings the label back.
+
 FMS messages, such as *"Scratchpad: NAV ACCURACY UPGRADED, white"*, are spoken as they appear: by the window while it is open, and in the background while it is closed. The background ones have their own Monitor Manager row, "FMS messages (MFD scratchpad)".
 
 The A350's normal checklists are on the MFD's C/L MENU (Alt+K in the window, or Output Ctrl+Shift+C). Each item is a button: Enter ticks it, and sensed items tick themselves.

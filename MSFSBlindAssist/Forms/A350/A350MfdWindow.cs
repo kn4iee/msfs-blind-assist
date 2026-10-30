@@ -134,7 +134,7 @@ public sealed class A350MfdWindow : Form
             }
             if (IsDisposed) return;
             var before = _lines;
-            (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
+            (_lines, var shown) = PageLines(cap, Side, _isDark(Side), _linesSide == Side ? before : null);
             _linesSide = Side;
             _list.SetLines(shown);
             // A new page says its title once and takes the selection to it, as the A380's MFD window does.
@@ -166,14 +166,16 @@ public sealed class A350MfdWindow : Form
 
     /// <summary>The page's lines (what Enter acts on) and what the list shows: a dark screen shows dark, with nothing
     /// to click, as the status display reads it; with no capture (none yet, or none young enough) there is nothing to
-    /// click either (review 2026-10-29: Enter clicked where the last page had its fields).</summary>
-    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark)
+    /// click either (review 2026-10-29: Enter clicked where the last page had its fields). A line a torn text left unreadable
+    /// keeps its reading from <paramref name="before"/>, the same side's last lines.</summary>
+    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark,
+        IReadOnlyList<MfdLine>? before = null)
     {
         if (cap == null)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.NotAvailableYet });
         if (dark)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
-        var lines = A350MfdPage.Read(cap, side);
+        var lines = A350MfdPage.KeepReadable(before ?? Array.Empty<MfdLine>(), A350MfdPage.Read(cap, side));
         return (lines, lines.Count == 0 ? new[] { "The MFD is off: no power." } : lines.Select(l => l.Spoken).ToList());
     }
 

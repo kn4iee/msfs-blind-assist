@@ -15,6 +15,7 @@ public class A350MfdPageTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
+    [InlineData(A350MfdPage.Unreadable)]   // a torn title, as the reader gives it since 2026-10-30
     [InlineData("¨÷é…")]
     [InlineData("ACTIVE/INIT")]
     public void A_title_that_cannot_be_read_is_no_page_change(string title)
@@ -926,4 +927,65 @@ public class A350MfdPageTests
         var rows = PageLines("mfd_fpln_tmpy_basu1d").Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
         Assert.Contains(rows, row => row.StartsWith("500: ", StringComparison.Ordinal) && row.Contains("ALT 500", StringComparison.Ordinal));
     }
+
+    // FCU BKUP's AFS CP page (live 2026-10-30, grey while the FCU works): its toggle keys draw the font's right arrow as "b"
+    // ("SPD b MACH", read "SPD b MACH"); SELECTED and MANAGED stand under each of the SPD, MAG HDG, ALT and V/S columns and
+    // read three times alike; the heading column's header is two words, MAG and HDG, and its box read "MAG".
+    [Fact]
+    public void The_afs_backup_keys_read_their_arrows_and_columns()
+    {
+        var lines = Page("mfd_fcu_bkup_afs");
+        Assert.Contains("SPD to MACH button, grey", lines);
+        Assert.Contains("MAG to TRUE button, grey", lines);
+        Assert.Contains("HDG-V/S to TRK-FPA button, grey", lines);
+        Assert.Contains("SPD SELECTED button, grey", lines);
+        Assert.Contains("SPD MANAGED button, grey", lines);
+        Assert.Contains("MAG HDG SELECTED button, grey", lines);
+        Assert.Contains("MAG HDG MANAGED button, grey", lines);
+        Assert.Contains("OPEN button, grey", lines);
+        Assert.Contains("ALT MANAGED button, grey", lines);
+        Assert.Contains("V/S SELECTED button, grey", lines);
+        Assert.Contains(lines, l => l.StartsWith("MAG HDG: none", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains(" b ", StringComparison.Ordinal) || l is "SELECTED button, grey" or "MANAGED button, grey");
+    }
+
+    // The EFIS CP page: the CSTR, WPT, VORD, NDB and ARPT keys carry no text of their own, their names drawn under them, and
+    // the WX, TERR and TRAF keys' over them; all eight read as a row of words and could not be pressed.
+    [Fact]
+    public void The_efis_backup_keys_take_the_names_drawn_beside_them()
+    {
+        var lines = PageLines("mfd_fcu_bkup_efis");
+        foreach (var name in new[] { "CSTR", "WPT", "VORD", "NDB", "ARPT", "WX", "TERR", "TRAF" })
+            Assert.Single(lines, l => l.Kind == "button" && l.Spoken == $"{name} button, grey");
+        Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("CSTR WPT", StringComparison.Ordinal) || l.Spoken.StartsWith("WX TERR", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Spoken == "HPA -> INHG button, grey");
+        Assert.Contains(lines, l => l.Spoken.Contains("1013 HPA", StringComparison.Ordinal));
+    }
+
+    // The baro unit key's label is rebuilt every frame in the A350's own heap: a copy read across a frame (about 100 ms at
+    // 2026-10-30's heap) caught it freed, its text a malloc chunk's pointers ("Xé\u0018…\u0012"). Never read out: the
+    // key reads unreadable, and the MFD window keeps the last good reading of that line.
+    [Fact]
+    public void A_torn_label_reads_unreadable_and_the_window_keeps_the_last_good_one()
+    {
+        var torn = PageLines("mfd_fcu_bkup_efis_torn");
+        var key = Assert.Single(torn, l => l.Kind == "button" && Math.Abs(l.ClickX - 126) < 2 && Math.Abs(l.ClickY - 527) < 2);
+        Assert.Equal("unreadable button, grey", key.Spoken);
+        Assert.DoesNotContain(torn, l => l.Spoken.Any(char.IsControl));
+        var good = PageLines("mfd_fcu_bkup_efis");
+        Assert.Contains("HPA -> INHG button, grey", A350MfdPage.KeepReadable(good, torn).Select(l => l.Spoken));
+        Assert.Equal("unreadable button, grey", A350MfdPage.KeepReadable(Array.Empty<MfdLine>(), torn)
+            .Single(l => Math.Abs(l.ClickX - 126) < 2 && Math.Abs(l.ClickY - 527) < 2).Spoken);
+    }
+
+    // The ATC COM and FUEL pages' prompts: the font's triangle before a word is a delta (FUEL&LOAD's "fFUEL", "fTIME").
+    [Theory]
+    [InlineData("fFUEL", "delta FUEL")]
+    [InlineData("fTIME", "delta TIME")]
+    [InlineData("TRUE b MAG", "TRUE to MAG")]
+    [InlineData("TRK-FPA b HDG-V/S", "TRK-FPA to HDG-V/S")]
+    [InlineData("BI611b", "BI611 (right turn)")]
+    [InlineData("DER22f", "DER22 (overfly)")]
+    public void The_fonts_symbols_read_as_words(string drawn, string read) =>
+        Assert.Equal(read, A350MfdPage.Glyphs(drawn));
 }
