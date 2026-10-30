@@ -3,7 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const AGENT = path.join(__dirname, '..', '..', 'MSFSBlindAssist', 'Resources', 'coherent-a350-ois-agent.js');
+const RESOURCES = path.join(__dirname, '..', '..', 'MSFSBlindAssist', 'Resources');
+const AGENTS = {
+  ois: { file: 'coherent-a350-ois-agent.js', global: '__MSFSBA_A350_OIS' },
+  fap: { file: 'coherent-a350-fap-agent.js', global: '__MSFSBA_A350_FAP' }
+};
 
 // Loads a fixture (an OIS page captured live with capture.js, see README.md) and the agent into
 // a jsdom window. data-vis="0" marks an element the OIS drew with no size (a hidden list, a page
@@ -24,8 +28,9 @@ function load(fixtureName, opts) {
   // jsdom has no innerText; Coherent's reads like textContent here (a <br> adds nothing).
   Object.defineProperty(window.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
   if (opts.before) opts.before(window);
-  window.eval(fs.readFileSync(AGENT, 'utf8'));
-  const A = window.__MSFSBA_A350_OIS;
+  const agent = AGENTS[opts.agent || 'ois'];
+  window.eval(fs.readFileSync(path.join(RESOURCES, agent.file), 'utf8'));
+  const A = window[agent.global];
   // The agent's dirty gate answers {unchanged:true} when its MutationObserver saw nothing, and jsdom delivers mutations
   // as microtasks: two scrapes in one synchronous test would see the second gated. Each scrape here reads the page in
   // full, unless the test is the gate's own (opts.gate).

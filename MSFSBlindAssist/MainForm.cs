@@ -133,6 +133,12 @@ public partial class MainForm : Form
 
     private CoherentPmdgEfbClient? coherentPmdgEfbFirstOfficer;
 
+    // The iniBuilds A350's FAP (the cabin's flight attendant panel) over the same transport: one client and window, created
+    // lazily from the aircraft's window list (Ctrl+Shift+F) and disposed on aircraft swap.
+    private CoherentPmdgEfbClient? coherentA350Fap;
+
+    private Forms.FBWA380.FbwEfbForm? a350FapForm;
+
     private Forms.FBWA380.FbwEfbForm? pmdgCoherentEfbCaptainForm;
 
     private Forms.FBWA380.FbwEfbForm? pmdgCoherentEfbFirstOfficerForm;
@@ -1469,6 +1475,7 @@ public partial class MainForm : Form
         // a user who opens the EFB then quits without switching aircraft leaks the socket + poll loop).
         coherentPmdgEfbCaptain?.Dispose();
         coherentPmdgEfbFirstOfficer?.Dispose();
+        coherentA350Fap?.Dispose();
 
         // Same for the MD-11's windows + EFB client (same leak class, same swap-only teardown in
         // MainForm.AircraftSwitch.cs): the MCDU form's 250 ms poll timer would otherwise tick

@@ -8,6 +8,7 @@ paths:
   - "MSFSBlindAssist/Forms/A350/**"
   - "tests/MSFSBlindAssist.Tests/A350/**"
   - "MSFSBlindAssist/Resources/coherent-a350-ois-agent.js"
+  - "MSFSBlindAssist/Resources/coherent-a350-fap-agent.js"
   - "tools/a350-ois-test/**"
 ---
 # iniBuilds A350 rules

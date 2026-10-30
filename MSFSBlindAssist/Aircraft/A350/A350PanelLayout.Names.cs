@@ -212,7 +212,7 @@ public static partial class A350PanelLayout
         ["CPT_TILLER_DISCO"] = "Captain tiller",
         ["FO_TILLER_DISCO"] = "First officer tiller",
         ["LIGHTS_DOME_OVERRIDE"] = "Dome light override",
-        ["PRINTER_PAPER_SIDE_1_CS"] = "Printer paper tear off",
+        ["PRINTER_PAPER_SIDE_1_CS"] = "Torn paper put away",
         ["A350_INT_INI_PEN"] = "Pen",
         ["OXYTEST_CPT_HATCH"] = "Captain oxygen mask stowage",
         ["OXYTEST_CPT_N"] = "Captain oxygen N/100%",
@@ -295,7 +295,7 @@ public static partial class A350PanelLayout
         ["OIS_DISPLAY_TRANSFER_OIS_ON_CENTER_RIGHT"] = "First officer OIS on center",
         ["OIS_DISPLAY_TRANSFER_DISPLAY_CYCLE_LEFT"] = "Captain display cycle",
         ["OIS_DISPLAY_TRANSFER_DISPLAY_CYCLE_RIGHT"] = "First officer display cycle",
-        ["PRINTER_PAPER_PED"] = "Printer",
+        ["PRINTER_PAPER_PED"] = "Printer paper tear off",
         ["WXR_ELEV_LEFT"] = "Captain weather radar elevation",
         ["WXR_ELEV_LEFT_PUSH"] = "Captain weather radar elevation auto",
         ["WXR_ELEV_LEFT_PULL"] = "Captain weather radar elevation manual",
@@ -492,10 +492,11 @@ public static partial class A350PanelLayout
     };
 
     /// <summary>Toggles the cockpit returns by itself within a second (light tests): a row presses them, once.
-    /// Live 2026-10-26: AUTOLAND's INI_AUTOLAND_LIGHT_TEST goes back to 0 on its own.</summary>
+    /// Live 2026-10-26: AUTOLAND's INI_AUTOLAND_LIGHT_TEST goes back to 0 on its own. Live 2026-10-30: the printer's paper, whose
+    /// INI_PRINTER_TRIGGER_PAPER_TRANSFER the aircraft takes at once, tearing the paper off to beside the seat.</summary>
     private static readonly HashSet<string> MomentaryToggles = new(StringComparer.Ordinal)
     {
-        "FCU_AUTO_LAND_LEFT", "FCU_AUTO_LAND_RIGHT",
+        "FCU_AUTO_LAND_LEFT", "FCU_AUTO_LAND_RIGHT", "PRINTER_PAPER_PED",
     };
 
     /// <summary>Whether a toggle is pressed rather than set (<see cref="MomentaryToggles"/>).</summary>

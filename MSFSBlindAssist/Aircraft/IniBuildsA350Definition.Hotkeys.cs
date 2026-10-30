@@ -51,6 +51,19 @@ public partial class IniBuildsA350Definition
             case var windowKey when A350.A350Hotkeys.MfdPages.TryGetValue(windowKey, out var page):
                 ShowMfdWindow(simConnect, announcer, hotkeyManager, page);
                 return true;
+            // Ctrl+Shift+F: the A350's other windows, as the Fenix's list: what has no key of its own.
+            case HotkeyAction.ShowAircraftWindows:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(
+                    () => new Forms.A350.A350WindowsForm(new[]
+                    {
+                        new Forms.A350.A350WindowEntry("FAP", "The flight attendant panel: cabin lights, temperature, doors and slides, water and waste, Cabin Ready.",
+                            () => (parentForm as MainForm)?.ShowA350FapDialog()),
+                        new Forms.A350.A350WindowEntry("Printer", "What the printer last printed.",
+                            () => ShowTrackedWindow(() => new Forms.A350.A350PrinterWindow(A350.A350Printout.ReadAsync), w => w.ShowForm())),
+                    }, announcer),
+                    w => w.ShowForm());
+                return true;
             // Ctrl+Shift+R: the RMP window (A380 parity): the chosen RMP's screen, a frequency typed on its keypad, Enter
             // loads it as standby, Alt+1/2/3 swaps it in; Alt+T a squawk.
             case HotkeyAction.ShowRMP:

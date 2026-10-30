@@ -178,6 +178,21 @@ public static class A350MfdPage
                 own.Add(right);
             checkboxLabels.UnionWith(own);
         }
+        // A rectangle check box (MFD DATA PRINTER's AUTO PRINT boxes, live 2026-10-30) holds no text. It is on the screen when its
+        // fill is drawn (RAD NAV keeps two that never are), and is named by the text nearest left on its row, which it owns when
+        // close (F-PLN INIT beside its box; PRE-FLIGHT, beyond a button, stays that row's too).
+        var rectangleBoxes = new Dictionary<DrawnElement, Cell?>();
+        foreach (var e in elements.Where(e => !hidden.Contains(e) && e.Class == "UIRectangleCheckbox"))
+        {
+            float x0 = e.X - shift;
+            if (capture.Shapes?.Any(sh => sh.Kind == "fill" && sh.Image == 0 && Math.Abs(sh.X0 - shift - x0) <= 2 && Math.Abs(sh.Y0 - e.Y) <= 2) != true)
+                continue;
+            var label = cells.Where(c => !inControls.Contains(c) && c.X < x0 && Math.Abs(c.Y - (e.Y + e.RectH * 0.75f)) <= 12)
+                .OrderByDescending(c => c.X).FirstOrDefault();
+            rectangleBoxes[e] = label;
+            if (label != null && x0 - label.X <= RectangleBoxOwnsLabelPixels)
+                used.Add(label);
+        }
 
         // A waypoint's open revision menu or a drop-down (its items with their own texts drawn after them): its items are
         // its own, never the F-PLN's column headers (FROM P.POS DIR TO, and POSITION's REPORT, white, sit in their band,
@@ -237,6 +252,20 @@ public static class A350MfdPage
                 // A box's options read together, in order (top before left would interleave the boxes).
                 float top = box?.Y ?? y0, left = (box == null ? x0 : box.X - shift) + (y0 - top) / 1000f;
                 lines.Add((top, left, new MfdLine("option", inside.All(c => c.Colour == "grey") ? name : $"{name}, selected, {colour}", cx, cy)));
+                continue;
+            }
+            if (e.Class == "UIRectangleCheckbox")
+            {
+                if (!rectangleBoxes.TryGetValue(e, out var rowLabel))
+                    continue;
+                // The title over its column; its cross is a cyan stroke inside it.
+                var boxTitle = cells.Where(c => !inControls.Contains(c) && !rectangleBoxes.ContainsValue(c) && c.Colour == "white"
+                    && c.X >= x0 - RectangleBoxOwnsLabelPixels && c.X <= x1 && c.Y < y0 && y0 - c.Y <= RectangleBoxTitleReachPixels)
+                    .OrderByDescending(c => c.Y).FirstOrDefault();
+                bool crossed = capture.Shapes?.Any(sh => sh.Kind == "stroke" && sh.Image == 0 && A350Rgba.NameOf(sh.Colour) == "cyan"
+                    && sh.X0 - shift >= x0 - 2 && sh.X1 - shift <= x1 + 2 && sh.Y0 >= y0 - 2 && sh.Y1 <= y0 + e.RectH + 2) == true;
+                string boxName = (boxTitle == null ? "" : boxTitle.Text + ": ") + (rowLabel?.Text ?? "");
+                lines.Add((y0, x0, new MfdLine("checkbox", $"{boxName} check box, {(crossed ? "checked" : "not checked")}".TrimStart(), cx, cy)));
                 continue;
             }
             if (e.Class == "BaseUICheckbox")
@@ -557,6 +586,9 @@ public static class A350MfdPage
 
     /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>
     private const string RevisionItem = "FlightplanButtonActionButton";
+
+    /// <summary>How far left a rectangle check box's row label is its own, and how far up the title over its column may stand.</summary>
+    private const float RectangleBoxOwnsLabelPixels = 300, RectangleBoxTitleReachPixels = 200;
 
     /// <summary>The title bar's colour, as its texts read: they are the page's title, said without a colour.</summary>
     private const string TitleBar = "title";

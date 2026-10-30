@@ -99,11 +99,11 @@ public class A350CockpitPanelTests
     [Fact]
     public void Misc()
     {
-        // The eight printer paper clickspots all hide the paper (INI_PRINTER_SIDE_PAPER_VIS 0): one row.
+        // The eight clickspots on the torn paper all hide it (INI_PRINTER_SIDE_PAPER_VIS 0): one row.
         Assert.Equal(new[]
         {
             ("Dome light override", Set, "0=Off, 1=On"),
-            ("Printer paper tear off", Press, ""),
+            ("Torn paper put away", Press, ""),
             ("Pen", Set, "0=Off, 1=On"),
         }, Rows("Misc"));
     }

@@ -283,7 +283,7 @@ All need an AI provider and Fenix v3.
 
 - **Input Shift+1** to **Shift+4** — Push the heading, altitude, speed and vertical speed knobs.
 - **Input Ctrl+1** to **Ctrl+4** — Pull the heading, altitude, speed and vertical speed knobs.
-- **Input Ctrl+Shift+F** — Open the Fenix windows list: Engines, Cabin, Failures, Fenix documents and Fenix options. On any other aircraft you hear *"This aircraft has no extra windows."*
+- **Input Ctrl+Shift+F** — Open the Fenix windows list: Engines, Cabin, Failures, Fenix documents and Fenix options. On the iniBuilds A350, its list: [the FAP and the printer](airbus-aircraft.md#a350-windows). On any other aircraft you hear *"This aircraft has no extra windows."*
 
 Ctrl+P opens the autopilot window: AP1, AP2, ATHR, APPR, LOC, EXPED and the disconnect buttons for each side. Input Shift+T opens the Fenix's own EFB web page, where **Alt+Home** goes back to the EFB's home screen.
 

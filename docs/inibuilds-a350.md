@@ -20,7 +20,7 @@ Everything the A350 shows or lets a pilot do is readable and operable without pi
 | SFD and SND standby displays | yes | yes | ISIS-class draws; their buttons are input events |
 | RMP 1-3 | yes | yes | RMP draw (frequencies come from cached CustomVariable values); keypad input events |
 | OIS/EFB, both sides | yes | yes | ordinary HTML over Coherent (`iniEfbA350` views): pages, fields, selects, buttons |
-| Cabin panel (FAP) | yes | yes | HTML over Coherent (`iniFAPA350`) |
+| Cabin panel (FAP) | yes | yes | HTML over Coherent (`iniFAPA350`): its own agent, the OIS's window |
 | Printer | yes | n/a | HTML over Coherent (`A350Printer`); empty until something prints |
 | BAT voltage display | yes | n/a | BAT draw; draws text only with the ANN LT switch in its normal position |
 | HUD | when deployed | yes | HUD draw; stowed draws nothing |
@@ -488,6 +488,23 @@ Learned on the way:
 - The OIS keeps the last opened company message on screen when another box is chosen; an AOC
   request box (LOADSHEET, ADC DELAY, DIVERSION) shows no form without a SimBrief plan.
 
+## The FAP and the printer (live 2026-10-30)
+
+Input Ctrl+Shift+F is the A350's window list (`A350WindowsForm`, the Fenix's key): the windows with no hotkey of their own.
+
+**The FAP** (`coherent-a350-fap-agent.js`, `CoherentPmdgEfbClient.ForA350Fap`, the shared `FbwEfbForm`) was read from its own script, `ini-fap-a350.js`, and every control pressed live through the agent. Two views, "VCockpitNN - iniFAPA350", show the same panel from the same L:vars, so the first is held. What the script does, as the agent reads it:
+
+- **The screen off** is an image over everything (`#iniFAP > img`, `L:INI_FAP_SCREENSAVER`), and the FAP sets it itself 1.1 s after load: every FAP starts with its screen off. The agent then shows only *Wake the screen* (a press on the image), as a sighted pilot sees nothing else.
+- **A tile that only looks like a button.** Caution, the Temp page's Zones, its zone tiles and its requested figure have the `is-button` class and no `onclick`: a press does nothing, so they read as text. `A.handlersKnown` needs a tab's `onclick` to tell, so a fixture (a saved page has no handlers) reads them all as buttons. Cabin Status's five tiles press through their pictures (`img.onclick`), and Smoke Detect's handler is only a comment (`A.inert`: *has no page*). `FAPSmoke` exists and is never shown.
+- **State.** A door's state is its indicator's colour, from the page's own legend; Cabin Ready is read from `L:INI_FAP_CABIN_READY`, as the paint follows only a press on the same view. Toasts (`notie`) are alerts.
+- **A level says Medium Dim after a page change.** On entering Lights the script compares the potentiometers (`INI_POTENTIOMETER_60` cabin, 44 avionics, 43 cargo) with 20 and 100, but writes them 0 to 1: anything but 0 reads Medium Dim, whatever is set. The agent reads what the panel shows.
+- **Temp.** The flight deck holds the temperature while `L:INI_TEMP_KNOB2` is 5 or more (the overhead Cabin temperature knob), and the page then shows only *Temperature controlled by flightdeck*.
+- **Pictures.** The outlines are fixed drawings of the aircraft from above, nothing on them changes: one line per page says what each shows.
+
+**The printer** (`A350Printout`, `A350PrinterWindow`): `A350_Printer.js` takes the module's `PRINTCALLBACK` over the comm bus and writes the text into `#paper`, wrapped at 78 columns, on both "VLivery0N - A350Printer" views. No sim variable marks a print: `INI_PRINTER_PAPER_OUT_PERCENT` stays at 50 until the paper is torn, `INI_PRINTING_SOUND` stays at 1, so `A350PrinterWatch` reads the paper every 5 s at a batch end (a printout's header holds its time, so a reprint differs) and says the new title on its Ctrl+M row. `AIRLINER_PRINTER_PAPER_PED` writes `INI_PRINTER_TRIGGER_PAPER_TRANSFER`, which the module takes at once (out percent 0, `INI_PAPER_SOUND` a moment, `INI_PRINTER_SIDE_PAPER_VIS` 1 to 4 picks where it lies), so its row is a press. The eight `PRINTER_PAPER_SIDE_n_CS` clickspots set that 0. `INI_PRINTER_STATUS_1` and `_2` only light two lamps and nothing writes them.
+
+**`UIRectangleCheckbox`** (the PRINTER page's AUTO PRINT boxes): no text of its own; its fill is drawn when it is on the screen (RAD NAV keeps two never drawn), its cross is a cyan stroke inside it, and its name is the text nearest left on its row under the title above its column. `INI_PRINTER_AUTOPRINT_FPLAN_INIT`, `_TODATA` and `_WIND` follow the top three; the three report boxes under ACTIVE F-PLN REPORT took no press while their PRINT keys were grey.
+
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 
 Every section's controls and displays use one of the paths above: cockpit interaction (push, pull, scroll), the OIS (FLT OPS PLAN/STS, LOADSHEET, charts list, T.O/LDG PERF with SYNC and SEND TO FMGS, AOC, GROUND incl. GSX, MAINTENANCE, SITUATIONS, FAILURES, AUTOSAVE, PANEL STATES, OPTIONS incl. 3RD PARTY), the FCU and its managed/selected modes, the MFD and KCCU (menu bar, interactive F-PLN, vertical revisions, C/L MENU checklists), EFIS CP and baro preset, ANF and BTV arming, the noise function (MFD PERF T.O), thrust levers, RMP tuning and squawk, the MFD SURV page (DEFAULT SETTINGS, CONFIRM), the HUD, sensed and not-sensed ECAM procedures, deferred procedures, STATUS, and the automatic emergency descent.
@@ -498,7 +515,7 @@ Exercised live: panels, FCU, EFIS, RMP, MFD INIT entry, ND pop-up, ECAM sensed/A
 - **DEFRD.** The page reads ("DEFERRED PROCEDURES LIST", "NO DEFERRED PROCEDURES"); none of the OIS's ground failures creates a deferred procedure. Its entries draw through the same item code as the ABN list.
 - **MFD checklists.** C/L MENU lists the ten checklists as `CheckListMenuItemUIButton`s; BEFORE START shows pilot-confirm items in cyan with `____`, sensed items green (BEACON ON), RESET, C/L COMPLETE, C/L MENU; a click ticked PARKING BRAKE to "PARKING BRAKE : CHECKED" in green.
 - **F-PLN revisions.** The F-PLN rows read with their cells as `BaseFlightPlanButton`s; a click on VCBI opened the revision menu (FROM P.POS DIR TO, INSERT NEXT WPT, DEPARTURE, OFFSET, AIRWAYS, NEW DEST, CONSTRAINTS, CMS, STEP ALTS in white; DELETE, ARRIVAL, OVERFLY, HOLD, ENABLE ALTN in grey).
-- **Printouts.** MFD DATA → PRINTER reads; its AUTO PRINT boxes are `UIRectangleCheckbox` with the state at element +64. OIS T.O PERF → COMPUTE → SEND TO FMS printed "FM ACTIVE TAKE-OFF DATA" as plain text on both printer views.
+- **Printouts.** MFD DATA → PRINTER reads; its AUTO PRINT boxes are `UIRectangleCheckbox`es, read by `A350MfdPage` (see The FAP and the printer). OIS T.O PERF → COMPUTE → SEND TO FMS printed "FM ACTIVE TAKE-OFF DATA" as plain text on both printer views.
 - **BAT display.** It is blank with BAT SELECTOR at OFF; at BAT 1 it draws 27.2 (as "272" and "."), at EMER 1 27.1.
 - **HUD.** With `INI_HUD_LEFT_STATE` 1 the second HUD object draws (FD, speed and altitude, heading scale, GS, QNH), all green.
 

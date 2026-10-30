@@ -28,6 +28,8 @@ namespace MSFSBlindAssist.SimConnect
     ///   • iniBuilds A350 OIS — <see cref="ForA350Ois"/>: two "iniEfbA350" views, told apart by the
     ///     page each loaded ([A350-8]); a page another of these clients holds is never probed
     ///     (<see cref="PageClaims"/>).
+    ///   • iniBuilds A350 FAP — <see cref="ForA350Fap"/>: two "iniFAPA350" views showing the same panel,
+    ///     so the first match is taken.
     ///
     /// Page ids shift between sim restarts, so the view is resolved BY TITLE every
     /// (re)connect — never hardcoded.
@@ -151,6 +153,13 @@ namespace MSFSBlindAssist.SimConnect
         public static CoherentPmdgEfbClient ForA350Ois(bool firstOfficer)
             => new("iniEfbA350", "coherent-a350-ois-agent.js", "__MSFSBA_A350_OIS", firstOfficer ? "FO" : "CPT",
                 "((document.documentElement.innerHTML.match(/ini-efb-a350-(cpt|fo)/)||['',''])[1]).toUpperCase()");
+
+        /// <summary>
+        /// The iniBuilds A350's FAP, the cabin's flight attendant panel. Two views ("VCockpitNN - iniFAPA350") show the same
+        /// panel from the same L:vars, so no side probe: the first is taken and held (live 2026-10-30, 1.2.7).
+        /// </summary>
+        public static CoherentPmdgEfbClient ForA350Fap()
+            => new("iniFAPA350", "coherent-a350-fap-agent.js", "__MSFSBA_A350_FAP", side: null);
 
         /// <summary>
         /// The TFDi MD-11 EFB. One view ("VCockpit04 - TFDi_MD11_efb"), so no side probe.

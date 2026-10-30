@@ -31,7 +31,17 @@ public static class A350StatusLines
         new A350StatusLine("A350_STAT_IR1_ALIGNED", "A350_IRS_IR_1", "INI_IRS1_ALIGNED", "IR 1 alignment", Alignment),
         new A350StatusLine("A350_STAT_IR2_ALIGNED", "A350_IRS_IR_2", "INI_IRS2_ALIGNED", "IR 2 alignment", Alignment),
         new A350StatusLine("A350_STAT_IR3_ALIGNED", "A350_IRS_IR_3", "INI_IRS3_ALIGNED", "IR 3 alignment", Alignment),
+        // The printer's paper: out of the printer until torn off (INI_PRINTER_PAPER_OUT_PERCENT 50 after a print, 0 once torn), then
+        // beside the seat until put away (INI_PRINTER_SIDE_PAPER_VIS 1 to 4 picks where, 0 none; live 2026-10-30).
+        new A350StatusLine("A350_STAT_PRINTER_PAPER", "A350_PRINTER_PAPER_PED", "INI_PRINTER_PAPER_OUT_PERCENT", "Paper at the printer", PrinterPaper),
+        new A350StatusLine("A350_STAT_TORN_PAPER", "A350_PRINTER_PAPER_SIDE_1_CS", "INI_PRINTER_SIDE_PAPER_VIS", "Torn paper", TornPaper),
     };
+
+    /// <summary>The paper out of the printer: "Hanging out" or "None".</summary>
+    public static string PrinterPaper(double percent) => percent > 0 ? "Hanging out" : "None";
+
+    /// <summary>The torn paper: "Beside the seat" or "None".</summary>
+    public static string TornPaper(double position) => position > 0 ? "Beside the seat" : "None";
 
     /// <summary>An IR's alignment flag: "Aligned" or "Not aligned".</summary>
     public static string Alignment(double flag) => flag >= 0.5 ? "Aligned" : "Not aligned";

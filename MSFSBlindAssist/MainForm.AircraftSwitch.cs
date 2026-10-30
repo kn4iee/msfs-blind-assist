@@ -1171,6 +1171,8 @@ public partial class MainForm
         pmdgCoherentEfbFirstOfficerForm?.Dispose(); pmdgCoherentEfbFirstOfficerForm = null;
         coherentPmdgEfbCaptain?.Dispose(); coherentPmdgEfbCaptain = null;
         coherentPmdgEfbFirstOfficer?.Dispose(); coherentPmdgEfbFirstOfficer = null;
+        a350FapForm?.Dispose(); a350FapForm = null;
+        coherentA350Fap?.Dispose(); coherentA350Fap = null;
 
         // The First Officer window was disposed at the top of this method.
 

@@ -95,7 +95,7 @@ internal sealed class ProbeForm : Form
     /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
     internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd", "ndpage",
+        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "fap", "mfd", "nd", "ndpage",
         "rmpwin", "hotkey", "displays", "gsx",
     };
     private readonly StringBuilder _out = new();
@@ -152,9 +152,11 @@ internal sealed class ProbeForm : Form
     /// printing what the window would get; with a text, presses that element and prints the next push.</summary>
     private async Task RunOis()
     {
-        var parts = (_arg ?? "cpt").Split(' ', 2);
+        // "ois [cpt|fo] STEPS", or "fap STEPS": the FAP is one panel, so it takes no side.
+        var parts = _mode == "fap" ? (_arg == null ? new[] { "fap" } : new[] { "fap", _arg }) : (_arg ?? "cpt").Split(' ', 2);
         bool fo = parts[0].Equals("fo", StringComparison.OrdinalIgnoreCase);
-        var client = MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient.ForA350Ois(fo);
+        var client = _mode == "fap" ? MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient.ForA350Fap()
+            : MSFSBlindAssist.SimConnect.CoherentPmdgEfbClient.ForA350Ois(fo);
         var pushes = new System.Collections.Concurrent.ConcurrentQueue<Dictionary<string, string>>();
         client.StateUpdated += (_, e) => { if (e.Type == "fbw_efb_elements") pushes.Enqueue(e.Data); };
         client.Start();
@@ -488,7 +490,7 @@ internal sealed class ProbeForm : Form
 
     private async Task Run()
     {
-        if (_mode == "ois")
+        if (_mode == "ois" || _mode == "fap")
         {
             await RunOis();
             return;

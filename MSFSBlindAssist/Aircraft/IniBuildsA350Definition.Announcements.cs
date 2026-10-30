@@ -1,6 +1,7 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.A350;
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -518,6 +519,27 @@ public partial class IniBuildsA350Definition
         ObserveWatchdog();
         ObserveCovers();
         ObserveTcas();
+        ObservePrinter();
+    }
+
+    private readonly A350PrinterWatch _printer = new();
+
+    /// <summary>The printer's paper, read every few seconds (<see cref="A350PrinterWatch"/>), never while the seed settles.</summary>
+    private void ObservePrinter()
+    {
+        if (_seedGate.Armed || _disposed || !_printer.IsDue(Clock()))
+            return;
+        _printer.Began(Clock());
+        _ = ReadPrinterAsync();
+    }
+
+    private async Task ReadPrinterAsync()
+    {
+        string? paper = null;
+        try { paper = await A350Printout.ReadAsync(); }
+        catch (Exception ex) { Log.Debug("A350", $"Printer read failed: {ex.Message}"); }
+        if (_printer.Read(paper) is { } said && !IsMuted(A350PrinterWatch.MuteKey) && !_disposed)
+            _batchAnnouncer?.Announce(said);
     }
 
     private readonly A350TcasCallouts _tcas = new();
@@ -570,6 +592,7 @@ public partial class IniBuildsA350Definition
         base.OnSimContextReset();
         _takeoffCallouts.Reset();
         _tcas.Reset(_ => null);
+        _printer.Reset();    // the new flight's paper is read afresh: its first read is a baseline
         _fmsSpeeds.Reset();
         _speedsTaken = null;
         _flownSinceSpeedsSet = false;

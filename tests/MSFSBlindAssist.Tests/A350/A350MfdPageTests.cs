@@ -25,6 +25,45 @@ public class A350MfdPageTests
         Assert.Equal("ACTIVE/INIT", A350MfdPage.PageJustChanged(before, new[] { new MfdLine("title", "ACTIVE/INIT", 0, 0) }));
     }
 
+    // MFD DATA PRINTER (live 2026-10-30, the F-PLN's auto print on): a rectangle check box holds no text, its name is its row's and
+    // the title above its column, its cross a cyan stroke; RAD NAV's two are never drawn, so they are no lines.
+    [Fact]
+    public void The_printer_pages_check_boxes_read_with_their_row_and_title()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_printer.json"), 0);
+        var spoken = lines.Select(l => l.Spoken).ToList();
+        Assert.Contains("AUTO PRINT ON RECEPTION: F-PLN INIT check box, checked", spoken);
+        Assert.Contains("AUTO PRINT ON RECEPTION: T.O DATA check box, checked", spoken);
+        Assert.Contains("AUTO PRINT ON RECEPTION: WIND DATA check box, checked", spoken);
+        Assert.Contains("AUTO PRINT: PRE-FLIGHT check box, not checked", spoken);
+        Assert.Contains("AUTO PRINT: IN-FLIGHT check box, not checked", spoken);
+        Assert.Contains("AUTO PRINT: POST-FLIGHT check box, not checked", spoken);
+        // The label beside its box is the box's alone; the one beyond a button stays that row's too.
+        Assert.Contains("F-PLN INIT, white", spoken);
+        Assert.DoesNotContain("F-PLN INIT F-PLN INIT, white", spoken);
+        Assert.Contains("PRE-FLIGHT, white", spoken);
+        // Enter clicks the box.
+        var box = lines.Single(l => l.Spoken.StartsWith("AUTO PRINT ON RECEPTION: T.O DATA", StringComparison.Ordinal));
+        Assert.Equal(691, box.ClickX, 1);
+        Assert.Equal(334.5f, box.ClickY, 1);
+    }
+
+    [Fact]
+    public void A_pressed_printer_check_box_changes_its_state()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_printer_changed.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("AUTO PRINT ON RECEPTION: F-PLN INIT check box, checked", spoken);
+        Assert.Contains("AUTO PRINT ON RECEPTION: T.O DATA check box, not checked", spoken);
+        // The report boxes take no press while their PRINT keys are grey (a click left it as it was, live).
+        Assert.Contains("AUTO PRINT: PRE-FLIGHT check box, not checked", spoken);
+    }
+
+    [Fact]
+    public void A_rectangle_check_box_never_drawn_is_no_line()
+    {
+        Assert.DoesNotContain(A350MfdPage.Read(A350Fixtures.Capture("mfd_radnav_ls.json"), 0), l => l.Spoken.Contains("check box", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_data_status_page_reads_as_lines()
     {

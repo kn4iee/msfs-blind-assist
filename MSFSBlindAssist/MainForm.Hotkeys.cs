@@ -327,8 +327,8 @@ public partial class MainForm
                 }
                 break;
             case HotkeyAction.ShowAircraftWindows:
-                // Reached only when the aircraft did not handle the key (today the Fenix A320 is the one
-                // aircraft with a window list). Say so: a silent key reads as a broken one.
+                // Reached only when the aircraft did not handle the key (today the Fenix A320 and the A350
+                // are the aircraft with a window list). Say so: a silent key reads as a broken one.
                 announcer.AnnounceImmediate("This aircraft has no extra windows.");
                 break;
             case HotkeyAction.ShowOANS:

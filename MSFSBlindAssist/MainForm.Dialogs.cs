@@ -600,6 +600,22 @@ public partial class MainForm
         }
     }
 
+    /// <summary>The A350's FAP, from its window list (Ctrl+Shift+F): the shared EFB window over the Coherent debugger.</summary>
+    public void ShowA350FapDialog()
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+        if (coherentA350Fap == null) { coherentA350Fap = CoherentPmdgEfbClient.ForA350Fap(); coherentA350Fap.Start(); }
+        if (a350FapForm == null || a350FapForm.IsDisposed)
+        {
+            a350FapForm = new Forms.FBWA380.FbwEfbForm(coherentA350Fap, announcer, "A350 FAP", "FAP", "FAP");
+            // Idle-gate the scrape to the window's visibility, as the OIS's: the socket and the agent stay warm.
+            var form = a350FapForm;
+            form.VisibleChanged += (_, _) => coherentA350Fap?.SetActive(!form.IsDisposed && form.Visible);
+        }
+        coherentA350Fap.SetActive(true);   // covers a re-Show of an already-visible window
+        a350FapForm.ShowForm();
+    }
+
     // A380 ND OANS / BTV control panel — reuses the WebView2 EFB form, but driven
     // by the ND Coherent view through CoherentNDClient. Used for BTV (Brake-To-
     // Vacate) exit selection and airport/runway/exit search.

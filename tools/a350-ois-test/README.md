@@ -1,7 +1,7 @@
-# A350 OIS agent tests
+# A350 OIS and FAP agent tests
 
-Offline tests of `MSFSBlindAssist/Resources/coherent-a350-ois-agent.js` against OIS pages captured live
-(iniBuilds A350 1.2.7). CI runs them in the efb-readers job of `.github/workflows/tests.yml`; run them by hand
+Offline tests of `MSFSBlindAssist/Resources/coherent-a350-ois-agent.js` and `coherent-a350-fap-agent.js` against pages captured
+live (iniBuilds A350 1.2.7). CI runs them in the efb-readers job of `.github/workflows/tests.yml`; run them by hand
 after changing the agent:
 
 ```
@@ -13,6 +13,25 @@ npm test
 Each scrape in a test reads the page in full: the agent's dirty gate answers `{unchanged:true}` when its observer saw
 no change, and jsdom delivers mutations as microtasks, so `run.js` marks the page changed before each scrape unless a
 test passes `{ gate: true }` (`gate.test.js`).
+
+## Re-taking a FAP fixture
+
+The FAP keeps every page in the DOM and its state in its paint, so `capture-fap.js` keeps every style and drops the hidden pages.
+It holds no credential. With the page showing, and MSFSBlindAssist's FAP window not holding the view:
+
+```
+node ../a350-probe/ceval.mjs "VCockpit01 - iniFAPA350" capture-fap.js > fixtures/fap_<name>.html
+```
+
+| Fixture | Page |
+| --- | --- |
+| fap_cabin | Cabin Status, nothing set |
+| fap_lights | Lights, with its Zones not pressed |
+| fap_lights_zones | Lights, Zones pressed |
+| fap_lights_cabin | Lights, the cabin picked: its brightness keys showing |
+| fap_temp | Temp, the keys showing (the Cabin temperature knob at its lowest) |
+| fap_doors | Doors/Slides, all closed and disarmed |
+| fap_water | Water/Waste, water full, waste empty |
 
 ## Re-taking a fixture
 

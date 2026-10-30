@@ -774,6 +774,8 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.
 - The flags and warnings the PFD raises, with their colours, for example *"PULL UP, red"*, *"ATT, red"*, *"TCAS, amber"*, *"AUTO BRK OFF, amber"*, *"DECEL, green"*. Said once as each appears; the PFD's own status display shows what is up now.
 - FMS messages while the MFD window is closed.
+- *"TCAS: Climb. Fly vertical speed plus 1500 feet per minute."*: the TCAS's advisories in its own words, with the vertical speed its guidance commands, as they sound; *"Traffic"* and *"Clear of conflict"* on their own.
+- *"Printer: FM ACTIVE TAKE-OFF DATA"* with the printout's title, a moment after the printer runs.
 - *"Memory low: 9 gigabytes left. The sim may close soon: save the flight in the OIS, then restart it."* when your PC is running out of memory. Long A350 flights make the simulator grow until it closes without warning, so this is said once below 10 gigabytes and once more below 5.
 - *"A350 module stopped responding: its displays and controls no longer work"* if the aircraft's own software stops (its displays freeze and nothing you press works), and *"A350 module responding again"* if it recovers. A paused simulator never counts.
 
@@ -782,12 +784,27 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 **Output Ctrl+Shift+B** opens the ND window: the A350's airport map (the ANF, its version of the A380's OANS) and Brake To Vacate live on the ND, and this window reads the ND line by line and does what a click does there. The ANF needs your Navigraph account linked on the OIS (FLT OPS MENU, OPTIONS, 3RD PARTY); without it the ND says *"ARPT NAV NOT AVAIL (NAVIGRAPH)"*, and Brake To Vacate still works by distance on the LANDING tab.
 
 - **Side**, **ND mode** and **ND range** at the top are that side's own EFIS knobs. The range's Zoom positions show the airport map. On Arc and the Rose modes the map follows the aircraft; **Plan** lets you look anywhere, and at other airports.
-- **The list** holds what the ND shows, then every name on the map with where it lies, nearest first: *"Stand A7: 2 o'clock, 75 m"*, *"Taxiway M6: north west, 75 m from the map's centre"* on Plan, *"Flag: 3 o'clock, 205 m"*. A name marked *"off the screen"* is known but needs the map moved first.
+- **The list** holds what the ND shows, then every name on the map with where it lies, nearest first: *"Stand A7: 2 o'clock, 75 m"*, *"Taxiway M6: north west, 75 m from the map's centre"* on Plan, *"Flag: 3 o'clock, 205 m"*. A name marked *"off the screen"* is known but needs the map moved first. On the ordinary ranges the list holds the waypoints the ND shows instead, with their colour, clock position and distance (*"TVM, green: 3 o'clock, 190 NM"*), and the **Aircraft symbol button**, which opens the same direct-to menu a sighted pilot's click on it does.
 - **Enter** does on a line what a click does: a name on the map opens the ND's menu for that spot, whose items then come first in the list (SET LDG RWY, SET BTV EXIT or UNSET BTV EXIT, DECLUTTER RWY, ADD CROSS, ADD FLAG, MAP DATA, ERASE ALL CROSSES, ERASE ALL FLAGS, CENTER ON ACFT; DELETE CROSS or DELETE FLAG on a mark). A greyed item says *"grey"*: it does nothing now.
 - **Functions button** opens the panel with its four tabs. **MAP DATA:** choose RWY, TWY, STAND or OTHER, then pick an item from the **Map item list button**, or type in the field; it shows the runway's lengths and offers ADD CROSS, ADD FLAG and CENTER MAP ON (Plan only). **LANDING:** MODIFY RWY, LDG PERF CODE, and the distance for BTV. **ARPT SEL:** type an ICAO or IATA code or a city name, or press ORIGIN, DEST or ALTN, then DISPLAY AIRPORT (Plan only); the airport's name reads yellow while it is only selected and green once shown. **STATUS:** the active and second airport databases and SWAP.
 - **The text box at the bottom** is for a field: type, then press Enter on the field. **Control plus an arrow** drags the map that way (on Arc and Rose it springs back when let go, as it does for a sighted pilot). **Page Up and Page Down** are the KCCU's arrows, which move through an open list longer than its 4 rows. **Backspace** is CLR, **Alt+X** the KCCU's ESC, **F5** reads now, **Escape** closes.
 
 **Brake To Vacate:** select the landing runway in the flight plan, set the runway condition (Autobrake panel), set the ND to Plan and a Zoom range, press the taxiway's name on the runway and choose SET BTV EXIT, or enter a distance on the LANDING tab, then press A/BRK. The ND then shows the runway and its landing distance, the condition, the exit, the occupancy and turnaround times, and the FMA says BTV. An exit before the wet or dry stop line reads *"TOO SHORT"*.
+
+### The FAP and the printer {#a350-windows}
+
+**Input Ctrl+Shift+F** opens the list of the A350's windows with no key of their own, as it does on the Fenix: **FAP** and **Printer**. **Enter** opens one, **Escape** closes the list.
+
+**The FAP** is the flight attendant panel, read and pressed as a sighted pilot uses it, in the same kind of window as the OIS. It starts with its screen off: press *Wake the screen*.
+
+- **The tabs** are Cabin Status, Lights, Temp, Doors/Slides and Water/Waste. Cabin Status also has a button for each of those pages; *Smoke Detect* has no page on this aircraft.
+- **Cabin Ready** tells the cabin is ready: the button says On or Off, and the ECAM shows it. **Screen Off** turns the panel's screen off, on every page.
+- **Lights:** **Zones** lists Cabin, Avionics Bay and Cargo Bay, each with its level. Press a zone, then Bright, Medium Dim, Low Dim or Off; the key at the zone's level says *current*. **Night Mode** and **Main On** set the cabin. The panel reads a level again when you come back to its page, and shows anything other than Off as Medium Dim then, for a sighted pilot too.
+- **Temp:** each zone's temperature, front to back, and the requested temperature with its up and down keys, from 18 to 30 °C. With the overhead **Cabin temperature** knob away from its lowest position the panel says *"Temperature controlled by flightdeck"* in place of the keys.
+- **Doors/Slides:** every door, with its state and colour: locked with the slide armed (blue), locked with the slide disarmed (green), moving (amber), open (red). **Enter** opens or closes it; the panel refuses while the aircraft moves or an engine runs, and says so.
+- **Water/Waste:** each waste tank and the water tank in percent, with the colour its bar is painted (amber, then red, as a tank nears its limit), and **Refill Water** and **Empty Waste**, which work on the ground.
+
+**The printer** window holds what the printer last printed, to read line by line, and shows a new printout as it arrives; **F5** reads it now, **Escape** closes. Printouts come from the MFD (ACTIVE, DATA, PRINTER: its PRINT keys and AUTO PRINT check boxes) and the OIS. The **Cockpit** panel's **Printer paper tear off** takes the paper off the printer and puts it beside the seat, and the **Misc** panel's **Torn paper put away** removes it; each has a status line.
 
 ### Things to know {#things-to-know-5}
 

@@ -167,7 +167,7 @@ public static class A350WritePlan
     {
         A350Kinds.Button => Steps(Set(control, control.Press ?? 1)),
         A350Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A350DelayStep(HoldMs), Set(control, 0)),
-        A350Kinds.Toggle when A350PanelLayout.IsMomentary(control) => Steps(Set(control, 1)),   // the cockpit returns it
+        A350Kinds.Toggle or A350Kinds.Selector when A350PanelLayout.IsMomentary(control) => Steps(Set(control, 1)),   // the cockpit returns it
         _ => A350Plan.Refused(NotSettableRefusal),
     };
 
