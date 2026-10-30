@@ -11,16 +11,6 @@ public static class Bbs757GroundPower
     /// <summary>BlueBird's ground power connection (0 not connected, 1 connected, measured): the GPU tile toggles it.</summary>
     public const string ConnectedVar = "BBS_757_GPU_AC_PWR_CONNECTED";
 
-    /// <summary>The overhead EXT PWR button's ON light (measured): 1 when external power is on line.</summary>
-    public const string ExtPwrOnVar = "B757_OVHD_EXT_PWR_BUTTON_ON";
-
-    /// <summary>
-    /// A key of its own for <see cref="ExtPwrOnVar"/>, registered on request. It is not the key of the announced EXT PWR row on the same
-    /// L:var: two streaming keys on one name break the batch ([VAR-7]), so this one never streams. Nothing asks for it since the
-    /// tablet stopped refusing a disconnect while external power is on line (plan 18).
-    /// </summary>
-    public const string ExtPwrOnKey = "BBS757_EFB_EXT_PWR_ON";
-
     /// <summary>
     /// From just before the window's taps, the longest a change of the ground power row counts as the window's
     /// own run: longer than any run can take, so it matters only for a run that never settles. A run that

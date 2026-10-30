@@ -5,21 +5,21 @@ using System.Runtime.InteropServices;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// A tablet picture's pixels (RGB), copied once so parsing never touches GDI, and NORMALISED: every
+/// A tablet picture's pixels (RGB), copied once so parsing never touches GDI, and NORMALIZED: every
 /// channel scaled so the frame's brightest luminance (its white text) is 255. The tablet dims itself
-/// (AUTO brightness at night) and every colour on it scales with it (measured 2026-10-26: a red tile
-/// (74,0,0) dim and (235,0,0) at 100 %, grey (38,38,38) and (136,136,136), white text 82 and 255), so
-/// after normalising one set of thresholds holds at any brightness. <see cref="Background"/> is the
-/// page's own colour, measured per frame (near black on a dim tablet, slate (22,29,37) at 100 %).
+/// (AUTO brightness at night) and every color on it scales with it (measured 2026-10-26: a red tile
+/// (74,0,0) dim and (235,0,0) at 100 %, gray (38,38,38) and (136,136,136), white text 82 and 255), so
+/// after normalizing one set of thresholds holds at any brightness. <see cref="Background"/> is the
+/// page's own color, measured per frame (near black on a dim tablet, slate (22,29,37) at 100 %).
 /// </summary>
 public sealed class Bbs757EfbPixels
 {
     private readonly byte[] _rgb;
     public int Width { get; }
     public int Height { get; }
-    /// <summary>The raw frame's white (its brightest luminance, at least 30); 255 after normalising.</summary>
+    /// <summary>The raw frame's white (its brightest luminance, at least 30); 255 after normalizing.</summary>
     public double RawWhite { get; }
-    /// <summary>The page background, normalised: the commonest colour of the content area.</summary>
+    /// <summary>The page background, normalized: the commonest color of the content area.</summary>
     public (int R, int G, int B) Background { get; }
 
     public Bbs757EfbPixels(int width, int height, byte[] rgb)
@@ -75,7 +75,7 @@ public sealed class Bbs757EfbPixels
         return new Bbs757EfbPixels(w, h, rgb);
     }
 
-    /// <summary>The normalised colour at (x, y); black outside the frame.</summary>
+    /// <summary>The normalized color at (x, y); black outside the frame.</summary>
     public (int R, int G, int B) At(int x, int y)
     {
         if (x < 0 || y < 0 || x >= Width || y >= Height) return (0, 0, 0);
@@ -89,7 +89,7 @@ public sealed class Bbs757EfbPixels
         return 0.299 * r + 0.587 * g + 0.114 * b;
     }
 
-    /// <summary>How far a colour is from the page background (largest channel difference).</summary>
+    /// <summary>How far a color is from the page background (largest channel difference).</summary>
     public int FromBackground((int R, int G, int B) c) =>
         Math.Max(Math.Abs(c.R - Background.R), Math.Max(Math.Abs(c.G - Background.G), Math.Abs(c.B - Background.B)));
 }
@@ -115,7 +115,7 @@ public enum Bbs757EfbKind
     Row,
 }
 
-/// <summary>The colour of a box: on BlueBird's tablet the colour IS the state of a tile.</summary>
+/// <summary>The color of a box: on BlueBird's tablet the color IS the state of a tile.</summary>
 public enum Bbs757EfbTint { None, Blue, Red, Green, Grey, Other }
 
 /// <summary>A slider's geometry: where its track runs and where its knob is, in tablet pixels.</summary>
@@ -211,7 +211,7 @@ public static class Bbs757EfbScreen
         Rectangle[]? Ignore = null,
         string? Note = null);
 
-    /// <summary>A labelled value area. Pattern, when set, keeps only the part of the read that matches
+    /// <summary>A labeled value area. Pattern, when set, keeps only the part of the read that matches
     /// it (the "16/16" out of "BUSINESS PAX - 16/16").</summary>
     public sealed record Bbs757EfbSlot(Rectangle Area, string Label, string? Pattern = null, string? UnitGroup = null);
 
@@ -326,7 +326,7 @@ public static class Bbs757EfbScreen
         var items = new List<Bbs757EfbItem>();
         var menu = new List<Bbs757EfbItem>();
 
-        // Systems: a centred title (the diagram's name) and a SELECT button in the title bar.
+        // Systems: a centered title (the diagram's name) and a SELECT button in the title bar.
         if (app == "SYSTEMS")
         {
             foreach (var l in body.Where(l => l.Box.Top < TitleBottom).ToList())
@@ -368,7 +368,7 @@ public static class Bbs757EfbScreen
     internal static List<Bbs757EfbTextLine> ApplyTemplate(List<Bbs757EfbTextLine> body, Bbs757EfbTemplate t, List<Bbs757EfbItem> items)
     {
         var o = new List<Bbs757EfbTextLine>(body);
-        // Slots take WORDS, not lines: OCR can read two neighbouring figures as one line ("20100 Lbs
+        // Slots take WORDS, not lines: OCR can read two neighboring figures as one line ("20100 Lbs
         // 182672 Lbs" across two columns, measured on Weight & balance).
         var slotted = new List<(Bbs757EfbSlot Slot, string Text)>();
         foreach (var slot in t.Slots ?? Array.Empty<Bbs757EfbSlot>())
@@ -568,7 +568,7 @@ public static class Bbs757EfbScreen
         var loose = new List<Bbs757EfbTextLine>();
         var claimed = new Dictionary<FoundBox, List<Bbs757EfbTextLine>>();
         // A shaded button can be found only down to the middle of its gradient (measured: the BBS button
-        // on a dim tablet), so a box with NO text inside it claims a line whose centre is just past its top
+        // on a dim tablet), so a box with NO text inside it claims a line whose center is just past its top
         // or bottom edge, and grows to hold it. A box that has its own text never does: the line under it
         // is its caption (a door tile's LEFT FWD).
         var pending = new List<Bbs757EfbTextLine>();
@@ -615,8 +615,8 @@ public static class Bbs757EfbScreen
             else
                 controls.Add((b, parts.OrderBy(p => p.Box.Top).ThenBy(p => p.Box.Left).ToList(), b.Box, false));
         }
-        // A tab drawn in its own colour beside a band of tabs (Maintenance's selected LANDING GEAR,
-        // grey against the blue band, measured) is that band's selected tab.
+        // A tab drawn in its own color beside a band of tabs (Maintenance's selected LANDING GEAR,
+        // gray against the blue band, measured) is that band's selected tab.
         var forcedSelected = new HashSet<Rectangle>();
         foreach (var band in controls.Where(c => c.Tab).Select(c => c.Box.Box).Distinct().ToList())
             for (int i = 0; i < controls.Count; i++)
@@ -631,7 +631,7 @@ public static class Bbs757EfbScreen
                 controls[i] = (c.Box, c.Lines, hitRect, true);
                 forcedSelected.Add(hitRect);
             }
-        // The selected tab: the one whose band colour differs from its siblings' (an odd one out).
+        // The selected tab: the one whose band color differs from its siblings' (an odd one out).
         var selectedTab = new HashSet<Rectangle>(forcedSelected);
         foreach (var g in controls.Where(c => c.Tab && !forcedSelected.Contains(c.Hit)).GroupBy(c => c.Box))
         {
@@ -734,7 +734,7 @@ public static class Bbs757EfbScreen
             var (tl, tr) = CabinLights.Contains(l.Text) ? CabinLightTrack : TrackExtent(px, l.Centre.Y, k);
             used.Add(l);
             if (value != null) used.Add(value);
-            // A value OCR cannot read (the cabin lights' small grey OFF) is said from the knob.
+            // A value OCR cannot read (the cabin lights' small gray OFF) is said from the knob.
             string val = value != null ? Bbs757EfbVocabulary.Pretty(value.Text) : SliderPercent(k, tl, tr);
             o.Add(new(Bbs757EfbKind.Slider, Bbs757EfbVocabulary.Pretty(l.Text), l.Box, new Point(k, l.Centre.Y), true, "sld:" + l.Text,
                 Value: val, Slider: new Bbs757EfbSlider(tl, tr, k)));
@@ -797,7 +797,7 @@ public static class Bbs757EfbScreen
     private static bool IsHeadingText(string t) =>
         t.Length >= 3 && !t.Any(char.IsLower) && t.Count(char.IsLetter) >= 3 && t.Split(' ').Length <= 3 && !t.Any(char.IsDigit);
 
-    /// <summary>The words a tile's state ends its text with, or that are all of it: a door's box reads OPEN, CLOSED or, grey,
+    /// <summary>The words a tile's state ends its text with, or that are all of it: a door's box reads OPEN, CLOSED or, gray,
     /// UNAVAIL under its caption (Maintenance's gear doors, measured: tablet-presses.md). The reader leaves them out of the tile's
     /// key, so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/> leaves them out when it
     /// compares a tile's words with another's.</summary>
@@ -898,7 +898,7 @@ public static class Bbs757EfbScreen
     /// ignored); the manual EFB brightness 795-1100; EFB BACKGROUND takes its choices from 804 (DEFAULT)
     /// to 1050 (9, and anything right of it 9 too), placed unevenly at the left (826 is 1, 875 is 2,
     /// then every 25 px: efb-settings.md), so its choices are spread over 804-1050 and the press's
-    /// closed loop steps over what the even spread misses. The unfilled part is the page's colour, so it
+    /// closed loop steps over what the even spread misses. The unfilled part is the page's color, so it
     /// cannot be seen: a slider not measured takes 895-1190, widened to its knob.
     /// </summary>
     internal static (int Left, int Right) SliderTrack(string label, Bbs757EfbPixels px, int cy, int knobX)
@@ -910,10 +910,10 @@ public static class Bbs757EfbScreen
 
     /// <summary>
     /// A two-state switch on row <paramref name="cy"/> between <paramref name="from"/> and
-    /// <paramref name="to"/>: a near-white ROUND knob (8-30 px wide and tall) inside a pill whose colour
+    /// <paramref name="to"/>: a near-white ROUND knob (8-30 px wide and tall) inside a pill whose color
     /// shows on at least one side of the knob and differs from the page. On: the knob at the pill's
-    /// right (the pill blue); off: at its left (grey). Measured dim and bright: Settings rows put the
-    /// pill at x 1140-1200, the Callouts page at 1220-1275. The hit point is the pill's centre.
+    /// right (the pill blue); off: at its left (gray). Measured dim and bright: Settings rows put the
+    /// pill at x 1140-1200, the Callouts page at 1220-1275. The hit point is the pill's center.
     /// A QR code's white squares fail the round-knob test (measured on the AIRAC page).
     /// </summary>
     internal static (Point Hit, bool On)? FindSwitch(Bbs757EfbPixels px, int cy, int from = 1130, int to = 1210)
@@ -943,7 +943,7 @@ public static class Bbs757EfbScreen
         while (bottom < cy + 20 && White(kc, bottom + 1)) bottom++;
         int kh = bottom - top + 1;
         if (kh < 8 || kh > 30 || Math.Abs(kh - kw) > 8) return null;
-        // The pill: its colour beside the knob, left and right, and not the page.
+        // The pill: its color beside the knob, left and right, and not the page.
         var leftC = px.At(knobL - 6, cy);
         var rightC = px.At(knobR + 6, cy);
         bool leftPill = px.FromBackground(leftC) >= 14 && !White(knobL - 6, cy);
@@ -961,8 +961,8 @@ public static class Bbs757EfbScreen
 
     /// <summary>
     /// A slider's knob between <paramref name="from"/> and <paramref name="to"/>: a ROUND blob of the
-    /// brightest blue (blue channel at least 150 normalised: the knob and the filled track; buttons
-    /// are a darker blue), not inside a button box, at most 26 px tall. Its centre is 7 px in from the
+    /// brightest blue (blue channel at least 150 normalized: the knob and the filled track; buttons
+    /// are a darker blue), not inside a button box, at most 26 px tall. Its center is 7 px in from the
     /// right end of the blue run (the knob sits at the end of the filled track).
     /// </summary>
     internal static int? FindKnob(Bbs757EfbPixels px, int cy, int from, int to, IReadOnlyList<FoundBox> boxes)
@@ -1038,7 +1038,7 @@ public static class Bbs757EfbScreen
             }
             return l;
         }).ToList();
-        // The checklist's own name: centred over the list (x 600-1000, above y 180), with a box at
+        // The checklist's own name: centered over the list (x 600-1000, above y 180), with a box at
         // x 298 that ticks the whole list.
         foreach (var l in lines.Where(l => l.Box.Left > 600 && l.Box.Left < 1000 && l.Box.Top < 180))
         {
@@ -1071,7 +1071,7 @@ public static class Bbs757EfbScreen
     /// 12 px above and below the row that are lit right across it (x - 9 to x + 9, at least halfway from the band round
     /// the box to its side border; a tick's fill leaves a dark gap inside each side border); the inside is between them,
     /// or as far as 12 px where none is found. Measured on the header (2026-10-29): its words sit 5 px above its box's
-    /// centre, so a window round the words took in the box's bright top border, read as a tick on an empty box.
+    /// center, so a window round the words took in the box's bright top border, read as a tick on an empty box.
     /// </summary>
     internal static bool? CheckboxAt(Bbs757EfbPixels px, int x, int cy)
     {
@@ -1092,21 +1092,21 @@ public static class Bbs757EfbScreen
 
     // ------------------------------------------------------------------ boxes
 
-    /// <summary>A filled box of button size found from the pixels, with its colour.</summary>
+    /// <summary>A filled box of button size found from the pixels, with its color.</summary>
     internal sealed record FoundBox(Rectangle Box, Bbs757EfbTint Tint);
 
-    /// <summary>Clearly not the surface it sits on (more than 18 normalised from it).</summary>
+    /// <summary>Clearly not the surface it sits on (more than 18 normalized from it).</summary>
     private static bool Filled((int R, int G, int B) c, (int R, int G, int B) bg, int threshold = 18) =>
         Math.Max(Math.Abs(c.R - bg.R), Math.Max(Math.Abs(c.G - bg.G), Math.Abs(c.B - bg.B))) > threshold;
 
     /// <summary>
-    /// Every filled box of button size in <paramref name="area"/>: connected pixels of one colour
+    /// Every filled box of button size in <paramref name="area"/>: connected pixels of one color
     /// family that differ from the page, each step a small change (a shaded button is a smooth
     /// gradient; its edge against the page is a jump), 60-520 px wide and 18-70 high, at least half
     /// filled (the text is a hole). A region bigger than that is a PANEL (the ground A/C box, the
-    /// GND SRVC Mode box, the cabin lighting box): it is searched again with the panel's own colour
+    /// GND SRVC Mode box, the cabin lighting box): it is searched again with the panel's own color
     /// as the background, since a button on a panel can shade smoothly into it (measured: the BBS
-    /// button's bottom (9,37,69) against its panel (16,50,84), normalised).
+    /// button's bottom (9,37,69) against its panel (16,50,84), normalized).
     /// </summary>
     internal static List<FoundBox> FindButtonBoxes(Bbs757EfbPixels px, Rectangle area)
     {
@@ -1125,7 +1125,7 @@ public static class Bbs757EfbScreen
         var found = new List<FoundBox>();
         var seen = new bool[px.Width * px.Height];
         const int Step = 14;
-        // Inside a panel a button's shading can come within a few levels of the panel's colour (the BBS
+        // Inside a panel a button's shading can come within a few levels of the panel's color (the BBS
         // button's lower half, measured): the panel search takes a finer threshold and a shorter box.
         int threshold = depth == 0 ? 18 : 10, minH = depth == 0 ? 18 : 14;
         var queue = new Queue<int>();
@@ -1168,7 +1168,7 @@ public static class Bbs757EfbScreen
                 }
                 else if (depth == 0 && w > 60 && h > 40 && count >= 0.3 * w * h)
                 {
-                    // A panel: look inside it against its own colour.
+                    // A panel: look inside it against its own color.
                     var inner = Rectangle.Intersect(rect, area);
                     var panel = ModeOf(px, inner);
                     found.AddRange(FindButtonBoxes(px, inner, panel, depth + 1));
@@ -1177,7 +1177,7 @@ public static class Bbs757EfbScreen
         return found;
     }
 
-    /// <summary>The commonest colour in a rectangle (a panel's own colour).</summary>
+    /// <summary>The commonest color in a rectangle (a panel's own color).</summary>
     private static (int R, int G, int B) ModeOf(Bbs757EfbPixels px, Rectangle r)
     {
         var counts = new Dictionary<int, int>();
@@ -1192,8 +1192,8 @@ public static class Bbs757EfbScreen
         return (((best >> 12) & 63) * 6 + 3, ((best >> 6) & 63) * 6 + 3, (best & 63) * 6 + 3);
     }
 
-    /// <summary>A box colour's meaning by its balance (normalised colours): measured red tile
-    /// (235,0,0), chocks green (91,223,61), unavailable grey (136,136,136), button blue (44,86,124).</summary>
+    /// <summary>A box color's meaning by its balance (normalized colors): measured red tile
+    /// (235,0,0), chocks green (91,223,61), unavailable gray (136,136,136), button blue (44,86,124).</summary>
     internal static Bbs757EfbTint TintOf((int R, int G, int B) c)
     {
         int max = Math.Max(c.R, Math.Max(c.G, c.B)), min = Math.Min(c.R, Math.Min(c.G, c.B));
@@ -1206,7 +1206,7 @@ public static class Bbs757EfbScreen
     }
 
     /// <summary>
-    /// A scroll bar down the page's right edge: column x 1386 lighter than 100 (normalised) for 300 rows
+    /// A scroll bar down the page's right edge: column x 1386 lighter than 100 (normalized) for 300 rows
     /// or more between y 90 and 1040. Measured: Settings, Callouts 944 rows (track and thumb), Settings,
     /// Aircraft none (its page fits).
     /// </summary>

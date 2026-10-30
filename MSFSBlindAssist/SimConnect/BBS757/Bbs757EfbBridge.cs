@@ -500,7 +500,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         return engine;
     }
 
-    /// <summary>A 32 x 24 grey thumbnail of the tablet below its status bar.</summary>
+    /// <summary>A 32 x 24 gray thumbnail of the tablet below its status bar.</summary>
     internal static byte[] Signature(Bitmap bmp) => Signature(Bbs757EfbPixels.FromBitmap(bmp));
 
     private static byte[] Signature(Bbs757EfbPixels px)
@@ -524,7 +524,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>
-    /// A 32 x 4 grey thumbnail of the top bar's right part, x 1000-1397 and y 0-32 (ruling 10): the departure countdown, the
+    /// A 32 x 4 gray thumbnail of the top bar's right part, x 1000-1397 and y 0-32 (ruling 10): the departure countdown, the
     /// boarding control and the notification count, which the page's <see cref="Signature(Bitmap)"/> leaves out with the clock. A
     /// change there reads the page again (and pushes it only when it reads differently); the clock, the date and the outside air
     /// temperature at the bar's left never do. Nothing about the top bar is spoken.
@@ -552,7 +552,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>Two thumbnails differ when any cell moved by more than 6 (a page change, a toast, a
-    /// tile changing colour); sensor noise stays below.</summary>
+    /// tile changing color); sensor noise stays below.</summary>
     internal static bool Differs(byte[] a, byte[] b)
     {
         for (int i = 0; i < a.Length; i++) if (Math.Abs(a[i] - b[i]) > 6) return true;
@@ -674,7 +674,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>The press runner's seams: the pop-out's captures, this bridge's settled read, the agent's taps, wheel and variable
-    /// reads, BlueBird's file through the app, the window's alert, and the app's echoes and hooks marshalled to the UI thread.</summary>
+    /// reads, BlueBird's file through the app, the window's alert, and the app's echoes and hooks marshaled to the UI thread.</summary>
     private Bbs757EfbPressIo PressIo() => new()
     {
         Capture = () => _popout.CaptureTablet(),

@@ -10,7 +10,7 @@ namespace MSFSBlindAssist.Tests;
 /// The 757's load watch (task 11e): after the EFB window taps IMPORT FROM SIMBRIEF and START BOARDING,
 /// BlueBird fuels in about two minutes and boards at its realistic pace (under 40 minutes, measured
 /// 2026-10-25), and the watch, reading every 15 s, says once each when the fuel and the boarding are
-/// done; after an hour it says what has not finished. The judgement is pure
+/// done; after an hour it says what has not finished. The judgment is pure
 /// (<see cref="Bbs757LoadWatch"/>); the definition owns the timing loop.
 /// </summary>
 public class Bbs757LoadWatchTests

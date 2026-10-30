@@ -61,7 +61,7 @@ RESET and RESET ALL, the GND SRVC mode, the Systems diagrams, Charts and Map, an
   changed only their own key in BlueBird's settings files (Units changes the unit in both files; Radio altimeter (2500)
   also switches the 2500 call-out off, below); the services, doors and gear doors moved exactly their own BlueBird
   variables; the failure categories and tabs each showed their own list.
-- **Nothing (9), each explained:** two were the view already shown (Catalog, Fires); five tiles were grey, unavailable at
+- **Nothing (9), each explained:** two were the view already shown (Catalog, Fires); five tiles were gray, unavailable at
   this stand or in this state (GROUND A/C, both air starts, STAIRS DISABLED, and JETWAY, which read red); FWD STAIR and
   the cabin lighting mode did not respond in this state (as plan 11 found for FWD STAIR).
 
@@ -98,7 +98,7 @@ AUTO, the manual level at 1.0 (it read 0.999 before; AUTO does not use it).
   (the settings file or the page) and corrected.
 - **A check box read wrong.** The checklist's header box ("Before start, whole checklist") read as ticked while none
   of its lines were; tapping it ticked them all.
-- **A button read "UNAVAIL" acted.** The nose gear door's grey UNAVAIL button opened the nose gear door when tapped.
+- **A button read "UNAVAIL" acted.** The nose gear door's gray UNAVAIL button opened the nose gear door when tapped.
 - **BlueBird couples some controls.** Switching "Radio altimeter (2500)" on switches the "2500" call-out off, and
   switching it off again does not bring "2500" back (put back by hand). Interactive on ticks the checklist lines whose
   conditions hold.
@@ -134,7 +134,7 @@ small's 31 MB) and compares the controls the press test would pick: kind, words,
   already does for the parser, but not for the OCR, which reads the raw frame): small then found every control,
   the two gear doors included, and matched medium on all four pages tried (one label differs).
 
-The tap point comes from the parser's pixel work (a box's centre, a switch's pill, a slider's knob, a menu entry's
+The tap point comes from the parser's pixel work (a box's center, a switch's pill, a slider's knob, a menu entry's
 row), not from the OCR's word boxes: the model names a control, it does not place it. So a bigger model buys nothing
 for where a tap lands, and on a dim tablet the brightening gets small to where medium is, at no cost in time.
 
@@ -151,7 +151,7 @@ Taken 2026-10-29 afternoon, same aircraft, MSFS Blind Assist closed; saved as te
 | `bright/20-fuel-start-boarding` | After FETCH SIMBRIEF OFP with AUTOMATIC BOARDING off: "» START BOARDING" in the top bar's green box, "DEP -03:19", and IMPORT FROM SIMBRIEF on the Fuel page at about (517,951). The reader drops that button today: the Fuel page's template ignores the whole content area |
 | `bright/21-defuel-question` | After IMPORT FROM SIMBRIEF with 20,100 lb aboard and a 15,543 lb plan: a box over a dimmed page (about x 320-1075, y 415-665): "Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?", YES (green, about 424,619), NO (dark blue, about 971,619). The reader today loses the page's section under the dimming and finds no NO |
 | `bright/22-fuel-adjustment-complete` | About 40 s after YES: "FUEL ADJUSTMENT IS COMPLETE!" in a box with OK (about 823,662); IMPORT FROM SIMBRIEF gone. The reader drops both today (the Fuel template again) |
-| `bright/23-units-question` | REFRESH SIMBRIEF OFP with the aircraft in kilograms: "Mismatch between flight plan and aircraft weight units! The loaded flight plan uses LBS, but the aircraft is currently set to KG. Do you want to switch the aircraft unit system?", YES (about 393,633), NO (about 1001,633), and the "SIMBRIEF OFP RECEIVED." notification. The flight plan behind it is painted over (the page's colour), so no route, callsign or plan data is in the repository |
+| `bright/23-units-question` | REFRESH SIMBRIEF OFP with the aircraft in kilograms: "Mismatch between flight plan and aircraft weight units! The loaded flight plan uses LBS, but the aircraft is currently set to KG. Do you want to switch the aircraft unit system?", YES (about 393,633), NO (about 1001,633), and the "SIMBRIEF OFP RECEIVED." notification. The flight plan behind it is painted over (the page's color), so no route, callsign or plan data is in the repository |
 | `bright/41-checklist-header-ticked`, `42-checklist-header-unticked` | The checklist with its header box ticked (every line ticked) and unticked; on the unticked one, and live after unticking, the reader still reads the header as ticked |
 | `dim/15-aircraft-maintenance` | 0 percent brightness: the gear doors' faint pink OPEN, which the small model misses on the raw picture |
 

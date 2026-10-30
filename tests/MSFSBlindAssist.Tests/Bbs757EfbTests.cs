@@ -87,8 +87,7 @@ public class Bbs757EfbTests
     [Fact]
     public void Home_sits_at_its_measured_position_and_the_chocks_have_their_variable()
     {
-        Assert.Equal(new EfbPoint(19, 62), Bbs757EfbLayout.Home);
-        Assert.Equal(new EfbPoint(Bbs757EfbScreen.HomeButton.X, Bbs757EfbScreen.HomeButton.Y), Bbs757EfbLayout.Home);   // the reader's Home button is the layout's
+        Assert.Equal(new System.Drawing.Point(19, 62), Bbs757EfbScreen.HomeButton);   // the window's own Home button, on every app page
         Assert.Equal("BBS757_vis_chocks", Bbs757EfbLayout.ChocksVar);
     }
 
@@ -109,7 +108,7 @@ public class Bbs757EfbTests
     [Fact]
     public void The_planned_time_of_a_sequence_is_the_sum_of_its_delays()
     {
-        Assert.Equal(1750, Bbs757EfbLayout.TotalMs(new (EfbPoint, int)[] { (Bbs757EfbLayout.Home, 1500), (new EfbPoint(1291, 337), 250) }));
+        Assert.Equal(1750, Bbs757EfbLayout.TotalMs(new (EfbPoint, int)[] { (new EfbPoint(19, 62), 1500), (new EfbPoint(1291, 337), 250) }));
         Assert.Equal(0, Bbs757EfbLayout.TotalMs(Array.Empty<(EfbPoint, int)>()));
     }
 
@@ -203,6 +202,9 @@ public class Bbs757EfbTests
     [InlineData("{\"cycle\":\"26100\"}")]
     [InlineData("{\"cycle\":\"2615\"}")]    // no 15th cycle in a year
     [InlineData("{\"cycle\":\"2600\"}")]
+    [InlineData("{\"cycle\":\"0999\"}")]    // four digits, but under 1000: no year's cycle
+    [InlineData("{\"cycle\":\"0901\"}")]    // under 1000 with a cycle number that exists: only the lower bound refuses it
+    [InlineData("{\"cycle\":10001}")]       // five digits
     [InlineData("{\"cycle\":true}")]
     [InlineData("{\"cycle\":{\"id\":2610}}")]
     [InlineData("{\"cycle\":26.10}")]
@@ -222,6 +224,18 @@ public class Bbs757EfbTests
         WriteCycle(tmp.Path, "{\"cycle\":2610}");
 
         Assert.Equal(2610, Bbs757WorkFolder.ReadInstalledCycle(tmp.Path));
+    }
+
+    [Theory]
+    [InlineData("{\"cycle\":\"2614\"}", 2614)]   // a year's 14th cycle (2020 had one, its last 2014)
+    [InlineData("{\"cycle\":2614}", 2614)]
+    [InlineData("{\"cycle\":\"2601\"}", 2601)]
+    public void ReadInstalledCycle_takes_every_cycle_of_a_year(string json, int cycle)
+    {
+        using var tmp = new TempDir();
+        WriteCycle(tmp.Path, json);
+
+        Assert.Equal(cycle, Bbs757WorkFolder.ReadInstalledCycle(tmp.Path));
     }
 
     [Fact]
@@ -282,7 +296,7 @@ public class Bbs757EfbTests
 
         Assert.False(client.IsReady);
         Assert.Equal(Bbs757EfbRunResult.Unreachable,
-            await client.RunAsync(new[] { (Bbs757EfbLayout.Home, 250) }, CancellationToken.None));
+            await client.RunAsync(new[] { (new EfbPoint(19, 62), 250) }, CancellationToken.None));
         Assert.Equal(Bbs757EfbRunResult.Unreachable, await client.RunAsync(Array.Empty<(EfbPoint, int)>(), CancellationToken.None));
     }
 

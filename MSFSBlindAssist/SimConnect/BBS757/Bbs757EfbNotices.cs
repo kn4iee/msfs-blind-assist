@@ -21,7 +21,7 @@ public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem>
 /// (17,28,41). Read into <see cref="Bbs757EfbScreenModel.Notices"/>, and each entry spoken once per appearance
 /// (<see cref="ToSpeak"/>).</item>
 /// <item>A question: a box over the page (dimmed or not) with its words and its answers (the defuel question, the units
-/// question, "FUEL ADJUSTMENT IS COMPLETE!" with OK). Found from its answers' words: the box is the colour just above
+/// question, "FUEL ADJUSTMENT IS COMPLETE!" with OK). Found from its answers' words: the box is the color just above
 /// an answer, flooded. Read into <see cref="Bbs757EfbScreenModel.Question"/>.</item>
 /// </list>
 /// Both are taken from OCR's own lines, not the page's snapped ones: snapped to the page's words, "GPU DISCONNECTED."
@@ -59,7 +59,7 @@ public static class Bbs757EfbNotices
     private const int PanelProbeY = 42, LeftOfPanel = 1020;
 
     /// <summary>The panel's left edge (measured at 1037), the column its bottom is found down (inside its left border),
-    /// how far down the list can reach (to y 518, measured), and the bottom of the title's row (title centre y 54, first
+    /// how far down the list can reach (to y 518, measured), and the bottom of the title's row (title center y 54, first
     /// time 83).</summary>
     private const int PanelLeft = 1036, PanelColumn = 1044, PanelLowest = 600, TitleRowBottom = 70;
 
@@ -171,7 +171,7 @@ public static class Bbs757EfbNotices
     }
 
     /// <summary>
-    /// The box round <paramref name="seed"/>: every pixel within 12 of the seed's colour that joins it, below the top bar
+    /// The box round <paramref name="seed"/>: every pixel within 12 of the seed's color that joins it, below the top bar
     /// (the box's words and answers, and the page where the box lets it through, are holes in it). Null when it runs wider
     /// or taller than a question box (the seed was on the page itself) or is smaller than one.
     /// </summary>

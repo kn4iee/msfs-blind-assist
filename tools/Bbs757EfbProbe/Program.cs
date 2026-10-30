@@ -547,7 +547,7 @@ internal static partial class Program
         Rectangle ToTablet(Rectangle box) => new(box.X - Pad + region.X, box.Y - Pad + region.Y, box.Width, box.Height);
     }
 
-    /// <summary>The slider knob's centre on a row: the widest run of knob-blue pixels between x 600
+    /// <summary>The slider knob's center on a row: the widest run of knob-blue pixels between x 600
     /// and 1230 (knob and filled track are the same blue; the knob is the run's right end).</summary>
     private static string KnobAt(int y)
     {

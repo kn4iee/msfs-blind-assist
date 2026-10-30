@@ -5,10 +5,10 @@ using MSFSBlindAssist.Services.TextRecognition;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
-/// <summary>One recognised word, in tablet pixels (the agent's click coordinates).</summary>
+/// <summary>One recognized word, in tablet pixels (the agent's click coordinates).</summary>
 public sealed record Bbs757EfbWord(string Text, Rectangle Box);
 
-/// <summary>One recognised line, in tablet pixels, and which pass read it (P: PaddleOCR; K: text a page template
+/// <summary>One recognized line, in tablet pixels, and which pass read it (P: PaddleOCR; K: text a page template
 /// knows, put in by the parser).</summary>
 public sealed record Bbs757EfbTextLine(string Text, Rectangle Box, IReadOnlyList<Bbs757EfbWord> Words, char Pass)
 {

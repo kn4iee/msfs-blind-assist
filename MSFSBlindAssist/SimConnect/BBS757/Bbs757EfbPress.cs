@@ -81,7 +81,7 @@ public static class Bbs757EfbPress
     /// them is left out ("Fuel truck off", "Chocks, on"): the tile moved a little, which changes its key and most of its box;</item>
     /// <item>none.</item>
     /// </list>
-    /// A neighbour with other words that covers the place in part is never taken: rule 3 wants it to be the same box, rule 4 the
+    /// A neighbor with other words that covers the place in part is never taken: rule 3 wants it to be the same box, rule 4 the
     /// same words. Tapping it would press a different control than the one asked for.
     /// </summary>
     public static Bbs757EfbItem? Relocate(Bbs757EfbScreenModel before, Bbs757EfbScreenModel now, Bbs757EfbItem pressed)

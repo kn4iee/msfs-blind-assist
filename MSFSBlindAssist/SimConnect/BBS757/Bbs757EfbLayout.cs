@@ -7,17 +7,15 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 public sealed record EfbPoint(int X, int Y);
 
 /// <summary>
-/// What the 757 EFB code keeps of BlueBird's EFB tablet ("BBOS", release 0.1.0) that no read of the tablet gives it: the home
-/// button's position, the chocks' L:var, the names of the weight units the load sheet speaks, the rules for a SimBrief ID, and how
-/// a click sequence goes to the agent (<see cref="CoherentBbs757EfbClient"/>). Every other control is found where the tablet reader
-/// sees it (<see cref="Bbs757EfbScreen"/>) and pressed through <see cref="Bbs757EfbPressRunner"/>, so no table of measured
-/// positions is left to go stale when BlueBird moves a button. Pure.
+/// What the 757 EFB code keeps of BlueBird's EFB tablet ("BBOS", release 0.1.0) that no read of the tablet gives it: the chocks'
+/// L:var, the names of the weight units the load sheet speaks, the rules for a SimBrief ID, and how a click sequence goes to the
+/// agent (<see cref="CoherentBbs757EfbClient"/>). Every control is found where the tablet reader sees it
+/// (<see cref="Bbs757EfbScreen"/>, the window's own Home button at <see cref="Bbs757EfbScreen.HomeButton"/> included) and pressed
+/// through <see cref="Bbs757EfbPressRunner"/>, so no table of measured positions is left to go stale when BlueBird moves a button.
+/// Pure.
 /// </summary>
 public static class Bbs757EfbLayout
 {
-    /// <summary>The home button, top left: the home screen from any app.</summary>
-    public static readonly EfbPoint Home = new(19, 62);
-
     /// <summary>The chocks' L:var (0 removed, 1 in place, measured), also the Status display's "Chocks" row.</summary>
     public const string ChocksVar = "BBS757_vis_chocks";
 

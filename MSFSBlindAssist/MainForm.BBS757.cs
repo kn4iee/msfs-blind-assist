@@ -177,7 +177,7 @@ public partial class MainForm
     /// Plan 18, Task 8: a Settings press is judged by BlueBird's file, read on the bridge's loop
     /// (<see cref="Bbs757SettingsFile.ReadValue"/> in the work folder <see cref="Bbs757WorkFolder.Find()"/> picks);
     /// the Navigraph sign-in is read and run over the definition's tablet client (one per view, [DBG-9]), taken here
-    /// on the UI thread, its speech marshalled back to it; and the hooks a press starts run on the UI thread
+    /// on the UI thread, its speech marshaled back to it; and the hooks a press starts run on the UI thread
     /// (<see cref="OnBbs757EfbHook"/>).
     /// </summary>
     private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo()

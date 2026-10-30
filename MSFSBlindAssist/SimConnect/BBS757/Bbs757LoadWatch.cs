@@ -11,7 +11,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 public enum Bbs757LoadParts { None = 0, Fuel = 1, Boarding = 2, Both = 3 }
 
 /// <summary>
-/// The load watch's judgement (task 11e), pure. Once IMPORT FROM SIMBRIEF and START BOARDING have been pressed
+/// The load watch's judgment (task 11e), pure. Once IMPORT FROM SIMBRIEF and START BOARDING have been pressed
 /// on BlueBird's tablet, BlueBird loads at its own pace with only a picture to show it: the
 /// fuel in about two minutes, the boarding at its REALISTIC rate in under 40 minutes (measured
 /// 2026-10-25, live-findings.md). The definition reads the tanks and stations every

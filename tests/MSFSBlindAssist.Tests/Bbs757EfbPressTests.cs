@@ -74,19 +74,19 @@ public class Bbs757EfbPressTests
     }
 
     [Theory]
-    [InlineData(60, 0)]     // IoU 0.53: a neighbour sliding over the tile's place
+    [InlineData(60, 0)]     // IoU 0.53: a neighbor sliding over the tile's place
     [InlineData(100, 0)]    // 0.32
     [InlineData(190, 0)]    // a sliver
     [InlineData(0, 21)]     // half the height: 0.33
     [InlineData(-80, 10)]   // from the other side, a little lower
     public void Relocate_never_takes_a_control_with_other_words(int dx, int dy)
     {
-        // The tile is gone (a notification covers it). A neighbour covers its place in part, with other words: tapping it would
+        // The tile is gone (a notification covers it). A neighbor covers its place in part, with other words: tapping it would
         // press another control than the one asked for, so nothing is found.
         var pressed = ReqFuelTruck();
-        var neighbour = Tile("Req catering", "btn:|REQ CATERING@62,29", new Rectangle(pressed.Box.X + dx, pressed.Box.Y + dy, pressed.Box.Width, pressed.Box.Height));
+        var neighbor = Tile("Req catering", "btn:|REQ CATERING@62,29", new Rectangle(pressed.Box.X + dx, pressed.Box.Y + dy, pressed.Box.Width, pressed.Box.Height));
 
-        Assert.Null(Bbs757EfbPress.Relocate(Ground(pressed), Ground(neighbour), pressed));
+        Assert.Null(Bbs757EfbPress.Relocate(Ground(pressed), Ground(neighbor), pressed));
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public class Bbs757EfbPressTests
 
     [Theory]
     [InlineData("Fuel truck off", "Req fuel truck")]       // other words
-    [InlineData("Left FWD: Closed", "Right FWD: Closed")]   // the neighbour door
+    [InlineData("Left FWD: Closed", "Right FWD: Closed")]   // the neighbor door
     [InlineData("Open", "Closed")]                          // a state word alone is no words
     [InlineData("Common", "Comm")]                          // "on" is a state word only as a word of its own
     public void Relocate_does_not_follow_a_moved_tile_with_other_words(string pressedText, string nowText)

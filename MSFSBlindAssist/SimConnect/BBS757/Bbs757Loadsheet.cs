@@ -6,15 +6,14 @@ using MSFSBlindAssist.Utils;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// What the 757's load takes from a SimBrief OFP, in pounds whatever the plan's units:
-/// the block fuel (<c>fuel/plan_ramp</c>), the passengers (<c>weights/pax_count_actual</c>, else
+/// What the 757's load takes from a SimBrief OFP, in pounds whatever the plan's units (<c>params/units</c>, converted as the
+/// plan is read): the block fuel (<c>fuel/plan_ramp</c>), the passengers (<c>weights/pax_count_actual</c>, else
 /// <c>pax_count</c>) and their standard weight (<c>pax_weight</c>), and the payload. Flight, origin
 /// and destination name the plan, the aircraft type (<c>aircraft/icaocode</c>) must be the
-/// 757-200's, and any of them may be empty. <see cref="Units"/> are the plan's own (<c>params/units</c>).
+/// 757-200's, and any of them may be empty.
 /// </summary>
 public sealed record Bbs757SimBriefPlan(string Flight, string Origin, string Destination, string AircraftIcao,
-    double BlockFuelLbs, int Passengers, double PassengerWeightLbs, double PayloadLbs,
-    Bbs757WeightUnits Units = Bbs757WeightUnits.Pounds);
+    double BlockFuelLbs, int Passengers, double PassengerWeightLbs, double PayloadLbs);
 
 /// <summary>What goes in each wing tank, the center tank, the cabin and each hold, in whole pounds.</summary>
 public sealed record Bbs757Loads(double LeftLbs, double RightLbs, double CenterLbs, double PassengerLbs,
@@ -185,7 +184,7 @@ public static class Bbs757Loadsheet
         string flight = string.Join(" ", new[] { airline, number }.Where(s => s.Length > 0));
         return new Bbs757SimBriefPlan(flight, Text(root, "origin", "icao_code") ?? "",
             Text(root, "destination", "icao_code") ?? "", Text(root, "aircraft", "icaocode") ?? "",
-            b * f, n, w * f, p * f, units);
+            b * f, n, w * f, p * f);
     }
 
     /// <summary>A child's child's text, trimmed with inner runs of white space made one space; null when missing or empty.</summary>

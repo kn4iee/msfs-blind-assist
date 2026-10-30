@@ -110,17 +110,17 @@ public static class Bbs757EfbTopBar
     }
 
     /// <summary>
-    /// A box of one colour in the bar between <paramref name="left"/> and <paramref name="right"/>: the widest run of columns
-    /// with at least <paramref name="minRows"/> pixels of that colour (a column through the box's words still has its colour
-    /// above and below them; a word drawn in that colour does not), at least <paramref name="minWidth"/> wide; its rows are
-    /// where those columns show the colour. Null when there is none.
+    /// A box of one color in the bar between <paramref name="left"/> and <paramref name="right"/>: the widest run of columns
+    /// with at least <paramref name="minRows"/> pixels of that color (a column through the box's words still has its color
+    /// above and below them; a word drawn in that color does not), at least <paramref name="minWidth"/> wide; its rows are
+    /// where those columns show the color. Null when there is none.
     /// </summary>
-    private static Rectangle? Run(Bbs757EfbPixels px, int left, int right, Func<(int R, int G, int B), bool> colour, int minRows, int minWidth)
+    private static Rectangle? Run(Bbs757EfbPixels px, int left, int right, Func<(int R, int G, int B), bool> color, int minRows, int minWidth)
     {
         int Count(int x)
         {
             int n = 0;
-            for (int y = 0; y < Bbs757EfbScreen.StatusBottom; y++) if (colour(px.At(x, y))) n++;
+            for (int y = 0; y < Bbs757EfbScreen.StatusBottom; y++) if (color(px.At(x, y))) n++;
             return n;
         }
         int bestL = -1, bestR = -2, runL = -1, gap = 0;
@@ -138,7 +138,7 @@ public static class Bbs757EfbTopBar
         int top = int.MaxValue, bottom = -1;
         for (int x = bestL; x <= bestR; x++)
             for (int y = 0; y < Bbs757EfbScreen.StatusBottom; y++)
-                if (colour(px.At(x, y))) { top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
+                if (color(px.At(x, y))) { top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
         return new Rectangle(bestL, top, bestR - bestL + 1, bottom - top + 1);
     }
 

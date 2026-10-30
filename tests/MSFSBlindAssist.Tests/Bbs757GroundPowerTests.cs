@@ -11,7 +11,7 @@ namespace MSFSBlindAssist.Tests;
 /// BlueBird's ground power, as far as it needs no simulator. The Ground Services GPU tile TOGGLES
 /// <c>L:BBS_757_GPU_AC_PWR_CONNECTED</c> (measured 2026-10-25, session 8, and again 2026-10-26); pressing it is the tablet
 /// press pipeline's like any other tile's (plan 18) and nothing here refuses it. This pins what the Ground Power row says
-/// when the variable changes and the variables' names. The second half is the definition's side (BBS757Definition.Efb.cs):
+/// when the variable changes and the variable's name. The second half is the definition's side (BBS757Definition.Efb.cs):
 /// the row on the Electrical panel, its speech, and the echo the window opens around its own press (armed before its tap,
 /// ended when it settles) so a change it made is said once, by the window.
 /// </summary>
@@ -68,13 +68,9 @@ public class Bbs757GroundPowerTests
     // ---- the variables and the run window ----------------------------------------------------------
 
     [Fact]
-    public void The_variable_names_and_the_run_window_are_pinned()
+    public void The_variable_name_and_the_run_window_are_pinned()
     {
         Assert.Equal("BBS_757_GPU_AC_PWR_CONNECTED", Bbs757GroundPower.ConnectedVar);
-        Assert.Equal("B757_OVHD_EXT_PWR_BUTTON_ON", Bbs757GroundPower.ExtPwrOnVar);
-        // The window's own OnRequest key for the L:var the announced EXT PWR row also reads: another key.
-        Assert.Equal("BBS757_EFB_EXT_PWR_ON", Bbs757GroundPower.ExtPwrOnKey);
-        Assert.NotEqual(Bbs757SharedKeys.ExtPwrOn, Bbs757GroundPower.ExtPwrOnKey);
         Assert.Equal(60_000, Bbs757GroundPower.WindowRunMaxMs);
     }
 
@@ -128,20 +124,6 @@ public class Bbs757GroundPowerTests
         Assert.Equal("Not connected", notConnected);
         Assert.True(def.TryGetDisplayOverride(GpuKey, double.NaN, out string unread));
         Assert.Equal("unavailable", unread);
-
-        // The window's own read of external power: on request, never spoken, no Ctrl+M row ([VAR-9]), on no
-        // panel; and it never streams beside plan 06's announced row on the same L:var ([VAR-7]).
-        var ext = vars[Bbs757GroundPower.ExtPwrOnKey];
-        Assert.Equal("B757_OVHD_EXT_PWR_BUTTON_ON", ext.Name);
-        Assert.Equal("External Power On", ext.DisplayName);
-        Assert.Equal(SimVarType.LVar, ext.Type);
-        Assert.Equal("number", ext.Units);
-        Assert.Equal(UpdateFrequency.OnRequest, ext.UpdateFrequency);
-        Assert.False(ext.IsAnnounced);
-        Assert.True(ext.ExcludeFromMonitorManager);
-        Assert.DoesNotContain(def.MonitorRows(), r => r.Key == Bbs757GroundPower.ExtPwrOnKey);
-        Assert.DoesNotContain(Bbs757GroundPower.ExtPwrOnKey, def.GetPanelControls().SelectMany(p => p.Value));
-        Assert.DoesNotContain(Bbs757GroundPower.ExtPwrOnKey, def.GetPanelDisplayVariables().SelectMany(p => p.Value));
     }
 
     [Theory]
@@ -219,16 +201,6 @@ public class Bbs757GroundPowerTests
 
         rig.Deliver(0);
         Assert.Equal(new[] { RowDisconnected }, rig.Speech.All);
-    }
-
-    [Fact]
-    public void The_window_reads_of_external_power_are_left_to_the_generic_path_and_say_nothing()
-    {
-        var rig = new Rig();
-
-        Assert.False(rig.Def.ProcessSimVarUpdate(Bbs757GroundPower.ExtPwrOnKey, 1, rig.Speech));
-        Assert.False(rig.Def.ProcessSimVarUpdate(Bbs757GroundPower.ExtPwrOnKey, 0, rig.Speech));
-        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]

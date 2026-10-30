@@ -31,8 +31,9 @@ public sealed class Bbs757EfbBridgeTextRecognitionTests
         Assert.Equal(1, h.Attempts);
         Assert.Single(h.Pushes);
 
-        // The pilot pressed Read the tablet screen with the models Ready again. The UI thread's call only sets a flag
-        // (the slot is the loop's alone), so a read before the loop's next turn still loads nothing.
+        // The pilot pressed Shift+T again with a simulator running and the models Ready (MainForm's Ready check, then
+        // RetryTextRecognition). The UI thread's call only sets a flag (the slot is the loop's alone), so a read before the
+        // loop's next turn still loads nothing.
         h.Bridge.RetryTextRecognition();
         await h.Bridge.ReadIfChangedAsync(CancellationToken.None, force: true);
         Assert.Equal(1, h.Attempts);

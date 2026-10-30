@@ -9,7 +9,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The tablet reader's page model (plan 11) against real captures of BlueBird's tablet (2026-10-26,
 /// 0.1.0, PW, dim night brightness and 100 %): each fixture is the calibrated capture (reduced to 256
-/// colours) and the reader's lines for it (one PaddleOCR read, re-recorded for plan 17 and again for plan 18's
+/// colors) and the reader's lines for it (one PaddleOCR read, re-recorded for plan 17 and again for plan 18's
 /// brightening by tools/Bbs757EfbProbe's reread). Parse is pure, so these pin what the pilot is given for each page.
 /// Fixtures are read from the source tree (tests/MSFSBlindAssist.Tests/Fixtures/bbs757-efb).
 /// </summary>
@@ -128,7 +128,7 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
-    public void Fuel_values_are_labelled_by_the_template_with_units()
+    public void Fuel_values_are_labeled_by_the_template_with_units()
     {
         var m = Load("bright", "11-aircraft-fuel");
         Assert.Equal("45%", Item(m, "Left tank").Value);
@@ -299,7 +299,7 @@ public class Bbs757EfbScreenTests
     [Fact]
     public void A_door_box_keeps_its_key_whatever_state_word_it_shows()
     {
-        // dim/15: NOSE DOOR over its box, which reads OPEN; CLOSED and UNAVAIL (grey: tablet-presses.md) are what the same box
+        // dim/15: NOSE DOOR over its box, which reads OPEN; CLOSED and UNAVAIL (gray: tablet-presses.md) are what the same box
         // shows in the door's other states. The key leaves out a state word that is all of the box's words, as it does one that
         // ends them ("FUEL TRUCK OFF"), so a press that changes the door keeps its key and the window its node (and the screen
         // reader's focus on it).
@@ -338,11 +338,11 @@ public class Bbs757EfbScreenTests
     }
 
     [Fact]
-    public void Every_control_is_clickable_at_its_own_centre_the_old_update_guard_box_included()
+    public void Every_control_is_clickable_at_its_own_center_the_old_update_guard_box_included()
     {
         // The reader used to keep a box round the AIRAC page's UPDATE/REMOVE spot (x 1191-1391, y 297-377) clear of taps on every
         // page: Callouts' Rotate and Positive rate sit in it and read "not clickable", with the tap point moved out. Nothing refuses a
-        // press now (the owner's ruling of 2026-10-29), so each is clickable at the centre of its own switch, like the ones round it.
+        // press now (the owner's ruling of 2026-10-29), so each is clickable at the center of its own switch, like the ones round it.
         var callouts = Load("bright", "53-settings-callouts");
         foreach (var (name, x, y) in new[] { ("Rotate", 1247, 308), ("Positive rate", 1247, 359) })
         {

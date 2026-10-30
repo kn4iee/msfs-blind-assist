@@ -119,8 +119,8 @@ public sealed class Bbs757EfbPressRunner
     /// <summary>How long a switch or check box with no setting behind it is read again for, from its tap.</summary>
     public const int FollowMaxMs = 4000;
 
-    /// <summary>How long BlueBird's file is read for a Settings press (its taps land in the file within a second, measured
-    /// 2026-10-27).</summary>
+    /// <summary>How long BlueBird's file is read for a Settings press. Measured 2026-10-27: its taps were in the file when read
+    /// 1.3 s later; the 2,000 ms read is the margin.</summary>
     public const int FileMaxMs = 2000;
 
     private const int ChangePollMs = 100, AfterTapMs = 700, NavigatePollMs = 500, FollowPollMs = 300, FilePollMs = 250;

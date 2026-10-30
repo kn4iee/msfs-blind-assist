@@ -285,10 +285,11 @@ public static class Bbs757EfbElements
         Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { } setting ? Bbs757EfbSettingsMatch.ChoicesFor(setting) : null;
 
     /// <summary>
-    /// The index among <paramref name="options"/> (the list <see cref="OptionsFor"/> gave for the same row) of the choice the row reads as;
-    /// -1 when the reader gave none or it is none of them. For a catalog setting the reader's words are matched with case, spaces and
-    /// punctuation ignored ("FULL(7 MIN+)" is "Full (7 min+)": <see cref="Bbs757EfbSettingsMatch.ChoiceIndex"/>); for any other slider,
-    /// with case ignored.
+    /// The index among <paramref name="options"/> (the list <see cref="OptionsFor"/> gave for the row the pilot pressed) of the choice
+    /// the row reads as; -1 when the reader gave none or it is none of them. For a catalog setting the reader's words are matched with
+    /// case, spaces and punctuation ignored ("FULL(7 MIN+)" is "Full (7 min+)": <see cref="Bbs757EfbSettingsMatch.ChoiceIndex"/>). A
+    /// row that matches no setting is matched with case ignored: the press runner meets one when it finds the pressed slider again by
+    /// its box under a label read otherwise (<see cref="Bbs757EfbPress.Relocate"/>), its choices still the pressed row's.
     /// </summary>
     public static int CurrentChoice(Bbs757EfbItem it, string pageName, IReadOnlyList<string> options)
     {

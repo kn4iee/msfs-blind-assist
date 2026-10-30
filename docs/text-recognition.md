@@ -109,7 +109,7 @@ Check 5, after the release, tested the download: its marker came out byte-identi
 `TextRecognitionModels.Check` reads the folder and answers one of four states (OCR-1):
 
 - **Missing**: no marker, and no listed file at its size.
-- **Incomplete**: some listed files at their size but no marker (a cancelled, failed or killed
+- **Incomplete**: some listed files at their size but no marker (a canceled, failed or killed
   download, one that died before writing the marker, or a model that failed to load and took the marker
   with it), or this version's marker with a file missing or cut short (an antivirus quarantine after the
   install).
@@ -187,8 +187,8 @@ rewritten in place at a phase change or a whole percent, so NVDA keeps its line.
 - Incomplete: "Incomplete: {k} of 4 files are kept; the next download fetches the rest, {size}." With every
   file at its size but no marker: "Incomplete: the files are here but not checked. Download text recognition to check them."
 - Failed: "The last download failed: {reason}. Download again to retry."
-- Cancelled: "Download cancelled. {k} of 4 files are kept; the next download fetches the rest, {size}."
-  With none kept: "Download cancelled." With every file at its size, so nothing left to fetch (a cancelled
+- Canceled: "Download cancelled. {k} of 4 files are kept; the next download fetches the rest, {size}."
+  With none kept: "Download cancelled." With every file at its size, so nothing left to fetch (a canceled
   repair): "Download cancelled. The files are here but not checked. Download text recognition to check them."
 
 {size} is what the next download still fetches, told as "N megabytes", "1 megabyte" or "less than 1
@@ -245,14 +245,15 @@ public `ReadAsync` returns the lines and words. The rest of the feature is inter
 - **Models.** `RapidOcrModelSet.PPOCRv6Small` with the four paths pointed into the folder, absolute (the
   library's own are relative to the app) and, from 260 characters on, in the extended form (`\\?\`, or
   `\\?\UNC\` for a network path) that the file calls under ONNX Runtime need past MAX_PATH.
-- **Options.** `RapidOcrOptions.PPOCRv6` with word boxes on (the reader clicks on words) and angle
-  detection off (the tablet is upright). The preset adds no white border, raises a short side under 736
+- **Options.** `RapidOcrOptions.PPOCRv6` with word boxes on (the reader's page templates take words,
+  not lines, so two figures read as one line across two columns land in their own slots; a tap's point
+  never comes from a word box, B757-18) and angle detection off (the tablet is upright). The preset adds no white border, raises a short side under 736
   pixels to 736, as the v6 models were exported, and bounds the long side at 2000 pixels (the v5 defaults
   starve the v6 detector). The tablet, 1397 by 1048 pixels, is inside those bounds, so it is read at its
   own size.
 - **Threads.** `PaddleOcrEngine.ThreadsFor`: one per eight logical processors, at least 1, at most 4
   (4 on the owner's PC), so reading the tablet leaves the simulator its cores (OCR-3).
-- **One read at a time.** A second `ReadAsync` waits outside the engine and can be cancelled there.
+- **One read at a time.** A second `ReadAsync` waits outside the engine and can be canceled there.
   The recognition runs on a thread-pool thread, so the caller's thread stays free.
 - **The picture.** The tablet's `Bitmap` is copied row by row into a BGRA `SKBitmap`, with no PNG encode
   and decode between. GDI+ converts any source format to 32-bit ARGB as it locks the bits; the alpha is
@@ -321,7 +322,7 @@ engine seam), `Settings/UserSettings.cs` (the checkbox's setting), and in `SimCo
 `TextRecognition` (the download) and `BBS757` (the reader).
 
 Tests in `tests/MSFSBlindAssist.Tests/TextRecognition/` need no model files: the download runs against a
-fake server (fresh, retried, failed, cancelled, killed, damaged, a full disk), every sentence runs under
+fake server (fresh, retried, failed, canceled, killed, damaged, a full disk), every sentence runs under
 en-US, de-DE and sv-SE, and the engine's conversions run on fake text blocks. `Bbs757EfbScreenTests` parse
 the saved PaddleOCR reads (`Fixtures/bbs757-efb/**/*.lines.json`) of 11 recorded tablet pages. Reading
 real pages with the real models is the probe's job: `tools/Bbs757EfbProbe reread <dir>` runs the app's

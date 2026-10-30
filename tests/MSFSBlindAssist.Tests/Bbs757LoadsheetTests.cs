@@ -83,11 +83,10 @@ public class Bbs757LoadsheetTests
         Assert.Equal(224, plan.Passengers);
         Assert.Equal(175, plan.PassengerWeightLbs);
         Assert.Equal(51459, plan.PayloadLbs);
-        Assert.Equal(Bbs757WeightUnits.Pounds, plan.Units);
     }
 
     [Fact]
-    public void A_kilogram_plan_is_read_in_pounds_and_keeps_its_units()
+    public void A_kilogram_plan_is_read_in_pounds()
     {
         var plan = Bbs757Loadsheet.ParsePlan(Ofp(units: "kgs", ramp: "11589", paxWeight: "84", payload: "23341"));
 
@@ -96,7 +95,6 @@ public class Bbs757LoadsheetTests
         Assert.Equal(84 * 2.20462, plan.PassengerWeightLbs, 6);
         Assert.Equal(23341 * 2.20462, plan.PayloadLbs, 6);
         Assert.Equal(224, plan.Passengers);   // a count, not a weight
-        Assert.Equal(Bbs757WeightUnits.Kilograms, plan.Units);   // the plan's own units, whatever the weights are converted to
     }
 
     [Fact]

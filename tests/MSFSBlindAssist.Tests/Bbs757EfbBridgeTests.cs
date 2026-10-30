@@ -939,7 +939,7 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
-    public async Task A_settings_file_that_cannot_be_read_leaves_the_judgement_to_the_page()
+    public async Task A_settings_file_that_cannot_be_read_leaves_the_judgment_to_the_page()
     {
         var sync = Switch("Sync barometers", "tgl:SYNC BAROMETERS", on: false);
         var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", sync));   // no file

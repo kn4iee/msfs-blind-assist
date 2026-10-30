@@ -8,8 +8,7 @@ namespace MSFSBlindAssist.Aircraft;
 /// <summary>
 /// BlueBird's ground power connection (<see cref="Bbs757GroundPower.ConnectedVar"/>) in the definition (plan 07;
 /// the EFB hooks of BBS757Definition.Hooks.cs): a Ground Power row on the Electrical panel's status display and
-/// a spoken change, the EFB window's own read of external power, and the echo that window opens around its own
-/// run.
+/// a spoken change, and the echo the EFB window opens around its own run.
 ///
 /// Speech follows CORE-7. The tablet window says what came of a press on the GPU tile itself (the tile's new
 /// words, or that nothing changed), so the row never says that change a second time:
@@ -23,8 +22,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// flight load or a reconnect makes the next reading a baseline again (<see cref="OnSimContextReset"/>).
 /// MainForm's Ctrl+M mute wrap gates the row ([VAR-8]); it is not wrap-exempt.
 ///
-/// The data-definition budget: the row rides the 1 Hz batch (no individual definition of its own) and external
-/// power is one individual definition, read on request.
+/// The data-definition budget: the row rides the 1 Hz batch (no individual definition of its own), as do the
+/// ground service rows.
 /// </summary>
 public partial class BBS757Definition
 {
@@ -41,8 +40,7 @@ public partial class BBS757Definition
     // =================================================================================
 
     /// <summary>
-    /// The ground power connection and the window's read of external power, added after the map's (never
-    /// shadowing a key).
+    /// The ground power connection and the ground service rows, added after the map's (never shadowing a key).
     /// </summary>
     static partial void AddEfbVariables(Dictionary<string, SimVarDefinition> vars)
     {
@@ -73,19 +71,6 @@ public partial class BBS757Definition
                 RenderAsReadOnlyStatus = true,
                 ValueDescriptions = new Dictionary<double, string> { [0] = Cap(s.OffWord), [1] = Cap(s.OnWord) },
             });
-
-        // The EXT PWR button's ON light, never spoken (the EFB window read it fresh before a disconnect until plan 18
-        // stopped refusing one), so it has no Ctrl+M row ([VAR-9]) and is on no panel or display. OnRequest and under a key of its own:
-        // plan 06 registers the same L:var as an announced EXT PWR row (Bbs757SharedKeys.ExtPwrOn), and two
-        // Continuous keys on one name would break the batch ([VAR-7]); this one never streams, so the two
-        // plans need not wait for each other.
-        Add(Bbs757GroundPower.ExtPwrOnKey, new SimVarDefinition
-        {
-            Name = Bbs757GroundPower.ExtPwrOnVar, DisplayName = "External Power On",
-            Type = SimVarType.LVar, Units = "number",
-            UpdateFrequency = UpdateFrequency.OnRequest,
-            ExcludeFromMonitorManager = true,
-        });
     }
 
     // =================================================================================
