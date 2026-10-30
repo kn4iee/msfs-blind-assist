@@ -21,14 +21,16 @@ public partial class IniBuildsA350Definition
     internal const string DisplaysSection = "Displays";
     internal const string PfdCaptainKey = "A350_DISP_PFD_CPT", PfdFirstOfficerKey = "A350_DISP_PFD_FO";
 
+    private static readonly A350FlashingLines CaptainFlashes = new(), FirstOfficerFlashes = new();
+
     // Each screen's power as its backlight reads it (the cockpit model's emissive codes): the variable follows the
     // screen's switch and its bus (live 2026-10-28: the captain's outer display switched off read 0 with its brightness
     // at 100), the RMPs and the FCU their brightness knob, whose 0 is OFF. The A350 keeps drawing a dark screen in
     // memory, so without this a dark PFD was read as if lit.
     public static readonly IReadOnlyList<A350DisplayPanel> DisplayPanels = new A350DisplayPanel[]
     {
-        new("Captain PFD", PfdCaptainKey, "EFIS", 0, c => A350Pfd.Read(c, 0), "INI_LEFT_EFIS_POWERED"),
-        new("First Officer PFD", PfdFirstOfficerKey, "EFIS", 1, c => A350Pfd.Read(c, 1), "INI_RIGHT_EFIS_POWERED"),
+        new("Captain PFD", PfdCaptainKey, "EFIS", 0, c => CaptainFlashes.Apply(A350Pfd.ReadParts(c, 0), DateTime.UtcNow), "INI_LEFT_EFIS_POWERED"),
+        new("First Officer PFD", PfdFirstOfficerKey, "EFIS", 1, c => FirstOfficerFlashes.Apply(A350Pfd.ReadParts(c, 1), DateTime.UtcNow), "INI_RIGHT_EFIS_POWERED"),
         new("Captain ND", "A350_DISP_ND_CPT", "EFIS", 0, c => A350GroundDisplays.ReadNd(c, 0), "INI_LEFT_EFIS_POWERED"),
         new("First Officer ND", "A350_DISP_ND_FO", "EFIS", 1, c => A350GroundDisplays.ReadNd(c, 1), "INI_RIGHT_EFIS_POWERED"),
         // The MFD as lines (A350MfdPage); its window operates them.

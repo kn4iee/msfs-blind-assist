@@ -678,7 +678,7 @@ The A350 has six sections. Its panels take the A380's names and order wherever t
 - **Gear Bays:** the main gear door hatch, the left and right main gear doors (open the hatch first, or BA says the door did not move), the nose gear door hatch and door, the nose wheel steering panel and the nose gear interphone panel.
 - **Engine Cowlings and Covers:** each engine's cowling, with a status line for the oil level its sight gauge shows, and the engine and pitot covers.
 
-**Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display and the BAT display.
+**Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display, the BAT display and, with the option fitted and the combiner deployed, the Captain and First Officer HUD.
 
 Some A350 controls are worth knowing about:
 
@@ -771,7 +771,7 @@ Note that Ctrl+Shift+R in Output mode reads your last landing rate instead.
 
 **E/WD window: Output Alt+E.** The engine block, every warning display line with its colour, the ECAM cursor ("selected") and each action box ("to do", "done"), the SD page and its permanent data line. Read with the arrow keys; it updates itself, F5 refreshes now and Escape closes.
 
-**Displays.** Output Alt+P reads the captain's PFD (the flight mode annunciator first, then speeds, altitude, heading and messages), Alt+N the captain's ND, Alt+S the SD page shown with its values named, and Alt+I the standby flight display. Every other display is in the Displays section.
+**Displays.** Output Alt+P reads the captain's PFD (the flight mode annunciator first, then speeds, altitude, heading and messages), Alt+N the captain's ND, Alt+S the SD page shown with its values named, and Alt+I the standby flight display. Every other display is in the Displays section. A PFD line that flashes reads *flashing* and keeps its place: QNH above the transition altitude, STD below the transition level, an FMA mode that flashes for attention such as LVR CLB. Traffic on the ND reads how far above or below you it is and, in the ND window, where: *"Traffic 700 feet above: 6 o'clock, 10 miles, white"*.
 
 ### Aircraft-specific hotkeys and callouts {#aircraft-specific-hotkeys-and-callouts-5}
 
