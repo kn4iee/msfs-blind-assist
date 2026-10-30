@@ -10,7 +10,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// <see cref="LockedAttempt"/> once: a held key's repeats and one turn of the wheel are one attempt, so the window says
 /// why once, not on every repeat. Focus, the screen reader's reading and the selection shown stay as they are, where a
 /// disabled control would drop out of the tab order. The 757 EFB settings window holds its choice lists with it
-/// while BlueBird's settings are read-only.
+/// while BlueBird's settings are read-only. Held or not, Ctrl+Page Up and Ctrl+Page Down do nothing
+/// (<see cref="IsTabKeyWithControl"/>: the old window's tab switch); held, they are an attempt like the others.
 /// </summary>
 internal sealed class Bbs757LockableComboBox : ComboBox
 {
@@ -57,12 +58,14 @@ internal sealed class Bbs757LockableComboBox : ComboBox
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (_locked && ChangesSelection(e.KeyData))
+        // Ctrl+Page Up and Ctrl+Page Down do nothing, held or not (IsTabKeyWithControl); held, so does every key that would
+        // change the selection. Each is an attempt while held.
+        if (IsTabKeyWithControl(e.KeyData) || (_locked && ChangesSelection(e.KeyData)))
         {
             // Handled: the native list never sees the key.
             e.Handled = true;
             e.SuppressKeyPress = true;
-            Attempt(_keyRepeat);
+            if (_locked) Attempt(_keyRepeat);
             return;
         }
         base.OnKeyDown(e);
@@ -121,8 +124,17 @@ internal sealed class Bbs757LockableComboBox : ComboBox
         if (!repeat) LockedAttempt?.Invoke(this, EventArgs.Empty);
     }
 
-    // The keys a closed DropDownList answers by changing its selection or opening its list. Alt+F4 is the window's.
-    private static bool ChangesSelection(Keys keyData)
+    /// <summary>
+    /// Whether a key is Page Up or Page Down held with Control (not Alt): the old window's tab switch, which a pilot presses
+    /// out of habit. The native list would move its selection a page (and the window save it), as nothing takes the key first
+    /// since the window lost its tab control, so the list takes it and does nothing, held or not. Pure; internal for the tests.
+    /// </summary>
+    internal static bool IsTabKeyWithControl(Keys keyData) =>
+        (keyData & (Keys.Control | Keys.Alt)) == Keys.Control && (keyData & Keys.KeyCode) is Keys.PageUp or Keys.PageDown;
+
+    /// <summary>The keys a closed DropDownList answers by changing its selection or opening its list; Alt+F4 is the window's.
+    /// Pure; internal for the tests.</summary>
+    internal static bool ChangesSelection(Keys keyData)
     {
         bool alt = (keyData & Keys.Alt) == Keys.Alt;
         return (keyData & Keys.KeyCode) switch

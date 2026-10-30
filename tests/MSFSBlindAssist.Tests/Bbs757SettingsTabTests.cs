@@ -8,7 +8,8 @@ namespace MSFSBlindAssist.Tests;
 /// The 757 EFB settings window (Shift+T with no simulator running): the pure parts of its content (what leaving a number or
 /// text box with a change not saved says, <c>BBS757EfbForm.UnsavedEditText</c>; where a key moves the random failure
 /// frequency's slider, <c>Bbs757LockableSlider.Target</c>; which keys with Control it takes and ignores,
-/// <c>Bbs757LockableSlider.IsSliderKeyWithControl</c>), and what the window is made of once it is built: its title, no tab
+/// <c>Bbs757LockableSlider.IsSliderKeyWithControl</c>; which keys a choice list takes, <c>Bbs757LockableComboBox.ChangesSelection</c>
+/// and <c>IsTabKeyWithControl</c>), and what the window is made of once it is built: its title, no tab
 /// control, the settings status box first, and none of the Flight page's controls or the nav data buttons in any section.
 /// The window is built and never shown, so no handle is made; how it reads and behaves is checked in the simulator, by ear.
 /// </summary>
@@ -89,16 +90,63 @@ public class Bbs757SettingsTabTests
     [InlineData(Keys.Home | Keys.Control, true)]
     [InlineData(Keys.End | Keys.Control, true)]
     [InlineData(Keys.Up | Keys.Control | Keys.Shift, true)]
-    // The tab control's own keys, Alt (the native trackbar ignores it), and the plain keys are not taken here.
-    [InlineData(Keys.PageUp | Keys.Control, false)]
-    [InlineData(Keys.PageDown | Keys.Control, false)]
+    // Page Up and Page Down too: the old window's tab switch, pressed out of habit, which the native trackbar would take as a
+    // page the other way (and the window save), as nothing takes it first since the window lost its tabs.
+    [InlineData(Keys.PageUp | Keys.Control, true)]
+    [InlineData(Keys.PageDown | Keys.Control, true)]
+    [InlineData(Keys.PageDown | Keys.Control | Keys.Shift, true)]
+    // Ctrl+Tab, Alt (the native trackbar ignores it), and the plain keys are not taken here.
     [InlineData(Keys.Tab | Keys.Control, false)]
     [InlineData(Keys.Up | Keys.Control | Keys.Alt, false)]
+    [InlineData(Keys.PageUp | Keys.Control | Keys.Alt, false)]
     [InlineData(Keys.Up | Keys.Alt, false)]
     [InlineData(Keys.Up, false)]
-    public void An_arrow_home_or_end_with_control_is_taken_and_moves_nothing(Keys key, bool taken)
+    [InlineData(Keys.PageUp, false)]
+    public void An_arrow_page_home_or_end_with_control_is_taken_and_moves_nothing(Keys key, bool taken)
     {
         Assert.Equal(taken, Bbs757LockableSlider.IsSliderKeyWithControl(key));
+    }
+
+    // ---- the choice lists' keys ----------------------------------------------------------------------
+
+    [Theory]
+    // The old window's tab switch, pressed out of habit: taken and doing nothing, held or not (an attempt while held).
+    [InlineData(Keys.PageUp | Keys.Control, true)]
+    [InlineData(Keys.PageDown | Keys.Control, true)]
+    [InlineData(Keys.PageUp | Keys.Control | Keys.Shift, true)]
+    // The list's own keys, Ctrl+Tab, and AltGr (Ctrl+Alt, which types a character) are not.
+    [InlineData(Keys.PageUp, false)]
+    [InlineData(Keys.PageDown, false)]
+    [InlineData(Keys.Down | Keys.Control, false)]
+    [InlineData(Keys.Tab | Keys.Control, false)]
+    [InlineData(Keys.PageUp | Keys.Control | Keys.Alt, false)]
+    public void Ctrl_page_up_and_down_do_nothing_on_a_choice_list(Keys key, bool taken)
+    {
+        Assert.Equal(taken, Bbs757LockableComboBox.IsTabKeyWithControl(key));
+    }
+
+    [Theory]
+    // What a closed list answers by changing its selection or opening its list: held, each is an attempt.
+    [InlineData(Keys.Up, true)]
+    [InlineData(Keys.Down, true)]
+    [InlineData(Keys.Down | Keys.Alt, true)]   // opens the list
+    [InlineData(Keys.Left, true)]
+    [InlineData(Keys.Right, true)]
+    [InlineData(Keys.PageUp, true)]
+    [InlineData(Keys.PageDown, true)]
+    [InlineData(Keys.Home, true)]
+    [InlineData(Keys.End, true)]
+    [InlineData(Keys.F4, true)]
+    [InlineData(Keys.PageUp | Keys.Control, true)]
+    // Alt+F4 is the window's; Tab, Enter and Escape change nothing.
+    [InlineData(Keys.F4 | Keys.Alt, false)]
+    [InlineData(Keys.Left | Keys.Alt, false)]
+    [InlineData(Keys.Tab, false)]
+    [InlineData(Keys.Return, false)]
+    [InlineData(Keys.Escape, false)]
+    public void A_held_choice_list_takes_the_keys_that_would_change_it(Keys key, bool changes)
+    {
+        Assert.Equal(changes, Bbs757LockableComboBox.ChangesSelection(key));
     }
 
     // ---- the window, built and never shown -----------------------------------------------------------

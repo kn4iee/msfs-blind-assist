@@ -7,8 +7,9 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// value in the tablet's words (<see cref="ValueText"/>, "2.5x", never the step's number), and it can be held where it is
 /// without leaving the tab order. Up and Right move it one step higher, Down and Left one lower, Page Up and Page Down
 /// <see cref="TrackBar.LargeChange"/> steps, Home and End to its ends: the keys are the slider's own, as a Win32
-/// trackbar lying flat takes Up and Page Up lower; with Control the arrows, Home and End do nothing (Ctrl+Page Up and
-/// Ctrl+Page Down are not handled here; the settings window has no tab control to take them first). From a value
+/// trackbar lying flat takes Up and Page Up lower; with Control the arrows, Page Up, Page Down, Home and End do nothing
+/// (Ctrl+Page Up and Ctrl+Page Down switched the old window's tabs, and the native trackbar would take them as a page the
+/// other way: the settings window has no tab control to take them first). From a value
 /// between steps (set on the tablet), a key moves from the nearest step. A click or a drag moves it as usual. Each move
 /// of the pilot's raises
 /// <see cref="StepChosen"/>; a key at an end, or a turn of the wheel that moves nothing, raises nothing. While
@@ -111,14 +112,16 @@ internal sealed class Bbs757LockableSlider : TrackBar
     }
 
     /// <summary>
-    /// Whether a key is an arrow, Home or End held with Control (not Alt): the native trackbar would act on it, taking
-    /// Up and Down the other way, so the slider takes the key and does nothing (an attempt while locked). Ctrl+Page Up,
-    /// Ctrl+Page Down and Ctrl+Tab are not taken here (the settings window has no tab control to take them first); with
-    /// Alt the native trackbar ignores every key. Pure; internal for the tests.
+    /// Whether a key is an arrow, Page Up, Page Down, Home or End held with Control (not Alt): the native trackbar would
+    /// act on it, taking Up, Down, Page Up and Page Down the other way, so the slider takes the key and does nothing (an
+    /// attempt while locked). Ctrl+Page Up and Ctrl+Page Down are the old window's tab switch, which a pilot presses out of
+    /// habit: nothing takes them first since the window lost its tab control, and the trackbar's move would be saved.
+    /// Ctrl+Tab is not taken here; with Alt the native trackbar ignores every key. Pure; internal for the tests.
     /// </summary>
     internal static bool IsSliderKeyWithControl(Keys keyData) =>
         (keyData & (Keys.Control | Keys.Alt)) == Keys.Control
-        && (keyData & Keys.KeyCode) is Keys.Up or Keys.Down or Keys.Left or Keys.Right or Keys.Home or Keys.End;
+        && (keyData & Keys.KeyCode) is Keys.Up or Keys.Down or Keys.Left or Keys.Right or Keys.PageUp or Keys.PageDown
+            or Keys.Home or Keys.End;
 
     protected override bool ProcessKeyMessage(ref Message m)
     {
