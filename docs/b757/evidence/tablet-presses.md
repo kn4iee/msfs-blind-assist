@@ -159,3 +159,69 @@ Taken 2026-10-29 afternoon, same aircraft, MSFS Blind Assist closed; saved as te
 - Put back afterwards: AUTOMATIC BOARDING on, the aircraft in pounds (the units question's YES), the GPU off, the
   checklist unticked, the plan removed; `efb_settings.json` and `G-BBS75-opt.json` identical to before (credentials
   compared by hash). The fuel stays at the plan's 15,543 lb (defueled from 20,100 lb by the captures).
+
+## After plan 18 (Task 12)
+
+Measured 2026-10-30 on the owner's PC: the same aircraft at Frankfurt stand C6, daylight, AUTO brightness, BBS Nest
+running, MSFS Blind Assist closed. The probe's `presstest` was run as on 2026-10-29, with the same pages, navigation and
+skips. It now links plan 18's reader: the brightening before OCR (Task 2) and the parser with the top bar, the notices
+and the question (Task 3).
+
+Two more controls were skipped than on 2026-10-29: Automatic boarding (the owner keeps it on) and Hoppie ACARS
+(switched on, it may log on to Hoppie with the owner's code).
+
+| Page | Offered | Tapped | Landed | Nothing | Wrong |
+|---|---|---|---|---|---|
+| Aircraft, Ground services | 11 | 11 | 8 | 3 | 0 |
+| Aircraft, Cabin & doors | 14 | 14 | 14 | 0 | 0 |
+| Aircraft, Maintenance | 8 | 8 | 7 | 1 | 0 |
+| Aircraft, Failures | 17 | 17 | 15 | 2 | 0 |
+| Checklist | 15 | 15 | 15 | 0 | 0 |
+| Settings, General | 7 | 7 | 7 | 0 | 0 |
+| Settings, Aircraft | 15 | 13 | 13 | 0 | 0 |
+| Settings, Livery options | 3 | 3 | 3 | 0 | 0 |
+| Settings, Callouts | 14 | 14 | 14 | 0 | 0 |
+| Settings, Cabin audio | 5 | 5 | 5 | 0 | 0 |
+| **All** | **109** | **107** | **101** | **6** | **0** |
+
+- **No wrong tap.** Every tap landed on the control the reader named, or did nothing.
+- **Every page offers as many controls as on 2026-10-29, or more.** Callouts gains Rotate and Positive rate, which the
+  retired UPDATE guard box had covered (Task 10). Cabin audio gains its Flight attendant calls switch.
+- **"Check" verdicts, read by hand from the log:**
+  - the Failures tabs and categories (the view shown);
+  - the checklist header and Interactive (they tick the lines);
+  - Radio altimeter (2500), which switches the 2500 call-out off;
+  - Units, which writes both keys;
+  - the colors theme, whose new theme re-reads the page;
+  - the Maintenance brake reset and nose door, which changed only another line's reading wobble ("81F"/"B1F",
+    "Recall"/"Recal") and the door's own percentage.
+- **Nothing (6):**
+  - the two air start tiles, which read gray "JETWAY CONNECTED" while the jetway was attached;
+  - STAIRS DISABLED;
+  - the brake temperature reset, already reset;
+  - the Failures Catalog and Fires tabs, already shown.
+- **Left behind by the probe's put-back and restored by hand:**
+  - the 2500 call-out (the known coupling);
+  - the cockpit door: CLOSE ALL closes it, and ALL CLOSED cannot reopen it;
+  - BlueBird's own re-save of its EFB brightness level (1.0 written as 0.999), which AUTO does not use.
+
+  After the run, both settings files were identical to before.
+- **The jetway.** At this stand the tapped JETWAY REMOVED went to REQUESTING… and the jetway attached; the put-back
+  tap did not cancel it. Pressed to leave, it stayed at JETWAY LEAVING for more than 15 minutes, and a later request
+  stayed at REQUESTING… These are BlueBird's and MSFS's own states at this stand. A sim jetway toggle sent during the
+  test may have put the two out of step. A fresh flight load resets the airport's jetways.
+- **Read only:**
+  - Navigation, ACARS dashboard reads FETCH SIMBRIEF OFP and REMOVE FP as buttons, with no caption.
+  - On the darkest tablet (manual brightness 0.5 %, white text at 114), Aircraft, Maintenance offers the three gear
+    doors with the same words as the bright tablet.
+- **Found:**
+  - Settings, AIRAC data read UPDATE and both LOGOUTs as a row's value, so the window could not press them. This was
+    fixed in Task 12's fix round, with the page as a test fixture (`bright/55-settings-airac-data`, the SimBrief ID
+    painted out before the read).
+  - Under a light colors theme (Light blue, measured), the reader finds no switch, slider or choice on any page. By the
+    owner's ruling the theme is offered in neither window, only as a note (B757-21).
+
+**Small against medium, plan 18's reader** (`compare` on the Task 1 captures):
+- **Bright, 18 pages (183 controls):** 3 differences, all the checklist's "Fuel: OB/PLAN" label.
+- **Dim, 4 pages (32 controls):** 1 difference: the left gear door's "0%" read as "05" by small.
+- **Both:** the same tap points and states everywhere. Medium read a page in 1.2-1.5 s against small's 0.4-0.7 s.
