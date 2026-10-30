@@ -658,6 +658,11 @@ internal sealed partial class ProbeForm : Form
                     def.ObserveMinimums(minimums, said);
                     foreach (var text in said.DrainList()) Say(text);
                 });
+                service.BtvRead += btv => BeginInvoke(() =>
+                {
+                    def.ObserveBtv(btv, said);
+                    foreach (var text in said.DrainList()) Say(text);
+                });
                 service.Start();
                 await WaitForDisplays(service);
                 Line($"displays: {service.State} {service.Reason}");

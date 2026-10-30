@@ -25,13 +25,18 @@ public sealed class A350ModuleFacts
     /// does not say: then only their call-outs go without.</summary>
     public A350MinimumsFacts? Minimums { get; }
 
+    /// <summary>Where BTV keeps its rollout (<see cref="A350BtvRollout"/>), or null when this version's module does not say:
+    /// then only its countdown goes without.</summary>
+    public A350BtvFacts? Btv { get; }
+
     private A350ModuleFacts(Dictionary<uint, string> vtables, List<(string, int)> anchors, A350TakeoffSpeedFacts? speeds,
-        A350MinimumsFacts? minimums)
+        A350MinimumsFacts? minimums, A350BtvFacts? btv)
     {
         VTables = vtables;
         Anchors = anchors;
         TakeoffSpeeds = speeds;
         Minimums = minimums;
+        Btv = btv;
     }
 
     public IReadOnlyList<uint> VTablesOf(string cls) => VTables.Where(kv => kv.Value == cls).Select(kv => kv.Key).OrderBy(a => a).ToList();
@@ -64,7 +69,49 @@ public sealed class A350ModuleFacts
         foreach (var a in AnchorStrings)
             anchors.Add((a, mod.LinearAddressOf(a) ?? throw new A350ModuleException("A350 module has no anchor string " + a)));
         var speeds = TakeoffSpeedsOf(mod);
-        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds));
+        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds), BtvOf(mod));
+    }
+
+    /// <summary>BTV's object: a static inside GEAR, as <c>ND::Update</c> reaches it (GEAR, each accessor adding to it), its fields
+    /// as their accessors read them; and the autobrake's level as <c>AutobrakeSystem::GetLevel()</c> asks the variable table.</summary>
+    private static A350BtvFacts? BtvOf(A350WasmModule mod)
+    {
+        const byte I32Const = 0x41, F32Load = 0x2A, F64Load = 0x2B, F32Store = 0x38;
+        if (DefinedFunction(mod, "ND::Update(float)") is not int ndUpdate
+            || DefinedFunction(mod, "GEAR::GetGearSystemBase()") is not int gearSystem
+            || DefinedFunction(mod, "GearSystem_Base::getAutobrakeSystem()") is not int autobrake
+            || DefinedFunction(mod, "AutobrakeSystem::GetBTVSystem()") is not int btv
+            || DefinedFunction(mod, "BTVUpdater::IsBTVEnabled()") is not int enabled
+            || DefinedFunction(mod, "BTVUpdater::GetRunwayLength()") is not int length
+            || DefinedFunction(mod, "BTVUpdater::GetExitOffset()") is not int exit
+            || DefinedFunction(mod, "BTVUpdater::UpdateRemainingDistance(float)") is not int remaining
+            || DefinedFunction(mod, "AutobrakeSystem::GetLevel()") is not int level
+            || DefinedFunction(mod, "Variables::GetInt(VariablesEnum)") is not int getInt)
+            return null;
+        if (ConstantArgument(mod, ndUpdate, gearSystem) is not uint gear
+            || Immediates(mod, gearSystem, I32Const).LastOrDefault() is not (> 0 and var toGearSystem)
+            || Immediates(mod, autobrake, I32Const).LastOrDefault() is not (> 0 and var toAutobrake)
+            || Immediates(mod, btv, I32Const).LastOrDefault() is not (> 0 and var toBtv)
+            || Immediates(mod, enabled, F64Load) is not [var endLat, var endLon, ..]
+            || Immediates(mod, length, F64Load).LastOrDefault() is not (> 0 and var lengthAt)
+            || Immediates(mod, exit, F32Load).LastOrDefault() is not (> 0 and var exitAt)
+            || Immediates(mod, remaining, F32Store).LastOrDefault() is not (> 0 and var remainingAt)
+            || Immediates(mod, remaining, F32Load).LastOrDefault() is not (> 0 and var marginAt)
+            || ConstantArgument(mod, level, getInt) is not uint levelEnum
+            || Immediates(mod, getInt, I32Const).Where(c => c > 1024).Cast<int?>().FirstOrDefault() is not int variables)
+            return null;
+        return new A350BtvFacts(gear + (uint)(toGearSystem + toAutobrake + toBtv), endLat, endLon, lengthAt, exitAt, remainingAt, marginAt,
+            (uint)variables + 8 * levelEnum);
+    }
+
+    /// <summary>The immediates of a function's instructions of one kind, in order: a load's or a store's offset, a constant.</summary>
+    private static List<int> Immediates(A350WasmModule mod, int function, byte op) =>
+        mod.Instructions(function).Where(i => i.Item1 == op).Select(i => (int)i.Item2).ToList();
+
+    private static int? DefinedFunction(A350WasmModule mod, string name)
+    {
+        var hits = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && kv.Value == name).Select(kv => kv.Key).ToList();
+        return hits.Count == 1 ? hits[0] : null;
     }
 
     /// <summary>The function that clears the approach minimums: its two stores, BARO then RADIO (live 2026-10-30).</summary>
@@ -116,15 +163,9 @@ public sealed class A350ModuleFacts
 
     private static A350TakeoffSpeedFacts? TakeoffSpeedsOf(A350WasmModule mod)
     {
-        int? Defined(string name)
-        {
-            var hits = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && kv.Value == name).Select(kv => kv.Key).ToList();
-            return hits.Count == 1 ? hits[0] : null;
-        }
-
         var (v1Name, vrName, v2Name, callerName) = TakeoffSpeedFunctions;
-        if (Defined(v1Name) is not int v1 || Defined(vrName) is not int vr || Defined(v2Name) is not int v2
-            || Defined(callerName) is not int caller)
+        if (DefinedFunction(mod, v1Name) is not int v1 || DefinedFunction(mod, vrName) is not int vr || DefinedFunction(mod, v2Name) is not int v2
+            || DefinedFunction(mod, callerName) is not int caller)
             return null;
         if (ReturnedLoad(mod, v1) is not int v1At || ReturnedLoad(mod, vr) is not int vrAt || ReturnedLoad(mod, v2) is not int v2At
             || ConstantArgument(mod, caller, v1) is not uint plan)

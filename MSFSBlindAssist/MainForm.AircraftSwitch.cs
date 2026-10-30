@@ -735,6 +735,11 @@ public partial class MainForm
             {
                 if (ReferenceEquals(currentAircraft, a350)) a350.ObserveMinimums(minimums, announcer);
             });
+            // And BTV's rollout: the distance to the exit and the runway remaining.
+            a350DisplayService.BtvRead += btv => SafeBeginInvoke(() =>
+            {
+                if (ReferenceEquals(currentAircraft, a350)) a350.ObserveBtv(btv, announcer);
+            });
         }
         a350DisplayService.Start();
         a350PfdMonitor.Start();

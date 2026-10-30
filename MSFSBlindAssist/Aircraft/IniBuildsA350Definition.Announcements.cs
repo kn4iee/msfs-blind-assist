@@ -398,6 +398,19 @@ public partial class IniBuildsA350Definition
                 announcer.Announce(text);
     }
 
+    private readonly A350BtvCountdown _btvCountdown = new();
+
+    /// <summary>BTV's rollout as the display reader read it from a memory copy (<see cref="A350.Display.A350BtvRollout"/>), on the
+    /// UI thread: on the ground with the autobrake on BTV, the distance to the exit and the runway remaining as the A380 says them
+    /// (<see cref="A350BtvCountdown"/>), each behind its row. On the ground is the sim's cache where there is one.</summary>
+    public void ObserveBtv(A350.Display.A350BtvRollout read, ScreenReaderAnnouncer announcer)
+    {
+        bool onGround = _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
+        foreach (var (key, text) in _btvCountdown.Observe(onGround && read.Active, read.ToExit, read.RunwayRemaining))
+            if (!IsMuted(key) && !_disposed)
+                announcer.Announce(text);
+    }
+
     /// <summary>A reconnect: the roll call-outs' arm goes, never the speeds, which a reconnect need not deliver again.</summary>
     public override void ResetAnnouncementBaselines()
     {

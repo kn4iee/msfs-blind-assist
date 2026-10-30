@@ -54,7 +54,7 @@ internal static class DisplayModes
         var src = A350ModuleCache.FindInstalledModule();
         if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var facts = A350ModuleFacts.From(A350WasmModule.Parse(File.ReadAllBytes(src)));
-        Console.WriteLine($"facts: {facts.TakeoffSpeeds?.ToString() ?? "none"}; {facts.Minimums?.ToString() ?? "no minimums"}");
+        Console.WriteLine($"facts: {facts.TakeoffSpeeds?.ToString() ?? "none"}; {facts.Minimums?.ToString() ?? "no minimums"}; {facts.Btv?.ToString() ?? "no BTV"}");
         if (facts.TakeoffSpeeds is not { } at) return 1;
         using var reader = new A350MemoryReader(facts.Anchors);
         if (!reader.TryLocate()) { Console.WriteLine("A350 not found in the sim"); return 1; }
@@ -63,7 +63,8 @@ internal static class DisplayModes
         {
             var copy = reader.Snapshot();
             string minimums = facts.Minimums is { } mAt ? A350Minimums.Read(copy, mAt)?.ToString() ?? "no read" : "";
-            Console.WriteLine($"{s,4}s\t{A350TakeoffSpeeds.Read(copy, at)?.ToString() ?? "no read"}\t{minimums}");
+            string btv = facts.Btv is { } bAt ? A350BtvRollout.Read(copy, bAt)?.ToString() ?? "no read" : "";
+            Console.WriteLine($"{s,4}s\t{A350TakeoffSpeeds.Read(copy, at)?.ToString() ?? "no read"}\t{minimums}\t{btv}");
             if (s >= seconds) return 0;
             Thread.Sleep(1000);
         }

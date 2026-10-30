@@ -59,6 +59,9 @@ public sealed class A350DisplayService : IDisposable
     /// <summary>The FMS's approach minimums in each copy a draw request takes (<see cref="A350Minimums"/>), the same way.</summary>
     public event Action<A350Minimums>? MinimumsRead;
 
+    /// <summary>BTV's rollout in each copy a draw request takes (<see cref="A350BtvRollout"/>), the same way.</summary>
+    public event Action<A350BtvRollout>? BtvRead;
+
     public A350DisplayState State { get; private set; } = A350DisplayState.Idle;
     public string? Reason { get; private set; }
 
@@ -221,6 +224,8 @@ public sealed class A350DisplayService : IDisposable
                 if (_facts?.Minimums is { } minimumsAt && MinimumsRead is { } minimumsRead
                     && A350Minimums.Read(copy, minimumsAt) is { } minimums)
                     minimumsRead(minimums);
+                if (_facts?.Btv is { } btvAt && BtvRead is { } btvRead && A350BtvRollout.Read(copy, btvAt) is { } btv)
+                    btvRead(btv);
                 var caps = new List<A350DrawCapture>(gauges.Length);
                 bool retried = false;
                 foreach (var (g, i) in gauges)

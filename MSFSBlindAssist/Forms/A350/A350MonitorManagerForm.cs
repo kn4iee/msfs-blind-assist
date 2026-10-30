@@ -22,8 +22,8 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
     /// <summary>The variable rows, then one row per display call-out the A350's display reader speaks
     /// (appended after the sort, as the A380's E/WD fold is): the E/WD call-outs, which Ctrl+E flips; each FMA column;
     /// the FMS messages heard with the MFD window closed; each take-off speed, said as it is entered and called on the
-    /// roll (<see cref="Aircraft.A350.A350TakeoffCallouts"/>); each approach minimum (<see cref="Aircraft.A350.A350MinimumsCallout"/>); the
-    /// PFD's flags, the TCAS's advisories, new printouts and low memory, one row each.</summary>
+    /// roll (<see cref="Aircraft.A350.A350TakeoffCallouts"/>); each approach minimum (<see cref="Aircraft.A350.A350MinimumsCallout"/>); BTV's
+    /// distance to the exit and runway remaining (<see cref="Aircraft.A350.A350BtvCountdown"/>); the PFD's flags, the TCAS's advisories, new printouts and low memory, one row each.</summary>
     internal static List<MonitorRow> BuildRows(IReadOnlyDictionary<string, SimVarDefinition> variables)
     {
         var rows = MonitorRowBuilder.Build(variables);
@@ -35,6 +35,8 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
         foreach (var (key, name) in Aircraft.A350.A350TakeoffCallouts.Speeds)
             rows.Add(new MonitorRow(key, name));
         foreach (var (key, label) in Aircraft.A350.A350MinimumsCallout.Rows)
+            rows.Add(new MonitorRow(key, label));
+        foreach (var (key, label) in Aircraft.A350.A350BtvCountdown.Rows)
             rows.Add(new MonitorRow(key, label));
         rows.Add(new MonitorRow(Aircraft.A350.A350TcasCallouts.MuteKey, Aircraft.A350.A350TcasCallouts.MuteLabel));
         rows.Add(new MonitorRow(Aircraft.A350.A350PrinterWatch.MuteKey, Aircraft.A350.A350PrinterWatch.MuteLabel));

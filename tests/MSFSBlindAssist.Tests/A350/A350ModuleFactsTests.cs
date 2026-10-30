@@ -116,6 +116,60 @@ public class A350ModuleFactsTests
         Assert.Null(A350ModuleFacts.From(WithFlightPlan(withGetters: false)).Minimums);   // no flight plan found
     }
 
+    // BTV's object (1.2.7, live 2026-10-30): a static inside GEAR (ND::Update's constant `this`, then each accessor's added
+    // constant: 1292056 + 8 + 8 + 56); its fields as their accessors read them; the autobrake's level through the variable
+    // table GetLevel() asks.
+    private static A350WasmModule WithBtv(bool withAccessors = true)
+    {
+        var m = new WasmTestModule();
+        int t1 = m.AddType(new[] { I32 }, new[] { I32 });
+        int tv = m.AddType(new[] { I32 }, Array.Empty<byte>());
+        static byte[] Bytes(params IEnumerable<byte>[] parts) => parts.SelectMany(p => p).ToArray();
+        // The unoptimised module's frame comes first: its 16 is no offset.
+        var frame = Bytes(new byte[] { 0x41 }, S(16), new byte[] { 0x1A });
+        int Added(string name, int n) => m.Func(name, t1, Bytes(frame, new byte[] { 0x20, 0x00, 0x41 }, S(n), new byte[] { 0x6A, 0x0F }));
+        int gear = Added("GEAR::GetGearSystemBase()", 8);
+        Added("GearSystem_Base::getAutobrakeSystem()", 8);
+        Added("AutobrakeSystem::GetBTVSystem()", 56);
+        m.Func("ND::Update(float)", tv, Bytes(new byte[] { 0x41 }, S(7), new byte[] { 0x1A, 0x41 }, S(1292056), new byte[] { 0x21, 0x00, 0x20, 0x00, 0x10 }, U(gear), new byte[] { 0x1A }));
+        int Load(string name, byte op, byte align, params int[] offsets)
+        {
+            var body = new List<byte>(frame);
+            foreach (var o in offsets)
+            {
+                body.AddRange(new byte[] { 0x20, 0x00, op, align });
+                body.AddRange(U(o));
+                body.Add(0x1A);
+            }
+            return m.Func(name, t1, body.Concat(new byte[] { 0x20, 0x00, 0x0F }).ToArray());
+        }
+        if (withAccessors)
+        {
+            Load("BTVUpdater::IsBTVEnabled()", 0x2B, 0x03, 8, 16);
+            Load("BTVUpdater::GetRunwayLength()", 0x2B, 0x03, 32);
+            Load("BTVUpdater::GetExitOffset()", 0x2A, 0x02, 92);
+        }
+        // UpdateRemainingDistance: a frame store first, then what is left goes into +96: the exit's +92, less a frame value, less
+        // the margin at +108, its last load.
+        m.Func("BTVUpdater::UpdateRemainingDistance(float)", tv, Bytes(
+            new byte[] { 0x20, 0x00, 0x43, 0, 0, 0, 0, 0x38, 0x02 }, U(44),
+            new byte[] { 0x20, 0x00, 0x20, 0x00, 0x2A, 0x02 }, U(92),
+            new byte[] { 0x20, 0x00, 0x2A, 0x02 }, U(44), new byte[] { 0x93 },
+            new byte[] { 0x20, 0x00, 0x2A, 0x02 }, U(108), new byte[] { 0x93, 0x38, 0x02 }, U(96)));
+        int getInt = m.Func("Variables::GetInt(VariablesEnum)", t1, Bytes(frame, new byte[] { 0x41 }, S(1343616), new byte[] { 0x1A, 0x20, 0x00, 0x0F }));
+        m.Func("AutobrakeSystem::GetLevel()", t1, Bytes(frame, new byte[] { 0x41 }, S(31), new byte[] { 0x10 }, U(getInt), new byte[] { 0x0F }));
+        m.Data(5000, "\0INI_MCDU{}_ENTER\0INI_MCDU_OPTION\0INI_FMC_PAGE1\0");
+        return A350WasmModule.Parse(m.Build());
+    }
+
+    [Fact]
+    public void The_btv_object_is_found_by_its_accessors()
+    {
+        Assert.Equal(new A350BtvFacts(1292128, 8, 16, 32, 92, 96, 108, 1343616 + 8 * 31), A350ModuleFacts.From(WithBtv()).Btv);
+        Assert.Null(A350ModuleFacts.From(WithBtv(withAccessors: false)).Btv);
+        Assert.Null(A350ModuleFacts.From(Sample()).Btv);
+    }
+
     // A version that moved them leaves the call-outs without speeds, never the displays without a reader.
     [Fact]
     public void A_module_without_the_getters_has_no_take_off_speeds()
