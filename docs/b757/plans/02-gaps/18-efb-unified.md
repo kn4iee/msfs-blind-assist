@@ -197,7 +197,7 @@
 - **Waiting on the owner:** nothing for the plan; the items under "Open at landing" are later work.
 - **In-sim results:** 2026-10-30, EDDF stand C6, the owner by ear on the deployed builds; every check passed in the end:
   - Shift+T opens "757 EFB" on the tablet's page with a simulator running, and "757 EFB settings" with none.
-  - Ground services, with the GND SRVC mode on BBS (the MSFS mode's fuel truck does not work, by BlueBird's design): the fuel truck attached and detached, the chocks, the air start unit requested and heard outside; BlueBird's jetway stayed at "Requesting…" (its own state at this stand, tablet-presses.md).
+  - Ground services, with the GND SRVC mode switched to BBS (in the MSFS mode some services, the fuel truck among them, did not work): the fuel truck attached and detached, the chocks, the air start unit requested and heard outside; BlueBird's jetway stayed at "Requesting…" (BlueBird's and MSFS's states at this stand, perhaps put out of step by a sim jetway toggle sent during the press test; tablet-presses.md).
   - Read-backs: a pressed control's new words once (GND SRVC mode, the gear doors), the tabs' "(selected)", two quick presses (Chocks, then Ground A/C) run in order and each said once; with the window hidden right after them, the presses already taken ran, the command still queued was dropped, and Shift+T read the page again.
   - Settings: switches say only the screen reader's checked or not checked; a choice list says nothing when it lands; a two-choice setting says its new choice ("EHSI up reference: TRK", then "…: HDG"); EFB background to 3 and back.
   - The top bar's notification button opens BlueBird's list and closes it.
