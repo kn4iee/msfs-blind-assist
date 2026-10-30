@@ -24,7 +24,7 @@ public static class A350MfdPage
 
     private static readonly HashSet<string> Containers = new(StringComparer.Ordinal)
     {
-        "WidgetSwitcherUI", "PopupDialog", "EULADialog", "DropdownMenuContainer", "SurvControlsBox",
+        "WidgetSwitcherUI", "PopupDialog", "CustomPopupDialog", "EULADialog", "DropdownMenuContainer", "SurvControlsBox",
         "UIFlightplanRevisionsMenu", "NextWaypointPopup", "NewDestPopup",
     };
 
@@ -78,6 +78,8 @@ public static class A350MfdPage
             .Select(p => new Cell(Torn(p.t.Text) ? Unreadable : Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")),
                 p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
+        // A frame can hold a text twice at one place (the F-PLN INFO pages' first frame, live 2026-10-30): the last one stands.
+        cells = cells.GroupBy(c => (c.Text, c.Colour, c.X, c.Y)).Select(g => g.Last()).OrderBy(c => c.Index).ToList();
         cells = JoinTimes(cells);
         // Black text is drawn on a filled box (every page, 2026-10-27/28): the scratchpad's message on white or amber, TMPY on
         // yellow, the page's title on the light title bar. It reads as the colour of the box a pilot sees; the title bar's row
@@ -110,7 +112,8 @@ public static class A350MfdPage
         // The CRASH REPORTING consent (EULADialog, over DATA/STATUS after an update) is one too. Its own texts come first
         // after it begins, inside it: the dismissed consent dialog sits in every frame, and what is drawn after it (the
         // FMS system menu beside it, a list over its place) is never its own (review, 2026-10-28).
-        var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).ToList();
+        // (A control drawn twice in a frame, as its text above, is one control.)
+        var elements = capture.Elements.Where(e => Mine(e.X) && e.RectW > 0 && e.RectH > 0).DistinctBy(e => (e.Class, e.X, e.Y, e.RectW, e.RectH)).ToList();
         // The notepad, open (KCCU NOTEPAD, live 2026-10-30): a light bar named NOTE PAD across the scratchpad's row hides CLEAR INFO and the
         // FMS message; what is left of it is its own box, the key for its saved notes in the box's row and the key right of it that closes it.
         // ATC COM's pages paint the bar and an empty box, with no control in it.
@@ -167,7 +170,7 @@ public static class A350MfdPage
         var leftLabels = new HashSet<Cell>();
         var checkboxLabels = new HashSet<Cell>();
         var headers = new HashSet<Cell>();
-        var keys = new List<(int At, string Name, float X0, float X1, float Top)>();   // the keys' lines, for their columns
+        var keys = new List<(int At, string Name, float X0, float X1, float Top, float RowY)>();   // the keys' lines, for their columns and rows
         string? pageTab = null;   // the tab the page is on
         // Texts inside a control are its own, never another control's label or header.
         var inControls = elements.Where(e => !hidden.Contains(e) && !Containers.Contains(e.Class)).SelectMany(e =>
@@ -285,10 +288,10 @@ public static class A350MfdPage
                 // The title over its column; its cross is a cyan stroke inside it.
                 var boxTitle = cells.Where(c => !inControls.Contains(c) && !rectangleBoxes.ContainsValue(c) && c.Colour == "white"
                     && c.X >= x0 - RectangleBoxOwnsLabelPixels && c.X <= x1 && c.Y < y0 && y0 - c.Y <= RectangleBoxTitleReachPixels)
-                    .OrderByDescending(c => c.Y).FirstOrDefault();
+                    .OrderByDescending(c => c.Y).ThenBy(c => Math.Abs(c.X - x0)).FirstOrDefault();
                 bool crossed = capture.Shapes?.Any(sh => sh.Kind == "stroke" && sh.Image == 0 && A350Rgba.NameOf(sh.Colour) == "cyan"
                     && sh.X0 - shift >= x0 - 2 && sh.X1 - shift <= x1 + 2 && sh.Y0 >= y0 - 2 && sh.Y1 <= y0 + e.RectH + 2) == true;
-                string boxName = (boxTitle == null ? "" : boxTitle.Text + ": ") + (rowLabel?.Text ?? "");
+                string boxName = boxTitle == null ? rowLabel?.Text ?? "" : rowLabel == null ? boxTitle.Text : $"{boxTitle.Text}: {rowLabel.Text}";
                 lines.Add((y0, x0, new MfdLine("checkbox", $"{boxName} check box, {(crossed ? "checked" : "not checked")}".TrimStart(), cx, cy)));
                 continue;
             }
@@ -326,7 +329,9 @@ public static class A350MfdPage
                 // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
                 // FUEL AT DEST field, is the table row's, the field's the heading above it. A check box's label reaches
                 // further: VERT REV's AT OR BELOW stands 277 px left of its box.)
-                var beside = cells.Where(c => OnRow(c) && c.X < x0 && x0 - c.X <= (checkboxLabels.Contains(c) ? 320 : 200) && !leftLabels.Contains(c))
+                // (A time unit just right of a box is its own: POSITION/TIME's [ ] H [ ] MIN.)
+                var beside = cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 15 && c.Text is "H" or "MIN").OrderBy(c => c.X).FirstOrDefault()
+                    ?? cells.Where(c => OnRow(c) && c.X < x0 && x0 - c.X <= (checkboxLabels.Contains(c) ? 320 : 200) && !leftLabels.Contains(c))
                         .OrderByDescending(c => c.X).FirstOrDefault()
                     ?? cells.Where(c => OnRow(c) && c.X > x1 && c.X - x1 <= 120).OrderBy(c => c.X).FirstOrDefault();
                 var label = beside
@@ -338,7 +343,9 @@ public static class A350MfdPage
                 // one whose frame is not drawn (VERT REV's AT and AT OR ABOVE boxes, HOLD's DIST box, until chosen).
                 bool Framed() => capture.Shapes is not { Count: > 0 } shapes || shapes.Any(sh => sh.Kind == "stroke" && sh.Image == 0
                     && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
-                if (inside.Count == 0 && (label == null || beside == null || !Framed())) continue;
+                // A key of the box's own rectangle under it: the box takes an entry, empty or not (CLOSEST AIRPORTS' OTHER ARPT, live 2026-10-30).
+                bool onKey = elements.Any(o => o.Class == "BaseUIButton" && Math.Abs(o.X - e.X) <= 2 && Math.Abs(o.Y - e.Y) <= 2 && Math.Abs(o.RectW - e.RectW) <= 2);
+                if (inside.Count == 0 && !onKey && (label == null || beside == null || !Framed())) continue;
                 used.UnionWith(inside);
                 if (label != null && label.X < x0) leftLabels.Add(label);
                 fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy, false, beside == null));
@@ -348,6 +355,7 @@ public static class A350MfdPage
             // BKUP's EFIS keys: CSTR to ARPT under theirs, WX, TERR and TRAF over theirs; live 2026-10-30). Its colour is its
             // light's, an empty text inside it (grey while the backup is not in use).
             if (inside.Count == 0 && e.Class == "BaseUIButton"
+                && !elements.Any(o => IsField(o) && Math.Abs(o.X - e.X) <= 2 && Math.Abs(o.Y - e.Y) <= 2 && Math.Abs(o.RectW - e.RectW) <= 2)
                 && cells.Where(c => !used.Contains(c) && !inControls.Contains(c) && !onBox.Contains(c) && c.Colour == "white" && c.X >= x0 - 10 && c.X <= x1
                         && (c.Y > y1 && c.Y - y1 <= 45 || c.Y < y0 && y0 - c.Y <= 25))
                     .OrderBy(c => c.Y > y1 ? c.Y - y1 : y0 - c.Y).FirstOrDefault() is { } nameBeside)
@@ -385,7 +393,7 @@ public static class A350MfdPage
                 "DropdownButtonUI" or RevisionItem => ("menuitem", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
             };
-            if (kind == "button") keys.Add((lines.Count, value, x0, x1, y0));
+            if (kind == "button") keys.Add((lines.Count, value, x0, x1, y0, y0 + e.RectH * 0.75f));
             lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
         }
 
@@ -424,31 +432,47 @@ public static class A350MfdPage
         // A box with no label of its own takes its column's header: the nearest white text above it over its column (WIND
         // CRZ's ALT and T.WIND, live 2026-10-28), every word of that row over the column (FCU BKUP's MAG HDG), numbered by
         // row where its column holds several.
-        string? ColumnHeader(float top, float x0, float x1)
+        string? ColumnHeader(float top, float x0, float x1, float reach = KeyColumnHeaderReach, HashSet<Cell>? took = null)
         {
-            // (Under the title bar: the header's flight number is no column's, live 2026-10-30.)
+            // (Under the title bar: the header's flight number is no column's, live 2026-10-30. CLOSEST AIRPORTS' last box stands 540 px under EFF WIND.)
             var over = cells.Where(c => !inFields.Contains(c) && !inControls.Contains(c) && c.Y >= TitleBottom
-                && c.Colour == "white" && c.Y < top && top - c.Y <= 300 && c.X >= x0 - 40 && c.X <= x1 + 40).ToList();
+                && c.Colour == "white" && c.Y < top && top - c.Y <= reach && c.X >= x0 - 40 && c.X <= x1 + 40).ToList();
             if (over.Count == 0) return null;
             float row = over.Max(c => c.Y);
-            return string.Join(" ", over.Where(c => row - c.Y <= 4).OrderBy(c => c.X).Select(c => c.Text));
+            var header = over.Where(c => row - c.Y <= 4).OrderBy(c => c.X).ToList();
+            // (A heading over the column itself, of a row of headings; else what stands beside it, the 40 px either way.)
+            if (header.Where(c => c.X >= x0 && c.X <= x1).ToList() is { Count: > 0 } own) header = own;
+            // (Right over its box it heads a table, said with its values, not a page's part: FCU BKUP's EFIS CP BACKUP stays a line.)
+            if (top - row <= TableHeaderOverPixels) took?.UnionWith(header);
+            return string.Join(" ", header.Select(c => c.Text));
         }
         var columnNames = new Dictionary<int, string>();
         foreach (var column in fields.Select((f, k) => (f, k)).Where(p => p.f.Label == null)
-                     .Select(p => (p.k, p.f, Header: ColumnHeader(p.f.Top, p.f.X0, p.f.X1))).Where(p => p.Header != null)
+                     .Select(p => (p.k, p.f, Header: ColumnHeader(p.f.Top, p.f.X0, p.f.X1, FieldColumnHeaderReach, headers))).Where(p => p.Header != null)
                      .GroupBy(p => (p.Header!, (int)Math.Round(p.f.X0))))
         {
             var rowsOf = column.OrderBy(p => p.f.Top).ToList();
+            // (The row above them may have that heading for its own label: POSITION/TIME's time markers.)
+            int firstRow = fields.Any(o => o.Label?.Text == column.Key.Item1 && o.Top < rowsOf[0].f.Top && Math.Abs(o.X0 - column.Key.Item2) <= 1) ? 2 : 1;
             for (int r = 0; r < rowsOf.Count; r++)
-                columnNames[rowsOf[r].k] = rowsOf.Count > 1 ? $"{column.Key.Item1} {r + 1}" : column.Key.Item1;
+                columnNames[rowsOf[r].k] = rowsOf.Count > 1 || firstRow > 1 ? $"{column.Key.Item1} {r + firstRow}" : column.Key.Item1;
         }
 
         // Keys of one name in several columns take their column's header (FCU BKUP's SELECTED and MANAGED under SPD, MAG HDG,
         // ALT and V/S; live 2026-10-30).
+        // Down one column their row's label tells them apart (POSITION/TIME's MODIFY beside BLOCK TIME and FLIGHT TIME, the PRINTER page's
+        // PRINT beside what it prints, live 2026-10-30).
         foreach (var same in keys.GroupBy(k => k.Name).Where(g => g.Count() > 1))
+        {
             foreach (var key in same)
-                if (ColumnHeader(key.Top, key.X0, key.X1) is { } header)
+            {
+                bool downOneColumn = same.Count(k => Math.Abs(k.X0 - key.X0) <= 2) > 1;
+                var rowLabel = !downOneColumn ? null : cells.Where(c => c.Colour == "white" && !inControls.Contains(c) && c.X < key.X0 && Math.Abs(c.Y - key.RowY) <= 12)
+                    .OrderByDescending(c => c.X).FirstOrDefault();
+                if ((rowLabel?.Text ?? ColumnHeader(key.Top, key.X0, key.X1)) is { } header)
                     lines[key.At] = lines[key.At] with { Line = lines[key.At].Line with { Spoken = $"{header} {lines[key.At].Line.Spoken}" } };
+            }
+        }
 
         // A label two fields share takes each field's column header: the nearest text above it in its column.
         int unnamed = Enumerable.Range(0, fields.Count).Count(k => fields[k].Label == null && !columnNames.ContainsKey(k));
@@ -460,7 +484,13 @@ public static class A350MfdPage
             // (A label may be drawn with its colon: NOTIFY TO ATC:. D-ATIS's boxes hold airports and have no label.)
             string name = f.Label?.Text.TrimEnd(':', ' ') ?? columnNames.GetValueOrDefault(k) ?? (unnamed == 1 ? pageTab : null)
                 ?? (titleRow.Any(c => c.Text.StartsWith("D-ATIS", StringComparison.Ordinal)) ? "Airport" : "Field");
-            if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
+            if (f.Label?.Text is "H" or "MIN")
+            {
+                var heading = cells.Where(c => !inFields.Contains(c) && c.Colour == "white" && c.Text is not ("H" or "MIN") && c.Y < f.Top && f.Top - c.Y <= 120 && c.X <= f.X1)
+                    .OrderByDescending(c => c.Y).ThenByDescending(c => c.X).FirstOrDefault();
+                if (heading != null) name = $"{heading.Text} {name}";
+            }
+            else if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)
                     .OrderByDescending(c => c.Y).FirstOrDefault();
@@ -479,8 +509,8 @@ public static class A350MfdPage
             // Headings are white words: a row holding an empty value (dashes, NONE) is labels and values instead.
             if (paired.Contains(i) || rows[i].Any(c => c.Colour != "white" || Word(c.Text) is "none" || c.Text == "NONE")) continue;
             int last = i;
-            // A table's rows follow its headings closely (WIND's: 83 px under them, 78 px apart, live 2026-10-28).
-            for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 90); j++)
+            // A table's rows follow its headings closely (WIND's: 83 px under them, 78 px apart, live 2026-10-28; CLOSEST AIRPORTS': 92).
+            for (int j = i + 1; j < rows.Count && rows[j][0].Y - rows[last][0].Y <= (rows[i].Count == 1 ? 50 : 95); j++)
             {
                 if (paired.Contains(j)) continue;
                 if (TableRow(rows[i], rows[j]) is not { } line)
@@ -612,6 +642,9 @@ public static class A350MfdPage
         }
         return null;
     }
+
+    /// <summary>How far above a box or a key its column's heading may stand, and how near it heads a table.</summary>
+    private const float FieldColumnHeaderReach = 560, KeyColumnHeaderReach = 300, TableHeaderOverPixels = 100;
 
     /// <summary>A button of a waypoint's revision menu (UIFlightplanRevisionsMenu).</summary>
     private const string RevisionItem = "FlightplanButtonActionButton";
@@ -942,7 +975,7 @@ public static class A350MfdPage
         var tokens = Tokens(row);
         // A white value is a placeholder: an empty one drawn as dashes, or NONE (SEC DEPARTURE's EOSID, live 2026-10-28);
         // any other white text is a label or another row of headings.
-        static bool Placeholder(DrawnCell t) => t.Text is "none" or "NONE";
+        static bool Placeholder(DrawnCell t) => t.Text is "none" or "NONE" or "AT DEST";
         int start = tokens.Count > 0 && tokens[0].Colour == "white" && !Placeholder(tokens[0]) && hs.Count > 1 ? 1 : 0;
         if (tokens.Skip(start).Any(t => t.Colour == "white" && !Placeholder(t))) return null;
         float first = hs[0].X - 40;

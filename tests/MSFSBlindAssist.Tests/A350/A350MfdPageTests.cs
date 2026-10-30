@@ -32,6 +32,9 @@ public class A350MfdPageTests
     {
         var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_printer.json"), 0);
         var spoken = lines.Select(l => l.Spoken).ToList();
+        Assert.Contains("F-PLN INIT PRINT * button", spoken);
+        Assert.Contains("PRE-FLIGHT PRINT * button, grey", spoken);
+        Assert.Contains("SEC3 PRINT * button, grey", spoken);
         Assert.Contains("AUTO PRINT ON RECEPTION: F-PLN INIT check box, checked", spoken);
         Assert.Contains("AUTO PRINT ON RECEPTION: T.O DATA check box, checked", spoken);
         Assert.Contains("AUTO PRINT ON RECEPTION: WIND DATA check box, checked", spoken);
@@ -111,6 +114,71 @@ public class A350MfdPageTests
     {
         var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_notepad_typing.json"), 0).Select(l => l.Spoken).ToList();
         Assert.Contains(spoken, l => l.StartsWith("Notepad: BCDEFGHIJKLMNOPQRSTUVWXYZ0123", StringComparison.Ordinal));
+    }
+
+    // POSITION/TIME (F-PLN INFO, TIME; live 2026-10-30): a closed pop-up's rectangle lay over the time marker's headings, and two MODIFY
+    // keys in one column are told apart by their rows.
+    [Fact]
+    public void The_time_page_names_its_time_markers_and_its_modify_keys()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_position_time.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("UTC: none, cyan", spoken);
+        Assert.Contains("REMAINING TIME: none, cyan", spoken);
+        Assert.Contains("TEXT: none, grey", spoken);
+        Assert.Contains("AURAL ALERT check box, not checked", spoken);
+        Assert.Contains("UTC 2: none, cyan", spoken);
+        Assert.Contains("REMAINING TIME 3: none, cyan", spoken);
+        Assert.Contains("TEXT 2: none, grey", spoken);
+        Assert.Contains("BLOCK TIME MODIFY button", spoken);
+        Assert.Contains("FLIGHT TIME MODIFY button", spoken);
+        Assert.DoesNotContain(spoken, l => l.StartsWith("Field", StringComparison.Ordinal) || l.StartsWith("check box", StringComparison.Ordinal));
+    }
+
+    // Its local time table: the hours and minutes boxes under UTC DIFF, each named by the unit right of it.
+    [Fact]
+    public void The_time_page_names_its_local_time_table()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_position_time.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("ARPT: VCBI, cyan", spoken);
+        Assert.Equal(2, spoken.Count(l => l == "UTC DIFF H: none, cyan"));
+        Assert.Equal(2, spoken.Count(l => l == "UTC DIFF MIN: none, cyan"));
+        Assert.Contains("LOCAL TIME none, LOCAL ETA AT DEST (white), green", spoken);
+        Assert.Contains("OMDB: LOCAL TIME none, LOCAL ETA none, green", spoken);
+    }
+
+    // Its other airports are boxes under keys of the same rectangle: boxes a pilot types into, so fields, empty or not.
+    [Fact]
+    public void The_closest_airports_other_airport_boxes_take_an_entry()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_closest_airports.json"), 0);
+        var first = lines.Single(l => l.Spoken == "OTHER ARPT: empty");
+        Assert.Equal("field", first.Kind);
+        Assert.Equal(648, first.ClickY);
+        Assert.Contains(lines, l => l.Spoken == "OTHER ARPT 2: empty" && l.ClickY == 704);
+        Assert.Contains(lines, l => l.Spoken == "OTHER ARPT 3: empty" && l.ClickY == 762);
+        Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("OTHER ARPT button", StringComparison.Ordinal));
+    }
+
+    // A frame can hold a text twice at one place (the F-PLN INFO pages' first frame, live 2026-10-30): it is one text on the screen.
+    [Fact]
+    public void A_text_drawn_twice_in_one_place_reads_once()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_closest_airports.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("RETURN button", spoken);
+        Assert.Contains("EFF WIND 5: 000 KT, cyan", spoken);
+    }
+
+    // CLOSEST AIRPORTS (F-PLN INFO; live 2026-10-30): the table's values under their headings; EFF WIND is its boxes' column, down to the
+    // other airports' boxes far below the heading.
+    [Fact]
+    public void The_closest_airports_table_reads_under_its_headings()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_closest_airports.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("DIST 0 NM, BRG 350°, UTC none, EFOB none T, green", spoken);
+        Assert.Contains("DIST 111 NM, BRG 042°, UTC none, EFOB none T, green", spoken);
+        Assert.Contains("EFF WIND 1: 000 KT, cyan", spoken);
+        Assert.Contains("EFF WIND 7: 000 KT, cyan", spoken);
+        Assert.DoesNotContain(spoken, l => l.StartsWith("Field", StringComparison.Ordinal));
     }
 
     // On the F-PLN the list reaches over the destination and INIT keys, whose rectangles hold the start of its rows: an item's text is
