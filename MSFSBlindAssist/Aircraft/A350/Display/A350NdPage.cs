@@ -150,10 +150,15 @@ public static class A350NdPage
         float bottom = tabs.Count > 0 ? tabs.Min(c => c.Y) : 1000;
         var map = A350DrawLayout.Region(A350DrawLayout.SplitEfis(texts, side).Nd, new A350Rect(-100000, -100000, 200000, 200000))
             .Select(t => t with { X = t.X - shift }).ToList();
-        foreach (var item in A350NdMap.Items(map))
+        // The landing runway, from the BTV block: its idents give the centreline a taxiway's name is measured along.
+        string? landing = shown.FirstOrDefault(l => l.StartsWith("Landing runway: ", StringComparison.Ordinal))?["Landing runway: ".Length..].Split(',')[0];
+        foreach (var item in A350NdMap.Items(map, landing))
         {
             bool onScreen = item.X is >= 0 and < HalfWidth && item.Y is >= 0 && item.Y < bottom;
-            string said = $"{item.Kind} {item.Name}" + (item.Where is { } where ? $": {where}" : "") + (onScreen ? "" : ", off the screen");
+            string mark = item.Kind == "Runway" && item.Colour == "cyan" ? " (landing)" : item.IsBtvExit ? " (BTV exit)" : "";
+            string said = $"{item.Kind} {item.Name}{mark}" + (item.Where is { } where ? $": {where}" : "");
+            if (item.OnRunway is { } onRunway) said += $", {onRunway}";
+            said += onScreen ? "" : ", off the screen";
             o.Add(onScreen ? new MfdLine("map", said, item.X, item.Y) : new MfdLine("text", said, -1, -1));
         }
         if (A350NdMap.FrameOf(map) is { } frame)

@@ -38,7 +38,14 @@ public static class A350NdMap
 
     /// <summary>One name on the map, where it is drawn (its nearest to the reference, the ND's coordinates), and in words
     /// where it lies: from the aircraft on a heading-up map, from the map's centre on a north-up one.</summary>
-    public sealed record NdMapItem(string Kind, string Name, string Colour, float X, float Y, string? Where);
+    public sealed record NdMapItem(string Kind, string Name, string Colour, float X, float Y, string? Where)
+    {
+        /// <summary>Where it lies along the landing runway, a taxiway on it (<see cref="AlongRunway"/>).</summary>
+        public string? OnRunway { get; init; }
+
+        /// <summary>The BTV exit set: the drawing of its name on the runway turns cyan.</summary>
+        public bool IsBtvExit { get; init; }
+    }
 
     /// <summary>A stand's name: a letter or two and a number ("A6", "GA5"), where a building has words.</summary>
     private static readonly System.Text.RegularExpressions.Regex StandName = new(@"^[A-Z]{0,3}\d+[A-Z]?$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -46,8 +53,9 @@ public static class A350NdMap
     /// <summary>What the map is reading against: the reference point, whether it is north-up (PLAN), and its scale if read.</summary>
     public readonly record struct NdMapFrame(float X, float Y, bool NorthUp, float? PixelsPerMetre);
 
-    private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text)
-        && (AtLocal(t, 0, 0) || t.ColourName == "white" && AtLocal(t, 0, 5));
+    /// <summary>A name through the map's transform: a runway's ident at local 0,5, white or, the landing runway's, cyan (live
+    /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
+    private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 0) || AtLocal(t, 0, 5));
 
     /// <summary>A runway's name along its centre: "04", "-", "22", white, each through the map's transform at a small x of its
     /// own at local y 0 (8.5, -7.5, -39.5 at VCBI; live 2026-10-30).</summary>
@@ -89,6 +97,41 @@ public static class A350NdMap
         return null;
     }
 
+    /// <summary>The ident of a runway's other end: 12L's is 30R, 04's is 22, 09C's is 27C.</summary>
+    internal static string? OtherEnd(string ident)
+    {
+        var digits = new string(ident.TakeWhile(char.IsDigit).ToArray());
+        if (digits.Length == 0 || !int.TryParse(digits, out int n) || n is < 1 or > 36) return null;
+        int other = n > 18 ? n - 18 : n + 18;
+        string side = ident[digits.Length..] switch { "L" => "R", "R" => "L", var s => s };
+        return other.ToString("00", System.Globalization.CultureInfo.InvariantCulture) + side;
+    }
+
+    /// <summary>How far a taxiway's name can lie from a runway's centreline and still be on it, in metres (the exits' names lie
+    /// 3 to 55 m off it at OMDB, live 2026-10-30; the next taxiway along is further).</summary>
+    private const float OnRunwayMetres = 60;
+
+    /// <summary>Where a name lies along a runway, from one ident to the other: "on runway 12L, about 1930 m from its threshold", or
+    /// null when it is off the runway. A name is drawn along its taxiway, so a fast exit's reads long (M9 2342 m, its exit 2087 m
+    /// on the ND): "about", and the ND's EXIT line once set is the figure.</summary>
+    private static double LateralMetres(NdMapFrame frame, (float X, float Y) threshold, (float X, float Y) far, float x, float y)
+    {
+        double dx = far.X - threshold.X, dy = far.Y - threshold.Y, length = Math.Sqrt(dx * dx + dy * dy);
+        return length < 1 || frame.PixelsPerMetre is not float scale ? double.MaxValue
+            : Math.Abs((x - threshold.X) * dy - (y - threshold.Y) * dx) / length / scale;
+    }
+
+    internal static string? AlongRunway(NdMapFrame frame, string ident, (float X, float Y) threshold, (float X, float Y) far, float x, float y)
+    {
+        if (frame.PixelsPerMetre is not float scale) return null;
+        double dx = far.X - threshold.X, dy = far.Y - threshold.Y, length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1) return null;
+        double along = ((x - threshold.X) * dx + (y - threshold.Y) * dy) / length / scale;
+        double lateral = Math.Abs((x - threshold.X) * dy - (y - threshold.Y) * dx) / length / scale;
+        if (lateral > OnRunwayMetres || along < 0 || along > length / scale) return null;
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"on runway {ident}, about {Math.Round(along / 10) * 10:0} m from its threshold");
+    }
+
     /// <summary>A point's place in words: "2 o'clock, 96 m" from the aircraft, "north east, 200 m from the map's centre" on PLAN.</summary>
     internal static string? Place(NdMapFrame frame, float x, float y)
     {
@@ -108,21 +151,38 @@ public static class A350NdMap
         return $"{(hour == 0 ? 12 : hour)} o'clock, {far}";
     }
 
-    /// <summary>Each name on the map once, its nearest drawing, nearest first, by kind. What is drawn off the ND still reads:
-    /// the ND's far runway ident says where the runway is.</summary>
-    public static IReadOnlyList<NdMapItem> Items(IReadOnlyList<DrawnText> texts)
+    /// <summary>Each name on the map once, nearest first, by kind, at its nearest drawing; a taxiway on the landing runway at the
+    /// drawing on the runway, the one a click takes for the exit (live 2026-10-30: a click on M9's others says no SET BTV EXIT).
+    /// What is drawn off the ND still reads: the ND's far runway ident says where the runway is.</summary>
+    /// <param name="landing">The landing runway's ident (the ND's BTV block), or null.</param>
+    public static IReadOnlyList<NdMapItem> Items(IReadOnlyList<DrawnText> texts, string? landing = null)
     {
         var names = texts.Where(IsMapName).ToList();
         if (names.Count == 0) return Array.Empty<NdMapItem>();
         var frame = FrameOf(texts) ?? new NdMapFrame(NdCentreX, NdCentreY, false, null);
-        static string KindOf(DrawnText t) => AtLocal(t, 0, 5) ? "Runway"
+        // A name drawn in both a taxiway's colour and cyan is the BTV exit: never a stand.
+        var taxiwayNames = names.Where(t => AtLocal(t, 0, 0) && t.ColourName is not ("cyan" or "green")).Select(t => t.Text.Trim()).ToHashSet(StringComparer.Ordinal);
+        string KindOf(DrawnText t) => AtLocal(t, 0, 5) ? "Runway"
+            : taxiwayNames.Contains(t.Text.Trim()) ? "Taxiway"
             : t.ColourName == "cyan" ? (StandName.IsMatch(t.Text.Trim()) ? "Stand" : "Building")
             : t.ColourName == "green" ? "Landmark" : "Taxiway";
+        var threshold = landing == null ? null : names.FirstOrDefault(t => AtLocal(t, 0, 5) && t.Text.Trim() == landing);
+        string? otherEnd = landing == null ? null : OtherEnd(landing);
+        var far = otherEnd == null ? null : names.FirstOrDefault(t => AtLocal(t, 0, 5) && t.Text.Trim() == otherEnd);
         var items = names.GroupBy(t => (Kind: KindOf(t), Name: t.Text.Trim()))
             .Select(g =>
             {
                 var at = g.OrderBy(t => (t.X - frame.X) * (t.X - frame.X) + (t.Y - frame.Y) * (t.Y - frame.Y)).First();
-                return new NdMapItem(g.Key.Kind, g.Key.Name, at.ColourName, at.X, at.Y, Place(frame, at.X, at.Y));
+                string? onRunway = null;
+                if (g.Key.Kind == "Taxiway" && threshold != null && far != null)
+                {
+                    // The drawing nearest the centreline, when one is on the runway.
+                    var nearest = g.OrderBy(t => LateralMetres(frame, (threshold.X, threshold.Y), (far.X, far.Y), t.X, t.Y)).First();
+                    if ((onRunway = AlongRunway(frame, landing!, (threshold.X, threshold.Y), (far.X, far.Y), nearest.X, nearest.Y)) != null)
+                        at = nearest;
+                }
+                return new NdMapItem(g.Key.Kind, g.Key.Name, at.ColourName, at.X, at.Y, Place(frame, at.X, at.Y))
+                    { OnRunway = onRunway, IsBtvExit = g.Key.Kind == "Taxiway" && g.Any(t => t.ColourName == "cyan") };
             }).ToList();
         foreach (var (name, first, _) in RunwayNames(texts))
             if (items.All(i => i.Name != name))
@@ -140,7 +200,7 @@ public static class A350NdMap
     public static IReadOnlyList<string> Read(IReadOnlyList<DrawnText> texts, ISet<DrawnText> used)
     {
         var named = texts.Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList();
-        var runways = named.Where(t => t.ColourName == "white" && AtLocal(t, 0, 5)).ToList();
+        var runways = named.Where(t => AtLocal(t, 0, 5)).ToList();
         // Grey at OMDB, olive at VCBI (0.71, 0.67, 0.20; live 2026-10-30): whatever is not a stand, a building or the tower.
         var taxiways = named.Where(t => t.ColourName is not ("cyan" or "green") && AtLocal(t, 0, 0)).ToList();
         var buildings = named.Where(t => t.ColourName == "cyan" && AtLocal(t, 0, 0)).ToList();
@@ -182,7 +242,7 @@ public static class A350NdMap
                 .OrderBy(n => n.Distance).Select(n => n.Name);
             o.Add(colour.Length > 0 ? $"{label}: {string.Join(", ", nearest)}, {colour}" : $"{label}: {string.Join(", ", nearest)}");
         }
-        Names("Runways", runways, "white");
+        Names("Runways", runways, runways.Select(t => t.ColourName).Distinct().Count() == 1 ? runways.FirstOrDefault()?.ColourName ?? "" : "");
         Names("Taxiways", taxiways, taxiways.Select(t => t.ColourName).Distinct().Count() == 1 ? taxiways.FirstOrDefault()?.ColourName ?? "" : "");
         Names("Stands and buildings", buildings, "cyan");
         Names("Landmarks", landmarks, "green");

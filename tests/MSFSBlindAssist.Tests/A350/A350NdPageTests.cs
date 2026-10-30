@@ -208,6 +208,58 @@ public class A350NdPageTests
         Assert.Equal((404f, 396.5f, true), (frame!.Value.X, frame.Value.Y, frame.Value.NorthUp));
     }
 
+    // Live 2026-10-30, M9 set as OMDB 12L's exit on a wet runway: "RWY 12L - 3900 M - WET-5", "EXIT M9 2087 M", "ROT 63''",
+    // "TURNAROUND 152'/169'" (the brakes' cooling after MAX and after IDLE reverse) at the ND's top left.
+    [Fact]
+    public void The_btv_block_reads_by_name()
+    {
+        var shown = Lines("efis0_anf_btv_set").Where(l => l.Kind == "text").Select(l => l.Spoken).ToList();
+        Assert.Contains("Landing runway: 12L, 3900 M, WET-5, green", shown);
+        Assert.Contains("BTV exit: M9, 2087 M, green", shown);
+        Assert.Contains("Runway occupancy: 63 seconds, green", shown);
+        Assert.Contains("Turnaround: 152 minutes with max reverse, 169 minutes with idle reverse, green", shown);
+        Assert.DoesNotContain(shown, l => l.StartsWith("Wind: 12L", StringComparison.Ordinal));   // the wind's place, when it is drawn
+    }
+
+    [Fact]
+    public void An_exit_too_short_says_so()
+    {
+        Assert.Equal("BTV exit: M6, 1500 M, TOO SHORT, orange", A350GroundDisplays.BtvRow("EXIT", new[] { "EXIT", "M6", "1500", "M", "TOO", "SHORT" }, "orange"));
+    }
+
+    [Fact]
+    public void A_distance_entered_by_hand_reads_as_the_exit()
+    {
+        Assert.Equal("BTV exit: 2949 M, green", A350GroundDisplays.BtvRow("EXIT", new[] { "EXIT", "2949", "M" }, "green"));
+    }
+
+    // Live 2026-10-30: a taxiway's name is drawn several times along it, and only the one on the runway is the exit's: a click
+    // there says SET BTV EXIT, or once set UNSET BTV EXIT, and that one turns cyan. Elsewhere the same click says neither.
+    [Fact]
+    public void The_exit_on_the_runway_is_the_drawing_a_click_lands_on()
+    {
+        var m9 = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M9", StringComparison.Ordinal));
+        Assert.Equal((624.5f, 537.4f), (MathF.Round(m9.ClickX, 1), MathF.Round(m9.ClickY, 1)));
+        Assert.StartsWith("Taxiway M9 (BTV exit):", m9.Spoken);
+        var m7a = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M7A", StringComparison.Ordinal));
+        Assert.DoesNotContain("(BTV exit)", m7a.Spoken);
+    }
+
+    [Fact]
+    public void The_landing_runway_says_so()
+    {
+        Assert.Contains(Lines("efis0_anf_btv_set"), l => l.Spoken.StartsWith("Runway 12L (landing):", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_taxiway_near_the_landing_runway_says_how_far_along_it_is()
+    {
+        var m7a = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway M7A:", StringComparison.Ordinal));
+        Assert.Contains("on runway 12L, about 1930 m from its threshold", m7a.Spoken);
+        var far = Assert.Single(Lines("efis0_anf_btv_set"), l => l.Kind == "map" && l.Spoken.StartsWith("Taxiway K5:", StringComparison.Ordinal));
+        Assert.DoesNotContain("on runway", far.Spoken);
+    }
+
     [Fact]
     public void A_side_clicks_its_own_half()
     {

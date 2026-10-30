@@ -95,7 +95,7 @@ internal sealed class ProbeForm : Form
     /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
     internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "list", "vars", "live", "set", "keep", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd", "ndpage",
+        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd", "ndpage",
         "rmpwin", "hotkey", "displays", "gsx",
     };
     private readonly StringBuilder _out = new();
@@ -799,6 +799,26 @@ internal sealed class ProbeForm : Form
         {
             foreach (var line in await Snapshot(def, displays.GetValueOrDefault(_arg!) ?? new List<string>()))
                 Line($"{line.Key}\t{line.Value}");
+            return;
+        }
+
+        if (_mode == "serve")
+        {
+            // `serve`: rows from stdin, KEY=VALUE a line, each pressed as it arrives, so a scripted pilot's hand-off to the
+            // autopilot takes milliseconds, not a probe's start (feedback_scripted_takeoff_handoff: about 15 s from `keep`).
+            Line("ready");
+            while (await Task.Run(Console.In.ReadLine) is { } command)
+            {
+                var kv = command.Split('=', 2);
+                if (kv.Length != 2 || !vars.TryGetValue(kv[0].Trim(), out var d)
+                    || !double.TryParse(kv[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+                {
+                    Line($"{command}\trefused");
+                    continue;
+                }
+                def.HandleUIVariableSet(kv[0].Trim(), value, d, _m, cap);
+                Line($"{command}\tpressed\tsaid: {cap.Drain()}");
+            }
             return;
         }
 

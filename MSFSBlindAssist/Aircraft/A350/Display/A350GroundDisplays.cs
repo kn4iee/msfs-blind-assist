@@ -48,6 +48,15 @@ public static class A350GroundDisplays
         // value moves left to x 64 (else x 122). The labels are not read.
         used.UnionWith(cells.Where(c => c.Colour == "white" && c.Text is "GS" or "TAS" && Math.Abs(c.Y - 35) <= 8));
         Field("Ground speed", c => c.Colour == "green" && Math.Abs(c.Y - 35) <= 8 && (Math.Abs(c.X - 122) <= 12 || Math.Abs(c.X - 64) <= 12));
+        // The BTV block at the top left (ND::DrawBTVInfo, live 2026-10-30), where the wind is drawn without it.
+        foreach (var (name, y) in new[] { ("RWY", 64f), ("EXIT", 89f), ("ROT", 112f), ("TURNAROUND", 136f) })
+        {
+            var row = cells.Where(c => !used.Contains(c) && Math.Abs(c.Y - y) <= 8 && c.X < 400).OrderBy(c => c.X).ToList();
+            if (row.Count == 0 || row[0].Text.Trim() != name) continue;
+            used.UnionWith(row);
+            string colour = row.Skip(1).FirstOrDefault(c => c.Colour is not ("white" or "cyan"))?.Colour ?? row[0].Colour;
+            o.Add(BtvRow(name, row.SelectMany(c => c.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToList(), colour));
+        }
         Field("True airspeed", c => c.Colour == "green" && Math.Abs(c.X - 175) <= 12 && Math.Abs(c.Y - 35) <= 8);
         Field("Wind", c => c.X is >= 60 and < 130 && Math.Abs(c.Y - 63) <= 8);
         // The procedure at the top (ND::DrawApproachInfo, x 270: the SID on the stand, live 2026-10-30) and the chronometer
@@ -117,6 +126,23 @@ public static class A350GroundDisplays
         }
         o.AddRange(Rest(cells, used));
         return o;
+    }
+
+    /// <summary>A row of the ND's BTV block by name, from its words as drawn: "RWY 12L - 3900 M - WET-5", "EXIT M9 2087 M" (and
+    /// "TOO SHORT" when the stop line is past it), "ROT 63 ''", "TURNAROUND 152 ' / 169 '" (minutes, after MAX and after IDLE
+    /// reverse: the manual's page 66).</summary>
+    internal static string BtvRow(string name, IReadOnlyList<string> words, string colour)
+    {
+        var w = words.Skip(1).Where(t => t != "-").ToList();
+        return name switch
+        {
+            "RWY" when w.Count >= 4 => $"Landing runway: {w[0]}, {w[1]} {w[2]}, {string.Join(" ", w.Skip(3))}, {colour}",
+            "EXIT" when w.Count >= 2 && w[0].All(char.IsDigit) => $"BTV exit: {w[0]} {w[1]}" + (w.Count > 2 ? $", {string.Join(" ", w.Skip(2))}" : "") + $", {colour}",
+            "EXIT" when w.Count >= 3 => $"BTV exit: {w[0]}, {w[1]} {w[2]}" + (w.Count > 3 ? $", {string.Join(" ", w.Skip(3))}" : "") + $", {colour}",
+            "ROT" when w.Count >= 1 => $"Runway occupancy: {w[0]} seconds, {colour}",
+            "TURNAROUND" when w.Count >= 3 && w.Where(t => t.Any(char.IsDigit)).ToList() is { Count: 2 } t => $"Turnaround: {t[0]} minutes with max reverse, {t[1]} minutes with idle reverse, {colour}",
+            _ => $"{string.Join(" ", words)}, {colour}",
+        };
     }
 
     public static IReadOnlyList<string> ReadFcu(A350DrawCapture capture)
