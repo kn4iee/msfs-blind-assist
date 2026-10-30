@@ -7,6 +7,19 @@ namespace MSFSBlindAssist.Tests.A350;
 // IRs aligned, no flight plan; heading 219, 12.8 ft indicated.
 public class A350GroundDisplaysTests
 {
+    // Live 2026-10-30, on the arrival: the vertical display's waypoints read by rows of names, with nothing of where they lie. Each stands
+    // beside its symbol on the two scales; the MSA is a line at its height with no figure.
+    [Fact]
+    public void The_vertical_displays_waypoints_say_where_they_lie_on_its_scales()
+    {
+        var lines = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_vd_arrival.json"), 0);
+        Assert.Contains("Vertical display: DB423, white: 6.9 NM, 8000 feet", lines);
+        Assert.Contains("Vertical display: DB407, green: 19 NM, 6000 feet", lines);
+        Assert.Contains("Vertical display: SOLIL, green: 39 NM, 4500 feet", lines);
+        Assert.DoesNotContain("DB408 DB403, green", lines);
+        Assert.Contains("MSA: about 3800 feet, magenta", lines);
+    }
+
     // Final review: the ND's status display got none of the traffic line: no way it moves, and with FLT ID on, orphan lines.
     [Fact]
     public void The_nds_status_display_says_what_a_target_is_doing_and_who_it_is()

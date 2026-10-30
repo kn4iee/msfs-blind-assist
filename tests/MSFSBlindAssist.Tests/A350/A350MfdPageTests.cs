@@ -27,6 +27,26 @@ public class A350MfdPageTests
 
     // MFD DATA PRINTER (live 2026-10-30, the F-PLN's auto print on): a rectangle check box holds no text, its name is its row's and
     // the title above its column, its cross a cyan stroke; RAD NAV's two are never drawn, so they are no lines.
+    // Live 2026-10-30: the box around DIRECT TO's own read as a field named after the heading beside it, "OPTIONS: empty".
+    [Fact]
+    public void A_list_box_holding_its_text_box_is_no_second_field()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_dir_tmpy.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("DIRECT TO: DB408, yellow", spoken);
+        Assert.DoesNotContain(spoken, s => s.StartsWith("OPTIONS:", StringComparison.Ordinal));
+        Assert.Contains("OPTIONS, white", spoken);
+    }
+
+    // Live 2026-10-30: VERT REV's CMS tab draws three boxes under no labels: where the constant Mach segment begins, its Mach, where it ends.
+    [Fact]
+    public void The_constant_mach_segments_boxes_have_names()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_vert_rev_cms.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("CMS from: none, cyan", spoken);
+        Assert.Contains("CMS Mach: none, cyan", spoken);
+        Assert.Contains("CMS to: none, cyan", spoken);
+    }
+
     // Live 2026-10-30: a stored waypoint draws one value under LAT and LONG, and the nearest heading took it all: "LONG 08°22.7N/077°08.9E".
     [Fact]
     public void One_value_under_two_headings_names_both_parts() =>

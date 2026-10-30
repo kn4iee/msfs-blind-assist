@@ -125,6 +125,24 @@ public static class A350Hotkeys
             ? (v, parts.Length >= 2 ? parts[1] : "") : null;
     }
 
+    /// <summary>The landing system as the PFD shows it, for Output N: it is the FMS's NAV 3, which the generic read-out leaves out.</summary>
+    public static string LandingSystem(IEnumerable<string> pfdLines)
+    {
+        var lines = pfdLines.Where(l => l.StartsWith("LS: ", StringComparison.Ordinal) || l.StartsWith("LS course: ", StringComparison.Ordinal)
+            || l.StartsWith("Localizer: ", StringComparison.Ordinal) || l.StartsWith("Glideslope: ", StringComparison.Ordinal)).ToList();
+        return lines.Count == 0 ? "LS not shown" : string.Join(". ", lines);
+    }
+
+    /// <summary>Output N: the FMS tunes VOR 1 on the stock NAV 1 and VOR 2 on NAV 2 (live 2026-10-30), with the landing system beside them.</summary>
+    public static string NavRadios(SimConnect.SimConnectManager.NavRadioData? radios, string landingSystem)
+    {
+        if (radios is not { } d)
+            return "NAV radio data unavailable. " + landingSystem;
+        string vor1 = Services.NavRadioFormat.Single("VOR 1", d.Nav1Freq, d.Nav1HasNav, d.Nav1HasLocalizer, d.Nav1HasGlideSlope, d.Nav1HasDME, d.Nav1DME, d.Nav1Localizer, d.Nav1GlideSlope, d.Nav1Ident, d.Nav1Name);
+        string vor2 = Services.NavRadioFormat.Single("VOR 2", d.Nav2Freq, d.Nav2HasNav, d.Nav2HasLocalizer, d.Nav2HasGlideSlope, d.Nav2HasDME, d.Nav2DME, d.Nav2Localizer, d.Nav2GlideSlope, d.Nav2Ident, d.Nav2Name);
+        return $"{vor1}. {vor2}. {landingSystem}";
+    }
+
     /// <summary>The squawk and transponder mode as an RMP shows them ("SQUAWK : 2000 - STBY, white"), read by the X key: the
     /// A350 keeps its squawk to itself (the stock TRANSPONDER CODE reads 0).</summary>
     public static string Squawk(IEnumerable<string> rmpLines)

@@ -427,6 +427,7 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 
 ### General keys that differ or don't work here {#hk-a350-general}
 
+- **Output N** says VOR 1 and VOR 2 from the radios the FMS tunes, then the landing system as the PFD shows it: frequency, distance, course, localizer and glideslope.
 - **Output Ctrl+Shift+B** opens the ND window: the ND and its airport map (ANF) and Brake To Vacate, line by line, as [the A350's chapter](airbus-aircraft.md#a350-nd-window) describes.
 - In the Surroundings window, Enter and Shift+Enter tune VHF 1 by pressing the RMP's own keys.
 

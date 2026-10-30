@@ -177,6 +177,10 @@ public partial class IniBuildsA350Definition
                     ? A350.A350Hotkeys.Sentences(A350.Display.A350SdText.Build(sd, sdPage))
                     : NotAvailableYet);
                 return true;
+            // N: the VORs from the stock radios the FMS tunes, and the LS as the PFD shows it, on the stock NAV 3 the generic read-out leaves out.
+            case HotkeyAction.ReadNavRadioInfo:
+                _ = ReadNavRadiosAsync(simConnect, announcer);
+                return true;
             // X: the squawk as the captain's RMP shows it (the A350 leaves the stock transponder code at 0).
             // A readout from a dark screen says so (a dark PFD's "none shown" read as no capability, review 2026-10-28).
             case HotkeyAction.ReadSquawkCode:
@@ -336,6 +340,18 @@ public partial class IniBuildsA350Definition
 
     /// <summary>A display read aloud: dark while its screen is dark, not available before its first good draw, else what
     /// <paramref name="read"/> makes of its lines (a dark PFD's "none shown" read as no capability, review 2026-10-28).</summary>
+    private async Task ReadNavRadiosAsync(SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        string landingSystem = Readout(PfdCaptainKey, A350.A350Hotkeys.LandingSystem);
+        var radios = new TaskCompletionSource<SimConnectManager.NavRadioData>(TaskCreationOptions.RunContinuationsAsynchronously);
+        simConnect.RequestNavRadioInfo(d => radios.TrySetResult(d));
+        SimConnectManager.NavRadioData? read = null;
+        try { read = await radios.Task.WaitAsync(TimeSpan.FromSeconds(2)); }
+        catch (TimeoutException) { }
+        if (!_disposed)
+            announcer.AnnounceImmediate(A350.A350Hotkeys.NavRadios(read, landingSystem));
+    }
+
     private string Readout(string displayKey, Func<IReadOnlyList<string>, string> read) =>
         DarkReadout(displayKey) ?? (DisplayLines(displayKey) is { } lines ? read(lines) : NotAvailableYet);
 }

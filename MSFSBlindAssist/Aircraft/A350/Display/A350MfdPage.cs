@@ -376,6 +376,10 @@ public static class A350MfdPage
                 // one whose frame is not drawn (VERT REV's AT and AT OR ABOVE boxes, HOLD's DIST box, until chosen).
                 bool Framed() => capture.Shapes is not { Count: > 0 } shapes || shapes.Any(sh => sh.Kind == "stroke" && sh.Image == 0
                     && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
+                // A list's box holds a text box: its value and label are the list's, and the empty text box inside takes none of its own (DIRECT TO's, beside OPTIONS).
+                if (inside.Count == 0 && e.Class == "BaseUITextBox" && elements.Any(o => o.Class == "DropdownTextBox" && e.X >= o.X && e.Y >= o.Y
+                        && e.X + e.RectW <= o.X + o.RectW && e.Y + e.RectH <= o.Y + o.RectH))
+                    continue;
                 // A key of the box's own rectangle under it: the box takes an entry, empty or not (CLOSEST AIRPORTS' OTHER ARPT, live 2026-10-30).
                 bool onKey = elements.Any(o => o.Class == "BaseUIButton" && Math.Abs(o.X - e.X) <= 2 && Math.Abs(o.Y - e.Y) <= 2 && Math.Abs(o.RectW - e.RectW) <= 2);
                 if (inside.Count == 0 && !onKey && (label == null || beside == null || !Framed())) continue;
@@ -512,13 +516,15 @@ public static class A350MfdPage
 
         // A label two fields share takes each field's column header: the nearest text above it in its column.
         int unnamed = Enumerable.Range(0, fields.Count).Count(k => fields[k].Label == null && !columnNames.ContainsKey(k));
+        // VERT REV's CMS draws three boxes under no labels: where the constant Mach segment begins, its Mach, where it ends (live 2026-10-30).
+        var inCmsOrder = pageTab == "CMS" && unnamed == 3 ? fields.OrderBy(f => f.X0).Select(f => f.X0).ToList() : null;
         for (int k = 0; k < fields.Count; k++)
         {
             var f = fields[k];
             // With no label and no column, the tab the page is on says what the page's one such box holds (VERT REV's SPD);
             // with several, a tab name would mislead ("CRZ: ..." on PERF CRZ).
             // (A label may be drawn with its colon: NOTIFY TO ATC:. D-ATIS's boxes hold airports and have no label.)
-            string name = f.Label?.Text.TrimEnd(':', ' ') ?? columnNames.GetValueOrDefault(k) ?? (unnamed == 1 ? pageTab : null)
+            string name = f.Label?.Text.TrimEnd(':', ' ') ?? columnNames.GetValueOrDefault(k) ?? (inCmsOrder != null ? new[] { "CMS from", "CMS Mach", "CMS to" }[inCmsOrder.IndexOf(f.X0)] : null) ?? (unnamed == 1 ? pageTab : null)
                 ?? (titleRow.Any(c => c.Text.StartsWith("D-ATIS", StringComparison.Ordinal)) ? "Airport" : "Field");
             if (f.Label?.Text is "H" or "MIN")
             {

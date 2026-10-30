@@ -74,6 +74,37 @@ public class A350HotkeysTests
 
     // The A32NX's DCDU key opens the mailbox, where the A350 shows those messages: as a page key it took the switch's earlier
     // case and the mailbox's never ran (found 2026-10-30).
+    // Live 2026-10-30: the FMS tunes VOR 1 on NAV 1, VOR 2 on NAV 2 and the LS on NAV 3 (110.10 for IDBL), which the generic Output N does not read.
+    [Fact]
+    public void Output_n_says_the_vors_and_the_landing_system()
+    {
+        var data = new MSFSBlindAssist.SimConnect.SimConnectManager.NavRadioData
+        {
+            Nav1Freq = 115.2, Nav1HasNav = 1, Nav1Ident = "MIN", Nav1Name = "", Nav1HasDME = 1, Nav1DME = 12.34,
+            Nav2Freq = 115.2, Nav2HasNav = 0, Nav2Ident = "", Nav2Name = "",
+        };
+        string ls = A350Hotkeys.LandingSystem(new[] { "Speed: 200 knots", "LS: 110.10, 23 NM, magenta", "LS course: 119, magenta", "Localizer: on the localizer", "Glideslope: off scale", "Heading: 119" });
+        Assert.Equal("LS: 110.10, 23 NM, magenta. LS course: 119, magenta. Localizer: on the localizer. Glideslope: off scale", ls);
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("sv-SE");
+            Assert.Equal("VOR 1: 115.20, MIN, DME 12.3 nautical miles. VOR 2: 115.20, no signal. " + ls, A350Hotkeys.NavRadios(data, ls));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    [Fact]
+    public void Output_n_says_when_the_pfd_shows_no_landing_system() =>
+        Assert.Equal("LS not shown", A350Hotkeys.LandingSystem(new[] { "Speed: 200 knots" }));
+
+    [Fact]
+    public void Output_n_with_no_answer_from_the_radios_says_the_landing_system() =>
+        Assert.Equal("NAV radio data unavailable. LS not shown", A350Hotkeys.NavRadios(null, "LS not shown"));
+
     [Fact]
     public void The_dcdu_key_is_no_mfd_page() => Assert.False(A350Hotkeys.MfdPages.ContainsKey(HotkeyAction.ShowDCDU));
 

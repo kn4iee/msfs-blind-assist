@@ -138,6 +138,7 @@ public static class A350GroundDisplays
         // left (y 1010), "FL 400" in STD (live 2026-10-28); it is neither a range nor an altitude label.
         Field("Vertical display selected altitude", c => c.Colour == "cyan" && Math.Abs(c.X - 105) <= 12
             && (Math.Abs(c.Y - 786) <= 8 || Math.Abs(c.Y - 1010) <= 8));
+        var distances = cells.Where(c => !used.Contains(c) && c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c)).OrderBy(c => c.X).ToList();
         Field("Vertical display range", c => c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c));
         // The labels run up to the range line and past it (the top one at y 799 on the stand at VCBI, 2026-10-28; y 773 at FL300, 2026-10-30).
         var altitudes = cells.Where(c => !used.Contains(c) && c.X is >= 90 and < 150 && (c.Y >= 810 || c.Y >= 770 && c.Colour == "white")
@@ -150,6 +151,7 @@ public static class A350GroundDisplays
             if (unit != null) used.Add(unit);
             o.Add("Vertical display altitudes: " + (unit != null ? "FL " : "") + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
         }
+        var scales = VerticalScales.Of(distances, altitudes, cells.Any(c => c.Text == "FL" && c.Colour == "white" && c.X < 90 && c.Y >= 810));
         // The safe altitude under the vertical display (MSA or MORA, white), its value just above its name ("3" and "8"), or
         // just under it low down.
         foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 900).ToList())
@@ -158,11 +160,60 @@ public static class A350GroundDisplays
                 && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
             used.Add(name);
             used.UnionWith(value);
-            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
+            // In the display itself the MSA has no figure: a line of its colour at its height, under or over its name (live 2026-10-30).
+            var line = value.Count > 0 || scales == null ? null : (capture.Shapes ?? Array.Empty<DrawnShape>()).FirstOrDefault(s => s.Kind == "stroke" && s.X1 - s.X0 >= VerticalScales.MinLinePixels
+                && s.X0 - shift <= name.X && s.X1 - shift >= name.X && Math.Abs((s.Y0 + s.Y1) / 2 - name.Y) <= 20 && A350Rgba.NameOf(s.Colour) == name.Colour);
+            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}"
+                : line != null ? $"{name.Text}: about {scales!.FeetAt((line.Y0 + line.Y1) / 2)} feet, {name.Colour}"
+                : $"{name.Text}, {name.Colour}");
         }
+        // The vertical display's waypoints, each name beside its symbol, on the two scales.
+        if (scales != null)
+            foreach (var name in cells.Where(c => !used.Contains(c) && scales.HoldsName(c)).OrderBy(c => c.X).ToList())
+            {
+                used.Add(name);
+                string shown = A350NdMap.TimeMarker.Match(name.Text) is { Success: true } marker ? "Time marker " + marker.Groups[1].Value : name.Text;
+                o.Add($"Vertical display: {shown}, {name.Colour}: {scales.NmAt(name.X - VerticalScales.NameRightOfSymbol)}, {scales.FeetAt(name.Y - VerticalScales.NameUnderSymbol)} feet");
+            }
         o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;
+    }
+
+    /// <summary>The vertical display's two scales, read from their labels (live 2026-10-30, 40 NM: "0" to "40" at x 175 to 707; "0" to "15000" at y 971
+    /// to 784, the tick about 10 px above its label's y).</summary>
+    private sealed record VerticalScales(float ZeroX, float PixelsPerNm, float ZeroTickY, float PixelsPerFoot)
+    {
+        internal const float NameRightOfSymbol = 6, NameUnderSymbol = 16, MinLinePixels = 100;
+        private const float TickOverLabel = 10, PlotTop = 800, PlotBottom = 1000;
+
+        private static double? Value(DrawnCell c, double scale) =>
+            double.TryParse(c.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v * scale : null;
+
+        public static VerticalScales? Of(IReadOnlyList<DrawnCell> distances, IReadOnlyList<DrawnCell> altitudes, bool flightLevels)
+        {
+            if (distances.Count < 2 || altitudes.Count < 2) return null;
+            var (d0, d1) = (distances[0], distances[^1]);
+            var (a1, a0) = (altitudes[0], altitudes[^1]);   // top down: the highest first
+            double feet = flightLevels ? 100 : 1;
+            if (Value(d0, 1) is not { } nm0 || Value(d1, 1) is not { } nm1 || Value(a0, feet) is not { } ft0 || Value(a1, feet) is not { } ft1 || nm1 <= nm0 || ft1 <= ft0)
+                return null;
+            float perNm = (float)((d1.X - d0.X) / (nm1 - nm0)), perFoot = (float)((a0.Y - a1.Y) / (ft1 - ft0));
+            return new VerticalScales(d0.X - (float)(nm0 * perNm), perNm, a0.Y - TickOverLabel + (float)(ft0 * perFoot), perFoot);
+        }
+
+        /// <summary>A waypoint's or a pseudo waypoint's name inside the plot.</summary>
+        public bool HoldsName(DrawnCell c) => c.Y is >= PlotTop and < PlotBottom && c.X >= ZeroX && !c.Text.Contains(' ')
+            && (c.Text.Any(char.IsLetter) || A350NdMap.TimeMarker.IsMatch(c.Text));
+
+        public string NmAt(float x)
+        {
+            double nm = Math.Max(0, (x - ZeroX) / PixelsPerNm);
+            return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{(nm >= 10 ? Math.Round(nm) : Math.Round(nm, 1)):0.#} NM");
+        }
+
+        public string FeetAt(float y) =>
+            ((int)(Math.Round((ZeroTickY - y) / PixelsPerFoot / 100) * 100)).ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>A row of the ND's BTV block by name, from its words as drawn: "RWY 12L - 3900 M - WET-5", "EXIT M9 2087 M" (and
