@@ -532,6 +532,17 @@ public static class A350MfdPage
                     .OrderByDescending(c => c.Y).ThenByDescending(c => c.X).FirstOrDefault();
                 if (heading != null) name = $"{heading.Text} {name}";
             }
+            // VERT REV's speed limit: [250 KT] AT OR BELOW [10000 FT], under its name. The words between them are the right box's, the name the left's.
+            else if (f.Label?.Text == "AT OR BELOW" && fields.Count(o => o.Label == f.Label) > 1)
+            {
+                var limit = f.X1 > f.Label.X ? null : cells.Where(c => !inFields.Contains(c) && c.Colour == "white" && c.Y < f.Top && f.Top - c.Y <= 90 && c.X <= f.X1)
+                    .OrderByDescending(c => c.Y).FirstOrDefault();
+                if (limit != null)
+                {
+                    name = limit.Text;
+                    used.Add(limit);
+                }
+            }
             else if (f.Label != null && !f.Inherited && !f.Above && fields.Count(o => o.Label == f.Label && !o.Inherited && !o.Above) > 1)
             {
                 var header = cells.Where(c => !inFields.Contains(c) && c.Y < f.Top && c.X >= f.X0 && c.X <= f.X1)

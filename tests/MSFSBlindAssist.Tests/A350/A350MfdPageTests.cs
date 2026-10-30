@@ -37,6 +37,17 @@ public class A350MfdPageTests
         Assert.Contains("OPTIONS, white", spoken);
     }
 
+    // Live 2026-10-30: the limit reads [250 KT] AT OR BELOW [10000 FT] under DES SPD LIMIT. The label between the two boxes went to both, with
+    // the tab above each for a heading: "RTA AT OR BELOW: 250 KT", "SPD CSTR AT AT OR BELOW: 10000 FT".
+    [Fact]
+    public void The_speed_limits_row_names_its_two_boxes()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_vert_rev_spd_limit.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("DES SPD LIMIT: 250 KT, cyan", spoken);
+        Assert.Contains("AT OR BELOW: 10000 FT, cyan", spoken);
+        Assert.DoesNotContain("DES SPD LIMIT, white", spoken);
+    }
+
     // Live 2026-10-30: VERT REV's CMS tab draws three boxes under no labels: where the constant Mach segment begins, its Mach, where it ends.
     [Fact]
     public void The_constant_mach_segments_boxes_have_names()
