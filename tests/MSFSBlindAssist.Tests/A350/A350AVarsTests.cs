@@ -18,6 +18,9 @@ public class A350AVarsTests
     [InlineData("PLANE LONGITUDE:0|Degrees", "PLANE LONGITUDE", "Degrees")]
     // The SD's F/CTL rudder index (live 2026-10-28): unanswered, the rudder read "centred" at full deflection.
     [InlineData("RUDDER POSITION:0|POSITION", "RUDDER POSITION", "POSITION")]
+    // The ND's (live 2026-10-30, every display drawn on the stand): unanswered, they read 0.
+    [InlineData("TOTAL WEIGHT:0|kg", "TOTAL WEIGHT", "kg")]
+    [InlineData("AMBIENT PRESSURE:0|hectopascal", "AMBIENT PRESSURE", "hectopascal")]
     public void A_draw_code_ask_maps_to_a_stock_variable(string ask, string name, string units)
     {
         var v = Assert.Single(A350AVars.All, a => a.Ask == ask);
