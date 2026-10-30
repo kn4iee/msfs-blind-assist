@@ -466,6 +466,7 @@ The Taxiing-phase steering tone feeds the pilot a **rate-lead projected error**,
 | HS 787 | 1.2 s | base default, unmeasured |
 | FBW A380 | 1.8 s | MEASURED 2026-06-11 flying the A380 on the A320's 1.3 s: five rollouts went 10–42° LONG at 15–19 kt (the reported "correct left right, left right" oscillation); pilot only coped by slowing below 13 kt. Overridden in `FlyByWireA380Definition` (the A380 and rollout-anticipation branches merged separately, so it had first inherited the 1.2 s base default); re-measure from telemetry |
 | Headwind A330 | 1.7 s | Unmeasured: one conservative step above the A320's 1.6 s, as the longer wheelbase and slower yaw response sit between the A320 and the A380; tune in-sim if rollouts run long or short |
+| iniBuilds A350 | 1.7 s | As the A330's: the yaw rate followed the tiller 0.5 to 1 s late at 13 to 16 kt (two scripted taxis, 2026-10-30, peak 14°/s) on a wheelbase between the A330's and the A380's. Not yet flown with the tone: tune in-sim if rollouts run long or short |
 | iFly 737 MAX8 | 0.4 s | Proxy from the PMDG 737 measurement (same airframe class), not measured on the iFly |
 | TFDi MD-11 | 0.6 s | Unmeasured: long-wheelbase trijet |
 

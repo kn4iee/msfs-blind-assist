@@ -19,6 +19,10 @@ public class TaxiTurnLeadTests
         Assert.Equal(45.0, fenix.TaxiTurnLeadMaxDegrees);
     }
 
+    [Fact]
+    public void The_A350_leads_as_the_A330_does() =>
+        Assert.Equal(new HeadwindA330Definition().TaxiTurnLeadSeconds, new IniBuildsA350Definition().TaxiTurnLeadSeconds);
+
     [Theory]
     [InlineData(nameof(IAircraftDefinition.TaxiSharpTurnLeadSeconds))]
     [InlineData(nameof(IAircraftDefinition.TaxiTurnLeadMaxDegrees))]
