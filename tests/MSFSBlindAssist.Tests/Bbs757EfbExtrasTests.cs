@@ -72,6 +72,24 @@ public class Bbs757EfbExtrasTests
     }
 
     [Theory]
+    // The reader may name a box by a short label just above it ("Navigation data: Update") or, for a generic action, by its row
+    // ("Update, Navigation data"); the key keeps the box's own words between | and @, which never take a caption.
+    [InlineData(AiracPage, "Navigation data: Update", "btn:NAVIGATION DATA|UPDATE@64,16", Bbs757EfbHook.NavDataUpdate)]
+    [InlineData(AiracPage, "Update, Navigation data", "btn:NAVIGATION DATA|UPDATE@64,16", Bbs757EfbHook.NavDataUpdate)]
+    [InlineData(AiracPage, "Navigation data: Remove", "btn:NAVIGATION DATA|REMOVE@64,16", Bbs757EfbHook.NavDataRemove)]
+    [InlineData(AcarsPage, "Flight plan: Fetch SIMBRIEF OFP", "btn:FLIGHT PLAN|FETCH SIMBRIEF OFP@42,40", Bbs757EfbHook.Fetch)]
+    [InlineData(AcarsPage, "Flight plan: Refresh SIMBRIEF OFP", "btn:FLIGHT PLAN|REFRESH SIMBRIEF OFP@42,40", Bbs757EfbHook.Fetch)]
+    [InlineData(FuelPage, "Total fuel: Import from SIMBRIEF", "btn:TOTAL FUEL|IMPORT FROM SIMBRIEF@18,46", Bbs757EfbHook.Import)]   // bright/21, dimmed
+    // The key's words are judged as the text is: other words, or the right words on another page, hook nothing.
+    [InlineData(AiracPage, "Navigation data: Updates", "btn:NAVIGATION DATA|UPDATES@64,16", Bbs757EfbHook.None)]
+    [InlineData(AcarsPage, "Navigation data: Update", "btn:NAVIGATION DATA|UPDATE@64,16", Bbs757EfbHook.None)]
+    [InlineData(AcarsPage, "Flight plan: Remove FP", "btn:FLIGHT PLAN|REMOVE FP@29,4", Bbs757EfbHook.None)]
+    public void A_captioned_control_hooks_by_the_words_of_its_key(string page, string text, string key, Bbs757EfbHook expected)
+    {
+        Assert.Equal(expected, Bbs757EfbExtras.HookFor(page, Control(text, key)));
+    }
+
+    [Theory]
     [InlineData("Navigation, acars dashboard", "Fetch SIMBRIEF OFP", Bbs757EfbHook.Fetch)]   // the page name is matched with case ignored
     [InlineData("aircraft, fuel", "Import from SIMBRIEF", Bbs757EfbHook.Import)]
     [InlineData("SETTINGS, AIRAC DATA", "Update", Bbs757EfbHook.NavDataUpdate)]

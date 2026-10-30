@@ -805,6 +805,13 @@ public static class Bbs757EfbScreen
 
     private static bool HasStateWord(string t) => StateWords.Any(w => t.EndsWith(" " + w, StringComparison.Ordinal) || t == w);
 
+    /// <summary>The words a box's key carries, between its caption and its place ("btn:NAVIGATION DATA|UPDATE@64,16" is UPDATE,
+    /// "btn:|FUEL TRUCK@56,28" is FUEL TRUCK): the box's own words without their state word (<see cref="StripState"/>), never the
+    /// caption or the row label the reader may name the box by; "" for a key that is no box's (a switch, the top bar, a menu
+    /// entry).</summary>
+    internal static string KeyWords(string key) =>
+        key.StartsWith("btn:", StringComparison.Ordinal) ? key.Substring(4).Split('|').Last().Split('@')[0] : "";
+
     /// <summary>A box's words for its key, without the state word <see cref="HasStateWord"/> finds: "FUEL TRUCK OFF" is FUEL TRUCK,
     /// and a door's CLOSED alone is no words (its caption and its place name it, whatever state it shows).</summary>
     private static string StripState(string t)

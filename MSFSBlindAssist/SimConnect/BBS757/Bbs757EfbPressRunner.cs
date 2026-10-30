@@ -86,9 +86,10 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// page's compare leaves out, the bar too). The same: the control is tapped where the reader found it. Different: the page is read
 /// again (settled) and the control found in it (<see cref="Bbs757EfbPress.Relocate"/>, from the page the pilot pressed on), the new
 /// page pushed, and the control tapped where it is now. Gone, turned into words that are no control (START BOARDING become
-/// "Boarding… 10 min"), or an answer whose question is no longer the one asked (every question's YES is keyed alike): nothing
-/// tapped, "{label} is no longer on the tablet." Under a question that came up meanwhile: nothing tapped and nothing said, since
-/// the read that found the question said it.</item>
+/// "Boarding… 10 min"), or an answer whose question was answered meanwhile: nothing tapped, "{label} is no longer on the tablet."
+/// Under a question that came up meanwhile, an answer to another question included (every question's YES is keyed alike):
+/// nothing tapped and nothing said, since the read that found the question said it. A side-menu entry or a home-screen app whose
+/// page the tablet shows already (pressed twice), and the window's own Home on the home screen: nothing tapped, nothing said.</item>
 /// <item>Whether: a switch or check box only when its state read differs from the wish (<see cref="Bbs757EfbPress.NeedsTap"/>), a
 /// slider only when it does not read the choice asked for. Nothing else refuses a press (the owner's ruling of 2026-10-29).</item>
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then a wait for the picture to change
@@ -155,7 +156,8 @@ public sealed class Bbs757EfbPressRunner
         if (target == null) return;
         var item = target.Item;
 
-        string words = TileWords(item);
+        // A tile's words from its key: "btn:|FUEL TRUCK@56,28" is FUEL TRUCK, the state word left out; "" for any other control.
+        string words = Bbs757EfbScreen.KeyWords(item.Key);
         var service = Bbs757GroundServices.ForTile(words);
         bool gpu = service == null && words.StartsWith("GPU", StringComparison.Ordinal);
         if (service != null) _io.ArmServiceEcho(service);
@@ -222,10 +224,6 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>A navigation the tablet never showed.</summary>
     public static string NotShownText(string page) => "The tablet did not show " + page + ". Try again, or use Read the tablet again.";
-
-    /// <summary>A tile's words from its key ("btn:|FUEL TRUCK@61,29" is FUEL TRUCK, the state word left out); "" for any other control.</summary>
-    private static string TileWords(Bbs757EfbItem item) =>
-        item.Key.StartsWith("btn:", StringComparison.Ordinal) ? item.Key.Substring(4).Split('|').Last().Split('@')[0] : "";
 
     // ------------------------------------------------------------------ switches and check boxes
 
@@ -362,28 +360,28 @@ public sealed class Bbs757EfbPressRunner
     // ------------------------------------------------------------------ sliders
 
     /// <summary>
-    /// A slider set to <paramref name="value"/>: one of its choices (<see cref="Bbs757EfbElements.OptionsFor"/>'s words), or, for a
-    /// slider with none, a percent along its track. A choice: the choice's place tapped (<see cref="Bbs757EfbPress.ChoiceX"/>), read
-    /// back, and stepped toward it (<see cref="Bbs757EfbPress.NextChoiceX"/>), at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps;
-    /// then judged by BlueBird's file when the row is one of its settings (the stored value of the choice asked for), else by the
-    /// page. A percent: one tap at its place, judged by where the knob is. Not set: "{label} could not be set to {value}."
+    /// A slider set to <paramref name="value"/>: one of its choices (<see cref="Bbs757EfbElements.OptionsFor"/>'s words), or else a
+    /// percent along its track (a slider with no choices, and one with choices whose current one was not read, which the window
+    /// shows as a 0-100 range). A choice: the choice's place tapped (<see cref="Bbs757EfbPress.ChoiceX"/>), read back, and stepped
+    /// toward it (<see cref="Bbs757EfbPress.NextChoiceX"/>), at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps; then judged by
+    /// BlueBird's file when the row is one of its settings (the stored value of the choice asked for), else by the page. A percent:
+    /// one tap at its place, judged by where the knob is. Not set, or a value that is neither: "{label} could not be set to {value}."
     /// </summary>
     public async Task SliderAsync(Bbs757EfbPressed pressed, string value, CancellationToken ct)
     {
         if (pressed.Item.Kind != Bbs757EfbKind.Slider) return;
-        if (Bbs757EfbElements.OptionsFor(pressed.Item, pressed.Page.PageName) is { } options)
-            await ChoiceAsync(pressed, options, value, ct);
+        var options = Bbs757EfbElements.OptionsFor(pressed.Item, pressed.Page.PageName) ?? Array.Empty<string>();
+        int wanted = -1;
+        for (int index = 0; index < options.Count && wanted < 0; index++)
+            if (string.Equals(options[index], value, StringComparison.OrdinalIgnoreCase)) wanted = index;
+        if (wanted >= 0)
+            await ChoiceAsync(pressed, options, wanted, ct);
         else
             await PercentAsync(pressed, value, ct);
     }
 
-    private async Task ChoiceAsync(Bbs757EfbPressed pressed, IReadOnlyList<string> options, string value, CancellationToken ct)
+    private async Task ChoiceAsync(Bbs757EfbPressed pressed, IReadOnlyList<string> options, int wanted, CancellationToken ct)
     {
-        int wanted = -1;
-        for (int index = 0; index < options.Count && wanted < 0; index++)
-            if (string.Equals(options[index], value, StringComparison.OrdinalIgnoreCase)) wanted = index;
-        if (wanted < 0) return;   // none of its choices: the window offers only these
-
         using var target = await LocateAsync(pressed, ct);
         if (target?.Item.Slider is not { } track) return;
         var row = target.Item;
@@ -416,8 +414,12 @@ public sealed class Bbs757EfbPressRunner
 
     private async Task PercentAsync(Bbs757EfbPressed pressed, string value, CancellationToken ct)
     {
-        // The window's range control writes the number, invariant.
-        if (!NumberParsing.TryParseExternal(value, out double percent) || !double.IsFinite(percent)) return;
+        // The window's range control writes the number, invariant. Anything else is no place on the track: nothing is tapped.
+        if (!NumberParsing.TryParseExternal(value, out double percent) || !double.IsFinite(percent))
+        {
+            _io.Alert(Bbs757EfbPress.CouldNotSetText(pressed.Item.Text, value));
+            return;
+        }
         percent = Math.Clamp(percent, 0, 100);
 
         using var target = await LocateAsync(pressed, ct);
@@ -477,9 +479,10 @@ public sealed class Bbs757EfbPressRunner
     /// The pressed control where it is to be tapped: a fresh capture compared with the frame the page was read from (the page's
     /// compare; for a control of the top bar, which that compare leaves out with its clock, the top bar's too); the same, the control
     /// as read; else the page read again and the control found in it. Null, with nothing tapped, when it is gone or no longer a control
-    /// ("{label} is no longer on the tablet."), when the question an answer was pressed on is not the one shown now (said the same
-    /// way), when a question came up over the page (the read that found it said it), when the pressed Home is no longer needed (the
-    /// tablet shows Home), and when nothing could be read (the window says why).
+    /// ("{label} is no longer on the tablet."), when the question an answer was pressed on was answered meanwhile (said the same way),
+    /// when a question came up over the page, another question in an answer's place included (the read that found it said it, and
+    /// nothing is said over it), when the pressed navigation is done already (the tablet shows the page a side-menu entry or a
+    /// home-screen app asks for, or Home for the window's Home: nothing said), and when nothing could be read (the window says why).
     /// </summary>
     private async Task<Target?> LocateAsync(Bbs757EfbPressed pressed, CancellationToken ct)
     {
@@ -504,12 +507,16 @@ public sealed class Bbs757EfbPressRunner
         if (item.Key == HomeKey)
             return now.App == "HOME" || now.Question != null ? null : item;
 
-        // Every question's answers are keyed alike (q:YES, q:NO): an answer is the one pressed only under the same question.
+        // A side-menu entry or a home-screen app whose page the tablet shows already (pressed twice: the first press took it
+        // there): its tap is done. It is no longer on the page it was pressed on, but saying so would be wrong.
+        if (NavigationDone(pressed, now)) return null;
+
+        // Every question's answers are keyed alike (q:YES, q:NO): an answer is the one pressed only under the same question. Under
+        // another one, the read that found it said it, so nothing is said over it; with none up, the answer is gone.
         if (pressed.Page.Question?.Buttons.Contains(item) == true)
         {
-            var answer = Bbs757EfbPress.SameQuestion(pressed.Page.Question, now.Question)
-                ? Bbs757EfbPress.Relocate(pressed.Page, now, item)
-                : null;
+            if (now.Question != null && !Bbs757EfbPress.SameQuestion(pressed.Page.Question, now.Question)) return null;
+            var answer = now.Question != null ? Bbs757EfbPress.Relocate(pressed.Page, now, item) : null;
             gone = answer == null || now.Question?.Buttons.Contains(answer) != true;
             return gone ? null : answer;
         }
@@ -524,6 +531,18 @@ public sealed class Bbs757EfbPressRunner
         // Under a question the tablet takes no tap on its page: only the top bar presses (the answers were found above).
         if (now.Question != null && !now.TopBar.Contains(found)) return null;
         return found;
+    }
+
+    /// <summary>Whether the tablet shows the page a side-menu entry or a home-screen app was pressed for: the entry's section of
+    /// the app it was pressed in ("Aircraft, Fuel" for Fuel pressed on "Aircraft, Ground services"), or the app.</summary>
+    private static bool NavigationDone(Bbs757EfbPressed pressed, Bbs757EfbScreenModel now)
+    {
+        var item = pressed.Item;
+        if (item.Kind != Bbs757EfbKind.Menu) return false;
+        if (item.Key.StartsWith("app:", StringComparison.Ordinal))
+            return string.Equals(now.App, item.Key.Substring("app:".Length), StringComparison.OrdinalIgnoreCase);
+        return item.Key.StartsWith("menu:", StringComparison.Ordinal)
+            && string.Equals(now.App, pressed.Page.App, StringComparison.OrdinalIgnoreCase) && PageIs(now, item.Text);
     }
 
     /// <summary>

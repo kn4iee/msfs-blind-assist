@@ -352,13 +352,29 @@ public class Bbs757EfbBridgeTests
     public async Task A_yes_pressed_on_one_question_is_never_tapped_on_another()
     {
         // The defuel question's YES was pressed, but the tablet now asks about the units, its YES in the same place under the same
-        // key: the press was not for this question.
+        // key: the press was not for this question. The read that found the new question said it, so nothing is said over it.
         var yes = Tile("Yes", "q:YES", new Rectangle(336, 591, 177, 57), Bbs757EfbTint.Green);
         var tablet = new FakeTablet(FuelAsked(DefuelQuestion, yes));
         var press = tablet.Press(yes);
         tablet.Show(FuelAsked(UnitsQuestion, yes));
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "read" }, tablet.Events);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_yes_whose_question_was_answered_meanwhile_is_gone(string culture)
+    {
+        // Pressed twice: the first YES answered the question, and no question is up now. Nothing to talk over: it is said gone.
+        var yes = Tile("Yes", "q:YES", new Rectangle(336, 591, 177, 57), Bbs757EfbTint.Green);
+        var tablet = new FakeTablet(FuelAsked(DefuelQuestion, yes));
+        var press = tablet.Press(yes);
+        tablet.Show(PageOf("AIRCRAFT", "FUEL", Tile("Import from SIMBRIEF", "btn:|IMPORT FROM SIMBRIEF@25,47", new Rectangle(377, 929, 280, 45))));
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
 
         Assert.Empty(tablet.Taps);
         Assert.Equal(new[] { "read", "alert Yes is no longer on the tablet." }, tablet.Events);
@@ -535,6 +551,49 @@ public class Bbs757EfbBridgeTests
 
         Assert.Empty(tablet.Alerts);
         Assert.Equal(3, reads);
+    }
+
+    [Fact]
+    public async Task A_side_menu_entry_pressed_again_on_its_own_page_taps_nothing_and_says_nothing()
+    {
+        // Pressed twice on the Ground services page: the first press took the tablet to Fuel, so the second finds the page it asks
+        // for shown already. Its tap is done (it used to say "Fuel is no longer on the tablet.").
+        var fuel = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(130, 230), true, "menu:FUEL");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", new[] { fuel }, new[] { ReqFuelTruck() }));
+        var press = tablet.Press(fuel);
+        tablet.Show(new Bbs757EfbScreenModel("AIRCRAFT", "FUEL", new[] { fuel with { Selected = true } }, Array.Empty<Bbs757EfbItem>()));
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Equal(new[] { "read" }, tablet.Events);
+    }
+
+    [Fact]
+    public async Task A_home_screen_app_pressed_again_once_it_opened_taps_nothing_and_says_nothing()
+    {
+        var aircraft = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Aircraft", new Rectangle(200, 400, 120, 30), new Point(260, 330), true, "app:AIRCRAFT");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), new[] { aircraft }));
+        var press = tablet.Press(aircraft);
+        tablet.Show(Ground(ReqFuelTruck()));
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Equal(new[] { "read" }, tablet.Events);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_side_menu_entry_on_a_page_that_went_elsewhere_is_gone(string culture)
+    {
+        // Neither the page it was pressed on nor the one it asks for: the entry is said gone, as any control.
+        var fuel = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(130, 230), true, "menu:FUEL");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", new[] { fuel }, new[] { ReqFuelTruck() }));
+        var press = tablet.Press(fuel);
+        tablet.Show(PageOf("SETTINGS", "GENERAL"));
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Equal(new[] { "read", "alert Fuel is no longer on the tablet." }, tablet.Events);
     }
 
     [Fact]
@@ -979,6 +1038,44 @@ public class Bbs757EfbBridgeTests
         var stuck = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling));
         await TestCulture.Run(culture, () => stuck.Runner().SliderAsync(stuck.Press(ceiling), "70", CancellationToken.None));
         Assert.Equal(new[] { "Ceiling could not be set to 70 percent." }, stuck.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_choice_slider_whose_choice_was_not_read_is_set_as_a_percent(string culture)
+    {
+        // IRS alignment time has choices, but the reader did not read which one is set: the window shows it as a 0-100 range
+        // (Bbs757EfbElements), so the number it sends is a percent along the track, tapped and judged by the knob, never dropped.
+        var irs = new Bbs757EfbItem(Bbs757EfbKind.Slider, "IRS alignment time", new Rectangle(273, 513, 255, 33), new Point(1000, 529), true,
+            "sld:IRS ALIGNMENT TIME", Value: "", Slider: new Bbs757EfbSlider(895, 1190, 1000));
+        var page = PageOf("SETTINGS", "AIRCRAFT", irs);
+        Assert.NotNull(Bbs757EfbElements.OptionsFor(irs, page.PageName));
+        var tablet = new FakeTablet(page);
+        var press = tablet.Press(irs);
+        tablet.OnTap = p => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", irs with { Slider = new Bbs757EfbSlider(895, 1190, p.X) }));
+
+        await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(press, "50", CancellationToken.None));
+        Assert.Equal(new[] { new Point(1043, 529) }, tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+
+        // A tablet that leaves the knob where it was: said, as for any slider set by a percent.
+        var stuck = new FakeTablet(page);
+        await TestCulture.Run(culture, () => stuck.Runner().SliderAsync(stuck.Press(irs), "50", CancellationToken.None));
+        Assert.Equal(new[] { "IRS alignment time could not be set to 50 percent." }, stuck.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_slider_value_that_is_neither_a_choice_nor_a_number_is_said_not_set(string culture)
+    {
+        var ceiling = new Bbs757EfbItem(Bbs757EfbKind.Slider, "Ceiling", new Rectangle(300, 300, 100, 30), new Point(500, 315), true,
+            "sld:CEILING", Slider: new Bbs757EfbSlider(500, 900, 500));
+        var tablet = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling));
+
+        await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(tablet.Press(ceiling), "bright", CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Ceiling could not be set to bright." }, tablet.Alerts);
     }
 
     // ---- the pushes: a press is the push's it was made on ---------------------------------------------------------------
@@ -1426,5 +1523,41 @@ public class Bbs757EfbBridgeTests
 
         Assert.Equal(0, h.SignedInReads);
         Assert.DoesNotContain(Bbs757EfbExtras.SignInText, Texts(h.Pushes[^1]));
+    }
+
+    [Fact]
+    public async Task A_read_asked_for_on_a_still_AIRAC_page_reads_the_sign_in_again()
+    {
+        using var h = new BridgeHarness { SignedInAnswer = false };
+        h.Bridge.TakeRead(AiracPage(), new Bitmap(1, 1), unclear: false);
+        await h.Bridge.RefreshSignInAsync(CancellationToken.None);
+        Assert.Equal(1, h.SignedInReads);
+
+        // The same page read again because its picture moved a little: nothing new, and the sign-in is not read again.
+        h.Bridge.TakeRead(AiracPage(), new Bitmap(1, 1), unclear: false);
+        await h.Bridge.RefreshSignInAsync(CancellationToken.None);
+        Assert.Equal(1, h.SignedInReads);
+
+        // A read that was asked for (the pilot's F5 or Read the tablet again, a press's own): the pilot may have signed in in the
+        // browser meanwhile, which a still page never shows.
+        h.SignedInAnswer = true;
+        h.Bridge.TakeRead(AiracPage(), new Bitmap(1, 1), unclear: false, asked: true);
+        await h.Bridge.RefreshSignInAsync(CancellationToken.None);
+        Assert.Equal(2, h.SignedInReads);
+        Assert.DoesNotContain(Bbs757EfbExtras.SignInText, Texts(h.Pushes[^1]));
+    }
+
+    [Theory]
+    [InlineData(10_000L, 10_000L, false)]   // the window's own ask, 450 ms after a click, taken right after the press's read
+    [InlineData(10_999L, 10_000L, false)]
+    [InlineData(11_000L, 10_000L, true)]    // a second after the last read: the pilot asked (F5)
+    [InlineData(60_000L, 10_000L, true)]
+    [InlineData(10_000L, long.MinValue / 2, true)]   // no read made yet
+    public void A_read_the_window_asks_for_right_after_a_read_is_not_forced(long nowMs, long lastReadMs, bool forced)
+    {
+        // The window asks for a read 450 ms after every click, and the loop comes to the ask only once the press, which reads the
+        // tablet itself, is done: forced, it was a second OCR read for every press.
+        Assert.Equal(1000, Bbs757EfbBridge.FreshReadMs);
+        Assert.Equal(forced, Bbs757EfbBridge.ForcesRead(nowMs, lastReadMs));
     }
 }

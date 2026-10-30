@@ -27,8 +27,9 @@ public enum Bbs757EfbHook
 /// owner's ruling of 2026-10-29): the load watch only listens, the nav data watch only reads BlueBird's cycle file, and the
 /// sign-in button is an addition to the page, not a replacement of a tablet control.
 /// <list type="bullet">
-/// <item><see cref="HookFor"/>: by the page and the words the reader gave the pressed control, case and spaces ignored (the
-/// reader's sentence case is <see cref="Bbs757EfbVocabulary.Pretty"/>'s: "Fetch SIMBRIEF OFP"). FETCH or REFRESH SIMBRIEF OFP
+/// <item><see cref="HookFor"/>: by the page and the words the reader gave the pressed control or its key (a box's own words,
+/// without the caption the reader may name it by), case and spaces ignored (the reader's sentence case is
+/// <see cref="Bbs757EfbVocabulary.Pretty"/>'s: "Fetch SIMBRIEF OFP"). FETCH or REFRESH SIMBRIEF OFP
 /// only on the ACARS dashboard (its REMOVE FP is no hook), IMPORT FROM SIMBRIEF only on the Fuel page, UPDATE or REMOVE only on the
 /// AIRAC page, START BOARDING only as the top bar's own control (<see cref="Bbs757EfbTopBar.BoardingKey"/>).</item>
 /// <item><see cref="PartsFor"/>: which parts of the load a hook has BlueBird start, so which the load watch listens for.</item>
@@ -67,28 +68,32 @@ public static class Bbs757EfbExtras
 
     /// <summary>
     /// The hook a press on <paramref name="item"/> of the page <paramref name="pageName"/> (as
-    /// <see cref="Bbs757EfbScreenModel.PageName"/> gives it) starts, or <see cref="Bbs757EfbHook.None"/>. Words and page names are
-    /// compared with case ignored and runs of spaces taken as one.
+    /// <see cref="Bbs757EfbScreenModel.PageName"/> gives it) starts, or <see cref="Bbs757EfbHook.None"/>. The control's words are
+    /// its text or the words of its key (<see cref="Bbs757EfbScreen.KeyWords"/>: a box's own words, which never take the caption
+    /// the reader may name it by, so "Navigation data: Update" is UPDATE). Words and page names are compared with case ignored and
+    /// runs of spaces taken as one.
     /// </summary>
     public static Bbs757EfbHook HookFor(string pageName, Bbs757EfbItem item)
     {
         string words = Squeeze(item.Text);
+        string keyWords = Squeeze(Bbs757EfbScreen.KeyWords(item.Key));
         string page = Squeeze(pageName);
+        bool Says(string expected) => Same(words, expected) || Same(keyWords, expected);
 
         // The boarding control belongs to the top bar, which every page has: only the bar's own item, and only while it offers to start.
         if (string.Equals(item.Key, Bbs757EfbTopBar.BoardingKey, StringComparison.Ordinal))
-            return Same(words, "START BOARDING") ? Bbs757EfbHook.StartBoarding : Bbs757EfbHook.None;
+            return Says("START BOARDING") ? Bbs757EfbHook.StartBoarding : Bbs757EfbHook.None;
 
         if (Same(page, AcarsPage))
-            return Same(words, "FETCH SIMBRIEF OFP") || Same(words, "REFRESH SIMBRIEF OFP") ? Bbs757EfbHook.Fetch : Bbs757EfbHook.None;
+            return Says("FETCH SIMBRIEF OFP") || Says("REFRESH SIMBRIEF OFP") ? Bbs757EfbHook.Fetch : Bbs757EfbHook.None;
 
         if (Same(page, FuelPage))
-            return Same(words, "IMPORT FROM SIMBRIEF") ? Bbs757EfbHook.Import : Bbs757EfbHook.None;
+            return Says("IMPORT FROM SIMBRIEF") ? Bbs757EfbHook.Import : Bbs757EfbHook.None;
 
         if (Same(page, AiracPage))
         {
-            if (Same(words, "UPDATE")) return Bbs757EfbHook.NavDataUpdate;
-            if (Same(words, "REMOVE")) return Bbs757EfbHook.NavDataRemove;
+            if (Says("UPDATE")) return Bbs757EfbHook.NavDataUpdate;
+            if (Says("REMOVE")) return Bbs757EfbHook.NavDataRemove;
         }
         return Bbs757EfbHook.None;
     }

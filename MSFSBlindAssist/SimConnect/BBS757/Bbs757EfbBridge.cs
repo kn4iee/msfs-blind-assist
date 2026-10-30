@@ -143,6 +143,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private Bitmap? _lastReadFrame;
     private string? _lastFingerprint;
     private long _lastReadMs;
+    /// <summary>When the last read of the tablet was made (OCR run and taken), for <see cref="ForcesRead"/>.</summary>
+    private long _lastReadDoneMs = long.MinValue / 2;
     private bool _forceRead = true;
     /// <summary>The page the window shows, with the frame it was read from; null while a status stands in its place.</summary>
     private Bbs757EfbShownPage? _shown;
@@ -362,6 +364,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
                 _lastReadMs = now;
                 return false;
             }
+            // Read because a read was asked for (the pilot's, a press's, the window shown again), not because the picture moved.
+            bool asked = force || _forceRead;
             _forceRead = false;
 
             // Wait for two captures in a row that show the same thing (Bbs757EfbFrameCompare).
@@ -396,9 +400,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             _lastTopBar = TopBarSignature(takenPx);
             _lastReadFrame?.Dispose();
             _lastReadFrame = new Bitmap(taken.Frame);
-            _lastReadMs = Environment.TickCount64;
+            _lastReadMs = _lastReadDoneMs = Environment.TickCount64;
             made.Remove(taken);
-            bool pushed = TakeRead(taken.Read.Model, taken.Frame, unclear);
+            bool pushed = TakeRead(taken.Read.Model, taken.Frame, unclear, asked);
             Log.Debug("BBS757", $"EFB reader: {taken.Read.Model.PageName}, {taken.Read.Model.Items.Count} items, {taken.Read.OcrMs} ms, "
                 + $"still={still}, reads={reads}, unclear={unclear}, pushed={pushed}");
             return true;
@@ -455,16 +459,19 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// What the read says by itself is said (<see cref="Bbs757EfbReadNews"/>: a question that was not in the previous read, BlueBird's
     /// notifications that were not, unless the pilot's own tap was under four seconds ago), with the warning when its reads disagreed,
     /// as one alert; and it is pushed when it says something the window does not show yet, kept with its frame for the presses made
-    /// on it. A newly shown AIRAC page has the Navigraph sign-in read again. True when pushed. On the loop only; internal for the
+    /// on it. The AIRAC page has the Navigraph sign-in read again when it is newly shown and when it was read because a read was
+    /// asked for (<paramref name="asked"/>: the pilot's F5 or Read the tablet again, a press's own read, the window shown again), as
+    /// a still page never shows a sign-in made in the browser meanwhile. True when pushed. On the loop only; internal for the
     /// tests, which give it pages read from the captures.
     /// </summary>
-    internal bool TakeRead(Bbs757EfbScreenModel model, Bitmap frame, bool unclear)
+    internal bool TakeRead(Bbs757EfbScreenModel model, Bitmap frame, bool unclear, bool asked = false)
     {
         _lastRead = model;
         string? said = _news.After(model, Environment.TickCount64 - _lastOwnTapMs);
         if (unclear) said = said == null ? UnclearText : said + " " + UnclearText;
         string fp = Bbs757EfbPress.Fingerprint(model);
         bool fresh = fp != _lastFingerprint;
+        if (IsAiracPage(model.PageName) && (fresh || asked)) _signInStale = true;
         if (!fresh)
         {
             frame.Dispose();
@@ -474,7 +481,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         {
             _lastFingerprint = fp;
             _shown = _pushes.Show(model, frame);
-            if (IsAiracPage(model.PageName)) _signInStale = true;
         }
         if (said != null) SetAlert(said);
         Push();
@@ -583,6 +589,19 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         if (dropped > 0) Log.Debug("BBS757", $"EFB reader: {dropped.ToString(CultureInfo.InvariantCulture)} command(s) dropped as the window hid.");
     }
 
+    /// <summary>
+    /// How long after a read of the tablet a read the window asks for is served as the tick's (a read only when the picture
+    /// moved; <see cref="ForcesRead"/>). The window asks for a read 450 ms after every click (FbwEfbForm's timer), and the loop
+    /// comes to that ask only once the press is done, whose own read was made right before: the loop's turn between the two (the
+    /// sign-in check, the mirror's refresh every 10 s) is well under this. Forced, every press cost a second OCR read (0.3 to
+    /// 0.7 s, a settle before it) and held up the next press. A read asked for later (F5) is forced.
+    /// </summary>
+    internal const int FreshReadMs = 1000;
+
+    /// <summary>Whether a read the window asks for at <paramref name="nowMs"/> is forced: no read was made in the
+    /// <see cref="FreshReadMs"/> before it (the last at <paramref name="lastReadMs"/>). Pure; internal for the tests.</summary>
+    internal static bool ForcesRead(long nowMs, long lastReadMs) => nowMs - lastReadMs >= FreshReadMs;
+
     /// <summary>A command from the window, on the loop: a read asked for, or a press on an element of a push. On the loop only;
     /// internal for the tests.</summary>
     internal async Task HandleAsync(string command, Dictionary<string, string>? payload, CancellationToken ct)
@@ -591,7 +610,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         {
             case "get_display_elements":
                 if (!_popoutReady) { _popoutError = null; return; }   // the loop opens it again
-                await ReadIfChangedAsync(ct, force: true);
+                await ReadIfChangedAsync(ct, force: ForcesRead(Environment.TickCount64, _lastReadDoneMs));
                 return;
             case "click_display_element":
                 if (Pressed(payload) is { } click) await ClickAsync(click.Action, click.Page, ct);
