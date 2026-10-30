@@ -1027,6 +1027,9 @@ public static class A350MfdPage
         // Values not one per heading: each heading reads every token nearest it, its grey units too (WIND's "FL", the
         // altitude, then "none° / none KT", live 2026-10-28).
         DrawnCell Nearest(DrawnCell t) => hs.OrderBy(h => Math.Abs(h.X - t.X)).First();
+        // One value for all its headings, a slash between the parts: a stored waypoint's "08°22.7N/077°08.9E" under LAT and LONG.
+        if (hs.Count > 1 && vals.Count == 1 && vals[0].Text.Split('/') is var parts && parts.Length == hs.Count)
+            return (label.Count == 0 ? "" : $"{string.Join(" ", label.Select(l => l.Text))}: ") + string.Join(", ", hs.Select((h, i) => $"{h.Text} {parts[i].Trim()}")) + $", {colour}";
         string body = hs.Count == 1
             ? $"{hs[0].Text}: {string.Join(", ", vals.Select(Value))}"
             : string.Join(", ", vals.Count == hs.Count

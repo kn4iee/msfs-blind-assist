@@ -27,6 +27,11 @@ public class A350MfdPageTests
 
     // MFD DATA PRINTER (live 2026-10-30, the F-PLN's auto print on): a rectangle check box holds no text, its name is its row's and
     // the title above its column, its cross a cyan stroke; RAD NAV's two are never drawn, so they are no lines.
+    // Live 2026-10-30: a stored waypoint draws one value under LAT and LONG, and the nearest heading took it all: "LONG 08°22.7N/077°08.9E".
+    [Fact]
+    public void One_value_under_two_headings_names_both_parts() =>
+        Assert.Contains("LAT 08°22.7N, LONG 077°08.9E, green", A350MfdPage.Read(A350Fixtures.Capture("mfd_pilot_wpt_stored.json"), 0).Select(l => l.Spoken));
+
     [Fact]
     public void The_printer_pages_check_boxes_read_with_their_row_and_title()
     {
