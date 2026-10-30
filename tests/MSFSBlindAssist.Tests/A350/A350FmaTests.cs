@@ -66,7 +66,69 @@ public class A350FmaTests
         var a = new A350FmaAnnouncer();
         a.Observe(Pfd("FMA engagement: AP1, white")); a.Observe(Pfd("FMA engagement: AP1, white"));
         foreach (var other in new[] { true, false, true, false, true, false })
-            Assert.Empty(a.Observe(other ? Pfd("FMA engagement: AP1; A/THR, white") : Pfd("FMA engagement: AP1, white")));
+            Assert.Empty(a.Observe(other ? Pfd("FMA engagement: AP2, white") : Pfd("FMA engagement: AP1, white")));
+    }
+
+    // Live 2026-10-30, a go-around at 1000 ft: LVR CLB flashes under MAN TOGA, which stays, so the column is never blank. The reads as
+    // they came. It said LVR CLB and then MAN TOGA, as though the lever call had gone, for as long as it flashed.
+    [Fact]
+    public void A_part_of_a_column_that_flashes_is_said_once()
+    {
+        const string man = "FMA autothrust: MAN; TOGA, white", lever = "FMA autothrust: MAN; TOGA; LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(man)); a.Observe(Pfd(man));
+        var said = new List<(string, string)>();
+        foreach (var flash in new[] { true, false, false, true, true, false, false, true, false, true, true, false, false, false, true })
+            said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd(man)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+    }
+
+    [Fact]
+    public void A_flash_seen_one_read_at_a_time_is_said_too()
+    {
+        const string man = "FMA autothrust: MAN; TOGA, white", lever = "FMA autothrust: MAN; TOGA; LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(man)); a.Observe(Pfd(man));
+        var said = new List<(string, string)>();
+        foreach (var flash in new[] { true, false, true, false, true, false })
+            said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd(man)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+    }
+
+    // The levers come back to the detent: the next mode is news at once, whatever was flashing.
+    [Fact]
+    public void The_next_mode_after_a_flash_speaks_at_once()
+    {
+        const string man = "FMA autothrust: MAN; TOGA, white", lever = "FMA autothrust: MAN; TOGA; LVR CLB, white", speed = "FMA autothrust: SPEED, green";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(man)); a.Observe(Pfd(man));
+        a.Observe(Pfd(lever)); a.Observe(Pfd(lever));
+        a.Observe(Pfd(man));
+        Assert.Empty(a.Observe(Pfd(speed)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), speed) }, a.Observe(Pfd(speed)));
+    }
+
+    // A part really gone is said, as a column clearing is, once it has stayed gone past any flash.
+    [Fact]
+    public void A_part_gone_for_good_is_said_past_any_flash()
+    {
+        const string both = "FMA vertical: SRS, green; ALT, cyan", one = "FMA vertical: SRS, green";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(both)); a.Observe(Pfd(both));
+        for (int read = 1; read < A350FmaAnnouncer.ClearAfterReads; read++)
+            Assert.Empty(a.Observe(Pfd(one)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("vertical"), one) }, a.Observe(Pfd(one)));
+    }
+
+    // A colour change is a change: the same mode in another colour loses nothing.
+    [Fact]
+    public void The_same_mode_in_another_colour_speaks_at_once()
+    {
+        const string armed = "FMA lateral: LOC, cyan", on = "FMA lateral: LOC, green";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(armed)); a.Observe(Pfd(armed));
+        a.Observe(Pfd(on));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("lateral"), on) }, a.Observe(Pfd(on)));
     }
 
     [Fact]
