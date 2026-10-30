@@ -192,6 +192,8 @@ Ctrl+Shift+B (`A350NdWindow`, the A380's airport map key) reads a side's ND thro
 
 **The range map** (live 2026-10-30, FL300). PLAN centres on the waypoint under the F-PLN's top line, so the F-PLN's scroll (PageUp and PageDown in the MFD window) steps it; the KCCU's UP and DOWN do not. The aircraft symbol's menu holds DIR TO, which opens a panel on the map (DIRECT, DIRECT WITH ABEAM, CRS IN, CRS OUT, the point `LL01` where the menu item was, and ERASE and INSERT * TMPY, `DualTextButton`s); a further click elsewhere moves nothing, so it amounts to the MFD's DIR TO with a lat/long point. A click on an empty part of the map opens nothing here, on a waypoint FROM P.POS DIR TO *, INSERT NEXT WPT and DELETE *. POSITION/TIME's time markers (UTC or remaining time, a text, an aural alert) draw their time in brackets on the path, `Time marker 20:45` here, and again on the vertical display; at the time the fields clear and only the aural says so: nothing is drawn on the PFD or the E/WD.
 
+**Restoring an OIS save in the air** (live 2026-10-30, FL300): the load pauses the sim for a few seconds, the displays run their SAFETY TEST, and the aircraft comes back flying with the autopilot and A/THR off, the engines near idle (N1 20) and `THR LK, amber` on the FMA, already descending and slowing. Engage AP 1 and A/THR at once, then pull ALT and push HDG: the flight plan and phase are kept. The sim's memory drops only about 3 GB.
+
 **The ANF's data is in the copy too** (`OANSAirportData`: taxiways, stands, thresholds, exit lines, runway-end info), not read yet: names on the screen are what a sighted pilot has.
 
 ## The RMPs in MSFSBA (live 2026-10-28)

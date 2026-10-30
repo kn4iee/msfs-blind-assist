@@ -44,6 +44,7 @@ public sealed class A350MfdWindow : Form
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
     private readonly A350MfdWindowMessages _messages;
     private readonly Action<string?>? _closed;
+    private readonly Action? _openMailbox;
     private readonly A350ShownCapture _shown = new();
     private System.Windows.Forms.Timer? _timer;
     private bool _busy;
@@ -54,8 +55,9 @@ public sealed class A350MfdWindow : Form
     /// (<see cref="A350PfdMonitor.MfdWindowOpening"/>): a message it does not hold is said on the window's first read.</param>
     /// <param name="closed">Called as the window closes with its last read of the captain's message line, for the
     /// background (<see cref="A350PfdMonitor.MfdWindowClosed"/>).</param>
+    /// <param name="openMailbox">Opens the mailbox window: the KCCU's MAILBOX key moves the cursor to a screen this window does not read.</param>
     public A350MfdWindow(Func<A350DrawCapture?> latest, Func<Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
-        A350MfdInput input, ScreenReaderAnnouncer announcer, string? backgroundAgreed = null, Action<string?>? closed = null)
+        A350MfdInput input, ScreenReaderAnnouncer announcer, string? backgroundAgreed = null, Action<string?>? closed = null, Action? openMailbox = null)
     {
         _previousWindow = GetForegroundWindow();
         _latest = latest;
@@ -65,6 +67,7 @@ public sealed class A350MfdWindow : Form
         _announcer = announcer;
         _messages = new A350MfdWindowMessages(backgroundAgreed);
         _closed = closed;
+        _openMailbox = openMailbox;
 
         Text = "A350 MFD";
         Size = new Size(820, 620);
@@ -252,6 +255,7 @@ public sealed class A350MfdWindow : Form
         if ((keyData & Keys.Alt) == Keys.Alt && PageKeys.TryGetValue(key, out var page))
         {
             PressKey(page);
+            if (page == "MAILBOX") _openMailbox?.Invoke();
             return true;
         }
         if (ActiveControl == _list)

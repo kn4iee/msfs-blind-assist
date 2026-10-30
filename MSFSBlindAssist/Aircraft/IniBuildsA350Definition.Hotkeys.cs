@@ -271,7 +271,8 @@ public partial class IniBuildsA350Definition
                     {
                         if (Pfd is { } closing) closing.MfdWindowClosed(captainRead, () => _mfdWindowOpen = false);
                         else _mfdWindowOpen = false;
-                    });
+                    },
+                    () => ShowMailboxWindow(simConnect, announcer));
             },
             w =>
             {
