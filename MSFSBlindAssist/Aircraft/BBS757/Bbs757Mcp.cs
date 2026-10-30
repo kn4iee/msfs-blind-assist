@@ -423,14 +423,62 @@ public static class Bbs757Mcp
     // Readouts
     // =================================================================================
 
+    /// <summary>The MCP button lights Shift+H names after the heading, in panel order (labels of <see cref="Bbs757McpLights"/>).</summary>
+    public static IReadOnlyList<string> HeadingModeLights { get; } = new[] { "LNAV", "HDG HOLD", "BCRS 1", "LOC", "APP" };
+
+    /// <summary>The lights Shift+S names after the speed.</summary>
+    public static IReadOnlyList<string> SpeedModeLights { get; } = new[] { "THR", "SPD", "VNAV", "FLCH" };
+
+    /// <summary>The lights Shift+A names after the altitude.</summary>
+    public static IReadOnlyList<string> AltitudeModeLights { get; } = new[] { "VNAV", "FLCH", "V/S", "ALT HOLD" };
+
+    /// <summary>The light Shift+V names after the vertical speed.</summary>
+    public static IReadOnlyList<string> VsModeLights { get; } = new[] { "V/S" };
+
+    /// <summary>
+    /// "Heading 090, LNAV": the phrase, then each lit button of <paramref name="lit"/> in order; the phrase
+    /// alone when none is lit. These are the MCP's button lights, not the flight mode annunciator (no
+    /// readable source for it, plan 13), so an armed mode whose button is lit is named too.
+    /// </summary>
+    public static string WithModes(string phrase, IReadOnlyList<string> lit)
+        => lit.Count == 0 ? phrase : $"{phrase}, {string.Join(", ", lit)}";
+
+    /// <summary>
+    /// Which of <paramref name="labels"/>' buttons are lit, in that order. The lights are batched, so each
+    /// comes from the cache when there is one, else a fresh read; an unread light counts as not lit.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> LitModesAsync(McpIo io, IReadOnlyList<string> labels, CancellationToken ct)
+    {
+        var lit = new List<string>();
+        foreach (string label in labels)
+        {
+            var light = Bbs757McpLights.All.First(l => l.Label == label);
+            double? value = io.Cached?.Invoke(light.Key) ?? await io.Read(light.Key, ct);
+            if (value is double v && double.IsFinite(v) && v > 0.5) lit.Add(label);
+        }
+        return lit;
+    }
+
     public static async Task<string> ReadHeadingAsync(McpIo io, CancellationToken ct)
-        => HeadingPhrase(await io.Read(HeadingVar, ct));
+    {
+        double? heading = await io.Read(HeadingVar, ct);
+        if (!IsReadable(heading)) return HeadingPhrase(null);
+        return WithModes(HeadingPhrase(heading), await LitModesAsync(io, HeadingModeLights, ct));
+    }
 
     public static async Task<string> ReadAltitudeAsync(McpIo io, CancellationToken ct)
-        => AltitudePhrase(await io.Read(AltitudeVar, ct));
+    {
+        double? altitude = await io.Read(AltitudeVar, ct);
+        if (!IsReadable(altitude)) return AltitudePhrase(null);
+        return WithModes(AltitudePhrase(altitude), await LitModesAsync(io, AltitudeModeLights, ct));
+    }
 
     public static async Task<string> ReadVerticalSpeedAsync(McpIo io, CancellationToken ct)
-        => VsPhrase(await io.Read(VsVar, ct));
+    {
+        double? vs = await io.Read(VsVar, ct);
+        if (!VsReadable(vs)) return VsPhrase(null);
+        return WithModes(VsPhrase(vs), await LitModesAsync(io, VsModeLights, ct));
+    }
 
     /// <summary>
     /// Shift+S: what the speed window shows. Read in order, stopping at the first that decides: the
@@ -439,29 +487,38 @@ public static class Bbs757Mcp
     /// flying 262, measured), and in Mach it is the Mach's IAS equivalent. The blank flag is batched,
     /// so it comes from the cache when there is one: a fresh read of it waited up to a second for the
     /// next batch, the lag Shift+S had over Shift+H and Shift+A (2026-10-27). The rest are read fresh.
+    /// The lit speed mode buttons (<see cref="SpeedModeLights"/>) follow the value.
     /// </summary>
     public static async Task<string> ReadSpeedAsync(McpIo io, CancellationToken ct)
     {
         double? blanked = io.Cached?.Invoke(IasBlankedVar) ?? await io.Read(IasBlankedVar, ct);
-        if (blanked is >= 0.5) return SpeedReadout(blanked, null, null, null);
+        if (blanked is >= 0.5) return SpeedReadout(blanked, null, null, null, await LitModesAsync(io, SpeedModeLights, ct));
         double? machFlag = await io.Read(MachModeVar, ct);
         if (machFlag is >= 0.5)
             return SpeedReadout(blanked, machFlag, null,
-                MachFromDrums(await io.Read(MachTenthsDrumVar, ct), await io.Read(MachHundredthsDrumVar, ct)));
-        return SpeedReadout(blanked, machFlag, await io.Read(SpeedVar, ct), null);
+                MachFromDrums(await io.Read(MachTenthsDrumVar, ct), await io.Read(MachHundredthsDrumVar, ct)),
+                await LitModesAsync(io, SpeedModeLights, ct));
+        double? knots = await io.Read(SpeedVar, ct);
+        if (!SpeedReadable(knots)) return SpeedPhrase(null);
+        return SpeedReadout(blanked, machFlag, knots, null, await LitModesAsync(io, SpeedModeLights, ct));
     }
 
     /// <summary>
     /// The speed window in words: blank ("MCP speed window blank. Speed Intervene opens it."), in Mach
     /// ("MCP Mach 0.78", or <see cref="MachModeReadNote"/> while the Mach is unread), else the IAS target
     /// ("Speed 250"). An unread flag counts as not set, so a window nothing is known about reads as before.
+    /// The lit mode buttons in <paramref name="modes"/> follow the value ("Speed 250, SPD"; blank: "MCP
+    /// speed window blank, VNAV. Speed Intervene opens it."); never after a value that was not read.
     /// </summary>
-    public static string SpeedReadout(double? blanked, double? machFlag, double? knots, double? mach)
+    public static string SpeedReadout(double? blanked, double? machFlag, double? knots, double? mach,
+        IReadOnlyList<string>? modes = null)
     {
-        if (blanked is >= 0.5) return BlankWindowNote;
+        modes ??= Array.Empty<string>();
+        if (blanked is >= 0.5)
+            return modes.Count == 0 ? BlankWindowNote : $"{WithModes("MCP speed window blank", modes)}. Speed Intervene opens it.";
         if (machFlag is >= 0.5)
-            return mach is double m ? $"MCP Mach {m.ToString("0.00", CultureInfo.InvariantCulture)}" : MachModeReadNote;
-        return SpeedPhrase(knots);
+            return mach is double m ? WithModes($"MCP Mach {m.ToString("0.00", CultureInfo.InvariantCulture)}", modes) : MachModeReadNote;
+        return SpeedReadable(knots) ? WithModes(SpeedPhrase(knots), modes) : SpeedPhrase(null);
     }
 
     /// <summary>

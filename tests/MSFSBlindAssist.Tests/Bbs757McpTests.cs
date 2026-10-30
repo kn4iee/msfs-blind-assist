@@ -313,6 +313,14 @@ public class Bbs757McpTests
 
         public double? Speed = 200, Heading = 0, Altitude = 10000, Vs = 0, Mach = 0;
         public double? Blanked = 0, Drum100, Drum10;   // the speed window's blank flag; its tenths and hundredths wheels
+        public readonly Dictionary<string, double?> Lights = new();   // MCP button lights by key; a missing one reads null
+
+        /// <summary>Lights the MCP buttons with these labels.</summary>
+        public FakeMcp Lit(params string[] labels)
+        {
+            foreach (string label in labels) Lights[Bbs757McpLights.All.First(l => l.Label == label).Key] = 1;
+            return this;
+        }
         public bool Tiered = true;
         public bool IgnoresSpeedEvents;
         public int EventsCountedPerBurst = int.MaxValue;
@@ -413,7 +421,7 @@ public class Bbs757McpTests
                     Bbs757Mcp.IasBlankedVar => Blanked,
                     Bbs757Mcp.MachTenthsDrumVar => Drum100,
                     Bbs757Mcp.MachHundredthsDrumVar => Drum10,
-                    _ => (double?)null,
+                    _ => Lights.TryGetValue(key, out double? light) ? light : (double?)null,
                 });
             },
             Write = rpn =>
@@ -878,6 +886,80 @@ public class Bbs757McpTests
         Assert.Equal("Speed 250", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
         Assert.Equal("Vertical speed minus 1500", await Bbs757Mcp.ReadVerticalSpeedAsync(mcp.Io, default));
         Assert.Empty(mcp.Writes);
+    }
+
+    // ---- The lit mode buttons after a readout (Declan's request, 2026-10-30) ----------------
+
+    [Fact]
+    public async Task Readouts_name_the_lit_mode_buttons_after_the_value()
+    {
+        var mcp = new FakeMcp { Heading = 90, Altitude = 12000, Speed = 250, Vs = -1500 }
+            .Lit("LNAV", "SPD", "V/S", "CMD L");
+
+        Assert.Equal("Heading 090, LNAV", await Bbs757Mcp.ReadHeadingAsync(mcp.Io, default));
+        Assert.Equal("Altitude 12000, V/S", await Bbs757Mcp.ReadAltitudeAsync(mcp.Io, default));
+        Assert.Equal("Speed 250, SPD", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
+        Assert.Equal("Vertical speed minus 1500, V/S", await Bbs757Mcp.ReadVerticalSpeedAsync(mcp.Io, default));
+    }
+
+    [Fact]
+    public async Task Several_lit_buttons_are_named_in_panel_order()
+    {
+        var mcp = new FakeMcp { Heading = 270, Altitude = 3000 }.Lit("APP", "LOC", "ALT HOLD");
+
+        Assert.Equal("Heading 270, LOC, APP", await Bbs757Mcp.ReadHeadingAsync(mcp.Io, default));
+        Assert.Equal("Altitude 3000, ALT HOLD", await Bbs757Mcp.ReadAltitudeAsync(mcp.Io, default));
+    }
+
+    [Fact]
+    public async Task The_blank_and_mach_windows_name_their_lit_buttons_too()
+    {
+        var blank = new FakeMcp { Blanked = 1, Speed = 250 }.Lit("VNAV", "THR");
+        var mach = new FakeMcp { Mach = 1, Drum100 = 70, Drum10 = 90 }.Lit("FLCH");
+
+        Assert.Equal("MCP speed window blank, THR, VNAV. Speed Intervene opens it.", await Bbs757Mcp.ReadSpeedAsync(blank.Io, default));
+        Assert.Equal("MCP Mach 0.78, FLCH", await Bbs757Mcp.ReadSpeedAsync(mach.Io, default));
+        InCulture("de-DE", () => Assert.Equal("MCP Mach 0.78, FLCH",
+            Bbs757Mcp.SpeedReadout(0, 1, null, 0.78, new[] { "FLCH" })));
+    }
+
+    [Fact]
+    public async Task An_unread_value_names_no_mode_and_an_unread_light_is_not_lit()
+    {
+        var mcp = new FakeMcp { Heading = null, Speed = null, Altitude = 5000 }.Lit("LNAV", "SPD");
+        mcp.Lights[Bbs757McpLights.All.First(l => l.Label == "ALT HOLD").Key] = double.NaN;
+
+        Assert.Equal("Heading unavailable", await Bbs757Mcp.ReadHeadingAsync(mcp.Io, default));
+        Assert.Equal("Speed unavailable", await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
+        Assert.Equal("Altitude 5000", await Bbs757Mcp.ReadAltitudeAsync(mcp.Io, default));
+    }
+
+    [Fact]
+    public async Task The_lights_come_from_the_cache_when_there_is_one()
+    {
+        var mcp = new FakeMcp { Heading = 90 };   // nothing lit when read fresh
+        var reads = new List<string>();
+        var inner = mcp.Io;
+        string lnav = Bbs757McpLights.All.First(l => l.Label == "LNAV").Key;
+        var io = new McpIo
+        {
+            Read = (key, ct) => { reads.Add(key); return inner.Read(key, ct); },
+            Write = inner.Write,
+            Delay = inner.Delay,
+            Cached = key => key == lnav ? 1 : 0,
+        };
+
+        Assert.Equal("Heading 090, LNAV", await Bbs757Mcp.ReadHeadingAsync(io, default));
+        Assert.Equal(new[] { Bbs757Mcp.HeadingVar }, reads);
+    }
+
+    [Fact]
+    public void Every_mode_light_named_is_an_mcp_light()
+    {
+        var labels = Bbs757McpLights.All.Select(l => l.Label).ToHashSet();
+        foreach (string label in Bbs757Mcp.HeadingModeLights.Concat(Bbs757Mcp.SpeedModeLights)
+                     .Concat(Bbs757Mcp.AltitudeModeLights).Concat(Bbs757Mcp.VsModeLights))
+            Assert.Contains(label, labels);
     }
 
     [Fact]
