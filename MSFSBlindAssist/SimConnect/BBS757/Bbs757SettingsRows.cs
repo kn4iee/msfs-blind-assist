@@ -135,12 +135,27 @@ public static class Bbs757SettingsRows
 
     /// <summary>
     /// What the 757 EFB settings window shows for the EFB colors theme, in a read-only box named by the row's label, as it never
-    /// offers the theme as a control (B757-21; <see cref="Bbs757EfbSettings.ThemeNoteValue"/>): the stored choice's word and the
+    /// offers the theme as a choice (B757-21; <see cref="Bbs757EfbSettings.ThemeNoteValue"/>): the stored choice's word and the
     /// note when the files hold one ("Dark blue. Non-default color schemes are not supported."), else the note alone (no
     /// settings file, no key, or a value no word stores).
     /// </summary>
     public static string ThemeNoteText(Bbs757SettingRow row) =>
         Bbs757EfbSettings.ThemeNoteValue(row.State == Bbs757RowState.Value ? row.Text : null);
+
+    /// <summary>The words of the 757 EFB settings window's one way back to the default EFB colors theme (<see cref="OffersDarkBlue"/>).</summary>
+    public const string SetDarkBlueText = "Set to Dark blue";
+
+    /// <summary>
+    /// Whether the 757 EFB settings window offers its Set to Dark blue button beside the EFB colors theme's note (B757-21, the
+    /// owner's ruling of 2026-10-30): for the theme's row while BlueBird's file holds another theme than Dark blue, the one the
+    /// tablet reader reads (Light blue, Light grey, Dark grey, or a value no theme word stores). Never while the file reads Dark
+    /// blue (nothing to set back) or cannot be read (no settings file, no key, another type: nothing known to set back from).
+    /// </summary>
+    public static bool OffersDarkBlue(Bbs757SettingRow row) =>
+        row.Setting.Path == Bbs757EfbSettings.ThemePath
+        && (row.State == Bbs757RowState.Other
+            || (row.State == Bbs757RowState.Value && row.ChoiceIndex >= 0 && row.ChoiceIndex < row.Setting.Choices.Count
+                && row.Setting.Choices[row.ChoiceIndex].Stored != Bbs757EfbSettings.DarkBlueTheme));
 
     /// <summary>
     /// The rows of <paramref name="section"/>, one for each of <see cref="Bbs757EfbSettings.InSection"/>'s settings, in

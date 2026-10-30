@@ -809,4 +809,68 @@ public class Bbs757SettingsRowsTests
         Assert.Equal("Non-default color schemes are not supported.", Note(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme_x\":0")));
         Assert.Equal("Non-default color schemes are not supported.", Note(null));
     }
+
+    // ---- the way back to Dark blue (B757-21, the owner's ruling of 2026-10-30) ----------------------------------
+
+    private static Bbs757SettingRow ThemeRow(string? settings) =>
+        RowFor(RowsOf(Bbs757SettingSection.General, settings), Bbs757EfbSettings.ThemePath);
+
+    [Theory]
+    [InlineData("\"ui_theme\":1", "Light blue")]
+    [InlineData("\"ui_theme\":3", "Light grey")]
+    [InlineData("\"ui_theme\":2", "Dark grey")]
+    public void The_way_back_to_dark_blue_is_offered_while_the_file_holds_another_theme(string stored, string word)
+    {
+        // A pilot whose file already holds another theme (one set on the tablet by a sighted helper, say) has no other way back: the
+        // reader reads only Dark blue, and neither window offers the theme as a choice.
+        var row = ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", stored));
+
+        Assert.Equal((Bbs757RowState.Value, word), (row.State, row.Text));
+        Assert.True(Bbs757SettingsRows.OffersDarkBlue(row));
+    }
+
+    [Fact]
+    public void The_way_back_is_offered_for_a_stored_theme_no_word_names_too()
+    {
+        // Not Dark blue either (a theme this BlueBird version does not know): Dark blue is a value BlueBird stores.
+        var row = ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":7"));
+
+        Assert.Equal(Bbs757RowState.Other, row.State);
+        Assert.True(Bbs757SettingsRows.OffersDarkBlue(row));
+    }
+
+    [Fact]
+    public void The_way_back_is_not_offered_for_dark_blue_or_a_theme_that_cannot_be_read()
+    {
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(ThemeRow(SettingsJson)));                                                // 0
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme_x\":0"))));    // no key
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":\"1\""))));  // text
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":1.5"))));    // no whole number
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(ThemeRow(null)));                                                        // no settings file
+        Assert.Equal(Bbs757RowState.Unreadable, ThemeRow(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":1.5")).State);
+    }
+
+    [Fact]
+    public void No_other_row_offers_the_way_back()
+    {
+        // Every other setting, from files whose theme is Light blue: the button belongs to the theme's row alone.
+        string lightBlue = Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":1");
+        foreach (Bbs757SettingSection section in Enum.GetValues<Bbs757SettingSection>())
+        {
+            foreach (var row in RowsOf(section, lightBlue, LiveryJson).Where(r => r.Setting.Path != Bbs757EfbSettings.ThemePath))
+                Assert.False(Bbs757SettingsRows.OffersDarkBlue(row), row.Setting.Path);
+        }
+    }
+
+    [Fact]
+    public void The_way_back_writes_the_catalogs_dark_blue_and_says_so()
+    {
+        // The button writes the theme the catalog lists first, Dark blue (stored 0), and names it with that word.
+        var theme = Setting(Bbs757EfbSettings.ThemePath);
+
+        Assert.Equal(("Dark blue", Bbs757Value.Of(0L)), (theme.Choices[0].Word, theme.Choices[0].Stored));
+        Assert.Equal(theme.Choices[0].Stored, Bbs757EfbSettings.DarkBlueTheme);
+        Assert.Equal("Set to Dark blue", Bbs757SettingsRows.SetDarkBlueText);
+        Assert.EndsWith(theme.Choices[0].Word, Bbs757SettingsRows.SetDarkBlueText, StringComparison.Ordinal);
+    }
 }

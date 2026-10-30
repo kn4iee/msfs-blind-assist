@@ -15,28 +15,33 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the Section list (the tablet's
 // pages, and ACARS) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice
 // list for the tablet's words, a label and a slider for the random failure frequency, a label and a box for a number or
-// text. The EFB colors theme is the one setting offered as no control: a label and a read-only box with its stored choice
-// and the note that non-default color schemes are not supported (B757-21, the owner's ruling of 2026-10-30), so the window
-// never writes ui_theme. A registration section starts with the registrations its rows apply to. Picking a section
-// rebuilds only the rows' panel; everything else (a save, the simulator closing, the window opening) updates the rows in
-// place, so no control is recreated and focus never moves.
+// text. The EFB colors theme is the one setting offered as no choice: a label and a read-only box with its stored choice
+// and the note that non-default color schemes are not supported (B757-21, the owner's rulings of 2026-10-30). Beside the
+// box, only while BlueBird's file holds another theme, a Set to Dark blue button writes Dark blue (ui_theme 0) and nothing
+// else: the window's one write of ui_theme, and its one button. A registration section starts with the registrations its
+// rows apply to. Picking a section rebuilds only the rows' panel; everything else (a save, the simulator closing, the window
+// opening) updates the rows in place, so no control is recreated and focus never moves, but from the Set to Dark blue button
+// when it goes: to the theme's note.
 //
 // The settings are writable only while Bbs757SimGuard.SettingsWritable holds, checked when the window opens, on every 1 s
 // guard tick while the window shows, and by every write. While it does not, every input stays focusable and readable
 // but does not change (a check box does not toggle, a choice list and the slider swallow what would move them, a box is
-// read-only) and an attempt says why, at once (ReadOnlyAttemptText). So does a row that waits for another (the
-// announcement categories) or that cannot change for its own state (unreadable, automatic). A box is saved by Enter; one
-// left with a change not saved shows the stored value again. A box that can be cleared says in its description what
-// empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's: every key checked first, the writes in
-// order through Bbs757SettingsFile (which logs each save and refusal), the first not done everywhere stopping the rest,
-// and the wording; this window reads the files for it, says the outcome and reads the files again.
+// read-only, the Set to Dark blue button writes nothing) and an attempt says why, at once (ReadOnlyAttemptText). So does
+// a row that waits for another (the announcement categories) or that cannot change for its own state (unreadable,
+// automatic). A box is saved by Enter; one left with a change not saved shows the stored value again. A box that can be
+// cleared says in its description what empty means (Bbs757EfbSettings.EmptyHint). A save is Bbs757SettingsSave.Run's:
+// every key checked first, the writes in order through Bbs757SettingsFile (which logs each save and refusal), the first
+// not done everywhere stopping the rest, and the wording; this window reads the files for it, says the outcome and reads
+// the files again.
 //
 // Speech (CORE-7): a check box, a choice list or the slider that saved says nothing, as the reader has said its new
-// state; a number or text box says "<label> saved", and "<label> not saved" when left with a change not saved; every
-// failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a save switched off that showed on is named
-// ("<label> turned off"); the simulator starting or closing while the window shows, or the app no longer able to tell
-// whether it runs, is said once (SimChangeText). The pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key
-// are shown in plain text and never logged: no value, write or row goes into a log line or an exception message here.
+// state; so does the Set to Dark blue button, which goes once its save took, focus moving to the theme's note, which the
+// reader then reads as Dark blue; a number or text box says "<label> saved", and "<label> not saved" when left with a
+// change not saved; every failure speaks, at once ("Couldn't save <label>: <reason>"); each callout a save switched off
+// that showed on is named ("<label> turned off"); the simulator starting or closing while the window shows, or the app no
+// longer able to tell whether it runs, is said once (SimChangeText). The pilot's SimBrief ID, Hoppie logon code and
+// SayIntentions ACARS key are shown in plain text and never logged: no value, write or row goes into a log line or an
+// exception message here.
 public partial class BBS757EfbForm
 {
     // The rows inside the section panel: the label column, the input column, one row's height and the rows' width.
@@ -44,6 +49,14 @@ public partial class BBS757EfbForm
     private const int RowInputLeft = 205;
     private const int RowStep = 30;
     private const int RowWidth = 412;
+
+    // An input's width, from the input column to the rows' right edge.
+    private const int RowInputWidth = RowWidth - (RowInputLeft - RowLeft);
+
+    // The EFB colors theme's Set to Dark blue button at the right of its row, while it shows (B757-21): its width, and the gap the
+    // note leaves before it.
+    private const int DarkBlueWidth = 112;
+    private const int DarkBlueGap = 6;
 
     // A switch's choices are Off, then On (Bbs757SettingKind.OnOff; On's index is Bbs757SettingsRows.OnChoiceIndex).
     private const int OffChoice = 0;
@@ -95,7 +108,7 @@ public partial class BBS757EfbForm
     /// <summary>
     /// Builds the window's content on the window itself, top to bottom in tab order: the status box, the Section list and the
     /// panel of the chosen section's rows (General first). Nothing comes before them and no control follows: there are no
-    /// tabs, no buttons.
+    /// tabs, and no buttons but General's Set to Dark blue, in the EFB colors theme's row (B757-21).
     /// </summary>
     private void BuildSettingsContent()
     {
@@ -215,9 +228,9 @@ public partial class BBS757EfbForm
 
     // One setting's row: a check box for a switch; a label and a choice list for the tablet's words; a label and a slider
     // for a number the tablet sets along a slider; a label and a box for a number or text; for the EFB colors theme, which
-    // is never a control (B757-21), a label and its note in a read-only box. Each input carries the tablet's label: a check
-    // box as its text, the others as their AccessibleName after a label (never a mnemonic: "Boarding & load rate" keeps
-    // its "&").
+    // is never a choice (B757-21), a label, its note in a read-only box and, beside it, the Set to Dark blue button, shown only
+    // while the files hold another theme. Each input carries the tablet's label: a check box as its text, the others as their
+    // AccessibleName after a label (never a mnemonic: "Boarding & load rate" keeps its "&").
     private SettingControl AddRow(Bbs757Setting setting, int y, ref int tab)
     {
         if (setting.Kind == Bbs757SettingKind.OnOff)
@@ -250,18 +263,32 @@ public partial class BBS757EfbForm
         {
             // The EFB colors theme: the stored choice and the note, in a read-only box (VAT-13) with no handler, which no lock
             // opens (ApplyLock passes it by) and no key saves. The tablet reader reads only the default theme, so a light one
-            // would leave the pilot without the tablet's controls (B757-21): the window never writes ui_theme.
+            // would leave the pilot without the tablet's controls (B757-21): the window writes ui_theme only through the button
+            // beside the note, and only as Dark blue. The button carries its own words, which the reader says (no name over them);
+            // ShowDarkBlue shows it while the files hold another theme.
             var note = new TextBox
             {
                 Location = new Point(RowInputLeft, y),
-                Size = new Size(RowWidth - (RowInputLeft - RowLeft), 25),
+                Size = new Size(RowInputWidth, 25),
                 ReadOnly = true,
                 TabStop = true,
                 AccessibleName = setting.Label,
                 TabIndex = tab++,
             };
             _sectionPanel.Controls.Add(note);
-            return new SettingControl(setting, note) { Note = note };
+            var darkBlue = new Button
+            {
+                Text = Bbs757SettingsRows.SetDarkBlueText,
+                UseMnemonic = false,
+                Location = new Point(RowLeft + RowWidth - DarkBlueWidth, y - 1),
+                Size = new Size(DarkBlueWidth, 27),
+                Visible = false,
+                TabIndex = tab++,
+            };
+            var themeRow = new SettingControl(setting, note) { Note = note, DarkBlue = darkBlue };
+            darkBlue.Click += (_, _) => OnSetDarkBlueClicked(themeRow);
+            _sectionPanel.Controls.Add(darkBlue);
+            return themeRow;
         }
 
         if (setting.Kind == Bbs757SettingKind.Choice)
@@ -434,9 +461,11 @@ public partial class BBS757EfbForm
         }
         else if (control.Note is { } note)
         {
-            // The EFB colors theme's note, with the stored choice when the files read one (B757-21).
+            // The EFB colors theme's note, with the stored choice when the files read one, and its way back to Dark blue
+            // (B757-21). The note's words come first, so a focus that moves to it reads them.
             string text = Bbs757SettingsRows.ThemeNoteText(row);
             if (note.Text != text) note.Text = text;
+            if (control.DarkBlue is { } darkBlue) ShowDarkBlue(note, darkBlue, Bbs757SettingsRows.OffersDarkBlue(row));
         }
         if (row.Inactive && EnabledBy(row.Setting) is { } enabledBy)
             description = JoinDescription(description, Bbs757SettingsRows.InactiveText(enabledBy));
@@ -445,6 +474,19 @@ public partial class BBS757EfbForm
             description = JoinDescription(description, hint);
         if (control.Input.AccessibleDescription != description) control.Input.AccessibleDescription = description;
         ApplyLock(control);
+    }
+
+    // The EFB colors theme's Set to Dark blue (B757-21): shown beside the note only while the files hold another theme
+    // (Bbs757SettingsRows.OffersDarkBlue), the note narrowed to make room for it. When it goes while it is the window's active
+    // control (its own press saved Dark blue), the note becomes the active control first, so the reader reads the note, now Dark
+    // blue, and focus does not jump on to the next control, where WinForms moves it from a focused control that is hidden. The
+    // note keeps that place in a window in the background too, and takes the focus when the window is active again.
+    private void ShowDarkBlue(TextBox note, Button button, bool offered)
+    {
+        if (!offered && ActiveControl == button) ActiveControl = note;
+        button.Visible = offered;
+        int width = offered ? RowInputWidth - DarkBlueWidth - DarkBlueGap : RowInputWidth;
+        if (note.Width != width) note.Width = width;
     }
 
     // Two descriptions said as one: ". " between them, a space alone after one that ends with its own full stop.
@@ -595,6 +637,23 @@ public partial class BBS757EfbForm
         }
         int choice = check.CheckState == CheckState.Checked ? Bbs757SettingsRows.OnChoiceIndex : OffChoice;
         SaveSetting(control.Setting, control.Setting.Choices[choice].Stored);
+    }
+
+    // The EFB colors theme's Set to Dark blue pressed (Space or Enter, as on any button, or a click): Dark blue (ui_theme 0)
+    // saved through the window's own save, the one write the window makes of the theme (B757-21; B757-17 governs it as every
+    // save). Locked as the window's other inputs are: while the settings are read-only a press writes nothing and says why, at
+    // once, as a check box that does not toggle does. Its outcome is worded as a choice list's (Bbs757SettingsSave.Run): a
+    // failure said at once, a save nothing more (CORE-7), as the button goes and the focus moves to the note, which the reader
+    // reads as Dark blue (ShowDarkBlue). A press on a row that no longer offers it (a hidden button) does nothing.
+    private void OnSetDarkBlueClicked(SettingControl control)
+    {
+        if (_disposed || control.Row is not { } row || !Bbs757SettingsRows.OffersDarkBlue(row)) return;
+        if (!row.CanEdit(_settingsWritable))
+        {
+            SayCannotChange(control);
+            return;
+        }
+        SaveSetting(control.Setting, Bbs757EfbSettings.DarkBlueTheme);
     }
 
     // A choice committed: an arrow key on the closed list, or an item picked from the open one.
@@ -769,6 +828,9 @@ public partial class BBS757EfbForm
 
         // The EFB colors theme's read-only note (B757-21): no Box, so neither a lock nor Enter ever reaches it.
         public TextBox? Note { get; init; }
+
+        // The EFB colors theme's Set to Dark blue, beside its note (B757-21): the window's one button, its lock checked at the press.
+        public Button? DarkBlue { get; init; }
 
         // What the files held at the last read; null before the first.
         public Bbs757SettingRow? Row { get; set; }

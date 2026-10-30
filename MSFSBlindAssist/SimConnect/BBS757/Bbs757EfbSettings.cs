@@ -231,8 +231,9 @@ public static class Bbs757EfbSettings
 
     // ---- the EFB colors theme -----------------------------------------------------------------------
 
-    /// <summary>The EFB colors theme's key. Neither 757 EFB window offers it as a control, only as a note
-    /// (<see cref="ThemeNote"/>, the owner's ruling of 2026-10-30, B757-21).</summary>
+    /// <summary>The EFB colors theme's key. Neither 757 EFB window offers it as a choice, only as a note
+    /// (<see cref="ThemeNote"/>, the owner's ruling of 2026-10-30, B757-21); the settings window writes it only as
+    /// <see cref="DarkBlueTheme"/>, through its one way back to that theme.</summary>
     public const string ThemePath = "ui_theme";
 
     // The theme's label, as the tablet and the catalog give it.
@@ -242,8 +243,15 @@ public static class Bbs757EfbSettings
     public const string ThemeNotSupportedText = "Non-default color schemes are not supported.";
 
     /// <summary>
+    /// The default EFB colors theme, Dark blue (stored 0, the catalog's first choice), the one theme the tablet reader reads: the
+    /// only value the app writes to <see cref="ThemePath"/>, through the 757 EFB settings window's Set to Dark blue button, which
+    /// shows while BlueBird's file holds another theme (B757-21, the owner's ruling of 2026-10-30).
+    /// </summary>
+    public static Bbs757Value DarkBlueTheme => Bbs757Value.Of(0L);
+
+    /// <summary>
     /// What the 757 tablet window shows in the EFB colors theme's place, as text, since neither 757 EFB window offers the theme
-    /// as a control (B757-21): "EFB colors theme: Dark blue. Non-default color schemes are not supported." with the theme's word
+    /// as a choice (B757-21): "EFB colors theme: Dark blue. Non-default color schemes are not supported." with the theme's word
     /// (<paramref name="choice"/>, one of the catalog's), or "EFB colors theme. Non-default color schemes are not supported."
     /// when none is given. The words are joined as they are: no Windows culture changes them.
     /// </summary>
@@ -562,7 +570,8 @@ public static class Bbs757EfbSettings
                     .Select(n => Choice(string.Create(CultureInfo.InvariantCulture, $"{n} sec"), n))
                     .Append(Choice("Never", 0L)).ToArray()),
             // The slider's order, which is not the stored numbers': LIGHT GREY is 3 and DARK GREY is 2. Neither 757 EFB window
-            // offers it (B757-21): the catalog keeps it to name the stored choice in their notes.
+            // offers it as a choice (B757-21): the catalog keeps it to name the stored choice in their notes, and its first, Dark
+            // blue, is what the settings window's way back writes (DarkBlueTheme).
             Pick(section, ThemePath, ThemeLabel, Bbs757ValueType.Integer,
                 Choice("Dark blue", 0L), Choice("Light blue", 1L), Choice("Light grey", 3L), Choice("Dark grey", 2L)),
         };

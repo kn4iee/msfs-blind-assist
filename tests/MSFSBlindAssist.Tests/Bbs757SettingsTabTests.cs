@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Windows.Forms;
 using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.SimConnect.BBS757;
@@ -10,13 +11,26 @@ namespace MSFSBlindAssist.Tests;
 /// frequency's slider, <c>Bbs757LockableSlider.Target</c>; which keys with Control it takes and ignores,
 /// <c>Bbs757LockableSlider.IsSliderKeyWithControl</c>; which keys a choice list takes, <c>Bbs757LockableComboBox.ChangesSelection</c>
 /// and <c>IsTabKeyWithControl</c>), and what the window is made of once it is built: its title, no tab
-/// control, the settings status box first, and none of the Flight page's controls or the nav data buttons in any section.
-/// The window is built and never shown, so no handle is made; how it reads and behaves is checked in the simulator, by ear.
+/// control, the settings status box first, none of the Flight page's controls or the nav data buttons in any section, and the
+/// EFB colors theme's note with its one way back to Dark blue. The window is built and never shown, so no handle is made (a test
+/// may read BlueBird's files into it as the window does before it shows); how it reads and behaves is checked in the
+/// simulator, by ear.
 /// </summary>
 public class Bbs757SettingsTabTests
 {
     private static Bbs757SettingRow Row(string path, string text, Bbs757RowState state = Bbs757RowState.Value) =>
         new(Bbs757EfbSettings.ByPath(path)!, state, -1, text);
+
+    // efb_settings.json with made-up IDs and codes; its EFB colors theme is Dark blue ("ui_theme":0).
+    private static readonly string SettingsJson =
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "bbs757-efb-settings.json"));
+
+    /// <summary>The settings file with its theme stored as <paramref name="stored"/>; "\"ui_theme\":0" occurs once in it.</summary>
+    private static string WithTheme(string stored)
+    {
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(SettingsJson, "\"ui_theme\":0"));
+        return SettingsJson.Replace("\"ui_theme\":0", "\"ui_theme\":" + stored, StringComparison.Ordinal);
+    }
 
     // ---- a box left with a change not saved ---------------------------------------------------------
 
@@ -152,18 +166,30 @@ public class Bbs757SettingsTabTests
     // ---- the window, built and never shown -----------------------------------------------------------
 
     /// <summary>
-    /// The settings window built over an empty work folder (the only one it is told of) and an announcer that speaks nowhere.
-    /// Never shown: no handle is made and no message loop runs, so what is checked is what the constructor builds. Disposing
-    /// it disposes the window, the announcer and the folder.
+    /// The settings window built over a temp work folder (the only one it is told of), empty or holding BlueBird's settings file,
+    /// and an announcer that speaks nowhere. Never shown: no handle is made and no message loop runs, so what is checked is what
+    /// the constructor builds, and what reading the folder (<c>Open</c>) shows. Disposing it disposes the window, the
+    /// announcer and the folder.
     /// </summary>
     private sealed class SettingsWindow : IDisposable
     {
         private readonly DirectoryInfo _work = Directory.CreateTempSubdirectory("msfsba-bbs757-settings-");
         private readonly SpeechCapture _announcer = new();
 
-        public SettingsWindow() => Form = new BBS757EfbForm(_announcer, () => new[] { _work.FullName });
+        /// <param name="settingsJson">The work folder's efb_settings.json; none when null.</param>
+        public SettingsWindow(string? settingsJson = null)
+        {
+            if (settingsJson != null) File.WriteAllText(SettingsFile, settingsJson);
+            Form = new BBS757EfbForm(_announcer, () => new[] { _work.FullName });
+        }
 
         public BBS757EfbForm Form { get; }
+
+        /// <summary>The work folder the window reads and writes.</summary>
+        public string Folder => _work.FullName;
+
+        /// <summary>BlueBird's settings file in the work folder.</summary>
+        public string SettingsFile => Path.Combine(_work.FullName, Bbs757WorkFolder.SettingsFile);
 
         /// <summary>What the window said.</summary>
         public SpeechCapture Speech => _announcer;
@@ -237,8 +263,10 @@ public class Bbs757SettingsTabTests
             string section = (string)sections.Items[index]!;
             List<Control> controls = Under(window.Form).ToList();
 
-            // Every Button the old window had (Close, Read the tablet screen, the Flight page's, the two AIRAC data ones) is gone.
-            Assert.DoesNotContain(controls, control => control is Button);
+            // Every Button the old window had (Close, Read the tablet screen, the Flight page's, the two AIRAC data ones) is gone. The
+            // one Button left is the EFB colors theme's way back to Dark blue, in General (B757-21).
+            Assert.All(controls.OfType<Button>(), button => Assert.Equal(Bbs757SettingsRows.SetDarkBlueText, button.Text));
+            Assert.Equal(section == Bbs757EfbSettings.SectionName(Bbs757SettingSection.General) ? 1 : 0, controls.OfType<Button>().Count());
             foreach (Control control in controls)
             {
                 foreach (string words in new[] { control.Text, control.AccessibleName ?? "", control.AccessibleDescription ?? "" })
@@ -256,11 +284,11 @@ public class Bbs757SettingsTabTests
     // ---- the EFB colors theme is a note (B757-21) ------------------------------------------------------
 
     [Fact]
-    public void The_colors_theme_row_is_a_read_only_note_that_nothing_in_the_window_changes()
+    public void The_colors_theme_row_is_a_read_only_note_that_no_key_in_it_changes()
     {
-        // The owner's ruling of 2026-10-30: the theme is no control in the settings window either. Its row is a label and a
+        // The owner's ruling of 2026-10-30: the theme is no choice in the settings window either. Its row is a label and a
         // read-only box ([VAT-13]) holding the note; General has no choice list, check box or slider for it; and keys in the
-        // box save nothing (a save, or a refused one, would speak).
+        // box save nothing (a save, or a refused one, would speak). Its one way back to Dark blue is tested below.
         using var window = new SettingsWindow();   // General is the section shown first
         List<Control> controls = Under(window.Form).ToList();
 
@@ -283,7 +311,7 @@ public class Bbs757SettingsTabTests
     [Fact]
     public void No_save_of_another_setting_writes_the_colors_theme()
     {
-        // The theme's own row is no control (above), and no other setting's writes reach ui_theme: no linked key, no group.
+        // The theme's own row offers no choice (above), and no other setting's writes reach ui_theme: no linked key, no group.
         foreach (Bbs757Setting setting in Bbs757EfbSettings.All.Where(s => s.Path != Bbs757EfbSettings.ThemePath))
         {
             IEnumerable<Bbs757Value> values = setting.Kind switch
@@ -295,6 +323,125 @@ public class Bbs757SettingsTabTests
             foreach (Bbs757Value value in values)
                 Assert.DoesNotContain(Bbs757EfbSettings.WritesFor(setting, value), write => write.Path == Bbs757EfbSettings.ThemePath);
         }
+    }
+
+    // ---- the way back to Dark blue (B757-21, the owner's ruling of 2026-10-30) ----------------------------------------
+
+    // What the window does before it shows (ShowForm's OpenSettings), without showing it: BlueBird's files read afresh and the
+    // simulator checked, silently.
+    private static void Open(BBS757EfbForm form) =>
+        typeof(BBS757EfbForm).GetMethod("OpenSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null);
+
+    // One tick of the window's guard (UpdateSettingsGuard), whose timer runs only while the window shows.
+    private static void Guard(BBS757EfbForm form) =>
+        typeof(BBS757EfbForm).GetMethod("UpdateSettingsGuard", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null);
+
+    // The window's reading of the files after a save (RefreshSettingValues), in place.
+    private static void Refresh(BBS757EfbForm form) =>
+        typeof(BBS757EfbForm).GetMethod("RefreshSettingValues", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null);
+
+    // A button press, without showing the window (PerformClick needs a visible button).
+    private static void Press(Button button) =>
+        typeof(Button).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(button, new object[] { EventArgs.Empty });
+
+    private static TextBox ThemeNote(SettingsWindow window) =>
+        Under(window.Form).OfType<TextBox>().Single(box => box.AccessibleName == "EFB colors theme");
+
+    private static Button DarkBlueButton(SettingsWindow window) => Under(window.Form).OfType<Button>().Single();
+
+    [Theory]
+    [InlineData("1", "Light blue", true)]
+    [InlineData("3", "Light grey", true)]
+    [InlineData("2", "Dark grey", true)]
+    [InlineData("0", "Dark blue", false)]
+    public void Set_to_dark_blue_shows_beside_the_theme_note_only_while_the_file_holds_another_theme(string stored, string word,
+        bool shown)
+    {
+        using var window = new SettingsWindow(WithTheme(stored));
+        TextBox note = ThemeNote(window);
+        Button button = DarkBlueButton(window);
+
+        // A button with its own words (no name over them, so the reader says what it shows), right after the note in tab order.
+        Assert.Equal(Bbs757SettingsRows.SetDarkBlueText, button.Text);
+        Assert.Null(button.AccessibleName);
+        Assert.True(button.TabStop);
+        Assert.True(button.Enabled);
+        List<Control> order = InTabOrder(window.Form).ToList();
+        Assert.Same(button, order[order.IndexOf(note) + 1]);
+
+        // Moved into a holder that is visible itself, so its Visible reads its own flag: a control of a window that was never shown
+        // reads as not visible. The window keeps driving it.
+        using var holder = new Panel();
+        holder.Controls.Add(button);
+        Open(window.Form);
+
+        Assert.Equal(word + ". Non-default color schemes are not supported.", note.Text);
+        Assert.Equal(shown, button.Visible);
+        // Beside the note, never over it: the note makes room while the button shows, and takes the row's width while it does not.
+        if (shown) Assert.True(note.Right < button.Left);
+        else Assert.Equal(button.Right, note.Right);
+        Assert.Empty(window.Speech.All);   // reading the files says nothing
+    }
+
+    [Fact]
+    public void Set_to_dark_blue_is_not_offered_while_the_theme_cannot_be_read()
+    {
+        foreach (string? settings in new[] { SettingsJson.Replace("\"ui_theme\":0", "\"ui_theme_x\":0", StringComparison.Ordinal), null })
+        {
+            using var window = new SettingsWindow(settings);
+            using var holder = new Panel();
+            Button button = DarkBlueButton(window);
+            holder.Controls.Add(button);
+            Open(window.Form);
+
+            Assert.Equal("Non-default color schemes are not supported.", ThemeNote(window).Text);
+            Assert.False(button.Visible);
+        }
+    }
+
+    [Fact]
+    public void When_set_to_dark_blue_goes_the_theme_note_takes_its_place_in_the_focus()
+    {
+        // Its own press saved Dark blue: the files read after the save hold Dark blue, the button goes, and the note, which now
+        // says Dark blue, becomes the window's active control, so the reader reads it and the focus does not jump on to another
+        // row. Nothing is said. (The window is never shown, so this is its active control, not the keyboard's focus.)
+        using var window = new SettingsWindow(WithTheme("1"));
+        TextBox note = ThemeNote(window);
+        Button button = DarkBlueButton(window);
+        Open(window.Form);
+        window.Form.ActiveControl = button;
+        Assert.Same(button, window.Form.ActiveControl);
+
+        File.WriteAllText(window.SettingsFile, SettingsJson);
+        Refresh(window.Form);
+
+        Assert.Same(note, window.Form.ActiveControl);
+        Assert.Equal("Dark blue. Non-default color schemes are not supported.", note.Text);
+        Assert.Empty(window.Speech.All);
+    }
+
+    [Fact]
+    public void Set_to_dark_blue_pressed_while_the_settings_are_read_only_says_why_at_once_and_writes_nothing()
+    {
+        // The window's lock holds for the button as for a check box that does not toggle: while BlueBird's settings cannot be
+        // written, a press says why, at once, and writes nothing. Made read-only the one way a test can on any machine, a
+        // simulator running or not: BlueBird's settings file gone after the window read it, then a tick of the guard.
+        using var window = new SettingsWindow(WithTheme("1"));
+        using var holder = new Panel();
+        Button button = DarkBlueButton(window);
+        holder.Controls.Add(button);
+        Open(window.Form);
+        Assert.True(button.Visible);
+
+        File.Delete(window.SettingsFile);
+        Guard(window.Form);
+        Press(button);
+
+        Assert.Equal(new[] { "BlueBird hasn't created its settings yet. Load the 757 once, then close the simulator to change them." },
+            window.Speech.Interrupts);
+        Assert.Equal(window.Speech.Interrupts, window.Speech.All);
+        // Nothing written: the file is not made again (the app never creates it), and no temp file is left.
+        Assert.Empty(Directory.GetFileSystemEntries(window.Folder));
     }
 
     [Fact]

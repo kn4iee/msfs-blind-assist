@@ -545,4 +545,50 @@ public class Bbs757SettingsSaveTests
         // A row that can change has no reason.
         Assert.Null(ReasonOf(Bbs757SettingSection.Aircraft, "baro_sync", Files(SettingsJson)));
     }
+
+    // ---- the EFB colors theme's way back to Dark blue (B757-21) ------------------------------------------------------
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Set_to_dark_blue_plans_one_write_of_the_theme_and_saves_nothing_else(string culture)
+    {
+        // The settings window's Set to Dark blue saves Bbs757EfbSettings.DarkBlueTheme for the theme, as any save goes: one write,
+        // ui_theme 0 in efb_settings.json, and nothing said after it, as a choice list's save says nothing more (CORE-7).
+        var theme = Setting(Bbs757EfbSettings.ThemePath);
+        Bbs757SettingWrite planned = Assert.Single(Bbs757EfbSettings.WritesFor(theme, Bbs757EfbSettings.DarkBlueTheme));
+        Assert.Equal((Bbs757EfbSettings.ThemePath, Bbs757SettingFile.Global, Bbs757Value.Of(0L)), (planned.Path, planned.File, planned.Value));
+        Assert.Same(theme, planned.Setting);
+
+        var files = new FakeFiles();
+        var outcome = TestCulture.Run(culture, () => files.Save(theme, Bbs757EfbSettings.DarkBlueTheme,
+            Files(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":1"), LiveryJson),
+            new Bbs757SettingRow(theme, Bbs757RowState.Value, 1, "Light blue")));
+
+        Assert.Equal(new[] { "global ui_theme = 0" }, files.Writes);
+        Assert.Empty(files.Log);
+        Assert.Null(outcome.Spoken);
+        Assert.False(outcome.Immediate);
+        Assert.Empty(outcome.TurnedOff);
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Set_to_dark_blue_not_saved_says_why_at_once_in_the_windows_words(string culture)
+    {
+        // The simulator started between the window's last check and the press: the file layer refuses, and the failure is said at once.
+        var theme = Setting(Bbs757EfbSettings.ThemePath);
+        var files = new FakeFiles();
+        files.Global[Bbs757EfbSettings.ThemePath] = Refused(Bbs757SettingsFile.SimRunningReason);
+
+        var outcome = TestCulture.Run(culture, () => files.Save(theme, Bbs757EfbSettings.DarkBlueTheme,
+            Files(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":2"), LiveryJson)));
+
+        Assert.Equal(new[] { "global ui_theme = 0" }, files.Writes);
+        Assert.Equal("Couldn't save EFB colors theme: the simulator is running", outcome.Spoken);
+        Assert.True(outcome.Immediate);
+    }
 }

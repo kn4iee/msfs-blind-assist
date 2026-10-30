@@ -585,6 +585,53 @@ public class Bbs757SettingsFileTests
         Assert.Equal(secondOriginal, File.ReadAllBytes(Path.Combine(tmp.Sub("bk"), BackupKeyOf(msfs2024), "efb_settings.json")));
     }
 
+    [Fact]
+    public void Set_to_dark_blue_changes_only_the_themes_bytes_and_the_row_then_reads_dark_blue()
+    {
+        // The settings window's one write of ui_theme (B757-21), through its save (Bbs757SettingsSave.Run over Save): over a file
+        // holding Light blue only the theme's value changes, so the file is the fixture's Dark blue again byte for byte, and the row
+        // read from it says Dark blue, with no way back left to offer.
+        using var tmp = new TempDir();
+        string file = tmp.Sub("efb_settings.json");
+        byte[] darkBlue = File.ReadAllBytes(SettingsFixture);
+        File.WriteAllBytes(file, Utf8(WithValue(Encoding.UTF8.GetString(darkBlue), Bbs757EfbSettings.ThemePath, "1")));
+        Bbs757Setting theme = Bbs757EfbSettings.ByPath(Bbs757EfbSettings.ThemePath)!;
+
+        Bbs757SettingRow ThemeRow()
+        {
+            using var read = Bbs757SettingsFile.Read(file)!;
+            return Bbs757SettingsRows.For(Bbs757SettingSection.General, read.RootElement, Array.Empty<JsonElement>())
+                .Single(row => row.Setting.Path == Bbs757EfbSettings.ThemePath);
+        }
+
+        Bbs757SettingRow before = ThemeRow();
+        Assert.Equal("Light blue", before.Text);
+        Assert.True(Bbs757SettingsRows.OffersDarkBlue(before));
+
+        var registrationWrites = new List<string>();
+        Bbs757SettingSaveOutcome outcome;
+        using (var doc = Bbs757SettingsFile.Read(file)!)
+        {
+            outcome = Bbs757SettingsSave.Run(theme, Bbs757EfbSettings.DarkBlueTheme,
+                new Bbs757SettingsSnapshot(doc.RootElement, true, Array.Empty<JsonElement>(), 0), new[] { before },
+                (path, value) => Bbs757SettingsFile.Save(file, path, value, () => true, new Bbs757SettingsBackup(tmp.Sub("bk")), true, _ => { }),
+                (path, value) =>
+                {
+                    registrationWrites.Add(path);
+                    return Array.Empty<(string, Bbs757SaveResult)>();
+                },
+                _ => { });
+        }
+
+        Assert.Null(outcome.Spoken);
+        Assert.Empty(registrationWrites);
+        Assert.Equal(darkBlue, File.ReadAllBytes(file));
+        Bbs757SettingRow after = ThemeRow();
+        Assert.Equal((Bbs757RowState.Value, 0, "Dark blue"), (after.State, after.ChoiceIndex, after.Text));
+        Assert.Equal("Dark blue. Non-default color schemes are not supported.", Bbs757SettingsRows.ThemeNoteText(after));
+        Assert.False(Bbs757SettingsRows.OffersDarkBlue(after));
+    }
+
     // ---- every registration -------------------------------------------------------------------------
 
     [Fact]
