@@ -121,6 +121,7 @@ internal sealed partial class ProbeForm
             foreach (var raw in lines)
             {
                 var at = raw.IndexOf('|');
+                if (at < 0) continue;   // the tail of a command that held a line break: no answer is waited for under an id
                 string id = raw[..at], command = raw[(at + 1)..].Trim();
                 var space = command.IndexOf(' ');
                 string verb = space < 0 ? command : command[..space], rest = space < 0 ? "" : command[(space + 1)..].Trim();

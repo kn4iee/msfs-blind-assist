@@ -135,6 +135,34 @@ public class A350MfdPageTests
         Assert.Contains(spoken, l => l.StartsWith("Notepad: BCDEFGHIJKLMNOPQRSTUVWXYZ0123", StringComparison.Ordinal));
     }
 
+    // DATA/WAYPOINT's NEW WPT (live 2026-10-30): the slashes and dashes between its boxes are no labels; each box takes its heading above.
+    [Fact]
+    public void A_new_waypoints_boxes_read_under_their_headings()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_new_wpt.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("WPT IDENT: none, cyan", spoken);
+        Assert.Contains("LAT: none, cyan", spoken);
+        Assert.Contains("LONG: none, cyan", spoken);
+        Assert.Contains("PLACE: none, cyan", spoken);
+        Assert.Contains("BRG: none°, cyan", spoken);
+        Assert.Contains("DIST: none NM, cyan", spoken);
+        Assert.DoesNotContain(spoken, l => l.StartsWith("/:", StringComparison.Ordinal) || l.StartsWith("-:", StringComparison.Ordinal) || l.Contains(" /:", StringComparison.Ordinal) || l.Contains(" -:", StringComparison.Ordinal));
+        Assert.DoesNotContain(spoken, l => l.StartsWith("/", StringComparison.Ordinal) || l.Contains(" / ", StringComparison.Ordinal));
+        Assert.Equal(2, spoken.Count(l => l == "PLACE: none, cyan" ) - 1);   // PLACE/BRG/DIST's, and both of PLACE-BRG/PLACE-BRG's
+        Assert.Equal(3, spoken.Count(l => l == "BRG: none°, cyan"));
+    }
+
+    // Its stored list, and the confirmation over DELETE STORED WPT, whose CONFIRM key stands partly on the next key (live 2026-10-30).
+    [Fact]
+    public void A_key_drawn_over_another_keeps_its_own_text()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_delete_wpt_confirm.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("DELETE STORED WAYPOINT ?, white", spoken);
+        Assert.Contains("CONFIRM * button", spoken);
+        Assert.Contains("CANCEL button", spoken);
+        Assert.Contains("DELETE ALL * STORED WPTs button, grey", spoken);
+    }
+
     // POSITION/TIME (F-PLN INFO, TIME; live 2026-10-30): a closed pop-up's rectangle lay over the time marker's headings, and two MODIFY
     // keys in one column are told apart by their rows.
     [Fact]

@@ -244,7 +244,8 @@ public static class A350MfdPage
             // AIRWAYS list's off-screen text boxes, live 2026-10-28).
             int at = elements.IndexOf(e);
             // (A control holds only what is drawn after it begins: a field's own text under a later empty one stays the field's.)
-            bool OverByLater(Cell c) => IsField(e) && elements.Skip(at + 1).Any(o => !Containers.Contains(o.Class) && !IsField(o)
+            // A key's too: DATA/WAYPOINT's CONFIRM over the next key (live 2026-10-30).
+            bool OverByLater(Cell c) => elements.Skip(at + 1).Any(o => !Containers.Contains(o.Class) && !IsField(o)
                 && !hidden.Contains(o) && c.Index >= o.TextStart
                 && c.X >= o.X - shift && c.X <= o.X - shift + o.RectW && c.Y >= o.Y && c.Y <= o.Y + o.RectH + 4);
             // An open list's item owns its text, over whatever key it hangs across (the notepad's saved notes over the F-PLN's INIT key, live 2026-10-30).
@@ -326,8 +327,9 @@ public static class A350MfdPage
                 // A check box's label on the row, whatever its colour (yellow or cyan while chosen) and though inside the
                 // check box, names the box beside it: that choice's value.
                 // (D-ATIS's "- 1416Z" beside its airport box is the ATIS's time, no label.)
+                // (Nor is a slash or a dash between two boxes: NEW WPT's LAT / LONG, PLACE / BRG / DIST.)
                 bool OnRow(Cell c) => !inside.Contains(c) && (checkboxLabels.Contains(c) || !inControls.Contains(c) && c.Colour == "white")
-                    && Math.Abs(c.Y - rowY) <= 12 && !AtisTime.IsMatch(c.Text);
+                    && Math.Abs(c.Y - rowY) <= 12 && !AtisTime.IsMatch(c.Text) && c.Text is not ("/" or "-");
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
                 // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
@@ -342,7 +344,7 @@ public static class A350MfdPage
                     // else a label just above it (SURV's SQWK; FUEL&LOAD's MIN FUEL AT DEST heading, 26 px up; HOLD's
                     // INBOUND CRS, at the page's margin 79 px left of its box)
                     ?? cells.Where(c => !inControls.Contains(c) && c.Colour == "white" && c.X >= x0 - 100 && c.X <= x1 && c.Y < y0 && y0 - c.Y <= 30)
-                        .OrderByDescending(c => c.Y).FirstOrDefault();
+                        .OrderByDescending(c => c.Y).ThenBy(c => Math.Abs(c.X - (x0 + x1) / 2)).FirstOrDefault();
                 // An empty box labelled only by a text above it is no entry the page shows (FUEL&LOAD, under CI); nor is
                 // one whose frame is not drawn (VERT REV's AT and AT OR ABOVE boxes, HOLD's DIST box, until chosen).
                 bool Framed() => capture.Shapes is not { Count: > 0 } shapes || shapes.Any(sh => sh.Kind == "stroke" && sh.Image == 0
@@ -507,6 +509,8 @@ public static class A350MfdPage
         }
         used.UnionWith(fields.Where(f => f.Label != null).Select(f => f.Label!));
         used.UnionWith(headers);
+        // A slash or dash between a row's boxes is no line of its own (NEW WPT's).
+        used.UnionWith(cells.Where(c => c.Text is "/" or "-" && fields.Count(f => Math.Abs(f.Top + 26 - c.Y) <= 16) >= 2));
 
         var rows = A350DrawLayout.Rows(cells.Where(c => !used.Contains(c))
             .Select(c => new DrawnText(c.Text, c.X, c.Y, c.X, c.Y, 0, A350Rgba.Of(c.Colour)))).ToList();
@@ -1044,11 +1048,11 @@ public static class A350MfdPage
     private static bool IsField(DrawnElement e) => e.Class != "NotepadTextbox" && e.RectW > 0 && e.RectH > 0
         && (e.Class.EndsWith("TextBox", StringComparison.Ordinal) || e.Class.EndsWith("Textbox", StringComparison.Ordinal));
 
-    /// <summary>A drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet, "dC" degrees
+    /// <summary>A drawn token as said: amber boxes ("oooo") are a required entry, dashes nothing yet (a position's "--d--.-" too), "dC" degrees
     /// Celsius, a checklist's line to fill ("____") blank. Dot leaders are colons already (<see cref="A350Ewd"/>).</summary>
     private static string Word(string token) =>
         token.Length > 0 && token.Contains('o') && token.All(ch => ch is 'o' or '.') ? "required"
-        : token.Length > 0 && token.Contains('-') && token.All(ch => ch is '-' or ':' or '.') ? "none"
+        : token.Length > 0 && token.Contains('-') && token.All(ch => ch is '-' or ':' or '.' or 'd') ? "none"
         : token == "dC" ? "°C" : Blank.Replace(token, "blank");
 
     /// <summary>A field's tokens as said; a lone "d" is the degree sign of the number before it ("F040 d").</summary>
