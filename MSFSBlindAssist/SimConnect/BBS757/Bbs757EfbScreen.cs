@@ -797,16 +797,23 @@ public static class Bbs757EfbScreen
     private static bool IsHeadingText(string t) =>
         t.Length >= 3 && !t.Any(char.IsLower) && t.Count(char.IsLetter) >= 3 && t.Split(' ').Length <= 3 && !t.Any(char.IsDigit);
 
-    /// <summary>The words a tile's state ends its text with. The reader leaves them out of the tile's key, and
-    /// <see cref="Bbs757EfbPress.Relocate"/> leaves them out when it compares a tile's words with another's.</summary>
-    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED" };
+    /// <summary>The words a tile's state ends its text with, or that are all of it: a door's box reads OPEN, CLOSED or, grey,
+    /// UNAVAIL under its caption (Maintenance's gear doors, measured: tablet-presses.md). The reader leaves them out of the tile's
+    /// key, so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/> leaves them out when it
+    /// compares a tile's words with another's.</summary>
+    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL" };
 
     private static bool HasStateWord(string t) => StateWords.Any(w => t.EndsWith(" " + w, StringComparison.Ordinal) || t == w);
 
+    /// <summary>A box's words for its key, without the state word <see cref="HasStateWord"/> finds: "FUEL TRUCK OFF" is FUEL TRUCK,
+    /// and a door's CLOSED alone is no words (its caption and its place name it, whatever state it shows).</summary>
     private static string StripState(string t)
     {
         foreach (var w in StateWords)
+        {
+            if (t == w) return "";
             if (t.EndsWith(" " + w, StringComparison.Ordinal)) return t.Substring(0, t.Length - w.Length - 1);
+        }
         return t;
     }
 

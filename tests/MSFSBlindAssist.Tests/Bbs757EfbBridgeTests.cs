@@ -35,7 +35,8 @@ public class Bbs757EfbBridgeTests
         var b = Bbs757EfbElements.Build(Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services"), null, NoExtras);
         Assert.Equal("Aircraft, Ground services", b.Data["page"]);
         Assert.Equal("true", Field(b, "Fuel truck off", "clickable"));
-        Assert.Equal("true", Field(b, "Fuel truck off", "announceChange"));
+        // Spoken by the press, never by the window (Bbs757EfbPress.ButtonOutcome): no announceChange.
+        Assert.Equal("", Field(b, "Fuel truck off", "announceChange"));
         Assert.Equal(Bbs757EfbElements.ActionKind.Tap, ActionFor(b, "Fuel truck off").Kind);
         Assert.Equal(Bbs757EfbElements.ActionKind.Tap, ActionFor(b, "Home").Kind);
         Assert.Equal("Ground services (current page)", ItemsByText(b).Keys.First(k => k.StartsWith("Ground services", StringComparison.Ordinal)));
@@ -230,8 +231,8 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        // Tapped where the page was read, before anything was read again; nothing said (the window says the tile's new words).
-        Assert.Equal(new[] { "tap 1230,598", "read" }, tablet.Events);
+        // Tapped where the page was read, before anything was read again; then the tile's new words, once.
+        Assert.Equal(new[] { "tap 1230,598", "read", "alert Requesting" + Ellipsis }, tablet.Events);
         Assert.Equal(new[] { tile.Hit }, tablet.Taps);
     }
 
@@ -249,7 +250,7 @@ public class Bbs757EfbBridgeTests
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
         Assert.NotEqual(tile.Key, moved.Key);
-        Assert.Equal(new[] { "read", Tap(moved), "read" }, tablet.Events);
+        Assert.Equal(new[] { "read", Tap(moved), "read", "alert Requesting" + Ellipsis }, tablet.Events);
         Assert.Equal(new[] { new Point(1230, 623) }, tablet.Taps);
     }
 
@@ -409,6 +410,101 @@ public class Bbs757EfbBridgeTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
+    public async Task A_control_relabeled_under_a_new_key_is_said_once_in_its_new_words(string culture)
+    {
+        // The window rebuilds a control whose key changed and says nothing of it: the press says the new words, once.
+        var acars = new Rectangle(700, 780, 280, 45);
+        var mode = new Rectangle(258, 864, 196, 42);
+        var cases = new (Func<Bbs757EfbItem[], Bbs757EfbScreenModel> Page, Bbs757EfbItem Pressed, Bbs757EfbItem Now)[]
+        {
+            (Ground, ReqFuelTruck(), Tile("Requesting" + Ellipsis, "btn:|REQUESTING" + Ellipsis + "@56,28", new Rectangle(1131, 576, 197, 43))),
+            (items => PageOf("NAVIGATION", "ACARS DASHBOARD", items), Tile("Fetch SIMBRIEF OFP", "btn:|FETCH SIMBRIEF OFP@42,40", acars),
+                Tile("Refresh SIMBRIEF OFP", "btn:|REFRESH SIMBRIEF OFP@42,40", acars)),
+            (Ground, Tile("GND SRVC Mode: BBS", "btn:GND SRVC Mode|BBS@16,44", mode), Tile("GND SRVC Mode: MSFS", "btn:GND SRVC Mode|MSFS@16,44", mode)),
+        };
+
+        foreach (var (page, pressed, now) in cases)
+        {
+            var tablet = new FakeTablet(page(new[] { pressed, ReqCatering() }));
+            var press = tablet.Press(pressed);
+            tablet.OnTap = _ => tablet.Show(page(new[] { now, ReqCatering() }));
+
+            await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+            Assert.NotEqual(pressed.Key, now.Key);
+            Assert.Equal(new[] { pressed.Hit }, tablet.Taps);
+            Assert.Equal(new[] { now.Text }, tablet.Alerts);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_tile_whose_state_word_changed_under_its_key_is_said_once_by_the_press(string culture)
+    {
+        // BBS mode's Fuel truck tile keeps its key (btn:|FUEL TRUCK@...) as its state word changes. The window patches its label
+        // and says nothing; the press says the new words.
+        var off = Tile("Fuel truck off", "btn:|FUEL TRUCK@56,28", new Rectangle(1132, 577, 196, 42), Bbs757EfbTint.Red);
+        var tablet = new FakeTablet(Ground(off, ReqCatering()));
+        var press = tablet.Press(off);
+        tablet.OnTap = _ => tablet.Show(Ground(off with { Text = "Fuel truck on", Tint = Bbs757EfbTint.Green }, ReqCatering()));
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Equal(new[] { "Fuel truck on" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_top_bar_button_that_became_text_is_said_in_its_new_words(string culture)
+    {
+        var start = new Bbs757EfbItem(Bbs757EfbKind.Button, "Start boarding", new Rectangle(1142, 3, 180, 28), new Point(1231, 17), true,
+            Bbs757EfbTopBar.BoardingKey, Bbs757EfbTint.Green);
+        var tablet = new FakeTablet(Ground(ReqFuelTruck()) with { TopBar = new[] { start } });
+        var press = tablet.Press(start);
+        tablet.OnTap = _ => tablet.ShowTopBar(Ground(ReqFuelTruck()) with
+        {
+            TopBar = new[] { new Bbs757EfbItem(Bbs757EfbKind.Text, "Boarding" + Ellipsis + " 10 min", start.Box, new Point(1232, 17), false, Bbs757EfbTopBar.BoardingKey) },
+        });
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Equal(new[] { Tap(start), "hook StartBoarding", "read", "alert Boarding" + Ellipsis + " 10 min" }, tablet.Events);
+    }
+
+    [Fact]
+    public async Task A_press_whose_control_kept_its_words_but_changed_the_page_says_nothing()
+    {
+        // The tug tile reads as before, but the catering tile beside it changed: the press did something, and the pilot reads it.
+        var tug = ReqTug();
+        var tablet = new FakeTablet(Ground(tug, ReqCatering()));
+        var press = tablet.Press(tug);
+        tablet.OnTap = _ => tablet.Show(Ground(ReqTug(), Tile("Requesting" + Ellipsis, "btn:|REQUESTING" + Ellipsis + "@45,36", ReqCatering().Box)));
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Single(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_press_that_brought_up_a_question_says_nothing_over_it()
+    {
+        // IMPORT FROM SIMBRIEF brings up the defuel question, and the dimmed page under it reads the button by the TOTAL FUEL label
+        // above it (bright/20 and bright/21 read it so, in the same box): the read that found the question said it, and nothing may
+        // talk over it.
+        var import = Tile("Import from SIMBRIEF", "btn:|IMPORT FROM SIMBRIEF@18,46", new Rectangle(377, 929, 280, 45));
+        var tablet = new FakeTablet(PageOf("AIRCRAFT", "FUEL", import));
+        var press = tablet.Press(import);
+        tablet.OnTap = _ => tablet.Show(PageOf("AIRCRAFT", "FUEL", Tile("Total fuel: Import from SIMBRIEF", "btn:TOTAL FUEL|IMPORT FROM SIMBRIEF@18,46", import.Box))
+            with { Question = new Bbs757EfbQuestion(DefuelQuestion, new[] { YesAnswer }) });
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Equal(new[] { Tap(import), "hook Import", "read" }, tablet.Events);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
     public async Task A_menu_press_whose_page_never_comes_says_so(string culture)
     {
         var fuel = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(130, 230), true, "menu:FUEL");
@@ -444,7 +540,8 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public async Task A_tab_press_is_judged_as_a_button_not_as_a_page()
     {
-        // A tab changes the list under it, never the page's name: it is not "the tablet did not show Landing gear".
+        // A tab changes the list under it, never the page's name: it is not "the tablet did not show Landing gear". Like any
+        // button whose words the press changed, it says them.
         var tab = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Landing gear", new Rectangle(500, 100, 160, 34), new Point(580, 117), true, "tab:|LANDING GEAR@29,5");
         var other = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Brakes (selected)", new Rectangle(670, 100, 160, 34), new Point(750, 117), true, "tab:|BRAKES@37,5", Selected: true);
         var tablet = new FakeTablet(PageOf("AIRCRAFT", "MAINTENANCE", other, tab));
@@ -454,7 +551,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        Assert.Equal(new[] { Tap(tab), "read" }, tablet.Events);
+        Assert.Equal(new[] { Tap(tab), "read", "alert Landing gear (selected)" }, tablet.Events);
     }
 
     [Fact]
@@ -473,8 +570,8 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public async Task A_fuel_truck_tile_arms_its_echo()
     {
-        // The definition's Fuel truck row would say the change the window's tile says itself (CORE-7): its echo is open from right
-        // before the tap until the state read after it.
+        // The definition's Fuel truck row would say the change the press says itself (the tile's new words, CORE-7): its echo is
+        // open from right before the tap until the state read after it.
         var page = Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services");
         var tile = page.Items.First(i => i.Text == "Fuel truck off");
         var tablet = new FakeTablet(page);
@@ -488,7 +585,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        Assert.Equal(new[] { "arm FUEL TRUCK", Tap(tile), "read", "settle FUEL TRUCK 1" }, tablet.Events);
+        Assert.Equal(new[] { "arm FUEL TRUCK", Tap(tile), "read", "alert Fuel truck on", "settle FUEL TRUCK 1" }, tablet.Events);
     }
 
     [Fact]
@@ -508,7 +605,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        Assert.Equal(new[] { "arm GPU", Tap(gpu), "read", "settle GPU 1" }, tablet.Events);
+        Assert.Equal(new[] { "arm GPU", Tap(gpu), "read", "alert GPU connected", "settle GPU 1" }, tablet.Events);
     }
 
     [Fact]
@@ -535,7 +632,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        Assert.Equal(new[] { Tap(fetch), "hook Fetch", "read" }, tablet.Events);
+        Assert.Equal(new[] { Tap(fetch), "hook Fetch", "read", "alert Refresh SIMBRIEF ofp" }, tablet.Events);
     }
 
     [Fact]
@@ -551,7 +648,7 @@ public class Bbs757EfbBridgeTests
 
             await tablet.Runner().ClickAsync(tablet.Press(button), CancellationToken.None);
 
-            Assert.Equal(new[] { "cycle", Tap(button), "hook " + hook + " 2609", "read" }, tablet.Events);
+            Assert.Equal(new[] { "cycle", Tap(button), "hook " + hook + " 2609", "read", "alert Updating" + Ellipsis }, tablet.Events);
         }
     }
 
@@ -569,7 +666,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(tablet.Press(remove), CancellationToken.None);
 
-        Assert.Equal(new[] { "cycle", Tap(remove), "hook NavDataRemove 2610", "read" }, tablet.Events);
+        Assert.Equal(new[] { "cycle", Tap(remove), "hook NavDataRemove 2610", "read", "alert Update" }, tablet.Events);
     }
 
     [Fact]

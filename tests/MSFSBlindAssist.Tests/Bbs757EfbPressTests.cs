@@ -502,14 +502,64 @@ public class Bbs757EfbPressTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public void A_tile_whose_words_changed_says_nothing_itself(string culture)
+    public void A_tile_whose_words_changed_under_a_new_key_says_its_new_words(string culture)
     {
-        // The window says its new words once (announceChange).
+        // Req fuel truck, pressed: the tile says Requesting... in the same box, under another key. The window rebuilds a control
+        // whose key changed and says nothing of it, so the press says the new words, once.
         var pressed = ReqFuelTruck();
         var before = Ground(pressed, ReqCatering());
         var after = Ground(ReqCatering(), Requesting());
 
-        Assert.Null(TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
+        Assert.Equal("Requesting" + Ellipsis, TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_control_whose_words_changed_says_them_whatever_its_key_did(string culture)
+    {
+        var box = new Rectangle(700, 780, 280, 45);
+        var mode = new Rectangle(258, 864, 196, 42);
+        var truck = new Rectangle(1132, 577, 196, 42);
+        var cases = new (string Section, Bbs757EfbItem Pressed, Bbs757EfbItem Now)[]
+        {
+            // The ACARS dashboard's fetch becomes its refresh in the same box: another key.
+            ("ACARS DASHBOARD", Tile("Fetch SIMBRIEF OFP", "btn:|FETCH SIMBRIEF OFP@42,40", box),
+                Tile("Refresh SIMBRIEF OFP", "btn:|REFRESH SIMBRIEF OFP@42,40", box)),
+            // GND SRVC Mode under its caption (bright/13 and bright/18): btn:GND SRVC Mode|BBS@16,44 becomes ...|MSFS@16,44.
+            ("GROUND SERVICES", Tile("GND SRVC Mode: BBS", "btn:GND SRVC Mode|BBS@16,44", mode),
+                Tile("GND SRVC Mode: MSFS", "btn:GND SRVC Mode|MSFS@16,44", mode)),
+            // BBS mode's tile: its state word changed and its key, which leaves the state word out, did not.
+            ("GROUND SERVICES", Tile("Fuel truck off", "btn:|FUEL TRUCK@56,28", truck), Tile("Fuel truck on", "btn:|FUEL TRUCK@56,28", truck)),
+        };
+
+        foreach (var (section, pressed, now) in cases)
+        {
+            var before = PageOf("AIRCRAFT", section, pressed);
+            var after = PageOf("AIRCRAFT", section, now);
+            Assert.Equal(now.Text, TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_question_the_press_brought_up_is_its_outcome_whatever_the_dimmed_page_reads(string culture)
+    {
+        // IMPORT FROM SIMBRIEF, then the defuel question over the dimmed page: under the dimming the reader names the button by the
+        // TOTAL FUEL label above it (bright/20 reads btn:|IMPORT FROM SIMBRIEF@18,46, bright/21 btn:TOTAL FUEL|IMPORT FROM
+        // SIMBRIEF@18,46), in the same box. The read that found the question said it; the button's other words would talk over it.
+        var box = new Rectangle(377, 929, 280, 45);
+        var import = Tile("Import from SIMBRIEF", "btn:|IMPORT FROM SIMBRIEF@18,46", box);
+        var before = PageOf("AIRCRAFT", "FUEL", import);
+        var dimmed = Tile("Total fuel: Import from SIMBRIEF", "btn:TOTAL FUEL|IMPORT FROM SIMBRIEF@18,46", box);
+        var yes = Item(Bbs757EfbKind.Button, "Yes", "q:YES", new Rectangle(336, 591, 177, 57));
+        var after = PageOf("AIRCRAFT", "FUEL", dimmed) with { Question = new Bbs757EfbQuestion("Are you sure you want to defuel?", new[] { yes }) };
+        Assert.Same(dimmed, Bbs757EfbPress.Relocate(before, after, import));
+
+        Assert.Null(TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, import)));
+        // Under a question that was up before the press (a top bar control pressed under it), the control's new words are said.
+        var asked = before with { Question = after.Question, TopBar = new[] { StartBoarding() } };
+        var boarding = asked with { TopBar = new[] { Boarding() } };
+        Assert.Equal("Boarding" + Ellipsis + " 10 min", TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(asked, boarding, StartBoarding())));
     }
 
     [Theory]
@@ -560,15 +610,29 @@ public class Bbs757EfbPressTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public void A_top_bar_control_that_changed_says_nothing_though_the_top_bar_is_not_the_page(string culture)
+    public void A_top_bar_button_that_became_text_says_its_new_words_though_the_top_bar_is_not_the_page(string culture)
     {
-        // Start boarding becomes Boarding... 10 min: the page below the bar is untouched, but the pressed control changed.
+        // Start boarding becomes Boarding... 10 min, text under the same key: the page below the bar is untouched, but the pressed
+        // control changed, and its new words say the press took.
         var pressed = StartBoarding();
         var before = Ground(ReqFuelTruck()) with { TopBar = new[] { pressed } };
         var after = Ground(ReqFuelTruck()) with { TopBar = new[] { Boarding() } };
 
         Assert.True(Bbs757EfbPress.PageUnchanged(before, after));
-        Assert.Null(TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
+        Assert.Equal("Boarding" + Ellipsis + " 10 min", TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_notification_button_says_its_new_words(string culture)
+    {
+        // Pressed, it opens BlueBird's list (bright/18 to bright/19): "Notifications: 55" becomes "Close notifications", its key
+        // the same, while the list covers part of the page.
+        var before = Bbs757EfbScreenTests.Load("bright", "18-aircraft-ground-services-notification");
+        var after = Bbs757EfbScreenTests.Load("bright", "19-notification-list");
+        var pressed = Assert.Single(before.TopBar, i => i.Key == Bbs757EfbTopBar.NotificationsKey);
+
+        Assert.Equal("Close notifications", TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, pressed)));
     }
 
     [Theory]

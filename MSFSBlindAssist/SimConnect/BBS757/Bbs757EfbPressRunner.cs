@@ -94,14 +94,16 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then a wait for the picture to change
 /// (at most <see cref="ChangeMaxMs"/>), and a read.</item>
 /// <item>What it came to: a navigation (Home, a side-menu entry, a home-screen app) is read again until the page name is the one
-/// tapped (at most <see cref="NavigateMaxMs"/>); any other button says only when it changed nothing
-/// (<see cref="Bbs757EfbPress.ButtonOutcome"/>); a Settings switch or slider is judged by BlueBird's file (at most
-/// <see cref="FileMaxMs"/>, the stored value of what was asked for), and anything with no setting behind it by the page (a switch
-/// within <see cref="FollowMaxMs"/>); a callout the press switched off with it is named. A press that landed says nothing.</item>
+/// tapped (at most <see cref="NavigateMaxMs"/>); any other button says its new words when the read after the tap finds it with
+/// other words, whatever its key or kind now, and that it changed nothing when nothing on the page did
+/// (<see cref="Bbs757EfbPress.ButtonOutcome"/>; the window says neither); a Settings switch or slider is judged by BlueBird's file
+/// (at most <see cref="FileMaxMs"/>, the stored value of what was asked for), and anything with no setting behind it by the page (a
+/// switch within <see cref="FollowMaxMs"/>); a callout the press switched off with it is named. A switch, check box or slider that
+/// landed says nothing: the screen reader said its new state.</item>
 /// </list>
 /// A tile of a ground service or the GPU opens the definition's echo for its row before the tap and ends it with the state read
-/// after, so the row does not say what the tile's new words say (CORE-7). Everything said is an alert, in plain words that no Windows
-/// culture changes.
+/// after, so the row does not say what the press says of the tile's new words (CORE-7). Everything said is an alert, in plain words
+/// that no Windows culture changes.
 /// </summary>
 public sealed class Bbs757EfbPressRunner
 {
@@ -169,6 +171,7 @@ public sealed class Bbs757EfbPressRunner
 
             if (NavigationTarget(item) is { } page)
                 await ArriveAsync(after, page, ct);
+            // The control's new words, or that the press changed nothing: said here, once, since the window says neither.
             else if (Bbs757EfbPress.ButtonOutcome(target.Page, after, item) is { } outcome)
                 _io.Alert(outcome);
         }

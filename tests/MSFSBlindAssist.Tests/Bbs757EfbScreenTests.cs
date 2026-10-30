@@ -23,7 +23,11 @@ public class Bbs757EfbScreenTests
         return Path.Combine(dir!.FullName, "tests", "MSFSBlindAssist.Tests", "Fixtures", "bbs757-efb");
     }
 
-    internal static Bbs757EfbScreenModel Load(string set, string name)
+    internal static Bbs757EfbScreenModel Load(string set, string name) => Load(set, name, line => line);
+
+    /// <summary>A capture read with some of its lines changed by <paramref name="edit"/>: what the same picture reads when a
+    /// box's words are other words (a door's state).</summary>
+    private static Bbs757EfbScreenModel Load(string set, string name, Func<Bbs757EfbTextLine, Bbs757EfbTextLine> edit)
     {
         string stem = Path.Combine(FixtureDir(), set, name);
         var lines = new List<Bbs757EfbTextLine>();
@@ -32,9 +36,9 @@ public class Bbs757EfbScreenTests
             {
                 var words = l.GetProperty("words").EnumerateArray().Select(w => new Bbs757EfbWord(w.GetProperty("text").GetString() ?? "",
                     new Rectangle(w.GetProperty("x").GetInt32(), w.GetProperty("y").GetInt32(), w.GetProperty("w").GetInt32(), w.GetProperty("h").GetInt32()))).ToList();
-                lines.Add(new Bbs757EfbTextLine(l.GetProperty("text").GetString() ?? "",
+                lines.Add(edit(new Bbs757EfbTextLine(l.GetProperty("text").GetString() ?? "",
                     new Rectangle(l.GetProperty("x").GetInt32(), l.GetProperty("y").GetInt32(), l.GetProperty("w").GetInt32(), l.GetProperty("h").GetInt32()),
-                    words, (l.GetProperty("pass").GetString() ?? "A")[0]));
+                    words, (l.GetProperty("pass").GetString() ?? "A")[0])));
             }
         using var bmp = new Bitmap(stem + ".png");
         return Bbs757EfbScreen.Parse(lines, Bbs757EfbPixels.FromBitmap(bmp));
@@ -290,6 +294,40 @@ public class Bbs757EfbScreenTests
             Assert.InRange(button.Hit.X, x - 15, x + 15);
             Assert.InRange(button.Hit.Y, 645, 675);
         }
+    }
+
+    [Fact]
+    public void A_door_box_keeps_its_key_whatever_state_word_it_shows()
+    {
+        // dim/15: NOSE DOOR over its box, which reads OPEN; CLOSED and UNAVAIL (grey: tablet-presses.md) are what the same box
+        // shows in the door's other states. The key leaves out a state word that is all of the box's words, as it does one that
+        // ends them ("FUEL TRUCK OFF"), so a press that changes the door keeps its key and the window its node (and the screen
+        // reader's focus on it).
+        var read = new[] { "OPEN", "CLOSED", "UNAVAIL" }.Select(state =>
+        {
+            var m = Load("dim", "15-aircraft-maintenance", line => line.Text == "OPEN" && line.Box.X == 821
+                ? line with { Text = state, Words = new[] { new Bbs757EfbWord(state, line.Box) } }
+                : line);
+            return Assert.Single(m.Items, i => i.Text.StartsWith("Nose door: ", StringComparison.Ordinal));
+        }).ToList();
+
+        Assert.Equal(new[] { "Nose door: Open", "Nose door: Closed", "Nose door: Unavail" }, read.Select(i => i.Text));
+        Assert.StartsWith("btn:NOSE DOOR|@", read[0].Key, StringComparison.Ordinal);
+        Assert.All(read, door => Assert.Equal(read[0].Key, door.Key));
+        // The other doors keep keys of their own.
+        var doors = Load("dim", "15-aircraft-maintenance").Items.Where(i => i.Text.Contains(" door: ", StringComparison.Ordinal)).Select(i => i.Key).ToList();
+        Assert.Equal(3, doors.Distinct().Count());
+    }
+
+    [Fact]
+    public void A_cabin_door_tile_keeps_one_key_open_or_closed()
+    {
+        // bright/14's door tiles read their state under a caption below them (LEFT FWD under CLOSED): one key each, unique on the
+        // page, and the same whether the door is open or closed.
+        var doors = Load("bright", "14-aircraft-cabin-doors").Items.Where(i => i.Text.EndsWith(": Closed", StringComparison.Ordinal)).ToList();
+        Assert.Equal(8, doors.Count);
+        Assert.Equal(8, doors.Select(d => d.Key).Distinct().Count());
+        Assert.All(doors, d => Assert.DoesNotContain("CLOSED", d.Key, StringComparison.Ordinal));
     }
 
     [Fact]

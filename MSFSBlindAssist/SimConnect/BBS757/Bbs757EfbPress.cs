@@ -9,7 +9,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// from the reads lives here, where it is tested without a tablet: finding the control the pilot pressed again in a fresh read
 /// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), where to tap a slider with choices
 /// and where to tap next (<see cref="ChoiceX"/>, <see cref="NextChoiceX"/>), whether a press changed the page
-/// (<see cref="PageUnchanged"/>, <see cref="ButtonOutcome"/>), and the words said when it did not go through. Nothing here
+/// (<see cref="PageUnchanged"/>), what a button press says (<see cref="ButtonOutcome"/>: the pressed control's new words, or that
+/// nothing changed), and the words said when a press did not go through. Nothing here
 /// refuses a press (the owner's ruling of 2026-10-29): a decision says where a control is now, whether its tap is still wanted,
 /// or what became of the press.
 /// </summary>
@@ -186,22 +187,36 @@ public static class Bbs757EfbPress
     // ------------------------------------------------------------------ what is said
 
     /// <summary>
-    /// What a button or tile press says about itself, or null when it says nothing here: the window says a new page (nothing) and
-    /// a control's new words (once, by <c>announceChange</c>), so this speaks only when the press changed nothing. Null when the page
-    /// name changed, and when the pressed control changed or is gone (found again by <see cref="Relocate"/>; the top bar is not part
-    /// of the page, so its control is judged on its own); <see cref="NoChangeText"/> when <see cref="PageUnchanged"/>, a new
-    /// notification over it included; else null, since something on the page moved even if the pressed control did not.
+    /// What a button or tile press says about itself, the one speaker of it (the window says a new page, and nothing of a pressed
+    /// control's words: it patches a control that kept its key silently and rebuilds one whose key changed), or null when it says
+    /// nothing. From <paramref name="before"/>, the page the control was tapped on, and <paramref name="after"/>, the read after the
+    /// tap:
+    /// <list type="bullet">
+    /// <item>the control's new words, when the read finds it again (<see cref="Relocate"/>, whatever its key or kind now) with
+    /// other words: "Req fuel truck" become "Requesting…", FETCH SIMBRIEF OFP become REFRESH SIMBRIEF OFP, "Fuel truck off" become
+    /// "Fuel truck on", START BOARDING become the text "Boarding… 10 min". The screen reader cannot say them (CORE-7);</item>
+    /// <item><see cref="NoChangeText"/> when the press changed nothing (<see cref="PageUnchanged"/>: a new notification over the page,
+    /// or a top bar that ticked, is no change of the press's);</item>
+    /// <item>null when the page name changed, when a question came up (the read that found it said it, and the dimmed page under
+    /// it reads otherwise: bright/21 names IMPORT FROM SIMBRIEF by the label above it), when the control is gone, and when the control
+    /// kept its words while something else on the page moved.</item>
+    /// </list>
     /// </summary>
     public static string? ButtonOutcome(Bbs757EfbScreenModel before, Bbs757EfbScreenModel after, Bbs757EfbItem pressed)
     {
         if (!SamePage(before, after)) return null;
+        if (after.Question != null && !SameQuestion(before.Question, after.Question)) return null;
         var now = Relocate(before, after, pressed);
-        if (now == null || Line(now) != Line(pressed)) return null;
+        if (now == null) return null;
+        if (!string.Equals(now.Text, pressed.Text, StringComparison.Ordinal))
+            return string.IsNullOrWhiteSpace(now.Text) ? null : now.Text;
+        if (Line(now) != Line(pressed)) return null;
         return PageUnchanged(before, after) ? NoChangeText(pressed.Text) : null;
     }
 
-    // Said as alerts (spoken at once, once): verbatim from the plan's speech rules, the label being the element's text. Plain
-    // concatenation of the given words, so no culture can change one.
+    // Said as alerts (spoken at once, once): verbatim from the plan's speech rules, the label being the element's text, and a
+    // control's new words as the reader gives them (ButtonOutcome). Plain concatenation of the given words, so no culture can
+    // change one.
 
     /// <summary>A tap that could not run.</summary>
     public const string UnreachableText = "The tablet cannot be reached, so nothing was tapped.";

@@ -190,16 +190,24 @@ public class Bbs757EfbElementsTests
     }
 
     [Fact]
-    public void A_tile_whose_words_carry_its_state_is_announced_when_they_change()
+    public void No_element_asks_the_window_to_say_its_new_words()
     {
-        var b = BuildOf("bright", "13-aircraft-ground-services");
-
-        Assert.Equal("true", Field(b, IndexOf(b, "Fuel truck off"), "announceChange"));
-        Assert.Equal("true", Field(b, IndexOf(b, "GND SRVC Mode: BBS"), "announceChange"));
-        // Home and the side menu say their page; a tile with no state in its words has nothing to announce.
-        Assert.Equal("", Field(b, IndexOf(b, "Home"), "announceChange"));
-        Assert.Equal("", Field(b, IndexOf(b, "Fuel"), "announceChange"));
-        Assert.Equal("", Field(b, IndexOf(b, "Req PB tug"), "announceChange"));
+        // One speaker: a pressed control's new words are the press's to say, once (Bbs757EfbPress.ButtonOutcome), whatever its key.
+        // The window's own announceChange would speak only a node it kept (the same key), so a tile relabeled under a new key
+        // ("Req fuel truck" to "Requesting...") was silent while one under its key would be said twice.
+        foreach (var (set, name) in new[]
+        {
+            ("bright", "13-aircraft-ground-services"), ("bright", "18-aircraft-ground-services-notification"), ("bright", "19-notification-list"),
+            ("bright", "14-aircraft-cabin-doors"), ("bright", "21-defuel-question"), ("dim", "15-aircraft-maintenance"),
+        })
+        {
+            var b = BuildOf(set, name);
+            Assert.DoesNotContain(b.Data.Keys, key => key.EndsWith(".announceChange", StringComparison.Ordinal));
+        }
+        // The tiles whose words carry their state still press.
+        var ground = BuildOf("bright", "13-aircraft-ground-services");
+        AssertPressable(ground, "Fuel truck off");
+        AssertPressable(ground, "GND SRVC Mode: BBS");
     }
 
     // ---- the order -----------------------------------------------------------------------------------------------------
@@ -377,9 +385,10 @@ public class Bbs757EfbElementsTests
     }
 
     [Fact]
-    public void A_change_in_the_notification_button_is_announced_whatever_it_says()
+    public void The_notification_button_presses_whatever_it_says()
     {
-        // Pressing it opens or closes BlueBird's list, and its words become "Close notifications" or back: the pilot hears which.
+        // Pressing it opens or closes BlueBird's list, and its words become "Close notifications" or back: the press says which
+        // (Bbs757EfbPress.ButtonOutcome), under the key the button keeps.
         foreach (var (set, name, text) in new[]
         {
             ("bright", "13-aircraft-ground-services", "Notifications"),
@@ -388,8 +397,8 @@ public class Bbs757EfbElementsTests
         })
         {
             var b = BuildOf(set, name);
-            AssertPressable(b, text);
-            Assert.Equal("true", Field(b, IndexOf(b, text), "announceChange"));
+            Assert.Equal(Bbs757EfbTopBar.NotificationsKey, AssertPressable(b, text).Item!.Key);
+            Assert.Equal(Bbs757EfbTopBar.NotificationsKey, Field(b, IndexOf(b, text), "key"));
         }
     }
 

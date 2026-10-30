@@ -78,8 +78,9 @@ public sealed class Bbs757EfbBridgeIo
 /// that page was read from, and is tapped where the control is now, or not at all when it is gone. The
 /// AIRAC page carries the app's extras (the Navigraph sign-in while signed out, and its code line), and a
 /// press that starts one of the app's hooks (the load watch, the nav data watch) tells MainForm on the UI
-/// thread. Speech follows CORE-7: the screen reader reads the control; a control whose label carries its
-/// own state is re-read for the pilot after the press (announceChange); a failure is said as an alert.
+/// thread. Speech follows CORE-7: the screen reader reads the control; a pressed control the tablet gave
+/// other words is said once in its new words, by the press runner, whatever its key (the window says
+/// nothing of them); a failure is said as an alert.
 ///
 /// The text recognition engine is loaded at the first read while the window is shown and released when
 /// it hides (<see cref="TextRecognitionEngineSlot{T}"/>), both only on the loop, which runs every read,

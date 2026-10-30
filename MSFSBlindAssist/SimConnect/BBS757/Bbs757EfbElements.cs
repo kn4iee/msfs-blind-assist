@@ -25,6 +25,10 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// notifications under a heading; Home and the side menu; the page; the app's extras; the scroll buttons; and "More" with Read the
 /// tablet again. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
 /// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first.
+///
+/// No element asks the window to say its new words (the shell's <c>announceChange</c>): the window could say them only for a
+/// control that kept its key, and a pressed control's new words are the press's to say, once, whatever its key
+/// (<see cref="Bbs757EfbPress.ButtonOutcome"/>).
 /// </summary>
 public static class Bbs757EfbElements
 {
@@ -60,7 +64,7 @@ public static class Bbs757EfbElements
         int n = 0;
 
         void Add(string text, string kind = "", string controlType = "", bool clickable = false, int level = 0,
-            string value = "", string key = "", bool announceChange = false, IReadOnlyList<string>? options = null,
+            string value = "", string key = "", IReadOnlyList<string>? options = null,
             string live = "", double? min = null, double? max = null, double? step = null, Action? action = null,
             string? of = null)
         {
@@ -79,7 +83,6 @@ public static class Bbs757EfbElements
             data[$"items.{i}.level"] = level.ToString(CultureInfo.InvariantCulture);
             data[$"items.{i}.live"] = live;
             data[$"items.{i}.disabled"] = "false";
-            if (announceChange) data[$"items.{i}.announceChange"] = "true";
             if (key.Length > 0) data[$"items.{i}.key"] = key;
             if (options != null) data[$"items.{i}.options"] = string.Join(OptionSeparator, options);
             if (min is double mn) data[$"items.{i}.min"] = mn.ToString(CultureInfo.InvariantCulture);
@@ -157,9 +160,7 @@ public static class Bbs757EfbElements
                 Add(it.Text, key: it.Key);
                 return;
             }
-            // The notification button's words say whether BlueBird's list is open, and change when it is pressed.
-            Add(it.Text, kind: "button", clickable: true, key: it.Key,
-                announceChange: it.Key == Bbs757EfbTopBar.NotificationsKey || CarriesState(it), action: new Action(ActionKind.Tap, it));
+            Add(it.Text, kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
         }
 
         void AddItem(Bbs757EfbItem it, string pageName, bool dimmed)
@@ -180,8 +181,7 @@ public static class Bbs757EfbElements
                     Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Button:
-                    Add(it.Text, kind: "button", clickable: true, key: it.Key, announceChange: CarriesState(it),
-                        action: new Action(ActionKind.Tap, it));
+                    Add(it.Text, kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Toggle:
                 {
@@ -242,11 +242,6 @@ public static class Bbs757EfbElements
     /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>
     private static string MenuText(Bbs757EfbItem it) =>
         it.Text + (it.Selected && !it.Text.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
-
-    /// <summary>Whether a button or tile's words carry its state, so the window says them again when a press changes them: a red or
-    /// green tile (on or off), or words with a colon ("GND SRVC Mode: BBS", "Notifications: 2").</summary>
-    private static bool CarriesState(Bbs757EfbItem it) =>
-        it.Tint is Bbs757EfbTint.Red or Bbs757EfbTint.Green || it.Text.Contains(':');
 
     /// <summary>A notification as a line of text: the time the tablet shows over its words, when it was read, then the words.</summary>
     private static string NoticeText(Bbs757EfbNotice notice) =>
