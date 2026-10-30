@@ -52,6 +52,110 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Equal(new[] { 1 }, await rig.LeverWrites());
     }
 
+    // Live 2026-10-30, on a final at 3000 ft: ALT took a 200 ft sag back at 1000 fpm, which read as a go-around, and the flaps came up
+    // from 2 to 0 at 9 NM. On the A350 a go-around has its levers at MCT or TOGA; nothing else climbs out of an approach as one.
+    [Fact]
+    public async Task The_A350s_climb_back_to_an_altitude_with_the_levers_at_climb_is_no_go_around()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms
+        rig.Lever(2);
+        rig.Fly(agl: 2_800, vs: -500, ias: 170);    // the sag
+        rig.Fly(agl: 2_900, vs: 1_000, ias: 170);
+        rig.Fly(agl: 3_010, vs: 800, ias: 170);     // 200 ft above it, climbing
+        rig.Wait(5);
+        rig.Fly(agl: 3_000, vs: 0, ias: 170);       // past F, level
+        rig.Wait(5);
+        rig.Fly(agl: 3_000, vs: 0, ias: 170);
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // The levers come back to CL at the thrust reduction altitude: the go-around was still one, though the height came after that.
+    [Fact]
+    public async Task The_A350s_go_around_stands_when_the_levers_left_TOGA_before_the_height_came()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(4);
+        rig.GearDown();
+        rig.Fly(agl: 300, vs: -700, ias: 140);      // the lowest
+        rig.Thrust(45);
+        rig.Fly(agl: 400, vs: 1_500, ias: 145);
+        rig.Thrust(25);
+        rig.Fly(agl: 550, vs: 1_800, ias: 150);     // "Go-around. Flaps 3."
+
+        Assert.Equal(new[] { 3 }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued("Go-around. Flaps 3.") }, rig.Speech.All);
+    }
+
+    // Live 2026-10-30: at idle on the glide path, flaps 2 and gear down, the speed settled at 154 with F at 152.9 and stayed there through
+    // 1100 ft, so the landing flaps never came. The manual's rule is "Always select your next flap setting when below Vfe next"; F is only
+    // when the First Officer gets to it high on the approach.
+    [Fact]
+    public async Task The_A350s_landing_flaps_come_on_the_descent_below_1500_ft_whatever_the_speed_settled_at()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(2);
+        rig.GearDown();
+        rig.Fly(agl: 1_600, vs: -800, ias: 154);     // F is 150: above the gate it waits
+        Assert.Empty(await rig.LeverWrites());
+        rig.Fly(agl: 1_450, vs: -800, ias: 154);
+        Assert.Equal(new[] { 3 }, await rig.LeverWrites());
+        rig.Lever(3);
+        rig.Wait(5);
+        rig.Fly(agl: 1_350, vs: -800, ias: 154);
+        Assert.Equal(new[] { 3, 4 }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued("Speed checked. Flaps 3."), Queued("Speed checked. Flaps full.") }, rig.Speech.All);
+    }
+
+    // Level at circuit height is no final: it waits for the speed as before, and VFE next still holds it.
+    [Fact]
+    public async Task The_A350s_gate_holds_for_level_flight_and_for_VFE_next()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(2);
+        rig.GearDown();
+        rig.Fly(agl: 1_200, vs: 0, ias: 154);        // level
+        rig.Fly(agl: 1_200, vs: -800, ias: 212);     // VFE next is 215: within its margin
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // The gear gate stands below it too: the last step is not taken with the gear up.
+    [Fact]
+    public async Task The_A350s_full_flaps_still_wait_for_the_gear_below_the_gate()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(3);
+        rig.Fly(agl: 1_400, vs: -800, ias: 154);
+        Assert.Empty(await rig.LeverWrites());
+        rig.GearDown();
+        rig.Fly(agl: 1_300, vs: -800, ias: 154);
+        Assert.Equal(new[] { 4 }, await rig.LeverWrites());
+    }
+
     // Takeoff with CONF 1+F and a climb-out the pilot cleans up himself, then an arrival: a real descent
     // to a level high final at 4,000 ft AGL (the approach context arms on the way down), where the pilot
     // selects flaps 1 and flies above S.
@@ -180,6 +284,7 @@ public class FbwFamilyAutoManagerSecondReviewTests
         rig.GearDown();
         rig.Fly(agl: 500, vs: -700, ias: 140);
         rig.Fly(agl: 300, vs: -700, ias: 140);      // the approach's lowest point
+        rig.Thrust(45);
         rig.Fly(agl: 400, vs: 1_500, ias: 145);     // TOGA: climbing, not yet 200 ft above it
         rig.Fly(agl: 550, vs: 1_800, ias: 150);     // "Go-around. Flaps 3."
         rig.Lever(3);
@@ -314,6 +419,14 @@ public class FbwFamilyAutoManagerSecondReviewTests
         }
 
         public void Lever(int position) => Seed(_sim, _leverKey, position);
+
+        /// <summary>The A350's thrust levers (the only airframe here whose schedule reads them).</summary>
+        public void Thrust(double tla)
+        {
+            Seed(_sim, "A350_ENGINE_THROTTLE_1", tla);
+            Seed(_sim, "A350_ENGINE_THROTTLE_2", tla);
+        }
+
         public void GearDown() => Seed(_sim, _gearKey, 1);
         public void OnGround() => Manager.Update(FieldElevation, 0, 0, 0, onGround: true);
 

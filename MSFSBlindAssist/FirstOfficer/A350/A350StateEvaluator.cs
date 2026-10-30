@@ -64,6 +64,10 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string GreenDotField = "FO_SPEED_GD", SSpeedField = "FO_SPEED_S", FSpeedField = "FO_SPEED_F", VfeNextField = "FO_VFE_NEXT";
     internal const string LandingConf3Field = "FO_LANDING_CONF3";
     internal const string AdirsNavField = "FO_ADIRS_NAV", LeversIdleField = "FO_LEVERS_IDLE", CockpitDoorSecureField = "FO_COCKPIT_DOOR_SECURE";
+    internal const string GoAroundThrustField = "FO_GA_THRUST";
+
+    /// <summary>A lever past this has left the CLB detent (25) for MCT (35) or TOGA (45): the levers of a go-around, hard or soft.</summary>
+    private const double PastClimbDetent = 30;
 
     private readonly Func<string, string> _keyFor;
     private readonly IniBuildsA350Definition? _definition;
@@ -126,6 +130,9 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
             case LeversIdleField:
                 value = Both(GetValue("A350_ENGINE_THROTTLE_1"), GetValue("A350_ENGINE_THROTTLE_2"),
                     (one, two) => A350FlowDefinitions.LeversIdle(one) && A350FlowDefinitions.LeversIdle(two));
+                return true;
+            case GoAroundThrustField:
+                value = Both(GetValue("A350_ENGINE_THROTTLE_1"), GetValue("A350_ENGINE_THROTTLE_2"), (one, two) => Math.Max(one, two) > PastClimbDetent);
                 return true;
             case CockpitDoorSecureField:
                 value = Both(GetValue("A350_COCKPIT_DOOR_HANDLE_BASE_CS"), GetValue("A350_COCKPIT_DOOR_LOCK"), (open, locked) => open < 0.5 && locked > 0.5);

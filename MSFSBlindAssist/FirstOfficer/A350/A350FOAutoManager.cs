@@ -64,6 +64,11 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // V2 (live 2026-10-30, F 138, V2 148 at 200 t), so without this the lever came up to 1 at lift-off and to 0 at 430 ft.
     private const double RetractionMinAglFt = 1000;
 
+    // Below this on the descent the next flap does not wait for its speed, only for VFE next: at idle on the glide path the speed can settle
+    // just above it (live 2026-10-30: 154 with F at 152.9, flaps 2 through 1100 ft) and the manual's rule is "Always select your next flap
+    // setting when below Vfe next". High enough for the two last steps to be out by 1000 ft, the dwell between them.
+    private const double LandingFlapsGateAglFt = 1500;
+
     // Approach context: armed by a DESCENDING sample below 5000 ft AGL at least ApproachArmDescentFt
     // below the leg's highest MSL altitude (_peakMsl), one-way until go-around or touchdown. Extension
     // runs ONLY while armed, and retraction ONLY while disarmed — without this gate a departure
@@ -76,6 +81,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // go-around fallback and the next such sample cycled the lever every dwell.
     private bool _extensionArmed;
     private double _minAglInApproach = double.MaxValue;
+    private bool _goAroundThrustSeen;            // levers at MCT or TOGA in this approach context
     private int _lastExtendCommand = -1;         // don't re-fight a pilot who pulled flaps back
     private int _lastRetractCommand = 99;        // don't re-fight a pilot who re-extended
     private DateTime _lastFlapMoveUtc = DateTime.MinValue;
@@ -106,6 +112,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
     {
         _extensionArmed     = false;
         _minAglInApproach   = double.MaxValue;
+        _goAroundThrustSeen = false;
         _lastExtendCommand  = -1;
         _lastRetractCommand = 99;
         _lastFlapMoveUtc    = DateTime.MinValue;
@@ -119,6 +126,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
     {
         _extensionArmed    = false;
         _minAglInApproach  = double.MaxValue;
+        _goAroundThrustSeen = false;
         _lastExtendCommand = -1;
         _peakMsl           = double.NaN;
     }
@@ -181,12 +189,17 @@ public sealed class A350FOAutoManager : IFoAutoManager
         if (_extensionArmed && agl < _minAglInApproach)
             _minAglInApproach = agl;
 
+        // The levers may be back at CL before the height is regained, so once is enough.
+        if (_extensionArmed && _state.GetValue(A350StateEvaluator.GoAroundThrustField) > 0.5)
+            _goAroundThrustSeen = true;
+
         // ---- Go-around: disarm + SOP one-step retraction ----
         if (_extensionArmed)
         {
-            // Primary signature: sustained climb AND real height regained above the
-            // approach's minimum — a bare VS spike can never fire the lever.
-            bool gaPrimary  = vs > GaClimbFpm && agl >= _minAglInApproach + GaAglGainFt;
+            // Primary signature: the levers of a go-around, a sustained climb AND real height
+            // regained above the approach's minimum — a bare VS spike can never fire the lever,
+            // nor ALT taking back a sag at 1000 fpm (live 2026-10-30: the flaps came up at 9 NM).
+            bool gaPrimary  = _goAroundThrustSeen && vs > GaClimbFpm && agl >= _minAglInApproach + GaAglGainFt;
             // 737-style high safeguard: clears a stuck approach context on an ESTABLISHED
             // climb (above +200 fpm for GaFallbackClimbSeconds) above 3000 ft AGL.
             // LATCH-CLEAR ONLY — it must never command the SOP step (final-review I1) nor
@@ -257,21 +270,22 @@ public sealed class A350FOAutoManager : IFoAutoManager
             double gd = _state.GetValue(A350StateEvaluator.GreenDotField);
             double s  = _state.GetValue(A350StateEvaluator.SSpeedField);
             double f  = _state.GetValue(A350StateEvaluator.FSpeedField);
+            bool landingGate = descending && agl < LandingFlapsGateAglFt;
 
             switch (flaps)
             {
-                case 0 when !double.IsNaN(gd) && ias < gd:
+                case 0 when landingGate || (!double.IsNaN(gd) && ias < gd):
                     TryExtend(1, "Speed checked. Flaps 1.");
                     break;
-                case 1 when !double.IsNaN(s) && ias < s:
+                case 1 when landingGate || (!double.IsNaN(s) && ias < s):
                     TryExtend(2, "Speed checked. Flaps 2.");
                     break;
-                case 2 when !double.IsNaN(f) && ias < f:
+                case 2 when landingGate || (!double.IsNaN(f) && ias < f):
                     // With CONF 3 selected this IS the final landing step -> gear gate.
                     if (!conf3 || gearDown)
                         TryExtend(3, "Speed checked. Flaps 3.");
                     break;
-                case 3 when !conf3 && !double.IsNaN(f) && ias < f && gearDown:
+                case 3 when !conf3 && (landingGate || (!double.IsNaN(f) && ias < f)) && gearDown:
                     // Final landing step for a FULL landing -> gear gate. With CONF 3
                     // selected the schedule stops at 3 (never commands FULL).
                     TryExtend(4, "Speed checked. Flaps full.");

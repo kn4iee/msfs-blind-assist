@@ -394,6 +394,12 @@ whole flight, which is what a flight on 2026-10-30 did: no pause at T/D and no T
 speed that stays on the cruise schedule, and `FCPC_F_SPEED` still the takeoff configuration's F (137 kt, the F on PERF T.O, against PERF APPR's
 154 at 193 t; the PFD draws its F symbol from the same variable). Fly such an approach on selected speed and set flaps 3 and FULL by hand.
 
+With the phases right, the F speed follows the phase (read live on one flight, 2026-10-30): the takeoff F through phases 1 to 5, the approach F (154, then 156 on the
+second approach) from the moment phase 6 begins, whether at (DECEL) or with ACTIVATE APPR, and the takeoff F again in phase 9 and after it. The First Officer's flaps 3 and FULL
+wait for this F, so they come only in phase 6. A go-around leaves phase 9 for 3 at the acceleration altitude, about 250 ft above where TOGA was set at 1000 ft, and PERF
+APPR then offers ACTIVATE APPR (with CONFIRM) to come back to 6; the F-PLN has the approach strung again after the missed approach, past a discontinuity, so DIR TO its first fix joins it.
+BTV disarms in a go-around: its exit and the A/BRK selector have to be set again.
+
 What arms it (`AP_LOGIC::INI_update_throttle_detents`, live 2026-10-30 on the brakes with both engines running and flaps 2): the levers reaching FLX (with a FLEX
 temperature) or TOGA set `INI_AUTOTHROTTLE_ARMED`, then SRS and RWY, but on the next frame, while `INI_EWD_FLIGHT_PHASE` is still 2 or less, the same function clears them
 all. `update_EWD_flight_phase` goes to 3 only with the levers at the detent and N2 at or above 70 on an engine. So the engines must be spooled before the detent, the real

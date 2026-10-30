@@ -202,6 +202,14 @@ public class A350StateEvaluatorTests
     public void Levers_idle_is_both(double one, double two, double expected) =>
         Assert.Equal(expected, Evaluator(("A350_ENGINE_THROTTLE_1", one), ("A350_ENGINE_THROTTLE_2", two)).GetValue(A350StateEvaluator.LeversIdleField));
 
+    [Theory]
+    [InlineData(25, 25, 0)]
+    [InlineData(35, 35, 1)]
+    [InlineData(45, 45, 1)]
+    [InlineData(0, 45, 1)]    // an engine out
+    public void Go_around_thrust_is_either_lever_past_climb(double one, double two, double expected) =>
+        Assert.Equal(expected, Evaluator(("A350_ENGINE_THROTTLE_1", one), ("A350_ENGINE_THROTTLE_2", two)).GetValue(A350StateEvaluator.GoAroundThrustField));
+
     [Fact]
     public void Levers_idle_unread_is_unknown() =>
         Assert.True(double.IsNaN(Evaluator(("A350_ENGINE_THROTTLE_1", 0)).GetValue(A350StateEvaluator.LeversIdleField)));
