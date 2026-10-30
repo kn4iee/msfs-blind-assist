@@ -185,7 +185,7 @@ public static class A350Pfd
         // The selected altitude, read after the FMA: beyond the tape's range the readout at the tape's top or bottom, "FL"
         // at 587 and its number at 688 (live 2026-10-28: y 172 above, 615 below), one value; in range the tape's symbol.
         var selectedAltitude = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.X is >= 585 and < 720
-                && c.Y is >= FmaBottom and < 640)
+                && c.Y is >= FmaBottom and < 640 && !MetricText.IsMatch(c.Text.Trim()))
             .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
         used.UnionWith(selectedAltitude);
         if (selectedAltitude.Count == 0)
@@ -216,6 +216,14 @@ public static class A350Pfd
                 + (minimum.LastOrDefault(c => c.Text.Trim() is not ("RADIO" or "BARO")) ?? minimum[0]).Colour);
         if (selectedAltitude.Count > 0)
             o.Add($"Selected altitude: {string.Join(" ", selectedAltitude.Select(c => c.Text))}, cyan");
+        // METRIC ALT (live 2026-10-30): the selected altitude in metres above the altitude tape ("30M" at x 547 y 175 with
+        // 100 ft selected, "1520M" with 5000), cyan.
+        foreach (var c in cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.X is >= 500 and < 720
+                     && c.Y is >= FmaBottom and < BottomLine && MetricText.IsMatch(c.Text.Trim())))
+        {
+            used.Add(c);
+            o.Add($"Selected altitude in metres: {c.Text.Trim()[..^1]}, cyan");
+        }
         foreach (var c in constraint)
             o.Add($"Altitude constraint: {c.Text.Trim()}, magenta");
 
@@ -315,6 +323,14 @@ public static class A350Pfd
             var tens = drumTens.OrderBy(c => Math.Abs(c.Y - WindowY)).First();
             o.Add(string.Create(CultureInfo.InvariantCulture, $"Altitude: {Altitude(int.Parse(tape.Text, CultureInfo.InvariantCulture), tape.Y, int.Parse(tens.Text, CultureInfo.InvariantCulture), tens.Y)} feet, {tens.Colour}"));
         }
+        // METRIC ALT: the altitude in metres in the box under the tape ("20" at x 692 y 696 with the field at 81 ft), in the
+        // drum's colour.
+        foreach (var c in cells.Where(c => !used.Contains(c) && Drum(c.Colour) && c.X is >= 660 and < 720 && c.Y is >= 680 and < 715
+                     && c.Text.Trim() is { Length: > 0 } m && m.TrimStart('-').All(char.IsDigit)))
+        {
+            used.Add(c);
+            o.Add($"Altitude in metres: {c.Text.Trim()}, {c.Colour}");
+        }
 
         // The vertical speed, in hundreds of feet a minute beside the altitude tape: above the window climbing.
         foreach (var c in cells.Where(c => c.X >= 720 && c.Y is >= FmaBottom and < BottomLine && c.Text.All(char.IsDigit) && c.Text.Length is 1 or 2))
@@ -399,5 +415,8 @@ public static class A350Pfd
     private static bool Digits(string s) => s.Trim() is { Length: > 0 } t && t.All(char.IsDigit);
 
     private static readonly System.Text.RegularExpressions.Regex MachText = new(@"^\.\d{2,3}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>A metric altitude box's text: metres, then "M" ("1520M").</summary>
+    private static readonly System.Text.RegularExpressions.Regex MetricText = new(@"^-?\d+M$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
 }

@@ -568,4 +568,19 @@ public class A350PfdTests
         }
         finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
     }
+    // METRIC ALT on (live 2026-10-30 at VCBI, the field 81 ft): the selected altitude in metres above the altitude tape ("30M",
+    // cyan; "1520M" with the FCU at 5000 ft) and the altitude in metres in the box under it ("20", green), read by name, where
+    // they read "30M, cyan" and "20, green" as left over.
+    [Fact]
+    public void Metric_altitude_boxes_are_read_by_name()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_metric_alt"), 0);
+        Assert.Contains("Selected altitude: 100, cyan", lines);
+        Assert.Contains("Selected altitude in metres: 30, cyan", lines);
+        Assert.Contains("Altitude: 81 feet, green", lines);
+        Assert.Contains("Altitude in metres: 20, green", lines);
+        Assert.DoesNotContain(lines, l => l.Contains("30M") || l == "20, green");
+        Assert.True(lines.ToList().IndexOf("Selected altitude in metres: 30, cyan") == lines.ToList().IndexOf("Selected altitude: 100, cyan") + 1);
+        Assert.True(lines.ToList().IndexOf("Altitude in metres: 20, green") == lines.ToList().IndexOf("Altitude: 81 feet, green") + 1);
+    }
 }
