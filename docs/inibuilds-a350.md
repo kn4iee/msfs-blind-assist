@@ -381,6 +381,36 @@ speed and altitude with the knob's pull flew an open climb; the speed brake exte
 automatic descent itself starts only on a depressurisation). Put a test's FCU targets back afterwards: a speed left at 100
 knots from ground tests had the A/THR pulling idle in the air.
 
+### Takeoff, flight phases and the T/D pause (live 2026-10-30)
+
+`INI_flight_phase` (`A380FlightPhaseTransitions::UpdatePhaseTransitions`) runs 1 preflight, 2 takeoff, 3 climb, 4 cruise, 5 descent,
+6 approach, 9 go-around, and leaving preflight needs SRS (`INI_PITCH_MODE` 1) on the roll. A takeoff without SRS leaves it at 1 for the
+whole flight, which is what a flight on 2026-10-30 did: no pause at T/D and no T/D REACHED (`FMGSmessage_Pause_at_TOD::update` wants phase 4,
+`INI_PAUSE_AT_TOD_ENABLED`, `INI_TD_IDX` set and `INI_TD_DIST_TOTAL` within `INI_PAUSE_AT_TOD_DISTANCE`), no ACTIVATE APPR on PERF, a managed
+speed that stays on the cruise schedule, and `FCPC_F_SPEED` still the takeoff configuration's F (137 kt, the F on PERF T.O, against PERF APPR's
+154 at 193 t; the PFD draws its F symbol from the same variable). Fly such an approach on selected speed and set flaps 3 and FULL by hand.
+
+What arms it (`AP_LOGIC::INI_update_throttle_detents`), tried on the brakes with both engines running and flaps 2, read from the FMA and
+`INI_AUTOTHROTTLE_ARMED`:
+
+| Levers | FMA | Armed |
+| --- | --- | --- |
+| TOGA | `MAN TOGA`, `SRS` with `CLB` armed, `RWY` with `NAV` armed, `A/THR` cyan | yes |
+| FLX, a FLEX temperature in PERF T.O | as TOGA, with `MAN FLX` and the temperature | by the code; not yet tried |
+| FLX, no temperature | `MAN MCT` | no, no SRS |
+| TOGA after a press of an A/THR disconnect button, or as the first thrust after a landing | `MAN TOGA`, no SRS, no `A/THR` | no: latched |
+
+The latch clears with a press of the FCU A/THR button; nothing reads different at idle (`INI_AUTOTHROTTLE_ARMED` stays 0 until the levers move).
+`INI_EWD_FLIGHT_PHASE` reads 13 after a landing, 2 with the engines started, 3 at takeoff thrust.
+
+Other things a flight showed:
+
+- **After power-up** the OIS shows "OIS NOT AVAIL" (`#BootOIS`) for several minutes and boots by itself.
+- **AP DISCONNECT PROTECTION** (OIS OPTIONS > SIMULATION): AP 1 dropped and came back by itself in about 3.5 s at FL300, with the master warning and AP OFF.
+- **Pushback** (`Push back straight`, OIS GROUND): 2.5 kt, and it ends itself after about a minute (`PUSHBACK STATE` 0, then 1, then 3).
+- **BTV** took the autoland at OMDB 12L to the exit it was given: at touchdown the FMA autothrust reads `BTV, green` and `DECEL, green`, the aircraft came to the exit at about 14 kt,
+  and BTV ended with `AUTO BRK OFF`, amber, and the master caution, the brakes released and the aircraft rolling on: brake or steer before that.
+
 ### Pedestal levers (`A350Levers`, live 2026-10-27)
 
 The map lists the levers as "none": each bypasses its input event, so they are written in C# the way the cockpit's own

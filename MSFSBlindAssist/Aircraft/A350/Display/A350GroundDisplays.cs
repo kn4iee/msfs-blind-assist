@@ -24,7 +24,7 @@ public static class A350GroundDisplays
 
     private static bool Number(DrawnCell c) => c.Text.Length > 0 && c.Text.All(ch => char.IsDigit(ch) || ch == '.');
 
-    /// <summary>A side's ND (EFIS#0's left half, EFIS#1's right half), in its own coordinates.</summary>
+    /// <summary>A side's ND (EFIS#0's right half, EFIS#1's left half), in its own coordinates.</summary>
     /// <param name="skip">Texts another reader has taken (the ND's controls, <see cref="A350NdPage"/>).</param>
     public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side, Func<DrawnText, bool>? skip = null)
     {
