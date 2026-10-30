@@ -262,6 +262,28 @@ public class A350NdPageTests
         Assert.Contains(lines, l => l.Kind == "text" && l.Spoken == "Radar mode: WX+T, green");
     }
 
+    // Live 2026-10-30, FL300: POSITION/TIME's marker on the path: "(20:45)" in green. It has no letters, so it read as a bare line with no place.
+    [Fact]
+    public void A_time_marker_is_on_the_map_where_it_lies()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_time_marker.json"), 0, mode: 3, range: 8);
+        Assert.Contains(lines, l => l.Kind == "map" && l.Spoken.StartsWith("Time marker 20:45, green: 12 o'clock, ", StringComparison.Ordinal));
+    }
+
+    // Live 2026-10-30: the aircraft symbol's DIR TO opens a panel on the map whose ERASE and INSERT are DualTextButtons, read only as rows of
+    // text ("ERASE INSERT", "* *", "TMPY TMPY"), so nothing in the window could press them.
+    [Fact]
+    public void The_direct_to_panels_erase_and_insert_are_buttons()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_nd_dirto_panel.json"), 0, mode: 3, range: 8);
+        var erase = Assert.Single(lines, l => l.Kind == "button" && l.Spoken == "ERASE * TMPY button, amber");
+        Assert.Equal((265f, 647f), (erase.ClickX, erase.ClickY));
+        var insert = Assert.Single(lines, l => l.Kind == "button" && l.Spoken == "INSERT * TMPY button, amber");
+        Assert.Equal((542f, 647f), (insert.ClickX, insert.ClickY));
+        Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("ERASE INSERT", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Spoken == "DIRECT, selected" || l.Spoken == "DIRECT");
+    }
+
     // Review 3 (M4): a waypoint's menu opens with its title line first, so the selection stayed on an unrelated line; an erase dialog's
     // question has no menu line at all.
     [Fact]

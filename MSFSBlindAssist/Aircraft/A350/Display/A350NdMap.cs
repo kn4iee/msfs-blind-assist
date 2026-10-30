@@ -57,6 +57,9 @@ public static class A350NdMap
     /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
     private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 5) || AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t));
 
+    /// <summary>A time marker's label on the path: "(20:45)" (live 2026-10-30, POSITION/TIME).</summary>
+    internal static readonly System.Text.RegularExpressions.Regex TimeMarker = new(@"^\((\d{2}:\d{2})\)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>The radar's mode beside the map ("WX+T", live at FL300 2026-10-30): no name on it. No fix or navaid has a plus in its name.</summary>
     internal static bool IsRadarMode(string text) => text.Trim() is "WX" or "TERR" || text.Contains('+') && text.Trim().StartsWith("WX", StringComparison.Ordinal);
 

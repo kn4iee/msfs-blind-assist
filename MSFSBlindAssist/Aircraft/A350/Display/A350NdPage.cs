@@ -91,9 +91,10 @@ public static class A350NdPage
         }
         string tab = tabs.Count > 0 ? Words(tabs[^1].Own.Where(tabs[^1].Holds)) : "";
 
-        foreach (var c in controls.Where(c => c.Class == "BaseUIButton" && c.Own.Any(c.Holds)))
+        // A DualTextButton holds its two lines and the star between them, drawn out of order ("ERASE", "TMPY", "*").
+        foreach (var c in controls.Where(c => c.Class is "BaseUIButton" or "DualTextButton" && c.Own.Any(c.Holds)))
         {
-            var own = c.Own.Where(c.Holds).ToList();
+            var own = c.Own.Where(c.Holds).OrderBy(t => c.Class == "DualTextButton" ? t.Y : 0).ToList();
             Take(own);
             // ARPT SEL's three at the right hold the flight plan's airports once there is one: ORIGIN, DEST and ALTN, top down.
             string word = Words(own);
@@ -193,8 +194,12 @@ public static class A350NdPage
                 var at = t with { X = t.X - shift };
                 if (at.X is < 0 or >= HalfWidth || at.Y is < MapTop or >= MapBottom || at.ColourName is "red" or "amber") continue;
                 string name = at.Text.Trim();
-                if (name.Length < 2 || name.Contains(' ') || !name.Any(char.IsLetter) || A350NdMap.IsRadarMode(name)
-                    || names.Any(n => n.Spoken.StartsWith(name + ",", StringComparison.Ordinal))) continue;
+                // POSITION/TIME's marker on the path, its time in brackets as a pseudo waypoint's name is: the rule below wants a letter.
+                if (A350NdMap.TimeMarker.Match(name) is { Success: true } marker)
+                    name = "Time marker " + marker.Groups[1].Value;
+                else if (name.Length < 2 || name.Contains(' ') || !name.Any(char.IsLetter) || A350NdMap.IsRadarMode(name))
+                    continue;
+                if (names.Any(n => n.Spoken.StartsWith(name + ",", StringComparison.Ordinal))) continue;
                 taken.Add(t);
                 string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X - NameOffsetX, at.Y - NameOffsetY) : "";
                 names.Add(new MfdLine("map", $"{name}, {at.ColourName}" + (place.Length > 0 ? $": {place}" : ""), at.X, at.Y));
