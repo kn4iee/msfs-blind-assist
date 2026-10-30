@@ -70,8 +70,8 @@ public static class Bbs757EfbExtras
     /// The hook a press on <paramref name="item"/> of the page <paramref name="pageName"/> (as
     /// <see cref="Bbs757EfbScreenModel.PageName"/> gives it) starts, or <see cref="Bbs757EfbHook.None"/>. The control's words are
     /// its text or the words of its key (<see cref="Bbs757EfbScreen.KeyWords"/>: a box's own words, which never take the caption
-    /// the reader may name it by, so "Navigation data: Update" is UPDATE). Words and page names are compared with case ignored and
-    /// runs of spaces taken as one.
+    /// or row label the reader may name it by, so the AIRAC page's "Update, Latest cycle" is UPDATE). Words and page names are
+    /// compared with case ignored and runs of spaces taken as one.
     /// </summary>
     public static Bbs757EfbHook HookFor(string pageName, Bbs757EfbItem item)
     {

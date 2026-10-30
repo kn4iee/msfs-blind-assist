@@ -181,6 +181,34 @@ public class Bbs757EfbExtrasTests
         Assert.All(m.Menu.Concat(m.Items).Concat(m.TopBar), i => Assert.Equal(Bbs757EfbHook.None, Bbs757EfbExtras.HookFor(m.PageName, i)));
     }
 
+    [Fact]
+    public void The_captured_airac_page_hooks_its_update_and_no_logout()
+    {
+        // bright/55: UPDATE and the two LOGOUTs are buttons named by their rows ("Update, Latest cycle"); the hook is judged by the
+        // words of the key, the box's own, never the row's label.
+        var m = Bbs757EfbScreenTests.Load("bright", "55-settings-airac-data");
+
+        var update = m.Items.Single(i => i.Text == "Update, Latest cycle");
+        Assert.Equal(Bbs757EfbHook.NavDataUpdate, Bbs757EfbExtras.HookFor(m.PageName, update));
+        var logouts = m.Items.Where(i => i.Text.StartsWith("Logout, ", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, logouts.Count);
+        Assert.All(logouts, logout => Assert.Equal(Bbs757EfbHook.None, Bbs757EfbExtras.HookFor(m.PageName, logout)));
+        Assert.Equal(new[] { update.Key },
+            m.Menu.Concat(m.Items).Concat(m.TopBar).Where(i => Bbs757EfbExtras.HookFor(m.PageName, i) != Bbs757EfbHook.None).Select(i => i.Key));
+    }
+
+    [Fact]
+    public void The_captured_airac_pages_remove_hooks_the_nav_data_removal()
+    {
+        // The same box reading REMOVE, as BlueBird shows it when no newer cycle waits.
+        var m = Bbs757EfbScreenTests.Load("bright", "55-settings-airac-data", line => Bbs757EfbScreenTests.UpdateReadAs(line, "REMOVE"));
+
+        var remove = m.Items.Single(i => i.Text == "Remove, Latest cycle");
+        Assert.Equal(Bbs757EfbHook.NavDataRemove, Bbs757EfbExtras.HookFor(m.PageName, remove));
+        Assert.Equal(new[] { remove.Key },
+            m.Menu.Concat(m.Items).Concat(m.TopBar).Where(i => Bbs757EfbExtras.HookFor(m.PageName, i) != Bbs757EfbHook.None).Select(i => i.Key));
+    }
+
     [Theory]
     [InlineData("bright", "10-aircraft-presets")]
     [InlineData("bright", "11-aircraft-fuel")]

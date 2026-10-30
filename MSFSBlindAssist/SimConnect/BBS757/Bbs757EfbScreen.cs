@@ -184,7 +184,9 @@ public sealed record Bbs757EfbScreenModel(
 /// Controls are found from the PIXELS (filled boxes of button size), so a word OCR missed still
 /// leaves its control on the page; text inside a box names it. A settings row is a label at the
 /// left and a value at the right (x &gt; 1180), with a switch (a pill at x 1140-1200) or a slider (a
-/// round knob, the brightest blue) between. A checklist line has a box at x 286-311. Labels too
+/// round knob, the brightest blue) between; a box in that value column is the row's button instead
+/// (the AIRAC data page's UPDATE or REMOVE and its LOGOUTs), named by the row's label, and the row's
+/// own words stay text. A checklist line has a box at x 286-311. Labels too
 /// small for OCR (a door's name under its tile, a note) come from <see cref="KnownText"/>, by
 /// position, on the pages where BlueBird prints them in a fixed place.
 /// </summary>
@@ -741,7 +743,8 @@ public static class Bbs757EfbScreen
         }
         foreach (var l in loose.Where(l => !used.Contains(l) && FlatButtons.Contains(l.Text)).ToList())
         {
-            // A button drawn as plain text on the page (the checklist's RESET, the AIRAC page's LOGOUT).
+            // A button drawn as plain text on the page (the checklist's RESET). The AIRAC page's LOGOUTs are boxed (bright/55):
+            // ParseRows makes them its rows' buttons.
             used.Add(l);
             o.Add(new(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(l.Text), l.Box, l.Centre, true, "btn:" + l.Text));
         }
@@ -805,7 +808,7 @@ public static class Bbs757EfbScreen
 
     private static bool HasStateWord(string t) => StateWords.Any(w => t.EndsWith(" " + w, StringComparison.Ordinal) || t == w);
 
-    /// <summary>The words a box's key carries, between its caption and its place ("btn:NAVIGATION DATA|UPDATE@64,16" is UPDATE,
+    /// <summary>The words a box's key carries, between its caption and its place ("btn:LATEST CYCLE|UPDATE@59,14" is UPDATE,
     /// "btn:|FUEL TRUCK@56,28" is FUEL TRUCK): the box's own words without their state word (<see cref="StripState"/>), never the
     /// caption or the row label the reader may name the box by; "" for a key that is no box's (a switch, the top bar, a menu
     /// entry).</summary>
@@ -826,18 +829,39 @@ public static class Bbs757EfbScreen
 
     // ------------------------------------------------------------------ settings rows
 
+    /// <summary>Where a Settings row's value column starts: the row's value (its word, a figure) and, on the AIRAC data page, its
+    /// button lie right of it.</summary>
+    private const int ValueLeft = 1180;
+
+    /// <summary>A box in a Settings page's value column with words in it (<see cref="RowButtons"/>): a button, named by the
+    /// label of the row it stands in once one is found (its caption, null until then).</summary>
+    private sealed class RowButton(FoundBox box, List<Bbs757EfbTextLine> lines)
+    {
+        public FoundBox Box { get; } = box;
+        public List<Bbs757EfbTextLine> Lines { get; } = lines;
+        public string? Caption { get; set; }
+    }
+
     private static List<Bbs757EfbItem> ParseRows(List<Bbs757EfbTextLine> lines, Bbs757EfbPixels px)
     {
         var o = new List<Bbs757EfbItem>();
         var used = new HashSet<Bbs757EfbTextLine>();
         var boxes = FindButtonBoxes(px, ContentArea);
+        // A boxed button in the value column is no row's value: its words are its own (the AIRAC data page's UPDATE or REMOVE and
+        // its LOGOUTs, read as the rows' values until 2026-10-30, so none could be pressed).
+        var buttons = RowButtons(lines, boxes);
+        foreach (var button in buttons) used.UnionWith(button.Lines);
         var labels = lines.Where(l => l.Box.Left < 700 && l.Box.Left > MenuRight).OrderBy(l => l.Box.Top).ToList();
         foreach (var label in labels)
         {
             if (used.Contains(label)) continue;
             if (label.Text.Split(' ').Length > 6) continue;   // a note, read as text below
             int cy = label.Centre.Y;
-            var value = lines.FirstOrDefault(v => !used.Contains(v) && v.Box.Left > 1180 && Math.Abs(v.Centre.Y - cy) <= 14);
+            // A button whose height holds the label is the label's row's, taken by the first label met (UPDATE's box spans the
+            // latest and the installed cycle); that row has no value of its own.
+            var rowButton = buttons.FirstOrDefault(b => b.Caption == null && cy >= b.Box.Box.Top && cy <= b.Box.Box.Bottom);
+            var value = rowButton != null ? null
+                : lines.FirstOrDefault(v => !used.Contains(v) && v.Box.Left > ValueLeft && Math.Abs(v.Centre.Y - cy) <= 14);
             string name = label.Text;
             string pretty = Bbs757EfbVocabulary.Pretty(name);
             used.Add(label);
@@ -846,10 +870,33 @@ public static class Bbs757EfbScreen
 
             if (Bbs757EfbVocabulary.IsCredential(name))
             {
-                // Never show, speak or log a credential: say whether one is set, nothing more.
+                // Never show, speak or log a credential: say whether one is set, nothing more. The row's button (the SimBrief
+                // ID's LOGOUT) is named by the label and says only the words in its own box.
+                if (rowButton != null) rowButton.Caption = RowCaption(name);
                 foreach (var l in lines.Where(l => Math.Abs(l.Centre.Y - cy) <= 14)) used.Add(l);
                 o.Add(new(Bbs757EfbKind.Row, pretty, label.Box, label.Centre, false, "row:" + name,
                     Value: HasFieldText(px, cy) ? "set" : "not set"));
+                continue;
+            }
+
+            if (rowButton != null)
+            {
+                // The row's own words, left of its button and within its height, stay text, a line each as the tablet writes
+                // them: "Latest cycle: 2611, Update available!", "Installed cycle: 2610 | exp: 2026-10-28". The first line's
+                // first words name the button, whichever of that line's parts OCR boxed a pixel higher ("2611" over "LATEST
+                // CYCLE:" on bright/55).
+                var box = rowButton.Box.Box;
+                var words = lines.Where(l => l == label || (!used.Contains(l) && l.Box.Right <= box.Left
+                    && l.Centre.Y >= box.Top && l.Centre.Y <= box.Bottom)).ToList();
+                used.UnionWith(words);
+                var rows = Rows(words).ToList();
+                rowButton.Caption = RowCaption(rows[0][0].Text);
+                foreach (var row in rows)
+                {
+                    var rowBox = row.Select(r => r.Box).Aggregate(Rectangle.Union);
+                    o.Add(new(Bbs757EfbKind.Text, RowText(row), rowBox, Centre(rowBox), false,
+                        "txt:" + string.Join(" ", row.Select(r => r.Text))));
+                }
                 continue;
             }
 
@@ -887,9 +934,62 @@ public static class Bbs757EfbScreen
             else
                 o.Add(new(Bbs757EfbKind.Row, pretty, label.Box, label.Centre, false, "row:" + name, Value: Bbs757EfbVocabulary.Pretty(val)));
         }
+        foreach (var button in buttons)
+            o.Add(RowButtonItem(button));
         var rest = lines.Where(l => !used.Contains(l)).ToList();
         o.AddRange(ParseContent(rest, px));
         return Order(o);
+    }
+
+    /// <summary>
+    /// The buttons of a Settings page's value column: each box <see cref="FindButtonBoxes"/> found there (from x
+    /// <see cref="ValueLeft"/>) with the lines whose centers it holds, unless they read as a number, which is a value in a box as
+    /// on any other page (<see cref="IsNumberField"/>). Measured on Settings, AIRAC data (2026-10-30, bright/55): UPDATE green and
+    /// both LOGOUTs salmon at x 1197-1394, 58 px high; the identifier rows' gray text fields end at x 1196 and are no button.
+    /// </summary>
+    private static List<RowButton> RowButtons(List<Bbs757EfbTextLine> lines, List<FoundBox> boxes)
+    {
+        var o = new List<RowButton>();
+        foreach (var box in boxes.Where(b => b.Box.Left > ValueLeft))
+        {
+            var inside = lines.Where(l => box.Box.Contains(l.Centre)).OrderBy(l => l.Box.Top).ThenBy(l => l.Box.Left).ToList();
+            if (inside.Count == 0 || IsNumberField(string.Join(" ", inside.Select(l => l.Text)))) continue;
+            o.Add(new RowButton(box, inside));
+        }
+        return o;
+    }
+
+    /// <summary>A row's label as a button's caption: the words before its colon ("LATEST CYCLE:" names UPDATE "Latest cycle").</summary>
+    private static string RowCaption(string label) => label.Split(':')[0].Trim();
+
+    /// <summary>
+    /// A button of the value column as an action beside a row label is named ("Reset, Brake temperature" on Maintenance): its
+    /// words, then its row's label ("Update, Latest cycle", "Logout, SIMBRIEF ID number"), or its words alone when no row's label
+    /// lay within its height. Its key carries that label and its own words ("btn:LATEST CYCLE|UPDATE@59,14"), so the words a
+    /// press is judged by are the box's (<see cref="KeyWords"/>, <see cref="Bbs757EfbExtras.HookFor"/>). Tapped at its box's center.
+    /// </summary>
+    private static Bbs757EfbItem RowButtonItem(RowButton button)
+    {
+        string words = string.Join(" ", button.Lines.Select(l => l.Text));
+        string? caption = button.Caption is { Length: > 0 } c ? c : null;
+        string text = Bbs757EfbVocabulary.Pretty(words) + (caption != null ? ", " + Bbs757EfbVocabulary.Pretty(caption) : "");
+        var box = button.Box.Box;
+        return new(Bbs757EfbKind.Button, text, box, Centre(box), true,
+            "btn:" + (caption ?? "") + "|" + StripState(words) + "@" + box.X / 20 + "," + box.Y / 20, button.Box.Tint);
+    }
+
+    /// <summary>One line of a Settings row's words beside its button, each part as the tablet writes it (<see
+    /// cref="Bbs757EfbVocabulary.Pretty"/>), left to right: a label that ends in a colon runs into what follows it, and parts
+    /// apart are parted by commas ("LATEST CYCLE:", "2611" and "UPDATE AVAILABLE!" are "Latest cycle: 2611, Update available!").</summary>
+    private static string RowText(IReadOnlyList<Bbs757EfbTextLine> parts)
+    {
+        var text = new System.Text.StringBuilder();
+        for (int i = 0; i < parts.Count; i++)
+        {
+            if (i > 0) text.Append(parts[i - 1].Text.EndsWith(':') ? " " : ", ");
+            text.Append(Bbs757EfbVocabulary.Pretty(parts[i].Text));
+        }
+        return text.ToString();
     }
 
     /// <summary>

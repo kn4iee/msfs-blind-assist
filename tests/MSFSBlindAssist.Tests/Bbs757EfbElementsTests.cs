@@ -158,6 +158,32 @@ public class Bbs757EfbElementsTests
         Assert.Equal("true", Field(b, IndexOf(b, "Some switch"), "value"));
     }
 
+    [Fact]
+    public void The_airac_pages_captured_buttons_press_and_its_rows_are_text()
+    {
+        // bright/55 (the SimBrief ID painted out of the capture): UPDATE and the two LOGOUTs press, each tapping its own box; the
+        // identifier rows, the cycles and the sign-in's words are text.
+        var page = Bbs757EfbScreenTests.Load("bright", "55-settings-airac-data");
+        var b = Bbs757EfbElements.Build(page, null, NoExtras);
+
+        foreach (var (button, key) in new[]
+        {
+            ("Logout, SIMBRIEF ID number", "btn:SIMBRIEF ID NUMBER|LOGOUT@59,4"),
+            ("Update, Latest cycle", "btn:LATEST CYCLE|UPDATE@59,14"),
+            ("Logout, Successfully signed in to navigraph!", "btn:SUCCESSFULLY SIGNED IN TO NAVIGRAPH!|LOGOUT@59,18"),
+        })
+        {
+            Assert.Equal(key, AssertPressable(b, button).Item!.Key);
+            Assert.Equal("button", Field(b, IndexOf(b, button), "kind"));
+        }
+        foreach (var text in new[]
+        {
+            "SIMBRIEF ID number: not set", "Hoppie logon code: not set", "Sayintentions ACARS key: not set",
+            "Latest cycle: 2611, Update available!", "Installed cycle: 2610 | exp: 2026-10-28", "Successfully signed in to navigraph!",
+        })
+            AssertText(b, text);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

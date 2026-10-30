@@ -26,8 +26,9 @@ public class Bbs757EfbScreenTests
     internal static Bbs757EfbScreenModel Load(string set, string name) => Load(set, name, line => line);
 
     /// <summary>A capture read with some of its lines changed by <paramref name="edit"/>: what the same picture reads when a
-    /// box's words are other words (a door's state).</summary>
-    private static Bbs757EfbScreenModel Load(string set, string name, Func<Bbs757EfbTextLine, Bbs757EfbTextLine> edit)
+    /// box's words are other words (a door's state), and with <paramref name="added"/> read on it too.</summary>
+    internal static Bbs757EfbScreenModel Load(string set, string name, Func<Bbs757EfbTextLine, Bbs757EfbTextLine> edit,
+        params Bbs757EfbTextLine[] added)
     {
         string stem = Path.Combine(FixtureDir(), set, name);
         var lines = new List<Bbs757EfbTextLine>();
@@ -40,9 +41,14 @@ public class Bbs757EfbScreenTests
                     new Rectangle(l.GetProperty("x").GetInt32(), l.GetProperty("y").GetInt32(), l.GetProperty("w").GetInt32(), l.GetProperty("h").GetInt32()),
                     words, (l.GetProperty("pass").GetString() ?? "A")[0])));
             }
+        lines.AddRange(added);
         using var bmp = new Bitmap(stem + ".png");
         return Bbs757EfbScreen.Parse(lines, Bbs757EfbPixels.FromBitmap(bmp));
     }
+
+    /// <summary>bright/55's UPDATE read as another word: BlueBird draws REMOVE in the same box when no newer cycle waits.</summary>
+    internal static Bbs757EfbTextLine UpdateReadAs(Bbs757EfbTextLine line, string word) =>
+        line.Text == "UPDATE" && line.Box.X == 1261 ? line with { Text = word, Words = new[] { new Bbs757EfbWord(word, line.Box) } } : line;
 
     private static Bbs757EfbItem Item(Bbs757EfbScreenModel m, string text) =>
         m.Items.Concat(m.Menu).FirstOrDefault(i => i.Text == text)
@@ -330,6 +336,93 @@ public class Bbs757EfbScreenTests
         Assert.All(doors, d => Assert.DoesNotContain("CLOSED", d.Key, StringComparison.Ordinal));
     }
 
+    // ---- Settings, AIRAC data (bright/55, 2026-10-30: the pilot's SimBrief ID was painted out of the picture before it was read,
+    // so its row reads "not set")
+
+    private static readonly string[] AiracButtons =
+        { "Logout, SIMBRIEF ID number", "Update, Latest cycle", "Logout, Successfully signed in to navigraph!" };
+
+    [Fact]
+    public void The_airac_pages_boxed_buttons_are_buttons_named_by_their_rows()
+    {
+        // UPDATE (green) and the two LOGOUTs (salmon) are boxes in the rows' value column, x 1197-1394: read as the rows' values,
+        // they were text, and the nav data could not be updated. Each is a button named as an action beside a row label is
+        // ("Reset, Brake temperature"), keyed by that label and its own words, and tapped at its box's center.
+        var m = Load("bright", "55-settings-airac-data");
+
+        Assert.Equal("Settings, AIRAC data", m.PageName);
+        var buttons = m.Items.Where(i => i.Kind == Bbs757EfbKind.Button).ToList();
+        Assert.Equal(AiracButtons, buttons.Select(b => b.Text));
+        Assert.Equal(new[] { "btn:SIMBRIEF ID NUMBER|LOGOUT@59,4", "btn:LATEST CYCLE|UPDATE@59,14", "btn:SUCCESSFULLY SIGNED IN TO NAVIGRAPH!|LOGOUT@59,18" },
+            buttons.Select(b => b.Key));
+        Assert.Equal(new[] { Bbs757EfbTint.Other, Bbs757EfbTint.Green, Bbs757EfbTint.Other }, buttons.Select(b => b.Tint));
+        foreach (var (button, top) in buttons.Zip(new[] { 89, 299, 368 }))
+        {
+            Assert.True(button.Clickable, button.Text);
+            Assert.Equal(new Rectangle(1197, top, 197, 58), button.Box);
+            Assert.Equal(new Point(1295, top + 29), button.Hit);
+        }
+    }
+
+    [Fact]
+    public void The_airac_pages_rows_stay_text_beside_their_buttons()
+    {
+        var m = Load("bright", "55-settings-airac-data");
+
+        // The page as the pilot meets it: each row, then the button in its value column. The cycles and the sign-in's words are
+        // text, one line each as the tablet writes them, and no figure of them is a heading.
+        Assert.Equal(new[]
+        {
+            "SIMBRIEF ID number", "Logout, SIMBRIEF ID number", "Hoppie logon code", "Sayintentions ACARS key",
+            "Latest cycle: 2611, Update available!", "Update, Latest cycle", "Installed cycle: 2610 | exp: 2026-10-28",
+            "Successfully signed in to navigraph!", "Logout, Successfully signed in to navigraph!",
+        }, m.Items.Select(i => i.Text));
+        foreach (var text in new[] { "Latest cycle: 2611, Update available!", "Installed cycle: 2610 | exp: 2026-10-28", "Successfully signed in to navigraph!" })
+        {
+            var line = Item(m, text);
+            Assert.Equal(Bbs757EfbKind.Text, line.Kind);
+            Assert.False(line.Clickable);
+        }
+        // The identifier rows (plan 11's rule) say only whether one is set: the painted-out SimBrief ID reads as none.
+        foreach (var row in new[] { "SIMBRIEF ID number", "Hoppie logon code", "Sayintentions ACARS key" })
+        {
+            var it = Item(m, row);
+            Assert.Equal(Bbs757EfbKind.Row, it.Kind);
+            Assert.Equal("not set", it.Value);
+            Assert.False(it.Clickable);
+        }
+    }
+
+    [Fact]
+    public void The_airac_pages_remove_is_its_own_button_in_the_same_box()
+    {
+        // BlueBird shows REMOVE in UPDATE's place when no newer cycle waits.
+        var m = Load("bright", "55-settings-airac-data", line => UpdateReadAs(line, "REMOVE"));
+
+        var remove = Item(m, "Remove, Latest cycle");
+        Assert.Equal(Bbs757EfbKind.Button, remove.Kind);
+        Assert.Equal("btn:LATEST CYCLE|REMOVE@59,14", remove.Key);
+        Assert.Equal(new Point(1295, 328), remove.Hit);
+        Assert.DoesNotContain(m.Items, i => i.Text.StartsWith("Update,", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Words_in_an_identifier_field_never_reach_the_page_beside_its_button()
+    {
+        // A made-up ID read in the SimBrief ID's field, left of the row's LOGOUT: the row says only whether one is set (from the
+        // field's pixels, painted out here), the button only its own words, and no element carries the ID.
+        const string madeUp = "1234567";
+        var box = new Rectangle(905, 101, 110, 28);
+        var m = Load("bright", "55-settings-airac-data", line => line,
+            new Bbs757EfbTextLine(madeUp, box, new[] { new Bbs757EfbWord(madeUp, box) }, 'P'));
+
+        Assert.Equal("Logout, SIMBRIEF ID number", Item(m, "Logout, SIMBRIEF ID number").Text);
+        Assert.Equal("not set", Item(m, "SIMBRIEF ID number").Value);
+        Assert.DoesNotContain(m.Items.Concat(m.Menu).Concat(m.TopBar),
+            i => i.Text.Contains(madeUp, StringComparison.Ordinal) || i.Value.Contains(madeUp, StringComparison.Ordinal)
+                || i.Key.Contains(madeUp, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void A_page_that_scrolls_is_known()
     {
@@ -353,7 +446,11 @@ public class Bbs757EfbScreenTests
             Assert.InRange(sw.Hit.Y, y - 5, y + 5);
         }
 
-        foreach (var (set, name) in new[] { ("bright", "53-settings-callouts"), ("bright", "51-settings-aircraft"), ("bright", "13-aircraft-ground-services") })
+        foreach (var (set, name) in new[]
+        {
+            ("bright", "53-settings-callouts"), ("bright", "51-settings-aircraft"), ("bright", "13-aircraft-ground-services"),
+            ("bright", "55-settings-airac-data"),
+        })
         {
             var m = Load(set, name);
             var controls = m.Menu.Concat(m.Items).Where(i => i.Kind is Bbs757EfbKind.Button or Bbs757EfbKind.Toggle or Bbs757EfbKind.Slider
