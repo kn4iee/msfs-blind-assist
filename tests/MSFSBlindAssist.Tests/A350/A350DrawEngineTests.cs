@@ -15,7 +15,7 @@ public class A350DrawEngineTests
     private static byte[] Float(float f) => BitConverter.GetBytes(f);
     private static byte[] U32(params uint[] v) => v.SelectMany(BitConverter.GetBytes).ToArray();
 
-    private static byte[] Module(bool firstDrawPartial = false)
+    private static byte[] Module(bool firstDrawPartial = false, bool clip = false)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -27,11 +27,14 @@ public class A350DrawEngineTests
         int tFrame = m.AddType(new[] { I32, F32, F32, F32, F32, I32 }, Array.Empty<byte>());
         int tWide = m.AddType(new[] { I32, F32, F32, F32, F32, F32, I32 }, Array.Empty<byte>());
         int tXf = m.AddType(new[] { I32, F32, F32, F32, F32, F32, F32 }, Array.Empty<byte>());
+        int tRect = m.AddType(new[] { I32, F32, F32, F32, F32 }, Array.Empty<byte>());
         m.Import("wasi_snapshot_preview1", "path_readlink", t6);
         int guard = m.AddGlobal(0);
         int text = m.Func("nvgText", tText, new byte[] { 0x43, 0, 0, 0, 0 });
+        int scissor = m.Func("nvgScissor", tRect, Array.Empty<byte>());
         foreach (var (n, t) in new[] { ("nvgFillColor", tCtxPtr), ("nvgSave", tCtx), ("nvgRestore", tCtx), ("nvgTranslate", tCtxFF),
                      ("nvgScale", tCtxFF), ("nvgRotate", tCtxF), ("nvgResetTransform", tCtx), ("nvgReset", tCtx), ("nvgTransform", tXf),
+                     ("nvgResetScissor", tCtx),
                      ("DrawFrame(NVGcontext*, float, float, float, float, FsColor const&)", tFrame),
                      ("DrawWideFrame(NVGcontext*, float, float, float, float, float, FsColor const&)", tWide),
                      ("SFD::Draw(int)", tCtxPtr), ("SND::Draw(int)", tCtxPtr), ("nvgBeginFrame", tCtxFF), ("nvgEndFrame", tCtx) })
@@ -60,6 +63,13 @@ public class A350DrawEngineTests
             0x20, 0x00, 0x28, 0x02, 0x04, 0x04, 0x40, 0x00, 0x0B,   // the object's flag set: trap
             0x41, 0x01,                                       // ctx 1
         });
+        if (clip)
+        {
+            // nvgScissor(ctx 1, 0, 0, 5, 5): the text at (10, 20) is outside it.
+            body.Add(0x41); body.Add(0x01);
+            foreach (var f in new[] { 0f, 0f, 5f, 5f }) { body.Add(0x43); body.AddRange(Float(f)); }
+            body.Add(0x10); body.AddRange(U(scissor));
+        }
         if (!firstDrawPartial)
         {
             body.Add(0x43); body.AddRange(Float(10));
@@ -91,9 +101,9 @@ public class A350DrawEngineTests
         return copy;
     }
 
-    private static A350DrawEngine Engine(bool firstDrawPartial = false)
+    private static A350DrawEngine Engine(bool firstDrawPartial = false, bool clip = false)
     {
-        var original = Module(firstDrawPartial);
+        var original = Module(firstDrawPartial, clip);
         var mod = A350WasmModule.Parse(original);
         var engine = A350ModuleCache.CreateEngine();
         var module = Wasmtime.Module.FromBytes(engine, "a350", A350ModulePatcher.Patch(original).Bytes);
@@ -110,6 +120,21 @@ public class A350DrawEngineTests
         Assert.True(cap.Ok, cap.Error);
         var t = Assert.Single(cap.Texts);
         Assert.Equal(("HELLO", 10f, 20f), (t.Text, t.X, t.Y));
+        Assert.False(t.Clipped);
+    }
+
+    // The PFD clips its tapes (setClipArea -> nvgScissor); a text drawn outside the clip is not on the screen and says so
+    // (live 2026-10-30: the altitude tape's labels scrolled through the FMA band and were read as the approach column).
+    [Fact]
+    public void A_text_drawn_outside_the_scissor_is_marked_clipped()
+    {
+        using var e = Engine(clip: true);
+        e.Load(Copy(trap: false));
+        var cap = e.Draw("CTR");
+        Assert.True(cap.Ok, cap.Error);
+        var t = Assert.Single(cap.Texts);
+        Assert.Equal("HELLO", t.Text);
+        Assert.True(t.Clipped);
     }
 
     [Fact]

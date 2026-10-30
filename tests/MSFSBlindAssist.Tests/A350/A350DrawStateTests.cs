@@ -47,6 +47,38 @@ public class A350DrawStateTests
         s.Restore(1);   // an unbalanced restore is ignored
     }
 
+    // Live 2026-10-30 on final: the PFD clips its altitude tape (setClipArea -> nvgScissor) and the tape's labels scrolled
+    // through the FMA band, outside the clip, where the reader took them for the approach column ("LAND3; DUAL; 3000").
+    // A text is clipped when its point is outside the scissor in force, transformed as the scissor was set.
+    [Fact]
+    public void A_text_outside_the_scissor_is_clipped()
+    {
+        var s = new A350DrawState();
+        Assert.False(s.Clipped(1, 5000, 5000));   // no scissor: nothing is clipped
+        s.Translate(1, 100, 200);
+        s.Scissor(1, 0, 0, 50, 100);               // gauge x 100..150, y 200..300
+        Assert.False(s.Clipped(1, 120, 250));
+        Assert.True(s.Clipped(1, 120, 150));       // above the clip
+        Assert.True(s.Clipped(1, 200, 250));       // right of it
+        Assert.False(s.Clipped(2, 120, 150));      // another context is untouched
+        s.ResetScissor(1);
+        Assert.False(s.Clipped(1, 120, 150));
+    }
+
+    [Fact]
+    public void Save_and_restore_bring_back_the_scissor_and_reset_drops_it()
+    {
+        var s = new A350DrawState();
+        s.Save(1);
+        s.Scissor(1, 0, 0, 10, 10);
+        Assert.True(s.Clipped(1, 20, 20));
+        s.Restore(1);
+        Assert.False(s.Clipped(1, 20, 20));        // the scissor before the save: none
+        s.Scissor(1, 0, 0, 10, 10);
+        s.Reset(1);
+        Assert.False(s.Clipped(1, 20, 20));
+    }
+
     [Fact]
     public void Reset_clears_the_transform_and_clear_forgets_everything()
     {

@@ -161,7 +161,10 @@ public static class A350Pfd
     public static IReadOnlyList<string> Read(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? PfdWidth : 0;
-        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Pfd, A350DrawLayout.EfisPfd(side))
+        // A text drawn outside the clip is not on the screen (live 2026-10-30: the altitude tape's labels and its held
+        // selected altitude, beyond the tape's clip, were read in the FMA's fourth column on final).
+        var onScreen = capture.Texts.Where(t => !t.Clipped).ToList();
+        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(onScreen, side).Pfd, A350DrawLayout.EfisPfd(side))
             .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList();
         var cells = A350DrawLayout.Rows(texts).SelectMany(r => r).ToList();
         var used = new HashSet<DrawnCell>();
@@ -184,8 +187,10 @@ public static class A350Pfd
 
         // The selected altitude, read after the FMA: beyond the tape's range the readout at the tape's top or bottom, "FL"
         // at 587 and its number at 688 (live 2026-10-28: y 172 above, 615 below), one value; in range the tape's symbol.
-        var selectedAltitude = cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.X is >= 585 and < 720
-                && c.Y is >= FmaBottom and < 640 && !MetricText.IsMatch(c.Text.Trim()))
+        // The readout is white on its rows after an autoland, the APs off (live 2026-10-30, "3000" at y 172).
+        static bool ReadoutRow(float y) => Math.Abs(y - 172) <= 8 || Math.Abs(y - 615) <= 8;
+        var selectedAltitude = cells.Where(c => !used.Contains(c) && (c.Colour == "cyan" || c.Colour == "white" && ReadoutRow(c.Y))
+                && c.X is >= 585 and < 720 && c.Y is >= FmaBottom and < 640 && !MetricText.IsMatch(c.Text.Trim()))
             .OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
         used.UnionWith(selectedAltitude);
         if (selectedAltitude.Count == 0)
@@ -215,7 +220,7 @@ public static class A350Pfd
             o.Add($"Minimum: {string.Join(" ", minimum.Select(c => c.Text.Trim()))}, "
                 + (minimum.LastOrDefault(c => c.Text.Trim() is not ("RADIO" or "BARO")) ?? minimum[0]).Colour);
         if (selectedAltitude.Count > 0)
-            o.Add($"Selected altitude: {string.Join(" ", selectedAltitude.Select(c => c.Text))}, cyan");
+            o.Add($"Selected altitude: {string.Join(" ", selectedAltitude.Select(c => c.Text))}, {selectedAltitude[^1].Colour}");
         // METRIC ALT (live 2026-10-30): the selected altitude in metres above the altitude tape ("30M" at x 547 y 175 with
         // 100 ft selected, "1520M" with 5000), cyan.
         foreach (var c in cells.Where(c => !used.Contains(c) && c.Colour == "cyan" && c.X is >= 500 and < 720

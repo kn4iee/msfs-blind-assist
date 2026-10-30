@@ -27,6 +27,7 @@ public class A350ModulePatcherTests
         int tWide = m.AddType(new[] { I32, F32, F32, F32, F32, F32, I32 }, Array.Empty<byte>());
         int tUi = m.AddType(new[] { I32, I32, I32, I32 }, Array.Empty<byte>());
         int tXf = m.AddType(new[] { I32, F32, F32, F32, F32, F32, F32 }, Array.Empty<byte>());
+        int tRect = m.AddType(new[] { I32, F32, F32, F32, F32 }, Array.Empty<byte>());
         m.Import("wasi_snapshot_preview1", "fd_write", t6);
         m.Import("wasi_snapshot_preview1", "path_readlink", t6);
         void F(string name, int type, byte[]? body = null)
@@ -41,6 +42,7 @@ public class A350ModulePatcherTests
         F("nvgSave", tCtx); F("nvgRestore", tCtx);
         F("nvgTranslate", tCtxFF); F("nvgScale", tCtxFF); F("nvgRotate", tCtxF);
         F("nvgResetTransform", tCtx); F("nvgReset", tCtx); F("nvgTransform", tXf);
+        F("nvgScissor", tRect); F("nvgResetScissor", tCtx);
         F("DrawFrame(NVGcontext*, float, float, float, float, FsColor const&)", tFrame);
         F("DrawWideFrame(NVGcontext*, float, float, float, float, float, FsColor const&)", tWide);
         foreach (var g in Gauges) F(g + "::Draw()", tCtx);
@@ -58,7 +60,7 @@ public class A350ModulePatcherTests
     public void The_patch_version_moves_whenever_the_patch_output_does()
     {
         string hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(A350ModulePatcher.Patch(Sample()).Bytes));
-        Assert.Equal((4, "299761e03ade37d1be607a936dae1563f3bd15911ccfa3ab46b373b20bf3fbc3"), (A350ModulePatcher.Version, hash));
+        Assert.Equal((5, "633ab6ec9eb310ae8ad08ebc8dee773bae74b7d53a73d460b6e596e2e1d03326"), (A350ModulePatcher.Version, hash));
     }
 
     [Fact]
@@ -131,6 +133,21 @@ public class A350ModulePatcherTests
         // The UI element hook: element pointer, ctx, its class's index in UiDrawClasses (Bar 0, Foo 1).
         Assert.Equal((500, 7, 1), (reports[8].A, reports[8].B, reports[8].C));
         Assert.Equal((600, 7, 0), (reports[9].A, reports[9].B, reports[9].C));
+    }
+
+    // The clip (live 2026-10-30: the PFD's tapes draw their labels beyond it): nvgScissor reports ctx and its rectangle,
+    // nvgResetScissor its ctx; a module without them still patches.
+    [Fact]
+    public void The_scissor_reports_its_rectangle_and_its_reset()
+    {
+        var (inst, _, reports) = Run(A350ModulePatcher.Patch(Sample()).Bytes);
+        inst.GetFunction("raw_nvgScissor")!.Invoke(7, 1f, 2f, 30f, 40f);
+        inst.GetFunction("raw_nvgResetScissor")!.Invoke(7);
+        Assert.Equal(new[] { A350ModulePatcher.ScissorMagic, A350ModulePatcher.ResetScissorMagic }, reports.Select(r => r.Magic));
+        Assert.Equal(7, reports[0].A);
+        Assert.Equal(new[] { 1f, 2f, 30f, 40f }, new[] { reports[0].B, reports[0].C, reports[0].D, reports[0].E }.Select(BitConverter.Int32BitsToSingle));
+        Assert.Equal(7, reports[1].A);
+        A350ModulePatcher.Patch(Sample(leaveOut: "nvgScissor"));
     }
 
     [Fact]

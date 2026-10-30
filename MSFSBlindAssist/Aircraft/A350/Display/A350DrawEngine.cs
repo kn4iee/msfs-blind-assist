@@ -381,9 +381,11 @@ public sealed class A350DrawEngine : IDisposable
                 else text = CStr(mem, a);
                 float lx = F(d), ly = F(e);
                 var (x, y) = _state.Apply(c, lx, ly);
-                _texts.Add(new DrawnText(text, x, y, lx, ly, c, _state.FillOf(c)));
+                _texts.Add(new DrawnText(text, x, y, lx, ly, c, _state.FillOf(c)) { Clipped = _state.Clipped(c, x, y) });
                 break;
             }
+            case A350ModulePatcher.ScissorMagic: _state.Scissor(a, F(b), F(c), F(d), F(e)); break;
+            case A350ModulePatcher.ResetScissorMagic: _state.ResetScissor(a); break;
             case A350ModulePatcher.FillMagic:
                 _state.Fill(a, ReadRgba(mem, b));
                 break;

@@ -583,4 +583,21 @@ public class A350PfdTests
         Assert.True(lines.ToList().IndexOf("Selected altitude in metres: 30, cyan") == lines.ToList().IndexOf("Selected altitude: 100, cyan") + 1);
         Assert.True(lines.ToList().IndexOf("Altitude in metres: 20, green") == lines.ToList().IndexOf("Altitude: 81 feet, green") + 1);
     }
+
+    // Landed at OMDB after an autoland (live 2026-10-30): the PFD clips its altitude tape (setClipArea -> nvgScissor), and
+    // the tape's labels ("010" at y 50) and the selected altitude held at the screen's top ("3000", white, y 38) are drawn
+    // beyond the clip, in the FMA strip over its fourth column. On final the column was re-read four times in 15 s as the
+    // labels scrolled ("LAND3; DUAL; 3000", "LAND3 3000; DUAL"...). A text drawn outside the clip is not on the screen.
+    [Fact]
+    public void Texts_drawn_outside_the_clip_are_not_read()
+    {
+        var cap = A350Fixtures.Capture("efis0_omdb_landed_clipped.json");
+        Assert.Contains(cap.Texts, t => t.Clipped && t.Text == "3000");
+        var lines = A350Pfd.Read(cap, 0);
+        Assert.Contains("FMA approach: LAND3; DUAL, white", lines);
+        // The selected altitude's readout above the tape (x 688, y 172) is on the screen: white here, after the autoland.
+        Assert.Contains("Selected altitude: 3000, white", lines);
+        Assert.Single(lines, l => l.Contains("3000"));
+        Assert.DoesNotContain(lines, l => l.Contains("010"));
+    }
 }

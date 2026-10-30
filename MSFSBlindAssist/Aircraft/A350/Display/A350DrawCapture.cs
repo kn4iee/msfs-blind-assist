@@ -40,6 +40,10 @@ public readonly record struct A350Rgba(float R, float G, float B, float A)
 public sealed record DrawnText(string Text, float X, float Y, float LocalX, float LocalY, int Ctx, A350Rgba? Colour)
 {
     public string ColourName => A350Rgba.NameOf(Colour);
+
+    /// <summary>Drawn outside the clip in force (nvgScissor): not on the screen. The PFD's tape labels scroll beyond
+    /// their window this way (live 2026-10-30). Captures from before the clip was tracked read false.</summary>
+    public bool Clipped { get; init; }
 }
 
 /// <summary>A frame (DrawFrame / DrawWideFrame): the ECAM selection box is a cyan wide frame.</summary>

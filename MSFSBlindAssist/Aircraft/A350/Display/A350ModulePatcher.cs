@@ -28,7 +28,7 @@ public static class A350ModulePatcher
     public const int TextMagic = 0x7E57, FillMagic = 0x7E58, SaveMagic = 0x7E59, RestoreMagic = 0x7E5A,
         TranslateMagic = 0x7E5B, ScaleMagic = 0x7E5C, RotateMagic = 0x7E5D, ResetTransformMagic = 0x7E5E,
         ResetMagic = 0x7E5F, TransformMagic = 0x7E60, FrameMagic = 0x7E61, FrameColourMagic = 0x7E62,
-        ElementMagic = 0x7E65;
+        ElementMagic = 0x7E65, ScissorMagic = 0x7E66, ResetScissorMagic = 0x7E67;
 
     /// <summary>The allocator's questions to the engine, whose answer the patched function returns.</summary>
     public const int MallocMagic = 0x7E70, CallocMagic = 0x7E71, ReallocMagic = 0x7E72, MemalignMagic = 0x7E73,
@@ -38,8 +38,8 @@ public static class A350ModulePatcher
 
     /// <summary>The patch's version, part of the compiled module cache's key: bump it whenever the patch changes, or
     /// a module compiled from the older patch is loaded; and whenever <see cref="A350ModuleCache.CreateEngine"/>'s
-    /// compile settings change (4: epoch interruption, the draw deadline).</summary>
-    public const int Version = 4;
+    /// compile settings change (4: epoch interruption, the draw deadline; 5: the scissor hooks).</summary>
+    public const int Version = 5;
 
     /// <summary>The functions exported for the engine to call: export name emu_&lt;Class&gt;_Draw.</summary>
     public static readonly string[] DrawExports =
@@ -136,6 +136,13 @@ public static class A350ModulePatcher
                 Call(hook, FrameMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4)),
                 Call(hook, FrameColourMagic, Get(0), Get(6), Const(1), Zero, Zero)),
         };
+
+        // The clip (nvgScissor(ctx, x, y, w, h), nvgResetScissor(ctx)): the PFD's tapes and the MFD's lists draw beyond it.
+        // Left alone where a version lacks them.
+        if (TryFindFunction(mod, "nvgScissor") is int scissor)
+            hooks[scissor] = Call(hook, ScissorMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4));
+        if (TryFindFunction(mod, "nvgResetScissor") is int resetScissor)
+            hooks[resetScissor] = Call(hook, ResetScissorMagic, Get(0), Zero, Zero, Zero, Zero);
 
         // Every UI element's draw: (element, ctx, class index), sorted by name as the prototype numbered them.
         var ui = UiDrawFunctions(mod);
