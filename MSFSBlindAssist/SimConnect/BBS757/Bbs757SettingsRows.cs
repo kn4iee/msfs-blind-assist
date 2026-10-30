@@ -134,6 +134,15 @@ public static class Bbs757SettingsRows
     public static string InactiveText(Bbs757Setting enabledBy) => $"Turn on {enabledBy.Label} to change this.";
 
     /// <summary>
+    /// What the 757 EFB settings window shows for the EFB colors theme, in a read-only box named by the row's label, as it never
+    /// offers the theme as a control (B757-21; <see cref="Bbs757EfbSettings.ThemeNoteValue"/>): the stored choice's word and the
+    /// note when the files hold one ("Dark blue. Non-default color schemes are not supported."), else the note alone (no
+    /// settings file, no key, or a value no word stores).
+    /// </summary>
+    public static string ThemeNoteText(Bbs757SettingRow row) =>
+        Bbs757EfbSettings.ThemeNoteValue(row.State == Bbs757RowState.Value ? row.Text : null);
+
+    /// <summary>
     /// The rows of <paramref name="section"/>, one for each of <see cref="Bbs757EfbSettings.InSection"/>'s settings, in
     /// that order. <paramref name="global"/> is the parsed settings file, or null when it could not be read: every
     /// setting of that file is then <see cref="Bbs757RowState.Unreadable"/>. <paramref name="registrations"/> are the

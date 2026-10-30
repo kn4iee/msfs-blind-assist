@@ -787,4 +787,26 @@ public class Bbs757SettingsRowsTests
         Assert.Contains("2.0x", underCulture);                                 // the slider's reading, a decimal point
         Assert.Contains("Applies to 3 registrations: A, B, C", underCulture);
     }
+
+    // ---- the EFB colors theme's note (B757-21) ---------------------------------------------------------
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_colors_theme_shows_its_stored_choice_with_the_note_or_the_note_alone(string culture)
+    {
+        // The settings window offers the theme as no control (the owner's ruling of 2026-10-30): its read-only box, named by the
+        // row's label, says the stored choice when the file reads one, and that non-default color schemes are not supported.
+        string Note(string? settings) =>
+            TestCulture.Run(culture, () => Bbs757SettingsRows.ThemeNoteText(RowFor(RowsOf(Bbs757SettingSection.General, settings), "ui_theme")));
+
+        Assert.Equal("Dark blue. Non-default color schemes are not supported.", Note(SettingsJson));                       // 0
+        Assert.Equal("Light grey. Non-default color schemes are not supported.",
+            Note(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":3")));                                              // the slider's third
+        // A value no word stores, a missing key and no settings file name no choice.
+        Assert.Equal("Non-default color schemes are not supported.", Note(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme\":7")));
+        Assert.Equal("Non-default color schemes are not supported.", Note(Replaced(SettingsJson, "\"ui_theme\":0", "\"ui_theme_x\":0")));
+        Assert.Equal("Non-default color schemes are not supported.", Note(null));
+    }
 }

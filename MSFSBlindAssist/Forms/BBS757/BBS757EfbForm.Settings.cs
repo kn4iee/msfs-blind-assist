@@ -15,9 +15,11 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // Top to bottom: the status box (Bbs757SimGuard.StatusText; a read-only TextBox, VAT-13), the Section list (the tablet's
 // pages, and ACARS) and the chosen section's rows (Bbs757SettingsRows): a check box for a switch, a label and a choice
 // list for the tablet's words, a label and a slider for the random failure frequency, a label and a box for a number or
-// text. A registration section starts with the registrations its rows apply to. Picking a section rebuilds only the
-// rows' panel; everything else (a save, the simulator closing, the window opening) updates the rows in place, so no
-// control is recreated and focus never moves.
+// text. The EFB colors theme is the one setting offered as no control: a label and a read-only box with its stored choice
+// and the note that non-default color schemes are not supported (B757-21, the owner's ruling of 2026-10-30), so the window
+// never writes ui_theme. A registration section starts with the registrations its rows apply to. Picking a section
+// rebuilds only the rows' panel; everything else (a save, the simulator closing, the window opening) updates the rows in
+// place, so no control is recreated and focus never moves.
 //
 // The settings are writable only while Bbs757SimGuard.SettingsWritable holds, checked when the window opens, on every 1 s
 // guard tick while the window shows, and by every write. While it does not, every input stays focusable and readable
@@ -212,9 +214,10 @@ public partial class BBS757EfbForm
     }
 
     // One setting's row: a check box for a switch; a label and a choice list for the tablet's words; a label and a slider
-    // for a number the tablet sets along a slider; a label and a box for a number or text. Each input carries the
-    // tablet's label: a check box as its text, the others as their AccessibleName after a label (never a mnemonic:
-    // "Boarding & load rate" keeps its "&").
+    // for a number the tablet sets along a slider; a label and a box for a number or text; for the EFB colors theme, which
+    // is never a control (B757-21), a label and its note in a read-only box. Each input carries the tablet's label: a check
+    // box as its text, the others as their AccessibleName after a label (never a mnemonic: "Boarding & load rate" keeps
+    // its "&").
     private SettingControl AddRow(Bbs757Setting setting, int y, ref int tab)
     {
         if (setting.Kind == Bbs757SettingKind.OnOff)
@@ -242,6 +245,24 @@ public partial class BBS757EfbForm
             Size = new Size(RowInputLeft - RowLeft - 6, 20),
             TabIndex = tab++,
         });
+
+        if (setting.Path == Bbs757EfbSettings.ThemePath)
+        {
+            // The EFB colors theme: the stored choice and the note, in a read-only box (VAT-13) with no handler, which no lock
+            // opens (ApplyLock passes it by) and no key saves. The tablet reader reads only the default theme, so a light one
+            // would leave the pilot without the tablet's controls (B757-21): the window never writes ui_theme.
+            var note = new TextBox
+            {
+                Location = new Point(RowInputLeft, y),
+                Size = new Size(RowWidth - (RowInputLeft - RowLeft), 25),
+                ReadOnly = true,
+                TabStop = true,
+                AccessibleName = setting.Label,
+                TabIndex = tab++,
+            };
+            _sectionPanel.Controls.Add(note);
+            return new SettingControl(setting, note) { Note = note };
+        }
 
         if (setting.Kind == Bbs757SettingKind.Choice)
         {
@@ -410,6 +431,12 @@ public partial class BBS757EfbForm
         {
             // Out of the Value state the slider stays where it is and reads that state's text.
             slider.ShowStep(row.State == Bbs757RowState.Value ? row.ChoiceIndex : slider.Value, row.Text);
+        }
+        else if (control.Note is { } note)
+        {
+            // The EFB colors theme's note, with the stored choice when the files read one (B757-21).
+            string text = Bbs757SettingsRows.ThemeNoteText(row);
+            if (note.Text != text) note.Text = text;
         }
         if (row.Inactive && EnabledBy(row.Setting) is { } enabledBy)
             description = JoinDescription(description, Bbs757SettingsRows.InactiveText(enabledBy));
@@ -739,6 +766,9 @@ public partial class BBS757EfbForm
         public Bbs757LockableComboBox? Combo { get; init; }
         public Bbs757LockableSlider? Slider { get; init; }
         public TextBox? Box { get; init; }
+
+        // The EFB colors theme's read-only note (B757-21): no Box, so neither a lock nor Enter ever reaches it.
+        public TextBox? Note { get; init; }
 
         // What the files held at the last read; null before the first.
         public Bbs757SettingRow? Row { get; set; }

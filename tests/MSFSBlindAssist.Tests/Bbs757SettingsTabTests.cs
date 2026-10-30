@@ -165,6 +165,9 @@ public class Bbs757SettingsTabTests
 
         public BBS757EfbForm Form { get; }
 
+        /// <summary>What the window said.</summary>
+        public SpeechCapture Speech => _announcer;
+
         public void Dispose()
         {
             Form.Dispose();
@@ -247,6 +250,50 @@ public class Bbs757SettingsTabTests
                     }
                 }
             }
+        }
+    }
+
+    // ---- the EFB colors theme is a note (B757-21) ------------------------------------------------------
+
+    [Fact]
+    public void The_colors_theme_row_is_a_read_only_note_that_nothing_in_the_window_changes()
+    {
+        // The owner's ruling of 2026-10-30: the theme is no control in the settings window either. Its row is a label and a
+        // read-only box ([VAT-13]) holding the note; General has no choice list, check box or slider for it; and keys in the
+        // box save nothing (a save, or a refused one, would speak).
+        using var window = new SettingsWindow();   // General is the section shown first
+        List<Control> controls = Under(window.Form).ToList();
+
+        TextBox note = Assert.Single(controls.OfType<TextBox>(), box => box.AccessibleName == "EFB colors theme");
+        Assert.True(note.ReadOnly);
+        Assert.True(note.TabStop);
+        Assert.Equal("Non-default color schemes are not supported.", note.Text);   // a folder with no settings file: no choice
+        Assert.DoesNotContain(controls, control => control is ComboBox or CheckBox or Bbs757LockableSlider
+            && (control.AccessibleName == "EFB colors theme" || control.Text == "EFB colors theme"));
+        Assert.DoesNotContain(controls.OfType<ComboBox>(), combo => combo.Items.Contains("Light blue"));
+
+        var onKeyDown = typeof(Control).GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        foreach (Keys key in new[] { Keys.Return, Keys.Down, Keys.Up, Keys.Space, Keys.Delete })
+            onKeyDown.Invoke(note, new object[] { new KeyEventArgs(key) });
+
+        Assert.Empty(window.Speech.All);
+        Assert.True(note.ReadOnly);
+    }
+
+    [Fact]
+    public void No_save_of_another_setting_writes_the_colors_theme()
+    {
+        // The theme's own row is no control (above), and no other setting's writes reach ui_theme: no linked key, no group.
+        foreach (Bbs757Setting setting in Bbs757EfbSettings.All.Where(s => s.Path != Bbs757EfbSettings.ThemePath))
+        {
+            IEnumerable<Bbs757Value> values = setting.Kind switch
+            {
+                Bbs757SettingKind.OnOff or Bbs757SettingKind.Choice => setting.Choices.Select(choice => choice.Stored),
+                Bbs757SettingKind.Slider => setting.Steps!.Select(Bbs757Value.OfFloat),
+                _ => setting.EmptyStored is { } empty ? new[] { empty } : Array.Empty<Bbs757Value>(),
+            };
+            foreach (Bbs757Value value in values)
+                Assert.DoesNotContain(Bbs757EfbSettings.WritesFor(setting, value), write => write.Path == Bbs757EfbSettings.ThemePath);
         }
     }
 

@@ -19,7 +19,9 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
 /// is the tablet's own: while it shows a question over its page, the page is dimmed and takes no tap, so its controls are text until the
-/// question is answered. The question's answers press, and so does the top bar, which stays lit above the dimming.
+/// question is answered. The question's answers press, and so does the top bar, which stays lit above the dimming. One row is never
+/// offered as a control at all, by the owner's ruling of 2026-10-30: the EFB colors theme, whose place holds a note
+/// (<see cref="ThemeNoteFor"/>, B757-21).
 ///
 /// The order the pilot meets: the alert; the tablet's question (its words as text, then its answers); the top bar; BlueBird's
 /// notifications under a heading; Home and the side menu; the page; the app's extras; the scroll buttons; and "More" with Read the
@@ -165,6 +167,12 @@ public static class Bbs757EfbElements
 
         void AddItem(Bbs757EfbItem it, string pageName, bool dimmed)
         {
+            // The EFB colors theme is never a control (B757-21): its row is the note, whatever the reader made of it.
+            if (ThemeNoteFor(it, pageName) is { } note)
+            {
+                Add(note, key: it.Key);
+                return;
+            }
             if (dimmed && AddDimmed(it, pageName)) return;
             switch (it.Kind)
             {
@@ -237,6 +245,22 @@ public static class Bbs757EfbElements
                     return false;
             }
         }
+    }
+
+    /// <summary>
+    /// The text that stands in the place of the EFB colors theme's row (<see cref="Bbs757EfbSettings.ThemeNote"/>), or null for any
+    /// other element. Neither 757 EFB window offers the theme as a control (the owner's ruling of 2026-10-30, B757-21): the reader
+    /// reads only the default theme, and under a light one it finds no switch, slider or choice on any page (measured under Light
+    /// blue: every line of Settings, General a row), so a pilot who picked one could not get back. The row is the one
+    /// <see cref="Bbs757EfbSettingsMatch.SettingFor"/> matches to the catalog's theme, whatever kind the reader gave it (a slider
+    /// under the default theme, a row under a light one); its choice is the catalog's word for the one read, or none when the
+    /// reader read none of them. Internal for the tests.
+    /// </summary>
+    internal static string? ThemeNoteFor(Bbs757EfbItem it, string pageName)
+    {
+        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is not { Path: Bbs757EfbSettings.ThemePath } theme) return null;
+        int read = Bbs757EfbSettingsMatch.ChoiceIndex(theme, it.Value);
+        return Bbs757EfbSettings.ThemeNote(read >= 0 ? theme.Choices[read].Word : null);
     }
 
     /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>

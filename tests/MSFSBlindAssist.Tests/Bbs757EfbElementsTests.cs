@@ -564,10 +564,6 @@ public class Bbs757EfbElementsTests
         Assert.Equal("Realistic", Field(aircraft, rate, "value"));
 
         var general = BuildOf("dim", "50-settings-general");
-        int theme = IndexOf(general, "EFB colors theme");
-        // The slider's order, which is not the stored numbers': Light grey before Dark grey (the vocabulary's old list had them the other way).
-        Assert.Equal(new[] { "Dark blue", "Light blue", "Light grey", "Dark grey" }, OptionsAt(general, theme));
-        Assert.Equal("Dark blue", Field(general, theme, "value"));
         int timer = IndexOf(general, "Notifications fade-out timer");
         var seconds = OptionsAt(general, timer);
         Assert.Equal(29, seconds.Length);
@@ -578,6 +574,69 @@ public class Bbs757EfbElementsTests
         int background = IndexOf(general, "EFB background");
         Assert.Equal(new[] { "Default", "1", "2", "3", "4", "5", "6", "7", "8", "9" }, OptionsAt(general, background));
         Assert.Equal("Default", Field(general, background, "value"));
+    }
+
+    // ---- the EFB colors theme is a note (B757-21) ------------------------------------------------------------------------
+
+    private const string ThemeNoteDarkBlue = "EFB colors theme: Dark blue. Non-default color schemes are not supported.";
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_colors_theme_row_is_a_note_with_no_action_read_as_a_slider_or_a_row(string culture)
+    {
+        // The owner's ruling of 2026-10-30: the reader reads only the default theme, and under a light one it finds no switch,
+        // slider or choice on any page (measured under Light blue: every line of Settings, General a row). So the theme is offered
+        // as no control: its row says the theme read and that other schemes are not supported, as a slider (dim/50) or a row.
+        var general = Bbs757EfbScreenTests.Load("dim", "50-settings-general");
+        var slider = general.Items.Single(i => i.Key == "sld:EFB COLORS THEME");
+        var asRow = slider with { Kind = Bbs757EfbKind.Row, Key = "row:EFB COLORS THEME", Value = "Light blue", Slider = null };
+        var lightPage = general with { Items = general.Items.Select(i => i.Key == slider.Key ? asRow : i).ToList() };
+
+        var dark = TestCulture.Run(culture, () => Bbs757EfbElements.Build(general, null, NoExtras));
+        var light = TestCulture.Run(culture, () => Bbs757EfbElements.Build(lightPage, null, NoExtras));
+
+        AssertText(dark, ThemeNoteDarkBlue);
+        Assert.Equal("sld:EFB COLORS THEME", Field(dark, IndexOf(dark, ThemeNoteDarkBlue), "key"));
+        const string lightNote = "EFB colors theme: Light blue. Non-default color schemes are not supported.";
+        AssertText(light, lightNote);
+        Assert.Equal("row:EFB COLORS THEME", Field(light, IndexOf(light, lightNote), "key"));
+        foreach (var b in new[] { dark, light })
+        {
+            Assert.DoesNotContain(Texts(b), t => t == "EFB colors theme" || t.StartsWith("EFB colors theme (", StringComparison.Ordinal));
+            Assert.DoesNotContain(b.Actions.Values, a => a.Item?.Key is "sld:EFB COLORS THEME" or "row:EFB COLORS THEME");
+            Assert.DoesNotContain(Enumerable.Range(0, b.Count), i => Field(b, i, "options").Contains("Light blue", StringComparison.Ordinal));
+        }
+        // The page's other sliders are still choice lists.
+        Assert.Equal("select", Field(dark, IndexOf(dark, "EFB background"), "type"));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_colors_theme_note_names_a_catalog_choice_or_none(string culture)
+    {
+        var slider = Bbs757EfbScreenTests.Load("dim", "50-settings-general").Items.Single(i => i.Key == "sld:EFB COLORS THEME");
+        string? Note(Bbs757EfbItem it, string page = "Settings, General") => TestCulture.Run(culture, () => Bbs757EfbElements.ThemeNoteFor(it, page));
+
+        Assert.Equal(ThemeNoteDarkBlue, Note(slider));                                   // DARK BLUE, as the reader writes it
+        Assert.Equal("EFB colors theme: Light grey. Non-default color schemes are not supported.", Note(slider with { Value = "LIGHT GREY" }));
+        // None read, or none of the catalog's words: the note alone.
+        Assert.Equal("EFB colors theme. Non-default color schemes are not supported.", Note(slider with { Value = "" }));
+        Assert.Equal("EFB colors theme. Non-default color schemes are not supported.", Note(slider with { Value = "LIGHT BLU" }));
+        // A misread label, the same words on another page, and a heading are no theme row: they stay what they are.
+        Assert.Null(Note(slider with { Text = "EFB colors thme" }));
+        Assert.Null(Note(slider, "Aircraft, Ground services"));
+        Assert.Null(Note(slider with { Kind = Bbs757EfbKind.Heading }));
+    }
+
+    [Fact]
+    public void The_colors_theme_note_stays_under_a_question()
+    {
+        var page = Bbs757EfbScreenTests.Load("dim", "50-settings-general")
+            with { Question = new Bbs757EfbQuestion("Are you sure?", new[] { Answer("Yes") }) };
+        var b = Bbs757EfbElements.Build(page, null, NoExtras);
+
+        AssertText(b, ThemeNoteDarkBlue);
+        Assert.DoesNotContain("EFB colors theme: Dark blue", Texts(b));
     }
 
     [Fact]

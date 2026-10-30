@@ -229,6 +229,35 @@ public static class Bbs757EfbSettings
         _ => throw new ArgumentOutOfRangeException(nameof(section), section, "No such section."),
     };
 
+    // ---- the EFB colors theme -----------------------------------------------------------------------
+
+    /// <summary>The EFB colors theme's key. Neither 757 EFB window offers it as a control, only as a note
+    /// (<see cref="ThemeNote"/>, the owner's ruling of 2026-10-30, B757-21).</summary>
+    public const string ThemePath = "ui_theme";
+
+    // The theme's label, as the tablet and the catalog give it.
+    private const string ThemeLabel = "EFB colors theme";
+
+    /// <summary>Why the EFB colors theme is a note: the tablet reader reads only the default theme, Dark blue (B757-21).</summary>
+    public const string ThemeNotSupportedText = "Non-default color schemes are not supported.";
+
+    /// <summary>
+    /// What the 757 tablet window shows in the EFB colors theme's place, as text, since neither 757 EFB window offers the theme
+    /// as a control (B757-21): "EFB colors theme: Dark blue. Non-default color schemes are not supported." with the theme's word
+    /// (<paramref name="choice"/>, one of the catalog's), or "EFB colors theme. Non-default color schemes are not supported."
+    /// when none is given. The words are joined as they are: no Windows culture changes them.
+    /// </summary>
+    public static string ThemeNote(string? choice) =>
+        ThemeLabel + (string.IsNullOrEmpty(choice) ? ". " : ": " + choice + ". ") + ThemeNotSupportedText;
+
+    /// <summary>
+    /// The same note after the theme's label, as the 757 EFB settings window shows it in a read-only box named by that label:
+    /// "Dark blue. Non-default color schemes are not supported.", or the sentence alone when no <paramref name="choice"/> is
+    /// given. The screen reader says the box's name first, so the two windows say the same words.
+    /// </summary>
+    public static string ThemeNoteValue(string? choice) =>
+        (string.IsNullOrEmpty(choice) ? "" : choice + ". ") + ThemeNotSupportedText;
+
     // ---- what one change writes ---------------------------------------------------------------------
 
     /// <summary>
@@ -532,8 +561,9 @@ public static class Bbs757EfbSettings
                 Enumerable.Range(3, 28)
                     .Select(n => Choice(string.Create(CultureInfo.InvariantCulture, $"{n} sec"), n))
                     .Append(Choice("Never", 0L)).ToArray()),
-            // The slider's order, which is not the stored numbers': LIGHT GREY is 3 and DARK GREY is 2.
-            Pick(section, "ui_theme", "EFB colors theme", Bbs757ValueType.Integer,
+            // The slider's order, which is not the stored numbers': LIGHT GREY is 3 and DARK GREY is 2. Neither 757 EFB window
+            // offers it (B757-21): the catalog keeps it to name the stored choice in their notes.
+            Pick(section, ThemePath, ThemeLabel, Bbs757ValueType.Integer,
                 Choice("Dark blue", 0L), Choice("Light blue", 1L), Choice("Light grey", 3L), Choice("Dark grey", 2L)),
         };
     }
