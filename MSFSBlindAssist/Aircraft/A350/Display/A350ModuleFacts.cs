@@ -29,14 +29,19 @@ public sealed class A350ModuleFacts
     /// then only its countdown goes without.</summary>
     public A350BtvFacts? Btv { get; }
 
+    /// <summary>Where the variable table holds the pause (<see cref="A350SimPause"/>), or null when this version's module does
+    /// not say: then only the OIS's pause alerts go without.</summary>
+    public A350PauseFacts? Pause { get; }
+
     private A350ModuleFacts(Dictionary<uint, string> vtables, List<(string, int)> anchors, A350TakeoffSpeedFacts? speeds,
-        A350MinimumsFacts? minimums, A350BtvFacts? btv)
+        A350MinimumsFacts? minimums, A350BtvFacts? btv, A350PauseFacts? pause)
     {
         VTables = vtables;
         Anchors = anchors;
         TakeoffSpeeds = speeds;
         Minimums = minimums;
         Btv = btv;
+        Pause = pause;
     }
 
     public IReadOnlyList<uint> VTablesOf(string cls) => VTables.Where(kv => kv.Value == cls).Select(kv => kv.Key).OrderBy(a => a).ToList();
@@ -69,7 +74,36 @@ public sealed class A350ModuleFacts
         foreach (var a in AnchorStrings)
             anchors.Add((a, mod.LinearAddressOf(a) ?? throw new A350ModuleException("A350 module has no anchor string " + a)));
         var speeds = TakeoffSpeedsOf(mod);
-        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds), BtvOf(mod));
+        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds), BtvOf(mod), PauseOf(mod));
+    }
+
+    /// <summary>Above any constant a frame or an enum takes: an address.</summary>
+    private const int LowestAddress = 1024;
+
+    /// <summary>The variable table's entries beyond any version's count, for a name that is not there.</summary>
+    private const int MaxVariables = 4096;
+
+    /// <summary>The pause's two variables by name: the table's names are <c>Variables::Init()</c>'s (the one constant of its that
+    /// holds string pointers including these names), its values <c>Variables::GetInt</c>'s, 8 bytes an entry.</summary>
+    private static A350PauseFacts? PauseOf(A350WasmModule mod)
+    {
+        const byte I32Const = 0x41;
+        if (DefinedFunction(mod, "Variables::Init()") is not int init || DefinedFunction(mod, "Variables::GetInt(VariablesEnum)") is not int getInt
+            || Immediates(mod, getInt, I32Const).Where(c => c > LowestAddress).Cast<int?>().FirstOrDefault() is not int values)
+            return null;
+        foreach (int table in Immediates(mod, init, I32Const).Where(c => c > LowestAddress))
+        {
+            int isPaused = -1, type = -1;
+            for (int e = 0; e < MaxVariables && mod.U32(table + 4 * e) is uint name && name <= int.MaxValue; e++)
+            {
+                string? text = mod.CString((int)name);
+                if (text == "INI_IS_PAUSED") isPaused = e;
+                else if (text == "FMGS_PAUSE_TYPE") type = e;
+            }
+            if (isPaused >= 0 && type >= 0)
+                return new A350PauseFacts((uint)(values + 8 * isPaused), (uint)(values + 8 * type));
+        }
+        return null;
     }
 
     /// <summary>BTV's object: a static inside GEAR, as <c>ND::Update</c> reaches it (GEAR, each accessor adding to it), its fields
@@ -98,7 +132,7 @@ public sealed class A350ModuleFacts
             || Immediates(mod, remaining, F32Store).LastOrDefault() is not (> 0 and var remainingAt)
             || Immediates(mod, remaining, F32Load).LastOrDefault() is not (> 0 and var marginAt)
             || ConstantArgument(mod, level, getInt) is not uint levelEnum
-            || Immediates(mod, getInt, I32Const).Where(c => c > 1024).Cast<int?>().FirstOrDefault() is not int variables)
+            || Immediates(mod, getInt, I32Const).Where(c => c > LowestAddress).Cast<int?>().FirstOrDefault() is not int variables)
             return null;
         return new A350BtvFacts(gear + (uint)(toGearSystem + toAutobrake + toBtv), endLat, endLon, lengthAt, exitAt, remainingAt, marginAt,
             (uint)variables + 8 * levelEnum);
@@ -170,7 +204,8 @@ public sealed class A350ModuleFacts
         if (ReturnedLoad(mod, v1) is not int v1At || ReturnedLoad(mod, vr) is not int vrAt || ReturnedLoad(mod, v2) is not int v2At
             || ConstantArgument(mod, caller, v1) is not uint plan)
             return null;
-        return new A350TakeoffSpeedFacts(plan, v1At, vrAt, v2At);
+        int flexAt = DefinedFunction(mod, "FlightPlan::getFlexTemperature()") is int flex && ReturnedLoad(mod, flex) is int at ? at : -1;
+        return new A350TakeoffSpeedFacts(plan, v1At, vrAt, v2At, flexAt);
     }
 
     /// <summary>The offset of a getter's last <c>i32.load</c>: the field it returns.</summary>

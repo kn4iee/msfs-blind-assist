@@ -398,6 +398,19 @@ public partial class IniBuildsA350Definition
                 announcer.Announce(text);
     }
 
+    private readonly A350PauseAlerts _pauseAlerts = new();
+
+    /// <summary>The sim's pause as the display reader read it from a memory copy (<see cref="A350.Display.A350SimPause"/>), on the UI
+    /// thread: the aircraft's own pauses, said once behind their row (<see cref="A350PauseAlerts"/>).</summary>
+    public void ObservePause(A350.Display.A350SimPause read, ScreenReaderAnnouncer announcer)
+    {
+        if (_pauseAlerts.Observe(read) is { } text && !IsMuted(A350PauseAlerts.MuteKey) && !_disposed)
+            announcer.AnnounceImmediate(text);
+    }
+
+    /// <summary>The FMS's take-off speeds and FLEX temperature as last taken, null until two reads have agreed.</summary>
+    internal A350.Display.A350TakeoffSpeeds? FmsTakeoffSpeeds => _speedsTaken;
+
     private readonly A350BtvCountdown _btvCountdown = new();
 
     /// <summary>BTV's rollout as the display reader read it from a memory copy (<see cref="A350.Display.A350BtvRollout"/>), on the

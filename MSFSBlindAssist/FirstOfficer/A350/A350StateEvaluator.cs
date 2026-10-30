@@ -65,12 +65,17 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string LandingConf3Field = "FO_LANDING_CONF3";
 
     private readonly Func<string, string> _keyFor;
+    private readonly IniBuildsA350Definition? _definition;
 
     /// <summary>An evaluator with no definition: each input is read under its own key (a test's, with nothing read).</summary>
     public A350StateEvaluator() => _keyFor = A350PanelLamps.InputKey;
 
-    /// <param name="definition">Says which key streams an input.</param>
-    public A350StateEvaluator(IniBuildsA350Definition definition) => _keyFor = definition.KeyForInput;
+    /// <param name="definition">Says which key streams an input, and holds what the display reader reads from the FMS.</param>
+    public A350StateEvaluator(IniBuildsA350Definition definition)
+    {
+        _keyFor = definition.KeyForInput;
+        _definition = definition;
+    }
 
     private double Input(string name) => Sc?.GetCachedVariableValue(_keyFor(name)) ?? double.NaN;
 
@@ -93,6 +98,9 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
         return AirbusReadbackFormat.Baro(Math.Abs(mode - BaroStdMode) < 0.5 ? 1 : 0,
             inches ? millibars / AltimeterPhrase.HpaPerInHg : millibars, inches);
     }
+
+    /// <summary>The FMS's V1, VR, V2 and FLEX temperature as a blank's value, "not set" until entered; null while the reader has not read them.</summary>
+    public string? TakeoffDataText() => _definition?.FmsTakeoffSpeeds is { } s ? AirbusReadbackFormat.TakeoffSpeeds(s.V1, s.Vr, s.V2, s.Flex) : null;
 
     /// <summary>The flap lever as a blank's value.</summary>
     public string? FlapsText() => AirbusReadbackFormat.FlapsLever(GetValue("A350_FLAPS"));

@@ -663,6 +663,11 @@ internal sealed partial class ProbeForm : Form
                     def.ObserveBtv(btv, said);
                     foreach (var text in said.DrainList()) Say(text);
                 });
+                service.PauseRead += pause => BeginInvoke(() =>
+                {
+                    def.ObservePause(pause, said);
+                    foreach (var text in said.DrainList()) Say(text);
+                });
                 service.Start();
                 await WaitForDisplays(service);
                 Line($"displays: {service.State} {service.Reason}");

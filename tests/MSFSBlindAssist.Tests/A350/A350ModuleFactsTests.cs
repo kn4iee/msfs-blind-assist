@@ -170,6 +170,73 @@ public class A350ModuleFactsTests
         Assert.Null(A350ModuleFacts.From(Sample()).Btv);
     }
 
+    // The pause's variables by name in the variable table (Variables::Init()'s name table, 1.2.7: 920480, in the module's data;
+    // the values at Variables::GetInt()'s 1343616, 8 bytes each).
+    private static A350WasmModule WithVariableNames(bool withNames = true)
+    {
+        var m = new WasmTestModule();
+        int t1 = m.AddType(new[] { I32 }, new[] { I32 });
+        int t0 = m.AddType(Array.Empty<byte>(), Array.Empty<byte>());
+        static byte[] Bytes(params IEnumerable<byte>[] parts) => parts.SelectMany(p => p).ToArray();
+        m.Func("Variables::GetInt(VariablesEnum)", t1, Bytes(new byte[] { 0x41 }, S(16), new byte[] { 0x1A, 0x41 }, S(1343616), new byte[] { 0x1A, 0x20, 0x00, 0x0F }));
+        // Init's constants: a frame's, one that is no table, then the names.
+        m.Func("Variables::Init()", t0, Bytes(new byte[] { 0x41 }, S(16), new byte[] { 0x1A, 0x41 }, S(7000), new byte[] { 0x1A, 0x41 }, S(9000), new byte[] { 0x1A }));
+        if (withNames)
+        {
+            m.Data(9000, U32(9100, 9120, 9140));
+            m.Data(9100, "INI_OTHER\0");
+            m.Data(9120, "INI_IS_PAUSED\0");
+            m.Data(9140, "FMGS_PAUSE_TYPE\0");
+        }
+        m.Data(7000, U32(1, 2, 3));
+        m.Data(5000, "\0INI_MCDU{}_ENTER\0INI_MCDU_OPTION\0INI_FMC_PAGE1\0");
+        return A350WasmModule.Parse(m.Build());
+    }
+
+    [Fact]
+    public void The_pause_variables_are_found_by_their_names()
+    {
+        Assert.Equal(new A350PauseFacts(1343616 + 8, 1343616 + 16), A350ModuleFacts.From(WithVariableNames()).Pause);
+        Assert.Null(A350ModuleFacts.From(WithVariableNames(withNames: false)).Pause);
+        Assert.Null(A350ModuleFacts.From(Sample()).Pause);
+    }
+
+    // PERF T.O's FLEX: FlightPlan::getFlexTemperature() returns this+936 in 1.2.7, and a version without it keeps the speeds.
+    [Fact]
+    public void The_flex_temperature_is_found_with_the_speeds_and_never_needed()
+    {
+        var m = new WasmTestModule();
+        int t1 = m.AddType(new[] { I32 }, new[] { I32 });
+        int t0 = m.AddType(Array.Empty<byte>(), Array.Empty<byte>());
+        int Getter(string name, int offset) => m.Func(name, t1,
+            new byte[] { 0x20, 0x00, 0x28, 0x02 }.Concat(U(offset)).Concat(new byte[] { 0x0F }).ToArray());
+        int v1 = Getter("FlightPlan::getV1Speed()", 964);
+        Getter("FlightPlan::getVRSpeed()", 968);
+        Getter("FlightPlan::getV2Speed()", 972);
+        Getter("FlightPlan::getFlexTemperature()", 936);
+        m.Func("update_v1()", t0, new byte[] { 0x41 }.Concat(S(1418656)).Concat(new byte[] { 0x10 }).Concat(U(v1)).Concat(new byte[] { 0x1A }).ToArray());
+        m.Data(5000, "\0INI_MCDU{}_ENTER\0INI_MCDU_OPTION\0INI_FMC_PAGE1\0");
+        Assert.Equal(new A350TakeoffSpeedFacts(1418656, 964, 968, 972, 936), A350ModuleFacts.From(A350WasmModule.Parse(m.Build())).TakeoffSpeeds);
+        Assert.Equal(-1, A350ModuleFacts.From(WithFlightPlan()).TakeoffSpeeds!.FlexOffset);
+    }
+
+    [Fact]
+    public void The_flex_temperature_reads_with_the_speeds_and_a_wrong_one_is_none()
+    {
+        var facts = new A350TakeoffSpeedFacts(2000, 964, 968, 972, 936);
+        var mem = new byte[8192];
+        BitConverter.GetBytes(142).CopyTo(mem, 2964);
+        BitConverter.GetBytes(143).CopyTo(mem, 2968);
+        BitConverter.GetBytes(148).CopyTo(mem, 2972);
+        BitConverter.GetBytes(67).CopyTo(mem, 2936);
+        var copy = new A350MemoryCopy();
+        copy.Set(new[] { (0u, mem.Length) }, mem);
+        Assert.Equal(new A350TakeoffSpeeds(142, 143, 148, 67), A350TakeoffSpeeds.Read(copy, facts));
+        Assert.Equal(new A350TakeoffSpeeds(142, 143, 148), A350TakeoffSpeeds.Read(copy, facts with { FlexOffset = -1 }));
+        BitConverter.GetBytes(100000).CopyTo(mem, 2936);
+        Assert.Equal(new A350TakeoffSpeeds(142, 143, 148), A350TakeoffSpeeds.Read(copy, facts));
+    }
+
     // A version that moved them leaves the call-outs without speeds, never the displays without a reader.
     [Fact]
     public void A_module_without_the_getters_has_no_take_off_speeds()

@@ -797,6 +797,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - *"IRS aligned"*, once, as the last IR that is on finishes aligning.
 - The take-off speeds as the FMS takes them (*"V1: 142 knots"*), and *"V1"*, *"Rotate"* and *"V2"* on the take-off roll.
 - The approach minimums as PERF APPR takes them: *"Baro minimum 520 feet"*, *"Decision height 200 feet"*, *"No DH"*, and *"Baro minimum cleared"* when one goes, for example when you enter the other (the A350 keeps one) or change the approach. The FMS's own reset after landing says nothing.
+- When the aircraft pauses the simulator itself, why and where to resume: *"Top of descent pause. The simulation has been paused. Resume with RESUME FLIGHT on the OIS."* It does so at the top of descent and when the autopilot drops under time compression, if the OIS options say so. Open the OIS window (Input Shift+T) and press RESUME FLIGHT.
 - During a BTV rollout, the distance to the exit and the runway left, as on the A380: *"500 meters to exit"*, *"300 meters runway remaining"*.
 - Where the thrust levers, flaps and speed brake went (*"All thrust levers Climb"*, *"Spoilers 40 percent"*).
 - The OIS's red cover banners, with its window closed: *"Engine covers are still in place."* and, on the ground, *"Pitot covers are still in place."*, as they appear and once after a flight loads with them showing. Take the covers off on the OIS GROUND page (COVERS).

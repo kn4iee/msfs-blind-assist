@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A350.Display;
 using MSFSBlindAssist.FirstOfficer.A350;
+using MSFSBlindAssist.Tests.A350;
 using Xunit;
 
 namespace MSFSBlindAssist.Tests.FirstOfficer;
@@ -177,6 +179,28 @@ public class A350StateEvaluatorTests
     {
         var state = Evaluator(("XMLVAR_Baro1_Mode", 0), ("XMLVAR_Baro_Selector_HPA_1", 0), ("A350_FCU_CAPTAIN_BARO", 1013.25));
         Assert.Equal("QNH 29.92", state.BaroText());
+    }
+
+    // Before Start's "T.O data" and Before Takeoff's "V1, VR, V2 and thrust rating", as the A380's read theirs: from the FMS's
+    // flight plan in the reader's copy (INI_V1, INI_VR and INI_V2 are never written), flex only when set.
+    [Theory]
+    [InlineData(142, 143, 148, 67, "V1 142, VR 143, V2 148, flex 67")]
+    [InlineData(142, 143, 148, 0, "V1 142, VR 143, V2 148")]
+    [InlineData(0, 0, 0, 0, "not set")]
+    public void The_takeoff_data_reads_the_fms(int v1, int vr, int v2, int flex, string said)
+    {
+        var def = new IniBuildsA350Definition();
+        var speech = new SpeechCapture();
+        for (int i = 0; i < 2; i++)
+            def.ObserveTakeoffSpeeds(new A350TakeoffSpeeds(v1, vr, v2, flex), speech);
+        Assert.Equal(said, new A350StateEvaluator(def).TakeoffDataText());
+    }
+
+    [Fact]
+    public void The_takeoff_data_unread_says_nothing()
+    {
+        Assert.Null(new A350StateEvaluator(new IniBuildsA350Definition()).TakeoffDataText());
+        Assert.Null(new A350StateEvaluator().TakeoffDataText());
     }
 
     [Fact]

@@ -62,6 +62,9 @@ public sealed class A350DisplayService : IDisposable
     /// <summary>BTV's rollout in each copy a draw request takes (<see cref="A350BtvRollout"/>), the same way.</summary>
     public event Action<A350BtvRollout>? BtvRead;
 
+    /// <summary>Whether the sim is paused and why in each copy a draw request takes (<see cref="A350SimPause"/>), the same way.</summary>
+    public event Action<A350SimPause>? PauseRead;
+
     public A350DisplayState State { get; private set; } = A350DisplayState.Idle;
     public string? Reason { get; private set; }
 
@@ -226,6 +229,8 @@ public sealed class A350DisplayService : IDisposable
                     minimumsRead(minimums);
                 if (_facts?.Btv is { } btvAt && BtvRead is { } btvRead && A350BtvRollout.Read(copy, btvAt) is { } btv)
                     btvRead(btv);
+                if (_facts?.Pause is { } pauseAt && PauseRead is { } pauseRead && A350SimPause.Read(copy, pauseAt) is { } pause)
+                    pauseRead(pause);
                 var caps = new List<A350DrawCapture>(gauges.Length);
                 bool retried = false;
                 foreach (var (g, i) in gauges)

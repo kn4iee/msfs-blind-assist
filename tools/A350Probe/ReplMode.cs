@@ -72,6 +72,7 @@ internal sealed partial class ProbeForm
         service.TakeoffSpeedsRead += speeds => BeginInvoke(() => def.ObserveTakeoffSpeeds(speeds, cap));
         service.MinimumsRead += minimums => BeginInvoke(() => def.ObserveMinimums(minimums, cap));
         service.BtvRead += btv => BeginInvoke(() => def.ObserveBtv(btv, cap));
+        service.PauseRead += pause => BeginInvoke(() => def.ObservePause(pause, cap));
         service.Start();
         await WaitForDisplays(service);
         using var ecam = new A350EcamMonitor(() => false, line => BeginInvoke(() => cap.Announce("[ecam] " + line)));

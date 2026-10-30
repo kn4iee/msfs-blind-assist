@@ -740,6 +740,11 @@ public partial class MainForm
             {
                 if (ReferenceEquals(currentAircraft, a350)) a350.ObserveBtv(btv, announcer);
             });
+            // And the sim's pause: the aircraft's own, at the top of descent or an autopilot drop.
+            a350DisplayService.PauseRead += pause => SafeBeginInvoke(() =>
+            {
+                if (ReferenceEquals(currentAircraft, a350)) a350.ObservePause(pause, announcer);
+            });
         }
         a350DisplayService.Start();
         a350PfdMonitor.Start();
