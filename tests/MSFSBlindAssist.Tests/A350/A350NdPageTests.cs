@@ -13,7 +13,7 @@ public class A350NdPageTests
     public void Traffic_says_how_far_above_and_where()
     {
         var lines = A350NdPage.Read(A350Fixtures.Capture("nd_traffic.json"), 0, mode: 2, range: 5).Select(l => l.Spoken).ToList();
-        Assert.Contains(lines, l => l.StartsWith("Traffic 700 feet above: 6 o'clock, 10", StringComparison.Ordinal) && l.EndsWith(", white", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("Traffic 700 feet above, descending: 6 o'clock, 10", StringComparison.Ordinal) && l.EndsWith(", white", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, l => l.StartsWith("+07", StringComparison.Ordinal));
     }
 
@@ -260,6 +260,29 @@ public class A350NdPageTests
         var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_cruise_wxt.json"), 0, 3, 7);
         Assert.DoesNotContain(lines, l => l.Kind == "map" && l.Spoken.StartsWith("WX+T", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Kind == "text" && l.Spoken == "Radar mode: WX+T, green");
+    }
+
+    // Live 2026-10-30, FL300, an AI intruder: an arrow right of the figure, a 9 by 19 sprite, says which way the traffic is moving.
+    [Theory]
+    [InlineData("efis0_traffic_climbing.json", 7, "Traffic 900 feet above, climbing: 12 o'clock, ")]
+    [InlineData("efis0_traffic_descending.json", 7, "Traffic 800 feet above, descending: 12 o'clock, ")]
+    public void Traffic_says_which_way_it_is_moving(string fixture, int range, string starts)
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture(fixture), 0, mode: 3, range: range);
+        Assert.Contains(lines, l => l.Spoken.StartsWith(starts, StringComparison.Ordinal) && l.Spoken.EndsWith(", white", StringComparison.Ordinal));
+    }
+
+    // SURV TRAFFIC's FLT ID DISPLAY ON ND: the target's flight ID and, under it, its speed and wake category, on the other side of the symbol
+    // from the figure (live 2026-10-30). It read as a map name of its own and a bare "381 M".
+    [Theory]
+    [InlineData("efis0_traffic_flight_id_above.json", "Traffic IVAO, 1200 feet above, descending: 12 o'clock, ", ", speed 337, wake M, white")]
+    [InlineData("efis0_traffic_flight_id_below.json", "Traffic IVAO, 500 feet below, descending: 12 o'clock, ", ", speed 348, wake M, white")]
+    public void Traffic_says_its_flight_id_speed_and_wake(string fixture, string starts, string ends)
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture(fixture), 0, mode: 3, range: 6);
+        Assert.Contains(lines, l => l.Spoken.StartsWith(starts, StringComparison.Ordinal) && l.Spoken.EndsWith(ends, StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("IVAO", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => System.Text.RegularExpressions.Regex.IsMatch(l.Spoken, @"^\d+\s+M"));
     }
 
     // Live 2026-10-30, FL300: POSITION/TIME's marker on the path: "(20:45)" in green. It has no letters, so it read as a bare line with no place.

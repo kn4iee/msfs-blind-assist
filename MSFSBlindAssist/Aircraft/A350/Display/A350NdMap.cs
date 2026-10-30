@@ -57,6 +57,43 @@ public static class A350NdMap
     /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
     private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 5) || AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t));
 
+    /// <summary>The arrow right of a traffic figure, a 9 by 19 sprite whose place in its atlas says the way (live 2026-10-30, an AI intruder
+    /// climbing, then descending): ", climbing", ", descending", or nothing with none.</summary>
+    internal static string TrafficTendency(IReadOnlyList<DrawnShape>? shapes, DrawnText figure)
+    {
+        const float NearPixels = 40, SameSpotPixels = 2, ArrowWidth = 9, ArrowHeight = 19;
+        foreach (var s in shapes ?? Array.Empty<DrawnShape>())
+        {
+            if (s.Kind != "fill" || s.X0 - figure.X is <= 0 or >= NearPixels || Math.Abs(s.Y0 - figure.Y) >= NearPixels
+                || Math.Abs(s.X1 - s.X0 - ArrowWidth) >= SameSpotPixels || Math.Abs(s.Y1 - s.Y0 - ArrowHeight) >= SameSpotPixels)
+                continue;
+            float atlasX = s.X0 - s.PatternX, atlasY = s.Y0 - s.PatternY;
+            if (Math.Abs(atlasX - 164) < SameSpotPixels && Math.Abs(atlasY - 416) < SameSpotPixels) return ", climbing";
+            if (Math.Abs(atlasX + 173) < SameSpotPixels && Math.Abs(atlasY + 435) < SameSpotPixels) return ", descending";
+        }
+        return "";
+    }
+
+    /// <summary>What FLT ID DISPLAY ON ND adds to a target (SURV TRAFFIC), the texts that drew it among them.</summary>
+    internal readonly record struct TrafficIdent(string? FlightId, string? Speed, string? Wake, IReadOnlyList<DrawnText> Texts);
+
+    /// <summary>A target's flight ID and, under it, its speed and wake category (TcasSystem_Base::GetWakeCategory), left of the figure and on
+    /// the other side of the symbol from it (live 2026-10-30: figure "+13" at y 470, "IVAO" at 491, "340" and "M" at 510; "-05" at 626,
+    /// "IVAO" at 590, "348" and "M" at 609).</summary>
+    internal static TrafficIdent TrafficIdentOf(IEnumerable<DrawnText> nd, DrawnText figure)
+    {
+        const float LeftOfFigure = 26, Tolerance = 5, RowPixels = 19, IdBelowFigure = 21, IdAboveFigure = 36;
+        float idY = figure.Y + (figure.Text.Trim()[0] == '+' ? IdBelowFigure : -IdAboveFigure), x = figure.X - LeftOfFigure;
+        var near = nd.Where(t => !string.IsNullOrWhiteSpace(t.Text) && Math.Abs(t.X - x) <= Tolerance).ToList();
+        var id = near.FirstOrDefault(t => Math.Abs(t.Y - idY) <= Tolerance && t.Text.Trim().Any(char.IsLetter));
+        if (id == null)
+            return new TrafficIdent(null, null, null, Array.Empty<DrawnText>());
+        var row = near.Where(t => Math.Abs(t.Y - idY - RowPixels) <= Tolerance).ToList();
+        var speed = row.FirstOrDefault(t => t.Text.Trim().All(char.IsDigit));
+        var wake = row.FirstOrDefault(t => t.Text.Trim().All(char.IsLetter));
+        return new TrafficIdent(id.Text.Trim(), speed?.Text.Trim(), wake?.Text.Trim(), row.Append(id).ToList());
+    }
+
     /// <summary>A time marker's label on the path: "(20:45)" (live 2026-10-30, POSITION/TIME).</summary>
     internal static readonly System.Text.RegularExpressions.Regex TimeMarker = new(@"^\((\d{2}:\d{2})\)$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
