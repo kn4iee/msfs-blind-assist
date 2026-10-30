@@ -71,7 +71,7 @@ public sealed class A350FmaAnnouncer
     }
 
     /// <summary>Holds fewer modes than the other line and none it does not: what a part that flashes leaves behind, down to nothing.</summary>
-    private static bool IsPartOf(string part, string whole)
+    internal static bool IsPartOf(string part, string whole)
     {
         var modes = Modes(part);
         var all = Modes(whole);

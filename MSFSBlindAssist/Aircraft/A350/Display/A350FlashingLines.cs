@@ -4,10 +4,11 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
 /// The PFD's flashing lines as a status display says them. The A350 flashes a line by leaving it out of every other draw (QNH
-/// above the transition altitude, STD below the transition level, live 2026-10-30), so one read has it and the next has not. A
-/// line that comes back within <see cref="Window"/> of leaving flashes: it is said so, and held in its place while it is out. One
-/// that simply goes is gone at once. Only what can flash is followed: the FMA's columns, the baro and the flags of the rest; the
-/// tapes' figures come and go by themselves. Reads come from the UI thread and from a hotkey, hence the lock.
+/// above the transition altitude, STD below the transition level, live 2026-10-30), so one read has it and the next has not, or a
+/// part of an FMA column (LVR CLB under MAN TOGA, live). A line that comes back within <see cref="Window"/> of leaving, the second
+/// time in a row, flashes: it is said so, and held whole in its place while it is out. Once is a torn read or a column blank through
+/// a mode change. One that simply goes is gone at once. Only what can flash is followed: the FMA's columns, the baro and the flags
+/// of the rest; the tapes' figures come and go by themselves. Reads come from the UI thread and from a hotkey, hence the lock.
 /// </summary>
 public sealed class A350FlashingLines
 {
@@ -23,6 +24,7 @@ public sealed class A350FlashingLines
         public string Line = "";
         public int Place;
         public DateTime? LeftAt;
+        public DateTime? BackAt;
         public DateTime FlashingUntil;
     }
 
@@ -33,8 +35,23 @@ public sealed class A350FlashingLines
         || line.StartsWith("FMA ", StringComparison.Ordinal) || line.StartsWith("QNH: ", StringComparison.Ordinal)
         || line.StartsWith("QFE: ", StringComparison.Ordinal) || line.StartsWith("Baro: ", StringComparison.Ordinal);
 
-    /// <summary>A line's name: its label, or a flag with its figures left out (a flag is the same flag while they move).</summary>
-    private static string KeyOf(string line) => line.IndexOf(": ", StringComparison.Ordinal) is var colon and > 0 ? line[..colon] : Figure.Replace(line, "#");
+    /// <summary>A line's name: its label, or a flag with its figures left out (a flag is the same flag while they move). The baro is
+    /// one line, whichever label it has.</summary>
+    private static string KeyOf(string line)
+    {
+        string label = LabelOf(line);
+        return label is "QNH" or "QFE" or "Baro" ? "Baro" : label;
+    }
+
+    private static string LabelOf(string line) => line.IndexOf(": ", StringComparison.Ordinal) is var colon and > 0 ? line[..colon] : Figure.Replace(line, "#");
+
+    /// <summary>It came back: from the second time in a row it flashes.</summary>
+    private static void CameBack(Seen seen, DateTime now)
+    {
+        if (seen.BackAt is { } back && now - back <= 2 * Window) seen.FlashingUntil = now + Window;
+        seen.BackAt = now;
+        seen.LeftAt = null;
+    }
 
     /// <summary>One read of the PFD at <paramref name="now"/>, as its status display says it.</summary>
     public IReadOnlyList<string> Apply(A350Pfd.PfdRead read, DateTime now)
@@ -54,10 +71,31 @@ public sealed class A350FlashingLines
                 string key = KeyOf(line);
                 here.Add(key);
                 if (!_seen.TryGetValue(key, out var seen)) _seen[key] = seen = new Seen();
-                if (seen.LeftAt is { } left && now - left <= Window) seen.FlashingUntil = now + Window;
-                seen.LeftAt = null;
-                seen.Line = line;
                 seen.Place = said.Count;
+                // Only a part of an FMA column left: its other part may be out on a flash.
+                if (seen.Line.Length > 0 && line.StartsWith("FMA ", StringComparison.Ordinal) && A350FmaAnnouncer.IsPartOf(line, seen.Line))
+                {
+                    seen.LeftAt ??= now;
+                    if (now < seen.FlashingUntil)
+                    {
+                        said.Add(seen.Line + Flashing);
+                        continue;
+                    }
+                    if (now - seen.LeftAt > Window) seen.Line = line;
+                    said.Add(line);
+                    continue;
+                }
+                if (seen.LeftAt is { } left && now - left <= Window && LabelOf(seen.Line) == LabelOf(line))
+                    CameBack(seen, now);
+                else
+                    seen.LeftAt = null;
+                // Another label or another mode is no flash of the old one.
+                if (LabelOf(seen.Line) != LabelOf(line) || line.StartsWith("FMA ", StringComparison.Ordinal) && seen.Line != line && !A350FmaAnnouncer.IsPartOf(seen.Line, line))
+                {
+                    seen.FlashingUntil = default;
+                    seen.BackAt = null;
+                }
+                seen.Line = line;
                 said.Add(now < seen.FlashingUntil ? line + Flashing : line);
             }
             foreach (var (key, seen) in _seen.Where(s => !here.Contains(s.Key)).OrderBy(s => s.Value.Place).ToList())
