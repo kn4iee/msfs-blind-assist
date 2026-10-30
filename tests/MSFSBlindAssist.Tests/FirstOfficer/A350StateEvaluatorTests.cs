@@ -181,6 +181,38 @@ public class A350StateEvaluatorTests
         Assert.Equal("QNH 29.92", state.BaroText());
     }
 
+    // Review 3 (2026-10-30, I5): a latched line is judged on all it claims: "ADIRS: NAV" read IRS 1 alone, "Thrust levers: IDLE" lever 1
+    // alone, "Cockpit door: CLOSED and LOCKED" the lock alone.
+    [Theory]
+    [InlineData(1, 1, 1, 1)]
+    [InlineData(1, 0, 1, 0)]
+    [InlineData(1, 1, 2, 0)]
+    public void Adirs_nav_is_all_three(double one, double two, double three, double expected) =>
+        Assert.Equal(expected, Evaluator(("A350_IRS_MODE_1", one), ("A350_IRS_MODE_2", two), ("A350_IRS_MODE_3", three)).GetValue(A350StateEvaluator.AdirsNavField));
+
+    [Fact]
+    public void Adirs_nav_unread_is_unknown() =>
+        Assert.True(double.IsNaN(Evaluator(("A350_IRS_MODE_1", 1), ("A350_IRS_MODE_2", 1)).GetValue(A350StateEvaluator.AdirsNavField)));
+
+    [Theory]
+    [InlineData(0, 0, 1)]
+    [InlineData(0.5, -0.5, 1)]
+    [InlineData(0, 25, 0)]
+    [InlineData(25, 0, 0)]
+    public void Levers_idle_is_both(double one, double two, double expected) =>
+        Assert.Equal(expected, Evaluator(("A350_ENGINE_THROTTLE_1", one), ("A350_ENGINE_THROTTLE_2", two)).GetValue(A350StateEvaluator.LeversIdleField));
+
+    [Fact]
+    public void Levers_idle_unread_is_unknown() =>
+        Assert.True(double.IsNaN(Evaluator(("A350_ENGINE_THROTTLE_1", 0)).GetValue(A350StateEvaluator.LeversIdleField)));
+
+    [Theory]
+    [InlineData(0, 1, 1)]   // closed, locked
+    [InlineData(1, 1, 0)]   // open, its lock set
+    [InlineData(0, 0, 0)]   // closed, unlocked
+    public void The_cockpit_door_is_closed_and_locked(double open, double locked, double expected) =>
+        Assert.Equal(expected, Evaluator(("A350_COCKPIT_DOOR_HANDLE_BASE_CS", open), ("A350_COCKPIT_DOOR_LOCK", locked)).GetValue(A350StateEvaluator.CockpitDoorSecureField));
+
     // Before Start's "T.O data" and Before Takeoff's "V1, VR, V2 and thrust rating", as the A380's read theirs: from the FMS's
     // flight plan in the reader's copy (INI_V1, INI_VR and INI_V2 are never written), flex only when set.
     [Theory]

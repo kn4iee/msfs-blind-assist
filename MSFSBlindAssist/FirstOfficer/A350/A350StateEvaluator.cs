@@ -63,6 +63,7 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string WeatherRadarOnField = "FO_WXR_ON";
     internal const string GreenDotField = "FO_SPEED_GD", SSpeedField = "FO_SPEED_S", FSpeedField = "FO_SPEED_F", VfeNextField = "FO_VFE_NEXT";
     internal const string LandingConf3Field = "FO_LANDING_CONF3";
+    internal const string AdirsNavField = "FO_ADIRS_NAV", LeversIdleField = "FO_LEVERS_IDLE", CockpitDoorSecureField = "FO_COCKPIT_DOOR_SECURE";
 
     private readonly Func<string, string> _keyFor;
     private readonly IniBuildsA350Definition? _definition;
@@ -82,6 +83,9 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     /// <summary>Whether the lever's speed brake reads extended: arming the ground spoilers moves it to retracted
     /// (<c>0 'INI.SPOILERS_SET'</c>, A350Levers), so a spoiler arm is left alone (FOA-11).</summary>
     internal static bool SpeedBrakeExtended(A350StateEvaluator s) => AirbusGroundSpoilers.FbwSpeedBrakeExtended(s.GetValue("A350_STAT_SPEED_BRAKE"));
+
+    /// <summary>An IRS mode selector at NAV.</summary>
+    private static bool IsNav(double mode) => Math.Abs(mode - 1) < 0.5;
 
     /// <summary>True when the flap lever reads a takeoff position, 1 to 3.</summary>
     internal static bool IsTakeoffFlapsLever(double lever) => lever > 0.5 && lever < 3.5;
@@ -114,6 +118,17 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
         {
             case EnginesStoppedField:
                 value = Both(Eng1N2, Eng2N2, (one, two) => one < StoppedN2 && two < StoppedN2);
+                return true;
+            case AdirsNavField:
+                value = Both(Both(GetValue("A350_IRS_MODE_1"), GetValue("A350_IRS_MODE_2"), (one, two) => IsNav(one) && IsNav(two)),
+                    GetValue("A350_IRS_MODE_3"), (both, three) => both > 0.5 && IsNav(three));
+                return true;
+            case LeversIdleField:
+                value = Both(GetValue("A350_ENGINE_THROTTLE_1"), GetValue("A350_ENGINE_THROTTLE_2"),
+                    (one, two) => A350FlowDefinitions.LeversIdle(one) && A350FlowDefinitions.LeversIdle(two));
+                return true;
+            case CockpitDoorSecureField:
+                value = Both(GetValue("A350_COCKPIT_DOOR_HANDLE_BASE_CS"), GetValue("A350_COCKPIT_DOOR_LOCK"), (open, locked) => open < 0.5 && locked > 0.5);
                 return true;
             case EnginesOffField:
                 value = Both(GetValue("A350_ENG_MASTER_1"), GetValue("A350_ENG_MASTER_2"), (one, two) => one < 0.5 && two < 0.5);

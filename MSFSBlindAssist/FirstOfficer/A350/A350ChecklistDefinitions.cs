@@ -124,7 +124,7 @@ public static class A350ChecklistDefinitions
         Id = "BEFORE_START", Name = "Before Start",
         Items = new()
         {
-            Auto("BS_COCKPITDOOR", "BEFORE_START", "Cockpit door: CLOSED and LOCKED", "A350_COCKPIT_DOOR_LOCK", v => v > 0.5,
+            Auto("BS_COCKPITDOOR", "BEFORE_START", "Cockpit door: CLOSED and LOCKED", A350StateEvaluator.CockpitDoorSecureField, v => v > 0.5,
                 async (e, _) => { await e.Set("A350_COCKPIT_DOOR_HANDLE_BASE_CS", 0); await e.Set("A350_COCKPIT_DOOR_LOCK", 1); }),
             ActionManual("BS_FCUSPD", "BEFORE_START", "FCU speed: managed", (e, _) => e.Set("A350_FCU_SPD_KNOB_PUSH", 1)),
             ActionManual("BS_FCUHDG", "BEFORE_START", "FCU heading: managed", (e, _) => e.Set("A350_FCU_HDG_KNOB_PUSH", 1)),
@@ -165,11 +165,11 @@ public static class A350ChecklistDefinitions
             Reminder("BSC_PINS", "BEFORE_START_CL", "Gear pins and covers: REMOVED"),
             Reminder("BSC_FUEL", "BEFORE_START_CL", "Fuel quantity: SET", s => s.FuelText()),
             Auto("BSC_SEATBELT", "BEFORE_START_CL", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, action: null),
-            Auto("BSC_ADIRS", "BEFORE_START_CL", "ADIRS: NAV", "A350_IRS_MODE_1", v => Math.Abs(v - 1) < 0.5, new[] { "A350_IRS_MODE_2", "A350_IRS_MODE_3" }, action: null),
+            Auto("BSC_ADIRS", "BEFORE_START_CL", "ADIRS: NAV", A350StateEvaluator.AdirsNavField, v => v > 0.5, action: null),
             Reminder("BSC_BARO", "BEFORE_START_CL", "Baro reference: SET", s => s.BaroText()),
             Reminder("BSC_TODATA", "BEFORE_START_CL", "T.O data: SET", s => s.TakeoffDataText()),
             Reminder("BSC_DOORS", "BEFORE_START_CL", "Doors: CLOSED and ARMED"),
-            Auto("BSC_THRUST", "BEFORE_START_CL", "Thrust levers: IDLE", "A350_THRUST_LEVERS_ALL", A350FlowDefinitions.LeversIdle, action: null),
+            Auto("BSC_THRUST", "BEFORE_START_CL", "Thrust levers: IDLE", A350StateEvaluator.LeversIdleField, v => v > 0.5, action: null),
             Reminder("BSC_PARKBRK", "BEFORE_START_CL", "Parking brake: AS REQUIRED"),
             Auto("BSC_BEACON", "BEFORE_START_CL", "Beacon: ON", "A350_LIGHTS_EXT_BEACON", v => v > 0.5, action: null),
         }

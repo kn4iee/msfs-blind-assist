@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A350;
 using MSFSBlindAssist.FirstOfficer.A350;
 using MSFSBlindAssist.SimConnect;
 using Xunit;
@@ -20,15 +21,23 @@ internal sealed class RecordingA350Definition : IniBuildsA350Definition
         get { lock (_gate) return _writes.ToArray(); }
     }
 
-    public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
-        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    internal override A350WriteOutcome WriteRow(string varKey, double value, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
+        if (!GetVariables().ContainsKey(varKey))
+            return A350WriteOutcome.NoSuchRow;
         lock (_gate) _writes.Add((varKey, value));
+        return A350WriteOutcome.Sent;
+    }
+
+    internal override bool HoldForFirstOfficer(string key, bool down, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        lock (_gate) _writes.Add((key, down ? 1 : 0));
         return true;
     }
 
     public A350ActionExecutor Executor(params (string Name, double Value)[] seed)
     {
+        CanLand = _ => true;
         var variables = GetVariables();
         var executor = new A350ActionExecutor();
         executor.SetSimConnect(SeededSimConnectCache.ConnectedWith(seed
@@ -143,7 +152,7 @@ public class A350ActionExecutorTests
     {
         var def = new RecordingA350Definition();
         Assert.True(await def.Executor().HoldAsync("A350_ECAM_TO_CONFIG", 10));
-        Assert.Equal(new[] { ("A350_ECAM_TO_CONFIG", 1.0), ("A350_ECAM_TO_CONFIG", 1.0) }, def.Writes);
+        Assert.Equal(new[] { ("A350_ECAM_TO_CONFIG", 1.0), ("A350_ECAM_TO_CONFIG", 0.0) }, def.Writes);
     }
 
     // The window closing mid-hold lets go at once (HeldPresses), not on the hold's own timer.

@@ -35,10 +35,15 @@ public partial class IniBuildsA350Definition
     private int _pickSeq;
 
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
-        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+        SimConnectManager simConnect, ScreenReaderAnnouncer announcer) =>
+        WriteRow(varKey, value, simConnect, announcer) != A350WriteOutcome.NoSuchRow;   // no row is a base variable: MainForm's generic path
+
+    /// <summary>A panel row's write and what it came to; a refusal is spoken, and is a claimed row to MainForm but no write to the First
+    /// Officer (<see cref="ApplyForFirstOfficer"/>).</summary>
+    internal virtual A350WriteOutcome WriteRow(string varKey, double value, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
         if (!_rows.TryGetValue(varKey, out var row) || row.Control is not { } control)
-            return false;   // a base variable: MainForm's generic path
+            return A350WriteOutcome.NoSuchRow;
         _sim = simConnect;
 
         if (_typed.TryGetValue(varKey, out var field))
@@ -49,7 +54,7 @@ public partial class IniBuildsA350Definition
         {
             announcer.Announce(option.NotFitted);
             ReRead(row.Key, simConnect);
-            return true;
+            return A350WriteOutcome.NotFitted;
         }
 
         if (row.Action == A350RowAction.Press && A350WritePlan.IsLatched(control))
@@ -70,8 +75,9 @@ public partial class IniBuildsA350Definition
             : value;
         if (row.Action == A350RowAction.Press)
             ArmUnitButtonEcho(control);   // before the write, so its echo can never arrive first
-        if (!Execute(row, plan, simConnect, announcer, commanded))
-            return true;   // refused, already there or unavailable: nothing was written
+        var outcome = Execute(row, plan, simConnect, announcer, commanded);
+        if (outcome != A350WriteOutcome.Sent)
+            return outcome;   // refused, already there or unavailable: nothing was written
         NoteOwnLamps(control);   // its lights follow the pilot's own press or pick: its label says them
 
         if (row.Action == A350RowAction.Press && !ShowsState(row.Key))
@@ -81,7 +87,7 @@ public partial class IniBuildsA350Definition
 
         if (commanded is double target && control.Kind is A350Kinds.Toggle or A350Kinds.Command or A350Kinds.Selector)
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
-        return true;
+        return A350WriteOutcome.Sent;
     }
 
     /// <summary>Whether a press row's label shows a state after the press (its lights, its held record, its button state),
@@ -146,15 +152,16 @@ public partial class IniBuildsA350Definition
     /// the cockpit shows it released, and lets it go when the cockpit shows it held (after a flight load, or a hold made
     /// in the cockpit, the cockpit is the record), never on a timer. Its label says which once the cockpit's record
     /// arrives, asked for at once so the reader says it.</summary>
-    private bool HandleLatched(A350PlacedRow row, A350Control control, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    /// <param name="hold">Down or up whatever the cockpit reads (the First Officer's held tests), else as the cockpit shows it.</param>
+    private A350WriteOutcome HandleLatched(A350PlacedRow row, A350Control control, SimConnectManager sim, ScreenReaderAnnouncer announcer, bool? hold = null)
     {
         if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");
-            return true;
+            return A350WriteOutcome.Unavailable;
         }
         string heldKey = KeyForInput(A350WritePlan.HeldVarFor(control)!);
-        bool down = _commanded.Resolve(heldKey, Cached(sim, heldKey), Clock()) is not >= 0.5;
+        bool down = hold ?? _commanded.Resolve(heldKey, Cached(sim, heldKey), Clock()) is not >= 0.5;
         foreach (var step in (down ? A350WritePlan.ForHoldDown(control) : A350WritePlan.ForHoldUp(control)).Steps)
             if (step is A350CalcStep calc)
                 Send(sim, calc.Rpn);
@@ -169,7 +176,7 @@ public partial class IniBuildsA350Definition
         }
         NoteOwnLamps(control);
         ReRead(heldKey, sim);
-        return true;
+        return A350WriteOutcome.Sent;
     }
 
     /// <summary>How long a typed value's click is given to land before it is read back.</summary>
@@ -178,7 +185,7 @@ public partial class IniBuildsA350Definition
     /// <summary>A typed value (<see cref="A350TypedEntry"/>): refused aloud, or written one step short and clicked to,
     /// then read back, corrected when the click landed elsewhere, and confirmed as the cockpit shows it (a numeric
     /// confirmation always speaks, [CORE-7]).</summary>
-    private bool HandleTyped(A350PlacedRow row, A350TypedField field, double value, SimConnectManager sim,
+    private A350WriteOutcome HandleTyped(A350PlacedRow row, A350TypedField field, double value, SimConnectManager sim,
         ScreenReaderAnnouncer announcer)
     {
         double? Read(string name) => Cached(sim, KeyForInput(name));
@@ -186,15 +193,15 @@ public partial class IniBuildsA350Definition
         if (plan.Refusal != null)
         {
             announcer.Announce(plan.Refusal);
-            return true;
+            return A350WriteOutcome.Refused;
         }
         if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");
-            return true;
+            return A350WriteOutcome.Unavailable;
         }
         _ = TypedAsync(row, value, plan, Read, sim, announcer);
-        return true;
+        return A350WriteOutcome.Sent;
     }
 
     private async Task TypedAsync(A350PlacedRow row, double typed, A350TypedPlan plan, Func<string, double?> read,
@@ -331,28 +338,28 @@ public partial class IniBuildsA350Definition
         : new[] { CommandKey(rowKey) };
 
     /// <summary>Runs a plan, or refuses it aloud; true when its steps were sent.</summary>
-    private bool Execute(A350PlacedRow row, A350Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
+    private A350WriteOutcome Execute(A350PlacedRow row, A350Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
         double? commandedValue)
     {
         if (plan.Refusal != null)
         {
             announcer.Announce(A350WritePlan.SpokenRefusal(row.Name, plan.Refusal));
             ReRead(row.Key, sim);
-            return false;
+            return A350WriteOutcome.Refused;
         }
         if (plan.IsEmpty)
-            return false;   // already there; the screen reader has said so
+            return A350WriteOutcome.AlreadyThere;   // the screen reader has said so
         if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");
             ReRead(row.Key, sim);
-            return false;
+            return A350WriteOutcome.Unavailable;
         }
         if (commandedValue is double target)
             foreach (var key in CommandKeys(row.Key))
                 _commanded.Record(key, target, Clock());
         _ = RunAsync(RunKey(row), plan.Steps, sim);
-        return true;
+        return A350WriteOutcome.Sent;
     }
 
     /// <summary>What a run takes over: the switch its control writes, so both nudges of one trim switch are one switch (review

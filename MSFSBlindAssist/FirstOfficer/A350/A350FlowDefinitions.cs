@@ -140,10 +140,10 @@ public static class A350FlowDefinitions
             // The aircraft's own Before Start lines the flow does not set itself: read only (5 s, skipped aloud, never writes).
             Done(Skip(WaitForField("BS_BELTS_CHECK", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, 5),
                 s => s.IsPosition("A350_SIGNS_SEAT_BELTS", 0)), "BSC_SEATBELT"),
-            Done(Skip(WaitForField("BS_ADIRS_CHECK", "ADIRS: NAV", "A350_IRS_MODE_1", v => Math.Abs(v - 1) < 0.5, 5),
-                s => s.IsPosition("A350_IRS_MODE_1", 1) && s.IsPosition("A350_IRS_MODE_2", 1) && s.IsPosition("A350_IRS_MODE_3", 1)), "BSC_ADIRS"),
-            Done(Skip(WaitForField("BS_LEVERS_CHECK", "Thrust levers: IDLE", "A350_THRUST_LEVERS_ALL", LeversIdle, 5),
-                s => LeversIdle(s.GetValue("A350_THRUST_LEVERS_ALL"))), "BSC_THRUST"),
+            Done(Skip(WaitForField("BS_ADIRS_CHECK", "ADIRS: NAV", A350StateEvaluator.AdirsNavField, v => v > 0.5, 5),
+                s => s.IsOn(A350StateEvaluator.AdirsNavField)), "BSC_ADIRS"),
+            Done(Skip(WaitForField("BS_LEVERS_CHECK", "Thrust levers: IDLE", A350StateEvaluator.LeversIdleField, v => v > 0.5, 5),
+                s => s.IsOn(A350StateEvaluator.LeversIdleField)), "BSC_THRUST"),
             Also(Done(Skip(SW("BS_BEACON", "Beacon: ON", "A350_LIGHTS_EXT_BEACON", 1), s => s.IsOn("A350_LIGHTS_EXT_BEACON")), "BS_BEACON"), "BSC_BEACON"),
             Done(Skip(SW("BS_PARKBRK", "Parking brake: ON", "A350_PARK_BRK_PARKING_BRAKE", 1), s => s.IsOn("A350_PARK_BRK_PARKING_BRAKE")), "BS_PARKBRK"),
             // The manual's way: KCCU SURV, DEFAULT SETTINGS, CONFIRM makes the transponder and TCAS active.

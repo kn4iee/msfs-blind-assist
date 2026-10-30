@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A350;
 using MSFSBlindAssist.FirstOfficer.Models;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -41,6 +42,10 @@ public sealed class A350ActionExecutor : IFoActionExecutor
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly HeldPresses _held = new();
+
+    /// <summary>What a flipping button was just commanded to: the 1 Hz cache holds the old state for up to a second after a press, and a
+    /// second tick judged from it would flip the button back.</summary>
+    private readonly A350CommandedState _commanded = new();
     private SimConnectManager? _sc;
     private IniBuildsA350Definition? _def;
     private ScreenReaderAnnouncer? _announcer;
@@ -50,7 +55,7 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     public void SetDefinition(IniBuildsA350Definition def) => _def = def;
     public void SetAnnouncer(ScreenReaderAnnouncer announcer) => _announcer = announcer;
 
-    public bool IsAvailable => _sc is { IsConnected: true } && _def != null && _announcer != null;
+    public bool IsAvailable => _sc is { IsConnected: true } sc && _def != null && _announcer != null && _def.CanLand(sc);
 
     /// <summary>The window is closing: a held test is let go now, while the sim still listens.</summary>
     public void ReleaseHeldPresses() => _held.ReleaseAll();
@@ -120,7 +125,8 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     /// a press flips, so a guess could undo what the pilot set.</summary>
     private bool PressEachNotAt(int target, SimConnectManager sc, params (string Row, string State)[] buttons)
     {
-        var states = buttons.Select(b => _def!.CachedInput(sc, b.State)).ToList();
+        long now = Environment.TickCount64;
+        var states = buttons.Select(b => _commanded.Resolve(b.State, _def!.CachedInput(sc, b.State), now)).ToList();
         if (states.Contains(null))
         {
             Log.Warn("fo_a350", $"{string.Join(", ", buttons.Select(b => b.Row))}: state unread; nothing pressed");
@@ -128,8 +134,14 @@ public sealed class A350ActionExecutor : IFoActionExecutor
         }
         bool ok = true;
         for (int n = 0; n < buttons.Length; n++)
-            if ((states[n]!.Value > 0.5 ? 1 : 0) != target)
-                ok &= ApplySilent(buttons[n].Row, 1, sc);
+        {
+            if ((states[n]!.Value > 0.5 ? 1 : 0) == target)
+                continue;
+            if (ApplySilent(buttons[n].Row, 1, sc))
+                _commanded.Record(buttons[n].State, target, now);
+            else
+                ok = false;
+        }
         return ok;
     }
 
@@ -143,7 +155,22 @@ public sealed class A350ActionExecutor : IFoActionExecutor
         try
         {
             if (_def.ApplyForFirstOfficer(rowKey, value, sc, _announcer)) return true;
-            Log.Warn("fo_a350", $"{rowKey}: no such row; nothing written");
+            Log.Warn("fo_a350", $"{rowKey}: nothing written (no such row, refused, unavailable or not fitted)");
+            return false;
+        }
+        finally { _announcer.Suppressed = prior; }
+    }
+
+    /// <summary>A held test's press or release, as <see cref="ApplySilent"/>.</summary>
+    private bool HoldSilent(string rowKey, bool down, SimConnectManager sc)
+    {
+        if (_def == null || _announcer == null) return false;
+        bool prior = _announcer.Suppressed;
+        _announcer.Suppressed = true;
+        try
+        {
+            if (_def.HoldForFirstOfficer(rowKey, down, sc, _announcer)) return true;
+            Log.Warn("fo_a350", $"{rowKey}: {(down ? "press" : "release")} not sent");
             return false;
         }
         finally { _announcer.Suppressed = prior; }
@@ -165,9 +192,9 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     /// <summary>The T.O CONFIG key, held so the memo's TO CONFIG TEST completes.</summary>
     public Task<bool> TakeoffConfigTestAsync() => HoldAsync(ToConfigRow, ToConfigHoldMs);
 
-    /// <summary>A button the aircraft holds until pressed again (A350WritePlan.IsLatched): pressed, held, pressed again, whatever
-    /// happens, through the manager the press went through, and at once if the window closes mid-hold. Holds the gate for the
-    /// whole test, so WaitForDispatchDrainAsync covers the checklist's grace.</summary>
+    /// <summary>A button the aircraft holds until let go (A350WritePlan.IsLatched): pressed down, held, let go, whatever happens, through
+    /// the manager the press went through, and at once if the window closes mid-hold; a press that did not go fails, with nothing to let
+    /// go. Holds the gate for the whole test, so WaitForDispatchDrainAsync covers the checklist's grace.</summary>
     public async Task<bool> HoldAsync(string rowKey, int holdMs)
     {
         await _gate.WaitAsync();
@@ -176,10 +203,11 @@ public sealed class A350ActionExecutor : IFoActionExecutor
             if (_sc is not { IsConnected: true } || _def == null || _announcer == null) return false;
             await PaceAsync();
             if (_sc is not { IsConnected: true } sc) return false;   // detached during the wait: presses nothing
-            long hold = _held.Begin(() => { if (sc.IsConnected) ApplySilent(rowKey, 1, sc); });
+            if (!HoldSilent(rowKey, down: true, sc))
+                return false;
+            long hold = _held.Begin(() => { if (sc.IsConnected) HoldSilent(rowKey, down: false, sc); });
             try
             {
-                ApplySilent(rowKey, 1, sc);
                 _lastWriteUtc = DateTime.UtcNow;
                 await Task.Delay(holdMs);
                 return true;
