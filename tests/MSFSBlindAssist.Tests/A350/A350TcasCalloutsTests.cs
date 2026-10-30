@@ -118,4 +118,50 @@ public class A350TcasCalloutsTests
         var rows = MSFSBlindAssist.Forms.A350.A350MonitorManagerForm.BuildRows(vars);
         Assert.Contains(rows, r => r.Key == A350TcasCallouts.MuteKey && r.Label == A350TcasCallouts.MuteLabel);
     }
+
+    // Review 3 (I3): the A380's advisory interrupts; queued, "Fly vertical speed plus 1500" waited behind a long ECAM list, already a
+    // second late by the settle and the batch.
+    [Fact]
+    public void The_definition_interrupts_with_an_advisory()
+    {
+        long now = 100_000;
+        var cache = new Dictionary<string, double> { [A350TcasCallouts.TargetKey] = 1500 };
+        var speech = new SpeechCapture();
+        var def = new IniBuildsA350Definition
+        {
+            Clock = () => now,
+            CanLand = _ => true,
+            Send = (_, _) => { },
+            ReRead = (_, _) => { },
+            Delay = _ => new TaskCompletionSource().Task,
+            ReadFresh = (_, _, _) => Task.FromResult<double?>(null),
+            Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null,
+            IsMuted = _ => false,
+            ActiveBatches = _ => new[] { 0 },
+        };
+        def.Attach(new SimConnectManager(IntPtr.Zero));
+        _ = def.GetVariables();
+        def.ProcessSimVarUpdate("A350_TCAS_CLIMB", 0, speech);
+        def.OnContinuousBatchDelivered(0);
+        now += MSFSBlindAssist.Aircraft.MD11.Md11SeedGate.CeilingMs;
+        def.OnContinuousBatchDelivered(0);
+        def.ProcessSimVarUpdate("A350_TCAS_CLIMB", 1, speech);
+        now += 1000;
+        def.OnContinuousBatchDelivered(0);
+        Assert.Equal(new[] { "TCAS: Climb. Fly vertical speed plus 1500 feet per minute." }, speech.Interrupts);
+    }
+
+    // Review 3 (I3): the target can lag the aural (the sim has yet to show an RA): "Climb" with a descent to fly is worse than no number.
+    [Theory]
+    [InlineData("A350_TCAS_CLIMB", -1500, "TCAS: Climb.")]
+    [InlineData("A350_TCAS_CLIMB_NOW", -2500, "TCAS: Climb, climb now.")]
+    [InlineData("A350_TCAS_DESCENT", 1500, "TCAS: Descend.")]
+    [InlineData("A350_TCAS_DESCENT_MORE", 2500, "TCAS: Increase descent.")]
+    [InlineData("A350_TCAS_ADJUST_VS", -500, "TCAS: Adjust vertical speed. Fly vertical speed minus 500 feet per minute.")]
+    public void A_target_against_the_advisory_is_not_said(string key, double target, string said)
+    {
+        var c = new A350TcasCallouts();
+        c.Deliver(key, 1, 0);
+        Assert.Equal(said, c.Flush(1000, target));
+    }
 }

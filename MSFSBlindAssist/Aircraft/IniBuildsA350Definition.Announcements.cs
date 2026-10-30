@@ -576,7 +576,7 @@ public partial class IniBuildsA350Definition
         if (_sim is not { } sim || _seedGate.Armed)
             return;
         if (_tcas.Flush(Clock(), Cached(sim, A350TcasCallouts.TargetKey) ?? 0) is { } said && !IsMuted(A350TcasCallouts.MuteKey) && !_disposed)
-            _batchAnnouncer?.Announce(said);
+            _batchAnnouncer?.AnnounceImmediate(said);   // as the A380's: it does not wait behind an ECAM list
     }
 
     private readonly A350CoverAlerts _covers = new();

@@ -41,7 +41,7 @@ public sealed class A350TcasCallouts
     public static bool IsAdvisory(string key) => AdvisoryKeys.Contains(key);
 
     private readonly HashSet<string> _up = new(StringComparer.Ordinal);
-    private readonly List<(string Said, bool Rate)> _pending = new();
+    private readonly List<(string Said, bool Rate, int Way)> _pending = new();
     private long _pendingAt;
 
     /// <summary>An aural's flag delivered: a rise waits for the next <see cref="Flush"/> after the settle.</summary>
@@ -57,7 +57,8 @@ public sealed class A350TcasCallouts
         var advisory = Advisories.Single(a => a.Key == key);
         if (_pending.Count == 0)
             _pendingAt = nowMs;
-        _pending.Add((advisory.Said, advisory.Rate));
+        _pending.Add((advisory.Said, advisory.Rate, advisory.Said.StartsWith("Climb", StringComparison.Ordinal) || advisory.Said == "Increase climb" ? 1
+            : advisory.Said.StartsWith("Descend", StringComparison.Ordinal) || advisory.Said == "Increase descent" ? -1 : 0));
     }
 
     /// <summary>The sentence due now, if any, with the vertical speed to fly where the advisory commands one.</summary>
@@ -66,7 +67,8 @@ public sealed class A350TcasCallouts
         if (_pending.Count == 0 || nowMs - _pendingAt < GuidanceSettleMs)
             return null;
         string said = "TCAS: " + string.Join(". ", _pending.Select(p => p.Said)) + ".";
-        if (_pending.Any(p => p.Rate) && Math.Abs(target) >= 1)
+        // A target against the advisory is one that has yet to follow it, never one to fly.
+        if (_pending.Any(p => p.Rate) && Math.Abs(target) >= 1 && !_pending.Any(p => p.Way * target < 0))
             said += $" Fly vertical speed {TcasRaGuidance.FmtSignedFpm(target)} feet per minute.";
         _pending.Clear();
         return said;
