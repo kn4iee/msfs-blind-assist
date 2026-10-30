@@ -66,6 +66,9 @@ public class A350ActionExecutorTests
     [InlineData("A350_LDG_AUTO_BRK", "INI_AUTOBRAKE_ARMED", 0, 0, false)]
     [InlineData("A350_APU_START", "INI_APU_START_BUTTON", 0, 1, true)]
     [InlineData("A350_APU_START", "INI_APU_START_BUTTON", 1, 1, false)]
+    [InlineData("A350_EFIS_BSK_2_LEFT", "INI_WXR_ON", 0, 1, true)]
+    [InlineData("A350_EFIS_BSK_2_LEFT", "INI_WXR_ON", 1, 1, false)]
+    [InlineData("A350_EFIS_BSK_2_RIGHT", "INI_WXR2_ON", 0, 1, true)]
     public async Task A_flipping_button_is_pressed_only_on_a_definite_mismatch(string key, string state, double now, int target, bool pressed)
     {
         var def = new RecordingA350Definition();
@@ -126,13 +129,13 @@ public class A350ActionExecutorTests
     }
 
     [Fact]
-    public async Task The_seat_belt_sign_is_on_or_off_never_auto()
+    public async Task The_seat_belt_automation_sets_on_or_auto_never_off()
     {
         var def = new RecordingA350Definition();
         var executor = def.Executor();
         await executor.SetSeatbeltSign(true);
         await executor.SetSeatbeltSign(false);
-        Assert.Equal(new[] { ("A350_SIGNS_SEAT_BELTS", 0.0), ("A350_SIGNS_SEAT_BELTS", 2.0) }, def.Writes);
+        Assert.Equal(new[] { ("A350_SIGNS_SEAT_BELTS", 0.0), ("A350_SIGNS_SEAT_BELTS", 1.0) }, def.Writes);
     }
 
     [Fact]

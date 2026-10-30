@@ -78,6 +78,14 @@ public static class A350ChecklistDefinitions
             Auto("CP_GNDCTL", "COCKPIT_PREP", "Recorder ground control: ON", "A350_RCD_RCDR_GND_CTRL", v => v > 0.5, (e, _) => e.Set("A350_RCD_RCDR_GND_CTRL", 1)),
             Auto("CP_NAVLOGO", "COCKPIT_PREP", "Nav and logo lights: ON", A350StateEvaluator.NavLogoOnField, v => v > 0.5,
                 async (e, _) => { await e.Set("A350_LIGHTS_EXT_NAV", 0); await e.Set("A350_LIGHTS_EXT_LOGO", 1); }),
+            Auto("CP_EXTLT", "COCKPIT_PREP", "Strobe lights: AUTO. Beacon, landing and nose lights: OFF", A350StateEvaluator.PrepLightsField, v => v > 0.5,
+                async (e, _) =>
+                {
+                    await e.Set("A350_LIGHTS_EXT_STROBE", 1);
+                    await e.Set("A350_LIGHTS_EXT_BEACON", 0);
+                    await e.Set("A350_LIGHTS_EXT_LANDING", 0);
+                    await e.Set("A350_LIGHTS_EXT_NOSE", 2);
+                }),
             Auto("CP_SEATBELT", "COCKPIT_PREP", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, (e, _) => e.Set("A350_SIGNS_SEAT_BELTS", 0)),
             Multi("CP_NOSMOKE", "COCKPIT_PREP", "No smoking and no mobile signs: AUTO", "A350_SIGNS_NO_SMOKING", v => Math.Abs(v - 1) < 0.5, new[] { "A350_SIGNS_NO_MOBILE" },
                 async (e, _) => { await e.Set("A350_SIGNS_NO_SMOKING", 1); await e.Set("A350_SIGNS_NO_MOBILE", 1); }),
@@ -93,7 +101,7 @@ public static class A350ChecklistDefinitions
                 async (e, _) => { await e.Set("A350_AIR_HOT_AIR_1", 1); await e.Set("A350_AIR_HOT_AIR_2", 1); }),
             Reminder("CP_AIRTEMP", "COCKPIT_PREP", "Cabin temperature: set as required"),
             Auto("CP_BARO", "COCKPIT_PREP", "Baro reference: hectopascals", A350StateEvaluator.BaroUnitHectopascalsField, v => v > 0.5, (e, _) => e.Set(A350ActionExecutor.BaroUnitHectopascalsKey, 1)),
-            Reminder("CP_ALTIMETERS", "COCKPIT_PREP", "Altimeters: set QNH"),
+            Reminder("CP_ALTIMETERS", "COCKPIT_PREP", "Altimeters and standby instrument: set QNH"),
             Auto("CP_ANTISKID", "COCKPIT_PREP", "Anti-skid: ON", "A350_LDG_ANTI_SKID", v => v > 0.5, (e, _) => e.Set("A350_LDG_ANTI_SKID", 1)),
             Reminder("CP_ALTRPT", "COCKPIT_PREP", "Altitude reporting: on (MFD SURV page)"),
             Reminder("CP_TCASMODE", "COCKPIT_PREP", "TCAS mode: standby (MFD SURV page)"),
@@ -127,7 +135,7 @@ public static class A350ChecklistDefinitions
             Auto("BS_APU", "BEFORE_START", "APU: ON", "A350_APU_MASTER_SWITCH", v => v > 0.5, StartApuAsync),
             Auto("BS_APUBLEED", "BEFORE_START", "APU bleed: ON", "A350_AIR_APU_BLEED", v => v > 0.5, (e, _) => e.Set("A350_AIR_APU_BLEED", 1)),
             Auto("BS_GPU_OFF", "BEFORE_START", "Ground power: OFF", A350StateEvaluator.ExtOffField, v => v > 0.5, (e, _) => e.Set(A350ActionExecutor.ExternalPowerKey, 0)),
-            Reminder("BS_GPU_DISC", "BEFORE_START", "Disconnect ground power on the OIS GROUND page"),
+            Reminder("BS_GPU_DISC", "BEFORE_START", "Ground power and chocks: remove on the OIS GROUND page"),
             Multi("BS_FUELPUMPS", "BEFORE_START", "Fuel pumps: ON", A350FlowDefinitions.FuelPumps[0], v => v > 0.5, A350FlowDefinitions.FuelPumps.Skip(1).ToArray(),
                 async (e, _) =>
                 {
@@ -140,11 +148,10 @@ public static class A350ChecklistDefinitions
                 }),
             Auto("BS_BEACON", "BEFORE_START", "Beacon: ON", "A350_LIGHTS_EXT_BEACON", v => v > 0.5, (e, _) => e.Set("A350_LIGHTS_EXT_BEACON", 1)),
             Auto("BS_PARKBRK", "BEFORE_START", "Parking brake: ON", "A350_PARK_BRK_PARKING_BRAKE", v => v > 0.5, (e, _) => e.Set("A350_PARK_BRK_PARKING_BRAKE", 1)),
-            Reminder("BS_XPDR", "BEFORE_START", "Transponder: set for departure (MFD SURV page)"),
-            Reminder("BS_TCAS", "BEFORE_START", "TCAS mode: TA/RA (MFD SURV page)"),
+            Reminder("BS_SURV", "BEFORE_START", "Surveillance: default settings (MFD SURV page)"),
             Reminder("BS_PERF", "BEFORE_START", "Check the MFD PERF page"),
             Reminder("BS_TRIM", "BEFORE_START", "Set trim"),
-            Reminder("BS_DOORS", "BEFORE_START", "Doors: closed and armed (OIS and FAP)"),
+            Reminder("BS_DOORS", "BEFORE_START", "Doors: close all on the OIS GROUND page"),
             Reminder("BS_TAXICLR", "BEFORE_START", "Obtain pushback and start clearance"),
         }
     };
@@ -217,10 +224,13 @@ public static class A350ChecklistDefinitions
         Id = "TAXI", Name = "Taxi",
         Items = new()
         {
+            Reminder("TX_FCTL", "TAXI", "Check the flight controls"),
             // A/BRK flips: the executor presses only with the armed state read off, so a re-tick never disarms.
             Auto("TX_AUTOBRAKE", "TAXI", "Autobrake: RTO", A350StateEvaluator.AutoBrakeArmedField, v => v > 0.5, (e, _) => e.Set("A350_LDG_AUTO_BRK", 1)),
             Auto("TX_ENGMODE", "TAXI", "Engine mode: NORM", "A350_ENG_MASTER_MODE", v => Math.Abs(v - 1) < 0.5, (e, _) => e.Set("A350_ENG_MASTER_MODE", 1)),
-            Reminder("TX_WXR", "TAXI", "Weather radar and predictive windshear: on (MFD SURV page)"),
+            Auto("TX_WXR", "TAXI", "Weather radar: ON", A350StateEvaluator.WeatherRadarOnField, v => v > 0.5,
+                async (e, _) => { await e.Set("A350_EFIS_BSK_2_LEFT", 1); await e.Set("A350_EFIS_BSK_2_RIGHT", 1); }),
+            Reminder("TX_PWS", "TAXI", "Predictive windshear: on (MFD SURV page)"),
             Reminder("TX_FLAPS", "TAXI", "Flaps: set for takeoff"),
             Auto("TX_ECAMPAGE", "TAXI", "ECAM page: flight controls", "A350_SD_PAGE", v => Math.Abs(v - 10) < 0.5, (e, _) => e.Set("A350_SD_PAGE", 10)),
             ActionManual("TX_CONFIG", "TAXI", "Takeoff config test", (e, _) => e.TakeoffConfigTestAsync()),
@@ -295,9 +305,12 @@ public static class A350ChecklistDefinitions
         {
             Reminder("AP_AUTOBRAKE", "APPROACH", "Set the landing autobrake: Instrument section, Autobrake panel"),
             Auto("AP_SEATBELTS", "APPROACH", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, (e, _) => e.Set("A350_SIGNS_SEAT_BELTS", 0)),
+            Multi("AP_LS", "APPROACH", "LS buttons: ON", "A350_EFIS_LS_LEFT", v => v > 0.5, new[] { "A350_EFIS_LS_RIGHT" },
+                async (e, _) => { await e.Set("A350_EFIS_LS_LEFT", 1); await e.Set("A350_EFIS_LS_RIGHT", 1); }),
             Multi("AP_EFISMODE", "APPROACH", "EFIS mode: LS", "A350_EFIS_MODE_LEFT", v => v < 0.5, new[] { "A350_EFIS_MODE_RIGHT" },
                 async (e, _) => { await e.Set("A350_EFIS_MODE_LEFT", 0); await e.Set("A350_EFIS_MODE_RIGHT", 0); }),
             ActionManual("AP_CABIN", "APPROACH", "Notify the cabin crew for landing (call all)", (e, _) => e.Set("A350_CALLS_ALL", 1)),
+            Reminder("AP_ACTIVATE", "APPROACH", "Activate the approach phase (MFD PERF page) when you are ready"),
         }
     };
 

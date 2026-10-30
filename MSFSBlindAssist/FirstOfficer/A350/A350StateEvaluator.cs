@@ -21,6 +21,7 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string Baro1Mode = "XMLVAR_Baro1_Mode", Baro2Mode = "XMLVAR_Baro2_Mode";
     internal const string BaroUnit1 = "XMLVAR_Baro_Selector_HPA_1", BaroUnit2 = "XMLVAR_Baro_Selector_HPA_2";
     internal const string LandingConfig = "INI_LANDING_CONFIG";
+    internal const string WeatherRadar1 = "INI_WXR_ON", WeatherRadar2 = "INI_WXR2_ON";
     internal const string GreenDot = "FMGEC_GD_SPD", SSpeed = "FCPC_S_SPEED", FSpeed = "FCPC_F_SPEED";
     private const string GearLeft = "GEAR LEFT POSITION", GearCentre = "GEAR CENTER POSITION", GearRight = "GEAR RIGHT POSITION";
     private const string FuelTotal = "FUEL TOTAL QUANTITY WEIGHT";
@@ -31,6 +32,7 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     {
         (ApuAvailable, null), (ApuFlap, null), (ApuStartButton, null), (ExtAOnline, null), (ExtBOnline, null), (GpuAvailable, null), (AutoBrakeArmed, null),
         (Engine1Available, null), (Engine2Available, null), (Baro1Mode, null), (Baro2Mode, null), (BaroUnit1, null), (BaroUnit2, null), (LandingConfig, null),
+        (WeatherRadar1, null), (WeatherRadar2, null),
         (GreenDot, null), (SSpeed, null), (FSpeed, null), (A350Hotkeys.VfeNext, null),
         (GearLeft, "percent over 100"), (GearCentre, "percent over 100"), (GearRight, "percent over 100"), (FuelTotal, "kilograms"),
     };
@@ -57,7 +59,8 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string GearDownField = "FO_GEAR_DOWN", GearUpField = "FO_GEAR_UP";
     internal const string TakeoffFlapsField = "FO_TO_FLAPS", LandingFlapsField = "FO_LDG_FLAPS_SET";
     internal const string TakeoffMemoField = "FO_TO_MEMO_OK", LandingMemoField = "FO_LDG_MEMO_OK";
-    internal const string PacksOnField = "FO_PACKS_ON", NavLogoOnField = "FO_NAV_LOGO_ON", LineupLightsField = "FO_LINEUP_LIGHTS";
+    internal const string PacksOnField = "FO_PACKS_ON", NavLogoOnField = "FO_NAV_LOGO_ON", LineupLightsField = "FO_LINEUP_LIGHTS", PrepLightsField = "FO_PREP_LIGHTS";
+    internal const string WeatherRadarOnField = "FO_WXR_ON";
     internal const string GreenDotField = "FO_SPEED_GD", SSpeedField = "FO_SPEED_S", FSpeedField = "FO_SPEED_F", VfeNextField = "FO_VFE_NEXT";
     internal const string LandingConf3Field = "FO_LANDING_CONF3";
 
@@ -188,6 +191,16 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
             // The landing lights on and the nose selector at T.O, the two the Lineup step sets.
             case LineupLightsField:
                 value = Both(GetValue("A350_LIGHTS_EXT_LANDING"), GetValue("A350_LIGHTS_EXT_NOSE"), (landing, nose) => landing > 0.5 && nose < 0.5);
+                return true;
+            // The cockpit preparation's strobe at AUTO and its beacon, landing and nose lights off.
+            case PrepLightsField:
+                value = Both(
+                    Both(GetValue("A350_LIGHTS_EXT_STROBE"), GetValue("A350_LIGHTS_EXT_BEACON"), (strobe, beacon) => Math.Abs(strobe - 1) < 0.5 && beacon < 0.5),
+                    Both(GetValue("A350_LIGHTS_EXT_LANDING"), GetValue("A350_LIGHTS_EXT_NOSE"), (landing, nose) => landing < 0.5 && Math.Abs(nose - 2) < 0.5),
+                    (one, two) => one > 0.5 && two > 0.5);
+                return true;
+            case WeatherRadarOnField:
+                value = Both(Input(WeatherRadar1), Input(WeatherRadar2), (one, two) => one > 0.5 && two > 0.5);
                 return true;
             case GreenDotField:
                 value = Input(GreenDot);

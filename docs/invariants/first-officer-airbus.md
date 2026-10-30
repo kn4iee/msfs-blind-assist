@@ -170,6 +170,6 @@ Pinned by `FbwA380FlowChecklistLinkTests` (no undelivered line, every write with
 ## FOA-15
 
 - The iniBuilds A350 First Officer (`FirstOfficer/A350/`, 2026-10-30) writes only panel rows, through `IniBuildsA350Definition.ApplyForFirstOfficer`, which is the panels' `HandleUIVariableSet`, so a flow moves a switch exactly as the pilot's panel does. A key that is no row is refused and reported, never written as an L:var: there is no fallback to report a success over a control nobody moved (FOA-4's lesson).
-- `A350ActionExecutor` presses a button that flips what it switches (the EXT buttons on `INI_GEN_EXT_A_ONLINE` and `_B_`, A/BRK on `INI_AUTOBRAKE_ARMED`, APU START on `INI_APU_START_BUTTON`, the baro unit on `XMLVAR_Baro_Selector_HPA_n`) only on a definite mismatch. An unread state presses nothing and fails the step: a guess could undo what the pilot set.
+- `A350ActionExecutor` presses a button that flips what it switches (the EXT buttons on `INI_GEN_EXT_A_ONLINE` and `_B_`, A/BRK on `INI_AUTOBRAKE_ARMED`, APU START on `INI_APU_START_BUTTON`, the WX keys on `INI_WXR_ON` and `INI_WXR2_ON`, the baro unit on `XMLVAR_Baro_Selector_HPA_n`) only on a definite mismatch. An unread state presses nothing and fails the step: a guess could undo what the pilot set.
 - Surveillance (transponder, TCAS, weather radar, predictive windshear) is on the MFD's SURV page, which no row reaches: Captain reminders naming the page, never a write (FO-2).
 - Pinned by `A350ActionExecutorTests` and `A350FoStructureTests`. → [first-officer.md](../first-officer.md)

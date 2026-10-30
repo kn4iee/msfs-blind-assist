@@ -35,6 +35,8 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     {
         ["A350_LDG_AUTO_BRK"] = A350StateEvaluator.AutoBrakeArmed,
         ["A350_APU_START"] = A350StateEvaluator.ApuStartButton,
+        ["A350_EFIS_BSK_2_LEFT"] = A350StateEvaluator.WeatherRadar1,
+        ["A350_EFIS_BSK_2_RIGHT"] = A350StateEvaluator.WeatherRadar2,
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -200,6 +202,7 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     /// <summary>The nose light's selector: 0 T.O, 1 Taxi, 2 Off.</summary>
     public Task<bool> SetNoseLight(int position) => DispatchAsync("A350_LIGHTS_EXT_NOSE", position);
 
-    /// <summary>The seat belt switch: 0 On, 2 Off (1 is Auto).</summary>
-    public Task<bool> SetSeatbeltSign(bool on) => Set("A350_SIGNS_SEAT_BELTS", on ? 0 : 2);
+    /// <summary>The seat belt switch for the automation: On, or AUTO above 10,000 ft and in the cruise (the manual's walk-through: "the
+    /// passenger seat belt sign can also be set to Auto"), which keeps the sign working in the descent; Off is for the stand.</summary>
+    public Task<bool> SetSeatbeltSign(bool on) => Set("A350_SIGNS_SEAT_BELTS", on ? 0 : 1);
 }

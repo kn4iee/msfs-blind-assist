@@ -78,6 +78,10 @@ public static class A350FlowDefinitions
             Done(Skip(SW("CP_GNDCTL", "Recorder ground control: ON", "A350_RCD_RCDR_GND_CTRL", 1), s => s.IsOn("A350_RCD_RCDR_GND_CTRL")), "CP_GNDCTL"),
             Done(Skip(Multi("CP_NAVLOGO", "Nav and logo lights: ON", ("A350_LIGHTS_EXT_NAV", 0), ("A350_LIGHTS_EXT_LOGO", 1)),
                 s => s.IsPosition("A350_LIGHTS_EXT_NAV", 0) && s.IsPosition("A350_LIGHTS_EXT_LOGO", 1)), "CP_NAVLOGO"),
+            // The rest of the exterior lighting panel, as the manual's cockpit preparation sets it.
+            Done(Skip(Multi("CP_EXTLT", "Strobe lights: AUTO. Beacon, landing and nose lights: OFF",
+                    ("A350_LIGHTS_EXT_STROBE", 1), ("A350_LIGHTS_EXT_BEACON", 0), ("A350_LIGHTS_EXT_LANDING", 0), ("A350_LIGHTS_EXT_NOSE", 2)),
+                s => s.IsOn(A350StateEvaluator.PrepLightsField)), "CP_EXTLT"),
             Done(Skip(SW("CP_SEATBELT", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", 0), s => s.IsPosition("A350_SIGNS_SEAT_BELTS", 0)), "CP_SEATBELT"),
             Done(Skip(Multi("CP_NOSMOKE", "No smoking and no mobile signs: AUTO", ("A350_SIGNS_NO_SMOKING", 1), ("A350_SIGNS_NO_MOBILE", 1)),
                 s => s.IsPosition("A350_SIGNS_NO_SMOKING", 1) && s.IsPosition("A350_SIGNS_NO_MOBILE", 1)), "CP_NOSMOKE"),
@@ -93,7 +97,7 @@ public static class A350FlowDefinitions
             Captain("CP_AIRTEMP", "Cabin temperature: set as required"),
             Done(Skip(SW("CP_BARO", "Baro reference: hectopascals", A350ActionExecutor.BaroUnitHectopascalsKey, 1),
                 s => s.IsOn(A350StateEvaluator.BaroUnitHectopascalsField)), "CP_BARO"),
-            Captain("CP_ALTIMETERS", "Altimeters: set QNH"),
+            Captain("CP_ALTIMETERS", "Altimeters and standby instrument: set QNH"),
             Done(Skip(SW("CP_ANTISKID", "Anti-skid: ON", "A350_LDG_ANTI_SKID", 1), s => s.IsOn("A350_LDG_ANTI_SKID")), "CP_ANTISKID"),
             Captain("CP_ALTRPT", "Altitude reporting: on (MFD SURV page)"),
             Captain("CP_TCASMODE", "TCAS mode: standby (MFD SURV page)"),
@@ -131,7 +135,7 @@ public static class A350FlowDefinitions
             WaitForField("BS_APU_AVAIL", "Waiting for APU available", A350StateEvaluator.ApuAvailField, v => v > 0.5, 180, onTimeout: FlowStepFailurePolicy.Stop),
             Done(Skip(SW("BS_APUBLEED", "APU bleed: ON", "A350_AIR_APU_BLEED", 1), s => s.IsOn("A350_AIR_APU_BLEED")), "BS_APUBLEED"),
             Done(Skip(SW("BS_GPU_OFF", "Ground power: OFF", A350ActionExecutor.ExternalPowerKey, 0), s => s.IsOn(A350StateEvaluator.ExtOffField)), "BS_GPU_OFF"),
-            Captain("BS_GPU_DISC", "Disconnect ground power on the OIS GROUND page"),
+            Captain("BS_GPU_DISC", "Ground power and chocks: remove on the OIS GROUND page"),
             Done(Multi("BS_FUELPUMPS", "Fuel pumps: ON", FuelPumpWrites(1)), "BS_FUELPUMPS"),
             // The aircraft's own Before Start lines the flow does not set itself: read only (5 s, skipped aloud, never writes).
             Done(Skip(WaitForField("BS_BELTS_CHECK", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", v => v < 0.5, 5),
@@ -142,11 +146,11 @@ public static class A350FlowDefinitions
                 s => LeversIdle(s.GetValue("A350_THRUST_LEVERS_ALL"))), "BSC_THRUST"),
             Also(Done(Skip(SW("BS_BEACON", "Beacon: ON", "A350_LIGHTS_EXT_BEACON", 1), s => s.IsOn("A350_LIGHTS_EXT_BEACON")), "BS_BEACON"), "BSC_BEACON"),
             Done(Skip(SW("BS_PARKBRK", "Parking brake: ON", "A350_PARK_BRK_PARKING_BRAKE", 1), s => s.IsOn("A350_PARK_BRK_PARKING_BRAKE")), "BS_PARKBRK"),
-            Captain("BS_XPDR", "Transponder: set for departure (MFD SURV page)"),
-            Captain("BS_TCAS", "TCAS mode: TA/RA (MFD SURV page)"),
+            // The manual's way: KCCU SURV, DEFAULT SETTINGS, CONFIRM makes the transponder and TCAS active.
+            Captain("BS_SURV", "Surveillance: default settings (MFD SURV page)"),
             Captain("BS_PERF", "Check the MFD PERF page"),
             Captain("BS_TRIM", "Set trim"),
-            Captain("BS_DOORS", "Doors: closed and armed (OIS and FAP)"),
+            Captain("BS_DOORS", "Doors: close all on the OIS GROUND page"),
             Captain("BS_TAXICLR", "Obtain pushback and start clearance"),
         }
     };
@@ -197,14 +201,17 @@ public static class A350FlowDefinitions
     private static Flow BuildTaxi() => new()
     {
         Id = "TAXI", Name = "Taxi",
-        Description = "Autobrake RTO, engine mode NORM, radar reminder, flight controls page, takeoff config test.",
+        Description = "Flight controls check, autobrake RTO, engine mode NORM, weather radar, flight controls page, takeoff config test.",
         RelatedChecklistGroupIds = Array.Empty<string>(),
         Steps = new()
         {
+            Captain("TX_FCTL", "Check the flight controls"),
             // A/BRK on the ground arms RTO; it flips, so it is pressed only with the armed state read off.
             Done(Skip(SW("TX_AUTOBRAKE", "Autobrake: RTO", "A350_LDG_AUTO_BRK", 1), s => s.IsOn(A350StateEvaluator.AutoBrakeArmedField)), "TX_AUTOBRAKE"),
             Done(Skip(SW("TX_ENGMODE", "Engine mode: NORM", "A350_ENG_MASTER_MODE", 1), s => s.IsPosition("A350_ENG_MASTER_MODE", 1)), "TX_ENGMODE"),
-            Captain("TX_WXR", "Weather radar and predictive windshear: on (MFD SURV page)"),
+            // The EFIS panels' WX keys, the manual's way; they flip, so each is pressed only with its state read off.
+            Done(Skip(Multi("TX_WXR", "Weather radar: ON", ("A350_EFIS_BSK_2_LEFT", 1), ("A350_EFIS_BSK_2_RIGHT", 1)), s => s.IsOn(A350StateEvaluator.WeatherRadarOnField)), "TX_WXR"),
+            Captain("TX_PWS", "Predictive windshear: on (MFD SURV page)"),
             Captain("TX_FLAPS", "Flaps: set for takeoff"),
             Done(SW("TX_ECAMPAGE", "ECAM page: flight controls", "A350_SD_PAGE", 10), "TX_ECAMPAGE"),
             // Done after the flaps, so the warning computer verifies a complete configuration.
@@ -252,14 +259,16 @@ public static class A350FlowDefinitions
     private static Flow BuildApproach() => new()
     {
         Id = "APPROACH", Name = "Approach",
-        Description = "Landing autobrake reminder, seat belts, EFIS LS mode, cabin call.",
+        Description = "Landing autobrake reminder, seat belts, LS buttons, EFIS LS mode, cabin call.",
         RelatedChecklistGroupIds = new[] { "APPROACH_CL" },
         Steps = new()
         {
             Captain("AP_AUTOBRAKE", "Set the landing autobrake: Instrument section, Autobrake panel"),
             Also(Done(Skip(SW("AP_SEATBELTS", "Seat belts: ON", "A350_SIGNS_SEAT_BELTS", 0), s => s.IsPosition("A350_SIGNS_SEAT_BELTS", 0)), "AP_SEATBELTS"), "APC_SEATBELT"),
+            Done(Skip(Multi("AP_LS", "LS buttons: ON", ("A350_EFIS_LS_LEFT", 1), ("A350_EFIS_LS_RIGHT", 1)), s => s.IsOn("A350_EFIS_LS_LEFT") && s.IsOn("A350_EFIS_LS_RIGHT")), "AP_LS"),
             Done(Multi("AP_EFISMODE", "EFIS mode: LS", ("A350_EFIS_MODE_LEFT", 0), ("A350_EFIS_MODE_RIGHT", 0)), "AP_EFISMODE"),
             Done(SW("AP_CABIN", "Notify the cabin crew for landing (call all)", "A350_CALLS_ALL", 1), "AP_CABIN"),
+            Captain("AP_ACTIVATE", "Activate the approach phase (MFD PERF page) when you are ready"),
         }
     };
 

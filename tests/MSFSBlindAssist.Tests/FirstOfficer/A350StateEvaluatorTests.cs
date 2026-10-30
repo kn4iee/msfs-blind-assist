@@ -133,6 +133,23 @@ public class A350StateEvaluatorTests
     public void The_landing_flaps_follow_the_perf_page(double lever, double config, double expected) =>
         Assert.Equal(expected, Evaluator(("A350_FLAPS", lever), ("INI_LANDING_CONFIG", config)).GetValue(A350StateEvaluator.LandingFlapsField));
 
+    // The manual's cockpit preparation: strobe AUTO, beacon, landing and nose lights off.
+    [Theory]
+    [InlineData(1, 0, 0, 2, 1)]
+    [InlineData(0, 0, 0, 2, 0)]
+    [InlineData(1, 1, 0, 2, 0)]
+    [InlineData(1, 0, 1, 2, 0)]
+    [InlineData(1, 0, 0, 1, 0)]
+    public void The_cockpit_preparation_lights(double strobe, double beacon, double landing, double nose, double expected) =>
+        Assert.Equal(expected, Evaluator(("A350_LIGHTS_EXT_STROBE", strobe), ("A350_LIGHTS_EXT_BEACON", beacon), ("A350_LIGHTS_EXT_LANDING", landing), ("A350_LIGHTS_EXT_NOSE", nose))
+            .GetValue(A350StateEvaluator.PrepLightsField));
+
+    [Theory]
+    [InlineData(1, 1, 1)]
+    [InlineData(1, 0, 0)]
+    public void The_weather_radar_is_on_with_both_sides_on(double one, double two, double expected) =>
+        Assert.Equal(expected, Evaluator(("INI_WXR_ON", one), ("INI_WXR2_ON", two)).GetValue(A350StateEvaluator.WeatherRadarOnField));
+
     [Fact]
     public void The_speeds_read_the_aircrafts_own()
     {
