@@ -481,6 +481,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             vars[door.Key].ExcludeFromMonitorManager = false;
             vars[door.Key].ValueDescriptions = new Dictionary<double, string>();
         }
+        // The TCAS's advisories (A350TcasCallouts): each aural's flag and the vertical speed it commands, consumed and said at
+        // a batch end, all on one Ctrl+M row.
+        foreach (var advisory in A350TcasCallouts.Advisories)
+            Register(advisory.Key, advisory.Var, "TCAS " + advisory.Said, null);
+        Register(A350TcasCallouts.TargetKey, A350TcasCallouts.TargetVar, "TCAS target vertical speed", null);
+        vars[A350TcasCallouts.TargetKey].ValueDescriptions = new Dictionary<double, string>();
         // The module watchdog (A350ModuleWatchdog): the heartbeat on the call-out's own Ctrl+M row and the sim's clock, both
         // consumed silently and judged at each batch end.
         Register(A350ModuleWatchdog.HeartbeatKey, A350ModuleWatchdog.HeartbeatVar, A350ModuleWatchdog.MuteLabel, null);
@@ -748,6 +754,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 announcer.Announce(A350Doors.Said(door, open));
             return true;
         }
+        if (A350TcasCallouts.IsAdvisory(varName))
+        {
+            _tcas.Deliver(varName, value, Clock());   // said at a batch end, with the vertical speed to fly
+            return true;
+        }
+        if (varName == A350TcasCallouts.TargetKey)
+            return true;
         if (varName.StartsWith("A350_STAT_IR", StringComparison.Ordinal))
             _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
         else if (varName is A350ModuleWatchdog.HeartbeatKey or A350ModuleWatchdog.SimTimeKey)

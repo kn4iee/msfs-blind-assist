@@ -506,6 +506,7 @@ public partial class IniBuildsA350Definition
             foreach (var (key, _, _, _) in A350RadioCallouts.Rows)
                 if (!_radios.ContainsKey(key) && Cached(sim, key) is double radio)
                     _radios[key] = radio;
+            _tcas.Reset(key => Cached(sim, key));
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
@@ -516,6 +517,18 @@ public partial class IniBuildsA350Definition
         ObserveIrs(seeded);
         ObserveWatchdog();
         ObserveCovers();
+        ObserveTcas();
+    }
+
+    private readonly A350TcasCallouts _tcas = new();
+
+    /// <summary>The TCAS's advisory due at a batch end (<see cref="A350TcasCallouts"/>), never while the seed settles.</summary>
+    private void ObserveTcas()
+    {
+        if (_sim is not { } sim || _seedGate.Armed)
+            return;
+        if (_tcas.Flush(Clock(), Cached(sim, A350TcasCallouts.TargetKey) ?? 0) is { } said && !IsMuted(A350TcasCallouts.MuteKey) && !_disposed)
+            _batchAnnouncer?.Announce(said);
     }
 
     private readonly A350CoverAlerts _covers = new();
@@ -556,6 +569,7 @@ public partial class IniBuildsA350Definition
     {
         base.OnSimContextReset();
         _takeoffCallouts.Reset();
+        _tcas.Reset(_ => null);
         _fmsSpeeds.Reset();
         _speedsTaken = null;
         _flownSinceSpeedsSet = false;
