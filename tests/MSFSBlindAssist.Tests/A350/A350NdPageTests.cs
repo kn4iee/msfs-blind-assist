@@ -262,6 +262,22 @@ public class A350NdPageTests
         Assert.Contains(lines, l => l.Kind == "text" && l.Spoken == "Radar mode: WX+T, green");
     }
 
+    // Review 3 (M4): a waypoint's menu opens with its title line first, so the selection stayed on an unrelated line; an erase dialog's
+    // question has no menu line at all.
+    [Fact]
+    public void A_menu_or_dialog_just_opened_takes_the_selection()
+    {
+        MfdLine Line(string kind, string said) => new(kind, said, 1, 1);
+        var map = new[] { Line("text", "Ground speed: 0, green"), Line("map", "Taxiway M9: east, 480 m") };
+        var menu = new[] { Line("text", "DB407, green"), Line("menu", "FROM P.POS DIR TO"), Line("menu", "DELETE") };
+        Assert.Equal(1, A350NdPage.SelectionFor(map, menu));
+        Assert.Null(A350NdPage.SelectionFor(menu, menu));   // already open: the pilot's place stands
+        Assert.Null(A350NdPage.SelectionFor(menu, map));
+        var dialog = new[] { Line("text", "ERASE ALL CROSSES?"), Line("button", "CANCEL button"), Line("button", "ERASE button") };
+        Assert.Equal(0, A350NdPage.SelectionFor(map, dialog));
+        Assert.Null(A350NdPage.SelectionFor(dialog, dialog));
+    }
+
     // The plan's runway on a range map: it is no taxiway, and it says where it lies, once, as the map's other names do.
     [Fact]
     public void A_range_map_says_where_the_plans_runway_is()

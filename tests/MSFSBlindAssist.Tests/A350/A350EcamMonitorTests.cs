@@ -128,6 +128,15 @@ public class A350EcamMonitorTests
         Assert.Equal("E W D monitoring enabled", A350EcamMonitor.ToggleSpoken(true));
     }
 
+    // Review 3 (M12): Alt+E said a bare "Mailbox:" with nothing in it.
+    [Fact]
+    public void An_empty_mailbox_has_no_heading()
+    {
+        var text = A350EwdText.Build(A350Fixtures.Capture("ctr_cruise.json"));
+        Assert.DoesNotContain("Mailbox:", text);
+        Assert.Contains("Engine display:", text);
+    }
+
     [Fact]
     public void The_monitor_manager_lists_the_ecam_row()
     {

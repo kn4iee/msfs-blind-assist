@@ -79,8 +79,12 @@ public sealed class A350NdInput
                 if (EfisGuidIf(await CoherentEvalClient.EvalAsync(title, Find, ct).ConfigureAwait(false)) is int guid)
                     found.Add((title, guid));
             }
-        _views = found.OrderBy(v => v.Item2).ToList();
-        if (side < _views.Count) return _views[side];
+        // Only both are worth keeping: with one view's eval timed out, the one found would be side 0 for the window's life, and a click
+        // on the captain's ND could land on the first officer's half and report Done.
+        var ordered = found.OrderBy(v => v.Item2).ToList();
+        if (ordered.Count >= 2)
+            _views = ordered;
+        if (ordered.Count >= 2 && side < ordered.Count) return ordered[side];
         NoteUnreachable($"no EFIS view for side {side}: {found.Count} found");
         return null;
     }

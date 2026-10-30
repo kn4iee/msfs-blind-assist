@@ -13,8 +13,12 @@ public static class A350EwdText
 
         var o = new List<string> { "Engine display:" };
         o.AddRange(A350SdPage.ReadEngineBlock(view.Engine));
-        o.Add("Mailbox:");
-        o.AddRange(A350Mailbox.Read(capture).Where(l => l.Kind == "text").Select(l => l.Spoken));
+        var mailbox = A350Mailbox.Read(capture).Where(l => l.Kind == "text").Select(l => l.Spoken).ToList();
+        if (mailbox.Count > 0)
+        {
+            o.Add("Mailbox:");
+            o.AddRange(mailbox);
+        }
         o.Add("Warning display:");
         if (view.Warning.Count == 0) o.Add("No messages");
         foreach (var l in view.Warning)

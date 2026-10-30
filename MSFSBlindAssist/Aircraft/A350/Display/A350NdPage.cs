@@ -249,6 +249,23 @@ public static class A350NdPage
         return o;
     }
 
+    /// <summary>Where the selection goes as the page changes, null to leave it: a menu just opened to its first item, an erase dialog to
+    /// its question, where a sighted pilot looks.</summary>
+    public static int? SelectionFor(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
+    {
+        static int First(IReadOnlyList<MfdLine> lines, Func<MfdLine, bool> what)
+        {
+            for (int n = 0; n < lines.Count; n++)
+                if (what(lines[n])) return n;
+            return -1;
+        }
+        static bool IsMenu(MfdLine l) => l.Kind == "menu";
+        static bool IsDialog(MfdLine l) => l.Kind == "text" && l.Spoken.StartsWith("ERASE ALL ", StringComparison.Ordinal);
+        if (First(now, IsMenu) is >= 0 and var menu && First(before, IsMenu) < 0) return menu;
+        if (First(now, IsDialog) is >= 0 and var dialog && First(before, IsDialog) < 0) return dialog;
+        return null;
+    }
+
     /// <summary>The range map's area: under the ND's top lines, above the vertical display.</summary>
     private const float MapTop = 100, MapBottom = 760;
 

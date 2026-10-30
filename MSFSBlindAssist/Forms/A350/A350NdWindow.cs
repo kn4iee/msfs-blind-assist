@@ -154,10 +154,10 @@ public sealed class A350NdWindow : Form
             (_lines, var shown) = PageLines(cap, Side, _isDark(Side), (int?)_knob(Side, true), (int?)_knob(Side, false));
             _linesSide = Side;
             _list.SetLines(shown);
-            // A menu just opened takes the selection to its first item, where a sighted pilot looks, and a tab just opened
+            // A menu or dialog just opened takes the selection to where a sighted pilot looks, and a tab just opened
             // says itself once, as the MFD's pages do.
-            if (_lines.Count > 0 && _lines[0].Kind == "menu" && (before.Count == 0 || before[0].Kind != "menu"))
-                _list.SelectedIndex = 0;
+            if (A350NdPage.SelectionFor(before, _lines) is int opened && opened < _list.Items.Count)
+                _list.SelectedIndex = opened;
             if (TabOf(_lines) is { } tab && tab != TabOf(before))
             {
                 _announcer.Announce(tab);
