@@ -7,6 +7,16 @@ namespace MSFSBlindAssist.Tests.A350;
 // IRs aligned, no flight plan; heading 219, 12.8 ft indicated.
 public class A350GroundDisplaysTests
 {
+    // Final review: the ND's status display got none of the traffic line: no way it moves, and with FLT ID on, orphan lines.
+    [Fact]
+    public void The_nds_status_display_says_what_a_target_is_doing_and_who_it_is()
+    {
+        var lines = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_traffic_flight_id_above.json"), 0);
+        Assert.Contains("Traffic IVAO, 1200 feet above, descending, speed 337, wake M, white", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("IVAO", StringComparison.Ordinal) || l.StartsWith("337", StringComparison.Ordinal));
+        Assert.Contains("Traffic 900 feet above, climbing, white", A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_traffic_climbing.json"), 0));
+    }
+
     private static A350DrawCapture Fixture(string name) =>
         A350Fixtures.Capture("ground_" + name + ".json");
 

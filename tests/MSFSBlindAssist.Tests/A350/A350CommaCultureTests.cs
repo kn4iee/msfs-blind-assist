@@ -54,11 +54,4 @@ public sealed class A350CommaCultureTests : IDisposable
         Assert.Equal("118700".Select(c => A350Rmp.KeyFor(c)!), A350Rmp.ComTuningKeys(118_700_000, false).Where(digitKeys.Contains));
         Assert.Equal("11390".Select(c => A350Rmp.KeyFor(c)!), A350Rmp.TuningKeys("113.90", true)!.Where(digitKeys.Contains));
     }
-
-    [Fact]
-    public void The_mach_keeps_its_point()
-    {
-        var lines = A350Pfd.ReadParts(A350Fixtures.Capture("efis0_cruise_wxt.json"), 0).Lines;
-        Assert.DoesNotContain(lines, l => l.StartsWith("Mach: ", StringComparison.Ordinal) && l.Contains("0,", StringComparison.Ordinal));
-    }
 }

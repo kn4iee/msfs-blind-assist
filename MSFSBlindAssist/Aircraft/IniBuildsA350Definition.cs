@@ -284,13 +284,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override bool? MetricAltitude =>
         _rows.ContainsKey(MetricAltitudeKey) ? _sim is { } sim && Cached(sim, MetricAltitudeKey) is double on && on >= 0.5 : null;
 
-    // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody (its glidepath and
-    // flare biases are estimates pending an in-sim coupled-ILS calibration, the A330's status too), not the A320 baseline;
-    // the flare at about 40 ft radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
     // The turn-rollout lead, as the A330's: its yaw rate followed the tiller 0.5 to 1 s late at 13 to 16 kt (two scripted taxis, 2026-10-30, peak
     // 14 deg/s), on a wheelbase between the A330's and the A380's. Conservative; not yet flown with the tone: tune in-sim if rollouts run long or short.
     public override double TaxiTurnLeadSeconds => 1.7;
 
+    // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody (its glidepath and
+    // flare biases are estimates pending an in-sim coupled-ILS calibration, the A330's status too), not the A320 baseline;
+    // the flare at about 40 ft radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
     public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
     {
         TypicalApproachAoaDeg = 4.5,

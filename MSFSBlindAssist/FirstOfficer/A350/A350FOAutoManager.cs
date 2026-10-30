@@ -69,6 +69,14 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // setting when below Vfe next". High enough for the two last steps to be out by 1000 ft, the dwell between them.
     private const double LandingFlapsGateAglFt = 1500;
 
+    // ...on an established descent: one sag level at circuit height stepped the next flap.
+    private const double LandingGateSinkFpm = 300;
+    private const double LandingGateSinkSeconds = 5;
+
+    // The levers just past CLB: a go-around still sinking for seconds, which no flap extends into. After that it may be an approach with an
+    // engine out, at MCT.
+    private const double GoAroundLeverHoldSeconds = 10;
+
     // Approach context: armed by a DESCENDING sample below 5000 ft AGL at least ApproachArmDescentFt
     // below the leg's highest MSL altitude (_peakMsl), one-way until go-around or touchdown. Extension
     // runs ONLY while armed, and retraction ONLY while disarmed — without this gate a departure
@@ -81,7 +89,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // go-around fallback and the next such sample cycled the lever every dwell.
     private bool _extensionArmed;
     private double _minAglInApproach = double.MaxValue;
-    private bool _goAroundThrustSeen;            // levers at MCT or TOGA in this approach context
+    private DateTime? _goAroundThrustAtUtc;      // when the levers first went to MCT or TOGA in this approach context
+    private DateTime? _sinkingSinceUtc;          // below -LandingGateSinkFpm since, on the clock
     private int _lastExtendCommand = -1;         // don't re-fight a pilot who pulled flaps back
     private int _lastRetractCommand = 99;        // don't re-fight a pilot who re-extended
     private DateTime _lastFlapMoveUtc = DateTime.MinValue;
@@ -112,7 +121,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
     {
         _extensionArmed     = false;
         _minAglInApproach   = double.MaxValue;
-        _goAroundThrustSeen = false;
+        _goAroundThrustAtUtc = null;
+        _sinkingSinceUtc    = null;
         _lastExtendCommand  = -1;
         _lastRetractCommand = 99;
         _lastFlapMoveUtc    = DateTime.MinValue;
@@ -126,7 +136,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
     {
         _extensionArmed    = false;
         _minAglInApproach  = double.MaxValue;
-        _goAroundThrustSeen = false;
+        _goAroundThrustAtUtc = null;
         _lastExtendCommand = -1;
         _peakMsl           = double.NaN;
     }
@@ -151,6 +161,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
         bool descending = verticalSpeedFpm < -100;
         if (!climbing) _climbingSinceUtc = null;
         else _climbingSinceUtc ??= _utcNow();
+        if (verticalSpeedFpm < -LandingGateSinkFpm) _sinkingSinceUtc ??= _utcNow();
+        else _sinkingSinceUtc = null;
 
         if (AutoFlapsEnabled)
             CheckFlaps(airspeedKts, verticalSpeedFpm, altitudeAgl, altitudeMsl, climbing, descending);
@@ -191,7 +203,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
 
         // The levers may be back at CL before the height is regained, so once is enough.
         if (_extensionArmed && _state.GetValue(A350StateEvaluator.GoAroundThrustField) > 0.5)
-            _goAroundThrustSeen = true;
+            _goAroundThrustAtUtc ??= _utcNow();
 
         // ---- Go-around: disarm + SOP one-step retraction ----
         if (_extensionArmed)
@@ -199,7 +211,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
             // Primary signature: the levers of a go-around, a sustained climb AND real height
             // regained above the approach's minimum — a bare VS spike can never fire the lever,
             // nor ALT taking back a sag at 1000 fpm (live 2026-10-30: the flaps came up at 9 NM).
-            bool gaPrimary  = _goAroundThrustSeen && vs > GaClimbFpm && agl >= _minAglInApproach + GaAglGainFt;
+            bool gaPrimary  = _goAroundThrustAtUtc != null && vs > GaClimbFpm && agl >= _minAglInApproach + GaAglGainFt;
             // 737-style high safeguard: clears a stuck approach context on an ESTABLISHED
             // climb (above +200 fpm for GaFallbackClimbSeconds) above 3000 ft AGL.
             // LATCH-CLEAR ONLY — it must never command the SOP step (final-review I1) nor
@@ -260,6 +272,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
         // VFE-next protected) ----
         if (_extensionArmed && !climbing && agl < 5000)
         {
+            if (_goAroundThrustAtUtc is { } leversAt && (_utcNow() - leversAt).TotalSeconds < GoAroundLeverHoldSeconds)
+                return;
             double vfeNext = _state.GetValue(A350StateEvaluator.VfeNextField);
             if (double.IsNaN(vfeNext) || ias >= vfeNext - VfeNextMarginKts)
                 return;   // unknown or too fast for the next config — hold
@@ -270,7 +284,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
             double gd = _state.GetValue(A350StateEvaluator.GreenDotField);
             double s  = _state.GetValue(A350StateEvaluator.SSpeedField);
             double f  = _state.GetValue(A350StateEvaluator.FSpeedField);
-            bool landingGate = descending && agl < LandingFlapsGateAglFt;
+            bool landingGate = agl < LandingFlapsGateAglFt && _sinkingSinceUtc is { } sinking
+                && (_utcNow() - sinking).TotalSeconds >= LandingGateSinkSeconds;
 
             switch (flaps)
             {

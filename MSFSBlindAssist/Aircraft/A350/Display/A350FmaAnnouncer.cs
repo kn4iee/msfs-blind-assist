@@ -4,8 +4,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// What the FMA call-outs say (pure): from each PFD read (A350Pfd lines), the FMA columns; a column is
 /// spoken when its text changes and two reads in a row agree on it, or two of the last few with only parts of it between (a mode
 /// that flashes leaves every other draw: LVR CLB under MAN TOGA at the thrust reduction altitude), with its colours ("FMA vertical:
-/// SRS, green"). A column left with only a part of what it said, or with nothing ("FMA vertical clear"), says so once it has stayed
-/// that way past any flash. Each column's first agreed read is its silent
+/// SRS, green"). A column left with nothing ("FMA vertical clear"), or the autothrust column left with only a part of what it said,
+/// says so once it has stayed that way past any flash: elsewhere no part is known to flash, and a part going is news at once (the
+/// autopilot off, an armed mode dropped). An armed mode engaging is no part: it changes colour. Each column's first agreed read is its silent
 /// baseline. Columns agree each on its own: one that flickers never holds back another's change (live 2026-10-28,
 /// NAV engaging went unsaid while the engagement column flickered). Each line carries its column's Ctrl+M key.
 /// </summary>
@@ -29,6 +30,9 @@ public sealed class A350FmaAnnouncer
     /// <summary>The reads looked back over for a flash: its text twice, a part of it between.</summary>
     private const int FlashReads = 4;
 
+    /// <summary>The column a part of which flashes (LVR CLB under MAN TOGA, live 2026-10-30).</summary>
+    private const string PartFlashes = "autothrust";
+
     private readonly Dictionary<string, string> _spoken = new();   // what each column last said (its baseline once agreed)
     private readonly Dictionary<string, List<string>> _reads = new();   // each column's latest reads, the newest last
 
@@ -50,7 +54,7 @@ public sealed class A350FmaAnnouncer
             }
             if (read == last)
                 continue;
-            bool news = IsPartOf(read, last)
+            bool news = IsPartOf(read, last) && (read.Length == 0 || c == PartFlashes)
                 ? reads.Count == ClearAfterReads && reads.All(r => r == read)
                 : Agreed(reads);
             if (news)
@@ -78,17 +82,26 @@ public sealed class A350FmaAnnouncer
         return modes.Count < all.Count && modes.All(all.Contains);
     }
 
-    /// <summary>A column's modes, without its name and colours: "FMA autothrust: MAN; TOGA, white" holds MAN and TOGA.</summary>
-    private static IReadOnlyList<string> Modes(string line)
+    /// <summary>A column's modes with their colours, without its name: "FMA autothrust: MAN; TOGA, white" holds MAN and TOGA, both white
+    /// (a colour said once is for the modes since the last one).</summary>
+    private static IReadOnlyList<(string Mode, string Colour)> Modes(string line)
     {
         int name = line.IndexOf(": ", StringComparison.Ordinal);
         if (name < 0)
-            return Array.Empty<string>();
-        return line[(name + 2)..].Split("; ").Select(mode =>
+            return Array.Empty<(string, string)>();
+        var modes = new List<(string, string)>();
+        var uncoloured = new List<string>();
+        foreach (string part in line[(name + 2)..].Split("; "))
         {
-            int colour = mode.LastIndexOf(", ", StringComparison.Ordinal);
-            return colour < 0 ? mode : mode[..colour];
-        }).ToList();
+            int comma = part.LastIndexOf(", ", StringComparison.Ordinal);
+            uncoloured.Add(comma < 0 ? part : part[..comma]);
+            if (comma < 0)
+                continue;
+            modes.AddRange(uncoloured.Select(mode => (mode, part[(comma + 2)..])));
+            uncoloured.Clear();
+        }
+        modes.AddRange(uncoloured.Select(mode => (mode, "")));
+        return modes;
     }
 
     public void Reset() { _spoken.Clear(); _reads.Clear(); }

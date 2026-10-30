@@ -445,7 +445,7 @@ public partial class IniBuildsA350Definition
             case A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2:
                 NotePickReached(key, value);
                 _leverAnnouncer = announcer;
-                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value, Clock(), announcer.Suppressed) is { } thrust
+                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value, Clock(), announcer.Suppressed, _calloutOnGround) is { } thrust
                     && !announcer.Suppressed && !IsMuted(thrust.Row) && !_disposed)
                     announcer.Announce(thrust.Text);
                 return true;

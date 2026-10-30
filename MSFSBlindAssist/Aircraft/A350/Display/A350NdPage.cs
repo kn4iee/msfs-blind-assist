@@ -179,11 +179,8 @@ public static class A350NdPage
                 string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X, symbolY) : "";
                 var ident = A350NdMap.TrafficIdentOf(A350DrawLayout.SplitEfis(texts, side).Nd, t);
                 foreach (var part in ident.Texts) taken.Add(part);
-                names.Add(new MfdLine("text", $"Traffic {(ident.FlightId is { } id ? id + ", " : "")}{A350NdMap.TrafficAltitude(at.Text.Trim())}"
-                    + A350NdMap.TrafficTendency(capture.Shapes, t)
-                    + (place.Length > 0 ? ": " + place : "")
-                    + (ident.Speed is { } speed ? $", speed {speed}" : "") + (ident.Wake is { } wake ? $", wake {wake}" : "")
-                    + $", {at.ColourName}", -1, -1));
+                var (head, tail) = A350NdMap.TrafficWords(ident, capture.Shapes, t);
+                names.Add(new MfdLine("text", $"Traffic {head}{(place.Length > 0 ? ": " + place : "")}{tail}, {at.ColourName}", -1, -1));
             }
             // The plan's runway, the airport's name over the runway's, through a transform of its own.
             foreach (var label in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => !taken.Contains(t) && A350NdMap.IsPlanRunwayLabel(t))

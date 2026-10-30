@@ -48,10 +48,22 @@ public static class A350GroundDisplays
         // GS and TAS, green; with the airport map (zoom range, live 2026-10-28) their white labels are drawn too and GS's
         // value moves left to x 64 (else x 122). The labels are not read.
         used.UnionWith(cells.Where(c => c.Colour == "white" && c.Text is "GS" or "TAS" && Math.Abs(c.Y - 35) <= 8));
+        var drawn = A350DrawLayout.SplitEfis(capture.Texts, side).Nd;
         foreach (var traffic in cells.Where(c => A350NdMap.TrafficText.IsMatch(c.Text)).ToList())
         {
             used.Add(traffic);
-            trafficLines.Add($"Traffic {A350NdMap.TrafficAltitude(traffic.Text)}, {traffic.Colour}");
+            // Where it was drawn, for what lies beside it: the arrow is in the capture's coordinates, the cell in the ND's.
+            var figure = drawn.FirstOrDefault(t => t.Text.Trim() == traffic.Text && Math.Abs(t.X - shift - traffic.X) <= 2 && Math.Abs(t.Y - traffic.Y) <= 12);
+            if (figure == null)
+            {
+                trafficLines.Add($"Traffic {A350NdMap.TrafficAltitude(traffic.Text)}, {traffic.Colour}");
+                continue;
+            }
+            var ident = A350NdMap.TrafficIdentOf(drawn, figure);
+            foreach (var part in ident.Texts)
+                used.UnionWith(cells.Where(c => c.Text == part.Text.Trim() && Math.Abs(c.X - (part.X - shift)) <= 2 && Math.Abs(c.Y - part.Y) <= 12));
+            var (head, tail) = A350NdMap.TrafficWords(ident, capture.Shapes, figure);
+            trafficLines.Add($"Traffic {head}{tail}, {traffic.Colour}");
         }
         Field("Ground speed", c => c.Colour == "green" && Math.Abs(c.Y - 35) <= 8 && (Math.Abs(c.X - 122) <= 12 || Math.Abs(c.X - 64) <= 12));
         // The BTV block at the top left (ND::DrawBTVInfo, live 2026-10-30), where the wind is drawn without it.

@@ -74,6 +74,11 @@ public static class A350NdMap
         return "";
     }
 
+    /// <summary>A target's line without its place: "IVAO, 1200 feet above, descending" and what follows the place: ", speed 337, wake M".</summary>
+    internal static (string Head, string Tail) TrafficWords(TrafficIdent ident, IReadOnlyList<DrawnShape>? shapes, DrawnText figure) => (
+        (ident.FlightId is { } id ? id + ", " : "") + TrafficAltitude(figure.Text.Trim()) + TrafficTendency(shapes, figure),
+        (ident.Speed is { } speed ? $", speed {speed}" : "") + (ident.Wake is { } wake ? $", wake {wake}" : ""));
+
     /// <summary>What FLT ID DISPLAY ON ND adds to a target (SURV TRAFFIC), the texts that drew it among them.</summary>
     internal readonly record struct TrafficIdent(string? FlightId, string? Speed, string? Wake, IReadOnlyList<DrawnText> Texts);
 
@@ -85,12 +90,13 @@ public static class A350NdMap
         const float LeftOfFigure = 26, Tolerance = 5, RowPixels = 19, IdBelowFigure = 21, IdAboveFigure = 36;
         float idY = figure.Y + (figure.Text.Trim()[0] == '+' ? IdBelowFigure : -IdAboveFigure), x = figure.X - LeftOfFigure;
         var near = nd.Where(t => !string.IsNullOrWhiteSpace(t.Text) && Math.Abs(t.X - x) <= Tolerance).ToList();
-        var id = near.FirstOrDefault(t => Math.Abs(t.Y - idY) <= Tolerance && t.Text.Trim().Any(char.IsLetter));
-        if (id == null)
-            return new TrafficIdent(null, null, null, Array.Empty<DrawnText>());
-        var row = near.Where(t => Math.Abs(t.Y - idY - RowPixels) <= Tolerance).ToList();
+        var id = near.FirstOrDefault(t => Math.Abs(t.Y - idY) <= Tolerance && t.Text.Trim().Any(char.IsLetter) && t.ColourName == figure.ColourName);
+        var row = near.Where(t => Math.Abs(t.Y - idY - RowPixels) <= Tolerance && t.ColourName == figure.ColourName).ToList();
         var speed = row.FirstOrDefault(t => t.Text.Trim().All(char.IsDigit));
         var wake = row.FirstOrDefault(t => t.Text.Trim().All(char.IsLetter));
+        // With no speed under it, a name that happens to lie there is no flight ID (a waypoint's, with FLT ID off).
+        if (id == null || speed == null)
+            return new TrafficIdent(null, null, null, Array.Empty<DrawnText>());
         return new TrafficIdent(id.Text.Trim(), speed?.Text.Trim(), wake?.Text.Trim(), row.Append(id).ToList());
     }
 

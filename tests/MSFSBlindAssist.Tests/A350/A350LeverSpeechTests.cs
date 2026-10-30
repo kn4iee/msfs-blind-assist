@@ -40,6 +40,24 @@ public class A350LeverSpeechTests
         Assert.Empty(speech.Flush(9000));                                   // said once
     }
 
+    // Final review: the take-off's first step is a word on the ground; in the air the lever only passes it, and N1 there is no 50 percent.
+    [Fact]
+    public void The_takeoff_step_is_no_word_in_the_air()
+    {
+        var speech = new A350LeverSpeech();
+        speech.Thrust(1, 25, 0, onGround: false);
+        speech.Thrust(2, 25, 0, onGround: false);
+        Assert.Null(speech.Thrust(1, 12, 10, onGround: false));
+        Assert.Null(speech.Thrust(2, 12, 10, onGround: false));
+        Assert.Empty(speech.Flush(100_000));
+
+        var ground = new A350LeverSpeech();
+        ground.Thrust(1, 0, 0);
+        ground.Thrust(2, 0, 0);
+        ground.Thrust(1, 12, 10);
+        Assert.Equal(("All thrust levers 50 percent N1"), ground.Thrust(2, 12, 10)?.Text);
+    }
+
     [Fact]
     public void A_held_lever_that_moves_on_speaks_where_it_stopped()
     {

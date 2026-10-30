@@ -665,8 +665,10 @@ public sealed class A350DrawEngine : IDisposable
                 _unranked.Remove(c);
                 continue;
             }
-            int scans = (_unranked.TryGetValue(c, out var before) ? before.Scans : 0) + 1;
-            if (scans == 1)
+            // A pass made for another class looks at this one too: only its own timer's count toward its minute.
+            bool due = Elapsed(_shortAt.TryGetValue(c, out var at) ? at : null);
+            int scans = (_unranked.TryGetValue(c, out var before) ? before.Scans : 0) + (due ? 1 : 0);
+            if (due && scans == 1)
                 Log.Warn("A350", $"{c}: {found.Count} objects whose sides cannot be read yet; address order for now");
             if (scans > MaxUnrankedScans)
             {
@@ -676,7 +678,7 @@ public sealed class A350DrawEngine : IDisposable
                 continue;
             }
             _unranked[c] = (found, scans);
-            _shortAt[c] = Environment.TickCount64;
+            if (due) _shortAt[c] = Environment.TickCount64;
         }
         if (_objects.TryGetValue(cls, out var list)) return list;
         if (_unranked.TryGetValue(cls, out var unranked)) return unranked.Found;

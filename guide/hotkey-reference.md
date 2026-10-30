@@ -369,7 +369,7 @@ The Ctrl+A window adds a metric toggle, and Ctrl+P a Flight Director button.
 
 - **Output Alt+P, Alt+N, Alt+S, Alt+I** do nothing; read the displays from the panels.
 - **Input Ctrl+Shift+D** (DCDU) is not on the A380.
-- In the Surroundings window, Enter and Shift+Enter tune VHF 1 by pressing the RMP's own keys.
+- In the Surroundings window, Enter and Shift+Enter do not tune COM 1; use the RMP window.
 
 ## Headwind A330-900neo {#hk-a330}
 

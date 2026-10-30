@@ -28,6 +28,7 @@ public sealed class A350LeverSpeech
     /// <summary>Each lever's sentence waiting for the other lever: its detent, when it arrived, and whether its delivery
     /// was inside MainForm's echo window (the pilot's own pick, which the screen reader said: dropped, never said).</summary>
     private readonly (string Detent, long At, bool Suppressed)?[] _held = new (string, long, bool)?[2];
+    private bool _onGround = true;
 
     /// <summary>The take-off's first step (<see cref="A350Levers"/>).</summary>
     public const string TakeoffSpool = "50 percent N1";
@@ -43,24 +44,29 @@ public sealed class A350LeverSpeech
         Math.Abs(tla + 6) < 2.5 ? "Reverse idle" :
         tla <= -17.5 ? "Maximum reverse" : null;
 
+    /// <summary>The word for a TLA as this flight stands: the take-off's first step only on the ground; in the air a lever passes it, and N1
+    /// there is no 50 percent.</summary>
+    private string? Said(double tla) => Detent(tla) is var word && word == TakeoffSpool && !_onGround ? null : word;
+
     /// <summary>A lever's new TLA: "All thrust levers" now when both sit at its detent, else null, its own sentence held
     /// for <see cref="Flush"/>. <paramref name="suppressed"/>: the delivery is inside MainForm's echo window.</summary>
-    public (string Row, string Text)? Thrust(int lever, double tla, long now, bool suppressed = false)
+    public (string Row, string Text)? Thrust(int lever, double tla, long now, bool suppressed = false, bool onGround = true)
     {
+        _onGround = onGround;
         int i = lever - 1;
         bool baseline = double.IsNaN(_tla[0]) || double.IsNaN(_tla[1]);
         _tla[i] = tla;
-        string? detent = Detent(tla);
+        string? detent = Said(tla);
         if (baseline)
         {
             _lastDetent[i] = detent;
             if (!double.IsNaN(_tla[0]) && !double.IsNaN(_tla[1]))
-                _lastAll = Detent(_tla[0]) is { } d0 && d0 == Detent(_tla[1]) ? d0 : null;
+                _lastAll = Said(_tla[0]) is { } d0 && d0 == Said(_tla[1]) ? d0 : null;
             return null;
         }
         if (detent == null)
             return null;   // mid-travel: a held sentence waits for where the lever stops
-        if (Detent(_tla[1 - i]) == detent)
+        if (Said(_tla[1 - i]) == detent)
         {
             _held[0] = _held[1] = null;
             _lastDetent[0] = _lastDetent[1] = detent;
@@ -83,7 +89,7 @@ public sealed class A350LeverSpeech
             if (_held[i] is not { } held || now - held.At < GatherMs)
                 continue;
             _held[i] = null;
-            if (Detent(_tla[i]) != held.Detent)
+            if (Said(_tla[i]) != held.Detent)
                 continue;
             _lastDetent[i] = held.Detent;
             _lastAll = null;

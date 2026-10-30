@@ -108,16 +108,43 @@ public class A350FmaTests
         Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), speed) }, a.Observe(Pfd(speed)));
     }
 
-    // A part really gone is said, as a column clearing is, once it has stayed gone past any flash.
+    // A part really gone from the column that flashes is said, as a column clearing is, once it has stayed gone past any flash.
     [Fact]
     public void A_part_gone_for_good_is_said_past_any_flash()
     {
-        const string both = "FMA vertical: SRS, green; ALT, cyan", one = "FMA vertical: SRS, green";
+        const string both = "FMA autothrust: SPEED, green; BTV, cyan", one = "FMA autothrust: SPEED, green";
         var a = new A350FmaAnnouncer();
         a.Observe(Pfd(both)); a.Observe(Pfd(both));
         for (int read = 1; read < A350FmaAnnouncer.ClearAfterReads; read++)
             Assert.Empty(a.Observe(Pfd(one)));
-        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("vertical"), one) }, a.Observe(Pfd(one)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), one) }, a.Observe(Pfd(one)));
+    }
+
+    // Final review: an armed mode engaging kept its name and lost the other, so it read as a part left by a flash and waited 4 s or more.
+    [Theory]
+    [InlineData("lateral", "HDG, green; NAV, cyan", "NAV, green")]
+    [InlineData("lateral", "RWY TRK, green; NAV, cyan", "NAV, green")]
+    [InlineData("vertical", "ALT, green; G/S, cyan", "G/S, green")]
+    public void An_armed_mode_engaging_speaks_at_once(string column, string armed, string engaged)
+    {
+        string line = $"FMA {column}: {engaged}";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd($"FMA {column}: {armed}")); a.Observe(Pfd($"FMA {column}: {armed}"));
+        Assert.Empty(a.Observe(Pfd(line)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor(column), line) }, a.Observe(Pfd(line)));
+    }
+
+    // Only the autothrust column is known to flash a part. Elsewhere a part going is news: the autopilot off, an armed mode dropped.
+    [Theory]
+    [InlineData("engagement", "AP1; 1 FD 2; A/THR, white", "1 FD 2; A/THR, white")]
+    [InlineData("vertical", "SRS, green; ALT, cyan", "SRS, green")]
+    public void A_part_going_from_another_column_speaks_at_once(string column, string both, string one)
+    {
+        string line = $"FMA {column}: {one}";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd($"FMA {column}: {both}")); a.Observe(Pfd($"FMA {column}: {both}"));
+        Assert.Empty(a.Observe(Pfd(line)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor(column), line) }, a.Observe(Pfd(line)));
     }
 
     // A colour change is a change: the same mode in another colour loses nothing.

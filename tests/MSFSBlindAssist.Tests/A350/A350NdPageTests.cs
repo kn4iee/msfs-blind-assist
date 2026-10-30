@@ -28,7 +28,7 @@ public class A350NdPageTests
     public void The_status_display_says_traffic_too()
     {
         var lines = A350GroundDisplays.ReadNd(A350Fixtures.Capture("nd_traffic.json"), 0);
-        Assert.Contains("Traffic 700 feet above, white", lines);
+        Assert.Contains("Traffic 700 feet above, descending, white", lines);
     }
 
     private static IReadOnlyList<MfdLine> Lines(string fixture, int side = 0) =>
@@ -283,6 +283,18 @@ public class A350NdPageTests
         Assert.Contains(lines, l => l.Spoken.StartsWith(starts, StringComparison.Ordinal) && l.Spoken.EndsWith(ends, StringComparison.Ordinal));
         Assert.DoesNotContain(lines, l => l.Spoken.StartsWith("IVAO", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, l => System.Text.RegularExpressions.Regex.IsMatch(l.Spoken, @"^\d+\s+M"));
+    }
+
+    // Final review: with FLT ID off, a waypoint's name that happens to lie there is no flight ID.
+    [Fact]
+    public void A_name_beside_a_target_with_no_speed_under_it_is_no_flight_id()
+    {
+        var capture = A350Fixtures.Capture("efis0_traffic_climbing.json");
+        var figure = capture.Texts.First(t => t.Text.Trim() == "+09");
+        var name = figure with { Text = "BASUR", X = figure.X - 26, Y = figure.Y + 21, LocalX = figure.X - 26 - 836, LocalY = figure.Y + 21 };
+        var lines = A350NdPage.Read(capture with { Texts = capture.Texts.Append(name).ToList() }, 0, mode: 3, range: 7);
+        Assert.Contains(lines, l => l.Spoken.StartsWith("Traffic 900 feet above, climbing: ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Spoken.StartsWith("BASUR", StringComparison.Ordinal));
     }
 
     // Live 2026-10-30, FL300: POSITION/TIME's marker on the path: "(20:45)" in green. It has no letters, so it read as a bare line with no place.

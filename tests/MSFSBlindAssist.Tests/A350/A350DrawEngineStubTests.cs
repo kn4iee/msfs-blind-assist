@@ -329,6 +329,24 @@ public class A350DrawEngineStubTests
         Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
     }
 
+    // Final review: every pass counted for each class it found waiting, so other classes' scans used up a class's minute in seconds.
+    [Fact]
+    public void A_class_waiting_for_its_sides_counts_only_its_own_scans()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.RescanMissingAfter = TimeSpan.FromHours(1);
+        e.Load(Copy(objects: new[] { Object, Object + 200 }));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+        for (int other = 0; other <= A350DrawEngine.MaxUnrankedScans + 1; other++)
+        {
+            e.Load(Copy(objects: new[] { Object, Object + 200 }));
+            e.Objects("NOTHING" + other);   // a class not found makes a pass of its own
+        }
+        e.RescanMissingAfter = TimeSpan.Zero;
+        e.Load(Sided((Object, "R"), (Object + 200, "L")));
+        Assert.Equal(new[] { Object + 200, Object }, e.Objects("CTR"));
+    }
+
     // Re-located (another A350, or the same one reloaded), the engine forgets the objects and variables it knew, even where
     // the old ones still check out at their addresses: the new A350 may hold more.
     [Fact]

@@ -111,7 +111,8 @@ public class FbwFamilyAutoManagerSecondReviewTests
         rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
         rig.Lever(2);
         rig.GearDown();
-        rig.Fly(agl: 1_600, vs: -800, ias: 154);     // F is 150: above the gate it waits
+        for (int s = 0; s < 7; s++)
+            rig.Fly(agl: 1_600 - 10 * s, vs: -800, ias: 154);   // F is 150: above the gate it waits
         Assert.Empty(await rig.LeverWrites());
         rig.Fly(agl: 1_450, vs: -800, ias: 154);
         Assert.Equal(new[] { 3 }, await rig.LeverWrites());
@@ -134,9 +135,69 @@ public class FbwFamilyAutoManagerSecondReviewTests
         rig.Lever(2);
         rig.GearDown();
         rig.Fly(agl: 1_200, vs: 0, ias: 154);        // level
-        rig.Fly(agl: 1_200, vs: -800, ias: 212);     // VFE next is 215: within its margin
+        for (int s = 0; s < 7; s++)
+            rig.Fly(agl: 1_200 - 10 * s, vs: -800, ias: 212);   // VFE next is 215: within its margin
         Assert.Empty(await rig.LeverWrites());
         Assert.Empty(rig.Speech.All);
+    }
+
+    // Final review: one sample under the threshold opened the gate, so each sag level at circuit height stepped the next flap.
+    [Fact]
+    public async Task The_A350s_gate_wants_an_established_descent()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(2);
+        rig.GearDown();
+        for (int s = 0; s < 3; s++)
+        {
+            rig.Fly(agl: 1_200, vs: 0, ias: 154);
+            rig.Fly(agl: 1_190, vs: -500, ias: 154);   // a sag
+            rig.Wait(5);
+        }
+        Assert.Empty(await rig.LeverWrites());
+    }
+
+    // Final review: with the levers just gone to TOGA the aircraft still sinks for seconds, and the gate would step the flaps into the go-around.
+    [Fact]
+    public async Task The_A350s_flaps_do_not_extend_as_the_levers_go_to_toga()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(2);
+        rig.GearDown();
+        for (int s = 0; s < 7; s++)
+            rig.Fly(agl: 1_600 - 10 * s, vs: -800, ias: 154);
+        rig.Thrust(45);
+        rig.Fly(agl: 1_400, vs: -700, ias: 154);
+        rig.Fly(agl: 1_390, vs: -500, ias: 154);
+        Assert.Empty(await rig.LeverWrites());
+    }
+
+    // An engine out flies its approach at MCT: past that moment the levers hold nothing back.
+    [Fact]
+    public async Task The_A350s_approach_at_mct_gets_its_flaps()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(2);
+        rig.GearDown();
+        rig.Thrust(35);
+        for (int s = 0; s < 12; s++)
+            rig.Fly(agl: 1_600 - 10 * s, vs: -800, ias: 154);
+        rig.Fly(agl: 1_400, vs: -800, ias: 154);
+        Assert.Equal(new[] { 3 }, await rig.LeverWrites());
     }
 
     // The gear gate stands below it too: the last step is not taken with the gear up.
@@ -149,7 +210,8 @@ public class FbwFamilyAutoManagerSecondReviewTests
         rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
         rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
         rig.Lever(3);
-        rig.Fly(agl: 1_400, vs: -800, ias: 154);
+        for (int s = 0; s < 7; s++)
+            rig.Fly(agl: 1_400 - 10 * s, vs: -800, ias: 154);
         Assert.Empty(await rig.LeverWrites());
         rig.GearDown();
         rig.Fly(agl: 1_300, vs: -800, ias: 154);
