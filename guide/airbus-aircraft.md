@@ -747,6 +747,8 @@ The A350's EFB is its OIS, one on each side. It opens in the window the PMDG tab
 
 If you turn on STREAMER MODE in the OIS options, your SimBrief ID, API keys and logon codes are hidden in BA too: you hear only how many characters they have, for example "SIMBRIEF USER ID, hidden, 7 characters", and you can still type into them.
 
+A flight saved on the OIS (FLT OPS MENU, AUTOSAVE) and restored in the air comes back flying by hand: the autopilot and autothrust off, the engines near idle and *"THR LK"* on the FMA, already descending. Engage autopilot 1 and the autothrust at once, then pull the altitude knob and push the heading knob. The flight plan is kept.
+
 Output Ctrl+Shift+T stays the Cold Temperature Altitude Correction, as on the PMDG aircraft.
 
 ### Special windows {#special-windows-5}
