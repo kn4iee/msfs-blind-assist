@@ -309,7 +309,10 @@ internal sealed class ProbeForm : Form
         await Task.Delay(1500);
         var caps = await service.DrawAsync(("EFIS", side));
         if (caps == null || caps.Count == 0 || !caps[0].Ok) { Line("no draw: " + caps?.FirstOrDefault()?.Error); return; }
-        foreach (var l in MSFSBlindAssist.Aircraft.A350.Display.A350NdPage.Read(caps[0], side))
+        int? Knob(string key) => (int?)await_cached(key);
+        double? await_cached(string key) => _m!.GetCachedVariableValue(key);
+        foreach (var l in MSFSBlindAssist.Aircraft.A350.Display.A350NdPage.Read(caps[0], side,
+            Knob(side == 0 ? "A350_EFIS_MODE_LEFT" : "A350_EFIS_MODE_RIGHT"), Knob(side == 0 ? "A350_EFIS_RANGE_LEFT" : "A350_EFIS_RANGE_RIGHT")))
             Line($"{l.Kind,-7} {l.ClickX,7:0.0} {l.ClickY,7:0.0}  {l.Spoken}");
     }
 

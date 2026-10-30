@@ -260,6 +260,70 @@ public class A350NdPageTests
         Assert.DoesNotContain("on runway", far.Spoken);
     }
 
+    // Live 2026-10-30 at 320 NM with the flight plan: a click on a waypoint's name says its name and FROM P.POS DIR TO *, INSERT
+    // NEXT WPT, DELETE *; a click on the aircraft symbol says P.POS and DIR TO.
+    [Fact]
+    public void On_a_range_the_names_on_the_map_can_be_clicked_and_say_where_they_lie()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_nd_arc_320.json"), 0, mode: 3, range: 10);
+        var tvm = Line(lines, "TVM, green: 3 o'clock, 190 NM");   // 113 + 80 along the route, F-PLN page
+        Assert.Equal("map", tvm.Kind);
+        Assert.InRange(tvm.ClickX, 690, 710);
+        Assert.Contains(lines, l => l.Kind == "map" && l.Spoken.StartsWith("BASUR, green: 3 o'clock, 110 NM", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Kind == "map" && l.Spoken.StartsWith("KAT, cyan:", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Kind == "text" && l.Spoken == "KAT, cyan");
+    }
+
+    [Fact]
+    public void The_aircraft_symbol_is_a_line_on_a_range_map()
+    {
+        var arc = Line(A350NdPage.Read(A350Fixtures.Capture("efis0_nd_arc_320.json"), 0, mode: 3, range: 10), A350NdPage.AircraftSymbol);
+        Assert.Equal((404f, 629f), (arc.ClickX, arc.ClickY));
+        var rose = Line(A350NdPage.Read(A350Fixtures.Capture("efis0_nd_rose_320.json"), 0, mode: 2, range: 10), A350NdPage.AircraftSymbol);
+        Assert.Equal((404f, 381f), (rose.ClickX, rose.ClickY));
+        Assert.DoesNotContain(A350NdPage.Read(A350Fixtures.Capture("efis0_nd_plan_320.json"), 0, mode: 4, range: 10), l => l.Spoken == A350NdPage.AircraftSymbol);
+    }
+
+    [Fact]
+    public void A_plan_map_says_where_a_name_lies_from_its_centre()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_nd_plan_320.json"), 0, mode: 4, range: 10);
+        Assert.Contains(lines, l => l.Kind == "map" && l.Spoken.StartsWith("BASUR, green: north west, 110 NM from the map's centre", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Without_the_knobs_a_name_still_reads_and_can_be_clicked()
+    {
+        var lines = Lines("efis0_nd_arc_320");
+        Assert.Contains(lines, l => l.Kind == "map" && l.Spoken == "TVM, green");
+    }
+
+    [Fact]
+    public void Flags_and_readouts_are_no_names_on_the_map()
+    {
+        var map = A350NdPage.Read(A350Fixtures.Capture("efis0_nd_arc_320.json"), 0, mode: 3, range: 10).Where(l => l.Kind == "map").Select(l => l.Spoken).ToList();
+        Assert.DoesNotContain(map, l => l.StartsWith("WXR", StringComparison.Ordinal) || l.StartsWith("TCAS", StringComparison.Ordinal) || l.StartsWith("NAV ACCUR", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_waypoints_menu_reads_its_title_first()
+    {
+        var lines = Lines("efis0_nd_wpt_menu");
+        Assert.Equal("TVM, green", lines[0].Spoken);
+        Assert.Equal("FROM P.POS DIR TO *", lines[1].Spoken);
+        Assert.Equal("INSERT NEXT WPT", lines[2].Spoken);
+        Assert.Equal("DELETE *", lines[3].Spoken);
+    }
+
+    [Fact]
+    public void The_airport_tabs_fms_airports_say_which_they_are()
+    {
+        var lines = Lines("efis0_anf_arpt_fms");
+        Assert.Contains(lines, l => l.Spoken == "Origin VCBI button");
+        Assert.Contains(lines, l => l.Spoken == "Destination OMDB button, grey");
+        Assert.Contains(lines, l => l.Spoken == "Alternate OMAA button");
+    }
+
     [Fact]
     public void A_side_clicks_its_own_half()
     {

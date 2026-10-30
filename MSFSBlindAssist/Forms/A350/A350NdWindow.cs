@@ -151,7 +151,7 @@ public sealed class A350NdWindow : Form
             if (IsDisposed) return;
             ReadKnobs();
             var before = _lines;
-            (_lines, var shown) = PageLines(cap, Side, _isDark(Side));
+            (_lines, var shown) = PageLines(cap, Side, _isDark(Side), (int?)_knob(Side, true), (int?)_knob(Side, false));
             _linesSide = Side;
             _list.SetLines(shown);
             // A menu just opened takes the selection to its first item, where a sighted pilot looks, and a tab just opened
@@ -186,13 +186,14 @@ public sealed class A350NdWindow : Form
 
     /// <summary>The ND's lines and what the list shows: a dark screen shows dark, with nothing to click, and with no capture
     /// (none yet, or none young enough) there is nothing to click either.</summary>
-    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark)
+    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark,
+        int? mode = null, int? range = null)
     {
         if (cap == null)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.NotAvailableYet });
         if (dark)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
-        var lines = A350NdPage.Read(cap, side);
+        var lines = A350NdPage.Read(cap, side, mode, range);
         return (lines, lines.Count == 0 ? new[] { "The ND shows nothing." } : lines.Select(l => l.Spoken).ToList());
     }
 

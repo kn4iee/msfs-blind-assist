@@ -97,6 +97,25 @@ public static class A350NdMap
         return null;
     }
 
+    /// <summary>A point's place on a range map, its frame's scale in pixels per NM: "1 o'clock, 190 NM", on PLAN "north west, 110 NM
+    /// from the map's centre". To the nearest 10 NM at most: a name is drawn beside its point.</summary>
+    internal static string PlaceNm(NdMapFrame frame, float x, float y)
+    {
+        if (frame.PixelsPerMetre is not float pixelsPerNm) return "";
+        double dx = x - frame.X, dy = y - frame.Y;
+        double nm = Math.Sqrt(dx * dx + dy * dy) / pixelsPerNm;
+        double rounded = nm >= 100 ? Math.Round(nm / 10) * 10 : nm >= 10 ? Math.Round(nm) : Math.Round(nm, 1);
+        string far = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{rounded:0.#} NM");
+        double degrees = (Math.Atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+        if (frame.NorthUp)
+        {
+            string[] points = { "north", "north east", "east", "south east", "south", "south west", "west", "north west" };
+            return $"{points[(int)Math.Round(degrees / 45) % 8]}, {far} from the map's centre";
+        }
+        int hour = (int)Math.Round(degrees / 30) % 12;
+        return $"{(hour == 0 ? 12 : hour)} o'clock, {far}";
+    }
+
     /// <summary>The ident of a runway's other end: 12L's is 30R, 04's is 22, 09C's is 27C.</summary>
     internal static string? OtherEnd(string ident)
     {
