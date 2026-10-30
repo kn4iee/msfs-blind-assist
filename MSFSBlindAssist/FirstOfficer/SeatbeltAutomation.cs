@@ -47,6 +47,7 @@ public sealed class SeatbeltAutomation
     private readonly Action<bool> _setSign;
     private readonly Action<string> _announce;
     private readonly Func<DateTime> _utcNow;
+    private readonly string _offWord;
 
     public FoSeatbeltMode Mode { get; set; } = FoSeatbeltMode.Disabled;
 
@@ -79,11 +80,14 @@ public sealed class SeatbeltAutomation
     private DateTime? _levelSince;
     private DateTime? _descendSince;
 
-    public SeatbeltAutomation(Action<bool> setSign, Action<string> announce, Func<DateTime>? utcNow = null)
+    /// <param name="offWord">What the call names the position <paramref name="setSign"/> goes to for false: "off", or "auto" on an
+    /// airframe that sets AUTO there (the A350).</param>
+    public SeatbeltAutomation(Action<bool> setSign, Action<string> announce, Func<DateTime>? utcNow = null, string offWord = "off")
     {
         _setSign = setSign;
         _announce = announce;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        _offWord = offWord;
     }
 
     public void Reset()
@@ -128,7 +132,7 @@ public sealed class SeatbeltAutomation
         if (!descending && nowAbove && _prevAbove10k == false)
         {
             _setSign(false);
-            _announce("Above ten thousand. Seat belt signs off.");
+            _announce($"Above ten thousand. Seat belt signs {_offWord}.");
         }
         else if (!climbing && nowBelow && _prevAbove10k == true)
         {
@@ -183,7 +187,7 @@ public sealed class SeatbeltAutomation
             if ((now - _levelSince.Value).TotalSeconds >= required)
             {
                 _setSign(false);
-                _announce("Cruise. Seat belt signs off.");
+                _announce($"Cruise. Seat belt signs {_offWord}.");
                 _tocDone = true;
             }
             return; // TOD is only evaluated after TOC

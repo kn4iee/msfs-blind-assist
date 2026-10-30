@@ -28,7 +28,7 @@ public sealed class A350FlightPhaseMonitor : IFoPhaseMonitor
         _executor = executor;
         _announcer = announcer;
         // Every crossing call is queued: the light call, the seat-belt call and a transition call can come from one sample.
-        _seatbelt = new SeatbeltAutomation(on => { _ = _executor.SetSeatbeltSign(on); }, announcer.Announce);
+        _seatbelt = new SeatbeltAutomation(on => { _ = _executor.SetSeatbeltSign(on); }, announcer.Announce, offWord: "auto");
     }
 
     public void SetThresholds(int transAltFt, int transLevelFt) => _trans.SetThresholds(transAltFt, transLevelFt);

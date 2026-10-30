@@ -98,6 +98,22 @@ public class SeatbeltAutomationTests
         Assert.DoesNotContain("Below ten thousand. Seat belt signs on.", spoken);
     }
 
+    // Review 3 (M1): on the A350 the sign's other position is AUTO, so "signs off" was not what it did.
+    [Fact]
+    public void An_airframe_whose_other_position_is_auto_says_so()
+    {
+        var tenK = new SeatbeltAutomation(signs.Add, spoken.Add, () => now, offWord: "auto") { Mode = FoSeatbeltMode.TenThousand };
+        Tick(tenK, 9_600, 1500);
+        Tick(tenK, 10_400, 1500);
+        Assert.Equal(new[] { "Above ten thousand. Seat belt signs auto." }, spoken);
+
+        spoken.Clear();
+        var toc = new SeatbeltAutomation(signs.Add, spoken.Add, () => now, offWord: "auto") { Mode = FoSeatbeltMode.TocTod, PlannedCruiseFt = 35_000 };
+        ClimbTo(toc, 0, 35_000);
+        Hold(toc, 35_000, 50, 25);
+        Assert.Equal(new[] { "Cruise. Seat belt signs auto." }, spoken);
+    }
+
     // ---- TOC/TOD mode, with the SimBrief cruise altitude known ----
     [Fact]
     public void TocTod_TocTurnsOffAfterSustainedLevelAtPlannedCruise()
