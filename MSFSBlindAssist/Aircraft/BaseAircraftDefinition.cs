@@ -958,6 +958,8 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
 
     public virtual string? StockComTuningRefusal => null;
 
+    public virtual Task<double?>? TuneCom1Own(SimConnect.SimConnectManager sim, int frequencyHz, bool active) => null;
+
     public virtual bool? MetricAltitude => null;
 
     // One capture at a time, app-wide — the scene description takes the same gate, because the

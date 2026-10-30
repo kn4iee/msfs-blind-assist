@@ -46,6 +46,9 @@ internal static class A350Levers
     /// <summary>How long a nudge holds the pitch trim switches: about 0.2 degrees (the THS trims about 0.19 degrees a
     /// second, live 2026-10-27; the A350 sets its takeoff trim itself, so these are small corrections).</summary>
     public const int PitchNudgeMs = 1000;
+
+    /// <summary>How long a nudge holds a seat's switch: about 34 percent of the seat's travel.</summary>
+    public const int SeatNudgeMs = 1000;
     public const int KeyEventFull = 16384;
 
     /// <summary>The SD pages the ECP has a key for: the page value, the A380's word, the key's input event; declared before
@@ -152,8 +155,29 @@ internal static class A350Levers
         Walkaround("EXT_ENGINES", "COVERS", "Engine and pitot covers", "INI_COVERS_ENABLED", "Removed", "Fitted"),
     };
 
+    /// <summary>The seats, tables and footrests: A350_Interior_SST's clickspots, not the cockpit file's, so not in the map. Live 2026-10-30: a
+    /// seat switch rests at 1; BKFWD 2 moves the seat forward, 0 back; UPDOWN 0 up, 2 down, about 34 percent of its travel a second; the rest
+    /// flip one L:var. Stowing a sliding table closes its keyboard cover, as its own click does.</summary>
+    private static readonly A350Lever[] Comfort = new[] { ("CPT", "Captain"), ("FO", "First officer") }.SelectMany(s => new[]
+    {
+        SeatNudge(s.Item1, s.Item2, "forward", "BKFWD", 2),
+        SeatNudge(s.Item1, s.Item2, "back", "BKFWD", 0),
+        SeatNudge(s.Item1, s.Item2, "up", "UPDOWN", 0),
+        SeatNudge(s.Item1, s.Item2, "down", "UPDOWN", 2),
+        Comfortable($"SEAT_{s.Item1}", $"SEAT_{s.Item1}_HARNESS", $"{s.Item2} shoulder harness", $"INI_SEAT_{s.Item1}_BKREST_SWITCH", "Free", "Locked"),
+        Comfortable($"SEAT_{s.Item1}", $"SEAT_{s.Item1}_ARMREST_LEFT", $"{s.Item2} left armrest", $"INI_A350_INT_SEAT_{s.Item1}_ARMREST_L_BASE", "Stowed", "Deployed"),
+        Comfortable($"SEAT_{s.Item1}", $"SEAT_{s.Item1}_ARMREST_RIGHT", $"{s.Item2} right armrest", $"INI_A350_INT_SEAT_{s.Item1}_ARMREST_R_BASE", "Stowed", "Deployed"),
+        SlidingTable(s.Item1, s.Item2),
+        Comfortable($"TABLE_{s.Item1}", $"TABLE_{s.Item1}_COVER", $"{s.Item2} keyboard cover", $"INI_{s.Item1}_TRAY", "Closed", "Open"),
+        Comfortable($"TABLE_{s.Item1}", $"TABLE_{s.Item1}_FOOTREST", $"{s.Item2} footrest", $"INI_{s.Item1}_TRAY_PEDAL", "Stowed", "Deployed"),
+    }).Concat(new[]
+    {
+        Comfortable("SEAT_OBSERVER", "SEAT_JUMPSEAT", "Jumpseat", "INI_A350_INT_SEAT_JS_SEAT", "Stowed", "Deployed"),
+        Comfortable("SEAT_OBSERVER", "SEAT_OBSERVER_ARMREST", "Observer left armrest", "INI_A350_INT_SEAT_FE_ARMREST_L_BASE", "Stowed", "Deployed"),
+    }).ToArray();
+
     private static readonly Dictionary<string, A350Lever> ById =
-        Replacements.Values.Concat(Extras.Select(e => e.Lever)).Concat(Exterior).ToDictionary(l => l.Control.Id, StringComparer.OrdinalIgnoreCase);
+        Replacements.Values.Concat(Extras.Select(e => e.Lever)).Concat(Exterior).Concat(Comfort).ToDictionary(l => l.Control.Id, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The map's controls with each lever in its place: a lever replaces its map entry (keeping the map's key,
     /// area, panel and event), and a lever with no input event sits beside its anchor.</summary>
@@ -179,7 +203,7 @@ internal static class A350Levers
             foreach (var extra in Extras.Where(e => !e.Before && Same(e.Anchor, control.Id)))
                 yield return Placed(extra.Lever.Control, control);
         }
-        foreach (var lever in Exterior)
+        foreach (var lever in Exterior.Concat(Comfort))
             yield return lever.Control;
     }
 
@@ -227,6 +251,40 @@ internal static class A350Levers
         lever.Control.Area = "EXTERIOR";
         lever.Control.Panel = panel;
         return lever;
+    }
+
+    private static A350Lever Comfortable(string panel, string name, string title, string lvar, string off, string on)
+    {
+        var lever = Lever($"MSFSBA_{name}", title, A350Kinds.Selector, "L:" + lvar, new[] { (0.0, off), (1.0, on) },
+            (position, _) => $"{Format(position)} (>L:{lvar})", key: $"A350_{name}");
+        lever.Control.Area = "MISC";
+        lever.Control.Panel = panel;
+        return lever;
+    }
+
+    private static A350Lever SlidingTable(string side, string title)
+    {
+        var lever = Lever($"MSFSBA_TABLE_{side}", $"{title} sliding table", A350Kinds.Selector, $"L:INI_{side}_TRAY_COVER_TGT",
+            new[] { (0.0, "Stowed"), (1.0, "Deployed") },
+            (position, _) => position >= 0.5 ? $"1 (>L:INI_{side}_TRAY_COVER_TGT)" : $"0 (>L:INI_{side}_TRAY_COVER_TGT) 0 (>L:INI_{side}_TRAY)",
+            key: $"A350_TABLE_{side}");
+        lever.Control.Area = "MISC";
+        lever.Control.Panel = $"TABLE_{side}";
+        return lever;
+    }
+
+    /// <summary>A second's hold of a seat's spring switch.</summary>
+    private static A350Lever SeatNudge(string side, string title, string way, string axis, double position)
+    {
+        string lvar = $"INI_SEAT_{side}_{axis}_SWITCH";
+        var lever = Lever($"MSFSBA_SEAT_{side}_{way.ToUpperInvariant()}", $"{title} seat {way} (nudge)", A350Kinds.Button, null,
+            Array.Empty<(double, string)>(), null, key: $"A350_SEAT_{side}_{way.ToUpperInvariant()}");
+        lever.Control.Area = "MISC";
+        lever.Control.Panel = $"SEAT_{side}";
+        return lever with
+        {
+            Press = () => new A350Step[] { new A350CalcStep($"{Format(position)} (>L:{lvar})"), new A350DelayStep(SeatNudgeMs), new A350CalcStep($"1 (>L:{lvar})") },
+        };
     }
 
     /// <summary>An RMP's STBY RAD NAV: no input event writes its variable in 1.2.7, so the row writes it (<see cref="A350Rmp.StbyRadNavKey"/>).</summary>

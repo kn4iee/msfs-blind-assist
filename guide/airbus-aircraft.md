@@ -669,7 +669,7 @@ The A350 has six sections. Its panels take the A380's names and order wherever t
 
 **Pedestal**: **Engines**, **Thrust Levers**, **Captain RMP**, **First Officer RMP**, **Emergency Descent**, **Flaps and Brakes**, **Speed Brake**, **Trim**, **ECAM Control Panel** with its Captain and First Officer parts, **Weather Radar** with its Captain and First Officer parts, **Transponder**, **Cockpit**, each pilot's **Display Transfer**, and **RMP 3**.
 
-**Cockpit**: what sits around you rather than on a panel: **Doors and Hatches**, the sun shades, the oxygen masks, the HUD units, each pilot's tiller and sidestick (with its takeover button), and **Misc**.
+**Cockpit**: what sits around you rather than on a panel: **Doors and Hatches**, the sun shades, the oxygen masks, the HUD units, each pilot's tiller and sidestick (with its takeover button), each pilot's **Seat** (nudges forward, back, up and down, with status lines for where the seat is, the shoulder harness and the armrests), the **Observer Seat** (jumpseat and armrest), each pilot's **Table** (sliding table, keyboard cover and footrest; stowing the table closes its cover) and **Misc**.
 
 **Exterior**: what a sighted pilot clicks on the walkaround:
 
@@ -839,7 +839,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 ### Things to know {#things-to-know-5}
 
 - **The A350's First Officer is not there yet.** Output Shift+C says *"No checklist for this aircraft."* Use the MFD's own checklists (Output Ctrl+Shift+C).
-- **Surroundings window frequencies:** the A350 has no stock COM radio, so pressing Enter on a frequency in the Surroundings window tells you that this aircraft tunes its radios only through its radio management panels.
+- **Surroundings window frequencies:** the A350 has no stock COM radio, so Enter on a frequency in the Surroundings window tunes it as you would by hand: on the captain's RMP it goes to the VHF page and loads the frequency as VHF 1's standby, and Shift+Enter also swaps it in. BA reads the RMP back, as on the other aircraft: *"COM 1 standby 118.700"*.
 - **Pictures stay pictures.** The OIS charts and en-route map, and the tapes, attitude and map symbols on the PFD and ND, are graphics. BA reads their values from the aircraft where it can.
 - **After an A350 update,** BA prepares the displays again (about 15 seconds). If a display stops reading after an update, report it.
 

@@ -15,6 +15,46 @@ public class A350CockpitPanelTests
             string.Join(", ", r.Positions.OrderBy(p => p.Key).Select(p =>
                 $"{p.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)}={p.Value}"))));
 
+    // The seats, tables and footrests (A350_Interior_SST's clickspots, so not in the map), live 2026-10-30: a seat switch rests at 1;
+    // BKFWD 2 moves the seat forward, 0 back; UPDOWN 0 up, 2 down; each ANIMATION is the seat's place, 0 to 100.
+    [Fact]
+    public void The_seats_are_nudges_and_levers()
+    {
+        Assert.Equal(new[]
+        {
+            ("Captain seat forward (nudge)", Press, ""), ("Captain seat back (nudge)", Press, ""), ("Captain seat up (nudge)", Press, ""),
+            ("Captain seat down (nudge)", Press, ""), ("Captain shoulder harness", Set, "0=Free, 1=Locked"),
+            ("Captain left armrest", Set, "0=Stowed, 1=Deployed"), ("Captain right armrest", Set, "0=Stowed, 1=Deployed"),
+        }, Rows("Captain Seat"));
+        Assert.Equal(new[] { ("Jumpseat", Set, "0=Stowed, 1=Deployed"), ("Observer left armrest", Set, "0=Stowed, 1=Deployed") }, Rows("Observer Seat"));
+        var steps = A350Levers.PressStepsFor(Placement.RowsByPanel["First Officer Seat"].Single(r => r.Name == "First officer seat down (nudge)").Control!);
+        Assert.Equal("2 (>L:INI_SEAT_FO_UPDOWN_SWITCH)", ((A350CalcStep)steps![0]).Rpn);
+        Assert.Equal("1 (>L:INI_SEAT_FO_UPDOWN_SWITCH)", ((A350CalcStep)steps[2]).Rpn);
+    }
+
+    [Fact]
+    public void The_tables_are_the_sliding_table_keyboard_cover_and_footrest()
+    {
+        Assert.Equal(new[]
+        {
+            ("Captain sliding table", Set, "0=Stowed, 1=Deployed"), ("Captain keyboard cover", Set, "0=Closed, 1=Open"), ("Captain footrest", Set, "0=Stowed, 1=Deployed"),
+        }, Rows("Captain Table"));
+        var table = Placement.RowsByPanel["First Officer Table"].Single(r => r.Name == "First officer sliding table").Control!;
+        Assert.Equal("L:INI_FO_TRAY_COVER_TGT", table.StateVar);
+        // Stowing the table closes its cover too, as its own click does.
+        Assert.Equal("0 (>L:INI_FO_TRAY_COVER_TGT) 0 (>L:INI_FO_TRAY)", A350Levers.WriteFor(table, 0));
+        Assert.Equal("1 (>L:INI_FO_TRAY_COVER_TGT)", A350Levers.WriteFor(table, 1));
+    }
+
+    [Fact]
+    public void The_seats_place_is_a_status_line()
+    {
+        var line = A350StatusLines.All.Single(l => l.Key == "A350_STAT_SEAT_CPT_FORE_AFT");
+        Assert.Equal("INI_SEAT_CPT_BKFWD_ANIMATION", line.Var);
+        Assert.Equal("68 percent", line.Format(68.2));
+        Assert.Contains(A350StatusLines.All, l => l.Key == "A350_STAT_SEAT_FO_HEIGHT" && l.Var == "INI_SEAT_FO_UPDOWN_ANIMATION");
+    }
+
     [Fact]
     public void The_cockpit_panels()
     {
@@ -24,7 +64,8 @@ public class A350CockpitPanelTests
         {
             "Doors and Hatches", "Center Sun Shade", "Captain Sun Shades", "First Officer Sun Shades", "Observer Oxygen Masks",
             "Captain Oxygen Mask", "First Officer Oxygen Mask", "Captain HUD Unit", "First Officer HUD Unit",
-            "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Misc",
+            "Captain Tiller and Sidestick", "First Officer Tiller and Sidestick", "Captain Seat", "First Officer Seat", "Observer Seat",
+            "Captain Table", "First Officer Table", "Misc",
         }, Placement.Structure["Cockpit"]);
     }
 

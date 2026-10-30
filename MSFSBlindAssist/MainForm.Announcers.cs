@@ -2070,7 +2070,8 @@ public partial class MainForm
     /// Enter (standby) or Shift+Enter (active) on a row of the surroundings window's Frequencies list:
     /// tunes COM 1 with the stock events (<see cref="MSFSBlindAssist.Services.Com1Tuning"/>), then
     /// reads COM 1 back and speaks what it holds — the pilot's only confirmation. An aircraft that
-    /// ignores the stock events says so instead (IAircraftDefinition.StockComTuningRefusal). On the UI
+    /// tunes its own way does (IAircraftDefinition.TuneCom1Own); one that only ignores the stock events
+    /// says so instead (IAircraftDefinition.StockComTuningRefusal). On the UI
     /// thread throughout, waits included: SendEvent's event map is not thread-safe.
     /// </summary>
     private async void TuneCom1FromSurroundings(int frequencyHz, bool active)
@@ -2080,22 +2081,27 @@ public partial class MainForm
         {
             var sim = simConnectManager;
             if (sim == null || !sim.IsConnected) { announcer.AnnounceImmediate("Not connected to the simulator."); return; }
-            if (currentAircraft?.StockComTuningRefusal is { } refusal) { announcer.AnnounceImmediate(refusal); return; }
-
-            sim.SendEvent(MSFSBlindAssist.Services.Com1Tuning.StandbySetEvent, (uint)frequencyHz);
-            if (active)
-            {
-                await Task.Delay(MSFSBlindAssist.Services.Com1Tuning.SwapGapMs);
-                sim.SendEvent(MSFSBlindAssist.Services.Com1Tuning.SwapEvent);
-            }
-
             double? read = null;
-            for (int attempt = 0; attempt < MSFSBlindAssist.Services.Com1Tuning.ReadAttempts
-                                  && !MSFSBlindAssist.Services.Com1Tuning.Holds(read, frequencyHz); attempt++)
+            if (currentAircraft?.TuneCom1Own(sim, frequencyHz, active) is { } own)
+                read = await own;
+            else
             {
-                await Task.Delay(MSFSBlindAssist.Services.Com1Tuning.SettleMs);
-                if (await sim.ReadCom1RadioAsync(MSFSBlindAssist.Services.Com1Tuning.ReadTimeout) is { } radio)
-                    read = active ? radio.ActiveHz : radio.StandbyHz;
+                if (currentAircraft?.StockComTuningRefusal is { } refusal) { announcer.AnnounceImmediate(refusal); return; }
+
+                sim.SendEvent(MSFSBlindAssist.Services.Com1Tuning.StandbySetEvent, (uint)frequencyHz);
+                if (active)
+                {
+                    await Task.Delay(MSFSBlindAssist.Services.Com1Tuning.SwapGapMs);
+                    sim.SendEvent(MSFSBlindAssist.Services.Com1Tuning.SwapEvent);
+                }
+
+                for (int attempt = 0; attempt < MSFSBlindAssist.Services.Com1Tuning.ReadAttempts
+                                      && !MSFSBlindAssist.Services.Com1Tuning.Holds(read, frequencyHz); attempt++)
+                {
+                    await Task.Delay(MSFSBlindAssist.Services.Com1Tuning.SettleMs);
+                    if (await sim.ReadCom1RadioAsync(MSFSBlindAssist.Services.Com1Tuning.ReadTimeout) is { } radio)
+                        read = active ? radio.ActiveHz : radio.StandbyHz;
+                }
             }
 
             // A newer press speaks for itself.

@@ -140,6 +140,27 @@ public class A350RmpPageTests
     [InlineData("12.5", false)]
     public void A_typed_entry_out_of_range_is_refused(string typed, bool frequency) => Assert.Null(A350Rmp.TuningKeys(typed, frequency));
 
+    // The Surroundings window's Enter tunes VHF 1 through RMP 1's keys, as a pilot does (manual p. 74-75): the VHF page, a new entry's
+    // CLR presses and its line's key, the digits, the line's key to load it as standby, the activation key to swap it in.
+    [Fact]
+    public void Tuning_vhf1_from_outside_presses_the_rmps_own_keys()
+    {
+        var clears = Enumerable.Repeat("CLR", A350RmpEntry.ClearPresses);
+        Assert.Equal(new[] { "VHF" }.Concat(clears).Concat(new[] { "LSK1", "1", "1", "8", "7", "0", "0", "LSK1" }), A350Rmp.ComTuningKeys(118_700_000, active: false));
+        Assert.Equal(new[] { "VHF" }.Concat(clears).Concat(new[] { "LSK1", "1", "2", "1", "8", "3", "3", "LSK1", "ADK1" }), A350Rmp.ComTuningKeys(121_833_000, active: true));
+    }
+
+    [Fact]
+    public void The_screen_says_what_vhf1_holds()
+    {
+        var lines = Read("rmp_vhf_page");
+        Assert.Equal(122_800_000, A350RmpPage.Vhf1Hz(lines, active: true));
+        Assert.Equal(123_450_000, A350RmpPage.Vhf1Hz(lines, active: false));
+        Assert.Null(A350RmpPage.Vhf1Hz(Read("rmp_hf_page"), active: true));
+        // VHF 3's DATA is no frequency: it would never stand on VHF 1, and says nothing if it did.
+        Assert.Null(A350RmpPage.Vhf1Hz(new[] { new RmpLine("VHF1: active DATA, white; standby 121.500, white") }, active: true));
+    }
+
     [Fact]
     public void Standby_radio_nav_going_on_says_the_page_it_opened_not_its_own_state_twice()
     {

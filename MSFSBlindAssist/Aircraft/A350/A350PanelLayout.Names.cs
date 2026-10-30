@@ -8,6 +8,12 @@ public static partial class A350PanelLayout
     /// split by side (<see cref="SidePanels"/>).</summary>
     private static readonly Dictionary<string, string> PanelNames = new(StringComparer.Ordinal)
     {
+        // Cockpit's seats and tables (A350Levers.Comfort)
+        ["SEAT_CPT"] = "Captain Seat",
+        ["SEAT_FO"] = "First Officer Seat",
+        ["SEAT_OBSERVER"] = "Observer Seat",
+        ["TABLE_CPT"] = "Captain Table",
+        ["TABLE_FO"] = "First Officer Table",
         // Exterior (A350Levers.Exterior)
         ["EXT_SERVICES"] = "Ground Services",
         ["EXT_HATCHES"] = "Service Hatches",
@@ -184,7 +190,11 @@ public static partial class A350PanelLayout
             "Engines", "Thrust Levers", "Captain RMP", "First Officer RMP", "Emergency Descent", "Flaps and Brakes", "Speed Brake",
             "Trim", "ECAM Control Panel", "Weather Radar", "Transponder", "Cockpit", "RMP 3",
         },
-        ["Cockpit"] = new() { "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Misc" },
+        ["Cockpit"] = new()
+        {
+            "Doors and Hatches", "Sun Shades", "Oxygen Masks", "HUD Units", "Tillers and Sidesticks", "Captain Seat", "First Officer Seat", "Observer Seat",
+            "Captain Table", "First Officer Table", "Misc",
+        },
         ["Exterior"] = new() { "Ground Services", "Service Hatches", "Gear Bays", "Engine Cowlings and Covers" },
     };
 

@@ -35,10 +35,19 @@ public static class A350StatusLines
         // beside the seat until put away (INI_PRINTER_SIDE_PAPER_VIS 1 to 4 picks where, 0 none; live 2026-10-30).
         new A350StatusLine("A350_STAT_PRINTER_PAPER", "A350_PRINTER_PAPER_PED", "INI_PRINTER_PAPER_OUT_PERCENT", "Paper at the printer", PrinterPaper),
         new A350StatusLine("A350_STAT_TORN_PAPER", "A350_PRINTER_PAPER_SIDE_1_CS", "INI_PRINTER_SIDE_PAPER_VIS", "Torn paper", TornPaper),
+        // Each seat's place along its travel, 0 to 100 (0 fully back, 100 fully forward; 0 fully down, 100 fully up).
+        new A350StatusLine("A350_STAT_SEAT_CPT_FORE_AFT", "A350_SEAT_CPT_BACK", "INI_SEAT_CPT_BKFWD_ANIMATION", "Captain seat forward by", WholePercent),
+        new A350StatusLine("A350_STAT_SEAT_CPT_HEIGHT", "A350_SEAT_CPT_DOWN", "INI_SEAT_CPT_UPDOWN_ANIMATION", "Captain seat height", WholePercent),
+        new A350StatusLine("A350_STAT_SEAT_FO_FORE_AFT", "A350_SEAT_FO_BACK", "INI_SEAT_FO_BKFWD_ANIMATION", "First officer seat forward by", WholePercent),
+        new A350StatusLine("A350_STAT_SEAT_FO_HEIGHT", "A350_SEAT_FO_DOWN", "INI_SEAT_FO_UPDOWN_ANIMATION", "First officer seat height", WholePercent),
         // The sight gauge under each cowling (the model's ENG1_OIL_INDICATOR animation reads it).
         new A350StatusLine("A350_STAT_ENG1_OIL", "A350_EXT_COWL_LEFT", "INI_ENG1_OIL_QUANTITY", "Left engine oil level", Quarts),
         new A350StatusLine("A350_STAT_ENG2_OIL", "A350_EXT_COWL_RIGHT", "INI_ENG2_OIL_QUANTITY", "Right engine oil level", Quarts),
     };
+
+    /// <summary>A travel already in percent: "68 percent".</summary>
+    public static string WholePercent(double percent) =>
+        Math.Round(percent, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + " percent";
 
     /// <summary>"16.3 quarts", as the SD's oil quantity.</summary>
     public static string Quarts(double quantity) => quantity.ToString("0.0", CultureInfo.InvariantCulture) + " quarts";

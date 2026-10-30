@@ -44,10 +44,10 @@ public class IniBuildsA350DefinitionTests
     }
 
     [Fact]
-    public void Stock_com_tuning_is_refused_as_the_aircraft_has_no_stock_radio()
+    public void Com_1_is_tuned_by_its_own_way_as_the_aircraft_has_no_stock_radio()
     {
-        // Live 2026-10-26: COM AVAILABLE:1 reads 0 and COM_STBY_RADIO_SET_HZ left COM 1 at 0.
-        Assert.Contains("radio management panel", _def.StockComTuningRefusal);
+        // Live 2026-10-26: COM AVAILABLE:1 reads 0 and COM_STBY_RADIO_SET_HZ left COM 1 at 0. Its own way is the RMP's keys.
+        Assert.Equal(typeof(IniBuildsA350Definition), typeof(IniBuildsA350Definition).GetMethod(nameof(IAircraftDefinition.TuneCom1Own))!.DeclaringType);
     }
 
     [Fact]

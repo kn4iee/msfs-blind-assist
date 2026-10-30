@@ -574,6 +574,13 @@ public interface IAircraftDefinition
     string? StockComTuningRefusal { get; }
 
     /// <summary>
+    /// Null when this aircraft has no way of its own to tune COM 1; otherwise tunes it in place of the stock events and
+    /// answers what that slot then holds, in Hz, or null when it did not report: the iniBuilds A350's RMP keys
+    /// (it has no stock COM radio). Called on the UI thread.
+    /// </summary>
+    Task<double?>? TuneCom1Own(SimConnect.SimConnectManager sim, int frequencyHz, bool active);
+
+    /// <summary>
     /// Null when this aircraft has no metric altitude mode (the A and Q read-outs speak the bare
     /// number); otherwise whether it is on: the FBW A380's FCU MTRS, the iniBuilds A350's METRIC ALT.
     /// While it is on, A and Q read metres and the altitude call-outs run in 300 m bands ([TKO-4]);

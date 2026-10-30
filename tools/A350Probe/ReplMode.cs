@@ -305,6 +305,13 @@ internal sealed partial class ProbeForm
                             Line($"{box.SelectedIndex}: {box.SelectedItem}");
                             break;
                         }
+                        case "tune":   // tune HZ [active]: what the Surroundings window's Enter (Shift+Enter) does
+                        {
+                            var p = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            var read = await def.TuneCom1Own(_m!, int.Parse(p[0], CultureInfo.InvariantCulture), p.Length > 1)!;
+                            Line($"read {read?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"}");
+                            break;
+                        }
                         case "text":   // text WORDS: into the top window's text box, as the pilot types it there
                         {
                             var box = Window()?.Controls.OfType<TextBox>().FirstOrDefault();

@@ -38,6 +38,17 @@ public static class A350RmpPage
         return lines;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex Vhf1Line = new(
+        @"^VHF1: active (?<active>[^,]+), \w+; standby (?<standby>[^,]+), \w+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>What VHF 1 holds in a slot by the screen, in Hz; null when the VHF page is not up or the slot holds no frequency.</summary>
+    public static double? Vhf1Hz(IReadOnlyList<RmpLine> lines, bool active)
+    {
+        var match = lines.Select(l => Vhf1Line.Match(l.Spoken)).FirstOrDefault(m => m.Success);
+        return match != null && double.TryParse(match.Groups[active ? "active" : "standby"].Value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double mhz) ? Math.Round(mhz * 1_000_000) : null;
+    }
+
     /// <summary>The radio pages: each radio named in the middle column, active left, standby right (cyan: the one the knob tunes).</summary>
     private static void RadioPage(List<DrawnCell> cells, List<RmpLine> lines)
     {

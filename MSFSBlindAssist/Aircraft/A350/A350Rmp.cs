@@ -35,6 +35,20 @@ public static class A350Rmp
         ? $"(L:{RadioModeVar(rmp)}) ! (>L:{RadioModeVar(rmp)})"
         : $"1 (>B:AIRLINER_RMP_{key}_{rmp}_Set)";
 
+    /// <summary>What tuning VHF 1 from outside the RMP window presses on RMP 1: the VHF page, a new entry (<see cref="A350RmpEntry"/>: the
+    /// old one emptied, its line selected), the frequency's six digits, the line's key to load it as standby, the activation key to swap it in.</summary>
+    public static IReadOnlyList<string> ComTuningKeys(int frequencyHz, bool active)
+    {
+        var entry = new A350RmpEntry();
+        var keys = new List<string> { "VHF" };
+        foreach (char digit in (frequencyHz / 1000).ToString("000000", System.Globalization.CultureInfo.InvariantCulture))
+            keys.AddRange(entry.Type(digit, 1));
+        keys.AddRange(entry.Load(1));
+        if (active)
+            keys.Add(ActivationKey(1));
+        return keys;
+    }
+
     /// <summary>The keypad keys a typed LS or VOR entry takes, or null when it is out of range: a frequency 108.00 to 117.95 with its two
     /// decimals (the point optional, 11390 is 113.90; 109.5 is 109.50), a course 0 to 360 in three digits. The field takes it as its digits
     /// complete (live 2026-10-30).</summary>

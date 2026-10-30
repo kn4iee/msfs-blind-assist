@@ -235,9 +235,28 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public void Attach(SimConnectManager sim) => _sim = sim;
 
     // The A350 has no stock COM radio: COM AVAILABLE:1 reads 0 and COM_STBY_RADIO_SET_HZ left COM 1 at 0 (live,
-    // 2026-10-26), so the surroundings window's Enter must not pretend to tune.
-    public override string? StockComTuningRefusal =>
-        "This aircraft tunes its radios only through its radio management panels.";
+    // 2026-10-26), so the surroundings window's Enter tunes VHF 1 on the captain's RMP, as a pilot does, and reads its screen back.
+    public override Task<double?>? TuneCom1Own(SimConnectManager sim, int frequencyHz, bool active) => TuneVhf1(sim, frequencyHz, active);
+
+    private async Task<double?> TuneVhf1(SimConnectManager sim, int frequencyHz, bool active)
+    {
+        foreach (string key in A350Rmp.ComTuningKeys(frequencyHz, active))
+        {
+            sim.ExecuteCalculatorCodeUnique(A350Rmp.Press(1, key));
+            await Delay(RmpKeyGapMs);
+        }
+        double? read = null;
+        for (int attempt = 0; attempt < RmpReadAttempts && !Services.Com1Tuning.Holds(read, frequencyHz); attempt++)
+        {
+            await Delay(RmpReadGapMs);
+            if (Displays != null && (await Displays.DrawAsync(A350Rmp.Gauge(1)))?.FirstOrDefault() is { Ok: true } capture)
+                read = A350.Display.A350RmpPage.Vhf1Hz(A350.Display.A350RmpPage.Read(capture), active);
+        }
+        return read;
+    }
+
+    /// <summary>Between two RMP keys (the RMP window's own gap); from the last key to a read of the screen, and how many such reads.</summary>
+    private const int RmpKeyGapMs = 150, RmpReadGapMs = 300, RmpReadAttempts = 4;
 
     /// <summary>The FCU's METRIC ALT pushbutton row (INI_FCU_METRIC_STATE: 0 only feet, 1 showing meters).</summary>
     public const string MetricAltitudeKey = "A350_FCU_METER";
