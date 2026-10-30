@@ -236,9 +236,13 @@ public static class A350NdMap
         var runways = named.Where(t => AtLocal(t, 0, 5)).ToList();
         // Grey at OMDB, olive at VCBI (0.71, 0.67, 0.20; live 2026-10-30): whatever is not a stand, a building or the tower.
         var taxiways = named.Where(t => t.ColourName is not ("cyan" or "green") && AtLocal(t, 0, 0)).ToList();
-        var buildings = named.Where(t => t.ColourName == "cyan" && AtLocal(t, 0, 0)).ToList();
+        // A taxiway's name also drawn in cyan is the BTV exit, as in Items: a taxiway, never a building.
+        var taxiwayNames = taxiways.Select(t => t.Text.Trim()).ToHashSet(StringComparer.Ordinal);
+        var cyanNames = named.Where(t => t.ColourName == "cyan" && AtLocal(t, 0, 0)).ToList();
+        var buildings = cyanNames.Where(t => !taxiwayNames.Contains(t.Text.Trim())).ToList();
         var landmarks = named.Where(t => t.ColourName == "green" && AtLocal(t, 0, 0)).ToList();
         if (runways.Count + taxiways.Count + buildings.Count == 0) return Array.Empty<string>();
+        foreach (var exit in cyanNames.Except(buildings)) used.Add(exit);
 
         var compass = named.Where(t => t.ColourName == "white" && (AtLocal(t, -3, -517) || AtLocal(t, -3, -272))).ToList();
         var (rx, ry) = CircleCentre(compass) ?? (NdCentreX, NdCentreY);

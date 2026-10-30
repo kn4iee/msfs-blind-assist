@@ -245,6 +245,15 @@ public class A350NdPageTests
         Assert.DoesNotContain(shown, l => l.StartsWith("Wind: 12L", StringComparison.Ordinal));   // the wind's place, when it is drawn
     }
 
+    // Live 2026-10-30: the BTV exit's name on the runway turns cyan, the stands' colour, and it read among the buildings.
+    [Fact]
+    public void The_btv_exit_is_a_taxiway_never_a_building()
+    {
+        var shown = Lines("efis0_anf_btv_set").Where(l => l.Kind == "text").Select(l => l.Spoken).ToList();
+        Assert.DoesNotContain(shown, l => l.StartsWith("Stands and buildings:", StringComparison.Ordinal) && l.Contains("M9", StringComparison.Ordinal));
+        Assert.Contains(shown, l => l.StartsWith("Taxiways:", StringComparison.Ordinal) && l.Contains("M9", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void An_exit_too_short_says_so()
     {
