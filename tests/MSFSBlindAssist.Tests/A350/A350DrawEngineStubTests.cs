@@ -277,6 +277,58 @@ public class A350DrawEngineStubTests
         Assert.True(e.Draw("CTR", 1).Ok);
     }
 
+    private static A350MemoryCopy Sided(params (int Object, string Parameter)[] sides)
+    {
+        var copy = Copy(objects: sides.Select(s => s.Object).ToArray());
+        int data = 40000;
+        foreach (var (obj, parameter) in sides)
+        {
+            copy.WriteInt32((uint)obj + 8, data);
+            for (int i = 0; i < parameter.Length; i++) copy.WriteInt32((uint)(data + 16 + i), parameter[i]);
+            copy.WriteInt32((uint)(data + 16 + 8), parameter.Length << 24);   // the 12th byte is the length
+            data += 64;
+        }
+        return copy;
+    }
+
+    // Review 3 (I1): a first scan during a flight load sees the objects before their gauge data, and its address order was kept for the
+    // session: "Captain ND" read the first officer's and followed the wrong knob until the next re-locate.
+    [Fact]
+    public void Objects_not_ranked_at_a_load_are_ranked_on_a_later_scan()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.RescanMissingAfter = TimeSpan.Zero;
+        e.Load(Copy(objects: new[] { Object, Object + 200 }));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));   // the best known for now
+        e.Load(Sided((Object, "R"), (Object + 200, "L")));
+        Assert.Equal(new[] { Object + 200, Object }, e.Objects("CTR"));
+    }
+
+    [Fact]
+    public void Objects_waiting_for_a_later_scan_still_draw_between_scans()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.RescanMissingAfter = TimeSpan.FromHours(1);
+        e.Load(Copy(objects: new[] { Object, Object + 200 }));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+    }
+
+    // A version whose gauges never say keeps address order, and stops paying for a scan every 10 s.
+    [Fact]
+    public void Objects_that_never_rank_settle_on_address_order()
+    {
+        using var e = Engine(_ => Array.Empty<byte>());
+        e.RescanMissingAfter = TimeSpan.Zero;
+        for (int scan = 0; scan <= A350DrawEngine.MaxUnrankedScans; scan++)
+        {
+            e.Load(Copy(objects: new[] { Object, Object + 200 }));
+            Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+        }
+        e.Load(Sided((Object, "R"), (Object + 200, "L")));
+        Assert.Equal(new[] { Object, Object + 200 }, e.Objects("CTR"));
+    }
+
     // Re-located (another A350, or the same one reloaded), the engine forgets the objects and variables it knew, even where
     // the old ones still check out at their addresses: the new A350 may hold more.
     [Fact]

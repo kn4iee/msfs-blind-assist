@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using MSFSBlindAssist.Utils.Logging;
 using Wasmtime;
 
 namespace MSFSBlindAssist.Aircraft.A350.Display;
@@ -589,6 +590,7 @@ public sealed class A350DrawEngine : IDisposable
     public void Forget()
     {
         _objects.Clear();
+        _unranked.Clear();
         _shortAt.Clear();
         _customVars.Clear();
         _customVarMissed = false;
@@ -632,12 +634,22 @@ public sealed class A350DrawEngine : IDisposable
         return true;
     }
 
-    /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables). A scan that finds
-    /// none is not kept, and is made again on a later copy once <see cref="RescanMissingAfter"/> has passed.</summary>
+    /// <summary>How many scans wait for a class's sides before its address order is kept: a minute at <see cref="RescanMissingAfter"/>'s 10 s.</summary>
+    internal const int MaxUnrankedScans = 6;
+
+    /// <summary>The objects of a class whose sides cannot be told yet, in address order, and how many scans have found them so
+    /// (<see cref="Objects"/>).</summary>
+    private readonly Dictionary<string, (List<int> Found, int Scans)> _unranked = new(StringComparer.Ordinal);
+
+    /// <summary>The objects of a gauge class in the copy (first word is one of the class's vtables), in panel order. A scan that finds
+    /// none is not kept, and is made again on a later copy once <see cref="RescanMissingAfter"/> has passed; so is one that finds several
+    /// with no way yet to tell their sides (a flight load builds the objects before their gauge data), until <see cref="MaxUnrankedScans"/>:
+    /// kept, its address order would read the wrong side for the whole session.</summary>
     public IReadOnlyList<int> Objects(string cls)
     {
         if (_objects.TryGetValue(cls, out var cached)) return cached;
-        if (!Elapsed(_shortAt.TryGetValue(cls, out var shortAt) ? shortAt : null)) return Array.Empty<int>();
+        if (!Elapsed(_shortAt.TryGetValue(cls, out var shortAt) ? shortAt : null))
+            return _unranked.TryGetValue(cls, out var waiting) ? waiting.Found : Array.Empty<int>();
         var copy = _copy ?? throw new InvalidOperationException("no copy loaded");
         // One pass looks for every drawn class not yet found (perf review 2026-10-30: a pass per class took about 400 ms
         // each at 339 MB, 3.1 s for the classes a tick asks for after a load); a class found keeps its list.
@@ -645,8 +657,29 @@ public sealed class A350DrawEngine : IDisposable
         foreach (var c in DrawnClasses.Append(cls).Distinct(StringComparer.Ordinal))
             if (!_objects.ContainsKey(c))
                 foreach (var vt in _facts.VTablesOf(c)) classOf[vt] = c;
-        foreach (var (c, found) in FindObjects(copy, classOf)) _objects[c] = InPanelOrder(copy, found);
+        foreach (var (c, found) in FindObjects(copy, classOf))
+        {
+            if (CanRank(copy, found))
+            {
+                _objects[c] = InPanelOrder(copy, found);
+                _unranked.Remove(c);
+                continue;
+            }
+            int scans = (_unranked.TryGetValue(c, out var before) ? before.Scans : 0) + 1;
+            if (scans == 1)
+                Log.Warn("A350", $"{c}: {found.Count} objects whose sides cannot be read yet; address order for now");
+            if (scans > MaxUnrankedScans)
+            {
+                Log.Warn("A350", $"{c}: the sides of its objects never read; keeping address order");
+                _objects[c] = found;
+                _unranked.Remove(c);
+                continue;
+            }
+            _unranked[c] = (found, scans);
+            _shortAt[c] = Environment.TickCount64;
+        }
         if (_objects.TryGetValue(cls, out var list)) return list;
+        if (_unranked.TryGetValue(cls, out var unranked)) return unranked.Found;
         _shortAt[cls] = Environment.TickCount64;
         return Array.Empty<int>();
     }
@@ -669,13 +702,18 @@ public sealed class A350DrawEngine : IDisposable
     /// <summary>A class's objects in the order MSFSBA counts them: the captain's, then the first officer's, then the third
     /// (panel.cfg's L or none, R, C). Address order is no side: live 2026-10-30 the first officer's EFIS sat below the
     /// captain's, so "Captain ND" read the first officer's. A parameter that cannot be read leaves address order.</summary>
-    internal static List<int> InPanelOrder(A350MemoryCopy copy, List<int> objects)
+    internal static List<int> InPanelOrder(A350MemoryCopy copy, List<int> objects) =>
+        CanRank(copy, objects) ? objects.OrderBy(o => PanelRank(copy, o)).ToList() : objects;
+
+    /// <summary>Whether each object's side can be told: every parameter read, no two alike.</summary>
+    internal static bool CanRank(A350MemoryCopy copy, List<int> objects)
     {
-        if (objects.Count < 2) return objects;
-        var ranked = objects.Select(o => (Object: o, Rank: GaugeParameter(copy, o) switch { "L" or "" => 0, "R" => 1, "C" => 2, _ => -1 })).ToList();
-        if (ranked.Any(r => r.Rank < 0) || ranked.Select(r => r.Rank).Distinct().Count() != ranked.Count) return objects;
-        return ranked.OrderBy(r => r.Rank).Select(r => r.Object).ToList();
+        if (objects.Count < 2) return true;
+        var ranks = objects.Select(o => PanelRank(copy, o)).ToList();
+        return ranks.All(r => r >= 0) && ranks.Distinct().Count() == ranks.Count;
     }
+
+    private static int PanelRank(A350MemoryCopy copy, int obj) => GaugeParameter(copy, obj) switch { "L" or "" => 0, "R" => 1, "C" => 2, _ => -1 };
 
     /// <summary>The classes a draw can be asked for: those with a Draw in <see cref="A350ModulePatcher.DrawExports"/> (it
     /// also exports two NanoVG functions).</summary>
