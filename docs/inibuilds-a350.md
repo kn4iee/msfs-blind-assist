@@ -196,6 +196,8 @@ Ctrl+Shift+B (`A350NdWindow`, the A380's airport map key) reads a side's ND thro
 
 **Output N** (`A350Hotkeys.NavRadios`): the FMS tunes VOR 1 on the stock NAV 1, VOR 2 on NAV 2 and the LS on NAV 3 (live 2026-10-30, MIN 115.20 twice, IDBL 110.10; `NAV CDI:3` moves on the ILS), so the generic read-out never said the LS. The A350 says the VORs from the stock radios and the LS from the PFD's lines; with the LS button off it says *"LS not shown"*. The RAD NAV page holds the idents and the ADFs.
 
+**The PFD's warnings, heard** (live 2026-10-30, a -6000 fpm descent from 4000 ft on V/S with the FCU altitude above the aircraft, so no capture): *"PULL UP, red"* at 1650 ft radio and -4800 fpm, no SINK RATE before it, then *"DH, amber"* at the minimum. With the FCU altitude below, ALT* starts about 2300 ft above it at that rate and never gets there. With the flaps up, TOGA does not take the autopilot out of V/S: it went on down to 31 ft at -5500 fpm, thrust alone. Pull the altitude knob.
+
 **Restoring an OIS save in the air** (live 2026-10-30, FL300): the load pauses the sim for a few seconds, the displays run their SAFETY TEST, and the aircraft comes back flying with the autopilot and A/THR off, the engines near idle (N1 20) and `THR LK, amber` on the FMA, already descending and slowing. Engage AP 1 and A/THR at once, then pull ALT and push HDG: the flight plan and phase are kept. The sim's memory drops only about 3 GB.
 
 **The ANF's data is in the copy too** (`OANSAirportData`: taxiways, stands, thresholds, exit lines, runway-end info), not read yet: names on the screen are what a sighted pilot has.

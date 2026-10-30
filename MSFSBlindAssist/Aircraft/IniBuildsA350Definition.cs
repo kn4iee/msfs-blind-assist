@@ -288,17 +288,18 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     // 14 deg/s), on a wheelbase between the A330's and the A380's. Conservative; not yet flown with the tone: tune in-sim if rollouts run long or short.
     public override double TaxiTurnLeadSeconds => 1.7;
 
-    // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody (its glidepath and
-    // flare biases are estimates pending an in-sim coupled-ILS calibration, the A330's status too), not the A320 baseline;
-    // the flare at about 40 ft radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
+    // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody, not the A320 baseline, on its own
+    // measured biases (live 2026-10-30, two coupled ILS approaches to OMDB 12L: the datum 52 ft over distance x tan 3 down the path, median of
+    // both; parked the datum reads 15.3 ft above the ground); the flare at about 40 ft radio altitude is Airbus's figure for the
+    // A330/A340/A350/A380 family (Safety First).
     public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
     {
         TypicalApproachAoaDeg = 4.5,
         ReferenceVrefKnots = 145.0,
         MaxPitchRateDegPerSec = 2.0,
         MaxBankRateDegPerSec = 2.5,
-        GlideslopeAltitudeBiasFt = 70.0,   // estimate
-        FlareAltitudeBiasFt = 30.0,        // estimate
+        GlideslopeAltitudeBiasFt = 52.0,
+        FlareAltitudeBiasFt = 15.0,
         FlareTriggerWheelHeightFt = 40.0,
         FlareTargetPitchDeg = 5.0,
     };

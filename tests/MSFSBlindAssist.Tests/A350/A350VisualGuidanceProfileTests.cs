@@ -17,8 +17,8 @@ public class A350VisualGuidanceProfileTests
         Assert.Equal(145.0, p.ReferenceVrefKnots);
         Assert.Equal(2.0, p.MaxPitchRateDegPerSec);
         Assert.Equal(2.5, p.MaxBankRateDegPerSec);
-        Assert.Equal(70.0, p.GlideslopeAltitudeBiasFt);
-        Assert.Equal(30.0, p.FlareAltitudeBiasFt);
+        Assert.Equal(52.0, p.GlideslopeAltitudeBiasFt);
+        Assert.Equal(15.0, p.FlareAltitudeBiasFt);
         Assert.Equal(40.0, p.FlareTriggerWheelHeightFt);
         Assert.Equal(5.0, p.FlareTargetPitchDeg);
     }

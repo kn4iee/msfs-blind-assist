@@ -137,7 +137,7 @@ VG measures altitude as the SimConnect **reference datum** (`PLANE ALTITUDE − 
 
 `GlideslopeAltitudeBiasFt` fixes (1): `idealAltitudeAGL = distance·tan(3°) + GlideslopeAltitudeBiasFt`. `FlareAltitudeBiasFt` fixes (2): `wheelHeightAGL = measuredAltitude − FlareAltitudeBiasFt`, and the flare (30 ft) and touchdown (5 ft) phase thresholds test `wheelHeightAGL`. The two are applied in **different code paths** and were measured separately (on the beam vs. near the ground, different attitudes) — they are deliberately **not** one shared constant. Set either to `0` to disable that correction.
 
-The 777 numbers are measured against a coupled ILS autoland; the A320 numbers are estimates (≈50 ft TCH + a smaller datum offset) pending in-sim calibration.
+The 777 numbers are measured against a coupled ILS autoland; the A320 numbers are estimates (≈50 ft TCH + a smaller datum offset) pending in-sim calibration. The iniBuilds A350's are measured: on two coupled ILS approaches to OMDB 12L (2026-10-30, 3000 to 300 ft, 56 samples) `PLANE ALTITUDE − threshold elevation − distance·tan(3°)` had a median of 52 and 53 ft, with the distance to the displaced threshold; parked, the datum reads 15.3 ft above the ground (`FlareAltitudeBiasFt` 15). Note `VisualGuidanceManager` measures to `runway.StartLat`, the runway's end and not its displaced threshold: on 12L, with 1493 ft displaced, its path lies 78 ft over the ILS on every aircraft.
 
 Override pattern:
 
