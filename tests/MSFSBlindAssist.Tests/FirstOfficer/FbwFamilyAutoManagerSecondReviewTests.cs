@@ -21,6 +21,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.FirstOfficer;
+using MSFSBlindAssist.FirstOfficer.A350;
 using MSFSBlindAssist.FirstOfficer.FBWA320;
 using MSFSBlindAssist.FirstOfficer.FBWA380;
 using MSFSBlindAssist.FirstOfficer.HWA330;
@@ -31,7 +32,25 @@ namespace MSFSBlindAssist.Tests.FirstOfficer;
 
 public class FbwFamilyAutoManagerSecondReviewTests
 {
-    public static TheoryData<string> Airframes => new() { "A32NX", "A380", "A330" };
+    public static TheoryData<string> Airframes => new() { "A32NX", "A380", "A330", "A350" };
+
+    // Live 2026-10-30, the A350's first take-off with the schedule on: its F speed reads below V2 (F 138, V2 148 at 200 t), so
+    // the lever came up to 1 at lift-off and to 0 at 430 ft. The manual: "Accelerating above the F speed select Flaps 1", in the
+    // acceleration segment, "between 1,000 and 1,500 ft". Nothing moves below that.
+    [Fact]
+    public async Task The_A350s_flaps_wait_for_the_acceleration_height()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(2);
+        rig.OnGround();
+        rig.Fly(agl: 10, vs: 500, ias: 155);
+        rig.Fly(agl: 400, vs: 2_000, ias: 175);
+        rig.Fly(agl: 900, vs: 2_000, ias: 180);
+        Assert.Empty(await rig.LeverWrites());
+        rig.Wait(5);
+        rig.Fly(agl: 1_100, vs: 2_000, ias: 180);
+        Assert.Equal(new[] { 1 }, await rig.LeverWrites());
+    }
 
     // Takeoff with CONF 1+F and a climb-out the pilot cleans up himself, then an arrival: a real descent
     // to a level high final at 4,000 ft AGL (the approach context arms on the way down), where the pilot
@@ -205,7 +224,7 @@ public class FbwFamilyAutoManagerSecondReviewTests
     private sealed class FlapRig
     {
         private const double FieldElevation = 500;
-        private const string LeverKey = "A32NX_FLAPS_HANDLE_INDEX";
+        private readonly string _leverKey;
         private const double VfeNextKts = 215;
 
         private readonly SimConnectManager _sim;
@@ -218,8 +237,10 @@ public class FbwFamilyAutoManagerSecondReviewTests
         public SpeechLog Speech { get; }
 
         private FlapRig(SimConnectManager sim, TestClock clock, SpeechLog speech, IFoActionExecutor executor,
-            string gearKey, IFoAutoManager manager, Func<IEnumerable<(string Key, double Value)>> writes)
+            string gearKey, IFoAutoManager manager, Func<IEnumerable<(string Key, double Value)>> writes,
+            string leverKey = "A32NX_FLAPS_HANDLE_INDEX")
         {
+            _leverKey = leverKey;
             _sim = sim;
             _clock = clock;
             Speech = speech;
@@ -273,12 +294,26 @@ public class FbwFamilyAutoManagerSecondReviewTests
                         new HwA330FOAutoManager(executor, state, speech, () => clock.Now),
                         () => definition.Writes.Select(w => (w.Key, w.Value)));
                 }
+                case "A350":
+                {
+                    var state = new A350StateEvaluator();
+                    state.SetSimConnect(sim);
+                    Seed(sim, "A350_IN_FMGEC_GD_SPD", 210);
+                    Seed(sim, "A350_IN_FCPC_S_SPEED", 190);
+                    Seed(sim, "A350_IN_FCPC_F_SPEED", 150);
+                    Seed(sim, "A350_IN_INI_VFE_SPEED", VfeNextKts);
+                    var definition = new RecordingA350Definition();
+                    var executor = definition.Executor();
+                    return new FlapRig(sim, clock, speech, executor, "A350_LDG_LEVER",
+                        new A350FOAutoManager(executor, state, speech, () => clock.Now),
+                        () => definition.Writes, "A350_FLAPS");
+                }
                 default:
                     throw new ArgumentOutOfRangeException(nameof(airframe), airframe, null);
             }
         }
 
-        public void Lever(int position) => Seed(_sim, LeverKey, position);
+        public void Lever(int position) => Seed(_sim, _leverKey, position);
         public void GearDown() => Seed(_sim, _gearKey, 1);
         public void OnGround() => Manager.Update(FieldElevation, 0, 0, 0, onGround: true);
 
@@ -295,7 +330,7 @@ public class FbwFamilyAutoManagerSecondReviewTests
         public async Task<int[]> LeverWrites()
         {
             await _executor.WaitForDispatchDrainAsync();
-            return _writes().Where(w => w.Key == LeverKey).Select(w => (int)w.Value).ToArray();
+            return _writes().Where(w => w.Key == _leverKey).Select(w => (int)w.Value).ToArray();
         }
 
         private static void Seed(SimConnectManager sim, string key, double value) =>

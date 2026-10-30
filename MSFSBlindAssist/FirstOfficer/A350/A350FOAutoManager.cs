@@ -60,6 +60,10 @@ public sealed class A350FOAutoManager : IFoAutoManager
     private const double GaAglGainFt = 200;      // …plus AGL regained above the approach minimum
     private const double GaFallbackClimbSeconds = 10;   // the fallback's established climb (a judgement)
 
+    // Nothing retracts below the acceleration segment (the manual's "between 1,000 and 1,500 ft"): the A350's F speed reads below
+    // V2 (live 2026-10-30, F 138, V2 148 at 200 t), so without this the lever came up to 1 at lift-off and to 0 at 430 ft.
+    private const double RetractionMinAglFt = 1000;
+
     // Approach context: armed by a DESCENDING sample below 5000 ft AGL at least ApproachArmDescentFt
     // below the leg's highest MSL altitude (_peakMsl), one-way until go-around or touchdown. Extension
     // runs ONLY while armed, and retraction ONLY while disarmed — without this gate a departure
@@ -222,7 +226,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
         // flaps 1, at S speed clean). Deliberately independent of CONF 3. Only after a
         // takeoff or go-around this manager watched, until the flaps first read up
         // (_retractionArmed).
-        if (_retractionArmed && !_extensionArmed && !descending)
+        if (_retractionArmed && !_extensionArmed && !descending && agl >= RetractionMinAglFt)
         {
             double f = _state.GetValue(A350StateEvaluator.FSpeedField);
             double s = _state.GetValue(A350StateEvaluator.SSpeedField);

@@ -133,6 +133,9 @@ internal sealed class FoDriver : IDisposable
             case "automation":
                 _automation = p.ElementAtOrDefault(1) != "off";
                 return _automation ? "automation on" : "automation off";
+            case "seatbelts":
+                _monitor.AutoSeatbeltMode = Enum.Parse<FoSeatbeltMode>(p.ElementAtOrDefault(1) ?? "Disabled");
+                return "seat belts " + _monitor.AutoSeatbeltMode;
             case "transition":
             {
                 var t = (p.ElementAtOrDefault(1) ?? "").Split(' ');
@@ -140,7 +143,7 @@ internal sealed class FoDriver : IDisposable
                 return "transition set";
             }
             default:
-                return "fo list | run FLOW | stop | running | log | items [GROUP] | tick LINE | field F,F | automation [off] | transition ALT LEVEL";
+                return "fo list | run FLOW | stop | running | log | items [GROUP] | tick LINE | field F,F | automation [off] | seatbelts MODE | transition ALT LEVEL";
         }
     }
 
