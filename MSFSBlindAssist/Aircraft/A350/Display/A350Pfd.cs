@@ -161,12 +161,14 @@ public static class A350Pfd
     public static IReadOnlyList<string> Read(A350DrawCapture capture, int side)
     {
         float shift = side == 0 ? PfdWidth : 0;
+        List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn) => A350DrawLayout.Rows(
+                A350DrawLayout.Region(A350DrawLayout.SplitEfis(drawn, side).Pfd, A350DrawLayout.EfisPfd(side))
+                    .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList())
+            .SelectMany(r => r).ToList();
         // A text drawn outside the clip is not on the screen (live 2026-10-30: the altitude tape's labels and its held
-        // selected altitude, beyond the tape's clip, were read in the FMA's fourth column on final).
-        var onScreen = capture.Texts.Where(t => !t.Clipped).ToList();
-        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(onScreen, side).Pfd, A350DrawLayout.EfisPfd(side))
-            .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList();
-        var cells = A350DrawLayout.Rows(texts).SelectMany(r => r).ToList();
+        // selected altitude, beyond the tape's clip, were read in the FMA's fourth column on final). The tape's altitude
+        // symbol alone is taken wherever it is drawn, below.
+        var cells = CellsOf(capture.Texts.Where(t => !t.Clipped).ToList());
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
 
@@ -179,8 +181,9 @@ public static class A350Pfd
         // top (y 38) or bottom (y 742) (live 2026-10-28; review 2026-10-29: moved along the tape it read as an FMA column,
         // the baro and the selected heading). Taken first and never read where it lies. Cyan, it is the selected altitude,
         // which the readout at the tape's edge shows while it is hidden; magenta, the constraint the vertical mode levels
-        // at (at the hold, the SID's 5000), which the readout does not show.
-        var altitudeSymbol = cells.Where(c => (Math.Abs(c.X - SymbolX) <= 3 || Math.Abs(c.X - StdSymbolX) <= 3)
+        // at (at the hold, the SID's 5000), which the readout does not show. Clipped or not (review 2026-10-30): hidden, it
+        // still says the constraint and backs up a missing readout.
+        var altitudeSymbol = CellsOf(capture.Texts).Where(c => (Math.Abs(c.X - SymbolX) <= 3 || Math.Abs(c.X - StdSymbolX) <= 3)
             && c.Colour is "cyan" or "magenta" && Digits(c.Text)).ToList();
         used.UnionWith(altitudeSymbol);
         static bool Hidden(DrawnCell c) => c.Y < AltitudeTapeTop || c.Y >= AltitudeTapeBottom;

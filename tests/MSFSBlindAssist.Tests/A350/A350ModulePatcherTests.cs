@@ -14,7 +14,7 @@ public class A350ModulePatcherTests
 
     /// <summary>A module with every name the patcher hooks or exports, each a stub of the A350's shape.
     /// nvgText stores 99 at address 0 so a test can tell the hook ran before the original body.</summary>
-    public static byte[] Sample(string? leaveOut = null, bool withUiDraw = true)
+    public static byte[] Sample(string? leaveOut = null, bool withUiDraw = true, bool oddScissor = false)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -42,7 +42,7 @@ public class A350ModulePatcherTests
         F("nvgSave", tCtx); F("nvgRestore", tCtx);
         F("nvgTranslate", tCtxFF); F("nvgScale", tCtxFF); F("nvgRotate", tCtxF);
         F("nvgResetTransform", tCtx); F("nvgReset", tCtx); F("nvgTransform", tXf);
-        F("nvgScissor", tRect); F("nvgResetScissor", tCtx);
+        F("nvgScissor", oddScissor ? tCtxPtr : tRect); F("nvgResetScissor", tCtx);
         F("DrawFrame(NVGcontext*, float, float, float, float, FsColor const&)", tFrame);
         F("DrawWideFrame(NVGcontext*, float, float, float, float, float, FsColor const&)", tWide);
         foreach (var g in Gauges) F(g + "::Draw()", tCtx);
@@ -148,6 +148,18 @@ public class A350ModulePatcherTests
         Assert.Equal(new[] { 1f, 2f, 30f, 40f }, new[] { reports[0].B, reports[0].C, reports[0].D, reports[0].E }.Select(BitConverter.Int32BitsToSingle));
         Assert.Equal(7, reports[1].A);
         A350ModulePatcher.Patch(Sample(leaveOut: "nvgScissor"));
+    }
+
+    // Review 2026-10-30: an optional hook is placed by name only if the function's signature is the one it reads, as the
+    // allocator's are: hooked with other parameters (an optimiser's change in a later build) the patched module fails
+    // validation and every display is lost; left alone, only the clip is.
+    [Fact]
+    public void A_scissor_of_another_signature_is_left_alone()
+    {
+        var patched = A350ModulePatcher.Patch(Sample(oddScissor: true));
+        using var engine = new Engine();
+        using var module = Module.FromBytes(engine, "a350", patched.Bytes);   // valid
+        Assert.Contains("emu_CTR_Draw", module.Exports.Select(e => e.Name));
     }
 
     [Fact]

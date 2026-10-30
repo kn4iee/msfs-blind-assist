@@ -35,6 +35,21 @@ public class A350FmsMessageAnnouncerTests
         Assert.Null(a.Observe(Page(null)));
     }
 
+    // Review 2026-10-30: a torn read reads "unreadable" since 2318eb76b, and two torn reads agree: "Scratchpad: unreadable"
+    // was said, then the message again once whole reads came back. A torn read is no read.
+    [Fact]
+    public void A_torn_read_is_no_read()
+    {
+        var a = new A350FmsMessageAnnouncer();
+        a.Observe(Page("CHECK T.O DATA"));
+        a.Observe(Page("CHECK T.O DATA"));   // the baseline
+        Assert.Null(a.Observe(Page(A350MfdPage.Unreadable)));
+        Assert.Null(a.Observe(Page(A350MfdPage.Unreadable)));
+        Assert.Null(a.Observe(Page("CHECK T.O DATA")));
+        Assert.Null(a.Observe(Page("CHECK T.O DATA")));
+        Assert.Equal("Scratchpad: CHECK T.O DATA, white", a.Agreed);
+    }
+
     [Fact]
     public void The_first_agreed_read_is_the_baseline_and_an_emptied_scratchpad_says_nothing()
     {
@@ -255,6 +270,18 @@ public class A350MfdWindowMessagesTests
         var w = new A350MfdWindowMessages(null);
         Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));
         Assert.Equal("Scratchpad: CHECK TAKEOFF DATA, white", w.Observe(Page("CHECK TAKEOFF DATA"), 0));
+    }
+
+    [Fact]
+    public void A_torn_read_is_no_read_for_the_window_either()
+    {
+        var w = new A350MfdWindowMessages(null);
+        Assert.Null(w.Observe(Page(A350MfdPage.Unreadable), 0));   // its first read, torn: not the baseline
+        Assert.Null(w.Captain);
+        Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));   // the baseline
+        Assert.Null(w.Observe(Page(A350MfdPage.Unreadable), 0));
+        Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));   // the same message, not said again
+        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", w.Captain);
     }
 
     [Fact]

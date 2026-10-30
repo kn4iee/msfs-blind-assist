@@ -3,8 +3,12 @@ using System.Text.RegularExpressions;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>One line of the MFD as a pilot moves through it: what kind it is (menu, button, tab, field,
-/// scratchpad, text), how it is spoken, and where on the side's own MFD a click lands on it.</summary>
-public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false);
+/// scratchpad, text), how it is spoken, and where on the side's own MFD a click lands on it. <see cref="Carried"/>: how
+/// many reads in a row it has been its last whole reading in place of a torn one (<see cref="A350MfdPage.KeepReadable"/>).</summary>
+public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false)
+{
+    public int Carried { get; init; }
+}
 
 /// <summary>
 /// One side's MFD page as lines (pure), from the draw's UI elements and texts by geometry: a button's, tab's or
@@ -57,7 +61,8 @@ public static class A350MfdPage
 
     /// <summary>What a torn text reads as: a copy read across a frame caught a label the A350 rebuilds every frame freed,
     /// its bytes a malloc chunk's pointers (FCU BKUP's HPA -> INHG key, live 2026-10-30). No A350 MFD text holds a control
-    /// character (127 captures); a torn one always does.</summary>
+    /// character (127 captures); a torn one nearly always does, but not every one: a freed block the sim has reused can hold
+    /// another string's printable text (a torn VERT REV title read "12000.000000").</summary>
     public const string Unreadable = "unreadable";
 
     private static bool Torn(string text) => text.Any(char.IsControl);
@@ -584,15 +589,23 @@ public static class A350MfdPage
     public static string? PageJustChanged(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now) =>
         before.Count == 0 || PageTitle(now) is not { } title || !Readable(title) || title == PageTitle(before) ? null : title;
 
+    /// <summary>How many reads in a row a torn line may read as its last whole reading before it reads unreadable again.</summary>
+    public const int MaxCarried = 3;
+
     /// <summary>The page with each line a torn text left unreadable read as it last read whole, where the last read has a
     /// line of its kind at the same click point: the window does not flicker to "unreadable" while the A350 rebuilds a
-    /// label every frame (most copies catch it torn), and a label that changed reads anew on its next whole read.</summary>
+    /// label every frame (most copies catch it torn), and a label that changed reads anew on its next whole read. Only
+    /// between two reads of the same whole title, and never the title itself: every page has its title at one point and
+    /// keys of other pages share click points (review 2026-10-30); at most <see cref="MaxCarried"/> reads in a row, so a
+    /// label that stays torn after a press says so instead of its old state.</summary>
     public static IReadOnlyList<MfdLine> KeepReadable(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
     {
         static bool HasUnreadable(MfdLine l) => l.Spoken.Contains(Unreadable, StringComparison.Ordinal);
-        return now.Select(l => HasUnreadable(l) && before.FirstOrDefault(b => b.Kind == l.Kind && !HasUnreadable(b)
-                && Math.Abs(b.ClickX - l.ClickX) <= 2 && Math.Abs(b.ClickY - l.ClickY) <= 2) is { } whole
-            ? l with { Spoken = whole.Spoken } : l).ToList();
+        if (PageTitle(now) is not { } title || !Readable(title) || PageTitle(before) != title)
+            return now;
+        return now.Select(l => l.Kind != "title" && HasUnreadable(l) && before.FirstOrDefault(b => b.Kind == l.Kind && !HasUnreadable(b)
+                && b.Carried < MaxCarried && Math.Abs(b.ClickX - l.ClickX) <= 2 && Math.Abs(b.ClickY - l.ClickY) <= 2) is { } whole
+            ? l with { Spoken = whole.Spoken, Carried = whole.Carried + 1 } : l).ToList();
     }
 
     /// <summary>Whether a title can be said: some text and no control character. A copy read across a frame (fixtures taken

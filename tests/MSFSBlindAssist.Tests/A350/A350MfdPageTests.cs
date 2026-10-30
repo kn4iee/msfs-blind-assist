@@ -978,6 +978,29 @@ public class A350MfdPageTests
             .Single(l => Math.Abs(l.ClickX - 126) < 2 && Math.Abs(l.ClickY - 527) < 2).Spoken);
     }
 
+    // Review 2026-10-30: the title stands at (34, 130) on every page and keys of other pages share click points (AIRWAYS'
+    // INSERT where DEPARTURE's TMPY F-PLN is): a torn title read as the last page's title and swallowed the page change,
+    // and a torn key on a new page read as the old page's key. A label torn in most copies kept saying its old state
+    // after a press. Lines carry over only between two reads of the same whole title, never the title, three reads at most.
+    [Fact]
+    public void A_torn_line_is_carried_only_on_the_same_page_never_its_title_and_not_for_long()
+    {
+        static MfdLine Title(string t) => new("title", t, 34, 130);
+        static MfdLine Key(string t) => new("button", t + " button", 126, 527);
+        var torn = Key(A350MfdPage.Unreadable);
+        var before = new[] { Title("DATA/STATUS"), Key("MODIFY") };
+        Assert.Equal(A350MfdPage.Unreadable, A350MfdPage.KeepReadable(before, new[] { Title(A350MfdPage.Unreadable), Key("X") })[0].Spoken);
+        Assert.Equal(torn.Spoken, A350MfdPage.KeepReadable(before, new[] { Title("ACTIVE/F-PLN/AIRWAYS"), torn })[1].Spoken);
+        IReadOnlyList<MfdLine> shown = new[] { Title("EFIS CONTROL PANEL"), Key("HPA -> INHG") };
+        for (int read = 1; read <= 3; read++)
+        {
+            shown = A350MfdPage.KeepReadable(shown, new[] { Title("EFIS CONTROL PANEL"), torn });
+            Assert.Equal("HPA -> INHG button", shown[1].Spoken);
+        }
+        shown = A350MfdPage.KeepReadable(shown, new[] { Title("EFIS CONTROL PANEL"), torn });   // the fourth torn read in a row
+        Assert.Equal(torn.Spoken, shown[1].Spoken);
+    }
+
     // The ATC COM and FUEL pages' prompts: the font's triangle before a word is a delta (FUEL&LOAD's "fFUEL", "fTIME").
     [Theory]
     [InlineData("fFUEL", "delta FUEL")]

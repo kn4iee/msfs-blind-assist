@@ -138,10 +138,13 @@ public static class A350ModulePatcher
         };
 
         // The clip (nvgScissor(ctx, x, y, w, h), nvgResetScissor(ctx)): the PFD's tapes and the MFD's lists draw beyond it.
-        // Left alone where a version lacks them.
-        if (TryFindFunction(mod, "nvgScissor") is int scissor)
+        // Left alone where a version lacks them or takes other parameters (review 2026-10-30: hooked with other parameters
+        // the module would fail validation and take every display with it; left alone, only the clip is lost).
+        bool Takes(int fn, byte[] parameters) => mod.Types[mod.FunctionTypeOf(fn)] is var t
+            && t.Params.AsSpan().SequenceEqual(parameters) && t.Results.Length == 0;
+        if (TryFindFunction(mod, "nvgScissor") is int scissor && Takes(scissor, new byte[] { 0x7F, 0x7D, 0x7D, 0x7D, 0x7D }))
             hooks[scissor] = Call(hook, ScissorMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4));
-        if (TryFindFunction(mod, "nvgResetScissor") is int resetScissor)
+        if (TryFindFunction(mod, "nvgResetScissor") is int resetScissor && Takes(resetScissor, I32s(1)))
             hooks[resetScissor] = Call(hook, ResetScissorMagic, Get(0), Zero, Zero, Zero, Zero);
 
         // Every UI element's draw: (element, ctx, class index), sorted by name as the prototype numbered them.

@@ -61,6 +61,8 @@ public sealed class A350DrawState
     /// box on the gauge.</summary>
     public void Scissor(int ctx, float x, float y, float w, float h)
     {
+        w = Math.Max(0, w);   // as nvgScissor clamps them: a negative size clips everything
+        h = Math.Max(0, h);
         var corners = new[] { Apply(ctx, x, y), Apply(ctx, x + w, y), Apply(ctx, x, y + h), Apply(ctx, x + w, y + h) };
         _scissor[ctx] = (corners.Min(c => c.X), corners.Min(c => c.Y), corners.Max(c => c.X), corners.Max(c => c.Y));
     }

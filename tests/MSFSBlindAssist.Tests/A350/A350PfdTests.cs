@@ -584,6 +584,20 @@ public class A350PfdTests
         Assert.True(lines.ToList().IndexOf("Altitude in metres: 20, green") == lines.ToList().IndexOf("Altitude: 81 feet, green") + 1);
     }
 
+    // Review 2026-10-30: the tape's altitude symbol held at the screen's top is clipped too, but a magenta one is the
+    // constraint the vertical mode levels at, which no readout shows (the 2026-10-28 hold at the SID's 5000): read as it
+    // was before the clip was tracked. The clip-tracked capture with its held symbol as that constraint.
+    [Fact]
+    public void A_held_constraint_beyond_the_clip_still_reads()
+    {
+        var cap = A350Fixtures.Capture("efis0_omdb_landed_clipped.json");
+        var magenta = new A350Rgba(1, 0, 1, 1);
+        cap = cap with { Texts = cap.Texts.Select(t => t.Clipped && t.Text == "3000" ? t with { Text = "5000", Colour = magenta } : t).ToList() };
+        var lines = A350Pfd.Read(cap, 0);
+        Assert.Contains("Altitude constraint: 5000, magenta", lines);
+        Assert.Contains("FMA approach: LAND3; DUAL, white", lines);
+    }
+
     // Landed at OMDB after an autoland (live 2026-10-30): the PFD clips its altitude tape (setClipArea -> nvgScissor), and
     // the tape's labels ("010" at y 50) and the selected altitude held at the screen's top ("3000", white, y 38) are drawn
     // beyond the clip, in the FMA strip over its fourth column. On final the column was re-read four times in 15 s as the

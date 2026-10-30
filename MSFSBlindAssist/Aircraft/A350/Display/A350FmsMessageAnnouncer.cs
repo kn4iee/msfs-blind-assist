@@ -23,7 +23,8 @@ public sealed class A350FmsMessageAnnouncer
     /// <summary>The message to say now, or null.</summary>
     public string? Observe(IReadOnlyList<MfdLine> lines)
     {
-        if (A350MfdPage.Scratchpad(lines) is not { } pad)
+        // A torn read (A350MfdPage.Unreadable) is no read: two of them would agree (review 2026-10-30).
+        if (A350MfdPage.Scratchpad(lines) is not { } pad || pad.Contains(A350MfdPage.Unreadable, StringComparison.Ordinal))
             return null;
         var previous = _pending;
         _pending = pad;

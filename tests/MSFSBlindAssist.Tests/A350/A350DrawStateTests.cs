@@ -65,6 +65,16 @@ public class A350DrawStateTests
         Assert.False(s.Clipped(1, 120, 150));
     }
 
+    // nvgScissor clamps a negative width or height to 0 (review 2026-10-30): a box mirrored behind its corner would keep
+    // texts the cockpit clips.
+    [Fact]
+    public void A_negative_scissor_size_is_none()
+    {
+        var s = new A350DrawState();
+        s.Scissor(1, 20, 20, -10, -10);
+        Assert.True(s.Clipped(1, 12, 12));
+    }
+
     [Fact]
     public void Save_and_restore_bring_back_the_scissor_and_reset_drops_it()
     {
