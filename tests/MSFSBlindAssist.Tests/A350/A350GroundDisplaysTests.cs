@@ -25,6 +25,19 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(nd, l => l.Contains("MTL"));   // drawn off the screen
     }
 
+    // On the stand with the departure set (live 2026-10-30): ND::DrawApproachInfo draws the procedure at the top (x 270, y
+    // 35: the SID, BASU1D) and ND::DrawChrono the chronometer at the bottom left (x 57 and 114, y 660: minutes and seconds,
+    // hours and minutes past the hour, through convertTimeClock); both read as left-over "BASU1D, green" and "28 23, green".
+    [Fact]
+    public void The_nd_names_its_procedure_and_its_chrono()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_metric_alt.json"), 0);
+        Assert.Contains("Procedure: BASU1D, green", nd);
+        Assert.Contains("Chrono: 28 23, green", nd);
+        Assert.DoesNotContain("BASU1D, green", nd);
+        Assert.DoesNotContain("28 23, green", nd);
+    }
+
     // Live in the climb on BASU1D (2026-10-28): the ND's TO waypoint block, top right, is the name (white), the track
     // to it (green, x 759), its distance a line under ("6." and a smaller "2", then a cyan NM) and the ETA under that.
     // The distance read as a line of its own split at its point ("6., green; 2, green; NM, cyan"), the ETA as another.

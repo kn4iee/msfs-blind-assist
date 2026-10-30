@@ -49,6 +49,10 @@ public static class A350GroundDisplays
         Field("Ground speed", c => c.Colour == "green" && Math.Abs(c.Y - 35) <= 8 && (Math.Abs(c.X - 122) <= 12 || Math.Abs(c.X - 64) <= 12));
         Field("True airspeed", c => c.Colour == "green" && Math.Abs(c.X - 175) <= 12 && Math.Abs(c.Y - 35) <= 8);
         Field("Wind", c => c.X is >= 60 and < 130 && Math.Abs(c.Y - 63) <= 8);
+        // The procedure at the top (ND::DrawApproachInfo, x 270: the SID on the stand, live 2026-10-30) and the chronometer
+        // at the bottom left (ND::DrawChrono, x 57 and 114: minutes and seconds, hours and minutes past the hour).
+        Field("Procedure", c => c.X is >= 200 and < 420 && Math.Abs(c.Y - 35) <= 8);
+        Field("Chrono", c => c.Colour == "green" && c.X is >= 40 and < 130 && Math.Abs(c.Y - 660) <= 8 && Number(c));
         o.AddRange(map);
         // The TO waypoint block, top right (live in the climb): the name (white) and the track to it (green, x 759), the
         // distance a line under ("6." and a smaller "2", then a cyan NM), the ETA under that. One line, as a pilot reads it.

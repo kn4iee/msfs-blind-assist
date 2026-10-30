@@ -57,7 +57,7 @@ public class A350RadioCalloutsTests
         Assert.Equal(("COM ACTIVE FREQUENCY:1", "MHz"), (vars[A350RadioCallouts.ActiveKey(1)].Name, vars[A350RadioCallouts.ActiveKey(1)].Units));
         Assert.Equal(("COM STANDBY FREQUENCY:2", "MHz"), (vars[A350RadioCallouts.StandbyKey(2)].Name, vars[A350RadioCallouts.StandbyKey(2)].Units));
         Assert.Equal(("TRANSPONDER CODE:1", "BCO16"), (vars[A350RadioCallouts.SquawkKey].Name, vars[A350RadioCallouts.SquawkKey].Units));
-        Assert.False(vars.Values.Any(v => v.Name.StartsWith("COM ACTIVE FREQUENCY:3")));   // VHF3 is the datalink radio
+        Assert.DoesNotContain(vars.Values, v => v.Name.StartsWith("COM ACTIVE FREQUENCY:3"));   // VHF3 is the datalink radio
         var rows = MSFSBlindAssist.Services.MonitorRowBuilder.Build(vars);
         Assert.Equal("VHF 1 active frequency", Assert.Single(rows, r => r.Key == A350RadioCallouts.ActiveKey(1)).Label);
         Assert.Equal("Squawk code", Assert.Single(rows, r => r.Key == A350RadioCallouts.SquawkKey).Label);
