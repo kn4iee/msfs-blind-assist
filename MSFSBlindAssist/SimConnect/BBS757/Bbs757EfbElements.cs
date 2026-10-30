@@ -250,8 +250,8 @@ public static class Bbs757EfbElements
     /// <summary>
     /// The text that stands in the place of the EFB colors theme's row (<see cref="Bbs757EfbSettings.ThemeNote"/>), or null for any
     /// other element. Neither 757 EFB window offers the theme as a control (the owner's ruling of 2026-10-30, B757-21): the reader
-    /// reads only the default theme, and under a light one it finds no switch, slider or choice on any page (measured under Light
-    /// blue: every line of Settings, General a row), so a pilot who picked one could not get back. The row is the one
+    /// reads only the default theme, and under a light one it found no switch, slider or choice (measured under Light blue: every
+    /// line of Settings, General a row), so a pilot who picked one could not get back. The row is the one
     /// <see cref="Bbs757EfbSettingsMatch.SettingFor"/> matches to the catalog's theme, whatever kind the reader gave it (a slider
     /// under the default theme, a row under a light one); its choice is the catalog's word for the one read, or none when the
     /// reader read none of them. Internal for the tests.

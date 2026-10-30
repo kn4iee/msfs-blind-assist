@@ -584,9 +584,9 @@ public class Bbs757EfbElementsTests
     [MemberData(nameof(Cultures))]
     public void The_colors_theme_row_is_a_note_with_no_action_read_as_a_slider_or_a_row(string culture)
     {
-        // The owner's ruling of 2026-10-30: the reader reads only the default theme, and under a light one it finds no switch,
-        // slider or choice on any page (measured under Light blue: every line of Settings, General a row). So the theme is offered
-        // as no control: its row says the theme read and that other schemes are not supported, as a slider (dim/50) or a row.
+        // The owner's ruling of 2026-10-30: the reader reads only the default theme, and under a light one it found no switch,
+        // slider or choice (measured under Light blue: every line of Settings, General a row). So the theme is offered as no
+        // control: its row says the theme read and that other schemes are not supported, as a slider (dim/50) or a row.
         var general = Bbs757EfbScreenTests.Load("dim", "50-settings-general");
         var slider = general.Items.Single(i => i.Key == "sld:EFB COLORS THEME");
         var asRow = slider with { Kind = Bbs757EfbKind.Row, Key = "row:EFB COLORS THEME", Value = "Light blue", Slider = null };
