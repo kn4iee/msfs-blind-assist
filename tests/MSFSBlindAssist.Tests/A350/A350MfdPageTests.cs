@@ -68,6 +68,25 @@ public class A350MfdPageTests
     }
 
     // ATC COM, live 2026-10-30, a flight plan inserted and nothing sent.
+    // A real D-ATIS (Hoppie, VCBI, live 2026-10-30): the airport's box keeps its name, the time beside it is a line of its own.
+    [Fact]
+    public void A_received_atis_says_its_time_apart_from_its_airport()
+    {
+        var spoken = A350MfdPage.Read(A350Fixtures.Capture("mfd_datis_list_atis.json"), 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("Airport: VCBI, cyan", spoken);
+        Assert.Contains(spoken, l => l.StartsWith("- 1416Z", StringComparison.Ordinal));
+        Assert.Contains("UPDATE OR PRINT button", spoken);
+    }
+
+    // The RECEIVED page draws over the list's boxes, which stay in the draw with no frame: its text is the message's, no box's.
+    [Fact]
+    public void A_box_with_no_frame_holds_no_text()
+    {
+        var lines = A350MfdPage.Read(A350Fixtures.Capture("mfd_datis_received.json"), 0);
+        Assert.Contains(lines, l => l.Kind == "text" && l.Spoken.StartsWith("1700. TEMP 28, DP 26. QNH", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Kind == "field");
+    }
+
     [Fact]
     public void The_atc_datis_page_names_its_airports_and_its_keys_only_by_their_own_words()
     {

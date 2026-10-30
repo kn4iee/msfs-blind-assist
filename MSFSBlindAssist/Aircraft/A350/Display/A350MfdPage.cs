@@ -33,6 +33,9 @@ public static class A350MfdPage
     /// <summary>The font's degree sign after a number: a position's "07d10.5N/079d53.1E", a course's "C220d".</summary>
     private static readonly Regex PositionDegrees = new(@"(?<=\d)d(?![A-Za-z])", RegexOptions.Compiled);
 
+    /// <summary>D-ATIS's time beside its airport.</summary>
+    private static readonly Regex AtisTime = new(@"^- ?\d{4}Z$", RegexOptions.Compiled);
+
     /// <summary>A symbol the MFD font draws as a lowercase letter after an ident (A350MFD-Regular.ttf's outlines: a a left
     /// arrow, b a right arrow, f the overfly triangle; its other lowercase letters are small capitals). An arrow is the
     /// procedure's turn there, read in words (BASU1D's BI611, the right turn after 500 ft; a screen reader may not say
@@ -322,8 +325,9 @@ public static class A350MfdPage
                 float rowY = y0 + e.RectH * 0.75f;
                 // A check box's label on the row, whatever its colour (yellow or cyan while chosen) and though inside the
                 // check box, names the box beside it: that choice's value.
+                // (D-ATIS's "- 1416Z" beside its airport box is the ATIS's time, no label.)
                 bool OnRow(Cell c) => !inside.Contains(c) && (checkboxLabels.Contains(c) || !inControls.Contains(c) && c.Colour == "white")
-                    && Math.Abs(c.Y - rowY) <= 12;
+                    && Math.Abs(c.Y - rowY) <= 12 && !AtisTime.IsMatch(c.Text);
                 // The nearest label left of the field, one field each (DATA STATUS: IDLE [ ] PERF [ ] [ ]); a label
                 // between two columns (RAD NAV's IDENT, FREQ, CRS) also stands right of the left column's fields.
                 // (A label beside a field sits close to it, within 200 px: FUEL&LOAD's row label DEST, 465 px left of its MIN
@@ -346,6 +350,9 @@ public static class A350MfdPage
                 // A key of the box's own rectangle under it: the box takes an entry, empty or not (CLOSEST AIRPORTS' OTHER ARPT, live 2026-10-30).
                 bool onKey = elements.Any(o => o.Class == "BaseUIButton" && Math.Abs(o.X - e.X) <= 2 && Math.Abs(o.Y - e.Y) <= 2 && Math.Abs(o.RectW - e.RectW) <= 2);
                 if (inside.Count == 0 && !onKey && (label == null || beside == null || !Framed())) continue;
+                // White text in a box with no frame is another page's drawn over a box not on the screen (D-ATIS's under its RECEIVED page, live
+                // 2026-10-30); a read-only value is a box's with no frame, in its value's colour (DATA STATUS's IDLE, POSITION/TIME's UTC).
+                if (inside.Count > 0 && !onKey && !Framed() && inside.All(c => c.Colour == "white")) continue;
                 used.UnionWith(inside);
                 if (label != null && label.X < x0) leftLabels.Add(label);
                 fields.Add((y0, x0, x1, label, inside.Count == 0 ? null : $"{value}, {colour}", cx, cy, false, beside == null));
