@@ -193,7 +193,8 @@ public static class A350NdPage
                 var at = t with { X = t.X - shift };
                 if (at.X is < 0 or >= HalfWidth || at.Y is < MapTop or >= MapBottom || at.ColourName is "red" or "amber") continue;
                 string name = at.Text.Trim();
-                if (name.Length < 2 || name.Contains(' ') || !name.Any(char.IsLetter) || names.Any(n => n.Spoken.StartsWith(name + ",", StringComparison.Ordinal))) continue;
+                if (name.Length < 2 || name.Contains(' ') || !name.Any(char.IsLetter) || A350NdMap.IsRadarMode(name)
+                    || names.Any(n => n.Spoken.StartsWith(name + ",", StringComparison.Ordinal))) continue;
                 taken.Add(t);
                 string place = rangeFrame is { } f ? A350NdMap.PlaceNm(f, at.X - NameOffsetX, at.Y - NameOffsetY) : "";
                 names.Add(new MfdLine("map", $"{name}, {at.ColourName}" + (place.Length > 0 ? $": {place}" : ""), at.X, at.Y));

@@ -254,6 +254,14 @@ public class A350NdPageTests
         Assert.Contains(shown, l => l.StartsWith("Taxiways:", StringComparison.Ordinal) && l.Contains("M9", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void The_radar_mode_is_no_name_on_the_map()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_cruise_wxt.json"), 0, 3, 7);
+        Assert.DoesNotContain(lines, l => l.Kind == "map" && l.Spoken.StartsWith("WX+T", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Kind == "text" && l.Spoken == "Radar mode: WX+T, green");
+    }
+
     // The plan's runway on a range map: it is no taxiway, and it says where it lies, once, as the map's other names do.
     [Fact]
     public void A_range_map_says_where_the_plans_runway_is()

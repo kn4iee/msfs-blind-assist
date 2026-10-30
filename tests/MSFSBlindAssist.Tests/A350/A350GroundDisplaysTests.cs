@@ -69,6 +69,17 @@ public class A350GroundDisplaysTests
         Assert.Contains(nd, l => l.StartsWith("To waypoint: DB403, white; track", StringComparison.Ordinal));
     }
 
+    // Live in the cruise at FL300 (2026-10-30): the radar's mode, top right of the map (x 781, y 622, "WX+T"), read as a name on the map,
+    // and the vertical display's top label (y 773) as a line of its own, "40000, white".
+    [Fact]
+    public void The_nd_reads_its_radar_mode_and_the_vertical_displays_top_label()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_cruise_wxt.json"), 0);
+        Assert.Contains("Radar mode: WX+T, green", nd);
+        Assert.Contains("Vertical display altitudes: 40000 35000 30000 25000, white", nd);
+        Assert.DoesNotContain("40000, white", nd);
+    }
+
     // The vertical display (live 2026-10-28): the selected altitude beyond its altitude range is a cyan value at its top
     // left (x 105, y 786; "FL 400" in STD) or bottom left (y 1010). It read inside the range line ("40000 0 2.5 5 7.5 10")
     // or as the lowest altitude label, or bare; the scale's "FL" (white, x 58) read as a line of its own, and the safe

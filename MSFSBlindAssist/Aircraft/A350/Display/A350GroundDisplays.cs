@@ -69,6 +69,7 @@ public static class A350GroundDisplays
         // at the bottom left (ND::DrawChrono, x 57 and 114: minutes and seconds, hours and minutes past the hour).
         Field("Procedure", c => c.X is >= 200 and < 420 && Math.Abs(c.Y - 35) <= 8);
         Field("Chrono", c => c.Colour == "green" && c.X is >= 40 and < 130 && Math.Abs(c.Y - 660) <= 8 && Number(c));
+        Field("Radar mode", c => A350NdMap.IsRadarMode(c.Text));
         // The ANF's two-line flag at the top: the airport shown is not in the flight plan (PLAN).
         var notInPlan = cells.Where(c => c.Text is "ARPT NOT IN" or "ACTIVE F-PLN").OrderBy(c => c.Y).ToList();
         if (notInPlan.Count == 2)
@@ -126,8 +127,8 @@ public static class A350GroundDisplays
         Field("Vertical display selected altitude", c => c.Colour == "cyan" && Math.Abs(c.X - 105) <= 12
             && (Math.Abs(c.Y - 786) <= 8 || Math.Abs(c.Y - 1010) <= 8));
         Field("Vertical display range", c => c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c));
-        // The labels run up to the range line (the top one at y 799 on the stand at VCBI, 2026-10-28).
-        var altitudes = cells.Where(c => !used.Contains(c) && c.X is >= 90 and < 150 && (c.Y >= 810 || c.Y >= 790 && c.Colour == "white")
+        // The labels run up to the range line and past it (the top one at y 799 on the stand at VCBI, 2026-10-28; y 773 at FL300, 2026-10-30).
+        var altitudes = cells.Where(c => !used.Contains(c) && c.X is >= 90 and < 150 && (c.Y >= 810 || c.Y >= 770 && c.Colour == "white")
             && Number(c)).OrderBy(c => c.Y).ToList();
         if (altitudes.Count > 0)
         {

@@ -57,6 +57,9 @@ public static class A350NdMap
     /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
     private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 5) || AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t));
 
+    /// <summary>The radar's mode beside the map ("WX+T", live at FL300 2026-10-30): no name on it. No fix or navaid has a plus in its name.</summary>
+    internal static bool IsRadarMode(string text) => text.Trim() is "WX" or "TERR" || text.Contains('+') && text.Trim().StartsWith("WX", StringComparison.Ordinal);
+
     /// <summary>The plan's runway on a range map: the airport's name over the runway's ("OMDB", "12L"), white, through a transform
     /// like the airport map's names, none of which is ever white (grey, olive, cyan, green; every ND draw kept, 2026-10-30).</summary>
     internal static bool IsPlanRunwayLabel(DrawnText t) => t.ColourName == "white" && AtLocal(t, 0, 0) && !string.IsNullOrWhiteSpace(t.Text);
