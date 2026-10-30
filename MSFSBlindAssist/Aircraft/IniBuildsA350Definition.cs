@@ -238,13 +238,21 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     // 2026-10-26), so the surroundings window's Enter tunes VHF 1 on the captain's RMP, as a pilot does, and reads its screen back.
     public override Task<double?>? TuneCom1Own(SimConnectManager sim, int frequencyHz, bool active) => TuneVhf1(sim, frequencyHz, active);
 
+    /// <summary>The latest tune: an older one stops at its next key, or two runs of keys would mix their digits on the RMP.</summary>
+    private int _tuneRun;
+
     private async Task<double?> TuneVhf1(SimConnectManager sim, int frequencyHz, bool active)
     {
+        int run = ++_tuneRun;
         foreach (string key in A350Rmp.ComTuningKeys(frequencyHz, active))
         {
-            sim.ExecuteCalculatorCodeUnique(A350Rmp.Press(1, key));
+            if (run != _tuneRun || _disposed)
+                return null;
+            Send(sim, A350Rmp.Press(1, key));
             await Delay(RmpKeyGapMs);
         }
+        if (run != _tuneRun || _disposed)
+            return null;
         double? read = null;
         for (int attempt = 0; attempt < RmpReadAttempts && !Services.Com1Tuning.Holds(read, frequencyHz); attempt++)
         {

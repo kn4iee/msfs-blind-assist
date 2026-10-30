@@ -412,6 +412,13 @@ public partial class MainForm
                     return;
                 }
 
+                // The same for a row the A350's ND window just set from its own mode or range box.
+                if (currentAircraft is IniBuildsA350Definition a350EchoDef && a350EchoDef.WindowEchoActive(e.VarName))
+                {
+                    simVarMonitor.SetBaseline(e.VarName, e.Value);
+                    return;
+                }
+
                 // A held master LIGHTS TEST shifts the composite switch+light combo values
                 // (start levers, EEC, fire switches, cargo arm/discharge, high-altitude
                 // landing) with no real switch movement — this generic path would speak every

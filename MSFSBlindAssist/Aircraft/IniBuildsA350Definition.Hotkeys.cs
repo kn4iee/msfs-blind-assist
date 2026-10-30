@@ -37,8 +37,12 @@ public partial class IniBuildsA350Definition
                         async side => Displays == null ? null : (await Displays.DrawAsync(("EFIS", side)))?.FirstOrDefault(),
                         side => IsScreenDark(side == 0 ? "Captain ND" : "First Officer ND"),
                         new A350.Display.A350NdInput(simConnect.ExecuteCalculatorCodeUnique), announcer,
-                        (side, mode, position) => PressRow(NdKnobRow(side, mode), simConnect, announcer, position),
-                        (side, mode) => Cached(simConnect, NdKnobRow(side, mode))),
+                        (side, mode, position) =>
+                        {
+                            ArmWindowEcho(NdKnobRow(side, mode));
+                            PressRow(NdKnobRow(side, mode), simConnect, announcer, position);
+                        },
+                        (side, mode) => ToggleState(NdKnobRow(side, mode), simConnect)),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
@@ -216,6 +220,18 @@ public partial class IniBuildsA350Definition
         else
             announcer.AnnounceImmediate("Not available on this aircraft");
     }
+
+    /// <summary>How long a row a window just set is the window's own echo: a batch period plus the aircraft applying it, as
+    /// <see cref="ToggleReadBackMs"/>.</summary>
+    internal const long WindowEchoMs = 2500;
+
+    private readonly Dictionary<string, long> _windowEcho = new(StringComparer.Ordinal);
+
+    /// <summary>A window is setting this row from its own box, which the screen reader has said: MainForm's generic path says nothing for
+    /// it (<see cref="WindowEchoActive"/>, [CORE-7]).</summary>
+    internal void ArmWindowEcho(string rowKey) => _windowEcho[rowKey] = Clock();
+
+    internal bool WindowEchoActive(string varName) => _windowEcho.TryGetValue(varName, out long at) && Clock() - at <= WindowEchoMs;
 
     /// <summary>A two-position row's state as a window's toggle flips it: what MSFSBA last commanded while that holds, else
     /// the cache, else null (review 2026-10-29: flipped from the raw cache, a second FD press within a second asked for On
