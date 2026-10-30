@@ -292,7 +292,9 @@ public class A350NdPageTests
         var capture = A350Fixtures.Capture("efis0_traffic_climbing.json");
         var figure = capture.Texts.First(t => t.Text.Trim() == "+09");
         var name = figure with { Text = "BASUR", X = figure.X - 26, Y = figure.Y + 21, LocalX = figure.X - 26 - 836, LocalY = figure.Y + 21 };
-        var lines = A350NdPage.Read(capture with { Texts = capture.Texts.Append(name).ToList() }, 0, mode: 3, range: 7);
+        var texts = capture.Texts.ToList();
+        texts.Insert(texts.IndexOf(figure) + 1, name);   // among the ND's: its texts are drawn before the PFD's
+        var lines = A350NdPage.Read(capture with { Texts = texts }, 0, mode: 3, range: 7);
         Assert.Contains(lines, l => l.Spoken.StartsWith("Traffic 900 feet above, climbing: ", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Spoken.StartsWith("BASUR", StringComparison.Ordinal));
     }
