@@ -9,7 +9,7 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// wheel and the drop-down (opened by a click or the screen reader, and closed again at once). Each attempt raises
 /// <see cref="LockedAttempt"/> once: a held key's repeats and one turn of the wheel are one attempt, so the window says
 /// why once, not on every repeat. Focus, the screen reader's reading and the selection shown stay as they are, where a
-/// disabled control would drop out of the tab order. The 757 EFB window's Settings page holds its choice lists with it
+/// disabled control would drop out of the tab order. The 757 EFB settings window holds its choice lists with it
 /// while BlueBird's settings are read-only.
 /// </summary>
 internal sealed class Bbs757LockableComboBox : ComboBox

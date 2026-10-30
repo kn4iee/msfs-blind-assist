@@ -26,11 +26,11 @@ public enum Bbs757SimState
 /// simulator's main menu, so the screen cannot say whether the 757 is loaded; the one safe moment is with no simulator
 /// process at all, MSFS 2024's (<c>FlightSimulator2024</c>) or MSFS 2020's (<c>FlightSimulator</c>). A check that fails
 /// is <see cref="Bbs757SimState.Unknown"/>, never "not running": the settings stay read-only, and debug.log says why,
-/// once however often the tab asks (a PC that blocks the process list would otherwise show "can't tell" and nothing
-/// more). The guard asks Windows itself and not <c>Utils/SimulatorDetector</c>, which answers "Unknown" both when no
-/// simulator runs and when its check fails, the two answers this guard must tell apart. A caller asks again immediately
-/// before each write, as the simulator may have started since it last asked. Pure but for the real counter, which lists
-/// the machine's processes and logs a failure.
+/// once however often the settings window asks (a PC that blocks the process list would otherwise show "can't tell" and
+/// nothing more). The guard asks Windows itself and not <c>Utils/SimulatorDetector</c>, which answers "Unknown" both
+/// when no simulator runs and when its check fails, the two answers this guard must tell apart. A caller asks again
+/// immediately before each write, as the simulator may have started since it last asked. Pure but for the real counter,
+/// which lists the machine's processes and logs a failure.
 /// </summary>
 public static class Bbs757SimGuard
 {
@@ -43,13 +43,13 @@ public static class Bbs757SimGuard
     /// <summary>What is said when a change is tried while the settings are read-only.</summary>
     public const string LockedText = "Close the simulator to change BlueBird's settings.";
 
-    /// <summary>What is said, once, when a simulator starts while the Settings tab is open.</summary>
+    /// <summary>What is said, once, when a simulator starts while the 757 EFB settings window is open.</summary>
     public const string SimStartedText = "Simulator started: BlueBird's settings are read-only.";
 
-    /// <summary>What is said, once, when the simulator closes while the Settings tab is open.</summary>
+    /// <summary>What is said, once, when the simulator closes while the 757 EFB settings window is open.</summary>
     public const string SimClosedText = "Simulator closed: BlueBird's settings can be changed.";
 
-    // What the Settings tab's status box shows, one text for each case (StatusText picks one).
+    // What the 757 EFB settings window's status box shows, one text for each case (StatusText picks one).
     private const string ClosedText =
         "The simulator is closed. Changes are saved to BlueBird's settings at once and take effect when the 757 next loads.";
     private const string RunningText =
@@ -59,8 +59,8 @@ public static class Bbs757SimGuard
     private const string NoSettingsText =
         "BlueBird hasn't created its settings yet. Load the 757 once, then close the simulator to change them.";
 
-    // The failure logged last, as "<type>: <message>" (LogFailure keeps it). The tab asks every second, and a failure
-    // that lasts is the same each time.
+    // The failure logged last, as "<type>: <message>" (LogFailure keeps it). The settings window asks every second, and a
+    // failure that lasts is the same each time.
     private static string? _lastLoggedFailure;
 
     /// <summary>
@@ -106,8 +106,8 @@ public static class Bbs757SimGuard
         state == Bbs757SimState.NotRunning && settingsFileExists;
 
     /// <summary>
-    /// What the Settings tab's status box says. A missing settings file comes first, whatever the simulator does: there
-    /// is nothing to change until BlueBird has made one, and its text sends the pilot to load the 757 once. Then a
+    /// What the 757 EFB settings window's status box says. A missing settings file comes first, whatever the simulator does:
+    /// there is nothing to change until BlueBird has made one, and its text sends the pilot to load the 757 once. Then a
     /// simulator that runs, then a check that failed (a state that is none of the three reads as failed), then, with the
     /// simulator closed, that changes are saved at once. That last text ends with the <paramref name="simulatorName"/>
     /// folder sentence when it is not null: the caller names the simulator only when more than one work folder exists (a
@@ -157,8 +157,8 @@ public static class Bbs757SimGuard
 
     /// <summary>
     /// Gives <paramref name="log"/> one line saying that the processes could not be listed and why (the exception's type
-    /// and message), unless this is the failure logged last: the tab asks every second, so a failure that lasts is
-    /// logged once, not on every check. A different failure is logged, and so is the first one again after it. Internal,
+    /// and message), unless this is the failure logged last: the settings window asks every second, so a failure that
+    /// lasts is logged once, not on every check. A different failure is logged, and so is the first one again after it. Internal,
     /// so the tests read what is logged without the app's process-wide logger. Safe to call from any thread.
     /// </summary>
     internal static void LogFailure(Exception failure, Action<string> log)

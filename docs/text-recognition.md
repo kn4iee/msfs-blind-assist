@@ -92,9 +92,9 @@ compact, as UTF-8 without a byte order mark and with no newline at the end:
 {"version":1,"files":[{"name":"PP-OCRv6_det_small.onnx","sha256":"090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"},{"name":"PP-OCRv6_rec_small.onnx","sha256":"6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"},{"name":"ppocrv6_dict.txt","sha256":"b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d"},{"name":"ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx","sha256":"54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7"}]}
 ```
 
-The folder then reads Ready, so "Read the tablet screen" opens the reader, which loads the models from
-it. The 757 probe (`tools/Bbs757EfbProbe`) loads the same four files from the same folder; it needs
-only the files, not the marker.
+The folder then reads Ready, so Shift+T on the 757, with a simulator running, opens the tablet window,
+which loads the models from it. The 757 probe (`tools/Bbs757EfbProbe`) loads the same four files from
+the same folder; it needs only the files, not the marker.
 
 ## The folder and the marker
 
@@ -224,10 +224,11 @@ the BlueBird 757 profile, the checkbox is on, the models are not Ready and no do
 - after the 757 is picked in the Aircraft menu (`BBS757MenuItem_Click`, after `SwitchAircraft`);
 - never at connect, where the window would open behind the simulator, unheard.
 
-A dismissal is never remembered: the one thing that silences the offer is the checkbox. "Read the tablet
-screen" (the button on the 757 EFB window, Shift+T) is not an offer: while the models are not Ready it
-shows the same window instead of the reader, whatever the checkbox says. Because the window is modal and
-comes before the update check, the update window never opens on top of it; a download that is still running
+A dismissal is never remembered: the one thing that silences the offer is the checkbox. Shift+T on the
+757 while a simulator runs is not an offer: while the models are not Ready it shows the same window
+instead of the tablet window, whatever the checkbox says. With no simulator running Shift+T opens the
+settings window, which reads no tablet and needs no models. Because the window is modal and comes
+before the update check, the update window never opens on top of it; a download that is still running
 when the offers are done makes that launch skip the update check, and the next launch asks again.
 
 ## The engine
@@ -265,14 +266,19 @@ public `ReadAsync` returns the lines and words. The rest of the feature is inter
 
 ## How the 757 reader uses it
 
-`Bbs757EfbOcr.ReadAsync` makes one read of the whole tablet picture, at the tablet's own size, with no
-preprocessing (no gray filter, no upscaling, no second pass) and no close-up re-reads, and maps the
-engine's lines to the reader's, pass P, in reading order. `Bbs757EfbPageReader` follows it with
+`Bbs757EfbOcr.ReadAsync` makes one read of the whole tablet picture, at the tablet's own size, with one
+preprocessing step and no other (no gray filter, no upscaling, no second pass) and no close-up re-reads,
+and maps the engine's lines to the reader's, pass P, in reading order. The step is the brightening
+(`Bbs757EfbOcr.Brighten`, plan 18): every picture is scaled before it is read, each channel times 255
+over the brightest luminance below the status bar (at least 30), so that its white is 255. On a tablet
+at 0 percent brightness the white text is at 80 of 255 and the small model missed faint controls on the
+raw picture (the Maintenance page's pink gear-door OPEN buttons); brightened, it finds them. The boxes
+stay in the tablet's pixels, since the picture keeps its size. `Bbs757EfbPageReader` follows it with
 `Bbs757EfbScreen.Parse`, and the probe uses the same two, so what the probe proves is what ships.
 
 `Bbs757EfbBridge` holds the engine in a `TextRecognitionEngineSlot<PaddleOcrEngine>` (OCR-3):
 
-- The engine loads on the bridge's loop, off the UI thread, at the first read while the tablet screen
+- The engine loads on the bridge's loop, off the UI thread, at the first read while the 757 EFB tablet
   window is shown (`MainForm` supplies `PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), ...)`
   with `ThreadsFor(Environment.ProcessorCount)`), and is released when the window hides. The slot is
   touched only on that loop: `Get` before a read, `ForgetFailure` when it takes a retry, `Release` in its
@@ -282,14 +288,14 @@ engine's lines to the reader's, pass P, in reading order. `Bbs757EfbPageReader` 
   offers the download again, and the reader's status says: "Text recognition could not start, so the
   tablet cannot be read. Download it again from Settings, Text recognition." From then on nothing is
   captured or read, and the slot does not load again, until the window is hidden and shown, or until the
-  pilot, with the models downloaded again, presses "Read the tablet screen": that passes its Ready check
-  (OCR-1) and has the loop forget the failure, take the status back and load again at its next read (a
-  load that fails again is reported again). F5 and "Read the tablet again" do not try again, since they
-  cannot check that the models are Ready. A status that takes the window's place meanwhile (the tablet
-  could not be reached, say) gives way to the reader's status again at the next read, so the window never
-  blames something else.
-- The window opens only when the models are Ready; otherwise "Read the tablet screen" shows the offer
-  window instead (OCR-2).
+  pilot, with the models downloaded again, presses Shift+T on the 757 (with a simulator running): that
+  passes its Ready check (OCR-1) and has the loop forget the failure, take the status back and load
+  again at its next read (a load that fails again is reported again). F5 and "Read the tablet again" do
+  not try again, since they cannot check that the models are Ready. A status that takes the window's
+  place meanwhile (the tablet could not be reached, say) gives way to the reader's status again at the
+  next read, so the window never blames something else.
+- The tablet window opens only when the models are Ready; otherwise Shift+T on the 757, with a
+  simulator running, shows the offer window instead (OCR-2).
 
 ## Measurements
 

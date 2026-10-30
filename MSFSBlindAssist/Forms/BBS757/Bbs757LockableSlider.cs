@@ -8,13 +8,14 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// without leaving the tab order. Up and Right move it one step higher, Down and Left one lower, Page Up and Page Down
 /// <see cref="TrackBar.LargeChange"/> steps, Home and End to its ends: the keys are the slider's own, as a Win32
 /// trackbar lying flat takes Up and Page Up lower; with Control the arrows, Home and End do nothing (Ctrl+Page Up and
-/// Ctrl+Page Down are the tab control's). From a value between steps (set on the tablet), a key moves from the nearest
-/// step. A click or a drag moves it as usual. Each move of the pilot's raises
+/// Ctrl+Page Down are not handled here; the settings window has no tab control to take them first). From a value
+/// between steps (set on the tablet), a key moves from the nearest step. A click or a drag moves it as usual. Each move
+/// of the pilot's raises
 /// <see cref="StepChosen"/>; a key at an end, or a turn of the wheel that moves nothing, raises nothing. While
 /// <see cref="Locked"/>, nothing the pilot does moves it: each attempt (a key, a turn of the wheel, a click) raises
 /// <see cref="LockedAttempt"/> once, a held key's repeats and one turn of the wheel being one attempt. The screen reader
-/// reads it through MSAA (see <see cref="WndProc"/>). The 757 EFB window's Settings page holds the random failure
-/// frequency with it, as <see cref="Bbs757LockableComboBox"/> holds the choice lists.
+/// reads it through MSAA (see <see cref="WndProc"/>). The 757 EFB settings window's Failures section holds the random
+/// failure frequency with it, as <see cref="Bbs757LockableComboBox"/> holds the choice lists.
 /// </summary>
 internal sealed class Bbs757LockableSlider : TrackBar
 {
@@ -112,8 +113,8 @@ internal sealed class Bbs757LockableSlider : TrackBar
     /// <summary>
     /// Whether a key is an arrow, Home or End held with Control (not Alt): the native trackbar would act on it, taking
     /// Up and Down the other way, so the slider takes the key and does nothing (an attempt while locked). Ctrl+Page Up,
-    /// Ctrl+Page Down and Ctrl+Tab are the tab control's, which takes them first; with Alt the native trackbar ignores
-    /// every key. Pure; internal for the tests.
+    /// Ctrl+Page Down and Ctrl+Tab are not taken here (the settings window has no tab control to take them first); with
+    /// Alt the native trackbar ignores every key. Pure; internal for the tests.
     /// </summary>
     internal static bool IsSliderKeyWithControl(Keys keyData) =>
         (keyData & (Keys.Control | Keys.Alt)) == Keys.Control

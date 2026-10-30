@@ -93,14 +93,6 @@ public static class Bbs757EfbVocabulary
         "LIGHT BLUE", "DARK GREY", "LIGHT GREY", "DARK", "CHECKED", "ALIGNED", "NORMAL", "CLOSED & LOCKED",
     };
 
-    /// <summary>
-    /// The option lists, by the slider's label and in its order (left to right), of sliders the settings catalog
-    /// (<see cref="Bbs757EfbSettings"/>) does not hold; a slider on no list is offered as a number. None is listed: the catalog holds
-    /// every slider measured so far (IRS alignment time, boarding and load rate, the notifications fade-out timer, the colors theme,
-    /// the CPDLC network) and gives their choices in its own order, which is the tablet's (<see cref="Bbs757EfbElements.OptionsFor"/>).
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, string[]> SliderOptions = new Dictionary<string, string[]>();
-
     /// <summary>Rows whose value is a credential: never shown, spoken or logged (plan 11).</summary>
     public static readonly string[] CredentialLabels = { "SIMBRIEF ID NUMBER", "HOPPIE LOGON CODE", "SAYINTENTIONS ACARS KEY" };
 

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
-/// <summary>What one control of the Settings tab shows for the value or values BlueBird's files hold.</summary>
+/// <summary>What one control of the 757 EFB settings window shows for the value or values BlueBird's files hold.</summary>
 public enum Bbs757RowState
 {
     /// <summary>
@@ -37,7 +37,7 @@ public enum Bbs757RowState
     Automatic,
 }
 
-/// <summary>One control of the Settings tab: what it shows and whether it may change.</summary>
+/// <summary>One control of the 757 EFB settings window: what it shows and whether it may change.</summary>
 /// <param name="Setting">The catalog entry the control is for.</param>
 /// <param name="State">What the files hold for it.</param>
 /// <param name="ChoiceIndex">
@@ -74,7 +74,7 @@ public sealed record Bbs757SettingRow(Bbs757Setting Setting, Bbs757RowState Stat
 }
 
 /// <summary>
-/// The rows of the Settings tab's sections: for each setting of a section, what its control shows, worked out from
+/// The rows of the 757 EFB settings window's sections: for each setting of a section, what its control shows, worked out from
 /// BlueBird's parsed files, and whether it may change. A setting of the settings file (<c>efb_settings.json</c>: General,
 /// Aircraft, AIRAC data, ACARS and Failures) reads that file. A setting of the registrations (Livery options, Callouts and
 /// Cabin audio) reads every registration's file in which its key reads: they agree, and the row shows the value; they
@@ -88,7 +88,7 @@ public sealed record Bbs757SettingRow(Bbs757Setting Setting, Bbs757RowState Stat
 /// or says nothing that can be read, the row is <see cref="Bbs757RowState.Automatic"/> and cannot change, so brightness
 /// is written only while the mode is known to be manual (with no settings file at all, every row of that file, this one
 /// too, is unreadable). A setting that waits for another is inactive unless that one reads On. Pure: it reads the JSON it
-/// is given and nothing else, so the tab calls it again after every save and when the simulator closes. The rows never
+/// is given and nothing else, so the window calls it again after every save and when the simulator closes. The rows never
 /// hold a <see cref="JsonElement"/>.
 /// </summary>
 public static class Bbs757SettingsRows
@@ -113,11 +113,11 @@ public static class Bbs757SettingsRows
 
     /// <summary>
     /// The EFB brightness mode's key: the brightness takes a value only while it reads manual (stored false), and a row
-    /// of the brightness is <see cref="Bbs757RowState.Automatic"/> otherwise. Internal for the tab's reasons.
+    /// of the brightness is <see cref="Bbs757RowState.Automatic"/> otherwise. Internal for the window's reasons.
     /// </summary>
     internal const string BrightnessModePath = "auto_brightness";
 
-    /// <summary>A switch's choices are Off, then On: On's index. Internal for the tab and its saves.</summary>
+    /// <summary>A switch's choices are Off, then On: On's index. Internal for the window and its saves.</summary>
     internal const int OnChoiceIndex = 1;
 
     /// <summary>

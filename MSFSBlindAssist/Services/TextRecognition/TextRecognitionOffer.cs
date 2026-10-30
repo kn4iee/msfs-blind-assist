@@ -7,8 +7,8 @@ namespace MSFSBlindAssist.Services.TextRecognition;
 ///
 /// <para>Pure and stateless on purpose. A dismissal is never remembered: "Not now" asks again at the next startup
 /// on the 757 and at the next pick of it, and the one thing that silences the offer is the pilot's own checkbox
-/// (<c>UserSettings.OfferTextRecognitionFor757</c>). The reader's "Read the tablet screen" is not an offer: while
-/// the models are not Ready it shows the offer window whatever the checkbox says.</para>
+/// (<c>UserSettings.OfferTextRecognitionFor757</c>). Shift+T on the 757 while a simulator runs is not an offer: while
+/// the models are not Ready it shows the offer window in place of the tablet window, whatever the checkbox says.</para>
 /// </summary>
 internal static class TextRecognitionOffer
 {

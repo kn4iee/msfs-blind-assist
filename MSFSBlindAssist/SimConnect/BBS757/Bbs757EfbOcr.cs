@@ -19,10 +19,11 @@ public sealed record Bbs757EfbTextLine(string Text, Rectangle Box, IReadOnlyList
 /// Reads the tablet picture with PaddleOCR (PP-OCRv6 small, through <see cref="PaddleOcrEngine"/>): ONE read of
 /// the whole picture at the tablet's own size, with one preprocessing step, the brightening (<see cref="Brighten"/>),
 /// and no other (no gray filter, no upscaling, no second pass) and no close-up re-reads; Windows OCR needed them,
-/// PaddleOCR does not. Measured on the 11 test pages, dim and bright, through the parser (2026-10-28): 98.4% of
-/// page elements right, against 91.8% for Windows OCR with its two passes and re-reads. The brightening is plan
-/// 18's: at 0 percent tablet brightness (white text at 80 of 255) the small model missed faint text on the raw
-/// picture, the Maintenance page's pink gear-door OPEN buttons, and found it with the white scaled to 255.
+/// PaddleOCR does not. Measured on the 11 test pages, dim and bright, through the parser (2026-10-28), on the raw
+/// pictures and so before the brightening: 98.4% of page elements right, against 91.8% for Windows OCR with its two
+/// passes and re-reads. The brightening is plan 18's: at 0 percent tablet brightness (white text at 80 of 255) the
+/// small model missed faint text on the raw picture, the Maintenance page's pink gear-door OPEN buttons, and found it
+/// with the white scaled to 255.
 /// </summary>
 public static class Bbs757EfbOcr
 {

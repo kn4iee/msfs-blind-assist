@@ -13,7 +13,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 public sealed record Bbs757SettingsSnapshot(JsonElement? Global, bool GlobalExists, IReadOnlyList<JsonElement> Registrations,
     int RegistrationFileCount);
 
-/// <summary>What a save did and what the Settings tab says of it (<see cref="Bbs757SettingsSave.Run"/>).</summary>
+/// <summary>What a save did and what the 757 EFB settings window says of it (<see cref="Bbs757SettingsSave.Run"/>).</summary>
 /// <param name="Spoken">
 /// The sentence to say, or null when there is nothing to add to what the screen reader said: a check box, a choice list or
 /// a slider that saved (CORE-7).
@@ -23,7 +23,7 @@ public sealed record Bbs757SettingsSnapshot(JsonElement? Global, bool GlobalExis
 public sealed record Bbs757SettingSaveOutcome(string? Spoken, bool Immediate, IReadOnlyList<string> TurnedOff);
 
 /// <summary>
-/// One save of the 757 EFB window's Settings tab, from the writes <see cref="Bbs757EfbSettings.WritesFor"/> plans to what
+/// One save of the 757 EFB settings window, from the writes <see cref="Bbs757EfbSettings.WritesFor"/> plans to what
 /// is said. First every key is checked in the files as read (<see cref="WhyNot"/>): with one missing from the settings
 /// file, or from every registration file, nothing is written and the write's own label says why, so a change of several
 /// keys (Units with its units, a callout with the rest of its group) never stops halfway at a key that is not there. A
@@ -53,7 +53,7 @@ public static class Bbs757SettingsSave
     /// Saves <paramref name="setting"/> as <paramref name="value"/> (for a switch or a choice, one of its choices'
     /// <see cref="Bbs757SettingChoice.Stored"/>, and for a slider one of its <see cref="Bbs757Setting.Steps"/>:
     /// <see cref="Bbs757EfbSettings.WritesFor"/> throws <see cref="ArgumentException"/> for anything else).
-    /// <paramref name="files"/> is the files as read just before; <paramref name="shown"/> the rows the tab showed (for
+    /// <paramref name="files"/> is the files as read just before; <paramref name="shown"/> the rows the window showed (for
     /// "turned off"). <paramref name="saveGlobal"/> writes a key of
     /// the settings file and <paramref name="saveRegistrations"/> a key of every registration's file
     /// (<c>Bbs757SettingsFile.Save</c>, <see cref="Bbs757SettingsFile.SaveToRegistrations"/>); <paramref name="log"/>

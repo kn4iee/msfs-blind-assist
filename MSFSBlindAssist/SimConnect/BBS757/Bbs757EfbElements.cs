@@ -282,17 +282,12 @@ public static class Bbs757EfbElements
     /// <summary>
     /// A slider's choices, left to right, as the tablet offers them; null when the slider is a number. A row of the Settings pages that is
     /// one of BlueBird's settings (<see cref="Bbs757EfbSettingsMatch.SettingFor"/>, by the page and the row's label) offers the settings
-    /// catalog's words in its order, which is the tablet's from left to right; a setting with no choices (a continuous slider) offers
-    /// none. A row that matches no setting (a label OCR misread, a slider on another page) takes
-    /// <see cref="Bbs757EfbVocabulary.SliderOptions"/> by its key, and is otherwise a number.
+    /// catalog's words in its order (<see cref="Bbs757EfbSettingsMatch.ChoicesFor"/>), which is the tablet's from left to right; a setting
+    /// with no choices (a continuous slider) offers none. A row that matches no setting (a label OCR misread, a slider on another page)
+    /// offers none either, so it is a number, and a press on it is judged by the page alone.
     /// </summary>
-    public static IReadOnlyList<string>? OptionsFor(Bbs757EfbItem it, string pageName)
-    {
-        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { } setting)
-            return Bbs757EfbSettingsMatch.ChoicesFor(setting);
-        if (!it.Key.StartsWith("sld:", StringComparison.Ordinal)) return null;
-        return Bbs757EfbVocabulary.SliderOptions.TryGetValue(it.Key.Substring(4), out var options) ? options : null;
-    }
+    public static IReadOnlyList<string>? OptionsFor(Bbs757EfbItem it, string pageName) =>
+        Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { } setting ? Bbs757EfbSettingsMatch.ChoicesFor(setting) : null;
 
     /// <summary>
     /// The index among <paramref name="options"/> (the list <see cref="OptionsFor"/> gave for the same row) of the choice the row reads as;
