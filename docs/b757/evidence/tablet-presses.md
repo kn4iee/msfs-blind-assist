@@ -218,8 +218,11 @@ Two more controls were skipped than on 2026-10-29: Automatic boarding (the owner
   - Settings, AIRAC data read UPDATE and both LOGOUTs as a row's value, so the window could not press them. This was
     fixed in Task 12's fix round, with the page as a test fixture (`bright/55-settings-airac-data`, the SimBrief ID
     painted out before the read).
-  - Under a light colors theme (Light blue, measured), the reader finds no switch, slider or choice on any page. By the
-    owner's ruling the theme is offered in neither window, only as a note (B757-21).
+  - Under a light colors theme (Light blue, measured on Settings, General), the reader found no switch, slider or
+    choice on the page: every setting read as a plain row. The owner heard the same in the window at the in-sim checks
+    (2026-10-30), after his press set Light blue. The other pages and the Light grey and Dark grey themes were not
+    measured. By the owner's ruling the theme is offered in neither window as a choice, only as a note, and the settings
+    window offers one "Set to Dark blue" while BlueBird's file holds another theme (B757-21).
 
 **Small against medium, plan 18's reader** (`compare` on the Task 1 captures):
 - **Bright, 18 pages (183 controls):** 3 differences, all the checklist's "Fuel: OB/PLAN" label.
