@@ -725,6 +725,11 @@ public partial class MainForm
             {
                 if (ReferenceEquals(currentAircraft, a350)) a350.ObserveTakeoffSpeeds(speeds, announcer);
             });
+            // And its approach minimums, set, changed or cleared.
+            a350DisplayService.MinimumsRead += minimums => SafeBeginInvoke(() =>
+            {
+                if (ReferenceEquals(currentAircraft, a350)) a350.ObserveMinimums(minimums, announcer);
+            });
         }
         a350DisplayService.Start();
         a350PfdMonitor.Start();

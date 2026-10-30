@@ -56,7 +56,7 @@ public class A350ModuleFactsTests
     // INI_V1, INI_VR and INI_V2 are never written (sim 2026-10-30). Found by name: each getter's returned load is the
     // speed's offset, and update_v1() passes the active flight plan, a static object, as the getter's constant `this`,
     // through a local as the unoptimised module does, or pushed straight.
-    private static A350WasmModule WithFlightPlan(bool throughLocal = true, bool withGetters = true)
+    private static A350WasmModule WithFlightPlan(bool throughLocal = true, bool withGetters = true, bool withApproachReset = true)
     {
         var m = new WasmTestModule();
         int t1 = m.AddType(new[] { I32 }, new[] { I32 });
@@ -80,6 +80,19 @@ public class A350ModuleFactsTests
         call.AddRange(U(v1));
         call.Add(0x1A);
         m.Func("update_v1()", t0, call.ToArray(), localGroups: new byte[] { 1, 1, I32 });
+        if (withApproachReset)
+        {
+            // resetApproachData() as the unoptimised module has it: the prologue stores `this` into the frame (offset 12),
+            // then each field gets 0, the first through a local: local.get 0; i32.const 0; local.set 1; local.get 1;
+            // i32.store offset=748; local.get 0; i32.const 0; i32.store offset=752.
+            var reset = new List<byte> { 0x20, 0x00, 0x20, 0x00, 0x36, 0x02, 0x0C };
+            reset.AddRange(new byte[] { 0x20, 0x00, 0x41, 0x00, 0x21, 0x01, 0x20, 0x01, 0x36, 0x02 });
+            reset.AddRange(U(748));
+            reset.AddRange(new byte[] { 0x20, 0x00, 0x41, 0x00, 0x36, 0x02 });
+            reset.AddRange(U(752));
+            m.Func("FlightPlan::resetApproachData()", m.AddType(new[] { I32 }, Array.Empty<byte>()), reset.ToArray(),
+                localGroups: new byte[] { 1, 1, I32 });
+        }
         m.Data(5000, "\0INI_MCDU{}_ENTER\0INI_MCDU_OPTION\0INI_FMC_PAGE1\0");
         return A350WasmModule.Parse(m.Build());
     }
@@ -91,6 +104,16 @@ public class A350ModuleFactsTests
     {
         var facts = A350ModuleFacts.From(WithFlightPlan(throughLocal));
         Assert.Equal(new A350TakeoffSpeedFacts(1418656, 964, 968, 972), facts.TakeoffSpeeds);
+    }
+
+    // The approach minimums (live 2026-10-30): PERF APPR's BARO at the active flight plan's +748, RADIO at +752 (0 not set,
+    // -1 NO DH), the two fields FlightPlan::resetApproachData() clears, in that order.
+    [Fact]
+    public void The_minimums_are_the_fields_the_approach_reset_clears()
+    {
+        Assert.Equal(new A350MinimumsFacts(1418656, 748, 752), A350ModuleFacts.From(WithFlightPlan()).Minimums);
+        Assert.Null(A350ModuleFacts.From(WithFlightPlan(withApproachReset: false)).Minimums);
+        Assert.Null(A350ModuleFacts.From(WithFlightPlan(withGetters: false)).Minimums);   // no flight plan found
     }
 
     // A version that moved them leaves the call-outs without speeds, never the displays without a reader.

@@ -595,6 +595,11 @@ internal sealed class ProbeForm : Form
                     def.ObserveTakeoffSpeeds(speeds, said);
                     foreach (var text in said.DrainList()) Say(text);
                 });
+                service.MinimumsRead += minimums => BeginInvoke(() =>
+                {
+                    def.ObserveMinimums(minimums, said);
+                    foreach (var text in said.DrainList()) Say(text);
+                });
                 service.Start();
                 await WaitForDisplays(service);
                 Line($"displays: {service.State} {service.Reason}");

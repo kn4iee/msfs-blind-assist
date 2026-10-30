@@ -50,6 +50,9 @@ public sealed class A350DisplayService : IDisposable
     /// worker thread; never when this A350 version's module does not say where they are (logged as it is prepared).</summary>
     public event Action<A350TakeoffSpeeds>? TakeoffSpeedsRead;
 
+    /// <summary>The FMS's approach minimums in each copy a draw request takes (<see cref="A350Minimums"/>), the same way.</summary>
+    public event Action<A350Minimums>? MinimumsRead;
+
     public A350DisplayState State { get; private set; } = A350DisplayState.Idle;
     public string? Reason { get; private set; }
 
@@ -104,6 +107,8 @@ public sealed class A350DisplayService : IDisposable
             _facts = A350ModuleFacts.From(mod);
             if (_facts.TakeoffSpeeds == null)
                 Log.Warn("A350Display", "this A350 version does not say where its FMS keeps the take-off speeds: no V1, Rotate and V2 call-outs");
+            if (_facts.Minimums == null)
+                Log.Warn("A350Display", "this A350 version does not say where its FMS keeps the approach minimums: no minimum call-outs");
             var ui = A350ModulePatcher.UiDrawClassesOf(mod);
             _engine = A350ModuleCache.CreateEngine();
             // Hashed once; "getting ready" is said as a compile starts, whatever the reason (no cache, a corrupt one).
@@ -202,6 +207,9 @@ public sealed class A350DisplayService : IDisposable
                 if (_facts?.TakeoffSpeeds is { } speedsAt && TakeoffSpeedsRead is { } speedsRead
                     && A350TakeoffSpeeds.Read(copy, speedsAt) is { } speeds)
                     speedsRead(speeds);
+                if (_facts?.Minimums is { } minimumsAt && MinimumsRead is { } minimumsRead
+                    && A350Minimums.Read(copy, minimumsAt) is { } minimums)
+                    minimumsRead(minimums);
                 var caps = new List<A350DrawCapture>(gauges.Length);
                 bool retried = false;
                 foreach (var (g, i) in gauges)

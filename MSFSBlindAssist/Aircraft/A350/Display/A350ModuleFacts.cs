@@ -21,11 +21,17 @@ public sealed class A350ModuleFacts
     /// module does not say: then only the take-off call-outs go without, never the displays.</summary>
     public A350TakeoffSpeedFacts? TakeoffSpeeds { get; }
 
-    private A350ModuleFacts(Dictionary<uint, string> vtables, List<(string, int)> anchors, A350TakeoffSpeedFacts? speeds)
+    /// <summary>Where the FMS keeps the approach minimums (<see cref="A350Minimums"/>), or null when this version's module
+    /// does not say: then only their call-outs go without.</summary>
+    public A350MinimumsFacts? Minimums { get; }
+
+    private A350ModuleFacts(Dictionary<uint, string> vtables, List<(string, int)> anchors, A350TakeoffSpeedFacts? speeds,
+        A350MinimumsFacts? minimums)
     {
         VTables = vtables;
         Anchors = anchors;
         TakeoffSpeeds = speeds;
+        Minimums = minimums;
     }
 
     public IReadOnlyList<uint> VTablesOf(string cls) => VTables.Where(kv => kv.Value == cls).Select(kv => kv.Key).OrderBy(a => a).ToList();
@@ -57,7 +63,50 @@ public sealed class A350ModuleFacts
         var anchors = new List<(string, int)>();
         foreach (var a in AnchorStrings)
             anchors.Add((a, mod.LinearAddressOf(a) ?? throw new A350ModuleException("A350 module has no anchor string " + a)));
-        return new A350ModuleFacts(vt, anchors, TakeoffSpeedsOf(mod));
+        var speeds = TakeoffSpeedsOf(mod);
+        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds));
+    }
+
+    /// <summary>The function that clears the approach minimums: its two stores, BARO then RADIO (live 2026-10-30).</summary>
+    public const string ApproachResetFunction = "FlightPlan::resetApproachData()";
+
+    private static A350MinimumsFacts? MinimumsOf(A350WasmModule mod, A350TakeoffSpeedFacts? speeds)
+    {
+        var hits = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && kv.Value == ApproachResetFunction).Select(kv => kv.Key).ToList();
+        if (speeds is null || hits.Count != 1)
+            return null;
+        // The fields get 0; the prologue's store of `this` into the frame is no field.
+        var stores = WithKnownTop(mod, hits[0]).Where(i => i.Op == 0x36 && i.Top == 0).Select(i => (int)i.Immediate).ToList();
+        return stores.Count == 2 ? new A350MinimumsFacts(speeds.FlightPlan, stores[0], stores[1]) : null;
+    }
+
+    /// <summary>A function's instructions, each with the constant the stack's top holds as it runs, where one is known: the
+    /// unoptimised module pushes a constant straight, or sets a local from an <c>i32.const</c> and gets it back.</summary>
+    private static IEnumerable<(byte Op, long Immediate, long? Top)> WithKnownTop(A350WasmModule mod, int function)
+    {
+        var locals = new Dictionary<long, long>();
+        long? top = null;
+        foreach (var (op, imm) in mod.Instructions(function))
+        {
+            yield return (op, imm, top);
+            switch (op)
+            {
+                case 0x41:   // i32.const
+                    top = imm;
+                    break;
+                case 0x21:   // local.set
+                    if (top is long c) locals[imm] = c; else locals.Remove(imm);
+                    top = null;
+                    break;
+                case 0x20:   // local.get
+                    top = locals.TryGetValue(imm, out var v) ? v : null;
+                    break;
+                default:     // local.tee and every other instruction: the stack's top is no longer a known constant
+                    if (op == 0x22) locals.Remove(imm);
+                    top = null;
+                    break;
+            }
+        }
     }
 
     /// <summary>The getters of the active flight plan's take-off speeds, and the function that calls the V1 getter on that
@@ -97,30 +146,9 @@ public sealed class A350ModuleFacts
     /// <c>i32.const</c> and got back for the call.</summary>
     private static uint? ConstantArgument(A350WasmModule mod, int caller, int callee)
     {
-        var locals = new Dictionary<long, long>();
-        long? pushed = null;   // the constant the last instruction left on the stack, if it was one
-        foreach (var (op, imm) in mod.Instructions(caller))
-        {
-            switch (op)
-            {
-                case 0x41:   // i32.const
-                    pushed = imm;
-                    break;
-                case 0x21:   // local.set
-                    if (pushed is long c) locals[imm] = c; else locals.Remove(imm);
-                    pushed = null;
-                    break;
-                case 0x20:   // local.get
-                    pushed = locals.TryGetValue(imm, out var v) ? v : null;
-                    break;
-                case 0x10 when imm == callee:
-                    return pushed is long a && a > 0 && a <= uint.MaxValue ? (uint)a : null;
-                default:     // local.tee and every other instruction: the stack is no longer a known constant
-                    if (op == 0x22) locals.Remove(imm);
-                    pushed = null;
-                    break;
-            }
-        }
+        foreach (var (op, imm, top) in WithKnownTop(mod, caller))
+            if (op == 0x10 && imm == callee)
+                return top is long a && a > 0 && a <= uint.MaxValue ? (uint)a : null;
         return null;
     }
 }

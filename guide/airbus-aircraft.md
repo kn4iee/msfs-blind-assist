@@ -759,6 +759,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - The FCU altitude window and each side's baro when they change other than by your own entry: *"Altitude 12000 feet"*, *"Captain altimeter 1013 hectopascals"*, *"First officer altimeter standard"*.
 - *"IRS aligned"*, once, as the last IR that is on finishes aligning.
 - The take-off speeds as the FMS takes them (*"V1: 142 knots"*), and *"V1"*, *"Rotate"* and *"V2"* on the take-off roll.
+- The approach minimums as PERF APPR takes them: *"Baro minimum 520 feet"*, *"Decision height 200 feet"*, *"No DH"*, and *"Baro minimum cleared"* when one goes, for example when you enter the other (the A350 keeps one) or change the approach. The FMS's own reset after landing says nothing.
 - Where the thrust levers, flaps and speed brake went (*"All thrust levers Climb"*, *"Spoilers 40 percent"*).
 - Every E/WD line as it appears, with its colour, from power-up on.
 - Each flight mode annunciator change with its colours, for example *"FMA vertical: SRS, green"*.

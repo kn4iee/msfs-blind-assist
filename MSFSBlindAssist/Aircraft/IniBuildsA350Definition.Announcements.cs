@@ -364,6 +364,39 @@ public partial class IniBuildsA350Definition
         }
     }
 
+    /// <summary>The FMS's approach minimums as the display reader reads them, taken once two reads agree.</summary>
+    private readonly A350.Display.A350StableValue<A350.Display.A350Minimums> _fmsMinimums = new();
+    private A350.Display.A350Minimums? _minimumsTaken;   // the last taken: a change is said against it
+    private bool _flownSinceMinimumSet;   // airborne since a minimum was last set: a clear on the ground now is the FMS's own
+
+    /// <summary>
+    /// The FMS's approach minimums as the display reader read them from a memory copy (<see cref="A350.Display.A350Minimums"/>),
+    /// on the UI thread, taken once two reads agree, as the A380 says its own (<see cref="A350MinimumsCallout"/>): set or
+    /// changed ("Baro minimum 520 feet", "Decision height 200 feet", "No DH") and cleared, each behind its row. The first taken
+    /// after a flight load is the baseline. A clear on the ground once the aircraft has flown since the minimum was set is the
+    /// FMS's reset after landing and is consumed silently (the A380's <see cref="ApproachMinimums.IsFmsReset"/>); a clear in the
+    /// air, or at the gate before a flight, is an approach change and is said. On the ground is the sim's cache where there is
+    /// one (a flight loaded in the air never delivers SIM_ON_GROUND here).
+    /// </summary>
+    public void ObserveMinimums(A350.Display.A350Minimums read, ScreenReaderAnnouncer announcer)
+    {
+        bool onGround = _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
+        if (!onGround)
+            _flownSinceMinimumSet = true;
+        if (!_fmsMinimums.Offer(read, out var taken))
+            return;
+        var before = _minimumsTaken;
+        _minimumsTaken = taken;
+        if (before is not { } was)
+            return;
+        bool sayClears = !(onGround && _flownSinceMinimumSet);
+        if (taken.Baro > 0 && taken.Baro != was.Baro || taken.Radio != 0 && taken.Radio != was.Radio)
+            _flownSinceMinimumSet = !onGround;   // set for an approach still to come
+        foreach (var (key, text) in A350MinimumsCallout.Changes(was, taken, sayClears))
+            if (!IsMuted(key) && !_disposed)
+                announcer.Announce(text);
+    }
+
     /// <summary>A reconnect: the roll call-outs' arm goes, never the speeds, which a reconnect need not deliver again.</summary>
     public override void ResetAnnouncementBaselines()
     {
@@ -500,6 +533,9 @@ public partial class IniBuildsA350Definition
         _fmsSpeeds.Reset();
         _speedsTaken = null;
         _flownSinceSpeedsSet = false;
+        _fmsMinimums.Reset();
+        _minimumsTaken = null;
+        _flownSinceMinimumSet = false;
         _commanded.Clear();
         _lampBoard.Reset();
         _lampSpeech.Clear();
