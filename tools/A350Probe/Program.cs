@@ -95,7 +95,7 @@ internal sealed class ProbeForm : Form
     /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
     internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "list", "vars", "live", "set", "keep", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd",
+        "list", "vars", "live", "set", "keep", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "mfd", "nd", "ndpage",
         "rmpwin", "hotkey", "displays", "gsx",
     };
     private readonly StringBuilder _out = new();
@@ -295,6 +295,22 @@ internal sealed class ProbeForm : Form
         for (int i = 0; i < 240 && service.State is MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Idle
             or MSFSBlindAssist.Aircraft.A350.Display.A350DisplayState.Preparing; i++)
             await Task.Delay(500);
+    }
+
+    /// <summary>`ndpage [side]`: the ND window's lines as MSFSBA's path reads them (its A: vars answered), each with its kind and click.</summary>
+    private async Task RunNdPage()
+    {
+        int side = int.TryParse(_arg, out var s) ? s : 0;
+        using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+        var avars = new MSFSBlindAssist.Aircraft.A350.Display.A350AVarAnswers(key => _m!.GetCachedVariableValue(key), ask => Line("asked: " + ask));
+        service.AVarAnswer = avars.Answer;
+        service.Start();
+        await WaitForDisplays(service);
+        await Task.Delay(1500);
+        var caps = await service.DrawAsync(("EFIS", side));
+        if (caps == null || caps.Count == 0 || !caps[0].Ok) { Line("no draw: " + caps?.FirstOrDefault()?.Error); return; }
+        foreach (var l in MSFSBlindAssist.Aircraft.A350.Display.A350NdPage.Read(caps[0], side))
+            Line($"{l.Kind,-7} {l.ClickX,7:0.0} {l.ClickY,7:0.0}  {l.Spoken}");
     }
 
     /// <summary>`displays [name,name]`: every display on demand (the Displays section's panels) as its status display reads
@@ -752,6 +768,12 @@ internal sealed class ProbeForm : Form
         if (_mode == "displays")
         {
             await RunDisplays();
+            return;
+        }
+
+        if (_mode == "ndpage")
+        {
+            await RunNdPage();
             return;
         }
 

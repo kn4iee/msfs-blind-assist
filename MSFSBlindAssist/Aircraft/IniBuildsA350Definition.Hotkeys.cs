@@ -29,6 +29,18 @@ public partial class IniBuildsA350Definition
                             simConnect.GetCachedVariableValue(SdPageKey))), announcer),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
+            // Ctrl+Shift+B: the ND and its airport map (ANF), as the A380's airport map window: the A350 draws them on the ND.
+            case HotkeyAction.ShowOANS:
+                hotkeyManager.ExitOutputHotkeyMode();
+                ShowTrackedWindow(
+                    () => new Forms.A350.A350NdWindow(side => Pfd?.Latest("EFIS", side),
+                        async side => Displays == null ? null : (await Displays.DrawAsync(("EFIS", side)))?.FirstOrDefault(),
+                        side => IsScreenDark(side == 0 ? "Captain ND" : "First Officer ND"),
+                        new A350.Display.A350NdInput(simConnect.ExecuteCalculatorCodeUnique), announcer,
+                        (side, mode, position) => PressRow(NdKnobRow(side, mode), simConnect, announcer, position),
+                        (side, mode) => Cached(simConnect, NdKnobRow(side, mode))),
+                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                return true;
             // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
             // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU. While it is open it says
             // the FMS messages itself, and the background follows them silently (MfdWindowOpen).
@@ -227,6 +239,9 @@ public partial class IniBuildsA350Definition
                 if (page != null) w.PressPage(page);
             });
     }
+
+    /// <summary>A side's ND mode or range knob, the EFIS panel's own row.</summary>
+    private static string NdKnobRow(int side, bool mode) => $"A350_EFIS_{(mode ? "MODE" : "RANGE")}_{(side == 0 ? "LEFT" : "RIGHT")}";
 
     /// <summary>An FCU window as the cockpit shows it now (<see cref="A350.A350FcuWindows"/>), or null while unread.</summary>
     internal string? FcuWindowText(string windowName, SimConnectManager simConnect)

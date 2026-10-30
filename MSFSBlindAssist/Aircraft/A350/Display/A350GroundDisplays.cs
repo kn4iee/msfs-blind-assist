@@ -25,10 +25,11 @@ public static class A350GroundDisplays
     private static bool Number(DrawnCell c) => c.Text.Length > 0 && c.Text.All(ch => char.IsDigit(ch) || ch == '.');
 
     /// <summary>A side's ND (EFIS#0's left half, EFIS#1's right half), in its own coordinates.</summary>
-    public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side)
+    /// <param name="skip">Texts another reader has taken (the ND's controls, <see cref="A350NdPage"/>).</param>
+    public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side, Func<DrawnText, bool>? skip = null)
     {
         float shift = side == 0 ? HalfWidth : 0;
-        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd, A350DrawLayout.EfisNd(side))
+        var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd.Where(t => skip?.Invoke(t) != true), A350DrawLayout.EfisNd(side))
             .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < HalfWidth).ToList();
         // The airport map at a zoom range (A350NdMap): read by kind, before the rows; its texts are not read again.
         var mapUsed = new HashSet<DrawnText>();
@@ -53,6 +54,13 @@ public static class A350GroundDisplays
         // at the bottom left (ND::DrawChrono, x 57 and 114: minutes and seconds, hours and minutes past the hour).
         Field("Procedure", c => c.X is >= 200 and < 420 && Math.Abs(c.Y - 35) <= 8);
         Field("Chrono", c => c.Colour == "green" && c.X is >= 40 and < 130 && Math.Abs(c.Y - 660) <= 8 && Number(c));
+        // The ANF's two-line flag at the top: the airport shown is not in the flight plan (PLAN).
+        var notInPlan = cells.Where(c => c.Text is "ARPT NOT IN" or "ACTIVE F-PLN").OrderBy(c => c.Y).ToList();
+        if (notInPlan.Count == 2)
+        {
+            used.UnionWith(notInPlan);
+            o.Add($"ARPT NOT IN ACTIVE F-PLN, {notInPlan[0].Colour}");
+        }
         o.AddRange(map);
         // The TO waypoint block, top right (live in the climb): the name (white) and the track to it (green, x 759), the
         // distance a line under ("6." and a smaller "2", then a cyan NM), the ETA under that. One line, as a pilot reads it.

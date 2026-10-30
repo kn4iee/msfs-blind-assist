@@ -777,10 +777,21 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - *"Memory low: 9 gigabytes left. The sim may close soon: save the flight in the OIS, then restart it."* when your PC is running out of memory. Long A350 flights make the simulator grow until it closes without warning, so this is said once below 10 gigabytes and once more below 5.
 - *"A350 module stopped responding: its displays and controls no longer work"* if the aircraft's own software stops (its displays freeze and nothing you press works), and *"A350 module responding again"* if it recovers. A paused simulator never counts.
 
+### The ND and its airport map (ANF) {#a350-nd-window}
+
+**Output Ctrl+Shift+B** opens the ND window: the A350's airport map (the ANF, its version of the A380's OANS) and Brake To Vacate live on the ND, and this window reads the ND line by line and does what a click does there. The ANF needs your Navigraph account linked on the OIS (FLT OPS MENU, OPTIONS, 3RD PARTY); without it the ND says *"ARPT NAV NOT AVAIL (NAVIGRAPH)"*, and Brake To Vacate still works by distance on the LANDING tab.
+
+- **Side**, **ND mode** and **ND range** at the top are that side's own EFIS knobs. The range's Zoom positions show the airport map. On Arc and the Rose modes the map follows the aircraft; **Plan** lets you look anywhere, and at other airports.
+- **The list** holds what the ND shows, then every name on the map with where it lies, nearest first: *"Stand A7: 2 o'clock, 75 m"*, *"Taxiway M6: north west, 75 m from the map's centre"* on Plan, *"Flag: 3 o'clock, 205 m"*. A name marked *"off the screen"* is known but needs the map moved first.
+- **Enter** does on a line what a click does: a name on the map opens the ND's menu for that spot, whose items then come first in the list (SET LDG RWY, SET BTV EXIT or UNSET BTV EXIT, DECLUTTER RWY, ADD CROSS, ADD FLAG, MAP DATA, ERASE ALL CROSSES, ERASE ALL FLAGS, CENTER ON ACFT; DELETE CROSS or DELETE FLAG on a mark). A greyed item says *"grey"*: it does nothing now.
+- **Functions button** opens the panel with its four tabs. **MAP DATA:** choose RWY, TWY, STAND or OTHER, then pick an item from the **Map item list button**, or type in the field; it shows the runway's lengths and offers ADD CROSS, ADD FLAG and CENTER MAP ON (Plan only). **LANDING:** MODIFY RWY, LDG PERF CODE, and the distance for BTV. **ARPT SEL:** type an ICAO or IATA code or a city name, or press ORIGIN, DEST or ALTN, then DISPLAY AIRPORT (Plan only); the airport's name reads yellow while it is only selected and green once shown. **STATUS:** the active and second airport databases and SWAP.
+- **The text box at the bottom** is for a field: type, then press Enter on the field. **Control plus an arrow** drags the map that way (on Arc and Rose it springs back when let go, as it does for a sighted pilot). **Page Up and Page Down** are the KCCU's arrows, which move through an open list longer than its 4 rows. **Backspace** is CLR, **Alt+X** the KCCU's ESC, **F5** reads now, **Escape** closes.
+
+**Brake To Vacate:** select the landing runway in the flight plan, set the runway condition (Autobrake panel), set the ND to Plan and a Zoom range, press the taxiway's name on the runway and choose SET BTV EXIT, or enter a distance on the LANDING tab, then press A/BRK. The ND then shows the runway and its landing distance, the condition, the exit, the occupancy and turnaround times, and the FMA says BTV. An exit before the wet or dry stop line reads *"TOO SHORT"*.
+
 ### Things to know {#things-to-know-5}
 
 - **The A350's First Officer is not there yet.** Output Shift+C says *"No checklist for this aircraft."* Use the MFD's own checklists (Output Ctrl+Shift+C).
-- **The A380's airport map and BTV window is not on the A350.** Output Ctrl+Shift+B says it is only on the A380. The A350 draws its airport map and brake-to-vacate on the navigation display.
 - **Surroundings window frequencies:** the A350 has no stock COM radio, so pressing Enter on a frequency in the Surroundings window tells you that this aircraft tunes its radios only through its radio management panels.
 - **Pictures stay pictures.** The OIS charts and en-route map, and the tapes, attitude and map symbols on the PFD and ND, are graphics. BA reads their values from the aircraft where it can.
 - **After an A350 update,** BA prepares the displays again (about 15 seconds). If a display stops reading after an update, report it.

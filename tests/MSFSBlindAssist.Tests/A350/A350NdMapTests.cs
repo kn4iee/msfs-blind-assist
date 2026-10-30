@@ -66,7 +66,7 @@ public class A350NdMapTests
     {
         var lines = A350GroundDisplays.ReadNd(Fixture("efis1_stand_omdb_a5"), 1);
         Assert.Equal("Position: A5, yellow", Line(lines, "Position"));
-        Assert.Equal("Buildings: CONCOURSE A, cyan", Line(lines, "Buildings"));
+        Assert.Equal("Stands and buildings: CONCOURSE A, cyan", Line(lines, "Stands and buildings"));
         Assert.Equal("Map range: 0.5 NM, cyan", Line(lines, "Map range"));
         Assert.Contains("Ground speed: 0, green", lines);
     }
