@@ -58,6 +58,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>The status lines beside offered rows (<see cref="A350StatusLines"/>), by key.</summary>
     private readonly Dictionary<string, A350StatusLine> _statusLines = new(StringComparer.Ordinal);
 
+    /// <summary>The doors shown and said (<see cref="A350Doors"/>), and whether each was last open (absent until delivered
+    /// or seeded).</summary>
+    private readonly Dictionary<string, A350Doors.Door> _doors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool> _doorOpen = new(StringComparer.Ordinal);
+
     /// <summary>The FCU's windows, while its panel is offered (<see cref="A350FcuWindows"/>).</summary>
     private readonly Dictionary<string, A350FcuWindow> _fcuWindows = new(StringComparer.Ordinal);
 
@@ -158,6 +163,14 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
                 _statusLines[line.Key] = line;
                 _lampInputKeys.Add(line.Key);   // consumed silently: shown, never spoken
                 AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == line.Beside)).Key, line.Key);
+            }
+
+        // The doors on the Doors and Hatches panel (A350Doors), each said as it opens and closes.
+        if (_rows.ContainsKey(A350Doors.PanelRow))
+            foreach (var door in A350Doors.All)
+            {
+                _doors[door.Key] = door;
+                AddDisplay(_placement.RowsByPanel.First(p => p.Value.Any(r => r.Key == A350Doors.PanelRow)).Key, door.Key);
             }
 
         // The ECAM Control Panel's status display reads the SD page shown (A350SdText), as the A380's does:
@@ -344,6 +357,11 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             displayText = line.Format(value);
             return true;
         }
+        if (_doors.TryGetValue(varKey, out var door))
+        {
+            displayText = A350Doors.State(door, A350Doors.IsOpen(value));
+            return true;
+        }
         if (_values.TryGetValue(varKey, out var readout))
         {
             displayText = A350Readouts.Format(readout.Control, value);
@@ -433,6 +451,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             Register(IrsAlignmentKey, "INI_IRS_ALIGNED", "IRS alignment", null);
             vars[IrsAlignmentKey].ExcludeFromMonitorManager = false;
             _lampInputKeys.Add(IrsAlignmentKey);
+        }
+        // The doors (A350Doors): each its interactive point, on its own Ctrl+M row, consumed and said as it moves.
+        foreach (var door in _doors.Values)
+        {
+            Register(door.Key, door.Var, door.Name, null, "percent over 100");
+            vars[door.Key].ExcludeFromMonitorManager = false;
+            vars[door.Key].ValueDescriptions = new Dictionary<double, string>();
         }
         // The module watchdog (A350ModuleWatchdog): the heartbeat on the call-out's own Ctrl+M row and the sim's clock, both
         // consumed silently and judged at each batch end.
@@ -670,6 +695,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         if (_speakingByInputKey.TryGetValue(varName, out var windows))
             foreach (var window in windows)
                 ObserveWindow(window, varName, value, announcer);
+        // A door, as the A380's: said once per transition, never while the seed settles (the new flight's state).
+        if (_doors.TryGetValue(varName, out var door))
+        {
+            bool open = A350Doors.IsOpen(value);
+            bool? was = _doorOpen.TryGetValue(varName, out var before) ? before : null;
+            _doorOpen[varName] = open;
+            if (!_seedGate.Armed && was is bool closedOrOpen && closedOrOpen != open && !IsMuted(varName) && !_disposed)
+                announcer.Announce(A350Doors.Said(door, open));
+            return true;
+        }
         if (varName.StartsWith("A350_STAT_IR", StringComparison.Ordinal))
             _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
         else if (varName is A350ModuleWatchdog.HeartbeatKey or A350ModuleWatchdog.SimTimeKey)

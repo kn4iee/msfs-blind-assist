@@ -497,6 +497,10 @@ public partial class IniBuildsA350Definition
                 _leverSpeech.SeedThrust(2, tla2);
             if (_rows.ContainsKey(SpeedBrakeKey) && Cached(sim, SpeedBrakeKey) is double handle)
                 _leverSpeech.SeedSpeedBrake(handle);
+            // And the doors never delivered since the reset (MainForm hands a definition no first snapshot).
+            foreach (var key in _doors.Keys)
+                if (!_doorOpen.ContainsKey(key) && Cached(sim, key) is double point)
+                    _doorOpen[key] = A350Doors.IsOpen(point);
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
@@ -544,6 +548,7 @@ public partial class IniBuildsA350Definition
         _stepReadbacks.Clear();   // a step made before the load is not the new flight's value
         _irs.Reset();
         _watchdog.Reset();
+        _doorOpen.Clear();   // the seed takes the new flight's doors
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();
