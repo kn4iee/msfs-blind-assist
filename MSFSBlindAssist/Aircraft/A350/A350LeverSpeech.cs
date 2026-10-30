@@ -29,10 +29,14 @@ public sealed class A350LeverSpeech
     /// was inside MainForm's echo window (the pilot's own pick, which the screen reader said: dropped, never said).</summary>
     private readonly (string Detent, long At, bool Suppressed)?[] _held = new (string, long, bool)?[2];
 
-    /// <summary>The detent a TLA sits at (the A350's: reverse -20 to 0, reverse idle -6, CLB 25, FLX/MCT 35, TOGA 45),
-    /// or null between detents. "Flex M C T" so a speech engine spells it.</summary>
+    /// <summary>The take-off's first step (<see cref="A350Levers"/>).</summary>
+    public const string TakeoffSpool = "50 percent N1";
+
+    /// <summary>The detent a TLA sits at (the A350's: reverse -20 to 0, reverse idle -6, CLB 25, FLX/MCT 35, TOGA 45; and the
+    /// take-off's first step, 12), or null between detents. "Flex M C T" so a speech engine spells it.</summary>
     public static string? Detent(double tla) =>
         Math.Abs(tla) < 1.5 ? "Idle" :
+        Math.Abs(tla - 12) < 1.5 ? TakeoffSpool :
         Math.Abs(tla - 25) < 2.5 ? "Climb" :
         Math.Abs(tla - 35) < 2.5 ? "Flex M C T" :
         Math.Abs(tla - 45) < 2.5 ? "TOGA" :

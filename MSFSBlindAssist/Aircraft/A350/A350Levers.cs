@@ -60,9 +60,13 @@ internal static class A350Levers
         (11, "Door", "DOOR"), (12, "Wheel", "WHEEL"), (14, "Status", "STS"), (16, "Video", "VIDEO"),
     };
 
+    /// <summary>The take-off's first step, no detent on the quadrant but no other way to set it from a combo: the levers reaching FLX or
+    /// TOGA with N2 below 70 arm nothing (<c>update_EWD_flight_phase</c>; live 2026-10-30, lever angle 12 at sea level: N1 53, N2 82).</summary>
+    private const double TakeoffSpoolTla = 12;
+
     private static readonly (double Tla, string Word)[] Detents =
     {
-        (-20, "Reverse"), (-6, "Reverse idle"), (0, "Idle"), (25, "Climb"), (35, "Flex/MCT"), (45, "TOGA"),
+        (-20, "Reverse"), (-6, "Reverse idle"), (0, "Idle"), (TakeoffSpoolTla, A350LeverSpeech.TakeoffSpool), (25, "Climb"), (35, "Flex/MCT"), (45, "TOGA"),
     };
 
     private static readonly (double Handle, string Word)[] SpeedBrakeSteps =

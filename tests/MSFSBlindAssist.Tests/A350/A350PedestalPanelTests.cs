@@ -90,7 +90,7 @@ public class A350PedestalPanelTests
     [Fact]
     public void Thrust_levers()
     {
-        const string detents = "-20=Reverse, -6=Reverse idle, 0=Idle, 25=Climb, 35=Flex/MCT, 45=TOGA";
+        const string detents = "-20=Reverse, -6=Reverse idle, 0=Idle, 12=50 percent N1, 25=Climb, 35=Flex/MCT, 45=TOGA";
         AssertRows("Thrust Levers",
             ("All thrust levers", Set, detents),
             ("Thrust lever 1", Set, detents),

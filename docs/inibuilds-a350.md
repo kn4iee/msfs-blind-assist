@@ -393,18 +393,20 @@ whole flight, which is what a flight on 2026-10-30 did: no pause at T/D and no T
 speed that stays on the cruise schedule, and `FCPC_F_SPEED` still the takeoff configuration's F (137 kt, the F on PERF T.O, against PERF APPR's
 154 at 193 t; the PFD draws its F symbol from the same variable). Fly such an approach on selected speed and set flaps 3 and FULL by hand.
 
-What arms it (`AP_LOGIC::INI_update_throttle_detents`), tried on the brakes with both engines running and flaps 2, read from the FMA and
-`INI_AUTOTHROTTLE_ARMED`:
+What arms it (`AP_LOGIC::INI_update_throttle_detents`, live 2026-10-30 on the brakes with both engines running and flaps 2): the levers reaching FLX (with a FLEX
+temperature) or TOGA set `INI_AUTOTHROTTLE_ARMED`, then SRS and RWY, but on the next frame, while `INI_EWD_FLIGHT_PHASE` is still 2 or less, the same function clears them
+all. `update_EWD_flight_phase` goes to 3 only with the levers at the detent and N2 at or above 70 on an engine. So the engines must be spooled before the detent, the real
+procedure's 50 % N1, stabilised:
 
 | Levers | FMA | Armed |
 | --- | --- | --- |
-| TOGA | `MAN TOGA`, `SRS` with `CLB` armed, `RWY` with `NAV` armed, `A/THR` cyan | yes |
-| FLX, a FLEX temperature in PERF T.O | as TOGA, with `MAN FLX` and the temperature | by the code; not yet tried |
-| FLX, no temperature | `MAN MCT` | no, no SRS |
-| TOGA after a press of an A/THR disconnect button, or as the first thrust after a landing | `MAN TOGA`, no SRS, no `A/THR` | no: latched |
+| Idle straight to FLX or TOGA (N2 59) | `MAN FLX` or `MAN TOGA`, no SRS, no `A/THR`; any modes the FMA held are cleared to CLB and NAV armed | no |
+| 50 % N1 (lever angle 12, N1 53, N2 82, a few seconds), then FLX or TOGA | `MAN FLX +67`, `SRS` with `CLB` armed, `NAV` armed, `A/THR` cyan | yes |
+| FLX, no FLEX temperature | `MAN MCT` | no |
 
-The latch clears with a press of the FCU A/THR button; nothing reads different at idle (`INI_AUTOTHROTTLE_ARMED` stays 0 until the levers move).
-`INI_EWD_FLIGHT_PHASE` reads 13 after a landing, 2 with the engines started, 3 at takeoff thrust.
+That is why the row "All thrust levers" has 50 percent N1, which no detent marks: a combo has no other way to stop there. The FCU A/THR button plays no part: an earlier
+test that seemed to need it had the engines still spinning down from the one before. OIS T.O PERF's SEND TO FMS fills the FLEX temperature, PERF's CONFIRM the V-speeds.
+Moving on the ground with thrust above taxi (lever angle 18) has the FMA read `V/S -200`, `OP CLB` and `RWY TRK` with the flight directors on; the next levers to a detent clear it.
 
 Other things a flight showed:
 

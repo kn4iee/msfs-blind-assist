@@ -37,9 +37,21 @@ public class A350LeversTests
         var row = Row($"A350_ENGINE_THROTTLE_{lever}");
         Assert.Equal(($"Thrust lever {lever}", A350RowAction.Set), (row.Name, row.Action));
         Assert.Equal($"L:INI_AUTOTHRUST_TLA:{lever}", row.Control!.StateVar);
-        Assert.Equal("-20=Reverse, -6=Reverse idle, 0=Idle, 25=Climb, 35=Flex/MCT, 45=TOGA", Positions(row));
+        Assert.Equal("-20=Reverse, -6=Reverse idle, 0=Idle, 12=50 percent N1, 25=Climb, 35=Flex/MCT, 45=TOGA", Positions(row));
         Assert.Equal(new[] { $"25 (>L:INI_TLA{lever}_REQUEST)" }, Rpn(A350WritePlan.ForSet(row.Control, 25, 0)));
         Assert.Equal(new[] { $"-20 (>L:INI_TLA{lever}_REQUEST)" }, Rpn(A350WritePlan.ForSet(row.Control, -20, 0)));
+    }
+
+    // The take-off's first step, with no detent to feel for (live 2026-10-30, sea level: lever angle 12 settles at N1 53, N2 82). The
+    // levers reaching FLX or TOGA from idle arm nothing: a pilot picking from a combo has no other way to set it.
+    [Fact]
+    public void All_thrust_levers_can_stop_at_50_percent_n1()
+    {
+        var all = Row("A350_THRUST_LEVERS_ALL");
+        Assert.Contains("12=50 percent N1", Positions(all));
+        Assert.Equal(new[] { "12 (>L:INI_TLA1_REQUEST) 12 (>L:INI_TLA2_REQUEST)" }, Rpn(A350WritePlan.ForSet(all.Control!, 12, 0)));
+        Assert.Equal("50 percent N1", A350LeverSpeech.Detent(12));
+        Assert.Null(A350LeverSpeech.Detent(6));
     }
 
     [Fact]

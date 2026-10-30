@@ -15,7 +15,7 @@ public class A350LeverSpeechTests
     [InlineData(45, "TOGA")]
     [InlineData(-6, "Reverse idle")]
     [InlineData(-20, "Maximum reverse")]
-    [InlineData(12, null)]
+    [InlineData(18, null)]
     public void A_tla_names_its_detent_or_nothing_mid_travel(double tla, string? word) =>
         Assert.Equal(word, A350LeverSpeech.Detent(tla));
 
