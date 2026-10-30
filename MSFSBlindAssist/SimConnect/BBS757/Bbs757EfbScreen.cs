@@ -194,7 +194,8 @@ public static class Bbs757EfbScreen
 {
     public const int Width = 1397, Height = 1048;
     public const int StatusBottom = 32, TitleTop = 35, TitleBottom = 88, MenuRight = 252;
-    /// <summary>The home button left of every app title (the layout's own Home point).</summary>
+    /// <summary>The home icon left of every app's title, a point measured on the 2026-10-26 captures: the window's own Home
+    /// button taps it (<see cref="Bbs757EfbElements"/>), as the reader offers no control for the icon.</summary>
     public static readonly Point HomeButton = new(19, 62);
 
     /// <summary>

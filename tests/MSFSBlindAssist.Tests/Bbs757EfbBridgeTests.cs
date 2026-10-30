@@ -899,8 +899,9 @@ public class Bbs757EfbBridgeTests
     [MemberData(nameof(Cultures))]
     public async Task Every_two_choice_row_the_tablet_shows_says_its_other_choice_both_ways(string culture)
     {
-        // The rows the owner named (2026-10-30), each pressed from either of its words. The pill's side is not the word's (measured
-        // 2026-10-29), so a row may start on or off: the press flips it and says the word of the choice that was not set.
+        // The rows the owner named (2026-10-30), each pressed from either of its words with its pill either way. The pill's side is
+        // not the word's (measured 2026-10-29: EHSI's HDG reads on, CPDLC's Hoppie off), so each word is met with the pill on and
+        // with it off: the press flips the pill and says the word of the choice that was not set, whichever side the pill was on.
         var rows = new (string Label, string Section, string Path, string[] Words)[]
         {
             ("CPDLC network", "AIRCRAFT", "cpdlc_network", new[] { "Hoppie", "SayIntentions" }),
@@ -914,21 +915,23 @@ public class Bbs757EfbBridgeTests
             var stored = Bbs757EfbSettings.ByPath(path)!.Choices.Select(c => c.Stored).ToArray();
             for (int before = 0; before < 2; before++)
             {
-                bool onBefore = before == 1;
-                var row = Switch(label, "tgl:" + label.ToUpperInvariant(), on: onBefore, value: words[before]);
-                var tablet = new FakeTablet(PageOf("SETTINGS", section, row));
-                tablet.File[path] = stored[before];
-                var press = tablet.Press(row);
-                tablet.OnTap = _ =>
+                foreach (bool onBefore in new[] { false, true })
                 {
-                    tablet.File[path] = stored[1 - before];
-                    tablet.Show(PageOf("SETTINGS", section, row with { On = !onBefore, Value = words[1 - before] }));
-                };
+                    var row = Switch(label, "tgl:" + label.ToUpperInvariant(), on: onBefore, value: words[before]);
+                    var tablet = new FakeTablet(PageOf("SETTINGS", section, row));
+                    tablet.File[path] = stored[before];
+                    var press = tablet.Press(row);
+                    tablet.OnTap = _ =>
+                    {
+                        tablet.File[path] = stored[1 - before];
+                        tablet.Show(PageOf("SETTINGS", section, row with { On = !onBefore, Value = words[1 - before] }));
+                    };
 
-                await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+                    await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
 
-                Assert.Single(tablet.Taps);
-                Assert.Equal(new[] { label + ": " + words[1 - before] }, tablet.Alerts);
+                    Assert.Single(tablet.Taps);
+                    Assert.Equal(new[] { label + ": " + words[1 - before] }, tablet.Alerts);
+                }
             }
         }
     }

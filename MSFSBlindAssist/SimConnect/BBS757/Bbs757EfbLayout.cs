@@ -10,8 +10,9 @@ public sealed record EfbPoint(int X, int Y);
 /// What the 757 EFB code keeps of BlueBird's EFB tablet ("BBOS", release 0.1.0) that no read of the tablet gives it: the chocks'
 /// L:var, the names of the weight units the load sheet speaks, the rules for a SimBrief ID, and how a click sequence goes to the
 /// agent (<see cref="CoherentBbs757EfbClient"/>). Every control is found where the tablet reader sees it
-/// (<see cref="Bbs757EfbScreen"/>, the window's own Home button at <see cref="Bbs757EfbScreen.HomeButton"/> included) and pressed
-/// through <see cref="Bbs757EfbPressRunner"/>, so no table of measured positions is left to go stale when BlueBird moves a button.
+/// (<see cref="Bbs757EfbScreen"/>) and pressed through <see cref="Bbs757EfbPressRunner"/>, so no table of measured positions is
+/// left to go stale when BlueBird moves a button. The one exception is the window's own Home button: the reader offers no control
+/// for the home icon, so it is tapped at a point measured once (<see cref="Bbs757EfbScreen.HomeButton"/>).
 /// Pure.
 /// </summary>
 public static class Bbs757EfbLayout

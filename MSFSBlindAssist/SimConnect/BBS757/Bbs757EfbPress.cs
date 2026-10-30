@@ -161,10 +161,13 @@ public static class Bbs757EfbPress
     /// The new choice of a switch of two choices that landed, for a row the settings catalog gives no word for (a row that is no
     /// setting, such as a label read as "CPDLC netwrk", or a setting whose choice before the tap is unknown): the word the control
     /// shows after its tap (<paramref name="now"/>, what the control found again reads), when it is a word and another than the
-    /// one it showed before (<paramref name="before"/>). A word is what the window labels a switch with ("CPDLC network: Hoppie",
-    /// <see cref="Bbs757EfbElements"/>): not empty and not On/Off. The two are compared with case, spaces and punctuation ignored
-    /// (<see cref="QuestionWords"/>), so a pill that moved while its word still reads the old one gives none. Null in every
-    /// other case: the screen reader says an On/Off switch's new state, and a switch with no word before has none to change.
+    /// one it showed before (<paramref name="before"/>). A word here is a value with a letter or digit that, with case, spaces and
+    /// punctuation left out (<see cref="QuestionWords"/>), reads neither ON nor OFF ("Hoppie", "Option 1"), and the two values
+    /// are compared folded so too, so a pill that moved while its word still reads the old one gives none. That is
+    /// narrower than what the window labels a switch with ("CPDLC network: Hoppie", <see cref="Bbs757EfbElements"/>), which
+    /// leaves out only a value that is exactly On or Off, case ignored: a misread "On." or "o n" is in the window's label but is
+    /// no word here, so the press errs to saying nothing. Null in every other case: the screen reader says an On/Off switch's new
+    /// state, and a switch with no word before has none to change.
     /// </summary>
     public static string? NewChoiceWord(string before, string? now)
     {

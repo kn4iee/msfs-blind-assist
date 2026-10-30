@@ -731,9 +731,13 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     }
 
     /// <summary>
-    /// The Navigraph sign-in read again once the AIRAC page was newly shown (its picture changed: the pilot may have signed in in
-    /// the browser meanwhile) or a sign-in ran, between presses and reads, never inside one. Signed in, the code line is used up.
-    /// A change is pushed. On the loop only; internal for the tests.
+    /// The Navigraph sign-in read again, between presses and reads and never inside one, after a read of the AIRAC page that was
+    /// new (its picture changed: the pilot may have signed in in the browser meanwhile) or asked for (the pilot's F5 or Read the
+    /// tablet again, the window shown again, a press's own read: <see cref="TakeRead"/>), and after a sign-in ran. So each press on
+    /// Settings, AIRAC data runs one sign-in check after it: a moment while the helper view answers, and while it does not, up to
+    /// about 8.5 s (the tablet client's wait of up to 6 s for its agent, then up to 2.5 s for the view,
+    /// <see cref="Bbs757NavigraphSignIn.ReadableWaitMs"/>), the loop taking no other press meanwhile. Signed in, the code line is
+    /// used up. A change is pushed. On the loop only; internal for the tests.
     /// </summary>
     internal async Task RefreshSignInAsync(CancellationToken ct)
     {
