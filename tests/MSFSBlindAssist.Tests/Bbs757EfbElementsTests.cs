@@ -696,6 +696,7 @@ public class Bbs757EfbElementsTests
             Bbs757EfbScreenTests.Load("dim", "50-settings-general"),
             Bbs757EfbScreenTests.Load("bright", "21-defuel-question"),
             Bbs757EfbScreenTests.Load("bright", "19-notification-list"),
+            Bbs757EfbScreenTests.Load("bright", "55-settings-airac-data"),   // buttons named by their rows
         };
         var extras = new[] { new Bbs757EfbExtraElement("extra:code", "Navigraph code: ABCD-1234", false) };
 

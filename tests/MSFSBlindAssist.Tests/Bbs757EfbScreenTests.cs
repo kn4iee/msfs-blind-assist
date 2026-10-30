@@ -406,6 +406,22 @@ public class Bbs757EfbScreenTests
         Assert.DoesNotContain(m.Items, i => i.Text.StartsWith("Update,", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_airac_page_reads_the_same_in_any_Windows_culture(string culture)
+    {
+        // The buttons' names and keys (the box's place in them) and the rows' words are put together from the read: no Windows
+        // culture changes them.
+        static (Bbs757EfbKind, string, string, string, Point)[] Read() =>
+            Load("bright", "55-settings-airac-data").Items.Select(i => (i.Kind, i.Key, i.Text, i.Value, i.Hit)).ToArray();
+
+        var expected = TestCulture.Run("en-US", Read);
+        Assert.Equal(expected, TestCulture.Run(culture, Read));
+        Assert.Contains(expected, i => i.Item2 == "btn:LATEST CYCLE|UPDATE@59,14" && i.Item3 == "Update, Latest cycle");
+        Assert.Contains(expected, i => i.Item3 == "Latest cycle: 2611, Update available!");
+    }
+
     [Fact]
     public void Words_in_an_identifier_field_never_reach_the_page_beside_its_button()
     {
