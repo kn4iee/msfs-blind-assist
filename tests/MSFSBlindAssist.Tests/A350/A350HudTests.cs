@@ -40,6 +40,18 @@ public class A350HudTests
         Assert.DoesNotContain(lines, l => l.Contains("19", StringComparison.Ordinal));
     }
 
+    // Review 3 (I4): what it does not name reads as drawn, as every other display's does: a flag or a word it does not know was lost. The
+    // compass letters and the pitch scale's numbers are scales, not readings.
+    [Fact]
+    public void What_it_does_not_name_reads_and_its_scales_do_not()
+    {
+        var capture = A350Fixtures.Capture("hud_climb.json");
+        var flag = capture.Texts.First(t => t.Text.Trim() == "NAV") with { Text = "BIRD OFF", X = 700, Y = 600 };
+        var lines = A350GroundDisplays.ReadHud(capture with { Texts = capture.Texts.Append(flag).ToList() });
+        Assert.Contains("BIRD OFF, green", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("N,", StringComparison.Ordinal) || l.StartsWith("18,", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Stowed_it_is_blank() =>
         Assert.Equal(new[] { "HUD: blank" }, A350GroundDisplays.ReadHud(new A350DrawCapture("HUD", Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 0)));

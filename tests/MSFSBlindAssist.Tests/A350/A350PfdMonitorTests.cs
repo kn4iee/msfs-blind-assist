@@ -123,7 +123,7 @@ public class A350PfdMonitorTests
     {
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         var cpt = new Queue<A350DrawCapture?>(new[] { Fixture("efis0_aligning"), Fixture("efis0_aligning"),
-            Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand"), Fixture("efis0_aligning"), Fixture("efis0_aligning") });
+            Fixture("efis0_fd_stand"), Fixture("efis0_fd_stand") }.Concat(Enumerable.Repeat(Fixture("efis0_aligning"), A350FmaAnnouncer.ClearAfterReads)));
         var said = new List<string>();
         var m = new A350PfdMonitor(Each((g, side) => g == "EFIS" && side == 0 ? cpt.Dequeue() : null), FlagsMuted, said.Add, () => now);
         await m.TickAsync();
@@ -134,8 +134,8 @@ public class A350PfdMonitorTests
         await m.TickAsync();                      // flight B's FDs, on as it loads
         Assert.Empty(said);
         now += A350EcamMonitor.SettleAfterLoad;
-        await m.TickAsync();
-        await m.TickAsync();                      // the FDs going off afterwards is news
+        for (int read = 0; read < A350FmaAnnouncer.ClearAfterReads; read++)
+            await m.TickAsync();                  // the FDs going off afterwards is news
         Assert.Contains("FMA engagement clear", said);
     }
 

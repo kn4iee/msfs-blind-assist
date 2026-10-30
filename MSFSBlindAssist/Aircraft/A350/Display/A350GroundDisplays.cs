@@ -270,6 +270,8 @@ public static class A350GroundDisplays
         }
         // The altitude drum's digits: its column and the rolling tens beside it.
         used.UnionWith(cells.Where(c => c.X is >= 1300 and < 1400 && c.Y is >= 500 and < 800 && c.Text.TrimStart('-').All(char.IsDigit)));
+        // What it does not name reads as drawn; the numbers left are scales' (the pitch ladder), a lone letter the compass's.
+        o.AddRange(Rest(cells.Where(c => c.Text.Any(char.IsLetter) && c.Text.Trim().Length > 1), used));
         return o;
     }
 

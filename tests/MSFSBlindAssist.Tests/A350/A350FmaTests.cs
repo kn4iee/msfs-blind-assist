@@ -27,9 +27,46 @@ public class A350FmaTests
     {
         var a = new A350FmaAnnouncer();
         a.Observe(Pfd("FMA vertical: SRS, green")); a.Observe(Pfd("FMA vertical: SRS, green"));
-        a.Observe(Pfd());
+        for (int read = 1; read < A350FmaAnnouncer.ClearAfterReads; read++)
+            Assert.Empty(a.Observe(Pfd()));   // it may be flashing
         Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("vertical"), "FMA vertical clear") }, a.Observe(Pfd()));
         Assert.Empty(a.Observe(Pfd()));
+    }
+
+    // Review 3 (I2): an FMA mode flashes by leaving every other draw (LVR CLB at the thrust reduction altitude). Two reads in a row never
+    // agreed, so it went unsaid; with the beat of 4x sim rate it chattered, with a "clear" that was false.
+    [Fact]
+    public void A_mode_that_flashes_is_said_once_and_never_clear()
+    {
+        const string lever = "FMA autothrust: LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd("FMA autothrust: MAN FLX, white")); a.Observe(Pfd("FMA autothrust: MAN FLX, white"));
+        var said = new List<(string, string)>();
+        foreach (var flash in new[] { true, false, true, false, true, false, true, false, true })
+            said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd()));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+    }
+
+    [Fact]
+    public void A_flash_in_runs_of_reads_says_it_once()
+    {
+        const string lever = "FMA autothrust: LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd()); a.Observe(Pfd());
+        var said = new List<(string, string)>();
+        foreach (var flash in new[] { true, true, false, false, false, true, true, true, false, false, false, true })
+            said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd()));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+    }
+
+    // Two texts taking turns are no mode to say: as before, it takes two reads in a row.
+    [Fact]
+    public void Two_texts_taking_turns_say_nothing()
+    {
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd("FMA engagement: AP1, white")); a.Observe(Pfd("FMA engagement: AP1, white"));
+        foreach (var other in new[] { true, false, true, false, true, false })
+            Assert.Empty(a.Observe(other ? Pfd("FMA engagement: AP1; A/THR, white") : Pfd("FMA engagement: AP1, white")));
     }
 
     [Fact]
