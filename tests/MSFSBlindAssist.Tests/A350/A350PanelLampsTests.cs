@@ -83,6 +83,19 @@ public class A350PanelLampsTests
         Assert.True(captain.IsLit(v => v == "INI_MASTER_WARNING_ACTIVE" ? 1 : 0));   // a warning, in a dark phase
     }
 
+    // Live 2026-10-30, the AP disconnected on the runway (AUTO FLT AP OFF, red): MASTER WARN flashed (about 0.52 s lit, 0.52 s
+    // dark) with INI_MASTER_WARNING_ACTIVE at 0; INI_AUTOPILOT_DISCONNECT_LIGHT held 1 until the pilot's MASTER WARN press put
+    // both out. The 1 Hz delivery caught runs of dark phases and "Master warning on" was said four times in 21 s.
+    [Fact]
+    public void The_master_warning_holds_through_an_autopilot_disconnect_warning()
+    {
+        var glareshield = A350PanelLamps.Resolve(Map, A350PanelLayout.Place(Map), new[] { "Glareshield" });
+        var warnings = glareshield.Where(l => l.Node.StartsWith("FCU_MASTER_WARNING_", StringComparison.Ordinal)).ToList();
+        Assert.All(warnings, l => Assert.Contains("INI_AUTOPILOT_DISCONNECT_LIGHT", l.Rule.Inputs));
+        Assert.True(warnings[0].Rule.IsLit(v => v == "INI_AUTOPILOT_DISCONNECT_LIGHT" ? 1 : 0));   // a dark phase
+        Assert.False(warnings[0].Rule.IsLit(_ => 0));
+    }
+
     [Theory]
     [InlineData("INI_MASTER_WARNING_CAPT_TOP")]
     [InlineData("INI_MASTER_WARNING_CAPT_BOTTOM")]

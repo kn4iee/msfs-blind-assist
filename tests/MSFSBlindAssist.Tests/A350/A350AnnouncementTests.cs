@@ -376,8 +376,9 @@ public class A350LampAnnouncementTests
     {
         var warning = Lamp("A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT");
         string active = warning.KeyFor("INI_MASTER_WARNING_ACTIVE"), bottom = warning.KeyFor("INI_MASTER_WARNING_CAPT_BOTTOM");
+        string apOff = warning.KeyFor("INI_AUTOPILOT_DISCONNECT_LIGHT");
         foreach (var key in warning.InputKeys)
-            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active ? 0 : 1, _speech);
+            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active || key == apOff ? 0 : 1, _speech);
         BatchAfter(5000);
         _def.ProcessSimVarUpdate(active, 1, _speech);   // a warning
         BatchAfter(A350LampSpeech.GatherMs + 100);
@@ -401,8 +402,9 @@ public class A350LampAnnouncementTests
             _def.ProcessSimVarUpdate(warning.Key, lit, _speech);   // the top legend, the light's own key
             _def.ProcessSimVarUpdate(bottom, lit, _speech);
         }
+        string apOff = warning.KeyFor("INI_AUTOPILOT_DISCONNECT_LIGHT");
         foreach (var key in warning.InputKeys)
-            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active ? 0 : 1, _speech);
+            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active || key == apOff ? 0 : 1, _speech);
         _def.ProcessSimVarUpdate(active, 1, _speech);
         Legends(1);
         _now += 1000;
@@ -422,6 +424,37 @@ public class A350LampAnnouncementTests
         _def.ProcessSimVarUpdate(active, 1, _speech);   // the next warning
         BatchAfter(A350LampSpeech.GatherMs + 100);
         Assert.Equal(new[] { "Master warning on", "Master warning on" }, _speech.All);
+    }
+
+    // Live 2026-10-30 after an autoland: AUTO FLT AP OFF flashed MASTER WARN with INI_MASTER_WARNING_ACTIVE at 0 and was said
+    // "Master warning on" four times in 21 s; INI_AUTOPILOT_DISCONNECT_LIGHT held 1 until the press.
+    [Fact]
+    public void A_flashing_autopilot_disconnect_warning_is_spoken_once()
+    {
+        var warning = Lamp("A350_LT_FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT");
+        string active = warning.KeyFor("INI_MASTER_WARNING_ACTIVE"), bottom = warning.KeyFor("INI_MASTER_WARNING_CAPT_BOTTOM");
+        string apOff = warning.KeyFor("INI_AUTOPILOT_DISCONNECT_LIGHT");
+        void Legends(double lit)
+        {
+            _def.ProcessSimVarUpdate(warning.Key, lit, _speech);
+            _def.ProcessSimVarUpdate(bottom, lit, _speech);
+        }
+        foreach (var key in warning.InputKeys)
+            _def.ProcessSimVarUpdate(key, key == warning.Key || key == bottom || key == active || key == apOff ? 0 : 1, _speech);
+        BatchAfter(5000);
+        _def.ProcessSimVarUpdate(apOff, 1, _speech);
+        Legends(1);
+        BatchAfter(A350LampSpeech.GatherMs);
+        for (int i = 0; i < 12; i++)   // dark for runs of deliveries, as the 1 Hz delivery caught it
+        {
+            Legends(i % 4 == 3 ? 1 : 0);
+            BatchAfter(1000);
+        }
+        Assert.Equal(new[] { "Master warning on" }, _speech.All);
+        _def.ProcessSimVarUpdate(apOff, 0, _speech);   // the pilot's MASTER WARN press
+        Legends(0);
+        BatchAfter(A350LampSpeech.OffHoldMs + 100);
+        Assert.Single(_speech.All);
     }
 
     [Fact]

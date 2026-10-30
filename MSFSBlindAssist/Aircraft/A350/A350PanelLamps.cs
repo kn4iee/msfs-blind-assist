@@ -142,8 +142,10 @@ public static class A350PanelLamps
 
     /// <summary>Lamps read with a steadier variable beside their emissive rule. MASTER WARN flashes, 0.5 s lit and 0.5 s
     /// dark, and the 1 Hz delivery caught only its dark phase for a whole fire test, twice in three (live 2026-10-28);
-    /// INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning until the pilot's press puts it out. Its legends still
-    /// count (anything lighting one without a warning), and both legends of a side read one rule: one light per side.</summary>
+    /// INI_MASTER_WARNING_ACTIVE holds 1 for the whole warning until the pilot's press puts it out. An autopilot disconnect
+    /// warning (AUTO FLT AP OFF) leaves it at 0: INI_AUTOPILOT_DISCONNECT_LIGHT holds 1 instead, until the same press (live
+    /// 2026-10-30; read only from its legends it was said four times in 21 s). Its legends still count (anything lighting
+    /// one without a warning), and both legends of a side read one rule: one light per side.</summary>
     private static readonly Dictionary<string, string> SteadyRules = new(StringComparer.Ordinal)
     {
         ["FCU_MASTER_WARNING_LEFT_SEQ1_LIGHT"] = MasterWarning("CAPT"),
@@ -153,7 +155,7 @@ public static class A350PanelLamps
     };
 
     private static string MasterWarning(string side) =>
-        $"(L:INI_MASTER_WARNING_{side}_TOP) (L:INI_MASTER_WARNING_{side}_BOTTOM) or (L:INI_MASTER_WARNING_ACTIVE) or";
+        $"(L:INI_MASTER_WARNING_{side}_TOP) (L:INI_MASTER_WARNING_{side}_BOTTOM) or (L:INI_MASTER_WARNING_ACTIVE) or (L:INI_AUTOPILOT_DISCONNECT_LIGHT) or";
 
     /// <summary>Indicator lamps with no control of their own: node → the panel they sit on and their name, shown after
     /// the panel's button lights.</summary>
