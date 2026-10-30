@@ -513,6 +513,23 @@ public partial class IniBuildsA350Definition
                 _leverAnnouncer?.Announce(text);
         ObserveIrs(seeded);
         ObserveWatchdog();
+        ObserveCovers();
+    }
+
+    private readonly A350CoverAlerts _covers = new();
+    private ScreenReaderAnnouncer? _batchAnnouncer;   // the announcer the last delivery came with
+
+    /// <summary>The OIS's cover banners (<see cref="A350CoverAlerts"/>) at a batch end, from the cache, once the seed has
+    /// settled (the new flight's covers, not the last one's): a cover left on is said even if its variable never changed.</summary>
+    private void ObserveCovers()
+    {
+        if (_sim is not { } sim || _seedGate.Armed)
+            return;
+        bool On(string key) => Cached(sim, key) is double v && v >= 0.5;
+        bool onGround = Cached(sim, "SIM_ON_GROUND") is not double g || g >= 0.5;
+        foreach (var said in _covers.Observe(On(A350CoverAlerts.EnginesKey), On(A350CoverAlerts.PitotKey), onGround))
+            if (!IsMuted(A350CoverAlerts.EnginesKey) && !_disposed)
+                _batchAnnouncer?.Announce(said);
     }
 
     private readonly A350ModuleWatchdog _watchdog = new();
@@ -554,6 +571,7 @@ public partial class IniBuildsA350Definition
         _doorOpen.Clear();   // the seed takes the new flight's doors
         _radios.Clear();     // and radios
         _windowSquawk = -1;
+        _covers.Reset();     // the new flight's cover banners are said once its seed settles
         ArmSeed();
         // The display call-outs too: the new flight's E/WD and FMA are its baseline (review 2026-10-29).
         Ecam?.Rebaseline();

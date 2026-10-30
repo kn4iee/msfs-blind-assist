@@ -460,6 +460,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             vars[IrsAlignmentKey].ExcludeFromMonitorManager = false;
             _lampInputKeys.Add(IrsAlignmentKey);
         }
+        // The OIS's cover banners (A350CoverAlerts): the engine covers on the call-out's Ctrl+M row, the pitot covers, both
+        // consumed and judged at each batch end.
+        Register(A350CoverAlerts.EnginesKey, "INI_COVERS_ENABLED", A350CoverAlerts.MuteLabel, null);
+        vars[A350CoverAlerts.EnginesKey].ExcludeFromMonitorManager = false;
+        _lampInputKeys.Add(A350CoverAlerts.EnginesKey);
+        Register(A350CoverAlerts.PitotKey, "COVER ON:2", "Pitot covers", null, "bool");
+        _lampInputKeys.Add(A350CoverAlerts.PitotKey);
         // The VHF 1 and 2 frequencies and the squawk (A350RadioCallouts), each on its own Ctrl+M row, consumed and said.
         foreach (var (key, name, label, units) in A350RadioCallouts.Rows)
         {
@@ -693,6 +700,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// switch's is consumed, its return to rest being the pilot's own press.</summary>
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        _batchAnnouncer = announcer;   // MainForm's one announcer: what a batch end speaks with
         // A seed still pending counts this delivery as evidence for or against the cache having settled (all the A350's own).
         if (_seedGate.Armed && _seedKeys.Contains(varName))
             _seedGate.NoteValue(varName, value, ownedByAircraft: true);
