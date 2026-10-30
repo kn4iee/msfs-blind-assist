@@ -698,7 +698,8 @@ The autopilot and knob keys are the A380's: Input Shift+A autopilot 1, Ctrl+O au
 Like the A380, the A350 has MFDs instead of MCDUs, worked from the KCCU. Input Shift+M opens the MFD window ("A350 MFD"): the page as a list of lines, each with its value and colour. BA drives the real display underneath, so you never need the cursor or trackball.
 
 - Up and Down move through the lines. Enter acts on the line: a field takes what you typed in the scratchpad box (Tab to it, type, then Enter); anything else is clicked.
-- Backspace presses CLR. Page Up and Page Down scroll. F5 refreshes and Escape closes.
+- Backspace presses CLR, which clears what the MFD is typing. Page Up and Page Down scroll. F5 refreshes and Escape closes.
+- To delete a value, type CLR in the scratchpad box and press Enter on its field, as on an MCDU. For a navaid you tuned by hand on RAD NAV, do it on its ident line: the FMS tunes it again itself.
 - The **Side** box picks the captain's or the first officer's MFD.
 - Alt and a letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF and Alt+X ESC.
 - A new page says its title, and a menu that opens takes you to its first item.
