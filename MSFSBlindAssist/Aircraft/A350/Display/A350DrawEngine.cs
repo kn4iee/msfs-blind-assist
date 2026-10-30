@@ -645,10 +645,36 @@ public sealed class A350DrawEngine : IDisposable
         foreach (var c in DrawnClasses.Append(cls).Distinct(StringComparer.Ordinal))
             if (!_objects.ContainsKey(c))
                 foreach (var vt in _facts.VTablesOf(c)) classOf[vt] = c;
-        foreach (var (c, found) in FindObjects(copy, classOf)) _objects[c] = found;
+        foreach (var (c, found) in FindObjects(copy, classOf)) _objects[c] = InPanelOrder(copy, found);
         if (_objects.TryGetValue(cls, out var list)) return list;
         _shortAt[cls] = Environment.TickCount64;
         return Array.Empty<int>();
+    }
+
+    /// <summary>The gauge parameter panel.cfg gives an object (EFIS L and R; RMP none, R and C; HUD L and R), or null when it
+    /// cannot be read: the object's +8 points at its gauge data, whose +16 is that string (EFIS::Draw compares it with "L"),
+    /// held as the module's short strings are, the length in its 12th byte.</summary>
+    internal static string? GaugeParameter(A350MemoryCopy copy, int obj)
+    {
+        var pointer = copy.Read((uint)obj + 8, 4);
+        if (pointer.Length < 4 || BitConverter.ToUInt32(pointer) == 0) return null;
+        var s = copy.Read(BitConverter.ToUInt32(pointer) + 16, 12);
+        if (s.Length < 12 || s[11] > 10) return null;
+        var held = s[..s[11]];
+        foreach (byte b in held)
+            if (b is < 32 or > 126) return null;
+        return System.Text.Encoding.ASCII.GetString(held);
+    }
+
+    /// <summary>A class's objects in the order MSFSBA counts them: the captain's, then the first officer's, then the third
+    /// (panel.cfg's L or none, R, C). Address order is no side: live 2026-10-30 the first officer's EFIS sat below the
+    /// captain's, so "Captain ND" read the first officer's. A parameter that cannot be read leaves address order.</summary>
+    internal static List<int> InPanelOrder(A350MemoryCopy copy, List<int> objects)
+    {
+        if (objects.Count < 2) return objects;
+        var ranked = objects.Select(o => (Object: o, Rank: GaugeParameter(copy, o) switch { "L" or "" => 0, "R" => 1, "C" => 2, _ => -1 })).ToList();
+        if (ranked.Any(r => r.Rank < 0) || ranked.Select(r => r.Rank).Distinct().Count() != ranked.Count) return objects;
+        return ranked.OrderBy(r => r.Rank).Select(r => r.Object).ToList();
     }
 
     /// <summary>The classes a draw can be asked for: those with a Draw in <see cref="A350ModulePatcher.DrawExports"/> (it

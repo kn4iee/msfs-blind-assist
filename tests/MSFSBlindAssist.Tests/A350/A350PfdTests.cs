@@ -231,8 +231,8 @@ public class A350PfdTests
         var climb = Fixture("efis0_climb");
         var amber = climb with
         {
-            // The drum on the captain's PFD, which the capture draws 836 px in (its right half).
-            Texts = climb.Texts.Select(t => A350Rgba.NameOf(t.Colour) == "green" && t.X - 836 is >= 605 and < 676 && t.Y is >= 330 and < 460
+            // The drum on the captain's PFD, drawn at its own x (its left half).
+            Texts = climb.Texts.Select(t => A350Rgba.NameOf(t.Colour) == "green" && t.X is >= 605 and < 676 && t.Y is >= 330 and < 460
                 ? t with { Colour = A350Rgba.Of("amber") } : t).ToList(),
         };
         Assert.Contains("Altitude: 2941 feet, amber", A350Pfd.Read(amber, 0));
@@ -304,7 +304,7 @@ public class A350PfdTests
         float shift = (float)((240.2 - knots) * 145 / 30);
         var lines = A350Pfd.Read(level with
         {
-            Shapes = level.Shapes!.Select(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 >= 836
+            Shapes = level.Shapes!.Select(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 < 836
                 ? s with { Y0 = s.Y0 - shift, Y1 = s.Y1 - shift, PatternY = s.PatternY - shift } : s).ToList(),
         }, 0);
         Assert.Contains(knots == 30 ? "Speed: 30 knots or less" : $"Speed: {knots} knots", lines);
@@ -358,9 +358,9 @@ public class A350PfdTests
     public void The_speed_target_reads_its_whole_knot_off_the_tape(string fixture, int target, string line)
     {
         var capture = Fixture(fixture);
-        var tape = capture.Shapes!.Single(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 >= 836);
+        var tape = capture.Shapes!.Single(s => Math.Abs(s.PatternH - 2285) < 2 && s.X0 < 836);
         var triangle = capture.Shapes!.Single(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - 957) < 1.5f
-            && Math.Abs(s.Y0 - s.PatternY - 748) < 1.5f && s.X0 >= 836);
+            && Math.Abs(s.Y0 - s.PatternY - 748) < 1.5f && s.X0 < 836);
         Assert.InRange(A350Pfd.TapeKnotsAt(tape, (triangle.Y0 + triangle.Y1) / 2), target - 0.15, target + 0.15);
         var lines = A350Pfd.Read(capture, 0);
         Assert.Contains(line, lines);
@@ -483,8 +483,8 @@ public class A350PfdTests
     {
         var cap = Fixture("efis0_ls_downwind_omdb");
         var texts = cap.Texts.ToList();
-        texts.Add(new DrawnText("XYZ", 836 + 37, 703, 37, 703, 1, new A350Rgba(1, 0.467f, 0.914f, 1)));
-        texts.Add(new DrawnText("25", 836 + 690, 760, 690, 760, 1, new A350Rgba(0, 1, 1, 1)));
+        texts.Add(new DrawnText("XYZ", 37, 703, 37, 703, 1, new A350Rgba(1, 0.467f, 0.914f, 1)));
+        texts.Add(new DrawnText("25", 690, 760, 690, 760, 1, new A350Rgba(0, 1, 1, 1)));
         var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
         Assert.Contains(lines, l => l.Contains("XYZ", StringComparison.Ordinal));
         Assert.Contains("25, cyan", lines);
@@ -531,7 +531,7 @@ public class A350PfdTests
     {
         var cap = Fixture("efis0_ils_below");
         var texts = cap.Texts.ToList();
-        texts.Add(new DrawnText("015", 836 + 595, 657, 595, 657, 1, new A350Rgba(1, 1, 1, 1)));
+        texts.Add(new DrawnText("015", 595, 657, 595, 657, 1, new A350Rgba(1, 1, 1, 1)));
         var lines = A350Pfd.Read(cap with { Texts = texts }, 0);
         Assert.Contains(lines, l => l.StartsWith("QNH: "));
         Assert.DoesNotContain(lines, l => l.Contains("015"));
@@ -551,13 +551,13 @@ public class A350PfdTests
     public void An_altitude_below_sea_level_reads_with_a_plain_minus_in_any_culture()
     {
         var cap = Fixture("efis0_takeoff_ready");
-        bool Tape(DrawnText t) => t.X - 836 is >= 585 and < 610 or >= 658 and < 676;
+        bool Tape(DrawnText t) => t.X is >= 585 and < 610 or >= 658 and < 676;
         var below = cap with
         {
             Texts = cap.Texts.Where(t => !Tape(t)).Concat(new[]
             {
-                new DrawnText("000", 836 + 595, 389, 0, 0, 0, new A350Rgba(1, 1, 1, 1)),
-                new DrawnText("20", 836 + 665, 389 - 31 * 21.75f / 20, 0, 0, 0, new A350Rgba(0, 1, 0, 1)),
+                new DrawnText("000", 595, 389, 0, 0, 0, new A350Rgba(1, 1, 1, 1)),
+                new DrawnText("20", 665, 389 - 31 * 21.75f / 20, 0, 0, 0, new A350Rgba(0, 1, 0, 1)),
             }).ToList(),
         };
         var culture = System.Globalization.CultureInfo.CurrentCulture;

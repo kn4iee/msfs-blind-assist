@@ -2,8 +2,8 @@ using System.Globalization;
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>
-/// The PFD read from an EFIS draw (pure), by area in the PFD's own coordinates (the captain's PFD is the
-/// right half of EFIS#0, so its x is shifted by 836): the FMA strip across the top, the speed tape, the
+/// The PFD read from an EFIS draw (pure), by area in the PFD's own coordinates (the first officer's PFD is the
+/// right half of EFIS#1, so its x is shifted by 836): the FMA strip across the top, the speed tape, the
 /// altitude tape with its drum, QNH and target, the radio altitude under the aircraft symbol, the heading
 /// scale and the line under it. Tape and drum labels are read as the values they show, never as text. What
 /// fits no area (a red ATT flag) reads as drawn, with its colour.
@@ -59,7 +59,7 @@ public static class A350Pfd
 
     /// <summary>A sprite in the speed tape's band (x 0 to 250 of the side's PFD) by where it sits in the atlas.</summary>
     private static DrawnShape? TapeSprite(A350DrawCapture capture, int side, float atlasX, float atlasY) =>
-        Sprite(capture, side, (atlasX, atlasY), s => s.X0 - (side == 0 ? PfdWidth : 0) is >= 0 and < 250);
+        Sprite(capture, side, (atlasX, atlasY), s => s.X0 - (side == 0 ? 0 : PfdWidth) is >= 0 and < 250);
 
     /// <summary>A tape symbol's speed in whole knots, read off the tape where its middle sits; or, drawn outside the tape's
     /// visible window, which way (+1 above, -1 below, Knots 0). Null while the tape does not draw it.</summary>
@@ -115,7 +115,7 @@ public static class A350Pfd
     /// the horizon 298 x 1168.</summary>
     private static DrawnShape? PatternOf(A350DrawCapture capture, int side, float w, float h) =>
         capture.Shapes?.FirstOrDefault(s => Math.Abs(s.PatternW - w) < 2 && Math.Abs(s.PatternH - h) < 2
-            && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
+            && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0));
 
     /// <summary>The LS scales and diamonds (PFDA350Elements.png), by drawn size: the LOC scale 294 x 35 under the
     /// attitude, the G/S scale 12 x 294 beside it; their dots 70.25 px apart around a centre 146.25 px (LOC) and
@@ -131,11 +131,11 @@ public static class A350Pfd
 
     private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas, Func<DrawnShape, bool>? where = null) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
-            && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0) && (where?.Invoke(s) ?? true));
+            && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0) && (where?.Invoke(s) ?? true));
 
     private static IEnumerable<DrawnShape> PfdSprites(A350DrawCapture capture, int side, float w, float h) =>
         (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Image > 1 && Math.Abs(s.X1 - s.X0 - w) < 1.5f
-            && Math.Abs(s.Y1 - s.Y0 - h) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side == 0));
+            && Math.Abs(s.Y1 - s.Y0 - h) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0));
 
     /// <summary>The ILS deviation in dots, where the aircraft is (the A380's words): a diamond right of centre is
     /// the localizer right of the aircraft. Nothing while the scales are not drawn (LS off).</summary>
@@ -171,12 +171,14 @@ public static class A350Pfd
     private const float StackedLetterX = 3, StackedLetterGap = 36;
 
     /// <summary>The rest's cells as the pilot sees them: a text drawn twice in one place is the one on top (PULL UP, green
-    /// and then red at x 359, y 400, live 2026-10-30), and letters stacked in one colour are one word.</summary>
+    /// and then red at x 359, y 400, live 2026-10-30), letters stacked in one colour are one word, and the font's small
+    /// capitals, lowercase letters, read as capitals (the red RA flag is "ra").</summary>
     private static List<DrawnCell> AsSeen(List<DrawnCell> cells)
     {
         var top = new List<DrawnCell>();
-        foreach (var c in cells)
+        foreach (var drawn in cells)
         {
+            var c = drawn with { Text = drawn.Text.ToUpperInvariant() };
             top.RemoveAll(t => t.Text == c.Text && Math.Abs(t.X - c.X) < 1 && Math.Abs(t.Y - c.Y) < 1);
             top.Add(c);
         }
@@ -195,7 +197,7 @@ public static class A350Pfd
 
     public static PfdRead ReadParts(A350DrawCapture capture, int side)
     {
-        float shift = side == 0 ? PfdWidth : 0;
+        float shift = side == 0 ? 0 : PfdWidth;
         List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn) => A350DrawLayout.Rows(
                 A350DrawLayout.Region(A350DrawLayout.SplitEfis(drawn, side).Pfd, A350DrawLayout.EfisPfd(side))
                     .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList())
@@ -297,7 +299,7 @@ public static class A350Pfd
         }
         if (PatternOf(capture, side, 298, 1168) is { } horizon)
         {
-            float dx = HeadingIndexX + (side == 0 ? PfdWidth : 0) - horizon.PatternX, dy = WindowY - horizon.PatternY;
+            float dx = HeadingIndexX + (side == 0 ? 0 : PfdWidth) - horizon.PatternX, dy = WindowY - horizon.PatternY;
             float det = horizon.PatternA * horizon.PatternD - horizon.PatternB * horizon.PatternC;
             if (Math.Abs(det) > 1e-6f)
             {

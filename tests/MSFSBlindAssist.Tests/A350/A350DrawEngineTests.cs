@@ -229,4 +229,63 @@ public class A350DrawEngineTests
         Assert.Equal(new[] { 9032 }, found["EFIS"]);
         Assert.Equal(3, found.Count);
     }
+
+    /// <summary>A copy with gauge objects: each object's +8 points at its gauge data, whose +16 is its panel.cfg parameter
+    /// as the module's short strings hold it (up to 10 characters, the length in the 12th byte).</summary>
+    private static A350MemoryCopy GaugesCopy(params (int Object, string? Parameter)[] gauges)
+    {
+        var bytes = new byte[0x4000];
+        int data = 0x2000;
+        foreach (var (obj, parameter) in gauges)
+        {
+            if (parameter == null) continue;
+            BitConverter.GetBytes(data).CopyTo(bytes, obj + 8);
+            System.Text.Encoding.ASCII.GetBytes(parameter).CopyTo(bytes, data + 16);
+            bytes[data + 16 + 11] = (byte)parameter.Length;
+            data += 64;
+        }
+        var copy = new A350MemoryCopy();
+        copy.Set(new (uint, int)[] { (0, bytes.Length) }, bytes);
+        return copy;
+    }
+
+    // Live 2026-10-30: the first officer's EFIS object sat below the captain's that session, so "Captain ND" read the first
+    // officer's and the other way round, and each ND followed the other's knob. Address order is no side.
+    [Fact]
+    public void Two_sides_are_ordered_by_their_panel_parameter_never_by_address()
+    {
+        var copy = GaugesCopy((0x100, "R"), (0x200, "L"));
+        Assert.Equal(new[] { 0x200, 0x100 }, A350DrawEngine.InPanelOrder(copy, new List<int> { 0x100, 0x200 }));
+    }
+
+    [Fact]
+    public void The_rmps_are_counted_left_right_centre()
+    {
+        // panel.cfg: RMP with no parameter (the captain's), R, C.
+        var copy = GaugesCopy((0x100, "C"), (0x200, "R"), (0x300, ""));
+        Assert.Equal(new[] { 0x300, 0x200, 0x100 }, A350DrawEngine.InPanelOrder(copy, new List<int> { 0x100, 0x200, 0x300 }));
+    }
+
+    [Fact]
+    public void A_parameter_that_cannot_be_read_keeps_address_order()
+    {
+        var copy = GaugesCopy((0x100, "R"), (0x200, null));
+        Assert.Equal(new[] { 0x100, 0x200 }, A350DrawEngine.InPanelOrder(copy, new List<int> { 0x100, 0x200 }));
+    }
+
+    [Fact]
+    public void A_single_object_stays_as_it_is()
+    {
+        var copy = GaugesCopy((0x100, "L"));
+        Assert.Equal(new[] { 0x100 }, A350DrawEngine.InPanelOrder(copy, new List<int> { 0x100 }));
+    }
+
+    [Fact]
+    public void The_parameter_reads_as_the_module_holds_it()
+    {
+        var copy = GaugesCopy((0x100, "R"), (0x200, ""));
+        Assert.Equal("R", A350DrawEngine.GaugeParameter(copy, 0x100));
+        Assert.Equal("", A350DrawEngine.GaugeParameter(copy, 0x200));
+        Assert.Null(A350DrawEngine.GaugeParameter(copy, 0x10000));   // outside the copy
+    }
 }

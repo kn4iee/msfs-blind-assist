@@ -27,7 +27,7 @@ public static class A350GroundDisplays
     /// <summary>A side's ND (EFIS#0's left half, EFIS#1's right half), in its own coordinates.</summary>
     public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side)
     {
-        float shift = side == 0 ? 0 : HalfWidth;
+        float shift = side == 0 ? HalfWidth : 0;
         var texts = A350DrawLayout.Region(A350DrawLayout.SplitEfis(capture.Texts, side).Nd, A350DrawLayout.EfisNd(side))
             .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < HalfWidth).ToList();
         // The airport map at a zoom range (A350NdMap): read by kind, before the rows; its texts are not read again.

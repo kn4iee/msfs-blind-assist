@@ -8,11 +8,9 @@ namespace MSFSBlindAssist.Tests.A350;
 // no part in what the PFD flags on its own (PULL UP, ATT, the T C A S letters, AUTO BRK OFF, DECEL, RWY TOO SHORT...).
 public class A350PfdFlagTests
 {
-    private const float Shift = 836;
-
-    /// <summary>A captain's EFIS draw of these texts, at the PFD's own x.</summary>
+    /// <summary>A captain's EFIS draw of these texts, at the PFD's own x (its left half).</summary>
     private static A350DrawCapture Pfd(params (string Text, float X, float Y, string Colour)[] texts) =>
-        new("EFIS", texts.Select(t => new DrawnText(t.Text, t.X + Shift, t.Y, t.X + Shift, t.Y, 0, A350Rgba.Of(t.Colour))).ToList(),
+        new("EFIS", texts.Select(t => new DrawnText(t.Text, t.X, t.Y, t.X, t.Y, 0, A350Rgba.Of(t.Colour))).ToList(),
             Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1);
 
     private static A350DrawCapture Fixture(string name) => A350Fixtures.Capture(name + ".json");
@@ -37,6 +35,14 @@ public class A350PfdFlagTests
         // Live 2026-10-30: PULL UP is drawn green, then red over it, at x 359 y 400.
         var read = A350Pfd.ReadParts(Pfd(("PULL UP", 359, 400, "green"), ("PULL UP", 359, 400, "red")), 0);
         Assert.Equal(new[] { "PULL UP, red" }, read.Rest);
+    }
+
+    [Fact]
+    public void Small_capitals_read_as_capitals()
+    {
+        // The font's small capitals are lowercase letters: the red RA flag is drawn "ra" (live 2026-10-30).
+        var read = A350Pfd.ReadParts(Pfd(("ra", 360, 580, "red")), 0);
+        Assert.Equal(new[] { "RA, red" }, read.Rest);
     }
 
     [Fact]

@@ -639,7 +639,8 @@ internal sealed class ProbeForm : Form
 
         if (_mode == "nd")
         {
-            // ND operations, ";"-separated: click:side:x:y (the EFIS gauge's point as drawn: the ND is right of 836),
+            // ND operations, ";"-separated: click:side:x:y (the EFIS gauge's point as drawn: the captain's ND is right of
+            // 836, the first officer's left of it),
             // key:side:KEY, type:side:TEXT, views (each WasmInstrument view's guid|url). The ND takes the mouse only with
             // the side's KCCU cursor on it [A350-4], so a click presses the side's ND key first.
             var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MfdInput(_m.ExecuteCalculatorCodeUnique);
@@ -656,8 +657,10 @@ internal sealed class ProbeForm : Form
                         views.Add((title, await CoherentEvalClient.EvalAsync(title, Find, CancellationToken.None) ?? ""));
                 }
             }
-            // The EFIS views in panel.cfg order: the captain's (parameter L) first, the first officer's (R) second.
-            var efis = views.Where(v => v.GuidUrl.Contains("wasm_gauge=EFIS", StringComparison.Ordinal)).OrderBy(v => v.Title, StringComparer.Ordinal).ToList();
+            // The EFIS views in panel.cfg order, which is the guids' order: the captain's (parameter L) first, the first
+            // officer's (R) second. The page shows neither parameter (live 2026-10-30: its url stops at wasm_gauge=EFIS).
+            var efis = views.Where(v => v.GuidUrl.Contains("wasm_gauge=EFIS", StringComparison.Ordinal))
+                .OrderBy(v => int.Parse(v.GuidUrl.Split('|')[0], CultureInfo.InvariantCulture)).ToList();
             foreach (var op in _arg!.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 var p = op.Split(':');
@@ -666,8 +669,7 @@ internal sealed class ProbeForm : Form
                 string result;
                 if (p[0] == "click")
                 {
-                    var view = efis.FirstOrDefault(v => v.GuidUrl.EndsWith(side == 0 ? ",L" : ",R", StringComparison.Ordinal)
-                        || v.GuidUrl.Contains(side == 0 ? "EFIS,L" : "EFIS,R", StringComparison.Ordinal));
+                    var view = efis.ElementAtOrDefault(side);
                     // Never by the views' titles: VCockpit10 sorts before VCockpit9, and the number is no side [A350-8].
                     if (view.Title == null) { Line($"{op}\tno EFIS view for side {side} ({efis.Count} found; `views` lists them)"); continue; }
                     await input.MoveCursorAsync(side, "ND");
