@@ -186,9 +186,10 @@ public sealed record Bbs757EfbScreenModel(
 /// left and a value at the right (x &gt; 1180), with a switch (a pill at x 1140-1200) or a slider (a
 /// round knob, the brightest blue) between; a box in that value column is the row's button instead
 /// (the AIRAC data page's UPDATE or REMOVE and its LOGOUTs), named by the row's label, and the row's
-/// own words stay text. A checklist line has a box at x 286-311. Labels too
-/// small for OCR (a door's name under its tile, a note) come from <see cref="KnownText"/>, by
-/// position, on the pages where BlueBird prints them in a fixed place.
+/// own words stay text, unless the box's words read as a number, which stays the row's value as a
+/// number in a box does on every other page (<see cref="IsNumberField"/>). A checklist line has a box
+/// at x 286-311. Labels too small for OCR (a door's name under its tile, a note) come from
+/// <see cref="KnownText"/>, by position, on the pages where BlueBird prints them in a fixed place.
 /// </summary>
 public static class Bbs757EfbScreen
 {
@@ -869,13 +870,20 @@ public static class Bbs757EfbScreen
             if (value != null) used.Add(value);
             string val = value?.Text ?? "";
 
-            if (Bbs757EfbVocabulary.IsCredential(name))
+            // A row of one of the pilot's identifiers: its label, or another line of the label column on its row (a label OCR
+            // split in two, read in either order), holds the identifier's distinctive word (Bbs757EfbVocabulary.CredentialLabel),
+            // whatever OCR made of the rest.
+            string? credential = Bbs757EfbVocabulary.CredentialLabel(name)
+                ?? labels.Where(l => l != label && Math.Abs(l.Centre.Y - cy) <= 14)
+                    .Select(l => Bbs757EfbVocabulary.CredentialLabel(l.Text)).FirstOrDefault(c => c != null);
+            if (credential != null)
             {
-                // Never show, speak or log a credential: say whether one is set, nothing more. The row's button (the SimBrief
-                // ID's LOGOUT) is named by the label and says only the words in its own box.
-                if (rowButton != null) rowButton.Caption = RowCaption(name);
+                // Never show, speak or log a credential: say whether one is set, nothing more. The row is named by the tablet's
+                // own label, never by the read, which may have run into the field beside it; its button (the SimBrief ID's
+                // LOGOUT) is named by that label too and says only the words in its own box.
+                if (rowButton != null) rowButton.Caption = RowCaption(credential);
                 foreach (var l in lines.Where(l => Math.Abs(l.Centre.Y - cy) <= 14)) used.Add(l);
-                o.Add(new(Bbs757EfbKind.Row, pretty, label.Box, label.Centre, false, "row:" + name,
+                o.Add(new(Bbs757EfbKind.Row, Bbs757EfbVocabulary.Pretty(credential), label.Box, label.Centre, false, "row:" + credential,
                     Value: HasFieldText(px, cy) ? "set" : "not set"));
                 continue;
             }
@@ -884,14 +892,17 @@ public static class Bbs757EfbScreen
             {
                 // The row's own words, left of its button and within its height, stay text, a line each as the tablet writes
                 // them: "Latest cycle: 2611, Update available!", "Installed cycle: 2610 | exp: 2026-10-28". The first line's
-                // first words name the button, whichever of that line's parts OCR boxed a pixel higher ("2611" over "LATEST
-                // CYCLE:" on bright/55).
+                // first phrase names the button, whichever of that line's parts OCR boxed a pixel higher ("2611" over "LATEST
+                // CYCLE:" on bright/55). A line inside a box the page draws (a text field: the identifier rows' at x 897-1196) is
+                // left out of the words and of the page, so a row whose label OCR misread past knowing still never says what an
+                // identifier's field holds.
                 var box = rowButton.Box.Box;
-                var words = lines.Where(l => l == label || (!used.Contains(l) && l.Box.Right <= box.Left
-                    && l.Centre.Y >= box.Top && l.Centre.Y <= box.Bottom)).ToList();
-                used.UnionWith(words);
+                var beside = lines.Where(l => l != label && !used.Contains(l) && l.Box.Right <= box.Left
+                    && l.Centre.Y >= box.Top && l.Centre.Y <= box.Bottom).ToList();
+                used.UnionWith(beside);
+                var words = beside.Where(l => !boxes.Any(b => b.Box.Contains(l.Centre))).Prepend(label).ToList();
                 var rows = Rows(words).ToList();
-                rowButton.Caption = RowCaption(rows[0][0].Text);
+                rowButton.Caption = RowCaption(Phrases(rows[0])[0]);
                 foreach (var row in rows)
                 {
                     var rowBox = row.Select(r => r.Box).Aggregate(Rectangle.Union);
@@ -979,18 +990,28 @@ public static class Bbs757EfbScreen
             "btn:" + (caption ?? "") + "|" + StripState(words) + "@" + box.X / 20 + "," + box.Y / 20, button.Box.Tint);
     }
 
-    /// <summary>One line of a Settings row's words beside its button, each part as the tablet writes it (<see
-    /// cref="Bbs757EfbVocabulary.Pretty"/>), left to right: a label that ends in a colon runs into what follows it, and parts
-    /// apart are parted by commas ("LATEST CYCLE:", "2611" and "UPDATE AVAILABLE!" are "Latest cycle: 2611, Update available!").</summary>
-    private static string RowText(IReadOnlyList<Bbs757EfbTextLine> parts)
+    /// <summary>One line of a Settings row's words beside its button: its phrases (<see cref="Phrases"/>) left to right, each as
+    /// the tablet writes it (<see cref="Bbs757EfbVocabulary.Pretty"/>), parted by commas. "LATEST CYCLE:", "2611" and "UPDATE
+    /// AVAILABLE!" are "Latest cycle: 2611, Update available!"; a sentence OCR read in two parts is one sentence again.</summary>
+    private static string RowText(IReadOnlyList<Bbs757EfbTextLine> parts) =>
+        string.Join(", ", Phrases(parts).Select(Bbs757EfbVocabulary.Pretty));
+
+    /// <summary>
+    /// A line's parts, left to right, as phrases, parted at the gap the page's other rows are (<see cref="ParseContent"/> joins a
+    /// row with commas once its lines lie 40 px apart): a part runs on into the one before it with a space after a label's colon
+    /// ("LATEST CYCLE:" and "2611") or across a gap under 40 px (a sentence OCR read in two), and starts a phrase of its own
+    /// across a wider gap. The first phrase names a row's button (<see cref="RowCaption"/>), never cut where OCR cut it.
+    /// </summary>
+    private static List<string> Phrases(IReadOnlyList<Bbs757EfbTextLine> parts)
     {
-        var text = new System.Text.StringBuilder();
+        var phrases = new List<string>();
         for (int i = 0; i < parts.Count; i++)
         {
-            if (i > 0) text.Append(parts[i - 1].Text.EndsWith(':') ? " " : ", ");
-            text.Append(Bbs757EfbVocabulary.Pretty(parts[i].Text));
+            bool runsOn = i > 0 && (parts[i - 1].Text.EndsWith(':') || parts[i].Box.Left - parts[i - 1].Box.Right < 40);
+            if (runsOn) phrases[^1] += " " + parts[i].Text;
+            else phrases.Add(parts[i].Text);
         }
-        return text.ToString();
+        return phrases;
     }
 
     /// <summary>

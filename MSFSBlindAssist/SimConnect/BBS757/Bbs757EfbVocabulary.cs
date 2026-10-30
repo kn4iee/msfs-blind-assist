@@ -96,12 +96,42 @@ public static class Bbs757EfbVocabulary
     /// <summary>Rows whose value is a credential: never shown, spoken or logged (plan 11).</summary>
     public static readonly string[] CredentialLabels = { "SIMBRIEF ID NUMBER", "HOPPIE LOGON CODE", "SAYINTENTIONS ACARS KEY" };
 
+    // Each credential row's distinctive word, its label's first (SIMBRIEF, HOPPIE, SAYINTENTIONS), folded as a label is.
+    private static readonly (string Word, string Label)[] CredentialWords =
+        CredentialLabels.Select(label => (Fold(label.Split(' ')[0]), label)).ToArray();
+
+    // The tablet's other labels that hold a credential's word, folded: HOPPIE ACARS (a switch of Settings, Aircraft) and IMPORT
+    // FROM SIMBRIEF (the Fuel page's button) are those rows, never a credential.
+    private static readonly HashSet<string> OtherLabelsWithACredentialWord = Labels
+        .Where(label => Array.IndexOf(CredentialLabels, label) < 0
+            && CredentialWords.Any(c => Fold(label).Contains(c.Word, StringComparison.Ordinal)))
+        .Select(Fold).ToHashSet(StringComparer.Ordinal);
+
     /// <summary>Whether a read is exactly one of the tablet's words (so a two-letter ON is a word,
     /// not an icon glyph).</summary>
     public static bool IsKnown(string t) => All.Contains(t.Trim(), StringComparer.OrdinalIgnoreCase);
 
-    public static bool IsCredential(string label) =>
-        CredentialLabels.Any(c => string.Equals(c, label, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// The credential row a Settings row's label names, as the tablet writes its label (one of <see cref="CredentialLabels"/>), or
+    /// null. The label's letters and digits, case ignored, hold that row's distinctive word (SIMBRIEF, HOPPIE, SAYINTENTIONS), so a
+    /// misread anywhere else ("SIMBRIEF lD NUMBER"), a label OCR split in two ("SIMBRIEF") or one run into the field beside it still
+    /// keeps the row's value out. A label that is exactly another of the tablet's labels holding such a word is that label: HOPPIE
+    /// ACARS is a switch.
+    /// </summary>
+    public static string? CredentialLabel(string label)
+    {
+        string folded = Fold(label);
+        if (folded.Length == 0 || OtherLabelsWithACredentialWord.Contains(folded)) return null;
+        foreach (var (word, credential) in CredentialWords)
+            if (folded.Contains(word, StringComparison.Ordinal)) return credential;
+        return null;
+    }
+
+    /// <summary>Whether a Settings row's label names a credential row (<see cref="CredentialLabel"/>).</summary>
+    public static bool IsCredential(string label) => CredentialLabel(label) != null;
+
+    // A label's letters and digits, upper-cased invariantly: what a credential row is known by.
+    private static string Fold(string text) => string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 
     private static readonly string[] All =
         Apps.Concat(Menus.Values.SelectMany(m => m)).Concat(Labels).Concat(Values).Concat(Notes).Distinct(StringComparer.Ordinal).ToArray();

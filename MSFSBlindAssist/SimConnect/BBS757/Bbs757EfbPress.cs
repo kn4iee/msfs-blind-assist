@@ -165,9 +165,9 @@ public static class Bbs757EfbPress
     /// punctuation left out (<see cref="QuestionWords"/>), reads neither ON nor OFF ("Hoppie", "Option 1"), and the two values
     /// are compared folded so too, so a pill that moved while its word still reads the old one gives none. That is
     /// narrower than what the window labels a switch with ("CPDLC network: Hoppie", <see cref="Bbs757EfbElements"/>), which
-    /// leaves out only a value that is exactly On or Off, case ignored: a misread "On." or "o n" is in the window's label but is
-    /// no word here, so the press errs to saying nothing. Null in every other case: the screen reader says an On/Off switch's new
-    /// state, and a switch with no word before has none to change.
+    /// leaves out only an empty value and one that is exactly On or Off, case ignored: a misread "On." or "o n" is in the window's
+    /// label but is no word here, so the press errs to saying nothing. Null in every other case: the screen reader says an On/Off
+    /// switch's new state, and a switch with no word before has none to change.
     /// </summary>
     public static string? NewChoiceWord(string before, string? now)
     {

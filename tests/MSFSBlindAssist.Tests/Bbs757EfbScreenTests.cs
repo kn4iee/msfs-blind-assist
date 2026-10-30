@@ -28,7 +28,12 @@ public class Bbs757EfbScreenTests
     /// <summary>A capture read with some of its lines changed by <paramref name="edit"/>: what the same picture reads when a
     /// box's words are other words (a door's state), and with <paramref name="added"/> read on it too.</summary>
     internal static Bbs757EfbScreenModel Load(string set, string name, Func<Bbs757EfbTextLine, Bbs757EfbTextLine> edit,
-        params Bbs757EfbTextLine[] added)
+        params Bbs757EfbTextLine[] added) => LoadPainted(set, name, paint: null, edit, added);
+
+    /// <summary>A capture as <see cref="Load(string, string, Func{Bbs757EfbTextLine, Bbs757EfbTextLine}, Bbs757EfbTextLine[])"/>
+    /// reads it, its picture first changed by <paramref name="paint"/> (on a 32-bit copy; none when null).</summary>
+    internal static Bbs757EfbScreenModel LoadPainted(string set, string name, Action<Bitmap>? paint,
+        Func<Bbs757EfbTextLine, Bbs757EfbTextLine> edit, params Bbs757EfbTextLine[] added)
     {
         string stem = Path.Combine(FixtureDir(), set, name);
         var lines = new List<Bbs757EfbTextLine>();
@@ -43,8 +48,24 @@ public class Bbs757EfbScreenTests
             }
         lines.AddRange(added);
         using var bmp = new Bitmap(stem + ".png");
-        return Bbs757EfbScreen.Parse(lines, Bbs757EfbPixels.FromBitmap(bmp));
+        if (paint == null) return Bbs757EfbScreen.Parse(lines, Bbs757EfbPixels.FromBitmap(bmp));
+        using var painted = bmp.Clone(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        paint(painted);
+        return Bbs757EfbScreen.Parse(lines, Bbs757EfbPixels.FromBitmap(painted));
     }
+
+    /// <summary>A line of the capture read as other words, found by its words and its box's left edge: its box kept, or made
+    /// <paramref name="width"/> wide. Every other line as it is.</summary>
+    internal static Bbs757EfbTextLine ReadAs(Bbs757EfbTextLine line, string text, int x, string word, int? width = null)
+    {
+        if (line.Text != text || line.Box.X != x) return line;
+        var box = width is int w ? line.Box with { Width = w } : line.Box;
+        return line with { Text = word, Box = box, Words = new[] { new Bbs757EfbWord(word, box) } };
+    }
+
+    /// <summary>A line OCR read, with one word as its box.</summary>
+    private static Bbs757EfbTextLine Line(string text, int x, int y, int w, int h) =>
+        new(text, new Rectangle(x, y, w, h), new[] { new Bbs757EfbWord(text, new Rectangle(x, y, w, h)) }, 'P');
 
     /// <summary>bright/55's UPDATE read as another word: BlueBird draws REMOVE in the same box when no newer cycle waits.</summary>
     internal static Bbs757EfbTextLine UpdateReadAs(Bbs757EfbTextLine line, string word) =>
@@ -422,21 +443,157 @@ public class Bbs757EfbScreenTests
         Assert.Contains(expected, i => i.Item3 == "Latest cycle: 2611, Update available!");
     }
 
+    /// <summary>Whether any element of the page carries <paramref name="words"/>, in its text, its value or its key.</summary>
+    private static bool Carries(Bbs757EfbScreenModel m, string words) =>
+        m.Items.Concat(m.Menu).Concat(m.TopBar).Any(i => i.Text.Contains(words, StringComparison.Ordinal)
+            || i.Value.Contains(words, StringComparison.Ordinal) || i.Key.Contains(words, StringComparison.Ordinal));
+
     [Fact]
     public void Words_in_an_identifier_field_never_reach_the_page_beside_its_button()
     {
         // A made-up ID read in the SimBrief ID's field, left of the row's LOGOUT: the row says only whether one is set (from the
         // field's pixels, painted out here), the button only its own words, and no element carries the ID.
         const string madeUp = "1234567";
-        var box = new Rectangle(905, 101, 110, 28);
-        var m = Load("bright", "55-settings-airac-data", line => line,
-            new Bbs757EfbTextLine(madeUp, box, new[] { new Bbs757EfbWord(madeUp, box) }, 'P'));
+        var id = Line(madeUp, 905, 101, 110, 28);
+        var m = Load("bright", "55-settings-airac-data", line => line, id);
 
         Assert.Equal("Logout, SIMBRIEF ID number", Item(m, "Logout, SIMBRIEF ID number").Text);
         Assert.Equal("not set", Item(m, "SIMBRIEF ID number").Value);
-        Assert.DoesNotContain(m.Items.Concat(m.Menu).Concat(m.TopBar),
-            i => i.Text.Contains(madeUp, StringComparison.Ordinal) || i.Value.Contains(madeUp, StringComparison.Ordinal)
-                || i.Key.Contains(madeUp, StringComparison.Ordinal));
+        Assert.False(Carries(m, madeUp));
+
+        // The label misread: OCR split it in two, its second half misread ("lD NUMBER"), read in either order; and the label run
+        // into the field's words, one line. The row is still the SimBrief ID's, by its distinctive word, named by the tablet's own
+        // label; its button too; and no element carries the ID, nor the misread half.
+        var split = Load("bright", "55-settings-airac-data",
+            line => ReadAs(line, "SIMBRIEF ID NUMBER", 275, "SIMBRIEF", width: 108), Line("lD NUMBER", 390, 100, 133, 30), id);
+        var splitOtherOrder = Load("bright", "55-settings-airac-data",
+            line => ReadAs(line, "SIMBRIEF ID NUMBER", 275, "SIMBRIEF", width: 108), Line("lD NUMBER", 390, 99, 133, 30), id);
+        var runIn = Load("bright", "55-settings-airac-data",
+            line => ReadAs(line, "SIMBRIEF ID NUMBER", 275, "SIMBRIEF ID NUMBER " + madeUp, width: 740));
+        foreach (var misread in new[] { split, splitOtherOrder, runIn })
+        {
+            var row = Item(misread, "SIMBRIEF ID number");
+            Assert.Equal((Bbs757EfbKind.Row, "row:SIMBRIEF ID NUMBER", "not set"), (row.Kind, row.Key, row.Value));
+            Assert.Equal("btn:SIMBRIEF ID NUMBER|LOGOUT@59,4", Item(misread, "Logout, SIMBRIEF ID number").Key);
+            Assert.False(Carries(misread, madeUp));
+            Assert.False(Carries(misread, "lD"));
+        }
+    }
+
+    [Fact]
+    public void Words_in_a_text_field_never_reach_a_row_whose_label_names_no_identifier()
+    {
+        // The SimBrief ID's field painted back (the fixture's was painted out with the pilot's ID): the gray of the Hoppie logon
+        // code's field, at its x and size, on the SimBrief row. Its label read past knowing (only "NUMBER": no identifier's word), so
+        // the row is no identifier's and its words stay text beside its LOGOUT; a made-up ID read inside the field is left out of
+        // them, and of the page: the row's text is its label alone.
+        const string madeUp = "7654321";
+        void Field(Bitmap bmp)
+        {
+            Color gray = bmp.GetPixel(1000, 187);   // inside the Hoppie logon code's field (897, 165, 299 x 44)
+            using var g = Graphics.FromImage(bmp);
+            using var brush = new SolidBrush(gray);
+            g.FillRectangle(brush, 897, 93, 299, 44);
+        }
+
+        var m = LoadPainted("bright", "55-settings-airac-data", Field, line => ReadAs(line, "SIMBRIEF ID NUMBER", 275, "NUMBER"),
+            Line(madeUp, 905, 101, 110, 28));
+
+        var text = Item(m, "Number");
+        Assert.Equal((Bbs757EfbKind.Text, "txt:NUMBER"), (text.Kind, text.Key));
+        Assert.Equal("btn:NUMBER|LOGOUT@59,4", Item(m, "Logout, Number").Key);
+        Assert.False(Carries(m, madeUp));
+    }
+
+    [Theory]
+    [InlineData("SIMBRIEF ID NUMBER", "SIMBRIEF ID NUMBER")]
+    [InlineData("HOPPIE LOGON CODE", "HOPPIE LOGON CODE")]
+    [InlineData("SAYINTENTIONS ACARS KEY", "SAYINTENTIONS ACARS KEY")]
+    [InlineData("SIMBRIEF lD NUMBER", "SIMBRIEF ID NUMBER")]          // the review's misread, case and spaces folded
+    [InlineData("Simbrief ID number", "SIMBRIEF ID NUMBER")]
+    [InlineData("SIMBRIEF", "SIMBRIEF ID NUMBER")]                    // the label OCR split in two
+    [InlineData("HOPPIE", "HOPPIE LOGON CODE")]
+    [InlineData("HOPPIE L0GON C0DE", "HOPPIE LOGON CODE")]
+    [InlineData("SAY INTENTIONS ACARS KEY", "SAYINTENTIONS ACARS KEY")]
+    [InlineData("SIMBRIEF ID NUMBER 1234567", "SIMBRIEF ID NUMBER")]  // the label run into its field (a made-up ID)
+    [InlineData("HOPPIE ACARS", null)]                                // a switch of Settings, Aircraft: that label, no identifier
+    [InlineData("Hoppie acars", null)]
+    [InlineData("IMPORT FROM SIMBRIEF", null)]                        // the Fuel page's button
+    [InlineData("CPDLC NETWORK", null)]
+    [InlineData("LATEST CYCLE:", null)]
+    [InlineData("ID NUMBER", null)]                                   // no identifier's word: no identifier
+    [InlineData("", null)]
+    public void A_credential_row_is_known_by_its_distinctive_word(string label, string? credential)
+    {
+        Assert.Equal(credential, Bbs757EfbVocabulary.CredentialLabel(label));
+        Assert.Equal(credential != null, Bbs757EfbVocabulary.IsCredential(label));
+    }
+
+    [Fact]
+    public void Hoppie_acars_stays_a_switch_beside_the_cpdlc_network()
+    {
+        // Settings, Aircraft (bright/51): HOPPIE ACARS holds an identifier's word but is a switch of its own.
+        var m = Load("bright", "51-settings-aircraft");
+
+        Assert.Equal(Bbs757EfbKind.Toggle, Item(m, "Hoppie ACARS").Kind);
+        Assert.Equal((Bbs757EfbKind.Toggle, "Hoppie"), (Item(m, "CPDLC network").Kind, Item(m, "CPDLC network").Value));
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Row && i.Value is "set" or "not set");
+    }
+
+    [Theory]
+    [InlineData("dim", "50-settings-general")]
+    [InlineData("bright", "51-settings-aircraft")]
+    [InlineData("bright", "53-settings-callouts")]
+    public void A_settings_page_with_no_boxed_button_has_no_button_in_its_value_column(string set, string name)
+    {
+        // The value column's boxed buttons are the AIRAC data page's (bright/55): no other Settings page captured draws a box
+        // there, so none of these offers a button whose box starts right of x 1180.
+        var m = Load(set, name);
+
+        Assert.NotEmpty(m.Items);
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Button && i.Box.Left > 1180);
+    }
+
+    [Fact]
+    public void A_number_in_a_value_column_box_stays_the_rows_value()
+    {
+        // A value-column box whose words read as a number is a value field, as on every other page (IsNumberField), never the row's
+        // button: the sign-in row's box read as "25" is that row's value.
+        var m = Load("bright", "55-settings-airac-data", line => ReadAs(line, "LOGOUT", 1236, "25"));
+
+        var row = Item(m, "Successfully signed in to navigraph!");
+        Assert.Equal((Bbs757EfbKind.Row, "25", false), (row.Kind, row.Value, row.Clickable));
+        Assert.Equal(new[] { "Logout, SIMBRIEF ID number", "Update, Latest cycle" },
+            m.Items.Where(i => i.Kind == Bbs757EfbKind.Button).Select(i => i.Text));
+    }
+
+    [Fact]
+    public void A_value_column_button_no_row_label_reached_keeps_its_own_words()
+    {
+        // The sign-in sentence not read: no row label lies within the LOGOUT's height, so it is named by its own words and keyed by
+        // them alone, and is still pressed at its box's center.
+        var m = Load("bright", "55-settings-airac-data", line => ReadAs(line, "SUCCESSFULLY SIGNED IN TO NAVIGRAPH!", 276, ""));
+
+        var logout = Item(m, "Logout");
+        Assert.Equal((Bbs757EfbKind.Button, "btn:|LOGOUT@59,18", true), (logout.Kind, logout.Key, logout.Clickable));
+        Assert.Equal(new Point(1295, 397), logout.Hit);
+    }
+
+    [Fact]
+    public void A_sentence_ocr_read_in_two_parts_stays_one_sentence_beside_its_button()
+    {
+        // The sign-in sentence read in two parts a word's gap apart (11 px). The parts of a row's words are joined as the page's
+        // other rows are: with a space where they lie under 40 px apart (or after a label's colon), else a comma. So the sentence is
+        // one, cut nowhere, and its button is named by all of it, as when OCR reads it whole; the cycle row's wide gap keeps its comma.
+        var m = Load("bright", "55-settings-airac-data",
+            line => ReadAs(line, "SUCCESSFULLY SIGNED IN TO NAVIGRAPH!", 276, "SUCCESSFULLY SIGNED IN", width: 297),
+            Line("TO NAVIGRAPH!", 584, 379, 179, 30));
+
+        var sentence = Item(m, "Successfully signed in to navigraph!");
+        Assert.Equal((Bbs757EfbKind.Text, "txt:SUCCESSFULLY SIGNED IN TO NAVIGRAPH!"), (sentence.Kind, sentence.Key));
+        Assert.Equal("btn:SUCCESSFULLY SIGNED IN TO NAVIGRAPH!|LOGOUT@59,18", Item(m, "Logout, Successfully signed in to navigraph!").Key);
+        Assert.Equal(Bbs757EfbKind.Text, Item(m, "Latest cycle: 2611, Update available!").Kind);
+        Assert.Equal(Load("bright", "55-settings-airac-data").Items.Select(i => i.Text), m.Items.Select(i => i.Text));
     }
 
     [Fact]
