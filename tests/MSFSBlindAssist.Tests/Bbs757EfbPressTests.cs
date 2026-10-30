@@ -610,6 +610,23 @@ public class Bbs757EfbPressTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
+    public void An_answer_whose_question_went_says_nothing_whatever_lies_under_it(string culture)
+    {
+        // YES pressed: the question went, and the page it covered has a button where the YES was. By its box alone it would be
+        // found as the YES with other words; it is another control, and the question's going is the press's outcome.
+        var yes = Item(Bbs757EfbKind.Button, "Yes", "q:YES", new Rectangle(336, 591, 177, 57));
+        var before = PageOf("AIRCRAFT", "FUEL") with { Question = new Bbs757EfbQuestion("Are you sure you want to defuel?", new[] { yes }) };
+        var under = Tile("Import from SIMBRIEF", "btn:|IMPORT FROM SIMBRIEF@21,30", new Rectangle(338, 592, 177, 57));
+        var after = PageOf("AIRCRAFT", "FUEL", under);
+        Assert.Same(under, Bbs757EfbPress.Relocate(before, after, yes));
+
+        Assert.Null(TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, after, yes)));
+        // The question still up, the answer not taken: that is no change.
+        Assert.Equal("Yes: no change on the tablet.", TestCulture.Run(culture, () => Bbs757EfbPress.ButtonOutcome(before, before with { }, yes)));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
     public void A_top_bar_button_that_became_text_says_its_new_words_though_the_top_bar_is_not_the_page(string culture)
     {
         // Start boarding becomes Boarding... 10 min, text under the same key: the page below the bar is untouched, but the pressed

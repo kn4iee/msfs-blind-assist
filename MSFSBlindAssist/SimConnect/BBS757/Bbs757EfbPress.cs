@@ -198,14 +198,16 @@ public static class Bbs757EfbPress
     /// <item><see cref="NoChangeText"/> when the press changed nothing (<see cref="PageUnchanged"/>: a new notification over the page,
     /// or a top bar that ticked, is no change of the press's);</item>
     /// <item>null when the page name changed, when a question came up (the read that found it said it, and the dimmed page under
-    /// it reads otherwise: bright/21 names IMPORT FROM SIMBRIEF by the label above it), when the control is gone, and when the control
-    /// kept its words while something else on the page moved.</item>
+    /// it reads otherwise: bright/21 names IMPORT FROM SIMBRIEF by the label above it), when the question an answer was pressed on
+    /// went (what lay under it is another control, whatever its box), when the control is gone, and when the control kept its words
+    /// while something else on the page moved.</item>
     /// </list>
     /// </summary>
     public static string? ButtonOutcome(Bbs757EfbScreenModel before, Bbs757EfbScreenModel after, Bbs757EfbItem pressed)
     {
         if (!SamePage(before, after)) return null;
         if (after.Question != null && !SameQuestion(before.Question, after.Question)) return null;
+        if (before.Question?.Buttons.Contains(pressed) == true && !SameQuestion(before.Question, after.Question)) return null;
         var now = Relocate(before, after, pressed);
         if (now == null) return null;
         if (!string.Equals(now.Text, pressed.Text, StringComparison.Ordinal))
