@@ -7,10 +7,11 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <summary>
 /// The press pipeline's decisions, pure (plan 18, Task 5). The bridge does the capturing, tapping and reading; what it decides
 /// from the reads lives here, where it is tested without a tablet: finding the control the pilot pressed again in a fresh read
-/// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), where to tap a slider with choices
-/// and where to tap next (<see cref="ChoiceX"/>, <see cref="NextChoiceX"/>), whether a press changed the page
-/// (<see cref="PageUnchanged"/>), what a button press says (<see cref="ButtonOutcome"/>: the pressed control's new words, or that
-/// nothing changed), and the words said when a press did not go through. Nothing here
+/// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), which new word a switch of two choices
+/// shows (<see cref="NewChoiceWord"/>), where to tap a slider with choices and where to tap next (<see cref="ChoiceX"/>,
+/// <see cref="NextChoiceX"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
+/// (<see cref="ButtonOutcome"/>: the pressed control's new words, or that nothing changed), and the words said when a press did
+/// not go through or a switch of two choices went to its other choice. Nothing here
 /// refuses a press (the owner's ruling of 2026-10-29): a decision says where a control is now, whether its tap is still wanted,
 /// or what became of the press.
 /// </summary>
@@ -140,7 +141,8 @@ public static class Bbs757EfbPress
     // ------------------------------------------------------------------ a question
 
     /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and
-    /// punctuation wobble from one read to the next ("defuel?", "defuel ?"); the words do not.</summary>
+    /// punctuation wobble from one read to the next ("defuel?", "defuel ?"); the words do not. A two-choice switch's words are
+    /// compared the same way (<see cref="NewChoiceWord"/>).</summary>
     public static string QuestionWords(string text) => string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 
     /// <summary>Whether two questions are the same question: both there, and their words the same (<see cref="QuestionWords"/>).
@@ -154,6 +156,25 @@ public static class Bbs757EfbPress
     /// wished state (it changed since the page was read, so a tap would undo the wish). A state the reader could not tell is not
     /// known to be as wished, so it is tapped.</summary>
     public static bool NeedsTap(Bbs757EfbItem item, bool wantOn) => item.On != wantOn;
+
+    /// <summary>
+    /// The new choice of a switch of two choices that landed, for a row the settings catalog gives no word for (a row that is no
+    /// setting, such as a label read as "CPDLC netwrk", or a setting whose choice before the tap is unknown): the word the control
+    /// shows after its tap (<paramref name="now"/>, what the control found again reads), when it is a word and another than the
+    /// one it showed before (<paramref name="before"/>). A word is what the window labels a switch with ("CPDLC network: Hoppie",
+    /// <see cref="Bbs757EfbElements"/>): not empty and not On/Off. The two are compared with case, spaces and punctuation ignored
+    /// (<see cref="QuestionWords"/>), so a pill that moved while its word still reads the old one gives none. Null in every
+    /// other case: the screen reader says an On/Off switch's new state, and a switch with no word before has none to change.
+    /// </summary>
+    public static string? NewChoiceWord(string before, string? now)
+    {
+        if (now == null) return null;
+        string was = QuestionWords(before), shows = QuestionWords(now);
+        return IsChoiceWord(was) && IsChoiceWord(shows) && was != shows ? now : null;
+    }
+
+    // A switch's value as QuestionWords folds it: a word of two choices, not nothing and not the On or Off of a plain switch.
+    private static bool IsChoiceWord(string folded) => folded.Length > 0 && folded is not ("ON" or "OFF");
 
     // ------------------------------------------------------------------ a slider with choices
 
@@ -231,6 +252,10 @@ public static class Bbs757EfbPress
 
     /// <summary>A switch or check box the tablet did not follow in time.</summary>
     public static string NotChangedText(string label) => label + " did not change.";
+
+    /// <summary>The new choice of a switch of two choices that landed ("CPDLC network: SayIntentions"). The screen reader says only
+    /// checked or not checked of its check box, which names no word (CORE-7).</summary>
+    public static string ChoiceText(string label, string word) => label + ": " + word;
 
     /// <summary>A slider that did not reach the wished choice or value.</summary>
     public static string CouldNotSetText(string label, string value) => label + " could not be set to " + value + ".";

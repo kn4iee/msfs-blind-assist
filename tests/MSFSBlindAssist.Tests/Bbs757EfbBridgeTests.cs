@@ -842,13 +842,21 @@ public class Bbs757EfbBridgeTests
         Assert.Empty(tablet.Alerts);
     }
 
+    // What CPDLC network's file holds once the tap is done, under each culture: the other choice (the tap took) or Hoppie still.
+    public static TheoryData<string, long, bool> CulturesByCpdlcFile => new()
+    {
+        { "en-US", 1L, false }, { "en-US", 0L, true },
+        { "de-DE", 1L, false }, { "de-DE", 0L, true },
+        { "sv-SE", 1L, false }, { "sv-SE", 0L, true },
+    };
+
     [Theory]
-    [InlineData(1L, false)]   // SayIntentions stored: the other choice, as wished
-    [InlineData(0L, true)]    // still Hoppie: the tablet did not change it
-    public async Task A_two_choice_setting_is_judged_by_the_choice_that_was_not_set(long stored, bool notChanged)
+    [MemberData(nameof(CulturesByCpdlcFile))]
+    public async Task A_two_choice_setting_is_judged_by_the_choice_that_was_not_set_and_says_it(string culture, long stored, bool notChanged)
     {
         // CPDLC network reads Hoppie with its pill off, while EHSI up reference reads HDG with its pill on (measured 2026-10-29): the
-        // pill's side names no word, so a tap is wished to store the choice the row did not read before it.
+        // pill's side names no word, so a tap is wished to store the choice the row did not read before it. When the file follows, the
+        // press says that choice once (NVDA says only checked or not checked); when it does not, only that it did not change.
         var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "Hoppie");
         var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", cpdlc));
         tablet.File["cpdlc_network"] = Bbs757Value.Of(0L);
@@ -859,13 +867,15 @@ public class Bbs757EfbBridgeTests
             tablet.Show(PageOf("SETTINGS", "AIRCRAFT", cpdlc with { On = true, Value = "SayIntentions" }));
         };
 
-        await tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None);
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
 
-        Assert.Equal(notChanged ? new[] { "CPDLC network did not change." } : Array.Empty<string>(), tablet.Alerts);
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { notChanged ? "CPDLC network did not change." : "CPDLC network: SayIntentions" }, tablet.Alerts);
     }
 
-    [Fact]
-    public async Task A_two_choice_setting_switched_off_is_judged_by_its_other_choice_too()
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_switched_off_is_judged_by_its_other_choice_too_and_says_it(string culture)
     {
         // EHSI up reference: HDG reads on, so switching it off is wished to store TRK, in the registration's file.
         var ehsi = Switch("EHSI up reference", "tgl:EHSI UP REFERENCE", on: true, value: "HDG");
@@ -878,11 +888,219 @@ public class Bbs757EfbBridgeTests
             tablet.Show(PageOf("SETTINGS", "LIVERY OPTIONS", ehsi with { On = false, Value = "TRK" }));
         };
 
-        await tablet.Runner().SwitchAsync(press, wantOn: false, CancellationToken.None);
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: false, CancellationToken.None));
 
         Assert.Single(tablet.Taps);
-        Assert.Empty(tablet.Alerts);
+        Assert.Equal(new[] { "EHSI up reference: TRK" }, tablet.Alerts);
         Assert.Contains("options.ehsi.up_reference", tablet.SettingsRead);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task Every_two_choice_row_the_tablet_shows_says_its_other_choice_both_ways(string culture)
+    {
+        // The rows the owner named (2026-10-30), each pressed from either of its words. The pill's side is not the word's (measured
+        // 2026-10-29), so a row may start on or off: the press flips it and says the word of the choice that was not set.
+        var rows = new (string Label, string Section, string Path, string[] Words)[]
+        {
+            ("CPDLC network", "AIRCRAFT", "cpdlc_network", new[] { "Hoppie", "SayIntentions" }),
+            ("Units", "LIVERY OPTIONS", "options.general.weight_unit", new[] { "Imperial", "Metric" }),
+            ("EHSI up reference", "LIVERY OPTIONS", "options.ehsi.up_reference", new[] { "HDG", "TRK" }),
+            ("VNAV takeoff behavior", "LIVERY OPTIONS", "options.general.vnav_takeoff_activation", new[] { "Option 1", "Option 2" }),
+        };
+
+        foreach (var (label, section, path, words) in rows)
+        {
+            var stored = Bbs757EfbSettings.ByPath(path)!.Choices.Select(c => c.Stored).ToArray();
+            for (int before = 0; before < 2; before++)
+            {
+                bool onBefore = before == 1;
+                var row = Switch(label, "tgl:" + label.ToUpperInvariant(), on: onBefore, value: words[before]);
+                var tablet = new FakeTablet(PageOf("SETTINGS", section, row));
+                tablet.File[path] = stored[before];
+                var press = tablet.Press(row);
+                tablet.OnTap = _ =>
+                {
+                    tablet.File[path] = stored[1 - before];
+                    tablet.Show(PageOf("SETTINGS", section, row with { On = !onBefore, Value = words[1 - before] }));
+                };
+
+                await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+                Assert.Single(tablet.Taps);
+                Assert.Equal(new[] { label + ": " + words[1 - before] }, tablet.Alerts);
+            }
+        }
+    }
+
+    // EFB brightness mode as the reader gives it on the dim General page (Auto): a Toggle reading Auto with its pill on.
+    private static Bbs757EfbItem BrightnessModeAuto()
+    {
+        var mode = Bbs757EfbScreenTests.Load("dim", "50-settings-general").Items.Single(i => i.Text == "EFB brightness mode");
+        Assert.Equal(Bbs757EfbKind.Toggle, mode.Kind);
+        Assert.Equal("Auto", mode.Value);
+        Assert.True(mode.On);
+        return mode;
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_whose_new_choice_has_no_word_on_the_tablet_says_the_catalogs_word(string culture)
+    {
+        // Manual has no word on the tablet (the brightness percent shows instead): the row reads none once the tap landed, so the
+        // catalog gives the word.
+        var auto = BrightnessModeAuto();
+        var tablet = new FakeTablet(PageOf("SETTINGS", "GENERAL", auto));
+        tablet.File["auto_brightness"] = Bbs757Value.Of(true);
+        var press = tablet.Press(auto);
+        tablet.OnTap = _ =>
+        {
+            tablet.File["auto_brightness"] = Bbs757Value.Of(false);
+            tablet.Show(PageOf("SETTINGS", "GENERAL", auto with { On = false, Value = "" }));
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: false, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "EFB brightness mode: Manual" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_whose_row_reads_no_word_before_is_found_by_the_file_and_says_the_other_word(string culture)
+    {
+        // The way back: the row reads no word for Manual, so the choice before the tap is the file's (false, Manual) and the choice
+        // now is Auto, which the row reads too.
+        var manual = BrightnessModeAuto() with { On = false, Value = "" };
+        var tablet = new FakeTablet(PageOf("SETTINGS", "GENERAL", manual));
+        tablet.File["auto_brightness"] = Bbs757Value.Of(false);
+        var press = tablet.Press(manual);
+        tablet.OnTap = _ =>
+        {
+            tablet.File["auto_brightness"] = Bbs757Value.Of(true);
+            tablet.Show(PageOf("SETTINGS", "GENERAL", manual with { On = true, Value = "Auto" }));
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "EFB brightness mode: Auto" }, tablet.Alerts);
+        Assert.Contains("auto_brightness", tablet.SettingsRead);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_the_file_cannot_be_read_for_is_judged_by_the_page_and_says_the_catalogs_choice(string culture)
+    {
+        // No file: the page judges, and its pill followed. The choice before the tap is the row's word (Hoppie), so the choice now is
+        // the catalog's SayIntentions, in the catalog's spelling, not the reader's (it makes "SAYINTENTIONS" "Sayintentions").
+        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "Hoppie");
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", cpdlc));
+        var press = tablet.Press(cpdlc);
+        tablet.OnTap = _ => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", cpdlc with { On = true, Value = "Sayintentions" }));
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "CPDLC network: SayIntentions" }, tablet.Alerts);
+        Assert.Contains("cpdlc_network", tablet.SettingsRead);   // the file was asked for, and said nothing
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_the_page_never_follows_says_only_that_it_did_not_change(string culture)
+    {
+        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "Hoppie");
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", cpdlc));   // no file, and the pill never moves
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(tablet.Press(cpdlc), wantOn: true, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "CPDLC network did not change." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_row_that_is_no_setting_says_the_word_the_page_shows_now(string culture)
+    {
+        // "CPDLC netwrk" matches no setting, so the file is never read and the catalog has no word: the page's is all there is.
+        var misread = Switch("CPDLC netwrk", "tgl:CPDLC NETWRK", on: false, value: "Hoppie");
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", misread));
+        var press = tablet.Press(misread);
+        tablet.OnTap = _ => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", misread with { On = true, Value = "SayIntentions" }));
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "CPDLC netwrk: SayIntentions" }, tablet.Alerts);
+        Assert.Empty(tablet.SettingsRead);
+    }
+
+    [Fact]
+    public async Task A_two_choice_row_that_is_no_setting_says_nothing_while_the_page_shows_the_old_word()
+    {
+        // The pill moved but the word still reads Hoppie (or Hoppie in other capitals): nothing is known to have changed but the pill.
+        foreach (string still in new[] { "Hoppie", "HOPPIE", "Hop-pie " })
+        {
+            var misread = Switch("CPDLC netwrk", "tgl:CPDLC NETWRK", on: false, value: "Hoppie");
+            var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", misread));
+            var press = tablet.Press(misread);
+            tablet.OnTap = _ => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", misread with { On = true, Value = still }));
+
+            await tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None);
+
+            Assert.Single(tablet.Taps);
+            Assert.Empty(tablet.Alerts);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_setting_of_two_choices_whose_choice_before_is_unknown_says_the_word_the_page_shows_now(string culture)
+    {
+        // A matched row whose word the reader garbled ("Hoppi"), with no file to ask: the choice before is unknown, so the catalog has
+        // nothing to say, and the page's new word is.
+        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "Hoppi");
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", cpdlc));
+        var press = tablet.Press(cpdlc);
+        tablet.OnTap = _ => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", cpdlc with { On = true, Value = "Sayintentions" }));
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
+
+        Assert.Equal(new[] { "CPDLC network: Sayintentions" }, tablet.Alerts);
+        Assert.Contains("cpdlc_network", tablet.SettingsRead);
+    }
+
+    [Fact]
+    public async Task Only_a_switch_of_two_choices_says_its_choice_the_others_say_nothing()
+    {
+        // The words beside these switches change when they are pressed, but none of them is a choice: the screen reader says an On/Off
+        // switch's state (a matched setting whose On and Off the reader garbled, and a misread label whose words it read), the TOD
+        // pause distance's box holds a number or nothing, and a check box has no word at all.
+        var line = new Bbs757EfbItem(Bbs757EfbKind.Checkbox, "Parking brake: SET", new Rectangle(286, 300, 400, 30), new Point(298, 315), true,
+            "chk:PARKING BRAKE", On: false, Value: "Set");
+        var cases = new (string App, string Section, Bbs757EfbItem Row, Bbs757EfbItem After)[]
+        {
+            ("SETTINGS", "AIRCRAFT", Switch("Sync barometers", "tgl:SYNC BAROMETERS", on: false, value: "0n"),
+                Switch("Sync barometers", "tgl:SYNC BAROMETERS", on: true, value: "0ff.")),
+            ("SETTINGS", "AIRCRAFT", Switch("Sync barometrs", "tgl:SYNC BAROMETRS", on: false, value: "Off"),
+                Switch("Sync barometrs", "tgl:SYNC BAROMETRS", on: true, value: "On")),
+            ("SETTINGS", "AIRCRAFT", Switch("TOD pause distance (NM)", "tgl:TOD PAUSE DISTANCE (NM)", on: true, value: "40"),
+                Switch("TOD pause distance (NM)", "tgl:TOD PAUSE DISTANCE (NM)", on: false, value: "-1")),
+            ("CHECKLIST", "BEFORE START", line, line with { On = true, Value = "Done" }),
+        };
+
+        foreach (var (app, section, row, after) in cases)
+        {
+            var tablet = new FakeTablet(PageOf(app, section, row));
+            var press = tablet.Press(row);
+            tablet.OnTap = _ => tablet.Show(PageOf(app, section, after));
+
+            await tablet.Runner().SwitchAsync(press, wantOn: after.On == true, CancellationToken.None);
+
+            Assert.Single(tablet.Taps);
+            Assert.Empty(tablet.Alerts);
+        }
     }
 
     [Theory]

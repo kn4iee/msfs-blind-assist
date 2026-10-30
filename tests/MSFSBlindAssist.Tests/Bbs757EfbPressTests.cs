@@ -687,6 +687,8 @@ public class Bbs757EfbPressTests
             Bbs757EfbPress.GoneText("Req fuel truck"),
             Bbs757EfbPress.NoChangeText("Req fuel truck"),
             Bbs757EfbPress.NotChangedText("Sync barometers"),
+            Bbs757EfbPress.ChoiceText("CPDLC network", "SayIntentions"),
+            Bbs757EfbPress.ChoiceText("Displays bootup speed", "Realistic"),
             Bbs757EfbPress.CouldNotSetText("IRS alignment time", "Full (7 min+)"),
             Bbs757EfbPress.CouldNotSetText("Ceiling", "30,5 percent"),
             Bbs757EfbPress.UnreachableText,
@@ -697,9 +699,38 @@ public class Bbs757EfbPressTests
             "Req fuel truck is no longer on the tablet.",
             "Req fuel truck: no change on the tablet.",
             "Sync barometers did not change.",
+            "CPDLC network: SayIntentions",
+            "Displays bootup speed: Realistic",
             "IRS alignment time could not be set to Full (7 min+).",
             "Ceiling could not be set to 30,5 percent.",
             "The tablet cannot be reached, so nothing was tapped.",
         }, texts);
+    }
+
+    // ---- the new word of a switch of two choices ----------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Hoppie", "SayIntentions", "SayIntentions")]        // the word changed: the new word, as the page shows it
+    [InlineData("Hoppie", "Sayintentions", "Sayintentions")]        // the reader's spelling is kept
+    [InlineData("Option 1", "Option 2", "Option 2")]                // a digit is part of the word
+    [InlineData("HDG", "Trk", "Trk")]
+    [InlineData("100%", "Auto", "Auto")]                            // a percent is a word to compare, whatever the tablet shows
+    [InlineData("Hoppie", "Hoppie", null)]                          // the pill moved, the word did not
+    [InlineData("Hoppie", "HOPPIE", null)]                          // case wobbles from one read to the next
+    [InlineData("Imperial", "IMPERIAL", null)]                      // in any culture (tr-TR upper-cases an i to a dotted capital)
+    [InlineData("Option 1", " option  1. ", null)]                  // so do spaces and punctuation
+    [InlineData("", "SayIntentions", null)]                         // no word before: a plain switch, or one the reader gave none
+    [InlineData("On", "SayIntentions", null)]                       // On and Off are the plain switch's states, not words
+    [InlineData("off", "SayIntentions", null)]
+    [InlineData("Hoppie", "", null)]                                // no word now
+    [InlineData("Hoppie", "On", null)]
+    [InlineData("Hoppie", "OFF", null)]
+    [InlineData("Hoppie", "...", null)]                             // punctuation alone is no word
+    [InlineData("40", "", null)]                                    // the TOD pause distance switched off
+    [InlineData("Hoppie", null, null)]                              // the control was not found again
+    public void The_new_word_of_a_two_choice_switch_is_the_word_it_shows_now_when_it_is_another(string before, string? now, string? expected)
+    {
+        foreach (string culture in new[] { "en-US", "de-DE", "sv-SE", "tr-TR" })
+            Assert.Equal(expected, TestCulture.Run(culture, () => Bbs757EfbPress.NewChoiceWord(before, now)));
     }
 }

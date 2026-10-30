@@ -100,7 +100,9 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// (<see cref="Bbs757EfbPress.ButtonOutcome"/>; the window says neither); a Settings switch or slider is judged by BlueBird's file
 /// (at most <see cref="FileMaxMs"/>, the stored value of what was asked for), and anything with no setting behind it by the page (a
 /// switch within <see cref="FollowMaxMs"/>); a callout the press switched off with it is named. A switch, check box or slider that
-/// landed says nothing: the screen reader said its new state.</item>
+/// landed says nothing: the screen reader said its new state. The exception is a switch of two choices (the CPDLC network, the
+/// units, the EHSI up reference): it says its new choice once, since the screen reader can say only checked or not checked of its
+/// check box, which names no word.</item>
 /// </list>
 /// A tile of a ground service or the GPU opens the definition's echo for its row before the tap and ends it with the state read
 /// after, so the row does not say what the press says of the tile's new words (CORE-7). Everything said is an alert, in plain words
@@ -234,7 +236,13 @@ public sealed class Bbs757EfbPressRunner
     /// choice that was not set before the tap, since the pill's side names no word the same way on every row (measured 2026-10-29:
     /// EHSI's HDG reads on, CPDLC's Hoppie off); the TOD pause distance switched off its empty box. A row that is no setting (a label
     /// misread, a checklist line), or a file that cannot be read, is judged by the page. Not followed: "{label} did not change."
-    /// Switched on, a callout of an exclusive group names each other member that read on before and is off now: "{label} turned off".
+    /// Followed, a switch or check box says nothing, since the screen reader said its new state, except a switch of two choices:
+    /// the screen reader can say only checked or not checked of its check box, which names no word, so the press says its new choice
+    /// once, "{label}: {word}" ("CPDLC network: SayIntentions"). The word is the catalog's for the choice that was not set before the
+    /// tap, for a setting of two choices whose choice before is known (from the row's word, else the file), whether the file or the
+    /// page followed; else, for a row that is no setting or whose choice before is unknown, the word the page shows now
+    /// (<see cref="Bbs757EfbPress.NewChoiceWord"/>), when it is another than the one it showed before. Switched on, a callout of an
+    /// exclusive group names each other member that read on before and is off now: "{label} turned off".
     /// </summary>
     public async Task SwitchAsync(Bbs757EfbPressed pressed, bool wantOn, CancellationToken ct)
     {
@@ -253,24 +261,50 @@ public sealed class Bbs757EfbPressRunner
         await WaitForChangeAsync(target.Picture, ct);
         if (await _io.Read(ct) is not { } after) return;   // nothing read: the window says why
 
-        var verdict = setting != null && wish != null ? await FileHoldsAsync(setting, wish, ct) : Verdict.Unread;
-        if (verdict == Verdict.Unread) verdict = await PageFollowsAsync(target.Page, after, item, wantOn, tappedAt, ct);
+        var verdict = setting != null && wish != null ? await FileHoldsAsync(setting, wish.Accepts, ct) : Verdict.Unread;
+        Bbs757EfbItem? shown = null;   // the switch as the page shows it once it followed
+        if (verdict == Verdict.Unread) (verdict, shown) = await PageFollowsAsync(target.Page, after, item, wantOn, tappedAt, ct);
         if (verdict == Verdict.Differs)
         {
             _io.Alert(Bbs757EfbPress.NotChangedText(item.Text));
             return;
         }
-        if (verdict == Verdict.Holds && onBefore.Count > 0 && await TurnedOffAsync(onBefore, after, ct) is { } turnedOff)
+        if (verdict != Verdict.Holds) return;
+
+        // A callout is an On/Off switch, so a switch of two choices never has a callout to name: one alert at most.
+        if (NewChoice(item, setting, wish, shown) is { } choice)
+            _io.Alert(Bbs757EfbPress.ChoiceText(item.Text, choice));
+        else if (onBefore.Count > 0 && await TurnedOffAsync(onBefore, after, ct) is { } turnedOff)
             _io.Alert(turnedOff);
     }
 
+    /// <summary>
+    /// The new choice a switch of two choices says once its tap landed; null for any other switch (an On/Off switch, the TOD pause
+    /// distance, a check box), which says nothing. A matched setting of two choices whose choice before the tap is known
+    /// (<paramref name="wish"/> carries the word): the catalog's word for the other choice, so a choice the tablet shows no word for
+    /// (EFB brightness mode's Manual) is named too. Else, for a row that is no setting (a label misread) or a setting whose choice
+    /// before was unknown and whose file could not be read, the word the page shows now (<paramref name="shown"/>, the control found
+    /// again by the page that followed), when it differs from the word the row read before (<see cref="Bbs757EfbPress.NewChoiceWord"/>).
+    /// </summary>
+    private static string? NewChoice(Bbs757EfbItem item, Bbs757Setting? setting, Wish? wish, Bbs757EfbItem? shown)
+    {
+        if (item.Kind != Bbs757EfbKind.Toggle) return null;
+        if (wish?.Word is { } word) return word;
+        return setting is null or { Kind: Bbs757SettingKind.Choice } ? Bbs757EfbPress.NewChoiceWord(item.Value, shown?.Value) : null;
+    }
+
+    /// <summary>What a switch's tap must leave in BlueBird's file: <see cref="Accepts"/> says whether a stored value is it, and
+    /// <see cref="Word"/> is, for a setting of two choices, the catalog's word for the choice the tap switches to (null for any other
+    /// setting).</summary>
+    private sealed record Wish(Func<Bbs757Value, bool> Accepts, string? Word = null);
+
     /// <summary>What BlueBird's file must hold once a switch's tap landed; null when the setting names no value to judge by.</summary>
-    private async Task<Func<Bbs757Value, bool>?> FileWishAsync(Bbs757Setting setting, Bbs757EfbItem row, bool wantOn, CancellationToken ct)
+    private async Task<Wish?> FileWishAsync(Bbs757Setting setting, Bbs757EfbItem row, bool wantOn, CancellationToken ct)
     {
         switch (setting.Kind)
         {
             case Bbs757SettingKind.OnOff:
-                return Bbs757EfbSettingsMatch.StoredFor(setting, wantOn, null) is { } on ? (Bbs757Value v) => v == on : null;
+                return Bbs757EfbSettingsMatch.StoredFor(setting, wantOn, null) is { } on ? new Wish(v => v == on) : null;
             case Bbs757SettingKind.Choice when setting.Choices.Count == 2:
             {
                 // The choice set before the tap: the word the row read, else the file's.
@@ -278,12 +312,12 @@ public sealed class Bbs757EfbPressRunner
                 if (before < 0 && await _io.ReadSetting(setting, ct) is { } stored)
                     before = setting.Choices.ToList().FindIndex(c => c.Stored == stored);
                 if (before < 0) return null;
-                var other = setting.Choices[1 - before].Stored;
-                return (Bbs757Value v) => v == other;
+                var other = setting.Choices[1 - before];
+                return new Wish(v => v == other.Stored, other.Word);
             }
             case Bbs757SettingKind.Number when setting.EmptyStored is { } empty:
                 // The TOD pause distance's switch: off is its empty box, on any distance.
-                return wantOn ? (Bbs757Value v) => v != empty : (Bbs757Value v) => v == empty;
+                return new Wish(wantOn ? v => v != empty : v => v == empty);
             default:
                 return null;
         }
@@ -340,19 +374,20 @@ public sealed class Bbs757EfbPressRunner
         }
     }
 
-    /// <summary>The page read again until the switch shows the wish, for <see cref="FollowMaxMs"/> from its tap: Holds, Differs, or
-    /// Unread (a read failed: the window says why).</summary>
-    private async Task<Verdict> PageFollowsAsync(Bbs757EfbScreenModel page, Bbs757EfbScreenModel after, Bbs757EfbItem item, bool wantOn,
-        long tappedAt, CancellationToken ct)
+    /// <summary>The page read again until the switch shows the wish, for <see cref="FollowMaxMs"/> from its tap: Holds, with the
+    /// switch as that read shows it (<see cref="Bbs757EfbPress.Relocate"/>), Differs, or Unread (a read failed: the window says
+    /// why).</summary>
+    private async Task<(Verdict Verdict, Bbs757EfbItem? Shown)> PageFollowsAsync(Bbs757EfbScreenModel page, Bbs757EfbScreenModel after,
+        Bbs757EfbItem item, bool wantOn, long tappedAt, CancellationToken ct)
     {
         long until = tappedAt + FollowMaxMs;
         var now = after;
         while (true)
         {
-            if (Bbs757EfbPress.Relocate(page, now, item)?.On == wantOn) return Verdict.Holds;
-            if (_io.NowMs() >= until) return Verdict.Differs;
+            if (Bbs757EfbPress.Relocate(page, now, item) is { } found && found.On == wantOn) return (Verdict.Holds, found);
+            if (_io.NowMs() >= until) return (Verdict.Differs, null);
             await _io.Delay(FollowPollMs, ct);
-            if (await _io.Read(ct) is not { } next) return Verdict.Unread;
+            if (await _io.Read(ct) is not { } next) return (Verdict.Unread, null);
             now = next;
         }
     }
