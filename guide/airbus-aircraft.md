@@ -773,6 +773,8 @@ Note that Ctrl+Shift+R in Output mode reads your last landing rate instead.
 
 **Displays.** Output Alt+P reads the captain's PFD (the flight mode annunciator first, then speeds, altitude, heading and messages), Alt+N the captain's ND, Alt+S the SD page shown with its values named, and Alt+I the standby flight display. Every other display is in the Displays section. A PFD line that flashes reads *flashing* and keeps its place: QNH above the transition altitude, STD below the transition level, an FMA mode that flashes for attention such as LVR CLB. Traffic on the ND reads how far above or below you it is and, in the ND window, where: *"Traffic 700 feet above: 6 o'clock, 10 miles, white"*.
 
+**First Officer: Output Shift+C.** Flows from cold and dark to securing the aircraft, with the aircraft's own checklists as its read-backs (the same words as the MFD's C/L pages, Output Ctrl+Shift+C). See [The First Officer and Checklists](first-officer.md).
+
 ### Aircraft-specific hotkeys and callouts {#aircraft-specific-hotkeys-and-callouts-5}
 
 The Output readouts are the A380's, from what the A350 itself shows:
@@ -838,7 +840,6 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 
 ### Things to know {#things-to-know-5}
 
-- **The A350's First Officer is not there yet.** Output Shift+C says *"No checklist for this aircraft."* Use the MFD's own checklists (Output Ctrl+Shift+C).
 - **Surroundings window frequencies:** the A350 has no stock COM radio, so Enter on a frequency in the Surroundings window tunes it as you would by hand: on the captain's RMP it goes to the VHF page and loads the frequency as VHF 1's standby, and Shift+Enter also swaps it in. BA reads the RMP back, as on the other aircraft: *"COM 1 standby 118.700"*.
 - **Pictures stay pictures.** The OIS charts and en-route map, and the tapes, attitude and map symbols on the PFD and ND, are graphics. BA reads their values from the aircraft where it can.
 - **After an A350 update,** BA prepares the displays again (about 15 seconds). If a display stops reading after an update, report it.

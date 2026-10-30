@@ -31,11 +31,13 @@ Output Shift+C opens the **First Officer**, a crew member who works the flows an
 - **Flows** runs each phase's procedure for you, from powering up the aircraft to securing it. The First Officer sets its own switches, checks that each one really moved, and reminds you of the Captain's items.
 - **Checklists** holds the aircraft's normal checklists. A line ticks itself once the aircraft is in that state, and ticking a line yourself has the First Officer do it.
 
-The First Officer is on the PMDG 777 and 737, the iFly 737 MAX8, the Fenix A320, the FlyByWire A32NX and A380X, the Headwind A330-900neo and the TFDi MD-11. You can also open it from the File menu, where the **First Officer** item is named after your aircraft, for example "Fenix A320 First Officer". On any other aircraft the item is not there, and Output Shift+C says *"No checklist for this aircraft."* and opens nothing.
+The First Officer is on the PMDG 777 and 737, the iFly 737 MAX8, the Fenix A320, the FlyByWire A32NX and A380X, the Headwind A330-900neo, the TFDi MD-11 and the iniBuilds A350. You can also open it from the File menu, where the **First Officer** item is named after your aircraft, for example "Fenix A320 First Officer". On any other aircraft the item is not there, and Output Shift+C says *"No checklist for this aircraft."* and opens nothing.
 
 The First Officer never programs the MCDU, CDU or FMC: you still enter the flight plan and performance yourself. Items only the Captain can judge, such as the landing autobrake setting, are spoken as reminders and left to you.
 
 <div class="callout note" role="note" markdown="1">
+
+**Note:** On the A350 the read-backs are the aircraft's own checklists, in its order, and the First Officer never touches the MFD: the transponder, TCAS and weather radar live on the MFD's SURV page, so those lines are reminders. Ground power comes from the OIS's GROUND page: it reminds you, and switches the EXT buttons on only once a ground power unit is there.
 
 **Note:** The A380X also has a live Electronic Checklist, read from the aircraft's own display and ticked by the aircraft's own sensing, on Output Ctrl+Shift+C. See [Airbus Aircraft](airbus-aircraft.md).
 
@@ -126,7 +128,7 @@ The **First Officer** tab of Settings (File menu, Settings) has these options:
 |---|---|---|
 | Auto-raise gear on positive rate (climb) | Raises the gear after a takeoff BA watched from the ground: *"Positive rate. Gear up."* | Off |
 | Auto-lower gear at 2000 ft AGL (descent) | Lowers the gear on a real descent below 2,000 feet above the ground, at 250 knots or less: *"Gear down."* | Off |
-| Auto-manage flaps (FBW A380, A32NX, Headwind A330) | Extends and retracts the flaps by the speed tape, on those three aircraft only. | Off |
+| Auto-manage flaps (FBW A380, A32NX, Headwind A330, iniBuilds A350) | Extends and retracts the flaps by the speed tape, on those four aircraft only. | Off |
 | Auto-engage autopilot on climbout | Engages the autopilot climbing through the height below, after a takeoff BA watched, for example *"350 feet. Autopilot engaged."* | Off |
 | Autopilot engagement altitude (feet AGL) | The height for the setting above, 100 to 3,000 feet. An aircraft with a higher minimum uses its own, such as 400 feet on the PMDG 737. | 350 |
 | Automatically switch landing lights at 10,000 feet | Landing lights off climbing through 10,000 feet and on descending through it. | On |

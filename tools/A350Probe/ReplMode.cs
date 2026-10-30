@@ -103,6 +103,7 @@ internal sealed partial class ProbeForm
         }
         async Task<string> Eval(string js) => await CoherentEvalClient.EvalAsync(MSFSBlindAssist.Aircraft.A350.A350Printout.ViewNeedle, js, CancellationToken.None) ?? "";
         Form? Window() => Application.OpenForms.OfType<Form>().LastOrDefault(f => f is not ProbeForm);
+        using var fo = new FoDriver(def, _m, cap, Eval);
 
         long offset = 0;
         while (true)
@@ -342,6 +343,9 @@ internal sealed partial class ProbeForm
                             Line("saved " + p[2]);
                             break;
                         }
+                        case "fo":   // the First Officer on the real engine (FoDriver)
+                            Line(fo.Command(rest));
+                            break;
                         case "stats":
                         {
                             var sim = System.Diagnostics.Process.GetProcessesByName("FlightSimulator2024").FirstOrDefault();

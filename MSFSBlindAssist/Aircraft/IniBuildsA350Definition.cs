@@ -559,6 +559,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _lampInputKeys.Add(A350PanelLamps.InputKey(name));   // consumed silently
         }
 
+        // What the First Officer reads where nothing above streams it (A350StateEvaluator), consumed silently.
+        foreach (var (name, unit) in MSFSBlindAssist.FirstOfficer.A350.A350StateEvaluator.Inputs.Where(i => !_keyByName.ContainsKey(i.Name)))
+        {
+            Register(A350PanelLamps.InputKey(name), name, name, null, unit);
+            _lampInputKeys.Add(A350PanelLamps.InputKey(name));
+        }
+
         // The take-off roll call-outs (A350TakeoffCallouts), as the A380's: the indicated airspeed per sim frame on its own
         // subscription (the 1 Hz batch would call "Rotate" up to a second late), consumed. The FMS's V-speeds are no sim
         // variable: the display reader reads them (ObserveTakeoffSpeeds), INI_V1, INI_VR and INI_V2 being never written.

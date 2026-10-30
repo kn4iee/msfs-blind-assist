@@ -4,6 +4,8 @@ paths:
   - "MSFSBlindAssist/FirstOfficer/FBWA320/**"
   - "MSFSBlindAssist/FirstOfficer/FBWA380/**"
   - "MSFSBlindAssist/FirstOfficer/HWA330/**"
+  - "MSFSBlindAssist/FirstOfficer/A350/**"
+  - "MSFSBlindAssist/Aircraft/IniBuildsA350Definition.FirstOfficer.cs"
   - "MSFSBlindAssist/FirstOfficer/Airbus/**"
   - "MSFSBlindAssist/FirstOfficer/FoUnclaimedKeyPolicy.cs"
   - "MSFSBlindAssist/Aircraft/FbwSimBuild.cs"
@@ -12,6 +14,7 @@ paths:
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/Fbw*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/Fenix*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/HwA330*.cs"
+  - "tests/MSFSBlindAssist.Tests/FirstOfficer/A350*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/FoA380*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/FoFbw*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/AirbusReadback*.cs"
@@ -20,7 +23,7 @@ paths:
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/A320Family*.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/AirbusSecuring*.cs"
 ---
-# First Officer rules: Fenix A320, FBW A32NX/A380, Headwind A330
+# First Officer rules: Fenix A320, FBW A32NX/A380, Headwind A330, iniBuilds A350
 
 Loaded when Claude reads matching code, on top of first-officer.md. Background: docs/first-officer.md. Full text of each rule: docs/invariants/first-officer-airbus.md.
 
@@ -38,3 +41,4 @@ Loaded when Claude reads matching code, on top of first-officer.md. Background: 
 - [FOA-12] The FBW A32NX/A380 FO resolve each name FBW's FS2020 (fs2020-master) and FS2024 builds spell differently per running sim (`FbwSimBuilds`, `A380BuildNames`, `SdPageShownVarFor`, `LandingConf3VarFor`); both names are registered `OnRequest`; an unknown sim reads NaN and writes nothing, reported. Full: docs/invariants/first-officer-airbus.md#foa-12
 - [FOA-13] Fenix v3: a cockpit cabin call no longer sets CABIN READY, the virtual purser does. The FO reads it (`FenixStateEvaluator.CabinReadyField`) only as the live value of the Line-up and Landing "Cabin: READY" lines, which stay pilot-confirmed Reminders (owner, 2026-10-22), and never speaks cabin ready (the cabin monitor's job). Full: docs/invariants/first-officer-airbus.md#foa-13
 - [FOA-14] A Fenix FO step only some variants have gates on `FenixStateEvaluator.Variant` (the definition's detected variant), never on the config L:vars; on a variant without it the step's target provider returns null ([FO-20]'s silent skip), and an unknown variant behaves as the A320 (the A321 has no PACK FLOW selector). Full: docs/invariants/first-officer-airbus.md#foa-14
+- [FOA-15] The iniBuilds A350 FO writes only panel rows, through `IniBuildsA350Definition.ApplyForFirstOfficer`, never an L:var; `A350ActionExecutor` presses a button that flips (EXT, A/BRK, APU START, baro unit) only on a definite mismatch, unread refused. Surveillance stays Captain reminders (MFD SURV page). Full: docs/invariants/first-officer-airbus.md#foa-15

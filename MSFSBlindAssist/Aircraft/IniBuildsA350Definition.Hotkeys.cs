@@ -305,7 +305,7 @@ public partial class IniBuildsA350Definition
     private IReadOnlyList<string>? DisplayLines(string displayKey) =>
         DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is not { } d ? null
             : IsDark(d) ? Array.Empty<string>()
-            : Pfd?.Latest(d.Gauge, d.Index) is { } capture ? d.Read(capture) : null;
+            : Pfd?.Latest(d.Gauge, d.Index) is { } capture ? ReadDisplay(d, capture) : null;
 
     /// <summary>"Captain PFD dark: ..." while that display's screen is dark, else null.</summary>
     private string? DarkReadout(string displayKey) =>

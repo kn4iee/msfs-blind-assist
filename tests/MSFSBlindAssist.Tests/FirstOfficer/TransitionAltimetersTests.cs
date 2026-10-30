@@ -77,7 +77,7 @@ public class TransitionAltimetersTests
             .Where(f => Regex.IsMatch(File.ReadAllText(f), @":\s*IFoPhaseMonitor\b"))
             .ToArray();
 
-        Assert.Equal(8, monitorTypes.Count);
+        Assert.Equal(9, monitorTypes.Count);
         Assert.Equal(monitorTypes.Count, files.Length);
         foreach (string file in files)
         {

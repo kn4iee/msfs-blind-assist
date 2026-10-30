@@ -5,7 +5,7 @@ These rules moved here, with their IDs and texts, from `first-officer.md` on 202
 
 ## FO-15
 
-- PMDG auto-flaps was REMOVED (2026-07-08, user decision) — never reintroduce a 737/777 flap schedule; the "Auto-manage flaps" setting acts on the FBW A380 and A32NX and the Headwind A330 only (Fenix stores-but-ignores it, the PMDG managers now do the same). The Headwind A330's manager duplicates the A32NX's schedule ([FOA-3]) and always acted on it; the settings text and this rule named only the two FlyByWire jets until 2026-10-18. → [first-officer.md](../first-officer.md)
+- PMDG auto-flaps was REMOVED (2026-07-08, user decision) — never reintroduce a 737/777 flap schedule; the "Auto-manage flaps" setting acts on the FBW A380 and A32NX, the Headwind A330 and the iniBuilds A350 only (Fenix stores-but-ignores it, the PMDG managers now do the same). The Headwind A330's manager duplicates the A32NX's schedule ([FOA-3]) and always acted on it; the settings text and this rule named only the two FlyByWire jets until 2026-10-18. → [first-officer.md](../first-officer.md)
 
 ## FO-16
 

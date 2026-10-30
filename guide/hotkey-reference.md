@@ -427,7 +427,6 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 
 ### General keys that differ or don't work here {#hk-a350-general}
 
-- **Output Shift+C** (First Officer) is not on the A350 yet; you hear *"No checklist for this aircraft."*
 - **Output Ctrl+Shift+B** opens the ND window: the ND and its airport map (ANF) and Brake To Vacate, line by line, as [the A350's chapter](airbus-aircraft.md#a350-nd-window) describes.
 - In the Surroundings window, Enter and Shift+Enter do not tune COM 1; use the RMP window.
 

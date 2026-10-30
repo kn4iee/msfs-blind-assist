@@ -7,6 +7,7 @@ using MSFSBlindAssist.FirstOfficer.Models;
 using Xunit;
 using A320State = MSFSBlindAssist.FirstOfficer.FBWA320.FbwA320StateEvaluator;
 using A330State = MSFSBlindAssist.FirstOfficer.HWA330.HwA330StateEvaluator;
+using A350State = MSFSBlindAssist.FirstOfficer.A350.A350StateEvaluator;
 using A380State = MSFSBlindAssist.FirstOfficer.FBWA380.FbwA380StateEvaluator;
 using FenixState = MSFSBlindAssist.FirstOfficer.Fenix.FenixStateEvaluator;
 using IFlyState = MSFSBlindAssist.FirstOfficer.IFly737.IFly737StateEvaluator;
@@ -187,6 +188,11 @@ public class FoCutGuardSweepTests
         MSFSBlindAssist.FirstOfficer.FBWA380.FbwA380FlowDefinitions.Build(),
         (g, r) => LVar(new A380State(), g, r), () => new A380State());
 
+    private static Profile<MSFSBlindAssist.FirstOfficer.A350.A350ActionExecutor, A350State> A350() => new("A350",
+        MSFSBlindAssist.FirstOfficer.A350.A350ChecklistDefinitions.Build(),
+        MSFSBlindAssist.FirstOfficer.A350.A350FlowDefinitions.Build(),
+        (g, r) => LVar(new A350State(), g, r), () => new A350State());
+
     private static Profile<MSFSBlindAssist.FirstOfficer.PMDG737.AircraftActionExecutor, Pmdg737State> Pmdg737() => new("PMDG 737",
         MSFSBlindAssist.FirstOfficer.PMDG737.PMDG737ChecklistDefinitions.Build(),
         MSFSBlindAssist.FirstOfficer.PMDG737.PMDG737FlowDefinitions.Build(),
@@ -244,6 +250,9 @@ public class FoCutGuardSweepTests
     public void FlyByWire_A380() => Sweep(A380());
 
     [Fact]
+    public void IniBuilds_A350() => Sweep(A350());
+
+    [Fact]
     public void Boeing_737s()
     {
         Sweep(Pmdg737());
@@ -286,6 +295,7 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(HwA330().Flows, "SECURE", "Headwind A330");
         AssertOpensWithGroundAndEnginesGuards(Fenix().Flows, "SECURE", "Fenix");
         AssertOpensWithGroundAndEnginesGuards(A380().Flows, "SECURE", "A380");
+        AssertOpensWithGroundAndEnginesGuards(A350().Flows, "SECURE", "A350");
         AssertOpensWithGroundAndEnginesGuards(Pmdg737().Flows, "SECURE", "PMDG 737");
         AssertOpensWithGroundAndEnginesGuards(IFly737().Flows, "SECURE", "iFly 737");
         AssertOpensWithGroundAndEnginesGuards(Pmdg777().Flows, "SECURE", "PMDG 777");
@@ -301,6 +311,7 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(HwA330().Flows, "ELECTRICAL_POWER_UP", "Headwind A330");
         AssertOpensWithGroundAndEnginesGuards(Fenix().Flows, "ELECTRICAL_POWER_UP", "Fenix");
         AssertOpensWithGroundAndEnginesGuards(A380().Flows, "COCKPIT_PREP", "A380");
+        AssertOpensWithGroundAndEnginesGuards(A350().Flows, "COCKPIT_PREP", "A350");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "POWER_UP", "MD-11");
         // The 737 Preflights switch the fuel pumps off: cold and dark only, like the 777's
         // Cockpit Preparation and Electrical Power Up (hydraulic pumps, fuel controls).
