@@ -308,7 +308,7 @@ public partial class MainForm
                 }
                 else
                 {
-                    announcer.AnnounceImmediate("The Radio Management Panel window is only available on the A380.");
+                    announcer.AnnounceImmediate("The Radio Management Panel window is only available on the A380 and the A350.");
                 }
                 break;
             case HotkeyAction.ShowDCDU:
@@ -323,7 +323,7 @@ public partial class MainForm
                 }
                 else
                 {
-                    announcer.AnnounceImmediate("The DCDU window is only available on the A32NX and the Headwind A330.");
+                    announcer.AnnounceImmediate("The DCDU window is only available on the A32NX, the Headwind A330 and the A350.");
                 }
                 break;
             case HotkeyAction.ShowAircraftWindows:
@@ -338,7 +338,7 @@ public partial class MainForm
                 }
                 else
                 {
-                    announcer.AnnounceImmediate("OANS airport map is only available on the A380.");
+                    announcer.AnnounceImmediate("The airport map is only available on the A380 and the A350.");
                 }
                 break;
             case HotkeyAction.ShowTrackFixWindow:
