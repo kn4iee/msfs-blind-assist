@@ -51,6 +51,11 @@ public partial class IniBuildsA350Definition
             case var windowKey when A350.A350Hotkeys.MfdPages.TryGetValue(windowKey, out var page):
                 ShowMfdWindow(simConnect, announcer, hotkeyManager, page);
                 return true;
+            // Input Ctrl+Shift+D: the ATC mailbox, the A32NX's DCDU key: where the A350 shows its CPDLC messages.
+            case HotkeyAction.ShowDCDU:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowMailboxWindow(simConnect, announcer);
+                return true;
             // Ctrl+Shift+F: the A350's other windows, as the Fenix's list: what has no key of its own.
             case HotkeyAction.ShowAircraftWindows:
                 hotkeyManager.ExitInputHotkeyMode();
@@ -59,6 +64,8 @@ public partial class IniBuildsA350Definition
                     {
                         new Forms.A350.A350WindowEntry("FAP", "The flight attendant panel: cabin lights, temperature, doors and slides, water and waste, Cabin Ready.",
                             () => (parentForm as MainForm)?.ShowA350FapDialog()),
+                        new Forms.A350.A350WindowEntry("Mailbox", "The ATC mailbox: the message it shows and its buttons. Also Input Ctrl+Shift+D.",
+                            () => ShowMailboxWindow(simConnect, announcer)),
                         new Forms.A350.A350WindowEntry("Printer", "What the printer last printed.",
                             () => ShowTrackedWindow(() => new Forms.A350.A350PrinterWindow(A350.A350Printout.ReadAsync), w => w.ShowForm())),
                     }, announcer),
@@ -225,6 +232,12 @@ public partial class IniBuildsA350Definition
     /// KCCU page key, <see cref="A350.A350Hotkeys.MfdPages"/>). While it is open it says the FMS messages itself, and the
     /// background follows them silently (<see cref="MfdWindowOpen"/>); the message line is handed over each way as it opens
     /// and closes (<see cref="A350.Display.A350PfdMonitor.MfdWindowOpening"/>).</summary>
+    private void ShowMailboxWindow(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => ShowTrackedWindow(
+        () => new Forms.A350.A350MailboxWindow(() => Ecam?.LatestCapture,
+            async () => Displays == null ? null : (await Displays.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
+            () => Ecam?.LatestCapture is { } shown && !A350.Display.A350Ewd.Parse(shown).Powered, new A350.Display.A350MailboxInput(simConnect.ExecuteCalculatorCodeUnique), announcer),
+        w => { w.Show(); w.BringToFront(); w.Activate(); });
+
     private void ShowMfdWindow(SimConnectManager simConnect, ScreenReaderAnnouncer announcer, HotkeyManager hotkeyManager, string? page)
     {
         hotkeyManager.ExitOutputHotkeyMode();

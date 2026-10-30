@@ -505,6 +505,17 @@ Input Ctrl+Shift+F is the A350's window list (`A350WindowsForm`, the Fenix's key
 
 **`UIRectangleCheckbox`** (the PRINTER page's AUTO PRINT boxes): no text of its own; its fill is drawn when it is on the screen (RAD NAV keeps two never drawn), its cross is a cyan stroke inside it, and its name is the text nearest left on its row under the title above its column. `INI_PRINTER_AUTOPRINT_FPLAN_INIT`, `_TODATA` and `_WIND` follow the top three; the three report boxes under ACTIVE F-PLN REPORT took no press while their PRINT keys were grey.
 
+## The ATC mailbox (live 2026-10-30)
+
+`SD::DrawMailbox` draws at the top of the CTR's right half (`A350DrawLayout.CtrMailbox`, y under 270; no WD line was ever drawn above y 307), so its lines are never the WD's or said as E/WD lines. `A350Mailbox` reads it, `A350MailboxWindow` shows it (Input Ctrl+Shift+D, the DCDU's key), Alt+E adds its text.
+
+- **NOT AVAIL.** `MAILBOX NOT AVAIL` (amber, at 229,135) is drawn while bus 81 has no power, or within 20 s of a timer (start-up): on batteries it stays. With the GPU connected and EXT on it goes.
+- **Controls.** As on the ND, all are in every draw. A control is on the screen when its fill is drawn; its texts are those between its `TextStart` and the next control's; SEND is drawn over CLOSE, so a later control at the same spot hides the earlier. Text: PRINT, RECALL, CLOSE, WILCO, STANDBY, UNABLE, ACCEPT, REJECT, SEND, CANCEL. Pictures, by position: (864,9) and (865,125) the message arrows, drawn only with two or more; (1393,50) and (1393,94) the page arrows.
+- **Press.** `A350MailboxInput`: the captain's KCCU MAILBOX key brings the cursor (`INI_CPT_CURSOR_SCREEN` 3), then the Coherent mouse route into the view holding the CTR gauge, at the draw's own coordinates.
+- **Text.** The message is black on a cyan box (970,50 to 1386,190), said *on cyan*. MSG and its count stand left of the box, PGE and its count right of it. A header's time and station are green. `ACTIVE ATC: {}`, `ADS OFF`, `1 ADS-C CONNECTION`, `OPEN`, `SENDING` and `SENT` are the module's other strings.
+
+Exercised without sending: a departure clearance request (ATC COM, REQUEST, CLEARANCE, DEPARTURE, GATE and D-ATIS CODE typed, XFR TO MAILBOX) shows TO VCBI with PRINT, SEND, CANCEL; the page arrows scroll it; PRINT prints `MAILBOX MESSAGE RECEIVED`; a second request gives MSG 1/2 and the message arrows; CANCEL on 2/2 emptied the list. **Not exercised:** SEND, an uplink and its replies (WILCO, STANDBY, UNABLE, ACCEPT, REJECT, CLOSE, RECALL), `INI_ATC_MSG_LIGHT` on an uplink: each goes out through `INI_CPDLC_SOURCE`'s network, so they wait for the owner's go-ahead.
+
 ## Manual coverage (Airbus A350 Manual 1.5, in the package's `Resources`)
 
 Every section's controls and displays use one of the paths above: cockpit interaction (push, pull, scroll), the OIS (FLT OPS PLAN/STS, LOADSHEET, charts list, T.O/LDG PERF with SYNC and SEND TO FMGS, AOC, GROUND incl. GSX, MAINTENANCE, SITUATIONS, FAILURES, AUTOSAVE, PANEL STATES, OPTIONS incl. 3RD PARTY), the FCU and its managed/selected modes, the MFD and KCCU (menu bar, interactive F-PLN, vertical revisions, C/L MENU checklists), EFIS CP and baro preset, ANF and BTV arming, the noise function (MFD PERF T.O), thrust levers, RMP tuning and squawk, the MFD SURV page (DEFAULT SETTINGS, CONFIRM), the HUD, sensed and not-sensed ECAM procedures, deferred procedures, STATUS, and the automatic emergency descent.

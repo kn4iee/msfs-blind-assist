@@ -19,11 +19,13 @@ public static class A350DrawLayout
 {
     private const float Far = float.MaxValue;
 
-    /// <summary>CTR: the engine display (left, top), the SD page, the SD permanent data line, the WD (right).</summary>
+    /// <summary>CTR: the engine display (left, top), the SD page, the SD permanent data line, the ATC mailbox (right, top; a WD
+    /// line has never been drawn above y 307), the WD (right).</summary>
     public static readonly A350Rect CtrEngineDisplay = new(0, 0, 822, 300);
     public static readonly A350Rect CtrSystemDisplay = new(0, 300, 822, 940);
     public static readonly A350Rect CtrPermanentData = new(0, 940, 822, Far);
-    public static readonly A350Rect CtrWarningDisplay = new(822, 0, Far, Far);
+    public static readonly A350Rect CtrMailbox = new(822, 0, Far, 270);
+    public static readonly A350Rect CtrWarningDisplay = new(822, 270, Far, Far);
 
     /// <summary>The EFIS screens' height: the ND's and the PFD's backgrounds are 1024 px tall, and the draw code puts names
     /// below them too (the next route points, runway idents off the map), which the screen clips.</summary>

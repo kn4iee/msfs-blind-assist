@@ -791,9 +791,9 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 
 **Brake To Vacate:** select the landing runway in the flight plan, set the runway condition (Autobrake panel), set the ND to Plan and a Zoom range, press the taxiway's name on the runway and choose SET BTV EXIT, or enter a distance on the LANDING tab, then press A/BRK. The ND then shows the runway and its landing distance, the condition, the exit, the occupancy and turnaround times, and the FMA says BTV. An exit before the wet or dry stop line reads *"TOO SHORT"*.
 
-### The FAP and the printer {#a350-windows}
+### The FAP, the printer and the ATC mailbox {#a350-windows}
 
-**Input Ctrl+Shift+F** opens the list of the A350's windows with no key of their own, as it does on the Fenix: **FAP** and **Printer**. **Enter** opens one, **Escape** closes the list.
+**Input Ctrl+Shift+F** opens the list of the A350's other windows, as it does on the Fenix: **FAP**, **Mailbox** and **Printer**. **Enter** opens one, **Escape** closes the list.
 
 **The FAP** is the flight attendant panel, read and pressed as a sighted pilot uses it, in the same kind of window as the OIS. It starts with its screen off: press *Wake the screen*.
 
@@ -805,6 +805,8 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 - **Water/Waste:** each waste tank and the water tank in percent, with the colour its bar is painted (amber, then red, as a tank nears its limit), and **Refill Water** and **Empty Waste**, which work on the ground.
 
 **The printer** window holds what the printer last printed, to read line by line, and shows a new printout as it arrives; **F5** reads it now, **Escape** closes. Printouts come from the MFD (ACTIVE, DATA, PRINTER: its PRINT keys and AUTO PRINT check boxes) and the OIS. The **Cockpit** panel's **Printer paper tear off** takes the paper off the printer and puts it beside the seat, and the **Misc** panel's **Torn paper put away** removes it; each has a status line.
+
+**The ATC mailbox** (**Input Ctrl+Shift+D**, the A32NX's DCDU key, or the list above) is where the A350 shows its datalink messages, above the warning display. It lists the message shown, line by line, with its time and station, how many messages there are (*"MSG 1/2"*), then its buttons: **Enter** presses one. A request you prepare on the MFD's ATC COM pages and pass over with XFR TO MAILBOX waits here with **SEND** and **CANCEL**; a message from ATC comes with its replies, such as WILCO, STANDBY and UNABLE. **SEND** and a reply go out to ATC, as they do for a sighted pilot. **PRINT** prints the message, and the arrows move between messages and pages. *"MAILBOX NOT AVAIL"* is what it shows for the first 20 seconds after power-up and whenever the bus feeding it has no power. Output Alt+E reads its lines too.
 
 ### Things to know {#things-to-know-5}
 

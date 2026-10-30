@@ -34,7 +34,7 @@ public class A350DrawLayoutTests
         var wd = A350DrawLayout.Region(Ctr().Texts, A350DrawLayout.CtrWarningDisplay);
         Assert.Equal(new[]
         {
-            "MAILBOX NOT AVAIL{amber}", "SURV SYS 1+2 FAULT{amber}", "XPDR MODE A ONLY{cyan}", "CLEAR{cyan}",
+            "SURV SYS 1+2 FAULT{amber}", "XPDR MODE A ONLY{cyan}", "CLEAR{cyan}",
             "F/CTL SLAT SYS 1+2 FAULT{amber}", "...{white}", "AIR XBLEED FAULT{amber}", "...{white}",
             "SURV TCAS STBY{amber}", "FWS FWS 2 FAULT{amber}",
         }, A350DrawLayout.Rows(wd).Select(Show));

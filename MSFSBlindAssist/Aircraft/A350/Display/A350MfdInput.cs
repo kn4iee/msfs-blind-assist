@@ -172,13 +172,13 @@ public sealed class A350MfdInput
         finally { Volatile.Write(ref _acting, 0); }
     }
 
-    /// <summary>Moves a side's KCCU cursor to its ND or MFD ([A350-4]: each takes the mouse only with the cursor on it).
+    /// <summary>Moves a side's KCCU cursor to its ND, MFD or the ATC mailbox ([A350-4]: each takes the mouse only with the cursor on it).
     /// The cursor keys are ones the aircraft does not reset: held about 180 ms, then let go [A350-3] (the MFD key was only
     /// ever written 1; the probe's ND key likewise, tools review 2026-10-30), so the next press has its rising edge.</summary>
     public async Task MoveCursorAsync(int side, string screen, CancellationToken ct = default)
     {
-        if (screen is not ("ND" or "MFD"))
-            throw new ArgumentException("The KCCU cursor keys are ND and MFD.", nameof(screen));
+        if (screen is not ("ND" or "MFD" or "MAILBOX"))
+            throw new ArgumentException("The KCCU cursor keys are ND, MFD and MAILBOX.", nameof(screen));
         string key = A350Kccu.LVar(side, screen);
         _send($"1 (>L:{key})");
         await _delay(MfdKeyHoldMs, ct).ConfigureAwait(false);

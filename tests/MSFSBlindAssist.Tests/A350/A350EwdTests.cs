@@ -89,14 +89,14 @@ public class A350EwdTests
         var amber = new A350Rgba(1, 0.6f, 0, 1);
         var texts = new[]
         {
-            new DrawnText("F/CTL PRIM 1 FAULT", 856, 100, 34, 100, 1, amber),
-            new DrawnText("PRIM 1 .........OFF THEN ON", 886, 130, 64, 130, 1, cyan),
-            new DrawnText("? PRIM RESET SUCCESSFUL ?", 886, 160, 64, 160, 1, white),
-            new DrawnText("YES", 905, 190, 83, 190, 1, white),
-            new DrawnText("NO", 1253, 190, 431, 190, 1, white),
-            new DrawnText("FUEL L TK MAIN PMP FAULT", 856, 220, 34, 220, 1, amber),
+            new DrawnText("F/CTL PRIM 1 FAULT", 856, 400, 34, 400, 1, amber),
+            new DrawnText("PRIM 1 .........OFF THEN ON", 886, 430, 64, 430, 1, cyan),
+            new DrawnText("? PRIM RESET SUCCESSFUL ?", 886, 460, 64, 460, 1, white),
+            new DrawnText("YES", 905, 490, 83, 490, 1, white),
+            new DrawnText("NO", 1253, 490, 431, 490, 1, white),
+            new DrawnText("FUEL L TK MAIN PMP FAULT", 856, 520, 34, 520, 1, amber),
         };
-        var frames = new[] { new DrawnFrame(885, 172, 15, 20, false, white), new DrawnFrame(1233, 172, 15, 20, false, white) };
+        var frames = new[] { new DrawnFrame(885, 472, 15, 20, false, white), new DrawnFrame(1233, 472, 15, 20, false, white) };
         var lines = A350Ewd.Parse(new A350DrawCapture("CTR", texts, frames, Array.Empty<DrawnElement>(), null, 1)).Warning;
         Assert.Equal(new[]
         {

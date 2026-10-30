@@ -95,7 +95,7 @@ internal sealed class ProbeForm : Form
     /// <summary>The modes this form runs; the display-engine modes are <see cref="DisplayModes.Names"/>.</summary>
     internal static readonly IReadOnlySet<string> Modes = new HashSet<string>(StringComparer.Ordinal)
     {
-        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "fap", "mfd", "nd", "ndpage",
+        "list", "vars", "live", "set", "keep", "serve", "disp", "labels", "listen", "cache", "rpn", "sample", "ois", "fap", "mfd", "nd", "ndpage", "mailbox",
         "rmpwin", "hotkey", "displays", "gsx",
     };
     private readonly StringBuilder _out = new();
@@ -300,6 +300,34 @@ internal sealed class ProbeForm : Form
     }
 
     /// <summary>`ndpage [side]`: the ND window's lines as MSFSBA's path reads them (its A: vars answered), each with its kind and click.</summary>
+    /// <summary>`mailbox [BUTTON|x:y]`: the ATC mailbox as its window reads it, a button or a point of the CTR pressed first through
+    /// its own route (the cursor brought there, the Coherent mouse route).</summary>
+    private async Task RunMailbox()
+    {
+        using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
+        service.AVarAnswer = new MSFSBlindAssist.Aircraft.A350.Display.A350AVarAnswers(key => _m!.GetCachedVariableValue(key), ask => Line("asked: " + ask)).Answer;
+        service.Start();
+        await WaitForDisplays(service);
+        await Task.Delay(1500);
+        async Task<IReadOnlyList<MSFSBlindAssist.Aircraft.A350.Display.MfdLine>> Lines()
+        {
+            var caps = await service.DrawAsync(("CTR", 0));
+            return caps is { Count: > 0 } && caps[0].Ok ? MSFSBlindAssist.Aircraft.A350.Display.A350Mailbox.Read(caps[0]) : Array.Empty<MSFSBlindAssist.Aircraft.A350.Display.MfdLine>();
+        }
+        if (_arg != null)
+        {
+            var input = new MSFSBlindAssist.Aircraft.A350.Display.A350MailboxInput(_m!.ExecuteCalculatorCodeUnique);
+            var parts = _arg.Split(':');
+            var hit = (await Lines()).FirstOrDefault(l => l.Kind == "button" && l.Spoken.StartsWith(_arg + " ", StringComparison.Ordinal));
+            if (hit != null) Line($"press {hit.Spoken}: {await input.ActAsync(hit.ClickX, hit.ClickY)}");
+            else if (parts.Length == 2) Line($"click {_arg}: {await input.ActAsync(float.Parse(parts[0], CultureInfo.InvariantCulture), float.Parse(parts[1], CultureInfo.InvariantCulture))}");
+            else Line($"no {_arg}");
+            await Task.Delay(1200);
+        }
+        foreach (var l in await Lines())
+            Line($"{l.Kind,-7} {l.ClickX,7:0.0} {l.ClickY,7:0.0}  {l.Spoken}");
+    }
+
     private async Task RunNdPage()
     {
         int side = int.TryParse(_arg, out var s) ? s : 0;
@@ -779,6 +807,12 @@ internal sealed class ProbeForm : Form
         if (_mode == "ndpage")
         {
             await RunNdPage();
+            return;
+        }
+
+        if (_mode == "mailbox")
+        {
+            await RunMailbox();
             return;
         }
 
