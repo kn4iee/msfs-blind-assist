@@ -152,21 +152,25 @@ public static class A350GroundDisplays
             o.Add("Vertical display altitudes: " + (unit != null ? "FL " : "") + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
         }
         var scales = VerticalScales.Of(distances, altitudes, cells.Any(c => c.Text == "FL" && c.Colour == "white" && c.X < 90 && c.Y >= 810));
-        // The safe altitude (MSA or MORA): under the vertical display its value just above its name ("3" and "8"), or just under it
-        // low down; in the display a line at its height, its name about 8.5 px over it wherever it lies (y 792 on the stand at VCBI,
-        // 874 at OMDB, 905 on the arrival, live 2026-10-30), never a waypoint's.
+        // The safe altitude (MSA or MORA): in the display a line of its colour at its height, its name about 8.5 px over it wherever it
+        // lies (y 792 on the stand at VCBI, 874 at OMDB, 905 on the arrival, live 2026-10-30), never a waypoint's; under the display, with
+        // no line, its figure in its colour just above its name ("3" and "8"), or just under it low down. The line comes first and the
+        // figure keeps to the name's colour: a runway's ident by the name ("22", white) or a constraint ("500", green) is no figure of its.
         foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 770).ToList())
         {
-            var value = cells.Where(c => !used.Contains(c) && c != name && c.Text.Length > 0 && c.Text.All(char.IsDigit)
-                && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
             used.Add(name);
+            var line = scales == null ? null : (capture.Shapes ?? Array.Empty<DrawnShape>()).FirstOrDefault(s => s.Kind == "stroke" && s.X1 - s.X0 >= VerticalScales.MinLinePixels
+                && s.Y1 - s.Y0 <= VerticalScales.MaxLineHeight && s.X0 - shift <= name.X && s.X1 - shift >= name.X && Math.Abs((s.Y0 + s.Y1) / 2 - name.Y) <= 20
+                && A350Rgba.NameOf(s.Colour) == name.Colour);
+            if (line != null)
+            {
+                o.Add($"{name.Text}: about {scales!.FeetAt((line.Y0 + line.Y1) / 2)} feet, {name.Colour}");
+                continue;
+            }
+            var value = cells.Where(c => !used.Contains(c) && c.Colour == name.Colour && c.Text.Length > 0 && c.Text.All(char.IsDigit)
+                && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
             used.UnionWith(value);
-            // In the display itself the MSA has no figure: a line of its colour at its height, under or over its name (live 2026-10-30).
-            var line = value.Count > 0 || scales == null ? null : (capture.Shapes ?? Array.Empty<DrawnShape>()).FirstOrDefault(s => s.Kind == "stroke" && s.X1 - s.X0 >= VerticalScales.MinLinePixels
-                && s.X0 - shift <= name.X && s.X1 - shift >= name.X && Math.Abs((s.Y0 + s.Y1) / 2 - name.Y) <= 20 && A350Rgba.NameOf(s.Colour) == name.Colour);
-            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}"
-                : line != null ? $"{name.Text}: about {scales!.FeetAt((line.Y0 + line.Y1) / 2)} feet, {name.Colour}"
-                : $"{name.Text}, {name.Colour}");
+            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
         }
         // The vertical display's waypoints, each name beside its symbol, on the two scales. Its own texts are drawn after its range
         // labels: the range map's names drawn behind it, under the map, come before them (MCT and BASUR at FL300, MIN on the arrival, live
@@ -209,6 +213,9 @@ public static class A350GroundDisplays
     private sealed record VerticalScales(float ZeroX, float PixelsPerNm, float ZeroTickY, float PixelsPerFoot, float EndX)
     {
         internal const float NameRightOfSymbol = 6, NameUnderSymbol = 16, MinLinePixels = 100, IdentUnderName = 20;
+
+        /// <summary>A line is a level stroke: every MSA line drawn is 4 px tall, and a step drawn as one path is no level.</summary>
+        internal const float MaxLineHeight = 6;
         private const float TickOverLabel = 10, PlotTop = 800, PlotBottom = 1000;
 
         /// <summary>A runway's ident under the airport's name: "22", "12L".</summary>

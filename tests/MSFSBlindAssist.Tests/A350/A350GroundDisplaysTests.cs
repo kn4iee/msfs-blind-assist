@@ -230,6 +230,57 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(nd, l => l.StartsWith("Vertical display: MSA", StringComparison.Ordinal) || l == "MSA, magenta");
     }
 
+    // Task 2A review (Important 1): the MSA's figure was any all-digit text within 40 px over or under its name and 50 px beside it, in
+    // any colour, taken before its line and before the runway's pairing. On the stand at VCBI at 40 NM the MSA's name stands about 37 px
+    // over the runway's ident "22", 6.6 px left of it (its line starts with the runway: metric_alt's from x 232.7, the name at 236.0), so
+    // it read "MSA: 22, white", and VCBI, its ident gone, a waypoint's place 1000 ft up. Here on takeoff_ready's own 10 NM scale, the
+    // name drawn among the display's own texts (after the ident, before the PFD's); `line` is a magenta stroke placed from the name, and
+    // `figure` adds a figure in the name's colour where the corner's stands over its name ("3" and "8", 28 px up, 12 and 28 px right).
+    private static A350DrawCapture StandWithMsaOverTheIdent(Func<DrawnText, DrawnShape>? line, bool shapesRecorded = true, bool figure = false)
+    {
+        var capture = A350Fixtures.Capture("efis0_takeoff_ready.json");
+        var ident = capture.Texts.First(t => t.Text.Trim() == "22" && t.Y > 900);
+        var name = ident with { Text = "MSA", X = ident.X - 6.6f, Y = ident.Y - 37, LocalX = ident.LocalX - 6.6f, LocalY = ident.LocalY - 37, Colour = A350Rgba.Of("magenta") };
+        var texts = capture.Texts.ToList();
+        var added = new List<DrawnText> { name };
+        if (figure)
+            added.AddRange(new[] { ("3", 12f), ("8", 28f) }.Select(d => name with { Text = d.Item1, X = name.X + d.Item2, Y = name.Y - 28, LocalX = name.LocalX + d.Item2, LocalY = name.LocalY - 28 }));
+        texts.InsertRange(texts.IndexOf(ident) + 1, added);
+        var shapes = line == null ? capture.Shapes! : capture.Shapes!.Append(line(name)).ToList();
+        return capture with { Texts = texts, Shapes = shapesRecorded ? shapes : null };
+    }
+
+    // Its line, level, 8 px under its name (its middle 908 ft on this scale), wins over a figure by it, in its colour or not.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_msa_takes_its_line_never_a_runway_ident(bool figureInItsColour)
+    {
+        var nd = A350GroundDisplays.ReadNd(StandWithMsaOverTheIdent(n => new DrawnShape("stroke", n.X - 3.3f, n.Y + 6, n.X + 400, n.Y + 10, 0, A350Rgba.Of("magenta")),
+            figure: figureInItsColour), 0);
+        Assert.Contains("MSA: about 900 feet, magenta", nd);
+        Assert.Contains("Vertical display: VCBI 22, white: 1.1 NM, 0 feet", nd);
+    }
+
+    [Fact]
+    public void With_no_line_the_msa_takes_no_figure_in_another_colour()
+    {
+        var nd = A350GroundDisplays.ReadNd(StandWithMsaOverTheIdent(null, shapesRecorded: false), 0);
+        Assert.Contains("MSA, magenta", nd);
+        Assert.DoesNotContain(nd, l => l.StartsWith("MSA: ", StringComparison.Ordinal));
+        Assert.Contains("Vertical display: VCBI 22, white", nd);
+    }
+
+    // Task 2A review (Minor 4): the MSA's line was any stroke whose box passed, so a magenta step drawn as one path (two levels and the
+    // climb between them, 40 px tall) read as a line at its middle. Every MSA line drawn in the captures is a level stroke 4 px tall.
+    [Fact]
+    public void A_tall_magenta_stroke_by_the_msa_is_no_line_of_its()
+    {
+        var nd = A350GroundDisplays.ReadNd(StandWithMsaOverTheIdent(n => new DrawnShape("stroke", n.X - 3.3f, n.Y - 30, n.X + 400, n.Y + 10, 0, A350Rgba.Of("magenta"))), 0);
+        Assert.Contains("MSA, magenta", nd);
+        Assert.DoesNotContain(nd, l => l.StartsWith("MSA: ", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("efis0_ls_downwind_omdb", "MSA: 38, magenta")]
     [InlineData("pfd_climb_std_fl400", "MORA: 16, magenta")]
