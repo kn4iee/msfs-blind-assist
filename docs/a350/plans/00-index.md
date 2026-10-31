@@ -17,7 +17,7 @@ someone else, that is Robin Kipp.
 
 - **01, first and alone:** the independent review of the last commits and its fixes, then the seams later plans add
   to (Ctrl+M call-out rows by area, the E/WD monitor's mute by key, an EFIS-drawn hook).
-- **02-11, early:** the flight's fixes first (02, 03, 04, 06), then each area's open checks. They run in parallel and
+- **02-11, 22, 23, early:** the flights' fixes first (02, 03, 04, 06, 09), then each area's open checks. They run in parallel and
   never share a file.
 - **12-17, audit:** the manual, cover to cover, by page range. They change no code: each writes its own ledger and new
   fixtures, and hands each gap to the plan owning the file. 12-16 may start before 01 lands; 17 flies the whole
@@ -34,10 +34,10 @@ someone else, that is Robin Kipp.
 | 03 | `03-reader-traps.md`: each draw-engine trap named, proved harmless, its retry counted; `nvgTransform`; the 1.2.8 addresses | early: fix | 01 |
 | 04 | `04-ecam.md`: memo color swaps, memos said again, cabin ready repeats, reverser status, flight phases, every SD page | early: fix | 01 |
 | 05 | `05-first-officer.md`: the flap margin flown; auto-gear; the lowest AP engage height (T3); every normal checklist end to end | early | 01 |
-| 06 | `06-ois.md`: the sign-in code kept out of the speech log; every OPTIONS option on and off; the OIS backlog; 1.2.8 fixtures | early: fix | 01 |
-| 07 | `07-pfd-callouts.md`: the PFD open checks, the PFD messages as call-outs, LVR CLB, TCAS TA/RA, metric altitude, SIM RATE/PAUSED | early | 01 |
-| 08 | `08-nd-anf-taxi.md`: waypoint passing, the ANF, the taxi turn lead | early | 01 |
-| 09 | `09-mfd-kccu-datalink.md`: the KCCU keys, Alt+D and Alt+M, every ATC page in the air, mailbox SEND and uplinks, KG units | early | 01 |
+| 06 | `06-ois.md`: the OIS window's layout and navigation round; the sign-in code kept out of the speech log; the OIS backlog; 1.2.8 fixtures | early: fix | 01 |
+| 07 | `07-pfd-callouts.md`: green dot, S and F on the ground (Shift+1 to 3); the PFD open checks, the PFD messages as call-outs, LVR CLB, TCAS TA/RA, metric altitude, SIM RATE/PAUSED, KG units | early: fix | 01 |
+| 08 | `08-nd-anf-taxi.md`: BTV armed in one step from the ND window; waypoint passing, the ANF, the taxi turn lead | early: fix | 01 |
+| 09 | `09-mfd-window.md`: the MFD window as the A380's (page buttons and list, role words, the F-PLN grid, long lists); the KCCU keys, Alt+D, Alt+M, the ATC pages in the air | early: fix | 01 |
 | 10 | `10-rmp.md`: the NAVAID audio selector, IDENT, STBY RAD NAV, Output N's receivers | early | 01 |
 | 11 | `11-panels.md`: the 1.2.8 control map, every split panel, SND keys, gear and IRS read-outs, the panel backlog | early | 01 |
 | 12 | `12-manual-front.md`: PDF pages 1-30 | audit | — |
@@ -50,6 +50,8 @@ someone else, that is Robin Kipp.
 | 19 | `19-fo-flaps-other-airbus.md`: the A350's flap margin, landing gate and go-around signature for the A380, A320 and A330 (pull requests off `main`) | shared | 05 |
 | 20 | `20-tools-portable.md`: `tools/A350Probe` and `tools/a350-probe` portable and documented | later | 03 |
 | 21 | `21-integration.md`: handoffs, guide, rules, hotkey guide, changelog, the 1.2.8 "do not chase" list, a regression flight, the pull request, delete `docs/a350/` | last | all |
+| 22 | `22-atc-mailbox.md`: the mailbox's SEND and a real uplink with the owner's go-ahead; an uplink said with the window closed | early | 01 |
+| 23 | `23-ois-options.md`: every OPTIONS option on and off (handoff 3.2), the controls the cockpit hides explained | early | 01 |
 
 ## File ownership
 
@@ -63,22 +65,24 @@ record. Paths are under `MSFSBlindAssist/` unless they start with `docs/`, `tool
 | File or pattern | Owner |
 |---|---|
 | Every file `git log --first-parent --no-merges --name-only e19171d2c..7e6d5fbd1` lists (the reviewed commits) | 01 while it runs, then the owners below |
-| `Aircraft/A350/A350CalloutRows.cs` (new), `Aircraft/IniBuildsA350Definition.Hooks.cs` (new), `Forms/A350/A350MonitorManagerForm.cs` | 01, then frozen (07 removes the PFD flags line there when it splits that row). 01 also creates the four `A350CalloutRows.<Area>.cs` parts (then 04's, 07's, 08's and 09's) and makes its seams' changes to `A350EcamMonitor.cs`, `A350PfdMonitor.cs` and `MainForm.AircraftSwitch.cs` (`StartA350DisplayService`) before anyone else starts |
+| `Aircraft/A350/A350CalloutRows.cs` (new), `Aircraft/IniBuildsA350Definition.Hooks.cs` (new), `Forms/A350/A350MonitorManagerForm.cs` | 01, then frozen (07 removes the PFD flags line there when it splits that row). 01 also creates the four `A350CalloutRows.<Area>.cs` parts (then 04's, 07's, 08's and 22's) and makes its seams' changes to `A350EcamMonitor.cs`, `A350PfdMonitor.cs` and `MainForm.AircraftSwitch.cs` (`StartA350DisplayService`) before anyone else starts |
 | `Aircraft/IniBuildsA350Definition.cs` | 01, then frozen, except the `TaxiTurnLeadSeconds` line (08) and `GetVisualGuidanceProfile` (18) |
 | `Aircraft/A350/A350TypedEntry.cs`, `A350FcuCallouts.cs`, `A350FcuWindows.cs`, `A350Readouts.cs`, `A350BaroEntry.cs` (new), `Aircraft/IniBuildsA350Definition.Interaction.cs`, `Forms/A350/A350BaroWindow.cs`, `A350FcuValueWindow.cs`, `A350FcuWindowBase.cs`, `A350AutopilotWindow.cs` | 02 |
 | `Aircraft/A350/Display/A350DrawEngine.cs`, `A350DisplayService.cs`, `A350MemoryReader.cs`, `A350MemoryCopy.cs`, `A350HotPages.cs`, `A350ReaderStats.cs`, `A350ReadHealth.cs`, `A350ModuleCache.cs`, `A350ModulePatcher.cs`, `A350ModuleFacts.cs`, `A350WasmModule.cs`, `A350DrawCapture.cs`, `A350DrawState.cs`, `A350DrawLayout.cs`, `A350ShapeReader.cs`, `A350AVars.cs`, `A350ShownCapture.cs`, `A350StableValue.cs`, `A350TrapReport.cs` (new), `Aircraft/IniBuildsA350Definition.Displays.cs` | 03 |
 | `tools/A350Probe/**` | 03 → 20 |
 | `Aircraft/A350/Display/A350Ewd.cs`, `A350EwdText.cs`, `A350EcamMonitor.cs`, `A350EcamAnnouncer.cs`, `A350SdPage.cs`, `A350SdSymbols.cs`, `A350SdText.cs`, `Aircraft/A350/A350CalloutRows.Ecam.cs` | 04 |
 | `FirstOfficer/A350/**`, `Aircraft/IniBuildsA350Definition.FirstOfficer.cs` | 05 |
-| `Resources/coherent-a350-ois-agent.js`, `Resources/coherent-a350-fap-agent.js`, `tools/a350-ois-test/**`, `Aircraft/A350/A350Options.cs`, `A350OisSecrets.cs`, `A350Printout.cs`, `A350PrinterWatch.cs`, `Aircraft/A350/Display/A350SpeechLog.cs`, `Forms/A350/A350PrinterWindow.cs`; additive, A350-gated changes to `SimConnect/CoherentPmdgEfbClient.cs` (`ForA350Ois`, `ForA350Fap`) and `Forms/FBWA380/FbwEfbForm.cs` | 06 |
-| `Aircraft/A350/Display/A350Pfd.cs`, `A350PfdMonitor.cs`, `A350PfdFlagAnnouncer.cs`, `A350FmaAnnouncer.cs`, `A350FlashingLines.cs`, `A350TakeoffSpeeds.cs`, `A350Minimums.cs`, `A350SimPause.cs`, `Aircraft/A350/A350TcasCallouts.cs`, `A350TakeoffCallouts.cs`, `A350MinimumsCallout.cs`, `A350PauseAlerts.cs`, `A350CalloutRows.Pfd.cs` | 07 |
-| `Aircraft/A350/Display/A350NdPage.cs`, `A350NdMap.cs`, `A350NdInput.cs`, `A350GroundDisplays.cs`, `A350BtvRollout.cs`, `Aircraft/A350/A350BtvCountdown.cs`, `A350RouteDistances.cs`, `A350CalloutRows.Nd.cs`, `Aircraft/IniBuildsA350Definition.Nd.cs` (new), `Forms/A350/A350NdWindow.cs` | 08 |
-| `Aircraft/A350/Display/A350MfdPage.cs`, `A350MfdInput.cs`, `A350MfdWindowMessages.cs`, `A350FmsMessageAnnouncer.cs`, `A350Mailbox.cs`, `A350MailboxInput.cs`, `Aircraft/A350/A350Hotkeys.cs`, `A350CalloutRows.Mfd.cs`, `Aircraft/IniBuildsA350Definition.Hotkeys.cs`, `Forms/A350/A350MfdWindow.cs`, `A350MailboxWindow.cs`, `A350WindowsForm.cs` | 09 |
+| `Resources/coherent-a350-ois-agent.js`, `Resources/coherent-a350-fap-agent.js`, `tools/a350-ois-test/**`, the A350 tests in `tools/flypad-shell-test/efb-shell.test.js`, `Aircraft/A350/A350OisSecrets.cs`, `A350Printout.cs`, `A350PrinterWatch.cs`, `Aircraft/A350/Display/A350SpeechLog.cs`, `Forms/A350/A350PrinterWindow.cs`; additive, A350-gated changes to `SimConnect/CoherentPmdgEfbClient.cs` (`ForA350Ois`, `ForA350Fap`) and `Forms/FBWA380/FbwEfbForm.cs` | 06 |
+| `Aircraft/A350/Display/A350Pfd.cs`, `A350PfdMonitor.cs`, `A350PfdFlagAnnouncer.cs`, `A350FmaAnnouncer.cs`, `A350FlashingLines.cs`, `A350TakeoffSpeeds.cs`, `A350Minimums.cs`, `A350SimPause.cs`, `Aircraft/A350/A350TcasCallouts.cs`, `A350TakeoffCallouts.cs`, `A350MinimumsCallout.cs`, `A350PauseAlerts.cs`, `A350CalloutRows.Pfd.cs`, `A350Hotkeys.cs`, `Aircraft/IniBuildsA350Definition.Hotkeys.cs` (the read-out hotkeys) | 07 |
+| `Aircraft/A350/Display/A350NdPage.cs`, `A350NdMap.cs`, `A350NdInput.cs`, `A350GroundDisplays.cs`, `A350BtvRollout.cs`, `A350AnfData.cs` (new), `Aircraft/A350/A350BtvCountdown.cs`, `A350BtvArming.cs` (new), `A350RouteDistances.cs`, `A350CalloutRows.Nd.cs`, `Aircraft/IniBuildsA350Definition.Nd.cs` (new), `Forms/A350/A350NdWindow.cs` | 08 |
+| `Aircraft/A350/Display/A350MfdPage.cs`, `A350MfdInput.cs`, `A350MfdWindowMessages.cs`, `A350FmsMessageAnnouncer.cs`, `Aircraft/A350/A350MfdPages.cs` (new), `Forms/A350/A350MfdWindow.cs`, `A350WindowsForm.cs` | 09 |
+| `Aircraft/A350/Display/A350Mailbox.cs`, `A350MailboxInput.cs`, `Aircraft/A350/A350CalloutRows.Datalink.cs`, `Forms/A350/A350MailboxWindow.cs` | 22 |
+| `Aircraft/A350/A350Options.cs` | 23 |
 | `Aircraft/A350/A350Rmp.cs`, `A350RmpEntry.cs`, `A350RadioCallouts.cs`, `A350PanelLayout.Rmp.cs`, `Aircraft/A350/Display/A350RmpPage.cs`, `Forms/A350/A350RmpWindow.cs`, `Services/NavRadioFormat.cs` (the A350's own helper) | 10 |
 | `Resources/a350_control_map.json`, `tools/a350-gen/**`, `Aircraft/A350/A350ControlMap.cs`, `A350PanelLayout.cs`, `A350PanelLayout.Names.cs`, `A350PanelLamps.cs`, `A350LampRule.cs`, `A350LampSpeech.cs`, `A350ButtonStates.cs`, `A350CommandedState.cs`, `A350CoverAlerts.cs`, `A350Doors.cs`, `A350Levers.cs`, `A350LeverSpeech.cs`, `A350StatusLines.cs`, `A350IrsAlignment.cs`, `A350ModuleWatchdog.cs`, `A350RunwayCondition.cs`, `A350WritePlan.cs`, `A350WriteOutcome.cs`, `Aircraft/IniBuildsA350Definition.Announcements.cs` | 11 |
-| `docs/a350/ledger/NN-*.md` | plan NN (06 for the OPTIONS pages, the audits 12-17 for theirs) |
+| `docs/a350/ledger/NN-*.md` | plan NN (23 for the OPTIONS pages, the audits 12-17 for theirs) |
 | `tools/a350-probe/**` | 20 |
-| `docs/inibuilds-a350.md` | by section, so two plans never edit one: 02 "Typed values"; 03 "The reader", "The patch", "Questions the draw code asks the sim", "Gauges and where they draw", the address table, "Operating the displays", "The draw code's own sim reads", "Logs"; 04 "The E/WD", "The SD", "ECAM control panel"; 06 "The OIS", "The FAP and the printer"; 07 "The PFD and FMA", "Takeoff, flight phases and the T/D pause"; 08 "The other displays", "The ND window and the ANF"; 09 "The MFD window", "The ATC mailbox"; 10 "The RMPs"; 11 "Panels" with its sub-sections and "Pedestal levers"; 21 the rest (the top, "Flying the A350 for a test", "Parity with the other aircraft", "Manual coverage", "Variants") and any new section |
+| `docs/inibuilds-a350.md` | by section, so two plans never edit one: 02 "Typed values"; 03 "The reader", "The patch", "Questions the draw code asks the sim", "Gauges and where they draw", the address table, "Operating the displays", "The draw code's own sim reads", "Logs"; 04 "The E/WD", "The SD", "ECAM control panel"; 06 "The OIS", "The FAP and the printer"; 07 "The PFD and FMA", "Takeoff, flight phases and the T/D pause"; 08 "The other displays", "The ND window and the ANF"; 09 "The MFD window"; 22 "The ATC mailbox"; 10 "The RMPs"; 11 "Panels" with its sub-sections and "Pedestal levers"; 21 the rest (the top, "Flying the A350 for a test", "Parity with the other aircraft", "Manual coverage", "Variants") and any new section |
 | `docs/tooling.md` (its A350 part) | 20 |
 | `guide/**`, `HotkeyGuides/iniBuilds_A350_Hotkeys.txt`, `docs/invariants/inibuilds-a350.md`, `.claude/rules/**`, `docs/first-officer.md`, `docs/visual-guidance.md` (on this branch), `docs/user-guide.md`, `changelog.d/**`, `CLAUDE.md`, `README.md` | 21: plans hand off their lines (a rule as its proposed one-line form and full text) |
 | `MainForm*.cs`, `Services/**` (except `NavRadioFormat.cs`), `SimConnect/**` (except 06's two paths), `Accessibility/**`, `Settings/**`, `Aircraft/IAircraftDefinition.cs`, `Aircraft/BaseAircraftDefinition.cs`, every other aircraft's files, `MSFSBlindAssist/MSFSBlindAssist.csproj`, `tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj` | nobody on this branch: frozen; handoff requests to 21 (01 makes its seams' one MainForm change; 18 and 19 change shared code only in their own pull requests off `main`) |
@@ -96,8 +100,8 @@ record. Paths are under `MSFSBlindAssist/` unless they start with `docs/`, `tool
 `FirstOfficer/FbwFamilyAutoManagerSecondReviewTests.cs` (the A350 is one of its airframes) 05; `A350OisSecretsTests`,
 `A350SpeechLogTests`, `A350Print*Tests` 06; `A350Pfd*Tests`, `A350FmaTests`, `A350FlashingLinesTests`,
 `A350TakeoffCalloutsTests`, `A350TcasCalloutsTests`, `A350MinimumsTests`, `A350PauseAlertsTests`,
-`A350MetricAltitudeTests`, `A350HudTests` 07; `A350Nd*Tests`, `A350GroundDisplaysTests`, `A350BtvTests`,
-`A350RouteDistancesTests`, the A350's lines in `TaxiTurnLeadTests.cs` 08; `A350Mfd*Tests`, `A350FmsMessageTests`, `A350MailboxTests`, `A350HotkeysTests` 09;
+`A350MetricAltitudeTests`, `A350HudTests`, `A350HotkeysTests` 07; `A350Nd*Tests`, `A350GroundDisplaysTests`, `A350BtvTests`,
+`A350RouteDistancesTests`, the A350's lines in `TaxiTurnLeadTests.cs` 08; `A350Mfd*Tests`, `A350FmsMessageTests` 09; `A350MailboxTests` 22; `A350OptionsTests` 23;
 `A350Rmp*Tests`, `A350RadioCalloutsTests` 10; `A350ControlMapTests`, `A350*PanelTests`, `A350PanelLampsTests`,
 `A350PanelLayoutTests`, `A350PanelConfirmationTests`, `A350Lamp*Tests`, `A350ButtonStateTests`,
 `A350CommandedStateTests`, `A350CoverAlertsTests`, `A350DoorsTests`, `A350Levers*Tests`, `A350AllThrustLeversTests`,
@@ -169,7 +173,7 @@ rebases onto it as usual.
 
 ## Running a plan with subagents
 
-Plans 01-11 and 18-20 are written for superpowers:subagent-driven-development (a fresh implementer per task, a reviewer
+Plans 01-11, 18-20, 22 and 23 are written for superpowers:subagent-driven-development (a fresh implementer per task, a reviewer
 after each); the audits (12-17) and plan 21 are live work, worked with superpowers:executing-plans.
 
 - One worktree per plan, inside the repo (`.claude/worktrees/a350-pNN`). In a fresh worktree, build the vPilot plugin
@@ -238,6 +242,6 @@ after each); the audits (12-17) and plan 21 are live work, worked with superpowe
 
 - Plan 01, the audits 12-16 and plan 18 start from the commit that added this folder ("docs(a350): plans for the work
   after the first full flight"), or from the branch's head when they start.
-- Early plans (02-11) start from the commit plan 01 records here: (plan 01 fills this in).
+- Early plans (02-11, 22, 23) start from the commit plan 01 records here: (plan 01 fills this in).
 - Plans 17 and 19-21 start from the branch once their "After" plans have landed; record the commit you started from in
   your plan's execution record ("Started").

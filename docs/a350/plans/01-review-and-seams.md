@@ -52,18 +52,18 @@
 
 ### Task 3: Seam: Ctrl+M rows for new display call-outs, by area
 
-**Files:** Create `Aircraft/A350/A350CalloutRows.cs`, `A350CalloutRows.Ecam.cs`, `A350CalloutRows.Pfd.cs`, `A350CalloutRows.Nd.cs`, `A350CalloutRows.Mfd.cs`; modify `Forms/A350/A350MonitorManagerForm.cs`; test `tests/MSFSBlindAssist.Tests/A350/A350CalloutRowsTests.cs`.
+**Files:** Create `Aircraft/A350/A350CalloutRows.cs`, `A350CalloutRows.Ecam.cs`, `A350CalloutRows.Pfd.cs`, `A350CalloutRows.Nd.cs`, `A350CalloutRows.Datalink.cs`; modify `Forms/A350/A350MonitorManagerForm.cs`; test `tests/MSFSBlindAssist.Tests/A350/A350CalloutRowsTests.cs`.
 
 **Interfaces:**
-- Produces, for plans 04 (Ecam), 07 (Pfd), 08 (Nd) and 09 (Mfd), each owning its own part's file:
+- Produces, for plans 04 (Ecam), 07 (Pfd), 08 (Nd) and 22 (Datalink), each owning its own part's file:
   ```csharp
   namespace MSFSBlindAssist.Aircraft.A350;
   internal static partial class A350CalloutRows
   {
       /// Every row the plans add, in area order; the rows that existed before them stay in A350MonitorManagerForm.BuildRows.
-      public static IEnumerable<(string Key, string Label)> All => Ecam.Concat(Pfd).Concat(Nd).Concat(Mfd);
+      public static IEnumerable<(string Key, string Label)> All => Ecam.Concat(Pfd).Concat(Nd).Concat(Datalink);
   }
-  // A350CalloutRows.Ecam.cs (likewise Pfd, Nd, Mfd), empty until its plan fills it:
+  // A350CalloutRows.Ecam.cs (likewise Pfd, Nd, Datalink), empty until its plan fills it:
   internal static partial class A350CalloutRows
   {
       public static readonly IReadOnlyList<(string Key, string Label)> Ecam = Array.Empty<(string Key, string Label)>();

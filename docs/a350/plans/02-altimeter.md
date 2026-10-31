@@ -101,7 +101,7 @@ The owner puts the aircraft in a stable cruise or hold above the transition alti
 
 - **Pilot-facing:** "A350 Altimeter window: a typed QNH is checked for both sides and the ISIS before anything is set, follows the OIS's LINKED INSTR option, and no longer takes a side off STD." Guide: the A350's Altimeter window; changelog `fix`.
 - **Rule proposal:** a new A350 rule: the Altimeter window plans its targets as one entry from one read (`A350BaroEntry.Plan`) and never clicks the ISIS while a side is on STD; full text: Task 1's measurements.
-- **For plan 06:** what LINKED INSTR does to the baros (Task 1), for its option's ledger line.
+- **For plan 23:** what LINKED INSTR does to the baros (Task 1), for its option's ledger line.
 
 ## Execution record
 

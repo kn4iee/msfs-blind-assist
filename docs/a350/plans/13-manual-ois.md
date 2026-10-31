@@ -14,7 +14,7 @@
 
 - Spec section 4 and the index's "Shared conventions" apply.
 - Owned files: `docs/a350/ledger/13-ois.md` (new), fixtures `tests/MSFSBlindAssist.Tests/A350/Fixtures/p13_*.json` (new, for the plans that fix gaps), `docs/a350/evidence/13-manual-ois.md` (new). No code, test or other doc changes.
-- Pages: PDF 31-40 (the manual's own numbers are one lower): Onboard Information System: Mission (FLT OPS PLAN, LOADSHEET, charts and their bookmarks), Performance (T.O PERF, LDG PERF), Utilities (AOC, MAINTENANCE, FAILURES, AUTOSAVE, PANEL STATES). The OPTIONS pages (PDF 41-51) are plan 06's ledger.
+- Pages: PDF 31-40 (the manual's own numbers are one lower): Onboard Information System: Mission (FLT OPS PLAN, LOADSHEET, charts and their bookmarks), Performance (T.O PERF, LDG PERF), Utilities (AOC, MAINTENANCE, FAILURES, AUTOSAVE, PANEL STATES). The OPTIONS pages (PDF 41-51) are plan 23's ledger.
 - "Not modelled" needs evidence from the module or its files (behavior XML, WASM names, the OIS script), never "it did not move" ([DBG-7]); the handoff's "Do not chase" list is re-checked on 1.2.8, not assumed.
 - A gap in a plan that is open goes to its claimant (or into its plan file's handoff request, by them); in a plan that has landed, it is listed for the owner to make into a new plan.
 

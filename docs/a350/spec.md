@@ -73,21 +73,40 @@ should keep them out too.
 - The First Officer moved no flap and no gear: its flap margin is still not flown (plan 05).
 - Taxi guidance ran out and in; the turn lead (`TaxiTurnLeadSeconds` 1.7) is still to be judged (plan 08).
 
+### 2.7 Found in the two test flights after the first (Robin Kipp, 2026-10-31)
+
+- The MFD window has no page buttons and no list of the MFD's pages (its Alt+letter keys work): the FBW A380's MCDU
+  window has both, and is the model (plan 09, Task 1).
+- On the ground after fuel, payload and the V-speeds, Shift+1 (green dot) said the speed was not shown: the hotkeys read
+  green dot, S and F only off the captain's speed tape, which draws none on the ground; the First Officer reads the same
+  speeds from the A350's own variables (`FMGEC_GD_SPD`, `FCPC_S_SPEED`, `FCPC_F_SPEED`) (plan 07, Task 6; question 15).
+- The MFD window does not say which lines take typed input ("required" is said, the field is not): the A380 window ends
+  each actionable line with a role word, ", edit", ", button", ", combo box, collapsed" (plan 09, Task 2).
+- Scrolling: DEPARTURE's SID and ARRIVAL's STAR lists needed Control+Down pressed many times before new rows showed
+  (plan 09, Task 4; question 14).
+- The F-PLN and other MFD pages read too long, above all on a braille display: the A380 window reads its F-PLN as a
+  fixed 40-cell grid under one column-header line (plan 09, Task 3; questions 12 and 13).
+- Arming BTV is clunky with a screen reader, mostly because the pilot must zoom the ANF in first: the A380's OANS window
+  arms it from a runway list and an exit list (plan 08, Task 2; question 16).
+- The OIS window needs another round of layout and navigation fixes (plan 06, Task 2; question 17).
+
 ## 3. The handoff's remaining work, by plan
 
 | Handoff item | Plan |
 | --- | --- |
 | 3.3 Fresh review of `345bfd07f`..`7e6d5fbd1` | 01 |
-| 3.2 Every OIS EQUIPMENT and AIRCRAFT option, on and off | 06 (LINKED INSTR's baro effect: 02) |
+| 3.2 Every OIS EQUIPMENT and AIRCRAFT option, on and off | 23 (LINKED INSTR's baro effect: 02) |
 | 3.1 Cover-to-cover manual pass, a ledger line per item | 12 to 17, by page range (section 6) |
 | 4 Built, never proven: TCAS TA/RA; LVR CLB | 07 |
 | 4 Built, never proven: FO `ExtendWithinKts = 3` | 05 |
-| 4 Built, never proven: Alt+M (MFD MAILBOX key) in flight; mailbox SEND and uplinks | 09 |
+| 4 Built, never proven: Alt+M (MFD MAILBOX key) in flight | 09 |
+| 4 Built, never proven: mailbox SEND and uplinks | 22 |
 | 4 Built, never proven: taxi lead tone | 08 |
 | 4 Open checks: PFD; PFD messages as call-outs; SIM RATE/SIM PAUSED lines; T10 METRIC ALT's PFD boxes | 07 |
 | 4 Open checks: `INI_CABIN_IS_READY`; engine and reverser status; flight phase values; W3 SD pages | 04 |
 | 4 Open checks: waypoint passing; ANF | 08 |
-| 4 Open checks: X12 KCCU; KG units on every weight read | 09 |
+| 4 Open checks: X12 KCCU | 09 |
+| 4 Open checks: KG units on every weight read | 07 |
 | 4 Open checks: W4 RMP | 10 |
 | 4 Open checks: panels and SND keys; gear position and UNLK lights; T8 IRS; the panel backlog (CVR, oxygen, ELT, chronos, trims, lights one at a time) | 11 |
 | 4 Open checks: auto-gear (stock GEAR_UP/DOWN against the A350's own `INI.GEAR` events); T3 lowest AP engage height; all normal checklists end to end | 05 |
@@ -152,6 +171,12 @@ it then. Only the owner fills in "Answer" (with the date).
 | 9 | 10 | STBY RAD NAV has no cockpit writer (documented in iniBuilds' FAQ): offer a row writing its L:var? | Decide after plan 10's Task 2, from what it finds | |
 | 10 | 18, 19 | Open the shared pull requests off `main` (they change released aircraft)? | Yes, each after its measurements, with its in-sim test plan | |
 | 11 | 19 | The other Airbus flap fixes: one pull request per aircraft, or one for all? | One per aircraft (CLAUDE.md: each gets its own in-sim test and review) | |
+| 12 | 09 | The MFD window's colors: say each line's color (as today), only a color that differs from what that page mostly shows, or none? | Only the colors that differ from the page's usual one: no word means normal | |
+| 13 | 09 | The F-PLN: the A380 window's fixed 40-cell grid (ident, airway, track, distance, speed, altitude, time, a header line above), or a shorter sentence per waypoint? | The A380's grid: a braille display shows a whole row and the columns line up | |
+| 14 | 09 | Lists longer than the MFD shows (SIDs, STARs, runways): read the whole list at once from the memory copy and move the real list to the pilot's pick, or page the real list with PageDown and read each page? | Read it whole, if plan 09's measurement finds the rows in the copy; else PageDown pages it | |
+| 15 | 07 | Green dot, S and F on the ground, where the tape draws none: from the A350's own speed variables (as the First Officer reads them), from the MFD's PERF T.O page, or say they show in flight only? | The variables, in the same sentence as in flight; "not shown" only when they hold none | |
+| 16 | 08 | Arming BTV: may MSFSBA set the ND to PLAN and the zoom range itself, arm, then put the pilot's mode and range back (saying so), or should it ask the pilot to set them first? | MSFSBA does it and puts them back | |
+| 17 | 06 | The OIS window's layout and navigation: what is hardest today, page by page? | The owner's list starts plan 06's design round | |
 
 ## 6. The manual by page range (plans 12 to 17)
 
@@ -163,7 +188,7 @@ menu map): render them (Windows PowerShell 5.1 and `Windows.Data.Pdf`, or Git Ba
 | --- | --- | --- |
 | 12 | 1 to 30 | Preface, About, Aircraft Selection and Liveries, Cockpit Interaction, Checklists, Control Sensitivity, Limitations, Aircraft Configuration Summary, A350 Specifications, Important notes (FMA, lights out, fly by wire), Cockpit Layout, Other Controls (HUD, sun visors, the captain's side, oxygen mask) |
 | 13 | 31 to 40 | OIS: Mission (FLT OPS PLAN, LOADSHEET, charts), Performance (T.O PERF, LDG PERF), Utilities (AOC, MAINTENANCE, FAILURES, AUTOSAVE, PANEL STATES) |
-| (06) | 41 to 51 | OIS OPTIONS (AIRCRAFT, EQUIPMENT, PRINTER, GPS JAMMING, throttle, CALLOUTS, VOLUME, 3RD PARTY, SIMULATION): plan 06 keeps their ledger lines |
+| (23) | 41 to 51 | OIS OPTIONS (AIRCRAFT, EQUIPMENT, PRINTER, GPS JAMMING, throttle, CALLOUTS, VOLUME, 3RD PARTY, SIMULATION): plan 23 keeps their ledger lines |
 | 14 | 52 to 63 | Aircraft Systems: FCU, MFD and KCCU, Electronic Checklist, EFIS, EFIS Control Panel |
 | 15 | 64 to 80 | Aircraft Systems: ANF, BTV, Noise Function, thrust levers, radio and transponder, RMP, TCAS, HUD symbols |
 | 16 | 81 to 86, 124 to 128 | Failures and Abnormal Procedures (ECAM, sensed and not sensed, STATUS, deferred procedures, automatic emergency descent); the Checklists |

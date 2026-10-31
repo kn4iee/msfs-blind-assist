@@ -44,7 +44,7 @@ A claim counts only once it is on the remote branch: one that exists only on you
 ### Task 2: The rules and the docs
 
 - [ ] **Step 1:** Each proposed rule line added to `.claude/rules/inibuilds-a350.md` (or the rule file its code loads) with its full text in `docs/invariants/inibuilds-a350.md`, mirrors where CLAUDE.md's list says; `ClaudeContextBudgetTests` green.
-- [ ] **Step 2:** `docs/inibuilds-a350.md`: "Manual coverage" from the ledgers (06's and 12-17's), the 1.2.8 "Do not chase" list as each plan re-checked it, "Parity with the other aircraft" and the top updated to 1.2.8; `docs/first-officer.md`, `docs/visual-guidance.md` and `docs/tooling.md` (with plan 20) as the handoffs say.
+- [ ] **Step 2:** `docs/inibuilds-a350.md`: "Manual coverage" from the ledgers (23's and 12-17's), the 1.2.8 "Do not chase" list as each plan re-checked it, "Parity with the other aircraft" and the top updated to 1.2.8; `docs/first-officer.md`, `docs/visual-guidance.md` and `docs/tooling.md` (with plan 20) as the handoffs say.
 - [ ] **Step 3:** The guide (`guide/airbus-aircraft.md`'s A350 chapter, `guide/hotkey-reference.md`, the Ctrl+M list) and `HotkeyGuides/iniBuilds_A350_Hotkeys.txt` updated from the pilot-facing lines; `tools/GuideBuilder` builds.
 
 ### Task 3: `main` merged and the whole suite

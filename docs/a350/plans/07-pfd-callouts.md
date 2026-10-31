@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
-**Goal:** The PFD's open checks are closed, each PFD message is a call-out on its own Ctrl+M row and heard live, LVR CLB is said as the aircraft shows it, the TCAS advisories are heard with real traffic, and the PFD's metric altitude and pause lines read on 1.2.8.
+**Goal:** The PFD's open checks are closed, each PFD message is a call-out on its own Ctrl+M row and heard live, LVR CLB is said as the aircraft shows it, the TCAS advisories are heard with real traffic, the PFD's metric altitude and pause lines read on 1.2.8, green dot, S and F are said on the ground as well as in flight (Shift+1 to 3), and every weight read-out says the aircraft's unit.
 
 **Architecture:** Each check is measured on captures of the captain's EFIS (`A350Probe draw live EFIS#0` with `A350_DRAW_JSON`, `pfdlisten`) in the state it names, then read by `A350Pfd` and spoken by `A350PfdMonitor`'s announcers; a misread is fixed test-first on its capture. The PFD flags' one Ctrl+M row becomes one row per message (owner question 6) in plan 01's `A350CalloutRows.Pfd`, each muted by its key through the monitor's keyed lookup.
 
 **Tech Stack:** C# 13 / .NET 10, xUnit with live-captured EFIS fixtures; `tools/A350Probe` (`draw`, `pfdlisten`, `listen`, `sample`).
 
-**Spec:** `docs/a350/spec.md` sections 2.6, 3 (handoff 4: TCAS TA/RA, LVR CLB; open checks: PFD, PFD messages, SIM RATE/PAUSED, T10's PFD boxes), 4, 5 (question 6); `docs/inibuilds-a350.md` "The PFD and FMA".
+**Spec:** `docs/a350/spec.md` sections 2.6, 2.7 (the test flights' speeds finding), 3 (handoff 4: TCAS TA/RA, LVR CLB; open checks: PFD, PFD messages, SIM RATE/PAUSED, T10's PFD boxes, KG units), 4, 5 (questions 6 and 15); `docs/inibuilds-a350.md` "The PFD and FMA".
 
 ## Global Constraints
 
 - Spec section 4 and the index's "Shared conventions" apply.
-- Owned files: `Aircraft/A350/Display/A350Pfd.cs`, `A350PfdMonitor.cs`, `A350PfdFlagAnnouncer.cs`, `A350FmaAnnouncer.cs`, `A350FlashingLines.cs`, `A350TakeoffSpeeds.cs`, `A350Minimums.cs`, `A350SimPause.cs`, `Aircraft/A350/A350TcasCallouts.cs`, `A350TakeoffCallouts.cs`, `A350MinimumsCallout.cs`, `A350PauseAlerts.cs`, `A350CalloutRows.Pfd.cs`; the PFD flags line in `Forms/A350/A350MonitorManagerForm.BuildRows` (removed when Task 2 splits it, its only change there); tests `A350Pfd*Tests`, `A350FmaTests`, `A350FlashingLinesTests`, `A350TakeoffCalloutsTests`, `A350TcasCalloutsTests`, `A350MinimumsTests`, `A350PauseAlertsTests`, `A350MetricAltitudeTests`, `A350HudTests`, new `A350PfdMessageRowsTests.cs`; fixtures `p07_*.json`; `docs/inibuilds-a350.md` "The PFD and FMA", "Takeoff, flight phases and the T/D pause"; `docs/a350/evidence/07-pfd-callouts.md` (new).
+- Owned files: `Aircraft/A350/Display/A350Pfd.cs`, `A350PfdMonitor.cs`, `A350PfdFlagAnnouncer.cs`, `A350FmaAnnouncer.cs`, `A350FlashingLines.cs`, `A350TakeoffSpeeds.cs`, `A350Minimums.cs`, `A350SimPause.cs`, `Aircraft/A350/A350TcasCallouts.cs`, `A350TakeoffCallouts.cs`, `A350MinimumsCallout.cs`, `A350PauseAlerts.cs`, `A350CalloutRows.Pfd.cs`, `A350Hotkeys.cs`, `Aircraft/IniBuildsA350Definition.Hotkeys.cs` (the read-out hotkeys); the PFD flags line in `Forms/A350/A350MonitorManagerForm.BuildRows` (removed when Task 2 splits it, its only change there); tests `A350Pfd*Tests`, `A350FmaTests`, `A350FlashingLinesTests`, `A350TakeoffCalloutsTests`, `A350TcasCalloutsTests`, `A350MinimumsTests`, `A350PauseAlertsTests`, `A350MetricAltitudeTests`, `A350HudTests`, `A350HotkeysTests`, new `A350PfdMessageRowsTests.cs`, `A350GroundSpeedsTests.cs`; fixtures `p07_*.json`; `docs/inibuilds-a350.md` "The PFD and FMA", "Takeoff, flight phases and the T/D pause"; `docs/a350/evidence/07-pfd-callouts.md` (new).
 - Never provoke a message in a way that risks the aircraft: a stall or windshear only as the OIS's own SITUATIONS or failures produce it, with the owner present, AP and A/THR ready; PULL UP and DH are already proven.
 - Splitting the PFD flags row: a pilot who unticked the old row keeps those messages muted (each new key starts unticked when the old key is in the disabled list).
 
@@ -73,9 +73,23 @@
 - [ ] **Step 2:** The aircraft's own pause at the top of descent (OPTIONS > SIMULATION > PAUSE AT T.O.D on, the owner's choice) heard with the OIS window closed; RESUME heard.
 - [ ] **Step 3:** The take-off speeds and minimums said as entered on 1.2.8 (the flight of 2026-10-31 read V1 140, VR 141, V2 146, FLEX 67 right); record.
 
+### Task 6 [sim]: Green dot, S and F on the ground (Shift+1 to 3)
+
+**Files:** `Aircraft/IniBuildsA350Definition.Hotkeys.cs` (`AnnounceTapeSpeed`), `Aircraft/A350/A350Hotkeys.cs`; test `A350GroundSpeedsTests.cs`.
+
+Found in the test flights after the first: on the ground, with fuel and payload loaded and the V-speeds set, Shift+1 said the speed was not shown: the hotkeys read green dot, S and F only as symbols on the captain's speed tape (`A350Pfd.TapeSymbol`), which draws none on the ground. The First Officer reads the same speeds from the A350's own variables (`A350StateEvaluator.GreenDot` = `FMGEC_GD_SPD`, `SSpeed` = `FCPC_S_SPEED`, `FSpeed` = `FCPC_F_SPEED`), and the MFD's PERF T.O page shows green dot.
+- [ ] **Step 1 [sim]:** On the ground after fuel, payload and the PERF T.O entries, then in flight: read the three variables beside what the MFD's PERF T.O page and the speed tape show; record when each holds a value and whether they agree.
+- [ ] **Steps 2-6**, owner question 15's answer (recommended: the tape's value while it shows the symbol, else the variable's while it holds one, the sentence unchanged, "Green dot speed 213 knots"; "not shown" only when neither has one), the usual five (tests `On_the_ground_green_dot_comes_from_its_variable`, `In_flight_the_tape_still_wins`, `Neither_gives_not_shown`, `The_speed_reads_the_same_under_sv_SE`); commit `fix(a350): green dot, S and F are said on the ground`.
+
+### Task 7 [sim]: Every weight in the aircraft's unit
+
+**Files:** `A350Hotkeys.cs`, `Aircraft/IniBuildsA350Definition.Hotkeys.cs` as found.
+
+- [ ] **Step 1:** With the aircraft set to kilograms, then pounds: every weight MSFSBA says (the fuel, weight and readout hotkeys) in that unit; the MFD's FUEL & LOAD page and the OIS LOADSHEET read as drawn (plans 09 and 06 if not). Each wrong unit fixed test-first with a de-DE test, commit `fix(a350): <read-out> says the aircraft's weight unit`.
+
 ## Handoff to plan 21
 
-- **Pilot-facing:** "A350: each PFD message (RWY TOO SHORT, MAX REVERSE, …) has its own Ctrl+M row; LVR CLB said flashing" (as found). Guide: the A350's PFD call-outs and the Ctrl+M list; changelog `improvement`/`fix`.
+- **Pilot-facing:** "A350: each PFD message (RWY TOO SHORT, MAX REVERSE, …) has its own Ctrl+M row; LVR CLB said flashing; green dot, S and F said on the ground" (as found). Guide: the A350's PFD call-outs, its read-out keys and the Ctrl+M list; changelog `improvement`/`fix`.
 - **Rule proposal:** none expected.
 
 ## Execution record
