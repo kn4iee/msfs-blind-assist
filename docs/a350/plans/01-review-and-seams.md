@@ -109,7 +109,49 @@
 
 ## Review findings
 
-(Task 1 fills this in.)
+Task 1's reviewer (Claude Opus 5.5, read-only, 2026-10-31) read the 12 commits' own diffs and each touched area whole, and
+modelled the new vertical display reader over every captain EFIS fixture. Verdict: ready with fixes. Strengths it named:
+`NavRadioFormat` fixes a comma-culture bug for every aircraft on Output N without changing en-US output; the FMA's
+color-aware parts, the draw engine's per-class count and the MFD naming fixes are correct and tested; the 3 kt flap window
+leaves VFE-next protection intact.
+
+Fixed in Task 2 (test first, one commit each):
+- **C1, Critical, VERIFIED.** `A350GroundDisplays.cs:170-177, 206-207`: the vertical display's waypoint loop gives VD
+  places to range-map names drawn behind the VD and to the VD's runway label: "Vertical display: MCT, cyan: 31 NM, 24600
+  feet" at FL300 (`efis0_cruise_wxt`), "VCBI, white: 1.2 NM, 1000 feet" for a field at about 26 ft (`efis0_takeoff_ready`);
+  5 of the 7 fixtures where it speaks. With it, M1 (clipped names and names past the scale read with places).
+- **I1, Important, VERIFIED.** `A350GroundDisplays.cs:157`: the MSA is read only while its name sits at y 900 or more; above,
+  it falls into the waypoint loop: "MSA, magenta: 0 NM, 4800 feet" for a 3800 ft MSA (`efis0_omdb_landed_clipped`).
+- **I2, Important, VERIFIED.** No comma-decimal culture test covers the VD's spoken decimals or its scale parsing.
+- **I3, Important, VERIFIED.** `IniBuildsA350Definition.Announcements.cs:448`: the lever word's "on the ground only" check
+  reads `_calloutOnGround`, true by default for a flight loaded in the air: "All thrust levers 50 percent N1" in flight.
+- **I4, Important, VERIFIED.** `A350FOAutoManager.cs:209-210, 279-280`: the 10 s go-around flap hold times from the
+  approach's first pass over CLB (a seen-once latch): an engine-out approach at MCT gets no hold in its go-around, and the
+  landing gate can step a flap into it.
+
+Minor, for the plans owning the files (not fixed here):
+- M2 (plan 09): `A350MfdPage.cs:520, 527`: the CMS tab's box names can shift, or throw on a fourth labelled field. PLAUSIBLE.
+- M3 (plan 21): `HotkeyGuides/iniBuilds_A350_Hotkeys.txt:141-142` still describes the old Output N; its "NOT ON THE A350
+  YET" block (405-409) is out of date.
+- M4: the strict flap speed waits are still described in `docs/first-officer.md:16` (plan 21) and
+  `docs/inibuilds-a350.md:409` (plan 07).
+- M5: the doc's DB423 example (6.8 NM against the test's 6.9): corrected with C1.
+- M6 (plan 08): `TaxiTurnLeadTests.cs:26-28` ties the A350's lead to the A330's instead of pinning 1.7.
+- M7: three comments left on the wrong code: `A350HotkeysTests.cs:75-76` and `IniBuildsA350Definition.Hotkeys.cs:341-343`
+  (plan 07), `A350MfdPageTests.cs:28-29` (plan 09).
+- M8 (plan 10): `NavRadioFormat.cs:24-25`: the glideslope line has no culture test; MainForm's generic Output N none.
+- M9 (plan 07): `IniBuildsA350Definition.Hotkeys.cs:182, 343-353`: the A350's Output N says nothing on an exception other
+  than a timeout.
+- M10 (plan 08): `A350NdMap.cs:93-99`: a flight ID drawn without a speed is no longer read as one. PLAUSIBLE.
+- M11 (plan 07): `A350FmaAnnouncer.cs:57`: the FMA's flash wait covers the autothrust column only. PLAUSIBLE.
+- M12 (plan 05, a design point for the owner): `A350FOAutoManager.cs:296`: with the 3 kt window, managed speed holding
+  green dot can bring out flaps 1 anywhere in the approach context below 5000 ft. PLAUSIBLE.
+- M13 (plan 21): `MainForm.Hotkeys.cs:326`: the DCDU refusal says the A350 has a DCDU window; its Ctrl+Shift+D is the
+  ATC mailbox.
+
+Handed on: measure the A350's `FlareAltitudeBiasFt` in the flare attitude (plan 18); check the FBW family for the same
+green-dot hold (plan 19's Task 1). Outside the range, for the owner: the PMDG 737's NAV radios dialog speaks
+`Nav1FreqMHz` in the PC's culture (`PMDG737Definition.cs`, about line 6990).
 
 ## Handoff to plan 21
 
