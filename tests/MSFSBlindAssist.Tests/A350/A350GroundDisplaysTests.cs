@@ -87,6 +87,27 @@ public class A350GroundDisplaysTests
         Assert.Contains("Vertical display: DB403, green: 34 NM, 4900 feet", nd);
     }
 
+    // Review 2026-10-31 (I2): the vertical display's figures keep their point in a comma-decimal culture: a distance with a tenth ("6.9 NM";
+    // "5.9 NM" on the 10 NM range, labelled 0 2.5 5 7.5 10). CI runs under en-US, so nothing else would catch a culture leak.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_vd_reads_the_same_under_de_DE_and_sv_SE(string culture)
+    {
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            var lines = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_vd_arrival.json"), 0);
+            Assert.Contains("Vertical display: DB423, white: 6.9 NM, 8000 feet", lines);
+            Assert.Contains("Vertical display: DB407, green: 19 NM, 6000 feet", lines);
+            Assert.Contains("Vertical display: SOLIL, green: 39 NM, 4500 feet", lines);
+            Assert.Contains("MSA: about 3800 feet, magenta", lines);
+            Assert.Contains("Vertical display: DB403, white: 5.9 NM, 6200 feet", A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
+    }
+
     // Final review: the ND's status display got none of the traffic line: no way it moves, and with FLT ID on, orphan lines.
     [Fact]
     public void The_nds_status_display_says_what_a_target_is_doing_and_who_it_is()
