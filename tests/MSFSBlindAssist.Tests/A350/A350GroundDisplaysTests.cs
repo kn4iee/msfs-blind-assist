@@ -55,6 +55,26 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain(lines, l => l.StartsWith("Vertical display: 12L", StringComparison.Ordinal));
     }
 
+    // Task 2A review (Minor 3): the runway's place took one of its two white lines as both, its middle then 5 px off the field's height:
+    // VCBI read 100 feet with only the upper line, -100 with only the lower (about 400 ft off at 40 NM). A draw strokes some lines twice
+    // (the path, in arc40 and on ROSE LS), so one line drawn twice is still one. Both lines, or no place.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void The_runways_place_needs_both_its_lines(bool keepUpper, bool drawnTwice)
+    {
+        var capture = A350Fixtures.Capture("efis0_takeoff_ready.json");
+        var both = capture.Shapes!.Where(s => s.Kind == "stroke" && A350Rgba.NameOf(s.Colour) == "white" && s.Y1 - s.Y0 <= 4 && Math.Abs(s.X0 - 836 - 232.1f) < 1)
+            .OrderBy(s => s.Y0).ToList();
+        Assert.Equal(2, both.Count);
+        var (kept, gone) = keepUpper ? (both[0], both[1]) : (both[1], both[0]);
+        var shapes = capture.Shapes!.Where(s => s != gone).ToList();
+        if (drawnTwice) shapes.Add(kept);
+        var nd = A350GroundDisplays.ReadNd(capture with { Shapes = shapes }, 0);
+        Assert.Contains("Vertical display: VCBI 22, white", nd);
+    }
+
     // Review 2026-10-31 (M1): a name the clip hides, its symbol past the last range label, read with a place nobody sees: ODLAL at 42 NM on
     // the 40 NM display (the arrival), SOLIL past 10 NM on ROSE LS, OMDB and 12L at 42 NM. A capture from before the clip was tracked reads
     // each text unclipped: ODLAL still lies past 40 NM. And a name the clip hides inside the range, as one under the display's window.

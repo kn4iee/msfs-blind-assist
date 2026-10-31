@@ -223,13 +223,15 @@ public static class A350GroundDisplays
 
         /// <summary>The runway under its label: the left end of its two white lines and their middle, the field's height (live on the
         /// stand at VCBI, 2026-10-28: the name 10.5 px right of their left end, the ident 8.5 px over the upper line, the lines 10 px
-        /// apart; the same over OMDB 12L on the arrival); null with no line drawn there (no shapes recorded).</summary>
+        /// apart; the same over OMDB 12L on the arrival); null without both lines (no shapes recorded): one alone, or one stroked twice
+        /// as the draw strokes some lines, lies 5 px off the field's height, about 400 ft at 40 NM.</summary>
         public static (float X, float Y)? RunwayAt(DrawnCell name, DrawnCell ident, IReadOnlyList<DrawnShape>? shapes, float shift)
         {
-            const float LeftOfName = 10.5f;
+            const float LeftOfName = 10.5f, LinesApart = 10;
             var lines = (shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Kind == "stroke" && A350Rgba.NameOf(s.Colour) == "white" && s.Y1 - s.Y0 <= 4
                 && Math.Abs(name.X - (s.X0 - shift) - LeftOfName) <= 3 && s.Y0 - ident.Y is >= 4 and <= 24).ToList();
-            return lines.Count == 0 ? null : (lines.Min(s => s.X0) - shift, (lines.Min(s => s.Y0) + lines.Max(s => s.Y1)) / 2);
+            if (lines.Count < 2 || Math.Abs(lines.Max(s => s.Y0) - lines.Min(s => s.Y0) - LinesApart) > 3) return null;
+            return (lines.Min(s => s.X0) - shift, (lines.Min(s => s.Y0) + lines.Max(s => s.Y1)) / 2);
         }
 
         private static double? Value(DrawnCell c, double scale) =>
