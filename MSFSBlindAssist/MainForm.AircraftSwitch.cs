@@ -681,6 +681,8 @@ public partial class MainForm
     private void StartA350DisplayService()
     {
         if (a350DisplayService != null) return;
+        // Whether a Ctrl+M row is unticked, asked by its key: the E/WD monitor's, the display monitor's and the definition's.
+        Func<string, bool> muted = key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key);
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
         // Everything said while the A350's reader runs goes in a350_speech.log, what is unticked in Ctrl+M in the main log:
         // together they answer "it never told me" from a pilot's logs.
@@ -706,7 +708,7 @@ public partial class MainForm
         a350IdentTimer.Start();
         var service = a350DisplayService;
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
-            key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
+            muted,
             line => SafeBeginInvoke(() => announcer.Announce(line)));
         // The displays: the CTR (the E/WD call-outs) and the captain's EFIS (the FMA call-outs, one Ctrl+M row per column)
         // each tick, the MFD (the FMS messages) every other tick, RMP 1 and the SFD in turn, and a display only a status
@@ -715,7 +717,7 @@ public partial class MainForm
         var ecam = a350EcamMonitor;
         a350PfdMonitor = new Aircraft.A350.Display.A350PfdMonitor(
             async gauges => await service.DrawAsync(gauges),
-            key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
+            muted,
             line => SafeBeginInvoke(() => announcer.Announce(line))) { CtrDrawn = ecam.Observe };
         if (currentAircraft is IniBuildsA350Definition a350)
         {
@@ -725,6 +727,13 @@ public partial class MainForm
             // The FMS messages heard with the MFD window closed: quiet while it is open (it says them), none from a dark MFD.
             a350PfdMonitor.MfdWindowOpen = () => a350.MfdWindowOpen;
             a350PfdMonitor.MfdDark = () => a350.IsScreenDark("Captain MFD");
+            // The captain's EFIS draw of each tick, for the ND's background reads: handed on from the monitor's pool thread, so
+            // what the definition says is posted to the UI thread like the monitors' own, and only while it is the aircraft.
+            Action<string> speak = line => SafeBeginInvoke(() => announcer.Announce(line));
+            a350PfdMonitor.CaptainEfisDrawn = (capture, at, settling) =>
+            {
+                if (ReferenceEquals(currentAircraft, a350)) a350.ObserveCaptainEfis(capture, at, settling, muted, speak);
+            };
             // The FMS's take-off speeds in each copy the reader takes: said as entered, and the roll call-outs' speeds.
             a350DisplayService.TakeoffSpeedsRead += speeds => SafeBeginInvoke(() =>
             {

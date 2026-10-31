@@ -6,7 +6,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// The A350's displays in the background: the CTR drawn first each tick and handed to the E/WD monitor
 /// (<see cref="CtrDrawn"/>); the captain's EFIS drawn every tick and its FMA changes spoken with
 /// colours (A350FmaAnnouncer), each behind its column's Ctrl+M row, and the flags it raises (A350PfdFlagAnnouncer), behind
-/// their one row; the captain's MFD every other tick, for the FMS
+/// their one row, and the draw handed on to the aircraft definition for the ND (<see cref="CaptainEfisDrawn"/>); the
+/// captain's MFD every other tick, for the FMS
 /// messages (A350FmsMessageAnnouncer) heard with the MFD window closed, behind their own Ctrl+M row; RMP 1 and the
 /// SFD in turn (<see cref="Others"/>); and one display only a status display or a window reads (<see cref="Quiet"/>)
 /// while it is read, else now and then. A tick's displays are all drawn on one memory copy. Each display's latest good
@@ -115,6 +116,13 @@ public sealed class A350PfdMonitor : IDisposable
     /// cycle, about 650 ms at 495 MB). First: its warnings matter most, and a request retries only one trapped draw.</summary>
     public Action<A350DrawCapture?>? CtrDrawn { get; set; }
 
+    /// <summary>The aircraft definition's reader of the captain's EFIS (IniBuildsA350Definition.Hooks.cs), so the ND can be
+    /// read in the background in a file of its own and this one needs no edit: each tick's good draw of it, once, with the
+    /// time of the tick and whether the call-outs are still settling after a flight load (<see cref="Rebaseline"/>). Handed
+    /// on after the FMA read, which starts that settling, and behind a guard of its own (a trapped or missing draw is not
+    /// handed on; one that throws costs that read only). Called on the monitor's pool thread.</summary>
+    public Action<A350DrawCapture, DateTime, bool>? CaptainEfisDrawn { get; set; }
+
     /// <summary>A display's latest draw that did not trap, or null when there is none younger than <see cref="MaxAge"/>.</summary>
     public A350DrawCapture? Latest(string gauge, int index)
     {
@@ -158,7 +166,13 @@ public sealed class A350PfdMonitor : IDisposable
         // Each reader reads its own draw, the E/WD's first (its warnings matter most), and one that throws costs that read
         // only (final review 2026-10-29: a message-line read that threw ended the tick before the E/WD had its CTR).
         if (ctr != null && caps.Count > 0) Read("E/WD", () => ctr(caps[0]));
-        if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt) Read("FMA", () => ObserveFma(cpt, at));
+        if (cptAt < caps.Count && caps[cptAt] is { Ok: true } cpt)
+        {
+            Read("FMA", () => ObserveFma(cpt, at));
+            // The definition's ND reader is handed the same draw once the FMA read has seen it: that read starts the settle
+            // window of a flight just loaded.
+            if (CaptainEfisDrawn is { } efis) Read("ND", () => efis(cpt, at, Settling(at)));
+        }
         int mfdAt = gauges.IndexOf(("MFD", 0));
         if (mfdAt >= 0 && mfdAt < caps.Count && caps[mfdAt] is { Ok: true } mfd)
             Read("FMS message", () => ObserveMessages(mfd, at));
@@ -179,6 +193,10 @@ public sealed class A350PfdMonitor : IDisposable
         }
     }
 
+    /// <summary>Whether the call-outs are still settling after a flight load at <paramref name="at"/>: the window the FMA read
+    /// opens (<see cref="ObserveFma"/>), which the reading loop alone sets.</summary>
+    private bool Settling(DateTime at) => _settleUntil is { } until && at < until;
+
     /// <summary>The captain's EFIS drawn: each FMA column's change is said, unless muted or settling after a load.</summary>
     private void ObserveFma(A350DrawCapture cpt, DateTime at)
     {
@@ -189,7 +207,7 @@ public sealed class A350PfdMonitor : IDisposable
             _flags.Reset();
             _settleUntil = at + A350EcamMonitor.SettleAfterLoad;
         }
-        bool settling = _settleUntil is { } until && at < until;
+        bool settling = Settling(at);
         var pfd = A350Pfd.ReadParts(cpt, 0);
         foreach (var (key, line) in _fma.Observe(pfd.Lines))
         {
@@ -226,7 +244,7 @@ public sealed class A350PfdMonitor : IDisposable
             message = _messages.Observe(lines);
             windowOpen = MfdWindowOpen?.Invoke() == true;
         }
-        bool settling = _settleUntil is { } until && at < until;
+        bool settling = Settling(at);
         if (message == null || _disposed) return;
         if (settling) A350SpeechLog.Quiet("FMS message", "settling after a load", message);
         else if (windowOpen) A350SpeechLog.Quiet("FMS message", "the MFD window says it", message);
