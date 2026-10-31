@@ -16,7 +16,7 @@
 - Owned files: `Aircraft/A350/Display/A350Ewd.cs`, `A350EwdText.cs`, `A350EcamMonitor.cs`, `A350EcamAnnouncer.cs`, `A350SdPage.cs`, `A350SdSymbols.cs`, `A350SdText.cs`, `Aircraft/A350/A350CalloutRows.Ecam.cs`; tests `A350Ewd*Tests`, `A350Ecam*Tests`, `A350Sd*Tests`, `A350EngineDisplayTests`, new `A350MemoHoldTests.cs`, `A350ReverserCalloutTests.cs`; fixtures `p04_*.json`; `docs/inibuilds-a350.md` "The E/WD", "The SD", "ECAM control panel"; `docs/a350/evidence/04-ecam.md` (new).
 - The colors as drawn are the cockpit's words: "COMPANY MSG, green", "WXR/PWS OFF, amber", never renamed.
 - If Task 1 shows the wrong color comes from how the engine records a fill (`A350DrawEngine.cs`) or how rows group (`A350DrawLayout.cs`), those are plan 03's files: agree the change with its claimant, or make it once 03 has landed (the index's rule), and say so in the record.
-- Owner questions 3 and 4: build the recommendations unless the Answer says otherwise.
+- The owner's answers (2026-10-31): a memo line back unchanged within 10 s is not said again (question 3); if the aircraft itself flips a memo's color, the change is said once it has held 3 s (question 4).
 - A line holding red or amber in the main column is always said when it appears, however recently it went: only memos are held.
 
 ## Review Focus

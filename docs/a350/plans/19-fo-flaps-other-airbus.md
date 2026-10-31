@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
-**Goal:** On the FBW A380, the FBW A32NX and the Headwind A330, the First Officer's flaps no longer wait forever on a managed approach that holds at about each flap speed, and a go-around is told by the levers, not vertical speed alone: each aircraft's own pull request off `main`, built from its own variables, after the symptom is shown on it.
+**Goal:** On the FBW A380, the FBW A32NX and the Headwind A330, the First Officer's flaps no longer wait forever on a managed approach that holds at about each flap speed, and a go-around is told by the levers, not vertical speed alone: one pull request off `main` for the three (the owner's answer to question 11), each aircraft's change built from its own variables, in its own commits, after the symptom is shown on it.
 
 **Architecture:** Each of `FbwA380FOAutoManager`, `FbwA320FOAutoManager` and `HwA330FOAutoManager` extends at `ias < gd`, `ias < s`, `ias < f` with no margin and shares a go-around detection from vertical speed alone. The fix plan 05 flew on this branch is the model, not a template (CLAUDE.md "Fix the aircraft the request is about"): an extension margin on each step, a landing gate bringing the rest of the flaps by a height whatever the speed, the go-around's lever signature (levers at MCT or TOGA seen once, a sustained climb, height regained) with a hold on extending after it, VFE-next protection kept. Each port is built from that aircraft's lever and speed variables, tested, flown and reviewed on its own.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Spec section 4 and the index's "Shared conventions" apply. **No pull request names the A350**: the defect and the fix are described on each aircraft's own terms, and its figures come from that aircraft's flights. Each opens only with the owner's OK (question 10), one per aircraft (question 11), to `oasis1701/msfs-blind-assist`, from a branch off `main`, with CLAUDE.md's PR workflow (changelog fragment after the number, the "User guide:" line, an in-sim test plan the owner runs).
+- Spec section 4 and the index's "Shared conventions" apply. **No pull request names the A350**: the defect and the fix are described on each aircraft's own terms, and its figures come from that aircraft's flights. It opens only with the owner's OK (question 10, given once the measurements are done), as one pull request for the three aircraft (question 11, 2026-10-31), to `oasis1701/msfs-blind-assist`, from one branch off `main` (`fix/airbus-fo-flap-margin`), with CLAUDE.md's PR workflow (changelog fragment after the number, the "User guide:" line, an in-sim test plan the owner runs with a part per aircraft). Each aircraft's change is its own commits with its own tests, so a reviewer can take one and leave another.
 - After: plan 05 has flown the A350's margin, landing gate and go-around (its Task 1); until then nothing here starts past Task 1.
 - Files, each pull request's own on `main`: `FirstOfficer/FBWA380/FbwA380FOAutoManager.cs`, `FirstOfficer/FBWA320/FbwA320FOAutoManager.cs`, `FirstOfficer/HWA330/HwA330FOAutoManager.cs`, their tests, and on `main`'s side `tests/MSFSBlindAssist.Tests/FirstOfficer/FbwFamilyAutoManagerSecondReviewTests.cs` (on this branch that file is plan 05's; the merge of `main` into the branch reconciles the two).
 - The Headwind A330 duplicates the A32NX profile under `HwA330ParityTests` (FOA-3): its port keeps that parity or names the divergence with its reason.
@@ -40,29 +40,32 @@
 
 - [ ] **Step 1:** On each of the A380, the A32NX and the A330, a managed approach with the First Officer's automatic flaps on: does a flap step wait while the speed holds at about its target? A climb on the approach with the levers at CL: read as a go-around? Record each (speeds, times, heights) in the execution record; an aircraft without the symptom gets no pull request.
 
-### Task 2: The A380's port (its own pull request)
+### Task 2: The A380's port
 
 **Files:** `FirstOfficer/FBWA380/FbwA380FOAutoManager.cs` (its extension cases at about lines 262-273 on `main`); its tests.
 
-- [ ] **Step 1:** `git switch -c fix/a380-fo-flap-margin origin/main` in its own worktree.
+- [ ] **Step 1:** `git switch -c fix/airbus-fo-flap-margin origin/main` in its own worktree (Tasks 3 and 4 add to the same branch).
 - [ ] **Steps 2-6**, the usual five (tests `The_A380s_flaps_come_within_the_margin_on_a_speed_hold`, `The_A380s_landing_gate_brings_the_flaps_by_its_height`, `The_A380s_go_around_stands_when_the_levers_left_TOGA_before_the_height_came`, `The_A380s_climb_with_the_levers_at_climb_is_no_go_around`, `An_unread_VFE_next_holds_the_A380s_flaps`), the margin, gate height and hold from the A380's own flown figures (Task 1) and its own variables; commit `fix(fbw-a380): the First Officer's flaps come within a margin of their speed, and a go-around is told by the levers`.
-- [ ] **Step 7 [owner]:** The pull request (question 10), with Task 1's figures and its in-sim plan: one managed approach, one go-around.
 
-### Task 3: The A32NX's port (its own pull request)
+### Task 3: The A32NX's port
 
 **Files:** `FirstOfficer/FBWA320/FbwA320FOAutoManager.cs`; its tests.
 
-- [ ] **Steps 1-7** as Task 2, on `fix/a32nx-fo-flap-margin` off `main`, with the A32NX's own variables and figures (tests named `The_A32NXs_…`).
+- [ ] **Steps 1-5** as Task 2's, on the same branch, with the A32NX's own variables and figures (tests named `The_A32NXs_…`); commit `fix(fbw-a32nx): …` as Task 2's.
 
-### Task 4: The A330's port (its own pull request)
+### Task 4: The A330's port
 
 **Files:** `FirstOfficer/HWA330/HwA330FOAutoManager.cs`; its tests; `HwA330ParityTests` (its allow-list only if a divergence is named, with its reason).
 
-- [ ] **Steps 1-7** as Task 2, on `fix/a330-fo-flap-margin` off `main`, keeping the A32NX parity (tests named `The_A330s_…`).
+- [ ] **Steps 1-5** as Task 2's, on the same branch, keeping the A32NX parity (tests named `The_A330s_…`); commit `fix(hw-a330): …` as Task 2's.
+
+### Task 5 [owner]: The pull request for the three
+
+- [ ] **Step 1:** With the owner's OK once Tasks 2-4 are green: push the branch to `origin`, open one pull request (no A350 anywhere) with each aircraft's Task 1 figures and an in-sim plan in three parts (per aircraft: one managed approach, one go-around), then its changelog fragment once the number is known and its "User guide:" line. Record the PR in this file's execution record.
 
 ## Handoff to plan 21
 
-- **Pilot-facing:** each pull request's own changelog on `main`; nothing on this branch.
+- **Pilot-facing:** the pull request's own changelog on `main`; nothing on this branch.
 - **For the merge of `main`:** the cross-profile test file's two sides reconciled when `main` is merged into this branch.
 
 ## Execution record

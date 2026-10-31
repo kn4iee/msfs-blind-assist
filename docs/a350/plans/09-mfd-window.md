@@ -4,11 +4,11 @@
 
 **Goal:** The accessible MFD window (Shift+M) works the way the FBW A380's MCDU window does: page buttons and a "Go to MFD page" list reach every page, each actionable line says what it is (edit, button, combo box), the F-PLN and the other wordy pages read in a short, fixed form a braille display shows whole, long lists scroll the way a list does, and every KCCU key, Alt+D, Alt+M and the ATC pages in the air work.
 
-**Architecture:** The window (`A350MfdWindow`) keeps its side box, page list, scratchpad and every key it has (Alt+letter page keys, Control+arrows the KCCU arrows, PageUp and PageDown, Enter, Backspace, F5). It gains the A380 window's two navigation aids: a row of page buttons carrying the window's existing Alt letters, and a "Go to MFD page" list of every page the A350's menus reach, each entry with its path (a KCCU page key, else the menu clicks), debounced as the A380's is. `A350MfdPage` gives each line its kind, so the window adds the A380's role words; its F-PLN rows become the A380's 40-cell grid under one column-header line; the colors follow owner question 12; long lists follow question 14, measured first.
+**Architecture:** The window (`A350MfdWindow`) keeps its side box, page list, scratchpad and every key it has (Alt+letter page keys, Control+arrows the KCCU arrows, PageUp and PageDown, Enter, Backspace, F5). It gains the A380 window's two navigation aids: a row of page buttons carrying the window's existing Alt letters, and a "Go to MFD page" list of every page the A350's menus reach, each entry with its path (a KCCU page key, else the menu clicks), debounced as the A380's is. `A350MfdPage` gives each line its kind, so the window adds the A380's role words after the line's color; its F-PLN rows become the A380's 40-cell grid under one column-header line, each followed by its color; PageDown and PageUp page a long list on the MFD a screen at a time, measured first.
 
 **Tech Stack:** C# 13 / .NET 10 Windows Forms, xUnit with live-captured MFD fixtures; `tools/A350Probe` (`mfd`, `mfdlines`, `hotkey`).
 
-**Spec:** `docs/a350/spec.md` sections 2.7 (the test flights' MFD findings), 3 (handoff 4: Alt+M; open checks: X12 KCCU), 4, 5 (questions 12 to 14); the A380 window `Forms/FBWA380/FBWA380MCDUForm.cs` (its header comment, `AllPages`, `RefreshDisplay`, `RoleWord`) and its F-PLN grid in `Resources/coherent-a380-agent.js` (`buildFplnLines`); `docs/inibuilds-a350.md` "The MFD window".
+**Spec:** `docs/a350/spec.md` sections 2.7 (the test flights' MFD findings), 3 (handoff 4: Alt+M; open checks: X12 KCCU), 4, 5 (questions 12 to 14, answered); the A380 window `Forms/FBWA380/FBWA380MCDUForm.cs` (its header comment, `AllPages`, `RefreshDisplay`, `RoleWord`) and its F-PLN grid in `Resources/coherent-a380-agent.js` (`buildFplnLines`); `docs/inibuilds-a350.md` "The MFD window".
 
 ## Global Constraints
 
@@ -17,9 +17,8 @@
 - **No key moves.** Every key the window has keeps its meaning (the established-hotkeys rule): the A380 window's Control+Up and Control+Down page keys are NOT taken over, because on the A350 they are the KCCU's UP and DOWN. A new key is the owner's question first.
 - The page buttons carry the window's existing Alt letters as their mnemonics (Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+M MAILBOX, Alt+K C/L MENU, Alt+G PROG, Alt+T DEST, Alt+O DATA), each pressing the same KCCU key as today; the window's other Alt letters (N NOTEPAD, U MENU, B AIRPORT, Y REF, X ESC, S OIS) stay keys.
 - Role words exactly as the A380 window's `RoleWord`: "edit" (a field taking typed input), "button", "combo box" with "collapsed"/"expanded", "option", "tab", "radio button", ", dimmed" for an unavailable one; a static text line carries none.
-- The A380 F-PLN grid: ident 8, airway 6, track 5, distance 4, speed 5, altitude 7, time 5 cells, literal screen values (a ditto `"`, a constraint's `*` as drawn), the column-header line above the first waypoint, the descent FPA as a suffix; owner question 13.
-- Owner questions 12 to 14 decide the colors, the grid and the lists; build the recommendations unless the Answer says otherwise.
-- A list read whole (question 14) is read from the memory copy only ([A350-1]: a scroll offset poked in the copy, never in the sim); the real list moves only by the aircraft's own keys.
+- The A380 F-PLN grid: ident 8, airway 6, track 5, distance 4, speed 5, altitude 7, time 5 cells, literal screen values (a ditto `"`, a constraint's `*` as drawn), the column-header line above the first waypoint, the descent FPA as a suffix, then the row's color (question 13: "BI613   BASU1D 295  4   *5000  00:05, green").
+- The owner's answers (2026-10-31): every line keeps its color, as today (question 12); long lists are paged on the MFD itself, PageDown and PageUp a screen at a time, the window reading each screen (question 14). The real list moves only by the aircraft's own keys.
 
 ## Review Focus
 
@@ -59,21 +58,22 @@ internal static class A350MfdPages
 
 **Files:** `A350MfdPage.cs` (each line's kind), `A350MfdWindow.cs` (the role word); test `A350MfdRolesTests.cs` on the existing MFD fixtures.
 
-- [ ] **Steps 1-5** (tests `A_field_reads_edit` on INIT's FROM ("FROM: VCBI, cyan, edit" or as question 12 rules the color), `A_required_field_reads_required_edit`, `A_key_reads_button`, `A_list_opener_reads_combo_box_collapsed_or_expanded`, `A_greyed_key_reads_dimmed`, `A_static_text_has_no_role_word`); commit `fix(a350): the MFD window says which lines take input`.
+- [ ] **Steps 1-5** (tests `A_field_reads_edit` on INIT's FROM ("FROM: VCBI, cyan, edit"), `A_required_field_reads_required_edit`, `A_key_reads_button`, `A_list_opener_reads_combo_box_collapsed_or_expanded`, `A_greyed_key_reads_dimmed`, `A_static_text_has_no_role_word`); commit `fix(a350): the MFD window says which lines take input`.
 
 ### Task 3: The F-PLN as a grid, and the wordy pages short
 
 **Files:** `A350MfdPage.cs`; tests `A350MfdFplnGridTests.cs`, `A350MfdPageTests.cs` (its F-PLN expectations move to the grid).
 
-- [ ] **Steps 1-5** for the F-PLN (owner question 13): each waypoint row the A380's 40-cell grid with its header line, read from `mfd_fpln_route.json` and `mfd_fpln_basu1d.json` (tests `The_flight_plan_reads_as_the_a380s_grid`, `The_header_line_stands_above_the_first_waypoint`, `A_constraint_star_and_a_ditto_read_as_drawn`, `A_discontinuity_reads_as_one_short_line`, `The_grid_reads_the_same_under_de_DE`); commit `fix(a350): the MFD's F-PLN reads as the A380's grid`.
+- [ ] **Steps 1-5** for the F-PLN (question 13): each waypoint row the A380's 40-cell grid with its header line, then its color, read from `mfd_fpln_route.json` and `mfd_fpln_basu1d.json` (tests `The_flight_plan_reads_as_the_a380s_grid`, `The_grid_row_ends_with_its_color`, `The_header_line_stands_above_the_first_waypoint`, `A_constraint_star_and_a_ditto_read_as_drawn`, `A_discontinuity_reads_as_one_short_line`, `The_grid_reads_the_same_under_de_DE`); commit `fix(a350): the MFD's F-PLN reads as the A380's grid`.
 - [ ] **Step 6 [owner]:** The owner names the other pages that read too long (PERF, FUEL & LOAD, the DEPARTURE and ARRIVAL lists are candidates); each shortened to the A380 window's "label: value" form with the role word, test-first on its fixture (Steps 1-5 per page), commit `fix(a350): the MFD's <page> reads short`.
 
 ### Task 4 [sim]: Long lists scroll as a list does
 
 **Files:** `A350MfdPage.cs`, `A350MfdInput.cs`, `A350MfdWindow.cs`; test `A350MfdListTests.cs`; fixtures `p09_mfd_departure_sid_<n>.json`.
 
-- [ ] **Step 1 [sim]:** On DEPARTURE's runway and SID lists and ARRIVAL's STAR and approach lists, measure what the KCCU's DOWN (Control+Down) and the window's PageDown (`SCROLL_DOWN`) do: how many rows the list shows, how far one press moves it, when the window's next read shows the move (the 2026-10-31 flights needed many Control+Down presses before new rows appeared), and whether the list's rows are all in the memory copy.
-- [ ] **Steps 2-6**, owner question 14's answer, the usual five (tests `The_whole_list_reads_from_the_copy` or `PageDown_moves_the_list_a_page_and_reads_it`, `Picking_a_row_moves_the_real_list_to_it_by_the_aircrafts_own_keys`, `A_short_list_sends_no_scroll_key`); commit `fix(a350): the MFD window's long lists`.
+- [ ] **Step 1 [sim]:** On DEPARTURE's runway and SID lists and ARRIVAL's STAR and approach lists, measure what the KCCU's DOWN (Control+Down) and the window's PageDown (`SCROLL_DOWN`) do: how many rows the list shows, how far one press moves it, how fast presses may follow each other, and when the window's next read shows the move (the 2026-10-31 flights needed many Control+Down presses before new rows appeared: the list did not move, or the window read before the MFD redrew).
+- The owner's answer to question 14 (2026-10-31): PageDown and PageUp page a long list on the MFD a screen at a time, with the aircraft's own keys at the measured pace, and the window reads the new screen once the draw shows it moved; focus goes to the first new row; at the list's end PageDown says "End of list" and sends nothing more. Control+arrows stay the KCCU's arrows.
+- [ ] **Steps 2-6**, the usual five (tests `PageDown_moves_the_list_a_screen_and_reads_it`, `The_window_reads_only_after_the_list_has_moved`, `PageDown_at_the_end_says_end_of_list`, `A_short_list_sends_no_scroll_key`); commit `fix(a350): PageDown and PageUp page the MFD's long lists`.
 
 ### Task 5 [sim, in flight]: The KCCU keys, Alt+D, Alt+M and the ATC pages
 
@@ -91,7 +91,7 @@ internal static class A350MfdPages
 ## Handoff to plan 21
 
 - **Pilot-facing:** "A350 MFD window: page buttons and a 'Go to MFD page' list; lines say edit, button or combo box; the F-PLN reads as a short grid; long lists scroll." Guide: the A350's MFD window section and its key list; the hotkey guide; changelog `improvement`.
-- **Rule proposal:** if Task 4 reads lists from the copy, a new A350 rule: a hidden list row is read by moving the list in the copy only, and the real list only by the aircraft's own keys.
+- **Rule proposal:** if Task 4 finds a pace below which the MFD drops list keys, a new A350 rule naming it, with the measurement as its full text.
 
 ## Execution record
 

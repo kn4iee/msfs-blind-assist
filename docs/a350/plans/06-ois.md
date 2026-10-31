@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
-**Goal:** The OIS window is easier to move around and reads in a clearer layout (the owner's design round), the OIS backlog items read as a sighted pilot sees them, the sign-in code is spoken but never logged, and the agent's fixtures and capture scripts are current for 1.2.8.
+**Goal:** In the OIS window, focus lands where a pilot expects after every action and the page never jumps under them (the owner's design round), the OIS backlog items read as a sighted pilot sees them, the sign-in code is spoken but never logged, and the agent's fixtures and capture scripts are current for 1.2.8.
 
-**Architecture:** The OIS opens in the PMDG tablets' window (`FbwEfbForm` through `CoherentPmdgEfbClient.ForA350Ois`), its pages read by `coherent-a350-ois-agent.js`. The design round starts from the owner's own list of what is hard (owner question 17), page by page; each change is made in the agent (its page model: groups, headings, order) or, A350-gated, in the window, test-first in the jsdom harness on pages captured from 1.2.8. The speech log's `ForTheLog`, which already drops a field's value from "Set … to …", learns the OIS's sign-in pop-up the same way.
+**Architecture:** The OIS opens in the PMDG tablets' window (`FbwEfbForm` through `CoherentPmdgEfbClient.ForA350Ois`), its pages read by `coherent-a350-ois-agent.js`. The design round is the owner's answer to question 17, focus after an action: where focus lands is measured page by page, then set by five rules (Task 2) in the agent's page model or, A350-gated, in the window, test-first in the jsdom harness and the shell's tests on pages captured from 1.2.8. The speech log's `ForTheLog`, which already drops a field's value from "Set … to …", learns the OIS's sign-in pop-up the same way.
 
 **Tech Stack:** C# 13 / .NET 10 Windows Forms, xUnit; JavaScript with jsdom (`tools/a350-ois-test`, Node per its README); `tools/A350Probe ois`.
 
@@ -42,13 +42,19 @@
 - `ForTheLog(string line)` also replaces the token after "User Code" and its colons with "(not logged)", keeping the rest of the sentence: "User Code: (not logged) This window will close automatically when sucessfully logged in." (the OIS's own spelling). The spoken line is untouched. Test inputs use a made-up code (`TEST-0000`), never a real one.
 - [ ] **Steps 1-5** (tests `A_sign_in_code_is_not_logged`, `Both_shapes_of_the_pop_up_are_masked`, `A_line_that_only_says_code_is_logged_as_is`, `A_field_set_still_loses_its_value`); commit `fix(a350): the speech log keeps the OIS's sign-in code out`.
 
-### Task 2 [sim] [owner]: The OIS window's layout and navigation
+### Task 2 [sim] [owner]: Focus after an action
 
-**Files:** `Resources/coherent-a350-ois-agent.js`, `tools/a350-ois-test/**` (a test per change), `Forms/FBWA380/FbwEfbForm.cs` (A350-gated) only where the change is the window's.
+**Files:** `Resources/coherent-a350-ois-agent.js`, `tools/a350-ois-test/**`, `Forms/FBWA380/FbwEfbForm.cs` (A350-gated), `tools/flypad-shell-test/efb-shell.test.js` (its A350 tests); test per rule.
 
-- [ ] **Step 1:** The owner's list (question 17's answer, copied into this plan's execution record), each item with the page it is on and what a sighted pilot sees there; capture each page on 1.2.8 (`capture.js`, new fixture names).
-- [ ] **Step 2 per item:** the change test-first in the harness (the page read as it should read), then live through the window; `npm test` green, and `tools/flypad-shell-test` green for a window change; commit `fix(a350): the OIS <page> <what changed>`.
-- [ ] **Step 3 [owner]:** The owner walks the changed pages by ear; record the verdict per item.
+The owner's answer to question 17 (2026-10-31): what is hardest is where focus lands after an action, and the page jumping; nothing else was named. The target, as the A380's MCDU window keeps its selection (a page-change signature gate, the saved row restored):
+- a press that leaves the page as it is (a switch, a choice, a field set, COMPUTE): focus stays on the control pressed, found again by its identity (its label and place), never by its row number; the result is said, focus does not move to it;
+- a press that opens another page: focus on that page's first line, its title said once;
+- a pop-up or dialog: focus on its first control; when it closes, back on the control that opened it;
+- a list that opens under a button: focus on its first item; when it closes, back on the button;
+- a page that redraws by itself (a timer, a sim change): focus stays where it was, and the window never scrolls under the pilot.
+- [ ] **Step 1 [sim]:** On each OIS page, both sides, record where focus lands today after each kind of action above (through the window, by ear and by the shell's selected row), and what the page does; keep a capture of each page where it goes wrong (`capture.js`, new names).
+- [ ] **Step 2 per rule:** the behavior test-first in the harness or the shell's tests, then live; `npm test` and `tools/flypad-shell-test` green (the PMDG tablets and the flyPad keep theirs: a change in the shared window is A350-gated, or it holds there too and their tests say so); commit `fix(a350): the OIS window keeps focus where <rule>`.
+- [ ] **Step 3 [owner]:** The owner works through MISSION, PERFORMANCE, UTILITIES and OPTIONS by ear; record the verdict per rule, and any other layout item found then, which becomes a step here.
 
 ### Task 3 [sim]: The OIS backlog
 

@@ -4,7 +4,7 @@
 
 **Goal:** The PFD's open checks are closed, each PFD message is a call-out on its own Ctrl+M row and heard live, LVR CLB is said as the aircraft shows it, the TCAS advisories are heard with real traffic, the PFD's metric altitude and pause lines read on 1.2.8, green dot, S and F are said on the ground as well as in flight (Shift+1 to 3), and every weight read-out says the aircraft's unit.
 
-**Architecture:** Each check is measured on captures of the captain's EFIS (`A350Probe draw live EFIS#0` with `A350_DRAW_JSON`, `pfdlisten`) in the state it names, then read by `A350Pfd` and spoken by `A350PfdMonitor`'s announcers; a misread is fixed test-first on its capture. The PFD flags' one Ctrl+M row becomes one row per message (owner question 6) in plan 01's `A350CalloutRows.Pfd`, each muted by its key through the monitor's keyed lookup.
+**Architecture:** Each check is measured on captures of the captain's EFIS (`A350Probe draw live EFIS#0` with `A350_DRAW_JSON`, `pfdlisten`) in the state it names, then read by `A350Pfd` and spoken by `A350PfdMonitor`'s announcers; a misread is fixed test-first on its capture. The PFD flags' one Ctrl+M row becomes one row per message (the owner's answer to question 6, 2026-10-31) in plan 01's `A350CalloutRows.Pfd`, each muted by its key through the monitor's keyed lookup.
 
 **Tech Stack:** C# 13 / .NET 10, xUnit with live-captured EFIS fixtures; `tools/A350Probe` (`draw`, `pfdlisten`, `listen`, `sample`).
 
@@ -79,7 +79,7 @@
 
 Found in the test flights after the first: on the ground, with fuel and payload loaded and the V-speeds set, Shift+1 said the speed was not shown: the hotkeys read green dot, S and F only as symbols on the captain's speed tape (`A350Pfd.TapeSymbol`), which draws none on the ground. The First Officer reads the same speeds from the A350's own variables (`A350StateEvaluator.GreenDot` = `FMGEC_GD_SPD`, `SSpeed` = `FCPC_S_SPEED`, `FSpeed` = `FCPC_F_SPEED`), and the MFD's PERF T.O page shows green dot.
 - [ ] **Step 1 [sim]:** On the ground after fuel, payload and the PERF T.O entries, then in flight: read the three variables beside what the MFD's PERF T.O page and the speed tape show; record when each holds a value and whether they agree.
-- [ ] **Steps 2-6**, owner question 15's answer (recommended: the tape's value while it shows the symbol, else the variable's while it holds one, the sentence unchanged, "Green dot speed 213 knots"; "not shown" only when neither has one), the usual five (tests `On_the_ground_green_dot_comes_from_its_variable`, `In_flight_the_tape_still_wins`, `Neither_gives_not_shown`, `The_speed_reads_the_same_under_sv_SE`); commit `fix(a350): green dot, S and F are said on the ground`.
+- [ ] **Steps 2-6**, the owner's answer to question 15 (2026-10-31: the A350's own variables): the tape's value while it shows the symbol, else the variable's while it holds one, the sentence unchanged ("Green dot speed 213 knots"), "not shown" only when neither has one; the usual five (tests `On_the_ground_green_dot_comes_from_its_variable`, `In_flight_the_tape_still_wins`, `Neither_gives_not_shown`, `The_speed_reads_the_same_under_sv_SE`); commit `fix(a350): green dot, S and F are said on the ground`.
 
 ### Task 7 [sim]: Every weight in the aircraft's unit
 

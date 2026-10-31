@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Spec section 4 and the index's "Shared conventions" apply. Nothing goes out to a network (SEND, a logon, a request) without the owner's go-ahead for that message (question 8); the Hoppie or SayIntentions logon is the owner's to enter, never typed, logged or captured ([A350-12]).
+- Spec section 4 and the index's "Shared conventions" apply. Nothing goes out to a network (SEND, a logon, a request) without the owner's go-ahead for that message (question 8, answered 2026-10-31: yes, one exchange with the owner signed in and present); the Hoppie or SayIntentions logon is the owner's to enter, never typed, logged or captured ([A350-12]).
 - Owned files: `Aircraft/A350/Display/A350Mailbox.cs`, `A350MailboxInput.cs`, `Forms/A350/A350MailboxWindow.cs`, `Aircraft/A350/A350CalloutRows.Datalink.cs`; tests `A350MailboxTests`, new `A350UplinkCalloutTests.cs`; fixtures `p22_*.json`; `docs/inibuilds-a350.md` "The ATC mailbox"; `docs/a350/evidence/22-atc-mailbox.md` (new).
 - The ATC COM pages on the MFD (where requests are built) are plan 09's window; this plan works the mailbox on the CTR.
 

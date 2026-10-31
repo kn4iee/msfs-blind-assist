@@ -55,8 +55,8 @@ COMPANY MSG repeating about every 100 s in an earlier flight) is likely the same
 read on the ground, or an engine is not read stopped." That was a checklist tick: the Parking flow itself waits up to
 120 s for both engines to read stopped before the pumps (`A350FlowDefinitions`, `PK_ENGINES_STOPPED`), and a tick
 refuses at once (FO-25). The sentence, which names neither condition, is the same on the Fenix, A32NX, A330, A380 and
-iFly 737, so the A350 is not the odd one out (CLAUDE.md, "Before changing behaviour"): a change is an app-wide proposal
-(question 5).
+iFly 737, so the A350 is not the odd one out (CLAUDE.md, "Before changing behaviour"); the owner keeps the wording on every
+aircraft (question 5).
 
 ### 2.5 The OIS's sign-in code is kept in the speech log (plan 06)
 
@@ -160,23 +160,23 @@ it then. Only the owner fills in "Answer" (with the date).
 
 | # | Plan | Question | Recommendation | Answer |
 | --- | --- | --- | --- | --- |
-| 1 | 02 | The sides are in hectopascals and the pilot types inches (or the reverse): refuse the whole entry, or convert by size as the ISIS does? | Refuse it all in one sentence naming each side's unit (the A380's window checks each side in its own unit) | |
-| 2 | 02 | With LINKED INSTR on, may the window write the captain's side only and let the aircraft copy it, as one knob turned in the cockpit does? | Yes, once plan 02's Task 1 shows the copy | |
-| 3 | 04 | A memo line that comes back unchanged within 10 s (after an alert is cleared): say it again? | No | |
-| 4 | 04 | If the aircraft itself flips a memo's color for about a second: say the flip? | No: a color change is said once it has held 3 s | |
-| 5 | — | A checklist tick that leaves the fuel pumps, IRS or batteries on says "not read on the ground, or an engine is not read stopped" on every aircraft: name the condition that failed ("engine 2 still turning"), for all aircraft, in a shared pull request off `main`? | Yes, its own pull request, outside these plans | |
-| 6 | 07 | The PFD messages (RWY TOO SHORT, MAX REVERSE, windshear, stall, ...): one Ctrl+M row each, or the one "PFD flags" row? | One row each (the handoff: every auto-announce its own row) | |
-| 7 | 08 | When the ND's TO waypoint changes: what is said, and is the row on by default? | "Next waypoint {name}", its own row, on | |
-| 8 | 09 | May plan 09 send a real CPDLC request through the mailbox (owner signed in, owner present)? | Yes: a logon, one departure clearance request, a logoff | |
+| 1 | 02 | The sides are in hectopascals and the pilot types inches (or the reverse): refuse the whole entry, or convert by size as the ISIS does? | Refuse it all in one sentence naming each side's unit (the A380's window checks each side in its own unit) | Refuse it all (Robin, 2026-10-31) |
+| 2 | 02 | With LINKED INSTR on, may the window write the captain's side only and let the aircraft copy it, as one knob turned in the cockpit does? | Yes, once plan 02's Task 1 shows the copy | The captain's side only, once plan 02 has measured the copy (Robin, 2026-10-31) |
+| 3 | 04 | A memo line that comes back unchanged within 10 s (after an alert is cleared): say it again? | No | Not said again (Robin, 2026-10-31) |
+| 4 | 04 | If the aircraft itself flips a memo's color for about a second: say the flip? | No: a color change is said once it has held 3 s | Said once it holds 3 s (Robin, 2026-10-31) |
+| 5 | — | A checklist tick that leaves the fuel pumps, IRS or batteries on says "not read on the ground, or an engine is not read stopped" on every aircraft: name the condition that failed ("engine 2 still turning"), for all aircraft, in a shared pull request off `main`? | Yes, its own pull request, outside these plans | Leave the wording on every aircraft: no shared pull request (Robin, 2026-10-31) |
+| 6 | 07 | The PFD messages (RWY TOO SHORT, MAX REVERSE, windshear, stall, ...): one Ctrl+M row each, or the one "PFD flags" row? | One row each (the handoff: every auto-announce its own row) | One row each (Robin, 2026-10-31) |
+| 7 | 08 | When the ND's TO waypoint changes: what is said, and is the row on by default? | "Next waypoint {name}", its own row, on | "Next waypoint {name}", its row unticked by default (Robin, 2026-10-31) |
+| 8 | 09 | May plan 09 send a real CPDLC request through the mailbox (owner signed in, owner present)? | Yes: a logon, one departure clearance request, a logoff | Yes, with the owner signed in and present (Robin, 2026-10-31) |
 | 9 | 10 | STBY RAD NAV has no cockpit writer (documented in iniBuilds' FAQ): offer a row writing its L:var? | Decide after plan 10's Task 2, from what it finds | |
-| 10 | 18, 19 | Open the shared pull requests off `main` (they change released aircraft)? | Yes, each after its measurements, with its in-sim test plan | |
-| 11 | 19 | The other Airbus flap fixes: one pull request per aircraft, or one for all? | One per aircraft (CLAUDE.md: each gets its own in-sim test and review) | |
-| 12 | 09 | The MFD window's colors: say each line's color (as today), only a color that differs from what that page mostly shows, or none? | Only the colors that differ from the page's usual one: no word means normal | |
-| 13 | 09 | The F-PLN: the A380 window's fixed 40-cell grid (ident, airway, track, distance, speed, altitude, time, a header line above), or a shorter sentence per waypoint? | The A380's grid: a braille display shows a whole row and the columns line up | |
-| 14 | 09 | Lists longer than the MFD shows (SIDs, STARs, runways): read the whole list at once from the memory copy and move the real list to the pilot's pick, or page the real list with PageDown and read each page? | Read it whole, if plan 09's measurement finds the rows in the copy; else PageDown pages it | |
-| 15 | 07 | Green dot, S and F on the ground, where the tape draws none: from the A350's own speed variables (as the First Officer reads them), from the MFD's PERF T.O page, or say they show in flight only? | The variables, in the same sentence as in flight; "not shown" only when they hold none | |
-| 16 | 08 | Arming BTV: may MSFSBA set the ND to PLAN and the zoom range itself, arm, then put the pilot's mode and range back (saying so), or should it ask the pilot to set them first? | MSFSBA does it and puts them back | |
-| 17 | 06 | The OIS window's layout and navigation: what is hardest today, page by page? | The owner's list starts plan 06's design round | |
+| 10 | 18, 19 | Open the shared pull requests off `main` (they change released aircraft)? | Yes, each after its measurements, with its in-sim test plan | Yes, each once its measurements are done (Robin, 2026-10-31) |
+| 11 | 19 | The other Airbus flap fixes: one pull request per aircraft, or one for all? | One per aircraft (CLAUDE.md: each gets its own in-sim test and review) | One pull request for all three aircraft (Robin, 2026-10-31) |
+| 12 | 09 | The MFD window's colors: say each line's color (as today), only a color that differs from what that page mostly shows, or none? | Only the colors that differ from the page's usual one: no word means normal | Every color, as today (Robin, 2026-10-31) |
+| 13 | 09 | The F-PLN: the A380 window's fixed 40-cell grid (ident, airway, track, distance, speed, altitude, time, a header line above), or a shorter sentence per waypoint? | The A380's grid: a braille display shows a whole row and the columns line up | The A380's grid, then the row's color (Robin, 2026-10-31) |
+| 14 | 09 | Lists longer than the MFD shows (SIDs, STARs, runways): read the whole list at once from the memory copy and move the real list to the pilot's pick, or page the real list with PageDown and read each page? | Read it whole, if plan 09's measurement finds the rows in the copy; else PageDown pages it | PageDown pages the real list a screen at a time, and the window reads each screen (Robin, 2026-10-31) |
+| 15 | 07 | Green dot, S and F on the ground, where the tape draws none: from the A350's own speed variables (as the First Officer reads them), from the MFD's PERF T.O page, or say they show in flight only? | The variables, in the same sentence as in flight; "not shown" only when they hold none | The A350's own variables (Robin, 2026-10-31) |
+| 16 | 08 | Arming BTV: may MSFSBA set the ND to PLAN and the zoom range itself, arm, then put the pilot's mode and range back (saying so), or should it ask the pilot to set them first? | MSFSBA does it and puts them back | MSFSBA sets PLAN and the zoom range, arms, puts the mode and range back and says so (Robin, 2026-10-31) |
+| 17 | 06 | The OIS window's layout and navigation: what is hardest today, page by page? | The owner's list starts plan 06's design round | Focus after an action: where it lands after a press, and the page jumping; no other item named (Robin, 2026-10-31) |
 
 ## 6. The manual by page range (plans 12 to 17)
 
@@ -199,5 +199,5 @@ menu map): render them (Windows PowerShell 5.1 and `Windows.Data.Pdf`, or Git Ba
 The flight's shared findings (`evidence/flight-2026-10-31.md`, last section) go to their own sessions and pull requests
 off `main`, never naming the A350: the taxi turn warning lost behind a short route segment, a positive-rate reminder
 when the automation's gear-up is off, GSX's invoice read at 350 ft, the ground traffic "Stop" while docking, the status
-box's forced reads logged every second, and (question 5) the checklist ticks' refusal naming the condition that failed. The GSX stop position for the A359 stays the known limit ("GSX cannot tell BA its
+box's forced reads logged every second,. The checklist ticks' refusal keeps its wording on every aircraft (question 5). The GSX stop position for the A359 stays the known limit ("GSX cannot tell BA its
 stop marks").

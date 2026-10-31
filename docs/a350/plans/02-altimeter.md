@@ -16,7 +16,7 @@
 - Owned files: `Aircraft/A350/A350TypedEntry.cs`, `A350FcuCallouts.cs`, `A350FcuWindows.cs`, `A350Readouts.cs`, `A350BaroEntry.cs` (new), `Aircraft/IniBuildsA350Definition.Interaction.cs`, `Forms/A350/A350BaroWindow.cs`, `A350FcuValueWindow.cs`, `A350FcuWindowBase.cs`, `A350AutopilotWindow.cs`; tests `A350TypedEntryTests.cs`, `A350FcuWindowsTests.cs`, `A350FcuCalloutsTests.cs`, `A350WindowWritesTests.cs`, `A350BaroEntryTests.cs` (new); `docs/inibuilds-a350.md` "Typed values"; `docs/a350/evidence/02-altimeter.md` (new).
 - Measured on 2026-10-31 (1.2.8, in flight): the ISIS short write `16510 3 r (>K:2:KOHLSMAN_SET)` and its knob click took both sides from STD to QNH 1013 and left the ISIS at 1013.25; every later knob click, on any of the three, landed on 1013.25; only the direct corrections (`16526 n r (>K:2:KOHLSMAN_SET)`) set 30.50. The captain's unit button switched the first officer's side too.
 - The baro event is the sim's own `{mb*16} {side} r (>K:2:KOHLSMAN_SET)` (sides 1, 2, the ISIS 3); STD is `XMLVAR_Baro{side}_Mode` 3; a side's unit is `XMLVAR_Baro_Selector_HPA_{side}` (1 hectopascals); the option is `L:INI_LINKED_INSTRUMENTS`. The STD preset is stepped by clicks 300 ms apart (`A350TypedStepper`), in flight only.
-- Owner questions 1 and 2 (spec section 5): build the recommendations (refuse it all in one sentence; linked: the captain's side only) unless the Answer says otherwise.
+- The owner's answers (2026-10-31, spec section 5): a unit mismatch refuses the whole entry in one sentence (question 1); with LINKED INSTR on, the captain's side only, once Task 1 has shown the copy (question 2).
 - Writes in the sim only with the sim owner's go-ahead; restore the owner's baro modes, units and LINKED INSTR afterwards.
 
 ## Review Focus
