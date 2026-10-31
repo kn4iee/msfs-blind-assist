@@ -182,18 +182,18 @@
 
 ## Execution record
 
-- **Status:** done (2026-10-30): landed on `kn4iee/B757` at the owner's word; the probe's press test and the owner's in-sim checks passed
+- **Status:** done (2026-10-31): landed on `kn4iee/B757` at the owner's word; the probe's press test and the owner's in-sim checks passed
 - **Claimed by:** Robin Kipp (robin24), 2026-10-29
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-10-29, from `B757` da7e39c8e (claim 3a3d0b208); rebased onto `B757` d71f707d6 on 2026-10-30 (Daniel Wolak's FLCH fix and a merge of main, no file in common with plan 18)
-- **Landed:** 2026-10-30, as a fast-forward of `B757` d71f707d6; the last code commit `fix(b757): the fix round review's minors: identifier rows, pins, joins` (97f64a28e), the record in the commit that carries this line; `git log --grep "^Plan: 18"` lists the plan's commits
-- **Tests at landing:** 2026-10-30, on `B757` d71f707d6 with plan 18 on top (7486d896d; only this record after it): full suite 19,774 passed, 0 failed (19,195 at the claim; 19,763 before the rebase)
-- **Tasks** (hashes after the rebase onto d71f707d6):
-  - 0 done: the claim (3a3d0b208); Declan Webster agreed that plan 18 supersedes plan 11's remaining work, noted in plan 11's record (e2b346183).
-  - 1 done: the press measurement and the probe's `presstest` (444a5babf, tablet-presses.md); ten tablet captures as test pages (e466925b1).
-  - 2 to 11 done, each reviewed: 2 (6fcfd8fcb), 3 (685c6dd9a), 4 (63d4b4c44), 5 (c8afde438), 6 (f05c189ef), 7 (c0ec63927), 8 (22b08266e; its review fixes 6cc6cef09), 9 (eee1d4079), 10 (bc3f10dc6: B757-2 and B757-4 retired, agent version 7), 11 (dd06836d9: B757-18 to B757-20, OCR-2 and OCR-3 reworded).
-  - The whole-branch review, its fix wave (e917533ab, 2f17f547d, 9df3d4bd5, 03016b2b9, 881e94b78) and a re-review; then the two-choice read-back the owner ruled on (df92d9569), reviewed.
-  - 12 done 2026-10-30: the probe's crop fix (9f591fc01) and its press test after plan 18 (fcbfe7114, 7486d896d: tablet-presses.md, "After plan 18"); three deploys to `C:\MSFSBA-B757` for the owner's in-sim checks, made before the rebase (their ProductVersion commits 90ee5f791, 50da22d1b and 65414dba7 are df92d9569, fcbfe7114 and 97f64a28e here); the fix round (04181be58, eb93c3e64, 56d517127, 091d4b84a, 48bc92837, 943932ce9) and the last round (e2fc7c449, 8276a44d7, 97f64a28e), each reviewed.
+- **Started:** 2026-10-29, from `B757` da7e39c8e (claim 3a3d0b208); rebased onto `B757` d71f707d6 on 2026-10-30 (Daniel Wolak's FLCH fix and a merge of main) and onto 31e0129bc on 2026-10-31 (Daniel Wolak's MCP mode names on Shift+H/S/A/V), neither with a file in common with plan 18
+- **Landed:** 2026-10-31, as a fast-forward of `B757` 31e0129bc; the last code commit `fix(b757): the fix round review's minors: identifier rows, pins, joins` (256e67b71), the record in the commit that carries this line; `git log --grep "^Plan: 18"` lists the plan's commits
+- **Tests at landing:** 2026-10-31, on `B757` 31e0129bc with plan 18 on top (be5be51c7; only this record's update after it): full suite 19,780 passed, 0 failed (19,195 at the claim; 19,763 before the first rebase, 19,774 after it)
+- **Tasks** (hashes after the rebase onto 31e0129bc):
+  - 0 done: the claim (3a3d0b208); Declan Webster agreed that plan 18 supersedes plan 11's remaining work, noted in plan 11's record (9daf0b2b3).
+  - 1 done: the press measurement and the probe's `presstest` (fa8864512, tablet-presses.md); ten tablet captures as test pages (ec1c15e30).
+  - 2 to 11 done, each reviewed: 2 (e524c70eb), 3 (eeacf2e71), 4 (004f3e518), 5 (050c05968), 6 (17e827479), 7 (79e2820fc), 8 (9b17a14b7; its review fixes e4ca979f8), 9 (2228ba136), 10 (2ca407ea9: B757-2 and B757-4 retired, agent version 7), 11 (05e4dcafe: B757-18 to B757-20, OCR-2 and OCR-3 reworded).
+  - The whole-branch review, its fix wave (e665790de, 5585a15a6, 975f85447, e1337a3b1, eba10343b) and a re-review; then the two-choice read-back the owner ruled on (706d8cd85), reviewed.
+  - 12 done 2026-10-30: the probe's crop fix (e804ad98d) and its press test after plan 18 (4be8fcc4f, 52039d63f: tablet-presses.md, "After plan 18"); three deploys to `C:\MSFSBA-B757` for the owner's in-sim checks, made before both rebases (their ProductVersion commits 90ee5f791, 50da22d1b and 65414dba7 are 706d8cd85, 4be8fcc4f and 256e67b71 here); the fix round (b6ab3ba69, 55bb00c7b, 28a7228a8, 07a21637d, 565bb8b6d, 5d34f7164) and the last round (86168e19f, cc06ee3a2, 256e67b71), each reviewed.
 - **Waiting on the owner:** nothing for the plan; the items under "Open at landing" are later work.
 - **In-sim results:** 2026-10-30, EDDF stand C6, the owner by ear on the deployed builds; every check passed in the end:
   - Shift+T opens "757 EFB" on the tablet's page with a simulator running, and "757 EFB settings" with none.
