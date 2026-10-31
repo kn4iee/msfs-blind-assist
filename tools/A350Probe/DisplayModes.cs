@@ -478,7 +478,7 @@ internal static class DisplayModes
         var sw = System.Diagnostics.Stopwatch.StartNew();
         svc.Spoken += s => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY (service): {s}");
         svc.Start();
-        using var mon = new A350EcamMonitor(() => false, line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
+        using var mon = new A350EcamMonitor(_ => false, line => Console.WriteLine($"{sw.Elapsed.TotalSeconds,6:F1} SAY: {line}"));
         while (sw.Elapsed.TotalSeconds < seconds)
         {
             mon.Observe(svc.DrawAsync(("CTR", 0)).GetAwaiter().GetResult()?.FirstOrDefault());

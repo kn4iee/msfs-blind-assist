@@ -125,7 +125,7 @@ public class A350PfdDisplayTests
     {
         var def = new IniBuildsA350Definition();
         def.Pfd = new A350PfdMonitor(A350PfdMonitorTests.Each((g, i) => g == "EFIS" && i == 0 ? Fixture("ground_EFIS_0") : null), _ => false, _ => { });
-        def.Ecam = new A350EcamMonitor(() => false, _ => { });
+        def.Ecam = new A350EcamMonitor(_ => false, _ => { });
         await def.Pfd.TickAsync();
         def.Ecam.Observe(Fixture("ctr_powerup_fws_fault"));
         Assert.NotNull(def.Pfd.Latest("EFIS", 0));

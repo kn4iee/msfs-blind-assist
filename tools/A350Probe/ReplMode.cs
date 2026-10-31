@@ -75,7 +75,7 @@ internal sealed partial class ProbeForm
         service.PauseRead += pause => BeginInvoke(() => def.ObservePause(pause, cap));
         service.Start();
         await WaitForDisplays(service);
-        using var ecam = new A350EcamMonitor(() => false, line => BeginInvoke(() => cap.Announce("[ecam] " + line)));
+        using var ecam = new A350EcamMonitor(_ => false, line => BeginInvoke(() => cap.Announce("[ecam] " + line)));
         using var pfd = new A350PfdMonitor(async gauges => await service.DrawAsync(gauges), _ => false,
             line => BeginInvoke(() => cap.Announce("[pfd] " + line))) { CtrDrawn = ecam.Observe };
         def.Displays = service;

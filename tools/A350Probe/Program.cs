@@ -455,7 +455,7 @@ internal sealed partial class ProbeForm : Form
         service.Start();
         await WaitForDisplays(service);
         Line($"displays: {service.State} {service.Reason}");
-        using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(() => true, _ => { });
+        using var ecam = new MSFSBlindAssist.Aircraft.A350.Display.A350EcamMonitor(_ => true, _ => { });
         // A350_HEAR=1: the background monitor's call-outs heard too, marked, and told when the MFD window is open as
         // MainForm tells it (an FMS message said once, by the window while it is open).
         bool hear = Environment.GetEnvironmentVariable("A350_HEAR") == "1";

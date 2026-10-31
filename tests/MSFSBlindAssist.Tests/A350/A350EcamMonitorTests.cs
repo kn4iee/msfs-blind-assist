@@ -19,7 +19,7 @@ public class A350EcamMonitorTests
     {
         var said = new List<string>();
         var muted = new bool[1];
-        return (new A350EcamMonitor(() => muted[0], said.Add), said, muted);
+        return (new A350EcamMonitor(key => key == A350EcamMonitor.MuteKey && muted[0], said.Add), said, muted);
     }
 
     /// <summary>The CTR draws handed over, as the display tick hands each one (<see cref="A350PfdMonitor.CtrDrawn"/>).</summary>
@@ -68,6 +68,28 @@ public class A350EcamMonitorTests
         Assert.DoesNotContain("FWS FWS 1+2 & CPIOM FAULT, amber", said);   // never replayed after unmuting
     }
 
+    // The Ctrl+M mutes are asked by key, as the PFD monitor asks its rows: the monitor asks for its own row and no other
+    // (a call-out another row owns can be muted apart from it), and only its own row unticked silences it.
+    [Fact]
+    public void The_ecam_row_mutes_by_its_key()
+    {
+        const string OtherRow = "A350_SOME_OTHER_ROW";
+        var unticked = new HashSet<string> { A350EcamMonitor.MuteKey };
+        var asked = new List<string>();
+        var said = new List<string>();
+        var m = new A350EcamMonitor(key => { asked.Add(key); return unticked.Contains(key); }, said.Add);
+        var fws = Fixture("ctr_powerup_fws_fault");
+        var apu = Fixture("ctr_apu_emer_shutdown");
+        Ticks(m, Dark, Dark, fws, fws);
+        Assert.Empty(said);                                      // its own row unticked: silent
+        unticked.Clear();
+        unticked.Add(OtherRow);
+        Ticks(m, apu, apu);
+        Assert.Contains("APU EMER SHUTDOWN, amber", said);       // another row unticked: it still speaks
+        Assert.NotEmpty(asked);
+        Assert.All(asked, key => Assert.Equal(A350EcamMonitor.MuteKey, key));
+    }
+
     // Review 2026-10-29 (speech 1): the call-outs were never re-baselined after a flight load, so each WD line flight B shows
     // that flight A lacked was spoken as new. After Rebaseline the new flight's E/WD is followed silently for
     // SettleAfterLoad from its first draw (it comes up as the flight loads), then speaks what changes from there.
@@ -76,7 +98,7 @@ public class A350EcamMonitorTests
     {
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         var said = new List<string>();
-        var m = new A350EcamMonitor(() => false, said.Add, () => now);
+        var m = new A350EcamMonitor(_ => false, said.Add, () => now);
         var fws = Fixture("ctr_powerup_fws_fault");
         var apu = Fixture("ctr_apu_emer_shutdown");
         Ticks(m, Dark, Dark, apu, apu);   // flight A
@@ -98,7 +120,7 @@ public class A350EcamMonitorTests
     {
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         var fws = Fixture("ctr_powerup_fws_fault");
-        var m = new A350EcamMonitor(() => true, _ => { }, () => now);
+        var m = new A350EcamMonitor(_ => true, _ => { }, () => now);
         m.Observe(fws);
         now += A350PfdMonitor.MaxAge;
         Assert.Same(fws, m.LatestCapture);

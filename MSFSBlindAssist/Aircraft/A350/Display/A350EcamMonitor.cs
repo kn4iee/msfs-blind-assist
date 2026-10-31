@@ -19,7 +19,7 @@ public sealed class A350EcamMonitor : IDisposable
     private volatile bool _rebaseline;
     private DateTime? _settleUntil;   // the reading loop's own
 
-    private readonly Func<bool> _muted;
+    private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
     private readonly A350EcamAnnouncer _announcer = new();
     private readonly Func<DateTime> _now;
@@ -30,8 +30,9 @@ public sealed class A350EcamMonitor : IDisposable
     /// <see cref="A350PfdMonitor.MaxAge"/> (review 2026-10-29: Alt+E read the last capture whatever its age).</summary>
     public A350DrawCapture? LatestCapture => _latest is { } kept && _now() - kept.At <= A350PfdMonitor.MaxAge ? kept.Capture : null;
 
+    /// <param name="muted">Whether a Ctrl+M row is unticked, asked by its key (the E/WD row's is <see cref="MuteKey"/>).</param>
     /// <param name="now">The time a draw arrives and is read (tests replace it).</param>
-    public A350EcamMonitor(Func<bool> muted, Action<string> speak, Func<DateTime>? now = null)
+    public A350EcamMonitor(Func<string, bool> muted, Action<string> speak, Func<DateTime>? now = null)
     {
         _muted = muted;
         _speak = speak;
@@ -52,7 +53,7 @@ public sealed class A350EcamMonitor : IDisposable
         }
         var lines = _announcer.Observe(A350Ewd.Parse(cap));
         if (lines.Count == 0 || _disposed) return;
-        string? quiet = _settleUntil is { } until && now < until ? "settling after a load" : _muted() ? "muted" : null;
+        string? quiet = _settleUntil is { } until && now < until ? "settling after a load" : _muted(MuteKey) ? "muted" : null;
         foreach (var l in lines)
         {
             if (quiet != null) A350SpeechLog.Quiet("E/WD", quiet, l);

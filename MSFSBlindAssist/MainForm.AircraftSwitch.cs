@@ -706,7 +706,7 @@ public partial class MainForm
         a350IdentTimer.Start();
         var service = a350DisplayService;
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(
-            () => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(Aircraft.A350.Display.A350EcamMonitor.MuteKey),
+            key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key),
             line => SafeBeginInvoke(() => announcer.Announce(line)));
         // The displays: the CTR (the E/WD call-outs) and the captain's EFIS (the FMA call-outs, one Ctrl+M row per column)
         // each tick, the MFD (the FMS messages) every other tick, RMP 1 and the SFD in turn, and a display only a status
