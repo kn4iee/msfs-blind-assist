@@ -1,5 +1,6 @@
 ---
 paths:
+  - "MSFSBlindAssist/Services/NavRadioFormat.cs"
   - "MSFSBlindAssist/SimConnect/*.cs"
   - "MSFSBlindAssist/MainForm*.cs"
   - "MSFSBlindAssist/Utils/ReadoutFormat.cs"
