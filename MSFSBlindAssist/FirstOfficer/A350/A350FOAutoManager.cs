@@ -64,6 +64,10 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // V2 (live 2026-10-30, F 138, V2 148 at 200 t), so without this the lever came up to 1 at lift-off and to 0 at 430 ft.
     private const double RetractionMinAglFt = 1000;
 
+    // The managed speed holds what the next flap waits for ("the aircraft will not decelerate below green dot" clean, the manual; live 2026-10-30: 191
+    // with green dot at 190.6, level at 4000 ft, flaps up): come down to it is enough.
+    private const double ExtendWithinKts = 3;
+
     // Below this on the descent the next flap does not wait for its speed, only for VFE next: at idle on the glide path the speed can settle
     // just above it (live 2026-10-30: 154 with F at 152.9, flaps 2 through 1100 ft) and the manual's rule is "Always select your next flap
     // setting when below Vfe next". High enough for the two last steps to be out by 1000 ft, the dwell between them.
@@ -289,18 +293,18 @@ public sealed class A350FOAutoManager : IFoAutoManager
 
             switch (flaps)
             {
-                case 0 when landingGate || (!double.IsNaN(gd) && ias < gd):
+                case 0 when landingGate || (!double.IsNaN(gd) && ias < gd + ExtendWithinKts):
                     TryExtend(1, "Speed checked. Flaps 1.");
                     break;
-                case 1 when landingGate || (!double.IsNaN(s) && ias < s):
+                case 1 when landingGate || (!double.IsNaN(s) && ias < s + ExtendWithinKts):
                     TryExtend(2, "Speed checked. Flaps 2.");
                     break;
-                case 2 when landingGate || (!double.IsNaN(f) && ias < f):
+                case 2 when landingGate || (!double.IsNaN(f) && ias < f + ExtendWithinKts):
                     // With CONF 3 selected this IS the final landing step -> gear gate.
                     if (!conf3 || gearDown)
                         TryExtend(3, "Speed checked. Flaps 3.");
                     break;
-                case 3 when !conf3 && (landingGate || (!double.IsNaN(f) && ias < f)) && gearDown:
+                case 3 when !conf3 && (landingGate || (!double.IsNaN(f) && ias < f + ExtendWithinKts)) && gearDown:
                     // Final landing step for a FULL landing -> gear gate. With CONF 3
                     // selected the schedule stops at 3 (never commands FULL).
                     TryExtend(4, "Speed checked. Flaps full.");

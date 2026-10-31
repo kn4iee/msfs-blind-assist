@@ -141,6 +141,29 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Empty(rig.Speech.All);
     }
 
+    // Live 2026-10-30: the managed speed holds the speed each configuration waits for ("the aircraft will not decelerate below green dot" clean,
+    // the manual): 191 with green dot at 190.6, 171 with S at 170.2, 154 with F at 152.9. Waiting to be under it held flaps up level at 4000 ft.
+    [Theory]
+    [InlineData(0, 212, 1, "Speed checked. Flaps 1.")]   // green dot 210
+    [InlineData(1, 192, 2, "Speed checked. Flaps 2.")]   // S 190
+    [InlineData(2, 152, 3, "Speed checked. Flaps 3.")]   // F 150
+    public async Task The_A350s_flaps_go_when_the_speed_has_come_down_to_what_they_wait_for(int lever, double ias, int next, string said)
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.VfeNext(255);                            // clean, as live: the rig's 215 would hold it
+        rig.Lever(lever);
+        rig.GearDown();
+        rig.Fly(agl: 3_000, vs: 0, ias: ias + 5);    // still coming down
+        Assert.Empty(await rig.LeverWrites());
+        rig.Fly(agl: 3_000, vs: 0, ias: ias);
+        Assert.Equal(new[] { next }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued(said) }, rig.Speech.All);
+    }
+
     // Final review: one sample under the threshold opened the gate, so each sag level at circuit height stepped the next flap.
     [Fact]
     public async Task The_A350s_gate_wants_an_established_descent()
@@ -481,6 +504,7 @@ public class FbwFamilyAutoManagerSecondReviewTests
         }
 
         public void Lever(int position) => Seed(_sim, _leverKey, position);
+        public void VfeNext(double knots) => Seed(_sim, "A350_IN_INI_VFE_SPEED", knots);
 
         /// <summary>The A350's thrust levers (the only airframe here whose schedule reads them).</summary>
         public void Thrust(double tla)
