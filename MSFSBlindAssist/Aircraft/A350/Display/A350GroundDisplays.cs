@@ -152,9 +152,10 @@ public static class A350GroundDisplays
             o.Add("Vertical display altitudes: " + (unit != null ? "FL " : "") + string.Join(" ", altitudes.Select(c => c.Text)) + ", " + altitudes[0].Colour);
         }
         var scales = VerticalScales.Of(distances, altitudes, cells.Any(c => c.Text == "FL" && c.Colour == "white" && c.X < 90 && c.Y >= 810));
-        // The safe altitude under the vertical display (MSA or MORA, white), its value just above its name ("3" and "8"), or
-        // just under it low down.
-        foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 900).ToList())
+        // The safe altitude (MSA or MORA): under the vertical display its value just above its name ("3" and "8"), or just under it
+        // low down; in the display a line at its height, its name about 8.5 px over it wherever it lies (y 792 on the stand at VCBI,
+        // 874 at OMDB, 905 on the arrival, live 2026-10-30), never a waypoint's.
+        foreach (var name in cells.Where(c => !used.Contains(c) && c.Text is "MSA" or "MORA" && c.Y >= 770).ToList())
         {
             var value = cells.Where(c => !used.Contains(c) && c != name && c.Text.Length > 0 && c.Text.All(char.IsDigit)
                 && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();

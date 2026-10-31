@@ -196,6 +196,19 @@ public class A350GroundDisplaysTests
         Assert.Contains("MSA: 38, magenta", nd);
     }
 
+    // Review 2026-10-31 (I1): the MSA's name stands about 8.5 px over its line, and was taken for the MSA only low in the display (y 900
+    // on). Higher up it read as a waypoint: on the ground at OMDB (the line at y 882 on a 0 to 6000 ft scale, the name at 874) "Vertical
+    // display: MSA, magenta: 0 NM, 4800 feet"; on the stand at VCBI (the line at the display's top, the name at 792) "MSA, magenta".
+    [Theory]
+    [InlineData("efis0_omdb_landed_clipped", "MSA: about 3800 feet, magenta")]
+    [InlineData("efis0_metric_alt", "MSA: about 3500 feet, magenta")]
+    public void The_msa_is_read_from_its_line_anywhere_in_the_vd(string fixture, string msa)
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), 0);
+        Assert.Contains(msa, nd);
+        Assert.DoesNotContain(nd, l => l.StartsWith("Vertical display: MSA", StringComparison.Ordinal) || l == "MSA, magenta");
+    }
+
     [Theory]
     [InlineData("efis0_ls_downwind_omdb", "MSA: 38, magenta")]
     [InlineData("pfd_climb_std_fl400", "MORA: 16, magenta")]
