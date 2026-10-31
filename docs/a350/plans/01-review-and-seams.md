@@ -121,10 +121,10 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Robin Kipp (robin24), 2026-10-31
+- **Worked by:** Robin Kipp with Claude, with subagents (superpowers:subagent-driven-development)
+- **Started:** 2026-10-31, `feat/inibuilds-a350` at eeb325324 (the plan set's last commit)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
