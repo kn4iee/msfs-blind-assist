@@ -20,6 +20,73 @@ public class A350GroundDisplaysTests
         Assert.Contains("MSA: about 3800 feet, magenta", lines);
     }
 
+    // Review 2026-10-31 (C1): a range map's name drawn under the map, behind the vertical display, read as one of its waypoints with a
+    // made-up altitude: MCT, the Muscat VOR, at 24600 feet in the cruise at FL300; BASUR at 32200 beside the display's own TVM at 30000;
+    // MIN at 13200 on the arrival. The map's names are drawn before the display's range labels, its own after them.
+    [Theory]
+    [InlineData("efis0_cruise_wxt", "MCT", "Vertical display: VELOD, white: 7.9 NM, 30000 feet")]
+    [InlineData("efis0_time_marker", "BASUR", "Vertical display: TVM, white: 37 NM, 30000 feet")]
+    [InlineData("efis0_arc40_omdb_label", "MIN", "Vertical display: DB403, white: 6.2 NM, 6400 feet")]
+    public void A_map_name_behind_the_vd_gets_no_vd_place(string fixture, string mapName, string own)
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), 0);
+        Assert.DoesNotContain(nd, l => l.StartsWith($"Vertical display: {mapName},", StringComparison.Ordinal));
+        Assert.Contains(own, nd);
+    }
+
+    // Review 2026-10-31 (C1): the display's runway label, the airport's name over the runway's ident (VCBI over 22, on the stand), read as
+    // a waypoint's name beside its symbol, 1000 ft over a field near sea level. It stands over the left end of the runway's two white lines.
+    [Fact]
+    public void The_runway_label_is_not_placed_as_a_waypoint()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_takeoff_ready.json"), 0);
+        Assert.DoesNotContain("Vertical display: VCBI, white: 1.2 NM, 1000 feet", nd);
+        Assert.Contains("Vertical display: VCBI 22, white: 1.1 NM, 0 feet", nd);
+        Assert.Contains("Vertical display: DER22, white: 2.9 NM, 100 feet", nd);
+        // OMDB over 12L on the arrival, clipped past 40 NM, as it reads 100 px nearer with its lines: a lettered ident is no waypoint either.
+        var arrival = A350Fixtures.Capture("efis0_arc40_omdb_label.json");
+        var nearer = arrival with
+        {
+            Texts = arrival.Texts.Select(t => t.Text.Trim() is "OMDB" or "12L" && t.Y > 900 ? t with { X = t.X - 100, Clipped = false } : t).ToList(),
+            Shapes = arrival.Shapes!.Select(s => s.Kind == "stroke" && s.X0 > 836 + 720 && s.Y0 > 980 ? s with { X0 = s.X0 - 100, X1 = s.X1 - 100 } : s).ToList(),
+        };
+        var lines = A350GroundDisplays.ReadNd(nearer, 0);
+        Assert.Contains("Vertical display: OMDB 12L, white: 34 NM, 100 feet", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Vertical display: 12L", StringComparison.Ordinal));
+    }
+
+    // Review 2026-10-31 (M1): a name the clip hides, its symbol past the last range label, read with a place nobody sees: ODLAL at 42 NM on
+    // the 40 NM display (the arrival), SOLIL past 10 NM on ROSE LS, OMDB and 12L at 42 NM. A capture from before the clip was tracked reads
+    // each text unclipped: ODLAL still lies past 40 NM. And a name the clip hides inside the range, as one under the display's window.
+    [Fact]
+    public void A_clipped_or_out_of_range_vd_name_is_not_read()
+    {
+        static bool Vd(string line, string name) => line.StartsWith($"Vertical display: {name},", StringComparison.Ordinal);
+        var arrival = A350Fixtures.Capture("efis0_vd_arrival.json");
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(arrival, 0), l => Vd(l, "ODLAL"));
+        var unclipped = arrival with { Texts = arrival.Texts.Select(t => t with { Clipped = false }).ToList() };
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(unclipped, 0), l => Vd(l, "ODLAL"));
+        var hidden = arrival with { Texts = arrival.Texts.Select(t => t.Text.Trim() == "DB408" && t.Y > 800 ? t with { Clipped = true } : t).ToList() };
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(hidden, 0), l => Vd(l, "DB408"));
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0), l => Vd(l, "SOLIL"));
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0), l => Vd(l, "OMDB") || Vd(l, "12L"));
+    }
+
+    // Review 2026-10-31 (M1): on the arrival a magenta D stands in a circle of its own on the path (likely the decel point), and read as a
+    // name beside a symbol, 600 ft over its circle: "Vertical display: D, magenta: 32 NM, 3400 feet". A lone letter is a mark, no name, as on
+    // the range map (A350NdPage); red and amber are the ND's flags.
+    [Fact]
+    public void A_mark_or_a_flag_in_the_vd_is_no_waypoint()
+    {
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0),
+            l => l.StartsWith("Vertical display: D,", StringComparison.Ordinal));
+        var arrival = A350Fixtures.Capture("efis0_vd_arrival.json");
+        var amber = arrival with { Texts = arrival.Texts.Select(t => t.Text.Trim() == "DB408" && t.Y > 800 ? t with { Colour = A350Rgba.Of("amber") } : t).ToList() };
+        var nd = A350GroundDisplays.ReadNd(amber, 0);
+        Assert.DoesNotContain(nd, l => l.StartsWith("Vertical display: DB408,", StringComparison.Ordinal));
+        Assert.Contains("Vertical display: DB403, green: 34 NM, 4900 feet", nd);
+    }
+
     // Final review: the ND's status display got none of the traffic line: no way it moves, and with FLT ID on, orphan lines.
     [Fact]
     public void The_nds_status_display_says_what_a_target_is_doing_and_who_it_is()

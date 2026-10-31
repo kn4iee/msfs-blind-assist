@@ -167,25 +167,62 @@ public static class A350GroundDisplays
                 : line != null ? $"{name.Text}: about {scales!.FeetAt((line.Y0 + line.Y1) / 2)} feet, {name.Colour}"
                 : $"{name.Text}, {name.Colour}");
         }
-        // The vertical display's waypoints, each name beside its symbol, on the two scales.
+        // The vertical display's waypoints, each name beside its symbol, on the two scales. Its own texts are drawn after its range
+        // labels: the range map's names drawn behind it, under the map, come before them (MCT and BASUR at FL300, MIN on the arrival, live
+        // 2026-10-30). A text the clip hides is off the display (ODLAL past 40 NM on the arrival). A cell keeps neither, so each is found
+        // again where it was drawn.
         if (scales != null)
-            foreach (var name in cells.Where(c => !used.Contains(c) && scales.HoldsName(c)).OrderBy(c => c.X).ToList())
+        {
+            int DrawnAt(DrawnCell c)
+            {
+                for (int i = 0; i < drawn.Count; i++)
+                    if (Math.Abs(drawn[i].X - shift - c.X) < 0.5f && Math.Abs(drawn[i].Y - c.Y) < 0.5f && drawn[i].Text.Trim() == c.Text) return i;
+                return -1;
+            }
+            int labels = distances.Select(DrawnAt).Where(i => i >= 0).DefaultIfEmpty(int.MaxValue).Min();
+            bool Own(DrawnCell c) => DrawnAt(c) > labels;
+            bool OnDisplay(DrawnCell c) => DrawnAt(c) is var i && i > labels && !drawn[i].Clipped;
+            foreach (var name in cells.Where(c => !used.Contains(c) && scales.HoldsName(c) && OnDisplay(c)).OrderBy(c => c.X).ToList())
             {
                 used.Add(name);
+                // The runway: the airport's name over the runway's ident at one x (VCBI over 22 on the stand), above its two white lines.
+                if (name.Colour == "white" && cells.FirstOrDefault(c => !used.Contains(c) && c.Colour == "white" && VerticalScales.RunwayIdent.IsMatch(c.Text)
+                        && Math.Abs(c.X - name.X) <= 2 && Math.Abs(c.Y - name.Y - VerticalScales.IdentUnderName) <= 3 && Own(c)) is { } ident)
+                {
+                    used.Add(ident);
+                    o.Add($"Vertical display: {name.Text} {ident.Text}, {name.Colour}"
+                        + (VerticalScales.RunwayAt(name, ident, capture.Shapes, shift) is { } at ? $": {scales.NmAt(at.X)}, {scales.FeetAt(at.Y)} feet" : ""));
+                    continue;
+                }
                 string shown = A350NdMap.TimeMarker.Match(name.Text) is { Success: true } marker ? "Time marker " + marker.Groups[1].Value : name.Text;
                 o.Add($"Vertical display: {shown}, {name.Colour}: {scales.NmAt(name.X - VerticalScales.NameRightOfSymbol)}, {scales.FeetAt(name.Y - VerticalScales.NameUnderSymbol)} feet");
             }
+        }
         o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;
     }
 
     /// <summary>The vertical display's two scales, read from their labels (live 2026-10-30, 40 NM: "0" to "40" at x 175 to 707; "0" to "15000" at y 971
-    /// to 784, the tick about 10 px above its label's y).</summary>
-    private sealed record VerticalScales(float ZeroX, float PixelsPerNm, float ZeroTickY, float PixelsPerFoot)
+    /// to 784, the tick about 10 px above its label's y). <see cref="EndX"/> is the last range label's.</summary>
+    private sealed record VerticalScales(float ZeroX, float PixelsPerNm, float ZeroTickY, float PixelsPerFoot, float EndX)
     {
-        internal const float NameRightOfSymbol = 6, NameUnderSymbol = 16, MinLinePixels = 100;
+        internal const float NameRightOfSymbol = 6, NameUnderSymbol = 16, MinLinePixels = 100, IdentUnderName = 20;
         private const float TickOverLabel = 10, PlotTop = 800, PlotBottom = 1000;
+
+        /// <summary>A runway's ident under the airport's name: "22", "12L".</summary>
+        internal static readonly System.Text.RegularExpressions.Regex RunwayIdent = new(@"^\d{2}[LCR]?$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>The runway under its label: the left end of its two white lines and their middle, the field's height (live on the
+        /// stand at VCBI, 2026-10-28: the name 10.5 px right of their left end, the ident 8.5 px over the upper line, the lines 10 px
+        /// apart; the same over OMDB 12L on the arrival); null with no line drawn there (no shapes recorded).</summary>
+        public static (float X, float Y)? RunwayAt(DrawnCell name, DrawnCell ident, IReadOnlyList<DrawnShape>? shapes, float shift)
+        {
+            const float LeftOfName = 10.5f;
+            var lines = (shapes ?? Array.Empty<DrawnShape>()).Where(s => s.Kind == "stroke" && A350Rgba.NameOf(s.Colour) == "white" && s.Y1 - s.Y0 <= 4
+                && Math.Abs(name.X - (s.X0 - shift) - LeftOfName) <= 3 && s.Y0 - ident.Y is >= 4 and <= 24).ToList();
+            return lines.Count == 0 ? null : (lines.Min(s => s.X0) - shift, (lines.Min(s => s.Y0) + lines.Max(s => s.Y1)) / 2);
+        }
 
         private static double? Value(DrawnCell c, double scale) =>
             double.TryParse(c.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v * scale : null;
@@ -199,12 +236,15 @@ public static class A350GroundDisplays
             if (Value(d0, 1) is not { } nm0 || Value(d1, 1) is not { } nm1 || Value(a0, feet) is not { } ft0 || Value(a1, feet) is not { } ft1 || nm1 <= nm0 || ft1 <= ft0)
                 return null;
             float perNm = (float)((d1.X - d0.X) / (nm1 - nm0)), perFoot = (float)((a0.Y - a1.Y) / (ft1 - ft0));
-            return new VerticalScales(d0.X - (float)(nm0 * perNm), perNm, a0.Y - TickOverLabel + (float)(ft0 * perFoot), perFoot);
+            return new VerticalScales(d0.X - (float)(nm0 * perNm), perNm, a0.Y - TickOverLabel + (float)(ft0 * perFoot), perFoot, d1.X);
         }
 
-        /// <summary>A waypoint's or a pseudo waypoint's name inside the plot.</summary>
-        public bool HoldsName(DrawnCell c) => c.Y is >= PlotTop and < PlotBottom && c.X >= ZeroX && !c.Text.Contains(' ')
-            && (c.Text.Any(char.IsLetter) || A350NdMap.TimeMarker.IsMatch(c.Text));
+        /// <summary>A waypoint's or a pseudo waypoint's name inside the plot, its symbol within the range. A lone letter is a mark of its
+        /// own, as on the range map (a magenta D in its circle on the arrival's path); a runway's ident reads with the airport's name over
+        /// it; red and amber are the ND's flags.</summary>
+        public bool HoldsName(DrawnCell c) => c.Y is >= PlotTop and < PlotBottom && c.X >= ZeroX && c.X - NameRightOfSymbol <= EndX
+            && c.Colour is not ("red" or "amber") && !c.Text.Contains(' ') && !RunwayIdent.IsMatch(c.Text)
+            && (c.Text.Length > 1 && c.Text.Any(char.IsLetter) || A350NdMap.TimeMarker.IsMatch(c.Text));
 
         public string NmAt(float x)
         {
