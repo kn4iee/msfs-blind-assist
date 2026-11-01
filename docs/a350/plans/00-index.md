@@ -242,6 +242,7 @@ after each); the audits (12-17) and plan 21 are live work, worked with superpowe
 
 - Plan 01, the audits 12-16 and plan 18 start from the commit that added this folder ("docs(a350): plans for the work
   after the first full flight"), or from the branch's head when they start.
-- Early plans (02-11, 22, 23) start from the commit plan 01 records here: (plan 01 fills this in).
+- Early plans (02-11, 22, 23) start from the commit plan 01 records here: `25bf4e534`, plan 01's last code and record
+  commit. The commit after it, `docs(a350): plan 01's base commit`, writes only this line and plan 01's landing.
 - Plans 17 and 19-21 start from the branch once their "After" plans have landed; record the commit you started from in
   your plan's execution record ("Started").

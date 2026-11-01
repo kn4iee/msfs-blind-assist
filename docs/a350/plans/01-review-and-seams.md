@@ -104,8 +104,8 @@
 
 ### Task 6: Land
 
-- [ ] **Step 1:** Full suite green after the rebase (the index's workflow 4-5); the Ctrl+M dialog's rows for a definition are the same before and after (Task 3's first test).
-- [ ] **Step 2:** In `00-index.md` "Base commits", replace "(plan 01 fills this in)" with the commit that lands this plan; commit `docs(a350): plan 01's base commit` with the trailer, push, set **Status** to landed.
+- [x] **Step 1:** Full suite green after the rebase (the index's workflow 4-5); the Ctrl+M dialog's rows for a definition are the same before and after (Task 3's first test).
+- [x] **Step 2:** In `00-index.md` "Base commits", replace "(plan 01 fills this in)" with the commit that lands this plan; commit `docs(a350): plan 01's base commit` with the trailer, push, set **Status** to landed.
 
 ## Review findings
 
@@ -173,6 +173,7 @@ green-dot hold (plan 19's Task 1). Outside the range, for the owner: the PMDG 73
   2. A go-around below 1500 ft from an approach flown at CLB, levers to TOGA while still sinking: no flap moves for 10 s. Tests pin the MCT-to-TOGA and one-engine cases, so no engine-out flight is needed.
   3. An unticked FMA, E/WD or FMS-message Ctrl+M row still mutes. Task 4 rewired the mute and Task 5 shares it.
   4. On the stand at VCBI with the ND at 40 NM: the vertical display's MSA from its line and the "VCBI 22" line.
+  5. Optional: on a circuit, TOGA about 250 ft below the leg's highest altitude, so the sink carries the aircraft through the arming height: no flap moves for 10 s. A unit test pins it.
 - **Docs left for plan 21:** `docs/first-officer.md:16`'s strict flap waits (M4). Its go-around hold sentence was corrected here.
 - **Rule proposals:** none. Each guardrail added here has a test whose failure explains it:
   - the vertical display's draw order;
@@ -194,19 +195,24 @@ green-dot hold (plan 19's Task 1). Outside the range, for the owner: the PMDG 73
     - `efis0_omdb_landed_clipped` reads only the first segment of its MSA line. The line steps to about 5400 ft from 13 NM, but a pilot hears 3800 ft.
     - PLAUSIBLE: range-map names under the vertical display still read as plain rows through `Rest` ("MCT, cyan", BASUR, MIN). If the display covers them, a sighted pilot never sees them. Settle it with a capture.
   - `A350SpeechThreadTests` (plan 03) pins the shape of `StartA350DisplayService`'s posting speak, so its four copies stay. A hoist with an in-post `currentAircraft` check would change that test, and the existing monitors' speech in an aircraft switch's window.
+  - `docs/a350/plans/05-first-officer.md:45` describes the go-around read as a sustained climb of 300 fpm for 5 s. The manager reads `GaClimbFpm` 500 with `GaAglGainFt` 200, and falls back to above 200 fpm for `GaFallbackClimbSeconds` 10 above 3000 ft AGL (plan 05).
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Robin Kipp (robin24), 2026-10-31
 - **Worked by:** Robin Kipp with Claude, with subagents (superpowers:subagent-driven-development)
 - **Started:** 2026-10-31, `feat/inibuilds-a350` at eeb325324 (the plan set's last commit)
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:** 0-5 done, 6 at landing; `git log --grep "^Plan: 01"` lists the commits.
+- **Landed:** 2026-11-01. `feat/inibuilds-a350` fast-forwards from the claim `2f8a446ce` to `docs(a350): plan 01's base commit`; the work ends at `25bf4e534`.
+- **Tests at landing:** at `25bf4e534`, nothing new on the branch to rebase onto:
+  - the suite passes 17,577 of 17,577 (`--filter "FullyQualifiedName!~ClaudeRulesHookTests"`), Task 3's row-order test included;
+  - the solution builds with 0 errors;
+  - `tools/A350Probe` builds;
+  - `git diff --name-only kn4iee/feat/inibuilds-a350...HEAD` lists only this plan's files.
+- **Tasks:** 0-6 done; `git log --grep "^Plan: 01"` lists the commits.
   - 0, the claim: `2f8a446ce`.
   - 1, the review: recorded at `3386b5b52`.
   - 2, the fixes:
@@ -220,9 +226,11 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   - 4, the keyed mute: `ab6e9c147`.
   - 5, the EFIS hand-on: `bdcc53f41`.
   - The record: `e9b6a60e7`.
-  - The final review's fix wave: `3538db526`, `879f198f6`, `9eb11fe28`, `66fd07d4e`, `446d8ceb9`, `07b460ee7`, `7f6249056`, `b0f0bc008`.
+  - The final review's fix wave: `3538db526`, `879f198f6`, `9eb11fe28`, `66fd07d4e`, `446d8ceb9`, `07b460ee7`, `7f6249056`, `b0f0bc008`; its record: `25bf4e534`.
+  - 6, the landing: `docs(a350): plan 01's base commit`.
 - **Waiting on the owner:**
-  - the four in-sim lines in the handoff above;
+  - the in-sim lines in the handoff above;
+  - to confirm or reverse the push-once ruling below;
   - M12, a design point for plan 05;
   - outside the A350: the PMDG 737 NAV radios dialog speaks `Nav1FreqMHz` in the PC's culture.
 - **In-sim results:** none yet; the checks go into plan 21's in-sim plan.
@@ -244,9 +252,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   - **Task 4's keyed constructor** also changed `A350PfdDisplayTests.cs` (one line) and three call sites in `tools/A350Probe` (plan 03's tool, which builds on its own).
   - **Task 5:**
     - a private `Settling(at)` helper in `A350PfdMonitor`;
-    - one `muted` local in `StartA350DisplayService`, shared by the E/WD monitor, the PFD monitor and the hook;
+    - one `muted` local in `StartA350DisplayService`, shared by the E/WD monitor, the PFD monitor and the hook, and, since the final review, the service's own `Muted`;
     - a fourth test pinning the settling after the FMA read.
-  - **Task 3:** a doc clause on `BuildRows`.
+  - **Task 3:** a doc clause on `BuildRows`. The final review widened its second test, now `No_two_rows_share_a_key_or_a_label_and_no_areas_row_takes_a_variables_key`.
   - **The final review** (Opus, read-only) asked for fixes: 3 Important, 6 Minor. One wave fixed them:
     - The go-around hold also stamps while the context is unarmed, so TOGA set just before it arms still holds. Its resets went, since the readings refresh every sample. Tests pin one engine's lever at idle.
     - Review Focus line 2's glideslope test (M8).
