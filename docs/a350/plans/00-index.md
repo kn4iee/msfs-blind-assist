@@ -193,8 +193,8 @@ after each); the audits (12-17) and plan 21 are live work, worked with superpowe
   rest.
 - Two plans at once: separate worktrees and separate scratch folders; never two agents on one plan or one file.
 - When the plan's tasks are done: one whole-plan review checks the ownership diff (step 5), that every Review Focus line
-  has its test, and that the handoff and execution record are filled in. The SDD ledger stays untracked
-  (`.superpowers/sdd/a350-pNN/`).
+  has its test, and that the handoff and execution record are filled in. The SDD ledger stays untracked, in the folder
+  the skill's `sdd-workspace` script names after the plan file (`.superpowers/sdd/01-review-and-seams/` for plan 01).
 
 ## Records: who worked a plan and how it went
 
