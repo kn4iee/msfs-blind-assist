@@ -104,8 +104,10 @@ public sealed class A350FOAutoManager : IFoAutoManager
     private DateTime _lastFlapMoveUtc = DateTime.MinValue;
 
     // The extension hold's own clock: when the levers last moved forward into go-around thrust, found by StampForwardLeverMovement from the previous
-    // sample's readings (NaN = none since a reset, so the first reading is a baseline, never a movement). Not the latch above: that is spent the
-    // first time the levers are past CLB, which an approach flown at MCT does when its context arms.
+    // sample's readings (NaN until the first, so the first reading is a baseline, never a movement). It watches every sample CheckFlaps reads,
+    // armed or not, so the readings are always the last sample's: a go-around begun just above the arming height, which still sinks through it,
+    // is held too. Not the latch above: that is armed-gated and spent the first time the levers are past CLB, which an approach flown at MCT does
+    // when its context arms.
     private DateTime? _leversForwardAtUtc;
     private double _lastGaThrust = double.NaN;
     private double _lastHigherLever = double.NaN;
@@ -137,9 +139,6 @@ public sealed class A350FOAutoManager : IFoAutoManager
         _extensionArmed     = false;
         _minAglInApproach   = double.MaxValue;
         _goAroundThrustAtUtc = null;
-        _leversForwardAtUtc = null;
-        _lastGaThrust       = double.NaN;
-        _lastHigherLever    = double.NaN;
         _sinkingSinceUtc    = null;
         _lastExtendCommand  = -1;
         _lastRetractCommand = 99;
@@ -155,9 +154,6 @@ public sealed class A350FOAutoManager : IFoAutoManager
         _extensionArmed    = false;
         _minAglInApproach  = double.MaxValue;
         _goAroundThrustAtUtc = null;
-        _leversForwardAtUtc = null;
-        _lastGaThrust      = double.NaN;
-        _lastHigherLever   = double.NaN;
         _lastExtendCommand = -1;
         _peakMsl           = double.NaN;
     }
@@ -226,8 +222,8 @@ public sealed class A350FOAutoManager : IFoAutoManager
         double gaThrust = _state.GetValue(A350StateEvaluator.GoAroundThrustField);
         if (_extensionArmed && gaThrust > 0.5)
             _goAroundThrustAtUtc ??= _utcNow();
-        if (_extensionArmed)
-            StampForwardLeverMovement(gaThrust);
+        // Unlike the latch, the hold's own watch runs armed or not (the _leversForwardAtUtc comment says why).
+        StampForwardLeverMovement(gaThrust);
 
         // ---- Go-around: disarm + SOP one-step retraction ----
         if (_extensionArmed)
@@ -333,10 +329,10 @@ public sealed class A350FOAutoManager : IFoAutoManager
         }
     }
 
-    // Stamps _leversForwardAtUtc when the levers have moved forward into go-around thrust since the previous sample: FO_GA_THRUST coming on (the
-    // higher lever past CLB), or the higher lever crossing the midpoint of MCT and TOGA upward (the go-around of an approach flown at MCT, whose
-    // levers were past CLB already). NaN compares false, so a first reading is only a baseline. An unread lever stamps nothing and leaves the
-    // last readings standing: a movement made meanwhile shows at the next reading, late, which only lengthens the hold.
+    // Stamps _leversForwardAtUtc when the levers have moved forward into go-around thrust since the previous sample CheckFlaps read, armed or not:
+    // FO_GA_THRUST coming on (the higher lever past CLB), or the higher lever crossing the midpoint of MCT and TOGA upward (the go-around of an
+    // approach flown at MCT, whose levers were past CLB already). NaN compares false, so the first reading is only a baseline. An unread lever
+    // stamps nothing and leaves the last readings standing: a movement made meanwhile shows at the next reading, late, which only lengthens the hold.
     private void StampForwardLeverMovement(double gaThrust)
     {
         double higher = Math.Max(_state.GetValue("A350_ENGINE_THROTTLE_1"), _state.GetValue("A350_ENGINE_THROTTLE_2"));

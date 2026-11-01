@@ -294,6 +294,29 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Empty(rig.Speech.All);
     }
 
+    // Final review (I1): the approach context arms 300 ft under the leg's highest altitude, and a go-around begun just above that sinks through
+    // it with its levers already at TOGA. A movement was looked for only once armed, so this one was never seen, and the landing gate, open in
+    // the go-around's sink, stepped the next flap into it ("Speed checked. Flaps 3."). The levers are watched before the context arms too.
+    [Fact]
+    public async Task The_A350s_go_around_begun_before_the_approach_arms_still_holds_the_flaps()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 1_500, vs: 1_500, ias: 200);   // peak 2000 MSL; the context arms at 1700 MSL
+        rig.Lever(2);
+        rig.GearDown();
+        for (int s = 0; s < 6; s++)
+            rig.Fly(agl: 1_290 - 10 * s, vs: -800, ias: 160);
+        rig.Thrust(45);                              // go-around at about 1220 ft
+        rig.Fly(agl: 1_215, vs: -600, ias: 160);
+        rig.Fly(agl: 1_195, vs: -400, ias: 160);    // arms here, gate open
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
     // The levers already at MCT when the context arms are where they were, not a movement into go-around thrust: the first flap is not held.
     [Fact]
     public async Task The_A350s_levers_at_mct_when_the_approach_arms_hold_nothing_back()
