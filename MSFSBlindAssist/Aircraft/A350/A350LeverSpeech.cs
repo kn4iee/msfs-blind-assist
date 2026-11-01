@@ -116,11 +116,12 @@ public sealed class A350LeverSpeech
     }
 
     /// <summary>A lever's baseline from the cache where no delivery has set one (a flight load re-delivers only what it
-    /// changed); silent.</summary>
-    public void SeedThrust(int lever, double tla)
+    /// changed); silent. <paramref name="onGround"/>: the aircraft is on the ground as it is made, which decides whether
+    /// the take-off's first step is a word for the baseline to hold.</summary>
+    public void SeedThrust(int lever, double tla, bool onGround)
     {
         if (double.IsNaN(_tla[lever - 1]))
-            Thrust(lever, tla, 0);
+            Thrust(lever, tla, 0, onGround: onGround);
     }
 
     /// <summary>The speed brake's baseline from the cache where none is set; silent.</summary>

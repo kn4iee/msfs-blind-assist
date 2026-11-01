@@ -291,6 +291,12 @@ public partial class IniBuildsA350Definition
     private readonly TakeoffVSpeedCallouts _takeoffCallouts = new();
     private bool _calloutOnGround = true;
 
+    /// <summary>Whether the aircraft is on the ground now: the sim's cache where it holds SIM_ON_GROUND, else the last delivery
+    /// (<see cref="_calloutOnGround"/>, true until one comes). A flight loaded in the air never delivers it here (MainForm hands a
+    /// definition no first snapshot), so the delivered flag alone would read the stand's, or the last flight's.</summary>
+    private bool IsOnGroundNow() =>
+        _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
+
     /// <summary>The FMS's take-off speeds as the display reader reads them, taken once two reads agree.</summary>
     private readonly A350.Display.A350StableValue<A350.Display.A350TakeoffSpeeds> _fmsSpeeds = new();
     private A350.Display.A350TakeoffSpeeds? _speedsTaken;   // the last taken: a change is said against it
@@ -384,7 +390,7 @@ public partial class IniBuildsA350Definition
 
     public void ObserveMinimums(A350.Display.A350Minimums read, ScreenReaderAnnouncer announcer)
     {
-        bool onGround = _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
+        bool onGround = IsOnGroundNow();
         if (!onGround)
             _flownSinceMinimumSet = true;
         if (!_fmsMinimums.Offer(read, out var taken))
@@ -421,7 +427,7 @@ public partial class IniBuildsA350Definition
     /// (<see cref="A350BtvCountdown"/>), each behind its row. On the ground is the sim's cache where there is one.</summary>
     public void ObserveBtv(A350.Display.A350BtvRollout read, ScreenReaderAnnouncer announcer)
     {
-        bool onGround = _sim is { } sim && Cached(sim, "SIM_ON_GROUND") is double g ? g >= 0.5 : _calloutOnGround;
+        bool onGround = IsOnGroundNow();
         foreach (var (key, text) in _btvCountdown.Observe(onGround && read.Active, read.ToExit, read.RunwayRemaining))
             if (!IsMuted(key) && !_disposed)
                 announcer.Announce(text);
@@ -445,7 +451,7 @@ public partial class IniBuildsA350Definition
             case A350LeverSpeech.Lever1 or A350LeverSpeech.Lever2:
                 NotePickReached(key, value);
                 _leverAnnouncer = announcer;
-                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value, Clock(), announcer.Suppressed, _calloutOnGround) is { } thrust
+                if (_leverSpeech.Thrust(key == A350LeverSpeech.Lever1 ? 1 : 2, value, Clock(), announcer.Suppressed, IsOnGroundNow()) is { } thrust
                     && !announcer.Suppressed && !IsMuted(thrust.Row) && !_disposed)
                     announcer.Announce(thrust.Text);
                 return true;
@@ -523,10 +529,12 @@ public partial class IniBuildsA350Definition
                 if (Cached(sim, key) is double cached)
                     _lampBoard.Seed(key, cached);
             // The levers the same way, where their rows are offered: a load re-delivers only what it changed.
+            // Their baseline is made as the flight stands: the take-off's first step is a word on the ground only.
+            bool onGround = IsOnGroundNow();
             if (_rows.ContainsKey(A350LeverSpeech.Lever1) && Cached(sim, A350LeverSpeech.Lever1) is double tla1)
-                _leverSpeech.SeedThrust(1, tla1);
+                _leverSpeech.SeedThrust(1, tla1, onGround);
             if (_rows.ContainsKey(A350LeverSpeech.Lever2) && Cached(sim, A350LeverSpeech.Lever2) is double tla2)
-                _leverSpeech.SeedThrust(2, tla2);
+                _leverSpeech.SeedThrust(2, tla2, onGround);
             if (_rows.ContainsKey(SpeedBrakeKey) && Cached(sim, SpeedBrakeKey) is double handle)
                 _leverSpeech.SeedSpeedBrake(handle);
             // And the doors never delivered since the reset (MainForm hands a definition no first snapshot).

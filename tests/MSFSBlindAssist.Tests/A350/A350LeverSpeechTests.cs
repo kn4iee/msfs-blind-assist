@@ -110,12 +110,29 @@ public class A350LeverSpeechTests
     public void A_seed_baselines_only_what_is_unseen_and_the_next_move_speaks()
     {
         var speech = new A350LeverSpeech();
-        speech.SeedThrust(1, 25);
-        speech.SeedThrust(2, 25);
+        speech.SeedThrust(1, 25, onGround: true);
+        speech.SeedThrust(2, 25, onGround: true);
         speech.SeedSpeedBrake(0);
-        speech.SeedThrust(1, 45);                                           // already seen: a seed never overwrites
+        speech.SeedThrust(1, 45, onGround: true);                           // already seen: a seed never overwrites
         Assert.Null(speech.Thrust(1, 0, 0));
         Assert.Equal(new[] { (A350LeverSpeech.Lever1, "Thrust lever 1 Idle") }, speech.Flush(A350LeverSpeech.GatherMs));
         Assert.Equal("Spoilers 50 percent", speech.SpeedBrake(0.5));
+    }
+
+    // Review 2026-10-31 (range review I3): a seed is a baseline too, and it took the ground's whatever the flight. Levers
+    // seeded at the take-off's first step in the air held no word for it, so the first move into it on the ground is news;
+    // seeded on the ground they held it, and the same move is not.
+    [Fact]
+    public void A_seed_holds_the_takeoff_step_as_a_word_only_on_the_ground()
+    {
+        var air = new A350LeverSpeech();
+        air.SeedThrust(1, 12, onGround: false);
+        air.SeedThrust(2, 12, onGround: false);
+        Assert.Equal("All thrust levers 50 percent N1", air.Thrust(1, 12.2, 10, onGround: true)?.Text);
+
+        var ground = new A350LeverSpeech();
+        ground.SeedThrust(1, 12, onGround: true);
+        ground.SeedThrust(2, 12, onGround: true);
+        Assert.Null(ground.Thrust(1, 12.2, 10, onGround: true));            // the baseline already holds that word
     }
 }

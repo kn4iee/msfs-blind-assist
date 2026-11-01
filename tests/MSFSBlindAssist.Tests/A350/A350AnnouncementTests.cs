@@ -579,6 +579,22 @@ public class A350LeverAnnouncementTests
         Assert.Equal(new[] { "All thrust levers Climb", "Thrust lever 2 TOGA" }, _speech.All);
     }
 
+    // Review 2026-10-31 (range review I3): the take-off's first step is a word on the ground only, and the lever delivery took
+    // "on the ground" from the last SIM_ON_GROUND it was delivered, true until one comes. MainForm hands a definition no first
+    // snapshot, so a flight loaded in the air delivers none, and the levers passing 12 together said "All thrust levers 50
+    // percent N1" in flight. The cache is asked first, as the minimums and BTV ask it.
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(1, "All thrust levers 50 percent N1")]
+    public void The_lever_word_in_the_air_asks_the_cache_when_no_ground_delivery_came(double onGround, string? word)
+    {
+        _cache["SIM_ON_GROUND"] = onGround;   // in the cache, never delivered
+        Baseline();                           // both at Idle
+        Deliver(A350LeverSpeech.Lever1, 12);  // both through 12, a delivery apart
+        Deliver(A350LeverSpeech.Lever2, 12);
+        Assert.Equal(word is null ? Array.Empty<string>() : new[] { word }, _speech.All);
+    }
+
     [Fact]
     public void Each_sentence_obeys_its_own_row()
     {
