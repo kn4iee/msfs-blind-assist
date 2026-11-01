@@ -34,19 +34,36 @@ public sealed class Bbs757EfbPixels
         RawWhite = max;
         double k = 255.0 / max;
         for (int i = 0; i < rgb.Length; i++) rgb[i] = (byte)Math.Min(255, (int)Math.Round(rgb[i] * k));
-        Background = Mode(260, 90, Math.Min(width, 1390), Math.Min(height, 1040));
+        int x1 = Math.Min(width, 1390), y1 = Math.Min(height, 1040);
+        Background = Mode(260, 90, x1, y1, _ => true, out _);
+        // A white chart filling the page (Navigation, Charts) outnumbers the page's own slate, which then counted as part of every
+        // box: the slate is the commonest dark color, while enough of the page is dark to be the page (measured 2026-11-01: 17.6 %
+        // of the Charts page with its chart painted white; a light theme's page is light, and keeps its commonest color).
+        if (Lum(Background) >= 200)
+        {
+            var dark = Mode(260, 90, x1, y1, c => Lum(c) < 80, out double share);
+            if (share >= 0.12) Background = dark;
+        }
     }
 
-    private (int R, int G, int B) Mode(int x0, int y0, int x1, int y1)
+    private static double Lum((int R, int G, int B) c) => 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;
+
+    /// <summary>The commonest of the colors <paramref name="take"/> keeps in a rectangle, and the share of the samples it kept.</summary>
+    private (int R, int G, int B) Mode(int x0, int y0, int x1, int y1, Func<(int R, int G, int B), bool> take, out double share)
     {
         var counts = new Dictionary<int, int>();
+        int all = 0, kept = 0;
         for (int y = y0; y < y1; y += 7)
             for (int x = x0; x < x1; x += 7)
             {
+                all++;
                 var (r, g, b) = At(x, y);
+                if (!take((r, g, b))) continue;
+                kept++;
                 int key = (r / 8) << 10 | (g / 8) << 5 | (b / 8);
                 counts[key] = counts.TryGetValue(key, out var c) ? c + 1 : 1;
             }
+        share = all == 0 ? 0 : (double)kept / all;
         if (counts.Count == 0) return (0, 0, 0);
         int best = counts.MaxBy(kv => kv.Value).Key;
         return (((best >> 10) & 31) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4);
@@ -283,6 +300,12 @@ public static class Bbs757EfbScreen
                 Ignore: new[] { new Rectangle(256, 88, 1141, 960) },
                 Note: "The weight and balance chart is not read."),
         },
+        ["NAVIGATION/CHARTS"] = new[]
+        {
+            // The Navigraph chart under the tab rows and the zoom bar (measured 2026-11-01: x 256-1397, y 236-980): its print is too
+            // small to read, and boxes drawn in it are no controls. The disclaimer under it stays.
+            new Bbs757EfbTemplate(Ignore: new[] { new Rectangle(256, 236, 1141, 745) }, Note: "The chart itself is not read."),
+        },
         ["AIRCRAFT/MAINTENANCE"] = new[]
         {
             new Bbs757EfbTemplate(Witness: "BRAKE TEMPERATURE",
@@ -301,6 +324,11 @@ public static class Bbs757EfbScreen
     /// <summary>The Systems app draws diagrams whose labels are too small to read: the reader keeps
     /// only the diagram's name and SELECT (which lists the diagrams).</summary>
     public const string SystemsNote = "This diagram's labels are too small to read. Use Select to choose another diagram.";
+
+    /// <summary>Where SELECT's list of diagrams opens (right of x 1090, above y 400), and how each of its lines reads: an ATA
+    /// chapter, a dash and the diagram's name ("28 - FUEL").</summary>
+    private const int SystemsListLeft = 1090, SystemsListBottom = 400;
+    private static readonly System.Text.RegularExpressions.Regex SystemsEntry = new(@"^\s*\d{1,2}\s*[-–]\s*([A-Za-z][A-Za-z /&]*)$");
 
     public static Bbs757EfbScreenModel Parse(IReadOnlyList<Bbs757EfbTextLine> lines, Bbs757EfbPixels px)
     {
@@ -330,10 +358,11 @@ public static class Bbs757EfbScreen
         var items = new List<Bbs757EfbItem>();
         var menu = new List<Bbs757EfbItem>();
 
-        // Systems: a centered title (the diagram's name) and a SELECT button in the title bar.
+        // Systems: a centered title (the diagram's name) and a SELECT button in the title bar. By the line's center: SELECT's
+        // list opens just under the bar, its first line's box reaching into it (top 86).
         if (app == "SYSTEMS")
         {
-            foreach (var l in body.Where(l => l.Box.Top < TitleBottom).ToList())
+            foreach (var l in body.Where(l => l.Centre.Y < TitleBottom).ToList())
             {
                 body.Remove(l);
                 if (l.Text == "SELECT") items.Add(new(Bbs757EfbKind.Button, "Select", l.Box, l.Centre, true, "btn:SELECT"));
@@ -350,6 +379,18 @@ public static class Bbs757EfbScreen
 
         if (app == "SYSTEMS")
         {
+            // SELECT's open list (measured 2026-11-01: "24 - ELECTRICAL", "28 - FUEL", "29 - HYDRAULICS", "36 - PNEUMATICS" at the
+            // top right, x 1100-1395, y 88-240): each line a diagram, named as its page's title names it, so a press is judged by
+            // the page it lands on.
+            foreach (var l in body.Where(l => l.Box.Left > SystemsListLeft && l.Box.Top >= TitleBottom - 4 && l.Box.Bottom < SystemsListBottom)
+                         .OrderBy(l => l.Box.Top))
+            {
+                var m = SystemsEntry.Match(l.Text);
+                if (!m.Success) continue;
+                string diagram = m.Groups[1].Value.Trim().ToUpperInvariant();
+                menu.Add(new(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(diagram), l.Box, l.Centre, true, "menu:" + diagram,
+                    Selected: string.Equals(diagram, section, StringComparison.OrdinalIgnoreCase)));
+            }
             items.Add(new(Bbs757EfbKind.Text, SystemsNote, Rectangle.Empty, Point.Empty, false, "txt:systems-note"));
             return new Bbs757EfbScreenModel(app, section, menu, items);
         }
@@ -568,7 +609,7 @@ public static class Bbs757EfbScreen
     private static List<Bbs757EfbItem> ParseContent(List<Bbs757EfbTextLine> lines, Bbs757EfbPixels px)
     {
         var o = new List<Bbs757EfbItem>();
-        var boxes = FindButtonBoxes(px, ContentArea);
+        var boxes = FindButtonBoxes(px, ContentArea, bands: true);
         var loose = new List<Bbs757EfbTextLine>();
         var claimed = new Dictionary<FoundBox, List<Bbs757EfbTextLine>>();
         // A shaded button can be found only down to the middle of its gradient (measured: the BBS button
@@ -585,7 +626,7 @@ public static class Bbs757EfbScreen
         }
         foreach (var l in pending)
         {
-            var host = boxes.FirstOrDefault(b => !claimed.ContainsKey(b) && l.Centre.X > b.Box.Left && l.Centre.X < b.Box.Right
+            var host = boxes.FirstOrDefault(b => !b.Band && !claimed.ContainsKey(b) && l.Centre.X > b.Box.Left && l.Centre.X < b.Box.Right
                 && l.Centre.Y >= b.Box.Top - 10 && l.Centre.Y <= b.Box.Bottom + 10 && l.Pass != 'K');
             if (host == null) { loose.Add(l); continue; }
             claimed[host] = new List<Bbs757EfbTextLine> { l };
@@ -613,6 +654,8 @@ public static class Bbs757EfbScreen
                 else clusters.Add(new List<Bbs757EfbTextLine> { l });
             }
             bool tabs = oneLine && clusters.Count > 1;
+            // A band is a control only as a row of tabs: one with a single text (or two lines) is plain text after all.
+            if (b.Band && !tabs) { loose.AddRange(parts); continue; }
             if (tabs)
                 foreach (var c in clusters)
                     controls.Add((b, c, c.Select(l => l.Box).Aggregate(Rectangle.Union), true));
@@ -620,13 +663,14 @@ public static class Bbs757EfbScreen
                 controls.Add((b, parts.OrderBy(p => p.Box.Top).ThenBy(p => p.Box.Left).ToList(), b.Box, false));
         }
         // A tab drawn in its own color beside a band of tabs (Maintenance's selected LANDING GEAR,
-        // gray against the blue band, measured) is that band's selected tab.
+        // gray against the blue band, measured) is that band's selected tab. One tinted as the band is not (Charts' SID alone in
+        // its box when OCR missed REF beside it, 2026-11-01): the touching boxes below make it a tab.
         var forcedSelected = new HashSet<Rectangle>();
-        foreach (var band in controls.Where(c => c.Tab).Select(c => c.Box.Box).Distinct().ToList())
+        foreach (var (band, bandTint) in controls.Where(c => c.Tab).Select(c => (c.Box.Box, c.Box.Tint)).Distinct().ToList())
             for (int i = 0; i < controls.Count; i++)
             {
                 var c = controls[i];
-                if (c.Tab || c.Lines.Count == 0) continue;
+                if (c.Tab || c.Lines.Count == 0 || c.Box.Tint == bandTint) continue;
                 var b = c.Box.Box;
                 bool sameLine = Math.Abs(b.Top + b.Height / 2 - (band.Top + band.Height / 2)) <= 8;
                 bool touching = Math.Abs(b.Right - band.Left) <= 10 || Math.Abs(band.Right - b.Left) <= 10;
@@ -635,11 +679,45 @@ public static class Bbs757EfbScreen
                 controls[i] = (c.Box, c.Lines, hitRect, true);
                 forcedSelected.Add(hitRect);
             }
-        // The selected tab: the one whose band color differs from its siblings' (an odd one out).
+        // Tabs drawn as boxes that touch: a selected tab in the middle splits its band (Weather & NOTAM with ARRIVAL and TAF
+        // selected, measured 2026-11-01: DEPARTURE | ARRIVAL | MANUAL three boxes, METAR a box beside the gray TAF). A one-line box
+        // touching a tab on its line is a tab too; a run of three or more touching one-line boxes is a row of tabs, the one
+        // tinted unlike the rest selected. Failures' tabs stand 10-12 px apart and stay buttons.
+        bool OneLine((FoundBox Box, List<Bbs757EfbTextLine> Lines, Rectangle Hit, bool Tab) c) =>
+            !c.Tab && c.Lines.Count > 0 && c.Lines.All(l => Math.Abs(l.Centre.Y - c.Lines[0].Centre.Y) <= 8)
+            && !IsNumberField(string.Join(" ", c.Lines.Select(l => l.Text)));
+        static bool Touch(Rectangle a, Rectangle b) =>
+            Math.Abs(a.Top + a.Height / 2 - (b.Top + b.Height / 2)) <= 8
+            && (Math.Abs(a.Right - b.Left) <= TabTouch || Math.Abs(b.Right - a.Left) <= TabTouch);
+        for (bool joined = true; joined;)
+        {
+            joined = false;
+            for (int i = 0; i < controls.Count; i++)
+            {
+                var c = controls[i];
+                if (!OneLine(c) || !controls.Any(t => t.Tab && Touch(c.Box.Box, t.Box.Box))) continue;
+                controls[i] = (c.Box, c.Lines, c.Lines.Select(l => l.Box).Aggregate(Rectangle.Union), true);
+                joined = true;
+            }
+        }
+        foreach (var run in TouchingRuns(controls.Where(OneLine).ToList()).Where(r => r.Count >= 3))
+        {
+            var odd = run.Where(c => run.Count(o => o.Box.Tint == c.Box.Tint) == 1).ToList();
+            foreach (var c in run)
+            {
+                int i = controls.IndexOf(c);
+                var hit = c.Lines.Select(l => l.Box).Aggregate(Rectangle.Union);
+                controls[i] = (c.Box, c.Lines, hit, true);
+                if (odd.Count == 1 && ReferenceEquals(odd[0].Box, c.Box)) forcedSelected.Add(hit);
+            }
+        }
+        // The selected tab: the one whose band color differs from its siblings' (an odd one out), on a row with none selected
+        // above (Charts' categories, under the DEPARTURE | ARRIVAL | MANUAL row whose MANUAL is gray; 2026-11-01).
         var selectedTab = new HashSet<Rectangle>(forcedSelected);
         foreach (var g in controls.Where(c => c.Tab && !forcedSelected.Contains(c.Hit)).GroupBy(c => c.Box))
         {
-            if (forcedSelected.Count > 0) break;
+            int row = g.Key.Box.Top + g.Key.Box.Height / 2;
+            if (forcedSelected.Any(s => Math.Abs(s.Top + s.Height / 2 - row) <= 12)) continue;
             var cols = g.Select(c => px.Lum(c.Hit.Left - 6, c.Hit.Top + c.Hit.Height / 2)).ToList();
             double median = cols.OrderBy(v => v).ElementAt(cols.Count / 2);
             int best = -1; double gap = 14;
@@ -761,6 +839,25 @@ public static class Bbs757EfbScreen
                 Centre(box), false, (heading ? "h:" : "txt:") + text));
         }
         return Order(o);
+    }
+
+    /// <summary>How far apart two boxes of a row of tabs may stand and still touch (measured 2026-11-01: 0-1 px on Weather &amp;
+    /// NOTAM; Failures' tabs, which are buttons, 10-12 px).</summary>
+    private const int TabTouch = 3;
+
+    /// <summary>The boxes in runs, left to right, each box's left edge meeting the right edge of the one before it on its line.</summary>
+    private static List<List<(FoundBox Box, List<Bbs757EfbTextLine> Lines, Rectangle Hit, bool Tab)>> TouchingRuns(
+        List<(FoundBox Box, List<Bbs757EfbTextLine> Lines, Rectangle Hit, bool Tab)> boxes)
+    {
+        var runs = new List<List<(FoundBox Box, List<Bbs757EfbTextLine> Lines, Rectangle Hit, bool Tab)>>();
+        foreach (var c in boxes.OrderBy(c => c.Box.Box.Left))
+        {
+            var b = c.Box.Box;
+            var run = runs.FirstOrDefault(r => r[^1].Box.Box is var last
+                && Math.Abs(last.Top + last.Height / 2 - (b.Top + b.Height / 2)) <= 8 && Math.Abs(last.Right - b.Left) <= TabTouch);
+            if (run != null) run.Add(c); else runs.Add(new() { c });
+        }
+        return runs;
     }
 
     /// <summary>The cabin lighting sliders (Aircraft, Cabin &amp; doors) and their track, measured on
@@ -1214,8 +1311,9 @@ public static class Bbs757EfbScreen
 
     // ------------------------------------------------------------------ boxes
 
-    /// <summary>A filled box of button size found from the pixels, with its color.</summary>
-    internal sealed record FoundBox(Rectangle Box, Bbs757EfbTint Tint);
+    /// <summary>A filled box of button size found from the pixels, with its color. <paramref name="Band"/>: a blue band wider
+    /// than any button, which only a row of tabs is (<see cref="FindButtonBoxes(Bbs757EfbPixels, Rectangle, bool)"/>).</summary>
+    internal sealed record FoundBox(Rectangle Box, Bbs757EfbTint Tint, bool Band = false);
 
     /// <summary>Clearly not the surface it sits on (more than 18 normalized from it).</summary>
     private static bool Filled((int R, int G, int B) c, (int R, int G, int B) bg, int threshold = 18) =>
@@ -1228,14 +1326,18 @@ public static class Bbs757EfbScreen
     /// filled (the text is a hole). A region bigger than that is a PANEL (the ground A/C box, the
     /// GND SRVC Mode box, the cabin lighting box): it is searched again with the panel's own color
     /// as the background, since a button on a panel can shade smoothly into it (measured: the BBS
-    /// button's bottom (9,37,69) against its panel (16,50,84), normalized).
+    /// button's bottom (9,37,69) against its panel (16,50,84), normalized). With <paramref name="bands"/>,
+    /// a blue region of a button's height (at most 40) but wider than 520 is kept too, as a band: the
+    /// unselected tabs of a row drawn as one bar (BlueBird's 2026-10-31 update, measured 2026-11-01:
+    /// Weather &amp; NOTAM's ARRIVAL | MANUAL 666 px and TAF | ATIS | NOTAM 750 px). A gray bar that wide is
+    /// a section header (FLIGHT INFO, DEPARTURE WEATHER), never a band.
     /// </summary>
-    internal static List<FoundBox> FindButtonBoxes(Bbs757EfbPixels px, Rectangle area)
+    internal static List<FoundBox> FindButtonBoxes(Bbs757EfbPixels px, Rectangle area, bool bands = false)
     {
         // A button found on the page and again inside its panel is one button.
         var o = new List<FoundBox>();
         foreach (var b in FindButtonBoxes(px, area, px.Background, depth: 0))
-            if (!o.Any(k => Near(k.Box, b.Box))) o.Add(b);
+            if ((bands || !b.Band) && !o.Any(k => Near(k.Box, b.Box))) o.Add(b);
         return o;
     }
 
@@ -1260,6 +1362,7 @@ public static class Bbs757EfbScreen
                 if (!Filled(seed, bg, threshold)) { seen[i0] = true; continue; }
                 var tint = TintOf(seed);
                 int minX = x, maxX = x, minY = y, maxY = y, count = 0;
+                long sumR = 0, sumG = 0, sumB = 0;
                 queue.Clear(); queue.Enqueue(i0); seen[i0] = true;
                 while (queue.Count > 0)
                 {
@@ -1268,6 +1371,7 @@ public static class Bbs757EfbScreen
                     count++;
                     if (cx < minX) minX = cx; if (cx > maxX) maxX = cx; if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
                     var c = px.At(cx, cy);
+                    sumR += c.R; sumG += c.G; sumB += c.B;
                     TryAdd(cx + 1, cy); TryAdd(cx - 1, cy); TryAdd(cx, cy + 1); TryAdd(cx, cy - 1);
 
                     void TryAdd(int nx, int ny)
@@ -1287,6 +1391,13 @@ public static class Bbs757EfbScreen
                 if (w >= 60 && w <= 520 && h >= minH && h <= 70)
                 {
                     if (count >= 0.5 * w * h) found.Add(new FoundBox(rect, tint));
+                }
+                else if (w > 520 && h >= minH && h <= 40 && tint == Bbs757EfbTint.Blue && count >= 0.5 * w * h)
+                {
+                    // The tabs' button blue (measured about (40-49, 78-92, 113-133) across the band), never the flat slate of a
+                    // table's header bar (Failures' FAILURE | STATUS | ACTIONS, (31, 41, 54)).
+                    double mr = (double)sumR / count, mg = (double)sumG / count, mb = (double)sumB / count;
+                    if (mb - mr >= 40 && mg >= 1.5 * mr) found.Add(new FoundBox(rect, tint, Band: true));
                 }
                 else if (depth == 0 && w > 60 && h > 40 && count >= 0.3 * w * h)
                 {

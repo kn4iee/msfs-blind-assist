@@ -139,6 +139,7 @@ public static class Bbs757EfbVocabulary
     // OCR's habit of reading a small dim "1" or "0" as a letter before a unit ("IO SEC", "to SEC").
     private static readonly Regex SecondsMisread = new(@"^(?:[Il|][Oo0]|[tT][oO])\s*SEC$", RegexOptions.CultureInvariant);
     private static readonly Regex Seconds = new(@"^(\d{1,2})\s*SEC$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex AtaEntry = new(@"^\d{1,2}\s*[-–]\s*[A-Za-z][A-Za-z /&]*$", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// What OCR read, snapped to the tablet's word when it is one. Strips a stray icon glyph read
@@ -151,6 +152,9 @@ public static class Bbs757EfbVocabulary
         string t = (read ?? "").Trim();
         if (t.Length == 0) return t;
         if (SecondsMisread.IsMatch(t)) return "10 SEC";
+        // A Systems diagram in SELECT's list ("24 - ELECTRICAL"): its chapter is no icon glyph, and stays (snapped, it was the
+        // Failures page's ELECTRICAL, the line no longer an entry; measured 2026-11-01).
+        if (AtaEntry.IsMatch(t)) return t;
         var sec = Seconds.Match(t);
         if (sec.Success) return sec.Groups[1].Value + " SEC";
 
@@ -285,5 +289,7 @@ public static class Bbs757EfbVocabulary
         "GPU", "APU", "IRS", "CG", "ZFW", "ACARS", "NM", "PB", "SVC", "A/C", "EFB", "TOD", "CPDLC", "FP", "NOTAM", "PERF",
         "AIRAC", "SIMBRIEF", "ID", "EHSI", "VNAV", "EGPWS", "RA", "KTS", "V1", "CBs", "MAC", "%MAC", "FWD", "AFT", "L", "R",
         "BBS", "MSFS", "GND", "SRVC", "UP", "OK", "OFP",
+        // Navigation's Weather & NOTAM and Charts tabs (BlueBird's 2026-10-31 update).
+        "METAR", "TAF", "ATIS", "SID", "STAR",
     };
 }

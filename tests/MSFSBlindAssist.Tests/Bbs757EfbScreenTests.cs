@@ -744,4 +744,152 @@ public class Bbs757EfbScreenTests
 
         Assert.Equal(new[] { "LEFT", "RIGHT", "BELOW" }, lines.Select(l => l.Text));
     }
+
+    /// <summary>The tabs of a page, in reading order, each with its own tap point inside its own words.</summary>
+    private static List<Bbs757EfbItem> Tabs(Bbs757EfbScreenModel m) =>
+        m.Items.Where(i => i.Kind == Bbs757EfbKind.Menu && i.Key.StartsWith("tab:", StringComparison.Ordinal)).ToList();
+
+    [Fact]
+    public void Weather_tabs_drawn_as_one_wide_band_are_each_a_tab()
+    {
+        // BlueBird's 2026-10-31 update (captured 2026-11-01): DEPARTURE | ARRIVAL | MANUAL and METAR | TAF | ATIS | NOTAM, the
+        // selected tab gray and the others one blue band 666 and 750 px wide, wider than any button: the band's tabs read as
+        // plain text, so ARRIVAL, MANUAL, TAF, ATIS and NOTAM could not be pressed.
+        var m = Load("bright", "60-navigation-weather");
+
+        Assert.Equal("Navigation, Weather & NOTAM", m.PageName);
+        Assert.Equal(new[] { "Departure (selected)", "Arrival", "Manual", "METAR (selected)", "TAF", "ATIS", "NOTAM" },
+            Tabs(m).Select(t => t.Text));
+        foreach (var t in Tabs(m))
+        {
+            Assert.True(t.Clickable, t.Text);
+            Assert.InRange(t.Hit.X, t.Box.Left, t.Box.Right);
+            Assert.InRange(t.Hit.Y, t.Box.Top, t.Box.Bottom);
+        }
+        // The rows the band's tabs used to read as.
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Text && i.Text.StartsWith("Arrival", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(m.Items, i => i.Kind == Bbs757EfbKind.Text && i.Text.StartsWith("Taf", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Weather_tabs_split_by_a_selected_middle_tab_are_still_tabs()
+    {
+        // ARRIVAL and TAF pressed (live, 2026-11-01): the selected gray tab splits each band, so DEPARTURE | ARRIVAL | MANUAL is
+        // three touching boxes and METAR a box of its own beside the gray TAF. Each stays a tab, the gray one selected (its
+        // SimBrief-made airport summary and TAF are painted out of the capture).
+        var m = Load("bright", "63-navigation-weather-arrival-taf");
+
+        Assert.Equal(new[] { "Departure", "Arrival (selected)", "Manual", "METAR", "TAF (selected)", "ATIS", "NOTAM" },
+            Tabs(m).Select(t => t.Text));
+    }
+
+    [Fact]
+    public void Failures_tabs_standing_apart_stay_buttons()
+    {
+        // CATALOG | ACTIVE / ARMED | RANDOM and the categories under them stand 10-12 px apart: buttons, as plan 18 tested them.
+        var m = Load("bright", "16-aircraft-failures");
+
+        Assert.Empty(Tabs(m));
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Active / armed").Kind);
+    }
+
+    [Fact]
+    public void A_wide_gray_header_bar_stays_a_heading()
+    {
+        // The same page's DEPARTURE WEATHER bar is a gray band about 1,000 px wide: a heading with its REFRESH button, no tab.
+        var m = Load("bright", "60-navigation-weather");
+
+        Assert.Equal(Bbs757EfbKind.Heading, Item(m, "Departure weather").Kind);
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Refresh").Kind);
+    }
+
+    [Fact]
+    public void Chart_category_tabs_are_each_a_tab_over_a_white_chart()
+    {
+        // The chart (painted out here, as white as the chart's paper) fills most of the page, so the commonest color of the page
+        // was white and the page's own dark slate counted as part of every box: SID and REF read as text.
+        var m = Load("bright", "61-navigation-charts");
+
+        Assert.Equal("Navigation, Charts", m.PageName);
+        Assert.Equal(new[] { "STAR", "App", "Taxi (selected)", "SID", "Ref" }, Tabs(m).Select(t => t.Text));
+    }
+
+    [Fact]
+    public void Each_chart_tab_row_has_its_own_selected_tab()
+    {
+        // With a SimBrief plan loaded, Charts adds DEPARTURE | ARRIVAL | MANUAL over the categories (live, 2026-11-01): MANUAL is
+        // gray beside its row's band, and TAXI only a lighter blue inside its row's band. The first row's selected tab must not
+        // keep the second row's from being found.
+        var m = Load("bright", "64-navigation-charts-departure-row");
+
+        Assert.Equal(new[] { "Departure", "Arrival", "Manual (selected)", "STAR", "App", "Taxi (selected)", "SID", "Ref" },
+            Tabs(m).Select(t => t.Text));
+    }
+
+    [Fact]
+    public void A_tab_box_tinted_as_its_band_is_never_taken_for_the_selected_tab()
+    {
+        // The live read of the same page took REF's purple letters for "EF" (dropped as noise): SID was left alone in its box,
+        // blue as the band beside it, and was said selected. Only a box in its own color is a band's selected tab.
+        var m = Load("bright", "64-navigation-charts-departure-row", line => ReadAs(line, "REF", 811, "EF"));
+
+        Assert.Equal(new[] { "Departure", "Arrival", "Manual (selected)", "STAR", "App", "Taxi (selected)", "SID" },
+            Tabs(m).Select(t => t.Text));
+    }
+
+    [Fact]
+    public void The_chart_itself_is_not_read()
+    {
+        // The chart's own small print (painted out of the capture, so added here as OCR read it live) is noise, and a box drawn
+        // in it is no control: the page keeps its tabs and its picker, and a note says what is left out.
+        var m = Load("bright", "64-navigation-charts-departure-row", line => line,
+            Line("ATLANTA, GA", 1268, 268, 88, 20), Line("in. 75", 1210, 304, 50, 20), Line("CAUTION NOTES", 1100, 404, 100, 16));
+
+        Assert.DoesNotContain(m.Items, i => i.Text.Contains("Atlanta, ga", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(m.Items, i => i.Text.Contains("caution", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(Bbs757EfbKind.Text, Item(m, "The chart itself is not read.").Kind);
+        Assert.Equal(8, Tabs(m).Count);
+    }
+
+    [Fact]
+    public void The_page_color_is_the_slate_even_under_a_white_chart()
+    {
+        using var bmp = new Bitmap(Path.Combine(FixtureDir(), "bright", "61-navigation-charts.png"));
+        var px = Bbs757EfbPixels.FromBitmap(bmp);
+
+        Assert.True(px.Background.R < 60 && px.Background.G < 60 && px.Background.B < 70, px.Background.ToString());
+    }
+
+    [Fact]
+    public void The_systems_diagram_list_is_offered_while_select_shows_it()
+    {
+        // SELECT opens a list of the diagrams at the top right (24 - ELECTRICAL, 28 - FUEL, 29 - HYDRAULICS, 36 - PNEUMATICS):
+        // each is a menu entry named by its diagram, the one shown selected, so a press lands on that diagram's page.
+        var m = Load("bright", "62-systems-select");
+
+        Assert.Equal("Systems, Electrical", m.PageName);
+        Assert.Equal(new[] { "Electrical", "Fuel", "Hydraulics", "Pneumatics" }, m.Menu.Select(i => i.Text));
+        Assert.True(m.Menu.Single(i => i.Text == "Electrical").Selected);
+        foreach (var e in m.Menu)
+        {
+            Assert.Equal(Bbs757EfbKind.Menu, e.Kind);
+            Assert.True(e.Clickable);
+            Assert.StartsWith("menu:", e.Key);
+            Assert.InRange(e.Hit.X, 1100, 1395);
+            Assert.InRange(e.Hit.Y, 88, 240);
+        }
+        Assert.True(Bbs757EfbPressRunner.PageIs(m, m.Menu[0].Text));
+        Assert.Equal(Bbs757EfbKind.Button, Item(m, "Select").Kind);
+    }
+
+    [Fact]
+    public void A_systems_diagram_with_select_closed_offers_select_and_the_note_only()
+    {
+        // The 2026-11-01 tour's capture with the list closed: the diagram's tiny labels are never offered.
+        var m = Load("bright", "62-systems-select", line => line.Box.X > 1095 && line.Box.Y > 85 && line.Box.Y < 240
+            ? line with { Text = "", Words = Array.Empty<Bbs757EfbWord>() } : line);
+
+        Assert.Empty(m.Menu);
+        Assert.Equal(new[] { "Select", Bbs757EfbScreen.SystemsNote }, m.Items.Select(i => i.Text));
+    }
 }
