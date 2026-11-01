@@ -77,9 +77,13 @@ public sealed class A350FOAutoManager : IFoAutoManager
     private const double LandingGateSinkFpm = 300;
     private const double LandingGateSinkSeconds = 5;
 
-    // The levers just past CLB: a go-around still sinking for seconds, which no flap extends into. After that it may be an approach with an
-    // engine out, at MCT.
+    // After the levers move forward into go-around thrust (past CLB, or MCT to TOGA) no flap extends for this long: a go-around still sinks for
+    // seconds. Counted from that movement, never from the first time the levers were past CLB: an approach with an engine out is flown at
+    // MCT, and its go-around is a movement of its own.
     private const double GoAroundLeverHoldSeconds = 10;
+
+    // Halfway from the MCT detent (35) to TOGA (45): the higher lever crossing it upward is MCT going to TOGA.
+    private const double MctTogaMidpointTla = 40;
 
     // Approach context: armed by a DESCENDING sample below 5000 ft AGL at least ApproachArmDescentFt
     // below the leg's highest MSL altitude (_peakMsl), one-way until go-around or touchdown. Extension
@@ -93,11 +97,18 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // go-around fallback and the next such sample cycled the lever every dwell.
     private bool _extensionArmed;
     private double _minAglInApproach = double.MaxValue;
-    private DateTime? _goAroundThrustAtUtc;      // when the levers first went to MCT or TOGA in this approach context
+    private DateTime? _goAroundThrustAtUtc;      // when the levers first went to MCT or TOGA in this approach context: the go-around signature's latch
     private DateTime? _sinkingSinceUtc;          // below -LandingGateSinkFpm since, on the clock
     private int _lastExtendCommand = -1;         // don't re-fight a pilot who pulled flaps back
     private int _lastRetractCommand = 99;        // don't re-fight a pilot who re-extended
     private DateTime _lastFlapMoveUtc = DateTime.MinValue;
+
+    // The extension hold's own clock: when the levers last moved forward into go-around thrust, found by StampForwardLeverMovement from the previous
+    // sample's readings (NaN = none since a reset, so the first reading is a baseline, never a movement). Not the latch above: that is spent the
+    // first time the levers are past CLB, which an approach flown at MCT does when its context arms.
+    private DateTime? _leversForwardAtUtc;
+    private double _lastGaThrust = double.NaN;
+    private double _lastHigherLever = double.NaN;
 
     /// <param name="utcNow">The clock (a test's own; the system clock when omitted). Every duration
     /// here is clock time, never a sample count: position samples arrive whenever any feature asks
@@ -126,6 +137,9 @@ public sealed class A350FOAutoManager : IFoAutoManager
         _extensionArmed     = false;
         _minAglInApproach   = double.MaxValue;
         _goAroundThrustAtUtc = null;
+        _leversForwardAtUtc = null;
+        _lastGaThrust       = double.NaN;
+        _lastHigherLever    = double.NaN;
         _sinkingSinceUtc    = null;
         _lastExtendCommand  = -1;
         _lastRetractCommand = 99;
@@ -141,6 +155,9 @@ public sealed class A350FOAutoManager : IFoAutoManager
         _extensionArmed    = false;
         _minAglInApproach  = double.MaxValue;
         _goAroundThrustAtUtc = null;
+        _leversForwardAtUtc = null;
+        _lastGaThrust      = double.NaN;
+        _lastHigherLever   = double.NaN;
         _lastExtendCommand = -1;
         _peakMsl           = double.NaN;
     }
@@ -206,8 +223,11 @@ public sealed class A350FOAutoManager : IFoAutoManager
             _minAglInApproach = agl;
 
         // The levers may be back at CL before the height is regained, so once is enough.
-        if (_extensionArmed && _state.GetValue(A350StateEvaluator.GoAroundThrustField) > 0.5)
+        double gaThrust = _state.GetValue(A350StateEvaluator.GoAroundThrustField);
+        if (_extensionArmed && gaThrust > 0.5)
             _goAroundThrustAtUtc ??= _utcNow();
+        if (_extensionArmed)
+            StampForwardLeverMovement(gaThrust);
 
         // ---- Go-around: disarm + SOP one-step retraction ----
         if (_extensionArmed)
@@ -276,7 +296,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
         // VFE-next protected) ----
         if (_extensionArmed && !climbing && agl < 5000)
         {
-            if (_goAroundThrustAtUtc is { } leversAt && (_utcNow() - leversAt).TotalSeconds < GoAroundLeverHoldSeconds)
+            if (_leversForwardAtUtc is { } leversAt && (_utcNow() - leversAt).TotalSeconds < GoAroundLeverHoldSeconds)
                 return;
             double vfeNext = _state.GetValue(A350StateEvaluator.VfeNextField);
             if (double.IsNaN(vfeNext) || ias >= vfeNext - VfeNextMarginKts)
@@ -311,6 +331,23 @@ public sealed class A350FOAutoManager : IFoAutoManager
                     break;
             }
         }
+    }
+
+    // Stamps _leversForwardAtUtc when the levers have moved forward into go-around thrust since the previous sample: FO_GA_THRUST coming on (the
+    // higher lever past CLB), or the higher lever crossing the midpoint of MCT and TOGA upward (the go-around of an approach flown at MCT, whose
+    // levers were past CLB already). NaN compares false, so a first reading is only a baseline. An unread lever stamps nothing and leaves the
+    // last readings standing: a movement made meanwhile shows at the next reading, late, which only lengthens the hold.
+    private void StampForwardLeverMovement(double gaThrust)
+    {
+        double higher = Math.Max(_state.GetValue("A350_ENGINE_THROTTLE_1"), _state.GetValue("A350_ENGINE_THROTTLE_2"));
+        if (double.IsNaN(gaThrust) || double.IsNaN(higher)) return;
+
+        bool pastClimb = _lastGaThrust < 0.5 && gaThrust > 0.5;
+        bool mctToToga = _lastHigherLever <= MctTogaMidpointTla && higher > MctTogaMidpointTla;
+        if (pastClimb || mctToToga) _leversForwardAtUtc = _utcNow();
+
+        _lastGaThrust = gaThrust;
+        _lastHigherLever = higher;
     }
 
     // Extension is monotonic per approach: if the pilot pulled flaps back after we

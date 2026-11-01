@@ -223,6 +223,70 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Equal(new[] { 3 }, await rig.LeverWrites());
     }
 
+    // An engine out flies its approach at MCT, so the levers were past CLB when the context armed, and a hold counted from there was spent by the
+    // go-around: MCT to TOGA got none, and the landing gate stepped the next flap into it. The hold counts from the lever movement itself.
+    [Fact]
+    public async Task The_A350s_engine_out_go_around_still_holds_the_flaps()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(35);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms, the levers at MCT
+        rig.Lever(1);
+        rig.GearDown();
+        for (int s = 0; s < 12; s++)
+            rig.Fly(agl: 1_620 - 10 * s, vs: -800, ias: 200);   // above the gate, and above S + 3
+        rig.Thrust(45);
+        rig.Fly(agl: 1_450, vs: -600, ias: 200);
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // Two engines, after an excursion past CLB earlier on the approach (a thrust correction): the go-around's levers are a movement of their
+    // own, to MCT (past CLB and no further) as to TOGA.
+    [Theory]
+    [InlineData(35)]
+    [InlineData(45)]
+    public async Task The_A350s_go_around_holds_the_flaps_after_an_earlier_excursion_past_climb(double tla)
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(25);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms
+        rig.Thrust(35);
+        rig.Fly(agl: 3_900, vs: -800, ias: 230);    // the excursion
+        rig.Thrust(25);
+        rig.Lever(1);
+        rig.GearDown();
+        for (int s = 0; s < 12; s++)
+            rig.Fly(agl: 1_620 - 10 * s, vs: -800, ias: 200);
+        rig.Thrust(tla);
+        rig.Fly(agl: 1_450, vs: -600, ias: 200);
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // The levers already at MCT when the context arms are where they were, not a movement into go-around thrust: the first flap is not held.
+    [Fact]
+    public async Task The_A350s_levers_at_mct_when_the_approach_arms_hold_nothing_back()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(35);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 205);  // the context arms with the speed inside green dot's window (210 + 3): flaps 1
+
+        Assert.Equal(new[] { 1 }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued("Speed checked. Flaps 1.") }, rig.Speech.All);
+    }
+
     // The gear gate stands below it too: the last step is not taken with the gear up.
     [Fact]
     public async Task The_A350s_full_flaps_still_wait_for_the_gear_below_the_gate()
