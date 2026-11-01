@@ -181,8 +181,8 @@ internal static partial class Program
                 }
                 return 0;
             }
-            case "tour":        // tour [n]   every menu entry of the page shown, each read n times (menu taps only)
-                return await Tour(args.Length > 1 ? int.Parse(args[1]) : 3);
+            case "tour":        // tour [n] [app ...]   every menu entry of the page shown, each read n times (menu taps only)
+                return await Tour(args.Length > 1 ? int.Parse(args[1]) : 3, args.Skip(2).ToArray());
             case "presstest":   // presstest <outDir> <label> [--nav x,y ...] [--only t] [--skip t] [--dry]   Program.PressTest.cs
                 return await PressTest(args);
             case "compare":     // compare <dir>   saved pages read with the small and the medium model
@@ -354,10 +354,22 @@ internal static partial class Program
             var (b, still, sms) = await Settled();
             if (b == null) break;
             allStill &= still; settle = Math.Max(settle, sms);
-            using (b) { var r = await Bbs757EfbPageReader.ReadAsync(Engine(), b); first ??= r.Model; fps.Add(Fp(r.Model)); ocr = Math.Max(ocr, r.OcrMs); }
+            using (b)
+            {
+                var r = await Bbs757EfbPageReader.ReadAsync(Engine(), b); fps.Add(Fp(r.Model)); ocr = Math.Max(ocr, r.OcrMs);
+                // PROBE_TOUR_SAVE=<dir>: each page's first picture kept, named after the page, for a look by eye.
+                if (first == null && Environment.GetEnvironmentVariable("PROBE_TOUR_SAVE") is { Length: > 0 } tourDir)
+                {
+                    Directory.CreateDirectory(tourDir);
+                    string stem = $"{_pages + 1:00}-" + string.Concat(label.Trim().Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-'));
+                    b.Save(Path.Combine(tourDir, stem + ".png"), ImageFormat.Png);
+                }
+                first ??= r.Model;
+            }
             if (i < n - 1) await Task.Delay(700);
         }
         if (first == null) { Console.WriteLine($"  {label}: capture failed"); return null; }
+        if (Environment.GetEnvironmentVariable("PROBE_TOUR_SAVE") is { Length: > 0 }) PrintModel(label.Trim(), first, "");
         bool stable = fps.Distinct().Count() == 1;
         bool landed = expect.Length == 0 || first.PageName.Contains(expect, StringComparison.OrdinalIgnoreCase);
         _pages++; if (stable) _stablePages++; if (landed) _landed++; if (!allStill) _unstill++;
@@ -367,7 +379,7 @@ internal static partial class Program
         return first;
     }
 
-    private static async Task<int> Tour(int n)
+    private static async Task<int> Tour(int n, string[] only)
     {
         if (Popout.Find() == IntPtr.Zero) { Console.WriteLine("no pop-out: run 'popout' first"); return 2; }
         Engine();   // loaded before the first tap, so no page waits for it
@@ -376,10 +388,13 @@ internal static partial class Program
         await Tap(Bbs757EfbScreen.HomeButton);
         var home = await ReadPage("Home", "Home", n);
         if (home == null) return 3;
-        var apps = home.Items.Where(i => i.Kind == Bbs757EfbKind.Menu && i.Clickable).ToList();
+        var apps = home.Items.Where(i => i.Kind == Bbs757EfbKind.Menu && i.Clickable
+            && (only.Length == 0 || only.Any(o => i.Text.Equals(o, StringComparison.OrdinalIgnoreCase)))).ToList();
         foreach (var app in apps)
         {
             await Tap(Bbs757EfbScreen.HomeButton);
+            // Home slides in after its first change, and an icon tapped meanwhile is lost (flight-11.md section 8).
+            await Task.Delay(HomeSlideMs);
             await Tap(app.Hit);
             var page = await ReadPage(app.Text, app.Text, n);
             if (page == null) continue;
@@ -397,6 +412,8 @@ internal static partial class Program
 
     // How long after mirror-on the pop-out reliably shows the tablet (see 'latency').
     private const int MirrorSettleMs = 600;
+    // How long the tour lets Home finish sliding in before it taps an app's icon.
+    private const int HomeSlideMs = 1500;
 
     private static async Task<int> Latency()
     {
