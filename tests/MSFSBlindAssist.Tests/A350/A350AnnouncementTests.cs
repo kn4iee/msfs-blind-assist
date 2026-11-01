@@ -586,9 +586,9 @@ public class A350LeverAnnouncementTests
     [Theory]
     [InlineData(0, null)]
     [InlineData(1, "All thrust levers 50 percent N1")]
-    public void The_lever_word_in_the_air_asks_the_cache_when_no_ground_delivery_came(double onGround, string? word)
+    public void The_lever_word_in_the_air_asks_the_cache_when_no_ground_delivery_came(double cachedOnGround, string? word)
     {
-        _cache["SIM_ON_GROUND"] = onGround;   // in the cache, never delivered
+        _cache["SIM_ON_GROUND"] = cachedOnGround;   // in the cache, never delivered
         Baseline();                           // both at Idle
         Deliver(A350LeverSpeech.Lever1, 12);  // both through 12, a delivery apart
         Deliver(A350LeverSpeech.Lever2, 12);
@@ -640,6 +640,24 @@ public class A350LeverAnnouncementTests
         Later();
         Deliver("A350_FCTL_SPD_BRK_LEVER", 1);
         Assert.Equal(new[] { "Thrust lever 1 Idle", "Spoilers full" }, _speech.All);
+    }
+
+    // Task 2B review: the seed's ground flag was pinned on A350LeverSpeech alone, never where the definition seeds. A baseline made in the air
+    // holds no take-off word for the levers at 12, so once on the ground their first move there says it; a baseline made as on the ground
+    // would hold it already, and the levers would say nothing.
+    [Fact]
+    public void Levers_seeded_in_the_air_say_the_take_offs_first_step_once_on_the_ground()
+    {
+        _cache[A350LeverSpeech.Lever1] = 12;
+        _cache[A350LeverSpeech.Lever2] = 12;
+        _cache["SIM_ON_GROUND"] = 0;
+        _def.ActiveBatches = _ => new[] { 0 };
+        _def.OnContinuousBatchDelivered(0);   // the first full cycle
+        _now += Md11SeedGate.CeilingMs;
+        _def.OnContinuousBatchDelivered(0);   // seeded at the ceiling, in the air
+        _cache["SIM_ON_GROUND"] = 1;          // on the ground now, in the cache, never delivered
+        Deliver(A350LeverSpeech.Lever1, 12.2);
+        Assert.Equal(new[] { "All thrust levers 50 percent N1" }, _speech.All);
     }
 
     [Fact]
