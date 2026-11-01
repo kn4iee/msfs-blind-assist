@@ -31,7 +31,7 @@ someone else, that is Robin Kipp.
 |---|---|---|---|
 | 01 | `01-review-and-seams.md`: an independent correctness review of `345bfd07f`..`7e6d5fbd1` and its fixes; the seams | first | — |
 | 02 | `02-altimeter.md`: the Altimeter window checks all three targets before it sends, follows LINKED INSTR, keeps STD; FCU changes from external hardware | early: fix | 01 |
-| 03 | `03-reader-traps.md`: each draw-engine trap named, proved harmless, its retry counted; `nvgTransform`; the 1.2.8 addresses | early: fix | 01 |
+| 03 | `03-reader-traps.md`: each draw-engine trap named, proved harmless, its retry counted; `nvgTransform`; what the reader takes from memory checked against the A350's L:vars; the 1.2.8 addresses | early: fix | 01 |
 | 04 | `04-ecam.md`: memo color swaps, memos said again, cabin ready repeats, reverser status, flight phases, every SD page | early: fix | 01 |
 | 05 | `05-first-officer.md`: the flap margin flown; auto-gear; the lowest AP engage height (T3); every normal checklist end to end | early | 01 |
 | 06 | `06-ois.md`: the OIS window's layout and navigation round; the sign-in code kept out of the speech log; the OIS backlog; 1.2.8 fixtures | early: fix | 01 |
@@ -68,7 +68,7 @@ record. Paths are under `MSFSBlindAssist/` unless they start with `docs/`, `tool
 | `Aircraft/A350/A350CalloutRows.cs` (new), `Aircraft/IniBuildsA350Definition.Hooks.cs` (new), `Forms/A350/A350MonitorManagerForm.cs` | 01, then frozen (07 removes the PFD flags line there when it splits that row). 01 also creates the four `A350CalloutRows.<Area>.cs` parts (then 04's, 07's, 08's and 22's) and makes its seams' changes to `A350EcamMonitor.cs`, `A350PfdMonitor.cs` and `MainForm.AircraftSwitch.cs` (`StartA350DisplayService`) before anyone else starts |
 | `Aircraft/IniBuildsA350Definition.cs` | 01, then frozen, except the `TaxiTurnLeadSeconds` line (08) and `GetVisualGuidanceProfile` (18) |
 | `Aircraft/A350/A350TypedEntry.cs`, `A350FcuCallouts.cs`, `A350FcuWindows.cs`, `A350Readouts.cs`, `A350BaroEntry.cs` (new), `Aircraft/IniBuildsA350Definition.Interaction.cs`, `Forms/A350/A350BaroWindow.cs`, `A350FcuValueWindow.cs`, `A350FcuWindowBase.cs`, `A350AutopilotWindow.cs` | 02 |
-| `Aircraft/A350/Display/A350DrawEngine.cs`, `A350DisplayService.cs`, `A350MemoryReader.cs`, `A350MemoryCopy.cs`, `A350HotPages.cs`, `A350ReaderStats.cs`, `A350ReadHealth.cs`, `A350ModuleCache.cs`, `A350ModulePatcher.cs`, `A350ModuleFacts.cs`, `A350WasmModule.cs`, `A350DrawCapture.cs`, `A350DrawState.cs`, `A350DrawLayout.cs`, `A350ShapeReader.cs`, `A350AVars.cs`, `A350ShownCapture.cs`, `A350StableValue.cs`, `A350TrapReport.cs` (new), `Aircraft/IniBuildsA350Definition.Displays.cs` | 03 |
+| `Aircraft/A350/Display/A350DrawEngine.cs`, `A350DisplayService.cs`, `A350MemoryReader.cs`, `A350MemoryCopy.cs`, `A350HotPages.cs`, `A350ReaderStats.cs`, `A350ReadHealth.cs`, `A350ModuleCache.cs`, `A350ModulePatcher.cs`, `A350ModuleFacts.cs`, `A350WasmModule.cs`, `A350DrawCapture.cs`, `A350DrawState.cs`, `A350DrawLayout.cs`, `A350ShapeReader.cs`, `A350AVars.cs`, `A350ShownCapture.cs`, `A350StableValue.cs`, `A350TrapReport.cs` (new), `A350FactsCheck.cs` (new), `Aircraft/IniBuildsA350Definition.Displays.cs` | 03 |
 | `tools/A350Probe/**` | 03 → 20 |
 | `Aircraft/A350/Display/A350Ewd.cs`, `A350EwdText.cs`, `A350EcamMonitor.cs`, `A350EcamAnnouncer.cs`, `A350SdPage.cs`, `A350SdSymbols.cs`, `A350SdText.cs`, `Aircraft/A350/A350CalloutRows.Ecam.cs` | 04 |
 | `FirstOfficer/A350/**`, `Aircraft/IniBuildsA350Definition.FirstOfficer.cs` | 05 |
