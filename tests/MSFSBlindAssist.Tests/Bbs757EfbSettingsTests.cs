@@ -76,9 +76,15 @@ public class Bbs757EfbSettingsTests
         },
         [Bbs757SettingSection.Aircraft] = new[]
         {
+            // BlueBird's 2026-10-31 update added Adaptive handling assist (with Control response under it while it is on),
+            // the automatic step climbs and Throttle lockout (measured 2026-11-01).
+            ("Adaptive handling assist", "easy_flight_enabled"),
+            ("Control response", "easy_flight_authority"),
             ("Adaptive cockpit lighting", "automatic_cockpit_lighting"),
             ("TOD pause distance (NM)", "tod_pause_distance"),
+            ("Automatic step climbs master option (experimental)", "automatic_step_climbs"),
             ("Nosewheel steering", "tiller_realistic"),
+            ("Throttle lockout", "throttle_lockout_enabled"),
             ("Displays bootup speed", "displays_bootup_realistic"),
             ("Sync barometers", "baro_sync"),
             ("Initial cockpit door", "cockpit_door_initial_open"),
@@ -256,6 +262,7 @@ public class Bbs757EfbSettingsTests
             // The tablet's slider order, not the stored numbers' (Light grey is 3, Dark grey is 2).
             ("ui_theme", Steps(("Dark blue", 0), ("Light blue", 1), ("Light grey", 3), ("Dark grey", 2))),
             ("automatic_cockpit_lighting", TrueFalse("Automatic", "Manual")),
+            ("automatic_step_climbs", TrueFalse("Enabled", "Disabled")),
             ("tiller_realistic", TrueFalse("Realistic", "Rudder")),
             ("displays_bootup_realistic", TrueFalse("Realistic", "Fast")),
             ("cockpit_door_initial_open", TrueFalse("Open", "Closed")),
@@ -274,6 +281,21 @@ public class Bbs757EfbSettingsTests
         // Every Choice setting is in the table, and nothing else is one.
         Assert.Equal(expected.Select(e => e.Path).Order(),
             Bbs757EfbSettings.All.Where(s => s.Kind == Bbs757SettingKind.Choice).Select(s => s.Path).Order());
+    }
+
+    [Fact]
+    public void Control_response_is_a_whole_number_to_100_while_adaptive_handling_assist_is_on()
+    {
+        // The tablet's slider stores 0 to 100 (GENTLE at 0, BALANCED at 50, RESPONSIVE at 100, "N/100" between; measured
+        // 2026-11-01) and shows only while Adaptive handling assist is on.
+        var response = Setting("easy_flight_authority");
+
+        Assert.Equal(Bbs757SettingKind.Number, response.Kind);
+        Assert.Equal(Bbs757ValueType.Integer, response.Type);
+        Assert.Equal(new Bbs757NumberRange(Bbs757NumberEntry.Whole, 0, 100), response.Range);
+        Assert.Equal("easy_flight_enabled", response.EnabledBy);
+        Assert.Equal(Bbs757SettingKind.OnOff, Setting("easy_flight_enabled").Kind);
+        Assert.Equal(Bbs757SettingKind.OnOff, Setting("throttle_lockout_enabled").Kind);
     }
 
     [Fact]
@@ -355,7 +377,7 @@ public class Bbs757EfbSettingsTests
     public void The_number_and_text_boxes_hold_what_the_tablet_holds()
     {
         Assert.Equal(
-            new[] { "display_brightness", "tod_pause_distance", "simbrief_id", "hoppie_logon_code",
+            new[] { "display_brightness", "easy_flight_authority", "tod_pause_distance", "simbrief_id", "hoppie_logon_code",
                     "sayintentions_acars_key" }.Order(),
             Bbs757EfbSettings.All.Where(s => s.Kind is Bbs757SettingKind.Number or Bbs757SettingKind.Text)
                 .Select(s => s.Path).Order());
@@ -586,13 +608,17 @@ public class Bbs757EfbSettingsTests
     }
 
     [Fact]
-    public void The_announcement_categories_follow_announcements()
+    public void The_announcement_categories_follow_announcements_and_control_response_its_assist()
     {
         var follow = Bbs757EfbSettings.All.Where(s => s.EnabledBy is not null).ToDictionary(s => s.Path, s => s.EnabledBy);
 
-        Assert.Equal(new[] { Cabin + "non_safety_announcements", Cabin + "safety_announcements" }, follow.Keys.Order());
-        Assert.All(follow.Values, v => Assert.Equal(Cabin + "announcements", v));
+        Assert.Equal(new[] { "easy_flight_authority", Cabin + "non_safety_announcements", Cabin + "safety_announcements" },
+            follow.Keys.Order());
+        Assert.Equal(Cabin + "announcements", follow[Cabin + "non_safety_announcements"]);
+        Assert.Equal(Cabin + "announcements", follow[Cabin + "safety_announcements"]);
+        Assert.Equal("easy_flight_enabled", follow["easy_flight_authority"]);
         Assert.Null(Setting(Cabin + "announcements").EnabledBy);
+        Assert.Null(Setting("easy_flight_enabled").EnabledBy);
     }
 
     // ---- what a number or text box shows, and what it takes ---------------------------------------

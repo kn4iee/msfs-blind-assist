@@ -131,6 +131,39 @@ public class Bbs757EfbSettingsMatchTests
             ("Dirty panel states", "dirty_panel_states_enabled"));
 
     [Fact]
+    public void The_updated_Aircraft_page_rows_are_matched_with_their_keys() =>
+        // BlueBird's 2026-10-31 update (captured 2026-11-01): three new rows, and the page scrolls; its lower rows are below.
+        AssertPage("bright", "56-settings-aircraft-step-climbs", "Settings, Aircraft",
+            ("Adaptive handling assist", "easy_flight_enabled"),
+            ("Adaptive cockpit lighting", "automatic_cockpit_lighting"),
+            ("TOD pause distance (NM)", "tod_pause_distance"),
+            ("Automatic step climbs master option: (experimental)", "automatic_step_climbs"),
+            ("Nosewheel steering", "tiller_realistic"),
+            ("Throttle lockout", "throttle_lockout_enabled"),
+            ("Displays bootup speed", "displays_bootup_realistic"),
+            ("Sync barometers", "baro_sync"),
+            ("Initial cockpit door", "cockpit_door_initial_open"),
+            ("Parking brake mode", "parking_brake_realistic"),
+            ("IRS alignment time", "irs_align_time"),
+            ("Boarding & load rate", "loading_speed"),
+            ("Automatic boarding", "automatic_loading"),
+            ("Automatic gpu/jetway", "auto_connect_ground_services_on_init"));
+
+    [Fact]
+    public void Control_response_shows_under_adaptive_handling_assist_switched_on()
+    {
+        AssertPage("bright", "57-settings-aircraft-control-response", "Settings, Aircraft",
+            ("Adaptive handling assist", "easy_flight_enabled"),
+            ("Control response", "easy_flight_authority"));
+
+        // A number along its track, as the window offers it: no choice list of words.
+        var model = Bbs757EfbScreenTests.Load("bright", "57-settings-aircraft-control-response");
+        var response = Assert.Single(model.Items, i => i.Text == "Control response");
+        Assert.Equal(Bbs757EfbKind.Slider, response.Kind);
+        Assert.Null(Bbs757EfbSettingsMatch.ChoicesFor(Bbs757EfbSettingsMatch.SettingFor(model.PageName, response)!));
+    }
+
+    [Fact]
     public void The_Callouts_page_rows_are_matched_with_their_keys() =>
         AssertPage("bright", "53-settings-callouts", "Settings, Callouts",
             ("80 KTS", Pilot + "80_knots"),

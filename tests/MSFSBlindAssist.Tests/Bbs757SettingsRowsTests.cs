@@ -108,9 +108,13 @@ public class Bbs757SettingsRowsTests
             ["notification_popback_seconds"] = "5 sec",
             ["ui_theme"] = "Dark blue",
             // Aircraft
+            ["easy_flight_enabled"] = "Off",
+            ["easy_flight_authority"] = "50",
             ["automatic_cockpit_lighting"] = "Automatic",
             ["tod_pause_distance"] = "0",
+            ["automatic_step_climbs"] = "Disabled",
             ["tiller_realistic"] = "Rudder",
+            ["throttle_lockout_enabled"] = "Off",
             ["displays_bootup_realistic"] = "Fast",
             ["baro_sync"] = "On",
             ["cockpit_door_initial_open"] = "Closed",
@@ -144,15 +148,42 @@ public class Bbs757SettingsRowsTests
             .ToArray();
 
         // Every row of these sections is in the table, and each one reads as the table says. Only the brightness is
-        // Automatic: the file's mode is automatic. Nothing is inactive and every row but that one may change.
+        // Automatic: the file's mode is automatic. Only Control response is inactive (Adaptive handling assist is off, and the
+        // tablet then hides it), and every row but the brightness may change.
         Assert.Equal(shown.Keys.Order(), rows.Select(row => row.Setting.Path).Order());
         var mismatches = rows
             .Where(row => row.Text != shown[row.Setting.Path]
                 || row.State != (row.Setting.Path == "display_brightness" ? Bbs757RowState.Automatic : Bbs757RowState.Value)
-                || row.Inactive
-                || row.CanEdit(true) != (row.Setting.Path != "display_brightness"))
+                || row.Inactive != (row.Setting.Path == "easy_flight_authority")
+                || row.CanEdit(true) != (row.Setting.Path is not ("display_brightness" or "easy_flight_authority")))
             .Select(row => $"{row.Setting.Path}: {row.State} '{row.Text}' (inactive {row.Inactive})");
         Assert.Empty(mismatches);
+    }
+
+    [Fact]
+    public void A_file_from_before_BlueBirds_update_reads_the_new_rows_as_unreadable_only()
+    {
+        // A pilot who has not installed BlueBird's 2026-10-31 update has none of its keys: those rows cannot be read or changed,
+        // and every other row reads as before.
+        string[] added = { "throttle_lockout_enabled", "easy_flight_enabled", "easy_flight_authority", "automatic_step_climbs" };
+        string older = SettingsJson.Replace(
+            ",\"ai_dispatch_enabled\":false,\"throttle_lockout_enabled\":false,\"easy_flight_enabled\":false,\"easy_flight_authority\":50,\"automatic_step_climbs\":false",
+            "", StringComparison.Ordinal);
+        Assert.NotEqual(SettingsJson, older);
+
+        var now = RowsOf(Bbs757SettingSection.Aircraft, SettingsJson);
+        var before = RowsOf(Bbs757SettingSection.Aircraft, older);
+
+        foreach (var row in before)
+        {
+            if (added.Contains(row.Setting.Path))
+            {
+                Assert.Equal(Bbs757RowState.Unreadable, row.State);
+                Assert.False(row.CanEdit(true), row.Setting.Path);
+            }
+            else
+                Assert.Equal(RowFor(now, row.Setting.Path), row);
+        }
     }
 
     [Fact]
@@ -350,7 +381,8 @@ public class Bbs757SettingsRowsTests
             Assert.All(rows, row =>
             {
                 Assert.Equal((Bbs757RowState.Unreadable, -1, Bbs757SettingsRows.UnreadableText), (row.State, row.ChoiceIndex, row.Text));
-                Assert.False(row.Inactive);
+                // Control response waits for Adaptive handling assist, which does not read On either.
+                Assert.Equal(row.Setting.Path == "easy_flight_authority", row.Inactive);
                 Assert.False(row.CanEdit(true), row.Setting.Path);
             });
         }
@@ -672,8 +704,9 @@ public class Bbs757SettingsRowsTests
     }
 
     [Fact]
-    public void Only_the_announcement_categories_follow_another_setting()
+    public void Only_the_announcement_categories_and_control_response_follow_another_setting()
     {
+        // The fixture's Adaptive handling assist is off: Control response waits for it as the categories wait for Announcements.
         var rows = new[]
             {
                 Bbs757SettingSection.General, Bbs757SettingSection.Aircraft, Bbs757SettingSection.AiracData,
@@ -682,8 +715,20 @@ public class Bbs757SettingsRowsTests
             }
             .SelectMany(section => RowsOf(section, SettingsJson, Replaced(LiveryJson, "\"announcements\":true", "\"announcements\":false")));
 
-        Assert.Equal(new[] { Cabin + "non_safety_announcements", Cabin + "safety_announcements" },
+        Assert.Equal(new[] { "easy_flight_authority", Cabin + "non_safety_announcements", Cabin + "safety_announcements" },
             rows.Where(row => row.Inactive).Select(row => row.Setting.Path).Order());
+    }
+
+    [Fact]
+    public void Control_response_may_change_once_adaptive_handling_assist_is_on()
+    {
+        var on = RowsOf(Bbs757SettingSection.Aircraft,
+            Replaced(SettingsJson, "\"easy_flight_enabled\":false", "\"easy_flight_enabled\":true"));
+
+        var response = RowFor(on, "easy_flight_authority");
+        Assert.Equal((Bbs757RowState.Value, "50"), (response.State, response.Text));
+        Assert.False(response.Inactive);
+        Assert.True(response.CanEdit(true));
     }
 
     // ---- what may be edited -------------------------------------------------------------------------

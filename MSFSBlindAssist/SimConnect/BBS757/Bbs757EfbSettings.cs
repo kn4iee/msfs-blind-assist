@@ -537,9 +537,10 @@ public static class Bbs757EfbSettings
 
     /// <summary>A number or text box, which has no choices.</summary>
     private static Bbs757Setting Box(Bbs757SettingSection section, string path, string label, Bbs757SettingKind kind,
-        Bbs757ValueType type, Bbs757Value? emptyStored = null, bool mayLog = true, Bbs757NumberRange? range = null) =>
+        Bbs757ValueType type, Bbs757Value? emptyStored = null, bool mayLog = true, Bbs757NumberRange? range = null,
+        string? enabledBy = null) =>
         new(path, FileOf(section), section, label, kind, type, Array.Empty<Bbs757SettingChoice>(),
-            EmptyStored: emptyStored, MayLog: mayLog, Range: range);
+            EnabledBy: enabledBy, EmptyStored: emptyStored, MayLog: mayLog, Range: range);
 
     private static Bbs757SettingChoice Choice(string word, bool stored) => new(word, Bbs757Value.Of(stored));
 
@@ -584,12 +585,22 @@ public static class Bbs757EfbSettings
         const Bbs757SettingSection section = Bbs757SettingSection.Aircraft;
         return new[]
         {
+            // BlueBird's 2026-10-31 update added Adaptive handling assist, the automatic step climbs and Throttle lockout
+            // (measured 2026-11-01, each switched on and back off on the tablet).
+            Switch(section, "easy_flight_enabled", "Adaptive handling assist"),
+            // Shown under it only while it is on: a slider storing 0 to 100, which the tablet says as GENTLE at 0, BALANCED at
+            // 50, RESPONSIVE at 100 and "N/100" between.
+            Box(section, "easy_flight_authority", "Control response", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
+                range: new Bbs757NumberRange(Bbs757NumberEntry.Whole, 0, 100), enabledBy: "easy_flight_enabled"),
             TwoWords(section, "automatic_cockpit_lighting", "Adaptive cockpit lighting", "Automatic", "Manual"),
             // Off is -1 (an empty box); switched on, the tablet stores 40 and then what its keypad types. The range 1 to
             // 999 is a ruling: the keypad's limits were not measured.
             Box(section, TodPauseDistancePath, "TOD pause distance (NM)", Bbs757SettingKind.Number, Bbs757ValueType.Integer,
                 emptyStored: Bbs757Value.Of(-1L), range: new Bbs757NumberRange(Bbs757NumberEntry.Whole, 1, 999)),
+            // The tablet's own label; its status line under it (OFF, DISARMED) is no setting.
+            TwoWords(section, "automatic_step_climbs", "Automatic step climbs master option (experimental)", "Enabled", "Disabled"),
             TwoWords(section, "tiller_realistic", "Nosewheel steering", "Realistic", "Rudder"),
+            Switch(section, "throttle_lockout_enabled", "Throttle lockout"),
             TwoWords(section, "displays_bootup_realistic", "Displays bootup speed", "Realistic", "Fast"),
             Switch(section, "baro_sync", "Sync barometers"),
             TwoWords(section, "cockpit_door_initial_open", "Initial cockpit door", "Open", "Closed"),
