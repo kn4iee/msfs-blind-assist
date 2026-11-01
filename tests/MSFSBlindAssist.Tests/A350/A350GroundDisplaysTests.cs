@@ -78,18 +78,25 @@ public class A350GroundDisplaysTests
     // Review 2026-10-31 (M1): a name the clip hides, its symbol past the last range label, read with a place nobody sees: ODLAL at 42 NM on
     // the 40 NM display (the arrival), SOLIL past 10 NM on ROSE LS, OMDB and 12L at 42 NM. A capture from before the clip was tracked reads
     // each text unclipped: ODLAL still lies past 40 NM. And a name the clip hides inside the range, as one under the display's window.
+    // Task 2A review (Minor 1): what the clip hides is not spoken at all, as on the PFD; it read as a row. ODLAL is said as often as the
+    // map draws it, once (y 136); SOLIL, drawn only past the clip, never; OMDB and 12L once each, the range map's plan runway label.
     [Fact]
     public void A_clipped_or_out_of_range_vd_name_is_not_read()
     {
         static bool Vd(string line, string name) => line.StartsWith($"Vertical display: {name},", StringComparison.Ordinal);
         var arrival = A350Fixtures.Capture("efis0_vd_arrival.json");
-        Assert.DoesNotContain(A350GroundDisplays.ReadNd(arrival, 0), l => Vd(l, "ODLAL"));
+        var nd = A350GroundDisplays.ReadNd(arrival, 0);
+        Assert.DoesNotContain(nd, l => Vd(l, "ODLAL"));
+        Assert.Equal("ODLAL, green", Assert.Single(nd, l => l.Contains("ODLAL", StringComparison.Ordinal)));
         var unclipped = arrival with { Texts = arrival.Texts.Select(t => t with { Clipped = false }).ToList() };
         Assert.DoesNotContain(A350GroundDisplays.ReadNd(unclipped, 0), l => Vd(l, "ODLAL"));
         var hidden = arrival with { Texts = arrival.Texts.Select(t => t.Text.Trim() == "DB408" && t.Y > 800 ? t with { Clipped = true } : t).ToList() };
         Assert.DoesNotContain(A350GroundDisplays.ReadNd(hidden, 0), l => Vd(l, "DB408"));
-        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0), l => Vd(l, "SOLIL"));
-        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0), l => Vd(l, "OMDB") || Vd(l, "12L"));
+        Assert.DoesNotContain(A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0), l => l.Contains("SOLIL", StringComparison.Ordinal));
+        var arc40 = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_arc40_omdb_label.json"), 0);
+        Assert.DoesNotContain(arc40, l => Vd(l, "OMDB") || Vd(l, "12L"));
+        Assert.Single(arc40, l => l == "OMDB, white");
+        Assert.Single(arc40, l => l == "12L, white");
     }
 
     // Review 2026-10-31 (M1): on the arrival a magenta D stands in a circle of its own on the path (likely the decel point), and read as a

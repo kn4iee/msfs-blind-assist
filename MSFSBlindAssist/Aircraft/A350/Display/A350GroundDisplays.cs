@@ -172,18 +172,18 @@ public static class A350GroundDisplays
             used.UnionWith(value);
             o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
         }
+        // A cell keeps neither its place in the draw order nor whether the clip hid it, so each is found again where it was drawn.
+        int DrawnAt(DrawnCell c)
+        {
+            for (int i = 0; i < drawn.Count; i++)
+                if (Math.Abs(drawn[i].X - shift - c.X) < 0.5f && Math.Abs(drawn[i].Y - c.Y) < 0.5f && drawn[i].Text.Trim() == c.Text) return i;
+            return -1;
+        }
         // The vertical display's waypoints, each name beside its symbol, on the two scales. Its own texts are drawn after its range
         // labels: the range map's names drawn behind it, under the map, come before them (MCT and BASUR at FL300, MIN on the arrival, live
-        // 2026-10-30). A text the clip hides is off the display (ODLAL past 40 NM on the arrival). A cell keeps neither, so each is found
-        // again where it was drawn.
+        // 2026-10-30). A text the clip hides is off the display (ODLAL past 40 NM on the arrival).
         if (scales != null)
         {
-            int DrawnAt(DrawnCell c)
-            {
-                for (int i = 0; i < drawn.Count; i++)
-                    if (Math.Abs(drawn[i].X - shift - c.X) < 0.5f && Math.Abs(drawn[i].Y - c.Y) < 0.5f && drawn[i].Text.Trim() == c.Text) return i;
-                return -1;
-            }
             int labels = distances.Select(DrawnAt).Where(i => i >= 0).DefaultIfEmpty(int.MaxValue).Min();
             bool Own(DrawnCell c) => DrawnAt(c) > labels;
             bool OnDisplay(DrawnCell c) => DrawnAt(c) is var i && i > labels && !drawn[i].Clipped;
@@ -203,6 +203,9 @@ public static class A350GroundDisplays
                 o.Add($"Vertical display: {shown}, {name.Colour}: {scales.NmAt(name.X - VerticalScales.NameRightOfSymbol)}, {scales.FeetAt(name.Y - VerticalScales.NameUnderSymbol)} feet");
             }
         }
+        // What the clip hides in the vertical display is not on the screen, so it is not spoken, as on the PFD; the map's own drawing of a
+        // name still reads (ODLAL on the arrival, the plan's OMDB 12L).
+        used.UnionWith(cells.Where(c => !used.Contains(c) && c.Y is >= VerticalScales.PlotTop and < VerticalScales.PlotBottom && DrawnAt(c) is var i and >= 0 && drawn[i].Clipped));
         o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;
@@ -216,7 +219,8 @@ public static class A350GroundDisplays
 
         /// <summary>A line is a level stroke: every MSA line drawn is 4 px tall, and a step drawn as one path is no level.</summary>
         internal const float MaxLineHeight = 6;
-        private const float TickOverLabel = 10, PlotTop = 800, PlotBottom = 1000;
+        internal const float PlotTop = 800, PlotBottom = 1000;
+        private const float TickOverLabel = 10;
 
         /// <summary>A runway's ident under the airport's name: "22", "12L".</summary>
         internal static readonly System.Text.RegularExpressions.Regex RunwayIdent = new(@"^\d{2}[LCR]?$", System.Text.RegularExpressions.RegexOptions.Compiled);
