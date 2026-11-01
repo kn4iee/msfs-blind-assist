@@ -135,6 +135,22 @@ public class A350GroundDisplaysTests
         finally { System.Globalization.CultureInfo.CurrentCulture = old; }
     }
 
+    // Final review (recommendation 2): the runway's line takes its place from its two white lines, not from a name beside a symbol, and its
+    // distance on the stand at VCBI has a tenth too.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_vds_runway_line_reads_the_same_under_de_DE_and_sv_SE(string culture)
+    {
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            Assert.Contains("Vertical display: VCBI 22, white: 1.1 NM, 0 feet", A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_takeoff_ready.json"), 0));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
+    }
+
     // Task 2A review (Minor 2): the scale reads only its end labels, none of them a decimal in any capture, so nothing pinned how a label
     // parses (another program's number, CORE-17). With the 10 NM range's "10" gone, "7.5" is the last label: parsed in the PC's culture it
     // reads 75 under de-DE and nothing under sv-SE, and the scale is lost.
