@@ -23,7 +23,7 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
     /// (appended after the sort, as the A380's E/WD fold is): the E/WD call-outs, which Ctrl+E flips; each FMA column;
     /// the FMS messages heard with the MFD window closed; each take-off speed, said as it is entered and called on the
     /// roll (<see cref="Aircraft.A350.A350TakeoffCallouts"/>); each approach minimum (<see cref="Aircraft.A350.A350MinimumsCallout"/>); BTV's
-    /// distance to the exit and runway remaining (<see cref="Aircraft.A350.A350BtvCountdown"/>); the aircraft's own pauses; the PFD's flags, the TCAS's advisories, new printouts and low memory, one row each; then the rows added since, by area (<see cref="Aircraft.A350.A350CalloutRows"/>).</summary>
+    /// distance to the exit and runway remaining (<see cref="Aircraft.A350.A350BtvCountdown"/>); the aircraft's own pauses; the PFD's flags, the TCAS's advisories, new printouts and low memory, one row each; then the rows the call-outs list by area in <see cref="Aircraft.A350.A350CalloutRows"/> (E/WD, PFD, ND, datalink).</summary>
     internal static List<MonitorRow> BuildRows(IReadOnlyDictionary<string, SimVarDefinition> variables)
     {
         var rows = MonitorRowBuilder.Build(variables);
