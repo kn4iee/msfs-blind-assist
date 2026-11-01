@@ -97,6 +97,23 @@ public class A350HotkeysTests
         }
     }
 
+    // Final review (Important 2): the read above pins the frequency and the DME under a comma culture, never the glideslope's figure, and
+    // every aircraft's Output N formats a radio through this one helper.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Output_ns_glideslope_reads_the_same_under_de_DE_and_sv_SE(string culture)
+    {
+        var old = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            Assert.Equal("Nav 1: 110.10, IDBL, localizer course 119, glideslope 3.0 degrees, DME 12.3 nautical miles",
+                MSFSBlindAssist.Services.NavRadioFormat.Single("Nav 1", 110.1, 1, 1, 1, 1, 12.34, 119, 3.0, "IDBL", ""));
+        }
+        finally { CultureInfo.CurrentCulture = old; }
+    }
+
     [Fact]
     public void Output_n_says_when_the_pfd_shows_no_landing_system() =>
         Assert.Equal("LS not shown", A350Hotkeys.LandingSystem(new[] { "Speed: 200 knots" }));
