@@ -141,6 +141,28 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Empty(rig.Speech.All);
     }
 
+    // The 3 kt window above what the next flap waits for reaches into VFE next's 5 kt margin when the two lie this close, and VFE next wins:
+    // with green dot at 210 and VFE next at 214, 211 is inside the window (under 213) and inside the margin (209 and up), so flaps 1 holds,
+    // at the margin's edge as well. One knot under the edge it goes.
+    [Fact]
+    public async Task The_A350s_flaps_never_extend_inside_the_margin_above_vfe_next_minus_5()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);   // the approach context arms
+        rig.VfeNext(214);
+        rig.Fly(agl: 3_000, vs: 0, ias: 211);        // green dot is 210
+        rig.Fly(agl: 3_000, vs: 0, ias: 209);        // VFE next minus 5
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+
+        rig.Fly(agl: 3_000, vs: 0, ias: 208);
+        Assert.Equal(new[] { 1 }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued("Speed checked. Flaps 1.") }, rig.Speech.All);
+    }
+
     // Live 2026-10-30: the managed speed holds the speed each configuration waits for ("the aircraft will not decelerate below green dot" clean,
     // the manual): 191 with green dot at 190.6, 171 with S at 170.2, 154 with F at 152.9. Waiting to be under it held flaps up level at 4000 ft.
     [Theory]
