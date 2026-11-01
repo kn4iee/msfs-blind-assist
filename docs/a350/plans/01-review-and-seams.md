@@ -155,8 +155,39 @@ green-dot hold (plan 19's Task 1). Outside the range, for the owner: the PMDG 73
 
 ## Handoff to plan 21
 
-- **Pilot-facing:** none from the seams; each fixed finding names its own.
-- **Rule proposals:** none expected; a finding that shows a guardrail worth keeping proposes its line here.
+- **Pilot-facing:** none from the seams. From the fixes:
+  - The vertical display reads only its own texts:
+    - the range map's names drawn behind it (MCT, BASUR, MIN) no longer get places;
+    - the runway's label reads "Vertical display: VCBI 22, white: 1.1 NM, 0 feet", placed from its two lines;
+    - text the clip hides is not spoken;
+    - the MSA is read from its line wherever it is drawn ("MSA: about 3800 feet, magenta"), never from a runway ident.
+  - After a flight loaded in the air, the levers through TLA 12 no longer say "All thrust levers 50 percent N1".
+  - The First Officer's 10 s go-around flap hold starts from the go-around's own lever movement, so an engine-out approach flown at MCT keeps it.
+  - **User guide:** none, because `guide/airbus-aircraft.md:822`'s vertical display sentence still holds, and the guide describes neither the lever word's ground condition nor the hold.
+  - **Hotkey guide:** none.
+  - **Changelog:** none of its own; the unreleased A350's aircraft fragment covers these.
+- **In-sim plan lines (CORE-5):**
+  1. A flight loaded in the air, both levers through TLA 12 together: nothing at 12. On the ground: "All thrust levers 50 percent N1".
+  2. An approach flown at MCT with one engine out, then TOGA below 1500 ft: no flap moves for 10 s.
+  3. An unticked FMA, E/WD or FMS-message Ctrl+M row still mutes (Task 5 rewired the mute).
+  4. On the stand at VCBI with the ND at 40 NM: the vertical display's MSA from its line and the "VCBI 22" line.
+- **Docs left for plan 21:** `docs/first-officer.md:16` describes the go-around hold and the strict flap waits (M4).
+- **Rule proposals:** none. Each guardrail added here has a test whose failure explains it:
+  - the vertical display's draw order;
+  - the MSA's line first;
+  - the lever word asking the cache;
+  - the hold's own stamp.
+- **Gaps in other plans' files:**
+  - `A350LeverSpeech.Thrust` still defaults `onGround` to true; only tests use the default (plan 11).
+  - `A350EcamMonitorTests.cs:90` pins the one key the monitor asks; relax it when keys are added (plan 04).
+  - Task 3's no-shared-key test compares against the variable rows only; widen it with the first added row (plan 04).
+  - `ObserveNd`, when it gets a body (plan 08):
+    - returns once the definition is disposed;
+    - tolerates a null `Pfd` or `Displays`;
+    - stays fast, since it runs before the FMS-message read;
+    - may re-check `currentAircraft` in its posted speak.
+
+    The PFD section of `docs/inibuilds-a350.md` gains the hand-on clause then.
 
 ## Execution record
 
@@ -169,8 +200,50 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Started:** 2026-10-31, `feat/inibuilds-a350` at eeb325324 (the plan set's last commit)
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
+- **Tasks:** all done; `git log --grep "^Plan: 01"` lists the commits.
+  - 0, the claim: `2f8a446ce`.
+  - 1, the review: recorded at `3386b5b52`.
+  - 2, the fixes:
+    - C1 with M1: `cae5f5757`.
+    - I1: `9f77eeb97`.
+    - I2: `0eaad800c`.
+    - Their review's round: `7832b53bb`, `41fcb6a24`, `7d06c43c8`, `85692e71d`.
+    - I3: `b30630c2b`.
+    - I4: `d6d23437b`, with the VFE-next pin `6ee0eb1f7`.
+  - 3, the Ctrl+M seam: `8f1b0b52d`.
+  - 4, the keyed mute: `ab6e9c147`.
+  - 5, the EFIS hand-on: `bdcc53f41`.
 - **Waiting on the owner:**
-- **In-sim results:**
+  - the four in-sim lines in the handoff above;
+  - M12, a design point for plan 05;
+  - outside the A350: the PMDG 737 NAV radios dialog speaks `Nav1FreqMHz` in the PC's culture.
+- **In-sim results:** none yet; the checks go into plan 21's in-sim plan.
 - **Changed from the plan:**
-- **Rulings made while working:**
+  - **Where:** worked in the session's worktree `.claude/worktrees/a350-deploy-a41d04`, not `a350-p01`, and pushed once, at landing.
+  - **Task 2** ran as three dispatches, each with its own review: the vertical display reader, the lever word, and the go-around hold.
+  - **The vertical display's review round** also fixed four Minors in its own code:
+    - clip-hidden texts left out of the plain rows;
+    - `RunwayAt` requires both lines;
+    - the MSA line has a height bound;
+    - `Value` parses through `NumberParsing.TryParseExternal` (CORE-17), pinned under de-DE and sv-SE.
+  - **Tests beyond the briefs:**
+    - an MSA figure of its own color that the line still beats;
+    - a runway line stroked twice;
+    - the go-around after an earlier MCT excursion;
+    - the hold's baseline rule.
+  - **I3's helper** also replaced its two identical copies (`ObserveMinimums`, `ObserveBtv`), and `SeedThrust` takes a required `onGround`. Its test sits in `A350AnnouncementTests.cs` (plan 11's file), beside the definition's lever-delivery tests.
+  - **I4's hold** reads the throttles in the manager; `A350StateEvaluator.cs`, outside this plan's files, is untouched.
+  - **Task 4's keyed constructor** also changed `A350PfdDisplayTests.cs` (one line) and three call sites in `tools/A350Probe` (plan 03's tool, which builds on its own).
+  - **Task 5:**
+    - a private `Settling(at)` helper in `A350PfdMonitor`;
+    - one `muted` local in `StartA350DisplayService`, shared by the E/WD monitor, the PFD monitor and the hook;
+    - a fourth test pinning the settling after the FMA read.
+  - **Task 3:** a doc clause on `BuildRows`.
+- **Rulings made while working** (question; answer; who decided):
+  - The review package: the merge or the commits? The first-parent non-merge commits' own diffs. (Claude)
+  - Task 3 beside Task 1's read-only review? Yes; Task 3 touches no reviewed file. (Claude)
+  - M1, a Minor, fixed here? Yes, with C1: it is the same name filter. (Claude)
+  - The vertical display review's Minors: Task 1's Minors go to their plans, but these were in code this plan wrote. Fixed in the fix loop. (Claude)
+  - The MSA: line or figure first? The line first, and a figure only of the name's color. (Claude)
+  - The forced files above (the probe, `A350PfdDisplayTests.cs`, `A350AnnouncementTests.cs`)? Kept in plan 01: plan 01 runs alone. (Claude)
+  - I4's 30 and 40: the hold stamps on `FO_GA_THRUST`'s rising edge or the higher lever crossing 40. (Claude)
