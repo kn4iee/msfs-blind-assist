@@ -681,14 +681,15 @@ public partial class MainForm
     private void StartA350DisplayService()
     {
         if (a350DisplayService != null) return;
-        // Whether a Ctrl+M row is unticked, asked by its key: the E/WD monitor's, the display monitor's and the definition's.
+        // Whether a Ctrl+M row is unticked, asked by its key: the reader's own (low memory), the E/WD monitor's, the display
+        // monitor's and the definition's.
         Func<string, bool> muted = key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key);
         a350DisplayService = new Aircraft.A350.Display.A350DisplayService();
         // Everything said while the A350's reader runs goes in a350_speech.log, what is unticked in Ctrl+M in the main log:
         // together they answer "it never told me" from a pilot's logs.
         announcer.Trace = Aircraft.A350.Display.A350SpeechLog.Said;
         Log.Info("A350", "Ctrl+M rows unticked: " + string.Join(", ", Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet));
-        a350DisplayService.Muted = key => Settings.SettingsManager.Current.A350DisabledMonitorVariablesSet.Contains(key);
+        a350DisplayService.Muted = muted;
         // The reader speaks from its worker thread and the monitors from pool threads: each line is posted to the UI thread,
         // the only one the announcer speaks from (off it a line is lost unheard, [A380C-22]).
         a350DisplayService.Spoken += line => SafeBeginInvoke(() => announcer.Announce(line));

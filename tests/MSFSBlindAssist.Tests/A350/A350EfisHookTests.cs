@@ -71,6 +71,31 @@ public class A350EfisHookTests
         Assert.Same(good, Assert.Single(handed));
     }
 
+    // An aircraft switch disposes the monitor, perhaps in the middle of a tick's draw: the draw that ends after it is not handed on, as nothing
+    // is said from it by the readers the monitor speaks for itself (final review, Minor 4).
+    [Fact]
+    public async Task A_draw_that_ends_after_dispose_is_not_handed_on()
+    {
+        var captain = Fixture("efis0_fd_stand");
+        var drawn = new TaskCompletionSource();
+        drawn.SetResult();   // the first tick draws at once
+        var handed = new List<A350DrawCapture>();
+        var m = new A350PfdMonitor(async gauges =>
+            {
+                await drawn.Task;
+                return gauges.Select(g => g == ("EFIS", 0) ? captain : null).ToList();
+            },
+            FlagsMuted, _ => { }) { CaptainEfisDrawn = (capture, _, _) => handed.Add(capture) };
+        await m.TickAsync();
+        Assert.Same(captain, Assert.Single(handed));   // the hook is wired
+        drawn = new TaskCompletionSource();
+        var tick = m.TickAsync();   // the next tick, still drawing
+        m.Dispose();                // the aircraft switch
+        drawn.SetResult();
+        await tick;
+        Assert.Single(handed);
+    }
+
     // Like every reader of a tick, the hook costs that read only when it throws: it is handed the next tick's draw as well,
     // and the E/WD's hand-over and the FMA read before it and the message line's read after it are untouched.
     [Fact]

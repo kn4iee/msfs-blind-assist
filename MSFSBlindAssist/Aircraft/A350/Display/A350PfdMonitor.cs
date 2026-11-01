@@ -170,8 +170,8 @@ public sealed class A350PfdMonitor : IDisposable
         {
             Read("FMA", () => ObserveFma(cpt, at));
             // The definition's ND reader is handed the same draw once the FMA read has seen it: that read starts the settle
-            // window of a flight just loaded.
-            if (CaptainEfisDrawn is { } efis) Read("ND", () => efis(cpt, at, Settling(at)));
+            // window of a flight just loaded. Not once disposed: like the readers that speak here, it says nothing after.
+            if (CaptainEfisDrawn is { } efis && !_disposed) Read("ND", () => efis(cpt, at, Settling(at)));
         }
         int mfdAt = gauges.IndexOf(("MFD", 0));
         if (mfdAt >= 0 && mfdAt < caps.Count && caps[mfdAt] is { Ok: true } mfd)
