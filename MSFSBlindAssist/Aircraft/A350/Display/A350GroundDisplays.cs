@@ -238,8 +238,9 @@ public static class A350GroundDisplays
             return (lines.Min(s => s.X0) - shift, (lines.Min(s => s.Y0) + lines.Max(s => s.Y1)) / 2);
         }
 
+        /// <summary>A scale label as a number another program wrote (CORE-17): the A350 draws "2.5" and "7.5" whatever the PC's culture.</summary>
         private static double? Value(DrawnCell c, double scale) =>
-            double.TryParse(c.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v * scale : null;
+            MSFSBlindAssist.Utils.NumberParsing.TryParseExternal(c.Text, out double v) ? v * scale : null;
 
         public static VerticalScales? Of(IReadOnlyList<DrawnCell> distances, IReadOnlyList<DrawnCell> altitudes, bool flightLevels)
         {

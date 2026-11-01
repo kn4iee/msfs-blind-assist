@@ -135,6 +135,26 @@ public class A350GroundDisplaysTests
         finally { System.Globalization.CultureInfo.CurrentCulture = old; }
     }
 
+    // Task 2A review (Minor 2): the scale reads only its end labels, none of them a decimal in any capture, so nothing pinned how a label
+    // parses (another program's number, CORE-17). With the 10 NM range's "10" gone, "7.5" is the last label: parsed in the PC's culture it
+    // reads 75 under de-DE and nothing under sv-SE, and the scale is lost.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_decimal_last_range_label_reads_the_same_under_de_DE_and_sv_SE(string culture)
+    {
+        var old = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            var capture = A350Fixtures.Capture("efis0_ls_rose_ils2.json");
+            var nd = A350GroundDisplays.ReadNd(capture with { Texts = capture.Texts.Where(t => !(t.Text.Trim() == "10" && Math.Abs(t.Y - 789) < 1)).ToList() }, 0);
+            Assert.Contains("Vertical display range: 0 2.5 5 7.5, cyan", nd);
+            Assert.Contains("Vertical display: DB403, white: 5.9 NM, 6200 feet", nd);
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = old; }
+    }
+
     // Final review: the ND's status display got none of the traffic line: no way it moves, and with FLT ID on, orphan lines.
     [Fact]
     public void The_nds_status_display_says_what_a_target_is_doing_and_who_it_is()
