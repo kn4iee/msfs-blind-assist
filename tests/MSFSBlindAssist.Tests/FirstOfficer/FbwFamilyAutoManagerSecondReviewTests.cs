@@ -267,6 +267,31 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Empty(rig.Speech.All);
     }
 
+    // The same with the dead engine's lever left at idle, as an engine-out approach is flown: only the live engine's lever goes from MCT to
+    // TOGA, so the hold reads the higher of the two. Each engine's lever is the live one once.
+    [Theory]
+    [InlineData(0, 35, 0, 45)]
+    [InlineData(35, 0, 45, 0)]
+    public async Task The_A350s_engine_out_go_around_holds_the_flaps_with_one_lever_at_idle(
+        double approachLever1, double approachLever2, double goAroundLever1, double goAroundLever2)
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(approachLever1, approachLever2);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms, the live engine's lever at MCT
+        rig.Lever(1);
+        rig.GearDown();
+        for (int s = 0; s < 12; s++)
+            rig.Fly(agl: 1_620 - 10 * s, vs: -800, ias: 200);   // above the gate, and above S + 3
+        rig.Thrust(goAroundLever1, goAroundLever2);
+        rig.Fly(agl: 1_450, vs: -600, ias: 200);
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
     // Two engines, after an excursion past CLB earlier on the approach (a thrust correction): the go-around's levers are a movement of their
     // own, to MCT (past CLB and no further) as to TOGA.
     [Theory]
@@ -616,10 +641,13 @@ public class FbwFamilyAutoManagerSecondReviewTests
         public void VfeNext(double knots) => Seed(_sim, "A350_IN_INI_VFE_SPEED", knots);
 
         /// <summary>The A350's thrust levers (the only airframe here whose schedule reads them).</summary>
-        public void Thrust(double tla)
+        public void Thrust(double tla) => Thrust(tla, tla);
+
+        /// <summary>Each of the A350's thrust levers on its own: with an engine out, its lever stays at idle.</summary>
+        public void Thrust(double lever1, double lever2)
         {
-            Seed(_sim, "A350_ENGINE_THROTTLE_1", tla);
-            Seed(_sim, "A350_ENGINE_THROTTLE_2", tla);
+            Seed(_sim, "A350_ENGINE_THROTTLE_1", lever1);
+            Seed(_sim, "A350_ENGINE_THROTTLE_2", lever2);
         }
 
         public void GearDown() => Seed(_sim, _gearKey, 1);
