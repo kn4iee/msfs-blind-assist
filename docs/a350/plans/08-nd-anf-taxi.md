@@ -86,10 +86,10 @@ Found in the test flights after the first: arming BTV from the ND window is clun
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
+- **Worked by:** Claude (Opus 5.5), inline
+- **Started:** 2026-11-02, from `f330aeba1`
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
