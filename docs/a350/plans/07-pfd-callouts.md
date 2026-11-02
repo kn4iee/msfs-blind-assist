@@ -97,14 +97,23 @@ Found in the test flights after the first: on the ground, with fuel and payload 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** in progress
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5) with the live sim, 2026-11-02
 - **Started:** 2026-11-02, from `ae0fbccef`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+- **Tasks:** 3 done (`a22d36914`: LVR CLB flashes, now said once with ", flashing"); 6 done (`c0068791e`: green dot, S and F from the
+  A350's variables where the tape shows none); 5 Step 1 (METRIC ALT) and Step 3 (the take-off speeds) confirmed live, pinned by two tests;
+  1 partly: CONF FULL, the flap lever and FCU ALT ABOVE A/C read live, the clean "=" and green dot 45/55 kt away still need a capture with
+  the sim's asks answered; 2, 4, 5 Step 2 and 7 to do.
+- **Waiting on the owner:** Task 2's windshear and stall (the OIS SITUATIONS, owner present) and a short-runway BTV; Task 4's TCAS in
+  live traffic; Task 5 Step 2's pause at the top of descent (the owner's choice).
+- **In-sim results:** `docs/a350/evidence/07-pfd-callouts.md`.
 - **Changed from the plan:**
-- **Rulings made while working:**
+- **Rulings made while working:** Task 3's test is built from MSFSBA's reader's own FMA lines as read live, not two draw captures: the
+  standalone `draw live EFIS#0` never drew LVR CLB (its sim asks answer with defaults); cost if wrong: none for the behaviour, the
+  fixtures differ from the plan's names. Task 6 says the variable cut to whole knots as the MFD's PERF page shows it (173.6 as 173),
+  while the tape's symbol is rounded as before; cost if wrong: a knot's difference from the tape in flight, where the tape wins anyway.
+  Task 3 holds a mode come beside the autothrust column's for up to 4 reads (2 s) to see a flash; cost if wrong: such a mode is said up
+  to 1.5 s later than before.
