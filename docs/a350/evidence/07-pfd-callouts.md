@@ -82,3 +82,25 @@ On the runway after the circuit (placed there, not landed), the FMS armed no CLB
 500 ft, the levers stayed at FLX (the script moved them to CL only above 1,100 ft), and the aircraft flew at 270 kt into rising ground 13 NM
 north-east. The take-off script now pulls ALT for OP CLB when not climbing 20 s after lift-off and sets CL by speed too, and the runner
 refuses to roll unless the FMA shows CLB armed: each test flight starts fresh from the menu.
+
+## The second flight (2026-11-02, 18:25-19:32): Tasks 1, 4 and 5 Step 2
+
+A fresh flight from the menu, flown end to end by the scripts (`prep_flight.sh`, `go_route.sh`, the landing script): the flows from
+cold and dark, a route built on the MFD (VCBI 04, 1030, PBD01 = KAT/260/80 picked off DUPLICATE NAMES, the discontinuity cleared,
+GOPRU, the ILS Z 04), SRS and a managed climb to FL200 in NAV, the cruise with the OIS's time compression AUTO up to 2X and SIM RATE
+REMINDER on, the top-of-descent pause, a managed descent to FL100, the tests below, DIR TO GOPRU, the approach phase, LOC and G/S
+captured, LAND, FLARE, ROLL OUT, then After Landing, Parking and Securing on stand A6.
+
+- **Task 1, the clean speed tape** (captures with the sim's asks answered, `p07_efis_clean_gd40/49`, `p07_efis_cruise_sim_rate`):
+  green dot (172 at FL100, 175 at FL200) is drawn at y 570 and read ("Green dot: 172, green") 40 kt below the speed, and drawn past the
+  tape's foot (y 610-615) and not read 49 kt and 99 kt below. The green "=" (atlas 1001,723) is drawn at the tape's top (102, 135) at
+  every speed from 212 to 275 kt: it marks no speed, and nothing reads it. VFE next reads where it is drawn ("VFE next: 255, amber").
+- **Task 1, SIM RATE and SIM PAUSED:** "SIM RATE: 2X, red" in the cruise and "SIM PAUSED, red" in the pause, both read (`p07_efis_sim_paused`).
+- **Task 5 Step 2, the pause at the top of descent:** with PAUSE AT T.O.D YES (30 NM) the aircraft paused itself at the top of descent
+  (`INI_IS_PAUSED` 1); the OIS said "TOP OF DESCENT PAUSE: Aircraft has reached top of descent. The simulation has been paused. Click
+  below to resume" over RESUME FLIGHT, which resumed it. MSFSBA's `A350PauseAlerts` keys on `FMGS_PAUSE_TYPE` from the memory copy,
+  which was not logged: what it said is not proven by this flight.
+- **Task 4, TCAS:** two AI aircraft spawned through SimConnect (`AIGAIM_Delta Air Lines Boeing 717-200` 7 NM ahead on the reciprocal at
+  FL100, 250 kt; `AIGAIM_Qantas Airbus A330-200` 3 NM ahead, 300 ft below) were confirmed created, yet every `INI_TCAS_*` aural stayed 0
+  for 2 minutes and the ND showed no traffic: the A350's TCAS does not see objects created that way (or they do not stay airborne). The
+  advisories need traffic the sim itself flies: AIG traffic with flight plans, or an online network.

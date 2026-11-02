@@ -603,6 +603,26 @@ public class A350PfdTests
         Assert.Contains(lines, l => l.StartsWith("Altitude in metres: ", StringComparison.Ordinal) && l.EndsWith(", green", StringComparison.Ordinal));
     }
 
+    // Plan 07 Task 1, live 2026-11-02 on 1.2.8, captured with the sim's asks answered (A350Probe displays): the OIS's time compression
+    // at 2X in the FL200 cruise and its pause at the top of descent each read as the PFD draws them, in red.
+    [Theory]
+    [InlineData("p07_efis_cruise_sim_rate", "SIM RATE: 2X, red")]
+    [InlineData("p07_efis_sim_paused", "SIM PAUSED, red")]
+    public void The_sim_rate_and_pause_lines_read_as_drawn(string fixture, string line) =>
+        Assert.Contains(line, A350Pfd.Read(Fixture(fixture), 0));
+
+    // Clean at FL100, green dot 172: at 212 kt (40 kt below) the tape draws it inside its window and it reads; at 221 kt (49 kt below)
+    // it is drawn past the tape's foot (y 610) and stays unread, as the sighted pilot does not see it. The green "=" at atlas 1001,723 is
+    // drawn at the tape's top (102, 135) at every speed from 212 to 275 kt: it marks no speed, and no line reads it.
+    [Fact]
+    public void Green_dot_reads_inside_the_tape_and_not_past_its_foot()
+    {
+        Assert.Contains("Green dot: 172, green", A350Pfd.Read(Fixture("p07_efis_clean_gd40"), 0));
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("p07_efis_clean_gd49"), 0), l => l.StartsWith("Green dot", StringComparison.Ordinal));
+        foreach (var fixture in new[] { "p07_efis_cruise_sim_rate", "p07_efis_clean_gd49", "p07_efis_clean_gd40", "p07_efis_sim_paused" })
+            Assert.DoesNotContain(A350Pfd.Read(Fixture(fixture), 0), l => l.Contains('='));
+    }
+
     [Fact]
     public void A_metric_altitude_box_is_never_said_with_metric_alt_off()
     {
