@@ -31,6 +31,14 @@ commits with `A350_LOG=1`. Captures are `A350Probe ecamwatch` (2 Hz, each change
 - So COMPANY MSG needs a message from outside: a telex sent to the aircraft's callsign by another datalink client, or a flight under SayIntentions
   that sends company messages (the 2026-10-31 flight's source).
 
+## A flight with SayIntentions running (2026-11-02, 20:16-22:16)
+
+The owner started SayIntentions for plan 07's traffic. The aircraft's own AOC (INIB) had sent a FLIGHTREPORT (the ATC MSG RECORD lists
+"2032Z FROM INIB MSFSBA1 FLIGHTREPORT") and `INI_COMPANY_MSG_RECEIVED` read 1. Read every 15 s for two hours (the E/WD's memo column and
+the variable), through plan 07's third flight in the air, its landing and five ATC exchanges at the stand afterwards: the variable stayed
+1 and the E/WD never drew COMPANY MSG. So the variable is not the memo's only condition on 1.2.8, and SayIntentions' ATC uplinks (plan
+22) are not company messages. Task 1 still waits on a COMPANY MSG on the E/WD.
+
 ## Task 2: the colour hold (owner's question 4)
 
 Built for both causes (a ruling: the cause was not found): a memo-column line whose only change is its colour is said once it has held 3 s, and
