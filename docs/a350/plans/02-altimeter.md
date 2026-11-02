@@ -102,20 +102,26 @@ The owner puts the aircraft in a stable cruise or hold above the transition alti
 - **Pilot-facing:** "A350 Altimeter window: a typed QNH is checked for both sides and the ISIS before anything is set, follows the OIS's LINKED INSTR option, and no longer takes a side off STD." Guide: the A350's Altimeter window; changelog `fix`.
 - **Rule proposal:** a new A350 rule: the Altimeter window plans its targets as one entry from one read (`A350BaroEntry.Plan`) and never clicks the ISIS while a side is on STD; full text: Task 1's measurements.
 - **For plan 23:** what LINKED INSTR does to the baros (Task 1), for its option's ledger line.
+- **Pilot-facing, added:** "A350: the FCU speed, heading and V/S windows are said when their knobs are turned outside MSFSBA, as the altitude window already was, in the A380's words; each has its Ctrl+M row." Guide: the A350's FCU windows and the Ctrl+M list; changelog `fix`. The Altimeter window's ISIS line reads "STD" while the ISIS is on its own STD.
+- **For `docs/inibuilds-a350.md` "Announcements" (21's):** the "FCU windows" bullet still names only the altitude window and the baros; now the speed, heading and V/S windows speak too (`A350FcuCallouts.Speaking`).
+- **For plan 11 (`IniBuildsA350Definition.Announcements.cs`, `ObserveWindow`):** a baro pulled from STD first says its old setting, then the new one ("Captain altimeter 1013 hectopascals", then "… 1033 …"): the mode arrives a batch before the setting. Proposed: treat a phrase leaving "standard"/"preset" for a QNH that is not the side's preset (`INI_BARO_PRESET_CPT`/`_FO`, kept after it goes out of view) as `IsQuiet`, so only the landed value is said. Measured in `docs/a350/evidence/02-altimeter.md`, Task 5.
+- **Frozen file (21):** `IniBuildsA350DefinitionTests.cs:641` pins the stepper's sentence "…shows no preset here, as on the ground; pull it for QNH first."; on 1.2.8 the preset shows on the ground too, so "as on the ground" is wrong. Proposed: "…shows no preset; pull it for QNH first." in `A350TypedEntry.PlanStdPreset` and both tests.
+- **For plan 03 → 20 (`tools/A350Probe/ReplMode.cs`):** a repl command `enter` (Enter in the top window's text box through its own KeyDown), used for Task 5; uncommitted here, committed with plan 03.
+- **Rule proposal (A350, with the one above):** "The ISIS has its own STD, toggled only by its STD/CHANGE key and read only from the SFD's draw: while on it, nothing written moves `KOHLSMAN SETTING MB:3`; never plan an ISIS write then (`A350BaroEntry`)."
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5) inline with superpowers:executing-plans, no subagents; the sim and the flight by Francesco's go-ahead
 - **Started:** 2026-11-02, from `31126580b`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-02
+- **Tests at landing:** the suite without `ClaudeRulesHookTests`, after the rebase (see the push's commit)
+- **Tasks:** 0-5 done.
+- **Waiting on the owner:** none. The rulings below are open to the owner's word (question 2's answer is applied per setting).
+- **In-sim results:** `docs/a350/evidence/02-altimeter.md`: Task 1 at all three LINKED INSTR settings, Task 4 every FCU knob, Task 5 in flight at all three and on the ground. Flown from an in-air placement over the sea off VCBI at FL200 (no OIS save held a flight); placed back on the stand afterwards. The owner's baros, units and LINKED INSTR (NONE) restored, the ISIS on its baro.
+- **Changed from the plan:** LINKED INSTR has three settings, not on and off: Task 2's "linked" became per setting (0 three targets, 1 the captain's side and the ISIS, 2 the captain's side). The ISIS's own STD (measured, not in the plan) leaves the ISIS out of an entry and is said; the window's ISIS line reads "STD" then (`IsisBaroText`). Task 4 found speed, heading and V/S silent from hardware and fixed them in `A350FcuCallouts`. Task 5 found two things, fixed test-first: a pull while the entry ran was said as "left STD", and a side pulled while its preset stepped said the stepper's "no preset" sentence instead of its QNH. `PressBaroEntry` returns its `Task` (tests await it) where the plan wrote `void`.
+- **Rulings made while working:** (1) At LINKED INSTR 1 the ISIS keeps its own target, since nothing there copies it (Francesco's session, Claude; the plan's "linked: captain only" assumed one setting). (2) The ISIS is set on STD at 0 and 1, since its write and click leave the sides alone there (the plan's own "unless Task 1 showed" clause). (3) An ISIS read on STD is left out and said, not refused: the sides are still set, as a pilot would. An ISIS whose display cannot be read is planned as usual and its read-back says what happened. (4) "Left STD" and the stepper's sentence say nothing about a side the pilot pulled meanwhile; its QNH is said instead, because the entry's echo had kept the background call-out quiet. (5) The pull's flicker (old setting said first) is plan 11's file: handed off, not fixed here.
