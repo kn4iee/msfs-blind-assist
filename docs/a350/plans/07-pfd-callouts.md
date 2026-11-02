@@ -106,9 +106,11 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Tasks:** 3 done (`a22d36914`: LVR CLB flashes, now said once with ", flashing"); 6 done (`c0068791e`: green dot, S and F from the
   A350's variables where the tape shows none); 5 Step 1 (METRIC ALT) and Step 3 (the take-off speeds) confirmed live, pinned by two tests;
   1 partly: CONF FULL, the flap lever and FCU ALT ABOVE A/C read live, the clean "=" and green dot 45/55 kt away still need a capture with
-  the sim's asks answered; 2, 4, 5 Step 2 and 7 to do.
-- **Waiting on the owner:** Task 2's windshear and stall (the OIS SITUATIONS, owner present) and a short-runway BTV; Task 4's TCAS in
-  live traffic; Task 5 Step 2's pause at the top of descent (the owner's choice).
+  the sim's asks answered (the probe now saves it); 2's rows done (`df41bcfd9`), its live words waiting; 4 scripted (AI intruder,
+  `INI_TCAS_*` sampled), not yet flown; 7 checked in both units, no fix (`7f05a4f6d`); 5 Step 2 waiting.
+- **Waiting on the owner:** a fresh flight from the menu for Tasks 1 and 4 (scripted); a ruling on windshear and stall, which the OIS
+  of 1.2.8 cannot raise; a short-runway BTV for RWY TOO SHORT and MAX REVERSE; Task 5 Step 2's pause at the top of descent (the owner's
+  choice).
 - **In-sim results:** `docs/a350/evidence/07-pfd-callouts.md`.
 - **Changed from the plan:**
 - **Rulings made while working:** Task 3's test is built from MSFSBA's reader's own FMA lines as read live, not two draw captures: the

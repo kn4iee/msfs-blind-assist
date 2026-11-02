@@ -58,3 +58,27 @@ Set on the OIS (OPTIONS > OIS SETTINGS > AIRCRAFT WEIGHT UNITS), live 2026-11-02
 W and Shift+W say the asked unit from the SD's figure in either unit, F and Shift+F from the stock fuel in either: no wrong unit, so no fix.
 Pinned: `Gross_weight_from_the_aircraft_in_pounds_reads_under_de_DE`. The MFD's "313.5 LBS" for 313,500 pounds is iniBuilds' own
 drawing (its kilogram mode draws T for tonnes); a pilot hears what the screen shows, as everywhere else.
+
+## Task 2: what can raise each message (2026-11-02)
+
+- The rows are in (`df41bcfd9`): one per message, the rest on "Other PFD flags and warnings", the old row's mute carried over.
+- Windshear and stall cannot come from the A350's own OIS on 1.2.8: the Situation Manager's SITUATIONS are DEPRESSURISATION, BIRD
+  STRIKE, DUAL ENGINE FAILURE, MEDICAL EMERGENCY, UNRULY PASSENGER and SMOKE IN THE CABIN ("Once enabled a situation cannot be reset and
+  the flight must be restarted"), and its FAILURES hold neither (`situations_128`, `failures_128`). The plan allows them only that way,
+  so their live words wait for the owner's ruling (MSFS's own weather, or left unheard); their rows match WINDSHEAR, W/S AHEAD and STALL,
+  and any other spelling falls to the old row.
+- RWY TOO SHORT and MAX REVERSE need BTV armed for a runway shorter than the landing distance: not VCBI's 3,341 m.
+
+## Task 4: scripted, not yet flown
+
+An AI intruder can be spawned: `msfs_create_ai_object` with an AIG title (`AIGAIM_Delta Air Lines Boeing 717-200` confirmed, object id
+returned; the stock `Cessna 172 Skyhawk Asobo` is not installed as a title on 1.2.8's MSFS 2024). The flight: `tcas_log.sh` samples every
+`INI_TCAS_*` aural, `INI_TCAS_VS_TGT` and the RA bands every 100 ms while the intruder is placed ahead at the same altitude on the
+reciprocal heading; the log is then replayed through `A350TcasCallouts` for what MSFSBA says.
+
+## A take-off from an already-flown FMS (2026-11-02, 17:37)
+
+On the runway after the circuit (placed there, not landed), the FMS armed no CLB and set no speeds. AP 1 engaged at 42 ft and held about
+500 ft, the levers stayed at FLX (the script moved them to CL only above 1,100 ft), and the aircraft flew at 270 kt into rising ground 13 NM
+north-east. The take-off script now pulls ALT for OP CLB when not climbing 20 s after lift-off and sets CL by speed too, and the runner
+refuses to roll unless the FMA shows CLB armed: each test flight starts fresh from the menu.
