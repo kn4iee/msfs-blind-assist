@@ -147,11 +147,17 @@ public partial class IniBuildsA350Definition
                 announcer.AnnounceImmediate(A350.A350Hotkeys.Speed("Alpha protection speed", CachedInput(simConnect, A350.A350Hotkeys.AlphaProt) ?? 0)
                     + ", " + A350.A350Hotkeys.Speed("alpha max", CachedInput(simConnect, A350.A350Hotkeys.AlphaMax) ?? 0));
                 return true;
-            // Green dot, S and F are symbols on the PFD's speed tape with no value of their own in the A350: read off the
-            // captain's tape (A350Pfd.TapeSymbol), as Shift+1 to 3 read the A380's.
-            case HotkeyAction.ReadSpeedGD: AnnounceTapeSpeed(A350.Display.A350Pfd.GreenDot, "Green dot speed", announcer); return true;
-            case HotkeyAction.ReadSpeedS: AnnounceTapeSpeed(A350.Display.A350Pfd.SSpeed, "S speed", announcer); return true;
-            case HotkeyAction.ReadSpeedF: AnnounceTapeSpeed(A350.Display.A350Pfd.FSpeed, "F speed", announcer); return true;
+            // Green dot, S and F: off the captain's tape (A350Pfd.TapeSymbol) while it shows them, as Shift+1 to 3 read the
+            // A380's; else the A350's own variables, which hold the PERF page's values on the ground (plan 07, question 15).
+            case HotkeyAction.ReadSpeedGD:
+                AnnounceTapeSpeed(A350.Display.A350Pfd.GreenDot, MSFSBlindAssist.FirstOfficer.A350.A350StateEvaluator.GreenDot, "Green dot speed", simConnect, announcer);
+                return true;
+            case HotkeyAction.ReadSpeedS:
+                AnnounceTapeSpeed(A350.Display.A350Pfd.SSpeed, MSFSBlindAssist.FirstOfficer.A350.A350StateEvaluator.SSpeed, "S speed", simConnect, announcer);
+                return true;
+            case HotkeyAction.ReadSpeedF:
+                AnnounceTapeSpeed(A350.Display.A350Pfd.FSpeed, MSFSBlindAssist.FirstOfficer.A350.A350StateEvaluator.FSpeed, "F speed", simConnect, announcer);
+                return true;
             // Fuel: F pounds, Shift+F kilograms, the fleet's shared requests (the A380's phrasing).
             case HotkeyAction.ReadFuelQuantity:
                 RequestFuelQuantity(simConnect, "A350");
@@ -309,16 +315,17 @@ public partial class IniBuildsA350Definition
         announcer.AnnounceImmediate(CachedInput(simConnect, var) is double knots ? A350.A350Hotkeys.Speed(name, knots) : name + " not available");
 
     /// <summary>A speed the captain's PFD shows only as a symbol on its tape, as the pilot sees it there: its value on the
-    /// visible tape, above or below the speed scale while it is drawn outside it, "not shown" while the tape does not draw
-    /// it, dark while the screen is.</summary>
-    private void AnnounceTapeSpeed(string symbol, string name, ScreenReaderAnnouncer announcer)
+    /// visible tape, above or below the speed scale while it is drawn outside it; where the tape draws none (on the ground) the
+    /// A350's own variable, as the MFD's PERF page shows it (plan 07, question 15); "not shown" when neither has one, "not
+    /// available" while the displays do not run and the variable has nothing either; dark while the screen is.</summary>
+    private void AnnounceTapeSpeed(string symbol, string variable, string name, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
         var pfd = DisplayPanels.First(d => d.Key == PfdCaptainKey);
+        var capture = Pfd?.Latest(pfd.Gauge, pfd.Index);
+        var shown = capture is null ? null : A350.Display.A350Pfd.TapeSymbol(capture, 0, symbol);
+        double? knots = CachedInput(simConnect, variable);
         announcer.AnnounceImmediate(DarkReadout(PfdCaptainKey)
-            ?? (Pfd?.Latest(pfd.Gauge, pfd.Index) is not { } capture ? name + " not available"
-                : A350.Display.A350Pfd.TapeSymbol(capture, 0, symbol) is not { } shown ? name + " not shown"
-                : shown.OffScale != 0 ? $"{name} {(shown.OffScale > 0 ? "above" : "below")} the speed scale"
-                : $"{name} {shown.Knots.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} knots"));
+            ?? (capture is null && !(knots > 1) ? name + " not available" : A350.A350Hotkeys.TapeSpeed(name, shown, knots)));
     }
 
     /// <summary>A display's latest lines, as its status display reads them (none while its screen is dark), or null while

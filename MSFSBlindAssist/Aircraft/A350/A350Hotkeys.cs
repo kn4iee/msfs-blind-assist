@@ -97,6 +97,17 @@ public static class A350Hotkeys
     public static string Speed(string name, double knots) =>
         knots > 1 ? name + " " + Math.Round(knots).ToString("0", CultureInfo.InvariantCulture) + " knots" : name + " not shown";
 
+    /// <summary>Green dot, S or F (Shift+1 to 3) as the captain's speed tape shows its symbol: its value, or above or below the scale;
+    /// where the tape draws none (on the ground), the A350's own variable as the MFD's PERF page shows it, whole knots cut, not rounded
+    /// (live 2026-11-02: 173.6 on the page as 173); "not shown" only when neither has one (the owner's answer to question 15).</summary>
+    public static string TapeSpeed(string name, (double Knots, int OffScale)? shown, double? variable) =>
+        shown is { } s
+            ? s.OffScale != 0 ? $"{name} {(s.OffScale > 0 ? "above" : "below")} the speed scale"
+                : $"{name} {s.Knots.ToString("0", CultureInfo.InvariantCulture)} knots"
+            : variable is double v && v > 1
+                ? $"{name} {Math.Floor(v).ToString("0", CultureInfo.InvariantCulture)} knots"
+                : name + " not shown";
+
     /// <summary>The gross weight and its CG as the SD's permanent data line shows them ("Gross weight: 199400 KG, green",
     /// "Gross weight CG: 30.1 %, green", in the aircraft's unit), spoken in the asked unit, as the A380's W and Shift+W.</summary>
     public static string GrossWeight(IEnumerable<string> permanentData, bool pounds)
