@@ -50,6 +50,14 @@ public static class A350Ewd
 
     private static float Overlap(float a0, float a1, float b0, float b1) => Math.Max(0, Math.Min(a1, b1) - Math.Max(a0, b0));
 
+    /// <summary>The engine block's thrust reversers, each engine's "REV" with its colour, engine 1 left of the THR label (live
+    /// 2026-11-02, landing on 1.2.8: REV at x 256 and 504, THR at 408); none while stowed.</summary>
+    public static IReadOnlyList<(int Engine, string Colour)> Reversers(A350EwdView view) =>
+        view.Engine.SelectMany(row => row).Where(c => c.Text.Trim() == "REV")
+            .Select(c => (Engine: c.X < ReverserSplitX ? 1 : 2, c.Colour)).OrderBy(r => r.Engine).ToList();
+
+    private const float ReverserSplitX = 380;
+
     public static A350EwdView Parse(A350DrawCapture capture)
     {
         var wdRows = A350DrawLayout.Rows(A350DrawLayout.Region(capture.Texts, A350DrawLayout.CtrWarningDisplay))

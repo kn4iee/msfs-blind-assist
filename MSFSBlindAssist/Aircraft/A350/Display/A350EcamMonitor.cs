@@ -11,6 +11,11 @@ public sealed class A350EcamMonitor : IDisposable
     public const string MuteKey = "A350_ECAM_WD";
     public const string MuteLabel = "ECAM E/WD call-outs";
 
+    /// <summary>The reverser call-outs' own Ctrl+M row (<see cref="A350CalloutRows.Ecam"/>).</summary>
+    public const string ReverserKey = "A350_ECAM_REVERSERS", ReverserLabel = "Reverser call-outs";
+
+    private readonly A350ReverserCallout _reversers = new();
+
     /// <summary>How long after a flight load (<see cref="Rebaseline"/>) the display call-outs follow the new flight
     /// silently, from its first draw: what it shows as it loads is its baseline, never news (review 2026-10-29: each line
     /// flight B showed that flight A lacked was spoken as new).</summary>
@@ -52,9 +57,20 @@ public sealed class A350EcamMonitor : IDisposable
             _announcer.Reset();
             _settleUntil = now + SettleAfterLoad;
         }
-        var lines = _announcer.Observe(A350Ewd.Parse(cap));
-        if (lines.Count == 0 || _disposed) return;
-        string? quiet = _settleUntil is { } until && now < until ? "settling after a load" : _muted(MuteKey) ? "muted" : null;
+        var view = A350Ewd.Parse(cap);
+        var lines = _announcer.Observe(view);
+        var reverse = _reversers.Observe(A350Ewd.Reversers(view), now);
+        if (_disposed) return;
+        bool settling = _settleUntil is { } until && now < until;
+        Speak(lines, settling, MuteKey);
+        Speak(reverse, settling, ReverserKey);
+    }
+
+    /// <summary>Says what a call-out found, its row asked only when there is something to say.</summary>
+    private void Speak(IReadOnlyList<string> lines, bool settling, string rowKey)
+    {
+        if (lines.Count == 0) return;
+        string? quiet = settling ? "settling after a load" : _muted(rowKey) ? "muted" : null;
         foreach (var l in lines)
         {
             if (quiet != null) A350SpeechLog.Quiet("E/WD", quiet, l);
@@ -87,5 +103,54 @@ public sealed class A350EcamMonitor : IDisposable
     public void Dispose()
     {
         _disposed = true;
+    }
+}
+
+/// <summary>
+/// The thrust reversers called as a pilot monitoring calls them (plan 04, from the landing of 2026-11-02 on 1.2.8), from the E/WD's
+/// "REV" over each engine: "Reverse green" once every engine showing REV reads green (two reads in a row agreeing, [A350-2]), the
+/// engine named when only one shows it; an engine whose REV stays amber past <see cref="AmberHold"/> named once ("Reverse 2 amber").
+/// Stowed, it starts again. Pure; the levers' own sentences are A350LeverSpeech's.
+/// </summary>
+public sealed class A350ReverserCallout
+{
+    public static readonly TimeSpan AmberHold = TimeSpan.FromSeconds(3);
+
+    private string? _previous;              // the last read, as one key
+    private bool _greenSaid;
+    private readonly Dictionary<int, DateTime> _amberSince = new();
+    private readonly HashSet<int> _amberSaid = new();
+
+    public IReadOnlyList<string> Observe(IReadOnlyList<(int Engine, string Colour)> reversers, DateTime now)
+    {
+        string key = string.Join(";", reversers.Select(r => r.Engine + r.Colour));
+        bool agreed = key == _previous;
+        _previous = key;
+        if (reversers.Count == 0)
+        {
+            _greenSaid = false;
+            _amberSince.Clear();
+            _amberSaid.Clear();
+            return Array.Empty<string>();
+        }
+        var said = new List<string>();
+        foreach (var (engine, colour) in reversers)
+        {
+            if (colour != "amber")
+            {
+                _amberSince.Remove(engine);
+                continue;
+            }
+            if (!_amberSince.TryGetValue(engine, out var since))
+                _amberSince[engine] = since = now;
+            if (now - since >= AmberHold && _amberSaid.Add(engine))
+                said.Add($"Reverse {engine} amber");
+        }
+        if (agreed && !_greenSaid && reversers.All(r => r.Colour == "green"))
+        {
+            _greenSaid = true;
+            said.Add(reversers.Count == 1 ? $"Reverse {reversers[0].Engine} green" : "Reverse green");
+        }
+        return said;
     }
 }
