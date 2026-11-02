@@ -236,8 +236,9 @@ public sealed class A350DisplayService : IDisposable
                 foreach (var (g, i) in gauges)
                 {
                     var cap = _draw.Draw(g, i);
-                    NoteDraw(g, i, cap);
-                    if (!cap.Ok && !retried && cap.Error!.StartsWith("trap"))
+                    bool trapRetried = !cap.Ok && !retried && cap.Error!.StartsWith("trap");
+                    NoteDraw(g, i, cap, trapRetried);
+                    if (trapRetried)
                     {
                         retried = true;
                         _stats.Retried();
@@ -245,7 +246,7 @@ public sealed class A350DisplayService : IDisposable
                         _draw.Load(_reader.Snapshot());
                         _stats.Copied(started, copyClock.Elapsed.TotalMilliseconds, _reader.LastBytes, _reader.LastReread, _reader.LastLeftOut);
                         cap = _draw.Draw(g, i);
-                        NoteDraw(g, i, cap);
+                        NoteDraw(g, i, cap, retrying: false);
                     }
                     caps.Add(cap);
                     // The draw asked for more than the head room holds and got NULL: logged when it starts and when it ends,
@@ -284,12 +285,17 @@ public sealed class A350DisplayService : IDisposable
 
     /// <summary>One draw's numbers for the minute's line, and a failure's text, with the wasm backtrace of a trap, each
     /// display's each error at most once a minute (<see cref="A350ReaderStats.LogFailure"/>).</summary>
-    private void NoteDraw(string gauge, int index, A350DrawCapture cap)
+    private void NoteDraw(string gauge, int index, A350DrawCapture cap, bool retrying)
     {
         _stats.Drew(gauge, index, cap.Milliseconds, cap.Ok, cap.Texts.Count(t => t.Text.Any(char.IsControl)), _draw!.LastHeapBytes);
         if (!cap.Ok && _stats.LogFailure(gauge, index, cap.Error!, DateTime.UtcNow))
+        {
+            bool trapped = cap.Error!.StartsWith("trap");
+            if (trapped && _draw.LastTrap is { } message && A350TrapReport.Parse(message) is { } report)
+                Diagnostics.Warn(report.Summary(gauge, index, retrying));
             Diagnostics.Warn($"{gauge}#{index}: {cap.Error}"
-                + (cap.Error!.StartsWith("trap") && _draw.LastTrap is { } trap ? Environment.NewLine + trap : ""));
+                + (trapped && _draw.LastTrap is { } trap ? Environment.NewLine + trap : ""));
+        }
     }
 
     public void Dispose()
