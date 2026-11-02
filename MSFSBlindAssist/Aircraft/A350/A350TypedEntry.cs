@@ -137,11 +137,11 @@ internal static class A350TypedEntry
         _ when field == VerticalSpeed => new[] { "INI_VVI_DIAL", "INI_FPA_DIAL", "INI_TRACK_FPA_STATE", "INI_FCU_VS_DASHED", "INI_PITCH_MODE" },
         _ when field == CabinAltitudeTarget => new[] { "INI_CABIN_PRESS_ALTITUDE_TARGET" },
         _ when field == CabinVsTarget => new[] { "INI_CABIN_PRESS_VS_TARGET" },
-        _ when field == IsisQnh => new[] { "KOHLSMAN SETTING MB:3" },
+        _ when field == IsisQnh => new[] { "KOHLSMAN SETTING MB:3", A350BaroEntry.LinkedVar },
         _ => new[]
         {
             $"KOHLSMAN SETTING MB:{field.Side}", $"XMLVAR_Baro_Selector_HPA_{field.Side}", $"XMLVAR_Baro{field.Side}_Mode",
-            PresetVar(field.Side), PresetVar(field.Side) + "_SHOW",
+            PresetVar(field.Side), PresetVar(field.Side) + "_SHOW", A350BaroEntry.LinkedVar,
         },
     };
 
