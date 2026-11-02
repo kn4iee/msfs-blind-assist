@@ -127,6 +127,64 @@ public class A350MailboxTests
         Assert.False(input.Busy);
     }
 
+    // Plan 22, live 2026-11-02 at VCBI: SayIntentions answered a departure clearance request with a status message, three pages
+    // ("RCD REQUEST BEING PROCESSED STANDBY IF NO RESPONSE IN 2 MINS REQUEST NEW FLIGHT IN APP"), then the clearance.
+    private static List<string> Spoken(string fixture) => A350Mailbox.Read(A350Fixtures.Capture(fixture)).Select(l => l.Spoken).ToList();
+
+    [Fact]
+    public void A_long_uplink_says_its_page_and_its_place_among_the_messages()
+    {
+        var spoken = Spoken("p22_ctr_mailbox_status.json");
+        Assert.Equal(new[]
+        {
+            "2132Z FROM VCBI, green",
+            "DEPART REQUEST STATUS ., white",
+            "FSM 2124 261102 VCBI, white",
+            "UAE111 RCD REQUEST, white",
+            "BEING PROCESSED STANDBY, white",
+            "IF NO RESPONSE IN 2, white",
+            "MSG 3/3, white",
+            "OPEN, cyan",
+            "PGE 1/3, white",
+        }, spoken.Where(s => !s.EndsWith(" button", StringComparison.Ordinal)));
+        Assert.Contains("CLOSE button", spoken);   // a message that asks for no answer is closed
+        Assert.DoesNotContain("WILCO button", spoken);
+    }
+
+    [Fact]
+    public void A_clearance_offers_wilco_standby_and_unable_and_no_send()
+    {
+        var spoken = Spoken("p22_ctr_mailbox_clearance.json");
+        Assert.Equal(new[]
+        {
+            "2133Z FROM VCBI, green",
+            "CLRD TO OMDB. BASU2D, white",
+            "DEPARTURE. MNTN 2500., white",
+            "SQUAWK 1441., white",
+            "MSG 3/3, white",
+            "OPEN, cyan",
+        }, spoken.Where(s => !s.EndsWith(" button", StringComparison.Ordinal)));
+        Assert.Equal(new[]
+        {
+            "Previous message button", "Next message button", "Previous page button", "Next page button", "PRINT button", "RECALL button",
+            "WILCO button", "STANDBY button", "UNABLE button",
+        }, spoken.Where(s => s.EndsWith(" button", StringComparison.Ordinal)));
+    }
+
+    // WILCO picked: it shows on cyan where OPEN was, SEND takes its place and CANCEL STANDBY's; UNABLE stays.
+    [Fact]
+    public void A_picked_answer_shows_on_cyan_until_send()
+    {
+        var spoken = Spoken("p22_ctr_mailbox_wilco_staged.json");
+        Assert.Contains("WILCO, on cyan", spoken);
+        Assert.DoesNotContain("OPEN, cyan", spoken);
+        Assert.Contains("SEND button", spoken);
+        Assert.Contains("CANCEL button", spoken);
+        Assert.Contains("UNABLE button", spoken);
+        Assert.DoesNotContain("WILCO button", spoken);
+        Assert.DoesNotContain("STANDBY button", spoken);
+    }
+
     [Theory]
     [InlineData("12|coui://x?wasm_module=inibuilds-A350&wasm_gauge=CTR", 12)]
     [InlineData("12|coui://x?wasm_module=inibuilds-A350&wasm_gauge=MFD", null)]
