@@ -220,7 +220,7 @@ public sealed class A350PfdMonitor : IDisposable
         {
             if (_disposed) return;
             if (settling) A350SpeechLog.Quiet("PFD flag", "settling after a load", line);
-            else if (_muted(A350PfdFlagAnnouncer.MuteKey)) A350SpeechLog.Quiet("PFD flag", "muted", line);
+            else if (A350PfdFlagAnnouncer.IsMuted(line, _muted)) A350SpeechLog.Quiet("PFD flag", "muted", line);
             else _speak(line);
         }
     }

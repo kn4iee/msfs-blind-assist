@@ -47,6 +47,14 @@ public sealed class A350MonitorManagerForm : MonitorManagerFormBase
         return rows;
     }
 
+    /// <summary>The unticked rows; the first time, the old PFD flags row's mute is carried to each message's own row (plan 07).</summary>
     protected override ICollection<string> DisabledVariables
-        => SettingsManager.Current.A350DisabledMonitorVariables;
+    {
+        get
+        {
+            var disabled = SettingsManager.Current.A350DisabledMonitorVariables;
+            Aircraft.A350.Display.A350PfdFlagAnnouncer.SplitOldMute(disabled);
+            return disabled;
+        }
+    }
 }

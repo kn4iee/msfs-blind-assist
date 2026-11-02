@@ -91,7 +91,7 @@ public class A350PfdFlagTests
         var said = new List<string>();
         for (int n = 0; n < 12; n++)
             said.AddRange(flags.Observe(n % 2 == 0 ? new[] { "PULL UP, red" } : Array.Empty<string>()));
-        Assert.Equal(new[] { "PULL UP, red" }, said);
+        Assert.Equal(new[] { "PULL UP, red, flashing" }, said);   // plan 07 Task 2: said once, as flashing
     }
 
     [Fact]
