@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Aircraft.A350.Display;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -60,7 +61,25 @@ public partial class IniBuildsA350Definition
     internal bool IsScreenDark(string panel) => DisplayPanels.FirstOrDefault(d => d.Panel == panel) is { } d && IsDark(d);
 
     /// <summary>The display reader, or null while it is not running.</summary>
-    public A350DisplayService? Displays { get; set; }
+    public A350DisplayService? Displays
+    {
+        get => _displays;
+        set
+        {
+            _displays = value;
+            if (value == null) return;
+            // What the reader takes from memory is held against these (A350FactsCheck). Continuous only: a value read on request
+            // can be as old as the request, and would read as a disagreement.
+            var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, def) in GetVariables())
+                if (def.Type == SimVarType.LVar && def.UpdateFrequency == UpdateFrequency.Continuous)
+                    keys.TryAdd(def.Name, key);
+            value.StreamedLVars = keys.Keys.ToList();
+            value.LVarCached = name => keys.TryGetValue(name, out var key) ? _sim?.GetCachedVariableValue(key) : null;
+        }
+    }
+
+    private A350DisplayService? _displays;
 
     /// <summary>The background E/WD call-outs (and the Alt+E window's source), or null.</summary>
     public A350EcamMonitor? Ecam { get; set; }

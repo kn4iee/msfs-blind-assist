@@ -45,6 +45,25 @@ public sealed class A350DisplayService : IDisposable
     /// <summary>Where the installed module is (tests point it at a module of their own).</summary>
     internal Func<string?> FindModule { get; init; } = A350ModuleCache.FindInstalledModule;
 
+    /// <summary>MSFSBA's cached value of an L:var it streams, by name without "L:"; null when not streamed or not yet read.
+    /// With <see cref="StreamedLVars"/>, what <see cref="A350FactsCheck"/> holds the copy against.</summary>
+    public Func<string, double?>? LVarCached { get; set; }
+
+    private IReadOnlySet<string> _streamed = new HashSet<string>();
+
+    /// <summary>The L:vars MSFSBA streams.</summary>
+    public IReadOnlyCollection<string> StreamedLVars
+    {
+        get => (IReadOnlyCollection<string>)_streamed;
+        set => _streamed = new HashSet<string>(value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The time the facts check goes by (tests replace it).</summary>
+    internal Func<DateTime> Clock { get; init; } = () => DateTime.UtcNow;
+
+    private A350FactsCheck _factsCheck = new();   // the worker thread's own, new whenever a module is prepared
+    private bool _pauseWithheld;                  // the table was found to disagree: its pause is not read this session
+
     /// <summary>The displays whose last draw ran out of head room (worker thread only).</summary>
     private readonly HashSet<(string Gauge, int Index)> _exhausted = new();
     private volatile bool _disposed;
@@ -122,6 +141,8 @@ public sealed class A350DisplayService : IDisposable
     {
         try
         {
+            _factsCheck = new A350FactsCheck();
+            _pauseWithheld = false;
             var path = FindModule() ?? throw new A350ModuleException("the A350 is not installed");
             _modulePath = path;
             Log.Info("A350Display", $"installed A350 package {A350ModuleCache.PackageVersionOf(path) ?? "(version not read)"}, MSFSBA's control map measured on {A350ControlMap.Load().PackageVersion}, patch version {A350ModulePatcher.Version}: {path}");
@@ -239,7 +260,7 @@ public sealed class A350DisplayService : IDisposable
                     minimumsRead(minimums);
                 if (_facts?.Btv is { } btvAt && BtvRead is { } btvRead && A350BtvRollout.Read(copy, btvAt) is { } btv)
                     btvRead(btv);
-                if (_facts?.Pause is { } pauseAt && PauseRead is { } pauseRead && A350SimPause.Read(copy, pauseAt) is { } pause)
+                if (!_pauseWithheld && _facts?.Pause is { } pauseAt && PauseRead is { } pauseRead && A350SimPause.Read(copy, pauseAt) is { } pause)
                     pauseRead(pause);
                 var caps = new List<A350DrawCapture>(gauges.Length);
                 bool retried = false;
@@ -269,6 +290,7 @@ public sealed class A350DisplayService : IDisposable
                             + $"({_draw.LastHeapBytes / 1048576} MB allocated)");
                     }
                 }
+                if (!retried) CheckFacts(copy);   // the asked variables are this copy's; a retry took another
                 var ended = DateTime.UtcNow;
                 Say(_status.Report(null, true, ended));
                 for (int n = 0; n < caps.Count; n++)
@@ -277,7 +299,7 @@ public sealed class A350DisplayService : IDisposable
                 if (_stats.IsDue(ended))
                 {
                     var machine = A350MachineMemory.Read();
-                    Diagnostics.Info(_stats.Due(ended, machine)!);
+                    Diagnostics.Info(_stats.Due(ended, machine, _factsCheck.MinuteWords)!);
                     if (_memoryWarning.Observe(machine.FreeCommit) is { } low && !Muted(A350MemoryWarning.MuteKey)) Say(low);
                 }
                 tcs.SetResult(caps);
@@ -292,6 +314,33 @@ public sealed class A350DisplayService : IDisposable
             }
         });
         return tcs.Task;
+    }
+
+    /// <summary>One copy held against the A350's own L:vars, until both parts have decided: the variable table's slots MSFSBA
+    /// streams, and the CustomVariables this copy's draws asked for. A disagreement withholds what its part disproves and says
+    /// so once; the variables' keeps the displays reading.</summary>
+    private void CheckFacts(A350MemoryCopy copy)
+    {
+        if (LVarCached is not { } cached || _factsCheck.Done || _draw == null) return;
+        var pairs = new List<A350FactsPair>();
+        if (_facts?.Table is { } table)
+            foreach (var name in _streamed)
+                if (table.SlotOf(name) is uint slot && cached(name) is double sim && copy.Read(slot, 8) is { Length: 8 } held)
+                    pairs.Add(new A350FactsPair(A350FactsPart.Table, name, BitConverter.ToDouble(held), sim));
+        foreach (var (name, answer) in _draw.AskedVariables)
+            if (_streamed.Contains(name) && cached(name) is double sim)
+                pairs.Add(new A350FactsPair(A350FactsPart.Variables, name, answer, sim));
+        bool tableWrong = false, variablesWrong = false;
+        foreach (var part in _factsCheck.Add(pairs, Clock()))
+        {
+            bool disagrees = _factsCheck.Verdict(part) == A350FactsVerdict.Disagrees;
+            if (disagrees) Log.Warn("A350Display", _factsCheck.LogLine(part));
+            else Log.Info("A350Display", _factsCheck.LogLine(part));
+            if (disagrees && part == A350FactsPart.Table) tableWrong = true;
+            if (disagrees && part == A350FactsPart.Variables) variablesWrong = true;
+        }
+        if (tableWrong) _pauseWithheld = true;
+        if (tableWrong || variablesWrong) Say(A350DisplayStatus.FactsMismatch(tableWrong, variablesWrong));
     }
 
     /// <summary>One draw's numbers for the minute's line, and a failure's text, with the wasm backtrace of a trap, each

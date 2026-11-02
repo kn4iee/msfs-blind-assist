@@ -75,7 +75,7 @@ public sealed class A350ReaderStats
     public bool IsDue(DateTime now) => _since is { } since && now - since >= Every;
 
     /// <summary>The minute's line once one is due, else null; the counts then start again.</summary>
-    public string? Due(DateTime now, A350MachineMemory? machine = null)
+    public string? Due(DateTime now, A350MachineMemory? machine = null, string? facts = null)
     {
         if (!IsDue(now) || _since is not { } since) return null;
         var line = FormattableString.Invariant($"{(now - since).TotalSeconds:0} s: {_copies} copies, avg {_copyMs / Math.Max(1, _copies):0} ms, max {_copyMax:0} ms, {_copyBytesMb} MB, {_rereadMax:0.0} MB read again, {_leftOut} regions left out; ")
@@ -86,7 +86,8 @@ public sealed class A350ReaderStats
             + (_retries > 0 ? FormattableString.Invariant($", {_retriesDrew} drew") : "")
             + (_freshInstances > 0 ? FormattableString.Invariant($", {_freshInstances} fresh instance{(_freshInstances == 1 ? "" : "s")}, {_freshMax:0} ms") : "")
             + FormattableString.Invariant($", {_torn} torn texts")
-            + (machine is { } m ? "; " + m.Line : "");
+            + (machine is { } m ? "; " + m.Line : "")
+            + (facts != null ? "; " + facts : "");
         _since = null;
         _copies = _draws = _retries = _retriesDrew = _freshInstances = _torn = _leftOut = _copyBytesMb = 0;
         _copyMs = _copyMax = _drawMs = _drawMax = _rereadMax = _freshMax = 0;

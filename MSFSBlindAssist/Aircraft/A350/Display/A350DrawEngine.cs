@@ -49,6 +49,11 @@ public sealed class A350DrawEngine : IDisposable
     private readonly Dictionary<string, List<int>> _objects = new();
     private A350MemoryCopy? _copy;
 
+    private readonly Dictionary<string, double> _askedVariables = new();
+
+    /// <summary>The CustomVariables this copy's draws asked for, each with the value answered (the facts check's).</summary>
+    public IReadOnlyList<(string Name, double Answer)> AskedVariables => _askedVariables.Select(kv => (kv.Key, kv.Value)).ToList();
+
     /// <summary>Calculator strings and A: vars the last draws asked for (diagnostics: A350Probe's draw mode prints them).</summary>
     public HashSet<string> Asked { get; } = new();
 
@@ -341,7 +346,10 @@ public sealed class A350DrawEngine : IDisposable
             return null;
         }
         var b = _copy.Read(cv.Address + 16, 8);
-        return b.Length == 8 ? BitConverter.ToDouble(b) : null;
+        if (b.Length != 8) return null;
+        double answer = BitConverter.ToDouble(b);
+        _askedVariables[cv.Name] = answer;
+        return answer;
     }
 
     private static string CStr(Memory mem, int ptr)
@@ -501,6 +509,7 @@ public sealed class A350DrawEngine : IDisposable
     public void Load(A350MemoryCopy copy)
     {
         _copy = copy;
+        _askedVariables.Clear();
         GrowFor(copy);
         ScanCustomVariables();
         foreach (var cls in _objects.Keys.ToList())

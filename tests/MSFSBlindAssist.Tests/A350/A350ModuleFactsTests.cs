@@ -172,7 +172,7 @@ public class A350ModuleFactsTests
 
     // The pause's variables by name in the variable table (Variables::Init()'s name table, 1.2.7: 920480, in the module's data;
     // the values at Variables::GetInt()'s 1343616, 8 bytes each).
-    private static A350WasmModule WithVariableNames(bool withNames = true)
+    internal static A350WasmModule WithVariableNames(bool withNames = true)
     {
         var m = new WasmTestModule();
         int t1 = m.AddType(new[] { I32 }, new[] { I32 });

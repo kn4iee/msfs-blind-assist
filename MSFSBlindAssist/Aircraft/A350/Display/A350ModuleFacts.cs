@@ -33,15 +33,20 @@ public sealed class A350ModuleFacts
     /// not say: then only the OIS's pause alerts go without.</summary>
     public A350PauseFacts? Pause { get; }
 
+    /// <summary>The variable table's slots by name, or null when this version's module does not say: then only the check of
+    /// what the reader takes from memory goes without (<see cref="A350FactsCheck"/>).</summary>
+    public A350VariableTable? Table { get; }
+
     private A350ModuleFacts(Dictionary<uint, string> vtables, List<(string, int)> anchors, A350TakeoffSpeedFacts? speeds,
-        A350MinimumsFacts? minimums, A350BtvFacts? btv, A350PauseFacts? pause)
+        A350MinimumsFacts? minimums, A350BtvFacts? btv, A350VariableTable? table)
     {
         VTables = vtables;
         Anchors = anchors;
         TakeoffSpeeds = speeds;
         Minimums = minimums;
         Btv = btv;
-        Pause = pause;
+        Table = table;
+        Pause = table?.SlotOf("INI_IS_PAUSED") is uint isPaused && table.SlotOf("FMGS_PAUSE_TYPE") is uint type ? new A350PauseFacts(isPaused, type) : null;
     }
 
     public IReadOnlyList<uint> VTablesOf(string cls) => VTables.Where(kv => kv.Value == cls).Select(kv => kv.Key).OrderBy(a => a).ToList();
@@ -74,7 +79,7 @@ public sealed class A350ModuleFacts
         foreach (var a in AnchorStrings)
             anchors.Add((a, mod.LinearAddressOf(a) ?? throw new A350ModuleException("A350 module has no anchor string " + a)));
         var speeds = TakeoffSpeedsOf(mod);
-        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds), BtvOf(mod), PauseOf(mod));
+        return new A350ModuleFacts(vt, anchors, speeds, MinimumsOf(mod, speeds), BtvOf(mod), VariableTableOf(mod));
     }
 
     /// <summary>Above any constant a frame or an enum takes: an address.</summary>
@@ -83,9 +88,9 @@ public sealed class A350ModuleFacts
     /// <summary>The variable table's entries beyond any version's count, for a name that is not there.</summary>
     private const int MaxVariables = 4096;
 
-    /// <summary>The pause's two variables by name: the table's names are <c>Variables::Init()</c>'s (the one constant of its that
-    /// holds string pointers including these names), its values <c>Variables::GetInt</c>'s, 8 bytes an entry.</summary>
-    private static A350PauseFacts? PauseOf(A350WasmModule mod)
+    /// <summary>The variable table: its names are <c>Variables::Init()</c>'s (the one constant of its that holds string pointers
+    /// including the pause's two variables), its values <c>Variables::GetInt</c>'s, 8 bytes an entry.</summary>
+    private static A350VariableTable? VariableTableOf(A350WasmModule mod)
     {
         const byte I32Const = 0x41;
         if (DefinedFunction(mod, "Variables::Init()") is not int init || DefinedFunction(mod, "Variables::GetInt(VariablesEnum)") is not int getInt
@@ -93,15 +98,12 @@ public sealed class A350ModuleFacts
             return null;
         foreach (int table in Immediates(mod, init, I32Const).Where(c => c > LowestAddress))
         {
-            int isPaused = -1, type = -1;
+            var slots = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
             for (int e = 0; e < MaxVariables && mod.U32(table + 4 * e) is uint name && name <= int.MaxValue; e++)
-            {
-                string? text = mod.CString((int)name);
-                if (text == "INI_IS_PAUSED") isPaused = e;
-                else if (text == "FMGS_PAUSE_TYPE") type = e;
-            }
-            if (isPaused >= 0 && type >= 0)
-                return new A350PauseFacts((uint)(values + 8 * isPaused), (uint)(values + 8 * type));
+                if (mod.CString((int)name) is { Length: > 0 } text)
+                    slots.TryAdd(text, (uint)(values + 8 * e));
+            if (slots.ContainsKey("INI_IS_PAUSED") && slots.ContainsKey("FMGS_PAUSE_TYPE"))
+                return new A350VariableTable(slots);
         }
         return null;
     }
@@ -227,4 +229,10 @@ public sealed class A350ModuleFacts
                 return top is long a && a > 0 && a <= uint.MaxValue ? (uint)a : null;
         return null;
     }
+}
+
+/// <summary>The A350's variable table: where a named variable's value sits in its memory (an f64 per entry).</summary>
+public sealed record A350VariableTable(IReadOnlyDictionary<string, uint> Slots)
+{
+    public uint? SlotOf(string name) => Slots.TryGetValue(name, out var slot) ? slot : null;
 }

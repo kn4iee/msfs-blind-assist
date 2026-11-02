@@ -51,6 +51,10 @@ public static class A350DisplayStatus
     public static string Readable(string gauge, int index) => $"A350 {NameOf(gauge, index)} readable again";
     public const string ReadableAgain = "A350 displays readable again";
 
+    /// <summary>What the reader takes from memory disagrees with the A350's own L:vars (<see cref="A350FactsCheck"/>): what goes without.</summary>
+    public static string FactsMismatch(bool table, bool variables) => "MSFSBA does not match this A350 version yet: "
+        + string.Join(", ", new[] { table ? "pause alerts off" : null, variables ? "display values may be wrong" : null }.Where(w => w != null));
+
     /// <summary>Why no display can be read (<see cref="A350ReaderStatus"/>).</summary>
     public static string CannotRead(A350ReaderFailure why) => "A350 displays cannot be read: " + why switch
     {

@@ -181,7 +181,7 @@ public class A350DrawEngineTests
     // A CustomVariable {u32 id, std::string name (short: inline, length in byte 11), f64 value at +16}
     // answers the draw code's L:var reads from the copy. The engine keeps their addresses between copies
     // and rescans only when one no longer checks out: a variable that moved is found again.
-    private static A350MemoryCopy CopyWithVariable(int at, double value)
+    internal static A350MemoryCopy CopyWithVariable(int at, double value)
     {
         var copy = Copy(trap: false);
         var mem = copy.Buffer;
