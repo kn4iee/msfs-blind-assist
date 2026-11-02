@@ -86,14 +86,19 @@ Found in the test flights after the first: arming BTV from the ND window is clun
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** in progress
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-02, from `f330aeba1`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Tasks:** 1 Steps 1-5 done (`675a5f79b`, 18,932 passed), Step 6 waits on a flight; 4 done at the stand (`f2311a089`: BAT, SFD, SND,
+  HUD read right, no fix), the SFD's attitude to be measured on the same flight; 2 and 3 not started.
+- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach; Task 3 Step 2's taxi by ear.
+- **In-sim results:** `docs/a350/evidence/08-nd-anf-taxi.md`.
+- **Changed from the plan:** `SeedA350MonitorDefaults` returns whether it seeded and the caller saves, where the Fenix's seed saves itself,
+  so its tests never write the real settings file.
+- **Rulings made while working:** The TO waypoint's name comes from `ReadNd`'s own "To waypoint" line (`ToWaypointName`), so the call-out
+  says exactly what the ND window and status display read, at the cost of the whole ND read each tick (cost if wrong: CPU on the
+  monitor's pool thread; measured nothing yet). The very first agreed name is a baseline even without a load's settle, so connecting in
+  flight says nothing until the TO waypoint changes (cost if wrong: one waypoint not said at connection).
