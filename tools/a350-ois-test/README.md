@@ -20,8 +20,12 @@ The FAP keeps every page in the DOM and its state in its paint, so `capture-fap.
 It holds no credential. With the page showing, and MSFSBlindAssist's FAP window not holding the view:
 
 ```
-node ../a350-probe/ceval.mjs "VCockpit01 - iniFAPA350" capture-fap.js > fixtures/fap_<name>.html
+node capture-run.mjs fap fap_<name>
 ```
+
+`capture-run.mjs` runs from any folder and any shell (PowerShell, cmd, Git Bash): the fixture goes to `--out <folder>`, else the
+folder in `A350_FIXTURES`, else this folder's `fixtures`; the debugger's port is `--port <port>`, else `COHERENT_PORT`, else 19999.
+It finds the view itself (`fap`, `ois:cpt`, `ois:fo`) and prints the file it wrote.
 
 | Fixture | Page |
 | --- | --- |
@@ -42,13 +46,14 @@ MSFSBlindAssist must not hold that view's socket at the time: Coherent allows on
 until the aircraft is switched or MSFSBlindAssist quits.
 
 ```
-node ../a350-probe/ceval.mjs ois:fo capture.js | sed -E 's/ data-a350-ois-label="[^"]*"//g; s/ class="__glassout_marker_inst"[^>]*>/>/g' > fixtures/<name>.html
+node capture-run.mjs ois:fo <name>
 ```
 
 `capture.js` keeps what is drawn, marks an element drawn with no size `data-vis="0"`, keeps small
 hidden lists whole (the runway choices), drops styles except a fixed overlay's (dialogs), a colour
-(door indicators, lit buttons), an opacity (the chock pictures), a percentage width (fluid bars), and the agent's own attributes. The sed drops labels a previous agent kept, so the fixture is the OIS as
-first seen.
+(door indicators, lit buttons), an opacity (the chock pictures), a percentage width (fluid bars), and the agent's own attributes.
+`capture-run.mjs` then drops labels a previous agent kept and the glass-out markers (`capture-args.js`, `capture-args.test.js`), so
+the fixture is the OIS as first seen.
 
 A fixture never keeps the owner's credentials. `capture.js` saves blank every password field and every text field
 in a row labelled as an ID, key, logon, password, token or PIN (OPTIONS > 3RD PARTY prints the SimBrief user ID,

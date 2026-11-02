@@ -532,7 +532,7 @@ window: Input mode > Shift+T for the captain's, Ctrl+Shift+T for the first offic
 mode's Ctrl+Shift+T stays Cold Temperature Altitude Correction, as on the PMDG 777). The agent,
 `Resources/coherent-a350-ois-agent.js`, is its own (the flyPad agent's scrape missed the OIS's
 option groups and fields); its behaviour is pinned by jsdom tests on live-captured pages in
-`tools/a350-ois-test` (`npm test`, run by CI's efb-readers job; re-take a fixture with its `capture.js`),
+`tools/a350-ois-test` (`npm test`, run by CI's efb-readers job; re-take a fixture with its `capture-run.mjs`),
 and every page was walked on both sides through the real client with `A350Probe ois`.
 
 How the OIS is built, and how each part reads:
