@@ -200,6 +200,34 @@ public class A350BaroEntryRunTests
         Assert.DoesNotContain(_speech.All, s => s.Contains("left STD", StringComparison.Ordinal));
     }
 
+    // In flight 2026-11-02: pulled while the captain's preset was still stepping, the knob's preset went out of view and the entry said
+    // "Captain baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first.", and the echo it had armed
+    // kept the background call-out of the new QNH quiet: the pilot heard a wrong sentence and not the setting.
+    [Fact]
+    public async Task A_side_pulled_while_its_preset_steps_is_said_with_its_qnh()
+    {
+        Baros(link: 0, mode1: 3, mode2: 3);
+        Fresh("INI_BARO_PRESET_CPT_SHOW", 0);   // out of view: pulled
+        Fresh("XMLVAR_Baro1_Mode", 0);
+        Fresh("KOHLSMAN SETTING MB:1", 1033.25);
+        Fresh("INI_BARO_PRESET_FO_SHOW", 1);
+        Fresh("INI_BARO_PRESET_FO", 1033);
+        Fresh("KOHLSMAN SETTING MB:3", 1033);
+        var gate = new TaskCompletionSource();
+        _def.Delay = _ => gate.Task;
+        var entry = Enter(1033);
+        _def.HandleUIVariableSet("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", 1,
+            _def.GetVariables()["A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL"], _sim, _speech);
+        _def.Delay = _ => Task.CompletedTask;
+        gate.SetResult();
+        await entry.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain(_speech.All, s => s.Contains("shows no preset", StringComparison.Ordinal));
+        Assert.Equal(new[]
+        {
+            "First officer altimeter preset 1033 hectopascals", "ISIS altimeter set 1033 hectopascals", "Captain altimeter 1033 hectopascals",
+        }, _speech.All.Where(s => !s.EndsWith("pressed", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public void A_speed_turned_elsewhere_is_said_once_and_its_muted_row_says_nothing()
     {

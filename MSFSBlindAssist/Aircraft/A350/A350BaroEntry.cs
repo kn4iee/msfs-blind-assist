@@ -69,9 +69,10 @@ internal static class A350BaroEntry
         return lines.Any(l => l.StartsWith("Baro:", StringComparison.Ordinal)) ? false : null;
     }
 
-    /// <summary>What a side that left STD without a pull is said as: the setting as the cockpit reads it in the side's unit.</summary>
-    public static string LeftStd(int side, double mb, double unit) =>
-        $"{(side == 1 ? "Captain" : "First officer")} altimeter left STD, now " + (unit >= 0.5
+    /// <summary>A side that was on STD and no longer is, after the entry: "left STD, now" when nobody pulled it, else the QNH the pull set,
+    /// in the A380's words (the background call-out's, which the entry's echo kept quiet); the setting as the cockpit reads it.</summary>
+    public static string AfterStd(int side, double mb, double unit, bool pulled) =>
+        $"{(side == 1 ? "Captain" : "First officer")} altimeter {(pulled ? "" : "left STD, now ")}" + (unit >= 0.5
             ? A350FcuWindows.Hectopascals(mb) + " hectopascals"
             : A350FcuWindows.Inches(mb / AltimeterPhrase.HpaPerInHg));
 

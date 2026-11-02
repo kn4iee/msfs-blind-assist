@@ -207,8 +207,9 @@ public partial class IniBuildsA350Definition
     }
 
     /// <param name="echoRows">The rows whose windows this run can move, when more than its own (a linked entry's copies).</param>
+    /// <param name="pulled">Whether the pilot pulled a baro since the run began (an altimeter entry's), so a preset gone from view is no news.</param>
     private async Task TypedAsync(A350PlacedRow row, double typed, A350TypedPlan plan, Func<string, double?> read,
-        SimConnectManager sim, ScreenReaderAnnouncer announcer, IReadOnlyList<string>? echoRows = null)
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, IReadOnlyList<string>? echoRows = null, Func<bool>? pulled = null)
     {
         int run = ++_nextRunId;
         _latestRunByRow[row.Key] = run;
@@ -234,7 +235,7 @@ public partial class IniBuildsA350Definition
             }
             if (plan.Stepper is { } stepper)
             {
-                await StepAsync(row, typed, plan, stepper, read, sim, announcer, Superseded, ArmEcho);
+                await StepAsync(row, typed, plan, stepper, read, sim, announcer, Superseded, ArmEcho, pulled);
                 return;
             }
             string key = KeyForInput(plan.ReadBackVar);
@@ -271,7 +272,8 @@ public partial class IniBuildsA350Definition
     /// <summary>Clicks toward a value read between clicks (<see cref="A350TypedStepper"/>): said when the knob shows none,
     /// else confirmed as the cockpit shows it once reached, or what it shows after the last round.</summary>
     private async Task StepAsync(A350PlacedRow row, double typed, A350TypedPlan plan, A350TypedStepper stepper,
-        Func<string, double?> read, SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<bool> superseded, Action armEcho)
+        Func<string, double?> read, SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<bool> superseded, Action armEcho,
+        Func<bool>? pulled)
     {
         double? now = null;
         for (int round = 0; round <= A350TypedStepper.MaxRounds; round++)
@@ -288,7 +290,8 @@ public partial class IniBuildsA350Definition
             }
             if (shownFlag < 0.5)
             {
-                announcer.Announce(stepper.NotShown);
+                if (pulled?.Invoke() != true)   // pulled meanwhile: the preset went out of view because the pilot used it
+                    announcer.Announce(stepper.NotShown);
                 return;
             }
             now = await ReadFresh(sim, KeyForInput(stepper.ValueVar), ReadoutTimeoutMs);
@@ -366,19 +369,20 @@ public partial class IniBuildsA350Definition
                 if (_disposed || entry != _baroEntry)
                     return;
                 await TypedAsync(_rows[target.Field.Key], typed, target.Plan, Read, sim, announcer,
-                    target.Field == A350TypedEntry.IsisQnh ? null : echoRows);
+                    target.Field == A350TypedEntry.IsisQnh ? null : echoRows, () => _baroPulls != pulls);
             }
             foreach (int side in plan.SidesOnStd)
             {
-                if (_disposed || entry != _baroEntry || _baroPulls != pulls)
-                    break;   // a pull asked meanwhile: what left STD was asked for (with LINKED INSTR one pull moves both)
+                if (_disposed || entry != _baroEntry)
+                    return;
                 if (await ReadFresh(sim, KeyForInput($"XMLVAR_Baro{side}_Mode"), ReadoutTimeoutMs) is not double mode || Math.Abs(mode - 3) < 0.5)
                     continue;   // unread: nothing is known to have left it
                 if (await ReadFresh(sim, KeyForInput($"KOHLSMAN SETTING MB:{side}"), ReadoutTimeoutMs) is double mb
                     && Read($"XMLVAR_Baro_Selector_HPA_{side}") is double unit && !_disposed && entry == _baroEntry)
                 {
+                    // A pull asked meanwhile (with LINKED INSTR one pull moves both): the side's QNH, which the entry's own echo kept quiet.
                     ArmTypedEcho(side == 1 ? CaptainQnhRow : FirstOfficerQnhRow);
-                    announcer.Announce(A350BaroEntry.LeftStd(side, mb, unit));
+                    announcer.Announce(A350BaroEntry.AfterStd(side, mb, unit, pulled: _baroPulls != pulls));
                 }
             }
             if (plan.Notice != null && !_disposed && entry == _baroEntry)
