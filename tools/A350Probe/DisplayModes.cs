@@ -487,30 +487,33 @@ internal static class DisplayModes
         return 0;
     }
 
-    /// <summary>Whether the copy has 1.2.7's Variables layout, which sdsweep and sdmap address directly: the name table's
-    /// entry 303 is INI_FMC_PAGE1 there (tools review 2026-10-30: on another version they set wrong cells and named them
-    /// wrong; sim 2026-10-30: the table starts at 920480 and the values at 1343616, where 920832 and 1344512, an entry and a
-    /// slot 88 and 112 enums on, named each value 24 enums off). Re-derive the addresses after an update
-    /// (docs/inibuilds-a350.md, "Addresses for 1.2.7").</summary>
-    private static bool HasVariablesLayout127(A350WasmModule mod, A350MemoryCopy copy, uint varNames)
+    /// <summary>What sdsweep and sdmap address, from the installed module rather than one version's numbers: the variable table's
+    /// slots by name (<see cref="A350ModuleFacts.Table"/>, the derivation the reader's pause and facts check use) and the SD page
+    /// shown, the one data store of <c>EWD::SetCurrentPage</c>. Numbers typed in for 1.2.7 once named every value 24 enums off
+    /// (tools review 2026-10-30), and 1.2.8 moved the table 304 bytes and the page 1,296 (plan 03, 2026-11-02).</summary>
+    private static (uint SdPage, IReadOnlyDictionary<string, uint> Slots)? LayoutOf(A350WasmModule mod, A350ModuleFacts facts)
     {
-        var p = copy.Read(varNames + 4 * 303, 4);
-        return p.Length == 4 && mod.CString((int)BitConverter.ToUInt32(p)) == "INI_FMC_PAGE1";
+        var setPage = mod.FunctionNames.Where(kv => kv.Key >= mod.ImportedFunctionCount && kv.Value == "EWD::SetCurrentPage(ECAMPages)")
+            .Select(kv => kv.Key).ToList();
+        if (facts.Table is not { } table || setPage.Count != 1)
+            return null;
+        const byte I32Store = 0x36;
+        var stores = mod.Instructions(setPage[0]).Where(i => i.Item1 == I32Store && i.Item2 > 100_000).Select(i => (uint)i.Item2).Distinct().ToList();
+        return stores.Count == 1 ? (stores[0], table.Slots) : null;
     }
 
-    private static int Refuse127()
+    private static int RefuseLayout()
     {
-        Console.WriteLine("This mode uses A350 1.2.7's Variables addresses, which this A350 does not have: re-derive them "
-            + "(docs/inibuilds-a350.md, Addresses for 1.2.7).");
+        Console.WriteLine("This A350's module does not say where its variable table or SD page is: the derivation needs looking at "
+            + "(docs/inibuilds-a350.md, the address table).");
         return 1;
     }
 
     /// <summary>`sdsweep copy.bin page NAME=v1,v2 [NAME=...]`: what one variable's values do to an SD page. NAME is
-    /// "L:x" (a CustomVariable) or "V:x" (the 1.2.7 Variables array); each value set in the copy, the page drawn,
-    /// and every shape and text that differs from the copy's own value printed.</summary>
+    /// "L:x" (a CustomVariable) or "V:x" (the Variables array, <see cref="LayoutOf"/>); each value set in the copy, the page
+    /// drawn, and every shape and text that differs from the copy's own value printed.</summary>
     private static int SdSweep(string[] args)
     {
-        const uint SdPage = 1451120, VarNames = 920480, VarValues = 1343616; const int VarCount = 1939;
         var src = A350ModuleCache.FindInstalledModule();
         if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
@@ -520,15 +523,11 @@ internal static class DisplayModes
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts) { RecordShapes = true };
         var copy = A350MemoryCopy.Load(args[0]);
         draw.Load(copy);
-        if (!HasVariablesLayout127(mod, copy, VarNames)) return Refuse127();
-        copy.WriteInt32(SdPage, int.Parse(args[1]));
+        if (LayoutOf(mod, facts) is not var (sdPage, slots)) return RefuseLayout();
+        copy.WriteInt32(sdPage, int.Parse(args[1]));
         var addr = new Dictionary<string, uint>();
         foreach (var cv in draw.CustomVariables) addr["L:" + cv.Name] = cv.Address + 16;
-        for (int i = 0; i < VarCount; i++)
-        {
-            var p = copy.Read(VarNames + (uint)(4 * i), 4);
-            if (p.Length == 4 && mod.CString((int)BitConverter.ToUInt32(p)) is string n) addr.TryAdd("V:" + n, VarValues + (uint)(8 * i));
-        }
+        foreach (var (name, slot) in slots) addr.TryAdd("V:" + name, slot);
         static List<string> Items(A350DrawCapture c) =>
             (c.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => A350DrawLayout.CtrSystemDisplay.Contains((sh.X0 + sh.X1) / 2, (sh.Y0 + sh.Y1) / 2))
                 .Where(sh => !(sh.Kind == "triangles" && sh.Image == 1))
@@ -564,12 +563,11 @@ internal static class DisplayModes
     }
 
     /// <summary>`sdmap copy.bin page [page...]`: which variable each drawn SD value shows. On the copy only:
-    /// each CustomVariable value and each Variables-array slot (1.2.7: names at 920480, values at 1343616,
-    /// 1939 entries) in turn set to 4321, the page redrawn, and every SD text that changed reported with the
-    /// variable's name. The SD page is set in the copy (1451120).</summary>
+    /// each CustomVariable value and each Variables-array slot (<see cref="LayoutOf"/>; 1939 on 1.2.7 and 1.2.8) in turn
+    /// set to 4321, the page redrawn, and every SD text that changed reported with the variable's name. The SD page is set
+    /// in the copy.</summary>
     private static int SdMap(string[] args)
     {
-        const uint SdPage = 1451120, VarNames = 920480, VarValues = 1343616; const int VarCount = 1939;
         var src = A350ModuleCache.FindInstalledModule();
         if (src == null) { Console.WriteLine("A350 module not found"); return 1; }
         var mod = A350WasmModule.Parse(File.ReadAllBytes(src));
@@ -579,16 +577,11 @@ internal static class DisplayModes
         using var draw = new A350DrawEngine(engine, module, A350ModulePatcher.UiDrawClassesOf(mod), facts);
         var copy = A350MemoryCopy.Load(args[0]);
         draw.Load(copy);
-        if (!HasVariablesLayout127(mod, copy, VarNames)) return Refuse127();
+        if (LayoutOf(mod, facts) is not var (sdPage, slots)) return RefuseLayout();
         draw.RecordShapes = true;
         var targets = new List<(string Name, uint Address)>();
         foreach (var cv in draw.CustomVariables) targets.Add(("L:" + cv.Name, cv.Address + 16));
-        for (int i = 0; i < VarCount; i++)
-        {
-            var p = copy.Read(VarNames + (uint)(4 * i), 4);
-            var name = p.Length == 4 ? mod.CString((int)BitConverter.ToUInt32(p)) : null;
-            targets.Add(("V:" + (name ?? "#" + i), VarValues + (uint)(8 * i)));
-        }
+        foreach (var (name, slot) in slots.OrderBy(kv => kv.Value)) targets.Add(("V:" + name, slot));
         Console.Error.WriteLine($"{targets.Count} variables");
         static Dictionary<(int, int), string> Cells(A350DrawCapture c) =>
             A350DrawLayout.Region(c.Texts, A350DrawLayout.CtrSystemDisplay).Where(t => !string.IsNullOrWhiteSpace(t.Text))
@@ -610,7 +603,7 @@ internal static class DisplayModes
         foreach (var pageArg in args.Skip(1))
         {
             int page = int.Parse(pageArg);
-            copy.WriteInt32(SdPage, page);
+            copy.WriteInt32(sdPage, page);
             var baseCap = draw.Draw("CTR");
             if (!baseCap.Ok) { Console.WriteLine($"page {page}: base draw failed {baseCap.Error}"); continue; }
             var baseCells = Cells(baseCap);

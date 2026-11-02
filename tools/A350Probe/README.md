@@ -90,8 +90,9 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350Probe patch [out.wasm [other.wasm]]` | Builds the patched module (`A350ModulePatcher`), saves it, and compares it with another. |
 | `A350Probe trap <export> <arg>`, `traptiny` | How a trap inside the A350's code (or a two-instruction module's) comes back to .NET, with its own compile cache in %TEMP% (never the app's [A350-11]). |
 
-`sdmap` and `sdsweep` address the Variables array at 1.2.7's addresses and first check the copy has that layout
-(`INI_FMC_PAGE1` at entry 215); on another version they refuse until the addresses are re-derived.
+`sdmap` and `sdsweep` take the Variables array's slots by name and the SD page's address from the installed module
+(`A350ModuleFacts.Table`, `EWD::SetCurrentPage`'s store), so a new version needs no numbers typed in; a module that does
+not say refuses.
 
 ## Environment
 

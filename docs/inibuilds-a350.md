@@ -102,24 +102,28 @@ Unanswered, those come back 0: QNH 0000 on the FCU, VHF 0.000 on the RMPs.
 
 iniBuilds' ECAM class names are swapped: `EWD` draws the SD pages (`EWD::DrawLowerPage`) and `SD` draws the Warning Display (memos, procedures, STATUS limitations).
 
-## Addresses for 1.2.7 (re-derive by name after an update)
+## Addresses for 1.2.8 (re-derive by name after an update)
 
-| What | 1.2.7 | How to find it |
-| --- | --- | --- |
-| `Variables` f64 array | 1343616 (enum e at +8e) | the `i32.const` in `Variables::GetInt` and `Variables::SetValue` |
-| `VariablesEnum` name table | 920480 (1939 names from `INI_IRS1_ALIGNED`; `INI_FMC_PAGE1` = 303, `INI_flight_phase` = 337, `INI_V1` = 358) | the `i32.const` in `Variables::Init`; the entry before it is no name |
-| `VariablesEnum` → L:var id | 1335856 (enum e at +4e) | the `i32.const` in `Variables::Init` and `Variables::SetValue` |
-| Active flight plan (`FlightPlan`) | 1418656; V1, VR, V2 at +964, +968, +972 (i32 knots), FLEX at +936 (i32 degrees) | `update_v1()`'s constant `this` for `FlightPlan::getV1Speed()`; each getter's load (`A350ModuleFacts.TakeoffSpeeds`) |
-| BTV (`BTVUpdater`) | 1292128, a static inside GEAR: far end of the runway +8, +16 (f64 degrees, -1 not set), its length +32 (f64 m), the exit's distance from the threshold +92, what is left to it +96, its margin +108 (f32 m, 60) | `ND::Update`'s constant `this` for `GEAR::GetGearSystemBase()` (1292056) plus each accessor's added constant (+8, +8, +56); the fields as `IsBTVEnabled`, `GetRunwayLength`, `GetExitOffset` and `UpdateRemainingDistance` read and write them; the autobrake's level is enum 31 in the variable table (`AutobrakeSystem::GetLevel()`), 1 BTV |
+Re-derived on 1.2.8 on 2026-11-02, each by its "How to find it" (`A350Probe speeds`, the module facts, the module's own constants read with
+`tools/a350-probe/wdis.py`); 1.2.7's column kept. MSFSBA itself derives the variable table, the flight plan, the minimums, BTV and the
+pause from the module at every start (`A350ModuleFacts`), so only the probe and these notes ever used the numbers.
+
+| What | 1.2.8 | 1.2.7 | How to find it |
+| --- | --- | --- | --- |
+| `Variables` f64 array | 1343312 (enum e at +8e) | 1343616 | the `i32.const` in `Variables::GetInt` and `Variables::SetValue` |
+| `VariablesEnum` name table | 920624 (1939 names from `INI_IRS1_ALIGNED`; `INI_FMC_PAGE1` = 303, `INI_flight_phase` = 337, `INI_V1` = 358, `INI_IS_PAUSED` = 623, `FMGS_PAUSE_TYPE` = 1670: the same indexes) | 920480 | the `i32.const` in `Variables::Init`; the entry before it is no name |
+| `VariablesEnum` → L:var id | 1335552 (enum e at +4e) | 1335856 | the `i32.const` in `Variables::Init` and `Variables::SetValue` |
+| Active flight plan (`FlightPlan`) | 1417664; V1, VR, V2 at +964, +968, +972 (i32 knots), FLEX at +936 (i32 degrees); minimums BARO +748, RADIO +752 | 1418656, the same offsets | `update_v1()`'s constant `this` for `FlightPlan::getV1Speed()`; each getter's load (`A350ModuleFacts.TakeoffSpeeds`) |
+| BTV (`BTVUpdater`) | 1291824, the same offsets; the autobrake's level at 1343560 (enum 31) | 1292128 | `ND::Update`'s constant `this` for `GEAR::GetGearSystemBase()` plus each accessor's added constant (+8, +8, +56); the fields as `IsBTVEnabled`, `GetRunwayLength`, `GetExitOffset` and `UpdateRemainingDistance` read and write them (1.2.7: far end of the runway +8, +16 (f64 degrees, -1 not set), its length +32 (f64 m), the exit's distance from the threshold +92, what is left to it +96, its margin +108 (f32 m, 60)); the autobrake's level is enum 31 in the variable table (`AutobrakeSystem::GetLevel()`), 1 BTV |
 
 These three table rows were 1344512, 920832 (`INI_FMC_PAGE1` = 215) and 1336752 until 2026-10-30, a slot, an entry and an id 112, 88 and 224 enums on: the name table's check entry still matched, but every value the probe's sdmap and sdsweep named was 24 enums off, and a scan of the variables by those numbers proved nothing (an earlier pass on the OIS switches; redone with the right enums, it found the same: no accessor touches them). Live 2026-10-30, `L:INI_VREF_SPEED` (119.4), `L:INI_VLS_SPEED` (142.1) and `L:INI_flight_phase` read the same as their slots at 1343616 + 8e.
-| SD page shown | i32 at 1451120 | `EWD::SetCurrentPage` |
-| FMGS page vector | FMGS+52 (99 pages, the 1.2.6 order) | vector whose entries' vtables are `FMS_Status`, `FMS_Init`, `FMC_Ref`, … |
-| FMS page shown flag | page+192 (u8) | the only byte set on the shown page alone |
-| FMS page elements | page+196 / +200, 8-byte `(BaseUIElement*, int)` pairs | |
-| MFD pointer position | FMGS+200 / +204 (f32) | `FMGS::Update` |
-| pointer request slots | x 1082152, y 1082156, flags 1413577 (captain) / 1413578 (first officer) | `RequestMouseChange`; not needed (see below) |
-| KCCU cursor screen | `INI_CPT_CURSOR_SCREEN` (1526) / `INI_FO_CURSOR_SCREEN` (1527): 1 ND, 2 MFD | |
+| SD page shown | i32 at 1449824 | 1451120 | `EWD::SetCurrentPage`'s one data store (the probe's `sdmap` and `sdsweep` find it there) |
+| FMGS page vector | FMGS+52 (99 pages, the 1.2.6 order): unchanged, the MFD window reads every page | the same | vector whose entries' vtables are `FMS_Status`, `FMS_Init`, `FMC_Ref`, … |
+| FMS page shown flag | page+192 (u8): unchanged | the same | the only byte set on the shown page alone |
+| FMS page elements | page+196 / +200, 8-byte `(BaseUIElement*, int)` pairs: unchanged | the same | |
+| MFD pointer position | FMGS+200 / +204 (f32): unchanged, MFD clicks land | the same | `FMGS::Update` |
+| pointer request slots | x 1080776, y 1080780, flags 1411689 (captain) / 1411690 (first officer) | x 1082152, y 1082156, flags 1413577 / 1413578 | `RequestMouseChange`; not needed (see below) |
+| KCCU cursor screen | `INI_CPT_CURSOR_SCREEN` (1526) / `INI_FO_CURSOR_SCREEN` (1527): 1 ND, 2 MFD | the same | |
 
 The 1.2.6 anchors `INI_MCDU{}_TACT_MODE` and `INI_FMC{}_MCDU` no longer exist. 1.2.7 adds `INI_FMC{1,2}_KEY_INPUT` (the PC-keyboard capture mode of the manual's "click a field, then LEFT CTRL", read by `FMGS::HandleKeyInput`), `INI_FMC{1,2}_CLR_ENTRY`, and a crash-reporting consent dialog (`EULADialog`) on both MFDs at first start.
 
