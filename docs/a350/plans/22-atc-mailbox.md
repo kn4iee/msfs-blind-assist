@@ -49,20 +49,34 @@
 ## Handoff to plan 21
 
 - **Pilot-facing:** mailbox fixes as found; "an ATC uplink is said (its own Ctrl+M row)" if Task 2 adds it. Guide: the A350's mailbox section and the Ctrl+M list; changelog `feature`/`fix`.
+- **Landed (2026-11-02):** no change a pilot sees. For the guide's mailbox section: a departure clearance works end to end with
+  SayIntentions (FLT NBR in FMS INIT, then ATC COM, REQUEST, CLEARANCE, DEPARTURE; XFR TO MAILBOX; SEND in the mailbox window, Ctrl+Shift+D);
+  an uplink is said as "ATC message light on"; WILCO, STANDBY and UNABLE are answered in the mailbox window, then SEND.
+- **Gaps in other plans' files:** plan 09, the D-ATIS page (`A350MfdPage`): the ATIS's last line read as the next fields' label, "menu
+  open" on the wrong button, and DEPARTURE REQUEST's fields read twice. Evidence 22, "Found for plan 09"; capture `p22_mfd_datis.json`.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:** Claude (Opus 5.5), inline
-- **Started:** 2026-11-02, from d5b733818
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Worked by:** Claude (Opus 5.5), inline, in the live sim with SayIntentions, 2026-11-02
+- **Started:** 2026-11-02, from `d5b733818`
+- **Landed:** 2026-11-02
+- **Tests at landing:** 18,922 passed (`ClaudeRulesHookTests` left to CI) at `eeaa1687c`
+- **Tasks:** 1: five departure clearance requests sent to SayIntentions (VCBI), each answered with a status message and the
+  clearance; WILCO, STANDBY, UNABLE, CLOSE, RECALL, PRINT and both arrow pairs worked from the mailbox's own route; a CPDLC logon
+  (NOTIFY) and logoff (DISCONNECT ALL); the D-ATIS requested and printed. Every mailbox state read right: no fix, the states pinned in
+  `A350MailboxTests` on live captures. 2: not needed: the ATC MSG lamps already say an uplink ("ATC message light on", once per
+  flashing run), replayed on the live timing in `A350UplinkCalloutTests`.
+- **Waiting on the owner:** nothing.
+- **In-sim results:** `docs/a350/evidence/22-atc-mailbox.md`. The aircraft's own: an UNABLE is recorded as WILCO, SENDING shows WILCO for
+  every answer, no answer is offered after STANDBY, and an uplink queued behind an open one never lights the light. ACCEPT and REJECT
+  were never offered (no such uplink on the ground).
+- **Changed from the plan:** Task 1's logon came after the request, not before: a departure clearance is an ACARS message that needs no
+  CPDLC connection ("NO NOTIFICATION REQUIRED" on the form). Task 2's five tests were not written; its condition was not met.
+- **Rulings made while working:** Is the lamp speech an uplink call-out? Yes: it says the one cue the cockpit gives, once per flashing
+  run, on its own Ctrl+M row ("ATC message light"); a separate row would say it twice (Claude). The D-ATIS page's three reading faults
+  are `A350MfdPage`'s, so plan 09's, not fixed here (Claude).
