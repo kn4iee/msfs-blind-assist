@@ -91,3 +91,10 @@ the SayIntentions API key and the Hoppie logon), and saves a Navigraph login cod
 | opt_navigraph_login | OPTIONS, 3RD PARTY, LOGIN WITH NAVIGRAPH: the user-code pop-up over the QR code |
 | opt_simulation | OPTIONS, SIMULATION: PAUSE AT T.O.D YES with its 30 NM box, time compression AUTO up to 4X |
 | opt_navigraph_login (STREAMER MODE on) | `streamer.test.js` turns STREAMER MODE on in the fixture: the IDs hidden |
+
+The fixtures above were captured on 1.2.7. `<name>_128` is the same page captured on 1.2.8 (2026-11-02, plan 06 Task 4), in its
+plain state on that flight (metric units, the owner signed in to Navigraph, PANEL STATES collapsed, TERML CHART before a search):
+aoc, enroute, failures, ground, ldgperf, loadsheet, maintenance, menu, menu_turnaround, opt_callouts, opt_simulation,
+opt_sound_cabin_options, opt_throttle_calibration, opt_volume_control, plan, situations, terml_chart, toperf_rwy_ok. Scraped beside
+their 1.2.7 page, every element reads, and what differs is the state, except two changes of 1.2.8's own: FLT OPS MENU's UTILITIES column
+gained SITUATIONS and OPTIONS, and TERML CHART opens on the flight's airports (`docs/a350/evidence/06-ois.md`).

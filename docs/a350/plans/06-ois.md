@@ -86,7 +86,8 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Started:** 2026-11-02, from `3c1a39b62`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:** 1 done (`af4e57197`); 3 re-confirmed live on both sides, nothing to fix; 5 done (`026f4dd9e`); 2 and 4 to do.
+- **Tasks:** 1 done (`af4e57197`); 3 re-confirmed live on both sides, nothing to fix; 4: 18 pinned pages re-captured on 1.2.8 and read
+  (two 1.2.8 layout changes, no agent change), the FO side and the FAP's pages still to walk; 5 done (`026f4dd9e`); 2 to do.
 - **Waiting on the owner:**
 - **In-sim results:** `docs/a350/evidence/06-ois.md`.
 - **Changed from the plan:**
