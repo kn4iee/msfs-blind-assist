@@ -164,4 +164,31 @@ public class A350TcasCalloutsTests
         c.Deliver(key, 1, 0);
         Assert.Equal(said, c.Flush(1000, target));
     }
+
+    // Plan 07 Task 4, live 2026-11-02 at 20:39:58 near VCBI at about 3,000 ft in SayIntentions traffic: the A350's TCAS raised DESCENT
+    // (INI_TCAS_VS_TGT -500), turned it to DESCENT_CROSS 2 s later (target -200), and CLEAR about 113 s later, with no TRAFFIC aural
+    // before it. The reads as the sampler took them, flushed once a second as the monitor does: each aural said once, with its rate.
+    [Fact]
+    public void The_live_descend_crossing_descend_and_clear_are_said_in_order()
+    {
+        var tcas = new A350TcasCallouts();
+        var said = new List<string>();
+        void Flush(long ms, double target) { if (tcas.Flush(ms, target) is { } s) said.Add(s); }
+        tcas.Deliver(Key("INI_TCAS_DESCENT"), 1, 0);
+        Flush(1000, -500);
+        tcas.Deliver(Key("INI_TCAS_DESCENT"), 0, 1840);
+        tcas.Deliver(Key("INI_TCAS_DESCENT_CROSS"), 1, 1990);
+        Flush(2000, -200);
+        Flush(3000, -200);
+        tcas.Deliver(Key("INI_TCAS_DESCENT_CROSS"), 0, 113_270);
+        tcas.Deliver(Key("INI_TCAS_CLEAR"), 1, 113_450);
+        Flush(114_000, 200);
+        Flush(115_000, 200);
+        Assert.Equal(new[]
+        {
+            "TCAS: Descend. Fly vertical speed minus 500 feet per minute.",
+            "TCAS: Descend, crossing descend. Fly vertical speed minus 200 feet per minute.",
+            "TCAS: Clear of conflict.",
+        }, said);
+    }
 }
