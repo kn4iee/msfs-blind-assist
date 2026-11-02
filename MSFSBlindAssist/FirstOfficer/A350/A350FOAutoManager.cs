@@ -68,6 +68,12 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // with green dot at 190.6, level at 4000 ft, flaps up): come down to it is enough.
     private const double ExtendWithinKts = 3;
 
+    // Extension happens below this height above the ground. While the FMS is in its approach phase the ceiling is the higher one: the
+    // commonest initial approach altitude, 5000 ft over a field near sea level, read 4999 to 5008 ft AGL (live 2026-11-02) and flaps 1
+    // waited at green dot until the aircraft drifted low. The higher ceiling still keeps a phase read wrongly at cruise from extending.
+    private const double ExtensionCeilingAglFt = 5000;
+    private const double FmsApproachCeilingAglFt = 10000;
+
     // Below this on the descent the next flap does not wait for its speed, only for VFE next: at idle on the glide path the speed can settle
     // just above it (live 2026-10-30: 154 with F at 152.9, flaps 2 through 1100 ft) and the manual's rule is "Always select your next flap
     // setting when below Vfe next". High enough for the two last steps to be out by 1000 ft, the dwell between them.
@@ -210,11 +216,13 @@ public sealed class A350FOAutoManager : IFoAutoManager
         // Arm the approach context on a real descent below 5000 ft AGL (one-way until
         // go-around or touchdown). See the _extensionArmed field comment for why extension
         // must never run unarmed, and why one descending sample is not a descent.
-        if (!_extensionArmed && descending && agl < 5000 && msl <= _peakMsl - ApproachArmDescentFt)
+        if (!_extensionArmed && descending && agl < ExtensionCeilingAglFt && msl <= _peakMsl - ApproachArmDescentFt)
             _extensionArmed = true;
         // ...or by the FMS's own approach phase on a level segment (live 2026-11-02: level at 5000 ft on the approach phase, the speed sat at
         // green dot for over two minutes with no flaps 1). Never while climbing: a go-around reads the approach phase for a moment.
-        if (!_extensionArmed && !climbing && agl < 5000 && _state.GetValue(A350StateEvaluator.FmsApproachField) > 0.5)
+        bool fmsApproach = _state.GetValue(A350StateEvaluator.FmsApproachField) > 0.5;
+        double ceiling = fmsApproach ? FmsApproachCeilingAglFt : ExtensionCeilingAglFt;
+        if (!_extensionArmed && !climbing && agl < ceiling && fmsApproach)
             _extensionArmed = true;
 
         // Track the lowest AGL seen while in the approach context — the go-around
@@ -292,9 +300,9 @@ public sealed class A350FOAutoManager : IFoAutoManager
             }
         }
 
-        // ---- Extension (ARMED approach context, not climbing, below 5000 AGL,
+        // ---- Extension (ARMED approach context, not climbing, below the ceiling,
         // VFE-next protected) ----
-        if (_extensionArmed && !climbing && agl < 5000)
+        if (_extensionArmed && !climbing && agl < ceiling)
         {
             if (_leversForwardAtUtc is { } leversAt && (_utcNow() - leversAt).TotalSeconds < GoAroundLeverHoldSeconds)
                 return;

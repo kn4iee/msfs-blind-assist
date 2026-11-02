@@ -96,6 +96,29 @@ public class A350FlapMarginTests
         Assert.Empty(await rig.LeverWrites());
     }
 
+    // Flown 2026-11-02 14:10 (the fix above, re-checked): level at 5000 ft on the approach phase over ground near sea level, the sim's
+    // PLANE ALT ABOVE GROUND read 4999 to 5008 ft, and flaps 1 waited 40 s at green dot until the aircraft drifted 15 ft low: the
+    // extension ceiling of 5000 ft AGL sat on the commonest initial approach altitude.
+    [Fact]
+    public async Task A_level_approach_at_5000_ft_over_a_sea_level_field_extends_flaps_1()
+    {
+        var rig = new Rig(fmsPhase: 6);
+        rig.Fly(3000, 2000, 250, 10);
+        rig.Fly(5035, 0, 250, 30);
+        rig.Fly(5035, 0, 173, 20);
+        Assert.Equal(new[] { 1 }, await rig.LeverWrites());
+    }
+
+    [Fact]
+    public async Task An_approach_phase_far_above_the_field_extends_nothing()
+    {
+        var rig = new Rig(fmsPhase: 6);
+        rig.Fly(9000, 2000, 250, 10);
+        rig.Fly(12000, 0, 250, 30);
+        rig.Fly(12000, 0, 173, 20);
+        Assert.Empty(await rig.LeverWrites());
+    }
+
     [Fact]
     public async Task A_go_around_climb_in_the_approach_phase_is_not_an_approach()
     {
