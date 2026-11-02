@@ -24,6 +24,18 @@ public static class A350GroundDisplays
 
     private static bool Number(DrawnCell c) => c.Text.Length > 0 && c.Text.All(ch => char.IsDigit(ch) || ch == '.');
 
+    /// <summary>The TO waypoint's name as a side's ND draws it (<see cref="ReadNd"/>'s "To waypoint" line, without its colour and
+    /// the rest of its block), or null when it draws none (the ROSE LS receiver's corner is no waypoint).</summary>
+    public static string? ToWaypointName(A350DrawCapture capture, int side)
+    {
+        const string Prefix = "To waypoint: ";
+        var line = ReadNd(capture, side).FirstOrDefault(l => l.StartsWith(Prefix, StringComparison.Ordinal));
+        if (line == null) return null;
+        string name = line[Prefix.Length..].Split("; ")[0];
+        int colour = name.LastIndexOf(", ", StringComparison.Ordinal);
+        return colour > 0 ? name[..colour] : name;
+    }
+
     /// <summary>A side's ND (EFIS#0's right half, EFIS#1's left half), in its own coordinates.</summary>
     /// <param name="skip">Texts another reader has taken (the ND's controls, <see cref="A350NdPage"/>).</param>
     public static IReadOnlyList<string> ReadNd(A350DrawCapture capture, int side, Func<DrawnText, bool>? skip = null)

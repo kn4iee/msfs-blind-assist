@@ -77,6 +77,7 @@ public static class SettingsManager
                     SeedTakeoffAssistToneConvention(defaultSettings, freshInstall: true);
                     SeedFenixMonitorDefaults(defaultSettings); // sets flag + saves
                     SeedPmdgMonitorDefaults(defaultSettings);
+                    if (SeedA350MonitorDefaults(defaultSettings)) Save(defaultSettings);
                     return defaultSettings;
                 }
 
@@ -107,6 +108,7 @@ public static class SettingsManager
                 }
                 SeedFenixMonitorDefaults(settings); // one-time: default-disable the noisy clock counters
                 SeedPmdgMonitorDefaults(settings);  // one-time: default-silence the cycling window-heat ON annunciators
+                if (SeedA350MonitorDefaults(settings)) Save(settings);   // one-time: the A350's next-waypoint call-out off
                 if (CarryRenamedMonitorMutes(settings)) Save(settings);
                 // Deserialization bypasses the property setters' usual mutation path, so the
                 // *DisabledMonitorVariablesSet sidecars (populated by field initializers to
@@ -256,6 +258,22 @@ public static class SettingsManager
                     s.FenixDisabledMonitorVariables.Add(key);
             }
             Save(s);
+        }
+
+        /// <summary>
+        /// One-time seed of the A350's call-outs that start unticked in its Ctrl+M list: the next
+        /// waypoint as the ND's TO waypoint changes (the owner's answer to question 7, 2026-10-31).
+        /// Guarded by A350MonitorDefaultsSeeded so a pilot who ticks it keeps it. Returns whether it
+        /// seeded (the caller saves). Literal key: Settings does not reach into the aircraft
+        /// definitions (A350WaypointCallout.Key).
+        /// </summary>
+        internal static bool SeedA350MonitorDefaults(UserSettings s)
+        {
+            if (s.A350MonitorDefaultsSeeded) return false;
+            s.A350MonitorDefaultsSeeded = true;
+            if (!s.A350DisabledMonitorVariables.Contains("A350_ND_NEXT_WAYPOINT"))
+                s.A350DisabledMonitorVariables.Add("A350_ND_NEXT_WAYPOINT");
+            return true;
         }
 
         /// <summary>

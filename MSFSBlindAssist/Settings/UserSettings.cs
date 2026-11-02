@@ -339,6 +339,11 @@ public class UserSettings
         // deliberate re-enable.
         public bool PmdgMonitorDefaultsSeeded { get; set; } = false;
 
+        // One-time seed marker (SettingsManager.SeedA350MonitorDefaults): the A350's next-waypoint
+        // call-out (A350_ND_NEXT_WAYPOINT) starts unticked in its Ctrl+M list; this flag stops
+        // re-seeding after the pilot ticks it.
+        public bool A350MonitorDefaultsSeeded { get; set; } = false;
+
         // PMDG Announcement Monitor Settings — variable keys that the user has
         // unticked in PMDGAnnouncementMonitorForm. The MainForm continuous-
         // monitoring branch consults this list when the loaded aircraft's
