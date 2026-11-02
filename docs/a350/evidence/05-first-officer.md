@@ -51,6 +51,10 @@ Every flap command below is the First Officer's own (`AIRLINER_Flaps_Set` in `de
   second circuit (14:36, after a ground placement back to the line-up point) took off with no SRS, the FMS stayed in phase 1 (the speed
   target read 100 kt before the roll: the FMS after a landing, re-initialised on INIT, FUEL&LOAD and PERF, did not guide the take-off), so
   ACTIVATE APPR was never offered; the aircraft was put back on the runway.
+- **The second fix's flight step, 15:36-16:57 on another fresh flight:** the same take-off and downwind, the approach phase activated level
+  at 5,000 ft (phase 6, managed speed). The gear-height reading sat at 4,986-4,991 ft, so the First Officer's own reading was at the old
+  5,000 ft boundary, and flaps 1 was commanded at 15:43:46 on the first sample inside the margin (174 kt, green dot 172), 35 s after the
+  deceleration began. Before the fix it waited 40 s at green dot for the aircraft to drift lower.
 
 ## Task 2: the gear the automation raises
 

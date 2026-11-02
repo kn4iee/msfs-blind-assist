@@ -69,27 +69,32 @@
 
 ## Handoff to plan 21
 
-- **Pilot-facing:** only what Tasks 1-4 fix, each in its own words; the guide's First Officer A350 notes if a step changed.
-- **For plan 19:** the flown figures from Task 1 (margins, gate heights, the go-around timeline), which the other Airbus ports cite.
-- **For the shared automation:** Task 2's finding if the A350 needs its own gear event.
+- **Pilot-facing:** plan 05 changed only the First Officer's automatic flaps on the A350 (category fix): flaps 1 now comes at green dot on a
+  level deceleration once the approach phase is active (before, only after a descent of 300 ft), up to 10,000 ft above the ground in the
+  approach phase. The guide's row ("Extends and retracts the flaps by the speed tape") still holds: no guide change.
+- **For plan 19:** the flown figures (evidence 05, Task 1 and Step 4): every step within 3 kt of its target (flaps 1 at green dot, 2 at S,
+  3 at F, FULL at F once the gear is down or at the 1,500 ft landing gate); no step above VFE next; on a go-around at 1,960 ft the lever
+  went to 0 18 s after TOGA, past the 10 s hold, and the FMS phase went from 6 to 3, not 9. The fixes to port: arm extension on the FMS's
+  own approach phase on a level segment (never while climbing), with a 10,000 ft AGL ceiling in that phase; a level approach at 5,000 ft
+  over a sea-level field otherwise sits on a 5,000 ft AGL ceiling.
+- **For the shared automation:** none: the stock `GEAR_UP` the automation sends was taken by the A350 on three take-offs.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** in progress: waiting on one flight (Task 1 Step 4 for the second fix, `f9527e830`)
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5) in the live sim, 2026-11-02
 - **Started:** 2026-11-02, from `a5a33328f`
-- **Landed:**
+- **Landed:** 2026-11-02
 - **Tests at landing:** 17,816 passed (`ClaudeRulesHookTests` left to CI) at `f9527e830`
 - **Tasks:** 1: Steps 1-3 flown, one miss (no flaps 1 on a level deceleration in the approach phase) fixed test-first in `2d3b12274`
   (`A350FlapMarginTests`) and flown again on a fresh flight (every step level, within 3 kt); that flight found a second miss (the 5,000 ft AGL
-  ceiling at a 5,000 ft approach), fixed test-first in `f9527e830`, whose own flight step is still to fly. 2: the stock `GEAR_UP` the shared automation sends is taken; no handoff. 3: the A350 accepts AP 1
+  ceiling at a 5,000 ft approach), fixed test-first in `f9527e830` and flown again (flaps 1 on the first sample inside the margin). 2: the stock `GEAR_UP` the shared automation sends is taken; no handoff. 3: the A350 accepts AP 1
   from 5 ft; no change. 4: every group worked from its flow, After Takeoff, Approach and Landing in flight on the fresh flight.
-- **Waiting on the owner:** a fresh flight loaded from the MSFS menu (OIS restores flew wrongly on 2026-11-02, and a take-off after a landing
-  got no SRS): one level deceleration at 5,000 ft in the approach phase, flaps 1 expected at green dot at once.
+- **Waiting on the owner:** nothing.
 - **In-sim results:** `docs/a350/evidence/05-first-officer.md`.
 - **Changed from the plan:** Task 2 measured with the take-off script sending the stock event the automation sends, not the automation itself
   (the probe runs the First Officer only).
