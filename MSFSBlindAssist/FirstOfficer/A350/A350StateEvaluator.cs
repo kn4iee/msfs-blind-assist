@@ -23,6 +23,10 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string LandingConfig = "INI_LANDING_CONFIG";
     internal const string WeatherRadar1 = "INI_WXR_ON", WeatherRadar2 = "INI_WXR2_ON";
     internal const string GreenDot = "FMGEC_GD_SPD", SSpeed = "FCPC_S_SPEED", FSpeed = "FCPC_F_SPEED";
+
+    /// <summary>The FMS's flight phase: 1 preflight, 2 take-off, 3 climb, 4 cruise, 5 descent, 6 approach, 9 go-around (live 2026-10-30).</summary>
+    internal const string FmsPhase = "INI_flight_phase";
+    private const double FmsApproachPhase = 6;
     private const string GearLeft = "GEAR LEFT POSITION", GearCentre = "GEAR CENTER POSITION", GearRight = "GEAR RIGHT POSITION";
     private const string FuelTotal = "FUEL TOTAL QUANTITY WEIGHT";
 
@@ -33,7 +37,7 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
         (ApuAvailable, null), (ApuFlap, null), (ApuStartButton, null), (ExtAOnline, null), (ExtBOnline, null), (GpuAvailable, null), (AutoBrakeArmed, null),
         (Engine1Available, null), (Engine2Available, null), (Baro1Mode, null), (Baro2Mode, null), (BaroUnit1, null), (BaroUnit2, null), (LandingConfig, null),
         (WeatherRadar1, null), (WeatherRadar2, null),
-        (GreenDot, null), (SSpeed, null), (FSpeed, null), (A350Hotkeys.VfeNext, null),
+        (GreenDot, null), (SSpeed, null), (FSpeed, null), (A350Hotkeys.VfeNext, null), (FmsPhase, null),
         (GearLeft, "percent over 100"), (GearCentre, "percent over 100"), (GearRight, "percent over 100"), (FuelTotal, "kilograms"),
     };
 
@@ -62,6 +66,9 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
     internal const string PacksOnField = "FO_PACKS_ON", NavLogoOnField = "FO_NAV_LOGO_ON", LineupLightsField = "FO_LINEUP_LIGHTS", PrepLightsField = "FO_PREP_LIGHTS";
     internal const string WeatherRadarOnField = "FO_WXR_ON";
     internal const string GreenDotField = "FO_SPEED_GD", SSpeedField = "FO_SPEED_S", FSpeedField = "FO_SPEED_F", VfeNextField = "FO_VFE_NEXT";
+
+    /// <summary>1 while the FMS is in its approach phase (PERF APPR activated, or the deceleration point passed), 0 in any other, NaN unread.</summary>
+    internal const string FmsApproachField = "FO_FMS_APPROACH";
     internal const string LandingConf3Field = "FO_LANDING_CONF3";
     internal const string AdirsNavField = "FO_ADIRS_NAV", LeversIdleField = "FO_LEVERS_IDLE", CockpitDoorSecureField = "FO_COCKPIT_DOOR_SECURE";
     internal const string GoAroundThrustField = "FO_GA_THRUST";
@@ -242,6 +249,10 @@ public sealed class A350StateEvaluator : LVarStateEvaluator
                 return true;
             case WeatherRadarOnField:
                 value = Both(Input(WeatherRadar1), Input(WeatherRadar2), (one, two) => one > 0.5 && two > 0.5);
+                return true;
+            case FmsApproachField:
+                double phase = Input(FmsPhase);
+                value = double.IsNaN(phase) ? double.NaN : Math.Abs(phase - FmsApproachPhase) < 0.5 ? 1 : 0;
                 return true;
             case GreenDotField:
                 value = Input(GreenDot);

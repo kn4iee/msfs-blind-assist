@@ -212,6 +212,10 @@ public sealed class A350FOAutoManager : IFoAutoManager
         // must never run unarmed, and why one descending sample is not a descent.
         if (!_extensionArmed && descending && agl < 5000 && msl <= _peakMsl - ApproachArmDescentFt)
             _extensionArmed = true;
+        // ...or by the FMS's own approach phase on a level segment (live 2026-11-02: level at 5000 ft on the approach phase, the speed sat at
+        // green dot for two and a half minutes with no flaps 1). Never while climbing: a go-around reads the approach phase for a moment.
+        if (!_extensionArmed && !climbing && agl < 5000 && _state.GetValue(A350StateEvaluator.FmsApproachField) > 0.5)
+            _extensionArmed = true;
 
         // Track the lowest AGL seen while in the approach context — the go-around
         // detector needs a real climb-out signature a turbulence gust can't fake.
