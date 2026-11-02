@@ -80,14 +80,15 @@ The owner's answer to question 17 (2026-10-31): what is hardest is where focus l
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** in progress
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5), 2026-11-02
 - **Started:** 2026-11-02, from `3c1a39b62`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
+- **Tasks:** 1 done (`af4e57197`); 3 re-confirmed live on both sides, nothing to fix; 5 done (`026f4dd9e`); 2 and 4 to do.
 - **Waiting on the owner:**
-- **In-sim results:**
+- **In-sim results:** `docs/a350/evidence/06-ois.md`.
 - **Changed from the plan:**
-- **Rulings made while working:**
+- **Rulings made while working:** Task 5's README recipe updated in `docs/tooling.md`'s OIS-harness row too (a plan 20 file), so the
+  tooling table does not keep the old sed recipe; cost if wrong: plan 20 rewrites one row.
