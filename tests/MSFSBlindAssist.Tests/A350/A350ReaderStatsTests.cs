@@ -20,6 +20,60 @@ public class A350ReaderStatsTests
         return stats;
     }
 
+    private static string Line(Action<A350ReaderStats> feed)
+    {
+        var stats = new A350ReaderStats();
+        stats.Copied(T0, 40, 512L << 20, 0, 0);
+        feed(stats);
+        return stats.Due(T0.AddSeconds(60))!;
+    }
+
+    [Fact]
+    public void A_retry_that_draws_is_counted() =>
+        Assert.Contains(", 1 retried, 1 drew, 0 torn texts", Line(s => { s.Retried(); s.RetryDrew(); }));
+
+    [Fact]
+    public void A_retry_that_traps_again_is_counted_as_not_drawn() =>
+        Assert.Contains(", 1 retried, 0 drew, 0 torn texts", Line(s => s.Retried()));
+
+    [Fact]
+    public void A_fresh_instance_adds_its_time()
+    {
+        Assert.Contains(", 0 retried, 1 fresh instance, 120 ms, 0 torn texts", Line(s => s.FreshInstance(120.4)));
+        Assert.Contains(", 0 retried, 2 fresh instances, 300 ms, 0 torn texts", Line(s => { s.FreshInstance(120); s.FreshInstance(300); }));
+    }
+
+    [Fact]
+    public void A_quiet_minute_reads_as_before() => Assert.Contains(", 0 retried, 0 torn texts", Line(_ => { }));
+
+    [Fact]
+    public void The_minute_line_starts_again_after_a_retry_and_a_fresh_instance()
+    {
+        var stats = new A350ReaderStats();
+        stats.Copied(T0, 40, 512L << 20, 0, 0);
+        stats.Retried();
+        stats.RetryDrew();
+        stats.FreshInstance(100);
+        stats.Due(T0.AddSeconds(60));
+        stats.Copied(T0.AddSeconds(61), 40, 512L << 20, 0, 0);
+        Assert.Contains(", 0 retried, 0 torn texts", stats.Due(T0.AddSeconds(122))!);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_minute_line_reads_the_same_under_de_DE(string culture)
+    {
+        var before = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo(culture);
+        try
+        {
+            Assert.Contains(", 1 retried, 1 drew, 1 fresh instance, 1234 ms, 0 torn texts",
+                Line(s => { s.Retried(); s.RetryDrew(); s.FreshInstance(1234.4); }));
+        }
+        finally { CultureInfo.CurrentCulture = before; }
+    }
+
     [Fact]
     public void Nothing_is_due_before_a_minute_has_passed()
     {
@@ -49,7 +103,7 @@ public class A350ReaderStatsTests
         var line = Fed().Due(T0.AddSeconds(60));
         Assert.Equal("60 s: 2 copies, avg 50 ms, max 60 ms, 520 MB, 3.0 MB read again, 2 regions left out; "
             + "3 draws, avg 20 ms, max 30 ms (MFD#0), head room max 12 MB; "
-            + "1 failed (EFIS#0 1), 1 retried, 2 torn texts", line);
+            + "1 failed (EFIS#0 1), 1 retried, 0 drew, 2 torn texts", line);
     }
 
     [Fact]

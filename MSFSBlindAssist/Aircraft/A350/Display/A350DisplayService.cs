@@ -247,6 +247,7 @@ public sealed class A350DisplayService : IDisposable
                         _stats.Copied(started, copyClock.Elapsed.TotalMilliseconds, _reader.LastBytes, _reader.LastReread, _reader.LastLeftOut);
                         cap = _draw.Draw(g, i);
                         NoteDraw(g, i, cap, retrying: false);
+                        if (cap.Ok) _stats.RetryDrew();
                     }
                     caps.Add(cap);
                     // The draw asked for more than the head room holds and got NULL: logged when it starts and when it ends,
@@ -288,6 +289,7 @@ public sealed class A350DisplayService : IDisposable
     private void NoteDraw(string gauge, int index, A350DrawCapture cap, bool retrying)
     {
         _stats.Drew(gauge, index, cap.Milliseconds, cap.Ok, cap.Texts.Count(t => t.Text.Any(char.IsControl)), _draw!.LastHeapBytes);
+        if (_draw.LastInstantiateMs > 0) _stats.FreshInstance(_draw.LastInstantiateMs);
         if (!cap.Ok && _stats.LogFailure(gauge, index, cap.Error!, DateTime.UtcNow))
         {
             bool trapped = cap.Error!.StartsWith("trap");

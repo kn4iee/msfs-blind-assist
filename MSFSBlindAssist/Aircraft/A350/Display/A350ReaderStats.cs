@@ -19,8 +19,8 @@ public sealed class A350ReaderStats
     public const int MaxFailureKeys = 64;
 
     private DateTime? _since;
-    private int _copies, _draws, _retries, _torn, _leftOut, _copyBytesMb;
-    private double _copyMs, _copyMax, _drawMs, _drawMax, _rereadMax;
+    private int _copies, _draws, _retries, _retriesDrew, _freshInstances, _torn, _leftOut, _copyBytesMb;
+    private double _copyMs, _copyMax, _drawMs, _drawMax, _rereadMax, _freshMax;
     private long _headRoomMax;
     private string _slowest = "";
     private readonly SortedDictionary<string, int> _failed = new(StringComparer.Ordinal);
@@ -61,6 +61,16 @@ public sealed class A350ReaderStats
     /// <summary>A trapped draw tried again on a new copy.</summary>
     public void Retried() => _retries++;
 
+    /// <summary>The draw retried on a new copy read.</summary>
+    public void RetryDrew() => _retriesDrew++;
+
+    /// <summary>A draw that started a new instance first (the one after a trap, [A350-9]), and what that took.</summary>
+    public void FreshInstance(double milliseconds)
+    {
+        _freshInstances++;
+        _freshMax = Math.Max(_freshMax, milliseconds);
+    }
+
     /// <summary>Whether a line is due: a minute has passed since the first copy it counts.</summary>
     public bool IsDue(DateTime now) => _since is { } since && now - since >= Every;
 
@@ -72,11 +82,14 @@ public sealed class A350ReaderStats
             + FormattableString.Invariant($"{_draws} draws, avg {_drawMs / Math.Max(1, _draws):0} ms, max {_drawMax:0} ms ({_slowest}), head room max {_headRoomMax >> 20} MB; ")
             + (_failed.Count == 0 ? "no failures"
                 : FormattableString.Invariant($"{_failed.Values.Sum()} failed ({string.Join(", ", _failed.Select(f => $"{f.Key} {f.Value}"))})"))
-            + FormattableString.Invariant($", {_retries} retried, {_torn} torn texts")
+            + FormattableString.Invariant($", {_retries} retried")
+            + (_retries > 0 ? FormattableString.Invariant($", {_retriesDrew} drew") : "")
+            + (_freshInstances > 0 ? FormattableString.Invariant($", {_freshInstances} fresh instance{(_freshInstances == 1 ? "" : "s")}, {_freshMax:0} ms") : "")
+            + FormattableString.Invariant($", {_torn} torn texts")
             + (machine is { } m ? "; " + m.Line : "");
         _since = null;
-        _copies = _draws = _retries = _torn = _leftOut = _copyBytesMb = 0;
-        _copyMs = _copyMax = _drawMs = _drawMax = _rereadMax = 0;
+        _copies = _draws = _retries = _retriesDrew = _freshInstances = _torn = _leftOut = _copyBytesMb = 0;
+        _copyMs = _copyMax = _drawMs = _drawMax = _rereadMax = _freshMax = 0;
         _headRoomMax = 0;
         _slowest = "";
         _failed.Clear();

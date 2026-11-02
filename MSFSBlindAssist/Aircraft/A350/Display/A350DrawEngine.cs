@@ -756,6 +756,7 @@ public sealed class A350DrawEngine : IDisposable
             _stubCalls.Clear();
         }
         Clear();
+        LastInstantiateMs = 0;
         var objs = Objects(cls);
         // Fewer objects than asked for (the first officer's EFIS built after the first scan): looked for again, at most
         // every RescanMissingAfter.
@@ -770,7 +771,13 @@ public sealed class A350DrawEngine : IDisposable
         string? error = null;
         try
         {
-            if (_fresh) { Instantiate(); _fresh = false; }
+            if (_fresh)
+            {
+                var building = Stopwatch.StartNew();
+                Instantiate();
+                LastInstantiateMs = building.Elapsed.TotalMilliseconds;
+                _fresh = false;
+            }
             var f = _instance.GetFunction(A350ModulePatcher.ExportName(cls + "::Draw()"))
                 ?? throw new A350ModuleException("no export for " + cls);
             void Run()
@@ -810,6 +817,9 @@ public sealed class A350DrawEngine : IDisposable
 
     /// <summary>The last trap's whole message, its wasm backtrace included (diagnostics, A350Probe draw).</summary>
     public string? LastTrap { get; private set; }
+
+    /// <summary>What starting a new instance took the last draw, in milliseconds; 0 when it started none.</summary>
+    public double LastInstantiateMs { get; private set; }
 
     /// <summary>The head room the last draw allocated, in bytes.</summary>
     public long LastHeapBytes { get; private set; }
