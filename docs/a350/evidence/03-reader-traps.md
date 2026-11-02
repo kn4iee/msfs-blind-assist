@@ -24,8 +24,10 @@ Both parts decided within 7 s of the displays being ready, and agreed; nothing w
 - Variables: agrees on 2 pairs, `INI_RMP1_TRANSMIT_CHANNEL` and `INI_RMP1_1_RECEIVE_SEL`, 1 and 1.
 - The minute line: `… no failures, 0 retried, 0 torn texts; … facts: table agrees, variables agrees`.
 
-At the gate the speeds the table holds (VLS, VFE, VMAX) read 0, so no pair counted them. The step's second half, in a climb where they are
-not 0, waits for the next flight.
+At the gate the speeds the table holds (VLS, VFE, VMAX) read 0, so no pair counted them. In the climb of the flight that afternoon (the reader
+started again at 6,000 ft): table agrees on 141 pairs, `INI_VFE_SPEED` 255 and `INI_VMAX_SPEED` 340 among them, each the same in the copy and the sim;
+`INI_VLS_SPEED` (143.2, moving as fuel burned) did not count, as designed; variables agree on 5 pairs (`INI_AUTOTHRUST_TLA:1` and `:2` 25, `INI_SPOILERS_ARMED`
+1, and the two RMP ones).
 
 ## Task 6: the addresses on 1.2.8
 
@@ -46,4 +48,6 @@ the page from the module: `sdsweep copy 1 V:INI_flight_phase=1,4` ran (page 1 th
 
 ## Task 7
 
-Waits for the next full flight on a build with Tasks 1 and 2.
+The flight of 2026-11-02 (VCBI to VCBI, about 55 minutes of the reader's minute lines from the gate to the stop after the autoland, copies of 42 to
+44 MB): no failures, no traps, 0 retried; the only fresh instances were the reader's two starts (9 and 8 ms). Traps per hour: 0 at this memory size;
+the 2026-10-31 traps came at much larger copies late in a long flight.
