@@ -213,7 +213,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
         if (!_extensionArmed && descending && agl < 5000 && msl <= _peakMsl - ApproachArmDescentFt)
             _extensionArmed = true;
         // ...or by the FMS's own approach phase on a level segment (live 2026-11-02: level at 5000 ft on the approach phase, the speed sat at
-        // green dot for two and a half minutes with no flaps 1). Never while climbing: a go-around reads the approach phase for a moment.
+        // green dot for over two minutes with no flaps 1). Never while climbing: a go-around reads the approach phase for a moment.
         if (!_extensionArmed && !climbing && agl < 5000 && _state.GetValue(A350StateEvaluator.FmsApproachField) > 0.5)
             _extensionArmed = true;
 

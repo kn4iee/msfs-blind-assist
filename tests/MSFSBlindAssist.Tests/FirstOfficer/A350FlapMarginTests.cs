@@ -4,7 +4,7 @@ using MSFSBlindAssist.SimConnect;
 namespace MSFSBlindAssist.Tests.FirstOfficer;
 
 // Plan 05 Task 1, flown 2026-11-02 at VCBI (1.2.8, about 153 t): on the approach phase (PERF APPR activated, INI_flight_phase 6), level at
-// 5000 ft with managed speed, the aircraft decelerated to green dot (172) and sat at 170 to 173 kt for two and a half minutes, inside
+// 5000 ft with managed speed, the aircraft decelerated to green dot (172) and sat at 170 to 174 kt for over two minutes, inside
 // ExtendWithinKts, without flaps 1: the approach context armed only on a descent of 300 ft below the leg's highest altitude, and the
 // intercept was flown level. Flown again descending, every step came within 3 kt of its target (flaps 1 at 174, 2 at 153 with S 152,
 // 3 at 139 with F 138), never past VFE next, and FULL at the landing gate.
