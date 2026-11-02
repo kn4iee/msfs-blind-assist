@@ -32,14 +32,34 @@ Every flap command below is the First Officer's own (`AIRLINER_Flaps_Set` in `de
 - **Step 3:** TOGA at 12:05:43 at about 1,960 ft AGL with flaps 1, CL at 12:06:01. The FMS phase went from 6 to 3 (climb), not 9. No extension
   in the go-around; the First Officer retracted to 0 at 12:06:01, 18 s after TOGA (past `GoAroundLeverHoldSeconds`), at about 200 kt, below
   VFE next 212 (the speed reached 234 kt by 12:06:10 with the lever already at 0). The approach was then activated again and flown (Step 2).
-- **Step 4 (the flight step again):** the fix's in-flight check is still to fly: see "The re-check flights" below.
+- **Step 4 (the flight step again), 14:03-14:24 on a fresh flight from the menu:** a scripted take-off from runway 04, a left-hand circuit at
+  5,000 ft, the approach phase activated level on the downwind (phase 6 at 14:09:40) with managed speed (the push took this time), the ILS Z
+  04 captured from below at 7.3 NM, an autoland with ROLL OUT. Every step came level and within 3 kt of its target:
+
+  | Time | Command | IAS | Target | Where |
+  | --- | --- | --- | --- | --- |
+  | 14:11:29 | flaps 1 | 172 | green dot 172 | level at 4,986 ft, phase 6 |
+  | 14:12:43 | flaps 2 | 152 | S 153 | level at 4,984 ft |
+  | 14:13:15 | flaps 3 | 139 | F 138-140 | level at 4,991 ft |
+  | 14:18:13 | flaps FULL | 134 | F 132 (conf 3), gear down 1.3 s before | descending through 2,440 ft on the glideslope |
+
+- **A second miss, found by that flight:** flaps 1 waited 40 s at green dot (the speed reached 174 kt at 14:10:48). Extension stopped at
+  5,000 ft AGL, and level at 5,000 ft over ground near sea level the sim's PLANE ALT ABOVE GROUND (what the First Officer reads, about 15 ft
+  more than the gear's height) read 4,999 to 5,008 ft: flaps 1 came once the aircraft had drifted 15 ft low. Fixed test-first (`f9527e830`,
+  `A_level_approach_at_5000_ft_over_a_sea_level_field_extends_flaps_1`, `An_approach_phase_far_above_the_field_extends_nothing`): in the
+  FMS's approach phase the ceiling is 10,000 ft AGL, armed by a descent alone it stays 5,000 ft. Its own flight step is still to fly: the
+  second circuit (14:36, after a ground placement back to the line-up point) took off with no SRS, the FMS stayed in phase 1 (the speed
+  target read 100 kt before the roll: the FMS after a landing, re-initialised on INIT, FUEL&LOAD and PERF, did not guide the take-off), so
+  ACTIVATE APPR was never offered; the aircraft was put back on the runway.
 
 ## Task 2: the gear the automation raises
 
 - The shared automation sends the stock `GEAR_UP` (`UniversalAutomationService`, "Positive rate. Gear up."). The same event, sent by the
   take-off script at 57 ft AGL (11:52:20), was taken: `INI_GEAR_HANDLE_STATUS` read 0 2.5 s later. No A350 hook is needed (Step 3: no handoff).
-- Not measured: the automation itself sending it (the probe runs the First Officer, not the shared service), the stock `GEAR_DOWN` on an
-  approach (the gear came down by the landing script's row), and the After Takeoff flow's `AT_GEAR_UP_CHECK` in flight.
+- Again on the fresh flight at 14:37:12 (63 ft): the handle read 0 3 s later. The After Takeoff flow's `AT_GEAR_UP_CHECK` read UP in flight
+  (14:05:57, "already set").
+- Not measured: the automation itself sending it (the probe runs the First Officer, not the shared service) and the stock `GEAR_DOWN` on an
+  approach (the gear came down by the landing script's row).
 
 ## Task 3: the lowest autopilot engage height (T3)
 
@@ -64,7 +84,12 @@ Every flap command below is the First Officer's own (`AIRLINER_Flaps_Set` in `de
   followed the spoilers' state where FO-8 leaves them unlatched.
 - AFTER_LANDING: the flaps are the Captain's; `AL_FLAPS_CHECK` timed out (20 s) and was skipped, so `ALC_FLAPS` stayed open until the lever was
   set to 0 by hand at 12:26:03, as FO-7 says for a skipped step.
-- Not run in flight: the AFTER_TAKEOFF, APPROACH and LANDING flows and their checklists (the take-off and the approaches were flown by scripts).
+- In flight on the fresh flight: AFTER_TAKEOFF completed 14:05:57 with nothing unfinished (gear check read UP); APPROACH completed 14:12:52
+  (Captain lines: the landing autobrake, activate the approach phase); LANDING completed 14:18:30 once LOC and G/S had captured (Captain line:
+  the missed-approach altitude).
+- Its LINEUP after a landing and a ground placement back to the runway: `LU_MEMO_CHECK` timed out and was skipped, leaving BTC_AUTOBRK and
+  BTC_SPLRS open, because the landing had disarmed the autobrake and the spoilers and the surveillance had gone to STBY: the A/BRK press, the
+  spoiler arm and the MFD SURV page's DEFAULT SETTINGS (with its CONFIRM) cleared the memo. That is the Captain's work, as the checklist says.
 
 ## The re-check flights (2026-11-02 afternoon): what an OIS restore did to the aircraft
 
@@ -81,5 +106,8 @@ Three attempts to fly the Step 4 re-check crashed or ended off the runway, none 
 - **The ground restore** (P05 RWY04, engines running): the same scripted take-off that flew the morning flight rejected itself at 107 kt, the
   cross-track readings jumping 20 m either side within seconds with almost no heading error; the idle command was not taken at first and the
   aircraft stopped 110 m right of the centreline, 2 km down the runway.
+- **The fresh flight settles it:** with the hydraulics up and never restored, `AXIS_AILERONS_SET` +6000 moved the yoke X to -0.135 and the
+  left aileron to 46% up (negative is a right roll, as measured on 2026-10-28), and the autopilot captured every heading. In the restored
+  states the aileron channel read 0 whatever was sent: those restores came back without roll control.
 - Every restore came after the first one of the day (P05 RWY04 at 12:40, before the MCP placement); the morning flight, never restored, flew
   normally from start to securing. A fresh flight loaded from the MSFS menu is needed for the re-check.

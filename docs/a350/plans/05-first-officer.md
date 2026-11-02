@@ -78,20 +78,23 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** in progress: waiting on one flight (Task 1 Step 4, the fix flown again)
+- **Status:** in progress: waiting on one flight (Task 1 Step 4 for the second fix, `f9527e830`)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5) in the live sim, 2026-11-02
 - **Started:** 2026-11-02, from `a5a33328f`
 - **Landed:**
-- **Tests at landing:** 17,814 passed (`ClaudeRulesHookTests` left to CI) at `2d3b12274`
+- **Tests at landing:** 17,816 passed (`ClaudeRulesHookTests` left to CI) at `f9527e830`
 - **Tasks:** 1: Steps 1-3 flown, one miss (no flaps 1 on a level deceleration in the approach phase) fixed test-first in `2d3b12274`
-  (`A350FlapMarginTests`), Step 4 not yet flown. 2: the stock `GEAR_UP` the shared automation sends is taken; no handoff. 3: the A350 accepts AP 1
-  from 5 ft; no change. 4: every group but After Takeoff, Approach and Landing worked from its flow; those three were not run in flight.
-- **Waiting on the owner:** a fresh flight loaded from the MSFS menu at VCBI (every OIS restore on 2026-11-02 afternoon flew wrongly: the evidence's
-  last section), then the level deceleration in the approach phase again, and the After Takeoff, Approach and Landing groups in flight.
+  (`A350FlapMarginTests`) and flown again on a fresh flight (every step level, within 3 kt); that flight found a second miss (the 5,000 ft AGL
+  ceiling at a 5,000 ft approach), fixed test-first in `f9527e830`, whose own flight step is still to fly. 2: the stock `GEAR_UP` the shared automation sends is taken; no handoff. 3: the A350 accepts AP 1
+  from 5 ft; no change. 4: every group worked from its flow, After Takeoff, Approach and Landing in flight on the fresh flight.
+- **Waiting on the owner:** a fresh flight loaded from the MSFS menu (OIS restores flew wrongly on 2026-11-02, and a take-off after a landing
+  got no SRS): one level deceleration at 5,000 ft in the approach phase, flaps 1 expected at green dot at once.
 - **In-sim results:** `docs/a350/evidence/05-first-officer.md`.
 - **Changed from the plan:** Task 2 measured with the take-off script sending the stock event the automation sends, not the automation itself
   (the probe runs the First Officer only).
 - **Rulings made while working:** the approach phase arms the flaps only below 5,000 ft AGL and never while climbing, so a departure level-off
   (climb phase) or a go-around's first seconds extend nothing; cost if wrong: an approach phase activated above 5,000 ft AGL waits for the
-  descent, as before the fix.
+  descent, as before the fix. The second fix's ceiling in the approach phase is 10,000 ft AGL (the speed limit's height): a deceleration in
+  the approach phase between 5,000 and 10,000 ft AGL now extends flaps 1 at green dot, as the manual's "CONF 1 at green dot" asks; cost if
+  wrong: a pilot who wants to stay clean that high in the approach phase sees flaps 1 there.
