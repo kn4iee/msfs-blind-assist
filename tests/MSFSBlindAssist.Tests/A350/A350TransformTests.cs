@@ -74,4 +74,18 @@ public class A350TransformTests
         using var module = Wasmtime.Module.FromBytes(engine, "a350", patched);
         Assert.NotNull(module);
     }
+
+    // Live 2026-11-02 on 1.2.8 (patch 6), at the VCBI stand: what calls nvgTransform is both EFIS draws, not the MFD; the ND's
+    // airport map draws each label at its own origin (local 0, 0) and places it with nvgTransform alone, so before patch 6 every
+    // stand, terminal and pier label sat at one point. Captured live (A350Probe draw live EFIS#0 with A350_DRAW_JSON).
+    [Fact]
+    public void The_airport_maps_labels_are_placed_by_nvgTransform_across_the_nd()
+    {
+        var capture = A350Fixtures.Capture("p03_efis_transform.json");
+        var labels = capture.Texts.Where(t => t.Text is "TERMINAL" or "PIER 1" or "CARGO VILLAGE TERMINAL" or "TWR").ToList();
+        Assert.Equal(4, labels.Count);
+        Assert.All(labels, t => Assert.Equal((0f, 0f), (t.LocalX, t.LocalY)));   // drawn at the origin: the transform alone places them
+        Assert.All(labels, t => Assert.True(t.X > 836, $"{t.Text} at {t.X} is not on the ND"));
+        Assert.Equal(labels.Count, labels.Select(t => (t.X, t.Y)).Distinct().Count());
+    }
 }
