@@ -15,7 +15,10 @@ public class A350DrawEngineTests
     private static byte[] Float(float f) => BitConverter.GetBytes(f);
     private static byte[] U32(params uint[] v) => v.SelectMany(BitConverter.GetBytes).ToArray();
 
-    private static byte[] Module(bool firstDrawPartial = false, bool clip = false)
+    /// <summary>The functions a test's own prelude calls (the import, nvgText, nvgScissor, then the list in Module).</summary>
+    internal const int NvgSaveFunction = 4, NvgRestoreFunction = 5, NvgResetTransformFunction = 9, NvgTransformFunction = 11;
+
+    private static byte[] Module(bool firstDrawPartial = false, bool clip = false, byte[]? prelude = null)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -63,6 +66,7 @@ public class A350DrawEngineTests
             0x20, 0x00, 0x28, 0x02, 0x04, 0x04, 0x40, 0x00, 0x0B,   // the object's flag set: trap
             0x41, 0x01,                                       // ctx 1
         });
+        if (prelude != null) body.AddRange(prelude);
         if (clip)
         {
             // nvgScissor(ctx 1, 0, 0, 5, 5): the text at (10, 20) is outside it.
@@ -101,9 +105,9 @@ public class A350DrawEngineTests
         return copy;
     }
 
-    internal static A350DrawEngine Engine(bool firstDrawPartial = false, bool clip = false)
+    internal static A350DrawEngine Engine(bool firstDrawPartial = false, bool clip = false, byte[]? prelude = null)
     {
-        var original = Module(firstDrawPartial, clip);
+        var original = Module(firstDrawPartial, clip, prelude);
         var mod = A350WasmModule.Parse(original);
         var engine = A350ModuleCache.CreateEngine();
         var module = Wasmtime.Module.FromBytes(engine, "a350", A350ModulePatcher.Patch(original).Bytes);

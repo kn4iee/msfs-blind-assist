@@ -57,7 +57,8 @@ Each hook prepends a call to WASI `path_readlink` (an import never used while dr
 | `nvgFillColor` | 0x7E58 | ctx, colour pointer (four f32) |
 | `nvgSave` / `nvgRestore` | 0x7E59 / 0x7E5A | ctx (fill and transform stack) |
 | `nvgTranslate`, `nvgScale`, `nvgRotate` | 0x7E5B-0x7E5D | ctx and the arguments |
-| `nvgResetTransform`, `nvgReset`, `nvgTransform` | 0x7E5E-0x7E60 | ctx |
+| `nvgResetTransform`, `nvgReset` | 0x7E5E-0x7E5F | ctx |
+| `nvgTransform` | 0x7E68, 0x7E69 | ctx, a, b, c, d; then ctx, e, f (six numbers do not fit one report; a version with other parameters reports 0x7E60, ctx alone, and the log says it is not applied) |
 | `DrawFrame`, `DrawWideFrame` | 0x7E61 + 0x7E62 | rectangle, then colour (wide flag set): the ECAM selection box is a cyan wide frame |
 | every `<Class>::draw(NVGcontext*, bool, int)` UI element (40 classes in 1.2.7) | 0x7E65 | element pointer, ctx, class index: rectangle at element +4/+8/+12/+16 |
 | `nvgScissor` / `nvgResetScissor` (left alone where a version lacks them) | 0x7E66 / 0x7E67 | ctx and the clip's rectangle / ctx: the clip in force, saved and restored with the state; a text drawn outside it is `Clipped` (live 2026-10-30: the PFD's tapes clip through `setClipArea`, and their labels and the held selected altitude scrolled through the FMA strip) |

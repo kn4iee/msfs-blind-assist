@@ -38,6 +38,7 @@ public sealed class A350DrawState
     }
 
     public void Translate(int ctx, float x, float y) => Mul(ctx, 1, 0, 0, 1, x, y);
+    public void Transform(int ctx, float a, float b, float c, float d, float e, float f) => Mul(ctx, a, b, c, d, e, f);
     public void Scale(int ctx, float x, float y) => Mul(ctx, x, 0, 0, y, 0, 0);
 
     public void Rotate(int ctx, float radians)

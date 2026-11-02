@@ -28,7 +28,7 @@ public static class A350ModulePatcher
     public const int TextMagic = 0x7E57, FillMagic = 0x7E58, SaveMagic = 0x7E59, RestoreMagic = 0x7E5A,
         TranslateMagic = 0x7E5B, ScaleMagic = 0x7E5C, RotateMagic = 0x7E5D, ResetTransformMagic = 0x7E5E,
         ResetMagic = 0x7E5F, TransformMagic = 0x7E60, FrameMagic = 0x7E61, FrameColourMagic = 0x7E62,
-        ElementMagic = 0x7E65, ScissorMagic = 0x7E66, ResetScissorMagic = 0x7E67;
+        ElementMagic = 0x7E65, ScissorMagic = 0x7E66, ResetScissorMagic = 0x7E67, TransformStartMagic = 0x7E68, TransformEndMagic = 0x7E69;
 
     /// <summary>The allocator's questions to the engine, whose answer the patched function returns.</summary>
     public const int MallocMagic = 0x7E70, CallocMagic = 0x7E71, ReallocMagic = 0x7E72, MemalignMagic = 0x7E73,
@@ -38,8 +38,8 @@ public static class A350ModulePatcher
 
     /// <summary>The patch's version, part of the compiled module cache's key: bump it whenever the patch changes, or
     /// a module compiled from the older patch is loaded; and whenever <see cref="A350ModuleCache.CreateEngine"/>'s
-    /// compile settings change (4: epoch interruption, the draw deadline; 5: the scissor hooks).</summary>
-    public const int Version = 5;
+    /// compile settings change (4: epoch interruption, the draw deadline; 5: the scissor hooks; 6: nvgTransform's numbers).</summary>
+    public const int Version = 6;
 
     /// <summary>The functions exported for the engine to call: export name emu_&lt;Class&gt;_Draw.</summary>
     public static readonly string[] DrawExports =
@@ -126,7 +126,6 @@ public static class A350ModulePatcher
             [mod.FindFunction("nvgRotate")] = Call(hook, RotateMagic, Get(0), GetF(1), Zero, Zero, Zero),
             [mod.FindFunction("nvgResetTransform")] = Call(hook, ResetTransformMagic, Get(0), Zero, Zero, Zero, Zero),
             [mod.FindFunction("nvgReset")] = Call(hook, ResetMagic, Get(0), Zero, Zero, Zero, Zero),
-            [mod.FindFunction("nvgTransform")] = Call(hook, TransformMagic, Get(0), Zero, Zero, Zero, Zero),
             // DrawFrame(ctx, x, y, w, h, colour&): the rectangle, then the colour (not wide)
             [mod.FindFunction("DrawFrame(NVGcontext*, float, float, float, float, FsColor const&)")] = Concat(
                 Call(hook, FrameMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4)),
@@ -146,6 +145,14 @@ public static class A350ModulePatcher
             hooks[scissor] = Call(hook, ScissorMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4));
         if (TryFindFunction(mod, "nvgResetScissor") is int resetScissor && Takes(resetScissor, I32s(1)))
             hooks[resetScissor] = Call(hook, ResetScissorMagic, Get(0), Zero, Zero, Zero, Zero);
+
+        // nvgTransform(ctx, a, b, c, d, e, f): six numbers do not fit one report, so two. Another signature keeps the report
+        // of the context alone: the module still validates and the log says the transform was not applied.
+        int transform = mod.FindFunction("nvgTransform");
+        hooks[transform] = Takes(transform, new byte[] { 0x7F, 0x7D, 0x7D, 0x7D, 0x7D, 0x7D, 0x7D })
+            ? Concat(Call(hook, TransformStartMagic, Get(0), GetF(1), GetF(2), GetF(3), GetF(4)),
+                Call(hook, TransformEndMagic, Get(0), GetF(5), GetF(6), Zero, Zero))
+            : Call(hook, TransformMagic, Get(0), Zero, Zero, Zero, Zero);
 
         // Every UI element's draw: (element, ctx, class index), sorted by name as the prototype numbered them.
         var ui = UiDrawFunctions(mod);

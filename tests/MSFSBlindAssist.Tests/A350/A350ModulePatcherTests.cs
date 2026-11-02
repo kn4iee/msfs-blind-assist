@@ -14,7 +14,7 @@ public class A350ModulePatcherTests
 
     /// <summary>A module with every name the patcher hooks or exports, each a stub of the A350's shape.
     /// nvgText stores 99 at address 0 so a test can tell the hook ran before the original body.</summary>
-    public static byte[] Sample(string? leaveOut = null, bool withUiDraw = true, bool oddScissor = false)
+    public static byte[] Sample(string? leaveOut = null, bool withUiDraw = true, bool oddScissor = false, bool transformTakesOnlyTheContext = false)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });
@@ -41,7 +41,7 @@ public class A350ModulePatcherTests
         F("nvgFillColor", tCtxPtr);
         F("nvgSave", tCtx); F("nvgRestore", tCtx);
         F("nvgTranslate", tCtxFF); F("nvgScale", tCtxFF); F("nvgRotate", tCtxF);
-        F("nvgResetTransform", tCtx); F("nvgReset", tCtx); F("nvgTransform", tXf);
+        F("nvgResetTransform", tCtx); F("nvgReset", tCtx); F("nvgTransform", transformTakesOnlyTheContext ? tCtx : tXf);
         F("nvgScissor", oddScissor ? tCtxPtr : tRect); F("nvgResetScissor", tCtx);
         F("DrawFrame(NVGcontext*, float, float, float, float, FsColor const&)", tFrame);
         F("DrawWideFrame(NVGcontext*, float, float, float, float, float, FsColor const&)", tWide);
@@ -60,7 +60,8 @@ public class A350ModulePatcherTests
     public void The_patch_version_moves_whenever_the_patch_output_does()
     {
         string hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(A350ModulePatcher.Patch(Sample()).Bytes));
-        Assert.Equal((5, "633ab6ec9eb310ae8ad08ebc8dee773bae74b7d53a73d460b6e596e2e1d03326"), (A350ModulePatcher.Version, hash));
+        Assert.Equal(6, A350ModulePatcher.Version);
+        Assert.True(hash == "30bc79ea74891f870fe0c084cc155aa90b4f1263534df5e3fdcc5c1dcd51a20c", "the patch output is now " + hash);
     }
 
     [Fact]

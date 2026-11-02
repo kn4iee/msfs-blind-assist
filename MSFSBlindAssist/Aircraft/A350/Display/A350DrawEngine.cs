@@ -24,7 +24,9 @@ public sealed class A350DrawEngine : IDisposable
     private Instance _instance = null!;
     private Memory _memory = null!;
     private bool _fresh;   // set after a trap or any error out of a draw: the next draw starts a new instance
-    private bool _transformSeen;   // nvgTransform said once (it is not applied)
+    private readonly HashSet<string> _transformSeen = new();   // the gauges whose draw called nvgTransform, each said once
+    private string _drawing = "";   // the gauge being drawn
+    private (float A, float B, float C, float D) _transformStart;   // nvgTransform's first report
     private readonly HashSet<string> _warmed = new();   // gauges drawn once on this instance
     private readonly IReadOnlyList<string> _uiClasses;
     private readonly A350ModuleFacts _facts;
@@ -400,14 +402,19 @@ public sealed class A350DrawEngine : IDisposable
             case A350ModulePatcher.RotateMagic: _state.Rotate(a, F(b)); break;
             case A350ModulePatcher.ResetTransformMagic: _state.ResetTransform(a); break;
             case A350ModulePatcher.ResetMagic: _state.Reset(a); break;
+            case A350ModulePatcher.TransformStartMagic:
+                _transformStart = (F(b), F(c), F(d), F(e));
+                break;
+            case A350ModulePatcher.TransformEndMagic:
+                _state.Transform(a, _transformStart.A, _transformStart.B, _transformStart.C, _transformStart.D, F(b), F(c));
+                if (_transformSeen.Add(_drawing))
+                    Log.Warn("A350Display", $"{_drawing}: the draw code called nvgTransform (applied)");
+                break;
             case A350ModulePatcher.TransformMagic:
-                // nvgTransform's six numbers do not fit the hook (only the context is passed): never seen in 1.2.7's draws;
-                // said once if it ever is, as every text after it would then be placed wrong (review 2026-10-29).
-                if (!_transformSeen)
-                {
-                    _transformSeen = true;
-                    MSFSBlindAssist.Utils.Logging.Log.Warn("A350Display", "the draw code called nvgTransform, which the reader does not apply: positions after it may be wrong");
-                }
+                // A version whose nvgTransform takes other parameters: only the context is passed, so every text after it
+                // may be placed wrong.
+                if (_transformSeen.Add(_drawing))
+                    Log.Warn("A350Display", $"{_drawing}: the draw code called an nvgTransform the reader does not apply: positions after it may be wrong");
                 break;
             case A350ModulePatcher.FrameMagic:
             {
@@ -759,6 +766,7 @@ public sealed class A350DrawEngine : IDisposable
             _stubCalls.Clear();
         }
         Clear();
+        _drawing = $"{cls}#{index}";
         LastInstantiateMs = 0;
         var objs = Objects(cls);
         // Fewer objects than asked for (the first officer's EFIS built after the first scan): looked for again, at most
