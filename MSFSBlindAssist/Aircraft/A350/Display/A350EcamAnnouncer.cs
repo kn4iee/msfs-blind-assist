@@ -11,7 +11,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// comes up. The cursor and the action boxes are not part of a line's identity: moving the cursor says nothing here.
 /// A memo back unchanged within <see cref="MemoReturn"/> of going is taken back silently (the owner's answer to question 3,
 /// 2026-10-31: the landing memo was said in full again 5 s after an AP OFF warning had displaced it); a warning or a caution
-/// (red or amber in the main column) is always said.
+/// (red or amber in the main column) is always said. A memo-column line whose only change is its colour is said once the new colour has held
+/// <see cref="ColourHold"/>, and not at all when it reverts within it (question 4: COMPANY MSG and WXR/PWS OFF swapped colours for
+/// about a second, every few minutes, on 2026-10-31).
 /// </summary>
 public sealed class A350EcamAnnouncer
 {
@@ -19,6 +21,12 @@ public sealed class A350EcamAnnouncer
 
     /// <summary>How soon a memo that went may come back unchanged and not be said again.</summary>
     public static readonly TimeSpan MemoReturn = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long a memo's new colour holds before it is said.</summary>
+    public static readonly TimeSpan ColourHold = TimeSpan.FromSeconds(3);
+
+    private readonly Dictionary<string, string> _plainOf = new();                               // identity's text without colours
+    private readonly Dictionary<string, (DateTime Since, List<string> Texts)> _colourPending = new();   // memos whose colour changed
 
     private readonly Func<DateTime> _now;
     private readonly Dictionary<string, DateTime> _memosWent = new();   // memos that went, by identity, with when
@@ -43,6 +51,8 @@ public sealed class A350EcamAnnouncer
     {
         var lines = view.Warning.Select(l => (Id: IdentityOf(l), Text: l.Spoken)).ToList();
         var memos = view.Warning.Where(IsMemo).Select(IdentityOf).ToHashSet();
+        var memoColumn = view.Warning.Where(l => l.Cells.Count > 0 && l.Cells.All(A350Ewd.InMemoColumn)).Select(IdentityOf).ToHashSet();
+        foreach (var l in view.Warning) _plainOf[IdentityOf(l)] = l.Text;
         var now0 = _now();
         foreach (var gone in _memosWent.Where(kv => now0 - kv.Value > MemoReturn).Select(kv => kv.Key).ToList())
             _memosWent.Remove(gone);
@@ -54,6 +64,8 @@ public sealed class A350EcamAnnouncer
 
         bool baseline = _agreed == null;
         _agreed ??= new Dictionary<string, int>();
+        // The texts the lines agreed before this read had, without their colours: a new memo with one of them changed colour only.
+        var plainBefore = _agreed.Keys.Select(k => _plainOf.GetValueOrDefault(k)).OfType<string>().ToHashSet();
         var toSay = new Dictionary<string, List<string>>();   // by identity, the texts to say
         // Every identity either read holds, and every one agreed on before: one gone from both reads has agreed on gone.
         foreach (var id in read.Keys.Union(previous.Keys).Union(_agreed.Keys).ToList())
@@ -66,12 +78,27 @@ public sealed class A350EcamAnnouncer
             {
                 // A memo back unchanged within MemoReturn: taken back silently.
             }
+            else if (!baseline && was == 0 && now > 0 && memoColumn.Contains(id) && _plainOf.TryGetValue(id, out var plain)
+                && plainBefore.Contains(plain) && !_agreed.ContainsKey(id))
+            {
+                _colourPending[id] = (now0, texts);   // only its colour changed: said once it holds
+            }
             else if (!baseline && now > was)
             {
                 // The texts new to this identity first (a second engine's line beside the first), then any.
                 var known = _agreedTexts.GetValueOrDefault(id)?.ToList() ?? new List<string>();
                 var fresh = texts.Where(t => !known.Remove(t)).ToList();
                 toSay[id] = fresh.Concat(texts.Except(fresh)).Take(now - was).ToList();
+            }
+            if (_colourPending.TryGetValue(id, out var pending))
+            {
+                if (now == 0)
+                    _colourPending.Remove(id);    // reverted within the hold: nothing to say
+                else if (now0 - pending.Since >= ColourHold)
+                {
+                    _colourPending.Remove(id);
+                    toSay[id] = texts;
+                }
             }
             if (now == 0)
             {
@@ -103,5 +130,7 @@ public sealed class A350EcamAnnouncer
         _agreedTexts.Clear();
         _memosWent.Clear();
         _memoIds.Clear();
+        _colourPending.Clear();
+        _plainOf.Clear();
     }
 }

@@ -94,6 +94,62 @@ public class A350MemoHoldTests
         Assert.Equal(new[] { "SIGNS: OFF, green" }, Twice(a, View(Line("SIGNS: OFF", "green", Main, 0)), afterSeconds: 2));
     }
 
+    // The flight of 2026-10-31: COMPANY MSG and WXR/PWS OFF swapped colours for about a second, every few minutes, and each swap
+    // was said ("COMPANY MSG, amber", "WXR/PWS OFF, green", then back). The owner's answer (question 4): a memo's colour change is said
+    // once it has held 3 s. Whether the reader or the aircraft made the swap was not settled (a 30-minute watch on 2026-11-02 saw no
+    // swap without COMPANY MSG); the hold covers both.
+    private static EcamLine[] Memos(string companyColour, string wxrColour) => new[]
+    {
+        Line("COMPANY MSG", companyColour, MemoColumn, 0), Line("WXR/PWS OFF", wxrColour, MemoColumn, 1),
+    };
+
+    [Fact]
+    public void A_color_flip_that_reverts_within_3_s_says_nothing()
+    {
+        var a = Started(Memos("green", "amber"));
+        Assert.Empty(Twice(a, View(Memos("amber", "green")), afterSeconds: 60));   // the swap
+        Assert.Empty(Twice(a, View(Memos("green", "amber")), afterSeconds: 1));     // and back
+        Assert.Empty(Twice(a, View(Memos("green", "amber")), afterSeconds: 5));
+    }
+
+    [Fact]
+    public void A_color_change_that_holds_is_said_once()
+    {
+        var a = Started(Memos("green", "amber"));
+        Assert.Empty(Twice(a, View(Memos("amber", "amber")), afterSeconds: 60));
+        Assert.Empty(Twice(a, View(Memos("amber", "amber")), afterSeconds: 1));
+        _now = _now.AddSeconds(2);
+        Assert.Equal(new[] { "COMPANY MSG, amber" }, a.Observe(View(Memos("amber", "amber"))));   // held 3 s
+        Assert.Empty(Twice(a, View(Memos("amber", "amber")), afterSeconds: 2));
+    }
+
+    [Fact]
+    public void A_caution_changing_colour_is_said_at_once()
+    {
+        var a = Started(Line("ENG 1 OIL LO PR", "amber", Main, 0));
+        Assert.Equal(new[] { "ENG 1 OIL LO PR, red" }, Twice(a, View(Line("ENG 1 OIL LO PR", "red", Main, 0)), afterSeconds: 5));
+    }
+
+    [Fact]
+    public void A_muted_ecam_row_says_no_held_line()
+    {
+        var now = new DateTime(2026, 10, 31, 16, 38, 0, DateTimeKind.Utc);
+        var said = new List<string>();
+        bool muted = false;
+        var m = new A350EcamMonitor(_ => muted, said.Add, () => now);
+        var steady = A350Fixtures.Capture("p04_ctr_rev_approach.json");
+        foreach (var _ in Enumerable.Range(0, 3)) { now = now.AddSeconds(0.5); m.Observe(steady); }
+        Assert.Empty(said);
+        // The held line's late sentence goes through the row like any other: the monitor's one quiet gate.
+        muted = true;
+        var flipped = steady with
+        {
+            Texts = steady.Texts.Select(t => t.Text.Trim() == "WXR/PWS OFF" ? t with { Colour = new A350Rgba(0, 1, 0, 1) } : t).ToList(),
+        };
+        foreach (var _ in Enumerable.Range(0, 10)) { now = now.AddSeconds(0.5); m.Observe(flipped); }
+        Assert.Empty(said);
+    }
+
     [Fact]
     public void A_flight_load_forgets_the_lines_that_went()
     {
