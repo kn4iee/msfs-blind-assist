@@ -209,6 +209,23 @@ public class A350HotkeysTests
         finally { CultureInfo.CurrentCulture = old; }
     }
 
+    // Plan 07 Task 7, live 2026-11-02 on 1.2.8 with OIS SETTINGS' AIRCRAFT WEIGHT UNITS at LBS: the SD drew "Gross weight: 313500 LBS"
+    // (the sim's TOTAL WEIGHT 313455 lb) and "Fuel on board: 4800 LBS" (the stock fuel 4808 lb that F reads). W and Shift+W say the asked
+    // unit from it, the same under a comma culture.
+    [Fact]
+    public void Gross_weight_from_the_aircraft_in_pounds_reads_under_de_DE()
+    {
+        var old = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            var lbs = new[] { "Gross weight: 313500 LBS, green", "Gross weight CG: 26.1 %, green" };
+            Assert.Equal("Gross weight 313500 pounds, center of gravity 26.1 percent MAC", A350Hotkeys.GrossWeight(lbs, pounds: true));
+            Assert.Equal("Gross weight 142200 kilograms, center of gravity 26.1 percent MAC", A350Hotkeys.GrossWeight(lbs, pounds: false));
+        }
+        finally { CultureInfo.CurrentCulture = old; }
+    }
+
     // X: the A350 keeps its squawk to itself (the stock TRANSPONDER CODE reads 0, live 2026-10-28); its RMP shows it.
     [Fact]
     public void The_squawk_reads_the_rmps_line()

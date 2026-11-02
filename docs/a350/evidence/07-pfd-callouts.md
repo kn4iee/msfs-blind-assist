@@ -43,3 +43,18 @@ request for plan 20, which owns the probe (save the EFIS too). SIM RATE and SIM 
 On the stand with fuel (15 t), payload (ZFW 140 t) and the PERF T.O entries in, before engine start: `FMGEC_GD_SPD` 173.6, `FCPC_S_SPEED`
 153.7, `FCPC_F_SPEED` 137; the MFD's PERF T.O page "Green dot: 173 KT", "S: 153 KT", "F: 137 KT"; the speed tape "30 knots or less", no
 symbol. The variables hold the page's values on the ground, truncated as the page shows them.
+
+## Task 7: every weight in the aircraft's unit
+
+Set on the OIS (OPTIONS > OIS SETTINGS > AIRCRAFT WEIGHT UNITS), live 2026-11-02 on the runway after the flight:
+
+| Read | KGS | LBS |
+| --- | --- | --- |
+| SD permanent data (W, Shift+W read it) | "Gross weight: 142200 KG", "Fuel on board: 2200 KG" | "Gross weight: 313500 LBS", "Fuel on board: 4800 LBS" |
+| The sim (F, Shift+F read the stock fuel) | — | FUEL TOTAL QUANTITY WEIGHT 4808 lb, TOTAL WEIGHT 313455 lb: they agree with the SD |
+| MFD FUEL & LOAD, as drawn | "GW: 155.0 T", "BLOCK: 15.0 T" (tonnes) | "GW: 313.5 LBS", "FOB: 4.8 LBS", "TAXI: 1.3 LBS": the MFD draws thousands of pounds with the label "LBS" (`MFD#0` raw texts "4.8" and "LBS"), read as drawn |
+| OIS LOADSHEET | "…KG" | "FIRST: 0 PAX, FIRST/PREM ECO 0 LBS", the holds in LBS: it follows the aircraft's unit |
+
+W and Shift+W say the asked unit from the SD's figure in either unit, F and Shift+F from the stock fuel in either: no wrong unit, so no fix.
+Pinned: `Gross_weight_from_the_aircraft_in_pounds_reads_under_de_DE`. The MFD's "313.5 LBS" for 313,500 pounds is iniBuilds' own
+drawing (its kilogram mode draws T for tonnes); a pilot hears what the screen shows, as everywhere else.
