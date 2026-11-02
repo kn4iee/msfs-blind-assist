@@ -5,8 +5,8 @@ using MSFSBlindAssist.SimConnect;
 namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>
-/// The A380's Altimeter window on the A350 (input Ctrl+B): a QNH typed once sets both sides and the ISIS (each side's
-/// typed QNH row, in that side's unit), STD on both sides (the baro knob's push) or QNH (its pull), and each side's unit
+/// The A380's Altimeter window on the A350 (input Ctrl+B): a QNH typed once sets both sides and the ISIS as one entry, every
+/// target or none (<see cref="IniBuildsA350Definition.PressBaroEntry"/>, in the sides' unit), STD on both sides (the baro knob's push) or QNH (its pull), and each side's unit
 /// (its EFIS panel's unit button, a toggle labelled with the unit it shows: the A380's unit, parity task 7); both sides'
 /// baro and the ISIS setting stay current in read-only boxes.
 /// </summary>
@@ -21,15 +21,12 @@ public sealed class A350BaroWindow : A350FcuWindowBase
         Size = new Size(420, 380);
         var label = new Label { Text = "QNH (both sides):", Location = new Point(20, 25), Size = new Size(130, 20) };
         _qnh = new TextBox { Location = new Point(160, 22), Size = new Size(110, 25), TabIndex = 0, AccessibleName = "QNH value",
-            AccessibleDescription = "Hectopascals (1013) or inches (29.92), in each side's unit. Enter sets both sides and the ISIS." };
+            AccessibleDescription = "Hectopascals (1013) or inches (29.92), in each side's unit. Enter sets both sides and the ISIS, or the captain's side when LINKED INSTR copies it." };
         _qnh.KeyDown += (s, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
             e.Handled = e.SuppressKeyPress = true;
-            if (!Utils.NumberParsing.TryParseTyped(_qnh.Text.Trim(), out double v)) { announcer.AnnounceImmediate("Invalid number"); _qnh.SelectAll(); return; }
-            aircraft.PressRow("A350_CAPT_QNH_SET", simConnect, announcer, v);
-            aircraft.PressRow("A350_FO_QNH_SET", simConnect, announcer, v);
-            aircraft.PressRow("A350_ISIS_QNH_SET", simConnect, announcer, v);
+            SubmitQnh(_qnh.Text, v => _ = aircraft.PressBaroEntry(v, simConnect, announcer), announcer.AnnounceImmediate);
             _qnh.SelectAll();
         };
         _captain = StatusBox("Captain baro", 20, 60, 360, 1);
@@ -56,6 +53,18 @@ public sealed class A350BaroWindow : A350FcuWindowBase
         CancelButton = close;
     }
 
+    /// <summary>The QNH box's Enter: one entry for a number the pilot typed, "Invalid number" for anything else.</summary>
+    internal static bool SubmitQnh(string text, Action<double> enter, Action<string> say)
+    {
+        if (!Utils.NumberParsing.TryParseTyped(text.Trim(), out double value))
+        {
+            say("Invalid number");
+            return false;
+        }
+        enter(value);
+        return true;
+    }
+
     protected override void OnShownForm() => _qnh.Focus();
 
     protected override void RefreshStates()
@@ -63,7 +72,7 @@ public sealed class A350BaroWindow : A350FcuWindowBase
         base.RefreshStates();
         Set(_captain, "Captain baro: ", aircraft.FcuWindowText("Captain baro", simConnect));
         Set(_firstOfficer, "First officer baro: ", aircraft.FcuWindowText("First officer baro", simConnect));
-        Set(_isis, "ISIS: ", aircraft.FcuWindowText("ISIS QNH setting", simConnect));
+        Set(_isis, "ISIS: ", aircraft.IsisBaroText(simConnect));
     }
 
     private static void Set(TextBox box, string name, string? shown)

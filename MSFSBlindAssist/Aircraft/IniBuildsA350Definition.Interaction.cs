@@ -204,15 +204,21 @@ public partial class IniBuildsA350Definition
         return A350WriteOutcome.Sent;
     }
 
+    /// <param name="echoRows">The rows whose windows this run can move, when more than its own (a linked entry's copies).</param>
     private async Task TypedAsync(A350PlacedRow row, double typed, A350TypedPlan plan, Func<string, double?> read,
-        SimConnectManager sim, ScreenReaderAnnouncer announcer)
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, IReadOnlyList<string>? echoRows = null)
     {
         int run = ++_nextRunId;
         _latestRunByRow[row.Key] = run;
         bool Superseded() => _disposed || _latestRunByRow.GetValueOrDefault(row.Key) != run;
+        void ArmEcho()
+        {
+            foreach (var key in echoRows ?? new[] { row.Key })
+                ArmTypedEcho(key);
+        }
         try
         {
-            ArmTypedEcho(row.Key);
+            ArmEcho();
             foreach (var step in plan.Steps)
             {
                 if (step is A350CalcStep calc)
@@ -226,7 +232,7 @@ public partial class IniBuildsA350Definition
             }
             if (plan.Stepper is { } stepper)
             {
-                await StepAsync(row, typed, plan, stepper, read, sim, announcer, Superseded);
+                await StepAsync(row, typed, plan, stepper, read, sim, announcer, Superseded, ArmEcho);
                 return;
             }
             string key = KeyForInput(plan.ReadBackVar);
@@ -237,7 +243,7 @@ public partial class IniBuildsA350Definition
             if (shown is double landed && !plan.Reached(landed) && !Superseded())
             {
                 Log.Debug("A350", $"{row.Key}: the click landed {A350WritePlan.Format(landed)}, not {A350WritePlan.Format(plan.Target)}; corrected");
-                ArmTypedEcho(row.Key);
+                ArmEcho();
                 Send(sim, plan.Correction.Rpn);   // e.g. a 1000 ft altitude step, or the managed speed's own preset
                 await Delay(TypedReadBackMs);
                 if (Superseded())
@@ -246,7 +252,7 @@ public partial class IniBuildsA350Definition
             }
             if (Superseded())
                 return;
-            ArmTypedEcho(row.Key);   // the confirmation is the value's one sentence: a late echo stays quiet
+            ArmEcho();   // the confirmation is the value's one sentence: a late echo stays quiet
             if (shown is not double now)
                 announcer.Announce(NotConfirmed(row, typed));   // no read-back: sent, never "selected"
             else if (plan.Reached(now))
@@ -263,7 +269,7 @@ public partial class IniBuildsA350Definition
     /// <summary>Clicks toward a value read between clicks (<see cref="A350TypedStepper"/>): said when the knob shows none,
     /// else confirmed as the cockpit shows it once reached, or what it shows after the last round.</summary>
     private async Task StepAsync(A350PlacedRow row, double typed, A350TypedPlan plan, A350TypedStepper stepper,
-        Func<string, double?> read, SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<bool> superseded)
+        Func<string, double?> read, SimConnectManager sim, ScreenReaderAnnouncer announcer, Func<bool> superseded, Action armEcho)
     {
         double? now = null;
         for (int round = 0; round <= A350TypedStepper.MaxRounds; round++)
@@ -296,7 +302,7 @@ public partial class IniBuildsA350Definition
                 break;
             for (int i = 0; i < Math.Abs(clicks); i++)
             {
-                ArmTypedEcho(row.Key);
+                armEcho();
                 Send(sim, stepper.Click(Math.Sign(clicks)).Rpn);
                 await Delay(A350TypedStepper.GapMs);
                 if (superseded())
@@ -305,10 +311,76 @@ public partial class IniBuildsA350Definition
         }
         if (now is not double shown)
             return;
-        ArmTypedEcho(row.Key);
+        armEcho();
         announcer.Announce(plan.Reached(shown)
             ? plan.Confirm(shown, read)
             : $"{LineName(row.Name)} did not take {A350WritePlan.Format(typed)}. {plan.Confirm(shown, read)}");
+    }
+
+    private const string CaptainQnhRow = "A350_CAPT_QNH_SET", FirstOfficerQnhRow = "A350_FO_QNH_SET", SfdDisplay = "A350_DISP_SFD";
+
+    /// <summary>Each entry's number: a newer entry stops an older one's remaining targets.</summary>
+    private int _baroEntry;
+
+    /// <summary>The ISIS's own STD, from its display; tests replace it.</summary>
+    internal Func<bool?>? IsisStdRead { get; set; }
+
+    private bool? IsisOnStd() => IsisStdRead != null ? IsisStdRead() : A350BaroEntry.IsisOnStd(DisplayLines(SfdDisplay));
+
+    /// <summary>The ISIS's line in the Altimeter window: STD where its display shows it (the setting then holds 1013.25, which says nothing),
+    /// else the setting the sim holds.</summary>
+    internal string? IsisBaroText(SimConnectManager simConnect) =>
+        IsisOnStd() == true ? "STD" : FcuWindowText("ISIS QNH setting", simConnect);
+
+    /// <summary>The Altimeter window's QNH, as one entry (<see cref="A350BaroEntry"/>): a refusal is said once and nothing is sent; else each
+    /// target runs after the one before it has finished, the windows it can move quiet for its own confirmation, and afterwards a side that was on
+    /// STD and no longer is, with no pull asked, is said. The next Enter stops what is left of this one.</summary>
+    internal async Task PressBaroEntry(double typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        _sim = sim;
+        int entry = ++_baroEntry;
+        double? Read(string name) => Cached(sim, KeyForInput(name));
+        var plan = A350BaroEntry.Plan(typed, Read, IsisOnStd());
+        if (plan.Refusal != null)
+        {
+            announcer.Announce(plan.Refusal);
+            return;
+        }
+        if (!CanLand(sim))
+        {
+            announcer.Announce("Altimeter unavailable");
+            return;
+        }
+        IReadOnlyList<string>? echoRows = plan.Linked ? new[] { CaptainQnhRow, FirstOfficerQnhRow } : null;
+        try
+        {
+            foreach (var target in plan.Targets)
+            {
+                if (_disposed || entry != _baroEntry)
+                    return;
+                await TypedAsync(_rows[target.Field.Key], typed, target.Plan, Read, sim, announcer,
+                    target.Field == A350TypedEntry.IsisQnh ? null : echoRows);
+            }
+            foreach (int side in plan.SidesOnStd)
+            {
+                if (_disposed || entry != _baroEntry)
+                    return;
+                if (await ReadFresh(sim, KeyForInput($"XMLVAR_Baro{side}_Mode"), ReadoutTimeoutMs) is not double mode || Math.Abs(mode - 3) < 0.5)
+                    continue;   // unread: nothing is known to have left it
+                if (await ReadFresh(sim, KeyForInput($"KOHLSMAN SETTING MB:{side}"), ReadoutTimeoutMs) is double mb
+                    && Read($"XMLVAR_Baro_Selector_HPA_{side}") is double unit && !_disposed && entry == _baroEntry)
+                {
+                    ArmTypedEcho(side == 1 ? CaptainQnhRow : FirstOfficerQnhRow);
+                    announcer.Announce(A350BaroEntry.LeftStd(side, mb, unit));
+                }
+            }
+            if (plan.Notice != null && !_disposed && entry == _baroEntry)
+                announcer.Announce(plan.Notice);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A350", $"The altimeter entry failed: {ex.Message}");
+        }
     }
 
     /// <summary>A typed value whose read-back never came: sent, never confirmed as taken (review 2026-10-29: a lost read

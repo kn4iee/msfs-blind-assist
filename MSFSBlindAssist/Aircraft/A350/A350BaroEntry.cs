@@ -58,6 +58,23 @@ internal static class A350BaroEntry
             isisOnStd == true ? IsisOnStdNotice : null);
     }
 
+    /// <summary>The ISIS's own STD as its display draws it: an STD line or a baro line; null when it shows neither (dark, not yet read).
+    /// It has no variable, and while it is on STD its setting holds 1013.25 whatever is written.</summary>
+    public static bool? IsisOnStd(IReadOnlyList<string>? lines)
+    {
+        if (lines == null)
+            return null;
+        if (lines.Any(l => l.StartsWith("STD,", StringComparison.Ordinal)))
+            return true;
+        return lines.Any(l => l.StartsWith("Baro:", StringComparison.Ordinal)) ? false : null;
+    }
+
+    /// <summary>What a side that left STD without a pull is said as: the setting as the cockpit reads it in the side's unit.</summary>
+    public static string LeftStd(int side, double mb, double unit) =>
+        $"{(side == 1 ? "Captain" : "First officer")} altimeter left STD, now " + (unit >= 0.5
+            ? A350FcuWindows.Hectopascals(mb) + " hectopascals"
+            : A350FcuWindows.Inches(mb / AltimeterPhrase.HpaPerInHg));
+
     private static string UnitName(double unit) => unit >= 0.5 ? "hectopascals" : "inches";
 
     private static A350BaroEntryPlan Refused(string why) =>
