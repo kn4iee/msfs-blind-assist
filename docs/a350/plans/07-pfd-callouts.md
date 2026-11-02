@@ -116,4 +116,6 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   fixtures differ from the plan's names. Task 6 says the variable cut to whole knots as the MFD's PERF page shows it (173.6 as 173),
   while the tape's symbol is rounded as before; cost if wrong: a knot's difference from the tape in flight, where the tape wins anyway.
   Task 3 holds a mode come beside the autothrust column's for up to 4 reads (2 s) to see a flash; cost if wrong: such a mode is said up
-  to 1.5 s later than before.
+  to 1.5 s later than before. Task 1's captures need the sim's asks answered: `A350Probe displays` now saves each display with
+  `A350_DRAW_JSON` (three lines in `tools/A350Probe/Program.cs`, plan 20's file, additive, plan 20 not started); cost if wrong: plan 20
+  keeps or moves those lines.

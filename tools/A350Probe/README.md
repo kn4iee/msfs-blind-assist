@@ -104,7 +104,7 @@ not say refuses.
 | `A350_TRACE="key,key"` | `listen` | Prints each delivery of those keys with its time, to see what the speech was made from. |
 | `A350_SPEEDS=0` | `listen` | Leaves the display reader out: no take-off speeds, no memory copies. |
 | `A350_OIS_ALL=1` | `ois` | Prints the page after every step. |
-| `A350_DRAW_JSON=<dir>` | `draw`, `displays` | Saves each good capture as a test fixture, under a new name only (never over a fixture a test pins); a trapped draw is never saved. |
+| `A350_DRAW_JSON=<dir>` | `draw`, `displays` | Saves each good capture as a test fixture, under a new name only (never over a fixture a test pins); a trapped draw is never saved. `displays` saves each display (`EFIS_0.json`…) and the E/WD with the sim's asks answered as MainForm answers them, so its PFD has the speed tape the standalone `draw` lacks. |
 | `A350_SHAPES=1` | `draw` | Records the shapes (sprites, fills) too. |
 | `A350_TRAP=1` | `draw` | Prints a trapped draw's whole trap message. |
 | `A350_N2=<percent>` | `draw` | The engine N2 the draw code's sim asks are answered with (default 0). |

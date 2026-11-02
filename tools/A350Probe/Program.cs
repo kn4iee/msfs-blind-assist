@@ -366,6 +366,9 @@ internal sealed partial class ProbeForm : Form
             for (int i = 0; i < 5 && capture is not { Ok: true }; i++)
                 capture = (await service.DrawAsync((d.Gauge, d.Index)))?.FirstOrDefault();
             Line($"== {d.Panel}{(capture is { Ok: true } ? "" : ": no good draw")}");
+            // A fixture with the sim asks answered as MainForm answers them (plan 07: the standalone draw has no speed tape).
+            if (capture is { Ok: true } && Environment.GetEnvironmentVariable("A350_DRAW_JSON") is { } displayJsonDir)
+                DisplayModes.SaveNew(Path.Combine(displayJsonDir, $"{d.Gauge}_{d.Index}.json"), System.Text.Json.JsonSerializer.Serialize(capture));
             if (capture is { Ok: true })
                 foreach (var line in d.Read(capture))
                     Line("  " + line);
