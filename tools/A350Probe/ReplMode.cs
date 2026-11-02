@@ -324,6 +324,15 @@ internal sealed partial class ProbeForm
                             Line("typed");
                             break;
                         }
+                        case "enter":   // Enter in the top window's first text box, through its own KeyDown handler (key enter goes to the form's)
+                        {
+                            var box = Window()?.Controls.OfType<TextBox>().FirstOrDefault();
+                            if (box == null) { Line("no text box"); break; }
+                            typeof(TextBox).GetMethod("OnKeyDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                                .Invoke(box, new object[] { new KeyEventArgs(Keys.Enter) });
+                            Line("entered");
+                            break;
+                        }
                         case "raw":   // raw GAUGE INDEX [Y0 Y1 [X0 X1]]: what a draw holds in a band: its texts and its controls, each with its index
                         {
                             var p = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
