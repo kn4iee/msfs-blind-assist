@@ -44,7 +44,7 @@ public class A350FmaTests
         var said = new List<(string, string)>();
         foreach (var flash in new[] { true, false, true, false, true, false, true, false, true })
             said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd()));
-        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever + ", flashing") }, said);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class A350FmaTests
         var said = new List<(string, string)>();
         foreach (var flash in new[] { true, true, false, false, false, true, true, true, false, false, false, true })
             said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd()));
-        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever + ", flashing") }, said);
     }
 
     // Two texts taking turns are no mode to say: as before, it takes two reads in a row.
@@ -80,7 +80,7 @@ public class A350FmaTests
         var said = new List<(string, string)>();
         foreach (var flash in new[] { true, false, false, true, true, false, false, true, false, true, true, false, false, false, true })
             said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd(man)));
-        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever + ", flashing") }, said);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class A350FmaTests
         var said = new List<(string, string)>();
         foreach (var flash in new[] { true, false, true, false, true, false })
             said.AddRange(a.Observe(flash ? Pfd(lever) : Pfd(man)));
-        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever + ", flashing") }, said);
     }
 
     // The levers come back to the detent: the next mode is news at once, whatever was flashing.
@@ -106,6 +106,37 @@ public class A350FmaTests
         a.Observe(Pfd(man));
         Assert.Empty(a.Observe(Pfd(speed)));
         Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), speed) }, a.Observe(Pfd(speed)));
+    }
+
+    // Plan 07 Task 3, live 2026-11-02 on 1.2.8: from the thrust reduction height to the levers at CL the FMA's autothrust column read the
+    // FLX line with and without LVR CLB in turn, about a second each (and after TOGA on the go-around, 22 reads in 30 s); MSFSBA said it once
+    // as a steady "LVR CLB, white". The reads as the monitor takes them, two a second. Said once, as flashing, then the next mode plainly.
+    [Fact]
+    public void Lvr_clb_flashing_is_said_flashing_once()
+    {
+        const string flx = "FMA autothrust: MAN, white; FLX, white; +67, cyan", lever = "FMA autothrust: MAN, white; FLX, white; +67, cyan; LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(flx)); a.Observe(Pfd(flx));
+        var said = new List<(string, string)>();
+        foreach (var on in new[] { true, true, false, false, true, true, false, false, true, true, false, false, true, true })
+            said.AddRange(a.Observe(on ? Pfd(lever) : Pfd(flx)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever + ", flashing") }, said);
+        const string climb = "FMA autothrust: THR DCLB, green";
+        a.Observe(Pfd(climb));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), climb) }, a.Observe(Pfd(climb)));
+    }
+
+    // A lever call that stays (no flash) is said plainly, once it has held past a flash's length.
+    [Fact]
+    public void A_lever_call_that_stays_is_said_plainly()
+    {
+        const string flx = "FMA autothrust: MAN, white; FLX, white; +67, cyan", lever = "FMA autothrust: MAN, white; FLX, white; +67, cyan; LVR CLB, white";
+        var a = new A350FmaAnnouncer();
+        a.Observe(Pfd(flx)); a.Observe(Pfd(flx));
+        var said = new List<(string, string)>();
+        for (int read = 0; read < 6; read++)
+            said.AddRange(a.Observe(Pfd(lever)));
+        Assert.Equal(new[] { (A350FmaAnnouncer.KeyFor("autothrust"), lever) }, said);
     }
 
     // A part really gone from the column that flashes is said, as a column clearing is, once it has stayed gone past any flash.

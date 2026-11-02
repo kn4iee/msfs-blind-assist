@@ -17,6 +17,9 @@ public sealed class A350FlashingLines
     public static readonly TimeSpan Window = TimeSpan.FromSeconds(4);
 
     private const string Flashing = ", flashing";
+
+    /// <summary>What a flashing line says after itself, here and in the FMA's call-outs.</summary>
+    internal const string FlashingSuffix = Flashing;
     private static readonly Regex Figure = new(@"\d+(\.\d+)?", RegexOptions.Compiled);
 
     private sealed class Seen

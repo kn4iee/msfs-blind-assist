@@ -4,7 +4,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// What the FMA call-outs say (pure): from each PFD read (A350Pfd lines), the FMA columns; a column is
 /// spoken when its text changes and two reads in a row agree on it, or two of the last few with only parts of it between (a mode
 /// that flashes leaves every other draw: LVR CLB under MAN TOGA at the thrust reduction altitude), with its colours ("FMA vertical:
-/// SRS, green"). A column left with nothing ("FMA vertical clear"), or the autothrust column left with only a part of what it said,
+/// SRS, green"). A mode come beside what the autothrust column said is said once it has flashed, with ", flashing", or once it has
+/// held for as many reads as a flash takes. A column left with nothing ("FMA vertical clear"), or the autothrust column left with only a part of what it said,
 /// says so once it has stayed that way past any flash: elsewhere no part is known to flash, and a part going is news at once (the
 /// autopilot off, an armed mode dropped). An armed mode engaging is no part: it changes colour. Each column's first agreed read is its silent
 /// baseline. Columns agree each on its own: one that flickers never holds back another's change (live 2026-10-28,
@@ -54,12 +55,17 @@ public sealed class A350FmaAnnouncer
             }
             if (read == last)
                 continue;
+            // A mode come beside what the autothrust column said (or into it blank) may be one that flashes: it waits for the flash, and
+            // is said flashing, or for as many steady reads as a flash would take (LVR CLB, live 2026-11-02: said once as steady).
+            bool flashed = c == PartFlashes && Flashed(reads);
             bool news = IsPartOf(read, last) && (read.Length == 0 || c == PartFlashes)
                 ? reads.Count == ClearAfterReads && reads.All(r => r == read)
-                : Agreed(reads);
+                : c == PartFlashes && IsPartOf(last, read)
+                    ? flashed || reads.Count >= FlashReads && reads.TakeLast(FlashReads).All(r => r == read)
+                    : Agreed(reads);
             if (news)
             {
-                said.Add((KeyFor(c), read.Length > 0 ? read : $"FMA {c} clear"));
+                said.Add((KeyFor(c), read.Length > 0 ? read + (flashed ? A350FlashingLines.FlashingSuffix : "") : $"FMA {c} clear"));
                 _spoken[c] = read;
             }
         }
@@ -72,6 +78,16 @@ public sealed class A350FmaAnnouncer
         string latest = reads[^1];
         var recent = reads.TakeLast(FlashReads).SkipWhile(r => r != latest).ToList();
         return recent.Count >= 2 && recent.All(r => r == latest || IsPartOf(r, latest));
+    }
+
+    /// <summary>The latest read came back after only parts of it, within the reads kept: it flashes.</summary>
+    private static bool Flashed(List<string> reads)
+    {
+        string latest = reads[^1];
+        if (latest.Length == 0)
+            return false;
+        int before = reads.LastIndexOf(latest, reads.Count - 2);
+        return before >= 0 && before < reads.Count - 2 && reads.Skip(before + 1).SkipLast(1).All(r => IsPartOf(r, latest));
     }
 
     /// <summary>Holds fewer modes than the other line and none it does not: what a part that flashes leaves behind, down to nothing.</summary>
