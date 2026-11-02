@@ -21,7 +21,7 @@ public sealed class A350EcamMonitor : IDisposable
 
     private readonly Func<string, bool> _muted;
     private readonly Action<string> _speak;
-    private readonly A350EcamAnnouncer _announcer = new();
+    private readonly A350EcamAnnouncer _announcer;
     private readonly Func<DateTime> _now;
     private sealed record Kept(A350DrawCapture Capture, DateTime At);
     private volatile Kept? _latest;   // one reference, written by the display tick, read by the windows
@@ -37,6 +37,7 @@ public sealed class A350EcamMonitor : IDisposable
         _muted = muted;
         _speak = speak;
         _now = now ?? (() => DateTime.UtcNow);
+        _announcer = new A350EcamAnnouncer(_now);
     }
 
     /// <summary>One CTR draw read: parse, speak what appeared; nothing for no draw or a trapped one.</summary>

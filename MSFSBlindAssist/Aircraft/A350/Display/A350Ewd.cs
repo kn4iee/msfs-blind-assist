@@ -44,7 +44,7 @@ public static class A350Ewd
     // (memos and procedures, x 856-886); the CLEAR prompt further right (x 1514) belongs to its procedure.
     private const float MemoColumnX = 1240, MemoColumnEnd = 1480;
 
-    private static bool InMemoColumn(DrawnCell c) => c.X >= MemoColumnX && c.X < MemoColumnEnd;
+    internal static bool InMemoColumn(DrawnCell c) => c.X >= MemoColumnX && c.X < MemoColumnEnd;
 
     private static bool IsDotRow(IReadOnlyList<DrawnCell> row) => row.All(c => c.Text.Trim('.', ' ').Length == 0);
 

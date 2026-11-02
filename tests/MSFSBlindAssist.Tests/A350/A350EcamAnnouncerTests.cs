@@ -48,12 +48,15 @@ public class A350EcamAnnouncerTests
         Assert.Equal(new[] { "APU MASTER SW OFF, white" }, Twice(a, View("APU MASTER SW OFF|white")));
     }
 
+    // A memo back within 10 s is not said again (the owner's question 3, A350MemoHoldTests); after that it is.
     [Fact]
-    public void A_line_that_returns_speaks_again()
+    public void A_line_that_returns_after_10_s_speaks_again()
     {
-        var a = new A350EcamAnnouncer();
+        var now = new DateTime(2026, 11, 2, 9, 0, 0, DateTimeKind.Utc);
+        var a = new A350EcamAnnouncer(() => now);
         Twice(a, View("PARK BRK|green"));
         Twice(a, View());
+        now = now.AddSeconds(11);
         Assert.Equal(new[] { "PARK BRK, green" }, Twice(a, View("PARK BRK|green")));
     }
 
