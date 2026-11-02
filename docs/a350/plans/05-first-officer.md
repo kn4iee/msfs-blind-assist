@@ -78,14 +78,20 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** in progress: waiting on one flight (Task 1 Step 4, the fix flown again)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5) in the live sim, 2026-11-02
 - **Started:** 2026-11-02, from `a5a33328f`
 - **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Tests at landing:** 17,814 passed (`ClaudeRulesHookTests` left to CI) at `2d3b12274`
+- **Tasks:** 1: Steps 1-3 flown, one miss (no flaps 1 on a level deceleration in the approach phase) fixed test-first in `2d3b12274`
+  (`A350FlapMarginTests`), Step 4 not yet flown. 2: the stock `GEAR_UP` the shared automation sends is taken; no handoff. 3: the A350 accepts AP 1
+  from 5 ft; no change. 4: every group but After Takeoff, Approach and Landing worked from its flow; those three were not run in flight.
+- **Waiting on the owner:** a fresh flight loaded from the MSFS menu at VCBI (every OIS restore on 2026-11-02 afternoon flew wrongly: the evidence's
+  last section), then the level deceleration in the approach phase again, and the After Takeoff, Approach and Landing groups in flight.
+- **In-sim results:** `docs/a350/evidence/05-first-officer.md`.
+- **Changed from the plan:** Task 2 measured with the take-off script sending the stock event the automation sends, not the automation itself
+  (the probe runs the First Officer only).
+- **Rulings made while working:** the approach phase arms the flaps only below 5,000 ft AGL and never while climbing, so a departure level-off
+  (climb phase) or a go-around's first seconds extend nothing; cost if wrong: an approach phase activated above 5,000 ft AGL waits for the
+  descent, as before the fix.
