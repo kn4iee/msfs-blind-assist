@@ -135,20 +135,23 @@ public sealed class A350FactsCheck
 - **Rule proposal:** extend [A350-9]'s full text with Task 1's kinds and the 2026-10-31 rate; if the transform needs a guardrail (the hook's argument count), a new A350 rule for it; and a new A350 rule for Task 5: a value the reader takes from the copy's raw memory is withheld for the session once `A350FactsCheck` finds it disagreeing with the A350's own L:vars, and the pilot is told once; the disagreement is never made silent.
 - **Docs:** `docs/tooling.md`'s A350Probe line for the layout check (plan 20's file).
 - **Gaps in other plans' files:** the take-off speeds, the minimums and BTV have no L:var twin in 1.2.7 (INI_V1, INI_VR and INI_V2 are never written), so Task 5 cannot check them; checking them against what draws them (the MFD's PERF TAKE OFF page, the PFD's minimums, the ND's BTV exit) is for plans 07, 08 and 09 to weigh.
+- **For plan 08:** on 1.2.8 the ND's airport map labels (stands, terminals, piers, the tower) are placed by `nvgTransform`, which the reader now applies: before, they all sat at one point. What `A350NdMap` and the ANF read from them should be looked at again (`p03_efis_transform.json`).
+- **For plan 20 (`tools/a350-probe/README.md`):** its line "the doc's 'Addresses for 1.2.7'" now reads "Addresses for 1.2.8"; `varenum.py`'s name-table address is 920624 on 1.2.8.
+- **Pilot-facing, as achieved:** "A350 airport map labels on the ND are read in their place" (Task 4; changelog `fix`), beside the plan's lines above.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** waiting on owner: Task 5 Step 6's climb half and Task 7 need the next flight; Task 5 Step 7 needs the owner's ear and word
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5) inline with superpowers:executing-plans, no subagents; Tasks 1-5's code was first written on 2026-11-02 before the plans went back to running in order, parked on a local branch, then brought onto this claim unchanged
 - **Started:** 2026-11-02, from `ec8c2451c`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-02 (Tasks 1-6)
+- **Tests at landing:** the suite without `ClaudeRulesHookTests`, after the rebase (see the push's commit)
+- **Tasks:** 0-6 done; 5's Step 6 at the gate only; 7 not yet.
+- **Waiting on the owner:** Task 5 Step 6 in a climb (the next flight: VLS, VFE and VMAX are 0 at the gate, so the table's speeds were not checked); Task 5 Step 7 (the sentence by ear, and whether a variables disagreement keeps the displays reading, as built, or stops them); Task 7 (the next full flight's `a350_display.log`).
+- **In-sim results:** `docs/a350/evidence/03-reader-traps.md`: the facts check agreed at the gate (table 141 pairs, variables 2); both EFIS draws call `nvgTransform` and the ND's airport map labels are placed by it; the 1.2.8 addresses.
+- **Changed from the plan:** Task 4 Step 6's capture is the EFIS's, not the MFD's (`p03_efis_transform.json`): the MFD does not call `nvgTransform` on 1.2.8. Task 6 Step 2 makes `sdmap` and `sdsweep` take the table from `A350ModuleFacts.Table` and the SD page from `EWD::SetCurrentPage`'s store, so no number is typed in for any version. The repl's `enter` command (plan 02 needed it) is committed here, as `tools/A350Probe/**` is this plan's.
+- **Rulings made while working:** (1) A variables disagreement keeps the displays reading, as the plan proposes, until the owner says otherwise (Step 7). (2) The facts check's pairs are the continuous L:vars the definition streams; one read on request can be older than the copy and would read as a disagreement (Claude).
