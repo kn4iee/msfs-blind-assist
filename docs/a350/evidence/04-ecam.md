@@ -17,6 +17,20 @@ commits with `A350_LOG=1`. Captures are `A350Probe ecamwatch` (2 Hz, each change
 - **Cabin ready:** `INI_CABIN_IS_READY` read 0 for the whole flight (no CABIN READY memo, no cabin report) and turned 1 only when the OIS's panel
   states were set afterwards; the 10-31 repeats did not occur.
 
+## What raises COMPANY MSG (2026-11-02, at the gate, with the owner's go-ahead for the datalink)
+
+- The memo follows `INI_COMPANY_MSG_RECEIVED` (variable 703), set only by the A350's own datalink client: `AOCHandler::addCommMessage` (a message
+  received on the datalink, the same function that sets `AcarsLogonActive` on a logon), `AOCHandler::SendCompletedLoadsheet` (the final
+  loadsheet delivered, from `AOCHandler::UpdateAOC` after 180 or 360 s) and `addMessage`. The OIS's COMPANY COM inbox does not raise it: five unread
+  messages there (METAR, TAF, a flight report) stood through the whole flight with no memo.
+- The datalink was set up already (the owner's SimBrief ID, SayIntentions key and Hoppie logon filled in, read as lengths only; CPDLC SOURCE SAY
+  INTENTIONS, whose app was not running), and `AcarsLogonActive` read 0.
+- Tried with CPDLC SOURCE set to HOPPIE for the test: no ACARS logon came by itself; a D-ATIS update and a loadsheet request (OIS COMPANY COM,
+  REQUESTS, LOADSHEET; then LOADSHEET, REQUEST FINAL LOADSHEET) raised nothing in 10 minutes. The cockpit has no free telex to send to its own
+  callsign. CPDLC SOURCE was set back to SAY INTENTIONS, the radar to AUTO.
+- So COMPANY MSG needs a message from outside: a telex sent to the aircraft's callsign by another datalink client, or a flight under SayIntentions
+  that sends company messages (the 2026-10-31 flight's source).
+
 ## Task 2: the colour hold (owner's question 4)
 
 Built for both causes (a ruling: the cause was not found): a memo-column line whose only change is its colour is said once it has held 3 s, and
