@@ -107,11 +107,12 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   A350's variables where the tape shows none); 5 Step 1 (METRIC ALT) and Step 3 (the take-off speeds) confirmed live, pinned by two tests;
   1 done: CONF FULL, the flap lever, FCU ALT ABOVE A/C, SIM RATE and SIM PAUSED read live, green dot read inside the tape and hidden past
   its foot, the green "=" marks no speed (pinned by tests on sim-answered captures); 2's rows done (`df41bcfd9`), its live words waiting;
-  4: SimConnect-spawned AI are not seen by the A350's TCAS (flown 2026-11-02), so it waits on real traffic; 7 checked in both units, no
-  fix (`7f05a4f6d`); 5 Step 2: the pause at the top of descent happened and resumed, MSFSBA's own sentence not yet proven.
-- **Waiting on the owner:** real traffic for Task 4 (AIG with flight plans, or an online network); windshear and stall, which neither the
-  OIS of 1.2.8 nor ActiveSky can be asked for; a short-runway BTV for RWY TOO SHORT and MAX REVERSE; one more top-of-descent pause with
-  `FMGS_PAUSE_TYPE` logged, for MSFSBA's own sentence.
+  4 done: SimConnect-spawned AI are not seen by the A350's TCAS, but SayIntentions' traffic gave a live RA (DESCEND, DESCEND CROSSING,
+  CLEAR OF CONFLICT, 2026-11-02 20:39), replayed in `9cd5251cf`; its wording matches `TcasRaGuidance`'s, nothing to fix; no TA came;
+  7 checked in both units, no fix (`7f05a4f6d`); 5 Step 2: the pause at the top of descent happened and resumed, MSFSBA's own sentence
+  not yet proven.
+- **Waiting on the owner:** windshear and stall, which neither the OIS of 1.2.8 nor ActiveSky can be asked for; a short-runway BTV for
+  RWY TOO SHORT and MAX REVERSE; one more top-of-descent pause with `FMGS_PAUSE_TYPE` logged, for MSFSBA's own sentence.
 - **In-sim results:** `docs/a350/evidence/07-pfd-callouts.md`.
 - **Changed from the plan:**
 - **Rulings made while working:** Task 3's test is built from MSFSBA's reader's own FMA lines as read live, not two draw captures: the

@@ -104,3 +104,21 @@ captured, LAND, FLARE, ROLL OUT, then After Landing, Parking and Securing on sta
   FL100, 250 kt; `AIGAIM_Qantas Airbus A330-200` 3 NM ahead, 300 ft below) were confirmed created, yet every `INI_TCAS_*` aural stayed 0
   for 2 minutes and the ND showed no traffic: the A350's TCAS does not see objects created that way (or they do not stay airborne). The
   advisories need traffic the sim itself flies: AIG traffic with flight plans, or an online network.
+
+## The third flight (2026-11-02, about 20:20-20:50): Task 4 in SayIntentions traffic
+
+The owner started SayIntentions, which flies its own AI traffic around VCBI. A script (`tcas_hunt.py`) listed the airborne aircraft
+within 30 NM (SimConnect's `RequestDataOnSimObjectType`, the user's own object left out) and steered the A350 through the FCU at the
+nearest one between 2,500 and 9,000 ft, hands off once an advisory came. `tcas_log.sh` sampled every `INI_TCAS_*` aural and
+`INI_TCAS_VS_TGT` every 100 ms.
+
+- **20:39:58, about 3,000 ft near VCBI:** `INI_TCAS_DESCENT` 1 with `INI_TCAS_VS_TGT` -500; 1.99 s later it turned to
+  `INI_TCAS_DESCENT_CROSS` (-200); 113 s after the first, `INI_TCAS_CLEAR`. No `INI_TCAS_TRAFFIC` came before the RA, so no TA was heard.
+- **What MSFSBA says** (it was not running; the samples replayed through `A350TcasCallouts`, flushed once a second as the monitor does,
+  `A350TcasCalloutsTests.The_live_descend_crossing_descend_and_clear_are_said_in_order`, `9cd5251cf`): "TCAS: Descend. Fly vertical speed
+  minus 500 feet per minute.", "TCAS: Descend, crossing descend. Fly vertical speed minus 200 feet per minute.", "TCAS: Clear of conflict."
+- **Against `TcasRaGuidance`** (the A32NX's and A380's): the same "TCAS: <advisory>. Fly vertical speed <plus|minus> N feet per minute."
+  form and the same signed words. The A350 gives one target (`INI_TCAS_VS_TGT`), where the FBW aircraft give a green band ("minus 500 to
+  minus 1500"): each reads what its aircraft shows. No difference to fix.
+- The other aurals (CLIMB and its NOW, CROSS and MORE, MAINTAIN, LEVEL OFF, ADJUST, MONITOR, TRAFFIC) did not come in this traffic; each is
+  bound to its variable from `sound.xml` and pinned in `A350TcasCalloutsTests`.
