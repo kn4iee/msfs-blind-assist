@@ -144,14 +144,14 @@ public sealed class A350FactsCheck
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** waiting on owner: Task 5 Step 7 needs the owner's ear and word
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5) inline with superpowers:executing-plans, no subagents; Tasks 1-5's code was first written on 2026-11-02 before the plans went back to running in order, parked on a local branch, then brought onto this claim unchanged
 - **Started:** 2026-11-02, from `ec8c2451c`
 - **Landed:** 2026-11-02 (Tasks 1-6)
 - **Tests at landing:** the suite without `ClaudeRulesHookTests`, after the rebase (see the push's commit)
-- **Tasks:** 0-7 done (Task 5 Step 6 at the gate and in the climb of 2026-11-02's flight; Task 7 from that flight).
-- **Waiting on the owner:** Task 5 Step 7 (the sentence by ear, and whether a variables disagreement keeps the displays reading, as built, or stops them).
+- **Tasks:** 0-7 done (Task 5 Step 6 at the gate and in the climb of 2026-11-02's flight; Task 7 from that flight; Task 5 Step 7 by Francesco's word, 2026-11-02).
+- **Waiting on the owner:** none.
 - **In-sim results:** `docs/a350/evidence/03-reader-traps.md`: the facts check agreed at the gate (table 141 pairs, variables 2); both EFIS draws call `nvgTransform` and the ND's airport map labels are placed by it; the 1.2.8 addresses.
 - **Changed from the plan:** Task 4 Step 6's capture is the EFIS's, not the MFD's (`p03_efis_transform.json`): the MFD does not call `nvgTransform` on 1.2.8. Task 6 Step 2 makes `sdmap` and `sdsweep` take the table from `A350ModuleFacts.Table` and the SD page from `EWD::SetCurrentPage`'s store, so no number is typed in for any version. The repl's `enter` command (plan 02 needed it) is committed here, as `tools/A350Probe/**` is this plan's.
-- **Rulings made while working:** (1) A variables disagreement keeps the displays reading, as the plan proposes, until the owner says otherwise (Step 7). (2) The facts check's pairs are the continuous L:vars the definition streams; one read on request can be older than the copy and would read as a disagreement (Claude).
+- **Rulings made while working:** (1) A variables disagreement keeps the displays reading, as the plan proposes; confirmed by Francesco on 2026-11-02 (Step 7: "don't stop the display reading"), who kept the sentence "MSFSBA does not match this A350 version yet: …" as written. (2) The facts check's pairs are the continuous L:vars the definition streams; one read on request can be older than the copy and would read as a disagreement (Claude).
