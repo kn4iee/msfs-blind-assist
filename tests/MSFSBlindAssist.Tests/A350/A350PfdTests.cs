@@ -592,6 +592,25 @@ public class A350PfdTests
         Assert.True(lines.ToList().IndexOf("Altitude in metres: 20, green") == lines.ToList().IndexOf("Altitude: 81 feet, green") + 1);
     }
 
+    // Plan 07 Task 5, on 1.2.8 (live 2026-11-02, descending through 4,900 ft to 2,500 on the approach): METRIC ALT on, the PFD said
+    // "Selected altitude in metres: 760" and "Altitude in metres" beside the feet; pressed off, no metric line at all. The captures
+    // are the standalone draw's (no speed tape: its sim asks answer with defaults), which the altitude side does not need.
+    [Fact]
+    public void Metric_altitude_reads_on_1_2_8_with_metric_alt_on()
+    {
+        var lines = A350Pfd.Read(Fixture("p07_efis_metric_on"), 0);
+        Assert.Contains("Selected altitude in metres: 760, cyan", lines);
+        Assert.Contains(lines, l => l.StartsWith("Altitude in metres: ", StringComparison.Ordinal) && l.EndsWith(", green", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_metric_altitude_box_is_never_said_with_metric_alt_off()
+    {
+        var lines = A350Pfd.Read(Fixture("p07_efis_metric_off"), 0);
+        Assert.DoesNotContain(lines, l => l.Contains("metres", StringComparison.Ordinal));
+        Assert.Contains("Selected altitude: 2500, cyan", lines);
+    }
+
     // Review 2026-10-30: the tape's altitude symbol held at the screen's top is clipped too, but a magenta one is the
     // constraint the vertical mode levels at, which no readout shows (the 2026-10-28 hold at the SID's 5000): read as it
     // was before the clip was tracked. The clip-tracked capture with its held symbol as that constraint.
