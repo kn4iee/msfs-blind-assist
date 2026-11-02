@@ -141,10 +141,10 @@ public sealed class A350FactsCheck
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
+- **Status:** claimed
+- **Claimed by:** Francesco Tissera (francescotissera1211), 2026-11-02
 - **Worked by:**
-- **Started:**
+- **Started:** 2026-11-02, from 548ad6175
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
