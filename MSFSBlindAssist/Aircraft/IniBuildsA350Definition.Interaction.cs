@@ -48,6 +48,8 @@ public partial class IniBuildsA350Definition
 
         if (_typed.TryGetValue(varKey, out var field))
             return HandleTyped(row, field, value, simConnect, announcer);
+        if (varKey is CaptainPullRow or FirstOfficerPullRow)
+            _baroPulls++;   // a side the pilot pulls has not left STD unasked
 
         // An option the aircraft is built without: the cockpit hides its controls and clears their variables.
         if (A350Options.For(control.Id) is { } option && Cached(simConnect, option.Key) is double fitted && fitted < 0.5)
@@ -319,8 +321,13 @@ public partial class IniBuildsA350Definition
 
     private const string CaptainQnhRow = "A350_CAPT_QNH_SET", FirstOfficerQnhRow = "A350_FO_QNH_SET", SfdDisplay = "A350_DISP_SFD";
 
+    private const string CaptainPullRow = "A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", FirstOfficerPullRow = "A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL";
+
     /// <summary>Each entry's number: a newer entry stops an older one's remaining targets.</summary>
     private int _baroEntry;
+
+    /// <summary>The baro pulls the pilot asked for (either side's pull row), counted so an entry knows one came while it ran.</summary>
+    private int _baroPulls;
 
     /// <summary>The ISIS's own STD, from its display; tests replace it.</summary>
     internal Func<bool?>? IsisStdRead { get; set; }
@@ -338,7 +345,7 @@ public partial class IniBuildsA350Definition
     internal async Task PressBaroEntry(double typed, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         _sim = sim;
-        int entry = ++_baroEntry;
+        int entry = ++_baroEntry, pulls = _baroPulls;
         double? Read(string name) => Cached(sim, KeyForInput(name));
         var plan = A350BaroEntry.Plan(typed, Read, IsisOnStd());
         if (plan.Refusal != null)
@@ -363,8 +370,8 @@ public partial class IniBuildsA350Definition
             }
             foreach (int side in plan.SidesOnStd)
             {
-                if (_disposed || entry != _baroEntry)
-                    return;
+                if (_disposed || entry != _baroEntry || _baroPulls != pulls)
+                    break;   // a pull asked meanwhile: what left STD was asked for (with LINKED INSTR one pull moves both)
                 if (await ReadFresh(sim, KeyForInput($"XMLVAR_Baro{side}_Mode"), ReadoutTimeoutMs) is not double mode || Math.Abs(mode - 3) < 0.5)
                     continue;   // unread: nothing is known to have left it
                 if (await ReadFresh(sim, KeyForInput($"KOHLSMAN SETTING MB:{side}"), ReadoutTimeoutMs) is double mb

@@ -178,6 +178,54 @@ public class A350BaroEntryRunTests
         Assert.DoesNotContain(_speech.All, s => s.StartsWith("First officer altimeter", StringComparison.Ordinal));
     }
 
+    // In flight 2026-11-02: the window's QNH button pressed while the entry still stepped the captain's preset was said back as
+    // "Captain altimeter left STD": the pilot asked for that pull.
+    [Theory]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL")]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL")]
+    public async Task A_pull_asked_while_the_entry_runs_is_not_said_as_leaving_std(string pullRow)
+    {
+        Baros(link: 2, mode1: 3, mode2: 3);
+        Fresh("INI_BARO_PRESET_CPT_SHOW", 1);
+        Fresh("INI_BARO_PRESET_CPT", 1033);
+        Fresh("XMLVAR_Baro1_Mode", 0);
+        Fresh("XMLVAR_Baro2_Mode", 0);
+        var gate = new TaskCompletionSource();
+        _def.Delay = _ => gate.Task;
+        var entry = Enter(1033);
+        _def.HandleUIVariableSet(pullRow, 1, _def.GetVariables()[pullRow], _sim, _speech);
+        _def.Delay = _ => Task.CompletedTask;
+        gate.SetResult();
+        await entry.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain(_speech.All, s => s.Contains("left STD", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_speed_turned_elsewhere_is_said_once_and_its_muted_row_says_nothing()
+    {
+        var speed = Window("Speed window");
+        void Speed(double dial)
+        {
+            Deliver("INI_FCU_SPD_DASHED", 0);
+            Deliver("INI_MANAGED_SPEED", 0);
+            Deliver("INI_FCU_SPD_DOT", 0);
+            Deliver("INI_PRESET_DIAL", 0);
+            Deliver("INI_PRESET_DIAL_IS_MACH", 0);
+            _cache[speed.Key] = dial;
+            _def.ProcessSimVarUpdate(speed.Key, dial, _speech);
+        }
+        Speed(250);
+        BatchAfter(1000);
+        Assert.Empty(_speech.All);   // a baseline
+        Speed(251);
+        BatchAfter(1000);
+        Assert.Equal(new[] { "Speed 251 knots" }, _speech.All);
+        _def.IsMuted = key => key == speed.Key;
+        Speed(252);
+        BatchAfter(1000);
+        Assert.Equal(new[] { "Speed 251 knots" }, _speech.All);
+    }
+
     [Fact]
     public async Task An_isis_on_its_own_std_is_left_alone_and_said_last()
     {
