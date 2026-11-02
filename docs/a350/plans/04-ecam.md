@@ -84,21 +84,24 @@
 
 - **Pilot-facing:** "A350 E/WD call-outs: memos are said once, in the color the cockpit holds; a memo back after an alert is not repeated; 'Reverse green' is called on landing (its own Ctrl+M row)." Guide: the A350's ECAM section and the Ctrl+M list; changelog `fix` and `feature`.
 - **Rule proposal:** a new A350 rule if Task 1's (a) is a recording trap (the fill a text takes), with Task 1's capture as its full text.
-- **Docs:** the flight phase table (Task 5) into "The E/WD" or, if it serves window titles, the owner's ruling.
+- **Docs:** the flight phase table (Task 5) is in "The E/WD"; the owner's ruling decides if it serves window titles or a call-out.
+- **Pilot-facing, as achieved:** "A350: an E/WD memo back within 10 s is not said again, a memo's colour change is said once it holds 3 s, the reversers are called ('Reverse green', its own Ctrl+M row 'Reverser call-outs'), and the SD's STATUS key says which page it shows." Changelog `fix` and `feature`; guide: the A350's ECAM section and the Ctrl+M list.
+- **For plan 05/07:** the take-off of 2026-11-02 gave no SRS (V/S +1000 and MAN FLX at the AP's engagement, `INI_flight_phase` 1 all flight), and the autoland then flew G/S and LOC to the runway with no LAND, FLARE or ROLL OUT (evidence "Other findings").
+- **For plan 07:** the SURV page came up with ALT RPTG and ADS-B RPTG OFF (TCAS STBY).
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** waiting on owner: Task 1's COMPANY MSG swap needs a flight with a company datalink message; Task 5 Step 1's start phases need a real engine start
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5) inline with superpowers:executing-plans, no subagents; the flight scripted by Claude at Francesco's word ("You fly it scripted")
 - **Started:** 2026-11-02, from `c64b3f5c9`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-02 (Tasks 2-5)
+- **Tests at landing:** the suite without `ClaudeRulesHookTests`, after the rebase (see the push's commit)
+- **Tasks:** 0, 2, 3, 4 done; 1 done without COMPANY MSG (no swap in 30 minutes); 5 done but the start phases.
+- **Waiting on the owner:** a flight with a company message (COMPANY MSG shown) and `ecamwatch` beside it, to settle Task 1's cause; a real engine start for the phases between 1 and 12.
+- **In-sim results:** `docs/a350/evidence/04-ecam.md`: the memo watch, the reversers through an autoland, the phase table, every SD page on the ground and at FL200.
+- **Changed from the plan:** Task 2 built (b), the colour hold, without Task 1's finding (see the ruling); the hold covers the memo column only. The reverser call-out lives in `A350EcamMonitor.cs` (`A350ReverserCallout`), a file the plan names, rather than a new one. The 30-minute watch spanned the climb, about 15 minutes of cruise, the descent and the approach. Task 5's SD found two misreads in flight (the door page's CAB V/S, the STATUS key showing another page), fixed in `A350SdPage`/`A350SdText`; the existing test `A_line_that_returns_speaks_again` became `A_line_that_returns_after_10_s_speaks_again` (question 3's rule).
+- **Rulings made while working:** (1) The colour hold was built although Task 1 found no swap: the owner's answer to question 4 covers the aircraft's flips, and a reader pairing a text with another's fill would be held the same way (Claude). (2) The hold applies to the memo column (x 1240 to 1480) only: both swaps of 10-31 were there, and a procedure's action turning from cyan to white (done) is news the pilot needs at once (Claude). (3) A memo is a memo-column line whatever its colour, or a main-column line with no red or amber (the plan's own definition). (4) With one engine showing REV, "Reverse 1 green" names it (the Review Focus's "naming the one").
