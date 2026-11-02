@@ -15,9 +15,16 @@ public static class A350SdText
         if (capture == null) return head + "\r\n" + A350DisplayStatus.NotAvailableYet;
         var view = A350Ewd.Parse(capture);
         if (!view.Powered) return head + "\r\nThe SD is off: no power.";
+        int shown = (int)Math.Round(page);
+        // The STATUS key with nothing for STATUS shows another page under its number: say which, and read that one.
+        if (shown == 14 && A350SdPage.StatusShowing(view.SystemDisplay) is int other)
+        {
+            head = $"{head}, showing the {PageName(other)} page";
+            shown = other;
+        }
         var o = new List<string> { head };
-        o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
-        o.AddRange(A350SdSymbols.Read(capture.Shapes, (int)Math.Round(page)));
+        o.AddRange(A350SdPage.Read(view.SystemDisplay, shown));
+        o.AddRange(A350SdSymbols.Read(capture.Shapes, shown));
         o.Add("Permanent data:");
         o.AddRange(A350SdPage.ReadPermanentData(view.PermanentData));
         return string.Join("\r\n", o);

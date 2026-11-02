@@ -32,6 +32,21 @@ public static class A350SdPage
 
     private const int StatusPage = 14;
 
+    /// <summary>The page the STATUS key shows when it draws no STATUS (live 2026-11-02: CRUISE in cruise, the alert's WHEEL page on the
+    /// ground with BRAKES PARK BRK ON): the page whose fields the drawn values fill most, three at least; null while STATUS is drawn,
+    /// or nothing fits.</summary>
+    public static int? StatusShowing(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
+    {
+        var cells = rows.SelectMany(r => r).ToList();
+        if (cells.Any(c => c.Text.Trim() == "STATUS"))
+            return null;
+        int Fits(IEnumerable<SdField> fields) =>
+            fields.Count(f => cells.Any(c => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx));
+        var best = Pages.Where(kv => kv.Key != StatusPage).Select(kv => (Page: kv.Key, Fits: Fits(kv.Value)))
+            .OrderByDescending(p => p.Fits).FirstOrDefault();
+        return best.Fits >= 3 ? best.Page : null;
+    }
+
     /// <summary>STATUS: under the ALL PHASES and APPR &amp; LDG headings two columns, read column by column, each item
     /// with its column's heading, down to the next centred heading (live 2026-10-28: INOP SYS read PART GALLEY, LS 2,
     /// FWD CARGO VENT, FLAP SYS 1 interleaved by row, no column said).</summary>
@@ -323,6 +338,8 @@ public static class A350SdPage
                 new SdField("Forward cargo door", 330, 465), new SdField("Aft cargo door", 330, 765),
                 new SdField("Bulk cargo door", 264, 812),
                 new SdField("Captain oxygen pressure", 737, 374, "PSI"), new SdField("First officer oxygen pressure", 737, 523, "PSI"),
+                // In flight only, under CAB V/S (its unit drawn below it, live 2026-11-02 at FL200).
+                new SdField("Cabin vertical speed", 694, 713, "FT/MIN"),
                 new SdField("Rain repellent level", 709, 888),
             }).ToArray(),
         // CRUISE (EcamCruiseStatic.png; live at FL400): FF and FU under their labels, (FOB + FU) - BLOCK, the landing
