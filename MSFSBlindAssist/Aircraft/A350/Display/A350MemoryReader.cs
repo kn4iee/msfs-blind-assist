@@ -15,7 +15,20 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// and reads them back-to-back into one reused buffer [A350-2] (hundreds of milliseconds for a grown heap). Port of
 /// tools/a350-probe fastlocate.py and fastdump2.py.
 /// </summary>
-public sealed class A350MemoryReader : IDisposable
+/// <summary>Where the display service gets its copies: the sim's process (<see cref="A350MemoryReader"/>), or a test's own.</summary>
+internal interface IA350MemorySource : IDisposable
+{
+    ulong Base { get; }
+    int LastReread { get; }
+    long LastBytes { get; }
+    int LastLeftOut { get; }
+    A350ReaderFailure? LastFailure { get; }
+    bool TryLocate();
+    bool IsStillValid();
+    A350MemoryCopy Snapshot();
+}
+
+public sealed class A350MemoryReader : IA350MemorySource
 {
     public static readonly string[] ProcessNames = { "FlightSimulator2024", "FlightSimulator" };
     public const ulong WasmMemorySpan = 1UL << 32;

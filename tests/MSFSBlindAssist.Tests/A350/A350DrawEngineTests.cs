@@ -87,7 +87,7 @@ public class A350DrawEngineTests
         return m.Build();
     }
 
-    private static A350MemoryCopy Copy(bool trap)
+    internal static A350MemoryCopy Copy(bool trap)
     {
         var mem = new byte[65536];
         U32(0, 3000, 11).CopyTo(mem, 2000);
@@ -101,7 +101,7 @@ public class A350DrawEngineTests
         return copy;
     }
 
-    private static A350DrawEngine Engine(bool firstDrawPartial = false, bool clip = false)
+    internal static A350DrawEngine Engine(bool firstDrawPartial = false, bool clip = false)
     {
         var original = Module(firstDrawPartial, clip);
         var mod = A350WasmModule.Parse(original);

@@ -28,6 +28,9 @@ public sealed class A350DrawEngine : IDisposable
     private readonly HashSet<string> _warmed = new();   // gauges drawn once on this instance
     private readonly IReadOnlyList<string> _uiClasses;
     private readonly A350ModuleFacts _facts;
+
+    /// <summary>What this engine knows of its module.</summary>
+    internal A350ModuleFacts Facts => _facts;
     private readonly A350DrawState _state = new();
 
     private List<DrawnText> _texts = new();

@@ -25,7 +25,7 @@ public sealed class A350DisplayService : IDisposable
     private Engine? _engine;
     private Module? _module;
     private A350DrawEngine? _draw;
-    private A350MemoryReader? _reader;
+    private IA350MemorySource? _reader;
     private A350ModuleFacts? _facts;
     private Func<string, double?> _aVar = _ => null;
     private Func<string, string?> _calcString = _ => null;
@@ -84,6 +84,16 @@ public sealed class A350DisplayService : IDisposable
     {
         _localAppData = localAppData ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         _thread = new Thread(Loop) { IsBackground = true, Name = "A350 displays" };
+    }
+
+    /// <summary>A service already prepared, on a memory source and an engine a test owns.</summary>
+    internal A350DisplayService(IA350MemorySource reader, A350DrawEngine draw, A350ModuleFacts facts) : this(Path.GetTempPath())
+    {
+        _reader = reader;
+        _draw = draw;
+        _facts = facts;
+        State = A350DisplayState.Ready;
+        _thread.Start();
     }
 
     private void Loop()
