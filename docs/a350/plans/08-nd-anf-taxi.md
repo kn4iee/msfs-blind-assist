@@ -86,12 +86,12 @@ Found in the test flights after the first: arming BTV from the ND window is clun
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** in progress
+- **Status:** landed, waiting on the owner (below)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-02, from `f330aeba1`
-- **Landed:**
-- **Tests at landing:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** the A350 tests 2,188 passed
 - **Tasks:** 1 done (`675a5f79b`; Step 6 flown 2026-11-03: each passage said once, within a poll of the ND's change; quiet on the
   ground and in the flare, `10ed0dc6a`, live on the second flight); 4 done (`f2311a089` at the stand; in flight the SFD's pitch and
   bank added and two heading misreads fixed, `1cff66915`, `b0e8df59f`); 2 Steps 1-6 done (the path measured at VCBI on two flights:
@@ -99,13 +99,13 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   the stand: exits read and said, every step taken, the ND put back, the FMA read back), Step 8 in part (ROSE NAV and ARC at the zoom
   on the approach); 3 Step 1 measured on the A350 itself (`990f5d692`: the airframe's run-on 0.80-0.85 s, the lead it needs about
   1.3-1.4 s against its 1.7), 18,962 passed.
-- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach with BTV armed from the
-  window (heard by ear); Task 3 Step 2's taxi by ear (1.7 s against 1.35 s); a fresh-session autoland with BTV at VCBI (the second
-  flight's rollout left the runway, its cause open: see the evidence).
+  Flight 2026-11-03: BTV armed from the ND window in flight (exit D) and an autoland with it ("190 meters to exit", DECEL, AUTO BRK OFF); typing into the ND wrote into the MFD's active field too (the decision height set to 900), fixed by putting the side's MFD on its F-PLN first (`f03adfb49`).
+- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach with BTV heard by ear; Task 3 Step 2's taxi by ear (1.7 s against 1.35 s)
 - **The owner's answers:** 2026-11-03, the next waypoint call-out quiet on the ground and in the flare (it had said the plan's entry on
   the stand, IKONA in the flare, PPOS after the landing).
 - **For plan 21 (guide):** the SFD now says pitch and bank (Alt+I and the Displays section), and its heading from 000 to 080.
 - **In-sim results:** `docs/a350/evidence/08-nd-anf-taxi.md`.
+  `docs/a350/evidence/flight-2026-11-03.md`
 - **Changed from the plan:** `SeedA350MonitorDefaults` returns whether it seeded and the caller saves, where the Fenix's seed saves itself,
   so its tests never write the real settings file.
 - **Rulings made while working (Tasks 2 and 3):** Task 3 Step 1 measured on the aircraft, not in VirtualPilot, whose pilot model has no

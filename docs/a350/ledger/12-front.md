@@ -35,8 +35,8 @@ reader reads, and the aircraft shows nothing of it). "Panels table" is `docs/ini
 | 18 | The FMA at the top of the PFD: thrust, vertical, lateral, approach capability, AP/FD/A/THR columns | FMA call-outs (each change said, "FMA autothrust: ...") and the Displays section's Captain PFD | proven live | FMA call-outs flown 2026-10-31 and 11-03 (plan 07; spec 2.6) | |
 | 19 | FMA colours: blue armed, green engaged, magenta constraints, white capability and AP/A/THR | each FMA cell said with its colour | proven live | "FMA autothrust: MAN, white; FLX, white; +67, cyan" (spec 2.6) | |
 | 19 | 1FD2 on the ground; CLB and NAV armed | the FMA read | proven live | "[pfd] FMA engagement: 1 FD 2, white" (2026-11-03, plan 11 IRS run) | |
-| 20 | A mode change boxed in white for 10 seconds | the FMA call-out says the change | built but not proven (the box itself) | the call-out says the new mode; whether the box is said is plan 07's open check | 07 |
-| 20 | A mode reversion: flashing white box and a triple click | the new mode said; the triple click is the aircraft's sound | built but not proven | reversion (HDG pulled in CLB: OP CLB) to fly | 07 |
+| 20 | A mode change boxed in white for 10 seconds | the FMA call-out says the change | proven live (the call-out); the box not read | every FMA change said live (flight-2026-11-03); the white box is a drawn shape, the display decode work |  |
+| 20 | A mode reversion: flashing white box and a triple click | the new mode said; the triple click is the aircraft's sound | proven live | HDG pulled in NAV/CLB: "FMA vertical: OP CLB", "FMA lateral: HDG" said (flight-2026-11-03) |  |
 | 20 | Heading pulled: NAV to HDG and CLB to OP CLB | the FCU's HDG knob pull row; the FMA call-outs | proven live | HDG pulls flown 2026-10-30 to 11-03 (scripted circuits) | |
 | 21 | Lights out: white lights off at set-up; blue temporary, amber caution, red warning | each panel's lights in its status display, each light said with what it shows | proven live | panel lights and their colours (Panels table; plan 11 sweep 2026-11-03) | |
 | 21 | Amber lights before engine start are normal | the same | reference | | |
@@ -63,7 +63,7 @@ reader reads, and the aircraft shows nothing of it). "Panels table" is `docs/ini
 | 23 | 20-21 CPT footrest, tray table | Captain Table | proven live | Panels table: every row, 2026-10-30 | |
 | 23 | 22 ISIS | ISIS panel; the SFD read (pitch, bank, speed, altitude, heading) | proven live | SFD read flown 2026-11-03 (plan 08 Task 4) | |
 | 23 | 23-24 Centre lower DU and CPT outer DU; centre lower DU (MFD) | Display Power; the MFD window | proven live | plan 09; plan 11 sweep | |
-| 23 | 25 Standby navigation display | SND panel; the SND read | proven live (read, MENU); built but not proven (MODE, +/-, LS/DIR TO, STD/CHANGE in flight) | plan 11 Task 2 | 11 |
+| 23 | 25 Standby navigation display | SND panel; the SND read | proven live (read, MENU, the keys pressed); built but not proven (what MODE, +/-, LS/DIR TO, STD change on the map) | in flight with a route the keys press and the read (GS, heading source, position) stays (flight-2026-11-03): their change is the map, graphics | 11 |
 | 23 | 26 Centre lower DU and FO outer DU toggles | Display Transfer: OIS on center, display cycle | proven live | plan 11 sweep 2026-11-03 | |
 | 24 | 1, 3 CPT and FO KCCU | the MFD window (typing, KCCU keys) | proven live | plan 09 Task 5 | |
 | 24 | 2 Thrust levers | Thrust Levers rows, lever call-outs | proven live | Panels table; flown | |
@@ -77,15 +77,15 @@ reader reads, and the aircraft shows nothing of it). "Panels table" is `docs/ini
 | 24 | 12 Parking brake and accumulator indicator | Flaps and Brakes: parking brake; accumulator gauges as status lines | proven live | Panels table | |
 | 24 | 13 Gravity gear extension | Flaps and Brakes: the gravity extension | proven live | Panels table: the whole procedure | |
 | 24 | 14 Cockpit lighting | Cockpit: dome, flood, integral, DU master | proven live | plan 11 sweep | |
-| 24 | 15 Pitch trim switches | Trim: pitch nudges; the pitch trim line and call-out | built but not proven (moving, heard) | plan 11 Task 4: trims do not move with the engines off | 11 |
-| 24 | 16 Rudder trim | Trim: nudges and reset; the rudder trim line and call-out | built but not proven (moving, heard) | plan 11 Task 4 | 11 |
+| 24 | 15 Pitch trim switches | Trim: pitch nudges; the pitch trim line and call-out | proven live | "Trim up 1.4 ... 1.0" as the THS moved (on the stand, engines running, flight-2026-11-03) |  |
+| 24 | 16 Rudder trim | Trim: nudges and reset; the rudder trim line and call-out | proven live | "Rudder trim 2.7 degrees left", "Rudder trim neutral" (flight-2026-11-03) |  |
 | 24 | 17 Cockpit door controls | Cockpit: door switch; Doors and Hatches | proven live | plan 11 sweep | |
 | 24 | 18 Printer | Cockpit: printer paper; the paper status lines | proven live | Panels table | |
 | 25 | 1, 22 CPT and FO windscreen wipers | Captain Wiper, First Officer Wiper | proven live | plan 11 sweep | |
 | 25 | 2 Cabin call system and evacuation | Calls, Evacuation | proven live | Panels table | |
 | 25 | 3 Crew and passenger oxygen supply | Oxygen | proven live | Panels table | |
 | 25 | 4 Recorder ground control | Recorder and Misc: RCDR GND CTL | proven live | Panels table | |
-| 25 | 5 ELT | Recorder and Misc: ELT, guard | proven live (switch); built but not proven (ELT EMITTING) | plan 11 Task 4 | 11 |
+| 25 | 5 ELT | Recorder and Misc: ELT, guard | proven live (switch); not raised (ELT EMITTING) | ON for 10 s in flight: no memo; the module holds "ELT EMITTING", its condition unknown (flight-2026-11-03) | 11 |
 | 25 | 6 Emergency electrical power | ELEC | proven live | Panels table | |
 | 25 | 7 Fuel jettison buttons | Fuel: jettison arm, active | proven live | Panels table (by hand, `keep`) | |
 | 25 | 8, 26 Flight control panels | Flight Control Computers | proven live | Panels table | |

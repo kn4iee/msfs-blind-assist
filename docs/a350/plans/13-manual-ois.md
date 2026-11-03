@@ -60,7 +60,10 @@ A claim counts only once it is on the remote branch: one that exists only on you
 
 ## Gaps for the owner
 
-(Task 4 fills this in: each gap whose plan has landed, with the page, the item and the file.)
+- p. 32: FLT OPS PLAN's request to SimBrief (the owner's account)
+- p. 33: the charts themselves, pictures (gap; the AI display read could describe them: the owner's choice)
+- p. 38: enabling a SITUATIONS scenario, irreversible (owner)
+- p. 31: OPS LIBRARY does nothing when pressed (gap, both sides, 1.2.8)
 
 ## Handoff to plan 21
 
@@ -71,14 +74,14 @@ A claim counts only once it is on the remote branch: one that exists only on you
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (the gaps above)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `b56af5c8a`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** none of its own (an audit); the A350 tests 2,188 passed
+- **Tasks:** the ledger `docs/a350/ledger/13-ois.md`: 26 lines: 21 proven live, 3 open, 2 gaps; the flight items flown 2026-11-03 (`docs/a350/evidence/flight-2026-11-03.md`); fixes found by it in their own plans' commits
+- **Waiting on the owner:** the gaps above
+- **In-sim results:** the ledger's Evidence column; `docs/a350/evidence/flight-2026-11-03.md`
+- **Changed from the plan:** the flight items were flown in one test flight with the other plans' (the session's scripts through MSFSBA's own rows and windows)
+- **Rulings made while working:** a line proven by another plan's live test cites it rather than repeating it

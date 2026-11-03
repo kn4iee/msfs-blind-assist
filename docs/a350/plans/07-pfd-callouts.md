@@ -97,12 +97,12 @@ Found in the test flights after the first: on the ground, with fuel and payload 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** in progress
+- **Status:** landed, waiting on the owner (below)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5) with the live sim, 2026-11-02
 - **Started:** 2026-11-02, from `ae0fbccef`
-- **Landed:**
-- **Tests at landing:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** the A350 tests 2,188 passed
 - **Tasks:** 3 done (`a22d36914`: LVR CLB flashes, now said once with ", flashing"); 6 done (`c0068791e`: green dot, S and F from the
   A350's variables where the tape shows none); 5 Step 1 (METRIC ALT) and Step 3 (the take-off speeds) confirmed live, pinned by two tests;
   1 done: CONF FULL, the flap lever, FCU ALT ABOVE A/C, SIM RATE and SIM PAUSED read live, green dot read inside the tape and hidden past
@@ -111,9 +111,10 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   CLEAR OF CONFLICT, 2026-11-02 20:39), replayed in `9cd5251cf`; its wording matches `TcasRaGuidance`'s, nothing to fix; no TA came;
   7 checked in both units, no fix (`7f05a4f6d`); 5 Step 2: the pause at the top of descent happened and resumed, MSFSBA's own sentence
   not yet proven.
-- **Waiting on the owner:** windshear and stall, which neither the OIS of 1.2.8 nor ActiveSky can be asked for; a short-runway BTV for
-  RWY TOO SHORT and MAX REVERSE; one more top-of-descent pause with `FMGS_PAUSE_TYPE` logged, for MSFSBA's own sentence.
+  Flight 2026-11-03: 5 Step 2 done (the top-of-descent pause: `FMGS_PAUSE_TYPE` 1, MSFSBA's sentence heard, resumed); the noise take-off (scenario 1) and the autoland's FMAs said; alternate law's amber crosses read as "Protections: lost" and no longer said as a flag (`31d26b96a`).
+- **Waiting on the owner:** windshear and stall, which neither the OIS of 1.2.8 nor ActiveSky can be asked for; RWY TOO SHORT and MAX REVERSE, which BTV for an exit too short (exit D, 900 m, 2026-11-03) did not draw: BTV gave way to BRK MED (a shorter runway is the owner's)
 - **In-sim results:** `docs/a350/evidence/07-pfd-callouts.md`.
+  `docs/a350/evidence/flight-2026-11-03.md`
 - **Changed from the plan:**
 - **Rulings made while working:** Task 3's test is built from MSFSBA's reader's own FMA lines as read live, not two draw captures: the
   standalone `draw live EFIS#0` never drew LVR CLB (its sim asks answer with defaults); cost if wrong: none for the behaviour, the

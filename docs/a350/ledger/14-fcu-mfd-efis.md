@@ -20,7 +20,7 @@ none of these controls (plan 11 Task 1). The MFD lines' evidence is plan 09's (`
 | 54 | 7 FD push button | FCU: FD; "FD: On" said | proven live | 2026-11-03 ("[generic] FD: On", plan 11 IRS run) | |
 | 54 | 8 AP1 and AP2; both for CAT 2 and autoland; disconnect on the sidestick | FCU: AP 1, AP 2; the sidestick takeover keys (AP off) | proven live | autoland with both APs flown 2026-11-03 (plan 08); `A350Levers`: the takeover fires `INI.AUTOPILOT_OFF`, live 2026-10-29 | |
 | 54-55 | 9 A/THR push button; disconnect on the thrust levers | FCU: A/THR; Thrust Levers: left and right A/THR disconnect | proven live | Panels table: the A/THR disconnect put the A/THR light out | |
-| 55 | 10 METER push button | FCU: metric altitude | proven live (the button); built but not proven (the PFD's metric boxes) | Panels table; the PFD's metric altitude boxes are plan 07's open check (T10) | 07 |
+| 55 | 10 METER push button | FCU: metric altitude | proven live | "Selected altitude in metres: 1520", "Altitude in metres: 0", off: none (flight-2026-11-03; plan 07 Task 5) |  |
 | 55 | 11 Altitude knob pulled (OP CLB / OP DES), pushed (CLB / DES, needs NAV), 100/1000 ft | FCU: altitude knob push and pull, altitude 100/1000, the Altitude typed field; Shift+A | proven live | Panels table; flown | |
 | 55 | 12 ALT push button (level off) | FCU: ALT | proven live | Panels table | |
 | 55 | 13 V/S or FPA knob pulled (V/S, FPA), pushed (level off) | FCU: V/S knob push and pull, the VS/FPA typed field; Shift+V | proven live | Panels table | |
@@ -37,12 +37,12 @@ none of these controls (plan 11 Task 1). The MFD lines' evidence is plan 09's (`
 | 60 | 3 Shortcut keys | Alt+letter keys, the page buttons | proven live | plan 09 Task 1 | |
 | 60 | 4 CLEAR INFO key | Alt+C; "CLEAR INFO button" | proven live | plan 09 Task 5 | |
 | 60 | 5 Cursor navigation keys (ND, MFD, OIS) | the KCCU ND, MFD and OIS keys (each window moves the cursor first, [A350-4]) | proven live | plan 09 Task 5: OIS moves the cursor off | |
-| 60 | 6 Scroll wheel: the flight plan and menus | the KCCU's SCROLL keys | built but not proven (the F-PLN) | plan 09 Task 4: SCROLL_DOWN never moved a list; on a long F-PLN, in flight | 09 |
+| 60 | 6 Scroll wheel: the flight plan and menus | the KCCU's SCROLL keys | proven live | SCROLL_DOWN and SCROLL_UP move the F-PLN a row each, on a nine-row plan (flight-2026-11-03) |  |
 | 60 | 7 Notepad | Alt+N | proven live | `mfd_notepad_open` and its list (plan 09) | |
 | 60 | 8 Enter key | Enter in the window | proven live | plan 09 | |
 | 61 | The electronic checklist on either MFD: C/L MENU, boxes for pilot items, sensed items green, RESET, C/L COMPLETE, C/L MENU | the MFD window's C/L MENU (Alt+K) | proven live | plan 09 Task 6, 2026-11-03, 1.2.8 | |
 | 62 | The PFD | the Displays section's Captain and First Officer PFD; the FMA and PFD call-outs | proven live | plan 07; flown | |
-| 62 | The PFD's lower part: slat/flap, gear, speed brake, parking brake, pitch trim, messages | the PFD read: the messages ("T.O THS, white; OUT OF RANGE, red", 2026-11-03) | proven live (messages, T.O THS); built but not proven (flap, gear, speed brake, parking brake indications) | the stand read; the rest needs them moving: in flight | 07 |
+| 62 | The PFD's lower part: slat/flap, gear, speed brake, parking brake, pitch trim, messages | the PFD read: the messages ("T.O THS, white; OUT OF RANGE, red", 2026-11-03) | proven live (flaps, speed brake, parking brake, T.O THS, messages); built but not proven (gear) | flaps read moving and set; the speed brake and parking brake sprites read since 069b8c22f; the gear indication not yet found (flight-2026-11-03) | 12 |
 | 62 | The ND | the ND read and the ND window | proven live | plan 08 | |
 | 62 | The VD | the ND read's vertical display | proven live | `docs/inibuilds-a350.md` "The range map" (VD on its scales) | |
 | 62 | The interactive ND: the ND cursor key, KCCU input to the ND | the ND window's clicks and keys (the cursor moved first) | proven live | plan 08 (SET LDG RWY, the functions panel) | |

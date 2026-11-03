@@ -98,7 +98,7 @@ internal static class A350MfdPages
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed, waiting on the owner (below) and on one check at the next landing
+- **Status:** landed, waiting on the owner (below)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `990f5d692`
@@ -115,6 +115,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **For plan 21 (guide):** the MFD window's page buttons and "Go to MFD page" list, the role words, the F-PLN grid and its header line,
   PageDown and PageUp on a long list, a minus typed as PLUS then MINUS.
 - **In-sim results:** `docs/a350/evidence/09-mfd-window.md`.
+  `docs/a350/evidence/flight-2026-11-03.md`: DIR after landing reads its empty page ("DIRECT TO: none"); DIRECT TO with its options in flight; the KCCU SCROLL keys move the F-PLN a row; ACTIVATE APPR with its CONFIRM.
 - **Changed from the plan:** the F-PLN rows read "button" in the window (the A380's `fplnwpt`), which Task 2's role words had left out.
 - **Rulings made while working (Task 3):** the grid is the A380's `padCell` exactly, a full cell taking one more space, so a six-letter
   SID's row is one cell off (cost if wrong: alignment on SID and STAR rows); the distance column's header is the A380's "NM", DIST not

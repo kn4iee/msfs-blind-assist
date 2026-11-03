@@ -60,7 +60,7 @@ A claim counts only once it is on the remote branch: one that exists only on you
 
 ## Gaps for the owner
 
-(Task 4 fills this in: each gap whose plan has landed, with the page, the item and the file.)
+- p. 62: the gear indication in the PFD's lower part (the display decode work)
 
 ## Handoff to plan 21
 
@@ -71,14 +71,14 @@ A claim counts only once it is on the remote branch: one that exists only on you
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (the gaps above)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `4e3fc3eef`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** none of its own (an audit); the A350 tests 2,188 passed
+- **Tasks:** the ledger `docs/a350/ledger/14-fcu-mfd-efis.md`: 43 lines: 40 proven live, 1 reference, 2 open; the flight items flown 2026-11-03 (`docs/a350/evidence/flight-2026-11-03.md`); fixes found by it in their own plans' commits
+- **Waiting on the owner:** the gaps above
+- **In-sim results:** the ledger's Evidence column; `docs/a350/evidence/flight-2026-11-03.md`
+- **Changed from the plan:** the flight items were flown in one test flight with the other plans' (the session's scripts through MSFSBA's own rows and windows)
+- **Rulings made while working:** a line proven by another plan's live test cites it rather than repeating it
