@@ -327,6 +327,48 @@ public sealed class A350MfdWindow : Form
         PressKey(key);
     }
 
+    /// <summary>The pace of the KCCU's list keys: 350 ms moved a ten-row list to its end in fourteen presses (live 2026-11-03).</summary>
+    private const int ListKeyPaceMs = 350;
+
+    /// <summary>PageDown and PageUp (plan 09 Task 4; the owner's answer to question 14): a long list open on the MFD pages a screen at a
+    /// time with the KCCU's own DOWN and UP at the measured pace, read again once its draw shows it moved, the selection on its first
+    /// new row; at its end "End of list" (its top "Top of list") and nothing sent. With no list open they scroll the page as before.</summary>
+    private async Task PageAsync(bool down)
+    {
+        if (_input.Busy) return;
+        var cap = await _drawNow();
+        if (cap is not { Ok: true } || A350MfdPage.ListOf(cap, Side) is not { } list)
+        {
+            PressKey(down ? "SCROLL_DOWN" : "SCROLL_UP");
+            return;
+        }
+        if ((down ? A350MfdPage.PageDownPresses(list) : A350MfdPage.PageUpPresses(list)) is not int presses)
+        {
+            _announcer.AnnounceImmediate(down ? "End of list" : "Top of list");
+            return;
+        }
+        for (int i = 0; i < presses; i++)
+        {
+            _input.Press(Side, down ? "DOWN" : "UP");
+            await Task.Delay(ListKeyPaceMs);
+        }
+        for (int waited = 0; waited <= 3000; waited += 300)
+        {
+            if (await _drawNow() is { Ok: true } now && A350MfdPage.ListOf(now, Side) is { } moved && A350MfdPage.ListMoved(list, moved))
+            {
+                await RefreshAsync(true);
+                // The first new row: under the rows kept going down, the top row going up.
+                int scrolled = Math.Abs(moved.First - list.First);
+                int row = down ? Math.Max(0, moved.Visible - scrolled) : 0;
+                var items = _lines.Select((l, i) => (l, i)).Where(p => p.l.Kind == "menuitem").ToList();
+                if (row < items.Count && items[row].i < _list.Items.Count) _list.SelectedIndex = items[row].i;
+                return;
+            }
+            await Task.Delay(300);
+        }
+        await RefreshAsync(true);
+    }
+
     /// <summary>Presses a KCCU key, unless a line's action is running: its keys would land among the action's.</summary>
     private void PressKey(string key)
     {
@@ -355,8 +397,8 @@ public sealed class A350MfdWindow : Form
             {
                 case Keys.Enter: _ = ActivateAsync(); return true;
                 case Keys.Back: PressKey("CLR"); return true;
-                case Keys.PageUp: PressKey("SCROLL_UP"); return true;
-                case Keys.PageDown: PressKey("SCROLL_DOWN"); return true;
+                case Keys.PageUp: _ = PageAsync(down: false); return true;
+                case Keys.PageDown: _ = PageAsync(down: true); return true;
             }
         }
         if (keyData == Keys.F5) { _ = RefreshAsync(true); return true; }

@@ -14,6 +14,19 @@ DEST and AIRPORT the F-PLN; PROG, DATA and MENU no titled page.
 The window's "Go to MFD page" list (`A350MfdPages.All`, 33 pages) driven live: ACTIVE: WIND, POSITION: TIME, SURV: TRAFFIC, FCU BKUP:
 AFS CP and DATA: PRINTER each opened by its clicks once chosen.
 
+## Task 4: long lists (2026-11-03, on the stand)
+
+A list shows at most nine rows, 32 px apart. VCBI's lists fit (RWY 2, SIDs NONE and 8, approaches 5, STARs NONE and 8), so OMDB was
+put in the plan: 12R's SIDs are ten (NONE, ANVI5G ... SENP3G) under nine rows. The KCCU's DOWN moves a cyan box down the rows from the
+first (none drawn on a list just opened); eight presses brought it to the last row and the ninth scrolled the list one row; at the end
+DOWN does nothing, and SCROLL_DOWN (the window's old PageDown) never moved a list. At 350 ms a press, fourteen presses ran the list to its
+end. The scrollbar's thumb, a grey fill right of the rows, is as long against the rows as they are against the list (259 of 288 px:
+ten) and as far down as the list is scrolled (28 px: one row); on a short list it fills the rows' height. Nothing hidden is drawn.
+
+The window now pages a list with DOWN and UP (`A350MfdPage.ListOf`, `PageDownPresses`), reads it once the draw shows it moved, and puts
+the selection on the first new row; the boxed row reads ", highlighted". Live: PageUp took OMDB 12L's list to NONE, PageDown to its end
+with "SENP3G button, highlighted" selected, PageDown again "End of list".
+
 ## Task 2: the role words (2026-11-03, offline)
 
 The window's shown line is `A350MfdPage.Shown`: a field and the scratchpad end with ", edit", a list opener reads as a combo box,

@@ -9,7 +9,13 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false, bool Opener = false)
 {
     public int Carried { get; init; }
+
+    /// <summary>A list item under the KCCU's cyan box (<see cref="A350MfdPage.ListOf"/>).</summary>
+    public bool Highlighted { get; init; }
 }
+
+/// <summary>An open list on the MFD: the rows drawn, the first's place in the list, how many the list holds, and the boxed row.</summary>
+public readonly record struct MfdList(int Visible, int First, int Total, int? Highlight);
 
 /// <summary>
 /// One side's MFD page as lines (pure), from the draw's UI elements and texts by geometry: a button's, tab's or
@@ -606,8 +612,57 @@ public static class A350MfdPage
                 ? l with { Spoken = revisionPopup.Title + ": " + ValueOf(l.Spoken) } : l).ToList();
             ordered = WithPopUpAfterTitle(ordered, revisionPopup, cells, shift);
         }
+        // The list item under the KCCU's cyan box, the one DOWN and UP move (plan 09 Task 4).
+        if (ListOf(capture, side) is { Highlight: int boxed } && menuItems.Count > 0)
+        {
+            var listRows = menuItems.Select(m => m.e).DistinctBy(e => (e.X, e.Y)).OrderBy(e => e.Y).ToList();
+            if (boxed < listRows.Count && ordered.FindIndex(l => AtCentre(l, listRows[boxed], shift)) is int at && at >= 0)
+                ordered[at] = ordered[at] with { Highlighted = true };
+        }
         return ordered;
     }
+
+    /// <summary>An open list's rows (as the MFD draws them, at most nine, 32 px apart) and where they stand: OMDB 12R's ten SIDs under
+    /// nine rows, live 2026-11-03. Its scrollbar's thumb, right of the rows, is as long against them as the rows are against the
+    /// list, and as far down as the list is scrolled; the KCCU's cyan box marks the row DOWN and UP move, none on a list just opened.
+    /// Null with no list open.</summary>
+    public static MfdList? ListOf(A350DrawCapture capture, int side)
+    {
+        float shift = side == 0 ? 0 : HalfWidth;
+        var rows = capture.Elements.Where(e => e.Class == "DropdownButtonUI" && e.RectW > 0 && e.RectH > 0 && (side == 0 ? e.X < HalfWidth : e.X >= HalfWidth))
+            .DistinctBy(e => (e.X, e.Y)).OrderBy(e => e.Y).ToList();
+        if (rows.Count == 0) return null;
+        float x0 = rows.Min(e => e.X) - shift, x1 = rows.Max(e => e.X + e.RectW) - shift, top = rows.Min(e => e.Y), bottom = rows.Max(e => e.Y + e.RectH);
+        float rowH = (bottom - top) / rows.Count;
+        var shapes = capture.Shapes ?? Array.Empty<DrawnShape>();
+        var thumb = shapes.FirstOrDefault(s => s.Kind == "fill" && s.Image == 0 && s.X0 - shift >= x1 - 2 && s.X0 - shift <= x1 + 12
+            && s.Y0 >= top - 3 && s.Y1 <= bottom + 3 && s.Y1 > s.Y0);
+        int total = rows.Count, first = 0;
+        if (thumb != null && thumb.Y1 - thumb.Y0 < bottom - top - rowH / 2)
+        {
+            total = (int)Math.Round(rows.Count * (bottom - top) / (thumb.Y1 - thumb.Y0));
+            first = (int)Math.Round((thumb.Y0 - top) / (bottom - top) * total);
+        }
+        var box = shapes.FirstOrDefault(s => s.Kind == "stroke" && A350Rgba.NameOf(s.Colour) == "cyan" && s.X0 - shift >= x0 - 4 && s.X1 - shift <= x1 + 4
+            && (s.Y0 + s.Y1) / 2 >= top && (s.Y0 + s.Y1) / 2 < bottom);
+        int? highlight = box == null ? null : Math.Clamp((int)((((box.Y0 + box.Y1) / 2) - top) / rowH), 0, rows.Count - 1);
+        return new MfdList(rows.Count, first, total, highlight);
+    }
+
+    /// <summary>The KCCU DOWN presses that page a list a screen on: to the last row (from the first when no row is boxed), then one a
+    /// row scrolled, a screen's worth or what is left; null at the list's end, a short list's too.</summary>
+    public static int? PageDownPresses(MfdList list)
+    {
+        int left = list.Total - (list.First + list.Visible);
+        return left <= 0 ? null : list.Visible - 1 - (list.Highlight ?? 0) + Math.Min(list.Visible, left);
+    }
+
+    /// <summary>The KCCU UP presses that page a list a screen back: to the first row, then one a row scrolled; null at its top.</summary>
+    public static int? PageUpPresses(MfdList list) =>
+        list.First <= 0 ? null : (list.Highlight ?? 0) + Math.Min(list.Visible, list.First);
+
+    /// <summary>Whether a list's draw shows it scrolled since another.</summary>
+    public static bool ListMoved(MfdList before, MfdList after) => before.First != after.First;
 
     /// <summary>A revision pop-up (INSERT NEXT WPT, NEW DEST) reads together after the page title (it read woven between
     /// the F-PLN rows by height, its CANCEL key down the column, live 2026-10-28), its lines flagged so the window moves
@@ -769,6 +824,7 @@ public static class A350MfdPage
             s = OpenerWord.Replace(open ? s[..^MenuOpen.Length] : s, "");
             return $"{s}, combo box, {(open ? "expanded" : "collapsed")}{(s.EndsWith(", grey", StringComparison.Ordinal) ? ", dimmed" : "")}";
         }
+        if (line.Highlighted) s += ", highlighted";
         return line.Kind is "button" or "menuitem" && s.EndsWith(", grey", StringComparison.Ordinal) ? s + ", dimmed" : s;
     }
 
