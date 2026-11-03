@@ -53,3 +53,23 @@ The compiled module is cached by the installed module's hash and `A350ModulePatc
 ## A350-12
 
 The OIS OPTIONS > 3RD PARTY page holds the pilot's SimBrief ID, SayIntentions API key, Hoppie logon code and Navigraph login, and the OIS hides them on screen while OPTIONS > STREAMER MODE is on. MSFSBA must hide them the same way, or a screen reader says them aloud and a log or a captured fixture keeps them. While STREAMER MODE's ON radio is checked, `A.isSecret` marks a field in that options page (`A.streamerScope`) whose label matches `A.SECRET_LABEL` (ID, KEY, LOGON, PASSWORD or TOKEN as a word), and any `input[type=password]` anywhere; such a field ships `secret: true` and its name as `A.hiddenName` composes it ("SIMBRIEF USER ID, hidden, 7 characters", "…, hidden, empty"). Its value still travels with it, masked: list mode's TextBox holds the field's value, and an empty one would make Enter wipe the credential. So nothing on that path (the agent's push, `CoherentPmdgEfbClient`, the shell, `FbwEfbForm`) may speak, log or capture a pushed field's value (final review 2026-10-29: the rule had said the value never shipped, which a later change could have trusted). `CoherentPmdgEfbClient` carries `secret` through to the shell (and into its change signature), and `FbwEfbForm` renders it as `type=password` with autocomplete off, a list-mode TextBox with `UseSystemPasswordChar`, and confirms a set with `FieldSetSpoken` ("Set, hidden, N characters"). Typing into a hidden field still works key by key ([A350-6]). With STREAMER MODE off the fields read as the OIS shows them: the pilot's own data on the pilot's own screen. Fixtures: `tools/a350-ois-test/secrets.test.js` fails when a fixture keeps a credential or a login code; the redacted 3RD PARTY fixture keeps only the structure. Tests: `streamer.test.js` (OIS harness), `FbwEfbFormFieldSetSpokenTests`, and the shell's secret tests in `tools/flypad-shell-test/efb-shell.test.js`.
+
+## A350-13
+
+The Altimeter window's typed QNH reaches up to three baros (the captain's, the first officer's, the ISIS), and the OIS's OPTIONS >
+AIRCRAFT > LINKED INSTR decides which writes move which (plan 02, 1.2.8, every write measured at each setting, evidence 02): at NONE (0)
+each baro moves alone; at CPT & FO (1) a side's click or pull copies to the other side; at CPT/FO & ISIS (2) the ISIS goes with them, and
+on STD the ISIS's own click takes both sides off STD (the flight of 2026-10-31 hit exactly this). So `A350BaroEntry.Plan` reads every
+input once and plans one entry from that read: at 1 and 2 the captain's side alone (its click or pull carries the rest), the ISIS a target
+of its own only at 0 and 1, where its write and click leave the sides alone, and at 2 no ISIS click while the sides are on STD. Planning
+each baro from its own read, or clicking the ISIS on STD at 2, moves the sides behind the pilot's back. Tests: `A350BaroEntryTests`,
+`A350BaroEntryRunTests`.
+
+## A350-14
+
+The ISIS has an STD of its own, toggled only by its STD/CHANGE key and shown only on its display (the SFD's `STD` line against its
+`Baro:` line): no variable says it. While it is on, `KOHLSMAN SETTING MB:3` holds 1013.25 and nothing written moves it, not a direct
+write, not a click, not MSFSBA's row, at every timing tried from 100 ms to 3 s; the setting underneath survives (the key brought back
+1020). At LINKED INSTR 2 a side's push puts the ISIS on STD with them and it stays there when the option goes back to 0 or 1, where only
+its own key gets it back (plan 02, evidence 02). So `A350BaroEntry` plans no ISIS target while the SFD shows it on STD and says so ("ISIS
+not set: it is on STD."), never a write that would read back unchanged and be reported as a failure.

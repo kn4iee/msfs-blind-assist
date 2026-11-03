@@ -83,7 +83,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 Every plan's "Handoff to plan 21" (22 plans) and its gaps, grouped by the file each lands in; [x] once applied (commit), [owner] where
 only the owner can do it, [pr] where it is the pull request's description or changelog (Task 5).
 
-- **`.claude/rules/inibuilds-a350.md` + `docs/invariants/inibuilds-a350.md`:** plan 02's two rules (the Altimeter window plans its
+- **`.claude/rules/inibuilds-a350.md` + `docs/invariants/inibuilds-a350.md`:** [x] plan 02's two rules (A350-13, A350-14) (the Altimeter window plans its
   targets as one entry from one read, `A350BaroEntry.Plan`; the ISIS has its own STD, toggled only by its key, read only from the SFD);
   plan 03's extension of [A350-9]'s full text (Task 1's trap kinds and the 2026-10-31 rate) and its Task 5 rule if it stands; plan 06's
   extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); plan 04's and 09's only if their
