@@ -511,20 +511,19 @@ public class A350MfdPageTests
         Assert.Contains("DISCONTINUITY, white", lines);
     }
 
-    // ACTIVE/F-PLN with the uplinked VCBI-OMDB plan (live): one line per waypoint, labelled by the page's own column
-    // headers (FROM, TIME, the SPD ALT menu's words; TRK, DIST, FPA for the leg into it, drawn just above its row),
-    // dashes as none, the track's "d" a degree sign; only the rows above the destination bar (a sighted pilot sees
-    // no more); the destination bar as one line.
+    // ACTIVE/F-PLN with the uplinked VCBI-OMDB plan (live): one line per waypoint with the leg into it (drawn just above its
+    // row), in the A380 window's grid (A350MfdFplnGridTests), dashes blank, the track's "d" a degree sign; only the rows above
+    // the destination bar (a sighted pilot sees no more); the destination bar as one line.
     private static IReadOnlyList<string> FlightPlan() => A350MfdPage.Read(A350Fixtures.Capture("mfd_fpln_route.json"), 0).Select(l => l.Spoken).ToList();
 
     [Fact]
     public void A_flight_plan_reads_one_line_per_waypoint_with_its_leg()
     {
         var lines = FlightPlan();
-        Assert.Contains("FROM VCBI: TIME 00:00, SPD none, ALT none, green", lines);
-        Assert.Contains("BASUR: TIME none, SPD none, ALT none, green", lines);
-        Assert.Contains("TVM: via P570, TRK 295°, DIST 80; TIME none, SPD none, ALT none, green", lines);
-        Assert.Contains("NIVUD: via P570, TRK 306°, DIST 105; TIME none, SPD none, ALT none, green", lines);
+        Assert.Contains("VCBI                               00:00, green", lines);
+        Assert.Contains("BASUR, green", lines);
+        Assert.Contains("TVM     P570  295° 80, green", lines);
+        Assert.Contains("NIVUD   P570  306° 105, green", lines);
         Assert.Contains("DISCONTINUITY, white", lines);
     }
 
@@ -660,7 +659,7 @@ public class A350MfdPageTests
         Assert.Equal(items, lines.Skip(first).Take(items.Length));
         Assert.Equal("ACTIVE/F-PLN", lines[first - 1]);
         Assert.All(all.Skip(first).Take(items.Length), l => Assert.Equal("menuitem", l.Kind));
-        Assert.Contains(lines, l => l.StartsWith("BASUR: via BASU1D", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("BASUR   BASU1D 295° 52", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -690,29 +689,30 @@ public class A350MfdPageTests
     // The temporary F-PLN with BASU1D (live): the MFD font draws symbols as lowercase letters (A350MFD-Regular.ttf:
     // a left arrow, b right arrow, d degree, f the overfly triangle; the other lowercase letters are small capitals). An
     // arrow after an ident is the procedure's turn, in words (BI611: BASU1D's right turn after 500 ft, track 221 to 279;
-    // a bare arrow is a symbol a screen reader may not say). A row's colour is its values'; an ident of another colour
-    // (the white TO waypoint in a yellow plan) says so once.
+    // a bare arrow is a symbol a screen reader may not say), after the row's colour, the grid holding the ident. A row's colour
+    // is its values'; an ident of another colour (the white TO waypoint in a yellow plan) says so once.
     [Fact]
     public void A_temporary_flight_plan_reads_its_symbols_and_colours()
     {
         var lines = Page("mfd_fpln_tmpy_sid");
-        Assert.Contains("DER22 (overfly) (white): via BASU1D, TRK 218°, DIST 1; TIME none, SPD none, ALT none, yellow", lines);
-        Assert.Contains("500: via C220°, TRK 221°, DIST 0; TIME none, SPD none, ALT 500 (magenta), yellow", lines);
-        Assert.Contains("BI611 (right turn): via BASU1D, TRK 279°, DIST 5; TIME none, SPD none, ALT none, yellow", lines);
+        Assert.Contains("DER22   BASU1D 218° 1, yellow, overfly, ident white", lines);
+        Assert.Contains("500     C220° 221° 0        500, yellow, ALT magenta", lines);
+        Assert.Contains("BI611   BASU1D 279° 5, yellow, right turn", lines);
         Assert.Contains("END OF TMPY F-PLN, yellow", lines);
         Assert.Contains("INSERT * TMPY button, amber", lines);
     }
 
     // The active F-PLN with predictions (live, BASU1D): an altitude column can hold a constraint's star and the predicted
     // altitude, both read (the reader once took the star alone and dropped the 5000); a magenta star is a constraint
-    // predicted to be met, an amber one missed (the Airbus FMS's). A ditto mark is the value above, said in words.
+    // predicted to be met, an amber one missed (the Airbus FMS's), said after the row's colour. A ditto mark stays as drawn, as
+    // the A380 window's grid keeps it (question 13).
     [Fact]
-    public void A_flight_plans_constraint_star_and_ditto_are_read_in_words()
+    public void A_flight_plans_constraint_star_and_ditto_read_as_drawn()
     {
         var lines = Page("mfd_fpln_basu1d");
-        Assert.Contains("BI613: via BASU1D, TRK 295°, DIST 4; TIME 00:05, SPD same as above, ALT 5000 (constraint met), green", lines);
-        Assert.Contains("BI453: via BASU1D, TRK 309°, DIST 6; TIME 00:04, SPD 250, ALT 5000, green", lines);
-        Assert.Contains(lines, l => l.StartsWith("BI611 (right turn): via BASU1D", StringComparison.Ordinal));
+        Assert.Contains("BI613   BASU1D 295° 4   \"    *5000  00:05, green, ALT constraint met", lines);
+        Assert.Contains("BI453   BASU1D 309° 6   250  5000   00:04, green", lines);
+        Assert.Contains("BI611   BASU1D 279° 6   210  3290   00:02, green, right turn", lines);
     }
 
     // After the 1.2.7 hotfix (live 2026-10-28) both MFDs open on the CRASH REPORTING consent dialog (EULADialog) over
@@ -747,14 +747,14 @@ public class A350MfdPageTests
     }
 
     // The ILS 12L final at OMDB (live 2026-10-28, IMPE3B via REREK): the final leg's flight path angle "-3.0" (white) is
-    // drawn beside its distance, nearer the DIST header than the FPA one; it read "DIST -3.0 (white)", a second distance.
+    // drawn beside its distance, nearer the DIST header than the FPA one; it read "DIST -3.0 (white)", a second distance. In
+    // the grid it is the A380's suffix after the time.
     [Fact]
     public void A_final_legs_flight_path_angle_reads_as_its_fpa()
     {
         var lines = Page("mfd_fpln_ils12l_final");
-        var final = Assert.Single(lines, l => l.StartsWith("OMDB12L:", StringComparison.Ordinal));
-        Assert.Contains("DIST 5, FPA -3.0° (white)", final);
-        Assert.DoesNotContain(lines, l => l.Contains("DIST -3.0"));
+        var final = Assert.Single(lines, l => l.StartsWith("OMDB12L ", StringComparison.Ordinal));
+        Assert.Equal("OMDB12L C119° 116° 5   144  *60    01:57 FPA -3.0, green, ALT constraint met, FPA white", final);
     }
 
     // FUEL&LOAD before entry (live): a value then its unit (the unit sits 4 px higher); "ooo.o" boxes are a required
@@ -997,28 +997,34 @@ public class A350MfdPageTests
 
     // Review 2026-10-28: the INSERT NEXT WPT pop-up removed the F-PLN cells under it, and the rows then read them as
     // absent ("500: ... ALT none" for its 500 ft constraint); the open revision menu covers the same columns and left
-    // them readable. One rule for both: a column under the overlay is left out of its row, as a sighted pilot sees it.
+    // them readable. One rule for both: a column under the overlay is blank in its row, as a sighted pilot sees it: each
+    // row's grid ends with the leg's distance (the speed, altitude and time cells start at 23, one later after a six-letter SID).
     [Theory]
     [InlineData("mfd_insert_next_wpt")]
     [InlineData("mfd_fpln_revision_basur")]
-    public void A_column_under_a_revision_overlay_is_left_out_of_its_row(string fixture)
+    public void A_column_under_a_revision_overlay_is_blank_in_its_row(string fixture)
     {
         var rows = PageLines(fixture).Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
         Assert.NotEmpty(rows);
-        Assert.All(rows, row => Assert.DoesNotContain("TIME ", row));
-        Assert.All(rows, row => Assert.DoesNotContain("SPD ", row));
-        Assert.All(rows, row => Assert.DoesNotContain("ALT ", row));
-        Assert.Contains(rows, row => row.StartsWith("500: via C220°", StringComparison.Ordinal));
+        Assert.All(rows, row => Assert.True(Grid(row).Length <= 24, row));
+        Assert.Contains(rows, row => row.StartsWith("500     C220° ", StringComparison.Ordinal) && row.EndsWith(" 0, green", StringComparison.Ordinal));
     }
 
-    // FROM is the F-PLN's first column heading: it names the first row only while that row is the FROM waypoint (the last
-    // sequenced, no leg into it). Scrolled down, the top row is any waypoint with its leg (DB416 at the ILS 12L final, live)
-    // and read "FROM DB416: TRK 298°, DIST 3; ...".
+    /// <summary>An F-PLN row's grid: the line before its colour.</summary>
+    private static string Grid(string row) => row[..row.IndexOf(", ", StringComparison.Ordinal)];
+
+    // FROM is the F-PLN's first column heading, drawn only while the first row is the FROM waypoint (the last sequenced, no leg
+    // into it): it heads the grid's first column then. Scrolled down, the top row is any waypoint with its leg (DB416 at the
+    // ILS 12L final, live), and it once read "FROM DB416: TRK 298°, DIST 3; ...".
     [Fact]
     public void Only_the_from_waypoint_is_called_from()
     {
-        Assert.StartsWith("DB416: TRK 298°, DIST 3;", Page("mfd_fpln_ils12l_final").First(l => l.Contains("DB416", StringComparison.Ordinal)));
-        Assert.StartsWith("FROM VCBI22: ", Page("mfd_fpln_basu1d").First(l => l.Contains("VCBI22", StringComparison.Ordinal)));
+        var final = Page("mfd_fpln_ils12l_final");
+        Assert.StartsWith("DB416         298° 3   ", final.First(l => l.Contains("DB416", StringComparison.Ordinal)));
+        Assert.DoesNotContain(final, l => l.StartsWith("FROM", StringComparison.Ordinal));
+        var basu1d = Page("mfd_fpln_basu1d");
+        Assert.StartsWith("VCBI22  ", basu1d.First(l => l.Contains("VCBI22", StringComparison.Ordinal)));
+        Assert.Single(basu1d, l => l.StartsWith("FROM  ", StringComparison.Ordinal));
     }
 
     // ACTIVE/WIND, CLB tab, empty (live 2026-10-28): under the ALT and WIND headings (y 330) each row is a grey FL, the
@@ -1231,21 +1237,19 @@ public class A350MfdPageTests
         Assert.Equal(new[] { "MONITOR button", "REPORT button", "NAVAIDS button", "IRS button", "GNSS button", "TIME button" },
             lines.Skip(position + 1).Take(6));
         Assert.DoesNotContain(lines, l => l.Contains("REPORT none", StringComparison.Ordinal));
-        string from = all.Single(l => l.Kind == "waypoint" && l.Spoken.StartsWith("FROM VCBI22", StringComparison.Ordinal)).Spoken;
-        Assert.DoesNotContain("TIME ", from);   // under the menu
-        Assert.DoesNotContain("SPD ", from);
-        Assert.Contains("ALT ", from);          // beside it
+        // Under the menu the speed and time cells are blank; the altitude beside it reads (30 ft at VCBI 22).
+        Assert.Contains(all, l => l.Kind == "waypoint" && l.Spoken == "VCBI22                      30, green");
     }
 
     // NEW DEST's pop-up stands in mid-page (live 2026-10-28, y 444 to its CANCEL key at 599): the rows above and below
-    // it show their columns, the rows beside it do not.
+    // it show their columns, the rows beside it do not (BI613's 5000 ft constraint, magenta in the same plan uncovered, is
+    // under it; the rows below have no predictions to show).
     [Fact]
     public void A_pop_up_covers_only_the_rows_beside_it()
     {
         var rows = PageLines("mfd_new_dest_popup").Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
-        Assert.Contains(rows, row => row.StartsWith("500: ", StringComparison.Ordinal) && row.Contains("ALT 500", StringComparison.Ordinal));
-        Assert.Contains(rows, row => row.StartsWith("BI453: ", StringComparison.Ordinal) && !row.Contains("TIME ", StringComparison.Ordinal));
-        Assert.Contains(rows, row => row.StartsWith("BI614: ", StringComparison.Ordinal) && row.Contains("TIME ", StringComparison.Ordinal));
+        Assert.Contains("500     C220° 036° 0        500, green, ALT magenta", rows);
+        Assert.Contains("BI613   BASU1D 110° 5, green", rows);
         Assert.Contains("NEW DEST FROM VCBI22: none, cyan", PageLines("mfd_new_dest_popup").Select(l => l.Spoken));
     }
 
@@ -1253,7 +1257,8 @@ public class A350MfdPageTests
     public void Without_an_overlay_every_column_reads()
     {
         var rows = PageLines("mfd_fpln_tmpy_basu1d").Where(l => l.Kind == "waypoint").Select(l => l.Spoken).ToList();
-        Assert.Contains(rows, row => row.StartsWith("500: ", StringComparison.Ordinal) && row.Contains("ALT 500", StringComparison.Ordinal));
+        Assert.Contains("500     C220° 036° 0        500, yellow, ALT magenta", rows);
+        Assert.Contains("BI613   BASU1D 110° 5        5000, yellow, ALT magenta", rows);
     }
 
     // FCU BKUP's AFS CP page (live 2026-10-30, grey while the FCU works): its toggle keys draw the font's right arrow as "b"

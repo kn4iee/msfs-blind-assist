@@ -831,6 +831,9 @@ public static class A350MfdPage
             return $"{s}, combo box, {(open ? "expanded" : "collapsed")}{(s.EndsWith(", grey", StringComparison.Ordinal) ? ", dimmed" : "")}";
         }
         if (line.Highlighted) s += ", highlighted";
+        // An F-PLN row opens its waypoint's revision menu: the A380 window's "button" for its rows.
+        if (line.Kind == "waypoint")
+            return s + ", button";
         return line.Kind is "button" or "menuitem" && s.EndsWith(", grey", StringComparison.Ordinal) ? s + ", dimmed" : s;
     }
 
@@ -951,17 +954,34 @@ public static class A350MfdPage
         return result;
     }
 
-    private static readonly Regex TrackDegrees = new(@"^(\d{1,3})d$", RegexOptions.Compiled);
-
     /// <summary>A leg's flight path angle, signed with one decimal ("-3.0").</summary>
     private static readonly Regex FlightPathAngle = new(@"^[+-]\d{1,2}\.\d$", RegexOptions.Compiled);
+
+    /// <summary>The A380 window's F-PLN grid (question 13): ident 8, airway 6, track 5, distance 4, speed 5, altitude 7 and time
+    /// 5 cells, 40 in all, one line of a 40-cell braille display.</summary>
+    private static readonly int[] GridWidths = { 8, 6, 5, 4, 5, 7, 5 };
+
+    /// <summary>A grid cell as the A380's padCell: the value padded with spaces to its width, a value that fills it followed by
+    /// one space (never cut).</summary>
+    private static string GridCell(string value, int width) => value.Length >= width ? value + " " : value.PadRight(width);
+
+    /// <summary>A grid line: its cells, without the spaces after the last value.</summary>
+    private static string GridLine(IEnumerable<string> cells) => string.Concat(cells.Zip(GridWidths, GridCell)).TrimEnd();
+
+    /// <summary>An ident read with its symbol in words (<see cref="IdentSymbol"/>): the ident for the grid, the symbol said
+    /// after the row's colour.</summary>
+    private static readonly Regex IdentWords = new(@"^(?<id>\S+) \((?<s>left turn|right turn|overfly)\)$", RegexOptions.Compiled);
+
+    private static (string Ident, string? Symbol) IdentAndSymbol(string text) =>
+        IdentWords.Match(text) is { Success: true } m ? (m.Groups["id"].Value, m.Groups["s"].Value) : (text, null);
 
     /// <summary>
     /// An F-PLN page (live, ACTIVE/F-PLN): each waypoint row is four boxes (ident, time, speed, altitude;
     /// <c>BaseFlightPlanButton</c>), the leg into it (airway, track, distance, FPA) drawn just above its row, and the
-    /// DISCONTINUITY and END rows full width. One line per waypoint, labelled with the page's own column headers
-    /// (FROM, TIME, the SPD ALT menu's words, TRK, DIST, FPA); only the rows above the destination bar, as a sighted
-    /// pilot sees them (the draw goes on below it, hidden); the destination bar as one line.
+    /// DISCONTINUITY and END rows full width. One line per waypoint in the A380 window's grid (<see cref="GridWidths"/>:
+    /// ident, airway, track, distance, speed, altitude, time, then a descent's FPA) under one column-header line, then the
+    /// row's colour and what the grid cannot hold; only the rows above the destination bar, as a sighted pilot sees them
+    /// (the draw goes on below it, hidden); the destination bar as one line.
     /// </summary>
     private static void ReadFlightPlan(A350DrawCapture capture, float shift, Func<float, bool> mine, List<Cell> cells,
         HashSet<Cell> used, List<(float Top, float Left, MfdLine Line)> lines, IReadOnlyList<Overlay> overlays)
@@ -975,7 +995,8 @@ public static class A350MfdPage
         // The column headers (live: FROM 25, TIME 262, TRK 605, DIST 722, FPA 741 at y 174; SPD ALT is a menu).
         var header = cells.Where(c => c.Colour == "white" && c.Y is > 160 and < 190 && !c.Text.Contains("  ")).ToList();
         string? Header(float x0, float x1) => header.FirstOrDefault(c => c.X >= x0 && c.X < x1)?.Text;
-        string from = Header(0, 100) ?? "FROM", time = Header(200, 334) ?? "TIME";
+        string? from = Header(0, 100);
+        string time = Header(200, 334) ?? "TIME";
         var spdAlt = (cells.FirstOrDefault(c => c.Y is > 160 and < 190 && c.Text.Contains("  "))?.Text ?? "SPD ALT")
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
         string spd = spdAlt.ElementAtOrDefault(0) ?? "SPD", alt = spdAlt.ElementAtOrDefault(1) ?? "ALT";
@@ -990,13 +1011,11 @@ public static class A350MfdPage
         bool InList(Cell c) => c.Index >= listStart && c.Index < headerIndex;
         used.UnionWith(cells.Where(c => InList(c) && c.Y >= barTop));
 
-        // A ditto mark is the value above (the speed a row keeps), in words.
-        static string Value(Cell c) => c.Text == "\"" ? "same as above"
-            : TrackDegrees.Match(c.Text) is { Success: true } m ? m.Groups[1].Value + "°" : Word(c.Text);
-        string ValueOf(Cell? c, string rowColour) =>
-            c == null ? "none" : Value(c) + (c.Colour != rowColour && c.Colour != "grey" ? $" ({c.Colour})" : "");
+        // A dash placeholder (no prediction yet) is a blank cell; a ditto mark and a constraint's star stay as drawn.
+        static string Literal(Cell c) => c.Text.Contains('-') && c.Text.All(ch => ch is '-' or ':' or '.' or 'd') ? "" : c.Text;
 
         float prevBottom = header.Select(c => c.Y).DefaultIfEmpty(174).Max() + 10;   // the first row's leg starts under the header
+        bool headerDone = false;
         var rows = boxes.Where(b => b.Y + b.H <= barTop && b.X < 40 && (b.W < 200 || b.W > 600)).OrderBy(b => b.Y).ToList();
         foreach (var b in rows)
         {
@@ -1014,51 +1033,70 @@ public static class A350MfdPage
             if (ident == null) { prevBottom = b.Y + b.H; continue; }
             used.Add(ident);
             var row = cells.Where(c => !used.Contains(c) && InList(c) && Math.Abs(c.Y - ident.Y) <= 6 && c.X >= 200 && c.X < 563).ToList();
-            // A column's cells left to right: its value, and a constraint's star read as its prediction (the Airbus FMS's
-            // magenta star met, amber missed; live, BI613's "*" and 5000).
-            string Column(float x0, float x1, string rowColour)
-            {
-                var inColumn = row.Where(c => c.X >= x0 && c.X < x1).OrderBy(c => c.X).ToList();
-                var star = inColumn.FirstOrDefault(c => c.Text == "*");
-                var values = inColumn.Where(c => c != star).Select(c => ValueOf(c, rowColour)).ToList();
-                string text = values.Count == 0 ? "none" : string.Join(" ", values);
-                return star == null ? text : text + star.Colour switch
-                {
-                    "magenta" => " (constraint met)",
-                    "amber" => " (constraint missed)",
-                    _ => $" (constraint, {star.Colour})",
-                };
-            }
             used.UnionWith(row);
             var leg = cells.Where(c => !used.Contains(c) && InList(c) && c.Y >= prevBottom && c.Y < b.Y && (c.X < 200 || c.X >= 560)).ToList();
             used.UnionWith(leg);
             // The row's colour: its values' most common (the TO waypoint's ident is white in a yellow plan).
             string colour = row.Concat(leg.Where(c => c.X >= 560)).Where(c => c.Colour != "grey").GroupBy(c => c.Colour)
                 .OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault() ?? ident.Colour;
-            var parts = new List<string>();
-            if (leg.FirstOrDefault(c => c.X < 200) is { } via) parts.Add("via " + via.Text);
-            foreach (var c in leg.Where(c => c.X >= 560).OrderBy(c => c.X))
+
+            // The column-header line above the first waypoint, as the A380's: the A350 draws FROM over the first column only
+            // while the top row is the FROM waypoint (the last sequenced; scrolled down, none).
+            if (!headerDone)
             {
-                // A signed decimal is the leg's flight path angle (the ILS final's "-3.0", white), drawn beside its
-                // distance, nearer the DIST header than the FPA one (live, OMDB 12L).
-                if (FlightPathAngle.IsMatch(c.Text))
-                {
-                    parts.Add($"FPA {c.Text}°" + (c.Colour != colour && c.Colour != "grey" ? $" ({c.Colour})" : ""));
-                    continue;
-                }
-                var name = legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text;
-                parts.Add(name == null ? ValueOf(c, colour) : $"{name} {ValueOf(c, colour)}");
+                headerDone = true;
+                var headerLine = GridLine(new[] { from ?? "", "", "TRK", "NM", spd, alt, time });
+                lines.Add((b.Y - 1, 0, new MfdLine("text", $"{headerLine}, {header.FirstOrDefault()?.Colour ?? "white"}", 150,
+                    header.Select(c => c.Y).DefaultIfEmpty(174).Min())));
             }
-            // FROM (the first column's heading) names the top row only while it is the FROM waypoint, which has no leg into
-            // it; scrolled down, the top row is any waypoint with its leg.
-            string label = (b.Y < 230 && parts.Count == 0 ? $"{from} {ident.Text}" : ident.Text) + (ident.Colour != colour ? $" ({ident.Colour})" : "");
-            string legText = parts.Count > 0 ? string.Join(", ", parts) + "; " : "";
-            // A column whose value an open menu or pop-up covers is left out: hidden, not absent. Each column's values are
-            // drawn at one x (live: TIME 262, SPD 357, ALT 443).
-            var columns = new[] { (time, 200f, 334f, 262f), (spd, 334f, 422f, 357f), (alt, 422f, 563f, 443f) }
-                .Where(k => !overlays.Any(o => o.Covers(k.Item4, ident.Y)))
-                .Select(k => $"{k.Item1} {Column(k.Item2, k.Item3, colour)}").Append(colour);
-            lines.Add((b.Y, 0, new MfdLine("waypoint", $"{label}: {legText}{string.Join(", ", columns)}", b.X + b.W / 2, b.Y + b.H / 2)));
+
+            // A torn text in the row reads unreadable after its ident, never a grid pushed out of line by the word.
+            if (ident.Text == Unreadable || row.Concat(leg).Any(c => c.Text == Unreadable))
+            {
+                string torn = (ident.Text == Unreadable ? "" : GridCell(IdentAndSymbol(ident.Text).Ident, GridWidths[0])) + Unreadable;
+                lines.Add((b.Y, 0, new MfdLine("waypoint", $"{torn}, {colour}", b.X + b.W / 2, b.Y + b.H / 2)));
+                prevBottom = b.Y + b.H;
+                continue;
+            }
+
+            // What the grid cannot hold, said after the row's colour: the ident's symbol, and a cell drawn in another colour
+            // than its row (a constraint's star in words: the Airbus FMS's magenta star met, amber missed; live, BI613's).
+            var (identText, symbol) = IdentAndSymbol(ident.Text);
+            var notes = new List<string>();
+            if (symbol != null) notes.Add(symbol);
+            if (ident.Colour != colour) notes.Add($"ident {ident.Colour}");
+            string Cells(IEnumerable<Cell> inCell, string name)
+            {
+                var drawn = inCell.OrderBy(c => c.X).ToList();
+                foreach (var c in drawn.Where(c => c.Colour != colour && c.Colour != "grey" && (c.Text == "*" || Literal(c).Length > 0)))
+                    notes.Add(c.Text != "*" ? $"{name} {c.Colour}" : c.Colour switch
+                    {
+                        "magenta" => $"{name} constraint met",
+                        "amber" => $"{name} constraint missed",
+                        _ => $"{name} constraint {c.Colour}",
+                    });
+                var star = drawn.FirstOrDefault(c => c.Text == "*");
+                return (star != null ? "*" : "") + string.Join(" ", drawn.Where(c => c != star).Select(Literal).Where(v => v.Length > 0));
+            }
+
+            // The leg into the row, drawn above it: the airway (white in any plan), then track, distance and a descent's flight
+            // path angle by their headers; a signed decimal is the FPA (the ILS final's "-3.0", white), drawn beside its
+            // distance, nearer the DIST header than the FPA one (live, OMDB 12L).
+            string airway = leg.Where(c => c.X < 200).OrderBy(c => c.X).Select(Literal).FirstOrDefault() ?? "";
+            var legValues = leg.Where(c => c.X >= 560).ToList();
+            string? HeaderOf(Cell c) => FlightPathAngle.IsMatch(c.Text) ? "FPA"
+                : legHeaders.OrderBy(h => Math.Abs(h.X - c.X)).FirstOrDefault()?.Text ?? (c.X < 680 ? "TRK" : "DIST");
+            string track = Cells(legValues.Where(c => HeaderOf(c) == "TRK"), "TRK");
+            string distance = Cells(legValues.Where(c => HeaderOf(c) is not ("TRK" or "FPA")), "NM");
+            // A column whose value an open menu or pop-up covers is blank: a sighted pilot sees the menu there. Each column's
+            // values are drawn at one x (live: TIME 262, SPD 357, ALT 443).
+            string Column(float x0, float x1, float valueX, string name) => overlays.Any(o => o.Covers(valueX, ident.Y)) ? ""
+                : Cells(row.Where(c => c.X >= x0 && c.X < x1), name);
+            string speed = Column(334, 422, 357, spd), altitude = Column(422, 563, 443, alt), at = Column(200, 334, 262, time);
+            var fpaCells = legValues.Where(c => HeaderOf(c) == "FPA").ToList();
+            string fpa = Cells(fpaCells, "FPA");
+            string grid = GridLine(new[] { identText, airway, track, distance, speed, altitude, at }) + (fpa.Length > 0 ? " FPA " + fpa : "");
+            lines.Add((b.Y, 0, new MfdLine("waypoint", string.Join(", ", new[] { grid, colour }.Concat(notes)), b.X + b.W / 2, b.Y + b.H / 2)));
             prevBottom = b.Y + b.H;
         }
 

@@ -14,6 +14,22 @@ DEST and AIRPORT the F-PLN; PROG, DATA and MENU no titled page.
 The window's "Go to MFD page" list (`A350MfdPages.All`, 33 pages) driven live: ACTIVE: WIND, POSITION: TIME, SURV: TRAFFIC, FCU BKUP:
 AFS CP and DATA: PRINTER each opened by its clicks once chosen.
 
+## Task 3: the F-PLN as the A380's grid (2026-11-03, offline, then live on the stand)
+
+Each waypoint row is the A380 window's grid (`buildFplnLines`'s `padCell`, the same widths), its header line above the first
+waypoint, then the row's colour and what the grid cannot hold (the ident's arrow or overfly triangle in words, a cell of another
+colour, a star's met or missed). Tested on `mfd_fpln_route`, `mfd_fpln_basu1d`, `mfd_fpln_tmpy_sid`, `mfd_fpln_ils12l_final` and
+the overlay captures; the same under de-DE; a torn text makes its row "BI613   unreadable, green". Live on 1.2.8 (FROM OMDB, a
+discontinuity, VCBI): the probe's read and the window both showed `FROM          TRK  NM  SPD  ALT    TIME, white`, then
+`OMDB                               00:00, green, button` and `VCBI, green, button`.
+
+- The A380 grid's own trait, kept: a six-letter SID or STAR (BASU1D, IMPE3B) fills the six-cell airway column, takes one space
+  more, and pushes the rest of its row one cell right; an eight-character ident ((SPDLIM)) does the same. Never cut, as on the
+  A380. Whether to widen the airway column to 7 (a 41-cell line) is the owner's question.
+- Question 13's example row ("BI613   BASU1D 295  4   *5000  00:05") leaves out the speed column's ditto and the track's degree
+  sign; the grid follows the A380's code, which keeps both: `BI613   BASU1D 295° 4   "    *5000  00:05`.
+- Step 6 (which other pages read too long) is the owner's.
+
 ## Task 4: long lists (2026-11-03, on the stand)
 
 A list shows at most nine rows, 32 px apart. VCBI's lists fit (RWY 2, SIDs NONE and 8, approaches 5, STARs NONE and 8), so OMDB was
