@@ -218,6 +218,8 @@ public static class A350GroundDisplays
         // What the clip hides in the vertical display is not on the screen, so it is not spoken, as on the PFD; the map's own drawing of a
         // name still reads (ODLAL on the arrival, the plan's OMDB 12L).
         used.UnionWith(cells.Where(c => !used.Contains(c) && c.Y is >= VerticalScales.PlotTop and < VerticalScales.PlotBottom && DrawnAt(c) is var i and >= 0 && drawn[i].Clipped));
+        // The flight path's symbols with no name of their own (plan 24): what each is; the ND window says where.
+        o.AddRange(A350NdMap.PathSymbolsOf(capture.Shapes, side).Select(p => $"{p.Name}, {p.Colour}"));
         o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;

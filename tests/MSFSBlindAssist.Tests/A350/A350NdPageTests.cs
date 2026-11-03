@@ -464,4 +464,27 @@ public class A350NdPageTests
         Assert.Contains(lines, l => l.Spoken.StartsWith("Airport: DUBAI", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Spoken == A350NdPage.FunctionButton);
     }
+
+    // Plan 24, the flight of 2026-11-03 (VCBI to VCBI, ARC 40 NM): the flight path's symbols with no name of their own, each by its
+    // sprite in NDElements.png and named as the FlyByWire A32NX's guide names them (the A350's are the same): the top of descent
+    // ahead in the cruise, and in the descent the decelerate point, a speed change, the intercept point and the level-off at the FCU
+    // altitude. They said nothing before. The status display says what each is; the window, knowing the range, where.
+    [Fact]
+    public void The_status_display_says_the_path_symbols()
+    {
+        Assert.Contains("Top of descent, white", A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_cruise_tod.json"), 0));
+        var descent = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_descent_path.json"), 0);
+        Assert.Contains("Decelerate point, magenta", descent);
+        Assert.Contains("Speed change, magenta", descent);
+        Assert.Contains("Intercept point, cyan", descent);
+        Assert.Contains("Level off in descent, cyan", descent);
+    }
+
+    [Fact]
+    public void The_window_says_where_each_path_symbol_lies()
+    {
+        var lines = A350NdPage.Read(A350Fixtures.Capture("efis0_cruise_tod.json"), 0, mode: 3, range: 7).Select(l => l.Spoken).ToList();
+        Assert.Contains("Top of descent, white: 11 o'clock, 39 NM", lines);
+        Assert.DoesNotContain("Top of descent, white", lines);   // said once, with its place
+    }
 }

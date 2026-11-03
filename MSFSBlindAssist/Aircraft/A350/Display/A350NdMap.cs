@@ -57,6 +57,39 @@ public static class A350NdMap
     /// 2026-10-30, 12L in the flight plan), everything else at local 0,0.</summary>
     private static bool IsMapName(DrawnText t) => !string.IsNullOrWhiteSpace(t.Text) && (AtLocal(t, 0, 5) || AtLocal(t, 0, 0) && !IsPlanRunwayLabel(t));
 
+    /// <summary>The flight path's symbols with no name of their own, by their sprites in NDElements.png and named as the FlyByWire
+    /// A32NX's guide names them (plan 24, the flight of 2026-11-03, each against the phase it was drawn in): the level-off arrows where
+    /// the FCU altitude is reached (cyan; magenta at a constraint), the top of descent (white; cyan with DES armed), the intercept point
+    /// (only in DES, cyan), the decelerate point and a speed change (magenta). Their own colour under a white tint.</summary>
+    private static readonly (string Name, float AtlasX, float AtlasY, string Colour)[] PathSprites =
+    {
+        ("Level off in climb", 554, 286, "cyan"), ("Level off in descent", 554, 258, "cyan"), ("Top of descent", 508, 289, "white"),
+        ("Intercept point", 200, 357, "cyan"), ("Decelerate point", 690, 320, "magenta"), ("Speed change", 610, 322, "magenta"),
+    };
+
+    /// <summary>A path symbol drawn on a side's ND map, at its middle in the ND's own coordinates.</summary>
+    public sealed record PathSymbol(string Name, string Colour, float X, float Y);
+
+    /// <summary>The path symbols on a side's ND map (x 0 to 836, y 100 to 760 of its own coordinates: one drawn beyond is under the
+    /// ND's edge), in the draw's order.</summary>
+    public static IReadOnlyList<PathSymbol> PathSymbolsOf(IReadOnlyList<DrawnShape>? shapes, int side)
+    {
+        float shift = side == 0 ? 836 : 0;
+        var o = new List<PathSymbol>();
+        foreach (var s in shapes ?? Array.Empty<DrawnShape>())
+        {
+            if (s.Image == 0 || Math.Abs(s.PatternW - 1024) > 1 || Math.Abs(s.PatternH - 1024) > 1) continue;
+            float ax = s.X0 - s.PatternX, ay = s.Y0 - s.PatternY;
+            var kind = PathSprites.FirstOrDefault(p => Math.Abs(p.AtlasX - ax) <= 2 && Math.Abs(p.AtlasY - ay) <= 2);
+            if (kind.Name == null) continue;
+            float x = (s.X0 + s.X1) / 2 - shift, y = (s.Y0 + s.Y1) / 2;
+            if (x is < 0 or >= 836 || y is < 100 or >= 760) continue;
+            string tint = A350Rgba.NameOf(s.Colour);
+            o.Add(new PathSymbol(kind.Name, tint == "white" ? kind.Colour : tint, x, y));
+        }
+        return o;
+    }
+
     /// <summary>The arrow right of a traffic figure, a 9 by 19 sprite whose place in its atlas says the way (live 2026-10-30, an AI intruder
     /// climbing, then descending): ", climbing", ", descending", or nothing with none.</summary>
     internal static string TrafficTendency(IReadOnlyList<DrawnShape>? shapes, DrawnText figure)

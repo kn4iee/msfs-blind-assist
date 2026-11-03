@@ -164,6 +164,7 @@ public static class A350NdPage
         bool anfDrawn = A350NdMap.FrameOf(A350DrawLayout.SplitEfis(texts, side).Nd.Select(t => t with { X = t.X - shift }).ToList()) != null
             || tabs.Count > 0;
         var names = new List<MfdLine>();
+        var placedPath = new List<string>();
         if (!anfDrawn)
         {
             bool roseOrPlan = mode is >= 0 and <= 2 or 4;
@@ -182,6 +183,13 @@ public static class A350NdPage
                 var (head, tail) = A350NdMap.TrafficWords(ident, capture.Shapes, t);
                 names.Add(new MfdLine("text", $"Traffic {head}{(place.Length > 0 ? ": " + place : "")}{tail}, {at.ColourName}", -1, -1));
             }
+            // The flight path's symbols with no name of their own, where each lies (ReadNd says what each is: said once, here).
+            if (rangeFrame is { } pathFrame)
+                foreach (var p in A350NdMap.PathSymbolsOf(capture.Shapes, side))
+                {
+                    names.Add(new MfdLine("text", $"{p.Name}, {p.Colour}: {A350NdMap.PlaceNm(pathFrame, p.X, p.Y)}", -1, -1));
+                    placedPath.Add($"{p.Name}, {p.Colour}");
+                }
             // The plan's runway, the airport's name over the runway's, through a transform of its own.
             foreach (var label in A350DrawLayout.SplitEfis(texts, side).Nd.Where(t => !taken.Contains(t) && A350NdMap.IsPlanRunwayLabel(t))
                          .GroupBy(t => (int)MathF.Round(t.X)).Select(g => g.OrderBy(t => t.Y).ToList()))
@@ -209,7 +217,9 @@ public static class A350NdPage
             }
         }
 
-        var shown = A350GroundDisplays.ReadNd(capture, side, taken.Contains);
+        var shown = A350GroundDisplays.ReadNd(capture, side, taken.Contains).ToList();
+        foreach (var path in placedPath)
+            shown.Remove(path);
         bool anf = shown.Any(l => l.StartsWith("Map range:", StringComparison.Ordinal));
         var button = controls.LastOrDefault(c => c.Class == "BaseTexturedButton");
 
