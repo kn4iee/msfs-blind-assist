@@ -282,14 +282,33 @@ internal sealed partial class ProbeForm
                             if (Window() is not { } w) { Line("no window"); break; }
                             if (rest == "close") { w.Close(); await Task.Delay(300); Line("closed"); break; }
                             Line("window\t" + w.Text);
-                            foreach (Control c in w.Controls.Cast<Control>().OrderBy(c => c.TabIndex))
-                                if (c is not Label)
+                            void List(Control.ControlCollection controls, string indent)
+                            {
+                                foreach (Control c in controls.Cast<Control>().OrderBy(c => c.TabIndex))
                                 {
-                                    Line($"  {c.GetType().Name}\t{c.Text}");
+                                    if (c is Label) continue;
+                                    if (c is Panel or FlowLayoutPanel) { List(c.Controls, indent + "  "); continue; }
+                                    Line($"{indent}{c.GetType().Name}\t{c.AccessibleName ?? c.Text}\t{c.Text}");
                                     if (c is ListBox box)
-                                        for (int k = 0; k < box.Items.Count; k++) Line($"    {(k == box.SelectedIndex ? ">" : " ")} {box.Items[k]}");
+                                        for (int k = 0; k < box.Items.Count; k++) Line($"{indent}  {(k == box.SelectedIndex ? ">" : " ")} {box.Items[k]}");
+                                    if (c is ComboBox combo)
+                                        for (int k = 0; k < combo.Items.Count; k++) Line($"{indent}  {(k == combo.SelectedIndex ? ">" : " ")} {combo.Items[k]}");
                                 }
+                            }
+                            List(w.Controls, "  ");
                             break;
+                        case "press":   // press TEXT: the top window's button of that text, as the pilot's Space on it
+                        case "focus":   // focus NAME: the top window's control of that accessible name (or text) takes the focus, as Tab brings it
+                        {
+                            if (Window() is not { } w2) { Line("no window"); break; }
+                            Control? Find(Control.ControlCollection controls) => controls.Cast<Control>()
+                                .Select(c => (c.AccessibleName == rest || c.Text == rest) && c is not (Panel or FlowLayoutPanel) ? c : Find(c.Controls))
+                                .FirstOrDefault(c => c != null);
+                            if (Find(w2.Controls) is not { } target2) { Line("no control " + rest); break; }
+                            if (verb == "press" && target2 is Button button) button.PerformClick(); else target2.Focus();
+                            Line($"{verb}\t{rest}");
+                            break;
+                        }
                         case "key":   // key TOKEN[ TOKEN]: keys to the top window, as the pilot types them: a digit or ".", enter, back, esc, f5, ctrl+N, alt+N, alt+LETTER, up, down
                         {
                             if (Window() is not { } target) { Line("no window"); break; }
