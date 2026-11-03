@@ -10,7 +10,7 @@ namespace MSFSBlindAssist.Tests.A350;
 /// 2026-10-31: "Next waypoint {name}", the name as the ND draws it, its row off until the pilot ticks it).</summary>
 public class A350WaypointCalloutTests
 {
-    private static string? Read(A350WaypointCallout c, string? name, bool settling = false) => c.Observe(name, settling);
+    private static string? Read(A350WaypointCallout c, string? name, bool settling = false, bool held = false) => c.Observe(name, settling, held);
 
     /// <summary>Two agreeing reads take the baseline, silently.</summary>
     private static A350WaypointCallout Flying(string at)
@@ -77,14 +77,78 @@ public class A350WaypointCalloutTests
         Assert.Null(A350GroundDisplays.ToWaypointName(A350Fixtures.Capture("efis0_ls_rose_ils2.json"), 0));   // the receiver's corner
     }
 
-    private static List<string> Fly(bool muted, params string[] fixtures)
+    // Plan 08's flight (2026-11-03): the owner wants it quiet on the ground and in the flare. The threshold sequenced the TO waypoint to the
+    // missed approach's IKONA as the flare began, and it was said. Below 400 ft (the A350's LAND mode height) a change is held: a landing
+    // takes it silently on the ground, a go-around says it once the aircraft climbs back through 400 ft.
+    [Fact]
+    public void A_change_while_held_is_said_once_the_hold_ends()
+    {
+        var c = Flying("VCBI04");
+        Assert.Null(Read(c, "IKONA", held: true));
+        Assert.Null(Read(c, "IKONA", held: true));
+        Assert.Equal("Next waypoint IKONA", Read(c, "IKONA"));
+        Assert.Null(Read(c, "IKONA"));
+    }
+
+    [Fact]
+    public void A_change_held_into_the_landing_is_never_said()
+    {
+        var c = Flying("VCBI04");
+        Assert.Null(Read(c, "IKONA", held: true));
+        Assert.Null(Read(c, "IKONA", held: true));
+        Assert.Null(Read(c, "IKONA", settling: true));   // touchdown: on the ground
+        Assert.Null(Read(c, "IKONA"));
+    }
+
+    private static List<string> Fly(bool muted, params string[] fixtures) => Fly(muted, airborne: true, fixtures.Select(A350Fixtures.Capture).ToArray());
+
+    private static List<string> Fly(bool muted, bool airborne, params A350DrawCapture[] captures)
     {
         var def = new IniBuildsA350Definition();
+        if (airborne) def.ProcessSimVarUpdate("SIM_ON_GROUND", 0, new SpeechCapture());
         var said = new List<string>();
-        foreach (var f in fixtures)
-            def.ObserveCaptainEfis(A350Fixtures.Capture(f), DateTime.UtcNow, settling: false,
-                key => muted && key == A350WaypointCallout.Key, said.Add);
+        foreach (var capture in captures)
+            def.ObserveCaptainEfis(capture, DateTime.UtcNow, settling: false, key => muted && key == A350WaypointCallout.Key, said.Add);
         return said;
+    }
+
+    /// <summary>A captain's EFIS draw with a radio altitude drawn under the PFD's aircraft symbol, where the A350 draws it (the
+    /// stand's "0" at x 359).</summary>
+    private static A350DrawCapture WithRadioAltitude(string fixture, string feet)
+    {
+        var cap = A350Fixtures.Capture(fixture);
+        var ra = A350Fixtures.Capture("efis0_stand_omdb_a5.json").Texts.First(t => t.Text.Trim() == "0" && t.X is >= 319 and <= 399 && t.Y is >= 540 and < 620);
+        return cap with { Texts = cap.Texts.Append(ra with { Text = feet }).ToList() };
+    }
+
+    [Fact]
+    public void On_the_ground_the_definition_says_no_waypoint()
+    {
+        Assert.Empty(Fly(false, airborne: false, A350Fixtures.Capture("efis0_climb_bi614.json"), A350Fixtures.Capture("efis0_climb_bi614.json"),
+            A350Fixtures.Capture("efis0_arc40_omdb_label.json"), A350Fixtures.Capture("efis0_arc40_omdb_label.json")));
+    }
+
+    [Fact]
+    public void In_the_flare_the_definition_says_no_waypoint()
+    {
+        var flare = WithRadioAltitude("efis0_arc40_omdb_label.json", "40");
+        Assert.Empty(Fly(false, airborne: true, A350Fixtures.Capture("efis0_climb_bi614.json"), A350Fixtures.Capture("efis0_climb_bi614.json"), flare, flare));
+    }
+
+    [Fact]
+    public void Above_400_feet_the_definition_still_speaks()
+    {
+        var final = WithRadioAltitude("efis0_arc40_omdb_label.json", "450");
+        Assert.Equal(new[] { "Next waypoint DB403" },
+            Fly(false, airborne: true, A350Fixtures.Capture("efis0_climb_bi614.json"), A350Fixtures.Capture("efis0_climb_bi614.json"), final, final));
+    }
+
+    [Fact]
+    public void The_pfd_gives_the_radio_altitude_where_it_draws_one()
+    {
+        Assert.Equal(0, A350Pfd.RadioAltitude(A350Fixtures.Capture("efis0_stand_omdb_a5.json"), 0));
+        Assert.Equal(1990, A350Pfd.RadioAltitude(A350Fixtures.Capture("p07_efis_conf_full.json"), 0));
+        Assert.Null(A350Pfd.RadioAltitude(A350Fixtures.Capture("efis0_climb_bi614.json"), 0));   // above 2500 ft none is drawn
     }
 
     [Fact]

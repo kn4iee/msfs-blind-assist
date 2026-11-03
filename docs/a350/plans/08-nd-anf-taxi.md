@@ -96,9 +96,10 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   (`f2311a089` at the stand; in flight the SFD's pitch and bank added and two heading misreads fixed, `1cff66915`, `b0e8df59f`,
   18,945 passed); 2 Step 1 measured at VCBI (the ANF in PLAN at 45 NM, the exits and their distances, SET BTV EXIT offered on two exits but
   arming nothing, the LANDING tab's `BTV EXIT AT` field), the arming itself still open; 3 not started.
-- **Waiting on the owner:** whether the next waypoint call-out should stay quiet on the ground and in the flare (said there: the plan's
-  entry, IKONA in the flare, PPOS after the landing); Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach;
-  Task 3 Step 2's taxi by ear.
+- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach; Task 3 Step 2's taxi by
+  ear.
+- **The owner's answers:** 2026-11-03, the next waypoint call-out quiet on the ground and in the flare (it had said the plan's entry on
+  the stand, IKONA in the flare, PPOS after the landing).
 - **For plan 21 (guide):** the SFD now says pitch and bank (Alt+I and the Displays section), and its heading from 000 to 080.
 - **In-sim results:** `docs/a350/evidence/08-nd-anf-taxi.md`.
 - **Changed from the plan:** `SeedA350MonitorDefaults` returns whether it seeded and the caller saves, where the Fenix's seed saves itself,
@@ -106,4 +107,7 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Rulings made while working:** The TO waypoint's name comes from `ReadNd`'s own "To waypoint" line (`ToWaypointName`), so the call-out
   says exactly what the ND window and status display read, at the cost of the whole ND read each tick (cost if wrong: CPU on the
   monitor's pool thread; measured nothing yet). The very first agreed name is a baseline even without a load's settle, so connecting in
-  flight says nothing until the TO waypoint changes (cost if wrong: one waypoint not said at connection).
+  flight says nothing until the TO waypoint changes (cost if wrong: one waypoint not said at connection). "In the flare" is below 400 ft
+  radio altitude (the A350's LAND mode height; on an approach the only change below it is the threshold's, to the missed approach), and a
+  change there is held, not dropped, so a go-around hears it once back through 400 ft (cost if wrong: a non-precision approach's MAP above
+  400 ft still said; a change held at 400 ft said late in a go-around).

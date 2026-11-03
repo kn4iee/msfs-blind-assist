@@ -204,17 +204,35 @@ public static class A350Pfd
         return seen;
     }
 
-    public static PfdRead ReadParts(A350DrawCapture capture, int side)
+    /// <summary>A side's PFD texts as cells in the PFD's own coordinates.</summary>
+    private static List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn, int side)
     {
         float shift = side == 0 ? 0 : PfdWidth;
-        List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn) => A350DrawLayout.Rows(
+        return A350DrawLayout.Rows(
                 A350DrawLayout.Region(A350DrawLayout.SplitEfis(drawn, side).Pfd, A350DrawLayout.EfisPfd(side))
                     .Select(t => t with { X = t.X - shift }).Where(t => t.X is >= 0 and < PfdWidth).ToList())
             .SelectMany(r => r).ToList();
-        // A text drawn outside the clip is not on the screen (live 2026-10-30: the altitude tape's labels and its held
-        // selected altitude, beyond the tape's clip, were read in the FMA's fourth column on final). The tape's altitude
-        // symbol alone is taken wherever it is drawn, below.
-        var cells = CellsOf(capture.Texts.Where(t => !t.Clipped).ToList());
+    }
+
+    /// <summary>A text drawn outside the clip is not on the screen (live 2026-10-30: the altitude tape's labels and its held
+    /// selected altitude, beyond the tape's clip, were read in the FMA's fourth column on final).</summary>
+    private static List<DrawnCell> OnScreenCells(A350DrawCapture capture, int side) => CellsOf(capture.Texts.Where(t => !t.Clipped).ToList(), side);
+
+    /// <summary>The radio altitude, drawn under the aircraft symbol below 2500 ft.</summary>
+    private static bool IsRadioAltitude(DrawnCell c) =>
+        Math.Abs(c.X - HeadingIndexX) <= 40 && c.Y is >= 540 and < 620 && c.Text.All(ch => char.IsDigit(ch) || ch == '-');
+
+    /// <summary>The radio altitude in feet as a side's PFD draws it, or null when it draws none (above 2500 ft).</summary>
+    public static int? RadioAltitude(A350DrawCapture capture, int side) =>
+        OnScreenCells(capture, side).FirstOrDefault(IsRadioAltitude) is { } c
+        && int.TryParse(c.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int feet) ? feet : null;
+
+    public static PfdRead ReadParts(A350DrawCapture capture, int side)
+    {
+        float shift = side == 0 ? 0 : PfdWidth;
+        List<DrawnCell> CellsOf(IReadOnlyList<DrawnText> drawn) => A350Pfd.CellsOf(drawn, side);
+        // The tape's altitude symbol alone is taken wherever it is drawn, below.
+        var cells = OnScreenCells(capture, side);
         var used = new HashSet<DrawnCell>();
         var o = new List<string>();
 
@@ -409,7 +427,7 @@ public static class A350Pfd
         o.AddRange(ls);
 
         // The radio altitude, under the aircraft symbol.
-        foreach (var c in cells.Where(c => Math.Abs(c.X - HeadingIndexX) <= 40 && c.Y is >= 540 and < 620 && c.Text.All(ch => char.IsDigit(ch) || ch == '-')))
+        foreach (var c in cells.Where(IsRadioAltitude))
         {
             used.Add(c);
             o.Add($"Radio altitude: {c.Text}, {c.Colour}");
