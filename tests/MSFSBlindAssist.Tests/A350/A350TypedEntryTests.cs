@@ -262,7 +262,7 @@ public class A350TypedEntryTests
         Assert.Equal("1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)", stepper.Click(1).Rpn);
         Assert.Equal("-1 (>B:AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_Set)", stepper.Click(-1).Rpn);
         Assert.Equal("Captain altimeter preset 1013 hectopascals", plan.Confirm(1013, _ => 0));
-        Assert.Equal("Captain baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first.", stepper.NotShown);
+        Assert.Equal("Captain baro is on STD and its knob shows no preset; pull it for QNH first.", stepper.NotShown);
         var fo = A350TypedEntry.Plan(A350TypedEntry.FirstOfficerQnh, 29.92, Baro(2, 1013.25, hpa: 0, mode: 3));
         Assert.Equal(("INI_BARO_PRESET_FO", 2992.0), (fo.Stepper!.ValueVar, fo.Stepper.Target));   // hundredths of an inch
         Assert.Equal("First officer altimeter preset 29.92 inches", fo.Confirm(2992, _ => 0));

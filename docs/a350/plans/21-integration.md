@@ -103,7 +103,7 @@ only the owner can do it, [pr] where it is the pull request's description or cha
   plan 24's new readings (the HUD's, the standby displays', the PFD's symbols, the ND's path symbols, the SD's arrows), where the
   guide lists what a display says; the Ctrl+M list from every plan's new rows.
 - **`HotkeyGuides/iniBuilds_A350_Hotkeys.txt`:** plan 09's MFD keys, plan 11's changed rows.
-- **Frozen files, a plan's request:** `IniBuildsA350DefinitionTests.cs:641`'s stepper sentence ("as on the ground": on 1.2.8 the preset
+- **Frozen files, a plan's request:** [x] `IniBuildsA350DefinitionTests.cs:641`'s stepper sentence ("as on the ground": on 1.2.8 the preset
   shows on the ground too; plan 02); `A350LeverSpeech.Thrust`'s `onGround` default (plan 01 for plan 11); `A350EcamMonitorTests.cs:90`
   (relax when keys are added; plan 01 for plan 04); `ObserveNd`'s three conditions when it gets a body (plan 01 for plan 08).
 - **Gaps for the owner (from the plans' records):** collected into the owner's steps file at the end.

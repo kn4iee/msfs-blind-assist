@@ -298,12 +298,13 @@ internal static class A350TypedEntry
     /// On STD the knob sets a preset QNH, which the pull then sets (live in flight 2026-10-26: 29.85 stepped to 29.89, the
     /// pull set 29.89). Its first click shows the preset, each further click while it shows is a step; the WASM keeps it
     /// in its own memory, so it is stepped to by clicks read between them (<see cref="A350TypedStepper"/>), in the side's
-    /// unit: whole hectopascals, or hundredths of an inch. On the ground the knob shows no preset (measured).
+    /// unit: whole hectopascals, or hundredths of an inch. On 1.2.7 the knob showed no preset on the ground; on 1.2.8 it shows one
+    /// there too (plan 02), so a knob that shows none is said as such, wherever it is.
     /// </summary>
     private static A350TypedPlan PlanStdPreset(A350TypedField field, string sideName, bool inches, double target)
     {
         var stepper = new A350TypedStepper(PresetVar(field.Side), PresetVar(field.Side) + "_SHOW", target, field.ControlId,
-            $"{sideName} baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first.");
+            $"{sideName} baro is on STD and its knob shows no preset; pull it for QNH first.");
         return new A350TypedPlan(new A350Step[] { stepper.Click(1) }, stepper.ValueVar, target, 0.5,
             new A350CalcStep(string.Empty),
             (shown, _) => $"{sideName} altimeter preset " + (inches

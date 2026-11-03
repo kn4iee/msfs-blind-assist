@@ -201,7 +201,7 @@ public class A350BaroEntryRunTests
     }
 
     // In flight 2026-11-02: pulled while the captain's preset was still stepping, the knob's preset went out of view and the entry said
-    // "Captain baro is on STD and its knob shows no preset here, as on the ground; pull it for QNH first.", and the echo it had armed
+    // "Captain baro is on STD and its knob shows no preset; pull it for QNH first.", and the echo it had armed
     // kept the background call-out of the new QNH quiet: the pilot heard a wrong sentence and not the setting.
     [Fact]
     public async Task A_side_pulled_while_its_preset_steps_is_said_with_its_qnh()
