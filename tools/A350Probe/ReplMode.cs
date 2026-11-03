@@ -297,6 +297,19 @@ internal sealed partial class ProbeForm
                             }
                             List(w.Controls, "  ");
                             break;
+                        case "choose":   // choose N NAME: the top window's list box of that accessible name to item N, as the pilot's arrowing commits it
+                        {
+                            if (Window() is not { } w3) { Line("no window"); break; }
+                            var parts = rest.Split(' ', 2);
+                            Control? FindCombo(Control.ControlCollection controls) => controls.Cast<Control>()
+                                .Select(c => c is ComboBox && c.AccessibleName == parts[1] ? c : FindCombo(c.Controls)).FirstOrDefault(c => c != null);
+                            if (parts.Length < 2 || FindCombo(w3.Controls) is not ComboBox combo2) { Line("no list " + rest); break; }
+                            combo2.SelectedIndex = int.Parse(parts[0]);
+                            typeof(ComboBox).GetMethod("OnSelectionChangeCommitted", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                                .Invoke(combo2, new object[] { EventArgs.Empty });
+                            Line($"choose\t{combo2.SelectedItem}");
+                            break;
+                        }
                         case "press":   // press TEXT: the top window's button of that text, as the pilot's Space on it
                         case "focus":   // focus NAME: the top window's control of that accessible name (or text) takes the focus, as Tab brings it
                         {
