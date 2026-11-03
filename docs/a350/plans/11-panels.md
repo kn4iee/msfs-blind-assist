@@ -77,14 +77,19 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** in progress
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `c0c940fdc`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+- **Tasks:** 1 done (`87feccf7e`: the 1.2.8 map, the oxygen masks renamed, 1.2.7 keys kept, live on all four seats); 2 Step 1 done
+  (every split panel swept, all PASS), Step 2 on the stand (MENU only; the rest in flight); 3 Step 2 done (IRS from OFF, seconds,
+  "IRS aligned" once), Step 1 on the stand (gear vars read 50); 4 done on the stand (`78cd1c5c0`: rudder trim call-out, chrono
+  times; CVR, ELT, oxygen, lights one at a time).
+- **In flight, still to do (one flight with the other plans' air items):** the gear in transit and UNLK (SD WHEEL read), both trims
+  heard moving, the SND keys with a route, ELT ON for its "ELT EMITTING".
+- **Waiting on the owner:** the SND keys' names once their in-flight function is known (placard words now).
+- **In-sim results:** `docs/a350/evidence/11-panels.md`.
 - **Changed from the plan:**
 - **Rulings made while working:**

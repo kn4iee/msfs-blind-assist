@@ -64,3 +64,8 @@ lights both autoland and both ATC MSG lights, so the captain's speaks for both (
   draws the time as two bare numbers ("Chrono: 00 29"), minutes and seconds or hours and minutes alike; each chrono's own
   seconds (`INI_CPT_CHRONO`, `INI_FO_CHRONO`) are now a status line beside its key in the A380's words ("1 minute 3 seconds").
 - Oxygen masks, all four seats: Task 1.
+- CVR TEST (held): `INI_CVR_TEST` 1 while held, 0 on the second press; its effect is a tone, nothing shown. ELT: guard open, TEST/RESET,
+  ON and back to ARMED, each said ("ELT: On"); on the stand no E/WD line came in 24 s ON, though the module has an "ELT EMITTING"
+  alert: tried in flight.
+- Lights changing together are said one at a time (live: the IRs switched OFF said "Wing anti ice fault light on", then "IRS on
+  battery light on", each its own sentence).
