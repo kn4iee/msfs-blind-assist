@@ -45,13 +45,12 @@ internal sealed partial class ProbeForm
         _m.SimVarUpdated += (_, e) =>
         {
             if (!vars.TryGetValue(e.VarName, out var d)) return;
-            if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal))
-            {
-                if (e.VarName == "SIM_ON_GROUND") def.ProcessSimVarUpdate(e.VarName, e.Value, cap);
-                return;
-            }
+            // Every variable reaches the definition, as MainForm hands it every one: the base's own call-outs (the elevator trim's
+            // MON_ElevatorTrim) are its too (2026-11-03: routed only A350_ keys, the pitch trim was never heard here). The generic
+            // announce stays the A350's own rows'.
             bool handled;
             try { handled = def.ProcessSimVarUpdate(e.VarName, e.Value, cap); } catch { return; }
+            if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal)) return;
             if (handled || !d.IsAnnounced || d.UpdateFrequency != UpdateFrequency.Continuous) return;
             bool first = !baseline.TryGetValue(e.VarName, out var was);
             baseline[e.VarName] = e.Value;

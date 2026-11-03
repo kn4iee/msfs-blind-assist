@@ -116,6 +116,18 @@ public class A350DoorsTests
 
     // Plan 11 Task 4 (the owner's backlog): the rudder trim said as it moves, as the doors are: seeded from the cache, silent
     // while a load settles and while muted; its Ctrl+M row is its status line's.
+    // The pitch trim, said as it moves by the shared elevator trim call-out (MON_ElevatorTrim), as on every aircraft: live
+    // 2026-11-03 on 1.2.8 the THS moved under the nudges (0.9 to 1.7 degrees) and nothing was said.
+    [Fact]
+    public void The_pitch_trim_is_said_as_it_moves()
+    {
+        _cache["MON_ElevatorTrim"] = 0.9;
+        Settle();
+        Deliver("MON_ElevatorTrim", 0.9);
+        Deliver("MON_ElevatorTrim", 1.66);
+        Assert.Single(_speech.All);
+    }
+
     [Fact]
     public void The_rudder_trim_is_said_as_it_moves_after_the_settle()
     {
