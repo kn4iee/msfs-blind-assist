@@ -18,6 +18,8 @@ public partial class IniBuildsA350Definition
     /// holds one for a go-around (the owner: quiet on the ground and in the flare).</summary>
     partial void ObserveNd(A350DrawCapture capture, DateTime at, bool settling, Func<string, bool> muted, Action<string> speak)
     {
+        // Plan 01's condition for this seam: a draw handed in after the aircraft switched says nothing.
+        if (_disposed) return;
         bool held = A350Pfd.RadioAltitude(capture, 0) is < WaypointHeldBelowFeet;
         if (_nextWaypoint.Observe(A350GroundDisplays.ToWaypointName(capture, 0), settling || IsOnGroundNow(), held) is { } said
             && !muted(A350WaypointCallout.Key))

@@ -158,6 +158,22 @@ public class A350WaypointCalloutTests
             "efis0_climb_bi614.json", "efis0_climb_bi614.json", "efis0_arc40_omdb_label.json", "efis0_arc40_omdb_label.json"));
     }
 
+    // Plan 01's condition for the seam's body (plan 21): once the definition is disposed (the aircraft switched), a draw the monitor
+    // still hands in says nothing.
+    [Fact]
+    public void A_disposed_definition_says_no_waypoint()
+    {
+        var def = new IniBuildsA350Definition();
+        def.ProcessSimVarUpdate("SIM_ON_GROUND", 0, new SpeechCapture());
+        var said = new List<string>();
+        foreach (var f in new[] { "efis0_climb_bi614.json", "efis0_climb_bi614.json" })
+            def.ObserveCaptainEfis(A350Fixtures.Capture(f), DateTime.UtcNow, settling: false, _ => false, said.Add);
+        def.Dispose();
+        foreach (var f in new[] { "efis0_arc40_omdb_label.json", "efis0_arc40_omdb_label.json" })
+            def.ObserveCaptainEfis(A350Fixtures.Capture(f), DateTime.UtcNow, settling: false, _ => false, said.Add);
+        Assert.Empty(said);
+    }
+
     [Fact]
     public void A_muted_row_says_nothing()
     {
