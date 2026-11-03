@@ -138,6 +138,10 @@ public static class A350Pfd
     /// <summary>The baro box's STD, which is no text: a sprite, "STD" in cyan boxed in yellow (66 x 36).</summary>
     private static readonly (float X, float Y) StdAtlas = (954, 545);
 
+    /// <summary>The lower part's sprites (live 2026-11-03): the speed brake out, 25 x 26 beside the flaps; the parking brake
+    /// set, 178 x 29 at the bottom left.</summary>
+    private static readonly (float X, float Y) SpeedBrakeAtlas = (653, 80), ParkingBrakeAtlas = (252, 11);
+
     private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas, Func<DrawnShape, bool>? where = null) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
             && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0) && (where?.Invoke(s) ?? true));
@@ -474,6 +478,12 @@ public static class A350Pfd
             used.UnionWith(flaps);
             o.Add("Flaps: " + A350DrawLayout.Speak(config));
         }
+        // The rest of the lower part are sprites, no text (live 2026-11-03, 1.2.8): the speed brake's symbol beside the flaps
+        // while it is out, the parking brake's legend while it is set.
+        if (Sprite(capture, side, SpeedBrakeAtlas) != null)
+            o.Add("Speed brake: extended");
+        if (Sprite(capture, side, ParkingBrakeAtlas) != null)
+            o.Add("Parking brake: on");
 
         // Everything else as drawn: flags, messages, the line under the heading scale. A two-line message there is one
         // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row.

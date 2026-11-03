@@ -681,4 +681,23 @@ public class A350PfdTests
     {
         Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_fd_stand"), 0), l => l.StartsWith("Protections", StringComparison.Ordinal));
     }
+
+    // The PFD's lower part (manual p. 62: slat/flap, gear, speed brake, parking brake, pitch trim, messages), live on the stand
+    // 2026-11-03 (1.2.8, engines running): the parking brake and the speed brake are sprites, no text. Set, the parking brake is a
+    // 178 x 29 sprite from atlas 252,11 at x 51, y 981; the speed brake out (half), a 25 x 26 one from atlas 653,80 beside the flaps.
+    [Fact]
+    public void The_parking_brake_reads_from_its_sprite()
+    {
+        Assert.Contains("Parking brake: on", A350Pfd.Read(Fixture("p12_efis0_park_brake_on"), 0));
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("p12_efis0_park_brake_off"), 0), l => l.StartsWith("Parking brake", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_speed_brake_reads_from_its_sprite()
+    {
+        var lines = A350Pfd.Read(Fixture("p12_efis0_speed_brake_half"), 0).ToList();
+        Assert.Contains("Speed brake: extended", lines);
+        Assert.True(lines.IndexOf("Speed brake: extended") == lines.FindIndex(l => l.StartsWith("Flaps", StringComparison.Ordinal)) + 1);
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("p12_efis0_park_brake_on"), 0), l => l.StartsWith("Speed brake", StringComparison.Ordinal));
+    }
 }
