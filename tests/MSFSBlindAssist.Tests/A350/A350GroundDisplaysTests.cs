@@ -470,4 +470,37 @@ public class A350GroundDisplaysTests
         Assert.Contains("Speed: 230 knots", sfd);
         Assert.Contains("Altitude: 5070 feet", sfd);
     }
+
+    // Plan 08's flight (2026-11-03, VCBI circuit): the SFD's attitude is its pitch ladder, labels every 10 degrees 49 px apart, each 8 px
+    // under its line, the ladder turned about the aircraft symbol by the bank. The sim's own attitude, logged beside each capture: climbing
+    // 8.29 up, 2.32 right; level at FL200 1.20 up, wings level; turning 4.67 up, 28.35 left; turning 1.34 up, 24.73 right.
+    [Theory]
+    [InlineData("p08_sfd_climb", "Pitch: 8.3 degrees up", "Bank: 2 degrees right")]
+    [InlineData("p08_sfd_level", "Pitch: 1.2 degrees up", "Bank: wings level")]
+    [InlineData("p08_sfd_turn_left", "Pitch: 4.7 degrees up", "Bank: 28 degrees left")]
+    [InlineData("p08_sfd_turn_right", "Pitch: 1.3 degrees up", "Bank: 25 degrees right")]
+    public void The_standby_flight_display_reads_pitch_and_bank_from_its_ladder(string fixture, string pitch, string bank)
+    {
+        var sfd = A350GroundDisplays.ReadSfd(A350Fixtures.Capture(fixture + ".json"));
+        Assert.Equal(new[] { pitch, bank }, sfd.Skip(2).Take(2));
+    }
+
+    // In the right turn the ladder's lower 20 crossed the heading scale's row (165.7, 239.0; the scale's 32 at 127.2 still nearer the
+    // index at 145, live heading 328). The same draw with that 20 at x 150, as at a little less bank: it is no heading label.
+    [Fact]
+    public void A_ladder_label_on_the_heading_row_is_no_heading_label()
+    {
+        var cap = A350Fixtures.Capture("p08_sfd_turn_right.json");
+        Assert.Contains("Heading: 328", A350GroundDisplays.ReadSfd(cap));
+        var nearer = cap with { Texts = cap.Texts.Select(t => t.Text == "20" && MathF.Abs(t.X - 165.7f) < 0.1f ? t with { X = 150 } : t).ToList() };
+        Assert.Contains("Heading: 328", A350GroundDisplays.ReadSfd(nearer));
+    }
+
+    // On the stand (sim 0.29 down): the attitude said after the tapes, before the baro.
+    [Fact]
+    public void On_the_stand_the_standby_attitude_is_level()
+    {
+        var sfd = A350GroundDisplays.ReadSfd(Fixture("SFD"));
+        Assert.Equal(new[] { "Pitch: 0.4 degrees down", "Bank: wings level", "Baro: 1013, cyan" }, sfd.Skip(2).Take(3));
+    }
 }

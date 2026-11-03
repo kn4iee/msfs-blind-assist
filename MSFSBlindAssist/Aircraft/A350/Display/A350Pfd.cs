@@ -111,6 +111,15 @@ public static class A350Pfd
         return (int)Math.Round(Math.Round((rough - last) / 100) * 100 + last, MidpointRounding.AwayFromZero);
     }
 
+    /// <summary>Pitch (degrees, up positive) and bank (degrees, left positive) as the PFD and the SFD say them: the pitch to a
+    /// tenth, the bank to a degree, under a degree wings level.</summary>
+    internal static IEnumerable<string> Attitude(double pitch, double bank)
+    {
+        yield return $"Pitch: {Math.Abs(pitch).ToString("0.0", CultureInfo.InvariantCulture)} degrees {(pitch >= 0 ? "up" : "down")}";
+        yield return Math.Abs(bank) < 1 ? "Bank: wings level"
+            : string.Create(CultureInfo.InvariantCulture, $"Bank: {Math.Abs(Math.Round(bank)):0} degrees {(bank > 0 ? "left" : "right")}");
+    }
+
     /// <summary>A pattern by its drawn size (the image numbers change per session): the speed tape 75 x 2285,
     /// the horizon 298 x 1168.</summary>
     private static DrawnShape? PatternOf(A350DrawCapture capture, int side, float w, float h) =>
@@ -304,9 +313,7 @@ public static class A350Pfd
             if (Math.Abs(det) > 1e-6f)
             {
                 double pitch = (PitchZeroImageY - (-horizon.PatternB * dx + horizon.PatternA * dy) / det) / PitchPxPerDegree;
-                o.Add($"Pitch: {Math.Abs(pitch).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} degrees {(pitch >= 0 ? "up" : "down")}");
-                double bank = A350ShapeReader.AngleDegrees(horizon);
-                o.Add(Math.Abs(bank) < 1 ? "Bank: wings level" : string.Create(CultureInfo.InvariantCulture, $"Bank: {Math.Abs(Math.Round(bank)):0} degrees {(bank > 0 ? "left" : "right")}"));
+                o.AddRange(Attitude(pitch, A350ShapeReader.AngleDegrees(horizon)));
             }
         }
 

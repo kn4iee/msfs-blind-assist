@@ -437,6 +437,45 @@ public static class A350GroundDisplays
     /// 20 ft, evenly spaced (no perspective, unlike the PFD's).</summary>
     private const float SfdWindowY = 132.5f, SfdSpeedPxPerKnot = 2.2f, SfdTapePxPerFoot = 0.14f, SfdDrumPxPerFoot = 1.3f;
 
+    /// <summary>The SFD's pitch ladder, measured in plan 08's flight (2026-11-03) against the sim's attitude: labels every 10 degrees
+    /// 49 px apart at local x 116, each drawn 8 px under its line; the horizon at y 125.0 at zero pitch; the heading scale's labels
+    /// unturned on the row at y 239.</summary>
+    private const float SfdPitchPxPerDegree = 4.9f, SfdPitchZeroY = 125.0f, SfdLadderX = 116, SfdLabelBelowLine = 8, SfdHeadingRowY = 239;
+
+    /// <summary>A heading scale label: drawn unturned on its row, where a ladder label passes only turned or off the row.</summary>
+    private static bool OnSfdHeadingRow(DrawnText t) =>
+        MathF.Abs(t.Y - SfdHeadingRowY) < 0.5f && MathF.Abs(t.LocalY - t.Y) < 0.5f && MathF.Abs(t.LocalX - t.X) < 0.5f;
+
+    /// <summary>The SFD's pitch (up positive) and bank (left positive) from its ladder's labels. The draw turns the ladder by the bank
+    /// after placing it by the pitch, so each label's local place gives the horizon (above it the values fall towards it, below they
+    /// rise; the split taken is the one whose labels agree), and the line through the two labels farthest apart, before and after the
+    /// turn, the bank. Null with fewer than two labels or no split that agrees within 2 px.</summary>
+    internal static (double Pitch, double Bank)? SfdAttitude(IEnumerable<DrawnText> texts)
+    {
+        var labels = Distinct(texts)
+            .Where(t => t.ColourName == "white" && MathF.Abs(t.LocalX - SfdLadderX) < 1 && !OnSfdHeadingRow(t)
+                && t.Text.Trim() is { Length: 2 } s && s[0] is >= '1' and <= '9' && s[1] == '0')
+            .OrderBy(t => t.LocalY).ToList();
+        if (labels.Count < 2) return null;
+        int Value(DrawnText t) => (t.Text.Trim()[0] - '0') * 10;
+        double? horizon = null, spread = null;
+        for (int split = 0; split <= labels.Count; split++)
+        {
+            var above = labels.Take(split).ToList();
+            var below = labels.Skip(split).ToList();
+            if (above.Zip(above.Skip(1)).Any(p => Value(p.First) <= Value(p.Second)) || below.Zip(below.Skip(1)).Any(p => Value(p.First) >= Value(p.Second)))
+                continue;
+            var lines = above.Select(t => t.LocalY - SfdLabelBelowLine + SfdPitchPxPerDegree * Value(t))
+                .Concat(below.Select(t => t.LocalY - SfdLabelBelowLine - SfdPitchPxPerDegree * Value(t))).ToList();
+            double s = lines.Max() - lines.Min();
+            if (spread == null || s < spread) (spread, horizon) = (s, lines.Average());
+        }
+        if (horizon is not { } h || spread > 2) return null;
+        var (first, last) = (labels[0], labels[^1]);
+        double turn = Math.Atan2(last.X - first.X, last.Y - first.Y) - Math.Atan2(last.LocalX - first.LocalX, last.LocalY - first.LocalY);
+        return ((h - SfdPitchZeroY) / SfdPitchPxPerDegree, -turn * 180 / Math.PI);
+    }
+
     /// <summary>The standby flight display: speed and altitude (its tapes), baro, heading (scale labels 2.3 px a degree,
     /// index at x 145), position and its source; flags as drawn.</summary>
     public static IReadOnlyList<string> ReadSfd(A350DrawCapture capture)
@@ -462,16 +501,19 @@ public static class A350GroundDisplays
             var d = drum.OrderBy(c => Math.Abs(c.Y - SfdWindowY)).First();
             o.Add(string.Create(CultureInfo.InvariantCulture, $"Altitude: {A350Pfd.Altitude(int.Parse(t.Text, CultureInfo.InvariantCulture), t.Y, int.Parse(d.Text, CultureInfo.InvariantCulture), d.Y, SfdWindowY, SfdTapePxPerFoot, SfdDrumPxPerFoot)} feet"));
         }
+        // The attitude, said as the PFD says it (plan 08, 2026-11-02: the SFD read no pitch or bank, its horizon being graphics).
+        if (SfdAttitude(capture.Texts) is { } attitude) o.AddRange(A350Pfd.Attitude(attitude.Pitch, attitude.Bank));
         foreach (var b in cells.Where(c => c.Colour == "cyan" && Number(c)))
         {
             used.Add(b);
             o.Add(A350Pfd.UnansweredBaro(new[] { b.Text }) ? "Baro: not available" : $"Baro: {b.Text}, cyan");
         }
-        var scale = cells.Where(c => c.Y is >= 230 and < 250 && c.Colour == "white" && c.Text.Length == 2 && c.Text.All(char.IsDigit)).ToList();
+        // The heading scale's labels, unturned on their row: a ladder label crossing the row in a turn is none (plan 08's right turn).
+        var scale = Distinct(capture.Texts).Where(t => t.ColourName == "white" && OnSfdHeadingRow(t) && t.Text.Trim() is { Length: 2 } s && s.All(char.IsDigit)).ToList();
         if (scale.Count > 0)
         {
-            var nearest = scale.OrderBy(c => Math.Abs(c.X - 145)).First();
-            o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(int.Parse(nearest.Text, CultureInfo.InvariantCulture) * 10 + (145 - nearest.X) / 2.3 + 360) % 360:0}"));
+            var nearest = scale.OrderBy(t => Math.Abs(t.X - 145)).First();
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(int.Parse(nearest.Text.Trim(), CultureInfo.InvariantCulture) * 10 + (145 - nearest.X) / 2.3 + 360) % 360:0}"));
         }
         Position(cells, used, o);
         // Tape, drum and scale numbers, and the vertical source letters, are not text to read.
