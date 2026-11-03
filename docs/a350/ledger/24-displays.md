@@ -20,7 +20,9 @@ its reason.
 | PFD | linear deviation (vertical profile) | d3355527c |
 | HUD | speed target and VFE next on its tape, the guidance cue on the flight path vector | 6130bad0c |
 | SD | CRUISE's cabin climbing or descending arrow, WHEEL's hottest brake arc, F/CTL's rudder travel limits | 7ca98844e |
-| SFD | the LS deviations (localizer, glideslope) | (this commit) |
+| SFD | the LS deviations (localizer, glideslope) | 7252b3426 |
+| ND | the CDA flap 1 and flap 2 points (the circled 1 and 2, white and amber), the cyan top of descent and the white decelerate point; the cross-track error; the safe altitude's figure in feet; no map name among the vertical display's altitude labels | 777c3823e |
+| HUD | the flight path vector's drift, wings level | 777c3823e |
 
 ## Not a gap (consumed into a value, or a false hit of the word measure)
 
@@ -42,13 +44,16 @@ its reason.
 
 ## Still to read
 
-- HUD sprites: the flight path vector's own place (its sideways offset in a turn fits no drift; its height no single pitch scale within
-  the HUD's draw delay), the green dot (no reference to fit its offset), the caution strips, F and S, the slip index, the LS scales and
-  diamonds, a wide green "=" near 270 kt clean (unnamed). The PFD says each of these.
-- ND: the circled 1 and 2 (they move with the map: behind the aircraft after take-off, then off it; meaning unconfirmed), the range marks
-  (only 20 and 30 at ARC 40 were drawn; the ND window knows the range from the knob), the compass's selected heading bug (not drawn in
-  these flights: NAV throughout); the second flight's NDs drew none of their sprites (to be looked at on the next flight).
+- HUD sprites: the flight path vector's height (the third flight, frozen at the top of descent: by the boresight in level flight, at the
+  attitude rather than the path, the HUD's own logged disagreement with the PFD: not said; its drift is read), the green dot (no reference
+  to fit its offset), the caution strips, F and S, the slip index, the LS scales and diamonds, a wide green "=" near 270 kt clean
+  (unnamed). The PFD says each of these.
+- ND: the range marks (only 20 and 30 at ARC 40 were drawn; the ND window knows the range from the knob), the compass's selected heading
+  bug (not drawn in the three flights: NAV throughout), and five sprites beside the path symbols never drawn in them (a magenta diamond,
+  V, crossed circle, ring and triangle). The circled 1 and 2 are read (the CDA flap points); the second flight's NDs drew nothing because
+  that FMS computed no predictions (INITIALIZE WEIGHT/CG after an engine restart, the third flight showed), not a reader gap.
 - E/WD and SD: F/CTL's four small circles under the ailerons' columns (unnamed); the rest of the 35 CTR sprites are read, consumed (the
   units' %, ° and °C sprites, the pitch trim's pointer beside its read figure) or the engine display's background art.
-- SND vector shapes (its needles), when a navaid is tuned to it.
+- SND needles: none on 1.2.8. The third flight tuned LS 109.90 (course 040) and VOR 1 114.10 through RMP 1's STBY RAD NAV and pressed the
+  SND's LS, MODE and +/- keys: the SND drew the same 23 shapes throughout; its MENU key's INSERT WPT reads.
 - MFD leftovers: the F-PLN header's DIST and FPA, MODE, MACH; the green "=" parked above the PFD's speed tape (never on its scale here).

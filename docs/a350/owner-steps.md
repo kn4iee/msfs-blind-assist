@@ -26,8 +26,8 @@ On the build from `feat/inibuilds-a350` (the all-PRs build), A350-900, cold and 
    BTV armed from the ND window (Ctrl+Shift+B), taxi to a stand, Securing.
 3. Plan 17's ledger lists 23 "to fly" steps (`docs/a350/ledger/17-walkthrough.md`): each should work as written there. Tell me any that
    did not, or send me `%APPDATA%\MSFSBlindAssist\logs` (debug.log, a350_speech.log, a350_display.log) and I go through them.
-4. On the way, if the chance comes (all plan 24's): the ND in ARC with the route showing (its symbols drew nothing on the second flight
-   of 2026-11-03), a VOR tuned on the SND (its needles), and SEC INDEX's WHAT IF in flight (grey on the stand).
+4. Plan 24's in-flight checks were flown on the third flight of 2026-11-03 (scripted): the ND's symbols, the SND with a navaid tuned and
+   WHAT IF in flight. Nothing is left for you there (`docs/a350/evidence/flight-2026-11-03.md`, the third flight).
 
 ### 2.2 The released aircraft's ILS flights (plan 18, the shared visual-guidance fix)
 
@@ -54,8 +54,8 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    2026-11-03 BTV gave way to BRK MED instead of drawing them.
 3. **The automatic emergency descent (plan 16):** only a depressurisation brings it (OIS SITUATIONS, irreversible): your call. The manual
    one was flown three times on 2026-11-03.
-4. **NOISE take-off scenarios 2 and 3 (plan 15):** ACCEL above THR RED, and a noise N1 (88 %): the same FMA reader as scenario 1, which
-   was flown; a take-off each.
+4. **NOISE take-off scenario 2 (plan 15):** ACCEL above THR RED: the same FMA reader as scenarios 1 and 3, which were flown (scenario 3,
+   the noise N1 of 88 %, on the third flight of 2026-11-03: "NOISE, N1, 88%" said at THR RED, THR DCLB above NOISE END).
 5. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
 
 ## 3. By ear (your judgement)
@@ -78,8 +78,8 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 6. **The charts (plan 13):** the charts are pictures; the AI display read (Gemini or Claude) could describe one on request: want it?
 7. **Reduced engine taxi out and in (plan 16):** a First Officer checklist for it, or leave it to you?
 8. **The display design question:** keep MSFSBA's own A350 windows, or an Alt+key that opens the display itself to click anything?
-9. **Two symbols I could not name for sure (plan 24):** the ND's circled 1 and 2 (they move with the map: behind the aircraft after
-   take-off, then off it) and four small circles under the ailerons' columns on F/CTL. If you know them, I read them.
+9. **A symbol I could not name for sure (plan 24):** four small circles under the ailerons' columns on F/CTL. If you know them, I read
+   them. (The ND's circled 1 and 2 are named now: the flap 1 and flap 2 points of the CDA function, settled on the third flight.)
 
 ## 5. Things outside the A350
 
