@@ -97,6 +97,12 @@ public class FbwEfbForm : Form
 
     private System.Windows.Forms.Timer _statusTimer = null!;
 
+    /// <summary>Focus follows what a press did (the A350's OIS and FAP, the owner's question 17): a press that opens another
+    /// page puts focus on its title, and a pressed control rebuilt under a new label keeps focus at its place. Every other
+    /// EFB keeps its own behaviour.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool FocusFollowsPress { get; init; }
+
     public FbwEfbForm(IMcduBridge bridgeServer, ScreenReaderAnnouncer announcer,
                           string? windowTitle = null, string? deviceNoun = null, string? pageLabel = null)
     {
@@ -428,7 +434,9 @@ public class FbwEfbForm : Form
             max = e.Max,
             step = e.Step
         });
-        return JsonSerializer.Serialize(new { page = _currentPage, items });
+        return FocusFollowsPress
+            ? JsonSerializer.Serialize(new { page = _currentPage, items, focus = true })
+            : JsonSerializer.Serialize(new { page = _currentPage, items });
     }
 
     private async void PushToBrowser(string json)
@@ -1219,10 +1227,19 @@ public class FbwEfbForm : Form
     window.__lastRenderSig = sig;
 
     var page = payload.page || '';
-    setText(document.getElementById('pgttl'), page ? ('{{NOUN}}: ' + page) : '{{NOUN}}');
-    if (page && page !== lastPage) { announce('{{NOUN}} page: ' + page); lastPage = page; }
-
     var list = document.getElementById('list');
+    // The A350's OIS and FAP ask for focus to follow what the press did (payload.focus, the owner's question 17): where the
+    // pilot is in the list before this render, and whether their own press led here.
+    var follow = payload.focus === true, title = document.getElementById('pgttl');
+    var held = -1;
+    if (follow) for (var h = 0; h < list.children.length; h++) if (list.children[h].contains(document.activeElement)) { held = h; break; }
+    var pressed = follow && (held >= 0 || Date.now() - lastClick.at < 5000);
+    setText(title, page ? ('{{NOUN}}: ' + page) : '{{NOUN}}');
+    var newPage = page && page !== lastPage;
+    // A press that opened another page: focus on its title, which the screen reader says once (so not the live region too).
+    if (newPage && !pressed) announce('{{NOUN}} page: ' + page);
+    if (newPage) lastPage = page;
+
     if (page !== renderedPage) { list.innerHTML = ''; renderedPage = page; }   // page change → clean rebuild
 
     var els = payload.items || [];
@@ -1243,6 +1260,12 @@ public class FbwEfbForm : Form
       prev = node;
     }
     for (var gone in existing) { if (!used[gone]) list.removeChild(existing[gone]); }
+    if (newPage && pressed) { title.focus(); return; }
+    // The control the pilot was on, rebuilt under a new label (the OIS writes a result into it): focus back at its place.
+    if (follow && held >= 0 && !list.contains(document.activeElement) && list.children.length) {
+      var back = ctrlOf(list.children[Math.min(held, list.children.length - 1)]);
+      if (back && back.focus) back.focus();
+    }
   };
 
   document.addEventListener('keydown', function (e) {

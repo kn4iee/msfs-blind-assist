@@ -576,7 +576,8 @@ public partial class MainForm
             if (coherentPmdgEfbFirstOfficer == null) { coherentPmdgEfbFirstOfficer = NewClient(); coherentPmdgEfbFirstOfficer.Start(); }
             if (pmdgCoherentEfbFirstOfficerForm == null || pmdgCoherentEfbFirstOfficerForm.IsDisposed)
             {
-                pmdgCoherentEfbFirstOfficerForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbFirstOfficer, announcer, title, noun, label);
+                pmdgCoherentEfbFirstOfficerForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbFirstOfficer, announcer, title, noun, label)
+                    { FocusFollowsPress = a350 };
                 // Idle-gate the 600 ms tablet scrape to the window's visibility (same pattern as
                 // the flyPad form above); the inspector socket + installed agent stay warm. Without
                 // this the scrape runs forever after the first open until aircraft swap.
@@ -591,7 +592,8 @@ public partial class MainForm
             if (coherentPmdgEfbCaptain == null) { coherentPmdgEfbCaptain = NewClient(); coherentPmdgEfbCaptain.Start(); }
             if (pmdgCoherentEfbCaptainForm == null || pmdgCoherentEfbCaptainForm.IsDisposed)
             {
-                pmdgCoherentEfbCaptainForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbCaptain, announcer, title, noun, label);
+                pmdgCoherentEfbCaptainForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbCaptain, announcer, title, noun, label)
+                    { FocusFollowsPress = a350 };
                 var caForm = pmdgCoherentEfbCaptainForm;
                 caForm.VisibleChanged += (_, _) => coherentPmdgEfbCaptain?.SetActive(!caForm.IsDisposed && caForm.Visible);
             }
@@ -607,7 +609,7 @@ public partial class MainForm
         if (coherentA350Fap == null) { coherentA350Fap = CoherentPmdgEfbClient.ForA350Fap(); coherentA350Fap.Start(); }
         if (a350FapForm == null || a350FapForm.IsDisposed)
         {
-            a350FapForm = new Forms.FBWA380.FbwEfbForm(coherentA350Fap, announcer, "A350 FAP", "FAP", "FAP");
+            a350FapForm = new Forms.FBWA380.FbwEfbForm(coherentA350Fap, announcer, "A350 FAP", "FAP", "FAP") { FocusFollowsPress = true };
             // Idle-gate the scrape to the window's visibility, as the OIS's: the socket and the agent stay warm.
             var form = a350FapForm;
             form.VisibleChanged += (_, _) => coherentA350Fap?.SetActive(!form.IsDisposed && form.Visible);

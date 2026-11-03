@@ -325,3 +325,55 @@ test('a choice whose value is none of its options shows (none), not its first op
   assert.strictEqual(now.value, 'DIM');
   assert.ok(![...now.options].some((o) => o.textContent === '(none)'), 'the placeholder stayed once a value was picked');
 });
+
+// Plan 06 Task 2, the owner's answer to question 17 (2026-10-31): on the A350's OIS and FAP focus follows what the press did.
+// The form asks for it per payload (focus: true); every other EFB keeps the behaviour pinned above.
+const follow = (s, page, items) => s.window.__render({ page, items, focus: true });
+
+test('with focus following, a press that opens another page puts focus on its title, said once', async (t) => {
+  const s = loadShell(t);
+  follow(s, 'FLT OPS MENU', [btn(1, 'LOADSHEET'), btn(2, 'T.O PERF')]);
+  await s.spoken();
+  const perf = s.buttonByLabel('T.O PERF');
+  perf.focus(); perf.click();
+  assert.strictEqual(await s.spoken(), 'Activating T.O PERF');
+  follow(s, 'T.O PERF', [btn(3, 'SYNC FMGS'), btn(4, 'COMPUTE')]);
+  const title = s.window.document.getElementById('pgttl');
+  assert.strictEqual(s.window.document.activeElement, title, 'focus did not move to the new page');
+  assert.strictEqual(title.textContent, 'EFB: T.O PERF');
+  assert.strictEqual(await s.spoken(), 'Activating T.O PERF', 'the title was said a second time through the live region');
+});
+
+test('with focus following, a page that changes by itself leaves focus alone and is announced', async (t) => {
+  const s = loadShell(t);
+  follow(s, 'GROUND', [btn(1, 'CLOSE ALL')]);
+  await s.spoken();
+  follow(s, 'LOADSHEET', [btn(2, 'SET FUEL')]);   // nobody pressed anything, focus was not in the list
+  assert.notStrictEqual(s.window.document.activeElement, s.window.document.getElementById('pgttl'));
+  assert.strictEqual(await s.spoken(), 'EFB page: LOADSHEET');
+});
+
+test('with focus following, a pressed control rebuilt under a new label keeps focus at its place', async (t) => {
+  const s = loadShell(t);
+  follow(s, 'T.O PERF', [btn(1, 'SYNC FMGS'), btn(2, 'COMPUTE'), btn(3, 'SEND TO FMGS')]);
+  const compute = s.buttonByLabel('COMPUTE');
+  compute.focus(); compute.click();
+  // The OIS writes its result into the button's label, which no suffix rule strips: a new node.
+  follow(s, 'T.O PERF', [btn(1, 'SYNC FMGS'), btn(2, 'COMPUTE DONE'), btn(3, 'SEND TO FMGS')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('COMPUTE DONE'), 'focus left the pressed control');
+});
+
+test('without focus following, a page change only announces and a rebuilt control lets focus go', async (t) => {
+  const s = loadShell(t);
+  s.render('Dashboard', [btn(1, 'Ground'), btn(2, 'Arm')]);
+  await s.spoken();
+  const arm = s.buttonByLabel('Arm');
+  arm.focus(); arm.click();
+  s.render('Dashboard', [btn(1, 'Ground'), btn(2, 'Armed now')]);
+  assert.notStrictEqual(s.window.document.activeElement, s.buttonByLabel('Armed now'));
+  const ground = s.buttonByLabel('Ground');
+  ground.focus(); ground.click();
+  s.render('Ground', [btn(3, 'Doors')]);
+  assert.notStrictEqual(s.window.document.activeElement, s.window.document.getElementById('pgttl'));
+  assert.strictEqual(await s.spoken(), 'EFB page: Ground');
+});
