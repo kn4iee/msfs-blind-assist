@@ -54,10 +54,10 @@ The options: EQUIPMENT: TAXI CAMERA LIGHT, SATCOM, BATTERY TYPE, SCS OUTLETS, FW
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
+- **Worked by:** Claude (Opus 5.5), inline
+- **Started:** 2026-11-03, from `17039ef0e`
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
