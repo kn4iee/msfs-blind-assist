@@ -78,7 +78,7 @@ public static class A350MfdPage
     {
         float shift = side == 0 ? 0 : HalfWidth;
         bool Mine(float x) => side == 0 ? x < HalfWidth : x >= HalfWidth;
-        var cells = capture.Texts.Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
+        var cells = Overlaid(capture.Texts).Select((t, i) => (t, i)).Where(p => Mine(p.t.X) && !string.IsNullOrWhiteSpace(p.t.Text))
             .Select(p => new Cell(Torn(p.t.Text) ? Unreadable : Glyphs(Spaces.Replace(A350Ewd.WithoutLeaders(p.t.Text), " ")),
                 p.t.ColourName, p.t.X - shift, p.t.Y, p.i))
             .Where(c => c.Text.Length > 0).ToList();
@@ -730,6 +730,25 @@ public static class A350MfdPage
     /// <summary>The page's title line, from its title bar ("ACTIVE/F-PLN", y 137; "ACTIVE/F-PLN; TMPY, yellow"), or null.</summary>
     public static string? PageTitle(IReadOnlyList<MfdLine> lines) => lines.FirstOrDefault(l => l.Kind == "title")?.Spoken;
 
+    /// <summary>A text box being typed in draws its text as two runs at one place, the second padded with spaces where the first
+    /// stands ("25" then "  0"; an empty box's placeholder "oo" then "  o"; plan 09, 2026-11-03): laid over each other they are one
+    /// text, in the first run's place, the second left empty. The list keeps its length, so every text keeps its draw index.</summary>
+    internal static IReadOnlyList<DrawnText> Overlaid(IReadOnlyList<DrawnText> texts)
+    {
+        var o = texts.ToList();
+        for (int i = 1; i < o.Count; i++)
+        {
+            var (p, t) = (o[i - 1], o[i]);
+            int pad = t.Text.Length - t.Text.TrimStart(' ').Length;
+            if (pad == 0 || p.Text.Length == 0 || p.Text.Length > pad || p.Text[0] == ' ' || t.ColourName != p.ColourName
+                || Math.Abs(p.X - t.X) > 0.5f || Math.Abs(p.Y - t.Y) > 0.5f)
+                continue;
+            o[i - 1] = p with { Text = p.Text.PadRight(pad) + t.Text[pad..] };
+            o[i] = t with { Text = "" };
+        }
+        return o;
+    }
+
     private const string MenuOpen = ", menu open";
 
     /// <summary>The reader's own word for a list opener, just before its colour or at its end ("RWY button", "FMS 1 menu, cyan").</summary>
@@ -849,10 +868,16 @@ public static class A350MfdPage
         bool In(MfdLine l, DrawnElement e) =>
             l.ClickX >= e.X - shift && l.ClickX <= e.X - shift + e.RectW && l.ClickY >= e.Y && l.ClickY <= e.Y + e.RectH;
         var menu = lines.Where(IsItem).ToList();
-        var owner = controls.Where(e => !items.Contains(e) && e.X - shift < x1 && e.X - shift + e.RectW > x0
+        MfdLine? LineOf(DrawnElement e) => lines.FirstOrDefault(l => !IsItem(l) && l.Kind is "button" or "menu" or "field" && In(l, e));
+        var others = controls.Where(e => !items.Contains(e)).ToList();
+        var owner = others.Where(e => e.X - shift < x1 && e.X - shift + e.RectW > x0
                 && (Math.Abs(e.Y + e.RectH - top) <= TouchPx || Math.Abs(e.Y - bottom) <= TouchPx))
-            .Select(e => lines.FirstOrDefault(l => !IsItem(l) && l.Kind is "button" or "menu" or "field" && In(l, e)))
-            .FirstOrDefault(l => l != null);
+            .Select(LineOf).FirstOrDefault(l => l != null)
+            // else the control beside it, its top level with the list's: ATC COM REQUEST's lists hang left of their keys (plan 09,
+            // 2026-11-03: VERTICAL's at x 384-586, the key from 590), and read interleaved with the other keys without an owner
+            ?? others.Where(e => (Math.Abs(e.X - shift - x1) <= TouchPx || Math.Abs(e.X - shift + e.RectW - x0) <= TouchPx)
+                    && Math.Abs(e.Y - top) <= TouchPx)
+                .Select(LineOf).FirstOrDefault(l => l != null);
         if (owner == null || menu.Count == 0)
             return lines;
         var result = lines.Where(l => !IsItem(l)).ToList();

@@ -1339,4 +1339,32 @@ public class A350MfdPageTests
     [InlineData("DER22f", "DER22 (overfly)")]
     public void The_fonts_symbols_read_as_words(string drawn, string read) =>
         Assert.Equal(read, A350MfdPage.Glyphs(drawn));
+
+    private static List<string> Spoken(string fixture) =>
+        A350MfdPage.Read(A350Fixtures.Capture(fixture + ".json"), 0).Select(l => l.Spoken).ToList();
+
+    // Plan 09 Task 5 (in the air, 2026-11-03): ATC COM REQUEST's lists hang beside their keys (VERTICAL's at x 384-586, its top level
+    // with the key's at 590), not under them, and read interleaved with the other keys: "CLIMB TO, VERTICAL, DESCEND TO, LATERAL".
+    [Theory]
+    [InlineData("p09_mfd_atc_vertical_menu", "VERTICAL", "LATERAL button",
+        "CLIMB TO button", "DESCEND TO button", "ALT/FL button, grey", "BLOCK ALT/FL button", "CRUISE CLIMB button", "ITP button, grey")]
+    [InlineData("p09_mfd_atc_lateral_menu", "LATERAL", "SPEED button",
+        "DIRECT TO button", "OFFSET button", "WX DEVIATION button", "HEADING button", "TRACK button", "SID/STAR button", "TAILORED ARRIVAL button", "REROUTING button, grey")]
+    public void A_list_beside_its_key_reads_after_it(string fixture, string key, string next, params string[] items)
+    {
+        var lines = Spoken(fixture);
+        int at = lines.IndexOf(key + " button, menu open");
+        Assert.True(at >= 0, string.Join(" | ", lines));
+        Assert.Equal(items, lines.Skip(at + 1).Take(items.Length));
+        Assert.Equal(next, lines[at + 1 + items.Length]);
+    }
+
+    // A field being typed in is drawn as two runs at one place, the second padded with spaces where the first stands ("25" and "  0";
+    // the empty field's placeholder "oo" and "  o"): one text, "250", and "required" once.
+    [Fact]
+    public void A_field_being_typed_in_reads_its_text_whole()
+    {
+        Assert.Contains("SPD/MACH: 250, cyan", Spoken("p09_mfd_atc_spd_typing"));
+        Assert.Contains("SPD/MACH: required, cyan", Spoken("p09_mfd_atc_spd_cursor"));
+    }
 }
