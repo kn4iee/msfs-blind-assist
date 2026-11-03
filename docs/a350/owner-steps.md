@@ -85,8 +85,6 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 ## 5. Things outside the A350
 
 1. **PMDG 737 NAV radios dialog (plan 01):** it speaks `Nav1FreqMHz` in the PC's culture (a comma decimal under de-DE): its own fix.
-2. **A flaky test:** `A350FoWritePathTests.A_flipping_button_is_judged_from_what_was_just_commanded` failed once under load and passed
-   three times alone: a timing margin to widen.
 
 ## 6. The pull request (plan 21, Task 5: only when you say)
 

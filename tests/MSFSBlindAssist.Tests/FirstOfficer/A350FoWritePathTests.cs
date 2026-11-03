@@ -121,11 +121,14 @@ public class A350FoWritePathTests
     }
 
     // Tick, untick, tick inside one batch period: judged from a stale cache the second tick pressed again and A/BRK ended disarmed.
+    // The clock stands still (it failed once under a loaded full-suite run, 2026-11-03: the wall clock passed the 2.5 s hold between two
+    // calls, so the cache was rightly trusted again).
     [Fact]
     public async Task A_flipping_button_is_judged_from_what_was_just_commanded()
     {
         var def = new RecordingA350Definition();
         var executor = def.Executor(("INI_AUTOBRAKE_ARMED", 0));
+        executor.Clock = () => 1_000_000;
         Assert.True(await executor.Set("A350_LDG_AUTO_BRK", 1));
         Assert.Single(def.Writes);
         Assert.True(await executor.Set("A350_LDG_AUTO_BRK", 1));   // the cache still says 0

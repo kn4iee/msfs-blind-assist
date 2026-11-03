@@ -46,6 +46,10 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     /// <summary>What a flipping button was just commanded to: the 1 Hz cache holds the old state for up to a second after a press, and a
     /// second tick judged from it would flip the button back.</summary>
     private readonly A350CommandedState _commanded = new();
+
+    /// <summary>The milliseconds the commanded states are timed by (a test stands it still).</summary>
+    internal Func<long> Clock { get; set; } = () => Environment.TickCount64;
+
     private SimConnectManager? _sc;
     private IniBuildsA350Definition? _def;
     private ScreenReaderAnnouncer? _announcer;
@@ -125,7 +129,7 @@ public sealed class A350ActionExecutor : IFoActionExecutor
     /// a press flips, so a guess could undo what the pilot set.</summary>
     private bool PressEachNotAt(int target, SimConnectManager sc, params (string Row, string State)[] buttons)
     {
-        long now = Environment.TickCount64;
+        long now = Clock();
         var states = buttons.Select(b => _commanded.Resolve(b.State, _def!.CachedInput(sc, b.State), now)).ToList();
         if (states.Contains(null))
         {
