@@ -66,14 +66,14 @@ A claim counts only once it is on the remote branch: one that exists only on you
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (Task 4's regression flight, Task 5's pull request)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
-- **Worked by:**
+- **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `a9dacf5f0` (plan 19 waits on the owner's flights on the other Airbus types: recorded below)
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Landed:** 2026-11-03 (Tasks 1-3)
+- **Tests at landing:** the whole suite, `ClaudeRulesHookTests` included: 19,342 passed (6 min 22 s); the solution's Release build succeeded
+- **Tasks:** 1 (handoffs collected by file, every request applied or put to the owner), 2 (rules A350-13 to 15, A350-9 and A350-12 extended; the doc's top, manual coverage, parity and do-not-chase list; the guide's A350 chapter and the hotkey guide), 3 (`main` already merged; the suite and the Release build green) done
+- **Waiting on the owner:** Task 4 (the regression flight), Task 5 (the pull request, only when the owner says); everything else in `docs/a350/owner-steps.md`
 - **In-sim results:**
 - **Changed from the plan:**
 - **Rulings made while working:**
