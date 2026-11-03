@@ -25,11 +25,19 @@ public static class A350Kccu
         var keys = new List<string>();
         foreach (char ch in text.ToUpperInvariant())
         {
+            // The minus is PLUS then MINUS: MINUS alone types nothing, the KCCU's minus turning a sign PLUS has begun (plan 09, live
+            // 2026-11-03, PERF APPR's OAT: "-7" so, "8" from MINUS MINUS 8).
+            if (ch == '-')
+            {
+                keys.Add("PLUS");
+                keys.Add("MINUS");
+                continue;
+            }
             string? key = ch switch
             {
                 >= 'A' and <= 'Z' or >= '0' and <= '9' => ch.ToString(),
                 // The point is DECIMAL: the module's DOT key types nothing (live, the MFD's ZFW field).
-                '/' => "SLASH", '.' => "DECIMAL", ' ' => "SPACE", '-' => "MINUS", '+' => "PLUS",
+                '/' => "SLASH", '.' => "DECIMAL", ' ' => "SPACE", '+' => "PLUS",
                 _ => null,
             };
             if (key == null) return null;

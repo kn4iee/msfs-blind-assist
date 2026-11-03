@@ -34,6 +34,16 @@ collapsed or expanded, a grey key ", dimmed"; the reader's own lines keep their 
 read them). Openers by their element class: `DropdownVariable` (DEPARTURE's RWY, SID, TRANS), `MainHeaderUIButton` (the page headers'
 ACTIVE, POSITION, SEC INDEX, DATA), `MainHeaderDropdownMenu` (INIT's MODE, the FMS 1 selector); `BaseUIButton` is a plain key.
 
+## Task 5 Step 1: the KCCU keys (2026-11-03, on the stand, a flight plan in)
+
+- DIR and DIR_TO (`INI_MCDU1_DIR`, `INI_MCDU1_DIR_TO`, X12) both open ACTIVE/F-PLN/DIRECT TO; Alt+D presses DIR. Without a flight plan
+  not reached: no page clears the active plan on the ground (it clears itself after a landing, as seen after both flights).
+- Typing goes into the field clicked (INIT's FLT NBR): BACKSPACE deletes one character ("AAB" to "AA"); CLR does nothing while a field is
+  being typed in; ESC cancels the edit; LEFT and RIGHT moved nothing visible there; UP and DOWN move a list's box (Task 4).
+- MINUS alone types nothing (PERF APPR's OAT: MINUS 5 read "5", MINUS MINUS 8 "8", a 1.5 s wait then MINUS 9 "9", each entered "+");
+  PLUS then MINUS types it: PLUS MINUS 7 entered "-7". The window types "-" as PLUS, MINUS (`A350Kccu.KeysFor`).
+- OIS moves the cursor off the MFD and ND (`INI_CPT_CURSOR_SCREEN` 0); MFD 2, ND 1.
+
 ## Task 5 Step 2: the ATC COM pages in the air (2026-11-03, VCBI circuit, climbing through 8000 ft to FL100, no CPDLC connection)
 
 Every REQUEST key, grey on the ground but CLEARANCE, is live in the air. Each opens a list beside it:

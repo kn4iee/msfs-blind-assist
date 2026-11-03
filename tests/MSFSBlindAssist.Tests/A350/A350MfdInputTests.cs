@@ -12,10 +12,16 @@ public class A350MfdInputTests
     [Fact]
     public void Typed_text_maps_to_kccu_keys()
     {
-        Assert.Equal(new[] { "V", "C", "B", "I", "SLASH", "1", "2", "DECIMAL", "5", "SPACE", "MINUS", "PLUS" },
+        Assert.Equal(new[] { "V", "C", "B", "I", "SLASH", "1", "2", "DECIMAL", "5", "SPACE", "PLUS", "MINUS", "PLUS" },
             A350Kccu.KeysFor("vcbi/12.5 -+"));
         Assert.Null(A350Kccu.KeysFor("VC#BI"));   // no key for '#'
     }
+
+    // Plan 09 Task 5 (live 2026-11-03, PERF APPR's OAT): MINUS alone types nothing, first, twice or after a wait ("8", "9"); PLUS then
+    // MINUS types the minus ("-7"): the KCCU's minus turns a sign PLUS has begun.
+    [Fact]
+    public void A_minus_is_typed_as_plus_then_minus() =>
+        Assert.Equal(new[] { "PLUS", "MINUS", "7" }, A350Kccu.KeysFor("-7"));
 
     [Fact]
     public void A_key_is_its_sides_lvar()
