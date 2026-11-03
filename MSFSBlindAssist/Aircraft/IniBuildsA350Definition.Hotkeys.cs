@@ -42,7 +42,9 @@ public partial class IniBuildsA350Definition
                             ArmWindowEcho(NdKnobRow(side, mode));
                             PressRow(NdKnobRow(side, mode), simConnect, announcer, position);
                         },
-                        (side, mode) => ToggleState(NdKnobRow(side, mode), simConnect)),
+                        (side, mode) => ToggleState(NdKnobRow(side, mode), simConnect),
+                        // BTV's arming (plan 08): the A/BRK pushbutton, the Autobrake panel's own row.
+                        () => PressRow("A350_LDG_AUTO_BRK", simConnect, announcer, 1)),
                     w => { w.Show(); w.BringToFront(); w.Activate(); });
                 return true;
             // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
