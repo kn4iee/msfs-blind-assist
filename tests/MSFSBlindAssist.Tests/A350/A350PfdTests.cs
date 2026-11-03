@@ -717,4 +717,55 @@ public class A350PfdTests
         Assert.Equal(said.Length, lines.Count(l => l.StartsWith("VLS:", StringComparison.Ordinal) || l.StartsWith("VMAX:", StringComparison.Ordinal)
             || l.StartsWith("V alpha", StringComparison.Ordinal)));
     }
+
+    // Plan 24, the flight of 2026-11-03: the PFD's symbols that are sprites, each named from where and when it was drawn and the
+    // manual's lower PFD ("slat/flap, gear and speed brake configuration, parking brake, pitch trim"): on the stand the LS course pin
+    // on the heading scale (ILS 04, 7 px a degree from the index), the sidestick order's cross at its centre, the gear's hatched
+    // triangle, the take-off trim pointer in its band.
+    [Fact]
+    public void On_the_stand_it_reads_the_ls_course_sidestick_gear_and_trim()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_stand_ls_course"), 0);
+        Assert.Contains("LS course: 040, magenta", lines);
+        Assert.Contains("Sidestick order: centred, white", lines);
+        Assert.Contains("Landing gear: down and locked, green", lines);
+        Assert.Contains("Pitch trim: in the take-off range, green", lines);
+    }
+
+    // After landing: the yaw bar of the roll-out, the trim pointer turned amber out of its band (the CG at 41.0 amber).
+    [Fact]
+    public void After_landing_it_reads_the_yaw_bar_and_the_trim_out_of_range()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_rollout_trim"), 0);
+        Assert.Contains("Yaw bar: centred, green", lines);
+        Assert.Contains("Pitch trim: out of the take-off range, amber", lines);
+        Assert.DoesNotContain("Pitch trim: in the take-off range, green", lines);
+    }
+
+    // In the flare at 248 ft: the tail strike pitch limit, and the speed trend, a yellow line from the tape's index (y 383.5) to the
+    // speed in 10 s, its head turned up when accelerating; the short-term managed speed, a magenta dot (the manual's words).
+    [Theory]
+    [InlineData("efis0_flare_tailstrike", "Speed trend: decreasing to 120 knots, yellow")]
+    [InlineData("efis0_decel_trend", "Speed trend: decreasing to 169 knots, yellow")]
+    [InlineData("efis0_slow_alpha", "Speed trend: increasing to 159 knots, yellow")]
+    public void It_reads_the_speed_trend_to_its_tip(string fixture, string trend) =>
+        Assert.Contains(trend, A350Pfd.Read(Fixture(fixture), 0));
+
+    [Fact]
+    public void It_reads_the_tail_strike_limit_the_managed_dot_and_a_course_off_the_scale()
+    {
+        Assert.Contains("Tail strike pitch limit, amber", A350Pfd.Read(Fixture("efis0_flare_tailstrike"), 0));
+        var decel = A350Pfd.Read(Fixture("efis0_decel_trend"), 0);
+        Assert.Contains("Short-term managed speed: 170, magenta", decel);
+        Assert.Contains("LS course: off the scale left, magenta", decel);
+        Assert.Contains("LS course: off the scale left, magenta", A350Pfd.Read(Fixture("efis0_cruise_vmax"), 0));
+    }
+
+    // With the LS block shown the course's value is drawn beside the pin as well (read as "LS course: 040"): said once.
+    [Fact]
+    public void The_ls_course_is_said_once_when_its_value_is_drawn()
+    {
+        var lines = A350Pfd.Read(Fixture("efis0_slow_alpha"), 0);
+        Assert.Equal("LS course: 040, magenta", Assert.Single(lines, l => l.StartsWith("LS course:", StringComparison.Ordinal)));
+    }
 }

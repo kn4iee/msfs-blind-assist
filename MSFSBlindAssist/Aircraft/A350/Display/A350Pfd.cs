@@ -60,6 +60,13 @@ public static class A350Pfd
         ("VMAX", 1, 1614, "red"), ("VLS", 24, 2, "amber"), ("V alpha prot", 43, 2, "amber"), ("V alpha max", 72, 2, "red"),
     };
 
+    /// <summary>The short-term managed speed's magenta dot in the atlas (its half at the tape's edges is off the scale).</summary>
+    private static readonly (float X, float Y) ManagedDotAtlas = (976, 655);
+
+    /// <summary>The speed trend line (plan 24): from the tape's index at y 383.5, where the tape reads the speed, to its tip; drawn in
+    /// 1, 0.94, 0.52 (nearer white than yellow by distance, so named for what it is).</summary>
+    private const float TrendIndexY = 383.5f, TrendGreen = 0.94f;
+
     /// <summary>The speed target's triangle in the atlas: cyan selected, magenta managed.</summary>
     private const float TargetAtlasX = 957, TargetAtlasY = 748;
 
@@ -146,6 +153,14 @@ public static class A350Pfd
 
     /// <summary>The baro box's STD, which is no text: a sprite, "STD" in cyan boxed in yellow (66 x 36).</summary>
     private static readonly (float X, float Y) StdAtlas = (954, 545);
+
+    /// <summary>Plan 24, the flight of 2026-11-03: the LS course's pin on the heading scale (its edges where it waits off the scale), the
+    /// gear's hatched triangle in the lower part (the stand, and from the gear's extension on final), the take-off trim's pointer (green
+    /// in its band, amber out of it, the T.O THS line beside it), the sidestick order's cross at the attitude's centre (the stand), the
+    /// yaw bar (take-off roll and roll-out), the tail strike pitch limit (the flare).</summary>
+    private static readonly (float X, float Y) LsCourseAtlas = (858, 732), GearDownAtlas = (442, 8), TrimInRangeAtlas = (786, 452),
+        TrimOutOfRangeAtlas = (786, 423), SidestickAtlas = (947, 790), YawBarAtlas = (801, 939), TailStrikeAtlas = (836, 667);
+    private const float LsCourseLeftEdge = 150, LsCourseRightEdge = 566, AttitudeCentreX = 359, SidestickCentreY = 382, CentredPixels = 4;
 
     /// <summary>The lower part's sprites (live 2026-11-03): the speed brake out, 25 x 26 beside the flaps; the parking brake
     /// set, 178 x 29 at the bottom left.</summary>
@@ -336,6 +351,17 @@ public static class A350Pfd
                         && Math.Abs(s.X0 - s.PatternX - atlasX) <= 1 && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0)) is { } strip
                     && strip.PatternY + row is var end && end >= TapeTop && end < TapeBottom)
                     o.Add($"{name}: {Knots(Math.Round(TapeKnotsAt(speedTape, end), MidpointRounding.AwayFromZero))}, {colour}");
+            // The short-term managed speed, a magenta dot (the manual's words: the minimum speed of the configuration it flies to).
+            if (TapeSprite(capture, side, ManagedDotAtlas.X, ManagedDotAtlas.Y) is { } dot && (dot.Y0 + dot.Y1) / 2 is var dotAt && dotAt >= TapeTop && dotAt < TapeBottom)
+                o.Add($"Short-term managed speed: {Knots(Math.Round(TapeKnotsAt(speedTape, dotAt), MidpointRounding.AwayFromZero))}, magenta");
+            // The speed trend: a yellow line from the tape's index to the speed in 10 s, its head turned up when accelerating.
+            if (capture.Shapes?.FirstOrDefault(s => s.Kind == "stroke" && s.Image == 0 && s.X0 - (side == 0 ? 0 : PfdWidth) is >= 100 and < 116
+                    && Math.Abs(s.Colour?.G - TrendGreen ?? 1) < 0.03f && s.Colour?.B < 0.7f && s.Colour?.R > 0.9f) is { } trend)
+            {
+                float tip = Math.Abs(trend.Y0 - TrendIndexY) > Math.Abs(trend.Y1 - TrendIndexY) ? trend.Y0 : trend.Y1;
+                if (Math.Abs(tip - TrendIndexY) >= 1)
+                    o.Add($"Speed trend: {(tip < TrendIndexY ? "increasing" : "decreasing")} to {Knots(Math.Round(TapeKnotsAt(speedTape, tip), MidpointRounding.AwayFromZero))} knots, yellow");
+            }
         }
         // The Mach number under the speed tape (live in the climb: ".681", green).
         foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 140 && c.Y is >= 640 and < 680 && MachText.IsMatch(c.Text.Trim())))
@@ -451,6 +477,20 @@ public static class A350Pfd
         if (Sprite(capture, side, StdAtlas) != null)
             o.Add("Baro: STD, cyan in a yellow box");
 
+        float centreX = AttitudeCentreX + (side == 0 ? 0 : PfdWidth);
+        if (Sprite(capture, side, SidestickAtlas) is { } stick)
+        {
+            float dx = (stick.X0 + stick.X1) / 2 - centreX, dy = (stick.Y0 + stick.Y1) / 2 - SidestickCentreY;
+            o.Add(Math.Abs(dx) <= CentredPixels && Math.Abs(dy) <= CentredPixels ? "Sidestick order: centred, white"
+                : $"Sidestick order: {string.Join(" and ", new[] { Math.Abs(dx) > CentredPixels ? (dx > 0 ? "right" : "left") : null, Math.Abs(dy) > CentredPixels ? (dy < 0 ? "up" : "down") : null }.Where(w => w != null))}, white");
+        }
+        if (Sprite(capture, side, YawBarAtlas) is { } yaw)
+        {
+            float dx = (yaw.X0 + yaw.X1) / 2 - centreX;
+            o.Add(Math.Abs(dx) <= CentredPixels ? "Yaw bar: centred, green" : $"Yaw bar: {(dx > 0 ? "right" : "left")} of centre, green");
+        }
+        if (Sprite(capture, side, TailStrikeAtlas) != null)
+            o.Add("Tail strike pitch limit, amber");
         o.AddRange(Deviation(capture, side));
         o.AddRange(ls);
 
@@ -481,6 +521,12 @@ public static class A350Pfd
             // The track diamond is a green sprite: its colour is the atlas's, never a drawn text's (as STD's).
             if (Sprite(capture, side, TrackAtlas) is { } track)
                 o.Add($"Track: {Degrees(heading + (At(track) - HeadingIndexX) / HeadingPxPerDegree)}, green");
+            // The LS course, a magenta pin on the scale, waiting at its edge while off it (plan 24: x 145 and 571); with the LS block
+            // shown its value is drawn too, read above, and the pin says nothing more.
+            if (Sprite(capture, side, LsCourseAtlas) is { } pin && !ls.Any(l => l.StartsWith("LS course:", StringComparison.Ordinal)))
+                o.Add(At(pin) is var pinAt && (pinAt <= LsCourseLeftEdge || pinAt >= LsCourseRightEdge)
+                    ? $"LS course: off the scale {(pinAt < HeadingIndexX ? "left" : "right")}, magenta"
+                    : $"LS course: {Degrees(heading + (pinAt - HeadingIndexX) / HeadingPxPerDegree)}, magenta");
         }
         else if (offScaleHeading.Count > 0)
             o.Add($"Selected heading: {offScaleHeading[0].Text}, cyan");
@@ -499,6 +545,12 @@ public static class A350Pfd
             o.Add("Speed brake: extended");
         if (Sprite(capture, side, ParkingBrakeAtlas) != null)
             o.Add("Parking brake: on");
+        if (Sprite(capture, side, GearDownAtlas) != null)
+            o.Add("Landing gear: down and locked, green");
+        if (Sprite(capture, side, TrimInRangeAtlas) != null)
+            o.Add("Pitch trim: in the take-off range, green");
+        if (Sprite(capture, side, TrimOutOfRangeAtlas) is { } trimOut)
+            o.Add($"Pitch trim: out of the take-off range, {A350Rgba.NameOf(trimOut.Colour)}");
 
         // Everything else as drawn: flags, messages, the line under the heading scale. A two-line message there is one
         // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row.
