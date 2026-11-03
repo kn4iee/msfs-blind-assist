@@ -104,8 +104,8 @@ only the owner can do it, [pr] where it is the pull request's description or cha
   guide lists what a display says; the Ctrl+M list from every plan's new rows.
 - **`HotkeyGuides/iniBuilds_A350_Hotkeys.txt`:** [x] plan 09's MFD keys and Go to MFD page; the stale "not on the A350 yet" block (Shift+C, Ctrl+Shift+B) rewritten; the PFD message, reverser and next waypoint rows; plan 11's changed rows: none changed a hotkey.
 - **Frozen files, a plan's request:** [x] `IniBuildsA350DefinitionTests.cs:641`'s stepper sentence ("as on the ground": on 1.2.8 the preset
-  shows on the ground too; plan 02); `A350LeverSpeech.Thrust`'s `onGround` default (plan 01 for plan 11); `A350EcamMonitorTests.cs:90`
-  (relax when keys are added; plan 01 for plan 04); `ObserveNd`'s three conditions when it gets a body (plan 01 for plan 08).
+  shows on the ground too; plan 02); [x] `A350LeverSpeech.Thrust`'s `onGround` default (plan 01 for plan 11: now required, da948d8a0); [x] `A350EcamMonitorTests.cs:90`
+  (relax when keys are added; plan 01 for plan 04: the monitor still asks its one key, nothing to relax); [x] `ObserveNd`'s three conditions when it gets a body (plan 01 for plan 08: disposed, 4efa0ab03; it reads no `Pfd` or `Displays`; one ND read a tick).
 - **Gaps for the owner (from the plans' records):** collected into the owner's steps file at the end.
 - **[pr] The pull request (Task 5):** every plan's pilot-facing line, compiled into the description and the A350's
   `changelog.d/<pr>-inibuilds-a350.aircraft.md`; the in-sim plan lines (plan 01's five and each plan's own).
