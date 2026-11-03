@@ -79,6 +79,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350Probe pfdlisten <seconds>` | MSFSBA's PFD monitor on the live sim: the FMA call-outs it would speak, the draw code's sim asks, and each side's PFD at the end. |
 | `A350Probe ecamwatch <seconds> [fixtureDir]` | The CTR at 2 Hz: each change of the E/WD and SD, once two reads agree, with colours; with a folder, each capture saved as `ctr_NNN.json`. |
 | `A350Probe ecamlisten <seconds>` | MSFSBA's own E/WD monitor: each line it would speak, with the time. |
+| `A350Probe reread CORPUS_DIR` | Every round of a `displays` corpus (A350_DRAW_JSON, its output saved as `read.txt`) read again offline by today's readers, as the round's `reread.txt`: `tools/a350-probe/coverage.py CORPUS_DIR OUT reread.txt` measures a reader change on every round (plan 24). |
 | `A350Probe mfdlines <mfd.json\|live> <side>` | The MFD page as `A350MfdPage` reads it, with each line's click point. |
 | `A350Probe ndlines <efis.json\|live> <side>` | The ND as MSFSBA reads it (the airport map by kind). A live draw has no aircraft position: use a capture taken with `A350_LAT`/`A350_LON` for the airport map. |
 | `A350Probe rmplines <rmp.json>` | A saved RMP draw as the RMP window reads it (`A350RmpPage`), each line with the key a press on it presses. |

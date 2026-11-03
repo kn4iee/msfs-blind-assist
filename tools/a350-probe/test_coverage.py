@@ -31,6 +31,11 @@ class MeasureTests(unittest.TestCase):
         _, missed, _ = coverage.measure([(read, {'SND_0': _cap('N07|10.3/E079|53.5', '005')})])
         self.assertEqual(0, sum(missed.values()))
 
+    def test_a_text_outside_its_clip_is_not_counted(self):
+        cap = {'Texts': [{'Text': '19', 'ColourName': 'green', 'X': -700, 'Y': 440, 'Clipped': True}]}
+        drawn, _, _ = coverage.measure([(['== Captain HUD display'], {'HUD_0': cap})])
+        self.assertEqual(0, sum(drawn.values()))
+
     def test_a_text_of_no_word_is_not_counted(self):
         drawn, _, _ = coverage.measure([(['== FCU display'], {'FCU_0': _cap('---', ' ', '.')})])
         self.assertEqual(0, sum(drawn.values()))

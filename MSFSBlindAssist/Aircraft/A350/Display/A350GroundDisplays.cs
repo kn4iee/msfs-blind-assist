@@ -366,6 +366,21 @@ public static class A350GroundDisplays
         Column("vertical", 520, 760);
         Column("lateral", 760, 1100);
         Column("engagement", 1100, float.MaxValue);
+        // The horizon's heading labels first: turned with the bank they can fall in any column, but unturned (their local place) they
+        // stand on one row, 531 px apart, one after the other. The heading reads off that row at the boresight, the bank is the row's
+        // turn, the pitch its height.
+        List<string>? horizonLines = null;
+        if (HudHorizon(capture.Texts) is { } horizon)
+        {
+            used.UnionWith(cells.Where(c => horizon.Any(t => t.Text.Trim() == c.Text && t.X == c.X && t.Y == c.Y)));
+            var near = horizon.OrderBy(t => Math.Abs(t.LocalX - HudBoresightX)).First();
+            int degrees = (int)Math.Round(HeadingLabel(near) * 10 + (HudBoresightX - near.LocalX) / HudHeadingPxPerDegree, MidpointRounding.AwayFromZero);
+            var (first, last) = (horizon[0], horizon[^1]);
+            double turn = Math.Atan2(last.Y - first.Y, last.X - first.X) - Math.Atan2(last.LocalY - first.LocalY, last.LocalX - first.LocalX);
+            horizonLines = new List<string> { string.Create(CultureInfo.InvariantCulture, $"Heading: {(degrees % 360 + 360) % 360:000}, {near.ColourName}") };
+            horizonLines.AddRange(A350Pfd.Attitude((horizon.Average(t => t.LocalY) - HudHorizonZeroY) / HudPitchPxPerDegree, turn * 180 / Math.PI));
+            horizonLines.Add($"Heading scale: {string.Join(", ", horizon.Select(t => t.Text.Trim()))}, {first.ColourName}");
+        }
         void Named(string name, Func<DrawnCell, bool> which, string separator = " ")
         {
             var found = cells.Where(c => !used.Contains(c) && which(c)).OrderBy(c => c.X).ToList();
@@ -378,7 +393,51 @@ public static class A350GroundDisplays
             used.Add(gs);
             o.Add($"Ground speed: {gs.Text[3..]}, {gs.Colour}");
         }
-        Named("Selected altitude", c => c.X >= 1400 && c.Text.Length >= 3 && c.Text.All(char.IsDigit));
+        bool Digits(DrawnCell c) => c.Text.Length > 0 && c.Text.All(char.IsDigit);
+        // The speed tape's labels (x 189) read off at its window; on the stand it rests on its 30 kt floor, as the PFD's.
+        var speedLabels = cells.Where(c => !used.Contains(c) && Math.Abs(c.X - HudSpeedLabelX) <= 2 && Digits(c) && c.Colour != "black").ToList();
+        if (speedLabels.OrderBy(c => Math.Abs(c.Y - HudSpeedWindowY)).FirstOrDefault() is { } speed)
+        {
+            double knots = Math.Round(int.Parse(speed.Text, CultureInfo.InvariantCulture) + (speed.Y - HudSpeedWindowY) / HudSpeedPxPerKnot, MidpointRounding.AwayFromZero);
+            o.Add(knots <= 30 ? $"Speed: 30 knots or less, {speed.Colour}" : string.Create(CultureInfo.InvariantCulture, $"Speed: {knots:0} knots, {speed.Colour}"));
+        }
+        // The speed target above the tape: its number black on a filled box, said in the box's colour.
+        foreach (var target in cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 193) <= 4 && Math.Abs(c.Y - 410) <= 8 && Digits(c)).ToList())
+        {
+            used.Add(target);
+            var box = capture.Shapes?.LastOrDefault(s => s.Image == 0 && s.Kind == "fill" && s.X1 - s.X0 < 200
+                && s.X0 <= target.X && s.X1 >= target.X && s.Y0 <= target.Y && s.Y1 >= target.Y);
+            o.Add($"Speed target: {target.Text}, {(target.Colour == "black" && box != null ? A350Rgba.NameOf(box.Colour) : target.Colour)}");
+        }
+        Named("V1", c => Math.Abs(c.X - 220) <= 4 && Digits(c) && c.Text.Length >= 2);
+        foreach (var mach in cells.Where(c => !used.Contains(c) && c.Text.Length > 1 && c.Text[0] == '.' && c.Text[1..].All(char.IsDigit)).ToList())
+        {
+            used.Add(mach);
+            o.Add($"Mach: 0{mach.Text}, {mach.Colour}");
+        }
+        // The altitude: the tape's hundreds (x 1303) and the drum's tens (x 1379), each nearest its window; the drum's other
+        // digits are its own.
+        var altTape = cells.Where(c => Math.Abs(c.X - 1303) <= 2 && c.Text.Length == 3 && Digits(c)).OrderBy(c => Math.Abs(c.Y - HudAltitudeWindowY)).FirstOrDefault();
+        var altDrum = cells.Where(c => Math.Abs(c.X - 1379) <= 2 && c.Text.Length == 2 && Digits(c)).OrderBy(c => Math.Abs(c.Y - HudAltitudeWindowY)).FirstOrDefault();
+        if (altTape != null && altDrum != null)
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Altitude: {A350Pfd.Altitude(int.Parse(altTape.Text, CultureInfo.InvariantCulture), altTape.Y, int.Parse(altDrum.Text, CultureInfo.InvariantCulture), altDrum.Y, HudAltitudeWindowY, HudTapePxPerFoot, HudDrumPxPerFoot)} feet, {altDrum.Colour}"));
+        // The V/S beside the altitude (x 1494), in hundreds of feet a minute, moving with its pointer.
+        foreach (var vs in cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 1494) <= 4 && int.TryParse(c.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)).ToList())
+        {
+            used.Add(vs);
+            int fpm = int.Parse(vs.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture) * 100;
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Vertical speed: {Math.Abs(fpm)} feet per minute{(fpm > 0 ? " up" : fpm < 0 ? " down" : "")}, {vs.Colour}"));
+        }
+        // The selected altitude: on the tape at its height (x 1325), or parked above or below it when off the scale (x 1409).
+        Named("Selected altitude", c => (c.X >= 1400 && c.Text.Length >= 3 || Math.Abs(c.X - 1325) <= 2 && c.Text.Length >= 3) && Digits(c));
+        // The LS block (x 142): its source, ident, frequency and distance top to bottom; an ident not decoded shows the frequency again.
+        var ls = cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 142) <= 4 && c.Y is >= 980 and < 1130).OrderBy(c => c.Y).ToList();
+        if (ls.Count > 0)
+        {
+            used.UnionWith(ls);
+            var words = ls.Select(c => c.Text).Where((t, i) => i == 0 || t != ls[i - 1].Text).ToList();
+            o.Add($"LS: {string.Join(", ", words)}, {ls[0].Colour}");
+        }
         if (cells.FirstOrDefault(c => c.Text == "QNH") is { } qnh)
         {
             used.Add(qnh);
@@ -388,24 +447,49 @@ public static class A350GroundDisplays
         var slash = cells.FirstOrDefault(c => c.Text == "/");
         if (slash != null)
             Named("Wind", c => Math.Abs(c.Y - slash.Y) <= 2 && c.X < 700);
-        Named("Speed scale", c => c.X is >= 150 and < 240 && c.Text.All(char.IsDigit) && c.Colour != "black", ", ");
+        Named("Speed scale", c => Math.Abs(c.X - HudSpeedLabelX) <= 2 && Digits(c) && c.Colour != "black", ", ");
         Named("Altitude scale", c => Math.Abs(c.X - 1303) <= 2 && c.Text.Length == 3 && c.Text.All(char.IsDigit), ", ");
-        // The heading scale's numbers, tens of degrees, stand on one line that moves with the pitch; the first two-digit run across the width.
-        var heading = cells.Where(c => !used.Contains(c) && c.Text.Length == 2 && c.Text.All(char.IsDigit) && c.X < 1450 && c.X > 240 && Math.Abs(c.X - 1379) > 2)
-            .GroupBy(c => (int)Math.Round(c.Y / 40)).Where(g => g.Count() >= 2).OrderByDescending(g => g.Count()).FirstOrDefault()?.ToList();
-        if (heading != null)
-        {
-            used.UnionWith(heading);
-            o.Add($"Heading scale: {string.Join(", ", heading.OrderBy(c => c.X).Select(c => c.Text))}, {heading[0].Colour}");
-        }
+        if (horizonLines != null)
+            o.AddRange(horizonLines);
         // The altitude drum's digits: its column and the rolling tens beside it.
         used.UnionWith(cells.Where(c => c.X is >= 1300 and < 1400 && c.Y is >= 500 and < 800 && c.Text.TrimStart('-').All(char.IsDigit)));
-        // What it does not name reads as drawn; the numbers left are scales' (the pitch ladder), a lone letter the compass's.
-        o.AddRange(Rest(cells.Where(c => c.Text.Any(char.IsLetter) && c.Text.Trim().Length > 1), used));
+        // What it does not name reads as drawn, a lone letter too (the N every flight frame draws at one place: no compass letter).
+        o.AddRange(Rest(cells, used));
         return o;
     }
 
     private const float HudFmaBottom = 230;
+
+    /// <summary>The HUD's scales, fitted on the second flight of 2026-11-03 against the PFD (level rounds; plan 24): the speed tape's
+    /// labels at x 189, 5.4 px a knot, its window at y 648; the altitude tape 0.388 px a foot and the drum's tens 1.275 px a foot,
+    /// their window at y 645; the horizon's heading labels 53.1 px a degree, the boresight at x 800.</summary>
+    private const float HudSpeedLabelX = 189, HudSpeedWindowY = 648, HudSpeedPxPerKnot = 5.4f,
+        HudAltitudeWindowY = 645, HudTapePxPerFoot = 0.388f, HudDrumPxPerFoot = 1.275f, HudBoresightX = 800, HudHeadingPxPerDegree = 53.1f;
+
+    /// <summary>The horizon's height for the pitch, fitted the same way: 45 px a degree, zero pitch at y 459 (the stand's -0.5 at 437,
+    /// level at 10,000 ft 2.35 at 565 and 0.3 at 472.7); its labels are tens of degrees, 531 px apart.</summary>
+    private const float HudHorizonZeroY = 459, HudPitchPxPerDegree = 45, HudHeadingLabelSpacing = 531;
+
+    private static int HeadingLabel(DrawnText t) => int.Parse(t.Text.Trim(), CultureInfo.InvariantCulture);
+
+    /// <summary>The horizon's heading labels: the longest run of two-digit numbers on one unturned row (local y within 2 px), each
+    /// 531 px after the one before (local x) and the next ten degrees; null with fewer than two.</summary>
+    internal static List<DrawnText>? HudHorizon(IEnumerable<DrawnText> texts)
+    {
+        var two = texts.Where(t => !t.Clipped && t.Text.Trim() is { Length: 2 } s && s.All(char.IsDigit)).ToList();
+        List<DrawnText>? best = null;
+        foreach (var seed in two)
+        {
+            var row = two.Where(t => Math.Abs(t.LocalY - seed.LocalY) <= 2).OrderBy(t => t.LocalX).ToList();
+            var chain = new List<DrawnText> { seed };
+            foreach (var t in row.Where(t => t.LocalX > seed.LocalX))
+                if (Math.Abs(t.LocalX - chain[^1].LocalX - HudHeadingLabelSpacing) <= 15 && (HeadingLabel(t) - HeadingLabel(chain[^1]) + 36) % 36 == 1)
+                    chain.Add(t);
+            if (chain.Count >= 2 && (best == null || chain.Count > best.Count))
+                best = chain;
+        }
+        return best;
+    }
 
     public static IReadOnlyList<string> ReadBat(A350DrawCapture capture)
     {

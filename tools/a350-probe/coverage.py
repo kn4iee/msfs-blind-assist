@@ -1,9 +1,9 @@
 """What the A350's displays draw that MSFS Blind Assist never says (plan 24): for each round of a corpus (one folder per round,
 written by `A350Probe displays` with A350_DRAW_JSON set and its output saved as read.txt), each display's drawn texts against
-the lines its readers said for it. A text is unsaid when one of its words or numbers appears nowhere in those lines (a dot
+the lines its readers said for it (a text outside its clip is not on the screen and not counted). A text is unsaid when one of its words or numbers appears nowhere in those lines (a dot
 leader, a glyph or a reordering is no gap).
 
-usage: python coverage.py CORPUS_DIR OUT_TSV
+usage: python coverage.py CORPUS_DIR OUT_TSV [READ_NAME]   (READ_NAME: read.txt, or reread.txt from `A350Probe reread`)
 Prints each display's drawn and unsaid counts; writes OUT_TSV: display, text, colour, rounds unsaid, rounds drawn, x, y.
 Standard library only; read-only towards the sim."""
 import collections
@@ -57,6 +57,8 @@ def measure(rounds):
             said = set(w for name in SECTIONS.get(display, []) for line in sec.get(name, []) for w in words(line))
             said |= set(w.lstrip('0') for w in said)
             for t in cap.get('Texts', []):
+                if t.get('Clipped'):
+                    continue   # outside its clip: not on the screen
                 text = re.sub(r'\s+', ' ', t.get('Text', '')).strip().upper()
                 if not words(text):
                     continue
@@ -68,9 +70,9 @@ def measure(rounds):
     return drawn, missed, place
 
 
-def _rounds(corpus):
+def _rounds(corpus, read_name='read.txt'):
     for d in sorted(glob.glob(os.path.join(corpus, '*'))):
-        read = os.path.join(d, 'read.txt')
+        read = os.path.join(d, read_name)
         if not os.path.isfile(read):
             continue
         caps = {}
@@ -88,8 +90,8 @@ def _rounds(corpus):
 
 def main(argv):
     if len(argv) < 3:
-        raise SystemExit('usage: python coverage.py CORPUS_DIR OUT_TSV')
-    rounds = list(_rounds(argv[1]))
+        raise SystemExit('usage: python coverage.py CORPUS_DIR OUT_TSV [READ_NAME]')
+    rounds = list(_rounds(argv[1], argv[3] if len(argv) > 3 else 'read.txt'))
     if not rounds:
         raise SystemExit(f'No rounds in {argv[1]}: each round is a folder with read.txt and the displays\' .json captures.')
     drawn, missed, place = measure(rounds)

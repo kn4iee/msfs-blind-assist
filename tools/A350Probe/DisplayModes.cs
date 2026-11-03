@@ -9,7 +9,7 @@ internal static class DisplayModes
     public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal)
     {
         "patch", "snapshot", "draw", "service", "trap", "traptiny", "ecamwatch", "ecamlisten", "sdmap", "sdtext", "sdsweep",
-        "pfdlisten", "mfdlines", "ndlines", "rmplines", "navdb", "memfind", "memread", "speeds",
+        "pfdlisten", "mfdlines", "ndlines", "rmplines", "navdb", "memfind", "memread", "speeds", "reread",
     };
 
     public static bool Handles(string mode) => Names.Contains(mode);
@@ -44,8 +44,50 @@ internal static class DisplayModes
             case "memfind": return MemFind(args);
             case "memread": return MemRead(args);
             case "speeds": return Speeds(args);
+            case "reread": return Reread(args);
             default: return 2;
         }
+    }
+
+    /// <summary>`reread CORPUS_DIR`: every round of a corpus (`displays` with A350_DRAW_JSON, its output saved as read.txt) read
+    /// again offline by today's readers, written as the round's reread.txt in read.txt's sections, so a reader change is
+    /// measured on every round (`tools/a350-probe/coverage.py CORPUS_DIR OUT reread.txt`; plan 24). The E/WD's SD page is the
+    /// one read.txt names.</summary>
+    private static int Reread(string[] args)
+    {
+        if (args.Length < 1 || !Directory.Exists(args[0]))
+        {
+            Console.Error.WriteLine("usage: A350Probe reread CORPUS_DIR   (a folder of rounds, each with read.txt and the displays' .json captures)");
+            return 2;
+        }
+        var pages = Enumerable.Range(0, 20).ToDictionary(n => "System display: " + A350SdText.PageName(n) + " page", n => (double)n, StringComparer.Ordinal);
+        static A350DrawCapture? Load(string path) =>
+            File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(path)) : null;
+        int rounds = 0;
+        foreach (var dir in Directory.GetDirectories(args[0]).Order(StringComparer.Ordinal))
+        {
+            var read = Path.Combine(dir, "read.txt");
+            if (!File.Exists(read)) continue;
+            var o = new List<string>();
+            foreach (var d in MSFSBlindAssist.Aircraft.IniBuildsA350Definition.DisplayPanels)
+            {
+                var cap = Load(Path.Combine(dir, $"{d.Gauge}_{d.Index}.json"));
+                o.Add($"== {d.Panel}{(cap is { Ok: true } ? "" : ": no good draw")}");
+                if (cap is { Ok: true })
+                    o.AddRange(d.Read(cap).Select(l => "  " + l));
+            }
+            var ctr = Load(Path.Combine(dir, "CTR_0.json"));
+            o.Add("== E/WD" + (ctr is { Ok: true } ? "" : ": no good draw"));
+            if (ctr is { Ok: true })
+            {
+                double? page = File.ReadLines(read).Select(l => l.Trim()).Where(pages.ContainsKey).Select(l => (double?)pages[l]).FirstOrDefault();
+                o.AddRange(A350EwdText.Build(ctr, page).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Select(l => "  " + l));
+            }
+            File.WriteAllLines(Path.Combine(dir, "reread.txt"), o);
+            rounds++;
+        }
+        Console.WriteLine($"{rounds} rounds read again");
+        return 0;
     }
 
     /// <summary>`speeds [seconds]`: the FMS's take-off speeds as MSFSBA finds and reads them: where, from the installed

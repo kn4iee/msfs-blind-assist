@@ -67,6 +67,8 @@ A corpus is a folder of rounds, each written by `A350Probe displays` with `A350_
 ```bash
 python coverage.py corpus coverage.tsv   # each drawn text whose words no reading says, per display, with rounds and place
 python sprites.py corpus sheets          # every drawn sprite cut out of its texture: sheets/<display>.png and .tsv
+../A350Probe/bin/x64/Debug/net10.0-windows/A350Probe.exe reread corpus   # every round read again by today's readers: reread.txt
+python coverage.py corpus coverage.tsv reread.txt   # the gaps today's readers leave, on every round
 ```
 
 `coverage.py` (standard library only) counts a text unsaid when one of its words or numbers is in no line its display said, so a dot leader, a glyph or a reordering is no gap; its `test_coverage.py` runs in CI. `sprites.py` needs **Pillow** (`python -m pip install pillow`): it finds each image handle's texture in the package's `Data/Textures` by size and by where the sprites are cut, numbers each distinct sprite on a contact sheet, and lists its atlas place, uses, where on screen it is drawn and its tints; a rotated or scaled sprite is listed apart.
