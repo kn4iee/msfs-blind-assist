@@ -73,9 +73,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `a4459f09c`
 - **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Tests at landing:** none (an audit: no code)
+- **Tasks:** 1 done 2026-11-03 (`docs/a350/ledger/17-walkthrough.md`: 112 steps, 9 from tutorials; 87 already proven through MSFSBA by plans 02-16 and Robin's KATL-KDTW flight); 2 and 3 wait on the flight
+- **Waiting on the owner:** Task 2, the SimBrief A-to-B flight (the SimBrief plan and the OIS sign-ins are the owner's); the ledger's 23 "to fly" lines are its checklist
 - **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Changed from the plan:** the ledger's Result column starts from what earlier plans proved through the same row or window, so the flight checks those again rather than finding them
+- **Rulings made while working:** steps the walk-through hands to "the in-sim checklist" (page 123) are listed from the A350's own C/L MENU checklists and the tutorials, marked *(tutorials)*

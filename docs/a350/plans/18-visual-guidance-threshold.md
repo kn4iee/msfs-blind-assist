@@ -89,9 +89,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03; Part A from `origin/main` 8eb77a5b4
 - **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Tests at landing:** Part A: 16,864 passed (suite without `ClaudeRulesHookTests`), `RunwayGlidepathOriginTests` 10/10
+- **Tasks:** Part A Tasks 2-4 done 2026-11-03 on the local branch `fix/visual-guidance-threshold` (worktree `vg-threshold-wt`, off `origin/main` 8eb77a5b4, commit a4895b983, not pushed; no A350 anywhere). Task 4: no bias changes (the 777's 80/40 are the only measured ones, on an unrecorded runway, and agree with a threshold without an offset; the rest are estimates); the doc lists each.
+- **Waiting on the owner:** Task 1 (a coupled ILS to a displaced and a non-displaced threshold on a released aircraft), Task 5 (the PR: push the branch to `origin`, open it, its changelog fragment and "User guide: none, because the guidance's tones and call-outs are unchanged; only where its glidepath starts moves"), then Task 6 once `main` with the fix is merged here
 - **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Changed from the plan:** Tasks 2 and 3 are one commit; the glidepath's altitude error moved into `VisualGuidanceManager.GlidepathAltitudeErrorFt` so a test pins the formula the guidance flies; rule VG-20 added
+- **Rulings made while working:** the 5/3/1-mile call-outs and the debug distances moved to the threshold with the glidepath (they count down the approach); `IsBehindRunway` and the extending phase's "behind threshold" count keep the pavement start (past it the aircraft is over the runway); cross-track keeps the start (same centerline, within 2 ft)
