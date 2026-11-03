@@ -106,8 +106,10 @@ public class A350CockpitPanelTests
         Assert.Contains(($"{seat} oxygen mask stowage", Set, "0=Closed, 1=Open"), rows);   // its tooltip names the click
         Assert.Contains(($"{seat} oxygen N/100%", Set, "0=Normal, 1=100%"), rows);
         Assert.Contains(($"{seat} oxygen mask test", Press, ""), rows);
-        Assert.Contains(($"{seat} oxygen emergency pressure", Press, ""), rows);
-        Assert.Equal(panel == "Observer Oxygen Masks" ? 8 : 4, rows.Count);   // the two observers' masks share the panel
+        // 1.2.8: the emergency pressure selector turns (NORMAL, EMERGENCY) and its push is a press to test.
+        Assert.Contains(($"{seat} oxygen emergency pressure", Set, "0=Normal, 1=Emergency"), rows);
+        Assert.Contains(($"{seat} oxygen emergency pressure test", Press, ""), rows);
+        Assert.Equal(panel == "Observer Oxygen Masks" ? 10 : 5, rows.Count);   // the two observers' masks share the panel
     }
 
     [Theory]

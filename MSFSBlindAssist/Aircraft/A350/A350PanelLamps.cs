@@ -187,13 +187,14 @@ public static class A350PanelLamps
 
     /// <summary>Indicators the map has no lamp node for, read from their own variable, shown after the map's: each oxygen
     /// mask's flow blinker, yellow while oxygen flows (its PRESS TO TEST held, live 2026-10-28), mechanical, so no bus;
-    /// each beside its mask.</summary>
+    /// each beside its mask. 1.2.8 renamed their variables (INI_OXY_BLINKER_&lt;seat&gt;, the observers 1 and 2); the lights keep
+    /// their 1.2.7 nodes, and so their keys.</summary>
     private static readonly (string Node, string Panel, string Name, string State)[] OwnIndicators =
     {
-        ("OXYTEST_BLINKER_CPT", "Captain Oxygen Mask", "Captain oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_CPT) 0.5 >"),
-        ("OXYTEST_BLINKER_FO", "First Officer Oxygen Mask", "First officer oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_FO) 0.5 >"),
-        ("OXYTEST_BLINKER_TO", "Observer Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_TO) 0.5 >"),
-        ("OXYTEST_BLINKER_4TH", "Observer Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXYTEST_BLINKER_4TH) 0.5 >"),
+        ("OXYTEST_BLINKER_CPT", "Captain Oxygen Mask", "Captain oxygen flow blinker", "(L:INI_OXY_BLINKER_CPT) 0.5 >"),
+        ("OXYTEST_BLINKER_FO", "First Officer Oxygen Mask", "First officer oxygen flow blinker", "(L:INI_OXY_BLINKER_FO) 0.5 >"),
+        ("OXYTEST_BLINKER_TO", "Observer Oxygen Masks", "Third occupant oxygen flow blinker", "(L:INI_OXY_BLINKER_1) 0.5 >"),
+        ("OXYTEST_BLINKER_4TH", "Observer Oxygen Masks", "Fourth occupant oxygen flow blinker", "(L:INI_OXY_BLINKER_2) 0.5 >"),
     };
 
     public static string? PowerKeyFor(A350LightPower power) => power switch

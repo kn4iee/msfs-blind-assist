@@ -10,8 +10,8 @@ public class A350ControlMapTests
     [Fact]
     public void The_embedded_map_holds_every_cockpit_control()
     {
-        Assert.Equal(696, Map.Controls.Count);
-        Assert.Equal("1.2.7", Map.PackageVersion);
+        Assert.Equal(700, Map.Controls.Count);   // 1.2.8 split each oxygen mask's emergency selector into a knob and its push
+        Assert.Equal("1.2.8", Map.PackageVersion);
     }
 
     [Fact]

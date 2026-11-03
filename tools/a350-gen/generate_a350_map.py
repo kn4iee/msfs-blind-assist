@@ -174,10 +174,21 @@ def knob_action(loc, title_key, ie_id):
     return loc_text(loc, title_key[:-len('.TITLE')] + '.' + m.group(1).upper()) or None
 
 
+# Keys kept across a rename: a control the aircraft renamed but kept keeps its earlier key, which Ctrl+M settings and tests pin
+# (plan 11). 1.2.8 renamed the oxygen masks' input events from OXYTEST_<seat>_<part> to OXY_<seat>_<part>: the observers' TO and
+# 4TH seats are 1 and 2, the mask test PANEL is MAIN, and the emergency pressure selector MASK is KNOB (now a two-position knob;
+# its new push, KNOB_PUSH, takes its own key).
+_OXY_SEATS = {'CPT': 'CPT', 'FO': 'FO', '1': 'TO', '2': '4TH'}
+_OXY_PARTS = {'HATCH': 'HATCH', 'N': 'N', 'MAIN': 'PANEL', 'KNOB': 'MASK'}
+KEPT_KEYS = {f'AIRLINER_OXY_{seat}_{part}': f'A350_OXYTEST_{old_seat}_{old_part}'
+             for seat, old_seat in _OXY_SEATS.items() for part, old_part in _OXY_PARTS.items()}
+
+
 def new_entry(ie, area, panel, title):
     short = ie['id'][len(PREFIX):] if ie['id'].upper().startswith(PREFIX) else ie['id']
+    key = KEPT_KEYS.get(ie['id'].upper(), 'A350_' + short.upper())
     return OrderedDict([
-        ('id', ie['id']), ('key', 'A350_' + short.upper()), ('area', area), ('panel', panel),
+        ('id', ie['id']), ('key', key), ('area', area), ('panel', panel),
         ('title', title), ('kind', NONE), ('event', set_event(ie)), ('state_var', None),
         ('state_unit', None), ('scale', None), ('positions', OrderedDict()), ('values', None),
         ('press', None), ('rest', None), ('note', None), ('checklist', None)])

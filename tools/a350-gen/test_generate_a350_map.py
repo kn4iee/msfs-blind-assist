@@ -225,6 +225,28 @@ class GenerateA350MapTests(unittest.TestCase):
 
 
 
+class KeptKeyTests(unittest.TestCase):
+    """1.2.8 renamed the oxygen masks' input events (OXYTEST_<seat>_<part> to OXY_<seat>_<part>, the observers' TO and 4TH
+    now 1 and 2): each same control keeps its 1.2.7 key, so a Ctrl+M setting or a test pinning it still finds it (plan 11)."""
+
+    @staticmethod
+    def _key(ie_id):
+        return gen.new_entry({'id': ie_id, 'inc_code': '', 'dec_code': '', 'set_code': ''}, 'MISC', 'OXYGEN_TEST', '')['key']
+
+    def test_a_renamed_control_keeps_its_1_2_7_key(self):
+        self.assertEqual('A350_OXYTEST_CPT_HATCH', self._key('AIRLINER_OXY_CPT_HATCH'))
+        self.assertEqual('A350_OXYTEST_TO_N', self._key('AIRLINER_OXY_1_N'))
+        self.assertEqual('A350_OXYTEST_4TH_PANEL', self._key('AIRLINER_OXY_2_MAIN'))
+        self.assertEqual('A350_OXYTEST_FO_MASK', self._key('AIRLINER_OXY_FO_KNOB'))
+
+    def test_every_kept_key_is_a_1_2_7_oxygen_key(self):
+        self.assertEqual(16, len(gen.KEPT_KEYS))
+        self.assertTrue(all(k.startswith('A350_OXYTEST_') for k in gen.KEPT_KEYS.values()))
+
+    def test_a_new_control_takes_its_own_key(self):
+        self.assertEqual('A350_OXY_CPT_KNOB_PUSH', self._key('AIRLINER_OXY_CPT_KNOB_PUSH'))
+
+
 class LampRuleTests(unittest.TestCase):
     def test_a_lamp_with_its_power_at_the_end(self):
         self.assertEqual(gen.lamp_rule('(L:INI_BATTERY_1_FAULT) 1 == (L:INI_ANNLT_SWITCH) 0 == + 1 min (L:INI_DC_LIGHTS_FAILURE) *'),
