@@ -523,4 +523,15 @@ public class A350NdPageTests
     {
         Assert.Contains(said, A350GroundDisplays.ReadNd(WithSprite(fromX, fromY, toX, toY), 1));
     }
+
+    // The fourth flight of 2026-11-03: heading 090 selected in HDG at 5000 ft, the aircraft turning through 062. The selected heading bug,
+    // the cyan triangle at NDElements (263.5, 296.5) drawn turned to its place on the compass: 27.9 degrees right on the captain's ARC (062 +
+    // 28 = 090) and 6.6 on the first officer's ROSE, drawn a moment later in the turn. It said nothing before; NAV in the earlier flights drew none.
+    [Theory]
+    [InlineData("efis0_arc_selected_heading", 0, "Selected heading: 28 degrees right, cyan")]
+    [InlineData("efis1_rose_selected_heading", 1, "Selected heading: 7 degrees right, cyan")]
+    public void The_selected_heading_bug_says_where_it_lies(string fixture, int side, string said)
+    {
+        Assert.Contains(said, A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), side));
+    }
 }

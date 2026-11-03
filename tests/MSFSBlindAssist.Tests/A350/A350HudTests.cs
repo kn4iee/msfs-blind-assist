@@ -169,4 +169,30 @@ public class A350HudTests
         Assert.Contains("Heading: 206, green", level);
         Assert.Contains("Pitch: 1.1 degrees up", level);
     }
+
+    // The same flight's ILS approach to VCBI 04. At 210 kt with VAPP 123 the target's box is parked under the tape (y 893), its number black
+    // on it ("123, black" read alone); at 2,222 ft the radio altitude is drawn 70 px under the flight path vector ("2160", every approach
+    // round at the vector's x); and a boxed "-3.0", black on green, rides 231 px right of the vector at the line 3 degrees under the horizon:
+    // the approach's slope (the F-PLN's FPA -3.0 on the final legs), read alone as "-3.0, black".
+    [Fact]
+    public void On_the_approach_it_reads_the_parked_target_the_radio_altitude_and_the_slope()
+    {
+        var fast = Read("hud_approach_target_below");
+        Assert.Contains("Speed target: 123, green", fast);
+        Assert.Contains("Approach slope reference: -3.0 degrees, green", fast);
+        Assert.DoesNotContain(fast, l => l is "123, black" or "-3.0, black");
+        var lower = Read("hud_approach_radio_altitude");
+        Assert.Contains("Radio altitude: 2160, green", lower);
+        Assert.DoesNotContain(lower, l => l is "2160, green" or "-3.0, black");
+    }
+
+    // Short final at 210 ft over the middle marker: "MM" (x 1173, y 816), read alone as "MM, green".
+    [Fact]
+    public void A_marker_beacon_says_which()
+    {
+        var final = Read("hud_short_final_middle_marker");
+        Assert.Contains("Middle marker, green", final);
+        Assert.Contains("Radio altitude: 210, green", final);
+        Assert.DoesNotContain("MM, green", final);
+    }
 }

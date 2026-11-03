@@ -235,6 +235,7 @@ public static class A350GroundDisplays
         used.UnionWith(cells.Where(c => !used.Contains(c) && c.Y is >= VerticalScales.PlotTop and < VerticalScales.PlotBottom && DrawnAt(c) is var i and >= 0 && drawn[i].Clipped));
         // The flight path's symbols with no name of their own (plan 24): what each is; the ND window says where.
         o.AddRange(A350NdMap.PathSymbolsOf(capture.Shapes, side).Select(p => $"{p.Name}, {p.Colour}"));
+        if (A350NdMap.SelectedHeadingLine(capture.Shapes, side) is { } selected) o.Add(selected);
         o.AddRange(trafficLines);
         o.AddRange(Rest(cells, used));
         return o;
@@ -426,8 +427,9 @@ public static class A350GroundDisplays
             double knots = Math.Round(int.Parse(speed.Text, CultureInfo.InvariantCulture) + (speed.Y - HudSpeedWindowY) / HudSpeedPxPerKnot, MidpointRounding.AwayFromZero);
             o.Add(knots <= 30 ? $"Speed: 30 knots or less, {speed.Colour}" : string.Create(CultureInfo.InvariantCulture, $"Speed: {knots:0} knots, {speed.Colour}"));
         }
-        // The speed target above the tape: its number black on a filled box, said in the box's colour.
-        foreach (var target in cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 193) <= 4 && Math.Abs(c.Y - 410) <= 8 && Digits(c)).ToList())
+        // The speed target off the tape's scale: its number black on a filled box, said in the box's colour, above the tape (y 410) when
+        // faster than the scale shows, under it (y 893) when slower (VAPP 123 at 210 kt on the approach, 2026-11-03).
+        foreach (var target in cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 193) <= 4 && (Math.Abs(c.Y - 410) <= 8 || Math.Abs(c.Y - 893) <= 8) && Digits(c)).ToList())
         {
             used.Add(target);
             var box = capture.Shapes?.LastOrDefault(s => s.Image == 0 && s.Kind == "fill" && s.X1 - s.X0 < 200
@@ -479,6 +481,32 @@ public static class A350GroundDisplays
             double drift = ((vector.X0 + vector.X1) / 2 - HudBoresightX) / HudHeadingPxPerDegree;
             o.Add(Math.Abs(drift) < 0.25 ? "Flight path vector: on the heading, green"
                 : string.Create(CultureInfo.InvariantCulture, $"Flight path vector: {Math.Abs(drift):0.0} degrees {(drift > 0 ? "right" : "left")}, green"));
+        }
+        // Low down the radio altitude, 70 px under the flight path vector at its x (every round of the approach of 2026-11-03).
+        if (vector != null)
+        {
+            float vx = (vector.X0 + vector.X1) / 2, vy = (vector.Y0 + vector.Y1) / 2;
+            foreach (var ra in cells.Where(c => !used.Contains(c) && Digits(c) && Math.Abs(c.X - vx) <= 4 && Math.Abs(c.Y - vy - HudRadioAltitudeUnderVector) <= 6).ToList())
+            {
+                used.Add(ra);
+                o.Add($"Radio altitude: {ra.Text}, {ra.Colour}");
+            }
+        }
+        // A marker beacon passed: "MM" over the middle marker on short final (x 1173, y 816, 2026-11-03).
+        foreach (var marker in cells.Where(c => !used.Contains(c) && c.Text is "OM" or "MM" or "IM").ToList())
+        {
+            used.Add(marker);
+            o.Add($"{marker.Text switch { "OM" => "Outer", "MM" => "Middle", _ => "Inner" }} marker, {marker.Colour}");
+        }
+        // On the approach a boxed slope, black on green, 231 px right of the vector at the line 3 degrees under the horizon: the approach's
+        // path angle (the F-PLN's FPA -3.0 on the final legs, 2026-11-03), said in its box's colour.
+        foreach (var slope in cells.Where(c => !used.Contains(c) && c.Colour == "black" && HudSlope.IsMatch(c.Text)).ToList())
+        {
+            var box = capture.Shapes?.LastOrDefault(s => s.Image == 0 && s.Kind == "fill" && s.X1 - s.X0 < 200
+                && s.X0 <= slope.X && s.X1 >= slope.X && s.Y0 <= slope.Y && s.Y1 >= slope.Y);
+            if (box == null) continue;
+            used.Add(slope);
+            o.Add($"Approach slope reference: {slope.Text} degrees, {A350Rgba.NameOf(box.Colour)}");
         }
         // The selected altitude: on the tape at its height (x 1325), or parked above or below it when off the scale (x 1409).
         Named("Selected altitude", c => (c.X >= 1400 && c.Text.Length >= 3 || Math.Abs(c.X - 1325) <= 2 && c.Text.Length >= 3) && Digits(c));
@@ -539,6 +567,12 @@ public static class A350GroundDisplays
 
     /// <summary>The bank within which the flight path vector's sideways place is the drift alone.</summary>
     private const double HudWingsLevelDegrees = 3;
+
+    /// <summary>How far under the flight path vector's box centre the radio altitude is drawn.</summary>
+    private const float HudRadioAltitudeUnderVector = 70;
+
+    /// <summary>The approach slope's boxed value: "-3.0".</summary>
+    private static readonly System.Text.RegularExpressions.Regex HudSlope = new(@"^-\d+\.\d$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static DrawnShape? HudSprite(A350DrawCapture capture, float atlasX, float atlasY) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.PatternW - 2048) < 2 && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f

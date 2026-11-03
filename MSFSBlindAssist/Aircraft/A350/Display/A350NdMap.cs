@@ -95,6 +95,26 @@ public static class A350NdMap
         return o;
     }
 
+    /// <summary>The selected heading bug, NDElements' cyan triangle at (263.5, 296.5), drawn turned to its place on the compass (the fourth
+    /// flight of 2026-11-03: 27.9 degrees right with 062 flown and 090 selected), so its turn is where it lies from the heading.</summary>
+    private const float HeadingBugAtlasX = 263.5f, HeadingBugAtlasY = 296.5f;
+
+    /// <summary>"Selected heading: 28 degrees right, cyan" while a side's ND draws the bug, else null.</summary>
+    internal static string? SelectedHeadingLine(IReadOnlyList<DrawnShape>? shapes, int side)
+    {
+        float shift = side == 0 ? 836 : 0;
+        foreach (var s in shapes ?? Array.Empty<DrawnShape>())
+        {
+            if (s.Image == 0 || Math.Abs(s.PatternW - 1024) > 1 || (s.X0 + s.X1) / 2 - shift is < 0 or >= 836) continue;
+            var (ax, ay) = A350ShapeReader.SpriteCentre(s);
+            if (Math.Abs(ax - HeadingBugAtlasX) > 3 || Math.Abs(ay - HeadingBugAtlasY) > 3) continue;
+            double turn = (A350ShapeReader.AngleDegrees(s) + 540) % 360 - 180;
+            int degrees = (int)Math.Round(Math.Abs(turn), MidpointRounding.AwayFromZero);
+            return degrees == 0 ? "Selected heading: on the heading, cyan" : $"Selected heading: {degrees} degrees {(turn > 0 ? "right" : "left")}, cyan";
+        }
+        return null;
+    }
+
     /// <summary>The cross-track error the ND draws beside the aircraft symbol, green: NM off the path and the side ("0.6R" in the turn to
     /// PBD18, plan 24's flight of 2026-11-03, 44 px right of ARC's symbol at 404,629 and 11 px under it; ROSE's symbol is at 404,381).</summary>
     private static readonly System.Text.RegularExpressions.Regex CrossTrack = new(@"^(\d+(?:\.\d+)?)([LR])$", System.Text.RegularExpressions.RegexOptions.Compiled);
