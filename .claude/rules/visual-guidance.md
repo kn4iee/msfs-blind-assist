@@ -1,12 +1,14 @@
 ---
 paths:
   - "MSFSBlindAssist/Services/VisualGuidanceManager.cs"
+  - "MSFSBlindAssist/Services/RunwayGlidepathOrigin.cs"
   - "MSFSBlindAssist/Services/HandFlyManager.cs"
   - "MSFSBlindAssist/Services/LiftoffHandoffBreadcrumb.cs"
   - "MSFSBlindAssist/Hotkeys/**"
   - "MSFSBlindAssist/MainForm.Hotkeys.cs"
   - "tests/MSFSBlindAssist.Tests/**/*HandFly*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*LiftoffHandoff*.cs"
+  - "tests/MSFSBlindAssist.Tests/**/*RunwayGlidepathOrigin*.cs"
   - "MSFSBlindAssist/Forms/Settings/HandFlyPanel.cs"
 ---
 # Visual guidance, hand fly and the liftoff handoff rules
@@ -32,3 +34,4 @@ Loaded when Claude reads matching code. Background: docs/visual-guidance.md. Ful
 - [VG-17] The pitch PID's `fpmError`/`fpmErrorRate` coefficients must stay positive (same sign as the error); never reintroduce the old leading minus, which produced wrong-direction guidance. Full: docs/invariants/visual-guidance.md#vg-17
 - [VG-18] Tone work must leave the PID math, phase machine and lateral arc capture untouched: VG's failure mode must always be "missing audible reference", never "wrong steering command". Full: docs/invariants/visual-guidance.md#vg-18
 - [VG-19] VG's manual-query grace window may suppress only the two chatty per-second callouts (bank guidance, centerline deviation); phase changes and distance callouts must still fire during a manual readout. Full: docs/invariants/visual-guidance.md#vg-19
+- [VG-20] VG's glidepath distance (the vertical error, the on-profile capture, the 5/3/1-mile call-outs) is from `RunwayGlidepathOrigin.Of`, the landing threshold, never the runway's start: a 2,055 ft displaced threshold read 108 ft high. Cross-track and `IsBehindRunway` keep the start, on the same centerline. Full: docs/invariants/visual-guidance.md#vg-20

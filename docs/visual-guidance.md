@@ -123,7 +123,7 @@ Approach AoA, Vref reference, and the pitch/bank rate caps are aircraft-shaped �
 | `MaxPitchRateDegPerSec` | 2.5 | 2.0 | Cap on commanded-pitch change rate; heavier aircraft = slower authority. |
 | `MaxBankRateDegPerSec` | 3.0 | 3.0 | Cap on commanded-bank change rate. |
 | `GlideslopeAltitudeBiasFt` | 60 *(est.)* | 80 *(measured)* | Added to the ideal `distance·tan(3°)` glidepath so VG's "on glideslope" matches the real ILS. See below. |
-| `FlareAltitudeBiasFt` | 12 *(est.)* | 30 *(measured)* | Subtracted from measured altitude before the flare/touchdown thresholds so they fire at true main-gear height. See below. |
+| `FlareAltitudeBiasFt` | 12 *(est.)* | 40 *(measured)* | Subtracted from measured altitude before the flare/touchdown thresholds so they fire at true main-gear height. See below. |
 | `FlareTriggerWheelHeightFt` | 30 (FCTM) | 40 (autoland) | True main-gear height at which the flare cue announces. A320 follows FCTM 30 ft initiation; PMDG 777 uses 40 to match its autopilot's autoland flare. |
 | `FlareTargetPitchDeg` | 6.0° | 4.5° | Pitch commanded during the Flare phase. A320 FCTM ~+5–6°; Boeing 777 FCTM "2–3° pitch increase from approach attitude" → ~+4–4.5° given the 777's +1.5° approach pitch. |
 | `TonePitchRangeDeg` | 6 | 10 | Pitch saturation. 777 widens to 10° (30 Hz/° matching slope) for gentler beat at small errors during a stabilized approach; A320 keeps the precision-oriented 6°. |
@@ -138,6 +138,19 @@ VG measures altitude as the SimConnect **reference datum** (`PLANE ALTITUDE − 
 `GlideslopeAltitudeBiasFt` fixes (1): `idealAltitudeAGL = distance·tan(3°) + GlideslopeAltitudeBiasFt`. `FlareAltitudeBiasFt` fixes (2): `wheelHeightAGL = measuredAltitude − FlareAltitudeBiasFt`, and the flare (30 ft) and touchdown (5 ft) phase thresholds test `wheelHeightAGL`. The two are applied in **different code paths** and were measured separately (on the beam vs. near the ground, different attitudes) — they are deliberately **not** one shared constant. Set either to `0` to disable that correction.
 
 The 777 numbers are measured against a coupled ILS autoland; the A320 numbers are estimates (≈50 ft TCH + a smaller datum offset) pending in-sim calibration. The iniBuilds A350's are measured: on two coupled ILS approaches to OMDB 12L (2026-10-30, 3000 to 300 ft, 56 samples) `PLANE ALTITUDE − threshold elevation − distance·tan(3°)` had a median of 52 and 53 ft, with the distance to the displaced threshold; parked, the datum reads 15.3 ft above the ground (`FlareAltitudeBiasFt` 15). Note `VisualGuidanceManager` measures to `runway.StartLat`, the runway's end and not its displaced threshold: on 12L, with 1493 ft displaced, its path lies 78 ft over the ILS on every aircraft.
+
+**The glidepath starts at the landing threshold** ([VG-20]). A displaced threshold puts the painted threshold, where a real glideslope crosses at its TCH, `Runway.ThresholdOffset` feet down the runway from the pavement start. Every glidepath distance (the vertical error, the "On vertical profile" capture, the 5/3/1-mile call-outs) is measured from `RunwayGlidepathOrigin.Of(runway)`, the start moved along the runway heading by that offset, so `distance` in the formula above is from the threshold. Measured from the start, which comes first on the approach, an aircraft exactly on the ILS read high by offset × tan(angle): 108 ft at a 2,055 ft offset (KJFK 13R's size), and the guidance flew it that much low. On the 94 % of runway ends with no offset nothing changes. The cross-track error and the "behind the runway" test keep the start: the threshold is on the same centerline, and past the start the aircraft is over the runway.
+
+Where each profile's glidepath bias comes from, since a bias measured on a displaced runway before this fix would hold the offset's error too:
+
+| Aircraft | `GlideslopeAltitudeBiasFt` | `FlareAltitudeBiasFt` | Measured on |
+|---|---|---|---|
+| PMDG 777 | 80 | 40 | a coupled ILS autoland, runway not recorded; 80 ft is the 50 ft TCH plus the datum's height over the glideslope antenna, which is what a threshold without an offset gives, so it stands; the next 777 autoland's `landing_assist.log` confirms it |
+| FBW A32NX, Fenix A320 | 60 | 12 | estimates, no runway |
+| Headwind A330 | 70 | 30 | estimates, no runway |
+| TFDi MD-11 | 75 | 35 | estimates, no runway |
+
+`FlareAltitudeBiasFt` is a height over the runway (datum to wheels), never a distance along it, so a displaced threshold never touched it.
 
 Override pattern:
 
@@ -207,7 +220,7 @@ The vertical path is **FPM-based** (target FPM derived from 3° glideslope + alt
 | `typicalApproachAoaDeg` `[profile]` | 6.0° | Nominal pitch = -3° + AoA. PMDG 777 overrides to 4.5°. |
 | `maxPitchRateDegPerSec` `[profile]` | 2.5 | Cap on commanded pitch change rate (deg/sec) |
 | `glideslopeAltitudeBiasFt` `[profile]` | 60 *(est.)* | Added to ideal glidepath so VG matches the real ILS (TCH + datum). PMDG 777 = 80 (measured). |
-| `flareAltitudeBiasFt` `[profile]` | 12 *(est.)* | Subtracted from measured altitude before flare/touchdown checks → true gear height. PMDG 777 = 30 (measured). |
+| `flareAltitudeBiasFt` `[profile]` | 12 *(est.)* | Subtracted from measured altitude before flare/touchdown checks → true gear height. PMDG 777 = 40 (measured). |
 | `flareTriggerWheelHeightFt` `[profile]` | 30 | True gear height at which the flare cue announces. PMDG 777 = 40 (matches autopilot autoland). |
 | `TOUCHDOWN_ALTITUDE_FT` | 5.0 | Touchdown phase entry — true main-gear height (`wheelHeightAGL`) |
 | `FPM_P_GAIN` | 0.005 | Pitch correction per FPM error (deg per FPM) |

@@ -28,6 +28,10 @@ public class VisualGuidanceManager : IDisposable
     private Runway? runway;
     private double magneticVariation = 0.0;
     private double thresholdElevationMSL = 0.0;
+    // The landing threshold, where the glidepath starts (RunwayGlidepathOrigin): the runway's start
+    // moved along its heading by a displaced threshold's offset. Glidepath distances only.
+    private double glidepathOriginLat;
+    private double glidepathOriginLon;
 
     // Audio generators — both always run while guidance is active.
     private AudioToneGenerator? desiredAttitudeTone;  // PID-commanded attitude
@@ -299,6 +303,7 @@ public class VisualGuidanceManager : IDisposable
         DisposeTones();
 
         runway = destinationRunway;
+        (glidepathOriginLat, glidepathOriginLon) = RunwayGlidepathOrigin.Of(destinationRunway);
         guidanceWaveType = guidanceToneWaveform;
         guidanceVolume = toneVolume;
         currentToneWaveType = currentToneWaveform;
@@ -856,9 +861,11 @@ public class VisualGuidanceManager : IDisposable
             return;
         }
 
-        // Calculate position relative to runway
+        // Calculate position relative to runway. The glidepath's distance is from the landing
+        // threshold (RunwayGlidepathOrigin); the cross-track error from the start, on the same
+        // centerline, is the same either way.
         double distance = NavigationCalculator.CalculateDistance(
-            lat, lon, runway.StartLat, runway.StartLon);
+            lat, lon, glidepathOriginLat, glidepathOriginLon);
 
         double crossTrackError = NavigationCalculator.CalculateDistanceToLocalizer(
             lat, lon, runway.StartLat, runway.StartLon, runway.Heading);
@@ -926,12 +933,25 @@ public class VisualGuidanceManager : IDisposable
     }
 
     /// <summary>
+    /// The glidepath's altitude error in feet (positive = too high): the height above the
+    /// threshold elevation against <paramref name="distanceNm"/> × tan(angle) plus the bias, the
+    /// distance measured from the landing threshold (<see cref="RunwayGlidepathOrigin"/>).
+    /// </summary>
+    internal static double GlidepathAltitudeErrorFt(double altMsl, double thresholdElevationMsl,
+        double distanceNm, double angleDeg, double biasFt)
+    {
+        double idealHeightFt = distanceNm * 6076.12 * Math.Tan(angleDeg * Math.PI / 180.0) + biasFt;
+        return altMsl - thresholdElevationMsl - idealHeightFt;
+    }
+
+    /// <summary>
     /// Calculates desired bank angle for lateral guidance
     /// </summary>
     private double CalculateDesiredBank(double lat, double lon, double heading)
     {
         if (runway == null) return 0.0;
 
+        // Lateral only: the centerline from the start, the same as from a displaced threshold.
         double crossTrackError = NavigationCalculator.CalculateDistanceToLocalizer(
             lat, lon, runway.StartLat, runway.StartLon, runway.Heading);
 
@@ -1084,9 +1104,9 @@ public class VisualGuidanceManager : IDisposable
                 // Apply bank limit for comfort
                 desiredBank = Math.Clamp(rawDesiredBank, -ARC_BANK_LIMIT, ARC_BANK_LIMIT);
 
-                // Calculate distance to threshold for debugging
+                // Calculate distance to threshold for debugging (the landing threshold, as the glidepath)
                 double distanceNM = NavigationCalculator.CalculateDistance(
-                    lat, lon, runway.StartLat, runway.StartLon);
+                    lat, lon, glidepathOriginLat, glidepathOriginLon);
 
                 // Debug output for arc mode
                 Log.Debug("VisualGuidance", 
@@ -1126,9 +1146,9 @@ public class VisualGuidanceManager : IDisposable
                 // Tight bank limit for precision
                 desiredBank = Math.Clamp(rawDesiredBank, -10.0, 10.0);
 
-                // Calculate distance to threshold for debugging
+                // Calculate distance to threshold for debugging (the landing threshold, as the glidepath)
                 double distanceNM = NavigationCalculator.CalculateDistance(
-                    lat, lon, runway.StartLat, runway.StartLon);
+                    lat, lon, glidepathOriginLat, glidepathOriginLon);
 
                 // Debug output for precision mode
                 Log.Debug("VisualGuidance", 
@@ -1227,9 +1247,10 @@ public class VisualGuidanceManager : IDisposable
         {
             // New glideslope-based vertical guidance - enforces 3° glideslope to threshold
 
-            // Calculate direct distance to threshold
+            // Direct distance to the landing threshold, the glidepath's origin (a displaced
+            // threshold's, not the pavement start's: RunwayGlidepathOrigin).
             double distanceToThresholdNM = NavigationCalculator.CalculateDistance(
-                lat, lon, runway.StartLat, runway.StartLon);
+                lat, lon, glidepathOriginLat, glidepathOriginLon);
 
             // Get current AGL relative to threshold
             double currentAGL = altMSL - thresholdElevationMSL;
@@ -1242,12 +1263,12 @@ public class VisualGuidanceManager : IDisposable
             // terms in, so VG's "on glideslope" coincides with the real ILS path the
             // autopilot flies — instead of a path one TCH too low, which previously biased
             // the commanded vertical speed into commanding excess descent.
-            double distanceFt = distanceToThresholdNM * 6076.12;
             double glideslopeAngleRad = glideslopeAngleDeg * Math.PI / 180.0;
-            double idealAltitudeAGL = distanceFt * Math.Tan(glideslopeAngleRad) + glideslopeAltitudeBiasFt;
 
             // Calculate altitude error (positive = too high, negative = too low)
-            double altitudeError = currentAGL - idealAltitudeAGL;
+            double altitudeError = GlidepathAltitudeErrorFt(
+                altMSL, thresholdElevationMSL, distanceToThresholdNM, glideslopeAngleDeg, glideslopeAltitudeBiasFt);
+            double idealAltitudeAGL = currentAGL - altitudeError;
 
             // Apply exponential smoothing to current FPM to reduce oscillation
             double smoothedFPM;
@@ -1414,6 +1435,9 @@ public class VisualGuidanceManager : IDisposable
     {
         if (runway == null) return false;
 
+        // From the pavement start, not the glidepath's displaced threshold: past the start the aircraft
+        // is over the runway, and above 500 ft there it must extend whatever the threshold's offset.
+
         // Safety check: Don't make determination if too close (bearing becomes unstable)
         const double MINIMUM_DISTANCE_NM = 0.1; // ~600 feet
         double distanceToThreshold = NavigationCalculator.CalculateDistance(
@@ -1506,8 +1530,9 @@ public class VisualGuidanceManager : IDisposable
         if ((now - lastDistanceAnnouncement).TotalMilliseconds < ANNOUNCEMENT_INTERVAL_MS)
             return;
 
+        // From the landing threshold, as the glidepath they mark (a DME-like count down the approach).
         double distanceNM = NavigationCalculator.CalculateDistance(
-            lat, lon, runway.StartLat, runway.StartLon);
+            lat, lon, glidepathOriginLat, glidepathOriginLon);
 
         // Announce at 5, 3, 1 miles
         double[] calloutDistances = { 5.0, 3.0, 1.0 };
@@ -1535,7 +1560,7 @@ public class VisualGuidanceManager : IDisposable
         if ((now - lastExtendingProgressAnnouncement).TotalMilliseconds < EXTENDING_PROGRESS_INTERVAL_MS)
             return;
 
-        // Calculate distance to threshold
+        // Calculate distance to threshold: the pavement start, the point IsBehindRunway measures past
         double distanceNM = NavigationCalculator.CalculateDistance(
             lat, lon, runway.StartLat, runway.StartLon);
 
@@ -1645,7 +1670,8 @@ public class VisualGuidanceManager : IDisposable
         if (RoutineAnnouncementsSuppressed)
             return;
 
-        // Calculate cross-track error (distance from centerline)
+        // Calculate cross-track error (distance from centerline): from the start, the same as from a
+        // displaced threshold on that centerline.
         double crossTrackErrorNM = NavigationCalculator.CalculateDistanceToLocalizer(
             lat, lon, runway.StartLat, runway.StartLon, runway.Heading);
 
