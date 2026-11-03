@@ -25,8 +25,20 @@ export async function pages(ms = 4000) {
   return r.json();
 }
 
-/** An inspector socket on a page: eval(expr) answers the expression's value; close() lets the page go. */
+/** An inspector socket on a page: eval(expr) answers the expression's value; close() lets the page go. Coherent frees a
+ *  closed socket's page about 500 ms after the close (measured on 1.2.8), so a refused open is tried again 500 ms apart, four
+ *  times: `oisView` closes the socket it identified the side with just before the caller opens its own. */
 export async function open(page, ms = 4000) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await openOnce(page, ms); }
+    catch (e) {
+      if (attempt >= 4 || !/^no socket/.test(e.message)) throw e;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
+
+async function openOnce(page, ms) {
   const ws = new WebSocket(`ws://${BASE}/devtools/inspector/${page.id}`);
   let id = 0;
   const pending = new Map();

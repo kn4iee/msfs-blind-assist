@@ -80,16 +80,19 @@ The owner's answer to question 17 (2026-10-31): what is hardest is where focus l
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** in progress
+- **Status:** landed, waiting on the owner (Task 2 Step 3, by ear)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-02
 - **Worked by:** Claude (Opus 5.5), 2026-11-02
 - **Started:** 2026-11-02, from `3c1a39b62`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:** 1 done (`af4e57197`); 3 re-confirmed live on both sides, nothing to fix; 4: 18 pinned pages re-captured on 1.2.8 and read
-  (two 1.2.8 layout changes, no agent change), the FO side and the FAP's pages still to walk; 5 done (`026f4dd9e`); 2 to do.
-- **Waiting on the owner:**
+- **Tasks:** 1 done (`af4e57197`); 3 re-confirmed live on both sides, nothing to fix; 4 done: 18 pinned pages re-captured on 1.2.8 and
+  read (two 1.2.8 layout changes, no agent change), both sides walked page by page and the FAP's five pages (2026-11-03); 5 done
+  (`026f4dd9e`); 2 Steps 1-2 done (`14e67b91e`, `68e976cb9`: the five focus rules on the OIS and FAP windows, shell tests 33 pass).
+- **Landed:** 2026-11-03
+- **Tests at landing:** `tools/flypad-shell-test` 33 pass; the A350 tests 2,181 pass
+- **Waiting on the owner:** Task 2 Step 3: MISSION, PERFORMANCE, UTILITIES and OPTIONS by ear through the window, a verdict per rule.
 - **In-sim results:** `docs/a350/evidence/06-ois.md`.
-- **Changed from the plan:**
-- **Rulings made while working:** Task 5's README recipe updated in `docs/tooling.md`'s OIS-harness row too (a plan 20 file), so the
+- **Changed from the plan:** Task 2 Step 1 recorded where focus landed from the shell's code and its tests (the window itself cannot be
+  hosted by the probe), not live through the window; the owner's Step 3 is the live check.
+- **Rulings made while working:** Task 2's rules are A350-only (`FocusFollowsPress`), each other EFB keeping its pinned behaviour; cost
+  if wrong: the flyPad and the PMDG tablets keep the old focus until their own owners ask. Task 5's README recipe updated in `docs/tooling.md`'s OIS-harness row too (a plan 20 file), so the
   tooling table does not keep the old sed recipe; cost if wrong: plan 20 rewrites one row.

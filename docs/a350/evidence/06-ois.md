@@ -50,10 +50,27 @@ No agent change was needed. The harness: 113 of 113, `secrets.test.js` over the 
 - **A tooling fault found on the way:** `ceval.mjs ois:cpt` (and `ois:fo`) fails on 1.2.8 with "no socket": `coherent.mjs`'s `oisView`
   finds the side's view by opening and closing a socket on it, and Coherent frees a page's one socket about 500 ms after the close (measured),
   so the open that follows at once is refused. `capture-run.mjs` tries the open again 500 ms apart; `coherent.mjs` itself is plan 20's
-  (handoff: wait or retry in `oisView`). A view picked by its index (`ceval.mjs iniEfbA350 … 1`) works.
-- Not walked: the First Officer's side page by page and the FAP's pages (`A350Probe ois fo`, `fap`): the FO side read its GROUND and T.O
-  PERF the same way in Task 3; the FAP's screen was off on this flight and read as "Screen off" with "Wake the screen".
+  (handoff: wait or retry in `oisView`). A view picked by its index (`ceval.mjs iniEfbA350 … 1`) works. Fixed with plan 20
+  (2026-11-03): `coherent.mjs`'s `open` tries a refused socket again 500 ms apart, four times; `ceval.mjs ois:cpt` and `ois:fo` answer.
+- **Both sides and the FAP walked (Step 2, 2026-11-03, 1.2.8).** Thirteen pages on each side from FLT OPS MENU (FLT OPS PLAN, FLT OPS
+  STS, LOADSHEET, TERML CHART, ENROUTE, OPS LIBRARY, T.O PERF, LDG PERF, AOC, GROUND, MAINTENANCE, AUTOSAVE, OFP) with
+  `A350Probe ois fo|cpt`: the same pages and element counts, no untitled element on either. The two sides differ only where the
+  aircraft makes them: each side's T.O PERF is its own (the captain's held the last COMPUTE, V1 141, VR 143, V2 148, FLEX 67, and
+  its SEND TO FMS; the first officer's was empty), and only the preferred seat side's menu holds SITUATIONS and OPTIONS (here the
+  captain's). OPS LIBRARY stays on the menu on both sides (the gap in plan 13's ledger). The FAP, woken with "Wake the screen":
+  Cabin Status, Lights Status, Temperature, Doors Status and Water/Waste Status read whole, no untitled element.
+
+## Task 2: focus after an action (2026-11-03)
+
+Where focus landed before (the shell's code, pinned by tests that keep it for every other EFB): a control kept by its key kept focus;
+one rebuilt under a new label (the OIS writes a result into a label) lost it to the document; a page change cleared the list, spoke
+"OIS page: …" through the live region and left focus on nothing; a dialog or a list that opened left focus where it was. Now, on the
+A350's OIS and FAP only (`FbwEfbForm.FocusFollowsPress`, sent as `focus: true`), each of the owner's five rules, test-first in
+`tools/flypad-shell-test/efb-shell.test.js` (33 pass): a press that opens another page puts focus on its title, read once; a pressed
+control rebuilt under a new label keeps focus at its place; a dialog the press brings up takes focus on its first button and gives it
+back to its opener; a list opening under a button ('(collapsed)' to '(expanded)': PANEL STATES, the EFB menu) takes focus on its first
+item and gives it back; a page or dialog that changes by itself leaves focus alone and is announced.
 
 ## Still to do
 
-- Task 2 (focus after an action): needs MSFSBlindAssist's OIS window itself, page by page on both sides, then the owner by ear.
+- Task 2 Step 3, the owner by ear: MISSION, PERFORMANCE, UTILITIES and OPTIONS through the window (Shift+T), a verdict per rule.

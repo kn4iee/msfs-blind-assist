@@ -26,6 +26,7 @@ variable the probe reads. No code change.
 | `fastdump2.py` | with no argument, did nothing and said nothing | usage line |
 | `ceval.mjs`, `lset.mjs`, `press.mjs`, `wclick.sh` | ran with no target (a timeout, or a socket opened for nothing) | usage line |
 | `draw.mjs`, `rawtext.mjs`, `sdpages.mjs`, `simq.mjs`, `xy.mjs` | a stack (`ENOENT importsigs.json`) before a fresh run, a `TypeError` without a copy | `emu2.mjs` names the missing generated file and the script that builds it; each script has a usage line |
+| `coherent.mjs` (`ceval.mjs ois:cpt` / `ois:fo`, plan 06's handoff) | "no socket" on 1.2.8: `oisView` closes the socket it found the side with, and Coherent frees the page about 500 ms later, so the caller's open was refused | `open` tries a refused socket again 500 ms apart, four times; both sides answer |
 | `fastlocate.py`, `memscan.py`, `memlib.py`, `make_importsigs.py`, `vtables.py`, `patch2.py`, `patchtext.py` | write and read their data files beside themselves (`os.path.dirname(__file__)`) | unchanged: already independent of the folder they are run from |
 
 Kept, not retired: the superseded Node draws (`draw.mjs`, `xy.mjs`, `simq.mjs`) already say which `A350Probe` mode
