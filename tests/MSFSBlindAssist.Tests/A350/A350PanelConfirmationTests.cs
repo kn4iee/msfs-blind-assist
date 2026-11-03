@@ -90,16 +90,16 @@ public class A350PanelConfirmationTests
         ("INI_ROLL_MODE", 2), ("INI_PITCH_MODE", 12),
     };
 
-    // Live 2026-11-03: the emergency descent engaged from NAV turned the selected heading a degree a second, 160 to 130, and each
-    // degree was said (thirty call-outs). While it flies (INI_PITCH_MODE 9 EMER DES, INI_ROLL_MODE 3 its HDG) the turn is the
-    // aircraft's own: said once, when the window has stood still.
+    // Live 2026-11-03: the emergency descent engaged from NAV turned the selected heading a degree a second (160 to 130, then 122 to
+    // 98 on a second flight), each degree said. INI_PITCH_MODE reads 33 while EMER DES flies, 9 from ALT* (where the turn stops) and
+    // 6 at ALT; the roll mode stays HDG's 2. The turn is the aircraft's own: said once, when the window has stood still.
     [Fact]
     public void The_emergency_descents_heading_turn_is_said_once_when_settled()
     {
         var hdg = Window("Heading window");
         Deliver(hdg, HeadingIn);
         BatchAfter(1000);
-        Deliver(hdg, ("INI_PITCH_MODE", A350FcuCallouts.EmerDescentPitchMode), ("INI_ROLL_MODE", A350FcuCallouts.EmerDescentRollMode));
+        Deliver(hdg, ("INI_PITCH_MODE", 33));
         for (int heading = 159; heading >= 130; heading--)
         {
             Deliver(hdg, ("INI_HEADING_DIAL", heading));
@@ -109,6 +109,18 @@ public class A350PanelConfirmationTests
         for (int i = 0; i < 5; i++)
             BatchAfter(1000);
         Assert.Equal(new[] { "Heading 130 degrees" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_heading_turned_during_alt_star_after_the_descent_is_said_at_the_batch_end()
+    {
+        var hdg = Window("Heading window");
+        Deliver(hdg, HeadingIn);
+        BatchAfter(1000);
+        Deliver(hdg, ("INI_PITCH_MODE", 9), ("INI_ROLL_MODE", 3));
+        Deliver(hdg, ("INI_HEADING_DIAL", 170));
+        BatchAfter(1000);
+        Assert.Equal(new[] { "Heading 170 degrees" }, _speech.All);
     }
 
     [Fact]

@@ -22,20 +22,18 @@ public static class A350FcuCallouts
     /// is in the cockpit and sampled by then, and a run of steps is read back once (panels minor 3).</summary>
     public const int StepSettleMs = 400;
 
-    /// <summary>The emergency descent flying, as the modes read it (live 2026-11-03, 1.2.8): <c>INI_PITCH_MODE</c> 9 from its
-    /// engagement to ALT*, <c>INI_ROLL_MODE</c> 3 (its HDG) from the engagement until the pilot picks a lateral mode.
+    /// <summary>EMER DES flying, as <c>INI_PITCH_MODE</c> reads it (live 2026-11-03, 1.2.8, two descents beside the FMA): 33 from
+    /// the engagement, 9 from ALT* (about 3,000 ft early at 7,000 ft/min), 6 at ALT; the roll mode stays HDG's 2, and
     /// <c>INI_EMER_DESCENT</c> stays 0 throughout.</summary>
-    public const double EmerDescentPitchMode = 9, EmerDescentRollMode = 3;
+    public const double EmerDescentPitchMode = 33;
 
     /// <summary>How long the heading window must stand still, while the aircraft turns it, before its value is said once.</summary>
     public const int AircraftTurnSettleMs = 3000;
 
-    /// <summary>Whether a window's change is the aircraft turning it: the heading window while the emergency descent flies (engaged
-    /// from NAV it turned the selected heading a degree a second, 160 to 130, live 2026-11-03). Said once settled, never per degree.</summary>
+    /// <summary>Whether a window's change is the aircraft turning it: the heading window while EMER DES flies (engaged from NAV it
+    /// turned the selected heading a degree a second until ALT*: 160 to 130, 122 to 98). Said once settled, never per degree.</summary>
     public static bool IsAircraftTurning(string window, Func<string, double?> read) =>
-        window == HeadingWindow
-        && (read("INI_PITCH_MODE") is double pitch && Math.Abs(pitch - EmerDescentPitchMode) < 0.5
-            || read("INI_ROLL_MODE") is double roll && Math.Abs(roll - EmerDescentRollMode) < 0.5);
+        window == HeadingWindow && read("INI_PITCH_MODE") is double pitch && Math.Abs(pitch - EmerDescentPitchMode) < 0.5;
 
     /// <summary>What a speaking window says, null while an input is unread (never a baseline of nothing).</summary>
     public static string? Phrase(string window, Func<string, double?> read) => window switch
