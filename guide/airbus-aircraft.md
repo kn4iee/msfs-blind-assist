@@ -678,7 +678,7 @@ The A350 has six sections. Its panels take the A380's names and order wherever t
 - **Gear Bays:** the main gear door hatch, the left and right main gear doors (open the hatch first, or BA says the door did not move), the nose gear door hatch and door, the nose wheel steering panel and the nose gear interphone panel.
 - **Engine Cowlings and Covers:** each engine's cowling, with a status line for the oil level its sight gauge shows, and the engine and pitot covers.
 
-**Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display, the BAT display and, with the option fitted and the combiner deployed, the Captain and First Officer HUD.
+**Displays**: each display read as text with its colours, refreshed every second: the Captain and First Officer PFD, ND and MFD, the FCU display, the three RMP displays, the standby flight display, the standby navigation display, the BAT display and, with the option fitted and the combiner deployed, the Captain and First Officer HUD displays (the HUD's brightness, crosswind and declutter keys are on the Glareshield's Captain HUD and First Officer HUD panels).
 
 Some A350 controls are worth knowing about:
 

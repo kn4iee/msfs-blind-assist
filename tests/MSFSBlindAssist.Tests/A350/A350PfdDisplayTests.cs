@@ -19,13 +19,25 @@ public class A350PfdDisplayTests
         {
             "Captain PFD", "First Officer PFD", "Captain ND", "First Officer ND", "Captain MFD", "First Officer MFD",
             "FCU display", "RMP 1 display", "RMP 2 display", "RMP 3 display",
-            "Standby flight display", "Standby navigation display", "BAT display", "Captain HUD", "First Officer HUD",
+            "Standby flight display", "Standby navigation display", "BAT display", "Captain HUD display", "First Officer HUD display",
         }, def.GetPanelStructure()["Displays"]);
         foreach (var d in IniBuildsA350Definition.DisplayPanels)
         {
             Assert.Contains(d.Key, def.GetPanelDisplayVariables()[d.Panel]);
             Assert.True(def.GetVariables()[d.Key].ExcludeFromMonitorManager);
         }
+    }
+
+    /// <summary>Panels are found by name: a display panel named as a cockpit panel took its place, and the cockpit panel's
+    /// rows were lost (the glareshield's Captain HUD and First Officer HUD keys, plan 23 2026-11-03).</summary>
+    [Fact]
+    public void No_display_panel_shares_a_name_with_a_cockpit_panel()
+    {
+        var def = new IniBuildsA350Definition();
+        var cockpit = def.GetPanelStructure().Where(s => s.Key != "Displays").SelectMany(s => s.Value).ToHashSet(StringComparer.Ordinal);
+        Assert.Empty(IniBuildsA350Definition.DisplayPanels.Select(d => d.Panel).Where(cockpit.Contains));
+        Assert.Equal(new[] { "A350_FCU_HUD_BRIGHTNESS_LEFT", "A350_FCU_HUD_XWIND_LEFT", "A350_INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID" },
+            def.GetPanelControls()["Captain HUD"]);
     }
 
     [Fact]
