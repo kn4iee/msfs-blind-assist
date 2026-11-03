@@ -56,6 +56,8 @@ its reason.
   that FMS computed no predictions (INITIALIZE WEIGHT/CG after an engine restart, the third flight showed), not a reader gap.
 - E/WD and SD: F/CTL's four small circles under the ailerons' columns (unnamed); the rest of the 35 CTR sprites are read, consumed (the
   units' %, ° and °C sprites, the pitch trim's pointer beside its read figure) or the engine display's background art.
+- ND on a zoom range in flight (near VCCC, which the ANF does not hold, 2026-11-03): "Vertical display altitudes: 05, green" and a
+  lone "00, green", green figures the reader took for the scale; one capture to read before naming them.
 - SND needles: none on 1.2.8. The third flight tuned LS 109.90 (course 040) and VOR 1 114.10 through RMP 1's STBY RAD NAV and pressed the
   SND's LS, MODE and +/- keys: the SND drew the same 23 shapes throughout; its MENU key's INSERT WPT reads.
 - MFD leftovers: the F-PLN header's DIST and FPA, MODE, MACH; the green "=" parked above the PFD's speed tape (never on its scale here).

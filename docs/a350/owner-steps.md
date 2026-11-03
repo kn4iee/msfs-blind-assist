@@ -48,13 +48,16 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 
 ### 2.4 Things a script cannot ask the aircraft for
 
-1. **Windshear and stall (plan 07):** neither the 1.2.8 OIS nor ActiveSky offers them. If you meet either, the PFD's call-out and its
-   Ctrl+M row should speak.
-2. **RWY TOO SHORT and MAX REVERSE (plan 07):** BTV armed for an exit too short for your weight on a shorter runway than VCBI's; on
-   2026-11-03 BTV gave way to BRK MED instead of drawing them.
-3. **The automatic emergency descent (plan 16):** only a depressurisation brings it (OIS SITUATIONS, irreversible): your call. The manual
-   one was flown three times on 2026-11-03.
-4. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
+0. **Restart the A350's flight from the MSFS menu first.** The fifth flight of 2026-11-03 ran the OIS's DEPRESSURISATION and BIRD STRIKE,
+   which cannot be reset: the aircraft on the VCBI stand has engine 1 failed and the cabin situation latched.
+1. **Windshear (plan 07):** the PFD draws "WIND SHEAR" (red), but neither the 1.2.8 OIS nor ActiveSky can be asked for one. If you meet
+   it, its call-out and its Ctrl+M row should speak. (The stall is the A350's horn alone, drawn on no display: nothing for MSFSBA to read,
+   and you hear the horn yourself.)
+2. **RWY TOO SHORT and MAX REVERSE (plan 07):** they need BTV armed for a runway shorter than the landing distance, at an airport the ANF
+   holds. VCBI is too long, and VCCC (1,400 m, tried 2026-11-03 with BRK MED) is not in the ANF's database, so BTV could not be armed.
+   A short runway at a big airport, with BTV armed for its end.
+3. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
+   (The automatic emergency descent was flown on 2026-11-03 and is off this list.)
 
 ## 3. By ear (your judgement)
 
