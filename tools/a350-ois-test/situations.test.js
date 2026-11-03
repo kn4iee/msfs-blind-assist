@@ -40,3 +40,21 @@ test('a card title stays with its own button', () => {
   assert.ok(els.some(e => e.kind === 'button' && e.text === 'DEPRESSURISATION: DISABLED'));
   assert.ok(els.some(e => e.kind === 'button' && e.text === 'FLT OPS MENU'), els.map(e => e.text).join(' | '));
 });
+
+// Live 2026-11-03 (1.2.8): a situation's START asks "Are you sure you want to start this situation?" in a notie confirm whose Yes
+// and Cancel are divs inside the toast. The question was read and nothing answered it, so no situation could be started from the
+// window. Its answers follow the question, each pressable.
+test('a confirmation toast offers its answers after its question', () => {
+  const els = scrape('situations_confirm');
+  const q = els.findIndex(e => e.kind === 'alert' && e.text === 'Are you sure you want to start this situation?');
+  assert.ok(q >= 0, els.map(e => e.text).join(' | '));
+  const yes = els[q + 1], cancel = els[q + 2];
+  assert.equal(yes.kind, 'button'); assert.equal(yes.text, 'Yes'); assert.ok(yes.clickable); assert.ok(yes.idx > 0);
+  assert.equal(cancel.kind, 'button'); assert.equal(cancel.text, 'Cancel'); assert.ok(cancel.clickable);
+});
+
+test('with situations enabled each button starts its situation', () => {
+  const els = scrape('situations_confirm');
+  assert.ok(els.some(e => e.kind === 'button' && e.text === 'DEPRESSURISATION: START'));
+  assert.ok(els.some(e => e.kind === 'button' && e.text === 'SMOKE IN THE CABIN: START'));
+});

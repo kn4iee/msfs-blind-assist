@@ -676,6 +676,17 @@ public class A350PfdTests
         Assert.True(read.Lines.ToList().IndexOf("Protections: lost, amber") == read.Lines.ToList().IndexOf("Bank: wings level") + 1);
     }
 
+    // The automatic emergency descent (1.2.8, 2026-11-03, the OIS's DEPRESSURISATION at FL310): the PFD's red message on two lines at the
+    // attitude's centre (x 359), "AUTO EMER DES" over "ENGAGED" 30 px under it (over "IN 12 S" while it counted down). They were said
+    // apart, the second line on the old flags row whatever the message's own row said.
+    [Fact]
+    public void A_two_line_message_at_the_pfds_centre_reads_as_one()
+    {
+        var read = A350Pfd.ReadParts(Fixture("efis0_auto_emer_des_engaged"), 0);
+        Assert.Contains("AUTO EMER DES ENGAGED, red", read.Rest);
+        Assert.DoesNotContain(read.Rest, l => l is "ENGAGED, red" or "AUTO EMER DES, red");
+    }
+
     [Fact]
     public void Normal_law_reads_no_protections_line()
     {

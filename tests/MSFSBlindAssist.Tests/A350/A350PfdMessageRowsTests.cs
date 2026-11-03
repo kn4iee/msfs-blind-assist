@@ -61,6 +61,32 @@ public class A350PfdMessageRowsTests
         Assert.False(A350PfdFlagAnnouncer.IsMuted("PULL UP, red", none.Contains));
     }
 
+    // The module's own PFD strings (1.2.8, read from its memory 2026-11-03): WIND SHEAR is two words; no PFD draws W/S AHEAD or STALL
+    // (the stall is the horn alone); AP OFF, A/THR OFF and DON'T SINK had no row. The emergency descent's messages, two lines heard live in the
+    // automatic descent ("AUTO EMER DES IN 12 S", "AUTO EMER DES ENGAGED", and COMPLETED), share one row, as EMER DES ARMED has its own.
+    [Theory]
+    [InlineData("WIND SHEAR, red", "WIND SHEAR")]
+    [InlineData("AP OFF, red", "AP OFF")]
+    [InlineData("A/THR OFF, amber", "A/THR OFF")]
+    [InlineData("DON'T SINK, red", "DON'T SINK")]
+    [InlineData("AUTO EMER DES IN 12 S, red", "AUTO EMER DES")]
+    [InlineData("AUTO EMER DES ENGAGED, red", "AUTO EMER DES")]
+    [InlineData("AUTO EMER DES COMPLETED, green", "AUTO EMER DES")]
+    [InlineData("EMER DES ARMED, cyan", "EMER DES")]
+    public void A_message_the_module_draws_has_its_row(string flag, string message)
+    {
+        Assert.Equal(A350PfdFlagAnnouncer.KeyFor(message), A350PfdFlagAnnouncer.MuteKeyFor(flag));
+    }
+
+    [Fact]
+    public void No_row_waits_for_a_message_the_module_never_draws()
+    {
+        Assert.DoesNotContain("WINDSHEAR", A350PfdFlagAnnouncer.Messages);
+        Assert.DoesNotContain("W/S AHEAD", A350PfdFlagAnnouncer.Messages);
+        Assert.DoesNotContain("STALL", A350PfdFlagAnnouncer.Messages);
+        Assert.Equal(A350PfdFlagAnnouncer.MuteKey, A350PfdFlagAnnouncer.MuteKeyFor("ATTITUDE, red"));   // a whole word, never a prefix of one
+    }
+
     [Fact]
     public void A_flashing_message_is_said_once_as_flashing()
     {

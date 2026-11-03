@@ -22,13 +22,14 @@ public sealed class A350PfdFlagAnnouncer
     public const string MuteLabel = "Other PFD flags and warnings";
     public const int Window = 4, Needed = 2, GoneAfter = 6;
 
-    /// <summary>The PFD messages with a row of their own: those seen drawn or in the module's strings there (docs/inibuilds-a350.md,
-    /// "The PFD's flags"), and windshear and stall as the plan names them (their drawn words still to be heard live: another spelling
-    /// falls to the old row).</summary>
+    /// <summary>The PFD messages with a row of their own: those seen drawn or in the module's own PFD strings (docs/inibuilds-a350.md,
+    /// "The PFD's flags"; 1.2.8's read from its memory 2026-11-03: WIND SHEAR in two words, no W/S AHEAD or STALL anywhere, the stall
+    /// being its horn alone). A message whose words go on after one of these is that one's (the emergency descent's two lines, "AUTO
+    /// EMER DES" over "IN 12 S", "ENGAGED" or "COMPLETED"; "EMER DES" over "ARMED").</summary>
     public static readonly IReadOnlyList<string> Messages = new[]
     {
-        "PULL UP", "SINK RATE", "GLIDE SLOPE", "ATT", "TCAS", "DH", "AUTO BRK OFF", "DECEL", "RWY TOO SHORT", "MAX REVERSE", "MAX BRAKING",
-        "SPD BRK AUTO EXT", "T.O THS OUT OF RANGE", "WINDSHEAR", "W/S AHEAD", "STALL",
+        "PULL UP", "SINK RATE", "GLIDE SLOPE", "DON'T SINK", "ATT", "TCAS", "DH", "AUTO BRK OFF", "DECEL", "RWY TOO SHORT", "MAX REVERSE",
+        "MAX BRAKING", "SPD BRK AUTO EXT", "T.O THS OUT OF RANGE", "WIND SHEAR", "AP OFF", "A/THR OFF", "AUTO EMER DES", "EMER DES",
     };
 
     /// <summary>In the disabled list once the old row's mute has been carried to every message's own.</summary>
@@ -42,9 +43,14 @@ public sealed class A350PfdFlagAnnouncer
     private static string WordsOf(string flag) => Regex.Replace(Figure.Replace(string.Join(" ", flag.Split("; ")
         .Select(p => p.LastIndexOf(", ", StringComparison.Ordinal) is var c and > 0 ? p[..c] : p)), ""), @"\s+", " ").Trim().ToUpperInvariant();
 
-    /// <summary>The Ctrl+M row a flag is muted by: its message's own, else the old row.</summary>
-    public static string MuteKeyFor(string flag) =>
-        Messages.FirstOrDefault(m => m == WordsOf(flag)) is { } message ? KeyFor(message) : MuteKey;
+    /// <summary>The Ctrl+M row a flag is muted by: its message's own (the longest whose words it is or starts with, word by word), else
+    /// the old row.</summary>
+    public static string MuteKeyFor(string flag)
+    {
+        string words = WordsOf(flag);
+        return Messages.Where(m => words == m || words.StartsWith(m + " ", StringComparison.Ordinal)).OrderByDescending(m => m.Length)
+            .FirstOrDefault() is { } message ? KeyFor(message) : MuteKey;
+    }
 
     /// <summary>Whether a flag is muted: by its row, or, until the split has run, by the old row that once held them all.</summary>
     public static bool IsMuted(string flag, Func<string, bool> muted)

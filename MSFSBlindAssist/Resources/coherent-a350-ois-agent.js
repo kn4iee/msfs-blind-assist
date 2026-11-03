@@ -558,6 +558,13 @@
           if (inner !== e) A.own(e);
           var nt = A.text(inner);
           if (nt) push(null, { kind: 'alert', live: 'assertive', text: nt });
+          // A confirmation's answers are divs inside the toast (a situation's START: "Yes", "Cancel", 1.2.8), pressable
+          // after its question; a plain toast has none.
+          var answers = e.querySelectorAll('.notie-button');
+          for (var na = 0; na < answers.length; na++) {
+            var answer = A.text(answers[na]);
+            if (answer && A.visible(answers[na])) push(answers[na], { kind: 'button', text: answer, clickable: true });
+          }
           continue;
         }
         var dlg = A.dialogText(e);

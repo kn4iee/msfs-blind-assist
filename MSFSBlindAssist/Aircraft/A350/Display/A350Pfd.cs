@@ -605,9 +605,10 @@ public static class A350Pfd
             o.Add($"Pitch trim: out of the take-off range, {A350Rgba.NameOf(trimOut.Colour)}");
 
         // Everything else as drawn: flags, messages, the line under the heading scale. A two-line message there is one
-        // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row.
+        // text (OUT OF over RANGE, red, beside the white T.O THS), placed between its lines so it reads in its row; so is one
+        // at the attitude's centre (AUTO EMER DES over ENGAGED or IN 12 S, red, 30 px apart at x 359; 2026-11-03).
         var rest = AsSeen(cells.Where(c => !used.Contains(c)).ToList());
-        foreach (var upper in rest.Where(c => c.Y >= BottomLine).OrderBy(c => c.Y).ToList())
+        foreach (var upper in rest.Where(c => c.Y >= BottomLine || Math.Abs(c.X - HeadingIndexX) <= 6).OrderBy(c => c.Y).ToList())
             if (rest.Contains(upper) && rest.FirstOrDefault(c => c != upper && c.Colour == upper.Colour && Math.Abs(c.X - upper.X) <= 6
                     && c.Y - upper.Y is >= 12 and <= 30) is { } lower)
             {
