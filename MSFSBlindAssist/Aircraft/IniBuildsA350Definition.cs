@@ -291,16 +291,16 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     public override double TaxiTurnLeadSeconds => 1.7;
 
     // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody, not the A320 baseline, on its own
-    // measured biases (live 2026-10-30, two coupled ILS approaches to OMDB 12L: the datum 52 ft over distance x tan 3 down the path, median of
-    // both; parked the datum reads 15.3 ft above the ground); the flare at about 40 ft radio altitude is Airbus's figure for the
-    // A330/A340/A350/A380 family (Safety First).
+    // measured biases (three coupled ILS approaches, the datum over distance from the landing threshold x tan 3: OMDB 12L twice, 2026-10-30,
+    // medians 52 and 53 ft; VCBI 04, 2026-11-03, median 54; parked the datum reads 15.3 ft above the ground); the flare at about 40 ft
+    // radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
     public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
     {
         TypicalApproachAoaDeg = 4.5,
         ReferenceVrefKnots = 145.0,
         MaxPitchRateDegPerSec = 2.0,
         MaxBankRateDegPerSec = 2.5,
-        GlideslopeAltitudeBiasFt = 52.0,
+        GlideslopeAltitudeBiasFt = 53.0,
         FlareAltitudeBiasFt = 15.0,
         FlareTriggerWheelHeightFt = 40.0,
         FlareTargetPitchDeg = 5.0,

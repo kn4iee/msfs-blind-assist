@@ -17,9 +17,17 @@ public class A350VisualGuidanceProfileTests
         Assert.Equal(145.0, p.ReferenceVrefKnots);
         Assert.Equal(2.0, p.MaxPitchRateDegPerSec);
         Assert.Equal(2.5, p.MaxBankRateDegPerSec);
-        Assert.Equal(52.0, p.GlideslopeAltitudeBiasFt);
         Assert.Equal(15.0, p.FlareAltitudeBiasFt);
         Assert.Equal(40.0, p.FlareTriggerWheelHeightFt);
         Assert.Equal(5.0, p.FlareTargetPitchDeg);
+    }
+
+    // Plan 18 Task 6: the glidepath bias as the guidance now measures, from the landing threshold (RunwayGlidepathOrigin). Three coupled
+    // ILS approaches, each the datum over d x tan 3 with d from the threshold: OMDB 12L twice (2026-10-30, threshold displaced 1493 ft,
+    // medians 52 and 53 ft) and VCBI 04 (2026-11-03, no displacement, 53 to 56 ft from 5 NM to 0.5 NM, median 54): 53.
+    [Fact]
+    public void The_a350_biases_are_measured_from_the_threshold()
+    {
+        Assert.Equal(53.0, new IniBuildsA350Definition().GetVisualGuidanceProfile().GlideslopeAltitudeBiasFt);
     }
 }
