@@ -2,7 +2,7 @@
 
 > **Read this when:** working on the iniBuilds A350 (-900, -900 ULR, -1000): its panels, the WASM display reader, the KCCU/MFD, the ECAM, the OIS/EFB, or re-deriving addresses after an A350 update.
 
-Measured live on 26 October 2026 against **A350 1.2.7** (package `inibuilds-aircraft-a350`, released 23 October 2026) in MSFS 2024, A350-900 powered at VCBI. It builds on the 3 October 2026 investigation of 1.2.6 (`development/a350-investigation`), whose method this aircraft depends on.
+Measured live on 26 October 2026 against **A350 1.2.7** (package `inibuilds-aircraft-a350`, released 23 October 2026) in MSFS 2024, A350-900 powered at VCBI. It builds on the 3 October 2026 investigation of 1.2.6 (`development/a350-investigation`), whose method this aircraft depends on. Re-measured on **1.2.8** (released 30 October 2026) by the plans of 1 to 3 November 2026: its addresses are "Addresses for 1.2.8" below; its control map differs from 1.2.7's only in the oxygen masks, so a section that still says 1.2.7 holds on 1.2.8.
 
 ## Feasibility verdict
 
@@ -665,6 +665,20 @@ Every item of the manual's 128 pages was given a line: where a blind pilot reach
 - **Not modelled:** the sidestick priority light (lit only by the ANN LT test).
 - **The owner's:** the deferred procedures (the 1.2.8 OIS lists no failure that creates one), the reduced engine taxi out and in (a
   First Officer checklist for them is a decision), SITUATIONS, the charts' display options, the 3RD PARTY sign-ins.
+
+### Not modelled, re-checked on 1.2.8 (the handoff's "do not chase" list, 2026-11-03)
+
+- **The weather radar's manual control:** on 1.2.8 the MFD's SURV CONTROLS page offers WXR MODE (WX or MAP) and GAIN (AUTO or MAN),
+  read and chosen through the MFD window; its ELEVN and TILT boxes stay unavailable (grey): no manual tilt.
+- **The taxi camera's picture:** the OIS's TAXI CAMERA LIGHT option only lights the model's cameras (plan 23); nothing draws a picture.
+- **The automatic TCAS manoeuvre (AP/FD TCAS):** the 1.2.8 module holds the "AP/FD TCAS MODE" text; not exercised: an RA needs traffic
+  TCAS sees, and traffic spawned through SimConnect is invisible to it.
+- **SEC what-if:** on 1.2.8 SEC INDEX has a WHAT IF button, grey on the stand even with a secondary plan imported, and the module holds
+  its WHAT IF - EO and WHAT IF - DEPRESS pages: to try in flight.
+- **The MEL at start-up:** the 1.2.8 module has no MEL page.
+- **The CDSS door video:** not re-checked: the ECP's VIDEO key and its SD page (16) exist.
+- **The HUD's V/S and flight path vector disagree with the PFD** (a logged iniBuilds issue): MSFSBA reads the HUD's V/S from its own
+  digits and leaves its flight path vector's place unread (plan 24).
 
 ## Variants
 
