@@ -379,6 +379,13 @@
     return A.BOX_NAMES[ph] || '';
   };
 
+  // A box with no label but a placeholder in words names itself by it: AUTOSAVE's "Create New Save" box is only
+  // "Enter save name..." (live 2026-11-03: unnamed, the window could not type into it and no save could be made).
+  A.placeholderName = function (input) {
+    var ph = A.norm(input.getAttribute('placeholder') || '').replace(/\s*(\.\.\.|…)$/, '');
+    return /[A-Za-z]{3}/.test(ph) ? ph : '';
+  };
+
   // -> {label, text}: the field's own name, and that name with the OIS's result ("AIRP, OK").
   A.fieldLabel = function (input, memoKey) {
     var parts = A.rowParts(input), names = [], status = [];
@@ -392,7 +399,7 @@
       A.memo[memoKey] = label;
     } else {
       var ol = A.ownLabelEl(input);
-      label = (ol && A.text(ol)) || input.getAttribute(A.LABEL) || A.memo[memoKey] || A.boxName(input);
+      label = (ol && A.text(ol)) || input.getAttribute(A.LABEL) || A.memo[memoKey] || A.boxName(input) || A.placeholderName(input);
     }
     var said = status.join(', ');
     return { label: label, text: label && said ? label + ', ' + said : (label || said) };

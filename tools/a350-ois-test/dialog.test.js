@@ -51,3 +51,13 @@ test('the Navigraph login reads its user code once, then its message, then its b
   for (const t of ['OPEN BROWSER', 'REFRESH CODE', 'CLOSE'])
     assert.ok(els.some(e => e.kind === 'button' && e.text === t), 'missing ' + t);
 });
+
+// AUTOSAVE > SAVE NOW opens "Create New Save": a text box with only a placeholder ("Enter save name..."), no label. Unnamed, the
+// window could not reach it and CREATE SAVE answered "FAILED, PLEASE ENTER A SAVE NAME" (live 2026-11-03, 1.2.8): no custom save.
+test('the save dialog names its box by its placeholder', () => {
+  const els = scrape('autosave_create_128');
+  const box = els.find(e => e.controlType === 'text' && /save name/i.test(e.text || ''));
+  assert.ok(box, 'the save name box has no name: ' + JSON.stringify(els.filter(e => e.controlType === 'text')));
+  assert.equal(box.text, 'Enter save name');
+  assert.ok(els.some(e => e.kind === 'button' && e.text === 'CREATE SAVE'));
+});
