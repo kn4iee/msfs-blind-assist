@@ -88,7 +88,7 @@ only the owner can do it, [pr] where it is the pull request's description or cha
   plan 03's extension of [A350-9]'s full text (Task 1's trap kinds and the 2026-10-31 rate) and its Task 5 rule if it stands; plan 06's
   extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); [x] plan 04's and 09's: none stood
   (their records). Each checked against CLAUDE.md's "Adding or changing a rule", `ClaudeContextBudgetTests`.
-- **`docs/inibuilds-a350.md`:** "Manual coverage" from the ledgers of plans 12-17 and 23 (pages, items, proven, gaps, not modelled);
+- **`docs/inibuilds-a350.md`:** [x] "Manual coverage" from the ledgers of plans 12-17 and 23 (pages, items, proven, gaps, not modelled);
   "Parity with the other aircraft" with plan 18's measured biases; the flight phase table (plan 04, its use the owner's ruling);
   the top updated to 1.2.8; the "Do not chase" list as each plan re-checked it; plan 24's readers are already in their sections.
 - **`docs/first-officer.md`:** [x] line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.

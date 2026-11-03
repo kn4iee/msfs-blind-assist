@@ -642,6 +642,30 @@ Exercised live: panels, FCU, EFIS, RMP, MFD INIT entry, ND pop-up, ECAM sensed/A
 
 Still to do with the pilot signed in: ANF exit selection for BTV (needs Navigraph) and the SD mailbox (needs a Hoppie or SayIntentions logon; the OIS fields are the pilot's to fill).
 
+### The manual, item by item (1.2.8, plans 12 to 17 and 23, 2026-11-02 to 03)
+
+Every item of the manual's 128 pages was given a line: where a blind pilot reaches it in MSFSBA and the live evidence that it works.
+
+| PDF pages | Items | Proven live | Built, not proven | Gap | Not modelled | Reference | Waiting |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1-30 (front) | 105 | 82 | 2 | 1 | 1 | 19 | |
+| 31-40 (OIS) | 26 | 22 | 1 | 2 | | | 2 the owner's (charts' display options, SITUATIONS) |
+| 40-51 (OIS OPTIONS) | 91 options | every one set, read back and restored | | | | | |
+| 52-63 (FCU, MFD, EFIS) | 43 | 41 | 1 | | | 1 | |
+| 64-80 (ANF to HUD) | 30 | 27 | 2 | 1 | | | |
+| 81-86, 124-128 (ECAM, checklists) | 31 | 24 | 2 | | | 3 | 3 the owner's |
+| 87-123 (the walk-through) | 112 | 87 | | 1 | | | 23 steps to fly on the owner's SimBrief A-to-B flight, 1 the owner's |
+
+- **Gaps:** the checklists in the native EFB (MSFSBA's First Officer and the MFD's C/L MENU carry them); a chart's picture and TERML
+  CHART's picking and pinning (pictures: the charts list reads); DOCUMENTATION's OPS LIBRARY; the HUD's flight path vector's own place
+  (plan 24 reads whether the guidance cue sits on it, and every HUD text).
+- **Built, not proven:** the -1000 and -900 ULR (one module, the same reader; not flown); each optional system on and off in a flight;
+  FLT OPS PLAN's SimBrief request; windshear detection; NOISE scenarios 2 and 3 (ACCEL above THR RED, a noise N1); the automatic
+  emergency descent and its automatic arming (the manual one flown three times, 2026-11-03).
+- **Not modelled:** the sidestick priority light (lit only by the ANN LT test).
+- **The owner's:** the deferred procedures (the 1.2.8 OIS lists no failure that creates one), the reduced engine taxi out and in (a
+  First Officer checklist for them is a decision), SITUATIONS, the charts' display options, the 3RD PARTY sign-ins.
+
 ## Variants
 
 `presets`: A350-900 (`A359`), A350-900 ULR (`A359 ULR`), A350-1000 (`A35K`), each with and without cabin. There is no A350-1000 ULR in 1.2.7.
