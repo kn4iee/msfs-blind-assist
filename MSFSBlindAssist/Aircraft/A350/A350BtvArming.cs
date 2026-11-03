@@ -98,8 +98,12 @@ public static class A350BtvArming
             ? "The airport map shows no exits for the landing runway."
             : $"Runway {read.Runway} exits: " + string.Join(", ", read.Exits.Select((e, i) => i == 0 ? $"{e.Name} {e.Metres} meters" : $"{e.Name} {e.Metres}")) + ".";
 
+    /// <summary>The exit was typed on the KCCU, so the side's MFD was put on its F-PLN page first (<see cref="A350NdInput"/>): said.</summary>
     public static string ArmedSentence(Exit exit, int mode, int range) =>
-        $"BTV armed, exit {exit.Name}, {exit.Metres} meters." + Back(mode, range);
+        $"BTV armed, exit {exit.Name}, {exit.Metres} meters." + Back(mode, range) + MfdOnFlightPlan;
+
+    /// <summary>What the pilot's MFD now shows after a value was typed into the ND.</summary>
+    public const string MfdOnFlightPlan = " The MFD shows its F-PLN.";
 
     /// <summary>" ND back to Arc, 20 NM." when the ND was moved for the arming, else nothing.</summary>
     public static string Back(int mode, int range) =>

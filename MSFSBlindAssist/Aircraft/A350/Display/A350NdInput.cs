@@ -19,6 +19,8 @@ public sealed class A350NdInput
 
     /// <summary>The wait after a click before typing (the release and the click come 120 ms after it), and how long a drag takes.</summary>
     private const int ClickLandsMs = 250, DragStepMs = 40, DragSteps = 8;
+    /// <summary>How long the MFD takes to show the page a KCCU key opened before the ND is typed into.</summary>
+    private const int PageLandsMs = 600;
 
     private readonly A350MfdInput _kccu;
     private readonly Func<int, CancellationToken, Task> _delay;
@@ -133,6 +135,13 @@ public sealed class A350NdInput
         {
             IReadOnlyList<string>? keys = null;
             if (!string.IsNullOrEmpty(typed) && (keys = A350Kccu.KeysFor(typed)) == null) return MfdAction.NoKey;
+            // The MFD takes every KCCU key wherever the cursor is, into its active field (live 2026-11-03, 1.2.8: a BTV exit's "900"
+            // and ENTER set the decision height to 900). Its F-PLN page has no field to take them: the side's MFD goes there first.
+            if (keys != null)
+            {
+                _kccu.Press(side, "FPLAN");
+                await _delay(PageLandsMs, ct).ConfigureAwait(false);
+            }
             await _kccu.MoveCursorAsync(side, "ND", ct).ConfigureAwait(false);
             if (!await _click(side, x, y, ct).ConfigureAwait(false))
             {

@@ -56,8 +56,8 @@ public class A350BtvArmingTests
         Assert.Equal(new SetEfis(2, 7), ArmSteps("04", new Exit("A", 3120), 2, 7, null)[^1]);
         // Already on PLAN at the zoom: nothing to set or put back.
         Assert.DoesNotContain(ArmSteps("04", new Exit("A", 3120), PlanMode, ZoomRange, null), s => s is SetEfis);
-        Assert.Equal("BTV armed, exit B, 2430 meters. ND back to Arc, 20 NM.", ArmedSentence(new Exit("B", 2430), 3, 6));
-        Assert.Equal("BTV armed, exit B, 2430 meters.", ArmedSentence(new Exit("B", 2430), PlanMode, ZoomRange));
+        Assert.Equal("BTV armed, exit B, 2430 meters. ND back to Arc, 20 NM. The MFD shows its F-PLN.", ArmedSentence(new Exit("B", 2430), 3, 6));
+        Assert.Equal("BTV armed, exit B, 2430 meters. The MFD shows its F-PLN.", ArmedSentence(new Exit("B", 2430), PlanMode, ZoomRange));
     }
 
     // The exit field cleared in flight (CLR, ENTER) but not on the stand, and the manual names no way: armed, A/BRK pressed once

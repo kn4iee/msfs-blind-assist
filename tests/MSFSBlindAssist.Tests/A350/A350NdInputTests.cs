@@ -51,7 +51,22 @@ public class A350NdInputTests
     {
         var rig = new Rig();
         Assert.Equal(MfdAction.Done, await rig.Input.ActAsync(0, 100, 200, "2.5"));
-        Assert.Equal(new[] { "1 (>L:INI_MCDU1_2)", "1 (>L:INI_MCDU1_DECIMAL)", "1 (>L:INI_MCDU1_5)", "1 (>L:INI_MCDU1_ENTER)" }, rig.Sent.Skip(2));
+        Assert.Equal(new[] { "1 (>L:INI_MCDU1_2)", "1 (>L:INI_MCDU1_DECIMAL)", "1 (>L:INI_MCDU1_5)", "1 (>L:INI_MCDU1_ENTER)" }, rig.Sent.Skip(3));
+    }
+
+    // The MFD takes every KCCU digit wherever the cursor is, into its active field (live 2026-11-03, 1.2.8: the cursor on the ND,
+    // "8" went into INIT's FLT NBR; the BTV exit's "900" and ENTER set the decision height to 900). Its F-PLN page has no field to
+    // take them, so the side's MFD goes there before the ND is typed into; a click alone moves no page.
+    [Fact]
+    public async Task A_text_for_the_nd_first_puts_the_sides_mfd_on_its_flight_plan()
+    {
+        var rig = new Rig();
+        Assert.Equal(MfdAction.Done, await rig.Input.ActAsync(1, 100, 200, "900"));
+        Assert.Equal(new[] { "1 (>L:INI_MCDU2_FPLAN)", "1 (>L:INI_MCDU2_ND)", "0 (>L:INI_MCDU2_ND)" }, rig.Sent.Take(3));
+        Assert.DoesNotContain("FPLAN", string.Join(" ", rig.Sent.Skip(3)));
+        var click = new Rig();
+        await click.Input.ActAsync(1, 100, 200, null);
+        Assert.DoesNotContain(click.Sent, s => s.Contains("FPLAN", StringComparison.Ordinal));
     }
 
     [Fact]

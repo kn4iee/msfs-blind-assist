@@ -297,7 +297,7 @@ public sealed class A350NdWindow : Form
         var (after, _) = await ReadNowAsync();
         string? now = after == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(after, Side));
         _announcer.AnnounceImmediate(now == "BTV" ? A350BtvArming.ArmedSentence(exit, mode, range)
-            : $"Exit {exit.Name} set, but the FMA shows {(now ?? "no autobrake")}, not BTV." + A350BtvArming.Back(mode, range));
+            : $"Exit {exit.Name} set, but the FMA shows {(now ?? "no autobrake")}, not BTV." + A350BtvArming.Back(mode, range) + A350BtvArming.MfdOnFlightPlan);
     }
 
     /// <summary>Clear BTV, then what the aircraft shows: BTV off the FMA, and whether the exit still stands on the map.</summary>
@@ -459,7 +459,11 @@ public sealed class A350NdWindow : Form
                 _announcer.AnnounceImmediate("The KCCU has no key for a character in " + typed);
                 return;
         }
-        if (types) _scratchpad.Clear();
+        if (types)
+        {
+            _scratchpad.Clear();
+            _announcer.Announce(A350BtvArming.MfdOnFlightPlan.Trim());   // the KCCU typing put the side's MFD on its F-PLN (A350NdInput)
+        }
         await AfterActionAsync();
     }
 
