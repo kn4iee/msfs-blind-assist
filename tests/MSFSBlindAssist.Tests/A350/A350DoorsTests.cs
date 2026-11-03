@@ -114,6 +114,31 @@ public class A350DoorsTests
         Assert.Empty(_speech.All);
     }
 
+    // Plan 11 Task 4 (the owner's backlog): the rudder trim said as it moves, as the doors are: seeded from the cache, silent
+    // while a load settles and while muted; its Ctrl+M row is its status line's.
+    [Fact]
+    public void The_rudder_trim_is_said_as_it_moves_after_the_settle()
+    {
+        _cache[A350RudderTrimCallout.Key] = 0;
+        Settle();
+        Deliver(A350RudderTrimCallout.Key, -0.5);
+        Deliver(A350RudderTrimCallout.Key, -0.52);   // within its tenth
+        Deliver(A350RudderTrimCallout.Key, 0);
+        Assert.Equal(new[] { "Rudder trim 0.5 degrees left", "Rudder trim neutral" }, _speech.All);
+        Assert.Equal("Rudder trim", Assert.Single(MSFSBlindAssist.Services.MonitorRowBuilder.Build(_def.GetVariables()),
+            r => r.Key == A350RudderTrimCallout.Key).Label);
+    }
+
+    [Fact]
+    public void The_rudder_trim_says_nothing_while_the_seed_settles_or_muted()
+    {
+        Deliver(A350RudderTrimCallout.Key, 1.5);   // during the settle: the new flight's trim
+        _muted.Add(A350RudderTrimCallout.Key);
+        Settle();
+        Deliver(A350RudderTrimCallout.Key, 0);
+        Assert.Empty(_speech.All);
+    }
+
     [Fact]
     public void The_fuel_truck_connects_and_disconnects()
     {

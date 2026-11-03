@@ -17,7 +17,8 @@ public static class A350StatusLines
 {
     public static readonly IReadOnlyList<A350StatusLine> All = new[]
     {
-        new A350StatusLine("A350_STAT_RUDDER_TRIM", "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", "Rudder trim", RudderTrim),
+        // Also said as it moves (A350RudderTrimCallout, its Ctrl+M row this line's).
+        new A350StatusLine(A350RudderTrimCallout.Key, "A350_RUDDER_TRIM_RESET", "RUDDER_TRIM_ACTUAL_ANGLE", "Rudder trim", RudderTrim),
         new A350StatusLine("A350_STAT_SPEED_BRAKE", "A350_FCTL_SPD_BRK_LEVER", "INI_SPOILERS_HANDLE_POSITION", "Speed brake handle", Percent),
         new A350StatusLine("A350_STAT_PITCH_TRIM", "A350_PITCH_TRIM_UP", "ELEVATOR TRIM POSITION", "Pitch trim", PitchTrim, "degrees"),
         // The parking brake panel's accumulator gauges: each needle sweeps its INI_ACCU_*_PRESSURE_PERCENT, 0 to 1 of the
@@ -27,7 +28,8 @@ public static class A350StatusLines
         new A350StatusLine("A350_STAT_ACCU_YELLOW", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_YELLOW_PRESSURE_PERCENT",
             "Yellow brake accumulator pressure", Percent),
         // Each IR's alignment beside its pushbutton, as the A380 shows its ADIRUs' (parity task 8; the call-out is
-        // A350IrsAlignment's). The time left waits for the sim: INI_IRSn_TIME_REMAIN's unit is unmeasured.
+        // A350IrsAlignment's). The time left, INI_IRSn_TIME_REMAIN, counts seconds (live 2026-11-03: 294 at NAV, all three
+        // aligned together at 0 about five minutes on); the E/WD's memo says it ("IR IN ALIGN 6 MN"), which the ECAM reads.
         new A350StatusLine("A350_STAT_IR1_ALIGNED", "A350_IRS_IR_1", "INI_IRS1_ALIGNED", "IR 1 alignment", Alignment),
         new A350StatusLine("A350_STAT_IR2_ALIGNED", "A350_IRS_IR_2", "INI_IRS2_ALIGNED", "IR 2 alignment", Alignment),
         new A350StatusLine("A350_STAT_IR3_ALIGNED", "A350_IRS_IR_3", "INI_IRS3_ALIGNED", "IR 3 alignment", Alignment),
@@ -40,10 +42,26 @@ public static class A350StatusLines
         new A350StatusLine("A350_STAT_SEAT_CPT_HEIGHT", "A350_SEAT_CPT_DOWN", "INI_SEAT_CPT_UPDOWN_ANIMATION", "Captain seat height", WholePercent),
         new A350StatusLine("A350_STAT_SEAT_FO_FORE_AFT", "A350_SEAT_FO_BACK", "INI_SEAT_FO_BKFWD_ANIMATION", "First officer seat forward by", WholePercent),
         new A350StatusLine("A350_STAT_SEAT_FO_HEIGHT", "A350_SEAT_FO_DOWN", "INI_SEAT_FO_UPDOWN_ANIMATION", "First officer seat height", WholePercent),
+        // Each chrono's time beside its key: the ND draws it as two bare numbers, minutes and seconds or hours and minutes,
+        // which read alike; the module keeps each in seconds, 0 once reset (live 2026-11-03).
+        new A350StatusLine("A350_STAT_CHRONO_CPT", "A350_FCU_CHRONO_LEFT", "INI_CPT_CHRONO", "Captain chrono time", ChronoTime),
+        new A350StatusLine("A350_STAT_CHRONO_FO", "A350_FCU_CHRONO_RIGHT", "INI_FO_CHRONO", "First officer chrono time", ChronoTime),
         // The sight gauge under each cowling (the model's ENG1_OIL_INDICATOR animation reads it).
         new A350StatusLine("A350_STAT_ENG1_OIL", "A350_EXT_COWL_LEFT", "INI_ENG1_OIL_QUANTITY", "Left engine oil level", Quarts),
         new A350StatusLine("A350_STAT_ENG2_OIL", "A350_EXT_COWL_RIGHT", "INI_ENG2_OIL_QUANTITY", "Right engine oil level", Quarts),
     };
+
+    /// <summary>A chrono's seconds in the A380's words, whole seconds as the ND shows them: "Reset", "29 seconds", "1 minute 3
+    /// seconds", "1 hour 2 minutes 5 seconds".</summary>
+    public static string ChronoTime(double seconds)
+    {
+        int total = (int)Math.Floor(seconds);
+        if (total <= 0) return "Reset";
+        int h = total / 3600, m = total / 60 % 60, s = total % 60;
+        static string Of(int n, string unit) => $"{n} {unit}{(n == 1 ? "" : "s")}";
+        return h > 0 ? $"{Of(h, "hour")} {Of(m, "minute")} {Of(s, "second")}"
+            : m > 0 ? $"{Of(m, "minute")} {Of(s, "second")}" : Of(s, "second");
+    }
 
     /// <summary>A travel already in percent: "68 percent".</summary>
     public static string WholePercent(double percent) =>

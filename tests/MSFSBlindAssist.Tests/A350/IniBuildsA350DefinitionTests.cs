@@ -87,15 +87,32 @@ public class IniBuildsA350DefinitionTests
     // dial (the model's animation reads it times 100), found 2026-10-28 by scanning the cockpit for unread indicators.
     [InlineData("A350_STAT_ACCU_GREEN", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_GREEN_PRESSURE_PERCENT", 1, "100 percent")]
     [InlineData("A350_STAT_ACCU_YELLOW", "A350_PARK_BRK_ACCU_REINFLATE", "INI_ACCU_YELLOW_PRESSURE_PERCENT", 0.426, "43 percent")]
-    public void A_pedestal_status_line_reads_what_the_lever_did(string key, string beside, string var, double value, string text)
+    public void A_pedestal_status_line_reads_what_the_lever_did(string key, string beside, string var, double value, string text) =>
+        StatusLineReads("Pedestal", key, beside, var, value, text);
+
+    /// <summary>Plan 11 Task 4 (the owner, 2026-10-27: the chronos readable on both sides): the ND draws a chrono as two bare
+    /// numbers, minutes and seconds or hours and minutes, which read alike ("Chrono: 00 29"). Each chrono's own seconds
+    /// (<c>INI_CPT_CHRONO</c>, <c>INI_FO_CHRONO</c>: 0 once reset, the ND then showing none; live 2026-11-03) are a status line
+    /// beside its key, in the A380's words, whole seconds as the ND shows them.</summary>
+    [Theory]
+    [InlineData("A350_STAT_CHRONO_CPT", "A350_FCU_CHRONO_LEFT", "INI_CPT_CHRONO", 0, "Reset")]
+    [InlineData("A350_STAT_CHRONO_CPT", "A350_FCU_CHRONO_LEFT", "INI_CPT_CHRONO", 29.62, "29 seconds")]
+    [InlineData("A350_STAT_CHRONO_CPT", "A350_FCU_CHRONO_LEFT", "INI_CPT_CHRONO", 1.5, "1 second")]
+    [InlineData("A350_STAT_CHRONO_FO", "A350_FCU_CHRONO_RIGHT", "INI_FO_CHRONO", 63.36, "1 minute 3 seconds")]
+    [InlineData("A350_STAT_CHRONO_FO", "A350_FCU_CHRONO_RIGHT", "INI_FO_CHRONO", 3725, "1 hour 2 minutes 5 seconds")]
+    public void A_chrono_reads_its_time_beside_its_key(string key, string beside, string var, double value, string text) =>
+        StatusLineReads("Glareshield", key, beside, var, value, text);
+
+    private void StatusLineReads(string section, string key, string beside, string var, double value, string text)
     {
-        var def = new WithSections("Pedestal");
+        var def = new WithSections(section);
         def.Attach(_sim);
         string panel = def.GetPanelControls().Single(p => p.Value.Contains(beside)).Key;
         Assert.Contains(key, def.GetPanelDisplayVariables()[panel]);
         var line = def.GetVariables()[key];
         Assert.Equal(var, line.Name);
-        Assert.True(line.ExcludeFromMonitorManager);   // shown, never spoken
+        // Shown, never spoken; the rudder trim's line is also said as it moves (A350RudderTrimCallout), on its Ctrl+M row.
+        Assert.Equal(key != A350RudderTrimCallout.Key, line.ExcludeFromMonitorManager);
         Assert.True(def.TryGetDisplayOverride(key, value, out var shown));
         Assert.Equal(text, shown);
         var saved = System.Globalization.CultureInfo.CurrentCulture;

@@ -58,6 +58,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
     /// <summary>The status lines beside offered rows (<see cref="A350StatusLines"/>), by key.</summary>
     private readonly Dictionary<string, A350StatusLine> _statusLines = new(StringComparer.Ordinal);
 
+    private readonly A350RudderTrimCallout _rudderTrim = new();
+
     /// <summary>The doors shown and said (<see cref="A350Doors"/>), and whether each was last open (absent until delivered
     /// or seeded).</summary>
     private readonly Dictionary<string, A350Doors.Door> _doors = new(StringComparer.Ordinal);
@@ -495,6 +497,9 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             Register(line.Key, line.Var, line.Name, Array.Empty<string>(), line.Unit);
             vars[line.Key].ValueDescriptions = new Dictionary<double, string>();
         }
+        // The rudder trim's line speaks as it moves (A350RudderTrimCallout): its Ctrl+M row.
+        if (vars.TryGetValue(A350RudderTrimCallout.Key, out var rudderTrim))
+            rudderTrim.ExcludeFromMonitorManager = false;
         // The IRS alignment call-out's Ctrl+M row (A350IrsAlignment), on the A350's own overall flag, consumed silently.
         if (HasIrsPanel)
         {
@@ -812,6 +817,13 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         }
         if (varName == A350TcasCallouts.TargetKey)
             return true;
+        // The rudder trim, said as it moves as the pitch trim is (Shift+T for both); while a load settles it only follows.
+        if (varName == A350RudderTrimCallout.Key)
+        {
+            if (_rudderTrim.Observe(value) is { } trim && !_seedGate.Armed && _trimAnnouncementsEnabled && !IsMuted(varName) && !_disposed)
+                announcer.Announce(trim);
+            return true;
+        }
         if (varName.StartsWith("A350_STAT_IR", StringComparison.Ordinal))
             _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
         else if (varName is A350ModuleWatchdog.HeartbeatKey or A350ModuleWatchdog.SimTimeKey)

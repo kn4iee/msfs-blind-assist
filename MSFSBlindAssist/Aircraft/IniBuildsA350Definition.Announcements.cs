@@ -544,6 +544,9 @@ public partial class IniBuildsA350Definition
             foreach (var (key, _, _, _) in A350RadioCallouts.Rows)
                 if (!_radios.ContainsKey(key) && Cached(sim, key) is double radio)
                     _radios[key] = radio;
+            // And the rudder trim as it stands, its call-out's baseline (its first read is silent).
+            if (_statusLines.ContainsKey(A350RudderTrimCallout.Key) && Cached(sim, A350RudderTrimCallout.Key) is double rudderTrim)
+                _rudderTrim.Observe(rudderTrim);
             _tcas.Reset(key => Cached(sim, key));
         }
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
@@ -646,6 +649,7 @@ public partial class IniBuildsA350Definition
         _watchdog.Reset();
         _doorOpen.Clear();   // the seed takes the new flight's doors
         _radios.Clear();     // and radios
+        _rudderTrim.Reset(); // and the rudder trim
         _windowSquawk = -1;
         _covers.Reset();     // the new flight's cover banners are said once its seed settles
         ArmSeed();
