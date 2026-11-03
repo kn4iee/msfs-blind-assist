@@ -4,6 +4,9 @@
 import fs from 'fs';
 
 const here = (f) => new URL('./' + f, import.meta.url);
+// The files the once-per-version scripts build from your own A350 (README, "Once per A350 version"): said, never a stack.
+for (const [file, by] of [['importsigs.json', 'make_importsigs.py'], ['vtables.json', 'vtables.py'], ['a350-all.wasm', 'patch2.py'], ['ui_draws.json', 'patch2.py']])
+  if (!fs.existsSync(here(file))) { console.log(`${file} is missing: run python ${by} in this folder first (once per A350 version)`); process.exit(1); }
 const sigs = JSON.parse(fs.readFileSync(here('importsigs.json')));
 const VT = JSON.parse(fs.readFileSync(here('vtables.json')));
 

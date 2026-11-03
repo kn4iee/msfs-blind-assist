@@ -1,5 +1,6 @@
 import { createEmulator, toLines } from './emu2.mjs';
 const SDPAGE = 1451120;
+if (process.argv.length < 4) { console.log('usage: node sdpages.mjs copy.bin PAGE ...'); process.exit(1); }
 const emu = await createEmulator(); emu.load(process.argv[2]);
 const ctr = emu.findObjects('CTR')[0];
 if (ctr === undefined) { console.log('NO CTR OBJECT in this copy'); process.exit(1); }

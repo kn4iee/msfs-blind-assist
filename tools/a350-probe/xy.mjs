@@ -1,6 +1,7 @@
 // The prototype's raw draw positions: superseded by `A350Probe draw` (A350_SHAPES=1), whose engine answers the allocator
 // [A350-10]; kept for the record. A trapped draw or a missing gauge is said, never shown as an empty list.
 import { createEmulator, colorName } from './emu2.mjs';
+if (process.argv.length < 4) { console.log('usage: node xy.mjs copy.bin Gauge[#n]'); process.exit(1); }
 const emu = await createEmulator(); emu.load(process.argv[2]);
 const [cls, n = 0] = process.argv[3].split('#');
 const o = emu.findObjects(cls)[+n];

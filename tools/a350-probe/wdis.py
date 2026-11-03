@@ -1,8 +1,12 @@
 # Minimal WASM (MVP + bulk-memory) disassembler for inspecting single functions by name.
 import sys, struct
 import os
-# Set A350_PACKAGE to your inibuilds-aircraft-a350 folder (in your Community folder).
-PACKAGE = os.environ.get('A350_PACKAGE') or os.path.join(os.environ.get('LOCALAPPDATA', ''), r'Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community\inibuilds-aircraft-a350')
+import package
+# The package as MSFS Blind Assist finds it (package.py): A350_PACKAGE, else the sim's own UserCfg.opt.
+PACKAGE = package.find()
+if PACKAGE is None:
+    raise SystemExit('The iniBuilds A350 package was not found: no A350_PACKAGE, and no UserCfg.opt names a folder holding it. '
+                     'Set A350_PACKAGE to your inibuilds-aircraft-a350 folder.')
 WASM = os.path.join(PACKAGE, 'SimObjects/Airplanes/A350/attachments/inibuilds/Function_Interior_A350/panel/inibuilds-A350.wasm')
 if not os.path.exists(WASM):
     raise SystemExit('A350 module not found at %s. Set A350_PACKAGE to your inibuilds-aircraft-a350 folder.' % WASM)

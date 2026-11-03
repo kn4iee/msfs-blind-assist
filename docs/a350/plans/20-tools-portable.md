@@ -66,14 +66,14 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `95be7fc78`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** `python -m unittest discover -s tools/a350-probe -p "test_*.py"` 6/6; `A350Probe list` offline, 1,035 rows
+- **Tasks:** 1 (evidence `docs/a350/evidence/20-tools-portable.md`), 2 (nothing machine-specific in the probe: no code change), 3 (`package.py`, usage lines on every script that takes inputs, `emu2.mjs` names a missing generated file), 4 (`docs/tooling.md`)
+- **Waiting on the owner:** none
+- **In-sim results:** the once-per-version scripts found the 1.2.8 package through `UserCfg.opt` alone (no `A350_PACKAGE`)
+- **Changed from the plan:** Tasks 2 to 4 went in one commit, as each was a few lines; no script retired (the superseded Node draws already name their replacement and are kept for the record)
+- **Rulings made while working:** the Coherent port stays 19999 (the sim's fixed debugger port, the app's own); the package lookup's tests run in CI (`tests.yml`), a file outside the plan's list

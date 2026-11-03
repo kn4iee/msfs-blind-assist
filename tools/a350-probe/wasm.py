@@ -1,4 +1,6 @@
 import sys, struct, json, re, collections
+if len(sys.argv) < 3:
+    raise SystemExit('usage: python wasm.py MODULE.wasm OUT_DIR   (writes wasm_summary.json, wasm_fnames.txt and wasm_strings.txt there)')
 path = sys.argv[1]; out = sys.argv[2]
 data = open(path, 'rb').read()
 assert data[:4] == b'\0asm', 'not wasm'

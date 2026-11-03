@@ -2,7 +2,7 @@
 
 Live investigation scripts for the iniBuilds A350 (1.2.7 and later): they copy the A350's memory out of the running sim, read-only, and run the A350's own draw code on that copy, and they operate the cockpit through the sim's own inputs. Background and every measured address: [docs/inibuilds-a350.md](../../docs/inibuilds-a350.md). They grew out of the 3 October 2026 investigation of 1.2.6, and they are the prototype MSFSBA's display engine was ported from: for the display engine itself, use `tools/A350Probe` (its `draw`, `snapshot`, `sdmap` modes), which runs MSFSBA's own code.
 
-**Needs:** Python 3.14+ (standard library only), Node 22+ (the scripts use Node's built-in `WebSocket`), and the sim running with the A350 loaded. The package path defaults to the MS Store Community folder; set `A350_PACKAGE` otherwise. Run everything from this folder. The install of each is in [docs/tooling.md](../../docs/tooling.md#prerequisites-what-you-need-installed-to-run-these-tools).
+**Needs:** Python 3.14+ (standard library only), Node 22+ (the scripts use Node's built-in `WebSocket`), and the sim running with the A350 loaded. The scripts find the A350 package as MSFSBA does (`package.py`): the `InstalledPackagesPath` in the sim's own `UserCfg.opt` (the Steam or boxed config in `%APPDATA%`, then the Store build's), and `inibuilds-aircraft-a350` in its `Community` or `Community2024` folder; set `A350_PACKAGE` to the package folder to use another copy. A script with no package, or run without its arguments, says so and stops. Run everything from this folder. The install of each is in [docs/tooling.md](../../docs/tooling.md#prerequisites-what-you-need-installed-to-run-these-tools).
 
 **Nothing here writes into the sim's memory** [A350-1]: every process handle is opened for query and read only. Operating the cockpit goes through the sim's own inputs: L:var writes and the Coherent mouse route.
 
@@ -24,12 +24,14 @@ Live investigation scripts for the iniBuilds A350 (1.2.7 and later): they copy t
 python vtables.py            # vtables.json: the C++ class of each vtable
 python make_importsigs.py    # importsigs.json
 python patch2.py             # a350-all.wasm (the hooked scratch module for the Node draws) + ui_draws.json
-python beh.py .              # a350_inputevents.json (the 696 cockpit controls) and a350_refs.json
+python beh.py .              # a350_inputevents.json (the cockpit controls: 700 on 1.2.8) and a350_refs.json
 ```
 
 Re-derive after an update, by name (the doc's "Addresses for 1.2.7" says how): `varenum.py`'s `VariablesEnum` name-table address (`TABLE`, 920832 on 1.2.7, where `INI_FMC_PAGE1` is entry 215), `sdpages.mjs`' SD page address (`SDPAGE`, 1451120), `fastlocate.py`'s anchor names, `vtables.py`'s typeinfo range (below 1,280,000 on 1.2.7), and the same addresses in A350Probe's `sdmap` and `sdsweep` (which check the layout and refuse another version).
 
-`beh.py` reads the behaviour file with `tools/a350-gen/behavior_xml.py`, the map generator's reader.
+`beh.py` reads the behaviour file with `tools/a350-gen/behavior_xml.py`, the map generator's reader. The Node draws (`draw.mjs` and the others on `emu2.mjs`) say which of these files is missing and which script builds it.
+
+`package.py` is the package lookup the Python scripts share; its tests run offline, as CI runs them: `python -m unittest discover -s . -p "test_*.py"`.
 
 ## Each sim session
 

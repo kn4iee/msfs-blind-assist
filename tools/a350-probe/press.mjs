@@ -3,6 +3,8 @@
 // It opens an inspector socket on the OIS view: close MSFSBA's OIS window (or MSFSBA) first [DBG-9].
 import { oisView, open } from './coherent.mjs';
 
+if (process.argv.length < 3) { console.log('usage: node press.mjs L_VAR [wait500] ...'); process.exit(1); }
+
 try {
   const s = await open(await oisView(process.env.A350_OIS_SIDE || 'cpt'));
   try {

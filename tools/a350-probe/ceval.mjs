@@ -6,6 +6,7 @@ import fs from 'fs';
 import { find, open } from './coherent.mjs';
 
 const [needle, a2, a3, a4] = process.argv.slice(2);
+if (!needle || !a2 || (a2 === '-e' && !a3)) { console.log('usage: node ceval.mjs <titleNeedle | ois:cpt | ois:fo> <exprFile | -e expr> [index]'); process.exit(1); }
 let expr, idx = 0;
 if (a2 === '-e') { expr = a3; idx = +(a4 || 0); } else { expr = fs.readFileSync(a2, 'utf8'); idx = +(a3 || 0); }
 try {

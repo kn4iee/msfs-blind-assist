@@ -5,6 +5,8 @@
 # anchors must still sit at its base, or the copy would be empty or another module's (tools review 2026-10-30).
 # usage: python fastdump2.py c1.bin [c2.bin ...]
 import struct, sys, time, json, ctypes, os
+if len(sys.argv) < 2:
+    raise SystemExit('usage: python fastdump2.py c1.bin [c2.bin ...]')
 import memscan
 
 try:

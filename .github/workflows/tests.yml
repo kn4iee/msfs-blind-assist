@@ -51,6 +51,11 @@ jobs:
       - name: A350 generator tests (Python)
         run: python -m unittest discover -s tools/a350-gen -p "test_*.py" -v
 
+      # The A350 investigation scripts (tools/a350-probe) find the aircraft through the sim's own UserCfg.opt, as the
+      # MD-11 generator does: that lookup is pure logic, tested on synthetic configs (no aircraft, no sim).
+      - name: A350 probe package lookup tests (Python)
+        run: python -m unittest discover -s tools/a350-probe -p "test_*.py" -v
+
   efb-readers:
     name: EFB reader tests (jsdom)
     runs-on: ubuntu-latest
