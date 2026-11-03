@@ -60,6 +60,17 @@ node rawtext.mjs c.bin EFIS            # texts holding characters outside printa
 
 `memscan.py` run on its own is the slow whole-process scan (it reads every committed region: minutes): use it only if `fastlocate.py` finds nothing. `memscan.py` also holds what the others share: the anchor list and check, the allocation's region listing, and the sim's process for MSFS 2024 or 2020 (a sentence, never a crash, when no sim runs). The data files the scripts write and read (`membase.json`, `vtables.json`, `importsigs.json`, `ui_draws.json`, `a350-all.wasm`) sit beside them, whatever folder a script is run from. `memlib.py` (`Mem`: a copy's regions with typed reads and the class of an object by its vtable) and `varenum.py` (`NAMES`: the variable names by index) are for an interactive `python -i` session on a copy. `wasm.py module.wasm outdir` writes a module's section summary (`wasm_summary.json`), function names (`wasm_fnames.txt`) and data strings (`wasm_strings.txt`) into `outdir`; `wdis.py` is the module reader the others import.
 
+## Decoding the displays (plan 24)
+
+A corpus is a folder of rounds, each written by `A350Probe displays` with `A350_DRAW_JSON` set to the round's folder and its output saved as `read.txt` beside the captures (`EFIS_0.json`, `CTR_0.json` ...):
+
+```bash
+python coverage.py corpus coverage.tsv   # each drawn text whose words no reading says, per display, with rounds and place
+python sprites.py corpus sheets          # every drawn sprite cut out of its texture: sheets/<display>.png and .tsv
+```
+
+`coverage.py` (standard library only) counts a text unsaid when one of its words or numbers is in no line its display said, so a dot leader, a glyph or a reordering is no gap; its `test_coverage.py` runs in CI. `sprites.py` needs **Pillow** (`python -m pip install pillow`): it finds each image handle's texture in the package's `Data/Textures` by size and by where the sprites are cut, numbers each distinct sprite on a contact sheet, and lists its atlas place, uses, where on screen it is drawn and its tints; a rotated or scaled sprite is listed apart.
+
 ## Operating
 
 ```bash
