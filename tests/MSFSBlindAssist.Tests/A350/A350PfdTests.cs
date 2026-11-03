@@ -700,4 +700,21 @@ public class A350PfdTests
         Assert.True(lines.IndexOf("Speed brake: extended") == lines.FindIndex(l => l.StartsWith("Flaps", StringComparison.Ordinal)) + 1);
         Assert.DoesNotContain(A350Pfd.Read(Fixture("p12_efis0_park_brake_on"), 0), l => l.StartsWith("Speed brake", StringComparison.Ordinal));
     }
+
+    // Plan 24, the flight of 2026-11-03: the speed tape's caution strips (CautionTapes.png), each read at its end: VMAX's red barber
+    // pole at its lower end (340 kt clean at 335 kt), VLS's amber strip, V alpha prot's amber barber pole and V alpha max's red strip at
+    // their upper ends (flaps 3 on the approach; clean at 150 kt just after the in-air start). A strip parked outside the tape's window
+    // is off the scale: VMAX on the approach (VFE 3 about 54 kt above), VLS and the alphas in the cruise.
+    [Theory]
+    [InlineData("efis0_approach_vls", new[] { "VLS: 119, amber", "V alpha prot: 102, amber", "V alpha max: 93, red" })]
+    [InlineData("efis0_slow_alpha", new[] { "VLS: 143, amber", "V alpha prot: 125, amber", "V alpha max: 116, red" })]
+    [InlineData("efis0_cruise_vmax", new[] { "VMAX: 340, red" })]
+    public void The_speed_tape_says_its_caution_strips_where_it_shows_them(string fixture, string[] said)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        foreach (var line in said)
+            Assert.Contains(line, lines);
+        Assert.Equal(said.Length, lines.Count(l => l.StartsWith("VLS:", StringComparison.Ordinal) || l.StartsWith("VMAX:", StringComparison.Ordinal)
+            || l.StartsWith("V alpha", StringComparison.Ordinal)));
+    }
 }

@@ -51,6 +51,15 @@ public static class A350Pfd
         (GreenDot, 976f, 719f, "green"), (SSpeed, 887f, 757f, "green"), (FSpeed, 887f, 724f, "green"), (VfeNext, 1001f, 702f, "amber"),
     };
 
+    /// <summary>The speed tape's caution strips in CautionTapes.png (88 x 1615), by their column, with the texture row of the end that
+    /// marks their speed (plan 24, the flight of 2026-11-03): VMAX's red barber pole at its lower end (340 kt clean, 255 kt flaps 1),
+    /// VLS's amber strip, V alpha prot's amber barber pole and V alpha max's red strip at their upper ends (119, 103 and 93 kt with
+    /// flaps 3 on the approach).</summary>
+    private static readonly (string Name, float AtlasX, float Row, string Colour)[] CautionStrips =
+    {
+        ("VMAX", 1, 1614, "red"), ("VLS", 24, 2, "amber"), ("V alpha prot", 43, 2, "amber"), ("V alpha max", 72, 2, "red"),
+    };
+
     /// <summary>The speed target's triangle in the atlas: cyan selected, magenta managed.</summary>
     private const float TargetAtlasX = 957, TargetAtlasY = 748;
 
@@ -321,6 +330,12 @@ public static class A350Pfd
                 string at = Knots(Math.Round(TapeKnotsAt(speedTape, middle), MidpointRounding.AwayFromZero));
                 o.Add(A350Rgba.NameOf(target.Colour) == "magenta" ? $"Speed target: {at}, magenta" : $"Selected speed: {at}, cyan");
             }
+            // The caution strips beside the tape, each at its end where the window shows it (a strip parked outside is off the scale).
+            foreach (var (name, atlasX, row, colour) in CautionStrips)
+                if (capture.Shapes?.FirstOrDefault(s => Math.Abs(s.PatternW - 88) < 2 && Math.Abs(s.PatternH - 1615) < 2
+                        && Math.Abs(s.X0 - s.PatternX - atlasX) <= 1 && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0)) is { } strip
+                    && strip.PatternY + row is var end && end >= TapeTop && end < TapeBottom)
+                    o.Add($"{name}: {Knots(Math.Round(TapeKnotsAt(speedTape, end), MidpointRounding.AwayFromZero))}, {colour}");
         }
         // The Mach number under the speed tape (live in the climb: ".681", green).
         foreach (var c in cells.Where(c => !used.Contains(c) && c.X < 140 && c.Y is >= 640 and < 680 && MachText.IsMatch(c.Text.Trim())))
