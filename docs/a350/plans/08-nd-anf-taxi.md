@@ -92,18 +92,27 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Started:** 2026-11-02, from `f330aeba1`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:** 1 done (`675a5f79b`; Step 6 flown 2026-11-03: each passage said once, within a poll of the ND's change); 4 done
-  (`f2311a089` at the stand; in flight the SFD's pitch and bank added and two heading misreads fixed, `1cff66915`, `b0e8df59f`,
-  18,945 passed); 2 Step 1 measured at VCBI (the ANF in PLAN at 45 NM, the exits and their distances, SET BTV EXIT offered on two exits but
-  arming nothing, the LANDING tab's `BTV EXIT AT` field), the arming itself still open; 3 not started.
-- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach; Task 3 Step 2's taxi by
-  ear.
+- **Tasks:** 1 done (`675a5f79b`; Step 6 flown 2026-11-03: each passage said once, within a poll of the ND's change; quiet on the
+  ground and in the flare, `10ed0dc6a`, live on the second flight); 4 done (`f2311a089` at the stand; in flight the SFD's pitch and
+  bank added and two heading misreads fixed, `1cff66915`, `b0e8df59f`); 2 Steps 1-6 done (the path measured at VCBI on two flights:
+  SET LDG RWY, the LANDING tab's BTV EXIT AT, A/BRK after the exit; `7931c3694` arms it from the ND window in one step, driven live on
+  the stand: exits read and said, every step taken, the ND put back, the FMA read back), Step 8 in part (ROSE NAV and ARC at the zoom
+  on the approach); 3 Step 1 measured on the A350 itself (`990f5d692`: the airframe's run-on 0.80-0.85 s, the lead it needs about
+  1.3-1.4 s against its 1.7), 18,962 passed.
+- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach with BTV armed from the
+  window (heard by ear); Task 3 Step 2's taxi by ear (1.7 s against 1.35 s); a fresh-session autoland with BTV at VCBI (the second
+  flight's rollout left the runway, its cause open: see the evidence).
 - **The owner's answers:** 2026-11-03, the next waypoint call-out quiet on the ground and in the flare (it had said the plan's entry on
   the stand, IKONA in the flare, PPOS after the landing).
 - **For plan 21 (guide):** the SFD now says pitch and bank (Alt+I and the Displays section), and its heading from 000 to 080.
 - **In-sim results:** `docs/a350/evidence/08-nd-anf-taxi.md`.
 - **Changed from the plan:** `SeedA350MonitorDefaults` returns whether it seeded and the caller saves, where the Fenix's seed saves itself,
   so its tests never write the real settings file.
+- **Rulings made while working (Tasks 2 and 3):** Task 3 Step 1 measured on the aircraft, not in VirtualPilot, whose pilot model has no
+  airframe and whose A330 run would equal the A350's (cost if wrong: none lost, the VirtualPilot run is still possible). BTV's exit is
+  set through the LANDING tab's field, not the map's SET BTV EXIT, which was grey on two of VCBI's exits while the field took any distance
+  (cost if wrong: an exit the map refuses may be armed). Clear BTV also presses A/BRK when BTV is armed, the field having cleared in
+  flight but not on the stand (cost if wrong: the autobrake off where the pilot wanted only the exit gone).
 - **Rulings made while working:** The TO waypoint's name comes from `ReadNd`'s own "To waypoint" line (`ToWaypointName`), so the call-out
   says exactly what the ND window and status display read, at the cost of the whole ND read each tick (cost if wrong: CPU on the
   monitor's pool thread; measured nothing yet). The very first agreed name is a baseline even without a load's settle, so connecting in
