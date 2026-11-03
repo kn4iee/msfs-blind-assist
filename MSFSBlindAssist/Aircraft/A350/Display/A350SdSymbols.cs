@@ -12,6 +12,13 @@ public sealed record SdSymbol(string Label, float X, float Y, string Kind, int F
 {
     /// <summary>What this symbol's sprite word and colour mean here ("up" on a battery is charging); null keeps the word.</summary>
     public Func<string?, string, string?>? Say { get; init; }
+
+    /// <summary>A gear door, found by its hinge (X, Y: the ring at the line's top, which stays put as it swings, whichever end of
+    /// the sprite it is drawn at) on its box's top edge instead of by the box's centre.</summary>
+    public bool Hinged { get; init; }
+
+    /// <summary>What a flat bar drawn in this symbol's place instead of its sprite says (a gear extending), or null.</summary>
+    public string? FlatBar { get; init; }
 }
 
 /// <summary>A flight-control surface drawn as a plain bar from a neutral band (Base0..Base1): its column on screen
@@ -27,7 +34,22 @@ public sealed record SdBar(string Label, float X0, float X1, float Base0, float 
 public static class A350SdSymbols
 {
     private const int Atlas = 22;
-    private const float Reach = 12, SpriteReach = 4;
+    private const float Reach = 12, SpriteReach = 4, HingeReach = 4;
+
+    /// <summary>How far a shape is from a symbol's place, or null when out of reach: its box's centre, or for a hinged door its
+    /// top edge holding the hinge.</summary>
+    private static float? Distance(SdSymbol sym, DrawnShape s)
+    {
+        if (sym.Hinged)
+            return Math.Abs(s.Y0 - sym.Y) <= HingeReach && s.X0 - HingeReach <= sym.X && sym.X <= s.X1 + HingeReach ? Math.Abs(s.Y0 - sym.Y) : null;
+        float dx = Math.Abs((s.X0 + s.X1) / 2 - sym.X), dy = Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y);
+        return dx <= Reach && dy <= Reach ? dx + dy : null;
+    }
+
+    /// <summary>A flat plain bar (about 51 by 3 px) drawn at a symbol's place.</summary>
+    private static DrawnShape? FlatBarAt(IReadOnlyList<DrawnShape> shapes, SdSymbol sym) =>
+        shapes.FirstOrDefault(s => s.Image == 0 && s.Kind == "fill" && s.X1 - s.X0 is > 30 and < 70 && s.Y1 - s.Y0 is > 0 and <= 5
+            && Math.Abs((s.X0 + s.X1) / 2 - sym.X) <= Reach && Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y) <= Reach);
 
     private static readonly Dictionary<(int X, int Y), SdSprite> Catalogue = new()
     {
@@ -239,9 +261,14 @@ public static class A350SdSymbols
         var sprites = shapes.Where(s => s.Image == Atlas).ToList();
         foreach (var sym in symbols)
         {
-            var shape = sprites.Where(s => Math.Abs((s.X0 + s.X1) / 2 - sym.X) <= Reach && Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y) <= Reach)
-                .OrderBy(s => Math.Abs((s.X0 + s.X1) / 2 - sym.X) + Math.Abs((s.Y0 + s.Y1) / 2 - sym.Y)).FirstOrDefault();
-            if (shape == null) continue;
+            var shape = sprites.Select(s => (Shape: s, Far: Distance(sym, s))).Where(c => c.Far != null)
+                .OrderBy(c => c.Far).Select(c => c.Shape).FirstOrDefault();
+            if (shape == null)
+            {
+                if (sym.FlatBar is { } barWord && FlatBarAt(shapes, sym) is { } bar)
+                    o.Add($"{sym.Label}: {barWord}, {A350Rgba.NameOf(bar.Colour)}");
+                continue;
+            }
             if (sym.Kind == "accumulator")
             {
                 var (kpsi, band) = Accumulator(A350ShapeReader.AngleDegrees(shape));
@@ -258,6 +285,8 @@ public static class A350SdSymbols
                     MSFSBlindAssist.Utils.Logging.Log.Debug("A350Display", $"SD {page}: unknown sprite {sx:0},{sy:0} at {sym.Label}");
                 continue;
             }
+            // A swung door's line can come near a gear's place: it is that door's, never the gear's.
+            if (sprite.Kind == "gear door" && !sym.Hinged) continue;
             var tint = A350Rgba.NameOf(shape.Colour);
             var colour = tint == "white" ? sprite.Colour : tint;
             string? word = sprite.Kind switch
@@ -279,6 +308,8 @@ public static class A350SdSymbols
     private static SdSymbol S(string label, float x, float y) => new(label, x, y, "state");
     private static SdSymbol Said(string label, float x, float y, Func<string?, string, string?> say) => new(label, x, y, "state") { Say = say };
     private static SdSymbol D(string label, float x, float y) => new(label, x, y, "door");
+    private static SdSymbol Hinged(string label, float x, float y) => new(label, x, y, "state") { Hinged = true };
+    private static SdSymbol Gear(string label, float x, float y) => new(label, x, y, "state") { FlatBar = "in transit" };
 
     // Airbus colours on an arrow: green flowing or supplying, amber not (a fault), white not (normal).
     private static string? Flow(string? w, string c) => c == "green" ? "flow" : "no flow";
@@ -378,11 +409,14 @@ public static class A350SdSymbols
             Said("APU generator supply", 201, 328, Supply), S("APU generator", 199, 364),
             V("APU bleed valve", 639, 360, 90),
         },
+        // The doors by their hinges' rings (live 2026-11-03: closed, half and fully open in the gear's travel, the ring alone stays
+        // put); a gear extending is a flat bar in its triangle's place.
         [12] = new[]
         {
-            S("Nose gear door, left", 242, 433), S("Nose gear door, right", 298, 433), S("Nose gear", 270, 453),
-            S("Left main gear door", 127, 537), S("Left main gear", 124, 557),
-            S("Right main gear door", 413, 537), S("Right main gear", 418, 557),
+            Hinged("Nose gear door, left", 219.5f, 428), Hinged("Nose gear door, right", 321, 428),
+            Gear("Nose gear", 270, 453),
+            Hinged("Left main gear door", 173.5f, 532), Gear("Left main gear", 124, 557),
+            Hinged("Right main gear door", 366.5f, 532), Gear("Right main gear", 418, 557),
             new SdSymbol("Y accumulator pressure", 710, 615, "accumulator"), new SdSymbol("G accumulator pressure", 710, 843, "accumulator"),
         },
     };

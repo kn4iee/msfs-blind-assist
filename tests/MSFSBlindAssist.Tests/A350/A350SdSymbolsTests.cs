@@ -184,6 +184,33 @@ public class A350SdSymbolsTests
         Assert.Equal(14, p.Count(l => l.Contains("spoiler: retracted, amber") || l.Contains("spoiler") && l.EndsWith("retracted, amber")));
     }
 
+    // Live 2026-11-03, the gear retracting at 6,000 ft: each door swings down about its hinge, so the open line's box centre
+    // falls 14 to 29 px below the closed one's and the page read nothing about the gear in travel. A door is found by its hinge.
+    [Fact]
+    public void Wheel_reads_the_gear_doors_open_while_the_gear_travels()
+    {
+        var p = A350SdSymbols.Read(A350Fixtures.Capture("ctr_wheel_gear_up_transit.json").Shapes, 12);
+        Assert.Equal(new[]
+        {
+            "Nose gear door, left: open, green", "Nose gear door, right: open, green",
+            "Left main gear door: open, green", "Right main gear door: open, green",
+        }, p.Where(l => l.Contains("gear")));
+    }
+
+    // Live 2026-11-03, the gear extending at 10,000 ft: the doors hang fully open, a line hinged at its other end, and each gear's
+    // triangle is a flat green bar until it locks down (not drawn while the gear retracts).
+    [Fact]
+    public void Wheel_reads_the_gear_in_transit_while_it_extends()
+    {
+        var p = A350SdSymbols.Read(A350Fixtures.Capture("ctr_wheel_gear_down_transit.json").Shapes, 12);
+        Assert.Equal(new[]
+        {
+            "Nose gear door, left: open, green", "Nose gear door, right: open, green", "Nose gear: in transit, green",
+            "Left main gear door: open, green", "Left main gear: in transit, green",
+            "Right main gear door: open, green", "Right main gear: in transit, green",
+        }, p.Where(l => l.Contains("gear")));
+    }
+
     // Review 2026-10-29 (readers minor 13): the gear doors' rows of the atlas were matched on every page, so any uncatalogued
     // sprite there read as a gear door "open" wherever it was drawn. They are WHEEL's alone.
     [Fact]
