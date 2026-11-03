@@ -76,6 +76,16 @@ public static class A350Rmp
         return code.Aggregate(0, (bcd, c) => (bcd << 4) | (c - '0'));
     }
 
+    /// <summary>The transponder IDENT (manual p. 75) as the cockpit takes it: the SQWK page, then its "*IDENT", the third left-hand
+    /// key (live 2026-11-03: TRANSPONDER IDENT on for about 18 s). The page first, as ADK3 on another page is VHF3's swap.</summary>
+    public static readonly IReadOnlyList<string> IdentKeys = new[] { "SQWK", ActivationKey(3) };
+
+    /// <summary>What IDENT's fresh draw says: the RMP's message about it (TRANSMITTING IDENT, held until MSG CLR), else that it
+    /// was pressed.</summary>
+    public static string IdentReadBack(IReadOnlyList<string> after) =>
+        after.FirstOrDefault(l => l.Contains("IDENT", StringComparison.Ordinal) && !l.StartsWith("IDENT,", StringComparison.Ordinal)
+            && !l.StartsWith("*IDENT", StringComparison.Ordinal)) ?? "IDENT pressed";
+
     /// <summary>What a page key's fresh draw says: up to three lines it changed, or that it changed nothing (the TEL key
     /// leaves the screen as it was in 1.2.7, live 2026-10-30).</summary>
     public static string PageReadBack(string page, IReadOnlyList<string> before, IReadOnlyList<string> after)

@@ -15,7 +15,8 @@ namespace MSFSBlindAssist.Forms.A350;
 /// refused it; Alt+1/2/3 swaps that line's standby in (the activation key) and reads it back. Alt+V/H/L/N/U press the
 /// VHF, HF, TEL, NAV and MENU page keys, and the lines that changed are spoken. A key that would leave an entry behind
 /// (an activation or page key, another RMP, closing) deletes it first and says so. Alt+T starts a squawk: four digits
-/// 0-7, set on the fourth through the stock XPNDR_SET (the A350 keeps the transponder and its RMPs in step). On the other
+/// 0-7, set on the fourth through the stock XPNDR_SET (the A350 keeps the transponder and its RMPs in step); Alt+I the
+/// transponder IDENT (<see cref="A350Rmp.IdentKeys"/>), saying the RMP's message. On the other
 /// pages the list's lines act (<see cref="A350RmpPage"/>): Enter presses the key of a line that has one; on an LS or VOR
 /// frequency or course type the value and press Enter (its key, then the digits; the field takes it as they complete). Keys go in
 /// order, one at a time, 150 ms apart: two in one frame are read in the aircraft's own order (live: 4 3 2 1 typed in a
@@ -103,7 +104,7 @@ public sealed class A350RmpWindow : Form
         {
             Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 1, AccessibleName = "RMP screen",
             AccessibleDescription = "Control plus 1 to 3 picks the radio, type a frequency, Enter loads it as standby, Alt plus 1 to 3 "
-                + "swaps it in, Backspace deletes a digit. Alt plus V, H, L, N, U: VHF, HF, TEL, NAV, MENU pages. Alt plus T: squawk. "
+                + "swaps it in, Backspace deletes a digit. Alt plus V, H, L, N, U: VHF, HF, TEL, NAV, MENU pages. Alt plus T: squawk. Alt plus I: ident. "
                 + "On the other pages Enter presses the line; on a frequency or course, type it, then Enter.",
         };
         _list.SetText("Loading the RMP...");
@@ -248,6 +249,18 @@ public sealed class A350RmpWindow : Form
         _announcer.Announce(said);
     }
 
+    /// <summary>Speaks what IDENT put on the RMP, from a fresh draw (<see cref="A350Rmp.IdentReadBack"/>).</summary>
+    private async Task IdentAsync(int rmp)
+    {
+        await Task.Delay(ReadBackMs);
+        if (IsDisposed || rmp != Rmp || await _drawNow(rmp) is not { Ok: true } cap || IsDisposed || rmp != Rmp) return;
+        _shown.Fresh(_latest(rmp));
+        _page = A350RmpPage.Read(cap);
+        var lines = Lines(cap, _isDark(rmp));
+        Show(lines);
+        _announcer.Announce(A350Rmp.IdentReadBack(lines));
+    }
+
     /// <summary>Reads line <paramref name="line"/> of RMP <paramref name="rmp"/> back from a fresh draw, as
     /// <paramref name="say"/> words it: a line select or activation key's result.</summary>
     private async Task ReadBackAsync(int rmp, int line, Func<string, string>? say = null)
@@ -312,6 +325,13 @@ public sealed class A350RmpWindow : Form
         {
             _squawk = "";
             _announcer.AnnounceImmediate("Squawk: type four digits");
+            return true;
+        }
+        if (alt && key == Keys.I)
+        {
+            // The A380 window's Alt+I: the transponder IDENT, the cockpit's way (the SQWK page, then its IDENT key).
+            _squawk = null;
+            Press(Abandoned().Concat(A350Rmp.IdentKeys), () => IdentAsync(Rmp));
             return true;
         }
         if (alt && PageKeys.TryGetValue(key, out var page))

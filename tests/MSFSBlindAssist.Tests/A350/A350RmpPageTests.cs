@@ -81,6 +81,14 @@ public class A350RmpPageTests
         Assert.Equal("ADK3", Line("rmp_sqwk_page", "*IDENT, cyan").Key);
     }
 
+    // 1.2.8 (plan 10, live 2026-11-03): the transponder in AUTO, and after IDENT the RMP's message, held until MSG CLR.
+    [Fact]
+    public void The_squawk_page_says_the_ident_message_on_1_2_8()
+    {
+        Assert.Equal(new[] { "AUTO, grey", "SQWK: 2000, cyan", "*IDENT, cyan", "TRANSMITTING IDENT, white" }, Said("p10_rmp_sqwk_ident"));
+        Assert.Equal("ADK3", Line("p10_rmp_sqwk_ident", "*IDENT, cyan").Key);
+    }
+
     [Fact]
     public void The_nav_page_says_whether_standby_radio_nav_is_on_and_its_keys()
     {

@@ -97,4 +97,27 @@ public class A350RmpTests
         Assert.Equal(("RMP", 0), A350Rmp.Gauge(1));
         Assert.Equal(("RMP", 2), A350Rmp.Gauge(3));
     }
+
+    // Plan 10 Task 1 (live 2026-11-03, 1.2.8): the RMP's IDENT (manual p. 75, "transmitting the IDENT") is the SQWK page's
+    // "*IDENT", its third left-hand key: TRANSPONDER IDENT went on for about 18 s and the RMP showed TRANSMITTING IDENT until
+    // MSG CLR. The window's Alt+I (the A380 window's) takes the cockpit's way: the SQWK page, then that key; ADK3 on another
+    // page is VHF3's swap.
+    [Fact]
+    public void Ident_presses_the_sqwk_page_then_its_left_key_3()
+    {
+        Assert.Equal(new[] { "SQWK", "ADK3" }, A350Rmp.IdentKeys);
+    }
+
+    [Fact]
+    public void Ident_reads_back_the_rmps_message()
+    {
+        var after = new[] { "AUTO, grey", "SQWK: 2000, cyan", "IDENT, cyan", "TRANSMITTING IDENT, white" };
+        Assert.Equal("TRANSMITTING IDENT, white", A350Rmp.IdentReadBack(after));
+    }
+
+    [Fact]
+    public void Ident_with_no_message_says_it_was_pressed()
+    {
+        Assert.Equal("IDENT pressed", A350Rmp.IdentReadBack(new[] { "AUTO, grey", "SQWK: 2000, cyan", "*IDENT, cyan" }));
+    }
 }
