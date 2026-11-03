@@ -86,12 +86,12 @@ only the owner can do it, [pr] where it is the pull request's description or cha
 - **`.claude/rules/inibuilds-a350.md` + `docs/invariants/inibuilds-a350.md`:** [x] plan 02's two rules (A350-13, A350-14); [x] plan 03's [A350-9] extension and its facts-check rule (A350-15); [x] plan 06's [A350-12] extension (the Altimeter window plans its
   targets as one entry from one read, `A350BaroEntry.Plan`; the ISIS has its own STD, toggled only by its key, read only from the SFD);
   plan 03's extension of [A350-9]'s full text (Task 1's trap kinds and the 2026-10-31 rate) and its Task 5 rule if it stands; plan 06's
-  extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); plan 04's and 09's only if their
-  measured traps stood (check their records). Each checked against CLAUDE.md's "Adding or changing a rule", `ClaudeContextBudgetTests`.
+  extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); [x] plan 04's and 09's: none stood
+  (their records). Each checked against CLAUDE.md's "Adding or changing a rule", `ClaudeContextBudgetTests`.
 - **`docs/inibuilds-a350.md`:** "Manual coverage" from the ledgers of plans 12-17 and 23 (pages, items, proven, gaps, not modelled);
   "Parity with the other aircraft" with plan 18's measured biases; the flight phase table (plan 04, its use the owner's ruling);
   the top updated to 1.2.8; the "Do not chase" list as each plan re-checked it; plan 24's readers are already in their sections.
-- **`docs/first-officer.md`:** line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.
+- **`docs/first-officer.md`:** [x] line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.
 - **`docs/tooling.md`:** plan 03's A350Probe layout-check line and plan 06's OIS harness lines (plan 20 owns the file: check they
   landed there); plan 24's `coverage.py`, `sprites.py` and `A350Probe reread` (landed with plan 24).
 - **`guide/airbus-aircraft.md` (the A350 chapter) and `guide/hotkey-reference.md`:** plan 02's Altimeter window (both sides and the
