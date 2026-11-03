@@ -98,14 +98,28 @@ internal static class A350MfdPages
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (below) and on one check at the next landing
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `990f5d692`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
+- **Landed:** 2026-11-03, `b29e4e401`..`6234d325e`
+- **Tests at landing:** 19,001 passed (all but `ClaudeRulesHookTests`, which CI runs)
+- **Tasks:** 1 done (`adf2daf90`, `ddd297787`: every menu walked live, 33 pages, the list driven live); 2 done (`d7ce2c5da`); 3 Steps
+  1-5 done (`6234d325e`, live on the stand: probe and window read the grid); 4 done (`5045e9ba7`, measured at OMDB 12R's ten SIDs); 5
+  Step 1 done but DIR with no flight plan (`511d38f7c`: MINUS, live "-12"), Step 2 done in the air (`89a41fa59`); 6 done (`8c85fb1cd`:
+  ten checklists ticked, every page re-captured on 1.2.8).
+- **Waiting on the owner:** Task 3 Step 6, which other pages read too long; whether the grid's airway column grows to 7 cells (a
+  six-letter SID or STAR pushes its row one cell right, as on the A380).
+- **At the next landing (not the owner's):** Task 5 Step 1's DIR with no flight plan (no page clears the plan on the ground; it clears
+  itself after a landing).
+- **For plan 21 (guide):** the MFD window's page buttons and "Go to MFD page" list, the role words, the F-PLN grid and its header line,
+  PageDown and PageUp on a long list, a minus typed as PLUS then MINUS.
+- **In-sim results:** `docs/a350/evidence/09-mfd-window.md`.
+- **Changed from the plan:** the F-PLN rows read "button" in the window (the A380's `fplnwpt`), which Task 2's role words had left out.
+- **Rulings made while working (Task 3):** the grid is the A380's `padCell` exactly, a full cell taking one more space, so a six-letter
+  SID's row is one cell off (cost if wrong: alignment on SID and STAR rows); the distance column's header is the A380's "NM", DIST not
+  fitting four cells; the header's first cell says FROM only while the A350 draws it; what the grid cannot hold (the ident's symbol, a
+  cell's other colour, a star met or missed) follows the row's colour (cost if wrong: longer lines past the 40 cells); a column under a
+  menu or pop-up is blank where it was left out with its name (cost if wrong: a covered value and no value read alike in the row; the
+  open menu itself reads).
 - **Rulings made while working:**
