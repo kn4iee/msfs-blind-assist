@@ -306,15 +306,21 @@ public static class A350GroundDisplays
         var cells = Cells(capture.Texts).Where(c => c.Y is < 255 or >= 405).ToList();
         var used = new HashSet<DrawnCell>(cells.Where(c => c.Text is "SPD" or "HDG" or "ALT" or "V/S"));
         var o = new List<string>();
-        void Field(string label, float x, float y, Func<string, string>? number = null)
+        // A selected heading's degree sign is a small circle at the window's top right (plan 24: in every frame with HDG selected,
+        // in none while dashed).
+        bool degreeSign = capture.Shapes?.Any(s => s.Kind == "stroke" && s.Image == 0 && s.X0 >= 445 && s.X1 <= 475 && s.Y0 >= 45 && s.Y1 <= 75
+            && s.X1 - s.X0 is > 6 and < 18 && s.Y1 - s.Y0 is > 6 and < 18) == true;
+        void Field(string label, float x, float y, Func<string, string>? number = null, string unit = "")
         {
             var hit = cells.Where(c => !used.Contains(c) && Math.Abs(c.X - x) <= 12 && Math.Abs(c.Y - y) <= 8).ToList();
             if (hit.Count == 0) return;
             used.UnionWith(hit);
-            o.Add(number == null ? $"{label}: {Speak(hit)}"
-                : $"{label}: {number(string.Concat(hit.OrderBy(c => c.X).Select(c => c.Text.Trim())))}, {hit[0].Colour}");
+            // In the FCU window lines' words (A350FcuWindows): "knots" for KT, "Dashes" for a dashed window.
+            string value = number == null ? string.Join(" ", hit.OrderBy(c => c.X).Select(c => c.Text.Trim())) : number(string.Concat(hit.OrderBy(c => c.X).Select(c => c.Text.Trim())));
+            value = value.Trim().Trim('-').Length == 0 ? "Dashes" : value.Replace(" KT", " knots", StringComparison.Ordinal) + unit;
+            o.Add($"{label}: {value}, {hit[0].Colour}");
         }
-        Field("Speed", 158, 105); Field("Heading", 455, 105);
+        Field("Speed", 158, 105); Field("Heading", 455, 105, unit: degreeSign ? " degrees" : "");
         Field("Altitude", 241, 225, FcuAltitude); Field("Vertical speed", 275, 225, FcuVerticalSpeed);
         foreach (var (label, x0, x1) in new[] { ("Captain baro", 0f, 150f), ("First officer baro", 150f, 400f) })
         {

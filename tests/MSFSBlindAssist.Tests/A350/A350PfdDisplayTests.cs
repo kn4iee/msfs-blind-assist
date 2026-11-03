@@ -65,7 +65,7 @@ public class A350PfdDisplayTests
         }
         Assert.StartsWith("First Officer PFD\r\nFMA engagement: 1 FD 2, white\r\n", Read("First Officer PFD"));
         Assert.Contains("Ground speed: 0, green", Read("Captain ND"));
-        Assert.Contains("Speed: 100 KT, white", Read("FCU display"));
+        Assert.Contains("Speed: 100 knots, white", Read("FCU display"));
         Assert.Contains("VHF1: active 122.800, white; standby 123.450, cyan", Read("RMP 1 display"));
         Assert.Contains("Battery voltage: 28.2 V, grey", Read("BAT display"));
         Assert.Equal("RMP 2 display\r\nThe A350 displays are not available yet.", Read("RMP 2 display"));

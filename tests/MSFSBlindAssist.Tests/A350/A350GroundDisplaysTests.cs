@@ -360,9 +360,22 @@ public class A350GroundDisplaysTests
         var fcu = A350GroundDisplays.ReadFcu(Fixture("FCU"));
         Assert.Equal(new[]
         {
-            "Speed: 100 KT, white", "Heading: 218, white", "Altitude: 100, white", "Vertical speed: ----, white",
+            "Speed: 100 knots, white", "Heading: 218 degrees, white", "Altitude: 100, white", "Vertical speed: Dashes, white",
             "Captain baro: QNH 1013, white", "First officer baro: QNH 1013, white",
         }, fcu);
+    }
+
+    // Plan 24 (owner: "degree glyphs ... those should be there too"): a selected heading's window draws its degree sign as a small
+    // circle (x 453-465, y 54-66, in every frame with HDG selected, in none while dashed); the windows say it as the FCU window lines
+    // do ("knots", "Dashes"). Level at 10,000 ft in HDG on the second flight of 2026-11-03.
+    [Fact]
+    public void The_fcu_says_its_degree_sign_units_and_dashes_in_words()
+    {
+        Assert.Equal(new[]
+        {
+            "Speed: 220 knots, white", "Heading: 269 degrees, white", "Altitude: 10000, white", "Vertical speed: Dashes, white",
+            "Captain baro: QNH 1013, white", "First officer baro: QNH 1013, white",
+        }, A350GroundDisplays.ReadFcu(A350Fixtures.Capture("fcu_hdg_selected.json")));
     }
 
     // The FCU's altitude window draws five digits ("00100") and the V/S window its hundreds' zeros small, as "oo" (live
