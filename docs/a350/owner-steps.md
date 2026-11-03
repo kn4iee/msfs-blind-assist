@@ -54,9 +54,7 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    2026-11-03 BTV gave way to BRK MED instead of drawing them.
 3. **The automatic emergency descent (plan 16):** only a depressurisation brings it (OIS SITUATIONS, irreversible): your call. The manual
    one was flown three times on 2026-11-03.
-4. **NOISE take-off scenario 2 (plan 15):** ACCEL above THR RED: the same FMA reader as scenarios 1 and 3, which were flown (scenario 3,
-   the noise N1 of 88 %, on the third flight of 2026-11-03: "NOISE, N1, 88%" said at THR RED, THR DCLB above NOISE END).
-5. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
+4. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
 
 ## 3. By ear (your judgement)
 

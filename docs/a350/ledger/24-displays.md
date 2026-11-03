@@ -23,6 +23,8 @@ its reason.
 | SFD | the LS deviations (localizer, glideslope) | 7252b3426 |
 | ND | the CDA flap 1 and flap 2 points (the circled 1 and 2, white and amber), the cyan top of descent and the white decelerate point; the cross-track error; the safe altitude's figure in feet; no map name among the vertical display's altitude labels | 777c3823e |
 | HUD | the flight path vector's drift, wings level | 777c3823e |
+| HUD | the speed target parked under the tape, the radio altitude under the flight path vector, the approach slope reference, the marker beacons | 3da0060a1 |
+| ND | the selected heading bug, where it lies from the heading | 3da0060a1 |
 
 ## Not a gap (consumed into a value, or a false hit of the word measure)
 
@@ -48,9 +50,9 @@ its reason.
   attitude rather than the path, the HUD's own logged disagreement with the PFD: not said; its drift is read), the green dot (no reference
   to fit its offset), the caution strips, F and S, the slip index, the LS scales and diamonds, a wide green "=" near 270 kt clean
   (unnamed). The PFD says each of these.
-- ND: the range marks (only 20 and 30 at ARC 40 were drawn; the ND window knows the range from the knob), the compass's selected heading
-  bug (not drawn in the three flights: NAV throughout), and five sprites beside the path symbols never drawn in them (a magenta diamond,
-  V, crossed circle, ring and triangle). The circled 1 and 2 are read (the CDA flap points); the second flight's NDs drew nothing because
+- ND: the range marks (only 20 and 30 at ARC 40 were drawn; the ND window knows the range from the knob) and five sprites beside the
+  path symbols never drawn in four flights (a magenta diamond, V, crossed circle, ring and triangle). The selected heading bug is read
+  (the fourth flight, HDG). The circled 1 and 2 are read (the CDA flap points); the second flight's NDs drew nothing because
   that FMS computed no predictions (INITIALIZE WEIGHT/CG after an engine restart, the third flight showed), not a reader gap.
 - E/WD and SD: F/CTL's four small circles under the ailerons' columns (unnamed); the rest of the 35 CTR sprites are read, consumed (the
   units' %, ° and °C sprites, the pitch trim's pointer beside its read figure) or the engine display's background art.
