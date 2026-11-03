@@ -85,6 +85,35 @@ row (165.7, 239.0); a label drawn turned is no heading label. Fixed in `1cff6691
 - Open: why A armed nothing (the order, A/BRK before or after the exit, the field above in flight, or the ANF's data without Navigraph);
   the second airport with Navigraph signed in. Next flight: try the LANDING tab's field and the order, then Steps 2-6.
 
+### Task 3: the taxi turn lead (2026-11-03)
+
+Step 1 as written cannot tell the A350 from the A330: VirtualPilot builds its `TaxiGuidanceManager` with the default lead (1.2 s; nothing
+in `tools/VirtualPilot` sets `TurnLeadSeconds`), its `PilotModel` has no airframe (one yaw law for every aircraft), and the A350's lead
+is the A330's (1.7 s), so the two runs would be one. Measured instead on the A350 itself, as the Fenix's leads were (`FenixA320Definition`:
+the heading swept after the tone centred over the yaw rate then): on runway 04 a scripted tiller (`AXIS_STEERING_SET`, scratchpad
+`a350_steer_step.py`) held at a fixed deflection until the yaw rate was steady, then centred at once; the heading the aircraft kept
+sweeping over the yaw rate (the sim's `ROTATION VELOCITY BODY Y`) at the centring is the airframe's share of the lead.
+
+| Speed | Tiller | Yaw at centring | Swept after | Run-on |
+| --- | --- | --- | --- | --- |
+| 17 kt | 0.30 | 1.9 deg/s | 1.6 deg | 0.83 s |
+| 23 kt | 0.30 | 2.3 | 2.0 | 0.88 |
+| 27 kt | 0.25 | 2.2 | 1.9 | 0.85 |
+| 32 kt | 0.25 | 2.6 | 2.1 | 0.81 |
+| 34 kt | 0.20 | 2.2 | 1.7 | 0.80 |
+| 21-33 kt | 0.10-0.15 | 1.0-1.2 | 0.7-0.9 | 0.68-0.77 |
+
+(The first step, 13 kt and 0.8 deg/s, too small to read: 0.38 s. Idle thrust carried the speed from 13 to 34 kt.) The scripted taxi of
+2026-10-30 agrees: across 30 minutes at 15 to 21 kt and up to 14 deg/s, the yaw rate followed the tiller 0.9 to 1.0 s late (correlation
+0.99 and 0.92, the heading's own rate lagging a further ~0.13 s). So the A350's airframe keeps turning about 0.8-0.85 s after the
+tiller centres; with a pilot's reaction to the tone (about half a second) the lead it needs is about 1.3-1.4 s, under the 1.7 s it has.
+On the Fenix the turns that centred with too long a lead (2.1-2.4 s) ended 12-20 degrees short. Left at 1.7 s for the owner's taxi by
+ear (Step 2) with 1.35 s to compare; the test now pins the A350's own 1.7 (`TaxiTurnLeadTests`, plan 01's M6).
+
+The take-off after this test was rejected at 81 kt: the step script's last centring of the steering axis was lost and the nosewheel held
+3.3 degrees right through the roll (read back with the pedals neutral). The scratchpad take-off script now centres the axis and refuses
+unless the nosewheel reads centred, brakes on a reject, and never sets climb thrust after one.
+
 ### Other things the flight showed
 
 - After the landing the After Landing flow's flaps item timed out: the scratchpad landing script had stopped with the levers at reverse

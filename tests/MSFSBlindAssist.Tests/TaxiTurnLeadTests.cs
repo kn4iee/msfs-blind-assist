@@ -19,9 +19,11 @@ public class TaxiTurnLeadTests
         Assert.Equal(45.0, fenix.TaxiTurnLeadMaxDegrees);
     }
 
+    // The A350's own value (the A330's when it was set), pinned so a change to the A330 never moves it (plan 01's review, M6). Plan 08
+    // measured its airframe keeping on turning 0.80-0.85 s after the tiller centres (2026-11-03); the owner's taxi by ear decides.
     [Fact]
-    public void The_A350_leads_as_the_A330_does() =>
-        Assert.Equal(new HeadwindA330Definition().TaxiTurnLeadSeconds, new IniBuildsA350Definition().TaxiTurnLeadSeconds);
+    public void The_A350_lead_is_1_7_seconds() =>
+        Assert.Equal(1.7, new IniBuildsA350Definition().TaxiTurnLeadSeconds);
 
     [Theory]
     [InlineData(nameof(IAircraftDefinition.TaxiSharpTurnLeadSeconds))]
