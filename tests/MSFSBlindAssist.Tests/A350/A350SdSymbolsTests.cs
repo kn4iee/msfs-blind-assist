@@ -150,6 +150,7 @@ public class A350SdSymbolsTests
             "Right spoiler 1: retracted, amber", "Right spoiler 2: retracted, amber", "Right spoiler 3: retracted, amber",
             "Right spoiler 4: retracted, amber", "Right spoiler 5: retracted, amber", "Right spoiler 6: retracted, amber",
             "Right spoiler 7: retracted, amber",
+            "Rudder travel limit: 35 degrees each way, green",   // plan 24: full travel on the stand
         }, p.Where(l => l.Contains("aileron") || l.Contains("elevator") || l.Contains("spoiler") || l.StartsWith("Rudder")));
     }
 
@@ -344,4 +345,16 @@ public class A350SdSymbolsTests
         var keys = logged.Select(m => System.Text.RegularExpressions.Regex.Replace(m, @"unknown sprite [-0-9.,]+ ", "unknown sprite ")).ToList();
         Assert.Equal(keys.Distinct().Count(), keys.Count);
     }
+
+    // Plan 24, the flight of 2026-11-03: CRUISE's cabin vertical speed draws its direction as a green step arrow beside its figure (the
+    // figure has no sign climbing: "400" with the arrow up, "-50" with it down); WHEEL marks the hottest brake with an arc over its
+    // temperature (green, amber hot: 420 °C after the landing); F/CTL's green brackets are the rudder's travel limits about its trim
+    // pointer (1.571 px a degree, the rudder bar's; full travel on the stand).
+    [Theory]
+    [InlineData("ctr_cruise_cabin_up", 13, "Cabin: climbing, green")]
+    [InlineData("ctr_cruise_cabin_down", 13, "Cabin: descending, green")]
+    [InlineData("ctr_wheel_hot_brake", 12, "Hottest brake: brake 2, amber")]
+    [InlineData("ctr_fctl_rudder_limit", 10, "Rudder travel limit: 35 degrees each way, green")]
+    public void The_sd_says_its_arrows_arcs_and_limits(string fixture, int page, string said) =>
+        Assert.Contains(said, A350SdSymbols.Read(A350Fixtures.Capture(fixture + ".json").Shapes, page));
 }

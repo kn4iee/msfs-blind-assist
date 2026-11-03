@@ -105,6 +105,10 @@ public static class A350SdSymbols
         [(1556, 357)] = new("number", "green"), [(1579, 357)] = new("number", "green"),
         // Level markers.
         [(803, 23)] = new("level", "green"),
+        // Plan 24 (the flight of 2026-11-03): CRUISE's cabin vertical speed arrows (a green step up, down), WHEEL's hottest brake arc
+        // (green; amber hot).
+        [(983, 315)] = new("arrow", "green", Word: "up"), [(983, 345)] = new("arrow", "green", Word: "down"),
+        [(428, 471)] = new("state", "green", Word: "hottest"), [(469, 471)] = new("state", "amber", Word: "hottest"),
     };
 
     private static SdSprite Tri(string colour, bool filled) => new("state", colour, Word: filled ? "running" : "not running");
@@ -301,7 +305,22 @@ public static class A350SdSymbols
             o.Add(word == null ? $"{sym.Label}: {colour}" : colour.Length == 0 ? $"{sym.Label}: {word}" : $"{sym.Label}: {word}, {colour}");
         }
         o.AddRange(ReadBars(shapes, page));
+        if (page == FctlPage && RudderLimits(sprites) is { } limits) o.Add(limits);
         return o;
+    }
+
+    private const int FctlPage = 10;
+
+    /// <summary>F/CTL's rudder travel limits, two green brackets about the rudder trim's pointer (plan 24: atlas centres 1261.5, 51.5 and
+    /// 1272.5, 51.5), measured from the rudder bar's neutral edges at its scale: full travel, 35 degrees, on the stand.</summary>
+    private static string? RudderLimits(IReadOnlyList<DrawnShape> sprites)
+    {
+        DrawnShape? Bracket(float atlasX) => sprites.FirstOrDefault(s => A350ShapeReader.SpriteCentre(s) is var c && Math.Abs(c.X - atlasX) <= 2 && Math.Abs(c.Y - 51.5f) <= 2);
+        if (Bracket(1261.5f) is not { } left || Bracket(1272.5f) is not { } right) return null;
+        double l = Math.Round((RudderLeftEdge - (left.X0 + left.X1) / 2) / RudderPxPerDegree), r = Math.Round(((right.X0 + right.X1) / 2 - RudderRightEdge) / RudderPxPerDegree);
+        return Math.Abs(l - r) <= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"Rudder travel limit: {Math.Max(l, r):0} degrees each way, green")
+            : string.Create(CultureInfo.InvariantCulture, $"Rudder travel limit: {l:0} degrees left, {r:0} degrees right, green");
     }
 
     private static SdSymbol V(string label, float x, float y, int flow) => new(label, x, y, "valve", flow);
@@ -310,6 +329,9 @@ public static class A350SdSymbols
     private static SdSymbol D(string label, float x, float y) => new(label, x, y, "door");
     private static SdSymbol Hinged(string label, float x, float y) => new(label, x, y, "state") { Hinged = true };
     private static SdSymbol Gear(string label, float x, float y) => new(label, x, y, "state") { FlatBar = "in transit" };
+
+    /// <summary>WHEEL's hottest brake arc: drawn 18 px right of and 24 px above the brake's temperature.</summary>
+    private static SdSymbol HottestBrake(int brake, float x, float y) => new("Hottest brake", x + 18, y - 24, "state") { Say = (_, _) => $"brake {brake}" };
 
     // Airbus colours on an arrow: green flowing or supplying, amber not (a fault), white not (normal).
     private static string? Flow(string? w, string c) => c == "green" ? "flow" : "no flow";
@@ -418,6 +440,10 @@ public static class A350SdSymbols
             Hinged("Left main gear door", 173.5f, 532), Gear("Left main gear", 124, 557),
             Hinged("Right main gear door", 366.5f, 532), Gear("Right main gear", 418, 557),
             new SdSymbol("Y accumulator pressure", 710, 615, "accumulator"), new SdSymbol("G accumulator pressure", 710, 843, "accumulator"),
+            HottestBrake(1, 82, 666), HottestBrake(2, 181, 666), HottestBrake(3, 357, 666), HottestBrake(4, 456, 666),
+            HottestBrake(5, 82, 809), HottestBrake(6, 181, 809), HottestBrake(7, 357, 809), HottestBrake(8, 456, 809),
         },
+        // CRUISE: the cabin vertical speed's arrow beside its figure, which has no sign climbing.
+        [13] = new[] { Said("Cabin", 548, 650, (w, _) => w == "up" ? "climbing" : w == "down" ? "descending" : w) },
     };
 }

@@ -18,7 +18,8 @@ its reason.
 | PFD | speed trend, short-term managed speed, LS course pin, gear, take-off trim pointer, sidestick order, yaw bar, tail strike limit | e45a43ba8 |
 | PFD | flight director command, slip index | 7455a4366 |
 | PFD | linear deviation (vertical profile) | d3355527c |
-| HUD | speed target and VFE next on its tape, the guidance cue on the flight path vector | (this commit) |
+| HUD | speed target and VFE next on its tape, the guidance cue on the flight path vector | 6130bad0c |
+| SD | CRUISE's cabin climbing or descending arrow, WHEEL's hottest brake arc, F/CTL's rudder travel limits | (this commit) |
 
 ## Not a gap (consumed into a value, or a false hit of the word measure)
 
@@ -44,6 +45,7 @@ its reason.
   the HUD's draw delay), the green dot (no reference to fit its offset), the caution strips, F and S, the slip index, the LS scales and
   diamonds, a wide green "=" near 270 kt clean (unnamed). The PFD says each of these.
 - ND: the VOR bearing pointers (circled 1 and 2), the selected heading bug and lubber line on the compass, the range marks.
-- E/WD and SD: the 35 CTR sprites against `A350SdSymbols`' catalogue.
+- E/WD and SD: F/CTL's four small circles under the ailerons' columns (unnamed); the rest of the 35 CTR sprites are read, consumed (the
+  units' %, ° and °C sprites, the pitch trim's pointer beside its read figure) or the engine display's background art.
 - SFD and SND vector shapes (deviation, needles).
 - MFD leftovers: the F-PLN header's DIST and FPA, MODE, MACH; the green "=" parked above the PFD's speed tape (never on its scale here).
