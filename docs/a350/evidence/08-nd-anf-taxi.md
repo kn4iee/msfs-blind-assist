@@ -114,6 +114,44 @@ The take-off after this test was rejected at 81 kt: the step script's last centr
 3.3 degrees right through the roll (read back with the pedals neutral). The scratchpad take-off script now centres the axis and refuses
 unless the nosewheel reads centred, brakes on a reject, and never sets climb thrust after one.
 
+### The second flight (2026-11-03, 08:40-09:26, VCBI circuit at FL100, a go-around and a second approach)
+
+**Task 2 Step 1, the arming path found** (approach phase not needed; in the cruise at FL100):
+
+1. The ND in PLAN at the 2 NM zoom step draws the destination's ANF; the function panel's LANDING tab (Functions button, then LANDING)
+   reads `RWY none none`, `ROW LDG DIST none` and `BTV EXIT AT: none M FROM THRESHOLD`, grey, until the ANF has a landing runway.
+   MODIFY RWY there changed nothing.
+2. SET LDG RWY on the runway's ident on the map: the tab then reads `RWY 04 3350 M`, `ROW LDG DIST 1430 M` (1402 to 1423 later), and
+   `BTV EXIT AT` turns cyan.
+3. `BTV EXIT AT` takes a typed distance (`nd click:0:291:981:2430`, ENTER): `BTV EXIT AT: 2430 M`, and the ND reads `BTV exit: 2430 M,
+   green` (B's distance, though the map's SET BTV EXIT was grey on B: the field takes any distance).
+4. The A/BRK pushbutton **after** the exit arms BTV: FMA `SPEED; BTV, cyan`. Pressed before the exit it arms `BRK MED`, and an exit
+   set after that leaves `BRK MED`: the first flight's failure. A/BRK off and on again with the exit set gives `BTV`.
+5. Clear: a second A/BRK press disarms (FMA `SPEED`); CLR then ENTER in the field sets it back to `none`.
+6. A go-around disarmed A/BRK but kept the exit (`BTV EXIT AT: 2430`); one A/BRK press armed BTV again. So the docs' "its exit and the
+   A/BRK selector have to be set again" is the selector only on 1.2.8.
+
+The landing with BTV: `THR IDLE; BTV, cyan` in the flare, `BTV, green` and `DECEL` at touchdown, "1180 meters to exit" said
+(`A350BtvCountdown`), then the excursion below.
+
+**The next waypoint, quiet rule live:** on the stand, with the flight plan entered (PPOS, VCBI, 1030 on the ND), nothing was said. In the
+go-around at 182 ft (TOGA, `SRS`, `GA TRK`, then `NAV` at 09:12:19 about 140 ft), the ND's TO waypoint went from VCBI04 to IKONA below
+400 ft and "Next waypoint IKONA" was said at 09:12:28, about 550 ft climbing. PBD06, PBD07, PBD08 and GOPRU were each said once at
+their change. The First Officer called "Go-around. Flaps 2." and retracted on schedule.
+
+**ANF, Task 2 Step 8 (part):** in ROSE NAV and ARC at the 2 NM zoom on the downwind, 6-7 km from the runway, the ANF centres on the aircraft
+and reads both runways "off the screen" with their clock place and distance: it draws, around the aircraft.
+
+**Two runway excursions (scripts and an open cause):**
+- After the steering test, the first take-off roll drifted right (see Task 3); the reject at 81 kt set idle, but the scratchpad's
+  go_route.sh then set climb thrust and A/THR regardless, and the aircraft left the runway at 105 kt into the ground east of it,
+  stopped by it with N1 87 % until noticed. Both scripts are fixed (above).
+- The second approach's autoland touched down on the centreline at 118 kt, heading 040, then swung left in ROLL OUT (027 six seconds
+  later, 010 at 90 kt) and left the runway to the left, stopping from 89 kt in about two seconds (sim crash detection off). Not
+  established why: the final was steady (heading 038, LOC and G/S), the first flight's autoland at VCBI rolled out straight. Differences:
+  BTV active, the go-around before, and the steering axis driven by a script that morning (the pedals still steer the nosewheel after
+  it: rudder axis +8000 gave -3.05 degrees). A fresh session's autoland with BTV is the next check.
+
 ### Other things the flight showed
 
 - After the landing the After Landing flow's flaps item timed out: the scratchpad landing script had stopped with the levers at reverse
