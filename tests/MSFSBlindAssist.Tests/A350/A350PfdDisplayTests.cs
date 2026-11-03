@@ -208,7 +208,7 @@ public class A350PfdDisplayTests
         Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, shown);
         var (litLines, litShown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: false);
         Assert.NotEmpty(litLines);
-        Assert.Equal(litLines.Select(l => l.Spoken), litShown);
+        Assert.Equal(litLines.Select(A350MfdPage.Shown), litShown);   // each line with its role word (plan 09 Task 2)
     }
 
 

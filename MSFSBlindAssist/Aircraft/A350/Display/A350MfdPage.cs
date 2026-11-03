@@ -4,8 +4,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 
 /// <summary>One line of the MFD as a pilot moves through it: what kind it is (menu, button, tab, field,
 /// scratchpad, text), how it is spoken, and where on the side's own MFD a click lands on it. <see cref="Carried"/>: how
-/// many reads in a row it has been its last whole reading in place of a torn one (<see cref="A350MfdPage.KeepReadable"/>).</summary>
-public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false)
+/// many reads in a row it has been its last whole reading in place of a torn one (<see cref="A350MfdPage.KeepReadable"/>).
+/// <paramref name="Opener"/>: a key that opens a list (DEPARTURE's RWY, the page headers' ACTIVE, INIT's MODE).</summary>
+public sealed record MfdLine(string Kind, string Spoken, float ClickX, float ClickY, bool Popup = false, bool Opener = false)
 {
     public int Carried { get; init; }
 }
@@ -434,7 +435,7 @@ public static class A350MfdPage
                 _ => ("button", colour == "white" ? $"{value} button" : $"{value} button, {colour}"),
             };
             if (kind == "button") keys.Add((lines.Count, value, x0, x1, y0, y0 + e.RectH * 0.75f));
-            lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy)));
+            lines.Add((y0, x0, new MfdLine(kind, spoken, cx, cy, Opener: e.Class is "MainHeaderDropdownMenu" or "MainHeaderUIButton" or "DropdownVariable")));
         }
 
         // A page with no scratchpad box (the checklists) still shows the FMS message in its place, on its box; there is
@@ -728,6 +729,29 @@ public static class A350MfdPage
 
     /// <summary>The page's title line, from its title bar ("ACTIVE/F-PLN", y 137; "ACTIVE/F-PLN; TMPY, yellow"), or null.</summary>
     public static string? PageTitle(IReadOnlyList<MfdLine> lines) => lines.FirstOrDefault(l => l.Kind == "title")?.Spoken;
+
+    private const string MenuOpen = ", menu open";
+
+    /// <summary>The reader's own word for a list opener, just before its colour or at its end ("RWY button", "FMS 1 menu, cyan").</summary>
+    private static readonly Regex OpenerWord = new(@" (button|menu)(?=(, [a-z]+)?$)", RegexOptions.Compiled);
+
+    /// <summary>A line as the MFD window shows it: the reader's words, ended with the A380 window's role word where the line
+    /// takes input (plan 09 Task 2; spec 2.7: "required" was said, never that a field takes typed input). A field and the
+    /// scratchpad end with "edit"; a list opener reads as a combo box, collapsed or expanded, in place of its own word; a grey
+    /// key or opener, unavailable, ends with "dimmed". Other lines are as read.</summary>
+    public static string Shown(MfdLine line)
+    {
+        string s = line.Spoken;
+        bool open = s.EndsWith(MenuOpen, StringComparison.Ordinal);
+        if (line.Kind is "field" or "scratchpad")
+            return open ? s[..^MenuOpen.Length] + ", edit" + MenuOpen : s + ", edit";
+        if (line.Opener)
+        {
+            s = OpenerWord.Replace(open ? s[..^MenuOpen.Length] : s, "");
+            return $"{s}, combo box, {(open ? "expanded" : "collapsed")}{(s.EndsWith(", grey", StringComparison.Ordinal) ? ", dimmed" : "")}";
+        }
+        return line.Kind is "button" or "menuitem" && s.EndsWith(", grey", StringComparison.Ordinal) ? s + ", dimmed" : s;
+    }
 
     /// <summary>The FMS message line as the window compares it: the scratchpad's, or a checklist page's message; a read page
     /// showing none is an empty scratchpad (a checklist page has no box, so the first message there is a change too);

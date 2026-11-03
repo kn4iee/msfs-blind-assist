@@ -190,7 +190,7 @@ public sealed class A350MfdWindow : Form
         if (dark)
             return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
         var lines = A350MfdPage.KeepReadable(before ?? Array.Empty<MfdLine>(), A350MfdPage.Read(cap, side));
-        return (lines, lines.Count == 0 ? new[] { "The MFD is off: no power." } : lines.Select(l => l.Spoken).ToList());
+        return (lines, lines.Count == 0 ? new[] { "The MFD is off: no power." } : lines.Select(A350MfdPage.Shown).ToList());
     }
 
     private async Task AfterActionAsync()
