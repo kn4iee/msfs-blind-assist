@@ -795,7 +795,7 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 
 - Switches and selectors that something other than you moves, for example *"Seat belts: On"*, and lights as the cockpit lights them (*"BAT 1 fault light on"*, *"Master caution on"*). A light that only blinks says nothing.
 - *"pressed"* after a button's name, for a button with no light or state of its own. A knob you step says the value the cockpit then shows.
-- The FCU altitude window and each side's baro when they change other than by your own entry: *"Altitude 12000 feet"*, *"Captain altimeter 1013 hectopascals"*, *"First officer altimeter standard"*.
+- The FCU speed, heading, altitude and V/S windows and each side's baro when they change other than by your own entry: *"Speed 250 knots"*, *"Heading 270 degrees"*, *"Altitude 12000 feet"*, *"Captain altimeter 1013 hectopascals"*, *"First officer altimeter standard"*. While the emergency descent flies, the aircraft turns the heading window itself; you hear the heading once, when it has settled.
 - *"IRS aligned"*, once, as the last IR that is on finishes aligning.
 - The take-off speeds as the FMS takes them (*"V1: 142 knots"*), and *"V1"*, *"Rotate"* and *"V2"* on the take-off roll.
 - The approach minimums as PERF APPR takes them: *"Baro minimum 520 feet"*, *"Decision height 200 feet"*, *"No DH"*, and *"Baro minimum cleared"* when one goes, for example when you enter the other (the A350 keeps one) or change the approach. The FMS's own reset after landing says nothing.

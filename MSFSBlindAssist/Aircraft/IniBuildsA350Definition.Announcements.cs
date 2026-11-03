@@ -160,7 +160,7 @@ public partial class IniBuildsA350Definition
     {
         var speaking = _fcuWindows.Values.Where(w => A350FcuCallouts.Speaking.Contains(w.Name)).ToList();
         foreach (var window in speaking)
-            foreach (var input in window.Inputs)
+            foreach (var input in window.StreamedInputs)
             {
                 string key = WindowInputKey(window, input);
                 if (!_speakingByInputKey.TryGetValue(key, out var windows))
@@ -183,22 +183,46 @@ public partial class IniBuildsA350Definition
     {
         if (_sim is not { } sim)
             return;
-        string? phrase = A350FcuCallouts.Phrase(window.Name, input =>
+        double? Read(string input)
         {
             string key = WindowInputKey(window, input);
             return key == deliveredKey ? value : Cached(sim, key);
-        });
+        }
+        string? phrase = A350FcuCallouts.Phrase(window.Name, Read);
         if (phrase == null)
             return;
         // A window reads several inputs and the call-out keeps one phrase per key: another input arriving with the same
         // words is no new sample, and passed on it would unstage the change the first one staged.
         if (_windowPhrase.TryGetValue(window.Key, out var last) && last == phrase)
             return;
+        // The aircraft turning the window (the emergency descent's heading): held, said once it has stood still.
+        if (A350FcuCallouts.IsAircraftTurning(window.Name, Read))
+        {
+            _aircraftTurns[window.Key] = (phrase, Clock(), announcer);
+            _windowPhrase[window.Key] = phrase;
+            return;
+        }
+        _aircraftTurns.Remove(window.Key);
         if (A350FcuCallouts.IsQuiet(last, phrase))
             RebaselineFcuValue(window.Key, phrase);
         else
             AnnounceFcuValue(window.Key, phrase, announcer, muted: IsMuted(window.Key));
         _windowPhrase[window.Key] = phrase;
+    }
+
+    /// <summary>Windows the aircraft is turning, by key: the phrase each last showed, when, and the announcer it came with.</summary>
+    private readonly Dictionary<string, (string Phrase, long At, ScreenReaderAnnouncer Announcer)> _aircraftTurns = new(StringComparer.Ordinal);
+
+    /// <summary>A window the aircraft turned has stood still <see cref="A350FcuCallouts.AircraftTurnSettleMs"/>: its value goes to
+    /// the shared FCU call-out once, as a knob's would (muted by its Ctrl+M row).</summary>
+    private void ReleaseAircraftTurns()
+    {
+        long now = Clock();
+        foreach (var (key, turn) in _aircraftTurns.Where(t => now - t.Value.At >= A350FcuCallouts.AircraftTurnSettleMs).ToList())
+        {
+            _aircraftTurns.Remove(key);
+            AnnounceFcuValue(key, turn.Phrase, turn.Announcer, muted: IsMuted(key));
+        }
     }
 
     /// <summary>MSFSBA's own typed value is said by its own confirmation: the windows it moves stay quiet for the echo's
@@ -552,6 +576,7 @@ public partial class IniBuildsA350Definition
         if (_lampSpeech.Flush(Clock()) is string sentence && !_disposed)
             _lampAnnouncer?.Announce(sentence);
         ReleaseStepReadbacks();
+        ReleaseAircraftTurns();
         foreach (var (row, text) in _leverSpeech.Flush(Clock()))
             if (!IsMuted(row) && !_disposed)
                 _leverAnnouncer?.Announce(text);

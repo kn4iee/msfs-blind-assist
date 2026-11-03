@@ -162,7 +162,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             {
                 _fcuWindows[window.Key] = window;
                 _lampInputKeys.Add(window.Key);
-                _lampInputKeys.UnionWith(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
+                _lampInputKeys.UnionWith(window.StreamedInputs.Skip(1).Select(A350PanelLamps.InputKey));
                 AddDisplay(window.Panel, window.Key);
             }
         FindSpeakingWindows();
@@ -478,12 +478,12 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         foreach (var window in _fcuWindows.Values)
         {
             var keys = new List<string> { window.Key };
-            keys.AddRange(window.Inputs.Skip(1).Select(A350PanelLamps.InputKey));
+            keys.AddRange(window.StreamedInputs.Skip(1).Select(A350PanelLamps.InputKey));
             Register(window.Key, window.Inputs[0], window.Name, keys);
             vars[window.Key].ValueDescriptions = new Dictionary<double, string>();
             // A window that speaks on its own (A350FcuCallouts) has its Ctrl+M row; the call-out checks it ([A320-37]).
             vars[window.Key].ExcludeFromMonitorManager = !A350FcuCallouts.Speaking.Contains(window.Name);
-            foreach (var input in window.Inputs.Skip(1))
+            foreach (var input in window.StreamedInputs.Skip(1))
                 if (!vars.ContainsKey(A350PanelLamps.InputKey(input)))
                     Register(A350PanelLamps.InputKey(input), input, input, null);
         }

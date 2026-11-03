@@ -8,11 +8,12 @@ public sealed class A350FcuWindow
     private readonly Func<Func<string, double>, string> _compose;
 
     internal A350FcuWindow(string name, IReadOnlyList<string> inputs, Func<Func<string, double>, string> compose,
-        string panel = "FCU")
+        string panel = "FCU", IReadOnlyList<string>? calloutInputs = null)
     {
         Name = name;
         Panel = panel;
         Inputs = inputs;
+        StreamedInputs = calloutInputs == null ? inputs : inputs.Concat(calloutInputs).ToList();
         _compose = compose;
     }
 
@@ -27,6 +28,10 @@ public sealed class A350FcuWindow
     /// <summary>The variables it reads, A350 L:vars or sim variables (<see cref="A350FcuWindows.StockUnits"/>); the first
     /// streams under <see cref="Key"/>.</summary>
     public IReadOnlyList<string> Inputs { get; }
+
+    /// <summary>Its <see cref="Inputs"/> and those its spoken call-out reads besides (<see cref="A350FcuCallouts"/>): all streamed,
+    /// none needed for the line.</summary>
+    public IReadOnlyList<string> StreamedInputs { get; }
 
     /// <summary>The window as the FCU shows it, from values read by L:var name; null while an input is unread.</summary>
     public string? Compose(Func<string, double?> read)
@@ -76,11 +81,13 @@ public static class A350FcuWindows
             v => v("INI_FCU_SPD_DASHED") < 0.5 && v("INI_MANAGED_SPEED") >= 0.5
                 ? Speed(v("INI_PRESET_DIAL"), v("INI_PRESET_DIAL_IS_MACH") >= 0.5) + ", preset"
                 : Window(v("INI_FCU_SPD_DASHED"), v("INI_FCU_SPD_DOT"), Speed(v("INI_AIRSPEED_DIAL"), v("INI_AIRSPEED_DIAL") < 5))),
-        // In NAV (INI_ROLL_MODE 1; HDG is 2, TRK 11) a turn shows the preset heading for 45 s.
+        // In NAV (INI_ROLL_MODE 1; HDG is 2, TRK 11) a turn shows the preset heading for 45 s. The pitch mode is the call-out's
+        // alone: while the emergency descent flies, its turn of the window is said once settled (A350FcuCallouts.IsAircraftTurning).
         new A350FcuWindow("Heading window", new[] { "INI_HEADING_DIAL", "INI_TRK_DIAL", TrkFpa, "INI_FCU_HDG_DASHED", "INI_FCU_HDG_DOT", RollMode },
             v => Window(v("INI_FCU_HDG_DASHED"), v("INI_FCU_HDG_DOT"),
                 (v(TrkFpa) >= 0.5 ? "Track " + Degrees(v("INI_TRK_DIAL")) : "Heading " + Degrees(v("INI_HEADING_DIAL")))
-                + (v("INI_FCU_HDG_DASHED") < 0.5 && Math.Abs(v(RollMode) - NavRollMode) < 0.5 ? ", preset" : ""))),
+                + (v("INI_FCU_HDG_DASHED") < 0.5 && Math.Abs(v(RollMode) - NavRollMode) < 0.5 ? ", preset" : "")),
+            calloutInputs: new[] { "INI_PITCH_MODE" }),
         new A350FcuWindow("Altitude window", new[] { "INI_ALTITUDE_DIAL", "INI_FCU_ALT_DOT" },
             v => Window(0, v("INI_FCU_ALT_DOT"), Whole(v("INI_ALTITUDE_DIAL")) + " feet")),
         new A350FcuWindow("V/S window", new[] { "INI_VVI_DIAL", "INI_FPA_DIAL", TrkFpa, "INI_FCU_VS_DASHED" },
