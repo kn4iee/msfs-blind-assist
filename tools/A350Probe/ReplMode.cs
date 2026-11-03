@@ -83,6 +83,9 @@ internal sealed partial class ProbeForm
         def.Pfd = pfd;
         pfd.MfdWindowOpen = () => def.MfdWindowOpen;
         pfd.MfdDark = () => def.IsScreenDark("Captain MFD");
+        // The ND's background reads, as MainForm hands them the captain's EFIS draw (plan 01's seam), every row unmuted here.
+        pfd.CaptainEfisDrawn = (capture, at, settling) =>
+            def.ObserveCaptainEfis(capture, at, settling, _ => false, line => BeginInvoke(() => cap.Announce("[nd] " + line)));
         pfd.Start();
 
         var mfd = new A350MfdInput(_m.ExecuteCalculatorCodeUnique);
