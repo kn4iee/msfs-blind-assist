@@ -77,3 +77,37 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **In-sim results:**
 - **Changed from the plan:**
 - **Rulings made while working:**
+
+### Handoffs collected, by file (Task 1 Step 1, 2026-11-03)
+
+Every plan's "Handoff to plan 21" (22 plans) and its gaps, grouped by the file each lands in; [x] once applied (commit), [owner] where
+only the owner can do it, [pr] where it is the pull request's description or changelog (Task 5).
+
+- **`.claude/rules/inibuilds-a350.md` + `docs/invariants/inibuilds-a350.md`:** plan 02's two rules (the Altimeter window plans its
+  targets as one entry from one read, `A350BaroEntry.Plan`; the ISIS has its own STD, toggled only by its key, read only from the SFD);
+  plan 03's extension of [A350-9]'s full text (Task 1's trap kinds and the 2026-10-31 rate) and its Task 5 rule if it stands; plan 06's
+  extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); plan 04's and 09's only if their
+  measured traps stood (check their records). Each checked against CLAUDE.md's "Adding or changing a rule", `ClaudeContextBudgetTests`.
+- **`docs/inibuilds-a350.md`:** "Manual coverage" from the ledgers of plans 12-17 and 23 (pages, items, proven, gaps, not modelled);
+  "Parity with the other aircraft" with plan 18's measured biases; the flight phase table (plan 04, its use the owner's ruling);
+  the top updated to 1.2.8; the "Do not chase" list as each plan re-checked it; plan 24's readers are already in their sections.
+- **`docs/first-officer.md`:** line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.
+- **`docs/tooling.md`:** plan 03's A350Probe layout-check line and plan 06's OIS harness lines (plan 20 owns the file: check they
+  landed there); plan 24's `coverage.py`, `sprites.py` and `A350Probe reread` (landed with plan 24).
+- **`guide/airbus-aircraft.md` (the A350 chapter) and `guide/hotkey-reference.md`:** plan 02's Altimeter window (both sides and the
+  ISIS checked before anything is set, LINKED INSTR, never off STD) and the FCU windows' call-outs (landed with plan 16's fix today);
+  plan 04's E/WD call-outs (memos once, colours, "Reverse green" and its row); plan 06's OIS window; plan 07's PFD messages' rows,
+  LVR CLB flashing, green dot, S and F on the ground; plan 08's BTV from the ND window and the TO waypoint call-out; plan 09's MFD
+  window (page buttons, "Go to MFD page", role words, the F-PLN grid, long lists) and its keys; plan 10's RMP; plan 11's panel rows;
+  plan 22's mailbox (the clearance end to end, the uplink light, WILCO, STANDBY, UNABLE, SEND); plan 23's hidden options explained;
+  plan 24's new readings (the HUD's, the standby displays', the PFD's symbols, the ND's path symbols, the SD's arrows), where the
+  guide lists what a display says; the Ctrl+M list from every plan's new rows.
+- **`HotkeyGuides/iniBuilds_A350_Hotkeys.txt`:** plan 09's MFD keys, plan 11's changed rows.
+- **Frozen files, a plan's request:** `IniBuildsA350DefinitionTests.cs:641`'s stepper sentence ("as on the ground": on 1.2.8 the preset
+  shows on the ground too; plan 02); `A350LeverSpeech.Thrust`'s `onGround` default (plan 01 for plan 11); `A350EcamMonitorTests.cs:90`
+  (relax when keys are added; plan 01 for plan 04); `ObserveNd`'s three conditions when it gets a body (plan 01 for plan 08).
+- **Gaps for the owner (from the plans' records):** collected into the owner's steps file at the end.
+- **[pr] The pull request (Task 5):** every plan's pilot-facing line, compiled into the description and the A350's
+  `changelog.d/<pr>-inibuilds-a350.aircraft.md`; the in-sim plan lines (plan 01's five and each plan's own).
+- **Plan 19 [owner]:** its Task 1 flights on the A380, A32NX and A330 come first; its pull request is off `main`, apart from this branch.
+
