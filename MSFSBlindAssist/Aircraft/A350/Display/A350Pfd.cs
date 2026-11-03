@@ -170,6 +170,11 @@ public static class A350Pfd
     /// however the bank turns them.</summary>
     private static readonly (float X, float Y) RollPointerAtlasCentre = (906, 807.5f), SlipIndexAtlasCentre = (906, 830);
 
+    /// <summary>The linear deviation's green dot in PFDA350Elements.png (17 x 17; its upper half shares the place, its lower half 9 px
+    /// down), beside the altitude tape (plan 24: the symbol at the vertical profile's altitude from the top of descent to the MAP).</summary>
+    private static readonly (float X, float Y) LinearDeviationAtlas = (976, 676);
+    private const float LinearDeviationLowerHalfY = 685;
+
     private static bool Near((float X, float Y) a, (float X, float Y) b) => Math.Abs(a.X - b.X) <= 3 && Math.Abs(a.Y - b.Y) <= 3;
 
     /// <summary>The lower part's sprites (live 2026-11-03): the speed brake out, 25 x 26 beside the flaps; the parking brake
@@ -526,6 +531,17 @@ public static class A350Pfd
             double across = ((slip.X0 + slip.X1) / 2 - (pointer.X0 + pointer.X1) / 2) * Math.Cos(turn) + ((slip.Y0 + slip.Y1) / 2 - (pointer.Y0 + pointer.Y1) / 2) * Math.Sin(turn);
             string tint = A350Rgba.NameOf(slip.Colour);
             o.Add($"Slip index: {(Math.Abs(across) <= 1.5 ? "centred" : across > 0 ? "right of centre" : "left of centre")}, {(tint == "white" ? "yellow" : tint)}");
+        }
+        // The linear deviation: a green dot beside the altitude tape at the vertical profile's altitude (a half dot at the tape's edge:
+        // off the scale); the aircraft is above the profile while the dot is under the window.
+        if (capture.Shapes?.FirstOrDefault(sh => sh.Image > 1 && Math.Abs(sh.X0 - sh.PatternX - LinearDeviationAtlas.X) < 1.5f
+                && (Math.Abs(sh.Y0 - sh.PatternY - LinearDeviationAtlas.Y) < 1.5f || Math.Abs(sh.Y0 - sh.PatternY - LinearDeviationLowerHalfY) < 1.5f)
+                && (sh.X0 + sh.X1) / 2 - (side == 0 ? 0 : PfdWidth) >= 560 && ((sh.X0 + sh.X1) / 2 >= PfdWidth) == (side != 0)) is { } vdev)
+        {
+            float under = (vdev.Y0 + vdev.Y1) / 2 - WindowY;
+            o.Add(vdev.Y1 - vdev.Y0 < 12
+                ? $"Linear deviation: off the scale, {(under > 0 ? "above" : "below")} the profile, green"
+                : string.Create(CultureInfo.InvariantCulture, $"Linear deviation: {Math.Round(Math.Abs(under) / TapePxPerFoot / 10) * 10:0} feet {(under > 0 ? "above" : "below")} the profile, green"));
         }
         o.AddRange(Deviation(capture, side));
         o.AddRange(ls);

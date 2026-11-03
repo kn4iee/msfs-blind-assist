@@ -785,4 +785,14 @@ public class A350PfdTests
     [InlineData("efis0_turn_slip")]
     public void It_reads_the_slip_index_level_and_in_a_turn(string fixture) =>
         Assert.Contains("Slip index: centred, yellow", A350Pfd.Read(Fixture(fixture), 0));
+
+    // Plan 24: the linear deviation, a green dot beside the altitude tape at the altitude of the computed vertical profile (from the top
+    // of descent to the MAP); level at 5,000 ft on the approach the profile ran below: the dot 78.5 px under the window (0.35 px a
+    // foot), then cut to its upper half at the tape's foot: off the scale; at the tape's top after the emergency descent, below the profile.
+    [Theory]
+    [InlineData("efis0_approach_vls", "Linear deviation: 220 feet above the profile, green")]
+    [InlineData("efis0_approach_vdev", "Linear deviation: off the scale, above the profile, green")]
+    [InlineData("efis0_descent_vdev_off", "Linear deviation: off the scale, below the profile, green")]
+    public void It_reads_the_linear_deviation(string fixture, string deviation) =>
+        Assert.Contains(deviation, A350Pfd.Read(Fixture(fixture), 0));
 }
