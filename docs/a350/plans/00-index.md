@@ -52,6 +52,7 @@ someone else, that is Robin Kipp.
 | 21 | `21-integration.md`: handoffs, guide, rules, hotkey guide, changelog, the 1.2.8 "do not chase" list, a regression flight, the pull request, delete `docs/a350/` | last | all |
 | 22 | `22-atc-mailbox.md`: the mailbox's SEND and a real uplink with the owner's go-ahead; an uplink said with the window closed | early | 01 |
 | 23 | `23-ois-options.md`: every OPTIONS option on and off (handoff 3.2), the controls the cockpit hides explained | early | 01 |
+| 24 | `24-displays-decoded.md`: everything every display draws said, glyphs and symbols too, only junk dropped (owner, 2026-11-03) | late | 03, 04, 07, 08, 09 |
 
 ## File ownership
 
