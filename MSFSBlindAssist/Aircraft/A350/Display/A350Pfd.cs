@@ -162,6 +162,16 @@ public static class A350Pfd
         TrimOutOfRangeAtlas = (786, 423), SidestickAtlas = (947, 790), YawBarAtlas = (801, 939), TailStrikeAtlas = (836, 667);
     private const float LsCourseLeftEdge = 150, LsCourseRightEdge = 566, AttitudeCentreX = 359, SidestickCentreY = 382, CentredPixels = 4;
 
+    /// <summary>The flight director's pitch bar across y 382 when centred (its roll bar upright through x 359); a bar more than 1.5 px
+    /// off is a command (plan 24: 11 px low in the emergency descent, 12 px left at LOC capture).</summary>
+    private const float FdPitchCentreY = 382, FdCentredPixels = 1.5f;
+
+    /// <summary>The roll pointer's and the slip index's centres in PFDA350Elements.png (890, 795 and 880, 822 with their sizes), found
+    /// however the bank turns them.</summary>
+    private static readonly (float X, float Y) RollPointerAtlasCentre = (906, 807.5f), SlipIndexAtlasCentre = (906, 830);
+
+    private static bool Near((float X, float Y) a, (float X, float Y) b) => Math.Abs(a.X - b.X) <= 3 && Math.Abs(a.Y - b.Y) <= 3;
+
     /// <summary>The lower part's sprites (live 2026-11-03): the speed brake out, 25 x 26 beside the flaps; the parking brake
     /// set, 178 x 29 at the bottom left.</summary>
     private static readonly (float X, float Y) SpeedBrakeAtlas = (653, 80), ParkingBrakeAtlas = (252, 11);
@@ -491,6 +501,32 @@ public static class A350Pfd
         }
         if (Sprite(capture, side, TailStrikeAtlas) != null)
             o.Add("Tail strike pitch limit, amber");
+        // The flight director's bars, plain green fills: off its centre a bar is the command.
+        var fills = (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "fill" && sh.Image == 0 && A350Rgba.NameOf(sh.Colour) == "green"
+            && ((sh.X0 + sh.X1) / 2 >= PfdWidth) == (side != 0)).ToList();
+        var rollBar = fills.FirstOrDefault(sh => sh.X1 - sh.X0 is > 2 and < 7 && sh.Y1 - sh.Y0 > 150 && Math.Abs((sh.X0 + sh.X1) / 2 - centreX) < 80);
+        var pitchBar = fills.FirstOrDefault(sh => sh.Y1 - sh.Y0 is > 2 and < 7 && sh.X1 - sh.X0 > 150 && Math.Abs((sh.Y0 + sh.Y1) / 2 - FdPitchCentreY) < 80);
+        if (rollBar != null || pitchBar != null)
+        {
+            var parts = new List<string>();
+            if (pitchBar != null && (pitchBar.Y0 + pitchBar.Y1) / 2 - FdPitchCentreY is var down && Math.Abs(down) > FdCentredPixels)
+                parts.Add(string.Create(CultureInfo.InvariantCulture, $"pitch {Math.Abs(down) / PitchPxPerDegree:0.0} degrees {(down > 0 ? "down" : "up")}"));
+            if (rollBar != null && (rollBar.X0 + rollBar.X1) / 2 - centreX is var right && Math.Abs(right) > FdCentredPixels)
+                parts.Add(right > 0 ? "roll right" : "roll left");
+            o.Add($"Flight director: {(parts.Count == 0 ? "centred" : string.Join(", ", parts))}, green");
+        }
+        // The slip index, the trapezoid under the roll pointer, both turned with the bank: its offset across the pointer.
+        var pointer = (capture.Shapes ?? Array.Empty<DrawnShape>()).FirstOrDefault(sh => sh.Image > 1 && Near(A350ShapeReader.SpriteCentre(sh), RollPointerAtlasCentre)
+            && ((sh.X0 + sh.X1) / 2 >= PfdWidth) == (side != 0));
+        var slip = (capture.Shapes ?? Array.Empty<DrawnShape>()).FirstOrDefault(sh => sh.Image > 1 && Near(A350ShapeReader.SpriteCentre(sh), SlipIndexAtlasCentre)
+            && ((sh.X0 + sh.X1) / 2 >= PfdWidth) == (side != 0));
+        if (pointer != null && slip != null)
+        {
+            double turn = A350ShapeReader.AngleDegrees(pointer) * Math.PI / 180;
+            double across = ((slip.X0 + slip.X1) / 2 - (pointer.X0 + pointer.X1) / 2) * Math.Cos(turn) + ((slip.Y0 + slip.Y1) / 2 - (pointer.Y0 + pointer.Y1) / 2) * Math.Sin(turn);
+            string tint = A350Rgba.NameOf(slip.Colour);
+            o.Add($"Slip index: {(Math.Abs(across) <= 1.5 ? "centred" : across > 0 ? "right of centre" : "left of centre")}, {(tint == "white" ? "yellow" : tint)}");
+        }
         o.AddRange(Deviation(capture, side));
         o.AddRange(ls);
 

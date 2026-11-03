@@ -768,4 +768,21 @@ public class A350PfdTests
         var lines = A350Pfd.Read(Fixture("efis0_slow_alpha"), 0);
         Assert.Equal("LS course: 040, magenta", Assert.Single(lines, l => l.StartsWith("LS course:", StringComparison.Ordinal)));
     }
+
+    // Plan 24: the flight director's bars are plain green fills, the roll bar upright through x 359 and the pitch bar across y 382 when
+    // centred; a bar off its centre is the command (8.61 px a degree of pitch, the ladder's). The emergency descent's pitch bar 11 px low;
+    // LOC capture's roll bar 12 px left; level at 10,000 ft both centred.
+    [Theory]
+    [InlineData("efis0_emer_des_fd", "Flight director: pitch 1.3 degrees down, green")]
+    [InlineData("efis0_loc_capture_fd", "Flight director: roll left, green")]
+    [InlineData("efis0_level_fd", "Flight director: centred, green")]
+    public void It_reads_the_flight_directors_command(string fixture, string fd) =>
+        Assert.Contains(fd, A350Pfd.Read(Fixture(fixture), 0));
+
+    // The slip index, the trapezoid under the roll pointer, both turned with the bank: found however turned, its offset across the pointer.
+    [Theory]
+    [InlineData("efis0_level_fd")]
+    [InlineData("efis0_turn_slip")]
+    public void It_reads_the_slip_index_level_and_in_a_turn(string fixture) =>
+        Assert.Contains("Slip index: centred, yellow", A350Pfd.Read(Fixture(fixture), 0));
 }
