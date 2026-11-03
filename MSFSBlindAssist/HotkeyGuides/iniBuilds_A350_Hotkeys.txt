@@ -105,6 +105,11 @@ What you set or press yourself is never repeated back to you.
   FMS messages          a message the FMS posts in the MFD scratchpad ("Scratchpad: NAV ACCURACY
                         UPGRADED, white") while the MFD window is closed; the window says them
                         itself while it is open
+  PFD messages          each flag or message the PFD raises, one row each ("RWY TOO SHORT
+                        call-out", "PULL UP call-out")
+  Reverser call-outs    "Reverse green" on landing once the reversers are out
+  Next waypoint         "Next waypoint PBD12" as the ND's TO waypoint changes in flight
+                        (quiet on the ground and in the flare)
 
 The 1,000-foot altitude call-outs (a setting, as on every aircraft) come every 300 metres while
 the FCU's METRIC ALT is on ("3000 meters"), and A and Q then read metres.
@@ -368,7 +373,8 @@ MFD (the A350's flight management, its checklists and datalink):
              (Tab to it, type, Enter), anything else is clicked. Backspace presses CLR,
              PageUp/PageDown scroll, F5 refreshes, Escape closes. The Side box picks the
              captain's or the first officer's MFD. A new FMS message is spoken (with the
-             window closed, the background says it). Alt+letter presses a KCCU page key:
+             window closed, the background says it). The Go to MFD page list opens any
+             page the menus reach. Alt+letter presses a KCCU page key:
              Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC,
              Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG,
              Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU,
@@ -402,11 +408,13 @@ Radios (the A380's keys):
                 out) is also on the Pedestal's Captain RMP, First Officer RMP and RMP 3
                 panels.
 
-NOT ON THE A350 YET (each key says so when pressed):
-  Shift+C       The First Officer window, with its flows and checklists ("No checklist for this
-                aircraft."). The A350's own checklists are on the MFD: Ctrl+Shift+C.
-  Ctrl+Shift+B  The A380's airport map and BTV (OANS) window ("OANS airport map is only
-                available on the A380."). The A350 draws its airport map and BTV on the ND.
+First Officer and the ND:
+  Shift+C       The First Officer window: flows from cold and dark to securing, with the
+                aircraft's own checklists as its read-backs (also on the MFD: Ctrl+Shift+C).
+  Ctrl+Shift+B  The ND window: the ND line by line and its airport map (the ANF), Brake To
+                Vacate armed in one step (the landing runway's exits listed), the flight
+                path's symbols and traffic with where each lies; Enter does what a click on
+                the ND does.
 
 General:
   Escape     Exit active hotkey mode
