@@ -89,7 +89,7 @@ only the owner can do it, [pr] where it is the pull request's description or cha
   extension of [A350-12]'s full text (the sign-in pop-up's masking in `A350SpeechLog.ForTheLog`); [x] plan 04's and 09's: none stood
   (their records). Each checked against CLAUDE.md's "Adding or changing a rule", `ClaudeContextBudgetTests`.
 - **`docs/inibuilds-a350.md`:** [x] "Manual coverage" from the ledgers of plans 12-17 and 23 (pages, items, proven, gaps, not modelled);
-  "Parity with the other aircraft" with plan 18's measured biases; the flight phase table (plan 04, its use the owner's ruling);
+  [x] "Parity with the other aircraft" with plan 18's measured biases; the flight phase table (plan 04, its use the owner's ruling);
   the top updated to 1.2.8; the "Do not chase" list as each plan re-checked it; plan 24's readers are already in their sections.
 - **`docs/first-officer.md`:** [x] line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.
 - **`docs/tooling.md`:** plan 03's A350Probe layout-check line and plan 06's OIS harness lines (plan 20 owns the file: check they
