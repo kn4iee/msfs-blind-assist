@@ -442,6 +442,10 @@ public static class A350GroundDisplays
     /// unturned on the row at y 239.</summary>
     private const float SfdPitchPxPerDegree = 4.9f, SfdPitchZeroY = 125.0f, SfdLadderX = 116, SfdLabelBelowLine = 8, SfdHeadingRowY = 239;
 
+    /// <summary>The SFD's heading scale: 2.3 px a degree, its index the yellow mark centred at x 142 (in flight against the sim's
+    /// heading, plan 08: the stand's 145 read every heading 1.3 degrees high).</summary>
+    private const float SfdHeadingIndexX = 142, SfdHeadingPxPerDegree = 2.3f;
+
     /// <summary>A heading scale label: drawn unturned on its row, where a ladder label passes only turned or off the row.</summary>
     private static bool OnSfdHeadingRow(DrawnText t) =>
         MathF.Abs(t.Y - SfdHeadingRowY) < 0.5f && MathF.Abs(t.LocalY - t.Y) < 0.5f && MathF.Abs(t.LocalX - t.X) < 0.5f;
@@ -476,8 +480,8 @@ public static class A350GroundDisplays
         return ((h - SfdPitchZeroY) / SfdPitchPxPerDegree, -turn * 180 / Math.PI);
     }
 
-    /// <summary>The standby flight display: speed and altitude (its tapes), baro, heading (scale labels 2.3 px a degree,
-    /// index at x 145), position and its source; flags as drawn.</summary>
+    /// <summary>The standby flight display: speed and altitude (its tapes), pitch and bank (its ladder), baro, heading (its scale,
+    /// read at the index), position and its source; flags as drawn.</summary>
     public static IReadOnlyList<string> ReadSfd(A350DrawCapture capture)
     {
         var cells = Cells(capture.Texts);
@@ -509,11 +513,13 @@ public static class A350GroundDisplays
             o.Add(A350Pfd.UnansweredBaro(new[] { b.Text }) ? "Baro: not available" : $"Baro: {b.Text}, cyan");
         }
         // The heading scale's labels, unturned on their row: a ladder label crossing the row in a turn is none (plan 08's right turn).
-        var scale = Distinct(capture.Texts).Where(t => t.ColourName == "white" && OnSfdHeadingRow(t) && t.Text.Trim() is { Length: 2 } s && s.All(char.IsDigit)).ToList();
+        // From 000 to 080 a label is one digit; each is read off at the index.
+        var scale = Distinct(capture.Texts).Where(t => t.ColourName == "white" && OnSfdHeadingRow(t) && t.Text.Trim() is { Length: 1 or 2 } s && s.All(char.IsDigit)).ToList();
         if (scale.Count > 0)
         {
-            var nearest = scale.OrderBy(t => Math.Abs(t.X - 145)).First();
-            o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(int.Parse(nearest.Text.Trim(), CultureInfo.InvariantCulture) * 10 + (145 - nearest.X) / 2.3 + 360) % 360:0}"));
+            var nearest = scale.OrderBy(t => Math.Abs(t.X - SfdHeadingIndexX)).First();
+            int heading = (int)Math.Round(int.Parse(nearest.Text.Trim(), CultureInfo.InvariantCulture) * 10 + (SfdHeadingIndexX - nearest.X) / SfdHeadingPxPerDegree);
+            o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(heading % 360 + 360) % 360:000}"));
         }
         Position(cells, used, o);
         // Tape, drum and scale numbers, and the vertical source letters, are not text to read.

@@ -432,7 +432,7 @@ public class A350GroundDisplaysTests
     {
         var sfd = A350GroundDisplays.ReadSfd(Fixture("SFD"));
         Assert.Contains("Baro: 1013, cyan", sfd);
-        Assert.Contains("Heading: 220", sfd);
+        Assert.Contains("Heading: 219", sfd);   // the PFD's 219 on the same stand (the SFD's index measured in flight, plan 08)
         Assert.Contains("Position: N07 10.6 E079 53.1, green", sfd);
         Assert.Contains("Position source: GPIR3, white", sfd);
         var snd = A350GroundDisplays.ReadSnd(Fixture("SND"));
@@ -479,22 +479,54 @@ public class A350GroundDisplaysTests
     [InlineData("p08_sfd_level", "Pitch: 1.2 degrees up", "Bank: wings level")]
     [InlineData("p08_sfd_turn_left", "Pitch: 4.7 degrees up", "Bank: 28 degrees left")]
     [InlineData("p08_sfd_turn_right", "Pitch: 1.3 degrees up", "Bank: 25 degrees right")]
+    [InlineData("p08_sfd_descent_turn", "Pitch: 0.4 degrees down", "Bank: 25 degrees left")]   // sim 0.39 down, 24.6 left
     public void The_standby_flight_display_reads_pitch_and_bank_from_its_ladder(string fixture, string pitch, string bank)
     {
         var sfd = A350GroundDisplays.ReadSfd(A350Fixtures.Capture(fixture + ".json"));
         Assert.Equal(new[] { pitch, bank }, sfd.Skip(2).Take(2));
     }
 
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_standby_attitude_and_heading_hold_in_a_comma_decimal_culture(string name)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(name);
+            var sfd = A350GroundDisplays.ReadSfd(A350Fixtures.Capture("p08_sfd_climb.json"));
+            Assert.Contains("Pitch: 8.3 degrees up", sfd);
+            Assert.Contains("Heading: 351", sfd);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
     // In the right turn the ladder's lower 20 crossed the heading scale's row (165.7, 239.0; the scale's 32 at 127.2 still nearer the
-    // index at 145, live heading 328). The same draw with that 20 at x 150, as at a little less bank: it is no heading label.
+    // index, live heading 327 turning at 1.4 degrees a second). The same draw with that 20 at x 150, as at a little less bank: it is no
+    // heading label.
     [Fact]
     public void A_ladder_label_on_the_heading_row_is_no_heading_label()
     {
         var cap = A350Fixtures.Capture("p08_sfd_turn_right.json");
-        Assert.Contains("Heading: 328", A350GroundDisplays.ReadSfd(cap));
+        Assert.Contains("Heading: 326", A350GroundDisplays.ReadSfd(cap));
         var nearer = cap with { Texts = cap.Texts.Select(t => t.Text == "20" && MathF.Abs(t.X - 165.7f) < 0.1f ? t with { X = 150 } : t).ToList() };
-        Assert.Contains("Heading: 328", A350GroundDisplays.ReadSfd(nearer));
+        Assert.Contains("Heading: 326", A350GroundDisplays.ReadSfd(nearer));
     }
+
+    // Plan 08's flight: the SFD's heading against the sim's magnetic heading: level 298.3, climbing 351.4, inbound 041.7. Its index is
+    // the yellow mark centred at x 142 (the stand's calibration put it at 145: every heading 1.3 degrees high), and from 000 to 080 the
+    // scale's labels are one digit, "0" to "8": on the 040 inbound no heading was read at all. Said as the PFD says it, three digits.
+    [Theory]
+    [InlineData("p08_sfd_level", "Heading: 298")]
+    [InlineData("p08_sfd_climb", "Heading: 351")]
+    [InlineData("p08_sfd_inbound_040", "Heading: 042")]
+    [InlineData("p08_sfd_descent_turn", "Heading: 163")]
+    public void The_standby_heading_reads_at_its_index_from_every_label(string fixture, string heading) =>
+        Assert.Contains(heading, A350GroundDisplays.ReadSfd(A350Fixtures.Capture(fixture + ".json")));
 
     // On the stand (sim 0.29 down): the attitude said after the tapes, before the baro.
     [Fact]
