@@ -49,8 +49,10 @@ public sealed class A350LeverSpeech
     private string? Said(double tla) => Detent(tla) is var word && word == TakeoffSpool && !_onGround ? null : word;
 
     /// <summary>A lever's new TLA: "All thrust levers" now when both sit at its detent, else null, its own sentence held
-    /// for <see cref="Flush"/>. <paramref name="suppressed"/>: the delivery is inside MainForm's echo window.</summary>
-    public (string Row, string Text)? Thrust(int lever, double tla, long now, bool suppressed = false, bool onGround = true)
+    /// for <see cref="Flush"/>. <paramref name="onGround"/>: whether the aircraft is on the ground now, always the caller's to say: a
+    /// caller that left it to a default would say the take-off's word in the air (plan 01). <paramref name="suppressed"/>: the delivery
+    /// is inside MainForm's echo window.</summary>
+    public (string Row, string Text)? Thrust(int lever, double tla, long now, bool onGround, bool suppressed = false)
     {
         _onGround = onGround;
         int i = lever - 1;

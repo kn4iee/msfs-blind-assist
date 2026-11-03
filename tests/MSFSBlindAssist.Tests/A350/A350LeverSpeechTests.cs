@@ -26,15 +26,15 @@ public class A350LeverSpeechTests
     public void Both_levers_at_one_detent_read_as_all_and_a_split_reads_the_lever_that_moved()
     {
         var speech = new A350LeverSpeech();
-        Assert.Null(speech.Thrust(1, 0, 0));
-        Assert.Null(speech.Thrust(2, 0, 0));                                // the baseline: silent
-        Assert.Null(speech.Thrust(1, 25, 100));                             // lever 1 first: the other may be on its way
-        Assert.Equal((A350LeverSpeech.AllLevers, "All thrust levers Climb"), speech.Thrust(2, 25, 120));
+        Assert.Null(speech.Thrust(1, 0, 0, onGround: true));
+        Assert.Null(speech.Thrust(2, 0, 0, onGround: true));                                // the baseline: silent
+        Assert.Null(speech.Thrust(1, 25, 100, onGround: true));                             // lever 1 first: the other may be on its way
+        Assert.Equal((A350LeverSpeech.AllLevers, "All thrust levers Climb"), speech.Thrust(2, 25, 120, onGround: true));
         Assert.Empty(speech.Flush(1000));                                   // lever 1's lone sentence never comes
-        Assert.Null(speech.Thrust(1, 30, 1100));                            // mid-travel
-        Assert.Null(speech.Thrust(1, 25, 1200));                            // back where it was: nothing new
+        Assert.Null(speech.Thrust(1, 30, 1100, onGround: true));                            // mid-travel
+        Assert.Null(speech.Thrust(1, 25, 1200, onGround: true));                            // back where it was: nothing new
         Assert.Empty(speech.Flush(2000));
-        Assert.Null(speech.Thrust(2, 45, 3000));                            // a split, held for the gather
+        Assert.Null(speech.Thrust(2, 45, 3000, onGround: true));                            // a split, held for the gather
         Assert.Empty(speech.Flush(3000 + A350LeverSpeech.GatherMs - 1));
         Assert.Equal(new[] { (A350LeverSpeech.Lever2, "Thrust lever 2 TOGA") }, speech.Flush(3000 + A350LeverSpeech.GatherMs));
         Assert.Empty(speech.Flush(9000));                                   // said once
@@ -52,21 +52,21 @@ public class A350LeverSpeechTests
         Assert.Empty(speech.Flush(100_000));
 
         var ground = new A350LeverSpeech();
-        ground.Thrust(1, 0, 0);
-        ground.Thrust(2, 0, 0);
-        ground.Thrust(1, 12, 10);
-        Assert.Equal(("All thrust levers 50 percent N1"), ground.Thrust(2, 12, 10)?.Text);
+        ground.Thrust(1, 0, 0, onGround: true);
+        ground.Thrust(2, 0, 0, onGround: true);
+        ground.Thrust(1, 12, 10, onGround: true);
+        Assert.Equal(("All thrust levers 50 percent N1"), ground.Thrust(2, 12, 10, onGround: true)?.Text);
     }
 
     [Fact]
     public void A_held_lever_that_moves_on_speaks_where_it_stopped()
     {
         var speech = new A350LeverSpeech();
-        speech.Thrust(1, 0, 0);
-        speech.Thrust(2, 0, 0);
-        Assert.Null(speech.Thrust(1, 35, 100));
-        Assert.Null(speech.Thrust(1, 40, 200));
-        Assert.Null(speech.Thrust(1, 45, 300));
+        speech.Thrust(1, 0, 0, onGround: true);
+        speech.Thrust(2, 0, 0, onGround: true);
+        Assert.Null(speech.Thrust(1, 35, 100, onGround: true));
+        Assert.Null(speech.Thrust(1, 40, 200, onGround: true));
+        Assert.Null(speech.Thrust(1, 45, 300, onGround: true));
         Assert.Equal(new[] { (A350LeverSpeech.Lever1, "Thrust lever 1 TOGA") }, speech.Flush(300 + A350LeverSpeech.GatherMs));
     }
 
@@ -75,11 +75,11 @@ public class A350LeverSpeechTests
     public void A_suppressed_lever_sentence_is_dropped_not_held()
     {
         var speech = new A350LeverSpeech();
-        speech.Thrust(1, 0, 0);
-        speech.Thrust(2, 0, 0);
-        Assert.Null(speech.Thrust(1, 25, 100, suppressed: true));
+        speech.Thrust(1, 0, 0, onGround: true);
+        speech.Thrust(2, 0, 0, onGround: true);
+        Assert.Null(speech.Thrust(1, 25, 100, suppressed: true, onGround: true));
         Assert.Empty(speech.Flush(5000));
-        Assert.Null(speech.Thrust(1, 25, 6000));                            // already where it was said to be
+        Assert.Null(speech.Thrust(1, 25, 6000, onGround: true));                            // already where it was said to be
         Assert.Empty(speech.Flush(9000));
     }
 
@@ -87,11 +87,11 @@ public class A350LeverSpeechTests
     public void A_reset_takes_a_fresh_silent_baseline()
     {
         var speech = new A350LeverSpeech();
-        speech.Thrust(1, 0, 0);
-        speech.Thrust(2, 0, 0);
+        speech.Thrust(1, 0, 0, onGround: true);
+        speech.Thrust(2, 0, 0, onGround: true);
         speech.Reset();
-        Assert.Null(speech.Thrust(1, 25, 100));
-        Assert.Null(speech.Thrust(2, 25, 100));
+        Assert.Null(speech.Thrust(1, 25, 100, onGround: true));
+        Assert.Null(speech.Thrust(2, 25, 100, onGround: true));
         Assert.Empty(speech.Flush(9000));
     }
 
@@ -114,7 +114,7 @@ public class A350LeverSpeechTests
         speech.SeedThrust(2, 25, onGround: true);
         speech.SeedSpeedBrake(0);
         speech.SeedThrust(1, 45, onGround: true);                           // already seen: a seed never overwrites
-        Assert.Null(speech.Thrust(1, 0, 0));
+        Assert.Null(speech.Thrust(1, 0, 0, onGround: true));
         Assert.Equal(new[] { (A350LeverSpeech.Lever1, "Thrust lever 1 Idle") }, speech.Flush(A350LeverSpeech.GatherMs));
         Assert.Equal("Spoilers 50 percent", speech.SpeedBrake(0.5));
     }
