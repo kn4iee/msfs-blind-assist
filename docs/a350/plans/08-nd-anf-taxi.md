@@ -92,9 +92,14 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
 - **Started:** 2026-11-02, from `f330aeba1`
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:** 1 Steps 1-5 done (`675a5f79b`, 18,932 passed), Step 6 waits on a flight; 4 done at the stand (`f2311a089`: BAT, SFD, SND,
-  HUD read right, no fix), the SFD's attitude to be measured on the same flight; 2 and 3 not started.
-- **Waiting on the owner:** Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach; Task 3 Step 2's taxi by ear.
+- **Tasks:** 1 done (`675a5f79b`; Step 6 flown 2026-11-03: each passage said once, within a poll of the ND's change); 4 done
+  (`f2311a089` at the stand; in flight the SFD's pitch and bank added and two heading misreads fixed, `1cff66915`, `b0e8df59f`,
+  18,945 passed); 2 Step 1 measured at VCBI (the ANF in PLAN at 45 NM, the exits and their distances, SET BTV EXIT offered on two exits but
+  arming nothing, the LANDING tab's `BTV EXIT AT` field), the arming itself still open; 3 not started.
+- **Waiting on the owner:** whether the next waypoint call-out should stay quiet on the ground and in the flare (said there: the plan's
+  entry, IKONA in the flare, PPOS after the landing); Task 2 Step 1's second airport with Navigraph signed in; Task 2 Step 7's approach;
+  Task 3 Step 2's taxi by ear.
+- **For plan 21 (guide):** the SFD now says pitch and bank (Alt+I and the Displays section), and its heading from 000 to 080.
 - **In-sim results:** `docs/a350/evidence/08-nd-anf-taxi.md`.
 - **Changed from the plan:** `SeedA350MonitorDefaults` returns whether it seeded and the caller saves, where the Fenix's seed saves itself,
   so its tests never write the real settings file.
