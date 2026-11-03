@@ -94,7 +94,7 @@ only the owner can do it, [pr] where it is the pull request's description or cha
 - **`docs/first-officer.md`:** [x] line 16's strict flap waits (plan 01, M4) against plan 05's margin and landing gate.
 - **`docs/tooling.md`:** plan 03's A350Probe layout-check line and plan 06's OIS harness lines (plan 20 owns the file: check they
   landed there); plan 24's `coverage.py`, `sprites.py` and `A350Probe reread` (landed with plan 24).
-- **`guide/airbus-aircraft.md` (the A350 chapter) and `guide/hotkey-reference.md`:** plan 02's Altimeter window (both sides and the
+- **`guide/airbus-aircraft.md` (the A350 chapter) and `guide/hotkey-reference.md`:** [x] the A350 chapter (2026-11-03: the Altimeter window's checks, LINKED INSTR and the ISIS's STD; Go to MFD page; the E/WD memo hold, colour hold and Reverse green; each PFD message's row; the Next waypoint call-out; plan 24's readings; the OIS, BTV, RMP, mailbox and hidden options were already there); plan 02's Altimeter window (both sides and the
   ISIS checked before anything is set, LINKED INSTR, never off STD) and the FCU windows' call-outs (landed with plan 16's fix today);
   plan 04's E/WD call-outs (memos once, colours, "Reverse green" and its row); plan 06's OIS window; plan 07's PFD messages' rows,
   LVR CLB flashing, green dot, S and F on the ground; plan 08's BTV from the ND window and the TO waypoint call-out; plan 09's MFD
