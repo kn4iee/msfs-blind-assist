@@ -205,6 +205,8 @@ public static class A350NdPage
                 var at = t with { X = t.X - shift };
                 if (at.X is < 0 or >= HalfWidth || at.Y is < MapTop or >= MapBottom || at.ColourName is "red" or "amber") continue;
                 string name = at.Text.Trim();
+                // The cross-track error beside the aircraft symbol is no name: ReadNd says it.
+                if (A350NdMap.IsCrossTrack(name, at.ColourName, at.X, at.Y)) continue;
                 // POSITION/TIME's marker on the path, its time in brackets as a pseudo waypoint's name is: the rule below wants a letter.
                 if (A350NdMap.TimeMarker.Match(name) is { Success: true } marker)
                     name = "Time marker " + marker.Groups[1].Value;

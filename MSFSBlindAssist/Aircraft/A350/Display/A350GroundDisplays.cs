@@ -146,6 +146,16 @@ public static class A350GroundDisplays
             }
             o.Add("To waypoint: " + string.Join("; ", parts));
         }
+        // The cross-track error beside the aircraft symbol (A350NdMap.IsCrossTrack): how far off its path the aircraft flies.
+        foreach (var xtk in cells.Where(c => !used.Contains(c) && A350NdMap.IsCrossTrack(c.Text, c.Colour, c.X, c.Y)).ToList())
+        {
+            used.Add(xtk);
+            o.Add(A350NdMap.CrossTrackLine(xtk.Text, xtk.Colour));
+        }
+        // A map name drawn behind the vertical display goes through the map's transform (VCBI's "04" at local 0,0, plan 24's flight);
+        // the display's own labels never do.
+        bool Untransformed(DrawnCell c) => texts.Any(t => t.Text.Trim() == c.Text && Math.Abs(t.X - c.X) < 0.5f && Math.Abs(t.Y - c.Y) < 0.5f
+            && Math.Abs(t.X - t.LocalX) < 0.5f && Math.Abs(t.Y - t.LocalY) < 0.5f);
         // The selected altitude beyond the vertical display's altitude range: a cyan value at its top left (y 786) or bottom
         // left (y 1010), "FL 400" in STD (live 2026-10-28); it is neither a range nor an altitude label.
         Field("Vertical display selected altitude", c => c.Colour == "cyan" && Math.Abs(c.X - 105) <= 12
@@ -154,7 +164,7 @@ public static class A350GroundDisplays
         Field("Vertical display range", c => c.Y is >= 775 and < 800 && c.Colour == "cyan" && Number(c));
         // The labels run up to the range line and past it (the top one at y 799 on the stand at VCBI, 2026-10-28; y 773 at FL300, 2026-10-30).
         var altitudes = cells.Where(c => !used.Contains(c) && c.X is >= 90 and < 150 && (c.Y >= 810 || c.Y >= 770 && c.Colour == "white")
-            && Number(c)).OrderBy(c => c.Y).ToList();
+            && Number(c) && Untransformed(c)).OrderBy(c => c.Y).ToList();
         if (altitudes.Count > 0)
         {
             used.UnionWith(altitudes);
@@ -182,7 +192,12 @@ public static class A350GroundDisplays
             var value = cells.Where(c => !used.Contains(c) && c.Colour == name.Colour && c.Text.Length > 0 && c.Text.All(char.IsDigit)
                 && Math.Abs(name.Y - c.Y) is > 0 and <= 40 && Math.Abs(c.X - name.X) <= 50).OrderBy(c => c.X).ToList();
             used.UnionWith(value);
-            o.Add(value.Count > 0 ? $"{name.Text}: {string.Concat(value.Select(c => c.Text))}, {value[0].Colour}" : $"{name.Text}, {name.Colour}");
+            // The figure is in hundreds of feet: OMDB's MSA "38" under a 4500 to 6000 ft scale, "about 3800 feet" from its line on the
+            // ground; VCBI's MORA "16" drawn as no line on a 15000 to 30000 ft one (plan 24's flight, 2026-11-03).
+            o.Add(value.Count > 0 && int.TryParse(string.Concat(value.Select(c => c.Text)), System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out int hundreds)
+                ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{name.Text}: {hundreds * 100} feet, {value[0].Colour}")
+                : $"{name.Text}, {name.Colour}");
         }
         // A cell keeps neither its place in the draw order nor whether the clip hid it, so each is found again where it was drawn.
         int DrawnAt(DrawnCell c)
@@ -378,6 +393,7 @@ public static class A350GroundDisplays
         // stand on one row, 531 px apart, one after the other. The heading reads off that row at the boresight, the bank is the row's
         // turn, the pitch its height.
         List<string>? horizonLines = null;
+        double? bank = null;
         if (HudHorizon(capture.Texts) is { } horizon)
         {
             used.UnionWith(cells.Where(c => horizon.Any(t => t.Text.Trim() == c.Text && t.X == c.X && t.Y == c.Y)));
@@ -385,6 +401,7 @@ public static class A350GroundDisplays
             int degrees = (int)Math.Round(HeadingLabel(near) * 10 + (HudBoresightX - near.LocalX) / HudHeadingPxPerDegree, MidpointRounding.AwayFromZero);
             var (first, last) = (horizon[0], horizon[^1]);
             double turn = Math.Atan2(last.Y - first.Y, last.X - first.X) - Math.Atan2(last.LocalY - first.LocalY, last.LocalX - first.LocalX);
+            bank = turn * 180 / Math.PI;
             horizonLines = new List<string> { string.Create(CultureInfo.InvariantCulture, $"Heading: {(degrees % 360 + 360) % 360:000}, {near.ColourName}") };
             horizonLines.AddRange(A350Pfd.Attitude((horizon.Average(t => t.LocalY) - HudHorizonZeroY) / HudPitchPxPerDegree, turn * 180 / Math.PI));
             horizonLines.Add($"Heading scale: {string.Join(", ", horizon.Select(t => t.Text.Trim()))}, {first.ColourName}");
@@ -454,6 +471,15 @@ public static class A350GroundDisplays
             var away = new[] { Math.Abs(dy) > 2 ? (dy < 0 ? "up" : "down") : null, Math.Abs(dx) > 2 ? (dx < 0 ? "left" : "right") : null }.Where(w => w != null).ToList();
             o.Add(away.Count == 0 ? "Guidance cue: centred on the flight path vector, green" : $"Guidance cue: {string.Join(" and ", away)} of the flight path vector, green");
         }
+        // The flight path vector's sideways place, wings level, is the drift (plan 24's next flight, frozen at the top of descent: 81 px
+        // right of the boresight, 1.5 degrees, the sim's 1.53). Its height is the HUD's own disagreement with the PFD, which iniBuilds
+        // logged (by the boresight in level flight), and in a bank that height turns into the sideways place too: neither is said.
+        if (vector != null && bank is double b && Math.Abs(b) < HudWingsLevelDegrees)
+        {
+            double drift = ((vector.X0 + vector.X1) / 2 - HudBoresightX) / HudHeadingPxPerDegree;
+            o.Add(Math.Abs(drift) < 0.25 ? "Flight path vector: on the heading, green"
+                : string.Create(CultureInfo.InvariantCulture, $"Flight path vector: {Math.Abs(drift):0.0} degrees {(drift > 0 ? "right" : "left")}, green"));
+        }
         // The selected altitude: on the tape at its height (x 1325), or parked above or below it when off the scale (x 1409).
         Named("Selected altitude", c => (c.X >= 1400 && c.Text.Length >= 3 || Math.Abs(c.X - 1325) <= 2 && c.Text.Length >= 3) && Digits(c));
         // The LS block (x 142): its source, ident, frequency and distance top to bottom; an ident not decoded shows the frequency again.
@@ -510,6 +536,9 @@ public static class A350GroundDisplays
     private static readonly (float X, float Y)[] HudFlightPathVectors = { (14, 166), (14, 304), (14, 369) };
     private static readonly (float X, float Y) HudCueAtlas = (311, 191);
     private const float HudCueUnderVector = 7;
+
+    /// <summary>The bank within which the flight path vector's sideways place is the drift alone.</summary>
+    private const double HudWingsLevelDegrees = 3;
 
     private static DrawnShape? HudSprite(A350DrawCapture capture, float atlasX, float atlasY) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.PatternW - 2048) < 2 && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f

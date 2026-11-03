@@ -487,4 +487,40 @@ public class A350NdPageTests
         Assert.Contains("Top of descent, white: 11 o'clock, 39 NM", lines);
         Assert.DoesNotContain("Top of descent, white", lines);   // said once, with its place
     }
+
+    // Plan 24's flight (2026-11-03): the circled 1 and 2 are the CDA function's flap points, the latest place to select CONF 1 and CONF 2 for
+    // the approach's profile (Airbus Safety First; amber when the speed predicted there is above VFE). The F-PLN listed (DECEL), (FLAP1),
+    // GOPRU, (FLAP2) in that order, the order the ND drew them in; untuning VOR 2 moved neither. The first officer's ROSE NAV at 80 NM.
+    [Fact]
+    public void The_cda_flap_points_are_read()
+    {
+        var capture = A350Fixtures.Capture("efis1_rose_cda_flap_points.json");
+        var nd = A350GroundDisplays.ReadNd(capture, 1);
+        Assert.Contains("Flap 1 point, white", nd);
+        Assert.Contains("Flap 2 point, white", nd);
+        var lines = A350NdPage.Read(capture, 1, mode: 2, range: 8).Select(l => l.Spoken).ToList();
+        Assert.Contains(lines, l => l.StartsWith("Flap 1 point, white: 7 o'clock, ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("Flap 2 point, white: 7 o'clock, ", StringComparison.Ordinal));
+    }
+
+    /// <summary>The flaps capture with one sprite moved to another place in its atlas (the draw picks a symbol's colour by its sprite).</summary>
+    private static A350DrawCapture WithSprite(float fromX, float fromY, float toX, float toY)
+    {
+        var capture = A350Fixtures.Capture("efis1_rose_cda_flap_points.json");
+        var shapes = capture.Shapes!.Select(s => s.Image != 0 && Math.Abs(s.X0 - s.PatternX - fromX) < 1 && Math.Abs(s.Y0 - s.PatternY - fromY) < 1
+            ? s with { PatternX = s.X0 - toX, PatternY = s.Y0 - toY } : s).ToList();
+        return capture with { Shapes = shapes };
+    }
+
+    // The atlas's other colours of the same symbols, never drawn in the two flights of 2026-11-03: the amber flap points (VFE exceeded), the
+    // white decelerate point (speed selected; magenta while managed) and the cyan top of descent.
+    [Theory]
+    [InlineData(414, 376, 446, 376, "Flap 1 point, amber")]
+    [InlineData(478, 376, 510, 376, "Flap 2 point, amber")]
+    [InlineData(690, 320, 658, 320, "Decelerate point, white")]
+    [InlineData(508, 289, 608, 289, "Top of descent, cyan")]
+    public void Each_path_symbol_reads_in_its_sprites_colour(float fromX, float fromY, float toX, float toY, string said)
+    {
+        Assert.Contains(said, A350GroundDisplays.ReadNd(WithSprite(fromX, fromY, toX, toY), 1));
+    }
 }

@@ -156,4 +156,17 @@ public class A350HudTests
         Assert.Contains("Speed target: 335, green", mach);
         Assert.DoesNotContain(mach, l => l.StartsWith("VFE next", StringComparison.Ordinal));   // parked at the tape's foot
     }
+
+    // Plan 24's next flight (2026-11-03, the OIS's top of descent pause at FL200, the sim frozen: heading 206.4, track 208.0, pitch 1.2 up,
+    // alpha 1.2, the path level): the flight path vector's box centre 81 px right of the boresight, 1.5 degrees at the heading scale's 53.1 px
+    // a degree, the drift the sim gave. Its height (y 463, by the boresight, where a level path is on the horizon 49 px lower) is the HUD's own
+    // disagreement with the PFD that iniBuilds logged, so it is not said.
+    [Fact]
+    public void The_flight_path_vector_says_its_drift()
+    {
+        var level = Read("hud_level_drift_right");
+        Assert.Contains("Flight path vector: 1.5 degrees right, green", level);
+        Assert.Contains("Heading: 206, green", level);
+        Assert.Contains("Pitch: 1.1 degrees up", level);
+    }
 }

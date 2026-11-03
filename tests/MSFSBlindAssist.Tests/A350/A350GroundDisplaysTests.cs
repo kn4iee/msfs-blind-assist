@@ -272,12 +272,14 @@ public class A350GroundDisplaysTests
     }
 
     // Live at OMDB on the ground (2026-10-30, ROSE LS): the name stood above its value and they read apart, "MSA, magenta", "3 8, magenta".
+    // The figure is in hundreds of feet (plan 24's flight, 2026-11-03): OMDB's MSA read "38" under a 4500 to 6000 ft scale and "about
+    // 3800 feet" from its line after landing; VCBI's MORA "16" at FL 150 to 300 is drawn as no line, so it is under the scale, never 16000.
     [Fact]
     public void The_safe_altitude_reads_with_its_name_above_its_value()
     {
         var capture = A350Fixtures.Capture("efis0_ls_rose_ils2.json");
         var nd = A350GroundDisplays.ReadNd(capture with { Texts = capture.Texts.Select(t => t.Text.Trim() == "MSA" ? t with { Y = 962 } : t).ToList() }, 0);
-        Assert.Contains("MSA: 38, magenta", nd);
+        Assert.Contains("MSA: 3800 feet, magenta", nd);
     }
 
     // Review 2026-10-31 (I1): the MSA's name stands about 8.5 px over its line, and was taken for the MSA only low in the display (y 900
@@ -345,13 +347,44 @@ public class A350GroundDisplaysTests
     }
 
     [Theory]
-    [InlineData("efis0_ls_downwind_omdb", "MSA: 38, magenta")]
-    [InlineData("pfd_climb_std_fl400", "MORA: 16, magenta")]
+    [InlineData("efis0_ls_downwind_omdb", "MSA: 3800 feet, magenta")]
+    [InlineData("pfd_climb_std_fl400", "MORA: 1600 feet, magenta")]
+    [InlineData("efis0_climb_xtk_mora", "MORA: 1600 feet, magenta")]
     public void The_vertical_displays_safe_altitude_reads_with_its_name(string fixture, string safe)
     {
         var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture(fixture + ".json"), 0);
         Assert.Contains(safe, nd);
-        Assert.DoesNotContain(nd, l => l is "MSA, white" or "MORA, white" or "3 8, white" or "1 6, white");
+        Assert.DoesNotContain(nd, l => l is "MSA, white" or "MORA, white" or "3 8, white" or "1 6, white" or "MSA: 38, magenta" or "MORA: 16, magenta");
+    }
+
+    // Plan 24's flight (2026-11-03, the climb out of VCBI, ARC 40): the runway's "04" by VCBI, a map name drawn through the map's
+    // transform behind the vertical display, read among its scale's labels, "30000 04 25000 20000 15000". The scale's own are untransformed.
+    [Fact]
+    public void A_map_name_behind_the_vertical_display_is_no_altitude_label()
+    {
+        var nd = A350GroundDisplays.ReadNd(A350Fixtures.Capture("efis0_climb_xtk_mora.json"), 0);
+        Assert.Contains("Vertical display altitudes: 30000 25000 20000 15000, white", nd);
+    }
+
+    // The same climb, in the turn to PBD18: the cross-track error the ND draws beside the aircraft symbol ("0.6R", green, 44 px right of
+    // ARC's symbol), how far the aircraft is off its path. It read as a map name at 4 o'clock.
+    [Fact]
+    public void The_cross_track_error_reads_as_what_it_is()
+    {
+        var capture = A350Fixtures.Capture("efis0_climb_xtk_mora.json");
+        Assert.Contains("Cross track error: 0.6 NM right, green", A350GroundDisplays.ReadNd(capture, 0));
+        var page = A350NdPage.Read(capture, 0, mode: 3, range: 7).Select(l => l.Spoken).ToList();
+        Assert.Contains("Cross track error: 0.6 NM right, green", page);
+        Assert.DoesNotContain(page, l => l.StartsWith("0.6R", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("0.6R", "Cross track error: 0.6 NM right, green")]
+    [InlineData("1.2L", "Cross track error: 1.2 NM left, green")]
+    [InlineData("12L", "Cross track error: 12 NM left, green")]
+    public void The_cross_track_error_says_its_side(string drawn, string said)
+    {
+        Assert.Equal(said, A350NdMap.CrossTrackLine(drawn, "green"));
     }
 
     [Fact]

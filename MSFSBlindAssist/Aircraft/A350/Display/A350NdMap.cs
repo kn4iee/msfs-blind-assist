@@ -59,12 +59,17 @@ public static class A350NdMap
 
     /// <summary>The flight path's symbols with no name of their own, by their sprites in NDElements.png and named as the FlyByWire
     /// A32NX's guide names them (plan 24, the flight of 2026-11-03, each against the phase it was drawn in): the level-off arrows where
-    /// the FCU altitude is reached (cyan; magenta at a constraint), the top of descent (white; cyan with DES armed), the intercept point
-    /// (only in DES, cyan), the decelerate point and a speed change (magenta). Their own colour under a white tint.</summary>
+    /// the FCU altitude is reached (cyan; magenta at a constraint), the top of descent (white; its cyan sprite with DES armed), the
+    /// intercept point (only in DES, cyan), the decelerate point (magenta while the speed is managed, its white sprite while selected)
+    /// and a speed change (magenta). The circled 1 and 2 are the CDA function's flap points, the latest place to select CONF 1 and CONF 2
+    /// for the approach's profile, amber when the speed predicted there is above VFE (Airbus Safety First; the F-PLN's (FLAP1) and
+    /// (FLAP2) in the order drawn, the next flight of 2026-11-03). Their own colour under a white tint; a variant's colour is its sprite's.</summary>
     private static readonly (string Name, float AtlasX, float AtlasY, string Colour)[] PathSprites =
     {
         ("Level off in climb", 554, 286, "cyan"), ("Level off in descent", 554, 258, "cyan"), ("Top of descent", 508, 289, "white"),
-        ("Intercept point", 200, 357, "cyan"), ("Decelerate point", 690, 320, "magenta"), ("Speed change", 610, 322, "magenta"),
+        ("Top of descent", 608, 289, "cyan"), ("Intercept point", 200, 357, "cyan"), ("Decelerate point", 690, 320, "magenta"),
+        ("Decelerate point", 658, 320, "white"), ("Speed change", 610, 322, "magenta"), ("Flap 1 point", 414, 376, "white"),
+        ("Flap 1 point", 446, 376, "amber"), ("Flap 2 point", 478, 376, "white"), ("Flap 2 point", 510, 376, "amber"),
     };
 
     /// <summary>A path symbol drawn on a side's ND map, at its middle in the ND's own coordinates.</summary>
@@ -88,6 +93,22 @@ public static class A350NdMap
             o.Add(new PathSymbol(kind.Name, tint == "white" ? kind.Colour : tint, x, y));
         }
         return o;
+    }
+
+    /// <summary>The cross-track error the ND draws beside the aircraft symbol, green: NM off the path and the side ("0.6R" in the turn to
+    /// PBD18, plan 24's flight of 2026-11-03, 44 px right of ARC's symbol at 404,629 and 11 px under it; ROSE's symbol is at 404,381).</summary>
+    private static readonly System.Text.RegularExpressions.Regex CrossTrack = new(@"^(\d+(?:\.\d+)?)([LR])$", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private const float SymbolX = 404, ArcSymbolY = 629, RoseSymbolY = 381, CrossTrackBesideX = 100, CrossTrackBesideY = 40;
+
+    /// <summary>A green text beside the aircraft symbol shaped as a cross-track error (a runway's ident there, "12L" on the runway, is white).</summary>
+    internal static bool IsCrossTrack(string text, string colour, float x, float y) => colour == "green" && CrossTrack.IsMatch(text.Trim())
+        && Math.Abs(x - SymbolX) <= CrossTrackBesideX && (Math.Abs(y - ArcSymbolY) <= CrossTrackBesideY || Math.Abs(y - RoseSymbolY) <= CrossTrackBesideY);
+
+    /// <summary>"0.6R" as said: "Cross track error: 0.6 NM right, green".</summary>
+    internal static string CrossTrackLine(string drawn, string colour)
+    {
+        var m = CrossTrack.Match(drawn.Trim());
+        return $"Cross track error: {m.Groups[1].Value} NM {(m.Groups[2].Value == "R" ? "right" : "left")}, {colour}";
     }
 
     /// <summary>The arrow right of a traffic figure, a 9 by 19 sprite whose place in its atlas says the way (live 2026-10-30, an AI intruder
