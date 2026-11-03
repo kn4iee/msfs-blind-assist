@@ -377,3 +377,41 @@ test('without focus following, a page change only announces and a rebuilt contro
   assert.notStrictEqual(s.window.document.activeElement, s.window.document.getElementById('pgttl'));
   assert.strictEqual(await s.spoken(), 'EFB page: Ground');
 });
+
+const alertItem = (idx, text) => ({ idx, kind: 'alert', controlType: '', text, clickable: false, level: 0, live: 'assertive', disabled: false });
+
+test('with focus following, a dialog takes focus on its first button and gives it back to its opener when it closes', (t) => {
+  const s = loadShell(t);
+  follow(s, 'FLT OPS MENU', [btn(1, 'FLT OPS PLAN'), btn(2, 'TURNAROUND')]);
+  const turn = s.buttonByLabel('TURNAROUND');
+  turn.focus(); turn.click();
+  follow(s, 'FLT OPS MENU', [alertItem(3, 'TURNAROUND START: Are you sure?'), btn(4, 'CANCEL'), btn(5, 'START'),
+    btn(1, 'FLT OPS PLAN'), btn(2, 'TURNAROUND')]);
+  const cancel = s.buttonByLabel('CANCEL');
+  assert.strictEqual(s.window.document.activeElement, cancel, 'focus did not go to the dialog');
+  cancel.click();
+  follow(s, 'FLT OPS MENU', [btn(1, 'FLT OPS PLAN'), btn(2, 'TURNAROUND')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('TURNAROUND'), 'focus did not come back to the opener');
+});
+
+test('with focus following, a list that opens under a button takes focus on its first item, and back on the button when it closes', (t) => {
+  const s = loadShell(t);
+  follow(s, 'OPTIONS', [btn(1, 'PANEL STATES (collapsed)'), btn(2, 'AIRCRAFT')]);
+  const states = s.buttonByLabel('PANEL STATES');
+  states.focus(); states.click();
+  follow(s, 'OPTIONS', [btn(1, 'PANEL STATES (expanded)'), btn(5, 'COLD & DARK'), btn(6, 'TURNAROUND'), btn(2, 'AIRCRAFT')]);
+  const cold = s.buttonByLabel('COLD & DARK');
+  assert.strictEqual(s.window.document.activeElement, cold, 'focus did not go to the list');
+  cold.click();
+  follow(s, 'OPTIONS', [btn(1, 'PANEL STATES (collapsed)'), btn(2, 'AIRCRAFT')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('PANEL STATES'), 'focus did not come back to the button');
+});
+
+test('with focus following, a dialog that appears by itself leaves focus where it was', (t) => {
+  const s = loadShell(t);
+  follow(s, 'LOADSHEET', [btn(1, 'SET FUEL'), btn(2, 'SET ZFW')]);
+  const zfw = s.buttonByLabel('SET ZFW');
+  zfw.focus();   // reading, no press
+  follow(s, 'LOADSHEET', [alertItem(3, 'REFUEL: complete'), btn(4, 'OK'), btn(1, 'SET FUEL'), btn(2, 'SET ZFW')]);
+  assert.strictEqual(s.window.document.activeElement, zfw);
+});

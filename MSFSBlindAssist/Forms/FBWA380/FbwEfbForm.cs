@@ -1020,6 +1020,8 @@ public class FbwEfbForm : Form
   // a few seconds is the outcome of their own press (a stepper moving to the next runway), and
   // is spoken — a value patched silently into a focused button is a change nobody hears.
   var lastClick = { node: null, at: 0 };
+  // The key of the control that opened a dialog or a list, where focus comes back when it closes (payload.focus only).
+  var opener = null;
   function onActivate(e) {
     var idx = this.getAttribute('data-idx');
     if (this.getAttribute('data-disabled') === 'true') { announce('Unavailable'); return; }
@@ -1234,6 +1236,10 @@ public class FbwEfbForm : Form
     var held = -1;
     if (follow) for (var h = 0; h < list.children.length; h++) if (list.children[h].contains(document.activeElement)) { held = h; break; }
     var pressed = follow && (held >= 0 || Date.now() - lastClick.at < 5000);
+    var justPressed = follow && Date.now() - lastClick.at < 5000;
+    var heldNode = held >= 0 ? list.children[held] : null, heldWasCollapsed = !!heldNode && /\(collapsed\)$/.test(heldNode.textContent);
+    var alertsBefore = {};
+    for (var ab = 0; ab < list.children.length; ab++) if (list.children[ab].getAttribute('data-alert')) alertsBefore[list.children[ab].getAttribute('data-key')] = true;
     setText(title, page ? ('{{NOUN}}: ' + page) : '{{NOUN}}');
     var newPage = page && page !== lastPage;
     // A press that opened another page: focus on its title, which the screen reader says once (so not the live region too).
@@ -1253,14 +1259,41 @@ public class FbwEfbForm : Form
       var key = base + '#' + occ;                       // disambiguate duplicate labels
       var node = existing[key];
       if (node) { patchEl(node, it); }
-      else { node = buildEl(it); if (!node) continue; node.setAttribute('data-key', key); }
+      else { node = buildEl(it); if (!node) continue; node.setAttribute('data-key', key); if (it.kind === 'alert') node.setAttribute('data-alert', '1'); }
       used[key] = true;
       var ref = prev ? prev.nextSibling : list.firstChild;
       if (node !== ref) list.insertBefore(node, ref);    // move only if out of place
       prev = node;
     }
     for (var gone in existing) { if (!used[gone]) list.removeChild(existing[gone]); }
+    if (newPage) opener = null;
     if (newPage && pressed) { title.focus(); return; }
+    if (follow && !newPage) {
+      // A dialog the pilot's press brought up: focus on its first control; the control pressed is where it comes back.
+      var dialog = null, closed = false;
+      for (var na = 0; na < list.children.length; na++) {
+        var ch = list.children[na];
+        if (ch.getAttribute('data-alert') && !alertsBefore[ch.getAttribute('data-key')]) { dialog = ch; break; }
+      }
+      for (var ak in alertsBefore) if (!used[ak]) closed = true;
+      // A list the press opened under its button ('(collapsed)' now '(expanded)'): focus on its first item.
+      var opened = heldNode && heldWasCollapsed && heldNode.parentNode === list && /\(expanded\)$/.test(heldNode.textContent);
+      var from = dialog && justPressed ? dialog : opened ? heldNode : null;
+      if (from) {
+        if (heldNode && heldNode.parentNode === list) opener = heldNode.getAttribute('data-key');
+        for (var nx = from.nextSibling; nx; nx = nx.nextSibling) {
+          var fc = ctrlOf(nx);
+          if (fc && /^(BUTTON|A|INPUT|SELECT)$/.test(fc.tagName)) { fc.focus(); return; }
+        }
+      }
+      // ... and when the dialog or the list closes, back on the control that opened it.
+      var openerNode = null;
+      if (opener) for (var on = 0; on < list.children.length; on++) if (list.children[on].getAttribute('data-key') === opener) { openerNode = list.children[on]; break; }
+      if (openerNode && (closed || /\(collapsed\)$/.test(openerNode.textContent)) && (!list.contains(document.activeElement) || document.activeElement === document.body)) {
+        opener = null;
+        var oc = ctrlOf(openerNode); if (oc && oc.focus) { oc.focus(); return; }
+      }
+    }
     // The control the pilot was on, rebuilt under a new label (the OIS writes a result into it): focus back at its place.
     if (follow && held >= 0 && !list.contains(document.activeElement) && list.children.length) {
       var back = ctrlOf(list.children[Math.min(held, list.children.length - 1)]);
