@@ -1,5 +1,19 @@
 # Plan 09: the MFD window
 
+## Task 1: every page and its path (2026-11-03, on the stand at VCBI, a flight plan in)
+
+The system selector (116, 26) lists FMS 1, ATC COM, SURV, C/L MENU and FCU BKUP down x 105 from y 66, 32 px apart; a system's header keys
+stand on the row at y 77; a key with a list opens it under itself from y 125, 42 px apart. Walked (scratchpad `mfd_walk.sh`), each page
+by its title: ACTIVE (F-PLN, PERF, FUEL&LOAD, WIND, INIT), POSITION (MONITOR, REPORT, NAVAIDS, IRS, GNSS, TIME), SEC INDEX (SEC 1 to 3, each
+on SEC INDEX), DATA (STATUS, WAYPOINT, NAVAID with no title drawn, ROUTE, AIRPORT, PRINTER titled ACTIVE/PRINTER); ATC COM (CONNECT,
+REQUEST, REPORT&MODIFY, MSG RECORD, D-ATIS/LIST, EMER with no title); SURV (CONTROLS, STATUS & SWITCHING, TRAFFIC); C/L MENU (CHECKLISTS);
+FCU BKUP (EFIS CONTROL PANEL, AFS CONTROL PANEL). Nothing grey on the stand. The KCCU keys: INIT, FPLAN, PERF, FUEL open ACTIVE's pages,
+RADNAV POSITION/NAVAIDS, SEC the SEC INDEX, DIR ACTIVE/F-PLN/DIRECT TO, ATC REQUEST, SURV CONTROLS, CL_MENU CHECKLISTS, REF DATA/STATUS;
+DEST and AIRPORT the F-PLN; PROG, DATA and MENU no titled page.
+
+The window's "Go to MFD page" list (`A350MfdPages.All`, 33 pages) driven live: ACTIVE: WIND, POSITION: TIME, SURV: TRAFFIC, FCU BKUP:
+AFS CP and DATA: PRINTER each opened by its clicks once chosen.
+
 ## Task 2: the role words (2026-11-03, offline)
 
 The window's shown line is `A350MfdPage.Shown`: a field and the scratchpad end with ", edit", a list opener reads as a combo box,

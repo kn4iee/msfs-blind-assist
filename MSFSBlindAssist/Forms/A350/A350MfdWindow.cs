@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft.A350;
 using MSFSBlindAssist.Aircraft.A350.Display;
 
 namespace MSFSBlindAssist.Forms.A350;
@@ -26,6 +27,15 @@ public sealed class A350MfdWindow : Form
         [Keys.O] = "DATA", [Keys.U] = "MENU", [Keys.B] = "AIRPORT", [Keys.Y] = "REF", [Keys.X] = "ESC", [Keys.S] = "OIS",
     };
 
+    /// <summary>The page buttons (plan 09 Task 1, the A380 window's two rows), each carrying its Alt letter as its mnemonic and pressing
+    /// the same KCCU key; the window's other Alt letters (N, U, B, Y, X, S) stay keys.</summary>
+    internal static readonly IReadOnlyList<(string Text, string Key)> PageButtons = new[]
+    {
+        ("&INIT", "INIT"), ("&F-PLN", "FPLAN"), ("P&ERF", "PERF"), ("FUE&L", "FUEL"), ("&RAD NAV", "RADNAV"), ("SEC (&P)", "SEC"),
+        ("&DIR", "DIR"), ("&ATC", "ATC"), ("SUR&V", "SURV"), ("&CLR", "CLR"), ("&MAILBOX", "MAILBOX"), ("C/L MENU (&K)", "CL_MENU"),
+        ("PRO&G", "PROG"), ("DES&T", "DEST"), ("DATA (&O)", "DATA"),
+    };
+
     /// <summary>Control+arrow presses the KCCU's own arrows (F-PLN line by line, a list's options).</summary>
     internal static readonly IReadOnlyDictionary<Keys, string> ArrowKeys = new Dictionary<Keys, string>
     {
@@ -39,7 +49,9 @@ public sealed class A350MfdWindow : Form
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly DisplayListBox _list;
     private readonly TextBox _scratchpad;
-    private readonly ComboBox _side;
+    private readonly ComboBox _side, _goTo;
+    private readonly A350SettledChoice _goToChoice = new(TimeSpan.FromMilliseconds(350));
+    private System.Windows.Forms.Timer? _goToTimer;
     private readonly IntPtr _previousWindow;
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
     private readonly A350MfdWindowMessages _messages;
@@ -81,14 +93,35 @@ public sealed class A350MfdWindow : Form
         _side.SelectedIndex = 0;
         _side.SelectedIndexChanged += (s, e) => _ = RefreshAsync(false);
 
+        // Every page the menus reach (plan 09 Task 1, the A380 window's list), taken once the arrowing has settled.
+        _goTo = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Go to MFD page", TabIndex = 1 };
+        foreach (var p in A350MfdPages.All) _goTo.Items.Add(p.Label);
+        _goTo.SelectionChangeCommitted += (s, e) =>
+        {
+            _goToChoice.Changed(_goTo.SelectedIndex, DateTime.UtcNow);
+            _goToTimer ??= NewGoToTimer();
+            _goToTimer.Start();
+        };
+
         _list = new DisplayListBox
         {
-            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 1, AccessibleName = "MFD page",
+            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 2, AccessibleName = "MFD page",
             AccessibleDescription = "Enter acts on the line; a field takes the scratchpad. Backspace CLR, PageUp and PageDown scroll, F5 refreshes, Alt plus a letter presses a page key.",
         };
         _list.SetText("Loading the MFD...");
 
-        _scratchpad = new TextBox { Dock = DockStyle.Bottom, TabIndex = 2, AccessibleName = "Scratchpad: type, then Enter on a field" };
+        _scratchpad = new TextBox { Dock = DockStyle.Bottom, TabIndex = 3, AccessibleName = "Scratchpad: type, then Enter on a field" };
+        var pageButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, TabIndex = 4, WrapContents = true };
+        foreach (var (text, key) in PageButtons)
+        {
+            var button = new Button { Text = text, AutoSize = true, TabIndex = pageButtons.Controls.Count };
+            button.Click += (s, e) =>
+            {
+                PressKey(key);
+                if (key == "MAILBOX") _openMailbox?.Invoke();
+            };
+            pageButtons.Controls.Add(button);
+        }
         _scratchpad.KeyDown += async (s, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -99,6 +132,8 @@ public sealed class A350MfdWindow : Form
 
         Controls.Add(_list);
         Controls.Add(_scratchpad);
+        Controls.Add(pageButtons);
+        Controls.Add(_goTo);
         Controls.Add(_side);
 
         Load += async (s, e) =>
@@ -113,6 +148,57 @@ public sealed class A350MfdWindow : Form
     }
 
     private int Side => _side.SelectedIndex < 0 ? 0 : _side.SelectedIndex;
+
+    private System.Windows.Forms.Timer NewGoToTimer()
+    {
+        var timer = new System.Windows.Forms.Timer { Interval = 100 };
+        timer.Tick += async (s, e) =>
+        {
+            if (_goToChoice.Due(DateTime.UtcNow) is not int i) return;
+            timer.Stop();
+            if (i >= 0 && i < A350MfdPages.All.Count) await GoToAsync(A350MfdPages.All[i]);
+        };
+        return timer;
+    }
+
+    /// <summary>Opens a page as a pilot does: its KCCU key where one opens it, else its menu clicks; a list item drawn grey (not
+    /// offered in this phase) is said and nothing more is pressed, the open list closed.</summary>
+    private async Task GoToAsync(A350MfdPageNav page)
+    {
+        if (_input.Busy)
+        {
+            _announcer.AnnounceImmediate("The MFD is still busy with the last entry; choose the page again");
+            return;
+        }
+        if (page.KccuKey != null)
+        {
+            PressKey(page.KccuKey);
+            return;
+        }
+        for (int i = 0; i < page.MenuClicks.Count; i++)
+        {
+            var (x, y) = page.MenuClicks[i];
+            // The last click is a list's item: only when it is drawn and offered.
+            if (i == page.MenuClicks.Count - 1 && i >= 3)
+            {
+                var cap = await _drawNow();
+                if (cap is { Ok: true } && !A350MfdPages.Offered(A350MfdPage.Read(cap, Side), x, y))
+                {
+                    await _input.ActAsync(Side, 400, 600, null);   // a click off the list closes it
+                    _announcer.AnnounceImmediate(page.Label + " not available");
+                    await AfterActionAsync();
+                    return;
+                }
+            }
+            if (await _input.ActAsync(Side, x, y, null) == MfdAction.Unreachable)
+            {
+                _announcer.AnnounceImmediate("The MFD cannot be reached: is the Coherent debugger running?");
+                return;
+            }
+            await Task.Delay(700);
+        }
+        await AfterActionAsync();
+    }
 
     /// <summary>The side <see cref="_lines"/> were read for: Enter acts only on lines of the side the box shows.</summary>
     private int _linesSide;
@@ -283,6 +369,9 @@ public sealed class A350MfdWindow : Form
         _timer?.Stop();
         _timer?.Dispose();
         _timer = null;
+        _goToTimer?.Stop();
+        _goToTimer?.Dispose();
+        _goToTimer = null;
         _closed?.Invoke(_messages.Captain);
         base.OnFormClosed(e);
         if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
