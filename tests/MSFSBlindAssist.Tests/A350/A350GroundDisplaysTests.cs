@@ -441,6 +441,30 @@ public class A350GroundDisplaysTests
         Assert.Contains("Heading source: IR3, white", snd);
     }
 
+    // Plan 24 (the approach of 2026-11-03, ILS 04 at VCBI): the SFD's LS block (ILS and the frequency, magenta) and its heading
+    // source, written top to bottom as I, R, 3 at x 68, both dropped before (a number and lone letters).
+    [Fact]
+    public void The_standby_flight_display_reads_its_ls_block_and_heading_source()
+    {
+        var sfd = A350GroundDisplays.ReadSfd(A350Fixtures.Capture("sfd_approach_ls.json"));
+        Assert.Contains("LS: ILS, 109.90, magenta", sfd);
+        Assert.Contains("Heading source: IR3, white", sfd);
+        Assert.DoesNotContain("ILS, magenta", sfd);
+    }
+
+    // Plan 24, the second flight: the SND's rose labels every 30 degrees at radius 70 about (150, 150), each placed from (-2, -70)
+    // turned by its bearing less the heading; the heading is read at the top. Level at 271 by the PFD; in the turn north the HUD of
+    // the same round read 002 (the PFD, drawn seconds before, 346).
+    [Theory]
+    [InlineData("snd_level_271", "Heading: 272, white")]   // 271.6 by every label; the PFD of the same round 271
+    [InlineData("snd_turn_north", "Heading: 001, white")]
+    public void The_standby_navigation_display_reads_its_heading_off_the_rose(string fixture, string heading)
+    {
+        var snd = A350GroundDisplays.ReadSnd(A350Fixtures.Capture(fixture + ".json"));
+        Assert.Contains(heading, snd);
+        Assert.DoesNotContain(snd, l => l is "27, white" or "0, white");
+    }
+
     // Review 2026-10-29: the SFD dropped its speed and altitude, so Alt+I with a failed PFD gave baro, heading and position
     // only. They are its tapes, read as the PFD's: the labels nearest the window's text line (y 132.5); speed labels every
     // 20 kt 44 px apart (x 42), the altitude tape's hundreds 70 px per 500 ft (x 243), the drum's tens 26 px per 20 ft

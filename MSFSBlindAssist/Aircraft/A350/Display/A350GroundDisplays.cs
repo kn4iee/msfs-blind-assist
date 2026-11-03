@@ -605,14 +605,50 @@ public static class A350GroundDisplays
             int heading = (int)Math.Round(int.Parse(nearest.Text.Trim(), CultureInfo.InvariantCulture) * 10 + (SfdHeadingIndexX - nearest.X) / SfdHeadingPxPerDegree);
             o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(heading % 360 + 360) % 360:000}"));
         }
+        // The LS block bottom left (x 14: the source over the frequency, magenta) and the heading source written top to bottom at
+        // x 68 ("I", "R", "3"), both read since plan 24 (a number and lone letters before).
+        var ls = cells.Where(c => !used.Contains(c) && c.X < 40 && c.Y is >= 236 and < 275).OrderBy(c => c.Y).ToList();
+        if (ls.Count > 0)
+        {
+            used.UnionWith(ls);
+            o.Add($"LS: {string.Join(", ", ls.Select(c => c.Text))}, {ls[0].Colour}");
+        }
+        var source = cells.Where(c => !used.Contains(c) && Math.Abs(c.X - 68) <= 2 && c.Y is >= 228 and < 270 && c.Text.Length == 1).OrderBy(c => c.Y).ToList();
+        if (source.Count > 1)
+        {
+            used.UnionWith(source);
+            o.Add($"Heading source: {string.Concat(source.Select(c => c.Text))}, {source[0].Colour}");
+        }
         Position(cells, used, o);
-        // Tape, drum and scale numbers, and the vertical source letters, are not text to read.
+        // Tape, drum and scale numbers are not text to read.
         used.UnionWith(cells.Where(c => Number(c) || c.Text.Length == 1));
         o.AddRange(Rest(cells, used));
         return o;
     }
 
-    /// <summary>The standby navigation display: ground speed, heading source, position and its source.</summary>
+    /// <summary>The SND's rose (plan 24, the second flight of 2026-11-03): labels every 30 degrees at radius 70 about (150, 150), each
+    /// drawn from (-2, -70) turned by its bearing less the heading, so the heading is each label's bearing less its turn; their
+    /// mean, rounded, is read at the top.</summary>
+    private const float SndRoseX = 150, SndRoseY = 150;
+
+    private static string? SndHeading(IEnumerable<DrawnText> texts)
+    {
+        var labels = Distinct(texts).Where(t => !t.Clipped && MathF.Abs(t.LocalX + 2) < 1 && MathF.Abs(t.LocalY + 70) < 1
+            && t.Text.Trim() is { Length: 1 or 2 } s && s.All(char.IsDigit)).ToList();
+        if (labels.Count == 0) return null;
+        double offset = Math.Atan2(-2, 70);
+        double sin = 0, cos = 0;
+        foreach (var t in labels)
+        {
+            double turn = Math.Atan2(t.X - SndRoseX, SndRoseY - t.Y) - offset;
+            double heading = int.Parse(t.Text.Trim(), CultureInfo.InvariantCulture) * 10 * Math.PI / 180 - turn;
+            sin += Math.Sin(heading); cos += Math.Cos(heading);
+        }
+        int degrees = (int)Math.Round(Math.Atan2(sin, cos) * 180 / Math.PI, MidpointRounding.AwayFromZero);
+        return string.Create(CultureInfo.InvariantCulture, $"Heading: {(degrees % 360 + 360) % 360:000}, {labels[0].ColourName}");
+    }
+
+    /// <summary>The standby navigation display: ground speed, heading source, its heading off the rose, position and its source.</summary>
     public static IReadOnlyList<string> ReadSnd(A350DrawCapture capture)
     {
         var cells = Cells(capture.Texts);
@@ -630,6 +666,8 @@ public static class A350GroundDisplays
             used.Add(s);
             o.Add($"Heading source: {s.Text}, {s.Colour}");
         }
+        if (SndHeading(capture.Texts) is { } heading)
+            o.Add(heading);
         Position(cells, used, o);
         used.UnionWith(cells.Where(Number));   // the compass rose's labels
         o.AddRange(Rest(cells, used));
