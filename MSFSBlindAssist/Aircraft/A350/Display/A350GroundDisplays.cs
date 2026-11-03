@@ -417,6 +417,16 @@ public static class A350GroundDisplays
                 && s.X0 <= target.X && s.X1 >= target.X && s.Y0 <= target.Y && s.Y1 >= target.Y);
             o.Add($"Speed target: {target.Text}, {(target.Colour == "black" && box != null ? A350Rgba.NameOf(box.Colour) : target.Colour)}");
         }
+        // The tape's symbols, HudElements.png sprites (plan 24): each read off its labels' line plus its own offset, only between the
+        // tape's ends (an off-scale symbol is parked at y 369.5 or 908).
+        if (speedLabels.Count > 0)
+            foreach (var (name, atlasX, atlasY, offset) in HudTapeSymbols)
+                if (HudSprite(capture, atlasX, atlasY) is { } symbol && (symbol.Y0 + symbol.Y1) / 2 is var y && y > HudTapeTop && y < HudTapeBottom)
+                {
+                    var near = speedLabels.OrderBy(c => Math.Abs(c.Y - y)).First();
+                    double knots = int.Parse(near.Text, CultureInfo.InvariantCulture) + (near.Y - y) / HudSpeedPxPerKnot - offset;
+                    o.Add(string.Create(CultureInfo.InvariantCulture, $"{name}: {Math.Round(knots, MidpointRounding.AwayFromZero):0}, green"));
+                }
         Named("V1", c => Math.Abs(c.X - 220) <= 4 && Digits(c) && c.Text.Length >= 2);
         foreach (var mach in cells.Where(c => !used.Contains(c) && c.Text.Length > 1 && c.Text[0] == '.' && c.Text[1..].All(char.IsDigit)).ToList())
         {
@@ -435,6 +445,14 @@ public static class A350GroundDisplays
             used.Add(vs);
             int fpm = int.Parse(vs.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture) * 100;
             o.Add(string.Create(CultureInfo.InvariantCulture, $"Vertical speed: {Math.Abs(fpm)} feet per minute{(fpm > 0 ? " up" : fpm < 0 ? " down" : "")}, {vs.Colour}"));
+        }
+        // The guidance cue, a ring 7 px under the flight path vector's box centre while the aircraft follows it.
+        var vector = HudFlightPathVectors.Select(a => HudSprite(capture, a.X, a.Y)).FirstOrDefault(v => v != null);
+        if (vector != null && HudSprite(capture, HudCueAtlas.X, HudCueAtlas.Y) is { } cue)
+        {
+            float dx = (cue.X0 + cue.X1) / 2 - (vector.X0 + vector.X1) / 2, dy = (cue.Y0 + cue.Y1) / 2 - (vector.Y0 + vector.Y1) / 2 - HudCueUnderVector;
+            var away = new[] { Math.Abs(dy) > 2 ? (dy < 0 ? "up" : "down") : null, Math.Abs(dx) > 2 ? (dx < 0 ? "left" : "right") : null }.Where(w => w != null).ToList();
+            o.Add(away.Count == 0 ? "Guidance cue: centred on the flight path vector, green" : $"Guidance cue: {string.Join(" and ", away)} of the flight path vector, green");
         }
         // The selected altitude: on the tape at its height (x 1325), or parked above or below it when off the scale (x 1409).
         Named("Selected altitude", c => (c.X >= 1400 && c.Text.Length >= 3 || Math.Abs(c.X - 1325) <= 2 && c.Text.Length >= 3) && Digits(c));
@@ -477,6 +495,25 @@ public static class A350GroundDisplays
     /// <summary>The horizon's height for the pitch, fitted the same way: 45 px a degree, zero pitch at y 459 (the stand's -0.5 at 437,
     /// level at 10,000 ft 2.35 at 565 and 0.3 at 472.7); its labels are tens of degrees, 531 px apart.</summary>
     private const float HudHorizonZeroY = 459, HudPitchPxPerDegree = 45, HudHeadingLabelSpacing = 531;
+
+    /// <summary>The HUD's speed tape symbols in HudElements.png (2048 x 2048), each with the knots it reads above its labels' line (plan
+    /// 24, against the PFD on the second flight: the target triangle 220, 250, 335; VFE next 255), and where the tape parks one off its
+    /// scale.</summary>
+    private static readonly (string Name, float AtlasX, float AtlasY, double Offset)[] HudTapeSymbols =
+    {
+        ("Speed target", 284, 10, 1.9), ("VFE next", 121, 28, 1.3),
+    };
+    private const float HudTapeTop = 375, HudTapeBottom = 900;
+
+    /// <summary>The flight path vector's sprites (its forms with and without the diamond) and the guidance cue's ring, which sits 7 px
+    /// under the vector's box centre while the aircraft follows it.</summary>
+    private static readonly (float X, float Y)[] HudFlightPathVectors = { (14, 166), (14, 304), (14, 369) };
+    private static readonly (float X, float Y) HudCueAtlas = (311, 191);
+    private const float HudCueUnderVector = 7;
+
+    private static DrawnShape? HudSprite(A350DrawCapture capture, float atlasX, float atlasY) =>
+        capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.PatternW - 2048) < 2 && Math.Abs(s.X0 - s.PatternX - atlasX) < 1.5f
+            && Math.Abs(s.Y0 - s.PatternY - atlasY) < 1.5f);
 
     private static int HeadingLabel(DrawnText t) => int.Parse(t.Text.Trim(), CultureInfo.InvariantCulture);
 

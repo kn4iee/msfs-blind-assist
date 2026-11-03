@@ -140,4 +140,20 @@ public class A350HudTests
     [Fact]
     public void Stowed_it_is_blank() =>
         Assert.Equal(new[] { "HUD: blank" }, A350GroundDisplays.ReadHud(new A350DrawCapture("HUD", Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 0)));
+
+    // Plan 24: the HUD's speed tape symbols are HudElements.png sprites, each reading about its tape labels' line plus its own offset
+    // (the target triangle 1.9 kt, VFE next 1.3: then 220, 250, 335 and 255 as the PFD's); parked at the tape's ends (y 369.5, 908) they
+    // are off the scale. The guidance cue sits 7 px under the flight path vector's box centre while the aircraft follows it.
+    [Fact]
+    public void It_reads_its_speed_tape_symbols_and_the_guidance_cue()
+    {
+        var level = Read("hud_level_10000");
+        Assert.Contains("Speed target: 220, green", level);
+        Assert.Contains("VFE next: 255, green", level);
+        Assert.Contains("Guidance cue: centred on the flight path vector, green", level);
+        Assert.Contains("Speed target: 250, green", Read("hud_climb_vs"));
+        var mach = Read("hud_mach");
+        Assert.Contains("Speed target: 335, green", mach);
+        Assert.DoesNotContain(mach, l => l.StartsWith("VFE next", StringComparison.Ordinal));   // parked at the tape's foot
+    }
 }

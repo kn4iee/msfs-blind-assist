@@ -18,6 +18,7 @@ its reason.
 | PFD | speed trend, short-term managed speed, LS course pin, gear, take-off trim pointer, sidestick order, yaw bar, tail strike limit | e45a43ba8 |
 | PFD | flight director command, slip index | 7455a4366 |
 | PFD | linear deviation (vertical profile) | d3355527c |
+| HUD | speed target and VFE next on its tape, the guidance cue on the flight path vector | (this commit) |
 
 ## Not a gap (consumed into a value, or a false hit of the word measure)
 
@@ -39,8 +40,9 @@ its reason.
 
 ## Still to read
 
-- HUD sprites: flight path vector and guidance cue (against the boresight), speed target triangle, green dot, the speed tape's caution
-  strips and VFE/F/S marks, slip index, LS scales and diamonds.
+- HUD sprites: the flight path vector's own place (its sideways offset in a turn fits no drift; its height no single pitch scale within
+  the HUD's draw delay), the green dot (no reference to fit its offset), the caution strips, F and S, the slip index, the LS scales and
+  diamonds, a wide green "=" near 270 kt clean (unnamed). The PFD says each of these.
 - ND: the VOR bearing pointers (circled 1 and 2), the selected heading bug and lubber line on the compass, the range marks.
 - E/WD and SD: the 35 CTR sprites against `A350SdSymbols`' catalogue.
 - SFD and SND vector shapes (deviation, needles).
