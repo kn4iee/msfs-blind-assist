@@ -22,8 +22,8 @@ public sealed class A350MfdWindowMessages
     public string? Observe(IReadOnlyList<MfdLine> lines, int side)
     {
         var pad = A350MfdPage.Scratchpad(lines);
-        if (pad != null && pad.Contains(A350MfdPage.Unreadable, StringComparison.Ordinal))
-            return null;   // a torn read is no read (review 2026-10-30)
+        if (pad != null && A350MfdPage.NoMessageRead(pad))
+            return null;   // a torn read is no read (review 2026-10-30), nor one without the message's box
         var said = A350MfdPage.MessageJustArrived(_last, pad);
         if (pad != null)
         {

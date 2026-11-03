@@ -850,6 +850,12 @@ public static class A350MfdPage
 
     private const string EmptyScratchpad = "Scratchpad: empty";
 
+    /// <summary>Whether a read of the message line is no read: a torn text, or the message without its box (black text drawn
+    /// on a white or amber box, a copy catching the box undrawn; live 2026-11-03, "CHECK IRS/AIRPORT POS, black" said, then
+    /// "..., amber").</summary>
+    public static bool NoMessageRead(string pad) =>
+        pad.Contains(Unreadable, StringComparison.Ordinal) || pad.EndsWith(", black", StringComparison.Ordinal);
+
     /// <summary>The new page's title when the page changed since the last read (a page key, a menu pick, C/L COMPLETE
     /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
     /// first read.</summary>

@@ -50,6 +50,24 @@ public class A350FmsMessageAnnouncerTests
         Assert.Equal("Scratchpad: CHECK T.O DATA, white", a.Agreed);
     }
 
+    // Live 2026-11-03 (plan 10, the MFD window open): "Scratchpad: CHECK IRS/AIRPORT POS, black" was said, then "..., amber". The
+    // message is black text on its box; a draw that caught the box undrawn left it black. Such a read is no read.
+    internal static IReadOnlyList<MfdLine> Boxed(string message, string colour) =>
+        new[] { new MfdLine("title", "ACTIVE/F-PLN", 0, 0), new MfdLine("scratchpad", $"Scratchpad: {message}, {colour}", 400, 980) };
+
+    [Fact]
+    public void A_read_without_the_message_box_is_no_read()
+    {
+        var a = new A350FmsMessageAnnouncer();
+        a.Observe(Boxed("CHECK IRS/AIRPORT POS", "amber"));
+        a.Observe(Boxed("CHECK IRS/AIRPORT POS", "amber"));   // the baseline
+        Assert.Null(a.Observe(Boxed("CHECK IRS/AIRPORT POS", "black")));
+        Assert.Null(a.Observe(Boxed("CHECK IRS/AIRPORT POS", "black")));
+        Assert.Null(a.Observe(Boxed("CHECK IRS/AIRPORT POS", "amber")));
+        Assert.Null(a.Observe(Boxed("CHECK IRS/AIRPORT POS", "amber")));
+        Assert.Equal("Scratchpad: CHECK IRS/AIRPORT POS, amber", a.Agreed);
+    }
+
     [Fact]
     public void The_first_agreed_read_is_the_baseline_and_an_emptied_scratchpad_says_nothing()
     {
@@ -282,6 +300,15 @@ public class A350MfdWindowMessagesTests
         Assert.Null(w.Observe(Page(A350MfdPage.Unreadable), 0));
         Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));   // the same message, not said again
         Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", w.Captain);
+    }
+
+    [Fact]
+    public void A_read_without_the_message_box_is_no_read_for_the_window()
+    {
+        var w = new A350MfdWindowMessages("Scratchpad: CHECK IRS/AIRPORT POS, amber");
+        Assert.Null(w.Observe(A350FmsMessageAnnouncerTests.Boxed("CHECK IRS/AIRPORT POS", "black"), 0));
+        Assert.Null(w.Observe(A350FmsMessageAnnouncerTests.Boxed("CHECK IRS/AIRPORT POS", "amber"), 0));
+        Assert.Equal("Scratchpad: CHECK IRS/AIRPORT POS, amber", w.Captain);
     }
 
     [Fact]
