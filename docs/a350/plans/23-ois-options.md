@@ -54,14 +54,20 @@ The options: EQUIPMENT: TAXI CAMERA LIGHT, SATCOM, BATTERY TYPE, SCS OUTLETS, FW
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `17039ef0e`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** the A350 tests 2,181 passed (`A350OptionsTests` 43 of them)
+- **Tasks:** 1 done: all 91 options on 11 tabs set, read back and restored through MSFSBA's OIS client, each one's variable measured
+  (`docs/a350/ledger/23-options.md`); Steps 3-7: no new `A350Option` (the behaviour file hides controls for the four already
+  wired), `A350OptionsTests` pins every hidden control; the HUD keys fixed (79637e529) and panel names kept unique (9934e8fe5)
+- **Waiting on the owner:** none
+- **In-sim results:** `docs/a350/evidence/23-ois-options.md`
+- **Changed from the plan:** the toggling ran through `A350Probe ois` (the OIS window's own agent and client) rather than the
+  window by hand; the variables were measured by dumping the OIS script's `INI_` names around each set, the script being
+  obfuscated
+- **Rulings made while working:** options whose effect is a sound, the model's look or the pilot's own axes are recorded with
+  "none" for MSFSBA; DEFAULT PANEL STATE, which acts only on a new flight, was set and read back but not loaded (no flight
+  load on the A350); cost if wrong: one option's next-flight effect unseen
