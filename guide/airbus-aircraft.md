@@ -847,7 +847,8 @@ What the A350 says on its own, each with its own row in the A350 Monitor Manager
 ### Things to know {#things-to-know-5}
 
 - **Surroundings window frequencies:** the A350 has no stock COM radio, so Enter on a frequency in the Surroundings window tunes it as you would by hand: on the captain's RMP it goes to the VHF page and loads the frequency as VHF 1's standby, and Shift+Enter also swaps it in. BA reads the RMP back, as on the other aircraft: *"COM 1 standby 118.700"*.
-- **Pictures stay pictures.** The OIS charts and en-route map, and the tapes, attitude and map symbols on the PFD and ND, are graphics. BA reads their values from the aircraft where it can.
+- **Pictures stay pictures.** The OIS charts and en-route map are pictures. The tapes, attitude and symbols on the PFD, ND, HUD, standby and system displays are read as the values and names they show (see Displays under [Special windows](#special-windows-5)).
+- **Options you have not fitted:** a control whose OIS option is off says so when you press it, for example *"Fuel jettison is not fitted. It is an option on the OIS options page."*: fuel jettison, the brake fans, the standby navigation display, the HUD and the ADF.
 - **After an A350 update,** BA prepares the displays again (about 15 seconds). If a display stops reading after an update, report it.
 
 <nav class="guide-nav" aria-label="Guide chapters" markdown="1">
