@@ -106,6 +106,23 @@ public class A350EwdTests
         Assert.Equal(EcamBox.None, lines[3].Box);
     }
 
+    // Plan 16 (live 2026-11-03, 1.2.8, ABN, SMOKE / FUMES, ACTIVATE ?): the ECAM cursor boxes one of "YES..." and "NO..." (the
+    // cyan box around YES, x 960 to 1098; NO at x 1295), and the line read "YES or NO, white (selected)", not which. It says the
+    // choice the box is on.
+    [Fact]
+    public void A_choice_says_which_answer_the_ecam_cursor_is_on()
+    {
+        var capture = Fixture("p16_ctr_abn_activate");
+        var choice = Assert.Single(A350Ewd.Parse(capture).Warning, l => l.Text == "YES or NO");
+        Assert.Equal("YES", choice.Choice);
+        Assert.Contains("YES or NO, white (YES selected)", A350EwdText.Build(capture).Split('\n'));
+        var onNo = capture with
+        {
+            Frames = capture.Frames.Select(f => f.Wide && Math.Abs(f.Y - 428) < 2 ? f with { X = 1260 } : f).ToList(),
+        };
+        Assert.Equal("NO", Assert.Single(A350Ewd.Parse(onNo).Warning, l => l.Text == "YES or NO").Choice);
+    }
+
     // Live 2026-10-28 in the hold, failures cleared: the warning display's LIMITATIONS block (the heading, ALL PHASES
     // left and APPR & LDG right, FLAPS SLOW in cyan under APPR & LDG), then the memos, then STS at the bottom. The
     // headings straddle the memo column, so it read "ALL PHASES, STS, LIMITATIONS, APPR & LDG, FLAPS SLOW": no telling

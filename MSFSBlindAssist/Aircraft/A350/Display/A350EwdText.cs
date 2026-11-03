@@ -24,7 +24,7 @@ public static class A350EwdText
         foreach (var l in view.Warning)
         {
             var marks = new List<string>();
-            if (l.Selected) marks.Add("selected");
+            if (l.Selected) marks.Add(l.Choice is { } choice ? choice + " selected" : "selected");
             if (l.Box == EcamBox.ToDo) marks.Add("to do");
             if (l.Box == EcamBox.Done) marks.Add("done");
             o.Add(l.Spoken + (marks.Count > 0 ? " (" + string.Join(", ", marks) + ")" : ""));

@@ -6,7 +6,8 @@ public enum EcamBox { None, ToDo, Done }
 
 /// <summary>One line of the warning display: its cells with colours, its baseline, whether the ECAM cursor
 /// (the cyan wide frame the ECP wheel moves) is on it, and its action box.</summary>
-public sealed record EcamLine(IReadOnlyList<DrawnCell> Cells, float Y, bool Selected, EcamBox Box)
+/// <param name="Choice">On a YES/NO row the ECAM cursor is on: the answer it boxes ("YES" or "NO"), else null.</param>
+public sealed record EcamLine(IReadOnlyList<DrawnCell> Cells, float Y, bool Selected, EcamBox Box, string? Choice = null)
 {
     public string Text => string.Join(" ", Cells.Select(c => c.Text));
 
@@ -77,13 +78,14 @@ public static class A350Ewd
         }
 
         var selected = new HashSet<int>();
+        var cursors = new Dictionary<int, DrawnFrame>();   // the ECAM cursor by row: on a YES/NO row it boxes one answer
         var boxes = new Dictionary<int, EcamBox>();
         foreach (var f in wdFrames)
         {
             int row = RowOf(f);
             if (row < 0) continue;
             string colour = A350Rgba.NameOf(f.Colour);
-            if (f.Wide && colour == "cyan") selected.Add(row);
+            if (f.Wide && colour == "cyan") { selected.Add(row); cursors[row] = f; }
             else if (!f.Wide && f.W < 30 && f.H < 30)   // an action box (15 x 20)
                 boxes[row] = colour == "cyan" ? EcamBox.ToDo : EcamBox.Done;
         }
@@ -139,7 +141,12 @@ public static class A350Ewd
             var right = cells.Where(InMemoColumn).ToList();
             if (left.Count == 1 && right.Count == 1 && left[0].Text == "YES" && right[0].Text == "NO")
             {
-                main.Add(new EcamLine(new[] { left[0], left[0] with { Text = "or" }, right[0] }, left[0].Y, selected.Contains(i), EcamBox.None));
+                // The cursor boxes one answer (live 2026-11-03: x 960 to 1098 around YES, NO at 1295): said with the line.
+                string? choice = cursors.TryGetValue(i, out var cursor)
+                    ? (left[0].X >= cursor.X && left[0].X <= cursor.X + cursor.W ? "YES"
+                        : right[0].X >= cursor.X && right[0].X <= cursor.X + cursor.W ? "NO" : null)
+                    : null;
+                main.Add(new EcamLine(new[] { left[0], left[0] with { Text = "or" }, right[0] }, left[0].Y, selected.Contains(i), EcamBox.None, choice));
                 continue;
             }
             if (left.Count > 0) main.Add(new EcamLine(left, left[0].Y, selected.Contains(i), boxes.GetValueOrDefault(i, EcamBox.None)));
