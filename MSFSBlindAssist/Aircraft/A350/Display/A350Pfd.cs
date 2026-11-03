@@ -334,6 +334,15 @@ public static class A350Pfd
                 o.AddRange(Attitude(pitch, A350ShapeReader.AngleDegrees(horizon)));
             }
         }
+        // Alternate law: the protections' marks at the pitch and bank limits become amber crosses, an "X" each (1.2.8,
+        // 2026-11-03: six, at x 163 to 538, y 145 to 499). One line with the attitude, never flags: the ECAM says the law.
+        var crosses = cells.Where(c => !used.Contains(c) && c.Colour == "amber" && c.Text.Trim() == "X"
+            && c.X is >= 140 and < 580 && c.Y is >= FmaBottom and < 540).ToList();
+        if (crosses.Count > 0)
+        {
+            used.UnionWith(crosses);
+            o.Add("Protections: lost, amber");
+        }
 
         // The LS block, lower left (LS on): ident (none until it decodes), frequency (drawn "109." and "90"), DME and
         // its "nm", magenta; and the course pointer, a magenta number at the heading scale's end while off it. Taken

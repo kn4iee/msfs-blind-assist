@@ -25,7 +25,8 @@ public class A350PfdFlagTests
     [Fact]
     public void Letters_of_two_colours_or_far_apart_stay_apart()
     {
-        var read = A350Pfd.ReadParts(Pfd(("T", 700, 480, "amber"), ("C", 700, 508, "red"), ("X", 400, 300, "amber"), ("Y", 400, 400, "amber")), 0);
+        // Not an amber "X" in the attitude area: that is alternate law's protection cross (A350PfdTests).
+        var read = A350Pfd.ReadParts(Pfd(("T", 700, 480, "amber"), ("C", 700, 508, "red"), ("Q", 400, 300, "amber"), ("Y", 400, 400, "amber")), 0);
         Assert.Equal(4, read.Rest.Count());
     }
 

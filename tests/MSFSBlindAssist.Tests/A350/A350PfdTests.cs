@@ -661,4 +661,24 @@ public class A350PfdTests
         Assert.Single(lines, l => l.Contains("3000"));
         Assert.DoesNotContain(lines, l => l.Contains("010"));
     }
+
+    // Alternate law (1.2.8, 2026-11-03, the OIS's STABILIZER FAULT on the stand): the protections' green marks become amber
+    // crosses, an "X" each at the two pitch limits and the two bank limits (x 163 to 538, y 145 to 499 on this capture). They
+    // were read as three "X X, amber" lines among the flags and said as one, "X X, amber", beside the ECAM's own
+    // F/CTL ALTN LAW (PROT LOST).
+    [Fact]
+    public void Alternate_laws_crosses_read_as_protections_lost_and_are_no_flag()
+    {
+        var read = A350Pfd.ReadParts(Fixture("p07_efis0_altn_law"), 0);
+        Assert.Contains("Protections: lost, amber", read.Lines);
+        Assert.DoesNotContain(read.Lines, l => l.StartsWith("X", StringComparison.Ordinal));
+        Assert.DoesNotContain(read.Rest, l => l.Contains("Protections"));
+        Assert.True(read.Lines.ToList().IndexOf("Protections: lost, amber") == read.Lines.ToList().IndexOf("Bank: wings level") + 1);
+    }
+
+    [Fact]
+    public void Normal_law_reads_no_protections_line()
+    {
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_fd_stand"), 0), l => l.StartsWith("Protections", StringComparison.Ordinal));
+    }
 }
