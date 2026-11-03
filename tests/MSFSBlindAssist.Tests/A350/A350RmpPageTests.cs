@@ -81,6 +81,33 @@ public class A350RmpPageTests
         Assert.Equal("ADK3", Line("rmp_sqwk_page", "*IDENT, cyan").Key);
     }
 
+    // Plan 10 Task 4 (live 2026-11-03): every page re-captured on 1.2.8 from RMP 1 by its own keys reads as on 1.2.7, line for
+    // line and key for key; what differs is state (the frequencies tuned, the transponder in AUTO: no "- STBY").
+    [Theory]
+    [InlineData("rmp_vhf_page")]
+    [InlineData("rmp_hf_page")]
+    [InlineData("rmp_menu_page")]
+    [InlineData("rmp_router_page")]
+    [InlineData("rmp_datalink_init")]
+    [InlineData("rmp_com_status")]
+    [InlineData("rmp_vhf_provider")]
+    [InlineData("rmp_nav_page_off")]
+    [InlineData("rmp_nav_page")]
+    [InlineData("rmp_ls_page")]
+    [InlineData("rmp_vor_page")]
+    [InlineData("rmp_sqwk_page")]
+    public void Each_page_reads_alike_on_1_2_8(string fixture)
+    {
+        var before = A350RmpPage.Read(A350Fixtures.Capture(fixture + ".json"));
+        var now = A350RmpPage.Read(A350Fixtures.Capture("p10_" + fixture + ".json"));
+        Assert.Equal(before.Select(l => (l.Key, l.Typed, l.IsFrequency)), now.Select(l => (l.Key, l.Typed, l.IsFrequency)));
+        Assert.Equal(before.Select(Label), now.Select(Label));
+    }
+
+    /// <summary>A line without its state: what stands before its first colon or comma (the transponder's mode is state).</summary>
+    private static string Label(RmpLine line) => line.Spoken.Split(new[] { ':', ',' }, 2)[0] is "STBY" or "AUTO" ? "transponder mode"
+        : line.Spoken.Split(new[] { ':', ',' }, 2)[0];
+
     // 1.2.8 (plan 10, live 2026-11-03): the transponder in AUTO, and after IDENT the RMP's message, held until MSG CLR.
     [Fact]
     public void The_squawk_page_says_the_ident_message_on_1_2_8()

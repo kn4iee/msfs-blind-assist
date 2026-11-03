@@ -81,6 +81,7 @@ These run no SimConnect and no form (MSFSBA may run beside them). `copy.bin` is 
 | `A350Probe ecamlisten <seconds>` | MSFSBA's own E/WD monitor: each line it would speak, with the time. |
 | `A350Probe mfdlines <mfd.json\|live> <side>` | The MFD page as `A350MfdPage` reads it, with each line's click point. |
 | `A350Probe ndlines <efis.json\|live> <side>` | The ND as MSFSBA reads it (the airport map by kind). A live draw has no aircraft position: use a capture taken with `A350_LAT`/`A350_LON` for the airport map. |
+| `A350Probe rmplines <rmp.json>` | A saved RMP draw as the RMP window reads it (`A350RmpPage`), each line with the key a press on it presses. |
 | `A350Probe sdtext <ctr.json> <page>` | A saved CTR draw read as the ECAM Control Panel's status display reads it. |
 | `A350Probe sdmap <copy.bin> <page>` | Names the variable behind each SD value by setting each variable in the copy and redrawing. |
 | `A350Probe sdsweep <copy.bin> <page> NAME=v1,v2 …` | What one variable's values (`L:x`, or `V:x` in the Variables array) do to an SD page: every shape and text that differs. |

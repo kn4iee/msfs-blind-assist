@@ -9,7 +9,7 @@ internal static class DisplayModes
     public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.Ordinal)
     {
         "patch", "snapshot", "draw", "service", "trap", "traptiny", "ecamwatch", "ecamlisten", "sdmap", "sdtext", "sdsweep",
-        "pfdlisten", "mfdlines", "ndlines", "navdb", "memfind", "memread", "speeds",
+        "pfdlisten", "mfdlines", "ndlines", "rmplines", "navdb", "memfind", "memread", "speeds",
     };
 
     public static bool Handles(string mode) => Names.Contains(mode);
@@ -39,6 +39,7 @@ internal static class DisplayModes
             case "pfdlisten": return PfdListen(args);
             case "mfdlines": return MfdLines(args);
             case "ndlines": return NdLines(args);
+            case "rmplines": return RmpLines(args);
             case "navdb": return NavDb(args);
             case "memfind": return MemFind(args);
             case "memread": return MemRead(args);
@@ -442,6 +443,15 @@ internal static class DisplayModes
         else cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
         if (!cap.Ok) Console.WriteLine($"draw: ok={cap.Ok} texts={cap.Texts.Count} error={cap.Error}");
         foreach (var l in A350GroundDisplays.ReadNd(cap, side)) Console.WriteLine(l);
+        return 0;
+    }
+
+    /// <summary>`rmplines rmp.json`: a saved RMP draw read as the RMP window's lines, each with the key a press on it presses.</summary>
+    private static int RmpLines(string[] args)
+    {
+        var cap = System.Text.Json.JsonSerializer.Deserialize<A350DrawCapture>(File.ReadAllText(args[0]))!;
+        if (!cap.Ok) Console.WriteLine($"draw: ok={cap.Ok} texts={cap.Texts.Count} error={cap.Error}");
+        foreach (var l in A350RmpPage.Read(cap)) Console.WriteLine(l.Key == null ? l.Spoken : $"{l.Spoken}  [{l.Key}{(l.Typed ? ", typed" : "")}]");
         return 0;
     }
 

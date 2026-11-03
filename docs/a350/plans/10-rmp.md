@@ -68,14 +68,21 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (question 9)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `111950109`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-03
+- **Tests at landing:** 19,017 passed (all but `ClaudeRulesHookTests`, which CI runs)
+- **Tasks:** 1 done (`bb37ac844`: the RAD NAV selector on all three RMPs, IDENT, the window's Alt+I); 2 Step 1 done, Step 2 the
+  owner's (the row already exists from before the plans and still works on 1.2.8); 3 done on the stand, nothing to fix; 4 done
+  (twelve pages re-captured, all alike).
+- **Waiting on the owner:** question 9, keep the STBY RAD NAV row or drop it (`docs/a350/evidence/10-rmp.md`, Task 2).
+- **For plan 21 (guide):** the RMP window's Alt+I (ident); the RAD NAV selector plays no navaid audio on 1.2.8.
+- **In-sim results:** `docs/a350/evidence/10-rmp.md`.
+- **Changed from the plan:** Task 1's IDENT is the transponder's (the manual's RMP IDENT, p. 75), not a navaid's: the aircraft
+  plays no navaid audio, so there is no navaid ident to hear in or out of range. Task 3 ran on the stand, not in flight: tuning
+  needs no flight, and the FMS's own tuning in flight was proven on 2026-10-30.
+- **Rulings made while working:** Alt+I takes the A380 window's key for IDENT and presses the SQWK page first, so the RMP is left on
+  that page as a sighted pilot's would be (cost if wrong: one page key the pilot did not ask for); the RAD NAV selector gets no
+  MSFSBA-made audio, as the aircraft makes none (cost if wrong: a pilot expecting a morse ident hears none, as in the cockpit).
