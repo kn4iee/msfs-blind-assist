@@ -575,6 +575,11 @@ public static class A350GroundDisplays
     /// heading, plan 08: the stand's 145 read every heading 1.3 degrees high).</summary>
     private const float SfdHeadingIndexX = 142, SfdHeadingPxPerDegree = 2.3f;
 
+    /// <summary>The SFD's LS deviations (plan 24, the ILS 04 approach of 2026-11-03 against the PFD): the localizer's fill on the row at
+    /// y 201.5, centred at x 145.5; the glideslope's in the column at x 197.5, centred at y 121.1; both parked 52 px out at full scale,
+    /// two dots.</summary>
+    private const float SfdLocY = 201.5f, SfdLocCentreX = 145.5f, SfdGsX = 197.5f, SfdGsCentreY = 121.1f, SfdDotPx = 26.25f, SfdFullScaleDots = 2;
+
     /// <summary>A heading scale label: drawn unturned on its row, where a ladder label passes only turned or off the row.</summary>
     private static bool OnSfdHeadingRow(DrawnText t) =>
         MathF.Abs(t.Y - SfdHeadingRowY) < 0.5f && MathF.Abs(t.LocalY - t.Y) < 0.5f && MathF.Abs(t.LocalX - t.X) < 0.5f;
@@ -650,6 +655,17 @@ public static class A350GroundDisplays
             int heading = (int)Math.Round(int.Parse(nearest.Text.Trim(), CultureInfo.InvariantCulture) * 10 + (SfdHeadingIndexX - nearest.X) / SfdHeadingPxPerDegree);
             o.Add(string.Create(CultureInfo.InvariantCulture, $"Heading: {(heading % 360 + 360) % 360:000}"));
         }
+        // The LS deviations, two small magenta fills (plan 24): the localizer's under the attitude, the glideslope's at its right,
+        // parked at full scale (two dots) when off it; in the PFD's words.
+        var diamonds = (capture.Shapes ?? Array.Empty<DrawnShape>()).Where(sh => sh.Kind == "fill" && sh.Image == 0 && A350Rgba.NameOf(sh.Colour) == "magenta"
+            && (sh.X1 - sh.X0) * (sh.Y1 - sh.Y0) < 400).ToList();
+        static string Dots(double dots, string more, string less, string beam) =>
+            Math.Abs(dots) >= SfdFullScaleDots - 0.05 ? "off scale" : Math.Abs(dots) < 0.05 ? $"on the {beam}"
+            : $"{Math.Abs(dots).ToString("0.0", CultureInfo.InvariantCulture)} dots {(dots > 0 ? more : less)} {beam}";
+        if (diamonds.FirstOrDefault(sh => sh.X1 - sh.X0 > sh.Y1 - sh.Y0 && Math.Abs((sh.Y0 + sh.Y1) / 2 - SfdLocY) < 6) is { } loc)
+            o.Add("Localizer: " + Dots(((loc.X0 + loc.X1) / 2 - SfdLocCentreX) / SfdDotPx, "left of", "right of", "localizer"));
+        if (diamonds.FirstOrDefault(sh => sh.Y1 - sh.Y0 > sh.X1 - sh.X0 && Math.Abs((sh.X0 + sh.X1) / 2 - SfdGsX) < 6) is { } gs)
+            o.Add("Glideslope: " + Dots(((gs.Y0 + gs.Y1) / 2 - SfdGsCentreY) / SfdDotPx, "above", "below", "glideslope"));
         // The LS block bottom left (x 14: the source over the frequency, magenta) and the heading source written top to bottom at
         // x 68 ("I", "R", "3"), both read since plan 24 (a number and lone letters before).
         var ls = cells.Where(c => !used.Contains(c) && c.X < 40 && c.Y is >= 236 and < 275).OrderBy(c => c.Y).ToList();

@@ -465,6 +465,23 @@ public class A350GroundDisplaysTests
         Assert.DoesNotContain("ILS, magenta", sfd);
     }
 
+    // Plan 24, the ILS 04 approach of 2026-11-03: the SFD's LS deviations are two small magenta fills, the localizer's under the attitude
+    // (centred at x 145.5) and the glideslope's at its right (y 121.1), parked 52 px out at full scale (two dots: 26 px a dot), said in
+    // the PFD's words; parked, off scale.
+    [Theory]
+    [InlineData("sfd_approach_ls", "Localizer: on the localizer", "Glideslope: on the glideslope")]
+    [InlineData("sfd_approach_gs_below", "Localizer: 0.2 dots right of localizer", "Glideslope: 1.4 dots below glideslope")]
+    public void The_standby_flight_display_reads_its_ls_deviations(string fixture, string localizer, string glideslope)
+    {
+        var sfd = A350GroundDisplays.ReadSfd(A350Fixtures.Capture(fixture + ".json"));
+        Assert.Contains(localizer, sfd);
+        Assert.Contains(glideslope, sfd);
+    }
+
+    [Fact]
+    public void A_parked_standby_deviation_is_off_scale() =>
+        Assert.Contains("Localizer: off scale", A350GroundDisplays.ReadSfd(A350Fixtures.Capture("sfd_climb_loc_off.json")));
+
     // Plan 24, the second flight: the SND's rose labels every 30 degrees at radius 70 about (150, 150), each placed from (-2, -70)
     // turned by its bearing less the heading; the heading is read at the top. Level at 271 by the PFD; in the turn north the HUD of
     // the same round read 002 (the PFD, drawn seconds before, 346).
