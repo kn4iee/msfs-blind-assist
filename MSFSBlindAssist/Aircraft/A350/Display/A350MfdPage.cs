@@ -335,8 +335,11 @@ public static class A350MfdPage
                 // the labels. Up, a box is named by the words sharing it (OCEANIC CENTER ooooo), else by the text left of it on its row.
                 bool framed = capture.Shapes is not { Count: > 0 } drawn || drawn.Any(sh => sh.Kind == "stroke" && sh.Image == 0
                     && Math.Abs(sh.X0 - shift - x0) <= 4 && Math.Abs(sh.Y0 - y0) <= 4 && Math.Abs(sh.X1 - shift - x1) <= 6);
-                // (Two templates' boxes can stand on one place, a pixel apart.)
-                if (!framed || lines.Any(l => l.Line.Kind == "field" && Math.Abs(l.Line.ClickX - cx) <= 2 && Math.Abs(l.Line.ClickY - cy) <= 2)) continue;
+                // (Two templates' boxes can stand on one place, a pixel apart; the DEPARTURE REQUEST form's empty boxes stand 3 px over its
+                // filled ones and read "empty" before each value, plan 22: within 6 px an empty box gives way to the one with content.)
+                int near = lines.FindIndex(l => l.Line.Kind == "field" && Math.Abs(l.Line.ClickX - cx) <= 2 && Math.Abs(l.Line.ClickY - cy) <= 6);
+                if (!framed || near >= 0 && (Math.Abs(lines[near].Line.ClickY - cy) <= 2 || inside.Count == 0)) continue;
+                if (near >= 0 && lines[near].Line.Spoken.EndsWith(": empty", StringComparison.Ordinal)) lines.RemoveAt(near);
                 float line = y0 + e.RectH * 0.75f;
                 var words = inside.Where(c => c.Colour == "white" && Word(c.Text) is not ("required" or "none")).ToList();
                 var entry = inside.Except(words).ToList();
@@ -494,7 +497,10 @@ public static class A350MfdPage
             return string.Join(" ", header.Select(c => c.Text));
         }
         var columnNames = new Dictionary<int, string>();
-        foreach (var column in fields.Select((f, k) => (f, k)).Where(p => p.f.Label == null)
+        // (D-ATIS's boxes hold airports: the white text over them is the ATIS above, never their header: plan 22's "INITIAL CTC YOU HAVE
+        // INFO 1: VRMM", the ATIS's last line taken for a label and lost.)
+        bool datis = titleRow.Any(c => c.Text.StartsWith("D-ATIS", StringComparison.Ordinal));
+        foreach (var column in fields.Select((f, k) => (f, k)).Where(p => p.f.Label == null && !datis)
                      .Select(p => (p.k, p.f, Header: ColumnHeader(p.f.Top, p.f.X0, p.f.X1, FieldColumnHeaderReach, headers))).Where(p => p.Header != null)
                      .GroupBy(p => (p.Header!, (int)Math.Round(p.f.X0))))
         {
@@ -926,9 +932,11 @@ public static class A350MfdPage
         var menu = lines.Where(IsItem).ToList();
         MfdLine? LineOf(DrawnElement e) => lines.FirstOrDefault(l => !IsItem(l) && l.Kind is "button" or "menu" or "field" && In(l, e));
         var others = controls.Where(e => !items.Contains(e)).ToList();
-        var owner = others.Where(e => e.X - shift < x1 && e.X - shift + e.RectW > x0
-                && (Math.Abs(e.Y + e.RectH - top) <= TouchPx || Math.Abs(e.Y - bottom) <= TouchPx))
-            .Select(LineOf).FirstOrDefault(l => l != null)
+        bool Across(DrawnElement e) => e.X - shift < x1 && e.X - shift + e.RectW > x0;
+        // The control it hangs under first, then one it opens up from: a list under its key may reach down to the next key's top (D-ATIS's
+        // UPDATE OR PRINT list to the >>> key, which took "menu open": plan 22, 2026-11-02).
+        var owner = others.Where(e => Across(e) && Math.Abs(e.Y + e.RectH - top) <= TouchPx).Select(LineOf).FirstOrDefault(l => l != null)
+            ?? others.Where(e => Across(e) && Math.Abs(e.Y - bottom) <= TouchPx).Select(LineOf).FirstOrDefault(l => l != null)
             // else the control beside it, its top level with the list's: ATC COM REQUEST's lists hang left of their keys (plan 09,
             // 2026-11-03: VERTICAL's at x 384-586, the key from 590), and read interleaved with the other keys without an owner
             ?? others.Where(e => (Math.Abs(e.X - shift - x1) <= TouchPx || Math.Abs(e.X - shift + e.RectW - x0) <= TouchPx)

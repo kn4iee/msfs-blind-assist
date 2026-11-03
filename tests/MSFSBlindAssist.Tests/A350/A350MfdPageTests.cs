@@ -1359,6 +1359,55 @@ public class A350MfdPageTests
         Assert.Equal(next, lines[at + 1 + items.Length]);
     }
 
+    // Plan 22's D-ATIS (2026-11-02, handed to plan 09): the ATIS's last line, "INITIAL CTC YOU HAVE INFO .......", became the label of the
+    // airport boxes under it ("INITIAL CTC YOU HAVE INFO 1: VRMM") and was not read. D-ATIS's boxes hold airports and have no label.
+    [Fact]
+    public void Datis_airport_boxes_read_airport_and_the_atis_reads_whole()
+    {
+        var lines = Spoken("p22_mfd_datis");
+        Assert.Contains("Airport: VCBI, cyan", lines);
+        Assert.Contains("Airport: VRMM, cyan", lines);
+        Assert.Contains("Airport: none, cyan", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("INITIAL CTC YOU HAVE INFO 1", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("INITIAL CTC YOU HAVE INFO", StringComparison.Ordinal) && !l.Contains(':'));
+    }
+
+    // Plan 22: with UPDATE OR PRINT's list open, "menu open" went to the >>> key under the list, whose top it touches, not to the key it
+    // hangs from. The capture with four items under UPDATE OR PRINT, 37 px apart, to the >>> key's top.
+    [Fact]
+    public void An_open_list_names_the_key_it_hangs_from_not_the_one_under_it()
+    {
+        var cap = A350Fixtures.Capture("p22_mfd_datis.json");
+        var key = cap.Elements.First(e => e.Class == "DualTextButton" && Math.Abs(e.Y - 147) < 1);
+        var white = cap.Texts.First(t => t.ColourName == "white" && t.Text.StartsWith("INFO", StringComparison.Ordinal));
+        var texts = cap.Texts.ToList();
+        var elements = cap.Elements.ToList();
+        string[] items = { "UPDATE", "AUTO UPDATE", "PRINT", "AUTO PRINT" };
+        for (int i = 0; i < items.Length; i++)
+        {
+            float y = key.Y + key.RectH + 37 * i;
+            elements.Add(key with { Class = "DropdownButtonUI", Y = y, RectY = y, RectH = 37, TextStart = texts.Count, Ptr = key.Ptr + 1000 + i });
+            texts.Add(white with { Text = items[i], X = key.X + 20, Y = y + 26, LocalX = key.X + 20, LocalY = y + 26 });
+        }
+        var lines = A350MfdPage.Read(cap with { Texts = texts, Elements = elements }, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains(lines, l => l.StartsWith("UPDATE OR PRINT", StringComparison.Ordinal) && l.EndsWith(", menu open", StringComparison.Ordinal));
+        Assert.DoesNotContain(">>> button, menu open", lines);
+    }
+
+    // Plan 22: the DEPARTURE REQUEST form draws ACFT TYPE, DESTINATION and STATION twice, an empty box 3 px over the filled one, and each
+    // read twice ("ACFT TYPE: empty", "ACFT TYPE: A359"). One box, its value.
+    [Fact]
+    public void A_box_drawn_twice_in_one_place_reads_once()
+    {
+        var lines = Spoken("p09_mfd_atc_departure_request");
+        foreach (var name in new[] { "ACFT TYPE", "DESTINATION", "STATION" })
+        {
+            Assert.Single(lines, l => l.StartsWith(name + ":", StringComparison.Ordinal));
+            Assert.DoesNotContain(name + ": empty", lines);
+        }
+        Assert.Contains("ACFT TYPE: A359, cyan", lines);
+    }
+
     // A field being typed in is drawn as two runs at one place, the second padded with spaces where the first stands ("25" and "  0";
     // the empty field's placeholder "oo" and "  o"): one text, "250", and "required" once.
     [Fact]

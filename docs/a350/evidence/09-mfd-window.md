@@ -27,6 +27,29 @@ The window now pages a list with DOWN and UP (`A350MfdPage.ListOf`, `PageDownPre
 the selection on the first new row; the boxed row reads ", highlighted". Live: PageUp took OMDB 12L's list to NONE, PageDown to its end
 with "SENP3G button, highlighted" selected, PageDown again "End of list".
 
+## Task 6: the checklists and the pages on 1.2.8 (2026-11-03, on the stand)
+
+**Step 1.** C/L MENU's ten checklists (COCKPIT PREPARATION to SECURING THE AIRCRAFT, and the white << DEPARTURE CHANGE >>) each opened and
+read by its lines (the window's Enter is the same click; scratchpad `cl_walk.sh`). A manual item ticks to its response in green ("PARKING
+BRAKE: blank" to "PARKING BRAKE: CHECKED", "ANTI ICE: SET", "RWY & SID: CHECKED", "CABIN: SECURED / SIGNALED"); a sensed item does not
+tick on a press and stays cyan until the aircraft sees it (SEAT BELTS: ON, BEACON: ON, PITCH TRIM: CHECK, ADIRS: OFF on a parked
+aircraft); C/L COMPLETE greys the checklist in the menu, RESET puts it back (all reset after). Read as drawn: TAXI's and LANDING's white
+"T.O" and "LDG" lines; "PACK 1 & 2 : SET" once ticked (a space before the colon).
+
+**Step 2.** Every page of the menus captured again on 1.2.8 (the display service's draw, `save MFD 0`) and its labels set against the
+fixture of its title: the same on PERF, FUEL&LOAD, WIND, POSITION/TIME, DATA/STATUS, PRINTER, CONNECT, REQUEST, MSG RECORD, SURV
+CONTROLS, C/L MENU; the others differ by state only (MSG LIST against CLEAR INFO, the ND mode, the destination, stored waypoints) or are
+new on 1.2.8 and read whole (RAD NAV's ADF 1 and 2 frequency and ident). Six pages had no fixture (POSITION/MONITOR, REPORT, GNSS,
+DATA/ROUTE, AIRPORT, REPORT&MODIFY); DATA/NAVAID draws no title. The three D-ATIS and request faults plan 22 found, fixed here:
+
+- D-ATIS: the ATIS's last line, "INITIAL CTC YOU HAVE INFO .......", was the label of the airport boxes under it ("INITIAL CTC YOU HAVE
+  INFO 1: VRMM") and was lost; D-ATIS's boxes now read "Airport" and the line reads with the ATIS (also live on 1.2.8: the third slot
+  read "INITIAL CTC YOU HAVE INFO: none").
+- An open list now names the key it hangs from before one whose top it touches (UPDATE OR PRINT's list reached the >>> key, which
+  took "menu open"; tested on the D-ATIS capture with the list added, the live state needing a datalink).
+- The DEPARTURE REQUEST form's ACFT TYPE, DESTINATION and STATION read once (empty boxes 3 px over the filled ones read "empty" first;
+  live capture `p09_mfd_atc_departure_request`).
+
 ## Task 2: the role words (2026-11-03, offline)
 
 The window's shown line is `A350MfdPage.Shown`: a field and the scratchpad end with ", edit", a list opener reads as a combo box,
