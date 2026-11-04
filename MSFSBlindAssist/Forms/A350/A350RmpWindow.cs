@@ -303,6 +303,16 @@ public sealed class A350RmpWindow : Form
         return true;
     }
 
+    /// <summary>A digit or point typed on the RMP screen: into the squawk, an LS or VOR field, or the VHF scratchpad. Taken in
+    /// ProcessCmdKey, it never reaches the screen reader to echo, so the window says it (review 2026-11-04), as the squawk entry does.</summary>
+    internal void TypeCharacter(char ch)
+    {
+        if (_squawk != null) { TypeSquawk(ch); return; }
+        if (SelectedLine is { Typed: true }) _tuning.Append(ch);
+        else Press(_entry.Type(ch, _line));
+        _announcer.AnnounceImmediate(ch == '.' ? "point" : ch.ToString());
+    }
+
     private void TypeSquawk(char c)
     {
         if (c is < '0' or > '7') { _announcer.AnnounceImmediate("A squawk digit is 0 to 7."); return; }
@@ -367,9 +377,7 @@ public sealed class A350RmpWindow : Form
             };
             if (c is char ch)
             {
-                if (_squawk != null) TypeSquawk(ch);
-                else if (SelectedLine is { Typed: true }) _tuning.Append(ch);
-                else Press(_entry.Type(ch, _line));
+                TypeCharacter(ch);
                 return true;
             }
             switch (key)

@@ -402,7 +402,7 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 - **Input Shift+A**, **Ctrl+O**, **Shift+P**, **Ctrl+J**, **Ctrl+L** — Autopilot 1, autopilot 2, approach, autothrust and localiser, each the FCU's own pushbutton.
 - **Input Shift+1** to **Shift+4** and **Ctrl+1** to **Ctrl+4** — Push and pull the heading, altitude, speed and vertical speed knobs.
 - **Input Ctrl+S**, **Ctrl+H**, **Ctrl+A**, **Ctrl+V**, **Ctrl+P**, **Ctrl+B** — The speed, heading, altitude, vertical speed, autopilot and altimeter windows.
-- **Input Shift+M** — Open the MFD window. **Input Ctrl+N** — The MFD window on RAD NAV. **Input Ctrl+Shift+D** — The MFD window on ATC COM.
+- **Input Shift+M** — Open the MFD window. **Input Ctrl+N** — The MFD window on RAD NAV. **Input Ctrl+Shift+D** — The ATC mailbox window. **Input Ctrl+Shift+F** — The A350's other windows: FAP, Mailbox, Printer.
 - **Input Shift+T** — The captain's OIS. **Input Ctrl+Shift+T** — The first officer's OIS.
 - **Input Ctrl+Shift+R** — Open the RMP window.
 
@@ -413,7 +413,7 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 - **Tab** — To the scratchpad box.
 - **Backspace** (in the list) — CLR. **Page Up**, **Page Down** — Scroll.
 - **F5** — Refresh. **Escape** — Close.
-- **Alt+I** INIT, **Alt+F** F-PLN, **Alt+E** PERF, **Alt+L** FUEL, **Alt+R** RAD NAV, **Alt+P** SEC, **Alt+D** DIR, **Alt+A** ATC, **Alt+V** SURV, **Alt+C** CLR, **Alt+T** DEST, **Alt+G** PROG, **Alt+M** MAILBOX, **Alt+K** C/L MENU, **Alt+N** NOTEPAD, **Alt+O** DATA, **Alt+U** MENU, **Alt+B** AIRPORT, **Alt+Y** REF, **Alt+X** ESC.
+- **Alt+I** INIT, **Alt+F** F-PLN, **Alt+E** PERF, **Alt+L** FUEL, **Alt+R** RAD NAV, **Alt+P** SEC, **Alt+D** DIR, **Alt+A** ATC, **Alt+V** SURV, **Alt+C** CLR, **Alt+T** DEST, **Alt+G** PROG, **Alt+M** MAILBOX, **Alt+K** C/L MENU, **Alt+N** NOTEPAD, **Alt+O** DATA, **Alt+U** MENU, **Alt+B** AIRPORT, **Alt+Y** REF, **Alt+S** OIS, **Alt+X** ESC.
 
 ### RMP window (Input Ctrl+Shift+R) {#hk-a350-rmp}
 

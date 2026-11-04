@@ -116,7 +116,7 @@ Screen readers already announce every UI control interaction, so the app never r
 ## Quick Reference
 
 - Adding a panel control, background monitoring, an H-variable, a hotkey, an aircraft or a feature: follow its workflow in [adding-features.md](docs/adding-features.md); the short forms are in [QUICK-REFERENCE.md](docs/QUICK-REFERENCE.md). The rules for aircraft code load when you Read it.
-- **`SimConnectManager.SetLVar` — GLOBAL MobiFlight calc-path routing (2026-06):** A `SetLVar` write takes the calculator path only once `CalcPathVerified` is set, which only an aircraft registering `MSFSBA_BRIDGE_PROBE` reaches (FBW A320/A380, Headwind A330, MD-11); a VERIFIED verdict then holds for any aircraft switched to ([MD11-16]). Otherwise, and for a name with a space or colon ([SIM-12]), it takes the native data-def write. Full routing rules, the H:/dotted event queue, and the RPN invariant-formatting rule: [docs/architecture.md](docs/architecture.md).
+- **`SimConnectManager.SetLVar` — GLOBAL MobiFlight calc-path routing (2026-06):** A `SetLVar` write takes the calculator path only once `CalcPathVerified` is set, which only an aircraft registering `MSFSBA_BRIDGE_PROBE` reaches (FBW A320/A380, Headwind A330, MD-11, iniBuilds A350); a VERIFIED verdict then holds for any aircraft switched to ([MD11-16]). Otherwise, and for a name with a space or colon ([SIM-12]), it takes the native data-def write. Full routing rules, the H:/dotted event queue, and the RPN invariant-formatting rule: [docs/architecture.md](docs/architecture.md).
 
 ## Where things live
 
@@ -155,7 +155,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [hs787.md](docs/hs787.md) | HorizonSim 787-9: CDU, IRS, EICAS over the Coherent debugger | hs787 |
 | [inibuilds-a350.md](docs/inibuilds-a350.md) | iniBuilds A350: its displays read by running its own draw code on a memory copy, the MFD/ND mouse route, the ECAM, the OIS, the addresses to re-derive per version | inibuilds-a350 |
 | [md11.md](docs/md11.md) | TFDi MD-11: CEVENT transport, control state, layout, the control-map generator | md11, md11-controls |
-| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
+| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11, iniBuilds A350) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
 | [gemini.md](docs/gemini.md) | AI providers (Gemini or Claude): display reads, scene and route description, route briefing | ai-display, route-briefing |
 | [location-data.md](docs/location-data.md) | Output C and Location Info (Shift+L): the offline GeoNames + Natural Earth download, its database and lookups | location-data |
 | [user-guide.md](docs/user-guide.md) | The pilot's user guide in `guide/`: writing it, how the website and the Help menu publish it, the one-page build, the PR line (CORE-19) | user-guide |

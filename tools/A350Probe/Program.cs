@@ -351,7 +351,7 @@ internal sealed partial class ProbeForm : Form
     /// it, each from a good live draw (a torn copy's trapped draw is drawn again), the draw code's sim asks answered from
     /// SimConnect's cache as MainForm answers them (the PFD's baro is the sim's); a filter keeps the panels whose name
     /// holds one of the names.</summary>
-    private async Task RunDisplays()
+    private async Task RunDisplays(ProbeDefinition def)
     {
         using var service = new MSFSBlindAssist.Aircraft.A350.Display.A350DisplayService();
         service.AVarAnswer = new MSFSBlindAssist.Aircraft.A350.Display.A350AVarAnswers(
@@ -369,8 +369,10 @@ internal sealed partial class ProbeForm : Form
             // A fixture with the sim asks answered as MainForm answers them (plan 07: the standalone draw has no speed tape).
             if (capture is { Ok: true } && Environment.GetEnvironmentVariable("A350_DRAW_JSON") is { } displayJsonDir)
                 DisplayModes.SaveNew(Path.Combine(displayJsonDir, $"{d.Gauge}_{d.Index}.json"), System.Text.Json.JsonSerializer.Serialize(capture));
-            if (capture is { Ok: true })
-                foreach (var line in d.Read(capture))
+            // As its status display reads it (review 2026-11-04: the panel's bare read missed the dark screen and the PFD's flashing).
+            if (def.IsDark(d)) Line("  " + IniBuildsA350Definition.DarkScreen);
+            else if (capture is { Ok: true })
+                foreach (var line in def.ReadDisplay(d, capture))
                     Line("  " + line);
         }
         // The E/WD (Alt+E's window, not a display panel), with the SD page the A350_SD_PAGE row streams.
@@ -623,19 +625,16 @@ internal sealed partial class ProbeForm : Form
             {
                 if (trace.Contains(e.VarName)) Say($"[trace] {e.VarName}={Fmt(e.Value)}");
                 if (!vars.TryGetValue(e.VarName, out var d)) return;
-                // The base variables (ground speed, altitude…) are MainForm's own readouts, never this generic path; the
-                // definition still sees SIM_ON_GROUND, as MainForm hands it on (the roll call-outs' ground state).
-                if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal))
-                {
-                    if (e.VarName == "SIM_ON_GROUND") def.ProcessSimVarUpdate(e.VarName, e.Value, said);
-                    return;
-                }
+                // Every variable reaches the definition, as MainForm hands it every one (review 2026-11-04: only A350_ keys and
+                // SIM_ON_GROUND did, so the base's own call-outs, the pitch trim's, were never heard here; the REPL's fix of
+                // 2026-11-03). The base variables (ground speed, altitude…) are MainForm's own readouts, never the generic path.
                 bool handled;
                 bool wrap = MSFSBlindAssist.Services.DefAnnounceMuteSets.ShouldWrap(def, e.VarName, settings);
                 if (wrap) said.Suppressed = true;
                 try { handled = def.ProcessSimVarUpdate(e.VarName, e.Value, said); } catch { return; }
                 finally { if (wrap) said.Suppressed = false; }
                 foreach (var text in said.DrainList()) Say(text);
+                if (!e.VarName.StartsWith("A350_", StringComparison.Ordinal)) return;
                 if (handled || !d.IsAnnounced || d.UpdateFrequency != UpdateFrequency.Continuous) return;
                 bool muted = settings.A350DisabledMonitorVariablesSet.Contains(e.VarName);   // MainForm's Step-6 gate
                 bool first = !baseline.TryGetValue(e.VarName, out var was);
@@ -820,7 +819,7 @@ internal sealed partial class ProbeForm : Form
 
         if (_mode == "displays")
         {
-            await RunDisplays();
+            await RunDisplays(def);
             return;
         }
 

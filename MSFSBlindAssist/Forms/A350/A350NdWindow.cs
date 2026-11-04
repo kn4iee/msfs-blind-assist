@@ -32,7 +32,7 @@ public sealed class A350NdWindow : Form
     private readonly DisplayListBox _list;
     private readonly TextBox _scratchpad, _btvStatus;
     private readonly ComboBox _side, _mode, _range, _exits, _runways;
-    private readonly Button _armExit, _clearBtv, _armRunway;
+    private readonly Button _readExits, _armExit, _clearBtv, _armRunway;
     private A350BtvArming.ExitsRead? _exitsRead;
     private bool _arming;
     private readonly IntPtr _previousWindow;
@@ -83,25 +83,26 @@ public sealed class A350NdWindow : Form
         _range.Items.AddRange(Ranges.Cast<object>().ToArray());
         _range.SelectionChangeCommitted += (s, e) => TurnKnob(false, _range.SelectedIndex);
 
-        // BTV in one step (plan 08, the A380 OANS window's Map and BTV controls): the exit list fills from the zoomed airport map the
-        // first time it is entered; Arm exit, Clear BTV and Arm runway take the aircraft's own steps and put the ND back.
+        // BTV in one step (plan 08, the A380 OANS window's Map and BTV controls): Read exits fills the exit list from the zoomed airport map
+        // (never on focus alone: that turned the EFIS knobs, review 2026-11-04); Arm exit reads them again and arms the exit as it stands
+        // now; Clear BTV and Arm runway take the aircraft's own steps and put the ND back.
         var btv = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, TabIndex = 3, WrapContents = true };
-        _exits = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "BTV exit", Width = 200, TabIndex = 0 };
-        _exits.Enter += async (s, e) => { if (_exitsRead == null) await ReadExitsAsync(); };
-        _armExit = new Button { Text = "Arm exit", AutoSize = true, TabIndex = 1 };
+        _readExits = new Button { Text = "Read exits", AutoSize = true, TabIndex = 0 };
+        _readExits.Click += async (s, e) => await ReadExitsAsync();
+        _exits = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "BTV exit", Width = 200, TabIndex = 1 };
+        _armExit = new Button { Text = "Arm exit", AutoSize = true, TabIndex = 2 };
         _armExit.Click += async (s, e) => await ArmExitAsync();
-        _clearBtv = new Button { Text = "Clear BTV", AutoSize = true, TabIndex = 2 };
+        _clearBtv = new Button { Text = "Clear BTV", AutoSize = true, TabIndex = 3 };
         _clearBtv.Click += async (s, e) => await ClearBtvAsync();
-        _runways = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Landing runway", Width = 120, TabIndex = 3 };
-        _runways.Enter += async (s, e) => { if (_exitsRead == null) await ReadExitsAsync(); };
-        _armRunway = new Button { Text = "Arm runway", AutoSize = true, TabIndex = 4 };
+        _runways = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Landing runway", Width = 120, TabIndex = 4 };
+        _armRunway = new Button { Text = "Arm runway", AutoSize = true, TabIndex = 5 };
         _armRunway.Click += async (s, e) =>
         {
             if (_runways.SelectedItem is string rwy)
                 await RunAsync(A350BtvArming.RunwaySteps(rwy, KnobNow(true), KnobNow(false)), $"Landing runway {rwy} set." + A350BtvArming.Back(KnobNow(true), KnobNow(false)));
         };
-        _btvStatus = new TextBox { ReadOnly = true, AccessibleName = "BTV", Width = 300, TabIndex = 5 };
-        btv.Controls.AddRange(new Control[] { _exits, _armExit, _clearBtv, _runways, _armRunway, _btvStatus });
+        _btvStatus = new TextBox { ReadOnly = true, AccessibleName = "BTV", Width = 300, TabIndex = 6 };
+        btv.Controls.AddRange(new Control[] { _readExits, _exits, _armExit, _clearBtv, _runways, _armRunway, _btvStatus });
 
         _list = new DisplayListBox
         {
@@ -244,16 +245,18 @@ public sealed class A350NdWindow : Form
     private async Task<bool> ClickAsync(MfdLine line, string? typed = null) =>
         await _input.ActAsync(Side, line.ClickX, line.ClickY, typed) == MfdAction.Done;
 
-    /// <summary>The exits of the landing runway, from the airport map zoomed for the read and the ND put back: fills the two lists
-    /// and says them.</summary>
-    private async Task ReadExitsAsync()
+    /// <summary>The exits of the landing runway, from the airport map zoomed for the read (said before the knobs move) and the ND put
+    /// back unless <paramref name="stayZoomed"/> (Arm exit's own steps put it back): fills the two lists and, unless staying zoomed, says
+    /// them. Null when the ND was busy.</summary>
+    private async Task<A350BtvArming.ExitsRead?> ReadExitsAsync(bool stayZoomed = false)
     {
-        if (_arming) return;
+        if (_arming || _input.Busy) { _announcer.AnnounceImmediate("The ND is still busy; press it again"); return null; }
         int mode = KnobNow(true), range = KnobNow(false);
         _arming = true;
         try
         {
             bool move = (mode, range) != (A350BtvArming.PlanMode, A350BtvArming.ZoomRange);
+            _announcer.AnnounceImmediate(A350BtvArming.ReadingSentence(mode, range));
             if (move) await SetEfisAsync(A350BtvArming.PlanMode, A350BtvArming.ZoomRange);
             // The airport's name comes before the exits are placed along the runway (its scale): wait for them a while.
             A350DrawCapture? cap = null;
@@ -267,14 +270,16 @@ public sealed class A350NdWindow : Form
             _exitsRead = cap == null ? new A350BtvArming.ExitsRead(null, Array.Empty<A350BtvArming.Exit>()) : A350BtvArming.ExitsOf(cap, Side);
             var runways = lines.Select(l => System.Text.RegularExpressions.Regex.Match(l.Spoken, @"^Runway (\d{2}[LCR]?)\b")).Where(m => m.Success)
                 .Select(m => m.Groups[1].Value).Distinct().ToList();
-            if (move) await SetEfisAsync(mode, range);
+            if (move && !stayZoomed) await SetEfisAsync(mode, range);
             _exits.Items.Clear();
             foreach (var e in _exitsRead?.Exits ?? Array.Empty<A350BtvArming.Exit>()) _exits.Items.Add($"{e.Name}, {e.Metres} m");
             if (_exits.Items.Count > 0) _exits.SelectedIndex = 0;
             _runways.Items.Clear();
             foreach (var r in runways) _runways.Items.Add(r);
             if (_exitsRead?.Runway is { } landing && _runways.Items.IndexOf(landing) is int at && at >= 0) _runways.SelectedIndex = at;
-            _announcer.AnnounceImmediate(cap == null ? "The airport map could not be read." : A350BtvArming.ExitsSentence(_exitsRead));
+            if (!stayZoomed)
+                _announcer.Announce(cap == null ? "The airport map could not be read." : A350BtvArming.ExitsSentence(_exitsRead));
+            return _exitsRead;
         }
         finally { _arming = false; }
     }
@@ -283,14 +288,22 @@ public sealed class A350NdWindow : Form
     {
         if (_exitsRead?.Runway is not { } runway || _exits.SelectedIndex < 0 || _exits.SelectedIndex >= _exitsRead.Exits.Count)
         {
-            await ReadExitsAsync();
-            if (_exitsRead?.Exits.Count > 0) _announcer.Announce("Choose an exit, then Arm exit.");
+            if (await ReadExitsAsync() is { Exits.Count: > 0 }) _announcer.Announce("Choose an exit, then Arm exit.");
             return;
         }
-        var exit = _exitsRead.Exits[_exits.SelectedIndex];
+        var chosen = _exitsRead.Exits[_exits.SelectedIndex];
+        int mode = KnobNow(true), range = KnobNow(false);
+        // Read again first, on the zoom the arming uses: the list may be from another airport or runway (review 2026-11-04).
+        if (await ReadExitsAsync(stayZoomed: true) is not { } fresh) return;
+        var (exit, refusal) = A350BtvArming.Recheck(chosen, runway, fresh);
+        if (exit == null)
+        {
+            await SetEfisAsync(mode, range);
+            _announcer.AnnounceImmediate(refusal + A350BtvArming.Back(mode, range));
+            return;
+        }
         var (cap, _) = await ReadNowAsync();
         string? brake = cap == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(cap, Side));
-        int mode = KnobNow(true), range = KnobNow(false);
         if (!await RunAsync(A350BtvArming.ArmSteps(runway, exit, mode, range, brake), null)) return;
         // Read back what the aircraft shows: BTV on the FMA.
         await Task.Delay(1500);
@@ -484,15 +497,26 @@ public sealed class A350NdWindow : Form
         _ = AfterActionAsync();
     }
 
+    /// <summary>The map drag a key asks for: Ctrl+arrows on the ND list only, as the MFD window's (review 2026-11-04: from the text box they
+    /// dragged the map instead of moving by word). The view moves the way the arrow says, so the map is dragged the other way.</summary>
+    internal static (float Dx, float Dy)? DragFor(Keys keyData, bool onList) => !onList ? null : keyData switch
+    {
+        Keys.Control | Keys.Up => (0, DragPixels),
+        Keys.Control | Keys.Down => (0, -DragPixels),
+        Keys.Control | Keys.Left => (DragPixels, 0),
+        Keys.Control | Keys.Right => (-DragPixels, 0),
+        _ => null,
+    };
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
+        if (DragFor(keyData, ActiveControl == _list) is var (dx, dy))
+        {
+            _ = DragAsync(dx, dy);
+            return true;
+        }
         switch (keyData)
         {
-            // The view moves the way the arrow says, so the map is dragged the other way.
-            case Keys.Control | Keys.Up: _ = DragAsync(0, DragPixels); return true;
-            case Keys.Control | Keys.Down: _ = DragAsync(0, -DragPixels); return true;
-            case Keys.Control | Keys.Left: _ = DragAsync(DragPixels, 0); return true;
-            case Keys.Control | Keys.Right: _ = DragAsync(-DragPixels, 0); return true;
             case Keys.Alt | Keys.X: PressKey("ESC"); return true;
             case Keys.F5: _ = RefreshAsync(true); return true;
             case Keys.Escape: Close(); return true;

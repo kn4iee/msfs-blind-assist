@@ -91,4 +91,36 @@ public class A350BtvArmingTests
         Assert.Equal(2430, ExitSetOf(Cap("p08_efis_anf_btv_set_map"), 0));
         Assert.Null(ExitSetOf(Cap("p08_efis_anf_exits"), 0));
     }
+
+    // Review 2026-11-04 (forms W4): the ND window read the exits once, so on approach the list still held the departure's exits, and Arm
+    // exit set the old runway and typed the old distance. Arm exit reads them again first, and arms the exit only as it stands now.
+    [Fact]
+    public void An_exit_still_on_the_landing_runway_is_armed_at_its_distance_now()
+    {
+        var fresh = new ExitsRead("22", new[] { new Exit("A1", 1200), new Exit("B2", 2410) });
+        var (exit, refusal) = Recheck(new Exit("B2", 2430), "22", fresh);
+        Assert.Null(refusal);
+        Assert.Equal(new Exit("B2", 2410), exit);
+    }
+
+    [Fact]
+    public void Another_landing_runway_or_a_missing_exit_is_refused()
+    {
+        var other = Recheck(new Exit("B2", 2430), "22", new ExitsRead("04", new[] { new Exit("B2", 900) }));
+        Assert.Null(other.Exit);
+        Assert.Equal("The landing runway is now 04, not 22: choose an exit again, then Arm exit.", other.Refusal);
+        var gone = Recheck(new Exit("B2", 2430), "22", new ExitsRead("22", new[] { new Exit("A1", 1200) }));
+        Assert.Null(gone.Exit);
+        Assert.Equal("Exit B2 is no longer on runway 22: choose an exit again, then Arm exit.", gone.Refusal);
+        var none = Recheck(new Exit("B2", 2430), "22", new ExitsRead(null, Array.Empty<Exit>()));
+        Assert.Equal("The airport map shows no exits for the landing runway.", none.Refusal);
+    }
+
+    // Reading the exits turns the side's EFIS knobs: said before they move, and nothing when the ND is on the zoomed Plan already.
+    [Fact]
+    public void Moving_the_nd_to_read_the_exits_is_said_first()
+    {
+        Assert.Equal("Reading the exits: the ND goes to Plan, zoomed, then back to Arc, 20 NM.", ReadingSentence(3, 6));
+        Assert.Equal("Reading the exits.", ReadingSentence(PlanMode, ZoomRange));
+    }
 }

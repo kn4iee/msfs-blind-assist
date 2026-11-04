@@ -104,7 +104,7 @@ public partial class IniBuildsA350Definition
         string valueKey = A350Readouts.KeyFor(control);
         if (_values.ContainsKey(valueKey))
         {
-            _stepReadbacks[valueKey] = Clock();
+            _stepReadbacks[valueKey] = (Clock(), _sim is { } sim ? Cached(sim, valueKey) : null, false);
             _stepAnnouncer = announcer;
         }
         else

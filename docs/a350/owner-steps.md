@@ -67,6 +67,12 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 3. **The master caution's aural (plan 16):** cancelled by its key (the keys and lights are proven; the sound is yours to hear).
 4. **The trim call-out while the autopilot trims (cross-aircraft):** it says every change as on the FBW A380 (Shift+T toggles it). Keep,
    or quieter with the AP on?
+5. **Typing in the RMP window (code review, 2026-11-04):** type a VHF frequency into the RMP window (Ctrl+Shift+R). The window now says
+   each digit itself, as its squawk entry always did, because the window takes the keys before NVDA can echo them. Do you hear each
+   digit once, or twice (then NVDA echoes them after all, and I take the window's out)?
+6. **The ND window's BTV row (code review, 2026-11-04):** its exits no longer read when you tab into the list: press **Read exits**
+   (said first: "Reading the exits: the ND goes to Plan, zoomed, then back to..."). **Arm exit** reads them again and refuses a list from
+   another runway. Try it once on an approach: is the order of the row right for you?
 
 ## 4. Decisions
 

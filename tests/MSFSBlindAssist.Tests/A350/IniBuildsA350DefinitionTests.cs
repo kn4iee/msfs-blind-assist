@@ -688,6 +688,22 @@ public class IniBuildsA350ReadBackTests
         Assert.Equal(1, def.ToggleState("A350_FCU_FD", sim));  // the cache still Off: the second press flips to Off
     }
 
+    // Review 2026-11-04 (forms W1): the FCU windows' FD and Metric altitude toggles were said twice, the focused button's new label and then
+    // MainForm's generic "FD: PUSH" for the row: a window's toggle is its own echo, as the ND window's knobs are [CORE-7].
+    [Theory]
+    [InlineData("A350_FCU_FD")]
+    [InlineData("A350_FCU_METER")]
+    public void A_windows_toggle_is_its_own_echo(string row)
+    {
+        var cache = new Dictionary<string, double> { [row] = 0 };
+        var (def, sent, speech, _) = Typed(cache);
+        var sim = new SimConnectManager(IntPtr.Zero);
+        def.PressToggleFromWindow(row, sim, speech);
+        Assert.NotEmpty(sent);
+        Assert.Equal(1, def.ToggleState(row, sim));
+        Assert.True(def.WindowEchoActive(row));
+    }
+
     // Review 2026-10-29 (panels I4): a read-back that never came was taken for success: altitude 12000 typed from 10000,
     // the first read 13000 (a 1000 ft step), the correction sent, its read timed out, and the pilot heard "FCU altitude
     // 12000, selected"; a first read lost after a missed click left the dial at 11900, confirmed as 12000. The value is

@@ -254,15 +254,55 @@ public class A350PanelConfirmationTests
         Assert.Empty(_speech.All);
         BatchAfter(A350FcuCallouts.StepSettleMs - 200);
         Assert.Empty(_speech.All);   // too soon after the last step
-        _cache[valueKey] = 3;
+        DeliverValue(valueKey, 3);
         BatchAfter(300);
         Assert.Equal(new[] { up.Name[..^" increase".Length] + ": 3" }, _speech.All);
         BatchAfter(1000);
         Assert.Single(_speech.All);
         Press(Row("AIRLINER_WXR_ELEV_LEFT", A350RowAction.Decrease));
-        _cache[valueKey] = 2;
+        DeliverValue(valueKey, 2);
         BatchAfter(A350FcuCallouts.StepSettleMs + 100);
         Assert.Equal(up.Name[..^" increase".Length] + ": 2", _speech.All[^1]);
+    }
+
+    private void DeliverValue(string key, double value)
+    {
+        _cache[key] = value;
+        _def.ProcessSimVarUpdate(key, value, _speech);
+    }
+
+    // Review 2026-11-04 (definition E1): the A350 streams its rows in several batches, and the read-back went at the first batch end 400 ms
+    // after the step, whichever batch: the knob's value rides another, so the value from before the step was said. It waits for the value
+    // to arrive moved; a step at the knob's limit moves nothing, so after 1.5 s the value is said as it stands.
+    [Fact]
+    public void A_step_is_read_back_once_its_value_arrives_moved()
+    {
+        var up = Row("AIRLINER_WXR_ELEV_LEFT", A350RowAction.Increase);
+        string valueKey = A350Readouts.KeyFor(up.Control!);
+        string name = up.Name[..^" increase".Length];
+        DeliverValue(valueKey, 1);
+        Press(up);
+        BatchAfter(A350FcuCallouts.StepSettleMs + 100);   // another batch's end: the value not yet delivered
+        Assert.Empty(_speech.All);
+        DeliverValue(valueKey, 1);                         // a sample from before the step
+        BatchAfter(100);
+        Assert.Empty(_speech.All);
+        DeliverValue(valueKey, 2);
+        BatchAfter(100);
+        Assert.Equal(new[] { name + ": 2" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_step_at_the_knobs_limit_is_read_back_as_it_stands()
+    {
+        var up = Row("AIRLINER_WXR_ELEV_LEFT", A350RowAction.Increase);
+        string valueKey = A350Readouts.KeyFor(up.Control!);
+        DeliverValue(valueKey, 5);
+        Press(up);
+        BatchAfter(1000);
+        Assert.Empty(_speech.All);
+        BatchAfter(A350FcuCallouts.StepFallbackMs - 1000);
+        Assert.Equal(new[] { up.Name[..^" increase".Length] + ": 5" }, _speech.All);
     }
 
     [Theory]

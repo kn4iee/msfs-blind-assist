@@ -143,8 +143,8 @@ Navigation:
              speed ("541 miles to destination: 01:16:44"; "not available" with no route)
   Shift+D    Read the distance to the top of descent ("443 miles to top of descent", "Top of
              descent not yet computed", "Past top of descent")
-  N          Read NAV 1 and NAV 2 radio info (the simulator's receivers: frequency, ident,
-             localizer, glideslope, DME)
+  N          Read VOR 1, VOR 2 and the LS (frequency, ident, course, deviations) as the PFD
+             shows them ("LS not shown" without one)
 
 Characteristic Speeds (the values the A350 itself publishes):
   Shift+4    Read VLS (minimum selectable speed)
@@ -236,8 +236,8 @@ Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
   Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
   Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
-                In its Frequencies list, Enter and Shift+Enter only tell you that this aircraft
-                tunes its radios through its own radio management panels.
+                In its Frequencies list, Enter tunes VHF 1's standby by pressing the captain's
+                RMP keys, and Shift+Enter also swaps it active.
   (Open the form with Input mode > Shift+Y)
 
 Waypoint Tracking (use Fix Track window or EFB route viewer to add):
@@ -306,6 +306,14 @@ SayIntentions:
 
 VATSIM:
   Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
+First Officer and the ND:
+  Shift+C       The First Officer window: flows from cold and dark to securing, with the
+                aircraft's own checklists as its read-backs (also on the MFD: Ctrl+Shift+C).
+  Ctrl+Shift+B  The ND window: the ND line by line and its airport map (the ANF), Brake To
+                Vacate armed in one step (the landing runway's exits listed), the flight
+                path's symbols and traffic with where each lies; Enter does what a click on
+                the ND does.
 
 INPUT MODE - Press [ to activate
 
@@ -378,10 +386,13 @@ MFD (the A350's flight management, its checklists and datalink):
              Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC,
              Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG,
              Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU,
-             Alt+B AIRPORT, Alt+Y REF, Alt+X ESC.
+             Alt+B AIRPORT, Alt+Y REF, Alt+S OIS, Alt+X ESC.
   Ctrl+N     The MFD window opened on RAD NAV, where the A350 tunes its navaids (the
              PMDG 737's NAV radios key)
-  Ctrl+Shift+D  The MFD window opened on ATC COM, the A350's datalink (the A32NX's DCDU key)
+  Ctrl+Shift+D  The ATC mailbox window, where the A350 shows its CPDLC messages (the A32NX's
+                DCDU key)
+  Ctrl+Shift+F  The A350's other windows: FAP, Mailbox and Printer (Enter opens one, Escape
+                closes the list)
 
 OIS (the A350's EFB, one on each side):
   Shift+T       Captain's OIS
@@ -407,14 +418,6 @@ Radios (the A380's keys):
                 Every RMP key, microphone key, volume knob and reception (the knob pulled
                 out) is also on the Pedestal's Captain RMP, First Officer RMP and RMP 3
                 panels.
-
-First Officer and the ND:
-  Shift+C       The First Officer window: flows from cold and dark to securing, with the
-                aircraft's own checklists as its read-backs (also on the MFD: Ctrl+Shift+C).
-  Ctrl+Shift+B  The ND window: the ND line by line and its airport map (the ANF), Brake To
-                Vacate armed in one step (the landing runway's exits listed), the flight
-                path's symbols and traffic with where each lies; Enter does what a click on
-                the ND does.
 
 General:
   Escape     Exit active hotkey mode

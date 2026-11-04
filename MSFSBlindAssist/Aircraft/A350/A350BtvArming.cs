@@ -98,6 +98,23 @@ public static class A350BtvArming
             ? "The airport map shows no exits for the landing runway."
             : $"Runway {read.Runway} exits: " + string.Join(", ", read.Exits.Select((e, i) => i == 0 ? $"{e.Name} {e.Metres} meters" : $"{e.Name} {e.Metres}")) + ".";
 
+    /// <summary>The exit chosen from an earlier read, as a fresh read of the map has it now: armed at its distance now, or refused when the
+    /// landing runway changed or the exit is gone (review 2026-11-04: a list read at the gate armed the departure's runway on approach).</summary>
+    public static (Exit? Exit, string? Refusal) Recheck(Exit chosen, string runway, ExitsRead fresh)
+    {
+        if (fresh.Runway == null || fresh.Exits.Count == 0) return (null, ExitsSentence(fresh));
+        if (fresh.Runway != runway) return (null, $"The landing runway is now {fresh.Runway}, not {runway}: choose an exit again, then Arm exit.");
+        return fresh.Exits.FirstOrDefault(e => e.Name == chosen.Name) is { } now
+            ? (now, null)
+            : (null, $"Exit {chosen.Name} is no longer on runway {runway}: choose an exit again, then Arm exit.");
+    }
+
+    /// <summary>Said before a read of the exits turns the side's EFIS knobs to the zoomed Plan, and where they come back to.</summary>
+    public static string ReadingSentence(int mode, int range) =>
+        (mode, range) == (PlanMode, ZoomRange) || mode < 0 || mode >= ModeNames.Count || range < 0 || range >= RangeNames.Count
+            ? "Reading the exits."
+            : $"Reading the exits: the ND goes to Plan, zoomed, then back to {ModeNames[mode]}, {RangeNames[range]}.";
+
     /// <summary>The exit was typed on the KCCU, so the side's MFD was put on its F-PLN page first (<see cref="A350NdInput"/>): said.</summary>
     public static string ArmedSentence(Exit exit, int mode, int range) =>
         $"BTV armed, exit {exit.Name}, {exit.Metres} meters." + Back(mode, range) + MfdOnFlightPlan;

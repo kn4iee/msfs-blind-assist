@@ -294,7 +294,9 @@
       var c = text.charAt(i), code = c.charCodeAt(0);
       t.dispatchEvent(new KeyboardEvent('keydown', { key: c, keyCode: code, which: code, bubbles: true }));
       t.dispatchEvent(new KeyboardEvent('keypress', { key: c, keyCode: code, charCode: code, which: code, bubbles: true }));
-      set.call(t, t.value + c);
+      // A number box empties a value that is not a number yet ("29.", "-"): set the typed prefix, once it is one.
+      var prefix = text.substr(0, i + 1);
+      if ((t.type || '').toLowerCase() !== 'number' || /^-?\d+(\.\d+)?$/.test(prefix)) set.call(t, prefix);
       t.dispatchEvent(new Event('input', { bubbles: true }));
       t.dispatchEvent(new KeyboardEvent('keyup', { key: c, keyCode: code, which: code, bubbles: true }));
     }
@@ -980,6 +982,7 @@
     A._everScraped = true;
     if (A._obs) { try { A._obs.disconnect(); } catch (e1) {} }
     try { return A.collectPage(); }
+    catch (e) { A._dirty = true; throw e; }   // a failed read leaves the page to be read again
     finally { if (A._obs) { try { A._obs.observe(document.body, A.OBSERVER_OPTS); } catch (e2) {} } }
   };
 

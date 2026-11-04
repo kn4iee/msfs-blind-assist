@@ -191,3 +191,9 @@ tools/a350-probe/*.bin
 tools/a350-probe/*.json
 tools/a350-probe/__pycache__/
 tools/a350-probe/*.txt
+# What the probe scripts write into folders of their own (sprites.py's sheets: crops of the A350's payware textures; a
+# capture corpus): never committed (review 2026-11-04).
+tools/a350-probe/*/**/*.json
+tools/a350-probe/*/**/*.png
+tools/a350-probe/*/**/*.tsv
+tools/a350-probe/*/**/*.txt

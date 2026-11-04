@@ -316,7 +316,7 @@
             this.iniBuildsA350MenuItem.AccessibleDescription = "Switch to the iniBuilds Airbus A350";
             this.iniBuildsA350MenuItem.Name = "iniBuildsA350MenuItem";
             this.iniBuildsA350MenuItem.Size = new System.Drawing.Size(240, 26);
-            this.iniBuildsA350MenuItem.Text = "iniBuilds Airbus A&350";
+            this.iniBuildsA350MenuItem.Text = "iniBuilds Airbus A3&50";
             this.iniBuildsA350MenuItem.Checked = false;
             this.iniBuildsA350MenuItem.Click += new System.EventHandler(this.IniBuildsA350MenuItem_Click);
             //

@@ -294,7 +294,7 @@ public static class A350FlowDefinitions
     private static Flow BuildAfterLanding() => new()
     {
         Id = "AFTER_LANDING", Name = "After Landing",
-        Description = "Clean up after vacating: spoilers, autobrake, engine mode, flaps check, APU, anti-ice, lights.",
+        Description = "Clean up after vacating: spoilers, autobrake, engine mode, anti-ice, lights, APU, then the flaps check.",
         RelatedChecklistGroupIds = new[] { "AFTER_LANDING_CL" },
         Steps = new()
         {
@@ -302,17 +302,18 @@ public static class A350FlowDefinitions
             Done(Skip(SW("AL_AUTOBRAKE", "Autobrake: OFF", "A350_LDG_AUTO_BRK", 0), s => s.IsPosition(A350StateEvaluator.AutoBrakeArmedField, 0)), "AL_AUTOBRAKE"),
             Done(Skip(SW("AL_ENGMODE", "Engine mode: NORM", "A350_ENG_MASTER_MODE", 1), s => s.IsPosition("A350_ENG_MASTER_MODE", 1)), "AL_ENGMODE"),
             Captain("AL_FLAPS_UP", "Flaps: up"),
-            Done(Skip(WaitForField("AL_FLAPS_CHECK", "Flaps: 0", "A350_FLAPS", v => v < 0.5, 5), s => s.IsPosition("A350_FLAPS", 0)), "ALC_FLAPS"),
-            // The APU for the stand: the wait only skips, the engines still run and the clean-up below goes on.
-            Done(Skip(SW("AL_APU", "APU: ON", "A350_APU_MASTER_SWITCH", 1), s => s.IsOn("A350_APU_MASTER_SWITCH")), "AL_APU"),
-            Skip(Wait("AL_APU_DWELL", "Waiting before APU start", 3), s => s.IsOn(A350StateEvaluator.ApuAvailField)),
-            Skip(SW("AL_APU_START", "APU start", "A350_APU_START", 1), s => s.IsOn(A350StateEvaluator.ApuAvailField)),
-            Done(WaitForField("AL_APU_AVAIL", "Waiting for APU available", A350StateEvaluator.ApuAvailField, v => v > 0.5, 180), "ALC_APU"),
             Done(Multi("AL_ENGAI_OFF", "Engine anti-ice: OFF", ("A350_ANTI_ICE_ENG_LEFT", 0), ("A350_ANTI_ICE_ENG_RIGHT", 0)), "AL_ENGAI_OFF"),
             Done(Skip(SW("AL_WINGAI_OFF", "Wing anti-ice: OFF", "A350_ANTI_ICE_WING", 0), s => s.IsPosition("A350_ANTI_ICE_WING", 0)), "AL_WINGAI_OFF"),
             Done(Skip(SW("AL_LANDING_OFF", "Landing lights: OFF", "A350_LIGHTS_EXT_LANDING", 0), s => s.IsPosition("A350_LIGHTS_EXT_LANDING", 0)), "AL_LANDING_OFF"),
             Done(Skip(SW("AL_STROBE_AUTO", "Strobe lights: AUTO", "A350_LIGHTS_EXT_STROBE", 1), s => s.IsPosition("A350_LIGHTS_EXT_STROBE", 1)), "AL_STROBE_AUTO"),
             Done(Skip(SW("AL_NOSE_TAXI", "Nose light: TAXI", "A350_LIGHTS_EXT_NOSE", 1), s => s.IsPosition("A350_LIGHTS_EXT_NOSE", 1)), "AL_NOSE_TAXI"),
+            // The APU for the stand: the wait only skips, the engines still run and the flaps check after it goes on.
+            Done(Skip(SW("AL_APU", "APU: ON", "A350_APU_MASTER_SWITCH", 1), s => s.IsOn("A350_APU_MASTER_SWITCH")), "AL_APU"),
+            Skip(Wait("AL_APU_DWELL", "Waiting before APU start", 3), s => s.IsOn(A350StateEvaluator.ApuAvailField)),
+            Skip(SW("AL_APU_START", "APU start", "A350_APU_START", 1), s => s.IsOn(A350StateEvaluator.ApuAvailField)),
+            Done(WaitForField("AL_APU_AVAIL", "Waiting for APU available", A350StateEvaluator.ApuAvailField, v => v > 0.5, 180), "ALC_APU"),
+            // LAST: the Captain has had the lights and the APU's start to bring the flaps up (5 s after the reminder it always timed out, live).
+            Done(Skip(WaitForField("AL_FLAPS_CHECK", "Flaps: 0", "A350_FLAPS", v => v < 0.5, 5), s => s.IsPosition("A350_FLAPS", 0)), "ALC_FLAPS"),
         }
     };
 

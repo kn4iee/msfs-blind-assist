@@ -22,6 +22,10 @@ public static class A350FcuCallouts
     /// is in the cockpit and sampled by then, and a run of steps is read back once (panels minor 3).</summary>
     public const int StepSettleMs = 400;
 
+    /// <summary>How long after the last step its value is read back as it stands when it never arrived moved: a step at the knob's
+    /// limit moves nothing (review 2026-11-04).</summary>
+    public const int StepFallbackMs = 1500;
+
     /// <summary>EMER DES flying, as <c>INI_PITCH_MODE</c> reads it (live 2026-11-03, 1.2.8, two descents beside the FMA): 33 from
     /// the engagement, 9 from ALT* (about 3,000 ft early at 7,000 ft/min), 6 at ALT; the roll mode stays HDG's 2, and
     /// <c>INI_EMER_DESCENT</c> stays 0 throughout.</summary>

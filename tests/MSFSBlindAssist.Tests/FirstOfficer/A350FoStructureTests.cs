@@ -225,4 +225,16 @@ public class A350FoStructureTests
             "Flight controls: CHECKED", "Flight instruments: CHECKED", "Briefing: CONFIRMED", "Flaps setting: SET", "V1, VR, V2 and thrust rating: SET", "Squawk: SET",
             "T.O runway: CONFIRMED", "Cabin crew: ADVISED", "Autobrake: RTO", "Seat belts: ON", "Ground spoilers: ARM", "Flaps: T.O", "T.O config: NORMAL", "Cabin: READY", "Packs: OFF if required",
         }, A350ChecklistDefinitions.Build().Single(g => g.Id == "BEFORE_TAKEOFF_CL").Items.Select(i => i.Label).ToArray());
+
+    // Review 2026-11-04 (FO F2), seen every landing live: the flaps check came 5 s after the Captain's "Flaps: up" and timed out, and the
+    // APU's three-minute wait held the taxi lights behind it. The lights and anti-ice come first, the APU next, the flaps check last.
+    [Fact]
+    public void After_landing_sets_the_lights_before_the_apu_and_checks_the_flaps_last()
+    {
+        var ids = A350FlowDefinitions.Build().Single(f => f.Id == "AFTER_LANDING").Steps.Select(s => s.Id).ToList();
+        Assert.Equal("AL_FLAPS_CHECK", ids[^1]);
+        Assert.True(ids.IndexOf("AL_NOSE_TAXI") < ids.IndexOf("AL_APU"), string.Join(", ", ids));
+        Assert.True(ids.IndexOf("AL_ENGAI_OFF") < ids.IndexOf("AL_APU"), string.Join(", ", ids));
+        Assert.True(ids.IndexOf("AL_FLAPS_UP") < ids.IndexOf("AL_LANDING_OFF"), "the Captain hears the flaps first");
+    }
 }

@@ -250,6 +250,16 @@ public partial class IniBuildsA350Definition
     /// again and sent nothing, and an unread FD was taken for Off).</summary>
     internal double? ToggleState(string rowKey, SimConnectManager simConnect) => CurrentValue(rowKey, simConnect);
 
+    /// <summary>A window's two-position toggle (the FCU windows' FD and Metric altitude) pressed to its other position, from
+    /// <see cref="ToggleState"/> (unread goes in as unknown, refused aloud by the row's plan). The focused button's new label is what the
+    /// screen reader says, so the row's change is the window's own echo (review 2026-11-04: said twice, [CORE-7]).</summary>
+    internal void PressToggleFromWindow(string rowKey, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        double? now = ToggleState(rowKey, simConnect);
+        ArmWindowEcho(rowKey);
+        PressRow(rowKey, simConnect, announcer, now is >= 0.5 ? 0 : 1);
+    }
+
     /// <summary>The MFD window's KCCU and mouse: its key presses go out through <see cref="Send"/>, so a repeated key
     /// is a second press, never a duplicate the MobiFlight channel drops [VAR-4]. <paramref name="delay"/> replaces the
     /// waits between keys (tests).</summary>

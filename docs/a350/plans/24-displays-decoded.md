@@ -66,7 +66,7 @@ A live pass of every display on the ground, in climb, cruise and approach, compa
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** landed, waiting on a flight for Task 8's last items
+- **Status:** landed (Task 8's flight items on the third to fifth flights, 2026-11-03)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `dc5118f57`
@@ -75,8 +75,9 @@ Kept in this file only, so no other plan's push ever touches it.
 - **Tasks:** 1 (the tools, and `A350Probe reread`), 2 (HUD), 3 (SFD, SND), 4 (FCU; the RMP's only gap was a false hit), 5 (PFD), 6 (ND
   path symbols), 7 (SD symbols; the E/WD's and MFD's texts were already covered) done, each change measured on the whole corpus and
   live on the ground at VCBI; the ledger (`docs/a350/ledger/24-displays.md`) lists what is read, what is no gap, what is junk and why
-- **Waiting on the owner:** none; on the next flight: the ND's sprites (the second flight's NDs drew none), the HUD's flight path vector,
-  the SND's needles with a navaid tuned
+- **Waiting on the owner:** none. The flight items came on the third to fifth flights (2026-11-03): the ND's path sprites (top of
+  descent, decelerate, flap 1 and 2 points), the HUD's flight path vector (its drift wings level, the radio altitude under it), and the
+  SND with a navaid tuned (no needles on 1.2.8: the ledger)
 - **In-sim results:** the ledger; `docs/a350/evidence/flight-2026-11-03.md` (the corpus's flights)
 - **Changed from the plan:** the RMP and the MFD needed nothing; the HUD's green dot, caution strips, F and S stay with the PFD's (no
   reference to fit their offsets); `A350Probe reread` added so a reader change is measured without the sim

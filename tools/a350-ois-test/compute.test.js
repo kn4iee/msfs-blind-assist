@@ -133,3 +133,20 @@ test('LDG PERF results are spoken the same way', () => {
   assert.equal(said.length, 1);
   assert.match(said[0].text, /^Results: RWY: 22, LW: 450 x1000 LBS, LD: 4338 FT/);
 });
+
+// Review 2026-11-04 (Critical): a number box sanitises a value that is not yet a number ("29.", "-") to "", and the agent
+// appended each character to the box's value: 29.92 typed into T.O PERF's inHg QNH left 92, -5 into the OAT left 5.
+// The OAT box is a text box on this page: it is made a number box here to stand for one that takes a sign.
+for (const [label, typed] of [['QNH, inHg', '29.92'], ['OAT, °C', '-5'], ['OAT, °C', '-12.5']]) {
+  test(`a number typed into ${label} keeps its point and its sign (${typed})`, () => {
+    const { load } = require('./run');
+    const { window, A } = load('toperf_rwy_ok');
+    const field = JSON.parse(A.scrape()).elements.find(e => e.controlType === 'text' && e.text === label);
+    assert.ok(field, label);
+    const input = window.document.querySelector('[' + A.ATTR + '="' + field.idx + '"]');
+    if (label.startsWith('OAT')) input.type = 'number';
+    assert.equal(input.type, 'number');
+    assert.equal(A.setValue(field.idx, typed), 'ok');
+    assert.equal(input.value, typed);
+  });
+}

@@ -103,7 +103,7 @@ public sealed class A350FOAutoManager : IFoAutoManager
     // go-around fallback and the next such sample cycled the lever every dwell.
     private bool _extensionArmed;
     private double _minAglInApproach = double.MaxValue;
-    private DateTime? _goAroundThrustAtUtc;      // when the levers first went to MCT or TOGA in this approach context: the go-around signature's latch
+    private DateTime? _goAroundThrustAtUtc;      // when the levers moved forward to MCT or TOGA in this approach context: the go-around signature's latch
     private DateTime? _sinkingSinceUtc;          // below -LandingGateSinkFpm since, on the clock
     private int _lastExtendCommand = -1;         // don't re-fight a pilot who pulled flaps back
     private int _lastRetractCommand = 99;        // don't re-fight a pilot who re-extended
@@ -230,12 +230,15 @@ public sealed class A350FOAutoManager : IFoAutoManager
         if (_extensionArmed && agl < _minAglInApproach)
             _minAglInApproach = agl;
 
-        // The levers may be back at CL before the height is regained, so once is enough.
+        // The levers may be back at CL before the height is regained, so once is enough. Only levers moved forward into go-around
+        // thrust latch it: an engine-out approach is flown at MCT, past CLB from the moment the context arms, and a sag ALT took
+        // back then read as a go-around (review 2026-11-04). A movement made just before the context armed still counts.
         double gaThrust = _state.GetValue(A350StateEvaluator.GoAroundThrustField);
-        if (_extensionArmed && gaThrust > 0.5)
-            _goAroundThrustAtUtc ??= _utcNow();
         // Unlike the latch, the hold's own watch runs armed or not (the _leversForwardAtUtc comment says why).
         StampForwardLeverMovement(gaThrust);
+        if (_extensionArmed && gaThrust > 0.5 && _leversForwardAtUtc is { } movedAt
+            && (_utcNow() - movedAt).TotalSeconds < GoAroundLeverHoldSeconds)
+            _goAroundThrustAtUtc ??= _utcNow();
 
         // ---- Go-around: disarm + SOP one-step retraction ----
         if (_extensionArmed)

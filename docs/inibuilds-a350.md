@@ -10,7 +10,7 @@ Everything the A350 shows or lets a pilot do is readable and operable without pi
 
 | Surface | Read | Operate | How |
 | --- | --- | --- | --- |
-| Cockpit panels (696 input events; the KCCU's through the MFD window) | yes | yes | L:vars named in each control's own set code; placard names from `en-US.locPak` (`INI.TOOLTIPS.*`) |
+| Cockpit panels (700 input events on 1.2.8; the KCCU's through the MFD window) | yes | yes | L:vars named in each control's own set code; placard names from `en-US.locPak` (`INI.TOOLTIPS.*`) |
 | FCU, both EFIS control panels | yes | yes | read: FCU gauge draw; operate: `INI_*_COMMAND` / `INI_FCU_*` L:vars |
 | MFD, captain and first officer, every page | yes | yes | read: draw emulation with element rectangles; operate: Coherent `WASM_MOUSE_*` on the MFD gauge + KCCU key L:vars |
 | PFD, ND, VD | yes | yes | read: EFIS draw; ND clicks (pop-ups, ANF, BTV exit) through Coherent `WASM_MOUSE_*` with the KCCU cursor on the ND |
@@ -82,7 +82,7 @@ Exports added: `CTR::Draw`, `EFIS::Draw`, `FCU::Draw`, `HUD::Draw`, `ISIS::Draw`
 
 A draw makes a few sim calls, which the stubs must answer:
 
-- **L:vars by id** (`fsVarsNamedVarGet`): most are `CustomVariable` objects on the heap, laid out `{u32 id, std::string name, f64 lastValue at +16}`. Scan the copy for that shape (1,357 found, 100 ms) and answer from the cached value: the copy is self-sufficient. `VariablesEnum` names use the id array at 1336752.
+- **L:vars by id** (`fsVarsNamedVarGet`): most are `CustomVariable` objects on the heap, laid out `{u32 id, std::string name, f64 lastValue at +16}`. Scan the copy for that shape (1,357 found, 100 ms) and answer from the cached value: the copy is self-sufficient. `VariablesEnum` names use the id array (1335552 on 1.2.8, 1335856 on 1.2.7: the addresses table below).
 - **A: vars by name** (`get_aircraft_var_enum` / `get_units_enum` / `aircraft_varget`): the FCU and SFD ask `KOHLSMAN SETTING HG:1..3`, the EFIS and CTR `TURB ENG N2:1..2`. Supply them from SimConnect.
 - **Calculator strings** (`execute_calculator_code`): the EFIS asks `(A:NAV IDENT:1..2, String)` and `(A:ADF IDENT:1..2, String)`.
 
@@ -115,8 +115,6 @@ pause from the module at every start (`A350ModuleFacts`), so only the probe and 
 | `VariablesEnum` → L:var id | 1335552 (enum e at +4e) | 1335856 | the `i32.const` in `Variables::Init` and `Variables::SetValue` |
 | Active flight plan (`FlightPlan`) | 1417664; V1, VR, V2 at +964, +968, +972 (i32 knots), FLEX at +936 (i32 degrees); minimums BARO +748, RADIO +752 | 1418656, the same offsets | `update_v1()`'s constant `this` for `FlightPlan::getV1Speed()`; each getter's load (`A350ModuleFacts.TakeoffSpeeds`) |
 | BTV (`BTVUpdater`) | 1291824, the same offsets; the autobrake's level at 1343560 (enum 31) | 1292128 | `ND::Update`'s constant `this` for `GEAR::GetGearSystemBase()` plus each accessor's added constant (+8, +8, +56); the fields as `IsBTVEnabled`, `GetRunwayLength`, `GetExitOffset` and `UpdateRemainingDistance` read and write them (1.2.7: far end of the runway +8, +16 (f64 degrees, -1 not set), its length +32 (f64 m), the exit's distance from the threshold +92, what is left to it +96, its margin +108 (f32 m, 60)); the autobrake's level is enum 31 in the variable table (`AutobrakeSystem::GetLevel()`), 1 BTV |
-
-These three table rows were 1344512, 920832 (`INI_FMC_PAGE1` = 215) and 1336752 until 2026-10-30, a slot, an entry and an id 112, 88 and 224 enums on: the name table's check entry still matched, but every value the probe's sdmap and sdsweep named was 24 enums off, and a scan of the variables by those numbers proved nothing (an earlier pass on the OIS switches; redone with the right enums, it found the same: no accessor touches them). Live 2026-10-30, `L:INI_VREF_SPEED` (119.4), `L:INI_VLS_SPEED` (142.1) and `L:INI_flight_phase` read the same as their slots at 1343616 + 8e.
 | SD page shown | i32 at 1449824 | 1451120 | `EWD::SetCurrentPage`'s one data store (the probe's `sdmap` and `sdsweep` find it there) |
 | FMGS page vector | FMGS+52 (99 pages, the 1.2.6 order): unchanged, the MFD window reads every page | the same | vector whose entries' vtables are `FMS_Status`, `FMS_Init`, `FMC_Ref`, … |
 | FMS page shown flag | page+192 (u8): unchanged | the same | the only byte set on the shown page alone |
@@ -124,6 +122,8 @@ These three table rows were 1344512, 920832 (`INI_FMC_PAGE1` = 215) and 1336752 
 | MFD pointer position | FMGS+200 / +204 (f32): unchanged, MFD clicks land | the same | `FMGS::Update` |
 | pointer request slots | x 1080776, y 1080780, flags 1411689 (captain) / 1411690 (first officer) | x 1082152, y 1082156, flags 1413577 / 1413578 | `RequestMouseChange`; not needed (see below) |
 | KCCU cursor screen | `INI_CPT_CURSOR_SCREEN` (1526) / `INI_FO_CURSOR_SCREEN` (1527): 1 ND, 2 MFD | the same | |
+
+These three table rows were 1344512, 920832 (`INI_FMC_PAGE1` = 215) and 1336752 until 2026-10-30, a slot, an entry and an id 112, 88 and 224 enums on: the name table's check entry still matched, but every value the probe's sdmap and sdsweep named was 24 enums off, and a scan of the variables by those numbers proved nothing (an earlier pass on the OIS switches; redone with the right enums, it found the same: no accessor touches them). Live 2026-10-30, `L:INI_VREF_SPEED` (119.4), `L:INI_VLS_SPEED` (142.1) and `L:INI_flight_phase` read the same as their slots at 1343616 + 8e.
 
 The 1.2.6 anchors `INI_MCDU{}_TACT_MODE` and `INI_FMC{}_MCDU` no longer exist. 1.2.7 adds `INI_FMC{1,2}_KEY_INPUT` (the PC-keyboard capture mode of the manual's "click a field, then LEFT CTRL", read by `FMGS::HandleKeyInput`), `INI_FMC{1,2}_CLR_ENTRY`, and a crash-reporting consent dialog (`EULADialog`) on both MFDs at first start.
 
@@ -196,10 +196,14 @@ Ctrl+Shift+B (`A350NdWindow`, the A380's airport map key) reads a side's ND thro
 
 **A click on the map** opens the map's menu at the click: SET LDG RWY (SET BTV EXIT on a taxiway's name on a runway), DECLUTTER RWY, ADD CROSS (DELETE CROSS on a cross), ADD FLAG (DELETE FLAG on a flag), MAP DATA, ERASE ALL CROSSES, ERASE ALL FLAGS (each with a CANCEL/CONFIRM dialog), CENTER ON ACFT. A click with a menu open only closes it; the KCCU's ESC does not. An option list shows 4 rows: its scrollbar takes no mouse, the KCCU's DOWN and UP move it (the SCROLL keys do not).
 
-**BTV in one step** (plan 08 Task 2, `A350BtvArming`, the window's BTV row before the map's lines): the "BTV exit" list fills, the first
-time it is entered, from the airport map zoomed for the read (PLAN, the 2 NM step, waited for until the exits are placed along the
-runway) and the ND put back, and says them ("Runway 04 exits: E 220 meters, D 900, C 1420, B 2430, A 3120, END 3140."); "Landing
-runway" lists the map's runways. **Arm exit** takes the aircraft's own steps, each against a fresh read: PLAN and the zoom (one knob at a
+**BTV in one step** (plan 08 Task 2, `A350BtvArming`, the window's BTV row before the map's lines): **Read exits** fills the "BTV
+exit" list from the airport map zoomed for the read (PLAN, the 2 NM step, waited for until the exits are placed along the
+runway) and the ND put back, said before the knobs move (`ReadingSentence`), and says them ("Runway 04 exits: E 220 meters, D 900, C
+1420, B 2430, A 3120, END 3140."); "Landing runway" lists the map's runways. Until 2026-11-04 the list filled the first time it was
+entered, once per window: focus alone turned the EFIS knobs, and on approach the list still held the departure's exits, so Arm exit
+set the old runway and typed the old distance (review 2026-11-04). **Arm exit** reads the exits again on the zoom first and arms the
+chosen exit at its distance now, or refuses when the landing runway changed or the exit is gone (`Recheck`); then it takes the
+aircraft's own steps, each against a fresh read: PLAN and the zoom (one knob at a
 time, read back: written together the range stopped a step short), SET LDG RWY on the runway's ident, the LANDING tab, the exit's
 distance into BTV EXIT AT, the panel closed, A/BRK pressed once when off or twice when already armed (always after the exit), the
 pilot's mode and range back; then the FMA read back: "BTV armed, exit B, 2430 meters. ND back to Arc, 20 NM.", or what it shows instead.
@@ -256,7 +260,7 @@ Every page was read on 1.2.8 on the ground and at FL200 (2026-11-02; fixtures `p
 
 ## ECAM control panel
 
-The ECP buttons are L:vars the aircraft resets itself after reading. Press with ONE native SimConnect write of 1; two calculator writes (1 then 0) land in the same frame and do nothing. Verified: `INI_ECAM_CHECKLIST_LEFT` (check-off), `PUSH_ECAM_STS`, `INI_ECAM_ABN`, `INI_ECAM_WHEEL_L_MINUS_COMMAND` (selection down; PLUS is up), `INI_MASTER_CAUTION_COMMAND`. The other ECP keys follow the same pattern in their input events' set code.
+The ECP buttons are L:vars the aircraft resets itself after reading. Press with ONE write of 1 (a lone calculator write, or the key's own input event); two calculator writes (1 then 0) land in the same frame and do nothing. Verified: `INI_ECAM_CHECKLIST_LEFT` (check-off), `PUSH_ECAM_STS`, `INI_ECAM_ABN`, `INI_ECAM_WHEEL_L_MINUS_COMMAND` (selection down; PLUS is up), `INI_MASTER_CAUTION_COMMAND`. The other ECP keys follow the same pattern in their input events' set code.
 
 Failure test: OIS FAILURES → PRIM 1 FAULT gave the amber `F/CTL PRIM 1 FAULT`, the cyan `PRIM 1 ....OFF THEN ON`, `PRIM RESET SUCCESSFUL ?` with `YES` / `NO...`, `CLEAR`, the SD switched to F/CTL; the check-off completed it into STATUS (INFO, `APPR 1 ONLY`, `LAND 3 SINGLE ONLY`, INOP SYS `PRIM 1` in amber, ALERTS IMPACTING LDG PERF) and STS cleared it. ABN listed every not-sensed procedure with its colour.
 
@@ -279,7 +283,7 @@ What changes on its own is spoken, as on the A380, and each spoken thing has its
 - **Mutes.** A switch row is muted at MainForm's generic gate; a light inside the definition (`IsMuted`). A delivery that changes several lights (a light power flag, a shared input) is exempt from MainForm's mute wrap and checks each light's own row (`IsMuteWrapExempt`, [VAR-8]).
 - **One light, two lamps.** Lamps both sides light from one rule (ECAM CLR, ATC MSG, AUTOLAND) are one light: the captain's speaks, without its side ("ECAM clear light on"), and the other is its echo, with no Ctrl+M row; a press of either side's button is the pilot's own (review 2026-10-29).
 - **Blinks and the master lights.** A light that goes off and on again within the off-hold says nothing (a pending "on" waits while its off is held). The master caution and warning are steady: lit again after an off, each is a new "on", and a master press never quiets its relight.
-- **The pilot's own presses** (review 2026-10-29, panels minor 3; [CORE-7]). A button whose label shows no state says "<name> pressed" once the press is made; one that shows a state is confirmed by its label, which the screen reader says. An encoder stepped with its increase and decrease rows says the value the cockpit then shows, once the steps settle (`A350FcuCallouts.StepSettleMs`, 400 ms, at the next batch end: a run of steps is read back once).
+- **The pilot's own presses** (review 2026-10-29, panels minor 3; [CORE-7]). A button whose label shows no state says "<name> pressed" once the press is made; one that shows a state is confirmed by its label, which the screen reader says. An encoder stepped with its increase and decrease rows says the value the cockpit then shows, once the steps settle (`A350FcuCallouts.StepSettleMs`, 400 ms, at a batch end: a run of steps is read back once) and its value has arrived moved: the rows stream in several batches, and the first batch end after the step read the value from before it (review 2026-11-04); a step at the knob's limit moves nothing, so after 1.5 s (`StepFallbackMs`) the value is said as it stands.
 - **FCU windows** (parity 2026-10-29, as the iniBuilds A300 speaks its altitude window, in its own pull request). The altitude window and each side's baro speak on their own, in the A380's words (`A350FcuCallouts`): "Altitude 12000 feet"; "Captain altimeter 1013 hectopascals", "First officer altimeter 29.92 inches", "Captain altimeter standard", "Captain altimeter preset 1013 hectopascals". Since plan 02 (2026-11-02) the speed, heading and V/S windows speak too ("Speed 250 knots", "Heading 270 degrees", "Heading 300 degrees, preset" in NAV), as the A380 and the A320 say a knob turned outside MSFSBA; a dashed window says nothing. While EMER DES flies (`INI_PITCH_MODE` 33; 9 is ALT*, which starts about 3,000 ft early at 7,000 ft/min, and 6 ALT; the roll mode stays HDG's 2 and `INI_EMER_DESCENT` stays 0, live 2026-11-03) the aircraft turns the heading window itself, a degree a second until ALT* (engaged from NAV: 160 to 130, 122 to 98; engaged from HDG it turned nothing): that turn is held and said once, when the window has stood still 3 s (`A350FcuCallouts.IsAircraftTurning`); the pitch mode is a call-out input only (`A350FcuWindow.StreamedInputs`), never needed for the window's line. A change is staged to a batch end through the shared FCU call-out (`FcuValueAnnouncer`, [A320-22]), quiet through a load's settle; MSFSBA's own typed value is the echo of its window and says nothing; a unit button MSFSBA pressed is said by the button's label, not by the baro; a preset going out of view on STD is recorded, never said. One Ctrl+M row each: Speed window, Heading window, Altitude window, V/S window, Captain baro, First officer baro.
 - **IRS alignment** (parity 2026-10-29). "IRS aligned", once, as the last IR that is on finishes aligning (`A350IrsAlignment`, from `INI_IRSn_ALIGNED` and each IR pushbutton), judged at a batch end and only once the seed gate has released after a connect or a load: the settled sample is the baseline, so a flight loaded aligned says nothing. Its Ctrl+M row is "IRS alignment" (`A350_IRS_ALIGNMENT`). Each IR's alignment is a status line beside its pushbutton ("IR 1 alignment: Aligned").
 - **Module watchdog** (X7, 2026-10-30; `A350ModuleWatchdog`): the module bumps `L:INI_UPDATELOOP_HEARTBEAT` once every 256 passes of its update loop (`UpdateLoopLogger::BeginLoop` -> `TickHeartbeat()`; about 1 to 2 a second live, with the frame rate), and iniBuilds' own crash report (`ini-crash-report`, not in any panel.cfg) says the module stopped once it stands still 5 s. MSFSBA streams it with `ABSOLUTE TIME` and says "A350 module stopped responding: its displays and controls no longer work" once both the sim's clock (still while paused) and the wall clock (a clock jump, a high sim rate) ran 10 s without a beat (twice iniBuilds' 5 s: a low frame rate is no stop), and "A350 module responding again" when it beats; its own Ctrl+M row ("A350 module stopped responding"). Live: 75 beats in 75 s, nothing said. A stopped module leaves the display reader's copy frozen too, read as live: this call is the pilot's only word of it.
@@ -366,7 +370,7 @@ The A380's pedestal panels in its order, the A350's emergency descent and trims 
 | Panel | Rows | Tested | Notes |
 |---|---|---|---|
 | Engines | engine mode selector (Crank, Norm, Ign start), ENG 1 and 2 master; each master's FIRE and FAULT lights | every selector position; each engine shut down with its master and restarted with IGN START and its master (N2 59.7 % again); the masters' FIRE lights under the fire test | iniBuilds' master tooltips are swapped (the OFF key reads ON): a running engine reads `INI_MIXTURE_RATIO*_HANDLE` 1, so the words are pinned Off/On |
-| Thrust Levers | All thrust levers, Thrust lever 1 and 2 (Reverse, Reverse idle, Idle, Climb, Flex/MCT, TOGA), left and right A/THR disconnect | every detent on each lever and on both, with the parking brake set | the A380's rows and words; spoken as the A380's ("All thrust levers Climb"). The A/THR disconnects fire `K:AUTO_THROTTLE_DISCONNECT`: for the flight test, with A/THR engaged |
+| Thrust Levers | All thrust levers, Thrust lever 1 and 2 (Reverse, Reverse idle, Idle, 50 percent N1, Climb, Flex/MCT, TOGA), left and right A/THR disconnect | every detent on each lever and on both, with the parking brake set | the A380's rows and words; spoken as the A380's ("All thrust levers Climb"). The A/THR disconnects fire `K:AUTO_THROTTLE_DISCONNECT`: for the flight test, with A/THR engaged |
 | Emergency Descent | emergency descent; its ARMED light | pressed on the ground | for the flight test |
 | Flaps and Brakes | flaps (Up, 1, 2, 3, Full), parking brake, brake accumulator reinflate, gravity gear extension cover, guards 1 and 2, gravity gear extension (Reset, Off, Down) | every flap position; the parking brake off and on; the whole gravity extension procedure (cover and guards open, Down, Off, Reset, Off, closed) | the handle's tooltip reads state n as key n+1 and iniBuilds has no third key: its words come from what it does (2 Down, taken only with the cover and both guards at 1; it rests at 1, Off). The cover's tooltip words are the click's action |
 | Speed Brake | speed brake (Retracted, Quarter, Half, Three quarters, Full), ground spoilers (Disarmed, Armed); the handle's status line | every step, arm and disarm | spoken as the A380's, in tenths ("Spoilers 40 percent") |
@@ -467,7 +471,7 @@ lever code writes them, with the A380's rows and words (the A320 and Fenix agree
 | Row | Positions | Written with | Read from |
 |---|---|---|---|
 | Flaps | Up, 1, 2, 3, Full | `n×4096 (>B:AIRLINER_Flaps_Set)` (its set code fires `'INI.FLAPS_SET'`); the aircraft picks 1+F itself | `INI_FLAPS_HANDLE_INDEX` 0 to 4 |
-| All thrust levers, Thrust lever 1, 2 | Reverse (-20), Reverse idle (-6), Idle (0), Climb (25), Flex/MCT (35), TOGA (45) | `tla (>L:INI_TLAn_REQUEST)` | `INI_AUTOTHRUST_TLA:n`; All reads lever 1 |
+| All thrust levers, Thrust lever 1, 2 | Reverse (-20), Reverse idle (-6), Idle (0), 50 percent N1 (12), Climb (25), Flex/MCT (35), TOGA (45) | `tla (>L:INI_TLAn_REQUEST)` | `INI_AUTOTHRUST_TLA:n`; All reads lever 1 |
 | Speed brake | Retracted, Quarter, Half, Three quarters, Full | `'INI.SPOILERS_ARM_OFF' (>F:KeyEvent) x 'INI.SPOILERS_SET' (>F:KeyEvent)` (x 0 to 16384) | `INI_SPOILERS_HANDLE_POSITION` 0 to 1 |
 | Ground spoilers | Disarmed, Armed | arm: `0 'INI.SPOILERS_SET'` then `'INI.SPOILERS_ARM_ON'`; disarm: `'INI.SPOILERS_ARM_OFF'` | `INI_SPOILERS_ARMED` |
 | Parking brake | Off, On | its input event (the toggle `K:PARKING_BRAKES`), only when the state differs | stock `BRAKE PARKING POSITION` |
@@ -535,7 +539,7 @@ Every hotkey, call-out and feature of the other aircraft was audited for the A35
 
 The First Officer (Shift+C, flows and checklists) is `FirstOfficer/A350/` ([first-officer.md](first-officer.md), [FOA-15]). The waypoint flight director's A350 profile lives in its own pull request until both merge; its key says so when pressed.
 
-Still to confirm in the sim: the IRS flags' order and `INI_IRSn_TIME_REMAIN`'s unit in a real alignment; METRIC ALT's FCU units; an FMS message heard with the MFD window closed and not doubled with it open; whether the stock NAV 1 and 2 receivers that N reads follow the MFD RAD NAV tuning (the A350 keeps its own `INI_VOR1/2_FREQUENCY`); whether the cabin-ready state is an E/WD memo the call-outs say.
+Still to confirm in the sim: the IRS flags' order and `INI_IRSn_TIME_REMAIN`'s unit in a real alignment; an FMS message heard with the MFD window closed and not doubled with it open; whether the cabin-ready state is an E/WD memo the call-outs say.
 
 ## The OIS (live 2026-10-27, 1.2.7)
 
@@ -640,7 +644,7 @@ Exercised live: panels, FCU, EFIS, RMP, MFD INIT entry, ND pop-up, ECAM sensed/A
 - **BAT display.** It is blank with BAT SELECTOR at OFF; at BAT 1 it draws 27.2 (as "272" and "."), at EMER 1 27.1.
 - **HUD.** With `INI_HUD_LEFT_STATE` 1 the second HUD object draws (FD, speed and altitude, heading scale, GS, QNH), all green.
 
-Still to do with the pilot signed in: ANF exit selection for BTV (needs Navigraph) and the SD mailbox (needs a Hoppie or SayIntentions logon; the OIS fields are the pilot's to fill).
+Still to do with the pilot signed in: ANF exit selection for BTV (needs Navigraph) (needs Navigraph; the SD mailbox was done with SayIntentions, above).
 
 ### The manual, item by item (1.2.8, plans 12 to 17 and 23, 2026-11-02 to 03)
 

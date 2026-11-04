@@ -68,7 +68,7 @@ A claim counts only once it is on the remote branch: one that exists only on you
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
+- **Status:** waiting on the owner: Task 2, the SimBrief A-to-B flight (Task 3 follows it)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03, from `a4459f09c`

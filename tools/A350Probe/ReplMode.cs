@@ -213,10 +213,11 @@ internal sealed partial class ProbeForm
                                 {
                                     "click" => (await nd.ActAsync(side, F(p[2]), F(p[3]), p.Length > 4 ? p[4] : null)).ToString(),
                                     "drag" => (await nd.DragAsync(side, F(p[2]), F(p[3]), F(p[4]), F(p[5]))).ToString(),
-                                    "key" => "sent",
+                                    // A name the KCCU has no key for writes an L:var nothing reads: refused, as the mfd command's (review 2026-11-04).
+                                    "key" => KccuKeys.Contains(p[2]) ? "sent" : "refused: no such KCCU key",
                                     _ => "unknown",
                                 };
-                                if (p[0] == "key") nd.Press(side, p[2]);
+                                if (p[0] == "key" && KccuKeys.Contains(p[2])) nd.Press(side, p[2]);
                                 Line($"{op}\t{result}");
                                 await Task.Delay(500);
                             }
@@ -245,7 +246,9 @@ internal sealed partial class ProbeForm
                                 if (filters.Length > 0 && !filters.Any(f => d.Panel.Contains(f, StringComparison.OrdinalIgnoreCase))) continue;
                                 var c = await Draw(d.Gauge, d.Index);
                                 Line($"== {d.Panel}{(c != null ? "" : ": no good draw")}");
-                                if (c != null) foreach (var line in d.Read(c)) Line("  " + line);
+                                // As its status display reads it: dark, and the PFD's flashing (review 2026-11-04).
+                                if (def.IsDark(d)) Line("  " + IniBuildsA350Definition.DarkScreen);
+                                else if (c != null) foreach (var line in def.ReadDisplay(d, c)) Line("  " + line);
                             }
                             break;
                         }
@@ -384,8 +387,8 @@ internal sealed partial class ProbeForm
                         {
                             var p = rest.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
                             if (await Draw(p[0], int.Parse(p[1])) is not { } c) { Line("no draw"); break; }
-                            File.WriteAllText(p[2], System.Text.Json.JsonSerializer.Serialize(c));
-                            Line("saved " + p[2]);
+                            // Under a new name only, never over a fixture a test pins (review 2026-11-04: this one still overwrote).
+                            Line(DisplayModes.SaveNew(p[2], System.Text.Json.JsonSerializer.Serialize(c)) ? "saved " + p[2] : "not saved: " + p[2] + " exists");
                             break;
                         }
                         case "fo":   // the First Officer on the real engine (FoDriver)

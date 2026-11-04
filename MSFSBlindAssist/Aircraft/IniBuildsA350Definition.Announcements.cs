@@ -240,15 +240,26 @@ public partial class IniBuildsA350Definition
             SuppressFcuValueChangeEcho(window.Key);
     }
 
-    /// <summary>Encoders stepped with a value line, by value key, with their last step's time: the value they left is said
-    /// once at the first batch end <see cref="A350FcuCallouts.StepSettleMs"/> after the last step (panels minor 3).</summary>
-    private readonly Dictionary<string, long> _stepReadbacks = new(StringComparer.Ordinal);
+    /// <summary>Encoders stepped with a value line, by value key: their last step's time, the value cached then, and whether it has
+    /// arrived moved since. The value they left is said once at a batch end <see cref="A350FcuCallouts.StepSettleMs"/> after the last
+    /// step (panels minor 3), once it has arrived moved: the A350's rows stream in several batches, and the first batch end after
+    /// the step read the value from before it (review 2026-11-04). A step at the knob's limit moves nothing: after
+    /// <see cref="A350FcuCallouts.StepFallbackMs"/> its value is said as it stands.</summary>
+    private readonly Dictionary<string, (long At, double? Before, bool Moved)> _stepReadbacks = new(StringComparer.Ordinal);
     private ScreenReaderAnnouncer? _stepAnnouncer;
+
+    /// <summary>A stepped encoder's value delivered: moved when it differs from the value cached at the last step.</summary>
+    private void ObserveStepValue(string key, double value)
+    {
+        if (_stepReadbacks.TryGetValue(key, out var step) && !step.Moved && (step.Before is not double before || Math.Abs(before - value) > 1e-9))
+            _stepReadbacks[key] = step with { Moved = true };
+    }
 
     private void ReleaseStepReadbacks()
     {
         long now = Clock();
-        foreach (var (key, at) in _stepReadbacks.Where(s => now - s.Value >= A350FcuCallouts.StepSettleMs).ToList())
+        foreach (var (key, _) in _stepReadbacks.Where(s => now - s.Value.At >= A350FcuCallouts.StepSettleMs
+                     && (s.Value.Moved || now - s.Value.At >= A350FcuCallouts.StepFallbackMs)).ToList())
         {
             _stepReadbacks.Remove(key);
             if (_sim is { } sim && Cached(sim, key) is double value && !_disposed && _values.TryGetValue(key, out var line))

@@ -828,6 +828,8 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
             _irsAnnouncer = announcer;   // the IRS call-out speaks at the batch end
         else if (varName is A350ModuleWatchdog.HeartbeatKey or A350ModuleWatchdog.SimTimeKey)
             _watchdogAnnouncer = announcer;   // so does the module watchdog
+        if (_values.ContainsKey(varName))
+            ObserveStepValue(varName, value);   // a stepped encoder's value arriving: its read-back may go
         if (_lampInputKeys.Contains(varName) || _values.ContainsKey(varName) || A350Options.All.Any(o => o.Key == varName))
             return true;   // a light's input: the status display composes it on its next paint
         return base.ProcessSimVarUpdate(varName, value, announcer);

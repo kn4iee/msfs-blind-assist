@@ -32,6 +32,18 @@ public class A350EwdTextTests
         Assert.Contains("Centre tank: 137360 LBS, green", lines);
     }
 
+    // Review 2026-11-04 (display R1): the STATUS key with nothing for STATUS shows another page under its number; Alt+E said
+    // "Status page" over the CRUISE page's values, read as STATUS fields.
+    [Theory]
+    [InlineData("p04_ctr_sd_status_air", "System display: Status page, showing the Cruise page", "Cabin altitude: 2270 FT, green")]
+    [InlineData("p04_ctr_sd_status_alert_ground", "System display: Status page, showing the Wheel page", "Brake 1 temperature: 535 °C, amber")]
+    public void A_status_key_showing_another_page_is_read_as_that_page(string fixture, string title, string line)
+    {
+        var lines = A350EwdText.Build(Fixture(fixture), 14).Split('\n');
+        Assert.Contains(title, lines);
+        Assert.Contains(line, lines);
+    }
+
     [Fact]
     public void No_messages_and_no_power_are_said()
     {

@@ -76,6 +76,51 @@ public class FbwFamilyAutoManagerSecondReviewTests
         Assert.Empty(rig.Speech.All);
     }
 
+    // Review 2026-11-04 (FO F1): on one engine the live lever flies the approach at MCT (35), past CLB from the moment the context arms.
+    // That is no go-around: the same sag taken back by ALT keeps the flaps.
+    [Fact]
+    public async Task The_A350s_engine_out_approach_at_MCT_climbing_back_to_an_altitude_is_no_go_around()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(35);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms, the levers already past CLB
+        rig.Lever(2);
+        rig.Fly(agl: 2_800, vs: -500, ias: 170);    // the sag
+        rig.Fly(agl: 2_900, vs: 1_000, ias: 170);
+        rig.Fly(agl: 3_010, vs: 800, ias: 170);     // 200 ft above it, climbing
+        rig.Wait(5);
+        rig.Fly(agl: 3_000, vs: 0, ias: 170);
+        rig.Wait(5);
+        rig.Fly(agl: 3_000, vs: 0, ias: 170);
+
+        Assert.Empty(await rig.LeverWrites());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    // ...and its go-around, the levers from MCT to TOGA, is one.
+    [Fact]
+    public async Task The_A350s_engine_out_go_around_from_MCT_to_TOGA_is_a_go_around()
+    {
+        var rig = FlapRig.For("A350");
+        rig.Lever(0);
+        rig.OnGround();
+        rig.Thrust(35);
+        rig.Fly(agl: 10_000, vs: 1_500, ias: 250);
+        rig.Fly(agl: 4_000, vs: -1_000, ias: 230);
+        rig.Lever(4);
+        rig.GearDown();
+        rig.Fly(agl: 300, vs: -700, ias: 140);      // the lowest
+        rig.Thrust(45);
+        rig.Fly(agl: 400, vs: 1_000, ias: 145);
+        rig.Fly(agl: 550, vs: 1_200, ias: 150);     // "Go-around. Flaps 3."
+
+        Assert.Equal(new[] { 3 }, await rig.LeverWrites());
+        Assert.Equal(new[] { Queued("Go-around. Flaps 3.") }, rig.Speech.All);
+    }
+
     // The levers come back to CL at the thrust reduction altitude: the go-around was still one, though the height came after that.
     [Fact]
     public async Task The_A350s_go_around_stands_when_the_levers_left_TOGA_before_the_height_came()
@@ -497,6 +542,7 @@ public class FbwFamilyAutoManagerSecondReviewTests
         var rig = FlapRig.For(airframe);
         rig.Lever(0);
         rig.OnGround();
+        rig.Thrust(25);                             // the A350's levers, read all flight: the go-around moves them forward from CL
         rig.Fly(agl: 10_000, vs: 1_500, ias: 250);  // flaps up in the air: no climb-out retraction pending
         rig.Fly(agl: 4_000, vs: -1_000, ias: 230);  // the approach context arms
         rig.Lever(4);                               // the pilot's landing configuration

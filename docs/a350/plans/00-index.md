@@ -211,13 +211,13 @@ after each); the audits (12-17) and plan 21 are live work, worked with superpowe
 
 ## Shared conventions
 
-- CLAUDE.md applies in full. Read a file before changing it (CORE-16); the A350 rules A350-1 to A350-12 load with its
+- CLAUDE.md applies in full. Read a file before changing it (CORE-16); the A350 rules A350-1 to A350-15 load with its
   code. Spec section 4 holds the team's rules.
 - Every A350 write goes through the definition's existing write paths (calculator strings, VAR-5's invariant fixed-point
   numbers, unique strings for repeats, VAR-4); never a write into the sim's memory ([A350-1]).
 - What is spoken is the value read back; a direct interaction is confirmed once, with what the screen reader cannot say
   (CORE-7); a background change speaks once, after a silent first reading. A display read is said only once two reads in
-  a row agree ([A350-2]; `A350StableValue`, the announcers' agreement).
+  a row agree (`A350StableValue`, the announcers' agreement; a torn copy is [A350-2]'s).
 - Every new call-out has its Ctrl+M row: a variable's through `ExcludeFromMonitorManager` false; a display call-out's in
   its area's `A350CalloutRows.<Area>` list (plan 01's seam), muted through the monitor's key lookup. Each announcing plan
   has a test that a muted row says nothing.

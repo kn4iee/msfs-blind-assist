@@ -31,9 +31,10 @@ public static class A350EwdText
         }
         if (sdPage is double page)
         {
-            o.Add("System display: " + A350SdText.PageName(page) + " page");
-            o.AddRange(A350SdPage.Read(view.SystemDisplay, (int)Math.Round(page)));
-            o.AddRange(A350SdSymbols.Read(capture.Shapes, (int)Math.Round(page)));
+            var (title, shown) = A350SdText.Shown(view.SystemDisplay, page);
+            o.Add("System display: " + title);
+            o.AddRange(A350SdPage.Read(view.SystemDisplay, shown));
+            o.AddRange(A350SdSymbols.Read(capture.Shapes, shown));
         }
         else
         {

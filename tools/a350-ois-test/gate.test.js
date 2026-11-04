@@ -49,3 +49,17 @@ test('while a compute answer is awaited every scrape is full', async () => {
   A.pendingCompute = { page: 'GROUND', sig: '', at: Date.now() };
   assert.ok(JSON.parse(A.scrape()).elements);
 });
+
+// Review 2026-11-04 (OIS O2): a read that throws must leave the page dirty, or the next polls answer unchanged on stale indexes.
+test('a scrape that fails leaves the next one full', async () => {
+  const { A } = load('ground', { gate: true });
+  A.scrape();
+  await tick();
+  const collect = A.collectPage;
+  A._dirty = true;
+  A.collectPage = () => { throw new Error('torn read'); };
+  assert.throws(() => A.scrape());
+  A.collectPage = collect;
+  await tick();
+  assert.ok(JSON.parse(A.scrape()).elements);
+});
