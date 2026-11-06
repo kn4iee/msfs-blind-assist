@@ -133,8 +133,15 @@ public static class Bbs757EfbPress
     private static string[] StatelessWords(string text)
     {
         var words = WordRun.Matches(text).Select(m => m.Value).ToList();
-        if (words.Count > 1 && Bbs757EfbScreen.StateWords.Contains(words[^1], StringComparer.OrdinalIgnoreCase))
-            words.RemoveAt(words.Count - 1);
+        foreach (var state in Bbs757EfbScreen.StateWords)
+        {
+            var stateWords = state.Split(' ');
+            if (words.Count > stateWords.Length && words.TakeLast(stateWords.Length).SequenceEqual(stateWords, StringComparer.OrdinalIgnoreCase))
+            {
+                words.RemoveRange(words.Count - stateWords.Length, stateWords.Length);
+                break;
+            }
+        }
         return words.ToArray();
     }
 

@@ -7,29 +7,21 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance
 button  Failures
-text  BUSINESS PAX - 16/16
+heading 2  BUSINESS PAX - 16/16
 text  Lbs
-text  ECONOMY PAX - 160/160
+heading 2  ECONOMY PAX - 160/160
 text  Lbs
-text  FORWARD CARGO
+heading 2  FORWARD CARGO
 text  Lbs
-text  AFT CARGO
+heading 2  AFT CARGO
 text  Lbs
-text  GROSS WEIGHT
-text  196677 Lbs
-text  CENTER OF GRAVITY
-text  25.1 %
-text  EMPTY
-text  136940 Lbs
-text  ZFW
-text  176060 Lbs
-text  ZFW CG
-text  22.5 %
-text  BLK FUEL
-text  20617 Lbs
-text  TAKE-OFF
-text  195977 Lbs
-text  LANDING
-text  184399 Lbs
+text  GROSS WEIGHT: 196677 Lbs
+text  CENTER OF GRAVITY: 25.1 %
+text  EMPTY: 136940 Lbs
+text  ZFW: 176060 Lbs
+text  ZFW CG: 22.5 %
+text  BLK FUEL: 20617 Lbs
+text  TAKE-OFF: 195977 Lbs
+text  LANDING: 184399 Lbs
 heading 2  More
 button  Read the tablet again

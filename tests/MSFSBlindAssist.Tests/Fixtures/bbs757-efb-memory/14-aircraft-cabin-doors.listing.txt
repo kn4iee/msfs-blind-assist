@@ -25,13 +25,10 @@ text  RIGHT MID
 text  RIGHT AFT
 text  FWD CARGO
 text  AFT CARGO
-text  CABIN LIGHTING
+heading 2  CABIN LIGHTING
 button  Ground service off
-text  CEILING
-text  WINDOW
-text  ENTRY
-text  OFF
-text  OFF
-text  OFF
+text  CEILING: OFF
+text  WINDOW: OFF
+text  ENTRY: OFF
 heading 2  More
 button  Read the tablet again

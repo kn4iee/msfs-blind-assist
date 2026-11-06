@@ -12,10 +12,10 @@ button  Hydraulic
 button  Oxygen
 button  Fire protect
 button  APU
-text  BRAKE TEMPERATURE
+heading 2  BRAKE TEMPERATURE
 button  Reset
 button  Repair altn
-text  LANDING GEAR DOORS
+heading 2  LANDING GEAR DOORS
 text  NOSE DOOR
 text  LEFT DOOR
 text  RIGHT DOOR

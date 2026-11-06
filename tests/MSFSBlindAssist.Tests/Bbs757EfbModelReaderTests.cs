@@ -399,4 +399,303 @@ public class Bbs757EfbModelReaderTests
         var shellOnly = new App(2, "app", new[] { N("grid", "kb_grid", "", 0, 648, 1397, 400) });
         Assert.Null(Bbs757EfbModelReader.Read(new[] { shellOnly }));
     }
+
+    // ---- R3 headings, R4 value lines, R10 pictures and separators ----
+
+    private static Node Lbl(string name, string text, int x = 300, int y = 200, int w = 150) => N("label", name, text, x, y, w, 24);
+
+    private static IReadOnlyList<Bbs757EfbItem> ItemsOf(params Node[] content) =>
+        Bbs757EfbModelReader.Read(new[] { PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"], content) })!.Items;
+
+    [Fact]
+    public void A_label_and_value_named_alike_are_one_line()
+    {
+        var items = ItemsOf(
+            Lbl("planning_acars_flight_info_label_0", "Flight Number", 300, 200), Lbl("planning_acars_flight_info_value_0", "4RK", 300, 220),
+            Lbl("planning_acars_flight_info_label_1", "Callsign", 500, 200), Lbl("planning_acars_flight_info_value_1", "MSF1", 500, 220));
+
+        Assert.Equal(2, items.Count);
+        var flight = items[0];
+        Assert.Equal((Bbs757EfbKind.Row, "Flight Number", "4RK", "planning_acars_flight_info_label_0"), (flight.Kind, flight.Text, flight.Value, flight.Name));
+        Assert.Equal(("Callsign", "MSF1"), (items[1].Text, items[1].Value));
+    }
+
+    [Fact]
+    public void A_title_with_a_value_is_a_line_not_a_heading()
+    {
+        var items = ItemsOf(Lbl("wb_empty_weight_title", "EMPTY"), Lbl("wb_empty_weight_value", "136940 Lbs"));
+
+        var line = Assert.Single(items);
+        Assert.Equal((Bbs757EfbKind.Row, "EMPTY", "136940 Lbs"), (line.Kind, line.Text, line.Value)); // the tablet's case stays
+        Assert.DoesNotContain(items, i => i.Kind == Bbs757EfbKind.Heading);
+    }
+
+    [Fact]
+    public void Lbl_title_and_lbl_val_pair()
+    {
+        var items = ItemsOf(
+            Lbl("lbl_title_V1", "V1", 300, 200), Lbl("lbl_val_V1", "---", 300, 220),
+            Lbl("len_title_TODA", "TODA", 500, 200), Lbl("len_val_TODA", "---", 500, 220),
+            Lbl("lbl_title_FLX TMP", "FLX TMP", 700, 200), Lbl("lbl_val_FLX TMP", "---", 700, 220));
+
+        Assert.Equal(new[] { ("V1", "---"), ("TODA", "---"), ("FLX TMP", "---") }, items.Select(i => (i.Text, i.Value)).ToArray());
+        Assert.All(items, i => Assert.Equal(Bbs757EfbKind.Row, i.Kind));
+    }
+
+    [Fact]
+    public void A_name_and_value_pair()
+    {
+        var items = ItemsOf(Lbl("cabin_ceiling_name", "CEILING"), Lbl("cabin_window_name", "WINDOW", 300, 240),
+            Lbl("cabin_ceiling_value", "OFF", 500, 200), Lbl("cabin_window_value", "OFF", 500, 240));
+
+        Assert.Equal(new[] { ("CEILING", "OFF"), ("WINDOW", "OFF") }, items.Select(i => (i.Text, i.Value)).ToArray());
+    }
+
+    [Fact]
+    public void A_value_label_and_a_saved_label_are_value_side()
+    {
+        var items = ItemsOf(
+            Lbl("latest_cycle_title_label", "LATEST CYCLE:", 300, 200), Lbl("latest_cycle_value_label", "2611", 500, 200),
+            Lbl("simbrief_id_label", "SIMBRIEF ID NUMBER", 300, 240), Lbl("simbrief_id_saved_label", "123456", 500, 240));
+
+        Assert.Equal(new[] { ("LATEST CYCLE:", "2611"), ("SIMBRIEF ID NUMBER", "123456") }, items.Select(i => (i.Text, i.Value)).ToArray());
+        Assert.All(items, i => Assert.Equal(Bbs757EfbKind.Row, i.Kind));
+    }
+
+    [Fact]
+    public void A_title_and_a_longer_value_title_do_not_pair()
+    {
+        // PERF calc's "Length Type" and "Length (FT)": both titles, so neither is the other's value.
+        var items = ItemsOf(Lbl("planning_perf_calc_length_title", "Length Type"), Lbl("planning_perf_calc_length_value_title", "Length (FT)", 500, 200));
+
+        Assert.Equal(new[] { "Length Type", "Length (FT)" }, items.Select(i => i.Text).ToArray());
+        Assert.All(items, i => Assert.Equal(Bbs757EfbKind.Heading, i.Kind));
+    }
+
+    [Fact]
+    public void A_unit_joins_its_value()
+    {
+        var paired = ItemsOf(Lbl("fuel_left_qty_label", "LEFT TANK"), Lbl("fuel_left_qty_value", "1539", 500, 200), Lbl("fuel_left_qty_unit", "Gal", 600, 200));
+        var line = Assert.Single(paired);
+        Assert.Equal((Bbs757EfbKind.Row, "LEFT TANK", "1539 Gal"), (line.Kind, line.Text, line.Value));
+
+        // The unit may drop qty from its name (fuel_left_qty_unit beside fuel_left_value).
+        var shorter = ItemsOf(Lbl("fuel_left_label", "LEFT"), Lbl("fuel_left_value", "1539", 500, 200), Lbl("fuel_left_qty_unit", "Gal", 600, 200));
+        Assert.Equal("1539 Gal", Assert.Single(shorter).Value);
+    }
+
+    [Fact]
+    public void A_number_with_no_label_reads_with_its_unit()
+    {
+        // The Fuel page's names: the number has no label or value word in its name, only its unit beside it.
+        var items = ItemsOf(Lbl("fuel_left_qty", "1539"), Lbl("fuel_left_qty_unit", "Gal", 600, 200),
+            Lbl("fuel_left_weight", "10308", 300, 240), Lbl("fuel_left_weight_unit", "Lbs", 600, 240));
+
+        Assert.Equal(new[] { "1539 Gal", "10308 Lbs" }, items.Select(i => i.Text).ToArray());
+        Assert.Equal("fuel_left_qty", items[0].Key);
+    }
+
+    [Fact]
+    public void A_unit_whose_number_is_not_read_stays_a_line_of_its_own()
+    {
+        // On the Fuel page the numbers sit inside a box the reader does not open (Task 6's fields); their units must not vanish with them.
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Items;
+
+        Assert.Equal(new[] { "Gal", "Lbs", "Gal", "Lbs" }, items.Where(i => i.Text is "Gal" or "Lbs").Select(i => i.Text).Take(4).ToArray());
+    }
+
+    [Fact]
+    public void A_card_title_is_a_level_2_heading()
+    {
+        var items = ItemsOf(N("other", "planning_acars_flight_plan_canvas", "", 260, 90, 800, 300,
+            Lbl("planning_acars_flight_plan_title", "FLIGHT PLAN", 300, 100, 300),
+            Lbl("planning_acars_flight_plan_label_0", "Route Distance", 300, 140), Lbl("planning_acars_flight_plan_value_0", "0", 300, 160)));
+
+        Assert.Equal(new[] { Bbs757EfbKind.Heading, Bbs757EfbKind.Row }, items.Select(i => i.Kind).ToArray());
+        Assert.Equal(("FLIGHT PLAN", 2), (items[0].Text, items[0].Level));
+        Assert.Equal(0, items[1].Level);
+    }
+
+    [Fact]
+    public void A_title_inside_a_titled_card_is_level_3()
+    {
+        var items = ItemsOf(N("other", "outer_card", "", 260, 90, 800, 600,
+            Lbl("outer_title", "OUTER", 300, 100),
+            N("other", "inner_card", "", 270, 140, 700, 300, Lbl("inner_title", "inner", 300, 150)),
+            N("other", "second_card", "", 270, 450, 700, 200, Lbl("second_title", "SECOND", 300, 460))));
+
+        Assert.Equal(new[] { ("OUTER", 2), ("inner", 3), ("SECOND", 3) }, items.Select(i => (i.Text, i.Level)).ToArray());
+        Assert.All(items, i => Assert.Equal(Bbs757EfbKind.Heading, i.Kind));
+    }
+
+    [Fact]
+    public void Sibling_cards_each_titled_are_all_level_2()
+    {
+        var items = ItemsOf(
+            N("other", "a_card", "", 260, 90, 400, 300, Lbl("a_title", "FROM", 300, 100)),
+            N("other", "b_card", "", 700, 90, 400, 300, Lbl("b_title", "TO", 740, 100)));
+
+        Assert.Equal(new[] { ("FROM", 2), ("TO", 2) }, items.Select(i => (i.Text, i.Level)).ToArray());
+    }
+
+    [Fact]
+    public void The_route_is_no_heading()
+    {
+        var items = ItemsOf(N("other", "planning_acars_route_canvas", "", 260, 90, 1100, 200,
+            Lbl("planning_acars_route_title", "ROUTE", 300, 100),
+            N("other", "planning_acars_route_value", "KSEA/16L DCT BTG DCT KPDX/28R", 324, 140, 1000, 40)));
+
+        var heading = Assert.Single(items, i => i.Kind == Bbs757EfbKind.Heading);
+        Assert.Equal("ROUTE", heading.Text);
+        var route = Assert.Single(items, i => i.Text.StartsWith("KSEA", StringComparison.Ordinal));
+        Assert.Equal(Bbs757EfbKind.Text, route.Kind);
+    }
+
+    [Fact]
+    public void A_title_label_that_is_not_the_page_title_is_kept()
+    {
+        var items = ItemsOf(Lbl("page_title_label", "AIRCRAFT"), Lbl("gnd_service_mode_title_label", "GND SRVC Mode:"),
+            Lbl("latest_cycle_title_label", "LATEST CYCLE:", 300, 240), Lbl("latest_cycle_value_label", "2611", 500, 240));
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal((Bbs757EfbKind.Heading, "GND SRVC Mode:"), (items[0].Kind, items[0].Text));
+        Assert.Equal((Bbs757EfbKind.Row, "LATEST CYCLE:", "2611"), (items[1].Kind, items[1].Text, items[1].Value));
+        Assert.DoesNotContain(items, i => i.Text == "AIRCRAFT");
+    }
+
+    [Fact]
+    public void A_heading_name_and_the_presets_labels_are_headings()
+    {
+        var callouts = ItemsOf(Lbl("callouts_pilot_heading", "PILOT CALLOUTS"), Lbl("callouts_dh_help", "Captain DH must be above -20.", 300, 240));
+        Assert.Equal((Bbs757EfbKind.Heading, Bbs757EfbKind.Text), (callouts[0].Kind, callouts[1].Kind));
+
+        var presets = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("10-aircraft-cockpit-presets"))!.Items;
+        Assert.Equal(new[] { "PRESETS", "QUICK START", "CIRCUITS STATE", "ON GROUND", "IN FLIGHT", "CUSTOM" },
+            presets.Where(i => i.Kind == Bbs757EfbKind.Heading).Select(i => i.Text).ToArray());
+    }
+
+    [Fact]
+    public void A_line_whose_label_ends_in_a_colon_reads_with_one_colon()
+    {
+        var model = Bbs757EfbModelReader.Read(new[] { PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
+            Lbl("planning_acars_departure_label_0", "Airport:"), Lbl("planning_acars_departure_value_0", "SEATTLE-TACOMA INTL", 500, 200),
+            Lbl("planning_acars_flight_info_label_0", "Callsign"), Lbl("planning_acars_flight_info_value_0", "MSF1", 500, 240)) })!;
+
+        var texts = Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()).Data
+            .Where(kv => kv.Key.EndsWith(".text", StringComparison.Ordinal)).Select(kv => kv.Value).ToList();
+
+        Assert.Contains("Airport: SEATTLE-TACOMA INTL", texts);
+        Assert.Contains("Callsign: MSF1", texts);
+    }
+
+    [Fact]
+    public void A_level_3_heading_is_built_at_level_3()
+    {
+        var model = new Bbs757EfbScreenModel("AIRCRAFT", "", Array.Empty<Bbs757EfbItem>(), new[]
+        {
+            new Bbs757EfbItem(Bbs757EfbKind.Heading, "Inner", default, default, false, "h:in", Level: 3),
+            new Bbs757EfbItem(Bbs757EfbKind.Heading, "Outer", default, default, false, "h:out", Level: 2),
+        });
+        var data = Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()).Data;
+        var levels = Enumerable.Range(0, 4).Where(i => data.ContainsKey($"items.{i}.text"))
+            .ToDictionary(i => data[$"items.{i}.text"], i => data[$"items.{i}.level"]);
+        Assert.Equal(("3", "2"), (levels["Inner"], levels["Outer"]));
+    }
+
+    [Fact]
+    public void A_capitals_label_is_a_heading_only_when_it_is_named_a_title()
+    {
+        // Wide capitals used to make a heading (a route, a cycle number); now only BlueBird's *_title does.
+        var items = ItemsOf(Lbl("some_label", "SOMETHING VERY WIDE IN CAPITALS", 300, 200, 600), Lbl("planning_x_title", "A CARD", 300, 240, 600));
+
+        Assert.Equal((Bbs757EfbKind.Text, 0), (items[0].Kind, items[0].Level));
+        Assert.Equal(Bbs757EfbKind.Heading, items[1].Kind);
+    }
+
+    [Fact]
+    public void Separators_are_dropped()
+    {
+        var items = ItemsOf(
+            Lbl("planning_weather_primary_info_label_0", "AIRPORT"), Lbl("planning_weather_primary_info_value_0", "KSEA/SEA", 300, 220),
+            Lbl("planning_weather_primary_info_separator_value_0", "|", 500, 220),
+            Lbl("planning_weather_primary_info_label_1", "ELEVATION", 600), Lbl("planning_weather_primary_info_value_1", "432 FT", 600, 220),
+            Lbl("a_dash", "-- / --", 300, 300), Lbl("lone", "|", 300, 340));
+
+        Assert.Equal(new[] { ("AIRPORT", "KSEA/SEA"), ("ELEVATION", "432 FT") }, items.Select(i => (i.Text, i.Value)).ToArray());
+    }
+
+    [Fact]
+    public void A_pairing_is_read_the_same_under_other_cultures()
+    {
+        foreach (var culture in new[] { "de-DE", "sv-SE", "tr-TR" })
+        {
+            var items = TestCulture.Run(culture, () => ItemsOf(Lbl("WB_EMPTY_TITLE", "EMPTY"), Lbl("wb_empty_value", "136940 Lbs", 500, 200)));
+            Assert.Equal(("EMPTY", "136940 Lbs"), (Assert.Single(items).Text, items[0].Value));
+        }
+    }
+
+    [Theory]
+    [InlineData("./data/efb/images/bbs_ldg_gr_chocks.png", "IN PLACE")]
+    [InlineData("./data/efb/images/bbs_ldg_gr.png", "REMOVED")]
+    [InlineData("bbs_ldg_gr.png", "REMOVED")]
+    [InlineData("./data/efb/images/BBS_LDG_GR.PNG", "REMOVED")]
+    [InlineData("./data/efb/aircraft/bbs752pw_top.png", null)]
+    [InlineData("./data/efb/bbs_logo_light.png", null)]
+    [InlineData("", null)]
+    public void A_picture_file_names_a_state_or_none(string text, string? state) =>
+        Assert.Equal(state, Bbs757EfbPageRules.PictureState(text));
+
+    [Theory]
+    [InlineData("13-aircraft-ground-services", "IN PLACE")]
+    [InlineData("13b-aircraft-ground-services-chocks-removed", "REMOVED")]
+    public void The_chocks_picture_gives_its_tile_a_state(string fixture, string state)
+    {
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
+
+        var chocks = Assert.Single(model.Items, i => i.Text.StartsWith("Chocks", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("CHOCKS " + state, chocks.Text, ignoreCase: true);
+        Assert.Equal(Bbs757EfbKind.Button, chocks.Kind);
+        Assert.StartsWith("btn:|CHOCKS@", chocks.Key);
+        Assert.Equal("CHOCKS", Bbs757EfbScreen.KeyWords(chocks.Key)); // the press runner finds the service by these words
+        Assert.NotNull(Bbs757GroundServices.ForTile(Bbs757EfbScreen.KeyWords(chocks.Key)));
+        Assert.DoesNotContain(model.Items, i => i.Text.Contains(".png"));
+    }
+
+    [Fact]
+    public void The_chocks_tile_keeps_its_key_when_its_state_changes()
+    {
+        string KeyOf(string fixture) => Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!.Items,
+            i => i.Text.StartsWith("Chocks", StringComparison.OrdinalIgnoreCase)).Key;
+
+        Assert.Equal(KeyOf("13-aircraft-ground-services"), KeyOf("13b-aircraft-ground-services-chocks-removed"));
+    }
+
+    [Fact]
+    public void A_picture_joins_the_button_in_its_box()
+    {
+        var items = ItemsOf(N("other", "chocks_service_box", "", 300, 500, 220, 200,
+            N("button", "btn_chocks_toggle", "CHOCKS", 310, 512, 200, 42),
+            N("other", "chocks_status_image", "./data/efb/images/bbs_ldg_gr_chocks.png", 310, 565, 200, 100)),
+            N("button", "btn_gpu_toggle", "GPU CONNECTED", 600, 512, 200, 42));
+
+        Assert.Equal(new[] { "Chocks in place", "GPU connected" }, items.Select(i => i.Text).ToArray(), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("btn:|CHOCKS@20,26", items[0].Key);
+    }
+
+    [Fact]
+    public void A_picture_with_no_state_joins_nothing()
+    {
+        var items = ItemsOf(N("other", "chocks_service_box", "", 300, 500, 220, 200,
+            N("button", "btn_chocks_toggle", "CHOCKS", 310, 512, 200, 42),
+            N("other", "label_bg_img", "./data/efb/aircraft/bbs752pw_top.png", 310, 565, 200, 100)));
+
+        Assert.Equal("Chocks", Assert.Single(items).Text);
+    }
+
+    [Fact]
+    public void The_state_words_a_press_strips_include_a_multi_word_state()
+    {
+        Assert.Contains("IN PLACE", Bbs757EfbScreen.StateWords);
+        Assert.Equal("CHOCKS", Bbs757EfbScreen.KeyWords("btn:|CHOCKS@15,25"));
+    }
 }

@@ -12,7 +12,7 @@ button  Hydraulic
 button  Oxygen
 button  Fire protect
 button  APU
-text  RAM AIR TURBINE
+heading 2  RAM AIR TURBINE
 text  RAT stowed.
 DEPLOY available when aircraft is stationary on ground.
 button  Deploy

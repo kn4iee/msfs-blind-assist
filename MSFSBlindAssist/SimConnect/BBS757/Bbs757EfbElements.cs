@@ -177,13 +177,14 @@ public static class Bbs757EfbElements
             switch (it.Kind)
             {
                 case Bbs757EfbKind.Heading:
-                    Add(it.Text, level: 2, key: it.Key);
+                    Add(it.Text, level: it.Level == 3 ? 3 : 2, key: it.Key);
                     break;
                 case Bbs757EfbKind.Text:
                     Add(it.Text, key: it.Key);
                     break;
                 case Bbs757EfbKind.Row:
-                    Add(it.Value.Length > 0 ? it.Text + ": " + it.Value : it.Text, key: it.Key);
+                    // A label the tablet writes with its own colon ("Airport:") gets no second one.
+                    Add(it.Value.Length > 0 ? it.Text + (it.Text.EndsWith(':') ? " " : ": ") + it.Value : it.Text, key: it.Key);
                     break;
                 case Bbs757EfbKind.Menu:
                     Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));

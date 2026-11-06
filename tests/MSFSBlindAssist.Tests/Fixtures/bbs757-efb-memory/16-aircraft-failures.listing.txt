@@ -7,7 +7,7 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance
 button  Failures (current page)
-text  FAILURES
+heading 2  FAILURES
 text  ACTIVE 0    ARMED 0
 button  Catalog
 button  Active / armed

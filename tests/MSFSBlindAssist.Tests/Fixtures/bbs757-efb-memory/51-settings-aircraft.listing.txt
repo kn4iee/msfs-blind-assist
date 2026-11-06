@@ -8,7 +8,7 @@ button  Cabin audio
 button  AIRAC data
 checkbox not checked  ADAPTIVE HANDLING ASSIST
 checkbox not checked  ADAPTIVE COCKPIT LIGHTING: AUTOMATIC
-checkbox not checked  tod_pause_setting_grid
+checkbox not checked  TOD PAUSE DISTANCE (NM)
 checkbox not checked  AUTOMATIC STEP CLIMBS MASTER OPTION: (EXPERIMENTAL): DISABLED
 heading 2  AUTOMATIC STEP CLIMB STATUS:
 text  OFF

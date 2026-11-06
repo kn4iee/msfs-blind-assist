@@ -10,9 +10,9 @@ button  Failures
 text  70%
 text  0%
 text  70%
-text  LEFT
-text  CENTER
-text  RIGHT
+heading 2  LEFT
+heading 2  CENTER
+heading 2  RIGHT
 text  Gal
 text  Lbs
 text  Gal

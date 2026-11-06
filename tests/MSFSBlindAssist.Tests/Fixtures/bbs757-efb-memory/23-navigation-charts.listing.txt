@@ -9,8 +9,8 @@ button  PERF calc
 button  Departure
 button  Arrival
 button  Manual
-heading 2  SEATTLE-TACOMA INTL
-heading 2  SEATTLE, UNITED STATES
+text  SEATTLE-TACOMA INTL
+text  SEATTLE, UNITED STATES
 button  STAR
 button  App
 button  Taxi

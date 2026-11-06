@@ -136,8 +136,9 @@ public static class Bbs757EfbScreen
 
     /// <summary>The words a tile's text ends in that say its state, not its name ("FUEL TRUCK OFF" is FUEL TRUCK): the
     /// key strips them so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/>
-    /// leaves them out when it compares a tile's words with another's.</summary>
-    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL" };
+    /// leaves them out when it compares a tile's words with another's. "IN PLACE" is the chocks tile's other state (the picture's, joined to
+    /// the tile's words by <see cref="Bbs757EfbPageRules.PictureState"/>).</summary>
+    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE" };
 
     /// <summary>The words a box's key carries, between its caption and its place ("btn:LATEST CYCLE|UPDATE@59,14" is UPDATE,
     /// "btn:|FUEL TRUCK@56,28" is FUEL TRUCK): the box's own words without their state word, never the caption or the row

@@ -6,32 +6,19 @@ button  Weather & NOTAM (current page)
 button  Charts
 button  Map
 button  PERF calc
-text  DEPARTURE WEATHER
+heading 2  DEPARTURE WEATHER
 button  Departure
 button  Arrival
 button  Manual
 button  Refresh
-text  AIRPORT
-text  KSEA/SEA
+text  AIRPORT: KSEA/SEA
 SEATTLE-TACOMA INTL
-text  |
-text  ELEVATION
-text  432 FT
-text  |
-text  LOCAL TIME
-text  9:22 AM (UTC-8)
-text  |
-text  CURRENT WX
-text  VFR
-text  |
-text  METAR CEILING
-text  9999 FT
-text  |
-text  METAR VISIBILITY
-text  9999 M
-text  |
-text  TRANSITION ALT/LVL
-text  18000 / 18000
+text  ELEVATION: 432 FT
+text  LOCAL TIME: 9:22 AM (UTC-8)
+text  CURRENT WX: VFR
+text  METAR CEILING: 9999 FT
+text  METAR VISIBILITY: 9999 M
+text  TRANSITION ALT/LVL: 18000 / 18000
 button  METAR
 button  TAF
 button  ATIS

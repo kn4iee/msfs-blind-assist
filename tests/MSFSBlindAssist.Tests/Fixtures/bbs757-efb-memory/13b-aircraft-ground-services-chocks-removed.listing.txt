@@ -7,6 +7,7 @@ button  Ground services (current page)
 button  Cabin & doors
 button  Maintenance
 button  Failures
+heading 2  GND SRVC Mode:
 button  BBS
 button  Remove all
 button  FWD stair off
@@ -14,7 +15,7 @@ button  Jetway removed
 button  AFT stairs off
 button  Catering off
 button  GPU connected
-button  Chocks
+button  Chocks removed
 button  Ground A/C
 button  Left air start
 button  Right air start

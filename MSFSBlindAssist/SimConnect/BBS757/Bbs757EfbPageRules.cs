@@ -71,6 +71,72 @@ internal static class Bbs757EfbPageRules
             || head.EndsWith("_selector_button", StringComparison.Ordinal);
     }
 
+    /// <summary>The state a picture shows, from its file's name (the part after the last <c>/</c>), as the tablet's tiles use pictures
+    /// for what their words do not say: the chocks tile's picture is <c>bbs_ldg_gr_chocks.png</c> with the chocks in place and
+    /// <c>bbs_ldg_gr.png</c> with them removed (measured, <c>docs/b757/evidence/efb-memory-pages.md</c>). Null for any other picture.</summary>
+    internal static string? PictureState(string text)
+    {
+        string file = text[(Math.Max(text.LastIndexOf('/'), text.LastIndexOf('\\')) + 1)..];
+        return file.ToLowerInvariant() switch
+        {
+            "bbs_ldg_gr_chocks.png" => "IN PLACE",
+            "bbs_ldg_gr.png" => "REMOVED",
+            _ => null,
+        };
+    }
+
+    /// <summary>What a name's role words make of its control, among the labels one line is read from.</summary>
+    internal enum NameRole { None, Label, Value, Unit }
+
+    /// <summary>A control name read as the page grammar reads it (plan 20, R3 and R4): its role, the parts left once the role words
+    /// are taken out (a label and the value it pairs with have the same core), and whether it is a card's title.</summary>
+    internal sealed record NameInfo(NameRole Role, IReadOnlyCollection<string> Core, bool IsTitle)
+    {
+        /// <summary>The core as one string, parts in a fixed order: how two names with the same core are matched.</summary>
+        internal string CoreKey => string.Join(' ', Core.OrderBy(p => p, StringComparer.Ordinal));
+    }
+
+    /// <summary>The headings BlueBird gives no title name: Cockpit presets' section labels, which the page draws as <c>*_label</c>
+    /// (the exceptions table of the page grammar, plan 20 D5). Per app, the control names.</summary>
+    private static readonly (string App, string Name)[] HeadingNames =
+    {
+        ("AIRCRAFT", "presets_label"), ("AIRCRAFT", "quick_start_label"), ("AIRCRAFT", "circuits_state_label"),
+        ("AIRCRAFT", "ground_label"), ("AIRCRAFT", "inflight_label"), ("AIRCRAFT", "custom_label"),
+    };
+
+    /// <summary>Whether the table names the control as a heading of its app's page.</summary>
+    internal static bool IsHeadingName(string app, string name) => HeadingNames.Contains((app, name));
+
+    private static readonly HashSet<string> LabelWords = new(StringComparer.Ordinal) { "label", "title", "name", "lbl", "len", "heading" };
+    private static readonly HashSet<string> ValueWords = new(StringComparer.Ordinal) { "value", "val", "saved" };
+
+    /// <summary>A control name split on <c>_</c> and spaces, lower-case invariant.</summary>
+    internal static string[] NameParts(string name) =>
+        name.Split(new[] { '_', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.ToLowerInvariant()).ToArray();
+
+    /// <summary>
+    /// The role of a name by its last role word: <c>label</c>, <c>title</c>, <c>name</c>, <c>lbl</c>, <c>len</c> make a label,
+    /// <c>heading</c> (BlueBird's Callouts headings) makes a label, <c>value</c>, <c>val</c>, <c>saved</c> a value, and <c>value_label</c> or <c>saved_label</c> is a value (the value's own
+    /// label), while <c>length_value_title</c> is a title. A name ending in <c>unit</c> is a unit. A title is a label whose name ends
+    /// in <c>title</c>, <c>heading</c> or <c>title_label</c>. A name with no role word is none: a bare number or word.
+    /// </summary>
+    internal static NameInfo ReadName(string name)
+    {
+        var parts = NameParts(name);
+        bool IsRole(string p) => LabelWords.Contains(p) || ValueWords.Contains(p);
+        var core = parts.Where(p => !IsRole(p)).ToList();
+        if (parts.Length > 1 && parts[^1] == "unit")
+            return new NameInfo(NameRole.Unit, core.Where(p => p != "unit").ToList(), false);
+        var roleAt = Enumerable.Range(0, parts.Length).Where(i => IsRole(parts[i])).ToList();
+        if (roleAt.Count == 0) return new NameInfo(NameRole.None, parts, false);
+        int last = roleAt[^1];
+        bool value = ValueWords.Contains(parts[last])
+            || (parts[last] == "label" && roleAt.Count >= 2 && roleAt[^2] == last - 1 && ValueWords.Contains(parts[last - 1]));
+        if (value) return new NameInfo(NameRole.Value, core, false);
+        bool title = parts[^1] is "title" or "heading" || (parts[^1] == "label" && parts.Length >= 2 && parts[^2] == "title");
+        return new NameInfo(NameRole.Label, core, title);
+    }
+
     /// <summary>A value's letters and digits, upper-cased invariantly: how names and words are compared.</summary>
     internal static string Fold(string text) =>
         string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));

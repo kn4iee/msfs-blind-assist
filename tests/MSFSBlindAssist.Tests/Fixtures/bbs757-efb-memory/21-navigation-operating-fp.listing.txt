@@ -6,7 +6,7 @@ button  Weather & NOTAM
 button  Charts
 button  Map
 button  PERF calc
-text  OPERATING FLIGHT PLAN
-heading 2  0
+heading 2  OPERATING FLIGHT PLAN
+text  0
 heading 2  More
 button  Read the tablet again
