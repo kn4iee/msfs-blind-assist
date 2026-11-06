@@ -1066,7 +1066,11 @@ public class Bbs757NavRadTests
         public int Shown;
 
         /// <param name="gate">When set, the courses read waits for it (the window is then still opening).</param>
-        public WindowRig(FakeCdu cdu, Task? gate = null, double? vorL = 95, double? vorR = 0, double? ils = 95, FakeIlsDisplay? display = null)
+        /// <summary>Every key the window's reads asked for.</summary>
+        public readonly List<string> Reads = new();
+
+        public WindowRig(FakeCdu cdu, Task? gate = null, double? vorL = 95, double? vorR = 0, double? ils = 95, FakeIlsDisplay? display = null,
+            double? freqL = null, double? freqR = null, double? autoL = null, double? autoR = null)
         {
             Cdu = cdu;
             Display = display ?? new FakeIlsDisplay();
@@ -1081,14 +1085,17 @@ public class Bbs757NavRadTests
                     Read = async (key, _) =>
                     {
                         if (gate != null) await gate;
+                        Reads.Add(key);
                         return key switch
                         {
                             Bbs757NavRad.VorLCourseKey => vorL,
                             Bbs757NavRad.VorRCourseKey => vorR,
                             Bbs757NavRad.IlsCourseKey => ils,
-                            // The VOR variables N reads when the page is unavailable: not read here.
-                            Bbs757NavRad.VorLFrequencyKey or Bbs757NavRad.VorRFrequencyKey
-                                or Bbs757NavRad.VorLAutoKey or Bbs757NavRad.VorRAutoKey => null,
+                            // The VOR variables N reads when the page is unavailable.
+                            Bbs757NavRad.VorLFrequencyKey => freqL,
+                            Bbs757NavRad.VorRFrequencyKey => freqR,
+                            Bbs757NavRad.VorLAutoKey => autoL,
+                            Bbs757NavRad.VorRAutoKey => autoR,
                             _ => throw new InvalidOperationException($"the window read {key}"),
                         };
                     },
@@ -1241,6 +1248,39 @@ public class Bbs757NavRadTests
         Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. VOR frequencies unavailable. FMC runway ILS unavailable.",
             form.StatusText);
         Assert.Empty(rig.Cdu.Presses);
+    }
+
+    [Fact]
+    public async Task With_the_page_unavailable_the_window_shows_and_says_the_vors_from_the_variables()
+    {
+        // The window shows N's own sentence, so the fallback reaches it too.
+        var rig = new WindowRig(new FakeCdu { Screen = Legs(), PendingKeyCount = 3 },
+            freqL: 116.05, freqR: 113.90, autoL: 1, autoR: 0);
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        const string said = "VOR L 116.05 auto. VOR R 113.90 manual, course 000. ILS course 095. ILS tuning unknown. FMC runway ILS unavailable.";
+        Assert.Equal(said, form.StatusText);
+        Assert.Equal(new[] { said }, rig.Speech.Interrupts);
+        Assert.Contains(Bbs757NavRad.VorLFrequencyKey, rig.Reads);
+        Assert.Contains(Bbs757NavRad.VorRAutoKey, rig.Reads);
+    }
+
+    [Fact]
+    public async Task With_the_page_available_the_window_reads_none_of_the_vor_variables()
+    {
+        var rig = new WindowRig(new FakeCdu { Screen = NavRadio("116.90AGSU") },
+            freqL: 116.05, freqR: 113.90, autoL: 1, autoR: 0);
+
+        var form = rig.Open();
+        await rig.Def.NavRadiosFill!;
+
+        Assert.StartsWith(TunedAuto, form.StatusText);
+        Assert.DoesNotContain(Bbs757NavRad.VorLFrequencyKey, rig.Reads);
+        Assert.DoesNotContain(Bbs757NavRad.VorRFrequencyKey, rig.Reads);
+        Assert.DoesNotContain(Bbs757NavRad.VorLAutoKey, rig.Reads);
+        Assert.DoesNotContain(Bbs757NavRad.VorRAutoKey, rig.Reads);
     }
 
     [Fact]
