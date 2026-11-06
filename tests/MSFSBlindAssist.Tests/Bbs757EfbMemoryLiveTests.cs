@@ -72,6 +72,28 @@ public class Bbs757EfbMemoryLiveTests
             _out.WriteLine($"   {it.Kind,-8} {it.Text}{(it.Value.Length > 0 ? " = " + it.Value : "")}{(it.On is { } on ? $" (on={on})" : "")}  @({it.Hit.X},{it.Hit.Y}) key={it.Key}");
     }
 
+    /// <summary>
+    /// Writes the front apps' trees, scrubbed, as a <c>.tree.json</c> fixture. Skipped unless BBS_EFB_CAPTURE names
+    /// the output file. Node texts are never printed.
+    /// </summary>
+    [Fact]
+    public void Captures_the_tablet_as_a_tree_fixture()
+    {
+        string? outFile = Environment.GetEnvironmentVariable("BBS_EFB_CAPTURE");
+        if (string.IsNullOrEmpty(outFile)) return; // manual: MSFS + the 757 running
+        using var src = SimProcess.TryOpen("FlightSimulator2024", out string? failure);
+        Assert.True(src is not null, failure);
+        byte[] anchor = Convert.FromBase64String(AnchorBase64);
+        ulong? b = WasmMemoryLocator.FindLinearBase(src!, AnchorAddress, anchor);
+        Assert.True(b is not null, "the bbs757 module was not located by the anchor");
+        var reader = new Bbs757EfbMemory(new ModuleEfbMemory(new ModuleMemory(src!, b!.Value)), Layout(anchor));
+
+        var apps = reader.ReadFrontApps();
+        Assert.NotEmpty(apps);
+        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps)));
+        _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls");
+    }
+
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
 
     private void Print(Bbs757EfbMemory.Node n, int depth)
