@@ -634,15 +634,24 @@ public class Bbs757NavRadTests
 
     // ---- Output N -------------------------------------------------------------------------------
 
-    private static McpIo Courses(double? vorL, double? vorR, double? ils) => new()
+    private static McpIo Courses(double? vorL, double? vorR, double? ils,
+        double? freqL = null, double? freqR = null, double? autoL = null, double? autoR = null, List<string>? reads = null) => new()
     {
-        Read = (key, _) => Task.FromResult(key switch
+        Read = (key, _) =>
         {
-            Bbs757NavRad.VorLCourseKey => vorL,
-            Bbs757NavRad.VorRCourseKey => vorR,
-            Bbs757NavRad.IlsCourseKey => ils,
-            _ => throw new InvalidOperationException($"N read {key}, which is not a BlueBird nav course"),
-        }),
+            reads?.Add(key);
+            return Task.FromResult(key switch
+            {
+                Bbs757NavRad.VorLCourseKey => vorL,
+                Bbs757NavRad.VorRCourseKey => vorR,
+                Bbs757NavRad.IlsCourseKey => ils,
+                Bbs757NavRad.VorLFrequencyKey => freqL,
+                Bbs757NavRad.VorRFrequencyKey => freqR,
+                Bbs757NavRad.VorLAutoKey => autoL,
+                Bbs757NavRad.VorRAutoKey => autoR,
+                _ => throw new InvalidOperationException($"N read {key}, which is not a BlueBird nav course"),
+            });
+        },
         Write = _ => throw new InvalidOperationException("N writes nothing"),
         Delay = (_, _) => Task.CompletedTask,
     };
@@ -740,6 +749,88 @@ public class Bbs757NavRadTests
 
         Assert.Equal(new[] { "VOR L course 095, VOR R course 000, ILS course 095. ILS tuning unknown. VOR frequencies unavailable." },
             speech.Interrupts);
+    }
+
+    [Fact]
+    public void Without_the_page_the_vors_come_from_the_variables()
+    {
+        var l = Bbs757NavRad.TuningFromVariables(116.05, 1);
+        var r = Bbs757NavRad.TuningFromVariables(113.90, 0);
+        const string said = "VOR L 116.05 auto. VOR R 113.90 manual, course 095. ILS course 095. ILS 110.50.";
+        var read = new Bbs757IlsReading(false, 110.50, 95);
+        Assert.Equal(said, Bbs757NavRad.Readout(null, 0, 95, 95, IlsAt(110.50), read, l, r));
+        InCulture("sv-SE", () => Assert.Equal(said, Bbs757NavRad.Readout(null, 0, 95, 95, IlsAt(110.50), read, l, r)));
+    }
+
+    [Fact]
+    public void Variable_tunings_are_built_from_the_raw_values()
+    {
+        Assert.Null(Bbs757NavRad.TuningFromVariables(null, 1));
+        Assert.Equal(new Bbs757VorTuning(116.05, 'A', null), Bbs757NavRad.TuningFromVariables(116.05, 1));
+        Assert.Equal(new Bbs757VorTuning(116.05, 'M', null), Bbs757NavRad.TuningFromVariables(116.05, 0));
+        Assert.Equal(new Bbs757VorTuning(116.05, null, null), Bbs757NavRad.TuningFromVariables(116.05, null));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(118.0)]
+    [InlineData(107.9)]
+    [InlineData(double.NaN)]
+    public void Variables_out_of_the_vor_band_are_not_tuned(double mhz)
+    {
+        var t = Bbs757NavRad.TuningFromVariables(mhz, 1);
+        Assert.Equal(new Bbs757VorTuning(null, 'A', null), t);
+        Assert.StartsWith("VOR L not tuned.", Bbs757NavRad.Readout(null, 95, 95, 95, IlsParked, null, t, t));
+    }
+
+    [Fact]
+    public void Without_the_page_or_the_variables_the_words_are_as_before()
+    {
+        Assert.Equal("VOR L course 095, VOR R course 000, ILS course 095. ILS 110.50. VOR frequencies unavailable.",
+            Bbs757NavRad.Readout(null, 95, 0, 95, IlsAt(110.50), new Bbs757IlsReading(false, 110.50, 95), null, null));
+    }
+
+    [Fact]
+    public void A_side_whose_variable_is_unread_says_its_frequency_is_unavailable()
+    {
+        var l = Bbs757NavRad.TuningFromVariables(116.05, 1);
+        Assert.StartsWith("VOR L 116.05 auto. VOR R frequency unavailable.", Bbs757NavRad.Readout(null, 95, 0, 95, IlsParked, null, l, null));
+    }
+
+    [Fact]
+    public void With_the_page_the_variables_are_not_used()
+    {
+        var page = Bbs757NavRad.Parse(NavRadio("116.90AGSU"))!;
+        var v = Bbs757NavRad.TuningFromVariables(113.90, 0);
+        Assert.StartsWith("VOR L 116.90 auto, GSU. VOR R not tuned.", Bbs757NavRad.Readout(page, 95, 0, 95, IlsParked, null, v, v));
+    }
+
+    [Fact]
+    public async Task N_without_the_page_reads_the_four_variables_and_speaks_them()
+    {
+        var reads = new List<string>();
+        var cdu = new FakeCdu { Screen = Legs(), ScreenAfterNavRadKey = NavRadio("116.90AGSU"), PendingKeyCount = 3 };
+        var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95, 116.05, 113.90, 1, 0, reads) };
+        var speech = new SpeechCapture();
+
+        await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), speech, Pages(cdu));
+
+        Assert.Equal(new[] { "VOR L 116.05 auto. VOR R 113.90 manual, course 000. ILS course 095. ILS tuning unknown." }, speech.Interrupts);
+        Assert.Contains(Bbs757NavRad.VorLFrequencyKey, reads);
+        Assert.Contains(Bbs757NavRad.VorRAutoKey, reads);
+    }
+
+    [Fact]
+    public async Task N_with_the_page_does_not_read_the_variables()
+    {
+        var reads = new List<string>();
+        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU") };
+        var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95, 116.05, 113.90, 1, 0, reads) };
+
+        await def.ReadNavRadiosAsync(new SimConnectManager(IntPtr.Zero), new SpeechCapture(), Pages(cdu));
+
+        Assert.DoesNotContain(Bbs757NavRad.VorLFrequencyKey, reads);
+        Assert.DoesNotContain(Bbs757NavRad.VorRAutoKey, reads);
     }
 
     [Fact]
@@ -995,6 +1086,9 @@ public class Bbs757NavRadTests
                             Bbs757NavRad.VorLCourseKey => vorL,
                             Bbs757NavRad.VorRCourseKey => vorR,
                             Bbs757NavRad.IlsCourseKey => ils,
+                            // The VOR variables N reads when the page is unavailable: not read here.
+                            Bbs757NavRad.VorLFrequencyKey or Bbs757NavRad.VorRFrequencyKey
+                                or Bbs757NavRad.VorLAutoKey or Bbs757NavRad.VorRAutoKey => null,
                             _ => throw new InvalidOperationException($"the window read {key}"),
                         };
                     },

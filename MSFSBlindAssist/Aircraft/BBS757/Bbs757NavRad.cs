@@ -232,12 +232,27 @@ public static class Bbs757NavRad
     /// is "course unavailable".
     /// </summary>
     public static string Readout(Bbs757NavRadPage? page, int? vorL, int? vorR, int? ils, Bbs757IlsDial? ilsDial,
-        Bbs757IlsReading? ilsRead = null)
+        Bbs757IlsReading? ilsRead = null, Bbs757VorTuning? vorLVar = null, Bbs757VorTuning? vorRVar = null)
     {
         string panel = $"{(ilsRead != null ? Bbs757IlsPanel.ReadPhrase(ilsRead) : Bbs757IlsPanel.CountPhrase(ilsDial))}.";
+        if (page == null && (vorLVar != null || vorRVar != null))
+            return $"{VorPhrase("VOR L", vorLVar, vorL)} {VorPhrase("VOR R", vorRVar, vorR)} ILS course {CourseWords(ils)}. {panel}";
         if (page == null)
             return $"VOR L course {CourseWords(vorL)}, VOR R course {CourseWords(vorR)}, ILS course {CourseWords(ils)}. {panel} VOR frequencies unavailable.";
         return $"{VorPhrase("VOR L", page.Left, vorL)} {VorPhrase("VOR R", page.Right, vorR)} ILS course {CourseWords(ils)}. {panel}";
+    }
+
+    /// <summary>
+    /// One VOR's tuning from BlueBird's variables, for N when the CDU page cannot be read: null when the
+    /// frequency was not read; <c>Mhz</c> null ("not tuned") outside 108.00-117.95 (a not-tuned receiver's
+    /// reading is unmeasured); <c>Mode</c> 'A' for an auto flag of 1, 'M' for 0, null when unread. No ident.
+    /// </summary>
+    public static Bbs757VorTuning? TuningFromVariables(double? mhz, double? auto)
+    {
+        if (mhz is not double f) return null;
+        double? tuned = f >= 108.00 && f <= 117.95 ? Math.Round(f, 2) : null;
+        char? mode = auto is double a && double.IsFinite(a) ? (a >= 0.5 ? 'A' : 'M') : null;
+        return new Bbs757VorTuning(tuned, mode, null);
     }
 
     /// <summary>One VOR's sentence: the tuning, and its course only when it is tuned by hand.</summary>

@@ -559,7 +559,19 @@ public partial class BBS757Definition
         }
         ct.ThrowIfCancellationRequested();
         var ilsRead = await ReadIlsDisplayAsync(sim, bySet: false, ct);
-        return Bbs757NavRad.Readout(screen == null ? null : Bbs757NavRad.Parse(screen), vorL, vorR, ilsCourse, _ilsDial, ilsRead);
+        var page = screen == null ? null : Bbs757NavRad.Parse(screen);
+        Bbs757VorTuning? vorLVar = null, vorRVar = null;
+        if (screen == null)
+        {
+            // No page: BlueBird's own variables say the frequencies (the page keeps the station ident).
+            double? freqL = await io.Read(Bbs757NavRad.VorLFrequencyKey, ct);
+            double? freqR = await io.Read(Bbs757NavRad.VorRFrequencyKey, ct);
+            double? autoL = await io.Read(Bbs757NavRad.VorLAutoKey, ct);
+            double? autoR = await io.Read(Bbs757NavRad.VorRAutoKey, ct);
+            vorLVar = Bbs757NavRad.TuningFromVariables(freqL, autoL);
+            vorRVar = Bbs757NavRad.TuningFromVariables(freqR, autoR);
+        }
+        return Bbs757NavRad.Readout(page, vorL, vorR, ilsCourse, _ilsDial, ilsRead, vorLVar, vorRVar);
     }
 
     // =================================================================================
