@@ -404,7 +404,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             made.Remove(taken);
             bool pushed = TakeRead(taken.Read.Model, taken.Frame, unclear, asked);
             Log.Debug("BBS757", $"EFB reader: {taken.Read.Model.PageName}, {taken.Read.Model.Items.Count} items, {taken.Read.OcrMs} ms, "
-                + $"still={still}, reads={reads}, unclear={unclear}, pushed={pushed}");
+                + $"still={still}, reads={reads}, unclear={unclear}, pushed={pushed}"
+                + (taken.Read.Model.Menu.Count > 0 && taken.Read.Model.Section.Length == 0 && taken.Read.Model.App != "HOME"
+                    ? ", no menu entry selected, bands " + string.Join("/", taken.Read.Model.MenuBands.Select(b => b.ToString("0.0", CultureInfo.InvariantCulture)))
+                    : ""));
             return true;
         }
         finally

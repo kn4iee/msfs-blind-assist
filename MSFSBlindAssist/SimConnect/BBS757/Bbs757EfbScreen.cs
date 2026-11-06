@@ -180,6 +180,10 @@ public sealed record Bbs757EfbScreenModel(
     /// <summary>A question the tablet shows over the page, with its answers (not in <see cref="Items"/>); null when none.</summary>
     public Bbs757EfbQuestion? Question { get; init; }
 
+    /// <summary>Each side-menu entry's band value as the parser measured it, in menu order (empty when the page has no menu);
+    /// the bridge logs them when no entry reads as selected.</summary>
+    public IReadOnlyList<double> MenuBands { get; init; } = Array.Empty<double>();
+
     /// <summary>"Aircraft, Ground services" / "Home".</summary>
     public string PageName =>
         App.Length == 0 ? "Unknown page"
@@ -346,6 +350,7 @@ public static class Bbs757EfbScreen
     {
         string app = "";
         string section = "";
+        IReadOnlyList<double> menuBands = Array.Empty<double>();
         foreach (var l in clean)
         {
             if (l.Box.Top < TitleTop - 8 || l.Box.Bottom > TitleBottom + 6 || l.Box.Left > 300) continue;
@@ -374,7 +379,7 @@ public static class Bbs757EfbScreen
         {
             var menuLines = body.Where(l => l.Box.Right <= MenuRight + 4 && l.Box.Top > 125).ToList();
             foreach (var l in menuLines) body.Remove(l);
-            menu.AddRange(ParseMenu(menuLines, px, app, out section));
+            menu.AddRange(ParseMenu(menuLines, px, app, out section, out menuBands));
         }
 
         if (app == "SYSTEMS")
@@ -392,7 +397,7 @@ public static class Bbs757EfbScreen
                     Selected: string.Equals(diagram, section, StringComparison.OrdinalIgnoreCase)));
             }
             items.Add(new(Bbs757EfbKind.Text, SystemsNote, Rectangle.Empty, Point.Empty, false, "txt:systems-note"));
-            return new Bbs757EfbScreenModel(app, section, menu, items);
+            return new Bbs757EfbScreenModel(app, section, menu, items) { MenuBands = menuBands };
         }
 
         if (Templates.TryGetValue(app + "/" + section, out var templates))
@@ -405,7 +410,7 @@ public static class Bbs757EfbScreen
         items.AddRange(app == "SETTINGS" ? ParseRows(body, px)
                      : app == "CHECKLIST" ? ParseChecklist(body, px)
                      : ParseContent(body, px));
-        return new Bbs757EfbScreenModel(app, section, menu, items) { Scrollable = IsScrollable(px) };
+        return new Bbs757EfbScreenModel(app, section, menu, items) { Scrollable = IsScrollable(px), MenuBands = menuBands };
     }
 
     /// <summary>A page template applied to the page's lines: slots become items (added to
@@ -536,9 +541,10 @@ public static class Bbs757EfbScreen
 
     // ------------------------------------------------------------------ side menu
 
-    private static List<Bbs757EfbItem> ParseMenu(List<Bbs757EfbTextLine> lines, Bbs757EfbPixels px, string app, out string section)
+    private static List<Bbs757EfbItem> ParseMenu(List<Bbs757EfbTextLine> lines, Bbs757EfbPixels px, string app, out string section, out IReadOnlyList<double> menuBands)
     {
         section = "";
+        menuBands = Array.Empty<double>();
         var o = new List<Bbs757EfbItem>();
         // An entry can only be one of this app's menu words: snap to the nearest of those, more
         // loosely than the page vocabulary allows (GOCRAL -> GENERAL on a dim tablet, measured).
@@ -560,14 +566,9 @@ public static class Bbs757EfbScreen
         // darker on both a dim and a bright tablet). Judge it against the menu's own median.
         var entries = lines.Where(l => !(app == "CHECKLIST" && (l.Text == "INTERACTIVE" || l.Text == "RESET ALL"))).ToList();
         var bands = entries.Select(l => Enumerable.Range(MenuRight - 6, 5).Min(x => px.Lum(x, l.Centre.Y))).ToList();
-        double median = bands.Count == 0 ? 0 : bands.OrderBy(v => v).ElementAt(bands.Count / 2);
-        Bbs757EfbTextLine? selected = null;
-        double bestGap = 12;
-        for (int i = 0; i < entries.Count; i++)
-        {
-            double gap = Math.Abs(bands[i] - median);
-            if (gap > bestGap) { bestGap = gap; selected = entries[i]; }
-        }
+        menuBands = bands;
+        int selIndex = SelectedEntry(bands);
+        Bbs757EfbTextLine? selected = selIndex >= 0 ? entries[selIndex] : null;
         foreach (var l in lines)
         {
             if (app == "CHECKLIST" && l.Text == "INTERACTIVE")
@@ -589,6 +590,27 @@ public static class Bbs757EfbScreen
                 Selected: sel));
         }
         return o;
+    }
+
+    /// <summary>The selected entry must differ from the menu's median by at least this much.</summary>
+    internal const double SelectedMinGap = 6;
+    /// <summary>...and by at least this many times the next-largest gap (a dim tablet measured: the selected entry 10.7-13.6
+    /// from the median, the others about 1.5 among themselves).</summary>
+    internal const double SelectedOutlierRatio = 3;
+
+    /// <summary>The index of the menu entry whose band stands out from the rest, or -1 when none (or more than one) does.</summary>
+    internal static int SelectedEntry(IReadOnlyList<double> bands)
+    {
+        if (bands.Count < 3) return -1;
+        double median = bands.OrderBy(v => v).ElementAt(bands.Count / 2);
+        int best = -1; double bestGap = 0, second = 0;
+        for (int i = 0; i < bands.Count; i++)
+        {
+            double gap = Math.Abs(bands[i] - median);
+            if (gap > bestGap) { second = bestGap; bestGap = gap; best = i; }
+            else if (gap > second) second = gap;
+        }
+        return bestGap >= SelectedMinGap && bestGap >= SelectedOutlierRatio * second ? best : -1;
     }
 
     private static int BrightestX(Bbs757EfbPixels px, int left, int right, int cy)

@@ -342,7 +342,8 @@ public class Bbs757EfbElementsTests
         var page = Bbs757EfbScreenTests.Load("bright", "21-defuel-question");
         var b = Bbs757EfbElements.Build(page, null, NoExtras);
 
-        foreach (var behind in new[] { "Home", "Cockpit presets", "Fuel", "Ground services", "Total fuel: Import from SIMBRIEF" })
+        // Fuel's band (gap 11.2 from the median, the next 0.3) was missed by the old fixed threshold of 12: it is the current section. The three expectations below ("Fuel (current page)", "Import from SIMBRIEF", "Center tank: 14%") follow from the page now reading as the Fuel page.
+        foreach (var behind in new[] { "Home", "Cockpit presets", "Fuel (current page)", "Ground services", "Import from SIMBRIEF" })
             AssertText(b, behind);
         AssertPressable(b, "Yes");
         AssertPressable(b, "No");
@@ -352,7 +353,7 @@ public class Bbs757EfbElementsTests
         var taps = b.Actions.OrderBy(a => a.Key).Where(a => a.Value.Kind == Bbs757EfbElements.ActionKind.Tap).Select(a => a.Value.Item!.Key);
         Assert.Equal(new[] { "q:YES", "q:NO", "top:boarding", "top:notifications" }, taps);
         // The page's read-outs are still there to read.
-        Assert.Contains("14%", Texts(b));
+        Assert.Contains("Center tank: 14%", Texts(b));
     }
 
     [Fact]

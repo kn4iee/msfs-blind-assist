@@ -98,6 +98,40 @@ public class Bbs757EfbScreenTests
             m.Menu.Concat(m.Items).Where(i => i.Kind == Bbs757EfbKind.Menu).Select(i => i.Text));
     }
 
+    [Theory]
+    [InlineData("01-home", "Home")]
+    [InlineData("02-aircraft", "Aircraft, Cabin & doors")]
+    [InlineData("03-aircraft-cockpit-presets", "Aircraft, Cockpit presets")]
+    [InlineData("04-aircraft-fuel", "Aircraft, Fuel")]
+    [InlineData("05-aircraft-weight-balance", "Aircraft, Weight & balance")]
+    [InlineData("06-aircraft-ground-services", "Aircraft, Ground services")]
+    [InlineData("07-aircraft-cabin-doors", "Aircraft, Cabin & doors")]
+    [InlineData("08-aircraft-maintenance", "Aircraft, Maintenance")]
+    [InlineData("09-aircraft-failures", "Aircraft, Failures")]
+    [InlineData("10-navigation", "Navigation, ACARS dashboard")]
+    [InlineData("11-navigation-acars-dashboard", "Navigation, ACARS dashboard")]
+    [InlineData("12-navigation-operating-fp", "Navigation, Operating FP")]
+    [InlineData("13-navigation-weather-notam", "Navigation, Weather & NOTAM")]
+    [InlineData("14-navigation-charts", "Navigation, Charts")]
+    [InlineData("15-navigation-map", "Navigation, Map")]
+    [InlineData("16-navigation-perf-calc", "Navigation, PERF calc")]
+    public void Dim_tablet_pages_read_their_section(string name, string pageName)
+    {
+        // The 2026-11-05 night capture: the selected entry stands only 10.7-13.6 from the median there.
+        Assert.Equal(pageName, Load("dim2", name).PageName);
+    }
+
+    [Fact]
+    public void Selected_entry_stands_out_from_the_others()
+    {
+        Assert.Equal(2, Bbs757EfbScreen.SelectedEntry(new[] { 16.9, 16.5, 5.4, 16.9, 17.3 }));
+        Assert.Equal(-1, Bbs757EfbScreen.SelectedEntry(new[] { 16.9, 16.5, 16.9, 17.3 }));
+        Assert.Equal(-1, Bbs757EfbScreen.SelectedEntry(new[] { 16.9, 10.0, 5.4, 16.9 }));
+        Assert.Equal(-1, Bbs757EfbScreen.SelectedEntry(new double[] { 30, 30 }));
+        Assert.Equal(-1, Bbs757EfbScreen.SelectedEntry(Array.Empty<double>()));
+        Assert.Equal(1, Bbs757EfbScreen.SelectedEntry(new double[] { 200, 160, 200, 200 }));
+    }
+
     [Fact]
     public void A_side_menu_lists_its_entries_and_not_their_icons()
     {
