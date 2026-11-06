@@ -4,5 +4,6 @@ button
 button  
 button  
 heading 2  ELECTRICAL
+slider 0  ELEC ZOOM
 heading 2  More
 button  Read the tablet again

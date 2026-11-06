@@ -498,10 +498,15 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void A_unit_whose_number_is_not_read_stays_a_line_of_its_own()
     {
-        // On the Fuel page the numbers sit inside a box the reader does not open (Task 6's fields); their units must not vanish with them.
-        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Items;
+        // The Fuel page's numbers sit in value boxes, which are fields now (R7): the unit joins the number, no line of its own.
+        var fuel = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Items;
+        Assert.DoesNotContain(fuel, i => i.Kind == Bbs757EfbKind.Text && i.Text is "Gal" or "Lbs");
+        var left = fuel.Where(i => i.Kind == Bbs757EfbKind.Field).Take(2).Select(i => (i.Text, i.Value)).ToArray();
+        Assert.Equal(new[] { ("QUANTITY", "1539 Gal"), ("WEIGHT", "10308 Lbs") }, left);
 
-        Assert.Equal(new[] { "Gal", "Lbs", "Gal", "Lbs" }, items.Where(i => i.Text is "Gal" or "Lbs").Select(i => i.Text).Take(4).ToArray());
+        // A unit with no number to join (nothing is named like it) still reads, as a line.
+        var alone = ItemsOf(Lbl("fuel_left_qty_unit", "Gal", 600, 200));
+        Assert.Equal(("Gal", Bbs757EfbKind.Text), (Assert.Single(alone).Text, alone[0].Kind));
     }
 
     [Fact]
@@ -548,7 +553,21 @@ public class Bbs757EfbModelReaderTests
         var heading = Assert.Single(items, i => i.Kind == Bbs757EfbKind.Heading);
         Assert.Equal("ROUTE", heading.Text);
         var route = Assert.Single(items, i => i.Text.StartsWith("KSEA", StringComparison.Ordinal));
-        Assert.Equal(Bbs757EfbKind.Text, route.Kind);
+        Assert.Equal(Bbs757EfbKind.Text, route.Kind); // one line tall: plain text
+    }
+
+    [Fact]
+    public void The_route_is_long_text()
+    {
+        var tall = ItemsOf(N("other", "planning_acars_route_value", "KSEA/16L DCT BTG DCT KPDX/28R", 324, 140, 1000, 80));
+        Assert.Equal((Bbs757EfbKind.LongText, "KSEA/16L DCT BTG DCT KPDX/28R"), (Assert.Single(tall).Kind, tall[0].Text));
+
+        var broken = ItemsOf(Lbl("vnav_takeoff_help_textbox", "first line\nsecond line"));
+        Assert.Equal(Bbs757EfbKind.LongText, Assert.Single(broken).Kind);
+        Assert.Equal("first line\nsecond line", broken[0].Text);
+
+        var fp = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("21-navigation-operating-fp"))!.Items;
+        Assert.Contains(fp, i => i.Kind == Bbs757EfbKind.LongText && i.Name == "planning_operating_fp_value");
     }
 
     [Fact]
@@ -697,5 +716,224 @@ public class Bbs757EfbModelReaderTests
     {
         Assert.Contains("IN PLACE", Bbs757EfbScreen.StateWords);
         Assert.Equal("CHOCKS", Bbs757EfbScreen.KeyWords("btn:|CHOCKS@15,25"));
+    }
+
+    // ---- R5 names, R6 index rows, R7 value boxes, R8 sliders, R11 icon buttons ----
+
+    private static Node Btn(string name, string text, int x, int y, int w = 130, int h = 50, params Node[] kids) => N("button", name, text, x, y, w, h, kids);
+
+    [Fact]
+    public void A_state_word_button_takes_the_label_sharing_its_name()
+    {
+        var items = ItemsOf(
+            Lbl("maintenance_gear_door_nose_label", "NOSE DOOR", 845, 608, 72), Btn("maintenance_gear_door_nose_button", "OPEN", 780, 636),
+            Lbl("maintenance_gear_door_left_label", "LEFT DOOR", 985, 608, 68), Btn("maintenance_gear_door_left_button", "OPEN", 920, 636));
+
+        Assert.Equal(new[] { ("Open", "NOSE DOOR"), ("Open", "LEFT DOOR") }, items.Select(i => (i.Text, i.Label)).ToArray());
+        Assert.All(items, i => Assert.Equal(Bbs757EfbKind.Button, i.Kind));
+        Assert.DoesNotContain(items, i => i.Text == "NOSE DOOR"); // the label is the button's name, not a line of its own
+    }
+
+    [Fact]
+    public void A_door_button_takes_the_label_touching_it()
+    {
+        var items = ItemsOf(Btn("btn_l1_door", "CLOSED", 674, 187, 100, 40), Lbl("l1", "LEFT FWD", 692, 227, 64));
+
+        var door = Assert.Single(items);
+        Assert.Equal(("Closed", "LEFT FWD"), (door.Text, door.Label));
+        Assert.StartsWith("btn:|@", door.Key); // the key is still the button's own, positional
+    }
+
+    [Fact]
+    public void A_button_two_labels_touch_keeps_its_own_words()
+    {
+        var items = ItemsOf(Btn("btn_gate_door", "CLOSED", 300, 200, 100, 40), Lbl("below", "ONE", 310, 240, 60), Lbl("beside", "TWO", 200, 205, 95));
+
+        var door = Assert.Single(items, i => i.Kind == Bbs757EfbKind.Button);
+        Assert.Equal(("Closed", ""), (door.Text, door.Label));
+        Assert.Equal(3, items.Count);
+    }
+
+    [Fact]
+    public void A_label_far_from_a_button_names_nothing()
+    {
+        var door = Assert.Single(ItemsOf(Btn("btn_gate_door", "CLOSED", 300, 200, 100, 40), Lbl("far", "ONE", 310, 270, 60)), i => i.Kind == Bbs757EfbKind.Button);
+        Assert.Equal("", door.Label);
+    }
+
+    [Fact]
+    public void An_index_row_names_its_controls_and_state()
+    {
+        var items = ItemsOf(N("other", "failure_table", "", 280, 340, 1050, 500,
+            Lbl("failure_name_0", "L ENGINE FIRE", 296, 390, 106), Lbl("failure_state_0", "READY", 730, 388, 61),
+            Btn("failure_action_0", "FAIL NOW", 925, 380, 180, 44), Btn("failure_setup_0", "SET UP", 1125, 380, 180, 44),
+            Lbl("failure_name_1", "R ENGINE FIRE", 296, 442, 107), Lbl("failure_state_1", "FAILED", 730, 440, 61),
+            Btn("failure_action_1", "FAIL NOW", 925, 432, 180, 44), Btn("failure_setup_1", "SET UP", 1125, 432, 180, 44)));
+
+        Assert.Equal(new[]
+        {
+            (Bbs757EfbKind.Row, "L ENGINE FIRE", "READY", ""), (Bbs757EfbKind.Button, "Fail now", "", "L ENGINE FIRE"), (Bbs757EfbKind.Button, "Set up", "", "L ENGINE FIRE"),
+            (Bbs757EfbKind.Row, "R ENGINE FIRE", "FAILED", ""), (Bbs757EfbKind.Button, "Fail now", "", "R ENGINE FIRE"), (Bbs757EfbKind.Button, "Set up", "", "R ENGINE FIRE"),
+        }, items.Select(i => (i.Kind, i.Kind == Bbs757EfbKind.Row ? i.Text : i.Text.Replace("UP", "up"), i.Value, i.Label)).ToArray());
+    }
+
+    [Fact]
+    public void An_index_row_needs_a_control_and_the_tab_buttons_make_none()
+    {
+        // A label and its value numbered alike are a line (R4), not an index row; tab buttons share a number with nothing else.
+        var items = ItemsOf(N("other", "box", "", 280, 200, 900, 200,
+            Lbl("planning_acars_flight_info_label_0", "Flight Number", 300, 200), Lbl("planning_acars_flight_info_value_0", "4RK", 300, 220),
+            Tab("x_tab_button_0", "TAKE OFF"), Tab("x_tab_button_1", "LANDING")));
+        Assert.Equal((Bbs757EfbKind.Row, "Flight Number", "4RK"), (items[0].Kind, items[0].Text, items[0].Value));
+        Assert.Equal(2, items.Count(i => i.Kind == Bbs757EfbKind.Tab));
+    }
+
+    [Fact]
+    public void A_value_box_is_a_field()
+    {
+        var items = ItemsOf(Btn("fuel_left_qty_box", "", 377, 780, 150, 34, Lbl("fuel_left_qty", "1539", 422, 782, 60)), Lbl("fuel_left_qty_unit", "Gal", 537, 785, 31),
+            Btn("total_fuel_weight_box", "", 722, 954, 150, 34, Lbl("total_fuel_weight", "20617", 759, 956, 76)), Lbl("total_fuel_weight_unit", "Lbs", 882, 959, 34));
+
+        Assert.Equal(new[] { (Bbs757EfbKind.Field, "QUANTITY", "1539 Gal"), (Bbs757EfbKind.Field, "WEIGHT", "20617 Lbs") },
+            items.Select(i => (i.Kind, i.Text, i.Value)).ToArray());
+        Assert.Equal("fuel_left_qty_box", items[0].Key);
+    }
+
+    [Fact]
+    public void The_weight_and_balance_boxes_are_fields_with_their_unit()
+    {
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"))!.Items.Where(i => i.Kind == Bbs757EfbKind.Field).ToList();
+
+        Assert.Equal(new[] { "2960 Lbs", "29600 Lbs", "6160 Lbs", "0 Lbs" }, items.Select(i => i.Value).ToArray());
+        Assert.All(items, i => Assert.Equal("WEIGHT", i.Text));
+    }
+
+    [Fact]
+    public void A_slider_outside_a_settings_row_is_kept_with_its_value()
+    {
+        var cabin = ItemsOf(Lbl("cabin_ceiling_name", "CEILING", 1063, 302, 52), Lbl("cabin_ceiling_value", "OFF", 1303, 302, 25),
+            N("slider", "cabin_ceiling_slider", "", 1140, 299, 130, 20));
+        var ceiling = Assert.Single(cabin);
+        Assert.Equal((Bbs757EfbKind.Slider, "CEILING", "OFF", 1140), (ceiling.Kind, ceiling.Text, ceiling.Value, ceiling.Slider!.KnobX));
+
+        var fuel = ItemsOf(Lbl("fuel_left_slider_title", "LEFT", 453, 723, 48), N("slider", "fuel_slider_left", "", 377, 755, 200, 20),
+            Lbl("fuel_left_tank_label", "70%", 474, 410, 49));
+        var slider = Assert.Single(fuel, i => i.Kind == Bbs757EfbKind.Slider);
+        Assert.Equal(("LEFT", "70%"), (slider.Text, slider.Value));
+        Assert.Equal(new Bbs757EfbSlider(377, 577, 517), slider.Slider); // the knob at 70 % of 200 px
+        Assert.Equal(2, fuel.Count);                                     // the title stays its heading; the tank's percent is the slider's
+        Assert.Equal(Bbs757EfbKind.Heading, fuel[0].Kind);
+
+        var total = ItemsOf(Lbl("total_fuel_label", "TOTAL FUEL", 542, 884, 147), N("slider", "fuel_slider_total", "", 722, 889, 200, 20),
+            Lbl("total_fuel_perc_label", "27%", 942, 884, 49));
+        Assert.Equal(("TOTAL FUEL", "27%", 776), (total[0].Text, total[0].Value, total[0].Slider!.KnobX));
+    }
+
+    [Fact]
+    public void A_slider_percent_reads_the_same_under_other_cultures()
+    {
+        foreach (var culture in new[] { "de-DE", "sv-SE" })
+        {
+            var slider = TestCulture.Run(culture, () => Assert.Single(ItemsOf(
+                Lbl("fuel_left_slider_title", "LEFT"), N("slider", "fuel_slider_left", "", 377, 755, 200, 20), Lbl("fuel_left_tank_label", "70%")),
+                i => i.Kind == Bbs757EfbKind.Slider));
+            Assert.Equal(517, slider.Slider!.KnobX);
+        }
+    }
+
+    [Fact]
+    public void A_slider_with_no_label_is_named_by_its_control_name()
+    {
+        var zoom = Assert.Single(ItemsOf(N("slider", "planning_charts_zoom_slider", "", 1165, 202, 154, 42)));
+        Assert.Equal("PLANNING CHARTS ZOOM", zoom.Text);
+        Assert.Equal(new Bbs757EfbSlider(1165, 1319, 1165), zoom.Slider);
+    }
+
+    [Fact]
+    public void A_settings_slider_carries_its_track()
+    {
+        var app = SettingsApp("aircraft_scrollbox", 600,
+            N("grid", "loading_speed_grid", "", 250, 842, 1147, 60,
+                N("other", "loading_speed_label", "BOARDING & LOAD RATE", 280, 842, 647, 60),
+                N("slider", "loading_speed_slider", "", 897, 857, 300, 30)),
+            N("grid", "level_grid", "", 250, 900, 1147, 60,
+                N("other", "level_label", "LEVEL", 280, 900, 647, 60),
+                N("slider", "level_slider", "", 897, 915, 300, 30),
+                N("label", "level_value_label", "50%", 1197, 900, 200, 60)));
+
+        var items = Bbs757EfbModelReader.Read(new[] { app })!.Items;
+
+        Assert.Equal(new Bbs757EfbSlider(897, 1197, 897), items.Single(i => i.Text == "BOARDING & LOAD RATE").Slider);
+        Assert.Equal(new Bbs757EfbSlider(897, 1197, 1047), items.Single(i => i.Text == "LEVEL").Slider);
+    }
+
+    [Fact]
+    public void An_icon_button_is_named_from_its_control_name()
+    {
+        var items = ItemsOf(Btn("btn_pushback_left", "", 723, 960, 56, 56), Btn("btn_x1", "", 800, 960, 56, 56), Btn("btn_5th_row", "", 880, 960, 56, 56));
+
+        var pushback = Assert.Single(items);
+        Assert.Equal("Pushback left", pushback.Text, ignoreCase: true);
+        Assert.Equal("PUSHBACK LEFT", Bbs757EfbScreen.KeyWords(pushback.Key));
+    }
+
+    [Fact]
+    public void A_word_less_button_with_a_touching_label_is_named_by_it()
+    {
+        var item = Assert.Single(ItemsOf(Btn("btn_unknown", "", 300, 200, 56, 56), Lbl("caption", "SPARE", 300, 256, 60)), i => i.Kind == Bbs757EfbKind.Button);
+        Assert.Equal("Spare", item.Text, ignoreCase: true);
+    }
+
+    [Fact]
+    public void The_pushback_arrows_read_by_their_names_on_the_ground_page()
+    {
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"))!.Items;
+        var pushback = items.Where(i => i.Name.StartsWith("btn_pushback_", StringComparison.Ordinal)).Select(i => i.Text.ToUpperInvariant()).ToList();
+        Assert.Equal(new[] { "REQ PB TUG", "REMOVE TUG", "PUSHBACK LEFT", "PUSHBACK STRAIGHT", "PUSHBACK RIGHT" }, pushback);
+    }
+
+    [Fact]
+    public void A_title_naming_an_unread_input_is_a_field_with_no_value()
+    {
+        var items = ItemsOf(
+            N("other", "planning_perf_calc_flap_field_canvas", "", 479, 216, 229, 84, Lbl("planning_perf_calc_flap_field_title", "Flap Setting"),
+                N("other", "planning_perf_calc_flap_dropdown", "", 519, 240, 150, 34)),
+            N("other", "planning_perf_calc_length_canvas", "", 709, 132, 229, 84, Lbl("planning_perf_calc_length_title", "Length Type"),
+                N("other", "planning_perf_calc_tora_dropdown", "", 749, 156, 150, 34)),
+            Lbl("planning_perf_calc_units_title", "Units", 1268, 137, 28));
+
+        Assert.Equal(new[] { (Bbs757EfbKind.Field, "Flap Setting", ""), (Bbs757EfbKind.Field, "Length Type", ""), (Bbs757EfbKind.Heading, "Units", "") },
+            items.Select(i => (i.Kind, i.Text, i.Value)).ToArray());
+        Assert.Equal("planning_perf_calc_flap_dropdown", items[0].Key);
+    }
+
+    [Fact]
+    public void Perf_calc_reads_its_inputs_as_fields()
+    {
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!.Items;
+
+        var fields = items.Where(i => i.Kind == Bbs757EfbKind.Field).Select(i => i.Text).ToArray();
+        Assert.Equal(new[] { "Airport", "Runway", "Length Type", "Length (FT)", "Takeoff Weight (LB)", "Flap Setting", "Thrust Setting", "Bleed Setting",
+            "Anti-ice Setting", "Wind", "Temperature", "Pressure (inHg)", "Surface Condition", "Flex/Assumed Temperature", "Improved Climb Calculations" }, fields);
+        Assert.Equal(new[] { "Units", "Weather Source" }, items.Where(i => i.Kind == Bbs757EfbKind.Heading).Select(i => i.Text).ToArray());
+    }
+
+    [Fact]
+    public void A_field_is_built_as_a_value_line_under_every_culture()
+    {
+        var model = new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), new[]
+        {
+            new Bbs757EfbItem(Bbs757EfbKind.Field, "QUANTITY", default, default, true, "fuel_left_qty_box", Value: "1539,5 Gal"),
+            new Bbs757EfbItem(Bbs757EfbKind.Field, "Flap Setting", default, default, true, "planning_perf_calc_flap_dropdown"),
+        });
+        foreach (var culture in new[] { "en-US", "de-DE", "sv-SE" })
+        {
+            var texts = TestCulture.Run(culture, () =>
+            {
+                var data = Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()).Data;
+                return Enumerable.Range(0, 2).Select(i => data[$"items.{i}.text"]).ToArray();
+            });
+            Assert.Equal(new[] { "Quantity: 1539,5 Gal", "Flap Setting" }, texts);
+        }
     }
 }

@@ -12,6 +12,9 @@ button  Hydraulic
 button  Oxygen
 button  Fire protect
 button  APU
+slider 0  MAINTENANCE HYD RES LEFT
+slider 0  MAINTENANCE HYD RES CENTER
+slider 0  MAINTENANCE HYD RES RIGHT
 heading 2  RAM AIR TURBINE
 text  RAT stowed.
 DEPLOY available when aircraft is stationary on ground.

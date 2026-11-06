@@ -16,9 +16,6 @@ heading 2  BRAKE TEMPERATURE
 button  Reset
 button  Repair altn
 heading 2  LANDING GEAR DOORS
-text  NOSE DOOR
-text  LEFT DOOR
-text  RIGHT DOOR
 button  Open
 button  Open
 button  Open

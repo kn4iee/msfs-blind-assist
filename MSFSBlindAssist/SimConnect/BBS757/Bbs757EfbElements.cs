@@ -186,6 +186,16 @@ public static class Bbs757EfbElements
                     // A label the tablet writes with its own colon ("Airport:") gets no second one.
                     Add(it.Value.Length > 0 ? it.Text + (it.Text.EndsWith(':') ? " " : ": ") + it.Value : it.Text, key: it.Key);
                     break;
+                case Bbs757EfbKind.Field:
+                {
+                    // A value box: its name and what it holds ("Quantity: 1539 Gal"); an input not read yet is just its name.
+                    string name = Bbs757EfbVocabulary.Pretty(it.Text);
+                    Add(it.Value.Length > 0 ? name + (name.EndsWith(':') ? " " : ": ") + it.Value : name, key: it.Key);
+                    break;
+                }
+                case Bbs757EfbKind.LongText:
+                    Add(it.Text, key: it.Key); // Task 8 gives it its own block
+                    break;
                 case Bbs757EfbKind.Menu:
                     Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;

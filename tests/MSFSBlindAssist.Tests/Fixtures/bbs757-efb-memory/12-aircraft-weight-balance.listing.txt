@@ -8,13 +8,17 @@ button  Cabin & doors
 button  Maintenance
 button  Failures
 heading 2  BUSINESS PAX - 16/16
-text  Lbs
+slider 0  BUSINESS PAX - 16/16
+text  Weight: 2960 Lbs
 heading 2  ECONOMY PAX - 160/160
-text  Lbs
+slider 0  ECONOMY PAX - 160/160
+text  Weight: 29600 Lbs
 heading 2  FORWARD CARGO
-text  Lbs
+slider 0  FORWARD CARGO
+text  Weight: 6160 Lbs
 heading 2  AFT CARGO
-text  Lbs
+slider 0  AFT CARGO
+text  Weight: 0 Lbs
 text  GROSS WEIGHT: 196677 Lbs
 text  CENTER OF GRAVITY: 25.1 %
 text  EMPTY: 136940 Lbs

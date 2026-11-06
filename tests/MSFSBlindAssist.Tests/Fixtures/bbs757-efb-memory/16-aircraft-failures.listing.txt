@@ -27,24 +27,19 @@ button  Lights
 text  FAILURE
 text  STATUS
 text  ACTIONS
-text  L ENGINE FIRE
-text  READY
+text  L ENGINE FIRE: READY
 button  Fail now
 button  Set UP
-text  R ENGINE FIRE
-text  READY
+text  R ENGINE FIRE: READY
 button  Fail now
 button  Set UP
-text  APU FIRE
-text  READY
+text  APU FIRE: READY
 button  Fail now
 button  Set UP
-text  FWD CARGO FIRE
-text  READY
+text  FWD CARGO FIRE: READY
 button  Fail now
 button  Set UP
-text  AFT CARGO FIRE
-text  READY
+text  AFT CARGO FIRE: READY
 button  Fail now
 button  Set UP
 button  Random failures: off

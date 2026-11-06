@@ -18,6 +18,7 @@ button  SID
 button  Ref
 button  Day
 button  -
+slider 0  PLANNING CHARTS ZOOM
 button  +
 button  Pin
 heading 2  More

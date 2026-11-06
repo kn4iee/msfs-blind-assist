@@ -107,7 +107,66 @@ internal static class Bbs757EfbPageRules
     /// <summary>Whether the table names the control as a heading of its app's page.</summary>
     internal static bool IsHeadingName(string app, string name) => HeadingNames.Contains((app, name));
 
-    private static readonly HashSet<string> LabelWords = new(StringComparer.Ordinal) { "label", "title", "name", "lbl", "len", "heading" };
+    private static readonly HashSet<string> LabelWords = new(StringComparer.Ordinal) { "label", "title", "name", "lbl", "len", "heading", "field" };
+
+    /// <summary>The parts of a control's name that say what kind of control it is, not what it is about (plan 20, R5): taken out
+    /// of a control's name and of a label's before the two are compared.</summary>
+    internal static readonly HashSet<string> ControlWords = new(StringComparer.Ordinal)
+        { "btn", "button", "slider", "toggle", "box", "action", "setup", "input", "dropdown", "textbox" };
+
+    /// <summary>A control name's parts once role words and control words are taken out, as one string in a fixed order: how a
+    /// control and the label that names it are matched (R5). Empty when nothing is left.</summary>
+    internal static string ControlKey(string name) =>
+        string.Join(' ', NameParts(name).Where(p => !LabelWords.Contains(p) && !ValueWords.Contains(p) && !ControlWords.Contains(p))
+            .OrderBy(p => p, StringComparer.Ordinal));
+
+    /// <summary>A label's core once control words are taken out too (the other half of <see cref="ControlKey"/>).</summary>
+    internal static string ControlKey(NameInfo label) =>
+        string.Join(' ', label.Core.Where(p => !ControlWords.Contains(p)).OrderBy(p => p, StringComparer.Ordinal));
+
+    /// <summary>Whether a name is an input the reader cannot read: a box the tablet types into or picks from, named
+    /// <c>*_input</c>, <c>*_dropdown</c> or <c>*_textbox</c>, or PERF calc's four bare field names.</summary>
+    internal static bool IsUnreadInputName(string name) =>
+        name.EndsWith("_input", StringComparison.Ordinal) || name.EndsWith("_dropdown", StringComparison.Ordinal)
+        || name.EndsWith("_textbox", StringComparison.Ordinal)
+        || name is "planning_perf_calc_weight" or "planning_perf_calc_wind" or "planning_perf_calc_temp" or "planning_perf_calc_press";
+
+    /// <summary>The name of a value box on Fuel and Weight &amp; balance (R7), from the box's control name; null for any other
+    /// box.</summary>
+    internal static string? FieldName(string name)
+    {
+        bool fuel = name.StartsWith("fuel_", StringComparison.Ordinal) || name.StartsWith("total_fuel_", StringComparison.Ordinal);
+        bool wb = name.StartsWith("wb_", StringComparison.Ordinal);
+        if (fuel && name.EndsWith("_qty_box", StringComparison.Ordinal)) return "QUANTITY";
+        if (fuel && name.EndsWith("_weight_box", StringComparison.Ordinal)) return "WEIGHT";
+        if (wb && (name.EndsWith("_weight_box", StringComparison.Ordinal) || name.EndsWith("_value_box", StringComparison.Ordinal))) return "WEIGHT";
+        return null;
+    }
+
+    /// <summary>The name of the label holding a Fuel slider's percent (R8): <c>fuel_slider_left</c> reads
+    /// <c>fuel_left_tank_label</c>, <c>fuel_slider_total</c> reads <c>total_fuel_perc_label</c>; null for any other slider.</summary>
+    internal static string? SliderValueName(string sliderName)
+    {
+        const string prefix = "fuel_slider_";
+        if (!sliderName.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        string side = sliderName[prefix.Length..];
+        return side == "total" ? "total_fuel_perc_label" : side.Length > 0 ? "fuel_" + side + "_tank_label" : null;
+    }
+
+    /// <summary>Whether a control's words are none, or only one state word or action word.</summary>
+    internal static bool IsStateOrAction(string text)
+    {
+        string t = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+        return t.Length == 0 || Bbs757EfbScreen.StateWords.Contains(t, StringComparer.Ordinal) || Bbs757EfbScreen.ActionWords.Contains(t, StringComparer.Ordinal);
+    }
+
+    /// <summary>A button's name from its own control name (R11): the parts without <c>btn</c>/<c>button</c>, when two or more
+    /// remain and all are letters ("PUSHBACK LEFT"); null otherwise.</summary>
+    internal static string? NameFromParts(string name)
+    {
+        var parts = NameParts(name).Where(p => p is not ("btn" or "button")).ToList();
+        return parts.Count >= 2 && parts.All(p => p.All(char.IsLetter)) ? string.Join(' ', parts).ToUpperInvariant() : null;
+    }
     private static readonly HashSet<string> ValueWords = new(StringComparer.Ordinal) { "value", "val", "saved" };
 
     /// <summary>A control name split on <c>_</c> and spaces, lower-case invariant.</summary>

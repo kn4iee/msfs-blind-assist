@@ -759,4 +759,41 @@ public class Bbs757EfbPressTests
         foreach (string culture in new[] { "en-US", "de-DE", "sv-SE", "tr-TR" })
             Assert.Equal(expected, TestCulture.Run(culture, () => Bbs757EfbPress.NewChoiceWord(before, now)));
     }
+
+    // ---- plan 20, Task 6: named controls are still found, and a settings slider has its track --------------------------------
+
+    [Fact]
+    public void A_labelled_door_button_is_relocated_by_its_key()
+    {
+        var closed = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("14-aircraft-cabin-doors"))!;
+        var door = closed.Items.Single(i => i.Name == "btn_l1_door");
+        Assert.Equal("LEFT FWD", door.Label);
+        Assert.Equal(8, closed.Items.Count(i => i.Kind == Bbs757EfbKind.Button && i.Label.Length > 0));
+
+        // The door opened: its words change, its label and its key do not, and the read finds the same control again.
+        var opened = new Bbs757EfbScreenModel(closed.App, closed.Section, closed.Menu,
+            closed.Items.Select(i => i.Name == "btn_l1_door" ? i with { Text = "Open" } : i).ToList());
+        var found = Bbs757EfbPress.Relocate(closed, opened, door);
+
+        Assert.Equal("btn_l1_door", found?.Name);
+        Assert.Equal("Open", found?.Text);
+        Assert.Equal(door.Key, found?.Key);
+        var doors = closed.Items.Where(i => i.Name.EndsWith("_door", StringComparison.Ordinal)).ToList();
+        Assert.Equal(doors.Count, doors.Select(i => i.Key).Distinct().Count()); // no two share a key
+    }
+
+    [Fact]
+    public void A_settings_choice_slider_taps_its_choice_from_the_track()
+    {
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        var boarding = Assert.Single(model.Items, i => i.Text == "BOARDING & LOAD RATE");
+        var options = Bbs757EfbElements.OptionsFor(boarding, model.PageName)!;
+        Assert.Equal(new[] { "Realistic", "Standard", "Quick", "Instant" }, options, StringComparer.OrdinalIgnoreCase);
+
+        var track = Assert.IsType<Bbs757EfbSlider>(boarding.Slider);
+        Assert.Equal((897, 1197), (track.TrackLeft, track.TrackRight));
+        // The 2026-10-27 measurement: x 1095 set QUICK and x 945 set REALISTIC; each choice is 100 px wide, so the tap lands within half of that.
+        Assert.InRange(Bbs757EfbPress.ChoiceX(track, 2, options.Count), 1095 - 50, 1095 + 50);
+        Assert.InRange(Bbs757EfbPress.ChoiceX(track, 0, options.Count), 945 - 50, 945 + 50);
+    }
 }

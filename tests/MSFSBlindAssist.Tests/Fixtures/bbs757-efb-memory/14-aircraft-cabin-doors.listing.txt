@@ -17,18 +17,10 @@ button  Closed
 button  Closed
 button  Close all
 button  Cockpit open
-text  LEFT FWD
-text  LEFT MID
-text  LEFT AFT
-text  RIGHT FWD
-text  RIGHT MID
-text  RIGHT AFT
-text  FWD CARGO
-text  AFT CARGO
 heading 2  CABIN LIGHTING
 button  Ground service off
-text  CEILING: OFF
-text  WINDOW: OFF
-text  ENTRY: OFF
+slider 0  CEILING (OFF)
+slider 0  WINDOW (OFF)
+slider 0  ENTRY (OFF)
 heading 2  More
 button  Read the tablet again

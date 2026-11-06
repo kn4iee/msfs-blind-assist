@@ -140,6 +140,10 @@ public static class Bbs757EfbScreen
     /// the tile's words by <see cref="Bbs757EfbPageRules.PictureState"/>).</summary>
     internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE" };
 
+    /// <summary>The words that make a control's own words an action, not its name (plan 20, R5): such a control is named by a label
+    /// (<see cref="Bbs757EfbItem.Label"/>), as one whose words are a state word is.</summary>
+    internal static readonly string[] ActionWords = { "OPEN", "CLOSE", "CLOSED", "LOGOUT", "UPDATE", "REMOVE", "RESET", "FAIL NOW", "SET UP", "REPAIR", "REPAIR ALTN" };
+
     /// <summary>The words a box's key carries, between its caption and its place ("btn:LATEST CYCLE|UPDATE@59,14" is UPDATE,
     /// "btn:|FUEL TRUCK@56,28" is FUEL TRUCK): the box's own words without their state word, never the caption or the row
     /// label the reader may name the box by; "" for a key that is no box's (a switch, the top bar, a menu entry).</summary>

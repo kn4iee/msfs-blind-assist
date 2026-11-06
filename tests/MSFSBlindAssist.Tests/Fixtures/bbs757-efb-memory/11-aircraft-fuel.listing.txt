@@ -7,21 +7,20 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance
 button  Failures
-text  70%
-text  0%
-text  70%
 heading 2  LEFT
 heading 2  CENTER
 heading 2  RIGHT
-text  Gal
-text  Lbs
-text  Gal
-text  Lbs
-text  TOTAL FUEL
-text  27%
-text  Gal
-text  Lbs
-text  Gal
-text  Lbs
+slider 70  LEFT (70%)
+slider 0  CENTER (0%)
+slider 70  RIGHT (70%)
+text  Quantity: 1539 Gal
+text  Weight: 10308 Lbs
+text  Quantity: 0 Gal
+text  Weight: 0 Lbs
+slider 27  TOTAL FUEL (27%)
+text  Quantity: 3077 Gal
+text  Weight: 20617 Lbs
+text  Quantity: 1539 Gal
+text  Weight: 10308 Lbs
 heading 2  More
 button  Read the tablet again

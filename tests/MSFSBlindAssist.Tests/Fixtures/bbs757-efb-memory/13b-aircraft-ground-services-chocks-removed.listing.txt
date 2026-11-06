@@ -23,5 +23,8 @@ button  Cargo SVC off
 button  Fuel truck off
 button  Req PB tug
 button  Remove tug
+button  Pushback left
+button  Pushback straight
+button  Pushback right
 heading 2  More
 button  Read the tablet again
