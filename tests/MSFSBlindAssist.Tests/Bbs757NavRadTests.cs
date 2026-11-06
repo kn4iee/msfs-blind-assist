@@ -583,6 +583,55 @@ public class Bbs757NavRadTests
         }
     }
 
+    [Fact]
+    public void The_nav_variables_are_read_on_request_and_have_no_Ctrl_M_row()
+    {
+        var vars = new BBS757Definition().GetVariables();
+        var expected = new[]
+        {
+            (Bbs757NavRad.IlsFrequencyKey, "BBS_757_ILS_FREQ", "ILS Frequency"),
+            (Bbs757NavRad.VorLFrequencyKey, "BBS_757_VOR_L_FREQ", "VOR L Frequency"),
+            (Bbs757NavRad.VorRFrequencyKey, "BBS_757_VOR_R_FREQ", "VOR R Frequency"),
+            (Bbs757NavRad.VorLAutoKey, "B757_MCP_VOR1_MODE_AUTO", "VOR L Auto Tuning"),
+            (Bbs757NavRad.VorRAutoKey, "B757_MCP_VOR2_MODE_AUTO", "VOR R Auto Tuning"),
+        };
+
+        Assert.Equal(expected, Bbs757NavRad.NavVariables);
+        foreach (var (key, name, label) in expected)
+        {
+            var v = vars[key];
+            Assert.Equal(name, v.Name);
+            Assert.Equal(label, v.DisplayName);
+            Assert.Equal(SimVarType.LVar, v.Type);
+            Assert.Equal(UpdateFrequency.OnRequest, v.UpdateFrequency);
+            Assert.True(v.ExcludeFromMonitorManager);
+        }
+    }
+
+    [Fact]
+    public async Task N_says_the_variable_in_any_culture_and_the_count_when_it_is_absent()
+    {
+        var cdu = new FakeCdu { Screen = NavRadio("116.90AGSU") };
+        var display = new FakeIlsDisplay { Answer = () => Bbs757IlsPanel.ReadingFrom(110.50, 95) };
+        var def = new BBS757Definition { NestRunning = () => true, ReadoutIo = _ => Courses(95, 0, 95), IlsDisplayFor = _ => display };
+        var speech = new SpeechCapture();
+        var simConnect = new SimConnectManager(IntPtr.Zero);
+
+        async Task<string> N()
+        {
+            speech.Interrupts.Clear();
+            await def.ReadNavRadiosAsync(simConnect, speech, Pages(cdu));
+            return Assert.Single(speech.Interrupts);
+        }
+
+        await InCultureAsync("sv-SE", async () => Assert.EndsWith("ILS 110.50.", await N()));
+
+        display.Answer = () => Bbs757IlsPanel.ReadingFrom(null, 95);
+        def.OnSimContextReset();   // a fresh load: the count is PARK
+        def.ProcessSimVarUpdate(Bbs757Radios.ActiveKey(1), 121.9, new SpeechCapture());
+        Assert.EndsWith("ILS parked by count.", await N());
+    }
+
     // ---- Output N -------------------------------------------------------------------------------
 
     private static McpIo Courses(double? vorL, double? vorR, double? ils) => new()

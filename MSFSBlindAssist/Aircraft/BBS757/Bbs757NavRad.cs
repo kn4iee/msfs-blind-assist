@@ -34,8 +34,9 @@ public sealed record Bbs757RunwayIls(string Runway, double Mhz, string Ident, in
 /// own and leave the stock NAV variables alone (measured, docs/b757/spec-gaps.md 3.2), so the stock NAV
 /// radios are never read here. The courses are BlueBird's L:vars; the VOR frequencies are on the CDU's NAV
 /// RADIO page, and the FMC's runway ILS on APPROACH REF, both read on the first officer's CDU
-/// (<see cref="Bbs757CduPages"/>, ruling R52). The tuned ILS frequency is in no variable and on no page: the
-/// readout says what the ILS control panel's display shows (<see cref="Bbs757IlsOcr"/>), or, when it cannot be
+/// (<see cref="Bbs757CduPages"/>, ruling R52). The tuned ILS frequency is on no page: the
+/// readout says what the ILS control panel's display shows (BlueBird's <c>L:BBS_757_ILS_FREQ</c>, -1 parked;
+/// <see cref="Bbs757IlsPanel.ReadingFrom"/>), or, when it cannot be
 /// read, the app's count of the panel (<see cref="Bbs757IlsPanel"/>), saying it is a count ("ILS 110.50 by
 /// count."). The members here read screens and build sentences; they press no key.
 ///
@@ -68,6 +69,27 @@ public static class Bbs757NavRad
         (VorLCourseKey, "BBS_VOR_L_COURSE", "VOR L Course"),
         (VorRCourseKey, "BBS_VOR_R_COURSE", "VOR R Course"),
         (IlsCourseKey, IlsCourseLVar, "ILS Course"),
+    };
+
+    /// <summary>
+    /// The keys of BlueBird's tuning variables (added by its 2026-10-31 update, not in its public table;
+    /// docs/b757/evidence/flight-19.md): the ILS panel's frequency (-1 while parked), the two VOR receivers'
+    /// frequencies and whether each is tuned automatically.
+    /// </summary>
+    public const string IlsFrequencyKey = "BBS757_ILS_FREQ";
+    public const string VorLFrequencyKey = "BBS757_VOR_L_FREQ";
+    public const string VorRFrequencyKey = "BBS757_VOR_R_FREQ";
+    public const string VorLAutoKey = "BBS757_VOR_L_AUTO";
+    public const string VorRAutoKey = "BBS757_VOR_R_AUTO";
+
+    /// <summary>The tuning L:vars the keys read, with the names the variables are shown under.</summary>
+    public static readonly IReadOnlyList<(string Key, string LVar, string Label)> NavVariables = new[]
+    {
+        (IlsFrequencyKey, "BBS_757_ILS_FREQ", "ILS Frequency"),
+        (VorLFrequencyKey, "BBS_757_VOR_L_FREQ", "VOR L Frequency"),
+        (VorRFrequencyKey, "BBS_757_VOR_R_FREQ", "VOR R Frequency"),
+        (VorLAutoKey, "B757_MCP_VOR1_MODE_AUTO", "VOR L Auto Tuning"),
+        (VorRAutoKey, "B757_MCP_VOR2_MODE_AUTO", "VOR R Auto Tuning"),
     };
 
     /// <summary>What an empty ILS course box says.</summary>

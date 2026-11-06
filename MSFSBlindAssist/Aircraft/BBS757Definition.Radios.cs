@@ -26,8 +26,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// closes, its CDU walk and N's CDU step take turns (<see cref="_foCduWalk"/>), and a fill that ends after a
 /// set, park or course result only adds the FMC's runway ILS to the status, silently. The ILS course is written
 /// as a calculator write and read back (<see cref="SetIlsCourseAsync"/>). The ILS frequency and park turn the
-/// ILS control panel's knobs, which no variable reads back: the app reads the panel's display from a picture
-/// (<see cref="CoherentBbs757IlsDisplay"/>), turns the knobs from that read and reads it again
+/// ILS control panel's knobs, whose display BlueBird's <c>L:BBS_757_ILS_FREQ</c> shows (-1 parked; added by its
+/// 2026-10-31 update, not in its public table; flight-19.md): the app reads the display from that variable
+/// (<see cref="Bbs757IlsVariableDisplay"/>), turns the knobs from that read and reads it again
 /// (<see cref="SetIlsAsync"/>), and N says the read. When the display cannot be read, the app's count of the
 /// panel, from the state a flight loads it in and the clicks it sent, stands in, and is said as a count ("ILS
 /// 110.50 by count."). The VORs are not in it: a VOR is tuned, and its course set, on the CDU.
@@ -47,8 +48,9 @@ public partial class BBS757Definition
     // =================================================================================
 
     /// <summary>
-    /// The VOR and ILS course variables N reads fresh (<see cref="Bbs757NavRad.CourseVariables"/>): OnRequest
-    /// L:vars on no panel, never announced, so no Ctrl+M row ([VAR-9]). Then the COM radios' fifteen: for each
+    /// The VOR and ILS course variables N reads fresh (<see cref="Bbs757NavRad.CourseVariables"/>) and BlueBird's
+    /// tuning variables (<see cref="Bbs757NavRad.NavVariables"/>: the ILS panel's frequency, the VOR frequencies
+    /// and their auto-tuning flags): OnRequest L:vars on no panel, never announced, so no Ctrl+M row ([VAR-9]). Then the COM radios' fifteen: for each
     /// radio the active and standby rows (the stock COM variables, in MHz, on the 1 Hz batch so they ride
     /// no data definition of their own, with a Ctrl+M row each), the standby field and the transfer button
     /// (events, no data definition), and the three tuning panels' lights (OnRequest, read for the
@@ -56,7 +58,7 @@ public partial class BBS757Definition
     /// </summary>
     static partial void AddRadioVariables(Dictionary<string, SimVarDefinition> vars)
     {
-        foreach (var (key, lvar, label) in Bbs757NavRad.CourseVariables)
+        foreach (var (key, lvar, label) in Bbs757NavRad.CourseVariables.Concat(Bbs757NavRad.NavVariables))
         {
             if (vars.ContainsKey(key)) continue;   // never shadow a map control or a base var
             vars[key] = new SimVarDefinition
@@ -882,23 +884,18 @@ public partial class BBS757Definition
     internal Bbs757IlsDial? IlsDial => _ilsDial;
 
     // =================================================================================
-    // The ILS panel's display: read from a picture
+    // The ILS panel's display: read from BlueBird's L:BBS_757_ILS_FREQ
     // =================================================================================
 
     /// <summary>
     /// The ILS display reader a read uses, replaced by tests (a fake: they never touch the sim); null: the
-    /// definition's own <see cref="CoherentBbs757IlsDisplay"/>, made at the first read, and only while SimConnect is
-    /// connected (no simulator, nothing to read).
+    /// variable reader (<see cref="Bbs757IlsVariableDisplay"/>), and only while SimConnect is connected (no
+    /// simulator, nothing to read) and the definition is not retired.
     /// </summary>
     internal Func<SimConnectManager, IBbs757IlsDisplay?>? IlsDisplayFor { get; init; }
 
-    private readonly object _ilsDisplayLock = new();
-
-    /// <summary>The definition's own display reader: its Coherent socket on <c>mainUi</c> stays open while it lives.</summary>
-    private CoherentBbs757IlsDisplay? _ilsDisplay;
-
     /// <summary>Set by a switch away (<see cref="CloseRadioWindows"/>): from then on no reader is made.</summary>
-    private bool _ilsDisplayRetired;
+    private volatile bool _ilsDisplayRetired;
 
     /// <summary>Moves on at every restart of the count (<see cref="RestartIlsCount"/>): a reading begun before one is not applied after it.</summary>
     private int _ilsCountEpoch;
@@ -906,17 +903,13 @@ public partial class BBS757Definition
     private IBbs757IlsDisplay? IlsDisplayReader(SimConnectManager sim)
     {
         if (IlsDisplayFor != null) return IlsDisplayFor(sim);
-        if (!sim.IsConnected) return null;
-        lock (_ilsDisplayLock)
-        {
-            if (_ilsDisplayRetired) return null;
-            return _ilsDisplay ??= new CoherentBbs757IlsDisplay(fs2020: sim.DetectedSimulatorVersion == "FS2020");
-        }
+        if (!sim.IsConnected || _ilsDisplayRetired) return null;
+        return new Bbs757IlsVariableDisplay((key, ct) => WriteIoFor(sim).ReadFresh(key, ct));
     }
 
     /// <summary>
-    /// One read of the ILS control panel's display (about 0.2 s; a black box shows top left for about a tenth
-    /// of a second, <see cref="CoherentBbs757IlsDisplay"/>); null when it could not be read. A reading is also the
+    /// One read of the ILS control panel's display (two fresh variable reads, a frame each); null when it
+    /// could not be read. A reading is also the
     /// count from then on (<see cref="ApplyIlsReading"/>), unless the count restarted meanwhile or, for a read
     /// that is no set's (<paramref name="bySet"/> false: output N, the window), an ILS set is turning the knobs:
     /// its own reads keep the count. Throws only when <paramref name="ct"/> fires.
@@ -944,18 +937,8 @@ public partial class BBS757Definition
         _ilsDial = Bbs757IlsPanel.DialFrom(reading, count);
     }
 
-    /// <summary>The switch away: no reader from now on, and the one made is disposed (its socket and its view's claim go).</summary>
-    private void RetireIlsDisplay()
-    {
-        CoherentBbs757IlsDisplay? display;
-        lock (_ilsDisplayLock)
-        {
-            _ilsDisplayRetired = true;
-            display = _ilsDisplay;
-            _ilsDisplay = null;
-        }
-        display?.Dispose();
-    }
+    /// <summary>The switch away: no reader is made from now on.</summary>
+    private void RetireIlsDisplay() => _ilsDisplayRetired = true;
 
     /// <summary>The token of the ILS set turning the knobs now, linked to the lifetime; null when none runs.</summary>
     private CancellationTokenSource? _ilsSet;
@@ -1182,7 +1165,6 @@ public partial class BBS757Definition
     {
         CancelTransfers();
         RestartIlsCount(loadPending: true);
-        lock (_ilsDisplayLock) _ilsDisplay?.ForgetGauge();   // the load may number the gauge's live view anew
     }
 
     /// <summary>
@@ -1218,9 +1200,8 @@ public partial class BBS757Definition
         => _lastIlsClickMs is long last ? (int)Math.Clamp(IlsStepGapMs - (NowMs() - last), 0, IlsStepGapMs) : 0;
 
     /// <summary>
-    /// Closes and disposes the radio windows (a profile switch): the Ctrl+N window, and the ILS display
-    /// reader's Coherent socket with it (<see cref="RetireIlsDisplay"/>; a read still running takes its box
-    /// down first).
+    /// Closes and disposes the radio windows (a profile switch): the Ctrl+N window, and retires the ILS
+    /// display reader (<see cref="RetireIlsDisplay"/>: no read is made after a switch away).
     /// </summary>
     partial void CloseRadioWindows()
     {

@@ -59,6 +59,33 @@ public class Bbs757IlsPanelTests
     private static string[] Repeat(int times, params string[] cycle)
         => Enumerable.Range(0, times).SelectMany(_ => cycle).ToArray();
 
+    // ---- The display's variable ----------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(-1.0, 95.0, true, null, 95)]
+    [InlineData(108.1, 95.0, false, 108.10, 95)]
+    [InlineData(108.15, 95.0, false, 108.15, 95)]
+    [InlineData(111.95, 95.0, false, 111.95, 95)]
+    [InlineData(110.5, null, false, 110.50, null)]
+    public void Reading_from_the_variable(double frequency, double? course, bool parked, double? mhz, int? shownCourse)
+    {
+        var reading = Bbs757IlsPanel.ReadingFrom(frequency, course);
+
+        Assert.Equal(new Bbs757IlsReading(parked, mhz, shownCourse), reading);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(null)]
+    [InlineData(107.95)]
+    [InlineData(112.0)]
+    [InlineData(110.52)]
+    [InlineData(double.NaN)]
+    public void Reading_from_an_absent_variable_is_none(double? frequency)
+    {
+        Assert.Null(Bbs757IlsPanel.ReadingFrom(frequency, 95));
+    }
+
     // ---- The typed frequency --------------------------------------------------------------------------
 
     [Theory]

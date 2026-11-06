@@ -42,6 +42,14 @@ public readonly record struct Bbs757IlsDial(int Whole, int Fraction)
 }
 
 /// <summary>
+/// What the ILS control panel's display shows: PARK (<paramref name="Parked"/>, the display blank and
+/// <paramref name="Mhz"/> null; the panel remembers the fraction it hides), or a frequency on an ILS channel
+/// (<paramref name="Mhz"/>, 108.10 to 111.95), and the course in whole degrees (<paramref name="Course"/>;
+/// null when the variable did not give one).
+/// </summary>
+public sealed record Bbs757IlsReading(bool Parked, double? Mhz, int? Course);
+
+/// <summary>
 /// The 757's ILS control panel (aft pedestal), which the FMC does not tune and no instrument view shows:
 /// the knob model, the clicks that reach a frequency or PARK, and the words. Pure; BBS757Definition.Radios.cs
 /// keeps the count and turns the knobs.
@@ -56,8 +64,10 @@ public readonly record struct Bbs757IlsDial(int Whole, int Fraction)
 ///     goes right), .95 to .10 with no carry into the megahertz. While parked it does nothing, and PARK
 ///     remembers the fraction.
 ///   • A write of 2 moves one channel: one write is one click. Two writes landing in one frame count once.
-/// The panel's display can be read from a picture (round 5, <see cref="Bbs757IlsOcr"/>): a set reads it, clicks
-/// and reads it again, and what it says is what the display shows. When the display cannot be read the app
+/// The panel's display is read from BlueBird's own variable, <c>L:BBS_757_ILS_FREQ</c> (-1 while parked, the
+/// panel's frequency otherwise; added by BlueBird's 2026-10-31 update, not in its public table; measured
+/// 2026-11-05, docs/b757/evidence/flight-19.md): a set reads it, clicks and reads it again, and what it says is
+/// what the display shows (<see cref="ReadingFrom"/>). When the display cannot be read the app
 /// counts the clicks it sends from a state it knows (<see cref="Bbs757IlsDial.LoadState"/>, or the last
 /// reading) and its words say it went by the count (<see cref="ByCount"/>, <see cref="CountPhrase"/>).
 /// </summary>
@@ -258,7 +268,24 @@ public static class Bbs757IlsPanel
     /// </summary>
     public static string ByCount(string phrase) => $"{phrase} by count: the ILS display could not be read.";
 
-    // ---- The display (round 5: the panel read from a picture, Bbs757IlsOcr) --------------------------------
+    // ---- The display (read from BlueBird's L:BBS_757_ILS_FREQ) ---------------------------------------------
+
+    /// <summary>What <c>L:BBS_757_ILS_FREQ</c> holds while the panel is parked.</summary>
+    public const int ParkedValue = -1;
+
+    /// <summary>
+    /// The display from the frequency variable and the course variable: parked within 0.001 of
+    /// <see cref="ParkedValue"/>; an ILS channel (<see cref="TryDialFor"/>) as its frequency; anything else
+    /// (not read, 0, NaN, a frequency off the channels) null. The course is rounded to whole degrees 0 to 359,
+    /// else null.
+    /// </summary>
+    public static Bbs757IlsReading? ReadingFrom(double? frequency, double? course)
+    {
+        if (frequency is not double f || !double.IsFinite(f)) return null;
+        int? shownCourse = course is double c && double.IsFinite(c) && Math.Round(c) is >= 0 and <= 359 ? (int)Math.Round(c) : null;
+        if (Math.Abs(f - ParkedValue) <= 0.001) return new Bbs757IlsReading(true, null, shownCourse);
+        return TryDialFor(f, out var dial) ? new Bbs757IlsReading(false, dial.Mhz, shownCourse) : null;
+    }
 
     /// <summary>What the display shows, as said: "ILS 110.50", "ILS parked". Only what the panel shows, never a station received.</summary>
     public static string ReadPhrase(Bbs757IlsReading reading)
