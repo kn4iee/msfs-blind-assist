@@ -534,6 +534,48 @@ public class Bbs757EfbBridgeTests
         Assert.True(tablet.Now >= Bbs757EfbPressRunner.NavigateMaxMs, "read again for four seconds");
     }
 
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_menu_press_whose_section_is_not_read_says_nothing(string culture)
+    {
+        var fuel = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(130, 230), true, "menu:FUEL");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", new[] { fuel }, new[] { ReqFuelTruck() }));
+        var press = tablet.Press(fuel);
+        tablet.OnTap = _ => tablet.Show(new Bbs757EfbScreenModel("AIRCRAFT", "", new[] { fuel }, Array.Empty<Bbs757EfbItem>()));
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+        Assert.True(tablet.Now >= Bbs757EfbPressRunner.NavigateMaxMs, "read again for four seconds");
+    }
+
+    [Fact]
+    public async Task A_menu_press_whose_page_reads_unknown_says_nothing()
+    {
+        var fuel = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(130, 230), true, "menu:FUEL");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", new[] { fuel }, new[] { ReqFuelTruck() }));
+        var press = tablet.Press(fuel);
+        tablet.OnTap = _ => tablet.Show(new Bbs757EfbScreenModel("", "", new[] { fuel }, Array.Empty<Bbs757EfbItem>()));
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Single(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_home_press_that_lands_in_another_app_says_so()
+    {
+        var home = new Bbs757EfbItem(Bbs757EfbKind.Button, "Home", new Rectangle(5, 5, 40, 30), new Point(25, 20), true, "btn:HOME");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("NAVIGATION", "", new[] { home }, Array.Empty<Bbs757EfbItem>()));
+        var press = tablet.Press(home);
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Equal(new[] { "The tablet did not show Home. Try again, or use Read the tablet again." }, tablet.Alerts);
+    }
+
     [Fact]
     public async Task A_menu_press_whose_page_comes_late_says_nothing()
     {

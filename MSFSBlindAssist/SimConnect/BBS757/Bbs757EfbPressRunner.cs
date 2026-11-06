@@ -95,7 +95,8 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then a wait for the picture to change
 /// (at most <see cref="ChangeMaxMs"/>), and a read.</item>
 /// <item>What it came to: a navigation (Home, a side-menu entry, a home-screen app) is read again until the page name is the one
-/// tapped (at most <see cref="NavigateMaxMs"/>); any other button says its new words when the read after the tap finds it with
+/// tapped (at most <see cref="NavigateMaxMs"/>); a read that shows another app or another section says so, one whose section or app
+/// could not be read says nothing; any other button says its new words when the read after the tap finds it with
 /// other words, whatever its key or kind now, and that it changed nothing when nothing on the page did
 /// (<see cref="Bbs757EfbPress.ButtonOutcome"/>; the window says neither); a Settings switch or slider is judged by BlueBird's file
 /// (at most <see cref="FileMaxMs"/>, the stored value of what was asked for), and anything with no setting behind it by the page (a
@@ -174,7 +175,7 @@ public sealed class Bbs757EfbPressRunner
             if (after == null) return;   // nothing read: the window says why
 
             if (NavigationTarget(item) is { } page)
-                await ArriveAsync(after, page, ct);
+                await ArriveAsync(after, page, item, target.Page, ct);
             // The control's new words, or that the press changed nothing: said here, once, since the window says neither.
             else if (Bbs757EfbPress.ButtonOutcome(target.Page, after, item) is { } outcome)
                 _io.Alert(outcome);
@@ -199,7 +200,7 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>Reads the tablet again until it shows <paramref name="page"/>, for <see cref="NavigateMaxMs"/>, and says so when it
     /// never does.</summary>
-    private async Task ArriveAsync(Bbs757EfbScreenModel after, string page, CancellationToken ct)
+    private async Task ArriveAsync(Bbs757EfbScreenModel after, string page, Bbs757EfbItem item, Bbs757EfbScreenModel pressedOn, CancellationToken ct)
     {
         long until = _io.NowMs() + NavigateMaxMs;
         var now = after;
@@ -210,8 +211,25 @@ public sealed class Bbs757EfbPressRunner
             now = next;
         }
         if (PageIs(now, page)) return;
+        if (!ShowsOtherPage(now, item, pressedOn))
+        {
+            Log.Debug("BBS757", $"EFB reader: tapped '{page}', page reads '{now.PageName}'; its section was not read, nothing said");
+            return;
+        }
         Log.Debug("BBS757", $"EFB reader: tapped '{page}', page reads '{now.PageName}'");
         _io.Alert(NotShownText(page));
+    }
+
+    /// <summary>Whether the read names another place than the tap asked for: another app than Home, the home-screen app or the
+    /// pressed page's app, or in that app a section that is read and is not the entry's. An unread app or section says nothing.</summary>
+    internal static bool ShowsOtherPage(Bbs757EfbScreenModel now, Bbs757EfbItem pressed, Bbs757EfbScreenModel pressedOn)
+    {
+        if (string.IsNullOrWhiteSpace(now.App)) return false;
+        if (pressed.Key == HomeKey) return !now.App.Equals("HOME", StringComparison.OrdinalIgnoreCase);
+        if (pressed.Key.StartsWith("app:", StringComparison.Ordinal))
+            return !now.App.Equals(pressed.Key["app:".Length..], StringComparison.OrdinalIgnoreCase);
+        if (!now.App.Equals(pressedOn.App, StringComparison.OrdinalIgnoreCase)) return true;
+        return !string.IsNullOrWhiteSpace(now.Section) && !PageIs(now, pressed.Text);
     }
 
     /// <summary>Whether the page read is the one a navigation tap asked for (an app's or a section's name).</summary>
