@@ -37,7 +37,7 @@ internal static class Bbs757EfbTreeScrub
         apps.Select(a => a with { Controls = a.Controls.Select(ScrubNode).ToList() }).ToList();
 
     /// <summary>The made-up flight's value for a flight plan value node: the mapped one for a name in the table,
-    /// "0" for every other flight plan value.</summary>
+    /// "0" for every other flight plan value. An empty one is kept empty (<see cref="Scrub"/>).</summary>
     internal static string MadeUpFlight(string name) =>
         MadeUpFlightValues.TryGetValue(name, out string? v) ? v : Zero;
 
@@ -50,7 +50,8 @@ internal static class Bbs757EfbTreeScrub
         if (name == "hoppie_logon_code_value_label" || name == "sayintentions_acars_key_value_label"
             || name.EndsWith("_textbox", StringComparison.Ordinal))
             return text.Length == 0 || text == EmptyCode ? text : MadeUpCode;
-        if (IsFlightPlanValue(name)) return MadeUpFlight(name);
+        // An empty value stays empty, as an empty code does: "0" there would read as a value the tablet never showed.
+        if (IsFlightPlanValue(name)) return text.Length == 0 ? text : MadeUpFlight(name);
         return text;
     }
 

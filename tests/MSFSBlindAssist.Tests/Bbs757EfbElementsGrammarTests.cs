@@ -128,9 +128,8 @@ public class Bbs757EfbElementsGrammarTests
     public void A_two_choice_switch_is_a_choice_list(string culture)
     {
         var page = Page("SETTINGS", "AIRCRAFT", new[] { Make(Bbs757EfbKind.Toggle, "Nosewheel steering", "tgl:nws", value: "Rudder", on: false) });
-        var model = page with { Section = "AIRCRAFT" };
 
-        var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(model, null, NoExtras));
+        var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page, null, NoExtras));
 
         int at = IndexOf(b, "Nosewheel steering");
         Assert.Equal("select", F(b, at, "type"));

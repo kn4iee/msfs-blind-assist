@@ -1,7 +1,5 @@
 title: Navigation, Operating FP
 heading 2  Operating flight plan
-pre
-    0
 heading 2  Sections
 button  ACARS dashboard
 button  Operating FP (current page)

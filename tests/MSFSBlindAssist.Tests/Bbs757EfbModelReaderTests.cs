@@ -566,8 +566,11 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(Bbs757EfbKind.LongText, Assert.Single(broken).Kind);
         Assert.Equal("first line\nsecond line", broken[0].Text);
 
+        // Operating FP's plan is a long text when it holds one; the committed tree's is empty, as captured (M5), and reads as nothing.
+        var plan = ItemsOf(N("other", "planning_operating_fp_value", "KSEA DCT BTG DCT KPDX", 324, 152, 1000, 25761));
+        Assert.Equal(Bbs757EfbKind.LongText, Assert.Single(plan).Kind);
         var fp = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("21-navigation-operating-fp"))!.Items;
-        Assert.Contains(fp, i => i.Kind == Bbs757EfbKind.LongText && i.Name == "planning_operating_fp_value");
+        Assert.DoesNotContain(fp, i => i.Name == "planning_operating_fp_value");
     }
 
     [Fact]

@@ -52,6 +52,25 @@ public class Bbs757EfbTreeScrubTests
     }
 
     [Fact]
+    public void An_empty_flight_plan_value_stays_empty()
+    {
+        // The final review's M5: an empty value became "0", so Operating FP's fixture read "pre 0", which the tablet never shows.
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("planning_operating_fp_value", ""), N("planning_acars_flight_info_value_4", ""),
+            N("planning_acars_route_value", "")));
+        Assert.Equal(new[] { "", "", "" }, scrubbed[0].Controls.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void The_committed_operating_fp_tree_holds_no_flight_plan_text()
+    {
+        var value = Bbs757EfbTreeJson.Load("21-navigation-operating-fp").SelectMany(a => a.Controls).SelectMany(Flat)
+            .Single(n => n.Name == "planning_operating_fp_value");
+        Assert.Equal("", value.Text);
+
+        static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
+    }
+
+    [Fact]
     public void An_update_or_other_name_containing_date_or_time_is_kept()
     {
         var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("update_label", "UPDATE"), N("planning_time_label", "Time")));

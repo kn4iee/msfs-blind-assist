@@ -13,20 +13,26 @@ public class Bbs757EfbPageListingTests
         return Path.Combine(dir!.FullName, "tests", "MSFSBlindAssist.Tests", "Fixtures", "bbs757-efb-memory");
     }
 
+    /// <summary>Every committed tree, under en-US, de-DE and sv-SE (the final review's M6): one golden listing per page, which no
+    /// Windows culture may change by a byte (CI runs under en-US only).</summary>
     public static IEnumerable<object[]> Fixtures() =>
         Directory.GetFiles(FixtureDir(), "*.tree.json").OrderBy(p => p, StringComparer.Ordinal)
-            .Select(p => new object[] { Path.GetFileName(p)[..^".tree.json".Length] });
+            .SelectMany(p => new[] { "en-US", "de-DE", "sv-SE" }.Select(culture => new object[] { Path.GetFileName(p)[..^".tree.json".Length], culture }));
 
     [Theory]
     [MemberData(nameof(Fixtures))]
-    public void Every_page_reads_as_its_listing(string name)
+    public void Every_page_reads_as_its_listing(string name, string culture)
     {
-        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(name));
-        string actual = Bbs757EfbListing.Of(Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()));
+        string actual = TestCulture.Run(culture, () =>
+        {
+            var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(name));
+            return Bbs757EfbListing.Of(Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()));
+        });
         string path = Path.Combine(FixtureDir(), name + ".listing.txt");
         if (Environment.GetEnvironmentVariable("BBS_EFB_UPDATE_LISTINGS") == "1")
         {
-            File.WriteAllText(path, actual, new System.Text.UTF8Encoding(false));
+            // Written from en-US only, so a culture that read otherwise fails against the file the next run.
+            if (culture == "en-US") File.WriteAllText(path, actual, new System.Text.UTF8Encoding(false));
             return;
         }
         Assert.True(File.Exists(path), $"{name}.listing.txt is missing: run the tests once with BBS_EFB_UPDATE_LISTINGS=1 to write it.");

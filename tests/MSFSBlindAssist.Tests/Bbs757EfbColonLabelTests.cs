@@ -16,13 +16,14 @@ public class Bbs757EfbColonLabelTests
         Enumerable.Range(0, b.Count)
             .Select(i => (b.Data[$"items.{i}.text"], b.Data[$"items.{i}.kind"], b.Data[$"items.{i}.level"])).ToList();
 
+    /// <summary>Every committed tree, under each culture the listings run under.</summary>
     public static IEnumerable<object[]> Fixtures() => Bbs757EfbPageListingTests.Fixtures();
 
     [Theory]
     [MemberData(nameof(Fixtures))]
-    public void No_element_of_any_page_has_an_empty_name(string name)
+    public void No_element_of_any_page_has_an_empty_name(string name, string culture)
     {
-        var b = Built(name);
+        var b = TestCulture.Run(culture, () => Built(name));
         for (int i = 0; i < b.Count; i++)
             Assert.False(string.IsNullOrWhiteSpace(b.Data[$"items.{i}.text"]), $"{name}: element {i} ({b.Data[$"items.{i}.kind"]}) has no name");
     }
