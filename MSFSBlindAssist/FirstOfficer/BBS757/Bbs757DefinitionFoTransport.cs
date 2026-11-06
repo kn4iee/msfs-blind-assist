@@ -26,6 +26,10 @@ public sealed class Bbs757DefinitionFoTransport : IBbs757FoTransport
 
     public Task<bool> PressAsync(string node, CancellationToken ct) => _def.FoPressAsync(_sim, node, ct);
 
+    public Task<bool> PressHeldAsync(string node, int? holdMs, CancellationToken ct) => _def.FoPressAsync(_sim, node, ct, holdMs);
+
+    public Task<bool> P61TestAsync(string buttonKey, CancellationToken ct) => _def.FoSpringTestAsync(_sim, buttonKey, ct);
+
     public Task<double?> ReadAsync(string key, CancellationToken ct) => _def.FoReadAsync(_sim, key, ct);
 
     public double? Cached(string key) => _def.FoCached(_sim, key);

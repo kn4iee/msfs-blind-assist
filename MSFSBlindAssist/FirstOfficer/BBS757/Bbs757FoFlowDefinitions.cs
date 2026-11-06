@@ -101,10 +101,10 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildPreflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP and autobrake RTO.",
+        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP and autobrake RTO; then BlueBird's tests: squib, ground proximity, both stall warnings, takeoff and landing configuration warnings, CVR, both crew oxygen masks, TCAS and the wheel well, engine, APU and cargo fire tests.",
         RelatedChecklistGroupIds = new[] { "PREFLIGHT" },
-        Steps = new()
-        {
+        Steps =
+        [
             OnGroundGuard("PF_ON_GROUND"),
             EnginesStoppedGuard("PF_ENGINES_STOPPED"),
             Done(Skip(SW("PF_ENGINE_CONTROLS", "Engine limiters and, on a Rolls-Royce, EEC: ON", X.EngineControls, 1),
@@ -147,11 +147,12 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(SW("PF_AT_ARM", "Autothrottle: ARM", X.ArmAutothrottle, 1), s => s.IsOn("FO_AT_ARMED")), "PF_AT_ARM"),
             Done(Skip(SW("PF_BANK_LIMIT", "Bank limit: AUTO", K.BankLimit, 0), s => s.IsPosition(K.BankLimit, 0)), "PF_BANK_LIMIT"),
             Done(Skip(SW("PF_AUTOBRAKE", "Autobrake: RTO", K.Autobrake, (int)K.AutobrakeRto), s => s.IsPosition(K.Autobrake, (int)K.AutobrakeRto)), "PF_AUTOBRAKE"),
-            Done(Captain("PF_TESTS", "System tests",
-                "Complete the fire and overheat tests, the CVR test and the oxygen tests."), "PF_TESTS"),
+            // BlueBird's tests in its order, each a press of its own key and a wait for what it sounds; one that cannot
+            // be pressed is skipped aloud, never stops the flow. A self-test has no state: never "Already set".
+            .. Bbs757FoTests.Preflight.Select(t => Done(SW(Bbs757FoTests.PreflightId(t), t.Label, t.Key, 1), Bbs757FoTests.PreflightId(t))),
             Done(Captain("PF_FMS", "FMS", "Load the FMS route, winds, performance and takeoff data."), "PF_FMS"),
             Done(Captain("PF_ALTIMETERS", "Altimeters", "Set the altimeters."), "PF_ALTIMETERS"),
-        }
+        ]
     };
 
     // ------------------------------------------------------------------ Before Start

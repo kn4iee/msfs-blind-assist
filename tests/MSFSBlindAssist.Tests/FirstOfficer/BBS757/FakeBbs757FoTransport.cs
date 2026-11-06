@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,8 +48,20 @@ internal sealed class FakeBbs757FoTransport : IBbs757FoTransport
     public List<int> Delays { get; } = new();
     public List<string> Reads { get; } = new();
 
-    /// <summary>Every set, press and write-now in order ("set X=1", "press X", "now X=1").</summary>
+    /// <summary>
+    /// Every set, press, write-now, held press and P61 test in order ("set X=1", "press X", "now X=1",
+    /// "held X 10000" or "held X map" for the map's own hold, "p61 X").
+    /// </summary>
     public List<string> Events { get; } = new();
+
+    /// <summary>The held presses of the preflight tests, with the hold asked (null: the map's own).</summary>
+    public List<(string Node, int? HoldMs)> HeldPresses { get; } = new();
+
+    /// <summary>The P61 test buttons pressed.</summary>
+    public List<string> P61Tests { get; } = new();
+
+    /// <summary>Whether a held press or a P61 test goes out (and, for a P61 test, its switch rests); default it does.</summary>
+    public bool TestPressLands { get; set; } = true;
 
     public int AltimeterSets { get; private set; }
     public bool AltimetersLand { get; set; } = true;
@@ -75,6 +88,20 @@ internal sealed class FakeBbs757FoTransport : IBbs757FoTransport
         if (!Ready) return Task.FromResult(false);
         OnPress?.Invoke(node);
         return Task.FromResult(true);
+    }
+
+    public Task<bool> PressHeldAsync(string node, int? holdMs, CancellationToken ct)
+    {
+        HeldPresses.Add((node, holdMs));
+        Events.Add($"held {node} {(holdMs is int ms ? ms.ToString(CultureInfo.InvariantCulture) : "map")}");
+        return Task.FromResult(Ready && TestPressLands);
+    }
+
+    public Task<bool> P61TestAsync(string buttonKey, CancellationToken ct)
+    {
+        P61Tests.Add(buttonKey);
+        Events.Add($"p61 {buttonKey}");
+        return Task.FromResult(Ready && TestPressLands);
     }
 
     public Task<double?> ReadAsync(string key, CancellationToken ct)

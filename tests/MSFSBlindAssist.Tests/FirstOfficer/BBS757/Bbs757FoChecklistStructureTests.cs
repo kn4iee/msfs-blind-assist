@@ -444,6 +444,50 @@ public class Bbs757FoChecklistStructureTests
         if (after != null) Assert.Equal(items.FindIndex(i => i.Id == after) + 1, items.FindIndex(i => i.Id == id));
     }
 
+    // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
+
+    /// <summary>
+    /// Thirteen hand-tickable action lines where the "Fire and overheat tests…" reminder stood, in the table's order and
+    /// with the flow step's label. A self-test has no state: no state field, so a tick fires it every time (FO-12).
+    /// </summary>
+    [Fact]
+    public void Preflight_HasThirteenTestLines_ActionManual_InTheTablesOrder_WhereTheReminderWas()
+    {
+        var items = Group("PREFLIGHT").Items;
+        Assert.DoesNotContain(items, i => i.Id == "PF_TESTS");
+        int first = items.FindIndex(i => i.Id == "PF_TEST_SQUIB");
+        Assert.Equal(items.FindIndex(i => i.Id == "PF_AUTOBRAKE") + 1, first);
+        var lines = items.Skip(first).Take(Bbs757FoFlowTests.PreflightTestIds.Length).ToList();
+        Assert.Equal(Bbs757FoFlowTests.PreflightTestIds, lines.Select(i => i.Id));
+        Assert.Equal("PF_FMS", items[first + lines.Count].Id);
+
+        foreach (var (line, test) in lines.Zip(Bbs757FoTests.Preflight))
+        {
+            Assert.Equal(ChecklistItemType.Actionable, line.Type);
+            Assert.True(line.ManualCompletionAllowed);
+            Assert.Null(line.StateFieldName);
+            Assert.False(line.IsAutoDetectable);
+            Assert.NotNull(line.CheckAction);
+            Assert.Equal(test.Label, line.Label);
+        }
+    }
+
+    [Fact]
+    public async Task ATestLinesTick_RunsItsTest()
+    {
+        var io = new FakeBbs757FoTransport();
+        var exec = new X();
+        exec.SetTransport(io);
+        var lines = Group("PREFLIGHT").Items.Where(i => Bbs757FoFlowTests.PreflightTestIds.Contains(i.Id)).ToList();
+
+        foreach (var line in lines) await line.CheckAction!(exec, new Bbs757FoStateEvaluator());
+
+        var tests = Bbs757FoTests.Preflight;
+        Assert.Equal(tests.Where(t => t.Kind == Bbs757FoTestKind.HeldButton).Select(t => (t.Target, t.HoldMs)), io.HeldPresses);
+        Assert.Equal(tests.Where(t => t.Kind == Bbs757FoTestKind.P61Switch).Select(t => t.Target), io.P61Tests);
+        Assert.Equal(tests.Select(t => t.AfterMs), io.Delays);
+    }
+
     [Fact]
     public void AfterTakeoff_and_BeforeLanding_lines_sit_where_the_flow_puts_them()
     {

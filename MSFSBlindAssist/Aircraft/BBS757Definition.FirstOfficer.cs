@@ -164,16 +164,17 @@ public partial class BBS757Definition
     /// Presses a momentary button (or holds a held one for its hold time), silently: true when the press
     /// was sent. A button has no position to read back; the caller confirms what the press did by the
     /// state it drives (EXT PWR ON, the speedbrake lever). False when the control is unknown, is not a
-    /// button, has no press code, or a write cannot land.
+    /// button, has no press code, or a write cannot land. <paramref name="holdMs"/>, when given, replaces
+    /// the map's hold of a held button (a preflight oxygen test is held 10 s, plan 19 task 8).
     /// </summary>
-    internal async Task<bool> FoPressAsync(SimConnectManager sim, string node, CancellationToken ct)
+    internal async Task<bool> FoPressAsync(SimConnectManager sim, string node, CancellationToken ct, int? holdMs = null)
     {
         if (!_byNode.TryGetValue(node, out var control) || !Bbs757Write.IsMomentary(control)) return false;
         Sim = sim;
-        return await FoPressCoreAsync(control, WriteIoFor(sim), ct);
+        return await FoPressCoreAsync(control, WriteIoFor(sim), ct, holdMs);
     }
 
-    internal async Task<bool> FoPressCoreAsync(Bbs757Control control, Bbs757SimIo io, CancellationToken ct)
+    internal async Task<bool> FoPressCoreAsync(Bbs757Control control, Bbs757SimIo io, CancellationToken ct, int? holdMs = null)
     {
         var press = Bbs757Write.PressFor(control);
         if (press == null || !io.CanWrite() || _lifetime.IsCancellationRequested) return false;
@@ -183,7 +184,7 @@ public partial class BBS757Definition
         io.Write(press.Down);
         if (press.Up != null)
         {
-            await io.Delay(press.HoldMs, CancellationToken.None);   // a press is always let go
+            await io.Delay(holdMs ?? press.HoldMs, CancellationToken.None);   // a press is always let go
             io.Write(press.Up);
         }
         RelockIfUnlock(control, io);
@@ -198,6 +199,67 @@ public partial class BBS757Definition
             catch (OperationCanceledException) { /* the press went; only the echo read-back stopped */ }
         }
         return true;
+    }
+
+    /// <summary>
+    /// A P61 test run by the First Officer (plan 19, task 8), silently: its spring switch held to the test's side for
+    /// 3 s and let go, as the panel's press does (<see cref="PressSpringAsync"/>) but with nothing said; the flow speaks
+    /// the step, and the lights and warnings the test raises are the cockpit watcher's. True when the switch rests
+    /// afterwards; false for a key that is not a P61 test button, or see <see cref="FoSpringTestCoreAsync"/>.
+    /// </summary>
+    internal async Task<bool> FoSpringTestAsync(SimConnectManager sim, string buttonKey, CancellationToken ct)
+    {
+        if (Bbs757SpringControls.ForButtonKey(buttonKey) is not { } button) return false;
+        Sim = sim;
+        return await FoSpringTestCoreAsync(button, WriteIoFor(sim), ct);
+    }
+
+    /// <summary>
+    /// The testable core of <see cref="FoSpringTestAsync"/>. False, with nothing sent, for a button that is not a P61 test
+    /// (a trim or the cabin switch: <see cref="Bbs757SpringControl.ReadoutKey"/> not null), a write that cannot land, a
+    /// profile switched away, a Stop already given, or a switch already holding (one hold per switch, shared with the
+    /// panel's presses). Otherwise the hold (<see cref="HoldSpringAsync"/>: its waits are on
+    /// <see cref="CancellationToken.None"/>, so a Stop never cuts it short) and the verified release; true when the switch
+    /// rests. A switch still off rest is released again in the background, silently (<see cref="KeepReleasingAsync"/> with
+    /// no announcer), and keeps its hold until that ends; the test is then false. Nothing is ever said.
+    /// </summary>
+    internal async Task<bool> FoSpringTestCoreAsync(Bbs757SpringButton button, Bbs757SimIo io, CancellationToken ct)
+    {
+        var control = button.Control;
+        if (control.ReadoutKey != null || ct.IsCancellationRequested || _lifetime.IsCancellationRequested || !io.CanWrite())
+            return false;
+        if (!_springHolds.TryAdd(control.Key, 0))
+        {
+            Log.Debug("BBS757", $"FO {button.Label}: {control.LVar} is already holding; not pressed.");
+            return false;
+        }
+
+        bool releasing = false;   // the background release owns the switch's hold from then on
+        try
+        {
+            var (hold, release) = Bbs757SpringControls.Codes(control, button.Positive);
+            OnOwnWrite(control.LVar);   // plan 13
+            bool rested = await HoldSpringAsync(control, hold, release, io);
+            if (!rested)
+            {
+                Log.Warn("BBS757", $"FO {control.LVar} did not read its rest value after {Bbs757SpringControls.MaxReleaseWrites} releases; " +
+                    $"releasing it again every {Bbs757SpringControls.ReleaseRetryIntervalMs} ms for up to {Bbs757SpringControls.ReleaseRetryForMs} ms.");
+                releasing = true;
+                _ = ReleaseInBackgroundAsync(control, release, io);   // never throws
+            }
+            return rested;
+        }
+        finally
+        {
+            if (!releasing) _springHolds.TryRemove(control.Key, out _);
+        }
+    }
+
+    /// <summary>The First Officer's background release: silent, and the switch's hold kept until it ends. Never throws.</summary>
+    private async Task ReleaseInBackgroundAsync(Bbs757SpringControl control, string release, Bbs757SimIo io)
+    {
+        try { await KeepReleasingAsync(control, release, io, announcer: null); }
+        finally { _springHolds.TryRemove(control.Key, out _); }
     }
 
     /// <summary>

@@ -637,11 +637,12 @@ public class Bbs757FoExecutorTests
         Assert.False(await _exec.SetLandingLights(false));
     }
 
+    /// <summary>The executor's own keys, then the thirteen preflight tests' (plan 19, task 8).</summary>
     [Fact]
     public void PseudoKeys_AreTheExecutorsOwn()
         => Assert.Equal(new[] { X.ExtPower, X.ParkingBrake, X.ApuStart, X.FuelControl1, X.FuelControl2, X.EngineControls,
             X.SpeedbrakeArm, X.SpeedbrakeDown, X.AltimetersStandard, X.ArmAutothrottle,
-            X.LightOff1, X.LightOff2, X.Cutout1, X.Cutout2 }, X.PseudoKeys);
+            X.LightOff1, X.LightOff2, X.Cutout1, X.Cutout2 }.Concat(Bbs757FoTests.Preflight.Select(t => t.Key)), X.PseudoKeys);
 
     [Fact]
     public async Task ParkingBrake_IsSetThroughItsOwnWrite_AndNeverReleased()
@@ -931,5 +932,189 @@ public class Bbs757FoExecutorTests
         Assert.False(await _exec.ExecuteStepAsync(Sw(X.Cutout2, 1), second.Token));
         Assert.Empty(_io.Sets);
         first.Dispose();
+    }
+
+    // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
+
+    private const Bbs757FoTestKind Held = Bbs757FoTestKind.HeldButton;
+    private const Bbs757FoTestKind P61 = Bbs757FoTestKind.P61Switch;
+
+    /// <summary>BlueBird's order (User Procedures v1.01, simplified procedures pp. 36-42), with no battery test (owner).</summary>
+    [Fact]
+    public void ThePreflightTests_AreBlueBirdsThirteen_InItsOrder()
+    {
+        var expected = new Bbs757FoTest[]
+        {
+            new("FO_TEST_SQUIB", "Squib test — the nine green lamps light", "B757_P6_SQUIBS_BUTTON2", Held, null, 1000),
+            new("FO_TEST_GND_PROX", "Ground proximity test — listen for the callouts", "BBS757_P61_GROUND_PROX_TEST", P61, null, 15000),
+            new("FO_TEST_STALL_L", "Left stall warning test — listen for the stick shaker", "BBS757_P61_LEFT_STALL_TEST", P61, null, 1000),
+            new("FO_TEST_STALL_R", "Right stall warning test — listen for the stick shaker", "BBS757_P61_RIGHT_STALL_TEST", P61, null, 1000),
+            new("FO_TEST_CONFIG_TO", "Takeoff config test — listen for the configuration warning", "BBS757_P61_TAKEOFF_CONFIG_TEST", P61, null, 2000),
+            new("FO_TEST_CONFIG_LDG", "Landing config test — listen for the configuration warning", "BBS757_P61_LANDING_CONFIG_TEST", P61, null, 2000),
+            new("FO_TEST_CVR", "CVR test", "B757_OVHD_SW_CVR_TEST", Held, null, 1000),
+            new("FO_TEST_OXY_CAPT", "Captain oxygen test — listen for the oxygen flow", "OXY_CAPT_TEST_SWITCH001", Held, 10000, 1000),
+            new("FO_TEST_OXY_FO", "First officer oxygen test — listen for the oxygen flow", "OXY_FO_TEST_SWITCH1", Held, 10000, 1000),
+            new("FO_TEST_TCAS", "TCAS test — listen for TCAS test pass", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", Held, null, 8000),
+            new("FO_TEST_FIRE_WHLWELL", "Wheel well fire test — listen for the fire bell", "B757_PED_FIRE_WHLWELL_BUTTON", Held, null, 3000),
+            new("FO_TEST_FIRE_ENG", "Engine fire test — listen for the fire bell", "B757_PED_FIRE_ENG_BUTTON", Held, null, 3000),
+            new("FO_TEST_FIRE_CARGO", "Engine, APU and cargo fire test — listen for the fire bell", "B757_PED_FIRE_CARGO_BUTTON", Held, null, 3000),
+        };
+        Assert.Equal(expected, Bbs757FoTests.Preflight);
+    }
+
+    /// <summary>
+    /// A held button is a momentary control of the map that is let go (its own hold 3 s unless the test gives one);
+    /// a P61 test is a P61 test button (no readout, its switch held 3 s). Keys unique, each found by <c>For</c>.
+    /// </summary>
+    [Fact]
+    public void EachPreflightTest_TargetsAHeldMapButtonOrAP61TestButton()
+    {
+        var def = new MSFSBlindAssist.Aircraft.BBS757Definition();
+        foreach (var t in Bbs757FoTests.Preflight)
+        {
+            if (t.Kind == Held)
+            {
+                var c = def.ControlFor(t.Target);
+                Assert.True(c != null && MSFSBlindAssist.Aircraft.BBS757.Bbs757Write.IsMomentary(c), $"{t.Key}: {t.Target} is not a button of the map");
+                var press = MSFSBlindAssist.Aircraft.BBS757.Bbs757Write.PressFor(c!);
+                Assert.True(press?.Up != null, $"{t.Key}: {t.Target} is never let go");
+                Assert.Equal(3000, press!.HoldMs);
+            }
+            else
+            {
+                var b = MSFSBlindAssist.Aircraft.BBS757.Bbs757SpringControls.ForButtonKey(t.Target);
+                Assert.True(b != null, $"{t.Key}: {t.Target} is not a spring button");
+                Assert.Null(b!.Control.ReadoutKey);                  // a P61 test, not a trim
+                Assert.Equal(3000, b.Control.HoldMs);
+                Assert.Null(t.HoldMs);                               // its switch's own hold
+            }
+            Assert.Same(t, Bbs757FoTests.For(t.Key));
+        }
+        Assert.Equal(13, Bbs757FoTests.Preflight.Select(t => t.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.Null(Bbs757FoTests.For(K.Battery));
+        Assert.Null(Bbs757FoTests.For("B757_OVHD_SW_CVR_TEST"));     // a target is not a key
+    }
+
+    /// <summary>Each test goes to its kind with its hold, then waits its After; never through the map path (it knows nothing here).</summary>
+    [Fact]
+    public async Task EachPreflightTest_IsPressedByItsKind_WithItsHold_ThenWaitsItsAfter()
+    {
+        foreach (var t in Bbs757FoTests.Preflight)
+        {
+            var io = new FakeBbs757FoTransport { KnownNodes = new HashSet<string>() };
+            var exec = new X();
+            exec.SetTransport(io);
+
+            Assert.True(await exec.ExecuteStepAsync(Sw(t.Key, 1)), t.Key);
+
+            string sent = t.Kind == P61 ? $"p61 {t.Target}" : $"held {t.Target} {(t.HoldMs is int h ? h.ToString(System.Globalization.CultureInfo.InvariantCulture) : "map")}";
+            Assert.Equal(new[] { sent }, io.Events);
+            Assert.Equal(new[] { t.AfterMs }, io.Delays);
+        }
+    }
+
+    [Theory]
+    [InlineData("FO_TEST_OXY_CAPT", "held OXY_CAPT_TEST_SWITCH001 10000", 1000)]
+    [InlineData("FO_TEST_SQUIB", "held B757_P6_SQUIBS_BUTTON2 map", 1000)]
+    [InlineData("FO_TEST_GND_PROX", "p61 BBS757_P61_GROUND_PROX_TEST", 15000)]
+    [InlineData("FO_TEST_TCAS", "held B757_PED_TCAS_MODE_KNOB_TEST_CLICK map", 8000)]
+    public async Task APreflightTest_ByAChecklistTick_IsTheSamePressAndWait(string key, string sent, int after)
+    {
+        Assert.True(await _exec.Set(key, 1));
+        Assert.Equal(new[] { sent }, _io.Events);
+        Assert.Equal(new[] { after }, _io.Delays);
+    }
+
+    [Fact]
+    public async Task APreflightTestThatCannotBePressed_Fails_AndSkipsItsWait()
+    {
+        _io.TestPressLands = false;
+        foreach (var t in Bbs757FoTests.Preflight)
+            Assert.False(await _exec.ExecuteStepAsync(Sw(t.Key, 1)), t.Key);
+        Assert.Equal(13, _io.HeldPresses.Count + _io.P61Tests.Count);
+        Assert.Empty(_io.Delays);
+    }
+
+    /// <summary>
+    /// The executor over the definition's own test cores (the real control map, a fake sim with no clock): what a
+    /// flow's Stop does to a test in flight.
+    /// </summary>
+    private sealed class DefinitionCores : IBbs757FoTransport
+    {
+        public readonly Bbs757FakeIo Sim = new();
+        public readonly MSFSBlindAssist.Aircraft.BBS757Definition Def;
+        public readonly List<int> AfterWaits = new();
+
+        public DefinitionCores()
+        {
+            Def = new MSFSBlindAssist.Aircraft.BBS757Definition { NestRunning = () => true, WriteIo = _ => Sim.Io, NowMs = () => 0 };
+        }
+
+        public bool Ready => true;
+        public bool IsButton(string node) => false;
+        public bool Knows(string node) => false;
+
+        public Task<bool> PressHeldAsync(string node, int? holdMs, CancellationToken ct)
+            => Def.FoPressCoreAsync(Def.ControlFor(node)!, Sim.Io, ct, holdMs);
+
+        public Task<bool> P61TestAsync(string buttonKey, CancellationToken ct)
+            => Def.FoSpringTestCoreAsync(MSFSBlindAssist.Aircraft.BBS757.Bbs757SpringControls.ForButtonKey(buttonKey)!, Sim.Io, ct);
+
+        public Task Delay(int ms, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            AfterWaits.Add(ms);
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> SetAsync(string node, double target, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> PressAsync(string node, CancellationToken ct) => throw new NotSupportedException();
+        public Task<double?> ReadAsync(string key, CancellationToken ct) => throw new NotSupportedException();
+        public double? Cached(string key) => throw new NotSupportedException();
+        public bool WriteNow(string node, double target) => throw new NotSupportedException();
+        public Task<bool> SetAltimetersStandardAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> SetParkingBrakeAsync(CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// The Stop fires during the hold: the hold runs its full length and the switch is let go (the last write is the
+    /// release; no wait was canceled), and the test's After wait is not waited: the step reports false.
+    /// </summary>
+    [Theory]
+    [InlineData("FO_TEST_OXY_CAPT")]
+    [InlineData("FO_TEST_GND_PROX")]
+    public async Task A_stop_during_a_test_still_releases_it(string key)
+    {
+        var test = Bbs757FoTests.For(key)!;
+        var cores = new DefinitionCores();
+        string hold, release;
+        if (test.Kind == P61)
+        {
+            var button = MSFSBlindAssist.Aircraft.BBS757.Bbs757SpringControls.ForButtonKey(test.Target)!;
+            (hold, release) = MSFSBlindAssist.Aircraft.BBS757.Bbs757SpringControls.Codes(button.Control, button.Positive);
+            cores.Sim.Fresh[button.Control.LVar] = button.Control.Rest;   // the switch rests once let go
+        }
+        else
+        {
+            var press = MSFSBlindAssist.Aircraft.BBS757.Bbs757Write.PressFor(cores.Def.ControlFor(test.Target)!)!;
+            (hold, release) = (press.Down, press.Up!);
+        }
+        cores.Sim.Hold = ordinal => ordinal == 0;   // the hold's first wait
+        var exec = new X();
+        exec.SetTransport(cores);
+        using var stop = new CancellationTokenSource();
+
+        var step = exec.ExecuteStepAsync(Sw(key, 1), stop.Token);
+        Assert.False(step.IsCompleted);
+        Assert.Equal(new[] { hold }, cores.Sim.Writes);
+        stop.Cancel();
+        cores.Sim.Release(0);
+
+        Assert.False(await step.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(release, cores.Sim.Writes.Last());
+        Assert.Equal(test.Kind == P61 ? 100 : 1, cores.Sim.Writes.Count(w => w == hold));   // never cut short
+        Assert.Equal(test.Kind == P61 ? 3000 : 10_000, cores.Sim.Delays.TakeWhile(d => d != 250).Sum());
+        Assert.Equal(0, cores.Sim.CanceledDelays);
+        Assert.Empty(cores.AfterWaits);
     }
 }

@@ -93,8 +93,8 @@ public static class Bbs757FoChecklistDefinitions
     private static Group Preflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Items = new()
-        {
+        Items =
+        [
             Auto("PF_ENGINE_CONTROLS", "PREFLIGHT", "Engine limiters and, on a Rolls-Royce, EEC: ON", "FO_ENGINE_CONTROLS_ON", On,
                 Set(X.EngineControls, 1)),
             Auto("PF_YAW_DAMPERS", "PREFLIGHT", "Yaw dampers: ON", "FO_YAW_DAMPERS_ON", On,
@@ -128,10 +128,12 @@ public static class Bbs757FoChecklistDefinitions
             Auto("PF_AT_ARM", "PREFLIGHT", "Autothrottle: ARM", "FO_AT_ARMED", On, Set(X.ArmAutothrottle, 1)),
             Auto("PF_BANK_LIMIT", "PREFLIGHT", "Bank limit: AUTO", K.BankLimit, v => Is(v, 0), Set(K.BankLimit, 0)),
             Auto("PF_AUTOBRAKE", "PREFLIGHT", "Autobrake: RTO", K.Autobrake, v => Is(v, K.AutobrakeRto), Set(K.Autobrake, K.AutobrakeRto)),
-            Reminder("PF_TESTS", "PREFLIGHT", "Fire and overheat tests, CVR and oxygen tests: complete"),
+            // BlueBird's tests, as the flow runs them: a tick runs the test. A self-test has no state, so every tick
+            // runs it again (FO-12).
+            .. Bbs757FoTests.Preflight.Select(t => ActionManual(Bbs757FoTests.PreflightId(t), "PREFLIGHT", t.Label, Set(t.Key, 1))),
             Reminder("PF_FMS", "PREFLIGHT", "FMS: route, winds, performance and takeoff data loaded"),
             Reminder("PF_ALTIMETERS", "PREFLIGHT", "Altimeters: set"),
-        }
+        ]
     };
 
     internal static readonly string[] AllFuelPumps =
@@ -582,6 +584,15 @@ public static class Bbs757FoChecklistDefinitions
         item.RevertBehavior = RevertBehavior.StayComplete;
         return item;
     }
+
+    /// <summary>A hand-ticked line that acts and reads nothing (the FBW A320's): a self-test, run on every tick (FO-12).</summary>
+    private static Item ActionManual(string id, string groupId, string label, CheckFn action) => new()
+    {
+        Id = id, GroupId = groupId, Label = label,
+        Type = ChecklistItemType.Actionable,
+        ManualCompletionAllowed = true,
+        CheckAction = action,
+    };
 
     private static Item Reminder(string id, string groupId, string text) => new()
     {

@@ -26,6 +26,18 @@ public interface IBbs757FoTransport
     /// <summary>Presses a button; true when the press was sent.</summary>
     Task<bool> PressAsync(string node, CancellationToken ct);
 
+    /// <summary>
+    /// Presses a held button for <paramref name="holdMs"/> (null: the map's own hold) and lets it go; true when the press
+    /// was sent. A Stop never cuts the hold short: a press is always let go.
+    /// </summary>
+    Task<bool> PressHeldAsync(string node, int? holdMs, CancellationToken ct);
+
+    /// <summary>
+    /// Runs a P61 test: its spring switch held 3 s and let go, silently; true when the switch rests afterwards. A Stop
+    /// never cuts the hold short.
+    /// </summary>
+    Task<bool> P61TestAsync(string buttonKey, CancellationToken ct);
+
     /// <summary>A registered variable read fresh; null unread.</summary>
     Task<double?> ReadAsync(string key, CancellationToken ct);
 
@@ -78,6 +90,8 @@ public interface IBbs757FoTransport
 ///     pressed only when the lever reads otherwise, confirmed on the lever; ARM is refused over an
 ///     extended lever (the flows and checklist lines leave it alone with words first).
 ///   • <see cref="AltimetersStandard"/>: all three altimeters to standard by value.
+///   • BlueBird's preflight tests (<see cref="Bbs757FoTests"/>, <c>FO_TEST_*</c>): a held button or a P61 test
+///     switch held and released, then a wait for what the test sounds (<see cref="RunTestAsync"/>).
 ///
 /// Engine start safety: a start selector goes to GND only on a read N2 below
 /// <see cref="Bbs757FoStateEvaluator.StarterReengageN2"/> (the manual re-engages a starter only below
@@ -145,12 +159,12 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
     /// <summary>How long the A/T flag is watched after an ARM write.</summary>
     internal const int AutothrottleArmWaitMs = 3000;
 
-    /// <summary>The First Officer's own keys, for the tables' tests.</summary>
+    /// <summary>The First Officer's own keys, for the tables' tests: the executor's, then the preflight tests' (<see cref="Bbs757FoTests"/>).</summary>
     public static IReadOnlyCollection<string> PseudoKeys { get; } = new[]
     {
         ExtPower, ParkingBrake, ApuStart, FuelControl1, FuelControl2, EngineControls, SpeedbrakeArm, SpeedbrakeDown, AltimetersStandard,
         ArmAutothrottle, LightOff1, LightOff2, Cutout1, Cutout2,
-    };
+    }.Concat(Bbs757FoTests.Preflight.Select(t => t.Key)).ToArray();
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IBbs757FoTransport? _io;
@@ -276,6 +290,9 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
             case AltimetersStandard: return await io.SetAltimetersStandardAsync(stop);
             case ArmAutothrottle: return await AutothrottleArmAsync(io, stop);
         }
+
+        // A preflight test is no map node of its own: its key names the button and how it is held.
+        if (Bbs757FoTests.For(key) is { } test) return await RunTestAsync(io, test, stop);
 
         if (!io.Knows(key))
         {
@@ -453,6 +470,27 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
     }
 
     private static bool Is(double v, double p) => Math.Abs(v - p) < 0.25;
+
+    /// <summary>
+    /// One of BlueBird's preflight tests (<see cref="Bbs757FoTests"/>): its held button pressed for its hold (the map's
+    /// unless the test gives one) or its P61 switch held 3 s, released either way (a Stop never cuts a hold short), then
+    /// the test's After wait, so its sound and the cockpit watcher's announcements are heard before the next step. A
+    /// press that did not go out (or a P61 switch that did not rest) fails at once, with no wait: the flow skips it aloud.
+    /// A Stop during the wait ends it, and the step, with false.
+    /// </summary>
+    private static async Task<bool> RunTestAsync(IBbs757FoTransport io, Bbs757FoTest test, CancellationToken stop)
+    {
+        bool pressed = test.Kind == Bbs757FoTestKind.P61Switch
+            ? await io.P61TestAsync(test.Target, stop)
+            : await io.PressHeldAsync(test.Target, test.HoldMs, stop);
+        if (!pressed)
+        {
+            Log.Info("BBS757 FO", $"{test.Key}: {test.Target} was not pressed, or did not return; the test is skipped.");
+            return false;
+        }
+        await io.Delay(test.AfterMs, stop);
+        return true;
+    }
 
     /// <summary>
     /// A checklist tick's APU start: the start (on the gate), then a wait for the APU to run, read only and

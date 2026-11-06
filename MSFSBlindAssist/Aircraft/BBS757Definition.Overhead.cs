@@ -590,12 +590,14 @@ public partial class BBS757Definition
     /// <see cref="Bbs757SpringControls.ReleaseRetryIntervalMs"/>, for up to <see cref="Bbs757SpringControls.ReleaseRetryForMs"/>,
     /// reads the switch fresh and, while it does not read its rest value (unread counts as off rest), writes
     /// <paramref name="release"/> again. Once it rests, "{name} switch returned" is said once, unless the pilot has
-    /// switched to another profile; a switch that never rests is left after the last write with nothing more said
-    /// (the press already warned). A profile switch does not stop it: it is the safety, so the waits and reads are
-    /// on <see cref="CancellationToken.None"/>. The writes are the press's own (<c>Write</c>, unique calculator
-    /// writes). The awaits keep the UI context. Never throws: a failed wait, read or write counts as off rest.
+    /// switched to another profile or no <paramref name="announcer"/> is given (the First Officer's P61 tests are
+    /// silent, <see cref="FoSpringTestCoreAsync"/>); a switch that never rests is left after the last write with
+    /// nothing more said (the press already warned). A profile switch does not stop it: it is the safety, so the
+    /// waits and reads are on <see cref="CancellationToken.None"/>. The writes are the press's own (<c>Write</c>,
+    /// unique calculator writes). The awaits keep the UI context. Never throws: a failed wait, read or write counts
+    /// as off rest.
     /// </summary>
-    private async Task KeepReleasingAsync(Bbs757SpringControl control, string release, Bbs757SimIo io, ScreenReaderAnnouncer announcer)
+    private async Task KeepReleasingAsync(Bbs757SpringControl control, string release, Bbs757SimIo io, ScreenReaderAnnouncer? announcer)
     {
         try
         {
@@ -612,7 +614,7 @@ public partial class BBS757Definition
                 if (Bbs757SpringControls.AtRest(control, reading))
                 {
                     Log.Info("BBS757", $"{control.LVar} read its rest value {waited + Bbs757SpringControls.ReleaseRetryIntervalMs} ms into the background release.");
-                    if (!_lifetime.IsCancellationRequested) announcer.Announce(Bbs757SpringControls.ReturnedPhrase(control));
+                    if (!_lifetime.IsCancellationRequested) announcer?.Announce(Bbs757SpringControls.ReturnedPhrase(control));
                     return;
                 }
 

@@ -377,6 +377,126 @@ public class Bbs757FoWriteTests
         Assert.Empty(rig.Sim.Writes);
     }
 
+    // ------------------------------------------------------------------ the preflight tests (plan 19, task 8)
+
+    private const string HeldDown = "1 (>L:H)";
+    private const string HeldUp = "0 (>L:H)";
+
+    private static Bbs757Control HeldButton() => new()
+    {
+        Node = "H", Label = "Oxygen Test", Kind = Bbs757Kinds.Held, StateVar = "H", Press = HeldDown, Release = HeldUp, HoldMs = 3000,
+    };
+
+    [Fact]
+    public async Task A_held_press_given_a_hold_waits_that_hold_between_down_and_up()
+    {
+        var rig = new Rig(HeldButton());
+
+        Assert.True(await rig.Def.FoPressCoreAsync(rig.Def.ControlFor("H")!, rig.Sim.Io, CancellationToken.None, holdMs: 10_000));
+
+        Assert.Equal(new[] { Bbs757FakeIo.WriteEvent(HeldDown), Bbs757FakeIo.DelayEvent(10_000), Bbs757FakeIo.WriteEvent(HeldUp) }, rig.Sim.Events);
+    }
+
+    [Fact]
+    public async Task A_held_press_with_no_hold_given_keeps_the_maps_and_the_definition_passes_the_hold_on()
+    {
+        var rig = new Rig(HeldButton());
+
+        Assert.True(await rig.PressNode("H"));
+        Assert.True(await rig.Def.FoPressAsync(rig.Manager, "H", CancellationToken.None, 10_000));
+
+        Assert.Equal(new[] { 3000, 10_000 }, rig.Sim.Delays);
+        Assert.Equal(new[] { HeldDown, HeldUp, HeldDown, HeldUp }, rig.Sim.Writes);
+    }
+
+    private const string ConfigLVar = "BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW";
+    private const string TakeoffConfigHold = "0 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)";
+    private const string ConfigRelease = "1 (>L:BBS757_TO_AND_LAND_CONFIG_P61_TEST_SW)";
+    private static Bbs757SpringButton TakeoffConfig => Bbs757SpringControls.ForButtonKey("BBS757_P61_TAKEOFF_CONFIG_TEST")!;
+    private static readonly SimConnectManager Unconnected = new(IntPtr.Zero);
+
+    /// <summary>A definition over an empty map, its writes on <paramref name="sim"/>, its clock still (the hold is counted by its waits).</summary>
+    private static BBS757Definition SpringDef(Bbs757FakeIo sim)
+        => new(new Bbs757ControlMap()) { NestRunning = () => true, WriteIo = _ => sim.Io, NowMs = () => 0 };
+
+    [Fact]
+    public async Task A_P61_test_holds_its_position_every_30_ms_for_3_s_releases_and_is_true_when_it_rests()
+    {
+        var sim = new Bbs757FakeIo();
+        sim.Fresh[ConfigLVar] = 1;   // neutral once let go
+        var def = SpringDef(sim);
+
+        Assert.True(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None));
+
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, 100).Append(ConfigRelease), sim.Writes);
+        Assert.Equal(Enumerable.Repeat(30, 100).Append(250), sim.Delays);
+        Assert.Equal(0, sim.CanceledDelays);
+    }
+
+    [Fact]
+    public async Task A_P61_test_refuses_a_trim_button_a_write_that_cannot_land_and_a_stop_already_given()
+    {
+        var sim = new Bbs757FakeIo();
+        sim.Fresh[ConfigLVar] = 1;
+        var def = SpringDef(sim);
+
+        Assert.False(await def.FoSpringTestCoreAsync(Bbs757SpringControls.ForButtonKey("BBS757_RUDDER_TRIM_RIGHT")!, sim.Io, CancellationToken.None));
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        Assert.False(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, stopped.Token));
+        sim.CanWrite = false;
+        Assert.False(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None));
+
+        Assert.Empty(sim.Writes);
+        Assert.Empty(sim.Delays);
+    }
+
+    /// <summary>One hold per switch, shared with the panel: while the First Officer holds the config switch, neither its
+    /// other test nor the panel's press of it starts a hold.</summary>
+    [Fact]
+    public async Task A_P61_test_is_refused_while_its_switch_is_holding()
+    {
+        var sim = new Bbs757FakeIo();
+        sim.Fresh[ConfigLVar] = 1;
+        sim.Hold = ordinal => ordinal == 0;
+        var def = SpringDef(sim);
+        var speech = new SpeechCapture();
+
+        var first = def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None);
+        Assert.False(await def.FoSpringTestCoreAsync(Bbs757SpringControls.ForButtonKey("BBS757_P61_LANDING_CONFIG_TEST")!, sim.Io, CancellationToken.None));
+        await def.PressSpringAsync("BBS757_P61_LANDING_CONFIG_TEST", Unconnected, speech).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(new[] { TakeoffConfigHold }, sim.Writes);
+        Assert.Empty(speech.All);
+
+        sim.Release(0);
+        Assert.True(await first.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        // Let go: the switch holds again.
+        Assert.True(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None));
+        Assert.Equal(200, sim.Writes.Count(w => w == TakeoffConfigHold));
+    }
+
+    /// <summary>
+    /// A switch that does not rest after its three releases is released again in the background, silently (no announcer
+    /// anywhere on this path), and keeps its hold until that ends; the test reports false.
+    /// </summary>
+    [Fact]
+    public async Task A_P61_test_whose_switch_does_not_rest_is_false_and_released_again_in_the_background()
+    {
+        var sim = new Bbs757FakeIo();   // the switch never read: never known to rest
+        var def = SpringDef(sim);
+
+        Assert.False(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None));
+
+        // The waits take no time here, so the background release (every 2 s for 60 s) has run out already.
+        Assert.Equal(Enumerable.Repeat(TakeoffConfigHold, 100).Concat(Enumerable.Repeat(ConfigRelease, 3 + 30)), sim.Writes);
+        Assert.Equal(30, sim.Delays.Count(d => d == Bbs757SpringControls.ReleaseRetryIntervalMs));
+
+        // Once it has ended, the switch may be held again.
+        sim.Fresh[ConfigLVar] = 1;
+        Assert.True(await def.FoSpringTestCoreAsync(TakeoffConfig, sim.Io, CancellationToken.None));
+    }
+
     // ------------------------------------------------------------------ FoWriteNow (the window's close)
 
     [Fact]
@@ -450,10 +570,12 @@ public class Bbs757FoWriteTests
         var methods = typeof(BBS757Definition).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Where(m => m.Name.StartsWith("Fo", StringComparison.Ordinal)
                         && (m.Name.Contains("Set") || m.Name.Contains("Press") || m.Name.Contains("Write") || m.Name.Contains("Read")
-                            || m.Name.Contains("Cached")))
+                            || m.Name.Contains("Cached") || m.Name.Contains("Spring")))
             .ToList();
         Assert.Contains(methods, m => m.Name == "FoSetAsync");
         Assert.Contains(methods, m => m.Name == "FoPressAsync");
+        Assert.Contains(methods, m => m.Name == "FoSpringTestAsync");       // plan 19, task 8: the P61 tests, silent
+        Assert.Contains(methods, m => m.Name == "FoSpringTestCoreAsync");
         foreach (var m in methods)
             Assert.DoesNotContain(m.GetParameters(), p => typeof(ScreenReaderAnnouncer).IsAssignableFrom(p.ParameterType));
     }

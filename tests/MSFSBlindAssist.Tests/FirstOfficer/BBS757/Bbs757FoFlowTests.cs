@@ -647,6 +647,56 @@ public class Bbs757FoFlowTests
         Assert.True(battery.LeaveAloneWhen!(apuOn));
     }
 
+    // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
+
+    internal static readonly string[] PreflightTestIds =
+    {
+        "PF_TEST_SQUIB", "PF_TEST_GND_PROX", "PF_TEST_STALL_L", "PF_TEST_STALL_R", "PF_TEST_CONFIG_TO", "PF_TEST_CONFIG_LDG",
+        "PF_TEST_CVR", "PF_TEST_OXY_CAPT", "PF_TEST_OXY_FO", "PF_TEST_TCAS", "PF_TEST_FIRE_WHLWELL", "PF_TEST_FIRE_ENG",
+        "PF_TEST_FIRE_CARGO",
+    };
+
+    /// <summary>
+    /// The thirteen tests stand where the Captain's "System tests" reminder stood (after the autobrake, before the
+    /// FMS), in the table's order: each a press of its own key, skipped aloud if it cannot be pressed (never a stop,
+    /// never "Already set": a self-test has no state), and linked to its own line (FO-6, FO-7). The flow's on-ground
+    /// and engines-stopped guards stay first (FO-25).
+    /// </summary>
+    [Fact]
+    public void Preflight_RunsBlueBirdsTests_WhereTheReminderWas_EachLinkedToItsLine()
+    {
+        var steps = Flow("PREFLIGHT").Steps;
+        Assert.DoesNotContain(steps, s => s.Id == "PF_TESTS");
+        Assert.Equal(new[] { "PF_ON_GROUND", "PF_ENGINES_STOPPED" }, steps.Take(2).Select(s => s.Id));
+
+        int first = Index("PREFLIGHT", "PF_TEST_SQUIB");
+        Assert.Equal(Index("PREFLIGHT", "PF_AUTOBRAKE") + 1, first);
+        var tests = steps.Skip(first).Take(PreflightTestIds.Length).ToList();
+        Assert.Equal(PreflightTestIds, tests.Select(s => s.Id));
+        Assert.Equal("PF_FMS", steps[first + PreflightTestIds.Length].Id);
+
+        foreach (var (step, test) in tests.Zip(Bbs757FoTests.Preflight))
+        {
+            Assert.Equal(FlowStepActionType.SetSwitch, step.ActionType);
+            Assert.Equal(test.Key, step.EventName);
+            Assert.Equal(1, step.TargetValue);
+            Assert.Equal(test.Label, step.Label);
+            Assert.Equal(FlowStepFailurePolicy.Skip, step.FailurePolicy);
+            Assert.Null(step.SkipCondition);
+            Assert.Null(step.LeaveAloneWhen);
+            Assert.Equal(new[] { step.Id }, step.LinkedChecklistItemIds.ToArray());
+        }
+    }
+
+    [Fact]
+    public void Preflight_Description_NamesTheTests()
+    {
+        string d = Flow("PREFLIGHT").Description;
+        foreach (var word in new[] { "squib", "ground proximity", "stall warning", "configuration warning", "CVR", "oxygen", "TCAS", "fire" })
+            Assert.Contains(word, d, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("battery test", d, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ------------------------------------------------------------------ center pumps (FO-20)
 
     [Fact]
