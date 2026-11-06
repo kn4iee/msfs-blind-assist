@@ -1,10 +1,10 @@
 # Text recognition — rules in full
 
-Each section is the complete text of one rule. Every rule in this file is retired (PaddleOCR was removed in plan 20), so there is no rule file and no one-line form; the sections stay so the IDs are never reused. Background: text-recognition.md.
+Each section is the complete text of one rule. Every rule in this file is retired (PaddleOCR was removed in plan 20), so there is no rule file and no one-line form; the sections stay so the IDs are never reused. Their background doc, `docs/text-recognition.md`, went with PaddleOCR; the 757 tablet is read from the module's memory (`docs/b757.md`).
 
 ## OCR-1 (retired: PaddleOCR removed, plan 20)
 
-- Load the models only from a folder whose `installed.json` marker matches `TextRecognitionModels.ListVersion`; the marker is written last, after every file's SHA-256 matched; a model that fails to load removes the marker, so the next check offers the download again. → text-recognition.md
+- Load the models only from a folder whose `installed.json` marker matches `TextRecognitionModels.ListVersion`; the marker is written last, after every file's SHA-256 matched; a model that fails to load removes the marker, so the next check offers the download again.
 
 Why. The files in `%APPDATA%\MSFSBlindAssist\text-recognition` say nothing about whether they can be used: a download in progress, a job that the app's close or a crash killed, a model that an antivirus program cut short or took away, and a model that cannot be loaded all leave files behind. `installed.json` is the one statement that every listed file was fetched, or found there, and hashed against the list. `TextRecognitionDownloader` writes it last, after `RemoveUnlistedFiles`, through `TextRecognitionModels.WriteMarker`, so no moment of any job, a canceled or a killed one included, leaves a folder that reads Ready with a file unverified. Its content is `{"version":1,"files":[{"name":"…","sha256":"…"},…]}`, compact, in the list's order, UTF-8 without a byte order mark or a newline; only the `version` is read back.
 
@@ -18,7 +18,7 @@ How to apply. Decide "installed" only from `TextRecognitionModels.Check`, throug
 
 ## OCR-2 (retired: PaddleOCR removed, plan 20)
 
-- The download offer at startup and at the 757 menu pick is governed only by `UserSettings.OfferTextRecognitionFor757` (`TextRecognitionOffer.ShouldOffer`), never by a remembered "Not now"; Shift+T on the 757 while a simulator runs, without the models, always offers it. → text-recognition.md
+- The download offer at startup and at the 757 menu pick is governed only by `UserSettings.OfferTextRecognitionFor757` (`TextRecognitionOffer.ShouldOffer`), never by a remembered "Not now"; Shift+T on the 757 while a simulator runs, without the models, always offers it.
 
 Why. The owner's ruling of 2026-10-28, and the rule of 2026-08-09 that UPD-9 applies to the startup data check: a recurring prompt is governed by exactly one visible setting and behaves the same every time. A remembered "Not now" would be a second, invisible setting that the pilot can neither see nor reason about; a pilot who pressed it once, perhaps by accident, would meet the download only as the reader's refusal. So the window is offered again at every startup on the 757 and at every pick of it until the models are Ready, and what silences it is the Text recognition tab's checkbox, "Offer this download when the BlueBird 757 is selected" (`UserSettings.OfferTextRecognitionFor757`, on by default). Nothing about a dismissal is stored anywhere.
 
@@ -34,7 +34,7 @@ How to apply. A new place that offers asks `ShouldOffer` with the real state and
 
 ## OCR-3 (retired: PaddleOCR removed, plan 20)
 
-- PaddleOCR runs at most `PaddleOcrEngine.ThreadsFor` threads, one read at a time, and is loaded only while the 757 EFB tablet window is shown: `Bbs757EfbBridge` holds it in a `TextRecognitionEngineSlot` released only on its own loop (the inactive branch, and when the loop ends), never under a running read. → text-recognition.md
+- PaddleOCR runs at most `PaddleOcrEngine.ThreadsFor` threads, one read at a time, and is loaded only while the 757 EFB tablet window is shown: `Bbs757EfbBridge` holds it in a `TextRecognitionEngineSlot` released only on its own loop (the inactive branch, and when the loop ends), never under a running read.
 
 Why. ONNX Runtime uses every logical processor unless told otherwise, and the tablet is read while the simulator runs on the same PC. `PaddleOcrEngine.ThreadsFor` gives the sessions one thread per eight logical processors, at least 1 and at most 4 (`ThreadsFor_is_an_eighth_of_the_processors_from_one_to_four`): 4 on the owner's PC. The 2026-10-27 benchmark harness that chose the cap (the owner's PC, the median page of the 11 test pages) timed 466 ms with all the processors, 548 ms on 4 threads and 705 ms on 2; the extra 82 ms is what leaves the simulator its other cores. Those are that harness's timings, not the shipped reader's, which takes 334 to 503 ms a page on the 11 test pages with 4 threads (`docs/b757/evidence/tablet-ocr.md`). `MainForm` passes `Environment.ProcessorCount` and nothing else.
 
@@ -52,7 +52,7 @@ How to apply. Only the bridge's loop touches `_ocr`. Add no `Release`, `Dispose`
 
 ## OCR-4 (retired: PaddleOCR removed, plan 20)
 
-- `TextRecognitionDownloader` keeps a model file only when its SHA-256 matched, never by its size: after a failed load all four files sit at their size with no marker, and a damaged one must be fetched again; `.part` files never count and are deleted when a job starts. → text-recognition.md
+- `TextRecognitionDownloader` keeps a model file only when its SHA-256 matched, never by its size: after a failed load all four files sit at their size with no marker, and a damaged one must be fetched again; `.part` files never count and are deleted when a job starts.
 
 Why. `TextRecognitionModels.Check` counts a file by its exact size alone. That is right for "is anything installed" (it is read for every status box and every menu pick) and wrong for "which files may the job skip". A model that fails to load leaves all four files at their size and, after OCR-1's removal, no marker: a job that skipped files by size would see nothing to fetch, write the marker over the damaged file and say "Text recognition ready.", and the next showing of the window would fail the same way, every time. Plan 17's work on the downloader found it (2026-10-29). `TextRecognitionDownloader.RunAsync` therefore hashes the files in the folder first (`IsKeptAsync`: the file is there at its exact size and its SHA-256 is the list's) and fetches the rest; the hash pass over the 32 megabytes takes a fraction of a second. `A_damaged_file_of_the_right_size_is_fetched_again_and_the_good_ones_are_not` pins it, on the test's scaled-down list: only the damaged file is requested, and the job says what it fetches ("Downloading text recognition, 21 megabytes." with the real recognizer damaged), with the milestones the verified files already cover left unspoken.
 
@@ -64,7 +64,7 @@ How to apply. Whatever decides what the job fetches compares SHA-256, never a le
 
 ## OCR-5 (retired: PaddleOCR removed, plan 20)
 
-- Every status box and offer button reads `TextRecognitionDownloader.DisplayStatus()` (and `Installed()`), never `Status`: `Status` keeps a finished job's Ready after a failed load removed the marker, so the offer's Download button, never disabled, would read "Text recognition ready" and a press would do nothing all session. → text-recognition.md
+- Every status box and offer button reads `TextRecognitionDownloader.DisplayStatus()` (and `Installed()`), never `Status`: `Status` keeps a finished job's Ready after a failed load removed the marker, so the offer's Download button, never disabled, would read "Text recognition ready" and a press would do nothing all session.
 
 Why. `Status` is the job's last status as the job set it: after a job that ended in Ready it says Ready until the next job starts, whatever happened to the files since. The case that matters: the pilot downloads, the reader's engine then fails to load, and `OcrFailed` removes the marker (OCR-1). `Status` still says Ready, so a status box that read it would show "Ready: PaddleOCR PP-OCRv6 small." over models that cannot be used, and the offer window that Shift+T on the 757 then opens would build its Download button from the phase: it would read "Text recognition ready" and start nothing when pressed (`TextRecognitionText.OfferButton` makes a press start nothing once the phase is Ready), for the rest of the session. Plan 17's work on the downloader found it (2026-10-29).
 
