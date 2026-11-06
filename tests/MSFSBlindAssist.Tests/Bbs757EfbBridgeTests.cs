@@ -782,22 +782,42 @@ public class Bbs757EfbBridgeTests
 
     [Theory]
     [MemberData(nameof(CulturesByCpdlcFile))]
-    public async Task A_two_choice_setting_is_judged_by_the_choice_that_was_not_set_and_says_it(string culture, long stored, bool notChanged)
+    public async Task A_two_choice_setting_is_judged_by_the_choice_that_was_not_set(string culture, long stored, bool notChanged)
     {
-        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "Hoppie");
+        // A choice list in the window (its word was read): judged by the file, and only a failure speaks (item 18).
+        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: null, value: "Hoppie");
         var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", cpdlc));
         tablet.File["cpdlc_network"] = Bbs757Value.Of(0L);
         var press = tablet.Press(cpdlc);
         tablet.OnTap = _ =>
         {
             tablet.File["cpdlc_network"] = Bbs757Value.Of(stored);
-            tablet.Show(PageOf("SETTINGS", "AIRCRAFT", cpdlc with { On = true, Value = "SayIntentions" }));
+            tablet.Show(PageOf("SETTINGS", "AIRCRAFT", cpdlc with { Value = "SayIntentions" }));
         };
 
-        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None));
+        await TestCulture.Run(culture, () => tablet.Runner().ChoiceSwitchAsync(press, wanted: 1, CancellationToken.None));
 
         Assert.Single(tablet.Taps);
-        Assert.Equal(new[] { notChanged ? "CPDLC network did not change." : "CPDLC network: SayIntentions" }, tablet.Alerts);
+        Assert.Equal(notChanged ? new[] { "CPDLC network did not change." } : Array.Empty<string>(), tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_setting_the_window_shows_as_a_check_box_still_says_its_new_word(string culture)
+    {
+        // Its word was not read, so the window shows a check box, of which the screen reader says only checked or not: the press says
+        // the new word, from the catalog, as before item 18.
+        var cpdlc = Switch("CPDLC network", "tgl:CPDLC NETWORK", on: false, value: "");
+        var page = PageOf("SETTINGS", "AIRCRAFT", cpdlc);
+        Assert.False(Bbs757EfbElements.ShowsAsChoiceList(cpdlc, page.PageName));
+        var tablet = new FakeTablet(page);
+        tablet.File["cpdlc_network"] = Bbs757Value.Of(0L);
+        tablet.OnTap = _ => tablet.File["cpdlc_network"] = Bbs757Value.Of(1L);
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(tablet.Press(cpdlc), wantOn: true, CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "CPDLC network: SayIntentions" }, tablet.Alerts);
     }
 
     [Theory]
@@ -1029,8 +1049,10 @@ public class Bbs757EfbBridgeTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public async Task A_two_choice_switch_runner_tap_says_the_new_word_once(string culture)
+    public async Task A_two_choice_choice_list_change_says_nothing_and_a_failed_one_says_so(string culture)
     {
+        // Item 18 (the owner's ruling, 2026-11-07): the screen reader said "Rudder" as the pilot chose it in the choice list, so a
+        // change that landed says nothing; one that did not says "did not change", in sentence case.
         var row = Nosewheel("Realistic");
         var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", row));
         tablet.File["tiller_realistic"] = Bbs757Value.Of(true);
@@ -1040,10 +1062,55 @@ public class Bbs757EfbBridgeTests
             tablet.Show(PageOf("SETTINGS", "AIRCRAFT", row with { Value = "Rudder" }));
         };
 
-        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(tablet.Press(row), wantOn: row.On != true, CancellationToken.None));
+        await TestCulture.Run(culture, () => tablet.Runner().ChoiceSwitchAsync(tablet.Press(row), wanted: 1, CancellationToken.None));
 
         Assert.Equal(new[] { row.Hit }, tablet.Taps);
-        Assert.Equal(new[] { "Nosewheel steering: Rudder" }, tablet.Alerts);
+        Assert.Empty(tablet.Alerts);
+
+        var stuck = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", row with { Text = "NOSEWHEEL STEERING" }));
+        stuck.File["tiller_realistic"] = Bbs757Value.Of(true);
+        await TestCulture.Run(culture, () => stuck.Runner().ChoiceSwitchAsync(stuck.Press(stuck.Page.Items[0]), wanted: 1, CancellationToken.None));
+        Assert.Single(stuck.Taps);
+        Assert.Equal(new[] { "Nosewheel steering did not change." }, stuck.Alerts);
+    }
+
+    [Fact]
+    public async Task A_two_choice_switch_whose_fresh_read_shows_the_wish_is_not_tapped()
+    {
+        // The final review's I5: pressed on a push showing Realistic, the tablet shows Rudder by the press's own read. Rudder asked
+        // for: nothing tapped (a tap would switch it away from the wish). Realistic asked for: one tap.
+        var pushed = Nosewheel("Realistic");
+        var already = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", pushed));
+        var press = already.Press(pushed);
+        already.Show(PageOf("SETTINGS", "AIRCRAFT", Nosewheel("Rudder")));
+
+        await already.Runner().ChoiceSwitchAsync(press, wanted: 1, CancellationToken.None);
+
+        Assert.Empty(already.Taps);
+        Assert.Empty(already.Alerts);
+
+        var back = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", pushed));
+        var again = back.Press(pushed);
+        back.Show(PageOf("SETTINGS", "AIRCRAFT", Nosewheel("Rudder")));
+        await back.Runner().ChoiceSwitchAsync(again, wanted: 0, CancellationToken.None);
+        Assert.Single(back.Taps);
+    }
+
+    [Fact]
+    public async Task A_two_choice_switch_set_from_an_older_push_to_the_word_the_tablet_shows_now_taps_nothing()
+    {
+        // Through the bridge: the push showed Realistic, the tablet's read now shows Rudder, the pilot picks Rudder.
+        var pushed = PageOf("SETTINGS", "AIRCRAFT", Nosewheel("Realistic"));
+        var now = PageOf("SETTINGS", "AIRCRAFT", Nosewheel("Rudder"));
+        using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(now, null) };
+        h.Bridge.TakeRead(pushed);
+        var push = h.Pushes[^1];
+        int row = IndexOf(push, "Nosewheel steering");
+
+        await h.Bridge.HandleAsync("set_element_value", new Dictionary<string, string> { ["index"] = push[$"items.{row}.aidx"], ["value"] = "Rudder" },
+            CancellationToken.None);
+
+        Assert.DoesNotContain(Bbs757EfbPress.UnreachableText, Texts(h.Pushes[^1]));   // no tap was tried
     }
 
     // ---- scrolling into view --------------------------------------------------------------------------------------------

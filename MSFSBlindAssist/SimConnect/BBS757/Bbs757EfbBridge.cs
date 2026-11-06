@@ -307,12 +307,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         BeginPress();
         var pressed = new Bbs757EfbPressed(item, page.Model);
         if (item.Kind == Bbs757EfbKind.Toggle && TwoChoiceIndex(item, page.Model.PageName, value) is { } wanted)
-        {
-            // A switch of two words: the window sends the word it was set to. The word it shows already: nothing; the other: one tap
-            // (a two-choice row's On is null, so the press taps it once).
-            if (wanted != Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(page.Model.PageName, item)!, item.Value))
-                await _press.SwitchAsync(pressed, item.On != true, ct);
-        }
+            // A switch of two words: the window sends the word it was set to. Whether that needs a tap is the runner's, on its own
+            // fresh read (I5): the word the tablet shows then, never this push's.
+            await _press.ChoiceSwitchAsync(pressed, wanted, ct);
         else if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
             await _press.SwitchAsync(pressed, value == "true", ct);
         else if (item.Kind == Bbs757EfbKind.Slider)

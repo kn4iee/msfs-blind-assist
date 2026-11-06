@@ -207,10 +207,10 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Toggle:
                 {
                     // A two-choice switch ("Nosewheel steering": Realistic or Rudder) is a choice list of its two words (D4).
-                    var pair = TwoChoicesFor(it, pageName);
-                    int chosen = pair == null ? -1 : Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value);
-                    if (pair != null && chosen >= 0)
+                    if (ShowsAsChoiceList(it, pageName))
                     {
+                        var pair = TwoChoicesFor(it, pageName)!;
+                        int chosen = Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value);
                         Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "select", clickable: true, value: pair[chosen], key: it.Key,
                             options: pair, action: new Action(ActionKind.Tap, it));
                         break;
@@ -326,6 +326,12 @@ public static class Bbs757EfbElements
             return null;
         return words.Any(IsOnOff) ? null : words;
     }
+
+    /// <summary>Whether the window shows a switch as a choice list of its two words (D4): a two-choice setting
+    /// (<see cref="TwoChoicesFor"/>) whose word was read; any other switch is a check box.</summary>
+    internal static bool ShowsAsChoiceList(Bbs757EfbItem it, string pageName) =>
+        it.Kind == Bbs757EfbKind.Toggle && TwoChoicesFor(it, pageName) != null
+        && Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value) >= 0;
 
     /// <summary>A side-menu entry's words, "(current page)" after them on the entry of the page shown (a tab says "(current)",
     /// <see cref="Labelled"/>).</summary>
