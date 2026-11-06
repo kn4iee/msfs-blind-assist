@@ -323,7 +323,7 @@ public partial class MainForm
                 }
                 else
                 {
-                    announcer.AnnounceImmediate("The DCDU window is only available on the A32NX and the Headwind A330; on the A350 this key opens its ATC mailbox.");
+                    announcer.AnnounceImmediate("The DCDU window is only available on the A32NX, the Headwind A330 and the Fenix; on the A350 this key opens its ATC mailbox.");
                 }
                 break;
             case HotkeyAction.ShowAircraftWindows:

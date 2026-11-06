@@ -230,10 +230,10 @@ The local time is worked out from where the aircraft is on the globe, including 
 
 | Key | What it reads |
 |---|---|
-| Output D | Distance to destination, from the aircraft's FMS (not on the Fenix or the MD-11) |
-| Output Shift+D | Distance and time to top of descent, once the FMS has worked it out in flight (not on the Fenix or the MD-11) |
+| Output D | Distance to destination, from the aircraft's FMS (not on the MD-11; on the Fenix, worked out from its flight plan) |
+| Output Shift+D | Distance and time to top of descent, once the FMS has worked it out in flight (not on the MD-11; on the Fenix, worked out from its flight plan) |
 | Output N | NAV 1 and NAV 2: frequency, station ident, localiser, glideslope and DME |
-| Output Ctrl+W | The active waypoint on the navigation display: name, distance and bearing (FlyByWire aircraft) |
+| Output Ctrl+W | The active waypoint on the navigation display: name, distance and bearing (FlyByWire aircraft and the Fenix) |
 | Output C | Nearest city or town, or the water you are over (see [Location Info and Nearest City](#location-info)) |
 
 </div>
@@ -246,6 +246,7 @@ The Shift+number keys read the speeds your aircraft cares about. What they mean 
 
 - **Airbus (FlyByWire A320, A330, A380):** Shift+1 Green Dot, Shift+2 S speed, Shift+3 F speed, Shift+4 VLS, Shift+5 VS (stall), Shift+6 VFE Next.
 - **iniBuilds A350:** the same keys, except that Shift+5 reads the alpha protection and alpha max speeds, because the A350 shows no stall speed. Green Dot, S and F are read off its speed tape.
+- **Fenix A320:** the same keys, from its PFD's speed tape, with Shift+5 alpha prot, or VSW while the tape draws one.
 - **PMDG 737, PMDG 777 and iFly 737 MAX:** the flap manoeuvring speeds, from flaps up on Shift+1 upward. The exact flap settings differ between types.
 - **MD-11:** Shift+1 slat retraction speed, Shift+2 flap retraction speed.
 
@@ -336,7 +337,7 @@ You choose between two AI services: **Google Gemini** or **Anthropic Claude**. Y
 ### What it can read {#what-it-can-read}
 
 - **Alt+D, scene description:** on every aircraft, Output Alt+D describes the outside scene: what the simulator window is showing.
-- **Cockpit displays:** on the aircraft whose screens cannot be read as text, Output Alt+P, Alt+N, Alt+E, Alt+S and Alt+I read the PFD, the navigation display, the engine/warning display, the lower or system display, and the standby instruments. Which keys exist depends on the aircraft: the Fenix A320, PMDG 737 and 777, iFly 737 MAX, HorizonSim 787 and TFDi MD-11 have AI display reads. The FlyByWire aircraft read their displays as text instead, from the Panels list, and need no AI. See your aircraft's chapter for exactly what each key reads.
+- **Cockpit displays:** on the aircraft whose screens cannot be read as text, Output Alt+P, Alt+N, Alt+E, Alt+S and Alt+I read the PFD, the navigation display, the engine/warning display, the lower or system display, and the standby instruments. Which keys exist depends on the aircraft: the PMDG 737 and 777, iFly 737 MAX, HorizonSim 787 and TFDi MD-11 have AI display reads. The Fenix A320 opens live windows of its displays and uses the AI read only when it cannot read a display directly. The FlyByWire aircraft read their displays as text instead, from the Panels list, and need no AI. See your aircraft's chapter for exactly what each key reads.
 
 The AI is also used for the route briefing in the flight planning window; see [The Flight Planning Window](planning-your-flight.md#flight-planning-efb).
 
