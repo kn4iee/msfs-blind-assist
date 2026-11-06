@@ -1,31 +1,31 @@
 title: Aircraft, Cockpit presets
 heading 2  Presets
-heading 2  Quick start
-heading 2  Circuits state
-heading 2  On ground
-heading 2  In flight
-heading 2  Custom
+heading 3  On ground
 button  Cold & dark
 button  Turnaround
 button  Before start
 button  Ready for taxi
 button  Ready for takeoff
+heading 3  In flight
 button  After takeoff
 button  Cruise
-button  Final approach
 button  Approach
+button  Final approach
+heading 3  Custom
 button  Save user config
 button  Load user config
 pre
     Choose SAVE or LOAD,
     then select a panel state.
+heading 2  Quick start
 button  APU quick start
 button  Engine quick start
 button  IRS rapid align
+heading 2  Circuits state
+text  ALL BREAKERS PUSHED IN
 button  PUSH ALL CBs
 button  Battery
 button  External power
-text  ALL BREAKERS PUSHED IN
 heading 2  Sections
 button  Cockpit presets (current page)
 button  Fuel

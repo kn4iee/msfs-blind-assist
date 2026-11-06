@@ -588,9 +588,10 @@ public class Bbs757EfbModelReaderTests
         var callouts = ItemsOf(Lbl("callouts_pilot_heading", "PILOT CALLOUTS"), Lbl("callouts_dh_help", "Captain DH must be above -20.", 300, 240));
         Assert.Equal((Bbs757EfbKind.Heading, Bbs757EfbKind.Text), (callouts[0].Kind, callouts[1].Kind));
 
+        // In the order and at the levels Cockpit presets reads them (Bbs757EfbPageRules.Reorder): its three columns under PRESETS.
         var presets = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("10-aircraft-cockpit-presets"))!.Items;
-        Assert.Equal(new[] { "PRESETS", "QUICK START", "CIRCUITS STATE", "ON GROUND", "IN FLIGHT", "CUSTOM" },
-            presets.Where(i => i.Kind == Bbs757EfbKind.Heading).Select(i => i.Text).ToArray());
+        Assert.Equal(new[] { ("PRESETS", 2), ("ON GROUND", 3), ("IN FLIGHT", 3), ("CUSTOM", 3), ("QUICK START", 2), ("CIRCUITS STATE", 2) },
+            presets.Where(i => i.Kind == Bbs757EfbKind.Heading).Select(i => (i.Text, i.Level)).ToArray());
     }
 
     [Fact]
@@ -752,6 +753,122 @@ public class Bbs757EfbModelReaderTests
         var door = Assert.Single(items, i => i.Kind == Bbs757EfbKind.Button);
         Assert.Equal(("Closed", ""), (door.Text, door.Label));
         Assert.Equal(3, items.Count);
+    }
+
+    [Fact]
+    public void A_label_as_near_two_buttons_names_neither()
+    {
+        // The final review's M1: one label 6 px below one OPEN and 6 px above another. A tie names neither, whichever comes first.
+        var items = ItemsOf(Btn("btn_a", "OPEN", 400, 200, 100, 40), N("label", "shared_label", "SHARED", 400, 246, 100, 16),
+            Btn("btn_b", "OPEN", 400, 268, 100, 40));
+
+        Assert.Equal(new[] { ("Open", ""), ("Open", "") }, items.Where(i => i.Kind == Bbs757EfbKind.Button).Select(i => (i.Text, i.Label)).ToArray());
+        Assert.Contains(items, i => i.Kind == Bbs757EfbKind.Text && i.Text == "SHARED");   // still read, as a line of its own
+
+        // One pixel nearer the second: the second takes it.
+        var nearer = ItemsOf(Btn("btn_a", "OPEN", 400, 200, 100, 40), N("label", "shared_label", "SHARED", 400, 246, 100, 16),
+            Btn("btn_b", "OPEN", 400, 267, 100, 40));
+        Assert.Equal(new[] { "", "SHARED" }, nearer.Where(i => i.Kind == Bbs757EfbKind.Button).Select(i => i.Label).ToArray());
+    }
+
+    [Fact]
+    public void A_settings_rows_buttons_are_named_by_the_row()
+    {
+        // The final review's I8: R5's fourth source. SimBrief's and Navigraph's LOGOUT, FETCH KEY and REMOVE read with their row's label;
+        // a label that is a line with its value stays that line too.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("55-settings-airac-data"))!;
+
+        Assert.Equal(new[]
+        {
+            ("simbrief_id_logout_button", "SIMBRIEF ID NUMBER"), ("sayintentions_fetch_key_button", "SAYINTENTIONS ACARS KEY"),
+            ("btn_update", "LATEST CYCLE:"), ("btn_logout", "CONNECTED TO NAVIGRAPH"),
+        }, page.Items.Where(i => i.Kind == Bbs757EfbKind.Button).Select(i => (i.Name, i.Label)).ToArray());
+        Assert.Contains(page.Items, i => i.Kind == Bbs757EfbKind.Row && i.Text == "SIMBRIEF ID NUMBER" && i.Value == "123456");
+        Assert.Contains(page.Items, i => i.Kind == Bbs757EfbKind.Row && i.Text == "LATEST CYCLE:" && i.Value == "2611");
+        Assert.DoesNotContain(page.Items, i => i.Kind == Bbs757EfbKind.Text && i.Text == "CONNECTED TO NAVIGRAPH");   // said with its button
+    }
+
+    [Fact]
+    public void A_button_whose_nearest_grid_is_no_settings_row_takes_no_row_name()
+    {
+        // PERF calc's unit buttons sit in a grid that holds the field titles (planning_perf_calc_row1_grid is no *_row): their own words.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!;
+        Assert.All(page.Items.Where(i => i.Kind == Bbs757EfbKind.Button), b => Assert.Equal("", b.Label));
+    }
+
+    [Fact]
+    public void A_gear_doors_percent_is_named_by_its_doors_label()
+    {
+        // The final review's I9: maintenance_gear_door_nose_percent has no role word; maintenance_gear_door_nose_label names the door's
+        // button and the percent below it.
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!.Items;
+
+        Assert.Equal(new[] { ("NOSE DOOR", "0%"), ("LEFT DOOR", "0%"), ("RIGHT DOOR", "0%") },
+            items.Where(i => i.Name.EndsWith("_percent", StringComparison.Ordinal)).Select(i => (i.Text, i.Value)).ToArray());
+        Assert.All(items.Where(i => i.Name.EndsWith("_percent", StringComparison.Ordinal)), i => Assert.Equal(Bbs757EfbKind.Row, i.Kind));
+        Assert.Equal(new[] { "NOSE DOOR", "LEFT DOOR", "RIGHT DOOR" },
+            items.Where(i => i.Name.StartsWith("maintenance_gear_door_", StringComparison.Ordinal) && i.Kind == Bbs757EfbKind.Button).Select(i => i.Label).ToArray());
+    }
+
+    [Fact]
+    public void A_role_less_value_under_a_label_that_names_no_control_keeps_its_words()
+    {
+        // Failures' column headers: failure_header_status shares failure_header_name's stem, but that label names no control, so
+        // STATUS stays STATUS (never "FAILURE: STATUS").
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("16-aircraft-failures"))!.Items;
+        Assert.Contains(items, i => i.Kind == Bbs757EfbKind.Text && i.Text == "STATUS");
+        Assert.Contains(items, i => i.Kind == Bbs757EfbKind.Text && i.Text == "ACTIONS");
+    }
+
+    [Fact]
+    public void A_cards_title_reads_before_the_rest_of_its_card()
+    {
+        // The final review's M3: REPAIR ALTN comes before LANDING GEAR DOORS in its card's tree; the title reads first.
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!.Items.Select(i => i.Name).ToList();
+        Assert.True(items.IndexOf("maintenance_gear_doors_title") < items.IndexOf("maintenance_alternate_gear_repair"));
+        Assert.True(items.IndexOf("maintenance_brake_reset_button") < items.IndexOf("maintenance_gear_doors_title"));
+    }
+
+    [Fact]
+    public void Cockpit_presets_reads_each_heading_with_what_is_drawn_under_it()
+    {
+        // The final review's M3: BlueBird's tree gives all six headings, then the 17 buttons. By where they are drawn: each section,
+        // and in PRESETS its three columns at level 3, each followed by its own buttons.
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("10-aircraft-cockpit-presets"))!.Items;
+        string Line(Bbs757EfbItem i) => i.Kind == Bbs757EfbKind.Heading ? i.Level + " " + i.Text : i.Text;
+
+        Assert.Equal(new[]
+        {
+            "2 PRESETS",
+            "3 ON GROUND", "Cold & dark", "Turnaround", "Before start", "Ready for taxi", "Ready for takeoff",
+            "3 IN FLIGHT", "After takeoff", "Cruise", "Approach", "Final approach",
+            "3 CUSTOM", "Save user config", "Load user config", "Choose SAVE or LOAD,\nthen select a panel state.",
+            "2 QUICK START", "APU quick start", "Engine quick start", "IRS rapid align",
+            "2 CIRCUITS STATE", "ALL BREAKERS PUSHED IN", "PUSH ALL CBs", "Battery", "External power",
+        }, items.Select(Line).ToArray());
+    }
+
+    [Fact]
+    public void A_value_of_marks_reads_and_a_separator_does_not()
+    {
+        // The final review's M11: an unpaired value of marks is a value (a sighted pilot sees "------"); a role-less mark, or one
+        // BlueBird names a separator, is a separator (R10).
+        var items = ItemsOf(Lbl("hoppie_logon_code_value", "------", 300, 200), Lbl("planning_x_info_separator_value_0", "|", 300, 240),
+            Lbl("divider", "|", 300, 280));
+
+        var line = Assert.Single(items);
+        Assert.Equal((Bbs757EfbKind.Text, "------"), (line.Kind, line.Text));
+    }
+
+    [Theory]
+    [InlineData("ac_card", "")]           // two letters start ACARS DASHBOARD, but name nothing
+    [InlineData("a_card", "")]
+    [InlineData("per_card", "PERF CALC")] // three letters do
+    [InlineData("map_card", "MAP")]
+    public void A_section_stem_needs_three_letters_to_start_a_menu_word(string container, string section)
+    {
+        var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"], N("other", container, "", 260, 90, 100, 30));
+        Assert.Equal(section, Bbs757EfbModelReader.Read(new[] { page })!.Section);
     }
 
     [Fact]

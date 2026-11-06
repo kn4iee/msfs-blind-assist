@@ -6,14 +6,14 @@ button  Fire protect
 button  APU
 heading 2  Brake temperature
 button  Reset
-button  Repair altn
 heading 2  Landing gear doors
+button  Repair altn
 button  Nose door: Open
 button  Left door: Open
 button  Right door: Open
-text  0%
-text  0%
-text  0%
+text  Nose door: 0%
+text  Left door: 0%
+text  Right door: 0%
 heading 2  Sections
 button  Cockpit presets
 button  Fuel

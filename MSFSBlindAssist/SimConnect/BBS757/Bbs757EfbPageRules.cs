@@ -107,6 +107,32 @@ internal static class Bbs757EfbPageRules
     /// <summary>Whether the table names the control as a heading of its app's page.</summary>
     internal static bool IsHeadingName(string app, string name) => HeadingNames.Contains((app, name));
 
+    /// <summary>The settings rows BlueBird does not name <c>*_setting_grid</c> or <c>*_row</c>: the AIRAC page's Navigraph status row,
+    /// which holds its status label and its LOGOUT.</summary>
+    private static readonly (string App, string Name)[] RowGridNames = { ("SETTINGS", "auth_status_grid") };
+
+    /// <summary>Whether a grid is a settings row, whose first label that is no value names the buttons in it (R5's fourth source,
+    /// the final review's I8: "SIMBRIEF ID NUMBER" names its LOGOUT, "LATEST CYCLE:" its REMOVE): BlueBird's <c>*_setting_grid</c> and
+    /// <c>*_row</c> grids, and the table's.</summary>
+    internal static bool IsRowGridName(string app, string name) =>
+        name.EndsWith("_setting_grid", StringComparison.Ordinal) || name.EndsWith("_row", StringComparison.Ordinal)
+        || RowGridNames.Contains((app, name));
+
+    private static readonly HashSet<string> CardWords = new(StringComparer.Ordinal) { "canvas", "card", "panel", "grid", "box" };
+
+    /// <summary>The core a container's own title has (<see cref="NameInfo.CoreKey"/>): its name less its container word
+    /// (<c>maintenance_gear_doors_canvas</c> is titled by <c>maintenance_gear_doors_title</c>); "" for a name that is no card's.</summary>
+    internal static string TitleKeyOf(string containerName)
+    {
+        var parts = NameParts(containerName);
+        return parts.Length >= 2 && CardWords.Contains(parts[^1])
+            ? string.Join(' ', parts[..^1].OrderBy(p => p, StringComparer.Ordinal)) : "";
+    }
+
+    /// <summary>Whether a control's name says it is a separator (<c>planning_weather_primary_info_separator_value_0</c>, a "|"
+    /// between two readouts): marks with no word in them that are no value, whatever its role words say.</summary>
+    internal static bool IsSeparatorName(string name) => NameParts(name).Contains("separator");
+
     private static readonly HashSet<string> LabelWords = new(StringComparer.Ordinal) { "label", "title", "name", "lbl", "len", "heading", "field" };
 
     /// <summary>The parts of a control's name that say what kind of control it is, not what it is about (plan 20, R5): taken out
@@ -167,7 +193,8 @@ internal static class Bbs757EfbPageRules
     /// top (EMPTY, ZFW, ZFW CG, BLK FUEL, TAKE-OFF, LANDING) first, in tree order; Fuel reads tank by tank (LEFT, CENTER, RIGHT, TOTAL
     /// FUEL), each a level 2 heading, its slider, its quantity box and its weight box, matched on the tank part of BlueBird's names
     /// (<c>fuel_left_slider_title</c>, <c>fuel_slider_left</c>, <c>fuel_left_qty_box</c>, <c>fuel_left_weight_box</c>; the total's are
-    /// <c>fuel_slider_total</c>, <c>total_fuel_qty_box</c>, <c>total_fuel_weight_box</c>). Every other page keeps tree order.</summary>
+    /// <c>fuel_slider_total</c>, <c>total_fuel_qty_box</c>, <c>total_fuel_weight_box</c>); Cockpit presets reads by where its headings
+    /// are drawn (<see cref="ByPresetSections"/>). Every other page keeps tree order.</summary>
     internal static IReadOnlyList<Bbs757EfbItem> Reorder(string app, string section, IReadOnlyList<Bbs757EfbItem> items)
     {
         if (app != "AIRCRAFT") return items;
@@ -177,7 +204,69 @@ internal static class Bbs757EfbPageRules
             return top.Count == 0 ? items : top.Concat(items.Where(i => !top.Contains(i))).ToList();
         }
         if (section == "FUEL") return ByTank(items);
+        if (section == "COCKPIT PRESETS") return ByPresetSections(items);
         return items;
+    }
+
+    // ---- Cockpit presets (the final review's M3) ------------------------------------------------------------------
+
+    /// <summary>Cockpit presets' section headings, and the three columns of its PRESETS section.</summary>
+    private static readonly string[] PresetSections = { "presets_label", "quick_start_label", "circuits_state_label" };
+    private static readonly string[] PresetColumns = { "ground_label", "inflight_label", "custom_label" };
+
+    /// <summary>
+    /// Cockpit presets in the order a sighted pilot reads it, from where BlueBird draws it: BlueBird's tree gives its six headings
+    /// first and its 17 buttons after them. Each section heading (PRESETS, QUICK START, CIRCUITS STATE, level 2, top to bottom) is
+    /// followed by what is drawn below it down to the next; in PRESETS, its three columns (ON GROUND, IN FLIGHT, CUSTOM) become level
+    /// 3 headings, left to right, each followed by what is drawn nearest below it. Within a group, top to bottom, and what shares a row
+    /// left to right (ALL BREAKERS PUSHED IN, then PUSH ALL CBs). Tree order when the page draws none of the section headings.
+    /// </summary>
+    private static IReadOnlyList<Bbs757EfbItem> ByPresetSections(IReadOnlyList<Bbs757EfbItem> items)
+    {
+        bool IsOf(Bbs757EfbItem i, string[] names) => i.Kind == Bbs757EfbKind.Heading && names.Contains(i.Name);
+        var sections = items.Where(i => IsOf(i, PresetSections)).OrderBy(i => i.Box.Top).ToList();
+        if (sections.Count == 0) return items;
+        var columns = items.Where(i => IsOf(i, PresetColumns)).Select(i => i with { Level = 3 }).ToList();
+        var rest = items.Where(i => !IsOf(i, PresetSections) && !IsOf(i, PresetColumns)).ToList();
+        int SectionIndex(Bbs757EfbItem i)
+        {
+            int s = 0;
+            for (int k = 0; k < sections.Count; k++) if (sections[k].Box.Top <= i.Box.Top) s = k;
+            return s;
+        }
+        static int Middle(Bbs757EfbItem i) => i.Box.Left + i.Box.Width / 2;
+        var result = new List<Bbs757EfbItem>(items.Count);
+        for (int s = 0; s < sections.Count; s++)
+        {
+            result.Add(sections[s]);
+            var mine = rest.Where(i => SectionIndex(i) == s).ToList();
+            var cols = columns.Where(c => SectionIndex(c) == s).OrderBy(Middle).ToList();
+            if (cols.Count == 0)
+            {
+                result.AddRange(ByRows(mine));
+                continue;
+            }
+            foreach (var col in cols)
+            {
+                result.Add(col);
+                result.AddRange(ByRows(mine.Where(i => cols.OrderBy(c => Math.Abs(Middle(c) - Middle(i))).First() == col)));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Items top to bottom, those drawn on one row (their boxes overlapping the row's first one up and down) left to right.</summary>
+    private static IEnumerable<Bbs757EfbItem> ByRows(IEnumerable<Bbs757EfbItem> items)
+    {
+        var left = items.OrderBy(i => i.Box.Top).ThenBy(i => i.Box.Left).ToList();
+        while (left.Count > 0)
+        {
+            var first = left[0];
+            var row = left.Where(i => i.Box.Top < first.Box.Bottom && i.Box.Bottom > first.Box.Top).OrderBy(i => i.Box.Left).ToList();
+            if (row.Count == 0) row.Add(first);   // a box with no height
+            foreach (var i in row) yield return i;
+            left.RemoveAll(i => row.Contains(i));
+        }
     }
 
     private static string? TankOf(Bbs757EfbItem item)

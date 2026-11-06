@@ -12,10 +12,11 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// its stable identity, kept as the key of a settings row so a re-read relocates it exactly.
 ///
 /// Settings rows (a grid holding a toggle or slider with its label and value) become one Toggle or Slider item carrying
-/// the value the tablet shows and the switch state its value label gives. The current section comes from the content
-/// scrollbox's name (<c>callouts_scrollbox</c> → CALLOUTS), which is also the selected side-menu entry; whether the page
-/// scrolls comes from the scrollbox holding a taller stackbox. Pure over the walk (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App})"/>):
-/// tested against synthetic trees and live against the running 757.
+/// the value the tablet shows and the switch state its value label gives. The current section, also the selected side-menu entry,
+/// comes from the page rules' table of distinctive names, else from the name of a content container (<c>callouts_scrollbox</c> →
+/// CALLOUTS, <see cref="SectionOf"/>); whether the page scrolls, and its viewport, from the one scrollbox holding a taller stackbox,
+/// and each item is clipped to the scrollbox it sits in. Pure over the walk (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App})"/>):
+/// tested against synthetic trees and the committed trees.
 /// </summary>
 public sealed class Bbs757EfbModelReader
 {
@@ -54,7 +55,7 @@ public sealed class Bbs757EfbModelReader
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
         var grammar = new Grammar(content);
-        EmitChildren(content.Controls, content, grammar, section, menu, items, Bbs757EfbScreen.ContentArea);
+        EmitChildren(content.Controls, content, grammar, section, menu, items, Bbs757EfbScreen.ContentArea, parent: null);
         var scroller = PageScrollbox(content);
         return new Bbs757EfbScreenModel(content.Class, section, menu, Bbs757EfbPageRules.Reorder(content.Class, section, items))
         {
@@ -158,10 +159,10 @@ public sealed class Bbs757EfbModelReader
             case "label":
             case "other":
                 if (n.Text.Length > 0 && n.Children.Count == 0) EmitText(n, g, items);
-                EmitChildren(n.Children, content, g, section, menu, items, inner);
+                EmitChildren(n.Children, content, g, section, menu, items, inner, n);
                 return;
             default: // grid, colorbox, canvas, gradientbox, stack, image, pan_indicator, scrollbox: containers
-                EmitChildren(n.Children, content, g, section, menu, items, inner);
+                EmitChildren(n.Children, content, g, section, menu, items, inner, n);
                 return;
         }
     }
@@ -188,10 +189,19 @@ public sealed class Bbs757EfbModelReader
     /// <summary>The children of a container in order; the buttons of a tab row (two or more siblings named as
     /// <see cref="Bbs757EfbPageRules.IsTabName"/> says) come out as <see cref="Bbs757EfbKind.Tab"/> items keyed
     /// <c>tab:&lt;parent's name&gt;|&lt;words&gt;</c>, the current one selected. Every item is clipped to <paramref name="clip"/>, the
-    /// scrollbox the children sit in.</summary>
+    /// scrollbox the children sit in. <paramref name="parent"/> is the container they are the children of (null for the page's roots).</summary>
     private static void EmitChildren(IReadOnlyList<Bbs757EfbMemory.Node> kids, Bbs757EfbMemory.App content, Grammar g, string section,
-        List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items, Rectangle clip)
+        List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items, Rectangle clip, Bbs757EfbMemory.Node? parent)
     {
+        // A card's own title reads before the rest of its card (the final review's M3: Maintenance's REPAIR ALTN comes before
+        // maintenance_gear_doors_title in maintenance_gear_doors_canvas). Its own: the one heading named for the container
+        // (Bbs757EfbPageRules.TitleKeyOf); a heading among a list's rows (Callouts) or a page's headings (Cockpit presets) stays put.
+        if (parent is not null && Bbs757EfbPageRules.TitleKeyOf(parent.Name) is { Length: > 0 } own)
+        {
+            var heads = kids.Where(k => g.LevelOf.ContainsKey(k) && Bbs757EfbPageRules.ReadName(k.Name).CoreKey == own).ToList();
+            if (heads.Count == 1 && !ReferenceEquals(kids[0], heads[0]))
+                kids = heads.Concat(kids.Where(k => !ReferenceEquals(k, heads[0]))).ToList();
+        }
         var tabs = kids.Where(k => k.Kind == "button" && k.Text.Length > 0 && Bbs757EfbPageRules.IsTabName(k.Name)).ToList();
         if (tabs.Count < 2)
         {
@@ -309,7 +319,13 @@ public sealed class Bbs757EfbModelReader
                 Value: g.WithUnit(value), Name: n.Name));
             return;
         }
-        if (!n.Text.Any(char.IsLetterOrDigit)) return; // a separator ("|"), or marks with no word in them
+        if (g.NamedBy.TryGetValue(n, out var namer)) // a value under the label that names a control beside it ("Nose door: 0%")
+        {
+            items.Add(new Bbs757EfbItem(Bbs757EfbKind.Row, namer.Text, Box(n), Hit(n), false, KeyOf(n), Value: g.WithUnit(n), Name: n.Name));
+            return;
+        }
+        // A separator ("|"), or marks with no word in them; a value of marks ("------", "---") that pairs with nothing still reads.
+        if (!n.Text.Any(char.IsLetterOrDigit) && !g.IsValueOfMarks(n)) return;
         if (g.LevelOf.TryGetValue(n, out int level))
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Heading, n.Text, Box(n), Hit(n), false, KeyOf(n), Level: level, Name: n.Name));
         else if (n.H > LongTextHeight || n.Text.Contains('\n'))
@@ -389,8 +405,9 @@ public sealed class Bbs757EfbModelReader
             if (prefix.Length == 0) continue;
             foreach (var w in words)
             {
+                // A stem starts a menu word only with three letters or more: "ac" or "a" would start ACARS DASHBOARD or AIRCRAFT.
                 string fw = Fold(w);
-                if (fw == prefix || fw.StartsWith(prefix, StringComparison.Ordinal)) return w;
+                if (fw == prefix || (prefix.Length >= 3 && fw.StartsWith(prefix, StringComparison.Ordinal))) return w;
             }
         }
         return "";
@@ -537,8 +554,14 @@ public sealed class Bbs757EfbModelReader
         public Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> InputOf { get; } = new(ReferenceEqualityComparer.Instance);
         /// <summary>The word-less buttons holding exactly one label: value boxes, read as fields (R7).</summary>
         public HashSet<Bbs757EfbMemory.Node> FieldButtons { get; } = new(ReferenceEqualityComparer.Instance);
+        /// <summary>For a value with no role word whose name is the name of a label that names a control, plus one part
+        /// (<c>maintenance_gear_door_nose_percent</c> under <c>maintenance_gear_door_nose_label</c>, which names its door button):
+        /// that label, which names the value too ("Nose door: 0%", the final review's I9).</summary>
+        public Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> NamedBy { get; } = new(ReferenceEqualityComparer.Instance);
 
         private readonly Dictionary<Bbs757EfbMemory.Node, Bbs757EfbPageRules.NameInfo> _info = new(ReferenceEqualityComparer.Instance);
+        /// <summary>The labels R5 gave a control as its name.</summary>
+        private readonly HashSet<Bbs757EfbMemory.Node> _namers = new(ReferenceEqualityComparer.Instance);
 
         private readonly string _app;
 
@@ -570,7 +593,8 @@ public sealed class Bbs757EfbModelReader
             Sliders(content.Controls, free);
             Pair(free);
             JoinUnits(labels);
-            LabelControls(content.Controls, free);
+            LabelControls(content.Controls, free, parentOf);
+            NameValues(free);
             ColonLabels(free, parentOf);
             Inputs(all, free, parentOf);
             Title(content.Controls, titledAbove: false);
@@ -595,6 +619,11 @@ public sealed class Bbs757EfbModelReader
 
         /// <summary>A line's value with its unit ("1539 Gal"), or the label's own words when it has no unit.</summary>
         public string WithUnit(Bbs757EfbMemory.Node n) => _unitOf.TryGetValue(n, out var unit) ? n.Text + " " + unit : n.Text;
+
+        /// <summary>Whether a label of marks alone ("------", "---") is a value by its name's role words, so it reads where it stands even
+        /// when it pairs with nothing (the final review's M11); a mark with no role word, or named a separator, is a separator (R10).</summary>
+        public bool IsValueOfMarks(Bbs757EfbMemory.Node n) =>
+            _info.TryGetValue(n, out var info) && info.Role == Bbs757EfbPageRules.NameRole.Value && !Bbs757EfbPageRules.IsSeparatorName(n.Name);
 
         public string? PictureStateOf(Bbs757EfbMemory.Node button) => _pictureOf.GetValueOrDefault(button);
 
@@ -632,7 +661,8 @@ public sealed class Bbs757EfbModelReader
 
         /// <summary>The label that names a control whose own words are none, a state or an action, in order: the one label whose name,
         /// once role words and control words are taken out, equals the control's; the name of the control's index row; the one label
-        /// touching the control's rectangle. Null when none, or when two touch.</summary>
+        /// touching the control's rectangle that touches no other control waiting for a name as near or nearer. Null when none, when two
+        /// touch, and when the one that touches lies as near another such control (a tie names neither: the final review's M1).</summary>
         private Bbs757EfbMemory.Node? NamingLabel(Bbs757EfbMemory.Node control, IEnumerable<Bbs757EfbMemory.Node> pool)
         {
             var candidates = pool.Where(l => !Taken.Contains(l) || RowValues.ContainsKey(l)).ToList();
@@ -646,12 +676,30 @@ public sealed class Bbs757EfbModelReader
             if (_rowNameOf.TryGetValue(control, out var row)) return row;
             var touching = candidates.Where(l => _info[l].Role is Bbs757EfbPageRules.NameRole.None or Bbs757EfbPageRules.NameRole.Label
                 && !_info[l].IsTitle && !ValueOf.ContainsKey(l) && TouchGap(control, l) is { } own
-                && !_needsLabel.Any(o => !ReferenceEquals(o, control) && TouchGap(o, l) is { } other && other < own)).ToList();
+                && !_needsLabel.Any(o => !ReferenceEquals(o, control) && TouchGap(o, l) is { } other && other <= own)).ToList();
             return touching.Count == 1 ? touching[0] : null;
         }
 
-        /// <summary>The controls that wait for a name: a label touching two of them belongs to the nearer one.</summary>
+        /// <summary>The controls that wait for a name: a label touching two of them belongs to the nearer one, and to neither at a tie.</summary>
         private readonly List<Bbs757EfbMemory.Node> _needsLabel = new();
+
+        /// <summary>
+        /// R5's fourth source (the final review's I8): the label of the settings row a button sits in, its nearest grid when that is a
+        /// row (<see cref="Bbs757EfbPageRules.IsRowGridName"/>): the row's first label that is no value ("SIMBRIEF ID NUMBER" names the
+        /// row's LOGOUT, "LATEST CYCLE:" its REMOVE). Null for a button whose nearest grid is no row, or a row with no such label.
+        /// </summary>
+        private Bbs757EfbMemory.Node? RowGridLabel(Bbs757EfbMemory.Node button, Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> parentOf)
+        {
+            for (var p = parentOf.GetValueOrDefault(button); p != null; p = parentOf.GetValueOrDefault(p))
+            {
+                if (p.Kind != "grid") continue;
+                if (!Bbs757EfbPageRules.IsRowGridName(_app, p.Name)) return null;
+                return Descendants(p).FirstOrDefault(l => !ReferenceEquals(l, button) && _info.TryGetValue(l, out var info)
+                    && info.Role is Bbs757EfbPageRules.NameRole.Label or Bbs757EfbPageRules.NameRole.None && !IsValue(l)
+                    && l.Text.Any(char.IsLetterOrDigit));
+            }
+            return null;
+        }
 
         /// <summary>How far a label lies below, above or left of a control (at most 12 px, overlapping it in the other axis); null when it
         /// does not touch it.</summary>
@@ -675,15 +723,43 @@ public sealed class Bbs757EfbModelReader
             if (!_info[label].IsTitle && !RowValues.ContainsKey(label)) Taken.Add(label);
         }
 
-        private void LabelControls(IReadOnlyList<Bbs757EfbMemory.Node> roots, List<Bbs757EfbMemory.Node> free)
+        /// <summary>Names the buttons R5 names: one whose words are none, a state or an action by <see cref="NamingLabel"/>, else by its
+        /// settings row (<see cref="RowGridLabel"/>); any other button in a settings row by its row too ("Sayintentions ACARS key: Fetch
+        /// key"). A row's label that is also a line with its value ("SIMBRIEF ID NUMBER: 123456") stays that line.</summary>
+        private void LabelControls(IReadOnlyList<Bbs757EfbMemory.Node> roots, List<Bbs757EfbMemory.Node> free,
+            Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> parentOf)
         {
             var pool = free.Where(l => !Taken.Contains(l) && !ValueOf.ContainsKey(l) && _info[l].Role != Bbs757EfbPageRules.NameRole.Unit).ToList();
             foreach (var b in Reachable(roots).Where(n => n.Kind == "button" && !IsMenu(n, _app)))
             {
-                if (!FieldButtons.Contains(b) && !Bbs757EfbPageRules.IsStateOrAction(b.Text)) continue;
-                if (NamingLabel(b, pool) is not { } label) continue;
-                _labelOf[b] = label.Text;
-                Use(label);
+                bool waits = FieldButtons.Contains(b) || Bbs757EfbPageRules.IsStateOrAction(b.Text);
+                if (waits && NamingLabel(b, pool) is { } label)
+                {
+                    _labelOf[b] = label.Text;
+                    _namers.Add(label);
+                    Use(label);
+                }
+                else if (RowGridLabel(b, parentOf) is { } rowLabel)
+                {
+                    _labelOf[b] = rowLabel.Text;
+                    if (!ValueOf.ContainsKey(rowLabel)) Use(rowLabel);
+                }
+            }
+        }
+
+        /// <summary>Gives <see cref="NamedBy"/>: each value with no role word, unpaired, whose name less its last part has the core of a
+        /// label that names a control (no title: a card's title names its card, not each value in it).</summary>
+        private void NameValues(List<Bbs757EfbMemory.Node> free)
+        {
+            foreach (var v in free)
+            {
+                if (_info[v].Role != Bbs757EfbPageRules.NameRole.None || Taken.Contains(v) || ValueOf.ContainsKey(v) || _rowNames.Contains(v)
+                    || RowValues.ContainsKey(v)) continue;
+                var parts = Bbs757EfbPageRules.NameParts(v.Name);
+                if (parts.Length < 2) continue;
+                string stem = string.Join(' ', parts[..^1].OrderBy(p => p, StringComparer.Ordinal));
+                var namer = _namers.FirstOrDefault(l => !_info[l].IsTitle && _info[l].CoreKey == stem);
+                if (namer is not null) NamedBy[v] = namer;
             }
         }
 
