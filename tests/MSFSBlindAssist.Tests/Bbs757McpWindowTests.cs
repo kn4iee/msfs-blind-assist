@@ -92,7 +92,7 @@ public class Bbs757McpWindowTests
     [Fact]
     public void Autopilot_rows_in_order()
     {
-        // The sixteen engage and mode controls, then Speed Intervene, A/T Disconnect and the disengage bar (plan 14).
+        // The sixteen engage and mode controls, then Speed Intervene, A/T Disconnect and the captain yoke A/P disconnect (plan 19).
         Assert.Equal(new[]
         {
             "B757_MCP_CMD_1_BUTTON", "B757_MCP_CMD_2_BUTTON", "B757_MCP_CMD_3_BUTTON",
@@ -100,7 +100,7 @@ public class Bbs757McpWindowTests
             "B757_MCP_THR_BUTTON", "B757_MCP_SPD_BUTTON", "B757_MCP_LNAV_BUTTON", "B757_MCP_VNAV_BUTTON",
             "B757_MCP_FLCH_BUTTON", "B757_MCP_HOLD_1_BUTTON", "B757_MCP_HOLD_2_BUTTON", "B757_MCP_VS_BUTTON",
             "B757_MCP_LOC_BUTTON", "B757_MCP_APP_BUTTON",
-            "B757_MCP_AP_SPD_HOLD_SW", "B757_AT_DISC_1", "B757_MCP_btn_autopilot_disengage",
+            "B757_MCP_AP_SPD_HOLD_SW", "B757_AT_DISC_1", "btn_yoke_autopilot_disengage_pilot",
         }, Bbs757AutopilotLayout.Nodes);
     }
 
@@ -113,7 +113,7 @@ public class Bbs757McpWindowTests
         {
             "CMD L", "CMD C", "CMD R", "A/T Arm", "Captain F/D", "F/O F/D",
             "THR", "SPD", "LNAV", "VNAV", "FLCH", "HDG HOLD", "ALT HOLD", "V/S", "LOC", "APP",
-            "Speed Intervene", "A/T Disconnect", "Autopilot Disengage Bar",
+            "Speed Intervene", "A/T Disconnect", "A/P Disconnect",
         }, labels);
     }
 
@@ -133,7 +133,7 @@ public class Bbs757McpWindowTests
     public void Every_autopilot_button_is_a_lit_button_a_two_position_switch_or_a_press()
     {
         var map = Bbs757ControlMap.Load();
-        string[] unlit = { Bbs757AutopilotLayout.SpeedInterveneNode, Bbs757AutopilotLayout.AutothrottleDisconnectNode };
+        string[] unlit = { Bbs757AutopilotLayout.SpeedInterveneNode, Bbs757AutopilotLayout.AutothrottleDisconnectNode, Bbs757AutopilotLayout.AutopilotDisconnectNode };
         foreach (string node in Bbs757AutopilotLayout.Nodes)
         {
             var control = map.Controls.Single(c => c.Node == node);
@@ -145,7 +145,8 @@ public class Bbs757McpWindowTests
             }
             else
             {
-                Assert.Equal(Bbs757Kinds.Button, control.Kind);
+                if (node == Bbs757AutopilotLayout.AutopilotDisconnectNode) Assert.Equal(Bbs757Kinds.Held, control.Kind);
+                else Assert.Equal(Bbs757Kinds.Button, control.Kind);
                 Assert.Equal(!unlit.Contains(node), Bbs757McpLights.ForNode(node) != null);
             }
         }
@@ -176,6 +177,7 @@ public class Bbs757McpWindowTests
     [Theory]
     [InlineData(Bbs757AutopilotLayout.AutothrottleDisconnectNode, "A/T Disconnect pressed")]
     [InlineData(Bbs757AutopilotLayout.SpeedInterveneNode, "Speed Intervene pressed")]
+    [InlineData(Bbs757AutopilotLayout.AutopilotDisconnectNode, "A/P Disconnect pressed")]
     public async Task Ctrl_p_press_with_no_light_says_pressed_once(string node, string said)
     {
         var sim = new FakeSim();
@@ -189,26 +191,22 @@ public class Bbs757McpWindowTests
     }
 
     [Fact]
-    public async Task Ctrl_p_disengage_bar_shows_its_position_and_flips()
+    public async Task Ctrl_p_ap_disconnect_presses_the_captains_yoke_button()
     {
-        var cache = new Dictionary<string, double>(StringComparer.Ordinal) { [Bbs757AutopilotLayout.DisengageBarNode] = 0 };
-        var bar = Def.AutopilotButtons(key => cache.TryGetValue(key, out double v) ? v : null)
-            .Single(x => x.Label == "Autopilot Disengage Bar");
-        Assert.Equal("Up", bar.State());
-        cache[Bbs757AutopilotLayout.DisengageBarNode] = 1;
-        Assert.Equal("Down", bar.State());
-        Assert.Contains(Bbs757AutopilotLayout.DisengageBarNode, Bbs757AutopilotLayout.RequestedKeys);
+        var button = Def.AutopilotButtons(_ => 1).Single(x => x.Label == "A/P Disconnect");
+        Assert.Equal("", button.State());
+        Assert.DoesNotContain("B757_MCP_btn_autopilot_disengage", Bbs757AutopilotLayout.RequestedKeys);
 
         var sim = new FakeSim();
-        sim.Cache[Bbs757AutopilotLayout.DisengageBarNode] = 0;
-        sim.Fresh[Bbs757AutopilotLayout.DisengageBarNode] = 0;
         var def = new BBS757Definition { NestRunning = () => true, WriteIo = _ => sim.Io };
         var speech = new SpeechCapture();
 
-        await def.PressFromWindowAsync(Bbs757AutopilotLayout.DisengageBarNode, new SimConnectManager(IntPtr.Zero), speech);
+        await def.PressFromWindowAsync(Bbs757AutopilotLayout.AutopilotDisconnectNode, new SimConnectManager(IntPtr.Zero), speech);
 
-        Assert.Single(sim.Writes);
-        Assert.Contains("B757_MCP_btn_autopilot_disengage", sim.Writes[0]);
+        Assert.True(sim.Writes.Count >= 2, "a press and then its release");
+        Assert.Contains("btn_yoke_autopilot_disengage_pilot", sim.Writes[0]);
+        Assert.Contains("K:AUTOPILOT_OFF", sim.Writes[0]);
+        Assert.Equal(new[] { "A/P Disconnect pressed" }, speech.All);
     }
 
     [Fact]

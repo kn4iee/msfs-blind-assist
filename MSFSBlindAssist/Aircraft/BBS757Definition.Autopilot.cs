@@ -10,7 +10,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// The Ctrl+P "757 Autopilot" window: one button per MCP engage control (<see cref="Bbs757AutopilotLayout"/>),
 /// each captioned with its live state and pressed by its fixed Alt key. A mode or CMD button shows its
 /// MCP light (from the 1 Hz batch), Speed Intervene the speed window's blank flag, A/T Disconnect
-/// nothing; the two F/D switches and the disengage bar show their map position and A/T ARM BlueBird's armed flag
+/// nothing; A/P Disconnect is the captain's yoke button (a held press, no state; a second press silences
+/// the warning on BlueBird, the owner, 2026-11-05); the two F/D switches show their map position and A/T ARM BlueBird's armed flag
 /// (<c>L:BBS_AUTO_THROTTLE</c>, the A/T's real state, ruling R40), each read on request about once a
 /// second while the window is shown (they are OnRequest variables, and a status row of their own
 /// would cost a data definition and a Ctrl+M row nobody asked for).
@@ -63,7 +64,7 @@ public partial class BBS757Definition
                     Bbs757AutopilotLayout.SpeedInterveneNode => () => SpeedInterveneState(cached(Bbs757Mcp.IasBlankedVar)),
                     _ when Bbs757AutopilotLayout.SwitchNodes.Contains(node)
                         => () => Bbs757AutopilotLayout.SwitchState(control, cached(node)),
-                    _ => () => "",   // A/T Disconnect: a press with nothing to show
+                    _ => () => "",   // A/T Disconnect, A/P Disconnect: a press with nothing to show
                 };
             string label = Bbs757McpWindowLayout.CaptionOverride(node) ?? control.Label;
             buttons.Add(new Bbs757AutopilotButton(label, state, () =>
@@ -119,9 +120,10 @@ public partial class BBS757Definition
                 SayUnavailable(control, announcer);
                 return;
             }
-            // A lit button's caption is its feedback; Speed Intervene and A/T Disconnect have no light, so
+            // A lit button's caption is its feedback; Speed Intervene, A/T Disconnect and A/P Disconnect have no light, so
             // they say "… pressed" once, as the panel does (CORE-7).
-            await PressAsync(control, press, io, announcer, speak: Bbs757McpLights.ForNode(node) == null);
+            await PressAsync(control, press, io, announcer, speak: Bbs757McpLights.ForNode(node) == null,
+                label: Bbs757McpWindowLayout.CaptionOverride(node));
             return;
         }
         await FlipFromWindowAsync(control, io, announcer);

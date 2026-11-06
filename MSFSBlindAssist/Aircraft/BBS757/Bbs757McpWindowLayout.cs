@@ -42,6 +42,7 @@ public static class Bbs757McpWindowLayout
     private static readonly Dictionary<string, string> Overrides = new(StringComparer.Ordinal)
     {
         [SpeedInterveneNode] = "Speed Intervene",
+        ["btn_yoke_autopilot_disengage_pilot"] = "A/P Disconnect",   // the map's "Captain Yoke A/P Disconnect" stays on the panel
     };
 
     /// <summary>

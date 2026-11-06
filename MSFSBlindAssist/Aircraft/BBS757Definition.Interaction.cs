@@ -190,10 +190,11 @@ public partial class BBS757Definition
     /// The release is never canceled: a press is always let go, even across a profile switch.
     /// </summary>
     private async Task PressAsync(Bbs757Control control, Bbs757Press press, Bbs757SimIo io,
-        ScreenReaderAnnouncer announcer, bool speak)
+        ScreenReaderAnnouncer announcer, bool speak, string? label = null)
     {
         try
         {
+            label ??= control.Label;   // the autopilot window passes its own caption ("A/P Disconnect")
             if (_lifetime.IsCancellationRequested) return;   // switched away: nothing is pressed
             string? linked = LinkedStatusKey(control.Node);
             // The state the window's caption shows now, to tell a press the aircraft refused.
@@ -208,7 +209,7 @@ public partial class BBS757Definition
             }
             RelockIfUnlock(control, io);   // a fire handle unlocked from the app locks again (BBS757Definition.Overhead.cs)
             if (_lifetime.IsCancellationRequested) return;
-            if (linked == null && speak && !Bbs757Write.HasReadableState(control)) announcer.Announce($"{control.Label} pressed");
+            if (linked == null && speak && !Bbs757Write.HasReadableState(control)) announcer.Announce($"{label} pressed");
 
             await io.Delay(ReadBackDelayMs, _lifetime.Token);
             io.RequestRead(control.Node);
@@ -218,8 +219,8 @@ public partial class BBS757Definition
             _lifetime.Token.ThrowIfCancellationRequested();
             string phrase = LinkedPhrase(linked, state);
             if (state != null) SettleOwnWriteEcho(linked, phrase);
-            if (speak) announcer.Announce(state != null ? phrase : $"{control.Label} pressed");
-            else if (Bbs757McpLights.RefusedPhrase(control.Label, before, state) is { } refused) announcer.Announce(refused);
+            if (speak) announcer.Announce(state != null ? phrase : $"{label} pressed");
+            else if (Bbs757McpLights.RefusedPhrase(label, before, state) is { } refused) announcer.Announce(refused);
         }
         catch (OperationCanceledException) { /* switched away: nothing left to say or read */ }
         catch (Exception ex)
