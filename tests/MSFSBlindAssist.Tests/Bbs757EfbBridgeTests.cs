@@ -1332,6 +1332,76 @@ public class Bbs757EfbBridgeTests
         Assert.Single(s.Tablet.Taps);
     }
 
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_drag_that_cannot_run_says_so_and_taps_nothing(string culture)
+    {
+        var s = TwoRows(0);
+        s.Tablet.DragReachable = false;
+
+        await TestCulture.Run(culture, () => s.Tablet.Runner().ClickAsync(s.Tablet.Press(s.Row("Dirty panel states")), CancellationToken.None));
+
+        Assert.Empty(s.Tablet.Taps);
+        Assert.Equal(new[] { Bbs757EfbPress.UnreachableText }, s.Tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_page_that_never_brings_the_control_in_stops_after_the_most_drags()
+    {
+        // Each drag moves the page, but the control never arrives (a page far longer than the drags can cover): at most MaxScrollSteps
+        // drags, then no tap and "could not be brought into view".
+        var s = new Scrolled(0, ("Far row", 100_000));
+        s.Tablet.OnDrag = (_, y0, y1) =>
+        {
+            s.Offset += (y0 - y1) / 10.0;   // a tenth of each drag: it moves, but never far enough
+            s.Tablet.Show(s.PageAt());
+        };
+
+        await s.Tablet.Runner().ClickAsync(s.Tablet.Press(s.Row("Far row")), CancellationToken.None);
+
+        Assert.Equal(Bbs757EfbPressRunner.MaxScrollSteps, s.Tablet.Drags.Count);
+        Assert.Empty(s.Tablet.Taps);
+        Assert.Equal(new[] { "Far row could not be brought into view, not pressed." }, s.Tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_press_canceled_while_it_scrolls_taps_nothing_and_says_nothing()
+    {
+        // The window hid (or the bridge stopped) between two drags: the next drag answers false as canceled, and nothing is said.
+        var s = new Scrolled(0, ("Far row", 5000));
+        using var cts = new CancellationTokenSource();
+        var runner = new Bbs757EfbPressRunner(new Bbs757EfbPressIo
+        {
+            Read = _ => Task.FromResult<Bbs757EfbScreenModel?>(s.Tablet.Page),
+            Drag = (_, y0, y1, ct) =>
+            {
+                if (ct.IsCancellationRequested) return Task.FromResult(false);
+                s.Offset += y0 - y1;
+                s.Tablet.Show(s.PageAt());
+                cts.Cancel();   // canceled after the first drag
+                return Task.FromResult(true);
+            },
+            Tap = (p, _) => { s.Tablet.Taps.Add(p); return Task.FromResult(true); },
+            ReadInstalledCycle = () => null,
+            ReadVar = (_, _) => Task.FromResult<double?>(null),
+            ReadRegistered = (_, _) => Task.FromResult<double?>(null),
+            ReadSetting = (_, _) => Task.FromResult<Bbs757Value?>(null),
+            Alert = s.Tablet.Alerts.Add,
+            Delay = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+            NowMs = () => 0,
+            ArmServiceEcho = _ => { },
+            SettleServiceEcho = (_, _) => { },
+            ArmGroundPowerEcho = () => { },
+            SettleGroundPowerEcho = _ => { },
+            Hooked = (_, _) => { },
+        });
+
+        await runner.ClickAsync(s.Tablet.Press(s.Row("Far row")), cts.Token);
+
+        Assert.Empty(s.Tablet.Taps);
+        Assert.Empty(s.Tablet.Alerts);
+    }
+
     [Fact]
     public async Task A_control_in_the_side_menu_taps_where_it_is_with_no_drag()
     {

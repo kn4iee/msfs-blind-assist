@@ -357,12 +357,13 @@ public class Bbs757EfbTests
         foreach (string guard in new[] { "notBeforeLoadMs", "minAgeMs", "samePageAsMs", "onceKey", "guardProblem" })
             Assert.DoesNotContain(guard, code);
 
-        // The only reasons left to refuse a run are the ones about the run itself, never about where it clicks.
+        // The only reasons left to refuse a run are the ones about the run itself, never about where it clicks: a drag's point off the
+        // canvas ("bad-point") cannot be dragged at all, and "error: " is a throw before its run began.
         var refusals = System.Text.RegularExpressions.Regex.Matches(code, @"refuse\('([^']*)'")
             .Select(m => m.Groups[1].Value).Distinct().OrderBy(r => r, StringComparer.Ordinal).ToList();
-        Assert.Equal(new[] { "bad-seq", "busy", "no-canvas: ", "unknown-run" }, refusals);
+        Assert.Equal(new[] { "bad-point", "bad-seq", "busy", "error: ", "no-canvas: ", "unknown-run" }, refusals);
 
-        Assert.Equal(8, CoherentBbs757EfbClient.AgentVersion);
+        Assert.Equal(9, CoherentBbs757EfbClient.AgentVersion);
         Assert.Contains("var VERSION = " + CoherentBbs757EfbClient.AgentVersion.ToString(CultureInfo.InvariantCulture) + ";", code);
     }
 
@@ -372,11 +373,41 @@ public class Bbs757EfbTests
         string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
         string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
         Assert.Contains("A.drag = function (x, y0, y1)", code);
-        Assert.Contains("return 'busy'", code);
-        Assert.Contains("return 'started'", code);
+        Assert.Contains("return refuse('busy')", code);
         Assert.DoesNotContain("A.wheel", code);
         Assert.DoesNotContain("onMouseWheel", code);
         Assert.Contains("8: drag(x, y0, y1) replaces wheel", agent);
+    }
+
+    [Fact]
+    public void The_efb_agent_answers_a_drag_with_its_run_so_the_app_waits_for_it()
+    {
+        // The final review's I7: the app waited a fixed 1,500 ms for a drag that runs on the page's timers, so the tap after it could be
+        // refused as busy. The drag now answers as clickSeq does, and the client waits for that run by its status.
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+        Assert.DoesNotContain("'started'", code);
+        Assert.Contains("return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error };", code);
+        Assert.Contains("9: drag answers with its run", agent);
+
+        Assert.Equal((7, 1400), CoherentBbs757EfbClient.DragRun("{\"ok\":true,\"id\":7,\"n\":22,\"done\":2,\"totalMs\":1400,\"error\":null}"));
+        Assert.Equal((8, CoherentBbs757EfbClient.DragPlannedMs), CoherentBbs757EfbClient.DragRun("{\"ok\":true,\"id\":8,\"n\":22,\"done\":2,\"error\":null}"));
+        Assert.Null(CoherentBbs757EfbClient.DragRun("{\"ok\":false,\"error\":\"busy\"}"));
+        Assert.Null(CoherentBbs757EfbClient.DragRun("{\"ok\":true,\"id\":9,\"n\":22,\"done\":0,\"running\":false,\"error\":\"error: boom\"}"));
+        Assert.Null(CoherentBbs757EfbClient.DragRun("\"started\""));   // an older agent's answer
+    }
+
+    [Fact]
+    public void A_throw_at_the_start_of_a_drag_ends_its_run_and_lets_go_only_after_the_press()
+    {
+        // The final review's M7: a throw in the first mouse move or OnMouseDown left the run "running", so the agent answered busy for
+        // about 6 s. The start is now its own try: the run is failed (not running), and the button is let go only once OnMouseDown was
+        // called (a throw in the first move, before any press, lets nothing go).
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+        Assert.Matches(@"try \{\s*c\.onMouseMove\(ev\(y0\)\);\s*down = true;\s*c\.OnMouseDown\(ev\(y0\)\);\s*\} catch \(e\) \{\s*fail\(e\);\s*return runInfo\(run\);", code);
+        Assert.Matches(@"run\.letGo = function \(\) \{\s*run\.letGo = null;\s*if \(!down\) return;", code);
+        Assert.Matches(@"var fail = function \(e\) \{[^}]*run\.running = false;", code);
     }
 
     [Fact]

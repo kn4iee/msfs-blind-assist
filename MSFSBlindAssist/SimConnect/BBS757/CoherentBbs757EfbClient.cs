@@ -59,7 +59,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// click near the AIRAC page's UPDATE spot and the run guards it needed. An older agent on the
     /// page answers "no agent" to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 8;   // 4: mirror(on), 5: wheel (gone), 6: readVars(names), 7: no UPDATE-spot refusal or run guards, 8: drag(x, y0, y1) replaces wheel
+    internal const int AgentVersion = 9;   // 4: mirror(on), 5: wheel (gone), 6: readVars(names), 7: no UPDATE-spot refusal or run guards, 8: drag(x, y0, y1) replaces wheel, 9: drag answers with its run
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
@@ -328,33 +328,84 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         return o;
     }
 
-    /// <summary>A drag at a tablet-local x from y0 to y1 (this build scrolls on a drag): starts it in the page, then waits
-    /// <see cref="DragWaitMs"/> for it to finish. True when the agent started it, false when it refused or could not be
-    /// reached.</summary>
+    /// <summary>
+    /// A drag at a tablet-local x from y0 to y1 (this build scrolls on a drag), as a run of the agent's: one at a time with the click
+    /// runs (under the run lock, so the tap that follows never finds it still going and refused as busy), started in the page and
+    /// waited for by its status, with the click runs' slack (the agent's timers can fire at the gauge's frame rate, so it can take
+    /// longer than its planned 1,400 ms). True only once the run finished with every move made and the mouse let go; false when the
+    /// agent refused it (busy, a point off the canvas), it stopped part way, or the view could not be reached. A cancel stops the
+    /// run in the page before the lock is let go, and answers false.
+    /// </summary>
     public async Task<bool> DragAsync(int x, int y0, int y1, CancellationToken ct)
     {
+        if (_viewClaim == null || _disposed) return false;
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        using var doc = await CallAgentAsync("drag",
-            string.Join(",", x.ToString(inv), y0.ToString(inv), y1.ToString(inv)), ct, stringResult: true);
-        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.String || doc.RootElement.GetString() != "started")
+        string args = string.Join(",", x.ToString(inv), y0.ToString(inv), y1.ToString(inv));
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _loopToken);
+            var token = linked.Token;
+            await _runLock.WaitAsync(token);
+            try
+            {
+                if (!await WaitForAgentAsync(TimeSpan.FromMilliseconds(AgentWaitMs), token)) return false;
+                string raw = await EvalAsync(
+                    $"window.__MSFSBA_BBS757EFB && __MSFSBA_BBS757EFB.version >= {AgentVersion} && typeof __MSFSBA_BBS757EFB.drag === 'function' ? JSON.stringify(__MSFSBA_BBS757EFB.drag({args})) : '{NoAgent}'",
+                    token);
+                if (raw.Length == 0) { NoteUnansweredEval(); return false; }
+                if (raw == NoAgent) { AgentUnusable(); return false; }
+                if (DragRun(raw) is not { } run) return false;
+                try
+                {
+                    return await WaitForRunAsync(run.Id, run.PlannedMs, token) == Bbs757EfbRunResult.Done;
+                }
+                catch (OperationCanceledException)
+                {
+                    // The press is going away mid-drag: stop the tablet's run (it lets go of the mouse) before the lock is let go.
+                    if (!_disposed && IsReady) await CancelRunAsync();
+                    throw;
+                }
+            }
+            finally
+            {
+                _runLock.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
             return false;
-        // Like the other agent calls, a cancel answers instead of throwing: false, the drag may still be finishing in the page
-        // (it lets go of the mouse itself).
-        try { await Task.Delay(DragWaitMs, ct); }
-        catch (OperationCanceledException) { return false; }
-        return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
     }
 
-    /// <summary>The agent's drag takes about 1,400 ms; this is how long <see cref="DragAsync"/> waits before it returns.</summary>
-    internal const int DragWaitMs = 1500;
+    /// <summary>The agent's drag takes 20 moves 50 ms apart and a 400 ms hold: how long its run is planned to last when its answer
+    /// does not say.</summary>
+    internal const int DragPlannedMs = 1400;
+
+    /// <summary>The run a drag's answer started (its id, and how long it is planned to last); null when the agent refused it
+    /// (<c>{ok:false, error}</c>: busy, a point off the canvas, no canvas), when it stopped at its start (an error with the run), or
+    /// when the answer cannot be read. Internal for the tests.</summary>
+    internal static (int Id, int PlannedMs)? DragRun(string raw)
+    {
+        var start = Parse(raw);
+        if (start == null || !start.ok || start.error != null)
+        {
+            Log.Debug("BBS757", $"EFB drag not started: {(start == null ? "unreadable answer" : start.error ?? "refused")}");
+            return null;
+        }
+        return (start.id, start.totalMs > 0 ? start.totalMs : DragPlannedMs);
+    }
 
     /// <summary>
     /// Calls one of the agent's functions with literal JS arguments and parses its JSON answer. Null
     /// when the view or agent cannot be reached (the loop re-installs it), or the answer is not JSON.
-    /// Never connects ([A380C-3]) and takes no run's place: the reader's reads, mirror and drag
-    /// share the loop's socket between click runs.
+    /// Never connects ([A380C-3]) and takes no run's place: the reader's variable reads and the mirror
+    /// share the loop's socket between click runs (a drag is a run of its own, <see cref="DragAsync"/>).
     /// </summary>
-    private async Task<JsonDocument?> CallAgentAsync(string function, string args, CancellationToken ct, bool stringResult = false)
+    private async Task<JsonDocument?> CallAgentAsync(string function, string args, CancellationToken ct)
     {
         if (_viewClaim == null || _disposed) return null;
         try
@@ -834,6 +885,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         public int done { get; set; }
         public bool running { get; set; }
         public string? error { get; set; }
+        public int totalMs { get; set; }
     }
 
     private sealed class PingAnswer

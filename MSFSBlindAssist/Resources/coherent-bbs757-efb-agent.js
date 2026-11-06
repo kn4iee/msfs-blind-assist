@@ -13,7 +13,8 @@
 // Nothing here judges where a click lands (the owner's ruling of 2026-10-29): a click goes where it
 // is asked to, the AIRAC page's UPDATE/REMOVE spot included, and the app checks what it taps before
 // it taps. A run is refused only for what the agent cannot run: a sequence that is not
-// [[x, y, delayAfterMs], ...], one still going, or a tablet that is not the measured size.
+// [[x, y, delayAfterMs], ...], a drag point off the canvas, one still going, or a tablet that is not
+// the measured size.
 //
 // Sequences: clickSeq takes [[x, y, delayAfterMs], ...] and runs it in the page with setTimeout,
 // one run at a time, so a sequence is never interleaved with another and never depends on the
@@ -35,8 +36,9 @@
     // 6: readVars(names), the L:vars the reader judges a tap by.
     // 7: that refusal, the run guards it needed and the page clock they ran on are gone: a click runs anywhere on the tablet.
     // 8: drag(x, y0, y1) replaces wheel: this build scrolls on a drag (plan 20, Task 1)
+    // 9: drag answers with its run, as clickSeq does, so the app waits for it by status(id); a throw at its start ends the run
     // The app's calls ask for this version or later; an older agent on the page is replaced.
-    var VERSION = 8;
+    var VERSION = 9;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -133,29 +135,35 @@
     // A drag at a tablet-local x from y0 to y1, for the reader to scroll a page longer than the
     // tablet (this build scrolls on a drag, not reliably on the wheel): mouse move and down at
     // (x, y0), 20 moves 50 ms apart to (x, y1), held 400 ms, then up. It runs in the page, one run
-    // at a time with the click runs: refused while one is going. 'started', or why not.
+    // at a time with the click runs: refused while one is going. It answers as clickSeq does,
+    // {ok, id, n, done, totalMs, error}, and the app waits for the run by status(id) before it reads
+    // the page again; refused: {ok:false, error}.
     var DRAG_MOVES = 20, DRAG_MOVE_MS = 50, DRAG_HOLD_MS = 400;
     A.drag = function (x, y0, y1) {
+      var run = null;
       try {
-        if (coherentProblem()) return 'no-coherent';
         var c = findCanvas();
-        var p = canvasProblem(c);
-        if (p) return 'no-canvas: ' + p;
-        if (runIsLive(state.run)) return 'busy';
+        var p = coherentProblem() || canvasProblem(c);
+        if (p) return refuse('no-canvas: ' + p);
+        if (runIsLive(state.run)) return refuse('busy');
         var r = c.getBoundingClientRect();
+        // A point off the canvas cannot be dragged at all (not a judgment of where on the tablet).
         if (!isWhole(x) || !isWhole(y0) || !isWhole(y1) || x < 0 || x >= r.width
-            || y0 < 0 || y0 >= r.height || y1 < 0 || y1 >= r.height) return 'bad-point';
+            || y0 < 0 || y0 >= r.height || y1 < 0 || y1 >= r.height) return refuse('bad-point');
         stopRun(state.run, 'canceled');
         var total = DRAG_MOVES * DRAG_MOVE_MS + DRAG_HOLD_MS;
-        var run = { id: state.nextId++, n: DRAG_MOVES + 2, done: 0, running: true, error: null,
-                    startedAt: Date.now(), totalMs: total, timer: null };
+        run = { id: state.nextId++, n: DRAG_MOVES + 2, done: 0, running: true, error: null,
+                startedAt: Date.now(), totalMs: total, timer: null };
         state.run = run;
         var ev = function (y) { return { clientX: r.left + x, clientY: r.top + y, button: 0, preventDefault: function () { } }; };
-        // The mouse button is down from OnMouseDown until letGo: run.letGo is set while it is, and stopRun
-        // calls it, so a cancel or a failed move never leaves the tablet's mouse button held.
-        var lastY = y0;
+        // The mouse button counts as down from the call to OnMouseDown (a throw inside it may come after
+        // the press) until letGo: run.letGo is set from the start, and stopRun and fail call it, so a
+        // cancel or a failed move never leaves the tablet's mouse button held, and a throw in the first
+        // mouse move, before any press, lets nothing go.
+        var lastY = y0, down = false;
         run.letGo = function () {
           run.letGo = null;
+          if (!down) return;
           try { c.OnMouseUp(ev(lastY)); } catch (e) { }
         };
         var fail = function (e) {
@@ -180,12 +188,24 @@
             else run.timer = setTimeout(release, DRAG_HOLD_MS);
           } catch (e) { fail(e); }
         };
-        c.onMouseMove(ev(y0));
-        c.OnMouseDown(ev(y0));
+        try {
+          c.onMouseMove(ev(y0));
+          down = true;
+          c.OnMouseDown(ev(y0));
+        } catch (e) {
+          fail(e);   // the run is no longer running (never 'busy' for its 6 s), and lets go if the button went down
+          return runInfo(run);
+        }
         move(1);   // a throw in it goes to fail, which lets go
-        return 'started';
+        return { ok: true, id: run.id, n: run.n, done: run.done, totalMs: total, error: run.error };
       } catch (e) {
-        return 'error: ' + (e && e.message);
+        if (run) {
+          run.error = 'error: ' + (e && e.message);
+          run.running = false;
+          if (run.letGo) run.letGo();
+          return runInfo(run);
+        }
+        return refuse('error: ' + (e && e.message));
       }
     };
 
