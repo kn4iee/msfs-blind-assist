@@ -7,9 +7,8 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// Reads and writes a <see cref="Bbs757EfbScreenModel"/> as JSON, so the tablet-reader fixtures are stored as the
-/// page model the pilot is given rather than a screenshot run through OCR. The models were serialised once from the
-/// old OCR parse (the <c>.lines.json</c> + <c>.png</c> captures); the fixture loader now deserialises them, which is
-/// why the tests no longer need PaddleOCR or the OCR parser. The shape is deliberately plain — rectangles and points
+/// page model the pilot is given rather than a screenshot. The fixture loader deserialises them, so the tests need no
+/// capture and no recognition. The shape is deliberately plain — rectangles and points
 /// as arrays, enums as their names — so a committed <c>.model.json</c> is easy to read and diff.
 /// </summary>
 internal static class Bbs757EfbModelJson

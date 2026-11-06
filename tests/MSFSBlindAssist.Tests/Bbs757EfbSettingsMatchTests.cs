@@ -265,7 +265,7 @@ public class Bbs757EfbSettingsMatchTests
     [Fact]
     public void A_label_matching_no_catalog_entry_is_not_judged_by_the_file()
     {
-        // An OCR misread: the press is judged by the page alone, never by a key that may be another setting's.
+        // A label no catalog entry matches: the press is judged by the page alone, never by a key that may be another setting's.
         Assert.Null(Bbs757EfbSettingsMatch.SettingFor("Settings, Aircraft", Row(Bbs757EfbKind.Toggle, "Sync baromoters")));
         Assert.Null(Bbs757EfbSettingsMatch.SettingFor("Settings, Aircraft", Row(Bbs757EfbKind.Toggle, "Nosewheel stearing")));
         Assert.Null(Bbs757EfbSettingsMatch.SettingFor("Settings, Callouts", Row(Bbs757EfbKind.Toggle, "I000")));

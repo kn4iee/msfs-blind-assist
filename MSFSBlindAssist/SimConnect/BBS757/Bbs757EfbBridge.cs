@@ -59,7 +59,7 @@ public sealed class Bbs757EfbBridgeIo
 /// window's elements (<see cref="Bbs757EfbElements"/>), kept with the page it was read from (<see cref="Bbs757EfbPushes"/>), and
 /// pushed only when the page says something new (its fingerprint changed), so a still tablet costs one cheap memory read. What a read
 /// says by itself, a question that appeared or BlueBird's new notifications, is said as the window's alert
-/// (<see cref="Bbs757EfbReadNews"/>). Hidden, nothing is read. No capture, no OCR, no mirror: the ND stays the ND.
+/// (<see cref="Bbs757EfbReadNews"/>). Hidden, nothing is read. No capture, no mirror: the ND stays the ND.
 ///
 /// Presses (the owner's ruling of 2026-10-29: nothing refuses a press) queue on the command channel and run one at a time on the
 /// loop, through <see cref="Bbs757EfbPressRunner"/>: a press names the element of the push it was made on, so it is judged against the

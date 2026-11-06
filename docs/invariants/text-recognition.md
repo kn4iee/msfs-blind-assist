@@ -1,6 +1,6 @@
 # Text recognition — rules in full
 
-Each section is the complete text of one rule. Its one-line form, under the same ID, is in `.claude/rules/text-recognition.md`, which Claude Code loads when it reads matching code. Background: text-recognition.md.
+Each section is the complete text of one rule. Every rule in this file is retired (PaddleOCR was removed in plan 20), so there is no rule file and no one-line form; the sections stay so the IDs are never reused. Background: text-recognition.md.
 
 ## OCR-1 (retired: PaddleOCR removed, plan 20)
 

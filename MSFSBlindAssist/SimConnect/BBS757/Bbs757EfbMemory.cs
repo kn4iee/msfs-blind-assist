@@ -5,8 +5,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
 /// Reads BlueBird's EFB tablet control tree straight from the 757 module's memory through a layout
-/// (<see cref="Bbs757EfbMemLayout"/>), the replacement for the PaddleOCR capture-and-recognise path: exact text,
-/// visibility and tap rectangles, no screen capture. Reaches the EFB object through the gauge manager, then BBOS,
+/// (<see cref="Bbs757EfbMemLayout"/>), so the text is BlueBird's own, with
+/// visibility and tap rectangles and no screen capture. Reaches the EFB object through the gauge manager, then BBOS,
 /// then its app map; walks each front app's roots and current page, keeping the controls whose own visible byte
 /// (and whose ancestors') is set. Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
 /// simulator. The std::map/std::vector/std::string shapes it reads are the Emscripten libc++ ABI, stable across

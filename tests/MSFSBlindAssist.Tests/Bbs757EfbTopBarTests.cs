@@ -113,7 +113,7 @@ public class Bbs757EfbTopBarTests
 
     [Theory]
     [InlineData("18-aircraft-ground-services-notification")]   // BlueBird's popup over the page, the count still showing
-    [InlineData("20-fuel-start-boarding")]                     // a count whose figure OCR did not read
+    [InlineData("20-fuel-start-boarding")]                     // a count with no figure
     [InlineData("40-checklist")]                               // no count at all
     public void A_closed_list_is_opened_at_the_arrow(string name)
     {

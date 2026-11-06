@@ -4,11 +4,11 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
 /// Turns the EFB memory walk (<see cref="Bbs757EfbMemory"/>) into the window's model (<see cref="Bbs757EfbScreenModel"/>),
-/// the memory replacement for <see cref="Bbs757EfbScreen"/>'s OCR parse. The front content app's page becomes the model:
+/// the reader of the tablet (<see cref="Bbs757EfbScreen"/> keeps its shared key helpers). The front content app's page becomes the model:
 /// its side menu (<c>GENERAL</c>, <c>FUEL</c>, …) as <see cref="Bbs757EfbKind.Menu"/> entries, the home screen's five app
 /// icons as menu entries that navigate, and the page's own controls as items. The keys it gives match the schemes the
 /// press runner, the elements builder and the settings matcher already speak (<c>app:</c>, <c>menu:</c>,
-/// <c>btn:…|words@x,y</c>), so the memory read drops in where the OCR read was; a control's name in BlueBird's tree is
+/// <c>btn:…|words@x,y</c>), so the press runner reads them as they are; a control's name in BlueBird's tree is
 /// its stable identity, kept as the key of a settings row so a re-read relocates it exactly.
 ///
 /// Settings rows (a grid holding a toggle or slider with its label and value) become one Toggle or Slider item carrying
@@ -249,10 +249,9 @@ public sealed class Bbs757EfbModelReader
         menu.Add(new Bbs757EfbItem(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "menu:" + word, Selected: selected));
     }
 
-    /// <summary>A page button or tile: keyed <c>btn:|words@x,y</c> as the OCR reader keyed it, so the press runner reads
+    /// <summary>A page button or tile: keyed <c>btn:|words@x,y</c> so the press runner reads
     /// its words (<see cref="Bbs757EfbScreen.KeyWords"/>) and a ground-service tile is found (<see cref="Bbs757GroundServices.ForTile"/>).
-    /// The words are the control's text without its trailing state word ("GPU REMOVED" → GPU), the same the OCR reader
-    /// stripped.</summary>
+    /// The words are the control's text without its trailing state word ("GPU REMOVED" → GPU).</summary>
     private static Bbs757EfbItem Tile(Bbs757EfbMemory.Node n, string? pictureState, string? text = null, string label = "")
     {
         text ??= n.Text;
@@ -406,8 +405,7 @@ public sealed class Bbs757EfbModelReader
     private static string Fold(string text) =>
         string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 
-    /// <summary>A control's text without its trailing state word ("FUEL TRUCK OFF" → FUEL TRUCK), as the OCR reader's
-    /// key stripped it, so <see cref="Bbs757EfbScreen.KeyWords"/> gives the same words.</summary>
+    /// <summary>A control's text without its trailing state word ("FUEL TRUCK OFF" → FUEL TRUCK), so <see cref="Bbs757EfbScreen.KeyWords"/> gives the same words.</summary>
     private static string StripState(string text)
     {
         foreach (var w in Bbs757EfbScreen.StateWords)

@@ -51,7 +51,7 @@ public static class Bbs757EfbSettingsMatch
     /// plain row (a heading, a note, a button or a menu entry is no setting), and its text must be the label of a setting of
     /// the page's section, case, spaces and punctuation ignored. For Settings &gt; Aircraft and Settings &gt; AIRAC data that is
     /// also the ACARS section, which is no tablet page: Hoppie ACARS and CPDLC network are rows of the first, the Hoppie logon
-    /// code and the SayIntentions ACARS key rows of the second. A label that matches nothing (an OCR misread, a setting this
+    /// code and the SayIntentions ACARS key rows of the second. A label that matches nothing (a setting this
     /// version does not know) is null, never the nearest label.
     /// </summary>
     public static Bbs757Setting? SettingFor(string pageName, Bbs757EfbItem row)

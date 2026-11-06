@@ -115,8 +115,7 @@ public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem>
 /// <summary>
 /// The constants and the key/state-word helpers the memory tablet reader (<see cref="Bbs757EfbModelReader"/>) and the
 /// window share: the side-menu boundary, the window's own Home button, and how a tile's key carries
-/// its words. (This was the OCR screen parser; the EFB is now read from the module's memory, so only these shared
-/// pieces remain.)
+/// its words. (The EFB is read from the module's memory, so only these shared pieces live here.)
 /// </summary>
 public static class Bbs757EfbScreen
 {

@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The tablet window's order and wording (plan 20, Task 8): content first, then the status bar, "Sections" with the side menu and
-/// Home last; names in sentence case, values as the tablet writes them; no OCR-era buttons.
+/// Home last; names in sentence case, values as the tablet writes them; no buttons of the old screen reader.
 /// </summary>
 public class Bbs757EfbElementsGrammarTests
 {

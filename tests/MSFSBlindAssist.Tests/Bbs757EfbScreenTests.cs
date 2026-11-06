@@ -6,8 +6,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// Loads a 757 tablet-reader fixture as the page model the pilot is given. The fixtures are the page's serialized
 /// model (<c>&lt;set&gt;/&lt;name&gt;.model.json</c>, written by <see cref="Bbs757EfbModelJson"/> from the captured pages); the
-/// reader now reads the tablet from the module's memory, not OCR, so the window, extras and settings tests exercise
-/// their code against these real captured-page models without a screenshot or an OCR read. (Named a loader, kept as
+/// window, extras and settings tests exercise their code against these real captured-page models without a screenshot. (Named a loader, kept as
 /// <c>Bbs757EfbScreenTests</c> so its many call sites are unchanged.)
 /// </summary>
 internal static class Bbs757EfbScreenTests

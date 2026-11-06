@@ -358,7 +358,7 @@ public static class Bbs757EfbElements
     /// A slider's choices, left to right, as the tablet offers them; null when the slider is a number. A row of the Settings pages that is
     /// one of BlueBird's settings (<see cref="Bbs757EfbSettingsMatch.SettingFor"/>, by the page and the row's label) offers the settings
     /// catalog's words in its order (<see cref="Bbs757EfbSettingsMatch.ChoicesFor"/>), which is the tablet's from left to right; a setting
-    /// with no choices (a continuous slider) offers none. A row that matches no setting (a label OCR misread, a slider on another page)
+    /// with no choices (a continuous slider) offers none. A row that matches no setting (a setting this BlueBird version does not know, a slider on another page)
     /// offers none either, so it is a number, and a press on it is judged by the page alone.
     /// </summary>
     public static IReadOnlyList<string>? OptionsFor(Bbs757EfbItem it, string pageName) =>
