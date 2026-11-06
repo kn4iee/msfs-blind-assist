@@ -38,6 +38,7 @@
 
 **Files:** `docs/b757/evidence/efb-typing.md`
 
+- [ ] **Step 0: Whether the keyboard is shown.** Plan 20 found `kb_grid`'s visible byte set on every page whether or not the keyboard shows, and no change in its app's bytes at a field tap or `btn_keyboard_down` (`efb-memory-pages.md`). Find the field that says it is shown (the efb object, the shell app's page, an animation offset, the top bar's "KEYBOARD LOCKED"), and how the numeric keypad that number fields open (the SimBrief ID, the TOD pause distance: `efb-and-manual.md`) is drawn; no key is tapped before this is known. The field goes into the layout file as plan 20 Task 8b did for the scroll offset.
 - [ ] **Step 1:** PERF calc's Airport box: tap it; the keyboard's rectangle and the box's text in memory; whether the tap selects the text or puts the caret at its end (type one letter, read the text).
 - [ ] **Step 2:** The layers: whether memory says which layer shows (diff the shell app before and after `btn_shift`, `btn_double_shift`, `btn_numeric_switch`); a capital after one shift (one-shot or held); a digit and a symbol on the third layer; what `btn_numeric_switch2` is; backspace on one character.
 - [ ] **Step 3:** The fastest pace that types every character: runs of 10 letters at 300, 200 and 150 ms per tap, each read back.

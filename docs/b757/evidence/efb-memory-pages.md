@@ -37,12 +37,20 @@ two ACARS codes and every ACARS dashboard value made up; checked by grep for the
 | 54-settings-cabin-audio | Settings, Cabin audio | `cabin_audio_scrollbox` |
 | 55-settings-airac-data | Settings, AIRAC data | `airac_data_grid`, `simbrief_id_setting_grid`, `latest_cycle_row`, `waiting_panel_box` |
 
-Not captured yet, waiting on the owner's go-ahead (a tap that is not navigation): `60-keyboard-up` (a text box tapped,
-nothing typed) and `13b-aircraft-ground-services-chocks-removed` (the chocks picture's other file name). The keyboard
-was up at the start of the 2026-11-06 survey: `kb_grid` [0,648 1397x400] in the shell app (map key 2, class "app"),
-keys `char_btn_<lower>|<upper>|<third>` 100x75 in three rows of 10, 9 and 7, plus `btn_delete`, `btn_backspace`,
-`btn_tab`, `btn_enter`, `btn_double_shift`, `btn_shift2`, `btn_shift`, `,|,|!`, `.|.|?`, `btn_home`,
-`btn_numeric_switch2`, `btn_space`, `btn_numeric_switch`, `btn_keyboard_down` [1228,968 164x75].
+`13b-aircraft-ground-services-chocks-removed` (the owner's go-ahead, 2026-11-06): CHOCKS tapped twice. In place,
+`chocks_status_image` reads `./data/efb/images/bbs_ldg_gr_chocks.png`; removed, `./data/efb/images/bbs_ldg_gr.png`; the
+page read back identical after the second tap.
+
+**The QWERTY keyboard's state is not readable from its tree.** The shell app (map key 2, class "app") holds `kb_grid`
+[0,648 1397x400] with its own visible byte set on every page captured, before and after a tap on PERF calc's Airport
+box (the owner's go-ahead) and before and after `btn_keyboard_down` [1228,968 164x75]; neither the grid's nor its app's
+0x400 bytes changed, but for a clock double at app +0x20. The OCR reader of plans 17 and 18 read the page beneath
+(Ground services' tiles at y 744 to 917), so the keyboard is normally hidden while its tree reads visible. Its keys:
+`char_btn_<lower>|<upper>|<third>` 100x75 in rows of 10, 9 and 7, `btn_delete`, `btn_backspace`, `btn_tab`,
+`btn_enter`, `btn_double_shift`, `btn_shift2`, `btn_shift`, `,|,|!`, `.|.|?`, `btn_home`, `btn_numeric_switch2`,
+`btn_space`, `btn_numeric_switch`, `btn_keyboard_down`. A tap on a key while the keyboard is hidden would land on the
+page under it, so nothing taps it until its shown state is found (plan 22). Number fields (the SimBrief ID, the TOD
+pause distance) open a separate numeric keypad with an OK button (`efb-and-manual.md`, `efb-settings.md`).
 
 ## Scrolling: rectangles never move; the offset is the scrollbox's own
 

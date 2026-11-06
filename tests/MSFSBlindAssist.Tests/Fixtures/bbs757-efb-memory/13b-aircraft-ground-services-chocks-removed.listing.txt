@@ -1,0 +1,26 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  BBS
+button  Remove all
+button  FWD stair off
+button  Jetway removed
+button  AFT stairs off
+button  Catering off
+button  GPU connected
+button  Chocks
+button  Ground A/C
+button  Left air start
+button  Right air start
+button  Cargo SVC off
+button  Fuel truck off
+button  Req PB tug
+button  Remove tug
+heading 2  More
+button  Read the tablet again
