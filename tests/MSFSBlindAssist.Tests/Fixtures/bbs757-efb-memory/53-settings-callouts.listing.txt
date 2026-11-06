@@ -26,10 +26,10 @@ checkbox checked  20
 checkbox checked  10
 checkbox checked  5
 heading 2  Approach / minimums
-checkbox checked  Plus hundred (dh + 100)
-checkbox not checked  Approaching dh (dh + 100)
-checkbox checked  Approaching minimums (dh + 80)
-checkbox checked  Fifty above (dh + 50)
+checkbox checked  Plus hundred (DH + 100)
+checkbox not checked  Approaching DH (DH + 100)
+checkbox checked  Approaching minimums (DH + 80)
+checkbox checked  Fifty above (DH + 50)
 checkbox checked  Minimums
 checkbox not checked  Minimums minimums
 checkbox not checked  Minimum

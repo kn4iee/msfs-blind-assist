@@ -29,7 +29,7 @@ text  VR: ---
 text  V2: ---
 text  Flap: ---
 text  N1: ---
-text  Flx tmp: ---
+text  FLX TMP: ---
 text  Trim: ---
 text  TODA: ---
 text  TORA: ---

@@ -8,10 +8,10 @@ text  Airport: KSEA/SEA
 SEATTLE-TACOMA INTL
 text  Elevation: 432 FT
 text  Local time: 9:22 AM (UTC-8)
-text  Current wx: VFR
+text  Current WX: VFR
 text  METAR ceiling: 9999 FT
 text  METAR visibility: 9999 M
-text  Transition alt/lvl: 18000 / 18000
+text  Transition ALT/LVL: 18000 / 18000
 button  METAR
 button  TAF
 button  ATIS

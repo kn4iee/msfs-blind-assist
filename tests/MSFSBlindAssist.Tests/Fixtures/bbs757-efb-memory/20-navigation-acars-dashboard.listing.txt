@@ -34,7 +34,7 @@ text  AIRAC Cycle: 0
 text  OFP Layout: 0
 text  Units: 0
 text  Navlog: 0
-text  Etops: 0
+text  ETOPS: 0
 heading 2  Load sheet
 text  Enroute Burn: 0
 text  Passenger Count: 0

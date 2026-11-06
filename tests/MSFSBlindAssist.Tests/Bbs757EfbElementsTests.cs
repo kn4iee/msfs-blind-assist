@@ -248,9 +248,10 @@ public class Bbs757EfbElementsTests
     public void An_alert_is_ahead_of_the_question_and_is_the_only_alert()
     {
         var page = Bbs757EfbScreenTests.Load("bright", "21-defuel-question");
-        var b = Bbs757EfbElements.Build(page, "The tablet did not show Fuel. Try again, or use Read the tablet again.", NoExtras);
+        string alert = Bbs757EfbPressRunner.NotShownText("Fuel");
+        var b = Bbs757EfbElements.Build(page, alert, NoExtras);
 
-        Assert.Equal("The tablet did not show Fuel. Try again, or use Read the tablet again.", Field(b, 0, "text"));
+        Assert.Equal(alert, Field(b, 0, "text"));
         Assert.Equal("alert", Field(b, 0, "kind"));
         Assert.Equal("assertive", Field(b, 0, "live"));
         Assert.Equal(page.Question!.Text, Field(b, 1, "text"));

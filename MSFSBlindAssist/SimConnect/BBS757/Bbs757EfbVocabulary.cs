@@ -301,5 +301,7 @@ public static class Bbs757EfbVocabulary
         "METAR", "TAF", "ATIS", "SID", "STAR",
         // The performance calculator's result rows (V speeds, runway distances), spoken as the letters they are.
         "VR", "TODA", "TORA", "ASDA", "LDA",
+        // Callouts' DH rows, Weather's WX and ALT/LVL, the ACARS dashboard's ETOPS, PERF calc's FLX TMP.
+        "DH", "WX", "ALT", "LVL", "ETOPS", "FLX", "TMP",
     };
 }
