@@ -56,11 +56,11 @@ public class Bbs757EfbMemoryLiveTests
             _out.WriteLine($"== app key {app.Key} {app.Class} ({Count(app.Controls)} visible controls)");
 
         if (Environment.GetEnvironmentVariable("BBS_EFB_RAW") == "1")
-        {
-            var content = apps.Where(a => a.Controls.Count > 0).OrderByDescending(a => Count(a.Controls)).First();
-            _out.WriteLine($"\n== RAW {content.Class}:");
-            foreach (var r in content.Controls) Print(r, 0);
-        }
+            foreach (var a in apps.Where(a => a.Controls.Count > 0))
+            {
+                _out.WriteLine($"\n== RAW app key {a.Key} {a.Class}:");
+                foreach (var r in a.Controls) Print(r, 0);
+            }
 
         var model = new Bbs757EfbModelReader(reader).Read();
         Assert.NotNull(model);
