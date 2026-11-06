@@ -32,6 +32,11 @@ public class Bbs757EfbMemoryLiveTests
             new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
             new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
             new Bbs757EfbClassVptr("grid", 0x30320),
+            // app classes, keyed by the token the model reader shows
+            new Bbs757EfbClassVptr("HOME", 0x27bdc), new Bbs757EfbClassVptr("AIRCRAFT", 0x381c4),
+            new Bbs757EfbClassVptr("NAVIGATION", 0x28d10), new Bbs757EfbClassVptr("SYSTEMS", 0x2e530),
+            new Bbs757EfbClassVptr("CHECKLIST", 0x253f4), new Bbs757EfbClassVptr("SETTINGS", 0x2c860),
+            new Bbs757EfbClassVptr("SIGN IN", 0x2e3d0),
         });
 
     [Fact]
@@ -48,10 +53,23 @@ public class Bbs757EfbMemoryLiveTests
         var apps = reader.ReadFrontApps();
         Assert.NotEmpty(apps);
         foreach (var app in apps)
-        {
             _out.WriteLine($"== app key {app.Key} {app.Class} ({Count(app.Controls)} visible controls)");
-            foreach (var n in app.Controls) Print(n, 1);
+
+        if (Environment.GetEnvironmentVariable("BBS_EFB_RAW") == "1")
+        {
+            var content = apps.Where(a => a.Controls.Count > 0).OrderByDescending(a => Count(a.Controls)).First();
+            _out.WriteLine($"\n== RAW {content.Class}:");
+            foreach (var r in content.Controls) Print(r, 0);
         }
+
+        var model = new Bbs757EfbModelReader(reader).Read();
+        Assert.NotNull(model);
+        _out.WriteLine($"\n== MODEL page={model!.PageName}  App={model.App}");
+        _out.WriteLine("-- menu:");
+        foreach (var it in model.Menu) _out.WriteLine($"   {it.Kind,-8} {it.Text}");
+        _out.WriteLine("-- items:");
+        foreach (var it in model.Items)
+            _out.WriteLine($"   {it.Kind,-8} {it.Text}{(it.Value.Length > 0 ? " = " + it.Value : "")}{(it.On is { } on ? $" (on={on})" : "")}  @({it.Hit.X},{it.Hit.Y}) key={it.Key}");
     }
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
