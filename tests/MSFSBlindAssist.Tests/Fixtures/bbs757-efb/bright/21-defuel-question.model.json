@@ -1,0 +1,458 @@
+{
+  "app": "AIRCRAFT",
+  "section": "",
+  "scrollable": false,
+  "menu": [
+    {
+      "kind": "Menu",
+      "text": "Cockpit presets",
+      "box": [
+        43,
+        156,
+        190,
+        30
+      ],
+      "hit": [
+        130,
+        171
+      ],
+      "clickable": true,
+      "key": "menu:COCKPIT PRESETS",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Fuel",
+      "box": [
+        39,
+        212,
+        64,
+        34
+      ],
+      "hit": [
+        130,
+        229
+      ],
+      "clickable": true,
+      "key": "menu:FUEL",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Weight \u0026 balance",
+      "box": [
+        41,
+        277,
+        204,
+        27
+      ],
+      "hit": [
+        130,
+        290
+      ],
+      "clickable": true,
+      "key": "menu:WEIGHT \u0026 BALANCE",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Ground services",
+      "box": [
+        45,
+        337,
+        190,
+        27
+      ],
+      "hit": [
+        130,
+        350
+      ],
+      "clickable": true,
+      "key": "menu:GROUND SERVICES",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Cabin \u0026 doors",
+      "box": [
+        44,
+        397,
+        161,
+        27
+      ],
+      "hit": [
+        130,
+        410
+      ],
+      "clickable": true,
+      "key": "menu:CABIN \u0026 DOORS",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Maintenance",
+      "box": [
+        40,
+        454,
+        160,
+        32
+      ],
+      "hit": [
+        130,
+        470
+      ],
+      "clickable": true,
+      "key": "menu:MAINTENANCE",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Menu",
+      "text": "Failures",
+      "box": [
+        40,
+        514,
+        108,
+        32
+      ],
+      "hit": [
+        130,
+        530
+      ],
+      "clickable": true,
+      "key": "menu:FAILURES",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    }
+  ],
+  "items": [
+    {
+      "kind": "Text",
+      "text": "14%",
+      "box": [
+        792,
+        327,
+        62,
+        33
+      ],
+      "hit": [
+        823,
+        343
+      ],
+      "clickable": false,
+      "key": "txt:14%",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "45%",
+      "box": [
+        1113,
+        403,
+        68,
+        40
+      ],
+      "hit": [
+        1147,
+        423
+      ],
+      "clickable": false,
+      "key": "txt:45%",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "Left, center, right",
+      "box": [
+        444,
+        718,
+        764,
+        31
+      ],
+      "hit": [
+        826,
+        733
+      ],
+      "clickable": false,
+      "key": "txt:LEFT, CENTER, RIGHT",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "1000, Gal, 1000, Gal, 1000, Gal",
+      "box": [
+        381,
+        774,
+        883,
+        40
+      ],
+      "hit": [
+        822,
+        794
+      ],
+      "clickable": false,
+      "key": "txt:1000, Gal, 1000, Gal, 1000, Gal",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "6700, Lbs, 6700, Lbs, 6700, Lbs",
+      "box": [
+        381,
+        818,
+        884,
+        35
+      ],
+      "hit": [
+        823,
+        835
+      ],
+      "clickable": false,
+      "key": "txt:6700, Lbs, 6700, Lbs, 6700, Lbs",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "26%",
+      "box": [
+        932,
+        879,
+        65,
+        37
+      ],
+      "hit": [
+        964,
+        897
+      ],
+      "clickable": false,
+      "key": "txt:26%",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "3000, Gal",
+      "box": [
+        725,
+        911,
+        195,
+        36
+      ],
+      "hit": [
+        822,
+        929
+      ],
+      "clickable": false,
+      "key": "txt:3000, Gal",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Button",
+      "text": "Total fuel: Import from SIMBRIEF",
+      "box": [
+        379,
+        929,
+        277,
+        43
+      ],
+      "hit": [
+        517,
+        950
+      ],
+      "clickable": true,
+      "key": "btn:TOTAL FUEL|IMPORT FROM SIMBRIEF@18,46",
+      "tint": "Blue",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Text",
+      "text": "20100, Lbs",
+      "box": [
+        725,
+        951,
+        197,
+        35
+      ],
+      "hit": [
+        823,
+        968
+      ],
+      "clickable": false,
+      "key": "txt:20100, Lbs",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    }
+  ],
+  "topBar": [
+    {
+      "kind": "Text",
+      "text": "DEP -03:19",
+      "box": [
+        1029,
+        0,
+        106,
+        28
+      ],
+      "hit": [
+        1082,
+        14
+      ],
+      "clickable": false,
+      "key": "top:dep",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Button",
+      "text": "Start boarding",
+      "box": [
+        1142,
+        3,
+        180,
+        28
+      ],
+      "hit": [
+        1232,
+        17
+      ],
+      "clickable": true,
+      "key": "top:boarding",
+      "tint": "Green",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    },
+    {
+      "kind": "Button",
+      "text": "Notifications",
+      "box": [
+        1329,
+        6,
+        54,
+        19
+      ],
+      "hit": [
+        1373,
+        15
+      ],
+      "clickable": true,
+      "key": "top:notifications",
+      "tint": "Red",
+      "on": null,
+      "selected": false,
+      "value": "",
+      "slider": null
+    }
+  ],
+  "notices": [],
+  "question": {
+    "text": "Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?",
+    "buttons": [
+      {
+        "kind": "Button",
+        "text": "Yes",
+        "box": [
+          336,
+          591,
+          177,
+          57
+        ],
+        "hit": [
+          424,
+          619
+        ],
+        "clickable": true,
+        "key": "q:YES",
+        "tint": "Green",
+        "on": null,
+        "selected": false,
+        "value": "",
+        "slider": null
+      },
+      {
+        "kind": "Button",
+        "text": "No",
+        "box": [
+          882,
+          589,
+          181,
+          61
+        ],
+        "hit": [
+          972,
+          619
+        ],
+        "clickable": true,
+        "key": "q:NO",
+        "tint": "Blue",
+        "on": null,
+        "selected": false,
+        "value": "",
+        "slider": null
+      }
+    ]
+  }
+}
